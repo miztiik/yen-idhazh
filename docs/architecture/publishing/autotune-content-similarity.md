@@ -1,6 +1,6 @@
 # Autotuning the similarity line that groups one story
 
-**Last Updated**: 2026-10-10
+**Last Updated**: 2026-10-11
 
 A day runs the same story from more than one of our feeds. This page owns the
 line that decides when two items are one story, how that line fits itself once a
@@ -313,12 +313,24 @@ and why, is in [../../concepts/partitions.md](../../concepts/partitions.md).
 
 The council hosts judges and depends on none of them
 ([llm-council.md](llm-council.md#the-venue-and-its-tenants-are-separate-things)).
-This judge registers by putting its slug in `council.tenants` and declaring
+This judge registers in `judge_names` in `config/llm_council.json` and declares
 itself in
-[../../../backend/idhazh/similarity/tenant.py](../../../backend/idhazh/similarity/tenant.py),
+[../../../backend/idhazh/content_similarity_judge/tenant.py](../../../backend/idhazh/content_similarity_judge/tenant.py),
 which binds the venue's three units of work to the four stages above: pick the
 work, judge one unit of it, then count and fit. That module imports the venue;
 nothing in the venue imports it.
+
+Its file, `config/judges/content-similarity-judge.json`, declares it active and
+model-running. The judge alone reads `pair_budget` (200), `flush_every_pairs`
+(1) and `judge_temperature` (0.0) from that file. These retain the previous
+draw size, completed-pair durability and greedy decoding. The council validates
+only status and model need before importing the package.
+
+The band, fit gates, damping, movement caps and history windows stay under
+`assemble.same_story.adaptive_dedup_threshold` in `config/idhazh.json`.
+Counting, fitting and the applied-line reader still share them. The execution
+settings loader lives under `content_similarity_judge`, not in the shared
+settings model, so it adds no judge contract to the council's import closure.
 
 **The funnel closes, and the contract is what holds it closed.** Every pair a
 unit was dealt ends exactly one of four ways - read, refused by the grammar,

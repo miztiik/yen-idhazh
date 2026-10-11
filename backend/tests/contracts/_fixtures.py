@@ -98,10 +98,7 @@ FIXTURE_FILES: Final = (
     "label-row/unsupported.json",
     "machine-panels/nothing-recorded-this-run.json",
     "machine-panels/three-machines-one-run.json",
-    "machine-shard-row/a-shard-both-instruments-reached.json",
-    "machine-shard-row/a-shard-that-kept-nothing.json",
     "pipeline-tests-config/the-smallest-list-that-draws.json",
-    "public-run-day/five-runs.json",
     "public-telemetry/fetch-failed.json",
     "public-telemetry/published.json",
     "publication-inventory/published.json",
@@ -269,7 +266,16 @@ def copy_config(root: Path, *, models: dict[str, Any] | None = None) -> str:
     """
     target = root / "config"
     pointer = str(AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).models_file)
-    for name in ("idhazh.json", "sources.json", "taxonomy.json", "watchlist.json", "appearance.json", pointer):
+    for name in (
+        "idhazh.json",
+        "sources.json",
+        "taxonomy.json",
+        "watchlist.json",
+        "appearance.json",
+        "llm_council.json",
+        "judges/content-similarity-judge.json",
+        pointer,
+    ):
         destination = target / name
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(CONFIG_DIR / name, destination)

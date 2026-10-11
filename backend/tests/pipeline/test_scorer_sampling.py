@@ -42,6 +42,7 @@ def observed(observability: ObservabilityConfig) -> config.Settings:
     """The committed settings with one observability block swapped in."""
     settings = config.load(CONFIG_DIR)
     return config.Settings(
+        council=settings.council,
         app=settings.app.model_copy(update={"observability": observability}),
         models=settings.models,
         appearance=settings.appearance,

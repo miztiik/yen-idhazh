@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-10-09
+**Last Updated**: 2026-10-11
 
 Which workflows run, when they run, and what they may publish.
 The [workflow declarations](../../.github/workflows/) are authoritative.
@@ -57,6 +57,15 @@ publishes nothing. Overlapping runs use distinct writer identities and the
   while CI ran stays published.
 - Cancel superseded builds, but let an active deployment finish. Deploy requires
   a successful build and its complete artifact. These are separate job groups.
+
+## LLM council permissions
+
+`llm-council.yml` declares permissions per job, not for the whole workflow.
+`draw` reads repository contents. `judge` reads contents and Actions artifacts.
+Only `save_council_results` writes contents; it also reads Actions artifacts.
+All other scopes are disabled by each job's declared block. See the
+[council's permission boundary](../architecture/publishing/llm-council.md#design-rationale-nobody-has-to-notice-a-dead-night)
+for the reason and its check.
 
 ## Candidate runs
 

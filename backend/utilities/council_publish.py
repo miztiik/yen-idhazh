@@ -38,7 +38,7 @@ def settle_and_publish(
     clock: Callable[[], datetime] = job_machine.utc_now,
 ) -> int:
     settings = config.load(config_root)
-    hosted = tenants(settings.app.council.tenants)
+    hosted = tenants(settings.council.running(), app=settings.app, council=settings.council)
     if not hosted:
         print("council: no tenants; no record or publication")
         return 0
@@ -122,7 +122,7 @@ def settle_and_publish(
                                 preserve_existing=True,
                             )
                     session.settle(
-                        settings.app.council,
+                        settings.council,
                         date=date,
                         run_id=run_id,
                         state_dir=repo / "state",

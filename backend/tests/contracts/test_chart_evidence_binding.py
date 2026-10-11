@@ -9,7 +9,6 @@ import pytest
 from conftest import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 
 from idhazh.contracts.chart_evidence import ChartEvidence
-from idhazh.contracts.public_run_day import PublicRunDay
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.visual_decision import VisualDecision
 
@@ -28,7 +27,7 @@ def _frontend_fields() -> dict[str, str]:
 def test_evidence_fields_are_shared_by_every_payload_and_frontend_copy() -> None:
     fields = _frontend_fields()
     assert set(fields) == set(ChartEvidence.model_fields)
-    for payload in (VisualDecision, RunManifest, PublicRunDay):
+    for payload in (VisualDecision, RunManifest):
         schema = payload.json_schema()
         assert (
             schema["$defs"]["ChartEvidence"]["properties"]
@@ -46,10 +45,10 @@ def test_evidence_numeric_types_and_null_rates_match_the_frontend_copy() -> None
         assert fields[name] == ("number | null" if "null" in kinds else "number")
 
 
-def test_an_old_monthly_report_reads_as_unknown_not_as_zero_figures() -> None:
-    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "public-run-day" / "five-runs.json"))
+def test_an_old_run_manifest_reads_as_unknown_not_as_zero_figures() -> None:
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "run-manifest" / "two-runs.json"))
     for run in payload["runs"]:
         del run["chart_evidence"]
-    old = PublicRunDay.model_validate(payload)
+    old = RunManifest.model_validate(payload)
     assert old.runs
     assert all(run.chart_evidence is None for run in old.runs)

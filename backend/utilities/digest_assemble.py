@@ -15,6 +15,7 @@ from uuid import uuid4
 from idhazh import completed_writes, config, corpus
 from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
+from idhazh.contracts.knobs.windows import months_a_window_can_touch
 from idhazh.contracts.ledger_index import CompactIndex, EntryState
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain
@@ -34,11 +35,16 @@ from utilities.publication_request import (
 INVENTORY = "frontend/public/publication.json"
 
 
+def _band_input_days(settings: config.Settings) -> int:
+    widest = max(settings.appearance.console.window_presets)
+    return max(2 * widest, months_a_window_can_touch(widest) * 31)
+
+
 def _input_window(which: LedgerName, settings: config.Settings) -> int:
     window = max(
         settings.app.console.max_window_days,
         settings.appearance.console.max_window_days,
-        max(settings.app.observability.full_grain_months().values()) * 31,
+        _band_input_days(settings),
         settings.app.collect.reliability_window_days,
     )
     if which is LedgerName.SEEN:
@@ -71,6 +77,12 @@ def input_paths(*, date: str, settings: config.Settings) -> tuple[str, ...]:
         asked.add(f"frontend/public/digest/{stamp}")
         asked.add(f"state/digest-fragments/{stamp}")
         asked.add(f"state/day-metrics/{stamp[:7]}")
+    # Retired month mirrors no longer supply the band during regeneration.
+    # Materialize its native manifest/state records, not historical day payloads.
+    for offset in range(_band_input_days(settings)):
+        stamp = (through - timedelta(days=offset)).isoformat().replace("-", "/")
+        asked.add(f"frontend/public/digest/{stamp}/run.json")
+        asked.add(f"state/day-metrics/{stamp}.json")
     for path in DERIVED:
         rendered = path.format(day_dir=f"frontend/public/digest/{date.replace('-', '/')}")
         # The files inside these derived roots are named by the fresh inventory,
@@ -89,13 +101,13 @@ def resolved_inputs(
     asked = set(input_paths(date=date, settings=settings))
     count = max(
         settings.app.console.max_window_days,
+        settings.appearance.console.max_window_days,
+        _band_input_days(settings),
         settings.app.collect.reliability_window_days,
         ledger.HEALTH_WINDOW_DAYS,
     )
     through = max(date_type.fromisoformat(date), datetime.now(UTC).date())
-    cutoff = through - timedelta(
-        days=max(count, max(settings.app.observability.full_grain_months().values()) * 31) - 1
-    )
+    cutoff = through - timedelta(days=count - 1)
     permanent = (LedgerName.FEED_RETIREMENTS, LedgerName.VISUAL_PRUNES)
     unbounded_published = settings.app.collect.published_window_days == UNBOUNDED_WINDOW
     if unbounded_published:
@@ -253,8 +265,7 @@ def preparation(
                             - timedelta(
                                 days=max(
                                     settings.app.console.max_window_days,
-                                    max(settings.app.observability.full_grain_months().values())
-                                    * 31,
+                                    _band_input_days(settings),
                                 )
                             )
                         ).isoformat()[:7]

@@ -182,7 +182,7 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
     ),
     LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION: LedgerStaging(
         writer=(
-            "the council's shipping capability, through idhazh.similarity.tenant and "
+            "the council's shipping capability, through idhazh.content_similarity_judge.tenant and "
             "idhazh.stages.count_verdicts: both write the record straight to its "
             "address rather than calling a ledger writer"
         ),

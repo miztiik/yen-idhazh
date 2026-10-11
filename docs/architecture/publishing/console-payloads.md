@@ -1,18 +1,15 @@
 # Console Payloads
 
-**Last Updated**: 2026-10-10
-The operator console reads ten datasets. Nine of them are projected out of
-`state/`, so each one crosses from a ledger into the site and each crossing
-needs a contract (Guardrail #11). This page is the list. The machine-readable copy is
+**Last Updated**: 2026-10-11
+The operator console reads native records as well as the remaining public
+projections. Each crossing into the site needs a contract (Guardrail #11).
+This page lists the public projections. The machine-readable copy is
 `backend/idhazh/contracts/console_payloads.py`, and it is the one a build reads.
 
-Every one of them has a producer now. **Nothing reads them yet** - the console
-still derives the same numbers at build time, and the row of the
-shell-and-fetch migration that made the console fetch them is where it
-stops. The producer landing first is deliberate: a consumer written
-against a payload nobody has written is a consumer written against a guess.
+Every entry has a producer. The band is fetched first; the route rows own
+the migration of their other readers onto native records.
 
-## The eleven
+## The remaining published projections
 
 Every path below is under `frontend/public/`. Every shape is a contract under `backend/idhazh/contracts/`.
 
@@ -21,11 +18,6 @@ Every path below is under `frontend/public/`. Every shape is a contract under `b
 | Verdict band | `console-shell.ts` `consoleShell` | `console/band.json` | `console-band` |
 | Telemetry rows | `payload.ts` `telemetryRows` | `telemetry/<YYYY-MM>.csv` | `public-telemetry` |
 | Item health | `ledger-rows.ts` `itemHealthRows` | `telemetry/<YYYY-MM>.csv` | `public-telemetry` |
-| Run manifests | `payload.ts` `loadManifests` | `run-days/<YYYY-MM>.json` | `public-run-day` |
-| Published items | `payload.ts` `publishedCharts` | `run-days/<YYYY-MM>.json` | `public-run-day` |
-| Published charts | `payload.ts` `publishedCharts` | `run-days/<YYYY-MM>.json` | `public-run-day` |
-| Day metrics | `payload.ts` `dayMetrics` | `day-metrics/<YYYY-MM>.json` | `day-metrics` |
-| Machine counters | `machine-counters.ts` `loadMachineCounters` | `machine/<YYYY-MM>.csv` | `machine-shard-row` |
 | Run timeline | `run-timeline.ts` `loadRunTimeline` | `run-timeline/<YYYY-MM>.csv` | `run-timeline-row` |
 | Source health | `payload.ts` `sourceHealthView` | `source-health.json` | `source-health-view` |
 
@@ -35,8 +27,7 @@ ever fetched either - the console read both ledgers under `state/` at build time
 and always did. Today `evalRows` reads the eval ledger's packed files and
 `feedResults` the feed record's. The
 published trees, their two projections and their two schemas are gone; the
-ledgers stay. What that removes from this page is the twelfth dataset and the
-twelfth reader, not a source the console needs.
+ledgers stay. Removing a projection does not remove a source the console needs.
 
 **`source-health.json` is the one entry in that table nothing fetches**, and
 that has not changed since the panels reading it moved to `/console/voices/` on
@@ -46,11 +37,8 @@ staged into `frontend/static/` and never reaches the build. A
 `page_weight.payload_ceilings_bytes` key naming it would therefore match nothing
 and fail the bundle gate.
 
-**Eleven datasets, eight schemas.** Three console datasets answer off the run-day
-row and two off the telemetry shard. That is not a shortcut: `loadManifests` and
-`publishedCharts` share a key, a window and a producer, and `publishedCharts`
-opens a day payload of hundreds of kilobytes to take two integers out of it -
-the articles the day published and the charts among them. `itemHealthRows`
+**Five datasets, four schemas.** The two telemetry datasets share one
+public shard. `itemHealthRows`
 reads the census the telemetry shard already projects, so a second projection
 of it would be two schemas for one row.
 
@@ -66,15 +54,15 @@ census's own names, and the two that are not - `start_offset_ms` and
 filed twice, with the census as the source
 ([`run-timeline.md`](run-timeline.md)).
 
-It keeps two months where every other series keeps fourteen, and
+It keeps two months, and
 `observability.public_run_timeline_keep_months` is the knob. No window preset
 reaches it - the panel draws one run and names it - so a third month would
 publish the widest row this project writes to answer a question nobody can ask.
-That is also why it is the one published series absent from
-`ObservabilityConfig.full_grain_months`, which exists to stop a console window
-outliving the shard it selects.
+It has no separate window-preset floor. The removed machine, run-days and
+day-metrics copies no longer impose copy-retention floors either; native
+ledger retention remains governed by the gardener.
 
-### A thirteenth shape is declared, and it is written now
+### The timeline shape is declared and written
 
 `run-timeline-row` is the run timeline: one row an item, placed on the run's own
 clock. It landed ahead of its producer on purpose, so the writers produce what
@@ -98,13 +86,10 @@ a model stops the process rather than reaching the published tree.
 | --- | --- | --- |
 | `public-telemetry` | `canonical_url`, `url_key`, `detail` | Two identify the page rather than the measurement; `detail` is diagnostic free text that can quote a fetched body |
 
-**An empty list is a real answer, and it is stated rather than left blank.** Six
-shapes forbid nothing. `public-run-day` and `console-band` are not projections
-of a ledger row at all - one is a reduction of two documents to counts, the
-other a set of sentences the pipeline composed about its own run - so the
-refusal is structural: a fetched string has no field to arrive in. `day-metrics`,
-`machine-shard-row` and `source-health-view` are published
-whole, because every cell on each is a count or a duration of our own work.
+**An empty list is a real answer.** `console-band` is a set of sentences and
+named movement dates the pipeline composed about its own run: fetched text has
+no field to arrive in. Source-health and the retained run timeline describe
+our own work, so they have no redaction projection.
 
 **One shape refuses anything, where three used to.** `public-eval` refused
 `url_key`, `source_url` and `title`, and `public-feed-health` refused
@@ -121,11 +106,9 @@ The Data explorer reads ledger files rather than another pipeline projection.
 [What the Data explorer keeps and shares](data-explorer-state.md) owns its
 registry refresh, browser questions, shared addresses and answer copies.
 
-## Retention
-
 ## The producers
 
-Six modules under `backend/idhazh/telemetry/publish/`, one dataset each. None
+Each dataset has its own module under `backend/idhazh/telemetry/publish/`. None
 of them spells a path, a write rule or a prune of its own: `series.py` owns
 those and every producer obeys the same three rules from the same place.
 
@@ -139,18 +122,22 @@ day the run is publishing, and every projection's body stays in its own module
 
 | Producer | Writes | Reads |
 | --- | --- | --- |
-| `console_band.py` | `console/band.json` | the run-day shards it wrote, the feed-health days over the widest window through `ledger.load_health`, the newest day's item-health rows and its day-metrics record, the host-fingerprint days over the widest window - all three ledgers through `ledger.load_days` - and the newest day's `run.json` |
-| `run_days.py` | `run-days/<YYYY-MM>.json` | one month of committed `run.json` and `digest.json` |
-| `day_metrics.py` `publish_public` | `day-metrics/<YYYY-MM>.json` | one month of `state/day-metrics/<YYYY>/<MM>/` |
-| `machine.py` | `machine/<YYYY-MM>.csv` | one month of the item-health and host-fingerprint ledgers, through `ledger.load_days` |
+| `console_band.py` | `console/band.json` | native run manifests and state day-metrics over the widest window; native feed-health, item-health and host-fingerprint through the ledger door; native summary-quality-evals for checker movement |
+| `day_metrics.py` | `state/day-metrics/<YYYY>/<MM>/<DD>.json` | the publication's day and manifest, with that day's native rows |
 | `run_timeline.py` | `run-timeline/<YYYY-MM>.csv` | one month of the item-health ledger, through `ledger.load_days` |
 
-Each run-days record copies the manifest's `chart_evidence` without recomputing
+The band finds its newest manifest over the bounded named-month cover,
+including the whole month of the plan being assembled. A delayed older plan
+therefore cannot replace a newer published day in that month. Its subsequent
+window and predecessor reads are anchored on the newest day found, not the
+plan's date or the current clock. Discovery does not enter the following month.
+
+Each native manifest keeps its `chart_evidence` without recomputing
 or pooling it. Missing historical evidence stays null. The exact counts,
 denominator and weighted rates are defined once in
 [Where every drawn figure came from](where-every-drawn-figure-came-from.md#the-two-rates-and-why-both).
-`run_days.read_shard` validates the monthly JSON through `PublicRunDay`; the
-frontend's existing `loadManifests` reader exposes the same evidence as
+`RunManifest.read` validates the native JSON; the frontend's existing
+`loadManifests` reader exposes the same evidence as
 `chartEvidence`. Neither path needs a new chart or an extra source read.
 
 `scores.py` and `feed_health.py` were two more rows of that table until
@@ -159,12 +146,12 @@ frontend's existing `loadManifests` reader exposes the same evidence as
 drifts from its ledger unwatched - so both modules went and `PROJECTIONS` is two
 rows shorter.
 
-`public_telemetry.py` is the seventh and it predates this page. It keeps its own
+`public_telemetry.py` predates this page. It keeps its own
 path helper because the gardener's `telemetry-aggregate` task finds a shard to
 delete by the same `<month>.csv` name the helper writes, and two spellings of it
 would delete a month nobody published and leave the published one behind.
 
-`source_health.py` is the eighth. It writes `source-health.json`, the one entry
+`source_health.py` writes `source-health.json`, the one entry
 in the table above that nothing fetches, and it sits here rather than beside the
 digest because a feed's reliability is an observation about the run and not a
 product surface.
@@ -187,18 +174,22 @@ run would write a month the console window can no longer reach. The oracle for
 this row caught exactly that: six months of a twenty-month fixture were
 rewritten and re-deleted on the second pass.
 
-### The band is a reduction of the payloads beside it
+### The band reads native records
 
 `console-shell.ts` derives the band at build time from six committed ledgers and
 inlines it into three prerendered documents. `console_band.py` is the
 same derivation, ported sentence for sentence, and row 10 deletes the
 TypeScript one. Two things about where it reads from:
 
-- **The runs, the site size and the article counts come from the run-day shards
- this run just wrote**, not from the day payloads. Re-reducing five months of
- day payloads is the walk those shards exist to remove, and reading them makes
- the band and the console arithmetically identical rather than merely intended
- to be.
+- **The runs and site size come from native `run.json`; published-item counts
+ come from native `state/day-metrics`.** The band never opens `digest.json`.
+ Public machine, run-days and day-metrics mirrors, their producers and knobs
+ are retired. Native raw/compact state and the state day-metrics writer stay.
+  `digest_assemble` materializes the larger of the configured discovery cover
+  and two spans of native manifests and state day-metrics. Regeneration writes
+  its own plan-date manifest before the band runs, so that date is the anchor
+  and two spans include the farthest permitted predecessor. It no longer
+  derives publication input windows from the deleted public-copy knobs.
 - **The feed trouble comes from the feed-health ledger through `discover.settled`,
  `discover.streak` and `discover.resting`** - the reducers the pipeline itself
  rested a feed by. A page running its own copy is how a console starts
@@ -249,22 +240,41 @@ a contract. Data hygiene belongs there and not in pytest (`CLAUDE.md`
 section 13): it is the producer's own gate on what it just wrote, running where
 the payload is.
 
+### Recorded settings and checker movement
+
+`settings_moved` and `checker_moved` are nullable records on the real
+`ConsoleBand`; historic absent keys validate as `None`. The browser treats an
+absent or malformed kind as unknown independently of the other.
+
+The anchor is the newest native manifest day. For the widest configured window
+W, each rule reads [T-(W-1), T], then walks backward at most W days to its own
+nearest recorded predecessor. Settings compare each nonempty named input to
+its newest earlier day holding that name. Multiple runs retain all values that
+day; a revert is a change, but a later use of either value from a mixed day is
+not. Historic joined flags are normalized by `PipelineInputs` first.
+
+Checker movement reads `summary-quality-evals` through `day_metrics.read_score_rows`.
+Whole `scorer_version` strings detect checker movement. Removing `metrics-`,
+`bands=` and `lead=` segments identifies whether the scorer itself moved.
+Only names, dates and the scorer-moved boolean reach the band, never hash values.
+Both languages assert the same authored five-on-one-day expected fixture.
+
+`settingsRules` returns Row2's real `ModelRule`; settings and checker events
+remain independent, including two readouts on one date. The existing boundary
+adapter chooses one settings-priority boundary. Score-only notes describe the
+faithfulness scorer, not every checker change; a window wholly before coverage
+makes no no-change claim.
+
 ## Retention
 
-The retained monthly copies have a configured age. A payload a run appends to with no age is
-a directory that grows for ever (Guardrail #12). Every one of them has an age
-that ends. Three are knobs under `observability` in `config/idhazh.json`, each
-with a **non-null** default:
-
-`public_run_days_keep_months`, `public_day_metrics_keep_months`,
-`public_machine_keep_months`.
+The three public mirror retention knobs are retired with their projections.
+The native ledgers retain their own compaction declarations.
 
 The telemetry copy is the `public-copy` series of
 `config/gardener/telemetry-aggregate.json`, because the gardener task that folds
 the ledger it copies is the thing that deletes it.
 
-`ObservabilityConfig.refuse_windows_shorter_than` checks those settings against
-the widest configured console read, and the gardener loader checks the
+The gardener loader checks the native read floors and telemetry's
 `public-copy` series. **A shard deleted while a window preset can
 still reach it blanks that panel silently**, because a month with no file reads
 exactly like a month with no runs.
@@ -273,9 +283,7 @@ The telemetry copy projects a state ledger and is held **equal** to the ledger
 it projects: the `public-copy` series to the `full-grain` series of the same
 declaration. Any other pair leaves either a published month nothing can check
 against its source, or a source month the console has no copy of to draw. The
-other copies have no state ledger of their own: `run-days` reduces the committed day
-payloads, `day-metrics` has no age on the state side, and
-`machine` is where the month boundary is first drawn at all.
+retired copies no longer have an independent retention policy.
 
 **`public_scores_keep_months` and `public_feed_health_keep_months` were two more
 until 2026-09-16.** They are refused by name now rather than ignored, because a
@@ -375,14 +383,14 @@ compact, which is why the no-months row reads under the committed 777:
 | 14 (the retention bound) | 758 | 37.9 percent |
 | 24 (two years) | 780 | 39.0 percent |
 
-**The list cannot pass 14, and that is retention rather than a hope.** `months`
-is the union of the published month shards, and each series drops a shard once
-it is past its own window: the publishers trim theirs to
-`observability.public_*_keep_months`, and the gardener's `telemetry-aggregate`
-task trims the telemetry copy to its `public-copy` series. Every one of those is
-14. So the whole growable part of this payload is the 32 bytes between
-the first row and the third, and the served payload at its bound is about 809 -
-40.5 percent of the guardrail, which needs no window of its own.
+**The months list names telemetry only.** The band checks the named months
+inside the widest configured window; it no longer unions the retired machine,
+run-days and public day-metrics copies. Telemetry's `public-copy` series still
+governs its retention. Settings and checker changes are also bounded by the
+widest window, with one equal-length predecessor search for each kind.
+The figures above describe the older shape, before the movement fields.
+The owner suspended size studies on 2026-10-10; this change keeps the existing
+ceiling rather than deriving a new value from a measurement.
 
 **The band carried two numbers for two days, and the fix was to delete one.**
 `console-band.spec.ts` asserted `8 * 1024` of its own from 2026-09-08, sized for
@@ -449,18 +457,12 @@ table above it. What an empty box says until a chart draws, and after a download
 that failed, is
 [console-charts.md](console-charts.md#an-empty-chart-box-says-which-nothing-it-holds).
 
-**The band's months list is the union across all five fetched series**, not the
-run-day months alone. The field promised "every month a payload shard exists
-for" and delivered one series' worth. They can differ: each series is pruned by
-its own `observability.public_*_keep_months`, and the canary projects telemetry
-over a wider span than its run-days. Measured on the canary the day it was
-found, run-days held `2026-08` where the union holds `2026-07`, `2026-08` and
-`2026-09` - two months of the page that would never have filled. Five
-directory listings and no file opened, each directory bounded by its own knob,
-so it costs the same on any size of archive (Guardrail #12).
+**The band's months list names telemetry only.** The native ledgers have their
+own indexes; retired public mirrors do not contribute months. The read names
+the configured months and opens no telemetry row file.
 
 **The canary writes these payloads too, and it has to write them late.**
-`build_canary_day.py --console-payloads-only` runs the same four producers
+`build_canary_day.py --console-payloads-only` runs the remaining native-backed producers
 `idhazh publish` runs, called from `frontend/scripts/build-canary.mjs` straight
 after it projects the telemetry. Earlier than that and the item-health rows, the
 counters, the span rollup and the telemetry do not exist yet. Before this the

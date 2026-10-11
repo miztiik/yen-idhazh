@@ -278,9 +278,6 @@ def test_a_build_leaves_no_file_an_earlier_build_wrote(
         "digest/2026/10/01/digest.json",
         "assist/index/2026-10.json",
         "console/band.json",
-        "run-days/2026-10.json",
-        "day-metrics/2026-10.json",
-        "machine/2026-10.csv",
         "run-timeline/2026-10.csv",
         "state/day-metrics/2026/10/01.json",
     ]
@@ -297,4 +294,5 @@ def test_a_build_leaves_no_file_an_earlier_build_wrote(
     assert [name for name in left if (root / name).exists()] == []
     assert (root / "digest/2026/08/20/digest.json").is_file()
     assert (root / "assist/index/2026-08.json").is_file()
+    assert not any((root / name).exists() for name in ("machine", "run-days", "day-metrics"))
     assert (root / "publication.json").read_text(encoding="utf-8") == "written before this build\n"

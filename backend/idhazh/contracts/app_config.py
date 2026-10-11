@@ -40,7 +40,6 @@ from idhazh.contracts.knobs.assist import AssistConfig
 from idhazh.contracts.knobs.bench import BenchConfig
 from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.console import ConsoleConfig
-from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.contracts.knobs.evaluation import DriftConfig, EvaluationConfig
 from idhazh.contracts.knobs.extract import ElementsConfig, ExtractConfig
 from idhazh.contracts.knobs.finetune import FinetuneConfig, ReferenceDatasetConfig
@@ -57,7 +56,6 @@ from idhazh.contracts.knobs.similarity import SimilarityConfig
 from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.contracts.knobs.ui import UiConfig
 from idhazh.contracts.knobs.visuals import VisualsConfig
-from idhazh.contracts.knobs.windows import months_a_window_can_touch
 
 #: The top-level `config/idhazh.json` keys this file used to carry. `models`
 #: held the whole active model inline, so a swap edited eleven lines in the file
@@ -67,8 +65,10 @@ from idhazh.contracts.knobs.windows import months_a_window_can_touch
 #: another, and the run would stand a server up on whichever won. `prune` held
 #: the two GitHub collections' ages for a utility a person ran by hand; each
 #: collection is a gardener task now, and its age lives in its own declaration.
+#: `council` lives in its workflow's own config file, beside its judge list.
 SUPERSEDED_APP_NAMES: Final[Mapping[str, str]] = MappingProxyType(
     {
+        "council": "config/llm_council.json",
         "models": "models_file",
         "prune": (
             "window.value in config/gardener/workflow-artifacts.json and "
@@ -111,6 +111,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-11",
+            change="council removed; its settings live in config/llm_council.json.",
+            why="The council owns its settings and judge list, as the gardener does.",
+        ),
+        ChangelogEntry(
             version="2026-10-09",
             change="console.panel_groups and console.judged_panel_ids removed.",
             why="Each route's console file owns its panel order and judged list.",
@@ -126,11 +131,6 @@ class AppConfig(Contract):
             why="The Data explorer page is live and draws its own controls.",
         ),
         ChangelogEntry(
-            version="2026-10-02",
-            change="console.default_window_days 30 to 14; console.data_explorer_tab added.",
-            why="One opening span on every route, and the sixth tab waits for its page.",
-        ),
-        ChangelogEntry(
             version="2026-09-28",
             change="Earlier changes are in this file's git history.",
             why="A changelog says what moved lately; git is the archive.",
@@ -138,7 +138,6 @@ class AppConfig(Contract):
     )
 
     run: RunConfig = Field(default_factory=RunConfig)
-    council: CouncilConfig = Field(default_factory=CouncilConfig)
     bench: BenchConfig = Field(default_factory=BenchConfig)
     collect: CollectConfig = Field(default_factory=CollectConfig)
     extract: ExtractConfig = Field(default_factory=ExtractConfig)
@@ -178,9 +177,9 @@ class AppConfig(Contract):
     @model_validator(mode="before")
     @classmethod
     def _a_removed_top_level_block_is_refused_by_name(cls, data: Any) -> Any:
-        """`models` left this file on 2026-09-14 and `prune` on 2026-09-28; both are refused.
+        """Removed blocks are refused with the name of their replacement.
 
-        A config that still carries either block would otherwise fail with "extra
+        A config that still carries a removed block would otherwise fail with "extra
         inputs are not permitted", which does not tell an operator where their
         lines went.
         """
@@ -235,21 +234,4 @@ class AppConfig(Contract):
     @model_validator(mode="after")
     def _the_archive_opens_on_a_span_the_presets_name(self) -> Self:
         refuse_an_archive_window_no_preset_offers(self.ui, self.console)
-        return self
-
-    @model_validator(mode="after")
-    def _no_cleanup_age_is_shorter_than_the_console_can_ask_for(self) -> Self:
-        """Every full-grain window outlives the widest read the console offers.
-
-        Checked here because `ObservabilityConfig` cannot see `console`, and the
-        failure is the worst kind: a shard is deleted, a reader pans back to it
-        months later, and the page draws a gap that reads as a day the pipeline
-        did nothing. `config.load` runs the same check again against
-        `config/appearance.json`, which is the file the published console
-        actually reads its window from.
-        """
-        self.observability.refuse_windows_shorter_than(
-            months_a_window_can_touch(self.console.max_window_days),
-            window_days=self.console.max_window_days,
-        )
         return self

@@ -13,6 +13,13 @@ from idhazh.contracts.knobs.observability import SUPERSEDED_RETENTION_NAMES, Obs
 pytestmark = pytest.mark.contract
 
 
+def test_the_council_block_is_refused_naming_its_own_file() -> None:
+    with pytest.raises(ValidationError) as refused:
+        AppConfig.model_validate({"council": {}})
+    assert "config.council" in str(refused.value)
+    assert "config/llm_council.json" in str(refused.value)
+
+
 def test_a_config_still_carrying_a_removed_knob_is_refused_by_name() -> None:
     """Decision 2: a removed knob fails loudly and names what to use instead.
 
@@ -76,7 +83,11 @@ def test_every_removed_name_is_sent_somewhere_or_said_to_be_gone() -> None:
     assert dict(SUPERSEDED_COLLECT_NAMES) == {
         "quarantine_after_failures": "availability_strikes_before_rest"
     }
-    gone = {"public_scores_keep_months", "public_feed_health_keep_months", "runtime_counters_scrape"}
+    gone = {
+        "public_scores_keep_months",
+        "public_feed_health_keep_months",
+        "runtime_counters_scrape",
+    }
     assert {name for name, successor in SUPERSEDED_RETENTION_NAMES.items() if not successor} == gone
     for name, successor in SUPERSEDED_RETENTION_NAMES.items():
         if successor:

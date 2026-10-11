@@ -1,0 +1,17 @@
+{
+	"compared_from": "2026-09-17",
+	"changes": [
+		{
+			"date": "2026-09-17",
+			"inputs": ["prompt_sha256", "turn_markers_sha256", "truncation_cap_tokens", "sampling.temperature", "n_ctx"]
+		},
+		{
+			"date": "2026-09-18",
+			"inputs": ["prompt_sha256"]
+		},
+		{
+			"date": "2026-09-19",
+			"inputs": ["sanitizer_version"]
+		}
+	]
+}

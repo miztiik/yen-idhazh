@@ -10,5 +10,5 @@ export function stagedPath(file, servedElsewhere) {
 	if (file.startsWith('digest/')) {
 		return !servedElsewhere && ITEM_FILE.test(file.slice(file.lastIndexOf('/') + 1)) ? file : null;
 	}
-	return /^(telemetry|console|run-days|day-metrics|machine)\//.test(file) ? file : null;
+	return /^(telemetry|console)\//.test(file) ? file : null;
 }

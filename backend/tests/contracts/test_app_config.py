@@ -22,7 +22,6 @@ from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.knobs import placement
 from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.console import ConsoleConfig
-from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.knobs.ledger import LedgerConfig
 from idhazh.contracts.knobs.model_server import ModelServerConfig, is_loopback, resolve_base_url
@@ -144,8 +143,7 @@ def test_a_fresh_clone_runs_on_the_defaults() -> None:
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
     minimal = AppConfig.model_validate({})
     assert minimal.models_file == committed.models_file, (
-        "the default names the committed file, or a fresh clone reads a model "
-        "nobody put there"
+        "the default names the committed file, or a fresh clone reads a model nobody put there"
     )
     assert (CONFIG_DIR / minimal.models_file).is_file()
     assert minimal.run.safety_ceiling_per_run == committed.run.safety_ceiling_per_run
@@ -1194,16 +1192,12 @@ def test_every_published_window_outlives_the_shards_a_console_read_selects() -> 
     assert shards == 14, "a 366-day read reaches fourteen month shards, not thirteen"
     assert 13 * 30 > window, "the retired check passed 13, which is the whole point"
 
-    fresh = ObservabilityConfig()
-    assert set(fresh.full_grain_months()) == {
-        "public_run_days_keep_months",
-        "public_day_metrics_keep_months",
+    for name in (
+        "public_run_days_keep_months", "public_day_metrics_keep_months",
         "public_machine_keep_months",
-    }
-    for name, months in fresh.full_grain_months().items():
-        assert months >= shards, f"observability.{name} is shorter than a console read"
-        with pytest.raises(ValidationError, match=name):
-            AppConfig.model_validate({"observability": {name: months - 1}})
+    ):
+        with pytest.raises(ValidationError, match="Extra inputs"):
+            AppConfig.model_validate({"observability": {name: 14}})
 
 
 def test_a_config_with_no_logging_block_reads_every_flag_at_its_documented_default() -> None:
@@ -1550,49 +1544,9 @@ def test_a_config_with_no_judge_in_it_validates_and_stays_that_way() -> None:
     none_at_all = AppConfig.model_validate({})
 
     assert none_at_all.assemble.same_story.adaptive_dedup_threshold is None
-    assert none_at_all.council.shard_timeout_minutes >= 1
-    assert none_at_all.council.shards >= 1
 
     committed = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
     del committed["assemble"]["same_story"]["adaptive_dedup_threshold"]
-    committed["council"]["tenants"] = []
     without_a_judge = AppConfig.model_validate(committed)
 
     assert without_a_judge.assemble.same_story.adaptive_dedup_threshold is None
-    assert without_a_judge.council == AppConfig.model_validate({}).council
-
-
-def test_the_whole_range_of_the_repair_cap_loads() -> None:
-    """A knob whose top half will not load is a lying bound.
-
-    Dates are a PARALLEL axis - one job a date, each under its own
-    `shard_timeout_minutes` - so nothing multiplies a per-shard time budget by
-    this number. A check that did would refuse a config the knob's own bound
-    admits, and would be comparing parallel work against a per-job clock.
-    """
-    field = CouncilConfig.model_fields["repair_dates_a_night"]
-    lowest = next(bound.ge for bound in field.metadata if hasattr(bound, "ge"))
-    highest = next(bound.le for bound in field.metadata if hasattr(bound, "le"))
-
-    for value in range(lowest, highest + 1):
-        loaded = AppConfig.model_validate({"council": {"repair_dates_a_night": value}})
-        assert loaded.council.repair_dates_a_night == value
-
-
-def test_the_council_carries_its_own_window_its_floor_and_its_cap() -> None:
-    """Three knobs the venue owns, because all three price a runner.
-
-    What counts as behind is the tenant's - only it knows what it has read - but
-    how far back the council asks, how far back it may reach at all, and how
-    many older dates one night repairs are the venue's, because each one is
-    another job a tenant a shard.
-    """
-    committed = AppConfig.model_validate(json.loads(read_text(CONFIG_DIR / "idhazh.json"))).council
-    fresh = AppConfig.model_validate({}).council
-
-    assert committed.repair_window_nights == fresh.repair_window_nights
-    assert committed.first_night == fresh.first_night
-    assert committed.repair_dates_a_night == fresh.repair_dates_a_night
-    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", committed.first_night), (
-        "the floor is a date the window arithmetic can read"
-    )

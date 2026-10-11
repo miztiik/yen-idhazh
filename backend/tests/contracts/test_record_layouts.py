@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from datetime import date
 from pathlib import Path
 
 import pytest
@@ -101,7 +100,7 @@ def test_fragment_file_writer_preserves_records_and_metadata(tmp_path: Path, emp
             assert f'  "{name}": []' in text
 
 
-def test_month_producer_keeps_days_expanded_and_sources_on_one_line(tmp_path: Path) -> None:
+def test_state_producer_keeps_days_expanded_and_sources_on_one_line(tmp_path: Path) -> None:
     fixture = CONTRACT_FIXTURES_DIR / "day-metrics"
     metrics = DayMetrics.read(fixture / "full.json")
     state = tmp_path / "state"
@@ -119,19 +118,3 @@ def test_month_producer_keeps_days_expanded_and_sources_on_one_line(tmp_path: Pa
                 record.model_dump(mode="json"), sort_keys=True, separators=(",", ": ")
             )
             assert any(line.strip().rstrip(",") == rendered for line in state_text.splitlines())
-    digest = tmp_path / "public" / "digest"
-    paths = day_metrics.publish_public(
-        state_root=state,
-        digest_root=digest,
-        keep_months=1,
-        today=date.fromisoformat(metrics.date),
-        months=[metrics.date[:7]],
-    )
-    text = paths[0].read_text(encoding="utf-8")
-    assert text.startswith("[\n  {\n")
-    assert json.loads(text) == [metrics.model_dump(mode="json")]
-    for records in (metrics.sources, metrics.instruments, metrics.stage_timing):
-        for record in records:
-            row = record.model_dump(mode="json")
-            assert json.dumps(row, sort_keys=True, separators=(",", ": ")) in text
-    assert day_metrics.read_public_shard(paths[0]) == [metrics]

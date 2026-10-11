@@ -108,7 +108,7 @@ fold reads the age, it is a knob in `observability`, and
 selects. `visuals_full_grain_months` is a full-grain window and is **not** in
 | `state/visuals/` | 14 months | forever, in `state/visual-aggregate/` | `visuals_full_grain_months` and `visual_aggregate_keep_months` (null) in `observability` |
 | the feed-health ledger, `state/raw/feed-health/` and `state/compact/feed-health/` | the 14-month `monthly_window` of its compaction | none - a per-feed-per-run record is not a total worth keeping | `config/gardener/compact-feed-health.json` |
-| the host-fingerprint ledger, `state/raw/host-fingerprint/` and `state/compact/host-fingerprint/` | the 14-month `monthly_window` of its compaction | none - one job's silicon on one run, and a total over an old month names no machine | `config/gardener/compact-host-fingerprint.json`, which may not keep less than `public_machine_keep_months` |
+| the host-fingerprint ledger, `state/raw/host-fingerprint/` and `state/compact/host-fingerprint/` | the 14-month `monthly_window` of its compaction | none - one job's silicon on one run, and a total over an old month names no machine | `config/gardener/compact-host-fingerprint.json`; native read floors stay enforced |
 
 And one for each published copy, because a reader fetches those and our own disk
 is not what bounds them:
@@ -116,9 +116,6 @@ is not what bounds them:
 | Published copy | Age | Paired with |
 | --- | --- | --- |
 | `frontend/public/telemetry/` | 14 months, the `public-copy` series of `config/gardener/telemetry-aggregate.json` | the `full-grain` series of the same file, which it must equal |
-| `frontend/public/run-days/` | `public_run_days_keep_months` (14) | nothing - the source is the day payloads, whose retention is the archive's |
-| `frontend/public/day-metrics/` | `public_day_metrics_keep_months` (14) | nothing - `state/day-metrics/` has no age of its own |
-| `frontend/public/machine/` | `public_machine_keep_months` (14) | the `monthly_window` of `config/gardener/compact-host-fingerprint.json`, which may not keep less than it - the shard is folded from the host-fingerprint and item-health ledgers |
 
 **Two ages left this table on 2026-09-16.** `public_scores_keep_months` and
 `public_feed_health_keep_months` bounded published copies of `state/scores/` and
@@ -163,11 +160,9 @@ the thing that replaces it has been written.
 refuses a `public-copy` series that differs from the `full-grain` series of
 `telemetry-aggregate`, in both directions: a published month whose source has
 been folded away is a rate nobody can check, and a source month with no
-published copy is a window the console cannot draw. The machine shard is folded
-from the host-fingerprint ledger, so the declaration that governs that ledger -
-its compaction, which is what deletes its rows now - is refused when it keeps
-less than `public_machine_keep_months`. The other three copies have no
-state ledger behind them and are bounded by their own knob alone.
+published copy is a window the console cannot draw. Public machine, run-days
+and day-metrics mirrors and their retention knobs are retired. The native
+host-fingerprint compaction and state day-metrics records remain.
 
 **This block sets the ages. Which policy a tree is under - fold, delete or keep
 - is [../adaptive-pruning.md](../adaptive-pruning.md)**, which is also where an age is

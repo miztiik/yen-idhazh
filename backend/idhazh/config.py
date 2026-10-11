@@ -17,11 +17,15 @@ The gardener reads its own two inputs through `load_gardener`: its knobs in
 no use for them and a gardener run has no use for the model files. Every
 refusal that needs only those files and `config/idhazh.json` is made here, as
 they load; the two that need the task modules are the gardener runner's.
+
+The council reads `config/llm_council.json` through `load_council`. The shared
+loader carries the same model separately from `AppConfig` and records its digest.
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -38,6 +42,7 @@ from pydantic import TypeAdapter, ValidationError
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.appearance_config import AppearanceConfig
 from idhazh.contracts.base import SLUG_PATTERN
+from idhazh.contracts.knobs.council import CouncilConfig, JudgeDeclaration
 from idhazh.contracts.knobs.gardener import (
     CollectionTaskPolicy,
     CompactionPolicy,
@@ -63,7 +68,13 @@ REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG_DIR: Final = REPO_ROOT / "config"
 
 
-_FILES: Final[tuple[str, ...]] = ("idhazh.json", "sources.json", "taxonomy.json", "watchlist.json")
+_FILES: Final[tuple[str, ...]] = (
+    "idhazh.json",
+    "sources.json",
+    "taxonomy.json",
+    "watchlist.json",
+    "llm_council.json",
+)
 #: Read for validation and not digested. It owns the console window every
 #: cleanup age has to outlive, so a run that deletes a shard has to have checked
 #: against the file the published console really reads - `AppConfig.console` is
@@ -162,18 +173,53 @@ class Settings:
     """Every tunable the run will consult, already validated."""
 
     app: AppConfig
+    council: CouncilConfig
     models: ModelsConfig
     appearance: AppearanceConfig
     sources: Sources
     taxonomy: Taxonomy
     watchlist: Watchlist
     digests: tuple[ConfigDigest, ...]
+    config_dir: Path = DEFAULT_CONFIG_DIR
+
+
+def load_council(config_dir: Path = DEFAULT_CONFIG_DIR) -> CouncilConfig:
+    """Read the council's own named file without loading a judge or model."""
+    council = CouncilConfig.model_validate_json(
+        (config_dir / "llm_council.json").read_text(encoding="utf-8")
+    )
+    council.bind_declarations(load_judge_declarations(config_dir, council), config_dir=config_dir)
+    return council
+
+
+def load_judge_declarations(
+    config_dir: Path, council: CouncilConfig
+) -> dict[str, JudgeDeclaration]:
+    """Read only the council's two keys from each named judge file."""
+    declarations: dict[str, JudgeDeclaration] = {}
+    for name in council.judge_names:
+        path = config_dir / "judges" / f"{name}.json"
+        try:
+            raw = TypeAdapter(dict[str, object]).validate_python(
+                json.loads(path.read_text(encoding="utf-8"))
+            )
+            declarations[name] = JudgeDeclaration.model_validate(
+                {key: raw[key] for key in JudgeDeclaration.model_fields if key in raw}
+            )
+        except (ValidationError, json.JSONDecodeError) as error:
+            raise ValueError(f"config/judges/{name}.json is refused: {error}") from error
+    return declarations
 
 
 def load(config_dir: Path = DEFAULT_CONFIG_DIR) -> Settings:
     """A fresh clone runs on the committed defaults; a missing file is a failure, not a default."""
     read = {name: (config_dir / name).read_text(encoding="utf-8") for name in _FILES}
     app = AppConfig.from_json(read["idhazh.json"])
+    council = CouncilConfig.model_validate_json(read["llm_council.json"])
+    council.bind_declarations(load_judge_declarations(config_dir, council), config_dir=config_dir)
+    for name in council.judge_names:
+        judge_file = f"judges/{name}.json"
+        read[judge_file] = (config_dir / judge_file).read_text(encoding="utf-8")
     refuse_a_trial_case_named_for_a_claimed_root(app)
     read[app.models_file] = models_path(config_dir, app).read_text(encoding="utf-8")
     try:
@@ -187,12 +233,9 @@ def load(config_dir: Path = DEFAULT_CONFIG_DIR) -> Settings:
     appearance = AppearanceConfig.from_json(
         (config_dir / _APPEARANCE_FILE).read_text(encoding="utf-8")
     )
-    window = appearance.console.max_window_days
-    app.observability.refuse_windows_shorter_than(
-        months_a_window_can_touch(window), window_days=window
-    )
     return Settings(
         app=app,
+        council=council,
         models=models,
         appearance=appearance,
         sources=Sources.from_json(read["sources.json"]),
@@ -205,6 +248,7 @@ def load(config_dir: Path = DEFAULT_CONFIG_DIR) -> Settings:
             )
             for name, text in sorted(read.items())
         ),
+        config_dir=config_dir,
     )
 
 
@@ -283,10 +327,6 @@ _CONSOLE_READ_SERIES: Final[tuple[tuple[str, str], ...]] = (
 #: calendar month would move what every picture window selects.
 _PICTURE_WINDOW_TASKS: Final = ("digest-fragments", "visual-prune")
 _DAYS_A_PICTURE_MONTH: Final = 30
-
-#: The ledger the published machine shard is folded from, so the declaration
-#: that governs it may not keep less than `observability.public_machine_keep_months`.
-_MACHINE_SOURCE: Final = LedgerName.HOST_FINGERPRINT
 
 _TASK_POLICY: Final[TypeAdapter[TaskPolicy]] = TypeAdapter(TaskPolicy)
 _A_TASK_NAME: Final = re.compile(SLUG_PATTERN)
@@ -371,7 +411,6 @@ def refuse_what_the_declarations_break(
     _refuse_a_summary_that_goes_first(tasks)
     _refuse_a_copy_that_is_not_its_source(tasks)
     _refuse_a_window_a_console_read_still_opens(tasks, appearance)
-    _refuse_a_machine_source_shorter_than_its_copy(tasks, app)
     _refuse_a_picture_window_the_archive_does_not_state(tasks, app)
     for name, policy in tasks.items():
         if isinstance(policy, CompactionPolicy):
@@ -753,24 +792,6 @@ def _refuse_a_window_a_console_read_still_opens(
         kept = _series_of(policy, series)
         if not _reaches(kept, floor):
             raise refused(name, f"keeps its {series} series {_spelled(kept)}")
-
-
-def _refuse_a_machine_source_shorter_than_its_copy(
-    tasks: Mapping[str, TaskPolicy], app: AppConfig
-) -> None:
-    """The published machine shard is rebuilt from its ledger, so the ledger lasts as long."""
-    governing = _governing(_MACHINE_SOURCE, tasks)
-    if governing is None:
-        return
-    name, policy = governing
-    published = app.observability.public_machine_keep_months
-    if not _keeps(policy, MonthsWindow(unit="months", value=published)):
-        raise ValueError(
-            f"{_where(name)} {_kept_by(policy)} and "
-            f"observability.public_machine_keep_months is {published}. The published "
-            "machine shard is folded from the host-fingerprint ledger, so a source month "
-            "deleted while the published one is still kept is a shard nothing can rebuild"
-        )
 
 
 def _refuse_a_picture_window_the_archive_does_not_state(

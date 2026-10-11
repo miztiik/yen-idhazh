@@ -23,12 +23,9 @@ from typing import Final
 
 from idhazh.contracts import (
     console_band,
-    public_run_day,
     public_telemetry,
 )
 from idhazh.contracts.base import Contract
-from idhazh.contracts.day_metrics import DayMetrics
-from idhazh.contracts.machine_shard import MachineShardRow
 from idhazh.contracts.public_telemetry import PublicTelemetryRow
 from idhazh.contracts.source_health_view import SourceHealthView
 
@@ -52,7 +49,7 @@ class ConsolePayload:
     why: str
 
 
-#: The ten, in the order a cold load needs them.
+#: The remaining public projections, in the order a cold load needs them.
 #:
 #: The band is first because every route carries it and nothing else can be
 #: asked for until its months list has landed. The rest are month or day shards
@@ -89,54 +86,6 @@ CONSOLE_PAYLOADS: Final[tuple[ConsolePayload, ...]] = (
         ),
     ),
     ConsolePayload(
-        reader="payload.ts loadManifests()",
-        published_to="frontend/public/run-days/<YYYY-MM>.json",
-        contract=public_run_day.PublicRunDay,
-        forbidden=public_run_day.FORBIDDEN_COLUMNS,
-        why="What each run of a day did, and how big the site was when it finished.",
-    ),
-    ConsolePayload(
-        reader="payload.ts publishedCharts()",
-        published_to="frontend/public/run-days/<YYYY-MM>.json",
-        contract=public_run_day.PublicRunDay,
-        forbidden=public_run_day.FORBIDDEN_COLUMNS,
-        why=(
-            "Articles a day published, the denominator of the per-article cost. It "
-            "rides on the run-day row because the alternative is opening a "
-            "hundred-kilobyte day payload to read one integer (Guardrail #12)."
-        ),
-    ),
-    ConsolePayload(
-        reader="payload.ts publishedCharts()",
-        published_to="frontend/public/run-days/<YYYY-MM>.json",
-        contract=public_run_day.PublicRunDay,
-        forbidden=public_run_day.FORBIDDEN_COLUMNS,
-        why="Charts a reader can actually see on a day, counted from the same payload.",
-    ),
-    ConsolePayload(
-        reader="payload.ts dayMetrics()",
-        published_to="frontend/public/day-metrics/<YYYY-MM>.json",
-        contract=DayMetrics,
-        forbidden=frozenset(),
-        why=(
-            "What a run settled about one day: the bands, the reasons, the throughput "
-            "and the extraction census. Published as its own shape rather than as a "
-            "projection - every cell on it is a count or a measurement of our own "
-            "work, so a projection would be a second schema for an identical row."
-        ),
-    ),
-    ConsolePayload(
-        reader="machine.read_shard()",
-        published_to="frontend/public/machine/<YYYY-MM>.csv",
-        contract=MachineShardRow,
-        forbidden=frozenset(),
-        why=(
-            "What the hardware did while the model ran, one row a work shard. Nothing "
-            "on the row came from the open web: every cell is a fold of our own item "
-            "ledger or a counter our own server kept, so the whole row crosses."
-        ),
-    ),
-    ConsolePayload(
         reader="payload.ts sourceHealthView()",
         published_to="frontend/public/source-health.json",
         contract=SourceHealthView,
@@ -153,8 +102,8 @@ CONSOLE_PAYLOADS: Final[tuple[ConsolePayload, ...]] = (
 def payloads_by_stem() -> dict[str, ConsolePayload]:
     """One entry per schema file, so a caller can ask what a stem is for.
 
-    Datasets outnumber schemas - three console datasets answer off the run-day
-    row and two off the telemetry shard - so the first entry for a stem wins and
+    Datasets outnumber schemas - two answer off the telemetry shard -
+    so the first entry for a stem wins and
     the rest are the same shape read for another dataset.
     """
     found: dict[str, ConsolePayload] = {}
