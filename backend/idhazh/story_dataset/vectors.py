@@ -18,6 +18,7 @@ from idhazh.contracts.story_candidates import (
     VectorManifest,
 )
 from idhazh.contracts.story_source import ArticleEvidence, SourceFreeze
+from idhazh.contracts.story_vector_derivation import DerivedVectorSnapshot
 from idhazh.contracts.story_vectors import VectorExtensionSnapshot, VectorSnapshot
 from idhazh.story_dataset.source import article_id
 from idhazh.story_dataset.storage import Store, digest, file_hash
@@ -123,6 +124,32 @@ def register_vectors(
 
 
 def validate_vectors(vectors: VectorManifest, root: Path | None = None) -> None:
+    if isinstance(vectors, DerivedVectorSnapshot):
+        candidate = vectors.derivation
+        if (
+            len(vectors.caches) != 1 or vectors.extensions
+            or candidate.source_sha256 != vectors.source_sha256
+            or candidate.ordered_ids_sha256 != digest(vectors.article_ids)
+            or vectors.native_ordered_ids_sha256 != candidate.ordered_ids_sha256
+        ):
+            raise ValueError("derived snapshot source, order or lineage differs")
+        cache = vectors.caches[0]
+        if (
+            cache.slug != candidate.slug or cache.dimensions != candidate.dimensions
+            or cache.rows != len(vectors.article_ids)
+            or cache.reading_sha256 != digest(candidate)
+            or cache.settings_sha256 != digest(candidate)
+            or cache.file_sha256 != candidate.derived_file_sha256
+        ):
+            raise ValueError("derived snapshot dimensions, settings or hash differ")
+        matrix = np.load(vector_path(vectors, cache.file, root), mmap_mode="r", allow_pickle=False)
+        if (
+            matrix.shape != (cache.rows, candidate.dimensions)
+            or matrix.dtype != np.dtype("float32")
+            or not np.isfinite(matrix).all()
+            or np.any(np.linalg.norm(matrix, axis=1) == 0)
+        ):
+            raise ValueError("derived snapshot float32 shape or numeric values differ")
     if (
         file_hash(vector_path(vectors, vectors.input_file, root)) != vectors.input_sha256
         or file_hash(vector_path(vectors, vectors.readings_file, root)) != vectors.readings_sha256

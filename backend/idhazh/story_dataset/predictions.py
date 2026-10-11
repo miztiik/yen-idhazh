@@ -8,6 +8,7 @@ import numpy as np
 
 from idhazh.contracts.story_candidates import VectorManifest
 from idhazh.contracts.story_evaluation import ClusterRun, DevelopmentConfig, Partition, RetrievalRun
+from idhazh.contracts.story_vector_derivation import DerivedVectorSnapshot
 from idhazh.story_dataset.storage import Store, digest
 from idhazh.story_dataset.vectors import covered_ids, model_matrix, validate_vectors
 
@@ -45,6 +46,17 @@ def predict(
     if saved_config != config or config.partition_sha256 != digest(partition):
         raise ValueError("prediction configuration was not frozen against this partition")
     validate_vectors(vectors, store.root)
+    if isinstance(vectors, DerivedVectorSnapshot):
+        selection = config.parameters.get("vector_candidates")
+        if (
+            not isinstance(selection, dict)
+            or selection.get(model) != digest(vectors)
+            or vectors.derivation.slug != model
+            or vectors.derivation.source_sha256 != partition.source_sha256
+        ):
+            raise ValueError(
+                "derived dimensions must be selected in development before confirmation"
+            )
     if len(universe) < 2 or len(set(universe)) != len(universe) or k >= len(universe):
         raise ValueError("need distinct candidate articles and k < universe size")
     if any(partition.article_partitions.get(i) != selected_partition for i in universe):

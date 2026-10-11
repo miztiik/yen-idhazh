@@ -1029,14 +1029,12 @@ produce portable snapshots immediately. They refuse to replace an existing
 registration; use the explicit relocation command instead. Extension imports
 also require a portable base and retain their input and model checks.
 
-`encode --ids <bounded-ID-array.json> --model <slug> --output <file.npy>`
-can fill selected missing inputs on CPU, one model at a time, using offline
-cached weights and pinned original settings. `vector-import` validates its
-typed extension before adding coverage. Unpinned control revisions are refused.
-The installed ST 5.2.2 / Transformers 5.17 runtime cannot load EmbeddingGemma-2,
-which requires ST >= 6.1, Transformers >= 5.19 and compatible CPU image
-dependencies. That cost remains visible; no substitute model, TLS bypass,
-GPU, service or whole-archive re-encode is performed.
+The owner's 2026-10-11 ruling forbids local encoding or inference. The old
+`encode` entry points remain available for other operators, but must not be
+run for this delivery. Use the manual runner path below for unfinished rows.
+`vector-import` validates a typed downloaded extension before adding coverage.
+Unknown historical control revisions remain unknown. A current pin cannot
+repair their provenance.
 
 When the historical MiniLM or GTE revision is unknown, a current official pin
 is **not** proof of the historical weights. The separate
@@ -1053,10 +1051,6 @@ encoded new rows. Old control arrays cannot supply their coverage.
   --vectors '<exact portable snapshot.json>' --legacy-root "$D" `
   --slug '<old control slug>' --pin '<official immutable revision>' `
   --metadata '<captured official API response.json>' --check '<SourceCheck.json>'
-& $EncodingPython -m idhazh.story_dataset.candidate_cli `
-  --source-root "$D" --root '<new candidate evidence root>' encode `
-  --candidate '<hash-named candidate.json>' --ids '<bounded IDs.json>' `
-  --output '<new unit.npy>'
 & $Python -m idhazh.story_dataset.candidate_cli `
   --source-root "$D" --root '<new candidate evidence root>' import `
   --candidate '<hash-named candidate.json>' --unit '<unit.json>' `
@@ -1071,6 +1065,135 @@ it remains offline-only after exact official model acquisition. Candidate state
 imports copy vectors into hash-named evidence and recheck retained unit bytes.
 The new control must encode every article of the eventual common evaluation
 universe itself; combining it with unknown historical rows is prohibited.
+
+### Exact missing-only runner inputs
+
+`.github/workflows/story-archive-encoding.yml` is manual only. It does not
+commit, push, dispatch another workflow, publish metrics or select a winner.
+The older `encoder-comparison.yml` still answers its original proxy question;
+it is not the full-archive encoder.
+
+`RunnerShard` carries the frozen source manifest, resolved policy, parent
+registration, pinned reading or candidate, exact ordered full article evidence,
+summary-input hashes and expected model file hashes. `RunnerPackage` hashes
+the actual input and code files. Preparing that package grants no consent.
+Upload or push requires a separate approval naming the exact package,
+recipient repository and visibility. The owner's 2026-10-11 ruling selects
+a public workflow in the public repository, not a private repository or runner.
+It uses the standard `ubuntu-latest` runner with four CPUs and 16 GB.
+Encoding checks actual CPU and memory before loading weights.
+Workflow code, input artifacts, logs and result artifacts can be publicly
+accessible. Omitting a link does not make them private. The exact outbound
+preview must disclose this before separate upload, push or dispatch approval.
+
+The preserved input has 15,122 rows. MiniLM's distinct pinned candidate is
+complete and is never selected for re-encoding. The prepared continuation
+has GTE 2,922, Jina 4,430 and Gemma 4,430 missing inputs. It uses 32 shards
+of at most 400 rows, each split into immutable units of at most 20 rows.
+These are encoding gaps, not missing labels or a quality finding.
+Each job loads one model once. It uses the saved symmetric prefixes, 256-token
+input cap, CPU float32 output, two threads and batches of 16. Native Gemma
+output stays 768 wide. Two shards can run concurrently. The five-hour soft
+stop leaves time before GitHub's six-hour kill; shard completion is not
+guaranteed before an actual runner measurement.
+
+`config/story-runner-requirements.txt` pins the complete Linux CPython 3.14
+dependency closure to official wheel hashes. Its adjacent JSON records the
+versions and official metadata hashes. It reuses the declared comparison
+runtime: ST 6.1, Transformers 5.19, Pillow 12.3 and matching CPU
+Torch 2.14.1 / Torchvision 0.29.1. Windows wheel hashes are not reused.
+Preparation checked official metadata and Linux dependency markers, not a
+Linux execution. Runner preflight checks installed versions, CPU vision
+operators, the Gemma processor and every selected model, tokenizer and
+custom-code file before offline inference. No model substitution, TLS bypass
+or unbounded dependency upgrade is allowed.
+
+Prepare locally with the exact current heads, never a mutable source-folder
+commit:
+
+```powershell
+& $Python -m idhazh.story_dataset.runner_cli prepare `
+  --source-root "$D" --vectors '<current portable vector snapshot.json>' `
+  --vector-root '<native evidence root>' `
+  --candidate '<pinned GTE candidate.json>' --state '<current GTE state.json>' `
+  --candidate-root '<current candidate evidence root>' `
+  --requirements 'config\story-runner-requirements.txt' `
+  --output 'backend\var\runner-input'
+& $Python -m idhazh.story_dataset.runner_cli validate `
+  --package-root 'backend\var\runner-input'
+```
+
+Only after exact outbound approval, upload the prepared ZIP as a release asset
+in `miztiik/yen-idhazh`. This route does not require a pre-existing Actions
+artifact. Use `gh release upload <approved-release-tag> <exact-ZIP-path>`
+without `--clobber`, then obtain the numeric asset ID from
+`gh api repos/miztiik/yen-idhazh/releases/tags/<approved-release-tag>`.
+Preview the tag, exact ZIP path/hash, recipient and public exposure before
+approval; release assets, article summaries, logs and vectors are public data.
+Dispatch the workflow at its exact code commit with `input_asset_id`,
+`archive_sha256` and the approved `package.json` hash. Alternatively, an
+already-approved `archive-input` Actions artifact can use `input_artifact_id`.
+The workflow refuses both routes together. An exact shard runs only that shard.
+Preparation checks each code file against its committed LF Git blob; dirty
+or CRLF code cannot produce a runner-approved preview.
+The standard-library bootstrap checks installer bytes before pip runs.
+The workflow downloads no source from a changing digest window.
+
+Every complete unit gets a native `.npy`, typed descriptor, file checksum,
+input order and immutable candidate or extension lineage. `RunnerResult`
+records runtime, model files, host, UTC times, run/attempt, complete units and
+the exact pending IDs. Results remain GitHub artifacts for 90 days, not
+committed raw vectors. A hard-killed unit is not registered from an orphan
+array or a progress counter. A durable initial result records runtime and model
+provenance before encoding. `runner_cli recover --package-root ... --shard ...
+--result ...` validates complete descriptor/array pairs that survived a manifest
+interruption, reconstructs their exact manifest and keeps incomplete files in a
+sibling ignored directory. It does not infer, encode or register incomplete
+units. The workflow excludes `.part` files from result artifacts.
+
+After approval and execution, use `runner_cli download --recipient <owner/repo>
+--artifact-id <id> --name <archive-result-shard> --output <ignored-directory>`.
+It checks the exact recipient, artifact name, GitHub's archive digest,
+size and safe paths before extraction. Then use `runner_cli validate` with
+`--package-root`, `--shard` and `--result`. Import with the same arguments plus
+`--source-root`, `--root` and, for GTE, `--state-pointer` naming the current
+integration-owned state. Import uses the existing typed candidate/extension
+APIs. It rejects changed inputs, wrong pins, different prefixes, shape/dtype
+errors, nonfinite or zero rows, unexpected files and conflicting coverage.
+It never writes the annotation workers' index.
+
+A partial result can resume through the same package and one exact shard,
+with `resume_artifact_id` naming its retained result artifact. Validation
+skips only complete twenty-row units. Alternatively, import complete units
+first and prepare a new missing-only package from the advanced registration.
+Neither route borrows unknown legacy vectors. No workflow has run merely
+because these files exist.
+
+### Derived Gemma dimensions without inference
+
+`runner_cli derive --vectors <native snapshot.json> --root <native root>
+--output-root <derived root> --dimensions 128` also supports 256 and 512.
+It reads the native 768 rows, takes the first requested components and
+L2-normalizes each prefix. L2 normalization divides by the prefix's length.
+It makes no model call and leaves all native registrations and arrays intact.
+Finite, nonzero prefixes are required.
+
+Each `GemmaDimensionCandidate` has a distinct slug, native registration and
+file hashes, source/settings hashes, ordered IDs and actual output hash.
+Its `DerivedVectorSnapshot` has only that candidate's vectors. Query and
+candidate scoring therefore use the identical width and transform.
+Keep arrays and full derived snapshots in the ignored cache; compact lineage
+descriptors can be committed.
+
+Choose dimensions on development data. Put
+`"vector_candidates": {"<derived slug>": "<derived snapshot hash>"}`
+in the existing `DevelopmentConfig.parameters`, then freeze it before opening
+confirmation. `predict` and `evaluate` accept `--vectors <derived snapshot>`
+without changing the saved native registration. Both refuse an unselected
+derived candidate. Existing complete-qrels, source/catalogue partition and
+confirmation-exposure checks still apply. Arithmetic fixtures or smaller
+files are not evidence of improved quality. Full fresh comparison remains
+blocked until the required labels, reviews and independent qrels are ready.
 
 Fix the split before tuning:
 
@@ -1113,6 +1236,32 @@ cluster recovery suitable for non-disjoint solutions*. No all-positive toy
 universe can return a falsely perfect accepted evaluation.
 
 ### Validation and current scope
+
+The immutable local epoch `corpus/story-dataset-1/checkpoints/main-20261011-1930`
+is **partial model annotation, not full gold or accepted quality**. Its one
+read-only transaction captured 11,100 visited articles: 2,357 have resolved
+catalogue memberships, 8,252 are catalogue-pending and 491 are unresolved.
+Another 4,022 of the frozen 15,122 articles were unvisited at that epoch.
+Its 1,085 current article reviews and 1,588 judged pairs are review activity,
+not proof of label correctness. The 913 current article-review conflicts and
+88 pair-review conflicts include unresolved catalogue comparisons; they are
+not error-rate measurements.
+
+Quality acceptance is held. A 36-item nonblind diagnostic found one concrete
+main-body/source-scope failure, S09, and two uncertain parent identities.
+That mixed targeted sample is not an archive-wide error-rate estimate. Fresh
+blind targeted review and evidence-backed reconciliation remain annotation
+coordinator work. Later review receipts cannot retroactively qualify this
+frozen epoch. Required unavailable sources and transcripts stay uncertain.
+
+The epoch keeps full history, canonical catalogue, submission bindings,
+vector metadata and exposure settings. An empty ignored index replays its
+exact file hashes and bindings. Omitted discovery frames and their active
+settings remain explicit rather than being silently restored. It contains
+no live SQLite index, worker directory, models, raw arrays or captures.
+The original frozen source and 935 judgments remain byte-identical.
+Fresh comparative evaluation and any final model/dimension choice are blocked.
+The actual Linux encoder runtime has not been executed locally or remotely.
 
 The named real fixture is
 `backend/tests/fixtures/story-dataset/approved.json`, with twenty actual approved
