@@ -43,6 +43,15 @@ from idhazh.telemetry.host_evidence_inputs import (
 from utilities.host_telemetry_reference import identity, process_cost
 from utilities.host_telemetry_workload import now, wait_for
 
+LIVE_PROBE_ROOTS = (
+    "--proc-root",
+    "/proc",
+    "--cpu-root",
+    "/sys/devices/system/cpu",
+    "--namespace-root",
+    "/",
+)
+
 
 def binary() -> Path:
     path = ROOT / "backend/var/rust-host-telemetry/release/idhazh-host-telemetry"
@@ -65,6 +74,7 @@ def invoke(workspace: Path, verb: str, *args: str, manifest: str = "manifest.jso
                 manifest,
                 "--config",
                 "native-config.json",
+                *(LIVE_PROBE_ROOTS if verb in {"probe", "target"} else ()),
                 *args,
             ],
             stdout=stream,

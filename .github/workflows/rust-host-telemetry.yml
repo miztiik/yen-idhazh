@@ -103,6 +103,7 @@ jobs:
           backend/var/rust-host-telemetry/release/idhazh-host-telemetry probe \
             --workspace "$D5_WORKSPACE" --manifest host-manifest.json --config native-config.json \
             --command probe.json --metadata-input metadata --cache-multiple "$D5_CACHE_MULTIPLE" \
+            --proc-root /proc --cpu-root /sys/devices/system/cpu --namespace-root / \
             --format "$D5_FORMAT" --compression "$D5_COMPRESSION" --result-id "$D5_PROBE_ID"
       - name: Start native monitor and verify readiness
         run: python -m utilities.compare_host_telemetry start --workspace "$D5_WORKSPACE"

@@ -106,6 +106,13 @@ def test_yaml_separates_every_required_event_lifetime_boundary() -> None:
     assert "cargo test --locked --offline" in text
     assert "--metadata-input metadata" in text
     assert "--job-start-input start" in text
+    from utilities.host_telemetry_session import LIVE_PROBE_ROOTS
+
+    probe_step = next(
+        step for step in steps if step.get("name") == "Rust probe and native raw store"
+    )
+    for flag, root in zip(LIVE_PROBE_ROOTS[::2], LIVE_PROBE_ROOTS[1::2], strict=True):
+        assert f"{flag} {root}" in probe_step["run"]
     for name in ("Rust probe and native raw store", "Rust clock and native raw store"):
         step = next(step for step in steps if step.get("name") == name)
         assert "--manifest host-manifest.json" in step["run"]
