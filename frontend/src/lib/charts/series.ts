@@ -1,11 +1,11 @@
 import { dayMonth } from '../format';
 import { daysBetween, daysInWindow, type TimeWindow } from './viewport';
 
-/** The published projection's header, in `PUBLIC_COLUMNS` order.
+/** The legacy CSV reader's header, retained until its last component leaves.
  *
  * `backend/idhazh/contracts/item_health.py` owns the native cells. This is the reader's
- * copy of it, and it names every cell `parseTelemetryCsv` looks up. The order is
- * the writer's order and is what `telemetryCsv` writes back; no cell is read by
+ * vocabulary, and it names every cell `parseTelemetryCsv` looks up. The order is
+ * what `telemetryCsv` writes back; no cell is read by
  * its position in it.
  */
 export const TELEMETRY_COLUMNS = [

@@ -36,3 +36,8 @@ scale that includes overlapping steps. Independent clock arithmetic over the
 recorded native fixture checks every offset, item clock and six-step residual.
 The chart's drawing rules belong in
 [`console-design.md`](../../concepts/console-design.md).
+
+## See also
+
+- [what-the-pipelines-route-draws.md](what-the-pipelines-route-draws.md) - native panel queries and drawings.
+- [telemetry-series.md](telemetry-series.md) - projection retirement and retained state.

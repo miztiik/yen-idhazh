@@ -82,11 +82,9 @@ test('the cost of widening is the months not already in hand, and never a 404', 
 });
 
 test('the widest window this control offers never names a shard the cleanup age took', () => {
-	// The gardener's `telemetry-aggregate` task deletes the browser's copy of a
-	// month past its `public-copy` series, and that series must equal the ledger's
-	// own `full-grain` one. This is the reader's half of the same promise: over
+	// The gardener's native `full-grain` window is the reader's promise: over
 	// every anchor a year can offer, the months the widest read selects are all
-	// months the cleanup kept, so widening costs a fetch and never a 404.
+	// months kept at full grain. No public-copy series remains.
 	//
 	// It reads both windows rather than 366 and 14, because the two configs are
 	// where the pair is set and a test that repeated the numbers would agree with

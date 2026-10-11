@@ -4,12 +4,7 @@ Data hygiene belongs here and not in pytest (`CLAUDE.md` section 13): this is
 the producer's own gate on what it just wrote, and it runs where the payload is
 - in CI, against the committed tree.
 
-`ctx.months` names the months this run touched, which is what the day workflow
-passes. None selects the configured console window's month cover.
-Telemetry is the retained month projection checked here; the public machine,
-run-days and day-metrics mirrors have no producer or check anymore.
-
-The band is checked every time whatever `ctx.months` says. It is one small file
+The band is checked every time. It is one small file
 and it is the first thing the console asks for, so a band that will not load is
 a console with no verdict at all.
 """
@@ -20,6 +15,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from idhazh.contracts.base import StalePayloadError
 from idhazh.publication_checks.registry import Check, CheckResult, CheckScope, TreeContext
 from idhazh.telemetry.publish import (
     console_band,
@@ -32,7 +28,7 @@ def _faults(root: Path, months: frozenset[str] | None) -> list[str]:
     if band.is_file():
         try:
             console_band.read_band(band)
-        except (ValueError, ValidationError, OSError) as fault:
+        except (ValueError, ValidationError, StalePayloadError, OSError) as fault:
             faults.append(f"{console_band.BAND_RELPATH}: {fault}")
     elif band.parent.is_dir():
         # A console directory with no band in it is a producer that ran and

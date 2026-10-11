@@ -200,7 +200,6 @@ Authority: owner, 2026-09-06.
 | Feed health | `state/raw/feed-health/<YYYY>/<MM>/<DD>/`, packed under `state/compact/feed-health/` | `stages.plan`, through `ledger.persist` | Partitioned by **day** since 2026-09-13, and filed through the ledger door since it moved. The plan stage writes the run's own digest date and nothing else, as a file of its own, so two runs never collide on one, and a second attempt at one plan job replaces its first attempt's file. Closed once the run's date leaves the day. Its compaction makes each finished day one file, and the loader refuses one that keeps fewer month files than the widest console read opens. It had a monthly mirror under `frontend/public/feed-health/` until 2026-09-16; nothing fetched it, so there is no published grain to keep in step. |
 | Seen addresses | `state/raw/seen/<YYYY>/<MM>/<DD>/`, packed under `state/compact/seen/` | `ledger.append_seen`, through `ledger.persist` | Partitioned by **day** since 2026-09-13, and filed through the ledger door since it moved. The plan job files under the run's own digest date and nothing else, as a file of its own, so two runs never collide on one, and a second attempt at one plan job replaces its first attempt's file. Closed once the run's date leaves the day. Its compaction makes each finished day one file, and the loader refuses one that keeps fewer days than `collect.seen_window_days`. It has no published mirror at all, so unlike the two health ledgers there is no second grain anywhere near it. |
 | Counterfactual scores | `state/raw/counterfactual-scores/<YYYY>/<MM>/<DD>/`, packed under `state/compact/counterfactual-scores/` | `stages.plan`, through `ledger.persist` | Partitioned by **day** since 2026-09-14, and filed through the ledger door since it moved. The plan stage writes the run's own digest date and nothing else, so the day closes when the day's last run finishes. Every write is a file of its own, so two runs never collide on one, and its compaction makes each finished day one file. Its only reader will open a trailing window, `lens_weights.window_days`, and the loader refuses a compaction that keeps less. |
-| Telemetry projection | `frontend/public/telemetry/<YYYY-MM>.csv` | `telemetry.publish.public_telemetry.publish` | It writes only the months a caller names as changed, and rewrites a named month only when its projected bytes differ from the committed shard - so a closed month is neither read nor rewritten once nothing targets it. Frozen since row 19 of the constant-cost-reads plan (#484). |
 | Folded item health | `state/raw/item-health-summary/<YYYY>/<MM>/<DD>/`, packed under `state/compact/item-health-summary/` | `retention.compact_month`, written through `ledger.persist` by `telemetry_aggregate` | Written once, when the item-health month passes the `full-grain` series of `config/gardener/telemetry-aggregate.json` (14 months). It summarises a month while filing rows under each summary date, so the summary is where the month decision and the day-addressed door meet. Closed when one raw summary file exists in the month; the rows it summarises go later, when the item-health compaction's `monthly_window` passes, and nothing writes the summary again. No file is committed yet. |
 | Search index | `frontend/public/assist/index/<YYYY-MM>.json` and `<YYYY-MM>.bin` | `assemble.rebuild_search_index` | It is derived whole from the committed days of that month, so the month is closed once no day inside it changes. `stages.assemble.stage_assemble` rebuilds only `month_of(plan.date)`. |
 | Published addresses | `state/raw/published/<YYYY>/<MM>/<DD>/`, packed under `state/compact/published/` | `ledger.append_published`, through `ledger.persist` | Partitioned by **day**, not by month, and filed through the ledger door since it moved. The caller hands the date and the writer files that day alone, as a file of its own, so a day is closed once the run's date leaves it. Its read carries `collect.published_window_days`, which the committed config sets to `-1` - the cover is open, and the partition is what a finite value would have to skip. **A finite value must be strictly wider than `collect.seen_window_days`**, and `CollectConfig` refuses one that is not: an undated address whose sight row expires the same week reads as first-seen-today and republishes as new. |
@@ -222,23 +221,21 @@ is fourteen months.
 
 ## A ledger and its mirror may file at different grains
 
-**The item-health ledger files by day and `frontend/public/telemetry/` files by
-month, and neither is a mistake.** They answer different questions, so they take
-their grain from different things.
+**Item health files each write by day and packs finished periods.** Its former
+monthly public telemetry mirror is retired; native query windows use compact
+indexes to find the files that serve their dates.
 
 - **A `state/` ledger's grain follows what a run writes and what a removal takes
  away.** A run writes one day, two runs collide on a file only when they are the
  same day, and taking a day back is one `rm` rather than an edit inside a shared
  shard - which no merge driver can express.
-- **A `frontend/public/` mirror's grain follows what a browser fetches.** The
- console prices a window in files: `console.window_presets` ends at 90, and
- `WindowControl.svelte` tells the operator how many files a preset costs. At
- month grain the widest preset fetches five; at day grain it would fetch ninety.
+- **Read grain follows the selected native window.** A compact period may hold
+ several requested days. The ledger door reads that file once and retains the
+ requested dates.
 
-**So somebody has to bridge them, and it is the publisher.**
-`public_telemetry.publish` folds a month from that month's days, read through
-`ledger.load_days`, and the gardener's `telemetry-aggregate` task summarises on
-the same boundary. A month's input is at most 31 days, so the bridge is a
+**The native summary still uses a month boundary.** The gardener's
+`telemetry-aggregate` task summarises that month's days through
+`ledger.load_days`. A month's input is at most 31 days, so the summary is a
 ledger-bounded read rather than a growing one.
 
 **A day tree's filenames are an index of which days the ledger holds, and a
@@ -252,10 +249,7 @@ indexes and the raw day folders' names, so the newest `keep` days are the answer
 and no data file behind them is opened. A month name could not do this: it says
 only that the ledger holds records somewhere inside that month.
 
-What the day grain costs, stated rather than implied: the unbounded case of
-`public_telemetry.publish` opens about thirty times as many file handles for the
-same rows, and every listing of the ledger names one entry a recorded day instead
-of one a month. What it buys is the two properties in the first bullet, and a
+What day grain buys is the two properties in the first bullet, and a
 windowed read that opens exactly the days it names - where a 90-day cover over
 month shards opened files holding up to 120 days of rows.
 

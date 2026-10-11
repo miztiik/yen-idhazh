@@ -240,9 +240,7 @@
     "host_fingerprint": true,
     "host_fingerprint_bandwidth_cache_multiple": 2,
     "host_fingerprint_bandwidth_floor_mib": 512,
-    "public_run_timeline_keep_months": 2,
     "sample_rate": 1.0,
-    "telemetry_publish": true,
     "tracing_enabled": true,
     "visual_aggregate_keep_months": null,
     "visuals_full_grain_months": 14

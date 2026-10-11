@@ -223,7 +223,7 @@ def test_the_weight_gate_reads_a_build_of_the_tree_that_was_pushed(
     And it is conditional, because a push that landed first try left the tree
     the first build already read. The condition has to name every commit step
     that runs before it: `assemble` commits twice, the second stages
-    `frontend/public/telemetry`, and the console pages read that - so a
+    the current public and native console outputs - so a
     condition naming only the day's commit would skip the rebuild on the other
     one and put run 33270983446 straight back.
     """

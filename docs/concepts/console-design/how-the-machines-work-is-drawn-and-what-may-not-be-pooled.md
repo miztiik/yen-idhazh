@@ -263,8 +263,9 @@ the reading the panel exists for.
 
 > **The shape of the run is legible before a single number is.** A wide staircase is a run that queued; a solid block is a run that worked in parallel.
 
-The run timeline on `/console/` draws
-[`run-timeline/<YYYY-MM>.csv`](../../architecture/publishing/run-timeline.md).
+The run timeline on `/console/` derives its clock from
+[native item-health readings](../../architecture/publishing/run-timeline.md),
+not a monthly public CSV.
 
 - **A row is one item and the y axis is items, in start order.** Sorted by start
   rather than by cost, because the queue is the thing a reader cannot get

@@ -223,12 +223,9 @@ it any more** - `drift.read_windows` was the last and moved on 2026-09-13 with
 the eval ledger's month files. What it still answers is how many month-shaped buckets a
 day-counted window reaches, which is what sizes the `keep_months` knobs.
 
-**A ledger and its published mirror may file at different grains, and the
-item-health ledger is the worked example.** The ledger files by day because a
-run writes one day; the projection under `frontend/public/telemetry/` stays
-monthly because the console prices a window in the files a browser fetches. The
-publisher is the bridge: it folds a month from that month's days, read through
-`ledger.load_days`, at most 31. Both rules and what the bridge costs are in
+**Native write grain and read grain may differ.** Item health files each
+write by day; compact indexes select the packed files for a window. Its former
+monthly public telemetry mirror is retired. The native rules remain in
 [../../concepts/partitions.md](../../concepts/partitions.md#a-ledger-and-its-mirror-may-file-at-different-grains).
 
 For a whole-history scan, time sharding is a cost with no matching read saving.

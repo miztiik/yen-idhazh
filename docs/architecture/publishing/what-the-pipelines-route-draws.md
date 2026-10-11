@@ -300,11 +300,9 @@ The axis, the three marks a missing number can take and the model-change rule
 are [console-charts.md](console-charts.md)'s, because the throughput chart beside
 this one has to draw them the same way.
 
-**The console reads committed records in two ways.** The run strip, feed list and
-timing medians read the ledgers at build time. The item-health viewport fetches
-the browser-safe monthly projection under `telemetry/<YYYY-MM>.csv`. Nothing
-under `state/` is ever served - the browser reads only the narrow projection that
-drops `canonical_url`, `url_key` and `detail`
+**The Pipelines panels read native records through declared queries.** The
+ledger door selects raw or compact files for the requested window. There is no
+public telemetry or run-timeline mirror and no build-time timeline reader
 ([telemetry-series.md](telemetry-series.md),
 [console-payloads.md](console-payloads.md)).
 

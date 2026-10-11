@@ -231,20 +231,9 @@ makes no no-change claim.
 The three public mirror retention knobs are retired with their projections.
 The native ledgers retain their own compaction declarations.
 
-The telemetry copy is the `public-copy` series of
-`config/gardener/telemetry-aggregate.json`, because the gardener task that folds
-the ledger it copies is the thing that deletes it.
-
-The gardener loader checks the native read floors and telemetry's
-`public-copy` series. **A shard deleted while a window preset can
-still reach it blanks that panel silently**, because a month with no file reads
-exactly like a month with no runs.
-
-The telemetry copy projects a state ledger and is held **equal** to the ledger
-it projects: the `public-copy` series to the `full-grain` series of the same
-declaration. Any other pair leaves either a published month nothing can check
-against its source, or a source month the console has no copy of to draw. The
-retired copies no longer have an independent retention policy.
+The gardener loader still checks native read floors. The `telemetry-aggregate`
+declaration keeps its `full-grain` and `aggregate` windows and writes native
+item-health summaries. It owns no public tree and deletes no public copy.
 
 **`public_scores_keep_months` and `public_feed_health_keep_months` were two more
 until 2026-09-16.** They are refused by name now rather than ignored, because a
@@ -255,18 +244,17 @@ still there and keep their own ages.
 
 ## What the console actually fetches, and what it still carries
 
-Row 10 landed on 2026-09-09 and it did not move all of them. It moved the two
-that were bytes and the one the chain needed, and it left the rest inlined on
-purpose.
+The shell fetch migration began on 2026-09-09. Pipelines now reads native
+query answers rather than either of the retired public month projections.
 
 | What | Where it comes from now | Why |
 | --- | --- | --- |
 | The band, the strip and the three carries | `console/band.json`, fetched by `console/+layout.ts` | The derivation had a second home in `frontend/src/lib/server/console-shell.ts`, over the ledger under `state/`. Two derivations of one verdict is two verdicts |
-| The months list | the same payload | A page cannot ask for a month until it knows which months exist. On its own it would be a fifth serial hop before the first row (Carmack, 2026-09-08) |
-| Telemetry rows | `telemetry/<YYYY-MM>.csv`, fetched on mount and on every widen | 3,414,043 of the document's 3,880,361 bytes, for panels most visits never scroll to |
-| The other 28 payload keys | still inlined in the document | Together 97 KB. A fetch each breaks the four-hop cold-load ceiling for a twentieth of what one key cost |
+| Pipelines measurements and run clock | declared native ledger queries and compact indexes | One source of recorded facts; no public telemetry or run-timeline copy |
+| Reachable dates | the ledger indexes | The band no longer carries `months` |
+| Remaining prerendered route inputs | each route's existing loader | Their movement belongs to that route, not the projection retirement |
 
-**Measured 2026-09-09**, a developer machine / / node 24, one build
+**Historical shell migration, measured 2026-09-09**, a developer machine / / node 24, one build
 per case on the real digest, `stat` on the built file:
 
 | file | before | after |
@@ -331,25 +319,12 @@ Measured 2026-09-10, node 24.12.0,
 on the committed payload: **777 gzipped bytes from 1,799 raw - 38.9 percent of
 the guardrail.**
 
-Every fact on the payload but one is fixed: a set of sentences and counts about
-one day. The one term that moves with the archive is the months list, at one
-`YYYY-MM` string a month, and a list of dates with a shared prefix is what gzip
-is best at. Modelled on the committed payload the same day, re-serialised
-compact, which is why the no-months row reads under the committed 777:
-
-| months | gzip -5 | of the guardrail |
-| ---: | ---: | ---: |
-| 0 | 719 | 36.0 percent |
-| 2 (today) | 726 | 36.3 percent |
-| 14 (the retention bound) | 758 | 37.9 percent |
-| 24 (two years) | 780 | 39.0 percent |
-
-**The months list names telemetry only.** The band checks the named months
-inside the widest configured window; it no longer unions the retired machine,
-run-days and public day-metrics copies. Telemetry's `public-copy` series still
-governs its retention. Settings and checker changes are also bounded by the
-widest window, with one equal-length predecessor search for each kind.
-The figures above describe the older shape, before the movement fields.
+**The band no longer carries a months list.** Native ledger indexes own
+reachable dates. A copying before-validator drops only `months` from older
+committed bands; every other unknown key remains an error. Settings and checker
+changes are still bounded by the widest window, with one equal-length
+predecessor search for each kind. The figures above describe the older shape,
+before the movement fields and the retirement.
 The owner suspended size studies on 2026-10-10; this change keeps the existing
 ceiling rather than deriving a new value from a measurement.
 
@@ -440,8 +415,8 @@ entry. Naming it first is what makes a missing dataset fail at import instead of
 at review. Fowler, 2026-09-08, during the shell-and-fetch migration.
 
 **Derive the inventory from actual readers.** A missing reader leaves the
-published side incomplete. `TELEMETRY_ROOT` names `frontend/public/telemetry/`,
-not a state directory.
+published side incomplete. Native console reads name their ledger and its
+compact indexes, not a retired public root.
 
 **Publish a shape whole when no field needs projection.** A second model with
 the same fields would duplicate validation and create another place to drift.
@@ -548,7 +523,7 @@ decision 2's cold-load ceiling. Measured 2026-09-09.
 | Fetch all twelve datasets in row 10 | The remaining 28 payload keys are 97 KB between them. Four more serial hops for a twentieth of what one key cost, and past the four-hop cold-load ceiling (Carmack, 2026-09-08) |
 | Keep the band a server load and read `band.json` from disk at build time | It would meet the oracle - the band is 1,392 bytes - and leave the console a page only a finished build can produce. The point of the payload is that a shell can ask for it |
 | Fork a telemetry schema for `itemHealthRows` | Two schemas for one row, and the committed shards validate against the existing one |
-| Publish the state contracts unchanged and skip the forbidden-cell lists | The lists are the trust boundary. `PublicTelemetryRow` exists because a projection spelled as strings gains a cell by a one-word edit and nothing refuses it |
+| Skip the forbidden-cell lists on browser payloads | The lists are the trust boundary. A projection spelled as strings gains a cell by a one-word edit unless its shape refuses it |
 
 ## See also
 

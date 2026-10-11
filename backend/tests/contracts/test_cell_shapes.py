@@ -526,7 +526,7 @@ registerHooks({
 
 const parser = await import(pathToFileURL(process.argv[2]).href);
 const rows = parser.parseTelemetryCsv(readFileSync(process.argv[3], 'utf8'));
-process.stdout.write(JSON.stringify(rows.map((row) => row.item_id)));
+process.stdout.write(JSON.stringify(rows.map((row) => row.cpu_model)));
 """
 
 
@@ -543,7 +543,7 @@ def test_both_parsers_read_a_folded_shard_to_the_same_cells(tmp_path: Path) -> N
     if not _BROWSER_PARSER.exists():
         pytest.skip("the published bundle's parser is not in this checkout")
 
-    column = field_column(ItemHealthRow.model_fields["item_id"])
+    column = field_column(ItemHealthRow.model_fields["cpu_model"])
     expected = [fit_cell(raw, column=column, absent=ABSENT) for raw in HOSTILE.values()]
 
     names = ItemHealthRow.csv_columns()
@@ -556,7 +556,8 @@ def test_both_parsers_read_a_folded_shard_to_the_same_cells(tmp_path: Path) -> N
             row.update(
                 date="2026-09-15",
                 run_id="2026-09-15-1",
-                item_id=cell,
+                item_id="ai-01",
+                cpu_model=cell,
                 vertical="ai",
                 source_id="lab-blog",
                 stage="publish",
@@ -566,7 +567,7 @@ def test_both_parsers_read_a_folded_shard_to_the_same_cells(tmp_path: Path) -> N
 
     text = shard.read_text(encoding="utf-8")
     assert len(text.splitlines()) == len(expected) + 1, "a folded cell split a row in two"
-    by_python = [row["item_id"] for row in csv.DictReader(io.StringIO(text))]
+    by_python = [row["cpu_model"] for row in csv.DictReader(io.StringIO(text))]
     assert by_python == expected
 
     driver = tmp_path / "read-with-the-bundle.mjs"

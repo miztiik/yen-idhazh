@@ -30,7 +30,7 @@ test('one generated run inventories named drawings and current ledger files', ()
 		write('digest/2026/08/20/ai-05.json', '{}');
 		write('digest/2026/08/20/ai-16.json', '{}');
 		write('publication.json', '{}');
-		write('telemetry/2026/08.json', '{}');
+		write('console/band.json', '{}');
 		write('state/raw/feed-health/2026/08/20/01a10188-bb60-854b-8ec1-bd104a03b0d6.parquet', 'raw');
 		write('state/compact/feed-health/daily/2026/08/20.parquet', 'packed');
 		write('state/compact/feed-health/index/daily.json', '{}');
@@ -41,9 +41,9 @@ test('one generated run inventories named drawings and current ledger files', ()
 		write('state/unrelated/2026/08/20.csv', 'utc_date\n2026-08-20\n');
 		assert.deepEqual(canaryFiles(root, join(root, 'state')), {
 			publicFiles: [
+				'console/band.json',
 				'digest/2026/08/20/ai-05.json',
-				'digest/2026/08/20/digest.json',
-				'telemetry/2026/08.json'
+				'digest/2026/08/20/digest.json'
 			],
 			stateFiles: [
 				'compact/content-similarity-judge/merge-line-holdout-scores/daily/2026/08/20.parquet',

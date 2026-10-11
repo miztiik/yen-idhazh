@@ -142,13 +142,14 @@ def test_a_sealed_row_carrying_a_column_the_contract_renamed_is_still_named_stal
 
 
 def test_the_payload_a_stale_error_names_leaves_the_process_posix_and_relative(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """CLAUDE.md section 2, at the one boundary this error crosses."""
     payload = _a_decision()
     payload["version"] = "2026-01-01"
     payload["routed_at"] = payload.pop("decided_at")
 
+    monkeypatch.chdir(tmp_path)
     with pytest.raises(StalePayloadError) as raised:
         VisualDecision.read(_staged(tmp_path, payload, "world-01.visual.json"))
 
@@ -181,7 +182,7 @@ def test_every_console_read_resolves_to_exactly_one_declared_shape() -> None:
         assert entry.contract in CONTRACTS, f"{stem} is not a registered contract ({entry.reader})"
 
     stems = payloads_by_stem()
-    assert len(stems) == 3, "only the band, telemetry and source-health projections remain"
+    assert set(stems) == {"console-band", "source-health-view"}
     assert set(stems) == {entry.contract.__schema_stem__ for entry in CONSOLE_PAYLOADS}
 
 
@@ -250,26 +251,15 @@ def test_the_band_refuses_a_worst_route_the_strip_does_not_carry() -> None:
         ConsoleBand.model_validate(payload | {"routes": []})
 
 
-def test_the_band_refuses_months_that_run_backwards() -> None:
-    """The console pans by index, so a repeat or an inversion reads as a jump
-    backwards in time rather than as a malformed payload."""
+def test_the_band_drops_legacy_months_without_interpreting_the_retired_order() -> None:
     band = ConsoleBand.read(CONTRACT_FIXTURES_DIR / "console-band" / "newest-day.json")
     payload = band.model_dump(mode="json")
     for months in (["2026-09", "2026-08"], ["2026-08", "2026-08"]):
-        with pytest.raises(ValidationError, match="oldest first"):
-            ConsoleBand.model_validate(payload | {"months": months})
+        assert ConsoleBand.model_validate(payload | {"months": months}) == band
 
 
 def test_every_published_month_payload_has_a_window_that_ends() -> None:
-    """A payload a run appends to with no age is a directory that grows for ever.
-
-    The item-health aggregate and the score archive are kept forever today, and
-    each declaration under `config/gardener/` says so. Nothing minted for the
-    console may join them: a forever that spreads stops reading as a decision
-    (CLAUDE.md Guardrail #12). The browser's copy of the item-health ledger ages
-    with the public-copy series of `config/gardener/telemetry-aggregate.json`;
-    every other month folder has its own `public_*_keep_months` knob.
-    """
+    """The console registry must not reintroduce monthly projections."""
     monthly = {
         entry.published_to.rsplit("/", 1)[0].removeprefix("frontend/public/")
         for entry in CONSOLE_PAYLOADS

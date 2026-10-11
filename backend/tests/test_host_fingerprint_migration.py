@@ -930,7 +930,7 @@ def test_console_view_is_validated_but_not_fabricated(workspace: Path, version: 
     assert (workspace / view).read_bytes() == original
 
 
-@pytest.mark.parametrize("fault", ["retired_csv", "view_shape", "view_months"])
+@pytest.mark.parametrize("fault", ["retired_csv", "view_shape", "view_unknown_key"])
 def test_final_view_contract_defect_protects_entire_batch(workspace: Path, fault: str) -> None:
     document = manifest_document()
     generated_compact(workspace, document, Format.PARQUET, compact_only=False)
@@ -951,8 +951,8 @@ def test_final_view_contract_defect_protects_entire_batch(workspace: Path, fault
             payload["verdict"]["health"] = "unknown"
             reason = "health"
         else:
-            payload["months"] = ["2026-09", "2026-09"]
-            reason = "months must be distinct"
+            payload["unknown_key"] = ["2026-09", "2026-09"]
+            reason = "unknown_key"
         view = (json.dumps(payload) + "\n").encode("ascii")
     add_source(
         workspace,

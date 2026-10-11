@@ -30,3 +30,9 @@ New console bands omit `months`. A before-validation migration copies an older
 band without that one retired field. It leaves the caller's payload unchanged,
 preserves settings and checker movement facts, and still refuses every other
 unknown key. Delete the migration when no committed band carries `months`.
+
+## See also
+
+- [console-payloads.md](console-payloads.md) - retained published shapes.
+- [run-timeline.md](run-timeline.md) - native clock arithmetic.
+- [../contracts/state-ledgers.md](../contracts/state-ledgers.md) - source ledgers.

@@ -207,7 +207,6 @@ is the program the `history` job of `idhazh-gardener.yml` runs to do it
 | --- | --- | --- | --- |
 | `frontend/public/digest/<Y>/<M>/<D>/digest.json`, `run.json` | **Keep, always** | never | the record that a day happened. The archive is the product, so age is not a reason to remove any of it |
 | `frontend/public/digest/<Y>/<M>/<D>/*.svg` | Delete (asset) | `retention.image_months`, **13** | the item survives without its picture, which is what makes a visual the one published thing safe to remove. Not because it is the bigger half - it is not: 491 visuals weighing 6,244,624 bytes against 24,543,254 bytes of day payload in the same tree on 2026-09-13 |
-| `frontend/public/telemetry/` | Delete (projection) | 14 months, the `public-copy` series of `config/gardener/telemetry-aggregate.json` | the browser's copy of the item-health ledger, refused at any value but its source's |
 | `frontend/public/console/band.json` | Keep | none needed | one file, rewritten whole each run. Question 1 stops here |
 | `frontend/public/source-health.json` | Keep | none needed | one file, rewritten whole each run |
 | `frontend/public/assist/index/` | **No policy** | none | see below |
