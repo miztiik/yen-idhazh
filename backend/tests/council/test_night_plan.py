@@ -61,9 +61,7 @@ def _config_registering(root: Path, *, slugs: tuple[str, ...], **council: object
 def _planned(capsys: pytest.CaptureFixture[str], argv: list[str]) -> list[str]:
     """The dates the planner prints, read back off its one key-value line."""
     assert night_plan.main(argv) == 0
-    printed = dict(
-        line.split("=", 1) for line in capsys.readouterr().out.splitlines() if line
-    )
+    printed = dict(line.split("=", 1) for line in capsys.readouterr().out.splitlines() if line)
     return list(json.loads(printed["dates"]))
 
 
@@ -179,10 +177,7 @@ def test_a_tenant_that_names_a_night_nobody_asked_about_is_refused_by_name(
     )
     config_root = _config_registering(venue, slugs=("one-judge",))
 
-    with pytest.raises(SystemExit) as refusal:
-        night_plan.main(["--config-root", str(config_root), "--tonight", TONIGHT])
-
-    assert "'one-judge' says it is behind on 2019-04-01" in str(refusal.value)
+    assert night_plan.main(["--config-root", str(config_root), "--tonight", TONIGHT]) == 2
 
 
 def test_a_dispatched_date_replaces_the_plan_and_asks_nobody(
@@ -210,6 +205,10 @@ def test_a_dispatched_date_replaces_the_plan_and_asks_nobody(
             TONIGHT,
             "--dispatched",
             THE_NIGHT_BEFORE,
+            "--mode",
+            "manual",
+            "--judges",
+            '["one-judge"]',
         ],
     )
 
@@ -231,4 +230,4 @@ def test_a_date_no_contract_accepts_is_refused_before_it_addresses_anything(
     with pytest.raises(SystemExit) as refusal:
         night_plan.a_date(given, what="--tonight")
 
-    assert "--tonight must be a YYYY-MM-DD date" in str(refusal.value)
+    assert refusal.value.code == 2

@@ -224,6 +224,9 @@ export function selectPaths(paths: readonly string[]): Selection {
 		} else if (/^frontend\/src\/routes\/(?:console)(?:\/|$)/.test(path)) {
 			selected = CONSOLE;
 			reason = 'console route and publishing checks';
+		} else if (/^frontend\/src\/lib\/console\/voices\//.test(path)) {
+			selected = CONSOLE;
+			reason = 'route-owned Voices panels and publishing checks';
 		} else if (/^frontend\/src\/routes\/archive\//.test(path)) {
 			selected = ['logic', 'archive', 'model-search', 'publishing'];
 			reason = 'archive route and search consumer';

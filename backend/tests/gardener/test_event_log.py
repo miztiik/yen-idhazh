@@ -32,6 +32,7 @@ import pytest
 from conftest import CONFIG_DIR, REPO_ROOT
 from pydantic import BaseModel
 
+from idhazh import event_lines
 from idhazh.contracts import gardener_events
 from idhazh.contracts.base import Model
 from idhazh.contracts.collection_prune import Recovery, StopReason
@@ -112,6 +113,12 @@ def finished() -> TaskFinished:
 def line_of(record: logging.LogRecord) -> str:
     """What the gardener's handler writes for one record."""
     return event_log.OneJsonLine().format(record)
+
+
+def test_gardener_uses_the_shared_writer_with_its_existing_text_event() -> None:
+    assert issubclass(event_log.OneJsonLine, event_lines.OneJsonLine)
+    assert event_log.payload is event_lines.payload
+    assert event_log.cause_of is event_lines.cause_of
 
 
 def emitted(caplog: pytest.LogCaptureFixture, event: Model) -> logging.LogRecord:

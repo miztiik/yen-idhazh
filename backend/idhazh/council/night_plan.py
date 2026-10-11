@@ -1,27 +1,15 @@
-"""Which dates does tonight's council judge?
+"""Which judges and own dates does this scheduled or manual invocation select?
 
-Tonight, plus the older nights its tenants say they are behind on. The council
-owns the window, its floor and how many older nights one night may repair,
-because all three price a runner: every extra date is another job a tenant a
-shard. What counts as behind is the tenant's, because only the tenant knows what
-it has read.
-
-**The council asks; it does not look.** It calls `nights_outstanding` on every
-registered tenant and unions what comes back, so the venue knows nothing about
-any tenant's storage layout - and with nobody registered the union is empty and
-tonight is the whole plan.
-
-Nothing here repairs anything and nothing here needs an operator. The plan names
-the dates; the night's own three verbs do the work on each of them, and the next
-run finds a gap because finding the gap is how it picks its work.
+Scheduled work asks each active judge about one bounded window and caps each
+answer separately. Manual work validates the entire judge set and one date
+before any selected package is imported, and asks about no outstanding dates.
 """
 
 from __future__ import annotations
 
-import argparse
 import json
 from collections.abc import Sequence
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Final
 
@@ -29,8 +17,11 @@ from pydantic import TypeAdapter, ValidationError
 
 from idhazh import config
 from idhazh.contracts.base import DateStamp
+from idhazh.contracts.council_events import CouncilProgram, NightPlanned
 from idhazh.contracts.knobs.council import CouncilConfig
+from idhazh.council import event_log, outcome
 from idhazh.council.registry import tenants
+from idhazh.council.selection import SelectedJudge, Selection, manual
 from idhazh.council.tenancy import Tenant
 
 #: The one check that a date is a date every contract will accept. Held against
@@ -55,9 +46,8 @@ def a_date(given: str, *, what: str) -> DateStamp:
         stamped = str(_A_DATE.validate_python(given))
         date.fromisoformat(stamped)
     except (ValidationError, ValueError) as error:
-        raise SystemExit(
-            f"{what} must be a YYYY-MM-DD date, and '{given}' is not: {error}"
-        ) from error
+        event_log.failed(error, refused=True)
+        raise SystemExit(outcome.CouncilExit.REFUSED) from error
     return stamped
 
 
@@ -80,18 +70,14 @@ def window_before(council: CouncilConfig, *, tonight: DateStamp) -> tuple[DateSt
         last - timedelta(days=council.repair_window_nights - 1),
     )
     return tuple(
-        (floor + timedelta(days=offset)).isoformat()
-        for offset in range((last - floor).days + 1)
+        (floor + timedelta(days=offset)).isoformat() for offset in range((last - floor).days + 1)
     )
 
 
 def plan_the_night(
     council: CouncilConfig, *, tonight: DateStamp, hosted: Sequence[Tenant]
-) -> tuple[DateStamp, ...]:
-    """Tonight, and the older nights this run repairs with it. Newest first.
-
-    The union of what the tenants answered and never the intersection: one tenant
-    behind on a night is a night with a gap in it, whatever the others managed.
+) -> Selection:
+    """Tonight and each judge's own newest outstanding nights, capped separately.
 
     Cut to `repair_dates_a_night`, newest first. A date that can never succeed
     then holds the ones behind it out only until the window slides past it;
@@ -105,55 +91,78 @@ def plan_the_night(
     """
     window = window_before(council, tonight=tonight)
     asked = set(window)
-    behind: set[str] = set()
+    selected: list[SelectedJudge] = []
     for host in hosted:
+        behind: set[str] = set()
         for night in host.nights_outstanding(window=window):
             if night not in asked:
                 raise SystemExit(
-                    f"'{host.judge_id}' says it is behind on {night}, which is not one of "
+                    f"'{host.judge_id}' named a date outside "
                     f"the {len(window)} nights the council asked it about. A tenant answers "
                     "inside the window it was handed."
                 )
             behind.add(night)
-    return (tonight, *sorted(behind, reverse=True)[: council.repair_dates_a_night])
+        selected.append(
+            SelectedJudge(
+                tenant=host.judge_id,
+                status=council.declaration(host.judge_id).lifecycle_status,
+                dates=(tonight, *sorted(behind, reverse=True)[: council.repair_dates_a_night]),
+            )
+        )
+    return Selection(mode="scheduled", judges=tuple(selected)).check(council)
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    return outcome.run(CouncilProgram.PLAN, lambda: _main(argv))
+
+
+def _main(argv: list[str] | None = None) -> int:
+    parser = outcome.Parser(description=__doc__)
     parser.add_argument("--config-root", type=Path, default=Path("config"))
     parser.add_argument(
         "--tonight",
-        required=True,
+        default=None,
         metavar="YYYY-MM-DD",
-        help=(
-            "The date this night is for. Required and never defaulted: the planning job "
-            "decides which day the council opens on, and a second answer here could plan "
-            "one date while the artifacts were named for another."
-        ),
+        help=("The scheduled digest date. Defaults here, once, to yesterday UTC."),
     )
     parser.add_argument(
         "--dispatched",
         default="",
         metavar="YYYY-MM-DD",
-        help=(
-            "A date a person named, which replaces the plan outright. Somebody naming a "
-            "date is asserting something the plan cannot know, so no tenant is asked and "
-            "no older night rides along. Empty is the scheduled night."
-        ),
+        help=("A manual run's required single date. No outstanding dates ride along."),
     )
+    parser.add_argument("--mode", choices=("scheduled", "manual"), default="scheduled")
+    parser.add_argument("--judges", default="", help="A manual run's JSON list of judge names.")
     args = parser.parse_args(argv)
 
-    planned: tuple[DateStamp, ...]
-    if str(args.dispatched):
-        planned = (a_date(str(args.dispatched), what="the dispatched date"),)
+    settings = config.load(args.config_root)
+    event_log.install(settings.app.logging.level.value)
+    if args.mode == "manual":
+        tonight = a_date(str(args.dispatched), what="the dispatched date")
+        selected = manual(settings.council, judges=args.judges, day=tonight)
+        tenants(
+            selected.names(),
+            app=settings.app,
+            council=settings.council,
+            trials=selected.trials,
+        )
     else:
-        settings = config.load(args.config_root)
-        planned = plan_the_night(
+        if args.dispatched or args.judges:
+            raise SystemExit(outcome.CouncilExit.REFUSED)
+        tonight = a_date(
+            args.tonight or (datetime.now(UTC).date() - timedelta(days=1)).isoformat(),
+            what="--tonight",
+        )
+        selected = plan_the_night(
             settings.council,
-            tonight=a_date(str(args.tonight), what="--tonight"),
+            tonight=tonight,
             hosted=tenants(settings.council.running(), app=settings.app, council=settings.council),
         )
+    planned = selected.dates or (tonight,)
+    event_log.emit(NightPlanned(dates=planned, judges=len(selected.judges)))
+    print(f"date={tonight}")
     print(f"dates={json.dumps(list(planned), separators=(',', ':'))}")
+    print(f"selection={selected.model_dump_json()}")
     return 0
 
 

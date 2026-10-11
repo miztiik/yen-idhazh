@@ -102,7 +102,9 @@ the representative browser journey proves shared layout and interaction.
 **The explicit inventory registers every retained spec.** There is no test
 requiring each route to acquire a separate browser driver or expectation folder.
 A new browser case must protect a distinct failure mechanism before it joins
-`frontend/scripts/test-groups.ts`.
+`frontend/scripts/test-groups.ts`. The one Voices journey checks that changing
+the window keeps native panel readings and feed-evidence counts available;
+the feed, source and retirement rules remain deterministic logic tests.
 
 **A path filter is not a dependency map.** Shared styles, layouts and frontend
 dependencies reach the console without naming it, and the boundary is crossed in

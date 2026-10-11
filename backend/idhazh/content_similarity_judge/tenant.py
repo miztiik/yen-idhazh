@@ -23,20 +23,11 @@ from idhazh.contracts.base import DateStamp, RunId
 from idhazh.contracts.council_run_record import ShardOutcome
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
 from idhazh.contracts.story_similarity_pair import ContentSimilarityJudgeId
-from idhazh.council import metrics_sink, session
+from idhazh.council import metrics_sink, session, trial_paths
 from idhazh.council.tenancy import ShardResult
 from idhazh.ledger import staging
 from idhazh.similarity.budget import refuse_a_night_this_tenant_cannot_finish
-from idhazh.stages import (
-    common,
-    count_verdicts,
-    judge_item_pairs,
-    pick_item_pairs,
-    set_merge_line,
-)
-from idhazh.stages.common import LOG
 
 #: This judge's own slug, narrowed to the one member it can be. The closed set
 #: is declared once beside the column that holds it, and named here because this
@@ -158,6 +149,8 @@ class ContentSimilarityJudge:
         it. The default is the root the counting verb writes to, so the reader
         and the writer cannot drift apart.
         """
+        from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
+
         state = state_dir if state_dir is not None else config.REPO_ROOT / ledger.STATE_DIRNAME
         record_path = ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION)
         if not record_path.exists():
@@ -173,6 +166,8 @@ class ContentSimilarityJudge:
         knows it ran no call, and a zero there would read as a call that cost
         nothing.
         """
+        from idhazh.stages import common, pick_item_pairs
+
         drawn = pick_item_pairs.stage_pick_item_pairs(
             date,
             run_id=run_id,
@@ -200,6 +195,9 @@ class ContentSimilarityJudge:
         this unit did not fill fails on this runner rather than arriving in a
         committed ledger as an empty string.
         """
+        from idhazh.stages import common, judge_item_pairs
+        from idhazh.stages.common import LOG
+
         report = judge_item_pairs.stage_judge_item_pairs(
             date,
             run_id=run_id,
@@ -248,6 +246,8 @@ class ContentSimilarityJudge:
         back from that same root, so the two cannot part company on where tonight's
         rows went.
         """
+        from idhazh.stages import common, count_verdicts, set_merge_line
+
         settings = config.load()
         counted = count_verdicts.stage_count_verdicts(
             date,
@@ -265,7 +265,7 @@ class ContentSimilarityJudge:
             settings=settings,
             identity=identity,
             state_dir=state_dir,
-            digest_root=common.PUBLIC_ROOT,
+            digest_root=trial_paths.public_root(common.PUBLIC_ROOT),
         )
         return ShardResult(
             outcome=ShardOutcome.COMPLETED if counted.counted else ShardOutcome.NOTHING_TO_DO

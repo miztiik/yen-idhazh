@@ -47,7 +47,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 	],
 	reader: ['payload-state', 'reading-page'],
 	offline: ['service-worker'],
-	console: ['console-data-explorer-still', 'console-telemetry-heal'],
+	console: ['console-data-explorer-still', 'console-telemetry-heal', 'console-voices-journey'],
 	archive: ['archive'],
 	'model-search': ['search'],
 	publishing: ['canaries', 'explorer-boundary', 'malformed-day']

@@ -142,9 +142,12 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("drift.yml", "baseline_days"): "^[0-9]{1,4}$",
     ("drift.yml", "recent_days"): "^[0-9]{1,4}$",
     ("idhazh-pipeline-tests.yaml", "candidate_models_file"): DISPATCH_READ_BY_NAME,
-    # The judge's own date, shaped by the same pattern and for the same reason:
-    # it becomes the address the judged rows and the fitted row file under.
-    ("llm-council.yml", "date"): "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$",
+    # The planner checks both the date pattern and real UTC calendar day before
+    # resolving selected judges; the workflow passes it through env, not script source.
+    ("llm-council.yml", "date"): DISPATCH_READ_BY_NAME,
+    # The planner validates a nonempty unique JSON list of registered slugs,
+    # refuses retired judges, and allows paused judges only as isolated trials.
+    ("llm-council.yml", "judges"): DISPATCH_READ_BY_NAME,
     ("measure.yml", "candidate_models_file"): DISPATCH_READ_BY_NAME,
     ("measure.yml", "corpus_links"): "^[1-9][0-9]{0,4}$",
     ("measure.yml", "runtime_candidate"): DISPATCH_CHOICE,

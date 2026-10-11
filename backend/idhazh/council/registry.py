@@ -22,7 +22,12 @@ from typing import Final, cast
 
 from idhazh import config
 from idhazh.contracts.app_config import AppConfig
-from idhazh.contracts.knobs.council import CouncilConfig, derive_judge_package_name
+from idhazh.contracts.knobs.council import (
+    CouncilConfig,
+    JudgeLifecycleStatus,
+    JudgeRefusalError,
+    derive_judge_package_name,
+)
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain, LedgerLifecycleStatus
 from idhazh.council.tenancy import Tenant
@@ -92,6 +97,7 @@ def tenant(
     package: str | None = None,
     app: AppConfig | None = None,
     council: CouncilConfig | None = None,
+    trial: bool = False,
 ) -> Tenant:
     """The tenant that answers to `slug`, or a refusal naming the slug.
 
@@ -99,6 +105,17 @@ def tenant(
     slug would run every step, report nothing wrong and judge less than the
     config asked for, which is the failure a typo in a slug list produces.
     """
+    status = (
+        council.declaration(slug).lifecycle_status
+        if council is not None and slug in council.judge_names
+        else None
+    )
+    if status is JudgeLifecycleStatus.RETIRED or (
+        status is JudgeLifecycleStatus.PAUSED and not trial
+    ):
+        raise JudgeRefusalError(slug, "judge is not selected for execution")
+    if trial and status is not JudgeLifecycleStatus.PAUSED:
+        raise JudgeRefusalError(slug, "a trial requires a paused declaration")
     root = package or TENANT_PACKAGE
     module_name = f"{root}.{derive_judge_package_name(slug)}.{TENANT_MODULE}"
     try:
@@ -123,7 +140,9 @@ def tenant(
         *found.committed_paths,
     )
     for family in paths._CONFIG.families:
-        if family.lifecycle_status is LedgerLifecycleStatus.ACTIVE:
+        if family.lifecycle_status is LedgerLifecycleStatus.ACTIVE or (
+            trial and family.lifecycle_status is LedgerLifecycleStatus.PAUSED
+        ):
             continue
         for held in family.ledgers:
             addresses = [staging.staged_path(held.name)]
@@ -138,9 +157,10 @@ def tenant(
                 for address in addresses
                 for declared in committed
             ):
-                raise ValueError(
-                    f"active judge '{slug}' writes ledger '{held.name.value}' in "
-                    f"family '{family.name}', which is {family.lifecycle_status.value}"
+                raise JudgeRefusalError(
+                    slug,
+                    f"judge '{slug}' writes ledger '{held.name.value}' in "
+                    f"family '{family.name}', which is {family.lifecycle_status.value}",
                 )
     return found
 
@@ -151,10 +171,21 @@ def tenants(
     package: str | None = None,
     app: AppConfig | None = None,
     council: CouncilConfig | None = None,
+    trials: tuple[str, ...] = (),
 ) -> tuple[Tenant, ...]:
     """Every active tenant the council hosts, in registration order.
 
     An empty list is a legal night. The venue runs every step it always runs and
     judges nothing, which is what a room with no case heard in it looks like.
     """
-    return tuple(tenant(slug, package=package, app=app, council=council) for slug in slugs)
+    hosted: list[Tenant] = []
+    for slug in slugs:
+        try:
+            hosted.append(
+                tenant(slug, package=package, app=app, council=council, trial=slug in trials)
+            )
+        except JudgeRefusalError:
+            raise
+        except (Exception, SystemExit) as error:
+            raise JudgeRefusalError(slug, f"judge '{slug}' is refused") from error
+    return tuple(hosted)

@@ -389,7 +389,8 @@ for each is written by `report.py` and is not on the site.
 
 **Every line a task logs is one event: one line of JSON on stderr.** Each event
 is a model in `backend/idhazh/contracts/gardener_events.py`, and
-`backend/idhazh/gardener/event_log.py` writes it. `idhazh gardener` and
+`backend/idhazh/gardener/event_log.py` supplies gardener events to the shared
+writer in `backend/idhazh/event_lines.py`. `idhazh gardener` and
 `gardener_publish.py` install that module's one handler, at the level
 `config/idhazh.json` names. A line starts with three keys: `event`, the event's
 name; `at`, the UTC instant the line was made, to the millisecond, with a `Z`;
@@ -398,6 +399,11 @@ field with no value is left out. JSON escapes every character outside ASCII and
 every line break, so one event is always one line, and no text inside it can
 start a line that GitHub reads as a workflow command. A test reads the event off
 the log record (`event_log.payload`), never its text.
+
+The pre-install crash printer reaches only `idhazh/__init__.py`,
+`idhazh/crash_trace.py` and `idhazh/event_lines.py`. Their import-time code
+uses the standard library alone. The bare planner fixture copies these three
+named files and runs with site packages disabled.
 
 | # | Event | When | What it says |
 | --- | --- | --- | --- |
