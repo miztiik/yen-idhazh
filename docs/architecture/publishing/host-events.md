@@ -4,9 +4,10 @@
 
 ## What is implemented
 
-The isolated contracts, native Rust storage and read-only verifier do not change
-production collectors or shared ledger readers. Rust now renders and atomically
-files real host records. Host collection is not implemented at this increment.
+The isolated contracts, native Rust producers/storage and read-only verifier do
+not change production collectors or shared ledger readers. Rust now collects,
+renders and atomically files real probe, target and clock host records.
+Resource windows and production invocation are not implemented at this increment.
 The corrected host row removes the legacy CPU count and frequency columns.
 The candidate reads finite historical schemas without inventing measurements:
 old hashes retain algorithm 1, legitimate observed averages survive, and
@@ -30,6 +31,54 @@ Abort and shutdown resolve opening commands without silently dropping evidence.
 Memory collection defaults on. The manifest carries one strict Boolean; disabled
 memory cells are null and diagnosed separately from CPU and load readings.
 This candidate control does not yet turn off production Python instruments.
+
+## Probe, target and clock collection
+
+The thin native CLI routes `probe`, `target` and `clock` commands. `invocation.rs`
+binds a validated manifest and command to finite named inputs, an isolated output
+root and retained native results. `job_probe`, `target_probe` and `job_clock`
+produce whole rows through the existing store and receipt modules; they do not
+import codecs or mint file paths/envelopes.
+
+Probe inputs read bounded proc/sysfs topology, logical CPU IDs, policy frequency,
+selected-process affinity, cgroup constraints, cache and uptime. Physical topology
+and target allowance remain separate. Observed MHz is a validated complete mean;
+reported hardware maximum is independently covered. Missing or raced sources
+yield null with a typed reason. One early unknown target can be enriched by a
+labelled whole-row capture; clock collection never remeasures CPU facts.
+
+`hierarchy.rs` proves cgroup ancestry with actual kernel filesystem evidence.
+Matching fd-derived namespace/root identities establish source alignment, not
+host-initial identity. A pinned genuine cgroup2 root has `cgroup.procs` and an
+exact ENOENT lookup for `cgroup.events`; non-root groups have that marker even in
+a remounted cgroup namespace. A genuine v1 root positively exposes `release_agent`
+metadata; nothing executes or changes it. Mount/device evidence rejects covering
+substitutions. Unproved roots, denied reads or changed context leave quota
+unavailable even if a visible quota is finite. Bounded `cgroup.subtree_control`
+evidence establishes controller applicability rather than guessing from absence.
+Valid v2 partitions use the target effective cpuset, not intersections with
+parent effective sets; v1 inheritance retains its separate rules.
+
+Live and recorded captures pass the same reducers and brackets. Recorded hierarchy
+evidence is explicit; ordinary generated files cannot masquerade as kernel proof.
+The hardware-only algorithm-2 hash excludes quota, affinity, online topology,
+frequency and microcode. Fixed link-local metadata uses the minimal HTTP-only
+`ureq` client; copy bandwidth retains fallible allocation, three timed copies and
+observable results. Copy selection remains independent of memory collection.
+
+Before publishing raw bytes, the CLI retains the intended result, its diagnostics
+and exact write plan. An interrupted retry consumes this intent without recapture,
+synthetic timestamps or extra files. Only actual completed-file evidence permits
+publishing the result. Native tests interrupt real CLI processes at five stages in
+JSON and all three Parquet compression settings, then verify the same bytes.
+
+The named `probe-clock.json` fixture supplies independent corrected CPU/hash truth.
+Python compares unchanged identity, cache, uptime and clocks against its unchanged
+instruments and verifies native files without re-encoding. Locked dependencies add
+six packages, 410,532 cached archive bytes and no prior version changes. The whole
+MSVC development executable measured 25,457,664 bytes; this is neither a dependency
+size delta nor a Linux release-cost claim. Actual Linux cost remains experiment
+evidence, not a conclusion from fixture equality.
 
 ## Exact-byte verification
 
@@ -161,8 +210,9 @@ post-decode check. Bounded actual-page admission fixes that boundary. Apache
 Thrift supplies compact-protocol primitives and cramjam supplies bounded raw
 Snappy decoding; shared Python ledger codecs remain unchanged.
 
-Production cutover and historical replacement require the later explicit
-evidence-based decisions. Contracts and green tests cannot grant either.
+Production cutover and historical replacement are authorized for unattended
+delivery after their evidence/readiness gates. Contracts and green tests alone
+do not establish that evidence or permit skipping backups and quiet windows.
 
 ## See also
 

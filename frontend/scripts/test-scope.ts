@@ -165,21 +165,25 @@ const UTILITY_TESTS: Record<string, string> = {
 export const RUST_PARITY_TEST = 'backend/tests/contracts/test_rust_host_file_parity.py';
 export const RUST_STORE_TEST = 'backend/tests/test_rust_host_store_parity.py';
 export const RUST_RECEIPTS_TEST = 'backend/tests/test_rust_host_receipts.py';
-export const RUST_TESTS = [RUST_PARITY_TEST, RUST_STORE_TEST, RUST_RECEIPTS_TEST];
+export const RUST_PRODUCERS_TEST = 'backend/tests/contracts/test_host_event_rust_parity.py';
+export const RUST_TESTS = [RUST_PARITY_TEST, RUST_STORE_TEST, RUST_RECEIPTS_TEST, RUST_PRODUCERS_TEST];
 const HOST_TESTS: Record<string, string[]> = {
-	'backend/idhazh/contracts/host_events.py': ['backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_event_files.py', RUST_PARITY_TEST],
-	'backend/idhazh/contracts/host_output.py': ['backend/tests/contracts/test_host_output.py', 'backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_output_verify.py', RUST_PARITY_TEST],
+	'backend/idhazh/contracts/host_events.py': ['backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_event_files.py', ...RUST_TESTS],
+	'backend/idhazh/contracts/host_output.py': ['backend/tests/contracts/test_host_output.py', 'backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_output_verify.py', ...RUST_TESTS],
 	'backend/idhazh/telemetry/host_event_files.py': ['backend/tests/test_host_event_files.py'],
 	'backend/idhazh/telemetry/host_output_verify.py': ['backend/tests/test_host_output_verify.py', ...RUST_TESTS],
-	'backend/idhazh/telemetry/host_parquet_admission.py': ['backend/tests/test_host_parquet_admission.py', 'backend/tests/test_host_output_verify.py', RUST_PARITY_TEST],
+	'backend/idhazh/telemetry/host_parquet_admission.py': ['backend/tests/test_host_parquet_admission.py', 'backend/tests/test_host_output_verify.py', ...RUST_TESTS],
 	'backend/utilities/verify_host_output.py': ['backend/tests/test_host_output_verify.py'],
-	'config/host-telemetry-experiment.json': ['backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_event_files.py', RUST_PARITY_TEST],
+	'config/host-telemetry-experiment.json': ['backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_event_files.py', ...RUST_TESTS],
 	'tests/fixtures/host-events/file-parity.json': [RUST_PARITY_TEST],
 	'tests/fixtures/host-events/storage-parity.json': [RUST_STORE_TEST],
 	'tests/fixtures/host-events/publication-parity.json': [RUST_RECEIPTS_TEST],
-	'tests/fixtures/host-events/manifest.json': ['backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_event_files.py', RUST_PARITY_TEST],
-	'tests/fixtures/host-events/cpu-snapshots.json': ['backend/tests/contracts/test_host_output.py'],
-	'tests/fixtures/host-events/fingerprint-versions.json': ['backend/tests/contracts/test_host_output.py']
+	'tests/fixtures/host-events/probe-clock.json': [RUST_PRODUCERS_TEST],
+	'tests/fixtures/host-events/manifest.json': ['backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_event_files.py', ...RUST_TESTS],
+	'tests/fixtures/host-events/cpu-snapshots.json': ['backend/tests/contracts/test_host_output.py', RUST_PRODUCERS_TEST],
+	'tests/fixtures/host-events/fingerprint-versions.json': ['backend/tests/contracts/test_host_output.py', RUST_PRODUCERS_TEST],
+	'tests/fixtures/runtime/2026-08-29-3-shard-0.server-head.txt': [RUST_PRODUCERS_TEST],
+	'tests/fixtures/runtime/2026-08-26-5-shard-0.prom': [RUST_PRODUCERS_TEST]
 };
 
 export function selectPaths(paths: readonly string[]): Selection {
