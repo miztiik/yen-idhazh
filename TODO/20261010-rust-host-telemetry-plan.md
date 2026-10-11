@@ -67,7 +67,7 @@ Table D - authoritative execution queue
 | D12 | 12 | Produce verified receipts and recover completed writes | 11 | E | DONE | rust-d12-receipts | - | owner; native receipt/recovery leaf |
 | D3 | 3 | Produce machine probe and clock events in Rust | 12 | F | DONE | rust-d3-producers | - | owner; producer recovery and correctness workers |
 | D4 | 4 | Produce window and job resource events in Rust | 3 | D | DONE | rust-d4-resources | - | owner; bounded resource monitor, shutdown/fault corrections and real Linux lifecycle complete; candidate gates pass; production collectors unchanged; live-cost evidence belongs to D5 |
-| D15 | 15 | Build bounded historical inventory and dry-run migration | 4 | E | PENDING | - | - | - |
+| D15 | 15 | Build bounded historical inventory and dry-run migration | 4 | E | DONE | rust-d15-history | - | owner; disjoint path-portability and current-contract leaves integrated; 139 bounded D15 cases plus 5 current-band binding cases pass, Linux-platform typing passes 752 files; merge requires exact green Linux candidate; actual migrated-consumer historical evidence remains after D13/D14 |
 | D5 | 5 | Verify corrected Rust in an artifact-only YAML workflow | 15 | E | PENDING | - | - | - |
 | D13 | 13 | Migrate shared schemas and readers before writers | 5 | F | PENDING | - | - | - |
 | D14 | 14 | Migrate contracted backend and frontend consumers | 5 | F | PENDING | - | - | - |
@@ -978,14 +978,24 @@ Table AQ - Row 14 rejected alternatives
 - **Scope:** Implement the one-off host-history migration planner and dry-run verifier against bounded manifests/generated fixtures before isolated evidence, without changing historical files.
 - **Files touched:**
   - `backend/idhazh/contracts/host_migration.py`
+  - `backend/idhazh/telemetry/host_history_files.py`
+  - `backend/idhazh/telemetry/host_history_migration.py`
+  - `backend/idhazh/telemetry/host_history_bundle.py`
+  - `backend/idhazh/telemetry/host_history_paths.py`
   - `backend/utilities/migrate_host_fingerprints.py`
   - `backend/tests/contracts/test_host_migration.py`
+  - `backend/rust/host-telemetry/tests/config.rs`
   - `backend/tests/test_host_fingerprint_migration.py`
   - `tests/fixtures/host-events/history-migration.json`
-  - `config/host-telemetry-experiment.json`
-  - `.github/workflows/rust-host-telemetry.yml`
-  - `docs/how-to/migrate-host-telemetry.md`
+  - `config/host-history-migration.json`
+  - `frontend/scripts/test-scope.ts`
+  - `frontend/scripts/tests/test-scope.test.mjs`
+  - `docs/architecture/publishing/host-events.md`
   - `TODO/20261010-rust-host-telemetry-plan.md`
+- **Execution reconciliation:** D5 owns the real artifact-only workflow; D15 supplies named fixture tests and a CLI, not an empty workflow. Operational usage lives in the existing host-events page. Narrow helpers own bounded historical decoding, replacement/reconciliation, and isolated bundle publication. Fowler (2026-10-11) rules that real raw/compact/index and maintenance receipt candidates may complete now, while affected derived views and their receipts remain explicitly deferred. Candidate-reader evidence always blocks historical readiness until the actual Rows 13/14 consumers rerun the scoped manifest before D16; no copied view is described as regenerated.
+- **Local evidence (2026-10-11):** The original 83 D15 cases passed before review corrections. Eleven new expected refusals then failed against that implementation: actual Windows root/output casing and source/target hard links, repinned contradictory Parquet footer counts, and repinned loss days with compact rows. The existing raw-footer refusal control passed. A further missing-destination alias test exposed an incomplete first identity fix; read-only Windows parent-directory case attributes now cover that boundary too. Final serial, locked gates pass 102 D15 contract/integration cases without skips and 785 existing host-event/output/config/admission cases with one pre-existing privilege-dependent Windows symlink skip. Case-sensitive fixture expectations retain distinct root labels; legitimate loss without rows and all-set-aside periods remain valid. Selector regression passes 39 cases; repository Ruff passes; normal mypy passes 753 source files, including the narrow physical-path helper; the existing TypeScript tooling check passes using the installed compiler. Named doc-load and whitespace/ASCII/LF checks pass. Proof logs and XML remain under `backend/var/checks/d15-review-*`. No committed archive is scanned. These are local candidate results, not CI, a merge, live-cost evidence or historical application authority.
+- **Native configuration compatibility (2026-10-11):** The existing native `real_configuration_bounds_controls_and_override` test failed on the added shared `history_migration_limits` section before this correction. The migration-only four bounds now live in `config/host-history-migration.json`; the command combines them in memory with the existing shared `verification_limits`, without config writes or duplicated decode/source defaults. The shared experiment JSON and its Python section test are restored to their native-compatible shape. Rust strict unknown-field validation remains unchanged and has an explicit regression. Final local gates pass all 135 D15 cases (the existing 102 plus 33 named-config/bound/source-protection cases), all 3 native config tests, and the same 785 existing regressions with the known Windows skip. Pinned Rust 1.95.0 offline fmt/clippy, repository Ruff, normal mypy (753 files), selector (39 cases), and the existing TypeScript tooling check pass. Proof logs/XML are `backend/var/checks/d15-config-*`. These results remain local, pending candidate CI/merge.
+- **Linux candidate corrections (2026-10-11):** The first Linux candidate failed before tests on three Windows-only ctypes typing errors and two imports of a contract retired on its merged base. Disjoint leaf corrections preserve the Windows directory-case/physical-alias checks using an explicit platform branch and consume the retained ConsoleBand view contract. A generated legal retired machine CSV now refuses the whole batch before any writes; no historical source is silently retired or described as reconciled. Known 2026-10-02 band inputs remain admitted after the current model stamp moved. The integrated candidate includes the necessary current-contract trunk merge. All 139 bounded D15 cases and 5 current-band binding cases pass without skips; repository Ruff and Linux-platform mypy over 752 source files pass. The path leaf also passed Windows-platform typing and 13 existing native Windows alias/isolation cases. Integrated XML is `backend/var/checks/d15-integrated.xml`. This row's implementation is complete; merge remains conditional on the exact candidate's full Linux CI. No production collector or historical file was changed by this row.
 - **Acceptance gates - local:** Generated raw/compact/JSONL/Parquet/index/view fixtures exercise AN11, v1 preservation, valid average retention and null unmeasured fields. Dry-run has read-only historical access and writes reports/candidates only under a declared isolated root. Reject unknown files/versions, source-hash drift, missing metadata, unsafe paths and inconsistent inventories; never silently skip them.
 - **Acceptance gates - CI:** Named bounded dry-run fixtures before Row 5's verdict, including probe/clock duplicates, attempts, compact-only history, lost/empty periods, mixed legacy revisions, restart points and bad final batch. No test scans committed archives.
 - **Oracle:** A fixed manifest yields a complete validated replacement/reconciliation report without altering source bytes; it cannot prove an unlisted historical file exists or authorize applying the report.
@@ -1036,7 +1046,7 @@ Table AU - Row 16 rejected alternatives
   - `backend/utilities/migrate_host_fingerprints.py`
   - `backend/idhazh/contracts/host_migration.py`
   - `backend/tests/test_host_fingerprint_migration.py`
-  - `docs/how-to/migrate-host-telemetry.md`
+  - `docs/architecture/publishing/host-events.md`
   - `docs/reference/host-metrics.md`
   - `TODO/20261010-rust-host-telemetry-plan.md`
 - **Acceptance gates - local:** Separate approved maintenance execution, NOT an implementation test over production history. Re-run dry-run on exact manifest hashes before apply; stage all targets before any replacement; preflight dependencies/identities and publication exclusions. Generated fault/restart fixtures verify rollback and idempotence. Explicit maintenance output targets come from the approved manifest, never a glob in `Files touched`.

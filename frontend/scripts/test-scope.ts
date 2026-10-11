@@ -168,14 +168,26 @@ export const RUST_RECEIPTS_TEST = 'backend/tests/test_rust_host_receipts.py';
 export const RUST_PRODUCERS_TEST = 'backend/tests/contracts/test_host_event_rust_parity.py';
 export const RUST_RESOURCES_TEST = 'backend/tests/test_host_event_resource_parity.py';
 export const RUST_TESTS = [RUST_PARITY_TEST, RUST_STORE_TEST, RUST_RECEIPTS_TEST, RUST_PRODUCERS_TEST, RUST_RESOURCES_TEST];
+export const HOST_MIGRATION_TESTS = [
+	'backend/tests/contracts/test_host_migration.py',
+	'backend/tests/test_host_fingerprint_migration.py'
+];
 const HOST_TESTS: Record<string, string[]> = {
+	'config/host-history-migration.json': HOST_MIGRATION_TESTS,
+	'backend/idhazh/contracts/host_migration.py': HOST_MIGRATION_TESTS,
+	'backend/idhazh/telemetry/host_history_files.py': HOST_MIGRATION_TESTS,
+	'backend/idhazh/telemetry/host_history_migration.py': HOST_MIGRATION_TESTS,
+	'backend/idhazh/telemetry/host_history_bundle.py': HOST_MIGRATION_TESTS,
+	'backend/idhazh/telemetry/host_history_paths.py': HOST_MIGRATION_TESTS,
+	'backend/utilities/migrate_host_fingerprints.py': HOST_MIGRATION_TESTS,
+	'tests/fixtures/host-events/history-migration.json': HOST_MIGRATION_TESTS,
 	'backend/idhazh/contracts/host_events.py': ['backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_event_files.py', ...RUST_TESTS],
 	'backend/idhazh/contracts/host_output.py': ['backend/tests/contracts/test_host_output.py', 'backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_output_verify.py', ...RUST_TESTS],
 	'backend/idhazh/telemetry/host_event_files.py': ['backend/tests/test_host_event_files.py'],
 	'backend/idhazh/telemetry/host_output_verify.py': ['backend/tests/test_host_output_verify.py', ...RUST_TESTS],
 	'backend/idhazh/telemetry/host_parquet_admission.py': ['backend/tests/test_host_parquet_admission.py', 'backend/tests/test_host_output_verify.py', ...RUST_TESTS],
 	'backend/utilities/verify_host_output.py': ['backend/tests/test_host_output_verify.py'],
-	'config/host-telemetry-experiment.json': ['backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_event_files.py', ...RUST_TESTS],
+	'config/host-telemetry-experiment.json': ['backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_event_files.py', ...RUST_TESTS, ...HOST_MIGRATION_TESTS],
 	'tests/fixtures/host-events/file-parity.json': [RUST_PARITY_TEST],
 	'tests/fixtures/host-events/storage-parity.json': [RUST_STORE_TEST],
 	'tests/fixtures/host-events/publication-parity.json': [RUST_RECEIPTS_TEST],
