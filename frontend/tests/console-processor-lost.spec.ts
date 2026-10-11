@@ -89,25 +89,22 @@ test('THE ORACLE: the correction is printed on the panel, not filed in a doc', a
 	);
 });
 
-test('THE ORACLE: the shard board carries the same reading, in the same third state', async ({
+test('THE ORACLE: the newest-run shards carry the same unrecorded reading as the day tiles', async ({
 	page
 }) => {
-	const rows = page.locator('[data-shard-stolen-state]');
+	const rows = page.locator('[data-processor-lost-shard]');
 	const drawn = await rows.count();
-	expect(drawn, 'the shard board drew no rows, so this oracle asserts nothing').toBeGreaterThan(0);
+	expect(drawn, 'the run grain drew no shards, so this oracle asserts nothing').toBeGreaterThan(0);
 
 	for (const row of await rows.all()) {
-		// The board and the panel read one ledger, so they cannot be in two
-		// states at once. The canary records nothing, so both say unrecorded.
 		expect(
-			await row.getAttribute('data-shard-stolen-state'),
-			'the board drew a stolen share the ledger does not hold'
+			await row.getAttribute('data-processor-lost-state'),
+			'the run grain drew a stolen share the ledger does not hold'
 		).toBe('unrecorded');
-		expect(await row.getAttribute('data-shard-stolen-max'), 'the board invented a worst').toBe('');
+		expect(await row.getAttribute('data-processor-lost-pct'), 'the run grain invented a worst').toBe('');
+		await expect(row.locator('.says')).toHaveText('');
 	}
-	await expect(page.locator('[data-shard-figure="stolen-range"]').first()).toContainText(
-		'Not recorded'
-	);
+	await expect(page.locator('[data-processor-lost-grain="run"]')).toContainText(/\d{4}-\d{2}-\d{2}-\d+/);
 });
 
 test('THE ORACLE: the loud tile reverses, and the three states are three fills', async ({

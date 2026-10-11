@@ -12,7 +12,8 @@
  * it drew, whatever run it drew them for.
  */
 
-import { expect, test } from './support/door-page';
+import { expect, test, type Page } from './support/door-page';
+import { clientCode, drawClient } from './support/console-window/client-render';
 import { shardBoard } from '../src/lib/charts/machine';
 import { machineCounters, type MachineLimits, type MachineRun } from '../src/lib/server/machine-counters';
 import { ledgers, plan, type ShardReading } from './support/machine-rows';
@@ -53,6 +54,19 @@ function shard(over: ShardReading): ShardReading {
 		cores: 4,
 		...over
 	};
+}
+
+let boardCode: Promise<string> | undefined;
+async function openRetainedBoard(page: Page) {
+	boardCode ??= clientCode([['ShardBoardPanel', './src/lib/console/machine/ShardBoardPanel.svelte']]);
+	const run = foldedRun([
+		shard({ shard: 0, writtenTokens: 90, writeSeconds: 9, peakRssBytes: 2_000 * MIB }),
+		shard({ shard: 1, writtenTokens: 80, writeSeconds: 10, peakRssBytes: 3_000 * MIB })
+	]);
+	await drawClient(page, await boardCode, 'ShardBoardPanel', {
+		board: shardBoard(run, TEST_LIMITS.jobTimeoutSeconds, 640),
+		timeoutMinutes: TEST_LIMITS.jobTimeoutSeconds / 60
+	});
 }
 
 test.describe('the shard board carries the work-or-host answer on the row', () => {
@@ -168,7 +182,7 @@ test.describe('the shard board carries the work-or-host answer on the row', () =
 	test('the rate domain is the rates drawn, and the board prints the ratio it measured', async ({
 		page
 	}) => {
-		await page.goto('/console/machine/');
+		await openRetainedBoard(page);
 		const board = page.locator('[data-shard-board]');
 		const rows = board.locator('[data-shard-row]');
 		const count = await rows.count();
@@ -205,7 +219,7 @@ test.describe('the shard board carries the work-or-host answer on the row', () =
 	test('the memory domain takes the runner ceiling in rather than capping at it', async ({
 		page
 	}) => {
-		await page.goto('/console/machine/');
+		await openRetainedBoard(page);
 		const board = page.locator('[data-shard-board]');
 		const rows = board.locator('[data-shard-row]');
 		const count = await rows.count();

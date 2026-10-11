@@ -35,6 +35,7 @@ import {
 	type MachineRun
 } from '../src/lib/server/machine-counters';
 import { ledgers, plan, type ShardReading } from './support/machine-rows';
+import { clientCode, drawClient } from './support/console-window/client-render';
 
 const REPO = resolve(process.cwd(), '..');
 const DATE = '2026-09-04';
@@ -435,10 +436,20 @@ function measuredAttribute(cell: string | null | undefined): number | null {
 }
 
 test.describe('the memory panel puts the item grain on the page', () => {
+	let boardCode: string;
+	test.beforeAll(async () => {
+		boardCode = await clientCode([['MemoryBoardPanel', './src/lib/console/machine/MemoryBoardPanel.svelte']]);
+	});
+	test.beforeEach(async ({ page }) => {
+		const { run, health } = fixture(THREE_ITEMS);
+		await drawClient(page, boardCode, 'MemoryBoardPanel', {
+			board: memoryBoard(run, health), moved: [], start: DATE, end: DATE,
+			windowDays: 1, readoutMaxShare: 1, hatchDegrees: 45
+		});
+	});
 	test('the page names one tightest item, and the lead matches that item', async ({
 		page
 	}) => {
-		await page.goto('/console/machine/');
 		const board = page.locator('[data-memory-board]');
 		await expect(board).toBeVisible();
 
@@ -476,7 +487,6 @@ test.describe('the memory panel puts the item grain on the page', () => {
 	test('the kernel gap sentence follows the skipped count and bounded dates', async ({
 		page
 	}) => {
-		await page.goto('/console/machine/');
 		const board = page.locator('[data-memory-board]');
 		const skipped = Number(await board.getAttribute('data-memory-kernel-skipped'));
 		const from = Number(await board.getAttribute('data-memory-kernel-from'));
@@ -497,7 +507,6 @@ test.describe('the memory panel puts the item grain on the page', () => {
 	});
 
 	test('the page says the disputed high-water mark is not drawn', async ({ page }) => {
-		await page.goto('/console/machine/');
 		const board = page.locator('[data-memory-board]');
 		const drawnValues = await board.evaluate((node) =>
 			[...node.attributes]
@@ -514,7 +523,6 @@ test.describe('the memory panel puts the item grain on the page', () => {
 	});
 
 	test('every item mark carries parseable figures, and absent cells stay empty', async ({ page }) => {
-		await page.goto('/console/machine/');
 		const board = page.locator('[data-memory-board]');
 
 		const marks = board.locator('[data-memory-item]');
@@ -541,7 +549,6 @@ test.describe('the memory panel puts the item grain on the page', () => {
 	test('the brackets are labelled at most and drawn against the larger of themselves', async ({
 		page
 	}) => {
-		await page.goto('/console/machine/');
 		const board = page.locator('[data-memory-board]');
 
 		const server = measuredAttribute(await board.getAttribute('data-memory-server-end-high-water'));
@@ -558,7 +565,6 @@ test.describe('the memory panel puts the item grain on the page', () => {
 	});
 
 	test('the panel names its denominator and says what it cannot separate', async ({ page }) => {
-		await page.goto('/console/machine/');
 		const board = page.locator('[data-memory-board]');
 
 		// The denominator is on the panel as an attribute, so the drawn lengths

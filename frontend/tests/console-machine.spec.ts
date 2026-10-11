@@ -681,6 +681,12 @@ test.describe('do the two clocks agree', () => {
 });
 
 test.describe('the percentile curve', () => {
+	test('the newest measured run follows the numeric run suffix, not lexical order', () => {
+		const view = percentileHistory(['2026-09-04-10', '2026-09-04-9'].map((run_id) =>
+			healthRow({ run_id, summarize_ms: run_id.endsWith('-10') ? 2000 : 1000 })), 1);
+		expect(view.runs.map((run) => run.runId)).toEqual(['2026-09-04-9', '2026-09-04-10']);
+		expect(view.runs.at(-1)?.ms[PERCENTILES.indexOf(90)]).toBe(2000);
+	});
 	test('the interpolation rule is the stated one, checked by hand', () => {
 		const sorted = [1, 2, 3, 4, 5];
 		// Position is (n - 1) x fraction, then linear between the two neighbours.
