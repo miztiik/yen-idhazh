@@ -198,6 +198,47 @@ test.describe('with no script at all', () => {
 });
 
 test.describe('the theme control', () => {
+	test('denied storage cannot stop theme hydration or transient theme changes', async ({ page }) => {
+		const errors: string[] = [];
+		const warnings: string[] = [];
+		page.on('pageerror', (error) => errors.push(error.message));
+		page.on('console', (message) => {
+			if (message.type() === 'warning') warnings.push(message.text());
+		});
+		await page.addInitScript(() => Object.defineProperty(window, 'localStorage', {
+			configurable: true,
+			get() { throw new DOMException('Storage denied', 'SecurityError'); }
+		}));
+		await page.goto('/');
+		await expect.poll(() => warnings.some((message) => message.startsWith('[theme]'))).toBe(true);
+		const button = page.locator('[data-theme-toggle]');
+		await button.click();
+		await expect(button).toHaveAttribute('aria-label', 'Switch to the dark theme');
+		await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+		await button.click();
+		await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+		expect(errors).toEqual([]);
+	});
+
+	test('a full storage quota keeps the selected theme and names the unsaved preference', async ({ page }) => {
+		const errors: string[] = [];
+		const warnings: string[] = [];
+		page.on('pageerror', (error) => errors.push(error.message));
+		page.on('console', (message) => {
+			if (message.type() === 'warning') warnings.push(message.text());
+		});
+		await page.addInitScript(() => {
+			Storage.prototype.setItem = function () {
+				throw new DOMException('Storage quota full', 'QuotaExceededError');
+			};
+		});
+		await page.goto('/');
+		await page.locator('[data-theme-toggle]').click();
+		await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+		await expect.poll(() => warnings.some((message) => message.startsWith('[theme]'))).toBe(true);
+		expect(errors).toEqual([]);
+	});
+
 	test('is one button whose glyph does not change', async ({ page }) => {
 		await page.goto('/');
 		const button = page.locator('[data-theme-toggle]');
