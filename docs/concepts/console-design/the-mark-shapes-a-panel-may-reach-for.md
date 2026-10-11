@@ -1,6 +1,6 @@
 # The mark shapes a panel may reach for
 
-**Last Updated**: 2026-10-10
+**Last Updated**: 2026-10-11
 
 Nine chart types, the house style they draw with, five named mark shapes and
 three panel-level controls. **A panel is built from one chart type, and a mark
@@ -320,6 +320,27 @@ all readings, spreads and rules. Stacked domains also contain zero, so every
 segment's start and end stays inside the frame. A spread lies behind its series
 line, in the series colour mixed with the page surface at `--chart-spread-mix: 0.30`.
 
+For elapsed time, optional `reconciliation: {elapsed, overlap}` supplies two
+named `SeriesInput` readings alongside a duration stack. Every measured day
+must have all its stack parts, elapsed time and a non-negative overlap
+deduction. The stack's total minus that deduction must equal elapsed time.
+Stage heights do not shrink to pay for overlap. A bracket beside the stack
+draws the deduction, and a solid crossbar marks elapsed time. Their labels
+appear below the plot; both readings remain in the inspection strip.
+Ordinary stacks still refuse negative parts.
+
+The item-time caller counts `summarize_ms` once. Its label, summary and visual
+plan readings are non-additive details, not extra stage height. All comparable
+means use one stated cohort with the four named stages, whole clock and signed
+gap recorded and reconciled. Positive gaps supply unnamed duration; negative
+gaps supply overlap deductions. Average these separately, so opposite signed
+rows cannot conceal overlap by cancellation. State the cohort's excluded
+counts. A missing call detail stays unknown rather than zero.
+`durationCohort` in `frontend/src/lib/console/duration-cohort.ts` supplies these
+means and counts for the named calendar. A call's mean remains unknown unless
+that detail was recorded for every clock in the cohort; its recorded count
+still explains the missing comparison.
+
 `distribution` requires `scale: 'linear' | 'log'`. Log readings, rule values and
 domain ends must be positive; its bins are cut at powers of ten. Its optional
 domain contains every reading and named rule. Two charts or small multiples
@@ -327,6 +348,13 @@ receive the same domain so the same value has the same position. The kept
 `TimeHistogram` accepts an optional positive domain in seconds. A pooled window
 that crosses a setting change says so in the panel note rather than drawing a
 date on a value axis.
+Its optional `barToken` sets both the bars and their readout swatch. Omitting
+it keeps `--chart-1`; the cumulative line keeps its separate established colour.
+
+The kept `StageTimings` accepts an optional structured `rule` with the same
+declaration, boundary, note and readout-event meaning. A declined comparison
+must not become a claim that no setting changed. Legacy `modelChanges` retains
+its existing drawing when `rule` is omitted; a caller cannot provide both.
 
 Fowler and Susan, 2026-10-10: named `LegacyDateSeriesOptions` and
 `LegacyDistributionOptions` overloads preserve old call signatures. They admit
@@ -341,6 +369,13 @@ dated marks. A scalar card invents no date axis. Without either prop it keeps
 its old drawing. `FailureList.stages` supplies stage radio choices; the chosen
 stage ranks its `failed_rule`, with the legacy `code` when no new field exists.
 Omitting the prop keeps the existing cause and source lists.
+The alternative `FailureList.ranking` input contains only `date`, `stage`,
+`outcome`, `code` and nullable `failed_rule`. It is mutually exclusive with
+identity-bearing `rows`. This mode ranks recorded failure rows at the chosen
+stage, states their divisor, and counts unnamed rules separately. It never
+shows source breadth, item details or distinct-article counts because the query
+contains no identities. Its daily trend and unknown-rule count derive from
+the same rows on both routes.
 
 Every drawing declares `data-chart-type` and its readout. Date-series and
 distribution columns use `readoutOf`; record shapes use `factsOf`. Kept parts,

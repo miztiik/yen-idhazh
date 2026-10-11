@@ -41,17 +41,27 @@
 	import RankedList from './RankedList.svelte';
 	import { rankedGeometry } from '$lib/charts/d3/rankedList';
 	import Sparkline from './Sparkline.svelte';
+	import FailureRuleRanking from './FailureRuleRanking.svelte';
+	import type { FailureRuleRow } from '$lib/console/failure-rules';
 
 	let {
-		rows,
+		rows = [],
 		window,
 		selectedCode,
 		max,
 		sourceMax,
 		readoutMaxShare,
-		stages
-	}: {
+		stages,
+		ranking
+	}: ({
 		rows: (TelemetryRow & { failed_rule?: string })[];
+		ranking?: never;
+		stages?: { options: readonly string[]; chosen: string };
+	} | {
+		rows?: never;
+		ranking: readonly FailureRuleRow[];
+		stages: { options: readonly string[]; chosen: string };
+	}) & {
 		window: TimeWindow;
 		selectedCode: string | null;
 		max: number;
@@ -60,7 +70,6 @@
 		sourceMax: number;
 		/** `chart.readout_max_share`. */
 		readoutMaxShare: number;
-		stages?: { options: readonly string[]; chosen: string };
 	} = $props();
 
 	let selectedCause = $state<string | null>(null);
@@ -68,7 +77,17 @@
 	let rowsOpen = $state(false);
 	let chosenStage = $state<string | null>(null);
 	const stageName = $props.id();
-	const stage = $derived(chosenStage ?? stages?.chosen ?? null);
+	const stage = $derived(stages === undefined ? null : (
+		chosenStage !== null && stages.options.includes(chosenStage) ? chosenStage : stages.chosen
+	));
+	const rankingStage = $derived.by(() => {
+		if (ranking === undefined) return null;
+		if (stages === undefined || stages.options.length === 0 ||
+			new Set(stages.options).size !== stages.options.length || stage === null || !stages.options.includes(stage)) {
+			throw new Error('An identity-free failure ranking needs distinct stages and a chosen stage in that list.');
+		}
+		return stage;
+	});
 	const stageRows = $derived(
 		stages === undefined ? rows : rows.filter((row) => row.stage === stage).map((row) => ({
 			...row,
@@ -291,6 +310,9 @@
 			{/each}
 		</fieldset>
 	{/if}
+	{#if ranking !== undefined && rankingStage !== null}
+		<FailureRuleRanking rows={ranking} {window} stage={rankingStage} {max} {readoutMaxShare} />
+	{:else}
 	<h2 class="text-[1.0625rem] font-semibold text-text">Why items failed</h2>
 	<p class="mt-1 text-[0.8125rem] text-text-tertiary">
 		One row per cause, worst first. A cause is a stage and the code it stopped on. Pick one to see
@@ -469,6 +491,7 @@
 			{/if}
 		{/if}
 	</details>
+	{/if}
 </section>
 
 <style>
