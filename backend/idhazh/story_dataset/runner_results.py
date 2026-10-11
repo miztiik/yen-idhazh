@@ -9,7 +9,7 @@ from idhazh.contracts.story_encoder_candidate import CandidateVectorState, Candi
 from idhazh.contracts.story_runner import RunnerPackage, RunnerResult, RunnerShard
 from idhazh.contracts.story_source import ArticleEvidence
 from idhazh.contracts.story_vectors import VectorExtensionSnapshot, VectorSnapshot
-from idhazh.story_dataset.encoder_candidates import register_candidate_unit
+from idhazh.story_dataset.encoder_candidates import register_candidate_units
 from idhazh.story_dataset.runner_inputs import describe_file, validate_shard
 from idhazh.story_dataset.storage import Store, canonical, digest, file_hash, read_model
 from idhazh.story_dataset.vector_files import relative_vector_path, snapshot_file
@@ -186,6 +186,7 @@ def import_result(
         if state_pointer is None:
             raise ValueError("candidate import requires the current live state pointer")
         state = read_model(state_pointer, CandidateVectorState)
+        portable_units = []
         for unit in result.units:
             assert isinstance(unit, CandidateVectorUnit)
             cache = unit.cache.model_copy(
@@ -196,7 +197,11 @@ def import_result(
                 }
             )
             portable = unit.model_copy(update={"cache": cache})
-            state = register_candidate_unit(root, shard.candidate, articles, portable, state)
+            portable_units.append(portable)
+        if portable_units:
+            state = register_candidate_units(
+                root, shard.candidate, articles, portable_units, state
+            )
             part = state_pointer.with_suffix(".part")
             part.write_bytes(canonical(state))
             part.replace(state_pointer)

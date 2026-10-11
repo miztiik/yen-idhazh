@@ -485,6 +485,9 @@ metadata, checks source text, order, settings, model revision and numeric bytes,
 and records the immutable state and unit hashes. It performs no inference.
 An unknown historical revision stays unknown; no historical row is borrowed
 to fill a new candidate's missing coverage.
+Import validates all retained and incoming units once per result, then publishes
+one immutable candidate state and its cursor. A bad later unit publishes no
+partial state; exact units retained before an interruption are reused.
 
 Prediction and evaluation require the exact candidate snapshot hash in frozen
 development settings. Once confirmation is opened, another settings hash is
