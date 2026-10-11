@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-11
 **Level**: 5 (CLAUDE.md section 6). Row #8 changes a persisted shape and pauses for the owner; every other row states its own level.
-**Status**: drafted 2026-10-11 at the owner's request that the LLM council follow the gardener's pattern, and reviewed by Fowler, who applied the runtime persona's rule for the one runtime question. The owner ruled P1 to P18 on 2026-10-11, except P10, which is pending, and P9, which the owner declined. P18 is the owner's rule that the council keeps its own config file and each judge its own, as the gardener does; it supersedes P1 and adds rows #10 and #11. Table T maps each of the gardener's strengths to the row that brings it. The summary-fidelity-judge plan registers its judge paused and model-free in the shape row #1 defines, so that plan's row 'The judge's ledger and its tenant module' waits for row #1. No row started.
+**Status**: drafted 2026-10-11 at the owner's request that the LLM council follow the gardener's pattern, and reviewed by Fowler, who applied the runtime persona's rule for the one runtime question. The owner ruled P1 to P18 on 2026-10-11 and declined P9. P18 is the owner's rule that the council keeps its own config file and each judge its own, as the gardener does; it supersedes P1 and adds rows #10 and #11. Table T maps each of the gardener's strengths to the row that brings it. The summary-fidelity-judge plan registers its judge paused and model-free in the shape row #1 defines, so that plan's row 'The judge's ledger and its tenant module' waits for row #1. No row started.
 
 ## 0. Operating contract
 
@@ -80,7 +80,7 @@ Table D - rows
   - backend/tests/council/test_session.py, backend/tests/council/test_night_plan.py, backend/tests/council/test_council_runs_without_a_judge.py, backend/tests/council/_config.py and backend/tests/council/_tenants.py (prepare, settle, publication paths and nights_outstanding reach only active judges; a night whose only judge is paused runs every step and judges nothing; re-derive at dispatch)
   - backend/tests/workflows/test_llm_council_workflow.py (five values on a cell; the model-server step's condition)
   - backend/tests/contracts/test_council_config.py (a judge file with a missing field or an unknown status, and a name listed twice, are refused by name)
-  - docs/architecture/publishing/llm-council.md (registration and status, Table E3, five values on a cell, the earlier deadline of a cell with no model server)
+  - docs/architecture/publishing/llm-council.md (registration and status, Table E3, five values on a cell, the earlier deadline of a cell with no model server, and the worked lifecycle example below Table T, P10)
   - docs/architecture/contracts/ledger-registry.md (pausing a judge's family needs that judge paused first)
   - Every other reader of the judge list or of a cell, from git grep -n -e "judge_names" -e "tenants" -e "matrix.shards" -e "model-server" -- .github backend config docs frontend at dispatch
 - **Acceptance gates:** local - ruff, mypy and the shared test selector over backend/tests/council/, backend/tests/contracts/test_council_config.py and backend/tests/workflows/test_llm_council_workflow.py per docs/how-to/run-the-gates.md; CI - full suite. Observation, not a gate: the first scheduled night after merge, whose content-similarity cells still start the model server and file their rows.
@@ -396,7 +396,7 @@ Table O2 - rejected alternatives
 
 Owner requests that touch this plan are tracked, with their status, in Table Q of the summary-fidelity-judge plan (TODO/20261011-summary-fidelity-judge-plan.md).
 
-Table P - owner rulings: P1 to P18 ruled on 2026-10-11, except P10, which is pending; P9 declined; P18 supersedes P1
+Table P - owner rulings: P1 to P18 ruled on 2026-10-11; P9 declined; P18 supersedes P1
 
 | # | Question | Ruling | Evidence | Rows |
 | --- | --- | --- | --- | --- |
@@ -409,7 +409,7 @@ Table P - owner rulings: P1 to P18 ruled on 2026-10-11, except P10, which is pen
 | P7 | Stale or lost publication stays red, exit 1 | Approved | No council step redoes every judge's work to recover a push (committing.md) | 3 |
 | P8 | Tenant modules import heavy libraries inside their functions | Approved | The planning job then never installs every judge's extras | 4 |
 | P9 | Row #1 gains a test that names the owner's decision beside every active judge, so a change that flips a judge to active without one fails | Declined (owner, 2026-10-11): the commit that switches a judge on names the decision, and docs/ states the rule; no test holds it | The gardener holds the same rule with a test; E1.5 states it for judges with nothing holding it (Table T, T4) | 1 |
-| P10 | Row #1's llm-council.md edit carries the worked lifecycle example under Table T | Pending; recommended: approve | The owner asked for a lifecycle example (Table T, T3) | 1 |
+| P10 | Row #1's llm-council.md edit carries the worked lifecycle example under Table T | Approved | The owner asked for a lifecycle example (Table T, T3) | 1 |
 | P11 | A new B5: running one judge over a range of dates by hand, deferred until the owner wants a judge's history before its switch | Approved: deferred as B5; one date per manual run, and several dates are several runs | The gardener's run-task runs one task over a range and never pushes; the council has no equivalent (Table T, T12) | - |
 | P12 | How a judging job's events reach the job-page summary | Approved: each judging job adds its event lines to the bundle it already uploads | That upload already runs when a job fails, so no new transport is needed (Table I1) | 5 |
 | P13 | Row #8's stored shape, ruled before work starts | Approved: ShardOutcome gains failed; fault takes one word, raised, and is empty unless the outcome is failed; an earlier row reads with no fault | The owner clears stop points before implementation, so row #8 runs without stopping (Table L1) | 8 |
@@ -426,7 +426,7 @@ Table T - the gardener's strengths and the council row that brings each (Fowler,
 | T1 | One declaration a unit; config never names a module (idhazh-gardener.md, What runs) | capability | slug resolves to the module that declares it | row 11 The council finds each judge by its slug; row 1 | Covered |
 | T2 | The named list is the unit set (task_names) | flexibility | council.tenants inside config/idhazh.json | row 10 (judge_names in the council's own file) and row 1 | Covered |
 | T3 | lifecycle_status active, paused, retired, no default; paused keeps its claim; retired stays as the record (knobs_gardener.py TaskLifecycleStatus) | lifecycle | none | row 1 (council E1.1, E1.2 and table E3) | Covered; worked example below this table; P10 puts it in llm-council.md |
-| T4 | A switch ships safe unless a named decision put it live, held by a test (LIVE_BY_DECISION, test_gardener_config.py; registrydoc) | lifecycle | none | council E1.5: the commit message names the decision | Declined (P9): no test |
+| T4 | A switch ships safe unless a named decision put it live; the gardener held the decisions in a test until the owner dropped it on 2026-10-11 (#1548) | lifecycle | none | council E1.5: the commit message names the decision | Declined (P9): no test in either program |
 | T5 | dry_run with no default; every default reports and deletes nothing | lifecycle | - | council B1 (council P3: lands paused instead) | Deferred |
 | T6 | The loader refuses as one set, naming file and rule | capability | unknown slug refused | rows 1 and 4 | Covered |
 | T7 | Module refusals before any task: no module, unused module, kind mismatch, raising import, two modules one name; exit 2 | capability | sorted search | row 4 The council refuses a bad judge set before any unit runs | Covered |
@@ -455,7 +455,7 @@ Table T - the gardener's strengths and the council row that brings each (Fowler,
 | T30 | Every knob bounded; no default for safety keys; a wrong-kind key refused by name | flexibility | council knobs inside config/idhazh.json | row 10 (the council's own file) and row 1 (none defaulted) | Covered |
 | T31 | The program's own config file (config/idhazh_gardener.json) and one declaration file a unit (config/gardener/) | flexibility | a council block inside config/idhazh.json | row 10 The council reads its own config file; row 1 | Covered |
 
-Not covered by any row: the worked lifecycle example (T3) belongs inside row #1 if P10 is approved; running a judge over a range of dates by hand (T12) is B5 (P11); per-cell telemetry on no-model cells (T22) and retryable fault words (T19) have no consumer yet. The named-decision test (T4) was declined (P9).
+Not covered by any row: running a judge over a range of dates by hand (T12) is B5 (P11); per-cell telemetry on no-model cells (T22) and retryable fault words (T19) have no consumer yet. The worked lifecycle example (T3) goes into llm-council.md with row #1 (P10). The named-decision test (T4) was declined for the council (P9) and dropped from the gardener (#1548).
 
 One judge's own file through its life, in row #1's shape (lifecycle_status and runs_model, none defaulted; the judge's own settings sit beside them, and only the judge reads those):
 
