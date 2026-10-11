@@ -190,7 +190,6 @@ def rows(repo: Path) -> list[CouncilRunRecord]:
     loaded = ledger.load_days(
         repo / "state", LedgerName.COUNCIL_RUN_RECORDS, DATES, model=CouncilRunRecord
     )
-    assert all(row.outcome.value != "failed" for row in loaded)
     return loaded
 
 
@@ -232,7 +231,10 @@ def test_raising_judge_keeps_later_judges_dates_and_completed_bytes(
         assert failed[0]["error"] == "RuntimeError"
         assert failed[0]["where"].startswith("idhazh.council.")
         recorded = rows(repo)
-        assert len(recorded) == 5
+        assert len(recorded) == 6
+        assert [(row.judge_id, row.date, row.fault) for row in recorded if row.outcome == "failed"] == [
+            ("second-failed", DATES[0], "raised")
+        ]
         assert sum(row.date == DATES[1] for row in recorded) == 3
 
 
@@ -278,7 +280,7 @@ def test_every_push_rejected_reports_three_even_after_unit_failure(
         assert len((origin / "rejected-pushes").read_text().splitlines()) == published["pushes"]
         assert git(origin, "rev-parse", "main") == before
         assert published["writes"] == len(evidence(repo))
-        assert len(rows(repo)) == (1 if failed_unit else 2)
+        assert len(rows(repo)) == 2
         assert sum(event.get("outcome") == "failed" for event in events(caplog)) == int(failed_unit)
         for date in DATES:
             path = f"state/experiments/second-failed/{date}.json"

@@ -259,6 +259,77 @@ def test_failed_paused_input_stays_red_but_later_active_output_lands(
     assert foreign.read_text(encoding="utf-8") == '{"count":99}\n'
 
 
+@pytest.mark.parametrize("paused_family", [False, True])
+@pytest.mark.parametrize("failed_step", ["prepare", "shard", "settle"])
+def test_raised_paused_trial_files_failed_rows_without_publication(
+    venue: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+    paused_family: bool, failed_step: str,
+) -> None:
+    origin, repo = repository(venue, monkeypatch)
+    before = git(origin, "rev-parse", "main")
+    target = room(venue, {"paused-judge": ("paused", False)})
+    if paused_family:
+        registry_file = target / "ledgers.json"
+        raw = json.loads(registry_file.read_text(encoding="utf-8"))
+        for family in raw["families"]:
+            if any(
+                entry["name"] == LedgerName.COUNCIL_RUN_RECORDS.value for entry in family["ledgers"]
+            ):
+                family["lifecycle_status"] = "paused"
+        registry_file.write_text(json.dumps(raw), encoding="utf-8", newline="\n")
+        monkeypatch.setattr(paths, "_CONFIG", paths._load(target))
+    selected = planned(
+        target, capsys, "--mode", "manual", "--dispatched", OLD,
+        "--judges", '["paused-judge"]',
+    )
+    monkeypatch.setattr(session, "COUNCIL_ROOT", repo / "backend" / "var" / "council")
+    monkeypatch.setenv("COUNCIL_SELECTION", selected.model_dump_json())
+    council = config.load_council(target)
+    trial = trial_paths.root(session.COUNCIL_ROOT, run_id=RUN, judge_id="paused-judge")
+    with trial_paths.route(trial):
+        drawn = session.unit_file(OLD, slot="selection", judge_id="paused-judge", suffix=".json")
+        verdict = session.unit_file(OLD, slot="verdicts", judge_id="paused-judge", suffix=".json")
+    if failed_step == "prepare":
+        drawn.parent.parent.parent.mkdir(parents=True)
+        drawn.parent.parent.write_text("blocked selection\n", encoding="ascii", newline="\n")
+        with pytest.raises(OSError):
+            session.prepare(council, date=OLD, run_id=RUN, selection=selected)
+    else:
+        session.prepare(council, date=OLD, run_id=RUN, selection=selected)
+    if failed_step == "shard":
+        drawn.unlink()
+    if failed_step in ("prepare", "shard"):
+        with pytest.raises(OSError):
+            session.run_shard(
+                council, slug="paused-judge", date=OLD, run_id=RUN, shard=0, shards=1,
+                started=time.monotonic(), selection=selected,
+            )
+    else:
+        session.run_shard(
+            council, slug="paused-judge", date=OLD, run_id=RUN, shard=0, shards=1,
+            started=time.monotonic(), selection=selected,
+        )
+        verdict.unlink()
+    assert council_publish.main(
+        [
+            "--config-root", str(target), "--repo-root", str(repo), "--run-id", RUN,
+            "--commit", git(repo, "rev-parse", "HEAD").strip(), "--units-result", "failure",
+        ]
+    ) == 1
+    recorded = ledger.load_days(
+        trial / "state", LedgerName.COUNCIL_RUN_RECORDS, [OLD], model=CouncilRunRecord,
+    )
+    assert len(recorded) == 3
+    failed_count = {"prepare": 3, "shard": 2, "settle": 1}[failed_step]
+    assert sum(row.outcome == "failed" and row.fault == "raised" for row in recorded) == failed_count
+    assert sum(row.outcome == "completed" and row.fault is None for row in recorded) == 3 - failed_count
+    assert not (session.COUNCIL_ROOT / "publication").exists()
+    assert not ledger.load_days(
+        repo / "state", LedgerName.COUNCIL_RUN_RECORDS, [OLD], model=CouncilRunRecord,
+    )
+    assert git(origin, "rev-parse", "main") == before
+
+
 def test_paused_manual_judge_cannot_reopen_a_retired_family(
     venue: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

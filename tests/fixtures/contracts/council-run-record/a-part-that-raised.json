@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-10",
+  "evaluation_step": "evaluate_work_part",
+  "fault": "raised",
+  "judge_id": "fixture-judge",
+  "model_calls": null,
+  "model_seconds": null,
+  "outcome": "failed",
+  "run_id": "2026-10-11-123",
+  "seconds_spent": 0.5,
+  "started_at": "2026-10-11T22:04:11Z",
+  "tokens_in": null,
+  "tokens_out": null,
+  "version": "2026-10-11",
+  "work_part_count": 1,
+  "work_part_index": 0
+}

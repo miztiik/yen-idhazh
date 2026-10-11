@@ -32,6 +32,7 @@ from idhazh.contracts.council_events import NightPlanned, RowsCollected, UnitFin
 from idhazh.contracts.council_run_record import (
     CouncilRunRecord,
     EvaluationStep,
+    ShardOutcome,
 )
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.knobs.council import CouncilConfig
@@ -352,11 +353,8 @@ def _recorded(
     A returned result is filed before it is reported. A filing failure emits
     a failed unit event and propagates rather than reporting success.
 
-    **A unit that never handed one back files nothing**, and that is the design
-    rather than a gap. The outcome vocabulary has three members and none of them
-    says "this died"; the event says failed, and the ledger has a missing row
-    read against the `shards` cell its siblings carry. A unit the platform killed
-    leaves the same gap, so an operator reads one signal and not two.
+    A raised unit files a failed row before propagating its exception. If filing
+    also raises, both failures escape together. A platform kill cannot file a row.
     """
     began = datetime.now(UTC).strftime(STARTED_AT_FORMAT)
     started = time.monotonic()
@@ -364,18 +362,28 @@ def _recorded(
     failure: BaseException | None = None
     produced: ShardResult | None = None
     try:
-        produced = work()
-        _file(
-            produced,
-            judge_id=judge_id,
-            date=date,
-            run_id=run_id,
-            evaluation_step=evaluation_step,
-            work_part_index=work_part_index,
-            work_part_count=work_part_count,
-            began=began,
-            seconds=time.monotonic() - started,
+        file_result = partial(
+            _file, judge_id=judge_id, date=date, run_id=run_id,
+            evaluation_step=evaluation_step, work_part_index=work_part_index,
+            work_part_count=work_part_count, began=began,
         )
+        try:
+            produced = work()
+            if produced.outcome is ShardOutcome.FAILED:
+                raise ValueError("a failed council result requires a raised unit")
+        except BaseException as work_error:
+            try:
+                file_result(
+                    ShardResult(outcome=ShardOutcome.FAILED),
+                    seconds=time.monotonic() - started,
+                )
+            except BaseException as filing_error:
+                raise BaseExceptionGroup(
+                    "council work and recording failures", [work_error, filing_error]
+                ) from None
+            raise
+        else:
+            file_result(produced, seconds=time.monotonic() - started)
         return produced
     except BaseException as error:
         failure = error
@@ -390,7 +398,8 @@ def _recorded(
                 evaluation_step=evaluation_step,
                 work_part_index=work_part_index,
                 work_part_count=work_part_count,
-                outcome=produced.outcome if failure is None and produced is not None else "failed",
+                outcome=produced.outcome
+                if failure is None and produced is not None else ShardOutcome.FAILED,
                 error=error_name,
                 where=where,
             ),
@@ -428,6 +437,7 @@ def _file(
             "work_part_index": work_part_index,
             "work_part_count": work_part_count,
             "outcome": result.outcome,
+            "fault": "raised" if result.outcome is ShardOutcome.FAILED else None,
             "started_at": began,
             "seconds_spent": seconds,
             "model_calls": result.model_calls,

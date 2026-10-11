@@ -1,6 +1,7 @@
 {
   "date": "2026-09-20",
   "evaluation_step": "select_judge_work",
+  "fault": null,
   "judge_id": "paper-judge",
   "model_calls": null,
   "model_seconds": null,
