@@ -27,7 +27,7 @@
 	{#if !rule.narrow}<p data-charts-verdict>{rule.verdict}</p>{/if}
 	{#if days.length === 0}<p data-empty="missing">The private chart-drawing day records are unavailable.</p>
 	{:else if flow.empty}<p data-empty="quiet">{flow.reason}</p>{/if}
-	<p data-comparison="rule">Visuals published against articles that reached drawing.</p>
+	<p data-comparison="Visuals published against articles that reached drawing.">Visuals published against articles that reached drawing.</p>
 	<p data-charts-rule>Over {thresholds.ruleDays} days with the chart-only gate on, chart drawing is retired above {thresholds.minutesTarget} minutes per visual or below {thresholds.coveragePct}% coverage.</p>
 	<div data-charts="rule">
 		{#if rule.narrow}<p data-window-too-narrow="chart-drawing">The rule reads {thresholds.ruleDays} days. Widen the window to see it.</p>

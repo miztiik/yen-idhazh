@@ -1,6 +1,7 @@
 /** Published payload bytes per article require two measured manifest sizes. */
 import { siteCost as measuredCost, sizeGain as measuredGain } from '../../charts/glance';
 import type { RunSummary } from '../../server/payload';
+import { daysInWindow, type TimeWindow } from '../../charts/viewport';
 export { publishingHorizon } from '../../charts/glance';
 
 function measured(value: unknown): value is number {
@@ -25,4 +26,12 @@ export function siteCost(...[manifests, articles, window]: Parameters<typeof mea
 export function sizeGain(manifests: readonly RunSummary[]) {
 	const ordered = [...manifests].sort((a, b) => a.date.localeCompare(b.date));
 	return measured(ordered[0]?.siteBytes) && measured(ordered.at(-1)?.siteBytes) ? measuredGain(ordered) : null;
+}
+
+export function siteCostPoints(cost: ReturnType<typeof siteCost>, window: TimeWindow) {
+	const measured = new Map(cost.days.map((day) => [day.date, day.bytesPerItem]));
+	return daysInWindow(window).map((date) => {
+		const value = measured.get(date);
+		return { date, value: value === undefined || value < 0 ? null : value };
+	});
 }

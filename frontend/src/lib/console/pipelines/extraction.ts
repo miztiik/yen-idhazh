@@ -1,6 +1,8 @@
 /** What did native extraction find, and how many distinct articles carry recorded flags? */
 import type { Row } from '../../data/ledger';
 import { finiteCell } from '../rates';
+import { daysInWindow, type TimeWindow } from '../../charts/viewport';
+import type { ExtractionDay } from '../../charts/extraction-trend';
 
 export function nativeExtraction(items: readonly Row[], evaluations: readonly Row[] | null) {
 	const byUrl = new Map<string, Row>();
@@ -8,6 +10,17 @@ export function nativeExtraction(items: readonly Row[], evaluations: readonly Ro
 		if (typeof row.url_key !== 'string' || row.url_key === '') continue;
 		const held = byUrl.get(row.url_key) ?? {};
 		byUrl.set(row.url_key, { ...held, ...Object.fromEntries(Object.entries(row).filter(([, value]) => value !== null)) });
+	}
+
+	export function extractionYield(days: readonly ExtractionDay[], window: TimeWindow) {
+		const recorded = new Map(days.map((day) => [day.date, day]));
+		return [
+			{ label: 'Enough figures to draw', token: '--chart-1', key: 'chartable' as const },
+			{ label: 'Published carrying a chart', token: '--chart-4', key: 'charted' as const }
+		].map(({ label, token, key }) => ({
+			label, token,
+			points: daysInWindow(window).map((date) => ({ date, value: recorded.get(date)?.[key] ?? null }))
+		}));
 	}
 	const classes = new Map<string, number>();
 	const wouldNotReslice = items.filter((row) => row.span_integrity === false).length;

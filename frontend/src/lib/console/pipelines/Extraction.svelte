@@ -1,36 +1,38 @@
 <script lang="ts">
-	import { nativeExtraction } from './extraction';
+	import { nativeExtraction, extractionYield } from './extraction';
 	import KpiCard from '$lib/components/KpiCard.svelte';
 	import RankedList from '$lib/components/RankedList.svelte';
 	import { rankedList } from '$lib/charts/d3/rankedList';
 	import { dateSeries } from '$lib/charts/d3/dateSeries';
 	import DateSeries from '$lib/charts/d3/DateSeries.svelte';
 	import { emptyState } from '$lib/charts/d3/empty';
-	import { frame, MARGIN } from '$lib/charts/frame';
+	import { frame, MARGIN, chartWidth, observeWidth } from '$lib/charts/frame';
 	import Reserved from '$lib/components/Reserved.svelte';
 	import type { PanelState } from '../waiting';
 	import type { Range } from '../queries/window';
+	import type { TimeWindow } from '$lib/charts/viewport';
 	import type { ExtractionDay } from '$lib/charts/extraction-trend';
 	import type { Row } from '$lib/data/ledger';
 	import type { ModelRule } from '$lib/charts/d3/model-rule';
 	import type { ConsoleConfig, ChartConfig } from '$lib/server/config';
-	let { rows, evaluations, knobs, chart, rule, yieldDays, publishedShare, nativeState, evaluationsState, nativeWindow, evaluationsWindow }: {
+	let { rows, evaluations, knobs, chart, rule, viewport, yieldDays, publishedShare, nativeState, evaluationsState, nativeWindow, evaluationsWindow }: {
 		rows: Row[]; evaluations: Row[] | null; knobs: ConsoleConfig; chart: ChartConfig; rule: ModelRule;
 		yieldDays: ExtractionDay[];
+		viewport: TimeWindow;
 		publishedShare: { measuredDays: number; unusedPct: number | null; unused: number; chartablePublished: number };
 		nativeState: PanelState; evaluationsState: PanelState;
 		nativeWindow?: Range; evaluationsWindow?: Range;
 	} = $props();
+	let measured = $state<number | null>(null);
+	const width = $derived(chartWidth(measured, knobs.chart_width));
 	const extraction = $derived(nativeExtraction(rows, evaluations));
 	const classes = $derived(rankedList(extraction.classes.map((entry) => ({ label: entry.label, value: entry.count })), {}));
-	const geometry = $derived(dateSeries([
-		{ label: 'Enough figures to draw', token: '--chart-1', points: yieldDays.map((day) => ({ date: day.date, value: day.chartable })) },
-		{ label: 'Published carrying a chart', token: '--chart-4', points: yieldDays.map((day) => ({ date: day.date, value: day.charted })) }
-	], { frame: frame(knobs.chart_width, knobs.chart_height, MARGIN), density: chart.tick_density, valueTicks: 5, padding: 0.2, rule }));
+	const geometry = $derived(dateSeries(extractionYield(yieldDays, viewport),
+		{ frame: frame(width, knobs.chart_height, MARGIN), density: chart.tick_density, valueTicks: 5, padding: 0.2, rule }));
 	const noRule = { declined: 'one figure of the window, not a date axis' };
 </script>
-<div data-eval-panel="extraction">
-	<p data-comparison="classes">Chartable articles against narrative and unclassified ones, beside recorded extraction flags.</p>
+<div data-eval-panel="extraction" use:observeWidth={(next) => measured = next}>
+	<p data-comparison="Chartable articles against narrative and unclassified ones.">Chartable articles against narrative and unclassified ones, beside recorded extraction flags.</p>
 	{#if publishedShare.measuredDays === 0}
 		<p data-extraction="none">The build-time published chart-share record is unavailable in this window.</p>
 	{:else}
@@ -67,7 +69,7 @@
 	<h3>Whether the yield is falling</h3>
 	<DateSeries {geometry} empty={emptyState('quiet', 'No build-time day carries both yield counts.')}
 		name="extraction-yield" label="Enough figures to draw and articles published with a chart, day by day"
-		width={knobs.chart_width} height={knobs.chart_height} readout={geometry?.readout} readoutMaxShare={chart.readout_max_share} />
+		{width} height={knobs.chart_height} readout={geometry?.readout} readoutMaxShare={chart.readout_max_share} />
 	<ul class="sr-only" data-extraction-trend-days-list>
 		{#each yieldDays as day (day.date)}
 			<li data-extraction-trend-day={day.date} data-extraction-trend-chartable={day.chartable} data-extraction-trend-charted={day.charted}>{day.date}: {day.chartable} enough figures, {day.charted} carrying a chart.</li>

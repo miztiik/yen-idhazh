@@ -78,14 +78,18 @@
 		if (ticket !== revision) return;
 		const nextReach = retryWindow ? retryReach(previous, refreshed) : refreshed;
 		reach = nextReach;
-		await Promise.all(selected.map(async (query) => {
+		async function read(query: PanelQuery) {
 			const range = rangeFor(query, days, nextReach, knobs.window_presets);
 			const answer = 'from' in range ? await readers[query.name](range) : range;
 			if (ticket === revision) {
 				if ('from' in range) ranges = { ...ranges, [query.name]: range };
 				answers = { ...answers, [query.name]: answer };
 			}
-		}));
+		}
+		// The first slice loads the signed Parquet reader before simultaneous prepares.
+		await read(selected[0]);
+		if (ticket !== revision) return;
+		await Promise.all(selected.slice(1).map(read));
 	}
 	onMount(() => {
 		mounted = true;
@@ -175,10 +179,12 @@
 			{#each group.panels as id (id)}
 				{#if id === 'run-health'}
 					<RunHealth yieldDays={data.runYieldDays} grid={data.grid} window={viewport} days={windowDays} floorPct={data.floorPct}
+						windowPending={mounted && reach === null}
 						height={knobs.chart_height} width={knobs.chart_width} tickDensity={data.chart.tick_density} readoutMaxShare={data.chart.readout_max_share} />
 				{:else}
 					<Panel {id} title={titles[id]} wide>
-						<div data-windowed={id === 'run-timeline' ? undefined : id} data-window-days={id === 'run-timeline' ? undefined : windowDays}>
+						<div data-windowed={id === 'run-timeline' ? undefined : id} data-window-days={id === 'run-timeline' ? undefined : windowDays}
+							data-panel-state={mounted && reach === null ? 'loading' : undefined}>
 						{#if id === 'at-a-glance'}
 							<AtAGlance days={data.charts} window={viewport} {knobs} chart={data.chart} />
 						{:else if id === 'site-cost-per-item'}
@@ -192,7 +198,7 @@
 								evaluations={panelState(queries.extractionScoresQuery) === 'ready' ? rows(queries.extractionScoresQuery) : null}
 								evaluationsState={panelState(queries.extractionScoresQuery)}
 								nativeWindow={ranges[queries.extractionQuery.name]} evaluationsWindow={ranges[queries.extractionScoresQuery.name]}
-								{knobs} chart={data.chart} rule={settings} {yieldDays} {publishedShare} />
+								{knobs} chart={data.chart} rule={settings} {viewport} {yieldDays} {publishedShare} />
 						{:else if id === 'failure-mix'}
 							<FailureMix rows={rows(queries.failureMixQuery)} ruleRows={rows(queries.failedRuleQuery)}
 								nativeState={panelState(queries.failureMixQuery)} rulesState={panelState(queries.failedRuleQuery)}

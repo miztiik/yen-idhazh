@@ -11,7 +11,8 @@ import { consoleConfig } from '../src/lib/server/config';
 import { backendPython } from './support/backend-python';
 import { runTimeline } from '../src/lib/console/pipelines/run-timeline';
 import { nativeFailureMix } from '../src/lib/console/pipelines/failure-mix';
-import { nativeExtraction } from '../src/lib/console/pipelines/extraction';
+import { nativeExtraction, extractionYield } from '../src/lib/console/pipelines/extraction';
+import { siteCostPoints } from '../src/lib/console/pipelines/site-cost-per-item';
 import { articleAge } from '../src/lib/console/pipelines/article-age';
 import { slowerOnSameWork } from '../src/lib/console/pipelines/slower-on-same-work';
 import { nativeStageTimings } from '../src/lib/console/pipelines/stage-timings';
@@ -64,6 +65,21 @@ test('every declared native answer matches its independently committed slice', (
 		if (actual?.state !== 'ok') throw new Error(`${query.name} is not ready`);
 		expect({ ...actual, rows: [...actual.rows].sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))) }).toEqual(expected);
 	}
+});
+
+test('private date axes retain missing days without inventing zero readings', () => {
+	const window = { start: '2030-06-01', end: '2030-06-03' };
+	const yieldSeries = extractionYield([{ date: '2030-06-02', chartable: 4, charted: 0 }], window);
+	expect(yieldSeries.map((series) => series.points)).toEqual([
+		[{ date: '2030-06-01', value: null }, { date: '2030-06-02', value: 4 }, { date: '2030-06-03', value: null }],
+		[{ date: '2030-06-01', value: null }, { date: '2030-06-02', value: 0 }, { date: '2030-06-03', value: null }]
+	]);
+	expect(siteCostPoints({ days: [
+		{ date: '2030-06-02', bytesPerItem: -4 },
+		{ date: '2030-06-03', bytesPerItem: 0 }
+	] } as Parameters<typeof siteCostPoints>[0], window)).toEqual([
+		{ date: '2030-06-01', value: null }, { date: '2030-06-02', value: null }, { date: '2030-06-03', value: 0 }
+	]);
 });
 
 test('native timeline offsets and six-step residuals match the actual Python producer', () => {

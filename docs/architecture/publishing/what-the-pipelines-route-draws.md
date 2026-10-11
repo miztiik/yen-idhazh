@@ -1,5 +1,13 @@
 # What the Pipelines route draws
 
+Moved plots use the shared width observer and redraw in the CSS-pixel frame
+their panel actually occupies. Private date axes retain missing days as null,
+not zero, so a settings change on a day without a reading still has its place.
+The route resolves its record window before calling the private panels settled.
+Its first native slice loads the signed Parquet reader before the remaining
+queries start together; request epochs still prevent late windows replacing
+the current one, and the extractor and recorded flags retain separate states.
+
 **Last Updated**: 2026-10-11
 
 `/console/` answers two questions: did the runs work, and what each stage cost.
