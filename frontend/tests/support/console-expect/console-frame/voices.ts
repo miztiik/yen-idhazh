@@ -6,5 +6,6 @@ export const EXPECT: RouteExpect | null = {
 		{ id: 'what-the-sources-supplied', title: 'What the sources supplied', panels: ['source-health', 'feeds-failed', 'fetch-time', 'retiring', 'source-cuts'] },
 		{ id: 'what-the-ranking-did', title: 'What the ranking did', panels: ['ranking-discount', 'why-chosen', 'watchlist'] }
 	],
-	verdict: null, runSquares: false, prerender: true
+	verdict: null, runSquares: false, prerender: true,
+	grains: { 'why-chosen': 'newest day' }
 };

@@ -10,6 +10,7 @@
 	} = $props();
 </script>
 <VoicesPanel id="why-chosen" title="Why the newest day's articles were chosen" question="what happened"
+	snapshot="newest day"
 	comparison="authority against the four bonuses" reason="one day's choice, not a model trend">
 	<RecordFrame {panelState} {width} {height} name="why-chosen" label="Parts of selection scores" kind="partsOfOne">
 		<p data-lede>{view.lede}</p>
