@@ -382,8 +382,7 @@ fn wait_kind(files: &mut FileTransport, kind: EventKind) -> HostEvent {
             let event = match files.read(id, "results") {
                 Ok(event) => event,
                 Err(error)
-                    if error.contains("No such file")
-                        || error.contains("cannot find the file") =>
+                    if error.contains("No such file") || error.contains("cannot find the file") =>
                 {
                     continue;
                 }
