@@ -20,6 +20,11 @@ score-row counts. The reasons remain private published-item decisions. No live
 ledger values or ledger-read metadata are serialized into the route page data.
 A missing private input and a recorded quiet input say different things.
 
+Native throughput uses the same nearest-rank quartiles and median for the
+daily candle and each run's readout. A single-run day therefore prints the
+same middle rate in both places. Only paired reading and writing measurements
+enter that population; whole-day token totals still supply the weighted rates.
+
 The page owns one window control and one recording frame. Sampling, measurement
 off, recording start, coverage by another record and private partial-read notes
 keep the shared recording helpers' words. Live doors retain lost-day and

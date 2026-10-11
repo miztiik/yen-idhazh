@@ -37,7 +37,7 @@ import type { MovementPolarity } from '../../charts/theme';
 // layer both reducers reach, so the server one borrows it rather than the
 // console importing a server type back the other way.
 import type { DayScoredCounts } from '../eval-instruments';
-import { itemRates } from '../rates';
+import { itemRates, nearestRank } from '../rates';
 import type { SummaryBand } from '../../server/config';
 
 export { itemRates } from '../rates';
@@ -857,9 +857,9 @@ function rateSpread(values: number[]): RateSpread | null {
 	const sorted = [...values].sort((a, b) => a - b);
 	return {
 		min: sorted[0],
-		p25: quantile(sorted, 0.25),
-		median: quantile(sorted, 0.5),
-		p75: quantile(sorted, 0.75),
+		p25: nearestRank(sorted, 0.25)!,
+		median: nearestRank(sorted, 0.5)!,
+		p75: nearestRank(sorted, 0.75)!,
 		max: sorted[sorted.length - 1]
 	};
 }
