@@ -86,11 +86,7 @@
 				answers = { ...answers, [query.name]: answer };
 			}
 		}
-		// These slices share the door's one prepared-statement connection.
-		for (const query of selected) {
-			if (ticket !== revision) return;
-			await read(query);
-		}
+		await Promise.all(selected.map(read));
 	}
 	onMount(() => {
 		mounted = true;

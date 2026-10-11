@@ -1,14 +1,13 @@
 # What the Pipelines route draws
 
+**Last Updated**: 2026-10-11
+
 Moved plots use the shared width observer and redraw in the CSS-pixel frame
 their panel actually occupies. Private date axes retain missing days as null,
 not zero, so a settings change on a day without a reading still has its place.
 The route resolves its record window before calling the private panels settled.
-Its native slices share the door's one prepared-statement connection, so they
-run in order; request epochs still prevent late windows replacing
+Native reads start independently; request epochs prevent late windows replacing
 the current one, and the extractor and recorded flags retain separate states.
-
-**Last Updated**: 2026-10-11
 
 `/console/` answers two questions: did the runs work, and what each stage cost.
 This page holds its native stage and cost readings and its private run figures.

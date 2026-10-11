@@ -11,6 +11,7 @@ import { consoleConfig } from '../src/lib/server/config';
 import { backendPython } from './support/backend-python';
 import { runTimeline } from '../src/lib/console/pipelines/run-timeline';
 import { nativeFailureMix } from '../src/lib/console/pipelines/failure-mix';
+import { failureRuleRows } from '../src/lib/console/failure-rules';
 import { nativeExtraction, extractionYield } from '../src/lib/console/pipelines/extraction';
 import { siteCostPoints } from '../src/lib/console/pipelines/site-cost-per-item';
 import { articleAge } from '../src/lib/console/pipelines/article-age';
@@ -65,6 +66,14 @@ test('every declared native answer matches its independently committed slice', (
 		if (actual?.state !== 'ok') throw new Error(`${query.name} is not ready`);
 		expect({ ...actual, rows: [...actual.rows].sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))) }).toEqual(expected);
 	}
+});
+
+test('the identity-free ranking accepts the native nullable codes without changing recorded rows', () => {
+	const recorded = rows(queries.failedRuleQuery);
+	expect(recorded).toHaveLength(76);
+	expect(recorded.filter((row) => row.code === null)).toHaveLength(71);
+	expect(recorded.filter((row) => row.outcome === 'failed')).toHaveLength(1);
+	expect(failureRuleRows(recorded)).toEqual(recorded);
 });
 
 test('private date axes retain missing days without inventing zero readings', () => {
