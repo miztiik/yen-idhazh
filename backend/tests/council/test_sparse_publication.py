@@ -252,7 +252,7 @@ def test_undeclared_read_cannot_fetch_and_completed_sibling_still_lands(
     assert not (sparse / FORBIDDEN).exists()
     remote = Repository(origin)
     assert remote.entry("main", "state/results/first-judge/" + DATE + ".txt") is None
-    path = "state/results/second-judge/" + DATE + ".txt"
-    entry = remote.entry("main", path)
+    output_path = "state/results/second-judge/" + DATE + ".txt"
+    entry = remote.entry("main", output_path)
     assert entry is not None
-    assert remote.blob(entry.oid) == (sparse / path).read_bytes()
+    assert remote.blob(entry.oid) == (sparse / output_path).read_bytes()
