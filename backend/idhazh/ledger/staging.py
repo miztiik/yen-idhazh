@@ -67,6 +67,11 @@ class LedgerStaging:
 #: same commit that gives it a writer - never before, and never silently
 #: after.
 REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
+    LedgerName.RUN_SHARDS: LedgerStaging(
+        writer="idhazh.telemetry.run_shards.record, after assemble writes run.json",
+        symbol="idhazh.telemetry.run_shards.record",
+        job_labels=frozenset({"assemble"}),
+    ),
     LedgerName.SEEN: LedgerStaging(
         writer="idhazh.ledger.rows.append_seen, called by `python -m idhazh plan`",
         symbol="idhazh.ledger.rows.append_seen",

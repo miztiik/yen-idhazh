@@ -62,6 +62,7 @@ from idhazh.contracts.file_envelope import (
 )
 from idhazh.contracts.knobs.ledger import LedgerConfig
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.run_shards import RunShards, RunShardsProvenance
 from idhazh.ledger import arrow_schema, filenames, json_lines, lifecycle, paths
 from idhazh.ledger.arrow_schema import Column
 from idhazh.ledger.keys import DATE_CELL
@@ -80,6 +81,7 @@ _PARQUET_MAGIC: Final = b"PAR1"
 #: the column instead, so a row's own value is never overwritten; the envelope
 #: still carries the writer's.
 _IDENTITY_COLUMNS: Final[tuple[Column, ...]] = arrow_schema.columns_of(RowIdentity)
+_COUNT_PROVENANCE_COLUMNS: Final[tuple[Column, ...]] = arrow_schema.columns_of(RunShardsProvenance)
 
 #: The identity cells a row's own contract may not contradict, because the
 #: union ranks and groups on them: a row carrying another try than its writer's
@@ -93,6 +95,7 @@ class StoredRow[C: Contract]:
 
     identity: RowIdentity
     row: C
+    provenance: RunShardsProvenance | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -171,7 +174,7 @@ def file_columns(model: type[Contract]) -> tuple[Column, ...]:
     own = arrow_schema.columns_of(model)
     return own + tuple(
         column for column in _IDENTITY_COLUMNS if column.name not in model.model_fields
-    )
+    ) + (_COUNT_PROVENANCE_COLUMNS if model is RunShards else ())
 
 
 def _unit(ledger: LedgerName, covers: str, identity: WriterIdentity) -> uuid.UUID:
@@ -366,6 +369,14 @@ def persist(
         }
         own = [row.model_dump(mode="json") for row in batch]
         _refuse_a_row_that_names_another_try(stamped, own, where=f"{ledger.value} {day}")
+        if model is RunShards:
+            stamped |= RunShardsProvenance(
+                written_at_ms=written_at_ms,
+                file_id=str(filenames.file_id(
+                    unit=_unit(ledger, day, identity), attempt=identity.attempt,
+                    written_at_ms=written_at_ms,
+                )),
+            ).model_dump(mode="json")
         stored = [stamped | cells for cells in own]
         _refuse_an_identity_no_reader_could_read(stored, where=f"{ledger.value} {day}")
         name, data = _rendered(
@@ -421,7 +432,9 @@ def _refuse_rows_outside_the_period[C: Contract](
 def _stored[C: Contract](rows: Sequence[StoredRow[C]]) -> list[dict[str, Any]]:
     """Each row as the cells a file holds: its identity cells, then its contract's own."""
     return [
-        held.identity.model_dump(mode="json") | held.row.model_dump(mode="json") for held in rows
+        held.identity.model_dump(mode="json")
+        | (held.provenance.model_dump(mode="json") if held.provenance is not None else {})
+        | held.row.model_dump(mode="json") for held in rows
     ]
 
 
@@ -751,7 +764,10 @@ def load_stored[C: Contract](paths: Sequence[Path], *, model: type[C]) -> list[S
     """
     wanted = model.schema_version()
     added = {column.name for column in _IDENTITY_COLUMNS} - set(model.model_fields)
+    if model is RunShards:
+        added |= {column.name for column in _COUNT_PROVENANCE_COLUMNS}
     declared = {column.name for column in _IDENTITY_COLUMNS} | set(model.model_fields)
+    declared |= added
     held: list[StoredRow[C]] = []
     for path in paths:
         envelope, stored = _opened(path)
@@ -770,6 +786,12 @@ def load_stored[C: Contract](paths: Sequence[Path], *, model: type[C]) -> list[S
                     row=model.model_validate(
                         {key: value for key, value in cells.items() if key not in added}
                     ),
+                    provenance=RunShardsProvenance.model_validate(
+                        {
+                            column.name: cells.get(column.name)
+                            for column in _COUNT_PROVENANCE_COLUMNS
+                        }
+                    ) if model is RunShards else None,
                 )
                 for cells in stored
             )

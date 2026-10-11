@@ -1937,8 +1937,18 @@ def main() -> int:
         print(json.dumps(scored_keys(args.state), sort_keys=True))
         return 0
     if args.file_fixture_rows is not None:
+        from idhazh.telemetry.run_shards import backfill
+
         filed = file_fixture_rows(args.state, args.file_fixture_rows)
         filed.update(file_published_fixture_rows(args.state))
+        backfill(
+            args.out, args.state,
+            first=(calendar_date.fromisoformat(DATE) - timedelta(
+                days=max(config.load().appearance.console.window_presets) - 1
+            )).isoformat(),
+            through=DATE,
+            identity=_fixture_writer(SCORE_RUN_ID),
+        )
         pack_fixture_ledgers(args.state.resolve(), Path.cwd().resolve())
         unpacked = file_unpacked_fixture_day(args.state)
         filed[LedgerName.ITEM_HEALTH] = filed.get(LedgerName.ITEM_HEALTH, 0) + unpacked

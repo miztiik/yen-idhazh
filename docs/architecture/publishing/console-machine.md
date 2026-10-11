@@ -1,6 +1,6 @@
 # What the Hardware route draws
 
-**Last Updated**: 2026-10-06
+**Last Updated**: 2026-10-11
 `/console/machine/` answers a question no other route can ask: what machine did
 the run actually get, and does the day's rate mean anything because of it.
 
@@ -19,6 +19,14 @@ and the split take the processor and the flags off the machine record as well.
 The machine mix queries the packed host-fingerprint ledger in the browser
 through [the shared query reader](how-the-query-door-answers-a-panel.md).
 The other panels still read their ledgers at build time under `$lib/server/`.
+
+The native `run-shards` count foundation is published before the remaining
+Hardware readers move. It carries only the manifest's recorded date, run
+identity and nullable positive shard count, with existing writer provenance.
+See [the state ledgers](../contracts/state-ledgers.md). This foundation does
+not change the current panels, their build-time manifest refusal or their
+queries. A later reader must distinguish an unavailable count read from a
+successfully read historical null.
 
 | Group | Panel | Grain | The sentence it is for |
 | --- | --- | --- | --- |

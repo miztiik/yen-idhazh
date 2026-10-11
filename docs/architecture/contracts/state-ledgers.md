@@ -1,6 +1,6 @@
 # The ledgers under state/
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-11
 
 `state/` is the only memory this pipeline has. Every run starts on a fresh machine with a fresh checkout, so anything one run needs to tell the next is committed (CLAUDE.md Guardrail #1). This page says what each committed ledger answers and why it files at the grain it does.
 
@@ -27,6 +27,7 @@ A window lets the reader name the files it wants and skip the rest. Without one 
 | `state/raw/visual-prunes/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Is the picture backlog shrinking? One file per run | raw and compact | the whole tree |
 | `state/raw/gardener/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What did each gardener task see, take and leave at one wake? One file per shard | raw and compact | none yet |
 | `state/raw/run-plan/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What plan did the day hand to its later stages? One row per plan execution | raw and compact | the named UTC day |
+| `state/raw/run-shards/<YYYY>/<MM>/<DD>/<file_id>.parquet` | How many shards did the manifest record for this run? Only date, run identity and nullable count | raw and compact | the widest console window |
 | `state/raw/council-run-records/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Which step ran for each hosted judge, how it ended and what it cost | raw and compact | the judged UTC day |
 
 The seen ledger has no published mirror at all, so unlike the two health ledgers there is no second grain anywhere near it.
@@ -45,6 +46,14 @@ The council save job files each judged date's run records through the ledger
 door. Each row names the step and part, while the envelope names the save job,
 attempt and council run. A retry therefore replaces the earlier attempt when
 the reader settles rows by `unit_id`.
+
+The run-shards ledger publishes `RunRecord.shards` exactly. Assemble files the
+counts after its final manifest write. An absent count stays null; observed
+hosts, shard indexes and current configuration never fill it. Historical
+backfill reads one named daily manifest at a time over explicit inclusive UTC
+bounds. The last numeric record for a run survives a later unknown. The
+`compact-run-shards` task and normal site copy publish packed and unpacked days;
+whole manifests and plans are not added to the published ledger set.
 
 The console reads the feed record at build time from its packed files under `state/compact/feed-health/`, so the Voices page stops at the newest packed day. There is no published mirror; the one that existed until 2026-09-16 was never fetched.
 

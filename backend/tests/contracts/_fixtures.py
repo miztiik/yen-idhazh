@@ -32,6 +32,7 @@ CONFIG_FILES: dict[str, type[Contract]] = {
 }
 
 FIXTURE_FILES: Final = (
+    "run-shards/unknown.json",
     "app-config/every-knob-differs-from-the-committed-config.json",
     "appearance-config/knobs-set-away-from-the-defaults.json",
     "article/brief.json",
