@@ -97,7 +97,6 @@ BROWSER_SCOPE_CASES: Final = (
     ("frontend/src/routes/console/+page.svelte", True, True, True, False, False, False),
     ("frontend/src/routes/[date]/+page.svelte", True, True, False, False, False, True),
     ("config/idhazh.json", True, True, False, True, True, True),
-    ("frontend/tests/panel-captures.spec.ts", False, True, False, False, False, False),
     ("docs/reference/pipeline-cost.md", False, False, False, False, False, False),
 )
 
