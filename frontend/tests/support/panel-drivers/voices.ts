@@ -62,6 +62,7 @@ export async function publishVoicesFixture(state: string, publishedRoot?: string
 
 type PrivateRoute = Awaited<ReturnType<typeof judgementRoute>>;
 const routes = new WeakMap<Page, PrivateRoute>();
+let nextRoute = 0;
 test.afterEach(async ({ page }) => {
 	const route = routes.get(page);
 	routes.delete(page);
@@ -71,7 +72,9 @@ test.afterEach(async ({ page }) => {
 async function stateRoute(page: Page, state: BasicNothing): Promise<PrivateRoute> {
 	let route = routes.get(page);
 	if (!route) {
-		route = await judgementRoute(test.info().outputPath(`voices-${state}`), {
+		// Keep native build paths independent of Playwright's long, title-derived directory.
+		const report = join(test.info().project.outputDir, 'voices-states', `${test.info().workerIndex}-${nextRoute++}`);
+		route = await judgementRoute(report, {
 			voicesWait: state === 'loading',
 			voices: async (root, publishedRoot) => {
 				if (state === 'quiet') writeFileSync(join(publishedRoot, 'source-health.json'), JSON.stringify({ ...VOICES_CENSUS, sources: [] }));

@@ -380,7 +380,8 @@ target.write_text(band.to_json(), encoding="utf-8", newline="\\n")
 			import { build, preview } from 'vite';
 			import { createInterface } from 'node:readline';
 			await build({ cacheDir: ${JSON.stringify(join(root, 'vite-cache'))},
-				logLevel: 'warn', build: { reportCompressedSize: false } });
+				logLevel: 'warn', build: { reportCompressedSize: false,
+					...${JSON.stringify(options.voices ? { minify: false, cssMinify: false } : {})} } });
 			const server = await preview({ preview: { host: '127.0.0.1', port: 0 } });
 			let held = ${JSON.stringify(options.voicesWait ?? false)};
 			const pending = [];

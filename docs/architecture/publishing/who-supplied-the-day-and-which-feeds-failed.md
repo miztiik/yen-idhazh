@@ -153,6 +153,10 @@ therefore checks all its assertions without four compilations in one timeout.
 The Voices private build compiles only the Voices route from its fixed named
 inputs, not the unrelated Judgement and Data explorer pages. Those routes keep
 their existing builder inputs when their own tests call it.
+The private Voices correctness build omits JavaScript and CSS minification;
+the integrated production build still uses its normal minification. Both
+compile the same route and native readers, with unchanged timeout ceilings.
+State fixture directories use short worker-owned paths rather than test titles.
 Native route fixtures prepare and close their private build at worker scope,
 under the existing 150-second limit. The route's view and readout assertions
 then use the existing test timeout for their own browser work.
