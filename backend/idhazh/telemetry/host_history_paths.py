@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import ctypes
-import os
 import stat
+import sys
 from pathlib import Path
 
 from idhazh.contracts.host_migration import HistoryManifest
@@ -15,49 +15,49 @@ type PathAddress = tuple[FileIdentity, tuple[str, ...]]
 
 
 def _missing_names(anchor: Path, names: tuple[str, ...]) -> tuple[str, ...]:
-    if not names or os.name != "nt":
-        return names
-    # Windows directories can opt into case-sensitive names. Query the real
-    # parent read-only; only a missing suffix needs prospective name comparison.
-    class CaseSensitiveInfo(ctypes.Structure):
-        _fields_ = [("flags", ctypes.c_uint32)]
+    if sys.platform == "win32" and names:
+        # Windows directories can opt into case-sensitive names. Query the real
+        # parent read-only; only a missing suffix needs prospective name comparison.
+        class CaseSensitiveInfo(ctypes.Structure):
+            _fields_ = [("flags", ctypes.c_uint32)]
 
-    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
-    kernel.CreateFileW.argtypes = (
-        ctypes.c_wchar_p,
-        ctypes.c_uint32,
-        ctypes.c_uint32,
-        ctypes.c_void_p,
-        ctypes.c_uint32,
-        ctypes.c_uint32,
-        ctypes.c_void_p,
-    )
-    kernel.CreateFileW.restype = ctypes.c_void_p
-    kernel.GetFileInformationByHandleEx.argtypes = (
-        ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, ctypes.c_uint32
-    )
-    kernel.GetFileInformationByHandleEx.restype = ctypes.c_int
-    kernel.CloseHandle.argtypes = (ctypes.c_void_p,)
-    kernel.CloseHandle.restype = ctypes.c_int
-    # Win32 ABI: FILE_READ_ATTRIBUTES, all share modes, OPEN_EXISTING and
-    # FILE_FLAG_BACKUP_SEMANTICS admit a directory handle without creating it.
-    handle = kernel.CreateFileW(str(anchor), 0x80, 0x7, None, 3, 0x02000000, None)
-    if handle is None or handle == ctypes.c_void_p(-1).value:
-        raise ValueError(
-            "history path cannot open directory case information"
-        ) from ctypes.WinError()
-    try:
-        info = CaseSensitiveInfo()
-        # FileCaseSensitiveInfo is class 23; bit 1 is CASE_SENSITIVE_DIR.
-        if not kernel.GetFileInformationByHandleEx(
-            handle, 23, ctypes.byref(info), ctypes.sizeof(info)
-        ):
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel.CreateFileW.argtypes = (
+            ctypes.c_wchar_p,
+            ctypes.c_uint32,
+            ctypes.c_uint32,
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_uint32,
+            ctypes.c_void_p,
+        )
+        kernel.CreateFileW.restype = ctypes.c_void_p
+        kernel.GetFileInformationByHandleEx.argtypes = (
+            ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, ctypes.c_uint32
+        )
+        kernel.GetFileInformationByHandleEx.restype = ctypes.c_int
+        kernel.CloseHandle.argtypes = (ctypes.c_void_p,)
+        kernel.CloseHandle.restype = ctypes.c_int
+        # Win32 ABI: FILE_READ_ATTRIBUTES, all share modes, OPEN_EXISTING and
+        # FILE_FLAG_BACKUP_SEMANTICS admit a directory handle without creating it.
+        handle = kernel.CreateFileW(str(anchor), 0x80, 0x7, None, 3, 0x02000000, None)
+        if handle is None or handle == ctypes.c_void_p(-1).value:
             raise ValueError(
-                "history path cannot establish directory case semantics"
+                "history path cannot open directory case information"
             ) from ctypes.WinError()
-        return names if info.flags & 1 else tuple(name.lower() for name in names)
-    finally:
-        kernel.CloseHandle(handle)
+        try:
+            info = CaseSensitiveInfo()
+            # FileCaseSensitiveInfo is class 23; bit 1 is CASE_SENSITIVE_DIR.
+            if not kernel.GetFileInformationByHandleEx(
+                handle, 23, ctypes.byref(info), ctypes.sizeof(info)
+            ):
+                raise ValueError(
+                    "history path cannot establish directory case semantics"
+                ) from ctypes.WinError()
+            return names if info.flags & 1 else tuple(name.lower() for name in names)
+        finally:
+            kernel.CloseHandle(handle)
+    return names
 
 
 def preflight_path(workspace: Path, target: Path) -> PathAddress:
