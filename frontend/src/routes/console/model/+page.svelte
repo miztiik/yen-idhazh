@@ -7,7 +7,7 @@
 	import * as queries from '$lib/console/queries/model';
 	import { settingsRules } from '$lib/console/settings-moved';
 	import { windowOfDays } from '$lib/charts/viewport';
-	import { nameSpan } from '$lib/charts/series';
+	import { nameSpan } from '$lib/console/span-words';
 	import RecordNotes from '$lib/console/RecordNotes.svelte';
 	import RouteStatus from '$lib/components/RouteStatus.svelte';
 	import WindowControlSource from '$lib/components/WindowControlSource.svelte';

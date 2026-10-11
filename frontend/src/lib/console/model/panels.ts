@@ -2,7 +2,7 @@ import * as queries from '../queries/model';
 import type { PanelQuery, Range } from '../queries/window';
 import type { ConsoleShell } from '../band';
 import { settingsRules } from '../settings-moved';
-import { nameSpan } from '../../charts/series';
+import { nameSpan } from '../span-words';
 
 export const panelQueries: Readonly<Record<string, readonly PanelQuery[]>> = {
 	'model-throughput': [queries.modelThroughputQuery], 'call-ending': [queries.callEndingQuery],
