@@ -33,6 +33,7 @@ from idhazh.contracts.story_evaluation import (
     StoryPolicy,
 )
 from idhazh.contracts.story_source import SourceFreeze
+from idhazh.contracts.story_vector_derivation import DerivedVectorSnapshot
 from idhazh.contracts.story_vectors import VectorExtensionSnapshot, VectorSnapshot
 from idhazh.story_dataset.catalog import read_catalog, review_catalog
 from idhazh.story_dataset.checkpoints import export_checkpoint, restore_checkpoint
@@ -247,7 +248,8 @@ def execute(args: argparse.Namespace) -> None:
                 store,
                 manifest,
                 store.get("partition", split_id, Partition) if split_id else None,
-                read_vectors(store, vector_id) if vector_id else None,
+                read_model(args.vectors, TypeAdapter(DerivedVectorSnapshot | VectorSnapshot))
+                if args.vectors else (read_vectors(store, vector_id) if vector_id else None),
                 read_model(args.frame, PairFrame) if args.frame else None,
                 read_model(args.retrieval, RetrievalRun) if args.retrieval else None,
                 read_model(args.clusters, ClusterRun) if args.clusters else None,
@@ -282,6 +284,10 @@ def execute(args: argparse.Namespace) -> None:
             if vector_id is None:
                 raise ValueError("register saved vectors first")
             vector_manifest = read_vectors(store, vector_id)
+            if command == "predict" and args.vectors:
+                vector_manifest = read_model(
+                    args.vectors, TypeAdapter(DerivedVectorSnapshot | VectorSnapshot)
+                )
             if command == "vector-import":
                 extended = register_extension(
                     store,

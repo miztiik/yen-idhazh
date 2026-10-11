@@ -12,6 +12,7 @@ from idhazh.contracts.story_evaluation import (
     RetrievalRun,
 )
 from idhazh.contracts.story_source import SourceFreeze
+from idhazh.contracts.story_vector_derivation import DerivedVectorSnapshot
 from idhazh.story_dataset.catalog import read_catalog, resolved_paths
 from idhazh.story_dataset.metrics import neighbor_metrics, overlap_pair_metrics
 from idhazh.story_dataset.sampling import pair_id
@@ -77,6 +78,14 @@ def evaluate(
             )
             if config.partition_sha256 != digest(partition):
                 raise ValueError("development config belongs to a different partition")
+            if isinstance(vectors, DerivedVectorSnapshot):
+                selected = config.parameters.get("vector_candidates")
+                if (
+                    not isinstance(selected, dict)
+                    or selected.get(run.model) != digest(vectors)
+                    or run.model != vectors.derivation.slug
+                ):
+                    raise ValueError("derived dimensions were not frozen in development")
         except ValueError as error:
             blockers.append(str(error))
             continue
