@@ -10,6 +10,7 @@ from pydantic import TypeAdapter
 from idhazh.contracts.story_encoder_candidate import CandidateVectorState, PinnedEncoderCandidate
 from idhazh.contracts.story_runner import RunnerFile, RunnerPackage, RunnerResult, RunnerShard
 from idhazh.contracts.story_vectors import VectorSnapshot
+from idhazh.story_dataset.candidate_evaluation import materialize_candidate
 from idhazh.story_dataset.runner_download import download_artifact
 from idhazh.story_dataset.runner_inputs import (
     finish_package,
@@ -18,7 +19,7 @@ from idhazh.story_dataset.runner_inputs import (
 )
 from idhazh.story_dataset.runner_results import import_result, recover_result, validate_result
 from idhazh.story_dataset.source import load_policy, validate_freeze
-from idhazh.story_dataset.storage import digest, read_model
+from idhazh.story_dataset.storage import digest, read_model, write_model
 from idhazh.story_dataset.vector_derivation import derive_gemma
 
 
@@ -60,6 +61,12 @@ def main() -> None:
     derivation.add_argument("--root", type=Path, required=True)
     derivation.add_argument("--output-root", type=Path, required=True)
     derivation.add_argument("--dimensions", type=int, choices=(128, 256, 512), required=True)
+    materialization = commands.add_parser("materialize-candidate")
+    materialization.add_argument("--source-root", type=Path, required=True)
+    materialization.add_argument("--candidate-root", type=Path, required=True)
+    materialization.add_argument("--candidate", type=Path, required=True)
+    materialization.add_argument("--state", type=Path, required=True)
+    materialization.add_argument("--output-root", type=Path, required=True)
     args = parser.parse_args()
     try:
         if args.command == "download":
@@ -67,6 +74,21 @@ def main() -> None:
                 download_artifact(
                     args.recipient, args.artifact_id, args.name, args.output, args.sha256
                 )
+            )
+        elif args.command == "materialize-candidate":
+            policy = load_policy(args.repository / "config/story-dataset.json")
+            _, articles = validate_freeze(args.source_root, args.repository, policy)
+            snapshot = materialize_candidate(
+                read_model(args.candidate, PinnedEncoderCandidate),
+                read_model(args.state, CandidateVectorState), articles,
+                args.candidate_root, args.output_root,
+            )
+            write_model(
+                args.output_root / "candidate-snapshots" / (digest(snapshot) + ".json"), snapshot
+            )
+            print(
+                f"materialized {len(snapshot.article_ids)} saved rows; "
+                f"{digest(snapshot)}; no inference"
             )
         elif args.command == "derive":
             derived_result = derive_gemma(

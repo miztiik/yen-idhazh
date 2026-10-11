@@ -6,6 +6,7 @@ from typing import Literal
 
 import numpy as np
 
+from idhazh.contracts.story_candidate_evaluation import CandidateEvaluationSnapshot
 from idhazh.contracts.story_candidates import VectorManifest
 from idhazh.contracts.story_evaluation import ClusterRun, DevelopmentConfig, Partition, RetrievalRun
 from idhazh.contracts.story_vector_derivation import DerivedVectorSnapshot
@@ -46,17 +47,24 @@ def predict(
     if saved_config != config or config.partition_sha256 != digest(partition):
         raise ValueError("prediction configuration was not frozen against this partition")
     validate_vectors(vectors, store.root)
-    if isinstance(vectors, DerivedVectorSnapshot):
+    if isinstance(vectors, (DerivedVectorSnapshot, CandidateEvaluationSnapshot)):
         selection = config.parameters.get("vector_candidates")
+        candidate_slug = (
+            vectors.derivation.slug if isinstance(vectors, DerivedVectorSnapshot)
+            else vectors.candidate.slug
+        )
         if (
             not isinstance(selection, dict)
             or selection.get(model) != digest(vectors)
-            or vectors.derivation.slug != model
-            or vectors.derivation.source_sha256 != partition.source_sha256
+            or candidate_slug != model
+            or vectors.source_sha256 != partition.source_sha256
         ):
             raise ValueError(
-                "derived dimensions must be selected in development before confirmation"
+                "vector candidate must be selected in development before confirmation"
             )
+    opened = store.setting("confirmation-opened")
+    if selected_partition == "confirmation" and opened not in (None, digest(config)):
+        raise ValueError("confirmation was already opened with different development settings")
     if len(universe) < 2 or len(set(universe)) != len(universe) or k >= len(universe):
         raise ValueError("need distinct candidate articles and k < universe size")
     if any(partition.article_partitions.get(i) != selected_partition for i in universe):

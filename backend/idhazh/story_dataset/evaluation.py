@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from idhazh.contracts.story_annotation import AnnotationRecord
+from idhazh.contracts.story_candidate_evaluation import CandidateEvaluationSnapshot
 from idhazh.contracts.story_candidates import PairFrame, PairRecord, VectorManifest
 from idhazh.contracts.story_evaluation import (
     ClusterRun,
@@ -78,14 +79,23 @@ def evaluate(
             )
             if config.partition_sha256 != digest(partition):
                 raise ValueError("development config belongs to a different partition")
-            if isinstance(vectors, DerivedVectorSnapshot):
+            if isinstance(vectors, (DerivedVectorSnapshot, CandidateEvaluationSnapshot)):
                 selected = config.parameters.get("vector_candidates")
+                candidate_slug = (
+                    vectors.derivation.slug if isinstance(vectors, DerivedVectorSnapshot)
+                    else vectors.candidate.slug
+                )
                 if (
                     not isinstance(selected, dict)
                     or selected.get(run.model) != digest(vectors)
-                    or run.model != vectors.derivation.slug
+                    or run.model != candidate_slug
                 ):
-                    raise ValueError("derived dimensions were not frozen in development")
+                    raise ValueError("vector candidate was not frozen in development")
+            opened = store.setting("confirmation-opened")
+            if run.partition == "confirmation" and opened not in (None, digest(config)):
+                raise ValueError(
+                    "confirmation was already opened with different development settings"
+                )
         except ValueError as error:
             blockers.append(str(error))
             continue

@@ -11,12 +11,14 @@ from numpy.typing import NDArray
 from pydantic import TypeAdapter
 
 from idhazh.contracts.encoder_reading import EncoderReading, ReadingState
+from idhazh.contracts.story_candidate_evaluation import CandidateEvaluationSnapshot
 from idhazh.contracts.story_candidates import (
     NeighborEvidence,
     VectorCache,
     VectorExtension,
     VectorManifest,
 )
+from idhazh.contracts.story_encoder_candidate import CandidateVectorState
 from idhazh.contracts.story_source import ArticleEvidence, SourceFreeze
 from idhazh.contracts.story_vector_derivation import DerivedVectorSnapshot
 from idhazh.contracts.story_vectors import VectorExtensionSnapshot, VectorSnapshot
@@ -124,27 +126,101 @@ def register_vectors(
 
 
 def validate_vectors(vectors: VectorManifest, root: Path | None = None) -> None:
-    if isinstance(vectors, DerivedVectorSnapshot):
-        candidate = vectors.derivation
+    if isinstance(vectors, CandidateEvaluationSnapshot):
+        candidate = vectors.candidate
+        state = CandidateVectorState.model_validate_json(
+            vector_path(vectors, vectors.input_file, root).read_bytes()
+        )
+        ids = [i for unit in state.units for i in unit.article_ids]
         if (
             len(vectors.caches) != 1 or vectors.extensions
-            or candidate.source_sha256 != vectors.source_sha256
-            or candidate.ordered_ids_sha256 != digest(vectors.article_ids)
-            or vectors.native_ordered_ids_sha256 != candidate.ordered_ids_sha256
+            or vectors.source_sha256 != candidate.source_sha256
+            or vectors.ordered_ids_sha256 != digest(vectors.article_ids)
+            or vectors.input_sha256 != vectors.candidate_state_sha256
+            or vectors.readings_sha256 != digest(candidate)
+            or vectors.encoder_config_sha256 != digest(candidate)
+            or len(vectors.unit_sha256) != len(vectors.native_files_sha256)
+            or vectors.max_sequence_length != candidate.max_sequence_length
+            or vectors.text_conflict_article_ids
+            or not state.units or state.candidate_revision != digest(candidate)
+            or digest(state) != vectors.candidate_state_sha256
+            or vectors.unit_sha256 != [digest(unit) for unit in state.units]
+            or vectors.native_files_sha256 != [unit.cache.file_sha256 for unit in state.units]
+            or ids != vectors.article_ids or len(ids) != len(set(ids))
+            or vectors.text_sha256 != [h for unit in state.units for h in unit.summary_sha256]
+        ):
+            raise ValueError("candidate evaluation source, order or lineage differs")
+        cache = vectors.caches[0]
+        if (
+            cache.slug != candidate.slug or cache.model_id != candidate.model_id
+            or cache.revision != candidate.revision or cache.dimensions != candidate.dimensions
+            or cache.rows != len(vectors.article_ids) or cache.reading_sha256 != digest(candidate)
+            or cache.input_sha256 != vectors.candidate_state_sha256
+            or cache.settings_sha256 != digest({
+                "prefix": candidate.prefix, "model_options": candidate.model_options,
+                "encode_options": candidate.encode_options,
+            })
+        ):
+            raise ValueError("candidate evaluation dimensions, settings or pin differ")
+        matrix = np.load(vector_path(vectors, cache.file, root), mmap_mode="r", allow_pickle=False)
+        if (
+            matrix.shape != (cache.rows, candidate.dimensions)
+            or matrix.dtype != np.dtype("float32") or not np.isfinite(matrix).all()
+            or np.any(np.linalg.norm(matrix, axis=1) == 0)
+        ):
+            raise ValueError("candidate evaluation float32 shape or numeric values differ")
+        metadata = vector_path(vectors, candidate.official_metadata_file, root)
+        if file_hash(metadata) != candidate.official_metadata.evidence_sha256:
+            raise ValueError("candidate evaluation official metadata bytes changed")
+        offset = 0
+        for unit in state.units:
+            native = unit.cache
+            if (
+                unit.candidate_revision != digest(candidate)
+                or unit.source_sha256 != candidate.source_sha256
+                or unit.slug != candidate.slug
+                or native.slug != candidate.slug
+                or native.model_id != candidate.model_id
+                or native.revision != candidate.revision
+                or native.dimensions != candidate.dimensions
+                or native.reading_sha256 != digest(candidate)
+                or native.settings_sha256 != cache.settings_sha256
+                or native.rows != len(unit.article_ids)
+                or len(unit.summary_sha256) != native.rows
+                or len(unit.article_input_sha256) != native.rows
+            ):
+                raise ValueError("candidate evaluation native unit lineage differs")
+            path = vector_path(vectors, native.file, root)
+            saved = np.load(path, mmap_mode="r", allow_pickle=False)
+            if (
+                file_hash(path) != native.file_sha256
+                or saved.dtype != np.dtype("float32")
+                or saved.shape != (native.rows, candidate.dimensions)
+                or not np.array_equal(matrix[offset : offset + native.rows], saved)
+            ):
+                raise ValueError("candidate evaluation differs from retained native bytes")
+            offset += native.rows
+    if isinstance(vectors, DerivedVectorSnapshot):
+        derivation = vectors.derivation
+        if (
+            len(vectors.caches) != 1 or vectors.extensions
+            or derivation.source_sha256 != vectors.source_sha256
+            or derivation.ordered_ids_sha256 != digest(vectors.article_ids)
+            or vectors.native_ordered_ids_sha256 != derivation.ordered_ids_sha256
         ):
             raise ValueError("derived snapshot source, order or lineage differs")
         cache = vectors.caches[0]
         if (
-            cache.slug != candidate.slug or cache.dimensions != candidate.dimensions
+            cache.slug != derivation.slug or cache.dimensions != derivation.dimensions
             or cache.rows != len(vectors.article_ids)
-            or cache.reading_sha256 != digest(candidate)
-            or cache.settings_sha256 != digest(candidate)
-            or cache.file_sha256 != candidate.derived_file_sha256
+            or cache.reading_sha256 != digest(derivation)
+            or cache.settings_sha256 != digest(derivation)
+            or cache.file_sha256 != derivation.derived_file_sha256
         ):
             raise ValueError("derived snapshot dimensions, settings or hash differ")
         matrix = np.load(vector_path(vectors, cache.file, root), mmap_mode="r", allow_pickle=False)
         if (
-            matrix.shape != (cache.rows, candidate.dimensions)
+            matrix.shape != (cache.rows, derivation.dimensions)
             or matrix.dtype != np.dtype("float32")
             or not np.isfinite(matrix).all()
             or np.any(np.linalg.norm(matrix, axis=1) == 0)

@@ -6,19 +6,29 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from test_story_dataset import articles, manifest, policy
+from pydantic import TypeAdapter
+from test_story_dataset import answer, articles, manifest, policy, seeded_store
 
 from idhazh.contracts.encoder_reading import EncoderReading, ReadingState
+from idhazh.contracts.story_candidate_evaluation import CandidateEvaluationSnapshot
 from idhazh.contracts.story_candidates import VectorCache
 from idhazh.contracts.story_encoder_candidate import CandidateVectorUnit, PinnedEncoderCandidate
+from idhazh.contracts.story_evaluation import DevelopmentConfig, RetrievalRun
 from idhazh.contracts.story_source import SourceCheck
+from idhazh.contracts.story_vector_derivation import DerivedVectorSnapshot
 from idhazh.contracts.story_vectors import VectorSnapshot
+from idhazh.story_dataset.candidate_evaluation import materialize_candidate
 from idhazh.story_dataset.encoder_candidates import (
     register_candidate_unit,
     register_pinned_candidate,
 )
+from idhazh.story_dataset.evaluation import evaluate
+from idhazh.story_dataset.partitions import build_partition
 from idhazh.story_dataset.pinned_encoding import encode_pinned_selected
+from idhazh.story_dataset.predictions import freeze_development, predict
 from idhazh.story_dataset.storage import canonical, digest, file_hash, now, write_model
+from idhazh.story_dataset.vectors import covered_ids, model_matrix, validate_vectors
+from idhazh.story_dataset.workers import export_batch, import_submission
 
 pytestmark = pytest.mark.contract
 PIN = "f" * 40
@@ -213,3 +223,142 @@ def test_candidate_state_snapshots_arrays_and_rechecks_retained_bytes(tmp_path: 
     np.save(original, np.zeros((2, 2), dtype=np.float32))
     with pytest.raises(ValueError, match="bytes"):
         register_candidate_unit(tmp_path, candidate, articles(), second, state)
+
+
+def test_materialized_candidate_uses_only_saved_units_and_preserves_unknown_legacy(
+    tmp_path: Path,
+) -> None:
+    candidate, legacy = registered_candidate(tmp_path)
+    before = canonical(legacy)
+    old_array = (tmp_path / "old.npy").read_bytes()
+    ids = list(articles())[2:6]
+    first = generated_unit(tmp_path, candidate, ids[:2])
+    state = register_candidate_unit(tmp_path, candidate, articles(), first)
+    second = generated_unit(tmp_path, candidate, ids[2:])
+    state = register_candidate_unit(tmp_path, candidate, articles(), second, state)
+    state_before = canonical(state)
+    output = tmp_path / "evaluation"
+    snapshot = materialize_candidate(candidate, state, articles(), tmp_path, output)
+    validate_vectors(snapshot, output)
+    actual_ids, matrix = model_matrix(snapshot, candidate.slug, output)
+    assert actual_ids == ids and covered_ids(snapshot, candidate.slug) == set(ids)
+    assert snapshot.candidate_state_sha256 == digest(state)
+    assert snapshot.ordered_ids_sha256 == digest(ids)
+    assert snapshot.native_files_sha256 == [unit.cache.file_sha256 for unit in state.units]
+    assert snapshot.unit_sha256 == [digest(unit) for unit in state.units]
+    assert set(snapshot.missing_article_ids) == set(articles()) - set(ids)
+    assert snapshot.inference is False
+    np.testing.assert_array_equal(matrix, np.ones((4, candidate.dimensions)))
+    assert canonical(state) == state_before and canonical(legacy) == before
+    assert (tmp_path / "old.npy").read_bytes() == old_array
+    assert legacy.caches[0].revision is None
+    assert materialize_candidate(candidate, state, articles(), tmp_path, output) == snapshot
+
+
+@pytest.mark.parametrize("bad", ["state", "array", "snapshot-order", "snapshot-pin", "output"])
+def test_materialized_candidate_refuses_tampered_lineage(tmp_path: Path, bad: str) -> None:
+    candidate, _ = registered_candidate(tmp_path)
+    unit = generated_unit(tmp_path, candidate, list(articles())[:3])
+    state = register_candidate_unit(tmp_path, candidate, articles(), unit)
+    output = tmp_path / "evaluation"
+    snapshot = materialize_candidate(candidate, state, articles(), tmp_path, output)
+    if bad == "state":
+        state.candidate_revision = "0" * 64
+        with pytest.raises(ValueError, match="lineage"):
+            materialize_candidate(candidate, state, articles(), tmp_path, output)
+    elif bad == "array":
+        np.save(tmp_path / state.units[0].cache.file, np.zeros((3, 2), dtype=np.float32))
+        with pytest.raises(ValueError, match="bytes"):
+            materialize_candidate(candidate, state, articles(), tmp_path, output)
+    elif bad == "output":
+        (output / snapshot.caches[0].file).write_bytes(b"corrupt")
+        with pytest.raises(ValueError, match="immutable"):
+            materialize_candidate(candidate, state, articles(), tmp_path, output)
+    else:
+        if bad == "snapshot-order":
+            snapshot.article_ids.reverse()
+        else:
+            snapshot.caches[0].revision = None
+        with pytest.raises(ValueError):
+            validate_vectors(snapshot, output)
+
+
+def test_materialized_candidate_requires_separate_output_root(tmp_path: Path) -> None:
+    candidate, _ = registered_candidate(tmp_path)
+    unit = generated_unit(tmp_path, candidate, list(articles())[:3])
+    state = register_candidate_unit(tmp_path, candidate, articles(), unit)
+    with pytest.raises(ValueError, match="separate"):
+        materialize_candidate(candidate, state, articles(), tmp_path, tmp_path)
+
+
+@pytest.mark.parametrize("bad", ["native-bytes", "aggregate-bytes", "official-metadata"])
+def test_materialized_candidate_replays_retained_numeric_lineage(
+    tmp_path: Path, bad: str,
+) -> None:
+    candidate, _ = registered_candidate(tmp_path)
+    ids = list(articles())[:3]
+    state = register_candidate_unit(
+        tmp_path, candidate, articles(), generated_unit(tmp_path, candidate, ids[:2])
+    )
+    state = register_candidate_unit(
+        tmp_path, candidate, articles(), generated_unit(tmp_path, candidate, ids[2:]), state
+    )
+    output = tmp_path / "evaluation"
+    snapshot = materialize_candidate(candidate, state, articles(), tmp_path, output)
+    if bad == "native-bytes":
+        np.save(output / state.units[0].cache.file, np.zeros((2, 2), dtype=np.float32))
+    elif bad == "aggregate-bytes":
+        np.save(output / snapshot.caches[0].file, np.full((3, 2), 2, dtype=np.float32))
+        snapshot.caches[0].file_sha256 = file_hash(output / snapshot.caches[0].file)
+    else:
+        (output / candidate.official_metadata_file).write_bytes(b"changed")
+    with pytest.raises(ValueError, match=r"native|metadata"):
+        validate_vectors(snapshot, output)
+
+
+def test_candidate_snapshot_roundtrip_and_frozen_confirmation(tmp_path: Path) -> None:
+    candidate, _ = registered_candidate(tmp_path)
+    state = register_candidate_unit(
+        tmp_path, candidate, articles(), generated_unit(tmp_path, candidate, list(articles()))
+    )
+    output = tmp_path / "evaluation"
+    snapshot = materialize_candidate(candidate, state, articles(), tmp_path, output)
+    adapter: TypeAdapter[
+        CandidateEvaluationSnapshot | DerivedVectorSnapshot | VectorSnapshot
+    ] = TypeAdapter(
+        CandidateEvaluationSnapshot | DerivedVectorSnapshot | VectorSnapshot
+    )
+    restored = adapter.validate_json(canonical(snapshot))
+    assert isinstance(restored, CandidateEvaluationSnapshot) and restored == snapshot
+    moved = tmp_path / "moved"
+    output.rename(moved)
+    validate_vectors(restored, moved)
+    store = seeded_store(moved)
+    try:
+        batch = export_batch(store, manifest(), articles(), policy())
+        import_submission(store, manifest(), articles(), answer(batch))
+        partition = build_partition(store, manifest(), set(articles()), policy(), set())
+        universe = [i for i, p in partition.article_partitions.items() if p == "confirmation"]
+        config = DevelopmentConfig(
+            source_sha256=manifest().source_sha256,
+            partition_sha256=digest(partition),
+            frozen_at=now(), parameters={}, reason="Generated offline wiring fixture.",
+        )
+        freeze_development(store, config, partition)
+        with pytest.raises(ValueError, match="selected in development"):
+            predict(store, partition, restored, config, universe, candidate.slug,
+                    "confirmation", "story", 1)
+        assert store.setting("confirmation-opened") is None
+        selected = config.model_copy(update={
+            "parameters": {"vector_candidates": {candidate.slug: digest(restored)}}
+        })
+        freeze_development(store, selected, partition)
+        result = predict(store, partition, restored, selected, universe, candidate.slug,
+                         "confirmation", "story", 1)
+        assert isinstance(result, RetrievalRun)
+        report = evaluate(store, manifest(), partition, restored, None, retrieval=result)
+        assert any("qrels" in reason for reason in report.blockers)
+        assert not any("vector candidate" in reason for reason in report.blockers)
+        assert store.setting("confirmation-opened") == digest(selected)
+    finally:
+        store.close()
