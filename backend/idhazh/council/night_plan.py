@@ -18,7 +18,6 @@ run finds a gap because finding the gap is how it picks its work.
 
 from __future__ import annotations
 
-import argparse
 import json
 from collections.abc import Sequence
 from datetime import date, timedelta
@@ -29,7 +28,9 @@ from pydantic import TypeAdapter, ValidationError
 
 from idhazh import config
 from idhazh.contracts.base import DateStamp
+from idhazh.contracts.council_events import CouncilProgram, NightPlanned
 from idhazh.contracts.knobs.council import CouncilConfig
+from idhazh.council import event_log, outcome
 from idhazh.council.registry import tenants
 from idhazh.council.tenancy import Tenant
 
@@ -55,9 +56,8 @@ def a_date(given: str, *, what: str) -> DateStamp:
         stamped = str(_A_DATE.validate_python(given))
         date.fromisoformat(stamped)
     except (ValidationError, ValueError) as error:
-        raise SystemExit(
-            f"{what} must be a YYYY-MM-DD date, and '{given}' is not: {error}"
-        ) from error
+        event_log.failed(error, refused=True)
+        raise SystemExit(outcome.CouncilExit.REFUSED) from error
     return stamped
 
 
@@ -80,8 +80,7 @@ def window_before(council: CouncilConfig, *, tonight: DateStamp) -> tuple[DateSt
         last - timedelta(days=council.repair_window_nights - 1),
     )
     return tuple(
-        (floor + timedelta(days=offset)).isoformat()
-        for offset in range((last - floor).days + 1)
+        (floor + timedelta(days=offset)).isoformat() for offset in range((last - floor).days + 1)
     )
 
 
@@ -110,7 +109,7 @@ def plan_the_night(
         for night in host.nights_outstanding(window=window):
             if night not in asked:
                 raise SystemExit(
-                    f"'{host.judge_id}' says it is behind on {night}, which is not one of "
+                    f"'{host.judge_id}' named a date outside "
                     f"the {len(window)} nights the council asked it about. A tenant answers "
                     "inside the window it was handed."
                 )
@@ -119,7 +118,11 @@ def plan_the_night(
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    return outcome.run(CouncilProgram.PLAN, lambda: _main(argv))
+
+
+def _main(argv: list[str] | None = None) -> int:
+    parser = outcome.Parser(description=__doc__)
     parser.add_argument("--config-root", type=Path, default=Path("config"))
     parser.add_argument(
         "--tonight",
@@ -144,15 +147,19 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     planned: tuple[DateStamp, ...]
+    judges: int | None = None
     if str(args.dispatched):
         planned = (a_date(str(args.dispatched), what="the dispatched date"),)
     else:
         settings = config.load(args.config_root)
+        event_log.install(settings.app.logging.level.value)
+        judges = len(settings.council.running())
         planned = plan_the_night(
             settings.council,
             tonight=a_date(str(args.tonight), what="--tonight"),
             hosted=tenants(settings.council.running(), app=settings.app, council=settings.council),
         )
+    event_log.emit(NightPlanned(dates=planned, judges=judges))
     print(f"dates={json.dumps(list(planned), separators=(',', ':'))}")
     return 0
 

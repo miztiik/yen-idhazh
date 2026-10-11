@@ -102,8 +102,7 @@ def test_a_platform_that_handed_over_nothing_stops_the_step() -> None:
     string rather than as a missing argument - so this is the shape the runner
     actually produces when the expression resolves to nothing.
     """
-    with pytest.raises(SystemExit):
-        main(["--platform-run-id", ""])
+    assert main(["--platform-run-id", ""]) == 2
 
 
 def test_the_type_the_mint_is_held_against_is_the_one_the_contracts_use() -> None:

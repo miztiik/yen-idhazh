@@ -1,8 +1,8 @@
-# Summary fidelity judge
+# Plan 65 - Summary fidelity judge
 
 **Last Updated**: 2026-10-11
-**Level**: 5 (CLAUDE.md section 6). Row #3 declares a persisted shape, approved as P1 and amended by P13; every other row states its own level.
-**Status**: drafted 2026-10-11 from the drift-review plan of 2026-10-10, whose 16 review changes the owner approved (Table R). The owner then ruled to stop the drift review, to store every check in a ledger under state/raw/ in parquet, and to run the work as a judge in the LLM council. The owner ruled P1 to P19 on 2026-10-11 (P12 deferred to row #8's replay), ruled E1, F1 and G1, ruled that determinism is not an expectation (C10), and dropped rows #10 and #11 (D3). **Hold (owner, 2026-10-11): the owner disapproved judging per site** - the judge must judge summary quality across the digest - and the ledger is drift-evals. The hard look the owner asked for is done: a research survey (TODO/20261011-summary-quality-metrics-research-record.md) and Andre's and Fowler's reviews (TODO/20261011-summary-fidelity-judge-review-record.md). Section 4 proposes the redesign; P20 to P38 await the owner, and rows #2 to #14 are rewritten once they are ruled. Table Q tracks every open request. Plan 64 (TODO/20261011-64-council-follows-gardener-plan.md) is delivered separately; this plan meets it only where the judge registers (Q35). **To decide, read only this Status, Section 4 and Table P items P20 to P38**: rows #2 to #14 in Section 2 are the per-site design on hold, and the research and review records are the evidence those items cite. No row started.
+**Level**: 5 (CLAUDE.md section 6). Row #3 declares a persisted shape, approved as P1 and amended by P13, and row #23 (plan 36's flag flip) is the first change to a published day; every other row states its own level.
+**Status**: plan 65 since 2026-10-11 (it was the summary-fidelity-judge plan). Drafted 2026-10-11 from the drift-review plan of 2026-10-10 (Table R). The owner ruled to stop the drift review, to store every check in a ledger under state/raw/ in parquet and to run the work as a judge in the LLM council, ruled P1 to P19 (P12 deferred to row #8's replay), E1, F1 and G1, and ruled that determinism is not an expectation (C10); rows #10 and #11 were dropped (D3). **Hold (owner, 2026-10-11): the owner disapproved judging per site**, and the ledger is drift-evals. On 2026-10-11 the owner also moved plan 36, the summary-quality autotune plan, into this plan, because both target the same topic: its full text is Section 5, and its rows are #16 to #28, each held until its question is ruled. The research record (TODO/20261011-summary-quality-metrics-research-record.md) and the review record (TODO/20261011-summary-fidelity-judge-review-record.md) are the evidence; Section 4 carries their conclusions. **Every open decision is asked one at a time, in the order of Table QQ**, with its trade-offs; rows are rewritten once the questions that hold them are ruled. Plan 64 (TODO/20261011-64-council-follows-gardener-plan.md) is delivered separately; this plan meets it only where the judge registers (Q35). Table Q tracks every request. No row started.
 
 ## 0. Operating contract
 
@@ -12,12 +12,12 @@ Table A - operating contract
 
 | # | Field | Value |
 | --- | --- | --- |
-| A1 | Why this plan exists | The weekly drift review compares per-site medians against fixed percentage thresholds. A median jumps between two kinds of page when their shares cross one half, so a change in a site's mix of story types reads as drift (issue #1270); the thresholds ignore sample size and per-site spread; every result lives only in a GitHub issue that nothing can query; and the review runs in a workflow of its own, outside the council where the project's judges run. |
-| A2 | Hard scope - in | - The drift review, its workflow and its settings are deleted (row #1)<br>- The judge's settings in a config file of its own, every number bounded, and site identity: the host, listed multi-tenant hosts, declared page types (row #2)<br>- The judge's ledger under state/raw/ and state/compact/, enrolled for compaction and retention, its tenant module, and its council entry, paused (row #3)<br>- Measures declared in the settings file and tested by kind, with a registry that refuses a bad declaration before any check runs (row #4)<br>- Six measures, each with a p-value: article count (row #5), unusually short articles and page furniture (row #6), article length, copied phrases and faithfulness (row #7)<br>- One false-discovery step per judged date, and a replay that measures false crossings and detection (row #8)<br>- The switch: the judge's council entry turns active (row #9)<br>- The stored checks on a console page (row #12)<br>- An all-sites comparison and a combined-measures check (row #13)<br>- A long-baseline comparison (row #14) |
+| A1 | Why this plan exists | The weekly drift review compares per-site medians against fixed percentage thresholds. A median jumps between two kinds of page when their shares cross one half, so a change in a site's mix of story types reads as drift (issue #1270); the thresholds ignore sample size and per-site spread; every result lives only in a GitHub issue that nothing can query; and the review runs in a workflow of its own, outside the council where the project's judges run. Plan 36's autotune design for the same summaries (Section 5) planned fitted floors, a fluency judge and a publish gate beside it, so the owner moved it into this plan on 2026-10-11, and one plan now answers each question once. |
+| A2 | Hard scope - in | - The drift review, its workflow and its settings are deleted (row #1)<br>- The judge's settings in a config file of its own, every number bounded, and site identity: the host, listed multi-tenant hosts, declared page types (row #2)<br>- The judge's ledger under state/raw/ and state/compact/, enrolled for compaction and retention, its tenant module, and its council entry, paused (row #3)<br>- Measures declared in the settings file and tested by kind, with a registry that refuses a bad declaration before any check runs (row #4)<br>- Six measures, each with a p-value: article count (row #5), unusually short articles and page furniture (row #6), article length, copied phrases and faithfulness (row #7)<br>- One false-discovery step per judged date, and a replay that measures false crossings and detection (row #8)<br>- The switch: the judge's council entry turns active (row #9)<br>- The stored checks on a console page (row #12)<br>- An all-sites comparison and a combined-measures check (row #13)<br>- A long-baseline comparison (row #14)<br>- Plan 36's scope, moved here on 2026-10-11 (Section 5): fitted floors, its stored contracts and eval-row columns, a fluency judge, a publish gate on absolute lines and its flag flip, console quality bands with a withhold panel, a rejects ledger with a corpus fence, and its retro guards (rows #16 to #28), each held until its question in Table QQ is ruled |
 | A3 | Hard scope - out | Table B |
 | A4 | ESCALATE triggers | Table C |
 | A5 | Chosen strategy | The owner-supplied blueprint of 2026-10-10 with the 16 review changes the owner approved on 2026-10-10 (Table R), built from the first row as a tenant of the LLM council (docs/architecture/publishing/llm-council.md), never as a stage of drift.yml that later moves (P8). Reviewed by Fowler (contracts, structure, process safety) and Andre (metric and evaluation design). |
-| A6 | Execution | autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4. Rows #3 to #8 run in order because each edits the judge's settings file, tenant module, tests or doc; rows #5 to #7 each need only row #4, but share the settings file, the declaration contract and the judge's page. Row #3 waits for the council plan's row 'Judges carry a status and a model need'. Rows #12 and #13 can run side by side; row #14 follows row #13, whose files it shares. |
+| A6 | Execution | autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4. Rows #3 to #8 run in order because each edits the judge's settings file, tenant module, tests or doc; rows #5 to #7 each need only row #4, but share the settings file, the declaration contract and the judge's page. Row #3 waits for the council plan's row 'Judges carry a status and a model need'. Rows #12 and #13 can run side by side; row #14 follows row #13, whose files it shares. Rows #16 to #28 keep plan 36's own order and dependencies (Section 5, plan 36 section 0d), renumbered in Table D. |
 
 ### Hard scope - out
 
@@ -74,6 +74,22 @@ Table D - rows
 | 12 | The stored checks on a console page | 9 | I | PENDING | - | - | - |
 | 13 | All-sites comparison and combined-measures check | 9 | I | PENDING | - | - | - |
 | 14 | Long-baseline comparison | 13 | J | PENDING | - | - | - |
+| 16 | Plan 36 row #1: extract the fit core, direction-parameterised | plan 34's fit core (on main: backend/idhazh/similarity/fit.py) | K | COLLAPSED (owner, 2026-10-11, QQ3: this judge's nightly test replaces plan 36's fitted floors) | - | - | - |
+| 17 | Plan 36 row #2: the two contracts and the per-metric knob block, inert | 16 | L | COLLAPSED (owner, 2026-10-11, QQ3: this judge's nightly test replaces plan 36's fitted floors) | - | - | - |
+| 18 | Plan 36 row #3: EvalRow gains publish_decision and withheld_reason (its geval column dropped by QQ4) | plan 35's EvalRow changes (on main since 2026-09-24) | K | PENDING (held: QQ12) | - | - | - |
+| 19 | Plan 36 row #4: the fold | 17, 18 | M | COLLAPSED (owner, 2026-10-11, QQ3: this judge's nightly test replaces plan 36's fitted floors) | - | - | - |
+| 20 | Plan 36 row #5: the fit and the faithfulness seed | 16, 17, 19 | N | COLLAPSED (owner, 2026-10-11, QQ3: this judge's nightly test replaces plan 36's fitted floors) | - | - | - |
+| 21 | Plan 36 row #6: G-Eval fluency judge in the council | 18 | L | COLLAPSED (owner, 2026-10-11, QQ4: the summarizer grading its own fluency is replaced by the sampled key-fact check, rows #29 to #31) | - | - | - |
+| 22 | Plan 36 row #7: the veto-chain publish gate, record-only | 18 (the fitted bands it read are dropped by QQ3; it reads fixed lines only) | O | PENDING (held: QQ12) | - | - | - |
+| 23 | Plan 36 row #8: flip the flag (ESCALATE, Level 5) | 22 | P | PENDING (held: QQ12) | - | - | - |
+| 24 | Plan 36 row #9: console quality bands and the withhold panel (its fitted-floor lines dropped by QQ3) | 9, 22 | P | PENDING (held: QQ14) | - | - | - |
+| 25 | Plan 36 row #10: measure a real G-Eval call | 21 | M | COLLAPSED (owner, 2026-10-11, QQ4, with row #21) | - | - | - |
+| 26 | Plan 36 row #11: confirm coherence runs in assemble | plan 35's coherence scorer (scoring since 2026-09-24) | K | PENDING (held: QQ24) | - | - | - |
+| 27 | Plan 36 row #12: the rejects ledger and the corpus fence | 18, 22 | P | PENDING (held: QQ13) | - | - | - |
+| 28 | Plan 36 row #13: retro of plan 34's latent gaps and the shared space-trap guard, now shared with the key-fact judge (row #30) | plan 34, 30 | Q | PENDING (held: QQ25) | - | - | - |
+| 29 | The digest run samples 30 scored summaries a day across its runs and keeps their article text for 30 days | - | R | PENDING (shape and ledger name: QQ10, QQ11; Level 5: committed article text, a CLAUDE.md section 0a exception the owner approved in QQ4) | - | - | - |
+| 30 | The key-fact judge: completeness and conciseness of the sampled summaries, with the summarizer's own model, as its own council judge that runs the model | 29 | S | PENDING (shape: QQ10) | - | - | - |
+| 31 | The pilot: summaries with facts removed on purpose; the key-fact scores join the alarm only if the check catches them, else the judge model moves to Gemma 4 E4B | 30 | T | PENDING | - | - | - |
 
 ## 2. Rows
 
@@ -584,7 +600,38 @@ Table V2 - rejected alternatives
 
 ## 3. Owner rulings
 
-Table P - owner rulings: P1 to P19 ruled on 2026-10-11; P20 to P38 pending
+Table QQ - the open decisions, asked one at a time in this order (each with its trade-offs in the CLAUDE.md section 0c format; a ruling is written into Table P and here before the next question is asked)
+
+| # | Question | Decides | Depends on | Status | Ruling |
+| --- | --- | --- | --- | --- | --- |
+| QQ1 | Unit of judgment: what the judge compares night to night - each site, the whole digest per production model, or the digest plus a per-source pointer | P20; rows #2 and #4 to #14 | - | Ruled 2026-10-11 | A1: the whole digest, per production model series; article length and source only adjust the comparison and are never judged. The judge reads every scored summary and samples nothing itself (Q44) |
+| QQ2 | What is judged: which metrics decide drift, which are only watched as behaviour, and which are only shown | P21; Table RA | QQ1 | Ruled 2026-10-11 | A1: faithfulness (the average and the shares under 0.50 and 0.80), unsupported numbers and dropped hedges are judged; loops and too-short summaries wait paused until their base rates are known; copying and summary length are watched as behaviour; coverage, coherence and the input mix are shown only; article length and source only adjust (Table RA) |
+| QQ3 | Plan 36's fitted floors (a 5th-percentile floor per metric, refitted daily): replace them with this judge's nightly test, keep both, or keep the floors as the alarm | Rows #16, #17, #19 and #20; part of row #24 | QQ2 | Ruled 2026-10-11 | A1: this judge's nightly test replaces plan 36's fitted floors; rows #16, #17, #19 and #20 collapse, the floor lines leave row #24, and the gate (row #22) reads fixed lines only |
+| QQ4 | Fluency as plan 36 designs it (the summariser grades its own fluency) against a sampled key-fact judge for completeness and conciseness, or both | Rows #21 and #25, the geval column of row #18; P32 (first part) | QQ2 | Ruled 2026-10-11 | A1 B1 C3. The digest run keeps the article text of the day's sampled summaries in a small ledger, deleted after 30 days, and the judge reads it the next night (a CLAUDE.md section 0a exception, approved). The summarizer's own model lists each article's key facts before it sees the summary, then marks which facts the summary holds (completeness) and which summary sentences carry one (conciseness); if the pilot shows it overlooking removed facts, the check moves to Gemma 4 E4B. 30 summaries a day, a config number. Plan 36's self-graded fluency is dropped (rows #21 and #25 collapse; row #18 loses geval). Rows #29 to #31 |
+| QQ5 | The nightly test: the recency-weighted last 7 days against the days before, whole days re-dealt, values adjusted for article length and source | P22 | QQ1, QQ2 | Ruled 2026-10-11 | A1, on the owner's condition that it stays configurable: the recency-weighted last week against the baseline, whole days reshuffled, one test for every member. Every number is a setting in config/judges/summary-fidelity-judge.json (RC): recent_days, baseline_days, recency_lambda 0.15 (0 makes a flat week), min_day_rows 100, the reshuffle settings. Another test type, such as a chart that adds up small daily slips, can join later as a module a declaration selects (P13) |
+| QQ6 | Baseline length: 28 days, 56 days with a gap, or 14 days | P22 (RC2) | QQ5 | Asked 2026-10-11 | - |
+| QQ7 | False-discovery rate: 0.05, 0.01 or 0.10 | P23 | QQ5 | Open | - |
+| QQ8 | The composite: two combined rows (quality worse; something changed) beside every metric's own row, one signed score, or no composite | P24 | QQ2, QQ5 | Open | - |
+| QQ9 | Weights and day-to-day correlation settings: start from reader harm, tune on injected faults, a person commits them | P25 | QQ8 | Open | - |
+| QQ10 | The stored row: fields and key of the drift-evals ledger, a persisted shape | P26 | QQ1 to QQ9 | Open | - |
+| QQ11 | The ledger name drift-evals against the owner's 2026-09-27 naming rule | P29 | QQ10 | Open | - |
+| QQ12 | Plan 36's publish gate: a veto chain on absolute lines, record-only first, a stub-length pre-filter, then the flag flip | Rows #22 and #23 | QQ3 | Open | - |
+| QQ13 | Plan 36's rejects ledger and corpus fence: register state/rejects/ as a ledger, its 30-day retention, and no history rewrite outside the gardener's history job | Row #27 | QQ12 | Open | - |
+| QQ14 | One console home for this judge's rows and the withhold panel: the Model page or the Judgement page | Rows #12 and #24; P5 | QQ3, QQ12 | Open | - |
+| QQ15 | The faithfulness instrument: sentence-level scoring, entity and date checks, per-column stamps and a replaceable scorer - inside plan 65 or a plan of its own | P31, P38; row #18 | QQ2 | Open | - |
+| QQ16 | A second faithfulness checker: a trial after QQ15, every item now, or never | P32 (second part) | QQ15 | Open | - |
+| QQ17 | Per-source extraction health: who sees one source's extraction breaking | P34 | QQ1 | Open | - |
+| QQ18 | The one-year comparison: deferred until a year of history exists, or a row now | P28 | QQ5 | Open | - |
+| QQ19 | Accepting a known change so that it stops reading as drift, and whether a prompt or runtime change starts a new series or only labels the crossings inside its window (P20's last clause) | P35; P20 (last clause) | QQ5 | Open | - |
+| QQ20 | Drop the statistics library extra (scipy) that the redesign no longer needs | P27 | QQ5 | Open | - |
+| QQ21 | Drop the switch row's peak-memory observation | P30 | - | Open | - |
+| QQ22 | Correct the evaluation persona's line that calls a model judge a non-goal | P36 | - | Open | - |
+| QQ23 | Move the request tracker to a standing file | P37 | - | Open | - |
+| QQ24 | Plan 36's coherence-placement row: keep the confirmation, or collapse it because coherence is already scored every day | Row #26 | QQ2 | Open | - |
+| QQ25 | Plan 36's plan-34 retro row: keep the space-trap and thinking-off guards for the content-similarity judge and the key-fact judge (row #30) | Row #28 | QQ4 (ruled) | Open | - |
+| QQ26 | Plan 36's execution approval of 2026-09-19: carry it to rows #16 to #28, or hold every row until plan 65 is approved as a whole | Rows #16 to #28 | QQ1 to QQ25 | Open | - |
+
+Table P - owner rulings: P1 to P19 ruled on 2026-10-11; P20 to P38 asked one at a time through Table QQ, each marked when ruled; P39 on 2026-10-11
 
 | # | Question | Ruling | Evidence | Rows |
 | --- | --- | --- | --- | --- |
@@ -607,9 +654,9 @@ Table P - owner rulings: P1 to P19 ruled on 2026-10-11; P20 to P38 pending
 | P17 | Combine weights: scored only on the replay's injected slips and reshuffled dates, never on live crossings, and fixed before any night they judge; the replay prints the best weights and a person commits them; an autotune loop never writes the settings file, and an automatic loop would file damped, clamped rows in a ledger of its own, at Level 5, not built here (F2.2, F2.6) | Approved | Weights chosen this way move detection power, never the false-crossing rate, because the p-value comes from the same re-deals whatever the weights; weights fitted on live crossings would let the alarm choose what it alarms on | 8, 13 |
 | P18 | The reading budget counts new stretches: a typical night is the mean number of new stretches per judged date after the first seven; the count is split by check, and a check that crosses on reshuffled dates more often than false_discovery_rate is fixed first; false_discovery_rate 0.01 stays the second lever (M1.5). C5 would read: "No stop: the row splits the count by check, fixes a check that crosses too often on reshuffled dates, then sets false_discovery_rate to 0.01 and replays again before the switch; only a typical night still over the budget is reported, as a finding with options, never as a veto" | Approved | One real change stays in the recent window seven nights, so a count of crossings per night counts it seven times; in simulation, lowering the rate first removed 3.4 crossings a night, 2.7 of them real (Andre, 2026-10-11) | 8 |
 | P19 | Outside this plan: correct the evaluation persona's file, .github/agents/andre.agent.md, which says this pipeline runs "pinned and deterministic so a re-run is a re-run" | Approved, as one small commit of its own | The owner ruled that determinism is not an expectation, and determinism.md says "Determinism is not a property a summarizer needs"; a persona that expects a repeat would review every later plan against it | none |
-| P20 | Unit of judgment: the whole digest, per production model series with per-column instrument keys (P14); a prompt or runtime change labels the crossings inside its window rather than starting a series; sites, article count, unusually short, page furniture and article length are no longer judged, and article length and source become covariates | Pending; recommended: approve | Per-site cells are too small to test, and the one summariser-side change on record moved inside sources: the 99 sources present in both weeks moved -0.101 against -0.103 overall (review record, Andre 1.1); the research treats length, source and page type as covariates (research record 7.3); splitting a series on every input would blind the judge 13 nights after each change, about every 9 days | 3, 4, 7, 15, 8, 13, 12 |
-| P21 | The judged set of Table RA: faithfulness (an index and two shares), unsupported numbers and dropped hedges judged; copying and summary length watched as behaviour; coverage, coherence and the input mix as diagnostics; loops and too-short summaries paused until their base rates are known. Amends P13: each declaration gains role, statistic, line, adjust_by and rho, and the kinds become statistics tested by one module | Pending; recommended: approve | LLM-era frameworks judge faithfulness, completeness and conciseness; fluency is near ceiling; adjacent-sentence cosine and top-20-word coverage are unvalidated (research record 1.2 and 2.5); no column measures completeness or conciseness today (P32) | 4, 7, 15 |
-| P22 | The test: a recency-weighted 7-day window (recency_lambda 0.15) against the 28 days before it, whole days re-dealt with one deal for every member, widened for each member's day-to-day correlation (rho, proposed by the replay and committed by a person), on values adjusted for length band and source with the raw value stored beside; days under 100 rows left out | Pending; recommended: approve | It held its false rate at every baseline length simulated, and 0 of 8 stable real nights crossed; control limits taken from a reference window alone crossed 4.5 to 53 times their nominal rate in simulation and on 7 of the same 8 real nights; a 56-day reference would span every pipeline regime on record (review record, SP4) | 7, 15, 8 |
+| P20 | Unit of judgment: the whole digest, per production model series with per-column instrument keys (P14); a prompt or runtime change labels the crossings inside its window rather than starting a series; sites, article count, unusually short, page furniture and article length are no longer judged, and article length and source become covariates | Approved 2026-10-11 through QQ1 (A1), except its clause on prompt and runtime changes, which QQ19 asks | Per-site cells are too small to test, and the one summariser-side change on record moved inside sources: the 99 sources present in both weeks moved -0.101 against -0.103 overall (review record, Andre 1.1); the research treats length, source and page type as covariates (research record 7.3); splitting a series on every input would blind the judge 13 nights after each change, about every 9 days | 3, 4, 7, 15, 8, 13, 12 |
+| P21 | The judged set of Table RA: faithfulness (an index and two shares), unsupported numbers and dropped hedges judged; copying and summary length watched as behaviour; coverage, coherence and the input mix as diagnostics; loops and too-short summaries paused until their base rates are known. Amends P13: each declaration gains role, statistic, line, adjust_by and rho, and the kinds become statistics tested by one module | Approved 2026-10-11 through QQ2 (A1) for the judged set and the four roles; the declaration fields it adds for the test (rho, one test module) are decided with QQ5 and QQ9 | LLM-era frameworks judge faithfulness, completeness and conciseness; fluency is near ceiling; adjacent-sentence cosine and top-20-word coverage are unvalidated (research record 1.2 and 2.5); no column measures completeness or conciseness today (P32) | 4, 7, 15 |
+| P22 | The test: a recency-weighted 7-day window (recency_lambda 0.15) against the 28 days before it, whole days re-dealt with one deal for every member, widened for each member's day-to-day correlation (rho, proposed by the replay and committed by a person), on values adjusted for length band and source with the raw value stored beside; days under 100 rows left out | Approved 2026-10-11 through QQ5 (A1) for the test, with every number in config as the owner required; the baseline length is QQ6 and rho is QQ9 | It held its false rate at every baseline length simulated, and 0 of 8 stable real nights crossed; control limits taken from a reference window alone crossed 4.5 to 53 times their nominal rate in simulation and on 7 of the same 8 real nights; a 56-day reference would span every pipeline regime on record (review record, SP4) | 7, 15, 8 |
 | P23 | false_discovery_rate stays 0.05 | Pending; recommended: approve | With no change, 0.10 drift readings a month; 0.01 gives 0.03 but loses about 20 points of power on marginal changes (review record, SP6) | 8 |
 | P24 | The composite: every member keeps its own row; two calibrated combined rows enter the same step - quality_worse, the weighted positive parts of the quality members, so an improvement never offsets a harm, and something_changed, a T-squared over the quality and behaviour members; a person reads evaluator check, drift (two consecutive nights), watch or quiet; nothing acts. Amends P15 | Pending; recommended: approve | The 2026-09-07 step was a behaviour change a quality composite must not call worse, yet a person must see it; a signed, correlation-normalised sum lets an improvement cancel a harm; the per-item publish gate stays a veto chain (research record 5 and 7.4; review record, SP5) | 13, 12 |
 | P25 | Weights and rho: start from reader harm - faithfulness 3 across its three rows, unsupported numbers 3, dropped hedges 2; the replay scores candidate weights by their worst detection across an injection library (swapped numbers, entities and dates, negated statements, dropped hedges, truncation, a copied lead, repetition) and proposes rho; a person commits both; a new member lands paused with weight 0 and rho 0. Sharpens P17 | Pending; recommended: approve | Calibration does not depend on the weights, because every p comes from the re-deals; weights fitted on live crossings would let the alarm choose what it alarms on | 8, 13 |
@@ -619,13 +666,14 @@ Table P - owner rulings: P1 to P19 ruled on 2026-10-11; P20 to P38 pending
 | P29 | drift-evals names a kind of thing, which the owner's registry rule of 2026-09-27 forbids ("The value says what the ledger holds, never the kind of thing it is"): keep drift-evals and add a dated exception line to ledger-registry.md, or rename it summary-drift-evals | Pending; recommended: keep drift-evals with the exception line | The owner chose drift-evals on 2026-10-11; the cost is that no other judge can use the name (review record, Fowler 2.5) | 3 |
 | P30 | Drop row #9's peak-memory observation | Pending; recommended: approve | No machine is recorded per unit, so nothing could read it (review record, Fowler 7) | 9 |
 | P31 | A plan of its own, outside this judge: sentence-level faithfulness (each summary sentence against its best article window; the mean, the minimum and the sentences under 0.50 and 0.80), entity and date checks, and per-column instrument stamps, as one eval-row change after a one-day measurement | Pending; recommended: approve, as a separate plan | Scoring the whole summary against each window marks down multi-window articles: a 2-window article scores 0.22 and a 3-window article 0.40 below the same article read whole; about 3 times today's 12.5 scorer-minutes a day (estimate); Level 5; plan 36's 0.50 line must be re-cut on the new score (research record 4; review record, SP3) | - |
-| P32 | Completeness and conciseness: pilot a sampled key-fact judge, never the summariser, on injected omissions before building it, its scores in a ledger of its own; a second faithfulness checker only after P31, as a 100-a-day trial | Pending; recommended: approve the pilot only | The only route to completeness and conciseness, unproven at 9B; it needs the article, which is gone the day after it is summarised (autotune-summary-quality.md, Where each metric runs), so it runs in the digest job or keeps a sample of articles, a carve-out like plan 36's J3 (CLAUDE.md section 0a); 20 to 75 runner-minutes a day (estimate); a second checker adds 1 to 3 GB of memory and a dependency (review record, SP3) | - |
-| P33 | Plan 36: this judge supplies the drift alarms; plan 36 drops its fit and fold rows (1, 2, 4, 5) and its self-judged fluency (rows 6 and 10), keeps the publish gate on absolute lines, the rejects ledger and rows 3, 8 and 13, re-points its console row to this judge, and fixes three stale premises: a fluency leg in an old workflow, a history rewrite in prune.yml that CLAUDE.md section 8 forbids, and an unregistered state/rejects/ that the gardener's sweep would empty (its retention a 30-day exception) | Pending; recommended: approve, as a revision of plan 36 | Plan 36's own correction E1 made every adaptive floor a watch-only fleet alarm, which is this judge's job, and two alarms per metric would disagree; self-judged fluency carries every documented judge bias on a near-ceiling dimension (research record 2.3; review record, Fowler 3 and Andre 6) | - |
+| P32 | Completeness and conciseness: pilot a sampled key-fact judge, never the summariser, on injected omissions before building it, its scores in a ledger of its own; a second faithfulness checker only after P31, as a 100-a-day trial | Approved 2026-10-11 through QQ4 (A1 B1 C3) for the key-fact check, including the owner's approval to commit the sampled article text for 30 days, which row #29 writes into CLAUDE.md section 0a beside plan 36's rejects-ledger exception; the judge model is the summarizer's own for the pilot, not another model as first proposed here. The second faithfulness checker is asked as QQ16 | The only route to completeness and conciseness, unproven at 9B; it needs the article, which is gone the day after it is summarised (autotune-summary-quality.md, Where each metric runs), so it runs in the digest job or keeps a sample of articles, a carve-out like plan 36's J3 (Section 5; CLAUDE.md section 0a); 20 to 75 runner-minutes a day (estimate); a second checker adds 1 to 3 GB of memory and a dependency (review record, SP3) | - |
+| P33 | Plan 36: this judge supplies the drift alarms; plan 36 drops its fit and fold rows (1, 2, 4, 5) and its self-judged fluency (rows 6 and 10), keeps the publish gate on absolute lines, the rejects ledger and rows 3, 8 and 13, re-points its console row to this judge, and fixes three stale premises: a fluency leg in an old workflow, a history rewrite in prune.yml that CLAUDE.md section 8 forbids, and an unregistered state/rejects/ that the gardener's sweep would empty (its retention a 30-day exception) | Withdrawn 2026-10-11: the owner moved plan 36 into this plan (Q41), so its parts are asked as QQ3, QQ4 and QQ12 to QQ14 | Plan 36's own correction E1 made every adaptive floor a watch-only fleet alarm, which is this judge's job, and two alarms per metric would disagree; self-judged fluency carries every documented judge bias on a near-ceiling dimension (research record 2.3; review record, Fowler 3 and Andre 6) | - |
 | P34 | Per-source extraction health: a source-health check in feed-health or item-health, in a plan of its own | Pending; recommended: approve | Row #1 deletes the only per-site extraction checks, and no summary metric sees one source's extraction breaking (RD6) | 1 |
 | P35 | Accepting a known change: later, a person's mark resets one member's baseline; until then a deliberate change that starts no series reads as drift for up to 35 days | Pending; recommended: later, with B2's ledger of marks | The pipeline changed about every 9 days (RD5) | - |
 | P36 | Correct the evaluation persona's line that calls a model judge a project non-goal, which contradicts CLAUDE.md section 1a | Pending; recommended: approve, as one small commit | CLAUDE.md section 1a: "LLM-as-judge is primary evaluation where applicable" | - |
 | P37 | Move Table Q to a standing file, TODO/owner-requests.md, read first and updated in every session | Pending; recommended: approve | A plan-doc is deleted when it closes, and Table Q already tracks other plans' items (review record, Fowler 6) | - |
 | P38 | P31's eval-row change also makes the faithfulness scorer replaceable: the scorer, its pinned revision and its window size are named in config, the eval column gets a name that does not name HHEM, and RC8's test reads the window size from that declaration | Pending; recommended: approve | The owner gave Q15's reason as "we may change the evaluator or something else". The judge side already copes: a replaced scorer starts a new series (P14), and each member names its instrument (RC11). The scorer side does not: hhem.py pins the HHEM model and revision as code constants, the column is named hhem, and CLAUDE.md section 10 asks for model references in config. P31 already restarts the faithfulness series, so doing it there costs no second restart; the rename reaches every reader of the column (Level 5) | P31's plan |
+| P39 | Plan 36's fitted floors (rows #16, #17, #19 and #20, and the floor lines of row #24) are replaced by this judge's nightly test | Approved 2026-10-11 through QQ3 (A1) | Plan 36's own correction E1 left the floors no per-item action: faithfulness's 5th percentile (0.14) sits below the fixed 0.50 line, so each floor became a watch-only alarm on the whole digest, which this judge provides with a known false-alarm rate; the judge already watches the low end through the shares under 0.50 and 0.80 (QQ2) | 16, 17, 19, 20, 22, 24 |
 
 Table Q - every owner request on these plans since 2026-10-10, and where it landed (kept current; an open item is closed only by a ruling, a row or a commit)
 
@@ -650,13 +698,13 @@ Table Q - every owner request on these plans since 2026-10-10, and where it land
 | Q17 | 2026-10-11 | Approve the recommendations of the last review (judge P13 to P19; council P1 to P8) | Done | Both Table P | - |
 | Q18 | 2026-10-11 | The ESCALATE triggers table does not render | Done | Table C's delimiter row had three cells for four columns; F1.5 had an extra cell | - |
 | Q19 | 2026-10-11 | Disapprove site-drift-evals; use the generic name drift-evals | Done | H4.1, row #3, P1 | The contract and its stem follow: DriftEval, drift-eval |
-| Q20 | 2026-10-11 | Judging per site is wrong: judge summary quality - faithfulness, coherence, conciseness and the other standard metrics - and the variance of the metrics in autotune-summary-quality.md, taking good elements from its loop | Proposed | Section 4; P20 to P30 | The owner rules P20 to P30; then rows #2 to #14 are rewritten |
+| Q20 | 2026-10-11 | Judging per site is wrong: judge summary quality - faithfulness, coherence, conciseness and the other standard metrics - and the variance of the metrics in autotune-summary-quality.md, taking good elements from its loop | Proposed | Section 4; P20 to P30 | Asked through Table QQ (QQ1 to QQ11) |
 | Q21 | 2026-10-11 | A hard look at what matters, how we measure it, and what is measured and judged upon | Done | Review record (TODO/20261011-summary-fidelity-judge-review-record.md); Section 4 | Rulings P20 to P37 |
 | Q22 | 2026-10-11 | Which council rows bring the gardener's lifecycle, logging, telemetry and other strengths? | Handed to plan 64 | Plan 64's Table T | Tracked there |
 | Q23 | 2026-10-11 | Survey recent research on news and long-form summary metrics; use what is reasonable instead of a small set | Done | Research record (TODO/20261011-summary-quality-metrics-research-record.md); Section 4 | Instrument changes ruled as P31 and P32 |
-| Q24 | 2026-10-11 | How to make a composite metric that decides | Proposed | Section 4 (the rule); P24, P25 | The owner rules P24 and P25 |
+| Q24 | 2026-10-11 | How to make a composite metric that decides | Proposed | Section 4 (the rule); P24, P25 | Asked through Table QQ (QQ8, QQ9) |
 | Q25 | 2026-10-11 | Keep track of every item so nothing is lost | Done, standing | This table | Update it in every session that touches these plans |
-| Q26 | 2026-10-11 | Plan 36 already designs fleet alarms on the same four metrics (raised by the review, not the owner) | Proposed | P33 | The owner rules P33; then plan 36 is revised |
+| Q26 | 2026-10-11 | Plan 36 already designs fleet alarms on the same four metrics (raised by the review, not the owner) | Superseded by Q41 | Plan 36 is Section 5 of this plan; its parts are QQ3, QQ4 and QQ12 to QQ14 | - |
 | Q27 | 2026-10-11 | The evaluation persona still calls a model judge a project non-goal, against CLAUDE.md section 1a (raised by the review, not the owner) | Proposed | P36 | The owner rules P36 |
 | Q28 | 2026-10-11 | Write the research record's formulas as math that GitHub renders, not invented ASCII such as sqrt | Done | Research record (commit fce0749); this plan's Section 4 (2026-10-11) | The review record is an archive and keeps its ASCII formulas |
 | Q29 | 2026-10-11 | What Display and Display only mean in the research record's table 5.1; what the redesign takes from the research, what it does not, and why | Answered | Research record, under table 5.1 (the terms); review record SP1 row s9 and section 4 of this plan (taken and not taken) | - |
@@ -668,8 +716,16 @@ Table Q - every owner request on these plans since 2026-10-10, and where it land
 | Q35 | 2026-10-11 | The council has its own config, each judge has its own config, and judges register with the council, as the gardener does | Done in design | Plan 64 P18, rows #10, #11 and #1 | This judge's file carries lifecycle_status and runs_model, and its package is summary_fidelity_judge, when this plan's rows are rewritten |
 | Q36 | 2026-10-11 | Record a judge's switch to active in the commit message and docs, not in a test; the gardener may be wrong to use one | Done | Plan 64 P9 declined, E1.5; the gardener's test dropped in #1548, merged 2026-10-11 | - |
 | Q37 | 2026-10-11 | Deliver plan 64 as merged pull requests, with Fowler resolving any ambiguity | Stopped by the owner | Plan 64's Status line; row #10 back to PENDING, nothing built | The session that delivers it needs a checkout that runs the local checks, or the owner's exception to them |
-| Q38 | 2026-10-11 | Plan 64 is delivered by another agent, so focus on this judge only: which documents count, which one to read, and are the inputs of autotune-summary-quality.md already in it? | Answered | Status (what to read); Section 4, Table RE (every element of the design of record and where it landed); P32 gained the article constraint the design of record states | The owner rules P20 to P38 |
-| Q39 | 2026-10-11 | The design of record watches the withhold rate; the redesign covers it only through its two causes (found while answering Q38, not raised by the owner) | Open | Section 4, RE12 | When plan 36's gate stamps its decision on the eval row, declare a withheld_share member, paused |
+| Q38 | 2026-10-11 | Plan 64 is delivered by another agent, so focus on this judge only: which documents count, which one to read, and are the inputs of autotune-summary-quality.md already in it? | Answered | Status (what to read); Section 4, Table RE (every element of the design of record and where it landed); P32 gained the article constraint the design of record states | Asked through Table QQ |
+| Q39 | 2026-10-11 | The design of record watches the withhold rate; the redesign covers it only through its two causes (found while answering Q38, not raised by the owner) | Open | Section 4, RE12 | When the gate (row #22) stamps its decision on the eval row, declare a withheld_share member, paused |
+| Q40 | 2026-10-11 | Rename the plan to include 65: plan 65 | Done | TODO/20261011-65-summary-fidelity-judge-plan.md, titled Plan 65; links updated in plan 64, the research and review records and autotune-summary-quality.md | - |
+| Q41 | 2026-10-11 | Plan 36 targets the same topic: bring its full scope into plan 65 and remove plan 36 | Done | Section 5 holds plan 36's full text; its rows are #16 to #28, each held until its question is ruled; TODO/20260918-36-summary-quality-autotune-plan.md deleted | QQ3, QQ4, QQ12 to QQ14 and QQ24 to QQ26 decide what of it is built |
+| Q42 | 2026-10-11 | Ask every open decision of plan 65 as a question, one at a time, with its trade-offs in the CLAUDE.md section 0c format; P20 to P38 cannot be decided without them | In progress | Table QQ | After each ruling, record it and ask the next open question |
+| Q43 | 2026-10-11 | Does plan 65 include the research data? | Answered | It cites the research record and carries its conclusions in Section 4 and in each decision's evidence; the record stays a file of its own, as the house keeps research records beside their plans | - |
+| Q44 | 2026-10-11 | With A1: "I am assuming we are sampling - if a day ingested 10k items, we are not judging all of them, just a sample size that is config driven" | Answered | About 10,000 addresses are considered a day, but only 148 to 400 summaries a day (327 on average since 2026-09-24) were written and scored. The judge reads every scored summary, because it reads stored scores, runs no model and takes seconds. Sampling stays config-driven where it costs: observability.sample_rate decides which runs the faithfulness scorer scores (1.0 today, whole runs only), and QQ4's LLM judge would take a configured number of summaries a day. Section 4 says so The owner then said the intuition came from the completeness gap: research makes completeness essential, no score measures it, and an LLM judge that could measure it can only see a sample. That sampling belongs to QQ4, with its daily sample size in config | - |
+| Q45 | 2026-10-11 | With A1 for QQ2: "is this what the research papers also suggest?" | Answered | Yes for what today's scores can measure: the research makes faithfulness essential, finds fluency near its ceiling and coherence secondary for short summaries, finds no validation for word-recall coverage or neighbouring-sentence coherence, treats copying and length as properties to watch rather than quality, and treats wrong numbers and dropped hedges as named error types (research record, sections 1.2, 2.1 and 2.6). It also makes completeness essential and conciseness third, which no score measures yet (QQ4), and asks for faithfulness per sentence with entity and date checks (QQ15) | - |
+| Q46 | 2026-10-11 | For future questions, add hints on what comes from the research papers | Done, standing | Every question from QQ3 on carries what the research says, beside each option | - |
+| Q47 | 2026-10-11 | "We can do that even today with the same model or we can ask another model to do it, say 2 random articles to be summarized and checked, in the judge pipeline" | Ruled as QQ4 (A1 B1 C3) | Rows #29 to #31; Table QQ, QQ4 | - |
 
 Table R - the review changes the owner approved on 2026-10-10, and where each lands now
 
@@ -709,6 +765,8 @@ Evidence: TODO/20261011-summary-quality-metrics-research-record.md (76 verified 
 
 In one paragraph: the judge judges the quality of the digest's summaries, per production model series, not each site's articles. Each night it compares the last 7 days, recent days weighted more, with the 28 days before, re-dealing whole days to learn what no change looks like, after adjusting each summary for its article's length band and source. Faithfulness, unsupported numbers and dropped hedges are judged; copying and summary length are watched as behaviour; coverage, coherence and the input mix are shown as diagnostics; article length and source are covariates, never judged. Two combined rows sit beside the members, quality_worse and something_changed, and a person reads one of four levels. Nothing acts.
 
+What the judge reads: every scored summary in its windows; it samples nothing itself. About 10,000 addresses are considered a day, but only about 150 to 400 summaries a day are written and scored, so a 35-day window is about 10,000 to 14,000 stored rows, and the judge's work takes seconds with no model (owner, 2026-10-11, Q44). Sampling stays config-driven where it costs: observability.sample_rate decides which runs the faithfulness scorer scores (1.0 today; whole runs only, never part of a run, docs/concepts/evaluation.md), and any LLM judge takes a configured number of summaries a day (QQ4). A day with fewer than min_day_rows scored rows is left out and stored as thin (RC4).
+
 Table RE - what the redesign takes from the design of record, docs/architecture/publishing/autotune-summary-quality.md (unchanged since 2026-09-29; the owner asked to take its good elements without following it fully, Q20)
 
 | # | The design of record | In this redesign | Where |
@@ -717,15 +775,15 @@ Table RE - what the redesign takes from the design of record, docs/architecture/
 | RE2 | Faithfulness (HHEM) is the one metric reliable enough to withhold a story, at the absolute 0.50 line | Judged three ways: an index, the share under 0.50 (the block line) and the share under 0.80 (the display band) | RA1 to RA3 |
 | RE3 | Coverage, the recall of the article's 20 most-used content words, only watches: low recall can be a faithful abstraction | A diagnostic, never judged: the research found no validation for this kind of recall. Completeness waits for an instrument that measures it | RA12, P32 |
 | RE4 | Coherence, the cosine of neighbouring sentences, is a monitor and never a gate: a repeated sentence reads as coherent | A diagnostic; repetition is judged on its own by repetition_loops, paused until its base rate is known | RA6, RA12 |
-| RE5 | Fluency by G-Eval: the summariser judges its own output, next day, on about 30 summaries | Not built as specified: a model judging its own text favours it, on a dimension already near its ceiling. The sampled judge proposed instead is never the summariser, and it measures completeness and conciseness | P32, P33 |
+| RE5 | Fluency by G-Eval: the summariser judges its own output, next day, on about 30 summaries | Not built: a model judging its own text favours it, on a dimension already near its ceiling. The sampled key-fact check measures completeness and conciseness instead; for its pilot it uses the summarizer's own model, listing the article's key facts before it sees the summary | QQ4, rows #29 to #31 |
 | RE6 | No human labels: each metric is judged against its own rolling distribution | Taken: each member is compared with its own trailing 28 days; no golden or reference set | P22 |
-| RE7 | An adaptive floor per metric, the 5th percentile of a fixed-size rolling histogram, fitted daily, damped, gated and clamped | Not taken: a fitted floor says where the low tail sits, not whether a day moved beyond chance, and limits estimated from a reference window alone crossed 4.5 to 53 times their nominal rate in simulation. The whole-day re-deal test replaces the fit, and plan 36 drops rows 1, 2, 4 and 5 | P22, P33 |
+| RE7 | An adaptive floor per metric, the 5th percentile of a fixed-size rolling histogram, fitted daily, damped, gated and clamped | Not taken: a fitted floor says where the low tail sits, not whether a day moved beyond chance, and limits estimated from a reference window alone crossed 4.5 to 53 times their nominal rate in simulation. The whole-day re-deal test replaces the fit, and plan 36's fitted floors (rows #16, #17, #19 and #20) are dropped (QQ3) | P22, QQ3 |
 | RE8 | The adaptive floors only downgrade or watch; plan 36's correction E1 later made every one a watch-only fleet alarm | Taken: this judge is that alarm. Nothing downgrades or acts; a person reads one of four levels | P24, B2 |
 | RE9 | Faithfulness seeds from the committed HHEM history, so its first day has a baseline | Taken in effect: the judge reads the committed eval ledger, which held 50 scored days when the redesign was reviewed | P22 |
 | RE10 | When the fit stops moving, the council's cadence drops to weekly | Not taken: the judge runs no model and costs one runner job a night | RB7 |
-| RE11 | The publish gate is "a veto chain, never a composite", on absolute lines, behind a flag that first only stamps; an overall number "feeds no action" | Left to plan 36 unchanged. This judge's combined rows only report and feed no action, which the page allows | P24, P33 |
-| RE12 | The withhold rate is itself watched | Covered through its two causes, faith_below_050 and numbers_unsupported. Once plan 36's gate stamps its decision, a member reading that stamp lands paused, so a cause the owner later promotes to block is counted too | RA2, RA4, Q39 |
-| RE13 | Anything that needs the article runs the same day, because article bodies are gone the next day; the council reads committed rows only | Taken: the judge reads committed eval rows only. The completeness pilot needs the article, so it runs in the digest job or keeps a sample | P32 |
+| RE11 | The publish gate is "a veto chain, never a composite", on absolute lines, behind a flag that first only stamps; an overall number "feeds no action" | Plan 36's gate, now rows #22 and #23, decides publication (QQ12). This judge's combined rows only report and feed no action, which the page allows | P24, QQ12 |
+| RE12 | The withhold rate is itself watched | Covered through its two causes, faith_below_050 and numbers_unsupported. Once the gate (row #22) stamps its decision, a member reading that stamp lands paused, so a cause the owner later promotes to block is counted too | RA2, RA4, Q39 |
+| RE13 | Anything that needs the article runs the same day, because article bodies are gone the next day; the council reads committed rows only | Taken: the judge reads committed eval rows only. The key-fact check needs the article, so the digest run keeps the article text of the day's 30 sampled summaries for 30 days, and the check reads it the next night (QQ4) | QQ4, rows #29 to #31 |
 | RE14 | A change to what a column means goes through METRICS_VERSION, never a config knob | Taken: an instrument change starts a new series, and each member names its instrument key | P14, RC11 |
 | RE15 | UniEval was rejected: llama.cpp cannot serve it, and it was never measured | Kept rejected: the research found that such evaluators transfer poorly to LLM summaries | Research record, section 2.1 |
 
@@ -746,7 +804,7 @@ Table RA - what is judged (declared per P13 as amended by P21)
 | RA11 | scored_nulls | evaluator | share of rows missing hhem, coherence or semantic_coverage | none | higher | active | - |
 | RA12 | coverage, coherence, input mix | diagnostic | semantic_coverage and coherence (median, low tail, spread); length-band shares, source composition, extraction_suspect rate | - | - | stored with p, outside the step | - |
 
-Not judged: compression, hhem_full, hhem_delta, score_ms, band, determinism_violation, and fluency as plan 36 specifies it (P33). Completeness and conciseness wait for an instrument (P32). Rows flagged extraction_suspect leave the quality members.
+Not judged: compression, hhem_full, hhem_delta, score_ms, band, determinism_violation, and fluency as plan 36 specifies it (row #21; QQ4). Completeness and conciseness come from the sampled key-fact check (QQ4; rows #29 to #31): its scores land paused and join the alarm once its pilot passes. Rows flagged extraction_suspect leave the quality members.
 
 The rule, as a builder implements it (full form in the review record, section SP5):
 
@@ -807,3 +865,572 @@ Table RD - what the replay on the real record showed (Andre, 2026-10-11)
 | RD4 | Detection over a full week: 5 percent of summaries unfaithful 1.00; 2 percent 0.72; one 10-a-day source unfaithful 0.95; unsupported numbers doubled 0.74; dropped hedges up 3 points 0.29, the weakest |
 | RD5 | The pipeline changed about every 9 days, and every crossing on record traces to a dated change, so a crossing names the inputs that changed inside its window |
 | RD6 | No summary metric sees extraction breaking on one source, and row #1 deletes drift.py's per-site checks; extraction_suspect was 0 on all 50 days (P34) |
+
+## 5. Plan 36's scope, moved here on 2026-10-11
+
+The owner moved plan 36 into this plan on 2026-10-11, because both target the quality of the digest's summaries, and deleted its file, TODO/20260918-36-summary-quality-autotune-plan.md; git history keeps it. This section is plan 36's full text, so none of its scope, rulings or rejected alternatives is lost. Read it with three rules:
+
+- **Rows.** Plan 36's row N is this plan's row #(N + 15): plan 36 row #1 is row #16, and plan 36 row #13 is row #28 (Table D). Inside this section, "Row N" means plan 36's row N; "Row 17" in plan 36's Section 0a means plan 34's row 17.
+- **Ids.** The ids in this section - D1 to D8, E1 to E10, G1 to G14, H1 to H8, J1 to J8 and plan 36's numbered decisions - are plan 36's own. Outside this section they are written as plan 36 D1, plan 36 E1 and so on.
+- **Authority.** Plan 36's rulings stand as the owner and its reviewers made them, until a question in Table QQ changes one. Each of rows #16 to #28 is held until the question named beside it in Table D is ruled. Plan 36's execution stamp (execution AUTHORIZED by the owner on 2026-09-19, to begin once plan 34's fit core and plan 35's EvalRow changes were on main) and its zero-context handover are superseded by this plan's Section 0; whether that approval carries to rows #16 to #28 is QQ26.
+
+### Plan 36 - the summariser grades itself, and content decides its future
+
+**Created**: 2026-09-18
+**Depends on**: plan 34's fit core (rows 5-8) merged; plan 35's `EvalRow` churn (rows 6, 7, 8) merged
+**Correction level**: 5 - a model verdict decides what a reader is shown
+
+### Plan 36: start here - the handoff
+
+Every summary already gets a faithfulness score (HHEM) the day it is written. That number sets a
+display badge and nothing else: the item publishes whatever the badge says. This plan closes the loop
+plan 34 opened for the merge line, for summary quality: measure every summary on four axes, fit a band
+to each axis from its own rolling distribution with no human in the loop, and let the band decide
+whether a summary publishes or is withheld - and a withheld summary is absent from the reader's day,
+tracked in item-health telemetry and surfaced in the console, never a reader-facing card (section 0e).
+
+**The one sentence that orders every decision here, taken from plan 34 and still true: withholding a
+story the reader never sees is an invisible loss; publishing a weak summary is a visible, recoverable
+one. Only one of those is invisible.** So the default is to publish, the only failure that withholds is
+a false claim, and the floor that withholds is an absolute line that does not drift.
+
+### Plan 36 section 0 - Operating contract
+
+| Field | Value |
+| --- | --- |
+| Why this plan exists | The autotune is half-built: plan 35 measures four quality axes but nothing acts on them. This fits an adaptive band to each axis and gates publication on it, mirroring plan 34's proven loop. |
+| Hard scope - in | Two new contracts (`MetricScoreDistribution`, `FittedMetricBand`); three `EvalRow` columns; the fold and fit stages; the G-Eval fluency judge in the `LLM-JUDGES` council; the veto-chain publish gate (record-only, then flagged on); the console panels; a G-Eval cost measurement. |
+| Hard scope - out | see table below |
+| ESCALATE triggers | (1) Row 8 flips the flag and withholds items - the first change to a published day, lands alone, owner sign-off. (2) promoting any metric's action from `watch`/`downgrade` to `block` - owner, on a track record. |
+| Chosen strategy | Reuse plan 34 wholesale: extract its fit core direction-parameterised, mint data-parameterised per-metric contracts, host G-Eval on the existing `LLM-JUDGES` workflow, ship the gate record-only behind a flag. Owner + convergence debate, 2026-09-18. |
+| Execution | AUTHORIZED (owner, 2026-09-19); begins once plan 34's fit core and plan 35's EvalRow churn are on main. Parallel N = 4; the running-pool orchestration + 9-PR wave grouping is section 0d Table B. |
+| Intent | Every summary is measured on four axes; an adaptive band is fit to each from its own rolling distribution with no human in the loop; and the band decides whether a summary publishes or is withheld - a withheld item is absent from the reader's day and recorded as an item-health metric surfaced in the console (section 0e). The contracts each row names FOLLOW this intent; when a contract and the intent disagree, the contract changes, not the intent (CLAUDE.md 0d). |
+
+#### Plan 36: Onboarding (cold start - read these first, zero context assumed)
+
+A worker picks up any row with no prior context by reading, in order: [`CLAUDE.md`](../CLAUDE.md) (the
+engineering contract), [`docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md) (how this plan
+runs), [`docs/agents/bootstrap.md`](../docs/agents/bootstrap.md) (which page owns the surface a row
+touches), and [`docs/how-to/run-the-gates.md`](../docs/how-to/run-the-gates.md) (the gate commands). The
+design of record is [`docs/architecture/publishing/autotune-summary-quality.md`](../docs/architecture/publishing/autotune-summary-quality.md)
+(the four metrics, the fold-fit loop, the publish gate). The loop this plan mirrors is the adaptive
+merge line in [`docs/architecture/publishing/autotune-content-similarity.md`](../docs/architecture/publishing/autotune-content-similarity.md)
+- Row 1 extracts its fit core from `backend/idhazh/similarity/fit.py`. Owning pages per surface:
+contracts + schema versioning ->
+[`docs/architecture/contracts/schemas.md`](../docs/architecture/contracts/schemas.md); evaluation + the
+console -> [`docs/concepts/evaluation.md`](../docs/concepts/evaluation.md). Every row's `Files touched`
+is the exact surface; every persisted change stamps its schema `version` + `changelog` (CLAUDE.md 11).
+
+#### Plan 36: Hard scope - out
+
+| What is out | What it costs to leave out | What would bring it in |
+| --- | --- | --- |
+| A composite/normalised single score as the gate | No one "quality number" to gate on | Never for the gate - it dilutes the one reliable signal and erases which axis fired (veto chain instead). A displayed "overall" is Row 7's optional console convenience |
+| Blocking on coverage, coherence or fluency | Only faithfulness can withhold | A calibration showing that metric's low tail means "bad" and the owner promoting its action to `block` |
+| An adaptive percentile as the BLOCK floor | The block binds to the absolute HHEM 0.50 that already ships | Never - a percentile floor drifts up as the summariser improves and silently deletes fine stories |
+| A human holdout set (plan 34 has one) | No hand-marked drift alarm | Nothing - plan 34's holdout was its only floor; plan 36's absolute floors replace it, and the record-only corpus turn is the go/no-go |
+| Human quality labels for calibration | Bands are set from each metric's own distribution | The owner's standing "no human labour" rule forbids it; distributional bands self-correct |
+
+#### Plan 36 section 0a - what plan 34 taught, and what transfers
+
+Plan 34 built the same loop for the merge line. Every load-bearing piece transfers; the table is the map.
+
+| Plan 34 pattern | Transfers to plan 36 as | Change |
+| --- | --- | --- |
+| `StorySimilarityDistribution` - fixed-size 120-slot record, folded daily, never grows (Guardrail #12) | `MetricScoreDistribution` - one per metric | Add a `metric` enum; data-parameterised |
+| `FittedSimilarityThreshold` - per-day row, proposed/damped/applied, gates, clamp, `held_reason` | `FittedMetricBand` - one per metric per day | Add a `metric` enum; two floors (block, watch) not one line |
+| The fit: walk slots from the TOP (NO verdicts), `discard_share`, the `+ bin_width` boundary | The fit: walk from the BOTTOM (low scores) | One direction parameter; the boundary rule is identical and load-bearing |
+| One-directional damping: the risky move is damped, the safe move lands at once | Same invariant | The risky move is RAISING the floor (withhold more = invisible deletion), so the raise is damped |
+| `enabled` flag ships off; the "Apply" row is the first that changes a published day; everything before writes numbers nobody reads | Same | Row 8 is the Apply row; it lands alone |
+| Record-only first: stamp what WOULD happen for a corpus turn before acting | Same | Row 7 stamps `publish_decision` counterfactually; a person reads it once as go/no-go |
+| The `LLM-JUDGES` daily workflow hosts the judge; reads committed data, never article bodies | Hosts G-Eval fluency as another leg | Fluency is summary-only, so committed `digest.json` is enough |
+| Held reasons, min-days/min-samples gates, settle test, step-change guard | Same, per metric | Faithfulness seeds from committed history, so its gates clear on day one |
+| Row 17 measures a real judge call before trusting the leg budget | Row 10 measures a real G-Eval call | Same discipline |
+| The console draws the loop on `/console/judgement/` | Adds the quality panels beside the merge panels | Same route |
+
+#### Plan 36 section 0b - the converged design (owner + debate, 2026-09-18)
+
+| # | Decision | Ruling | Authority |
+| --- | --- | --- | --- |
+| D1 | Instrument all four, or just gate faithfulness? | All four get the full fold/fit/band. The ACTION on crossing is a per-metric config knob: `block` / `downgrade` / `watch`. Fully instrumented; the default action is conservative and promotable. | owner, Andre |
+| D2 | Which metric may withhold? | Faithfulness only. A false claim is the one failure where no story beats the story. Coverage and coherence are confounded (reward extractive / reward repetition), so their low tail can be a GOOD summary - default `watch`. Fluency is next-day, so it structurally cannot gate - `watch`. | Andre, Editor |
+| D3 | Block floor: absolute or adaptive? | BLOCK on the absolute reader-safety lines that already ship and do not drift: HHEM 0.50 and unsupported-number. The adaptive p01/p05 bands DOWNGRADE (faithfulness) or WATCH (others), never block, until the owner promotes one. | Andre, Editor |
+| D4 | A composite score for the gate? | No. Veto chain, like `verdict()`. Averaging dilutes HHEM with confounded signals and erases which axis fired (`doubt-reasons.ts`). A displayed "overall" is console convenience that feeds no action. | Andre, Fowler |
+| D5 | Sane defaults with no human labels? | Faithfulness seeds its band from p01/p05 of the ~6,966 committed HHEM readings, filtered to the current `scorer_version`. Coverage/coherence/fluency are record-only until their distribution fills (~5-10 days), then `downgrade`/`watch`. | Andre |
+| D6 | Damping direction | Damp the RAISE, drop at once: raising a floor withholds/marks more, which is the invisible-deletion direction. Same invariant as plan 34. For a `downgrade` band the asymmetry is weaker (a marker is visible), so the first fortnight measures whether the direction should differ per action. | Andre |
+| D7 | Human holdout? | Killed. Plan 34's holdout was its only floor; the absolute block floors replace it. The safety net is the record-only corpus turn a person reads once before the flag flips - reviewing output, not producing labels. | Fowler |
+| D8 | Withhold rate | WATCHed. A thin-but-true digest beats a full-but-false one, but a rising withhold rate is a bad-summariser day an operator must see, not a digest silently going hollow. | Editor |
+
+#### Plan 36 section 0c - critical-review corrections (2026-09-18)
+
+The 2026-09-18 critical review (Andre, Carmack, Fowler, Editor, each verified against the committed
+code and the 11,140-row ledger) reshaped the gate. These supersede the 0b rows they cite. Two are owner
+decisions (E4, E6) and gate their rows.
+
+| # | Correction | Supersedes | Authority |
+| --- | --- | --- | --- |
+| E1 | **All adaptive floors are WATCH-only (fleet-rate alarms), none downgrades per item.** Measured: faithfulness p05 = 0.14, but the absolute block 0.50 sits at the ~11th percentile, so the adaptive faithfulness floor is BELOW the block and the "downgrade" band is empty by construction - it can never fire. The only per-item faithfulness reader action is the absolute 0.50 block plus the EXISTING 0.80/0.50 display bands. | D1, D3 | Andre (A2) |
+| E2 | **The seed keys on the HHEM instrument sub-identity** (`hhem_rev@rev + weights_digest + window=900/150/anchored`), NOT the whole `scorer_version`. Plan 35 changes `scorer_version` (drops `;lead=`, bumps `metrics-3`->`4`), so a whole-version filter matches 0 of 11,140 rows and day one is empty. Keying on HHEM identity keeps ~8,461 current-geometry rows. | D5 | Andre (A1) |
+| E3 | **Symmetric damping for every watch floor.** "Damp the raise" belonged to plan 34's INVISIBLE-deletion trigger; here the withhold is absolute and undamped, and a watch/downgrade floor is a visible/operator signal, so asymmetric damping only ratchets the alarm down under noise and silences it. Resolve now, not after a fortnight. | D6 | Andre (B1) |
+| E4 | **SUPERSEDED by 0e H1 (2026-09-19): the reader sees nothing; the withhold is an item-health metric, not a card.** Historical rationale (no longer in force): the Editor proposed degrading a below-0.50 item to a link-only card so the loss stayed visible; the owner instead ruled the item ABSENT from the day and the signal an operator-only item-health metric surfaced in the console. | D2, D8 | Editor proposed; superseded by owner (0e H1) |
+| E5 | **State the ~11% steady-state withhold rate; add a length pre-filter.** The 0.50 line is the ~11th percentile, so Row 8 withholds (does not publish) ~11% of items every day, and 24% of that tail is sub-200-word stubs. A length pre-filter (never summarise a stub) and the stated baseline keep D8's alarm from reading 11% as an anomaly. | D8, Row 8 | Andre (B2), Editor |
+| E6 | **SUPERSEDED by 0e H5 (2026-09-19): no 3-model peak - coherence runs in `assemble`, not the `work` shard.** Verified: MiniLM is already loaded in the `plan`/`assemble` jobs (it builds the search index) and the summariser is NOT resident there, so coherence scores in `assemble` reusing the loaded MiniLM - summariser + HHEM + MiniLM never coexist in one process. Historical concern (no longer in force): that coherence would be a third resident model on the busy `work` shard. | Row 8 (35), Row 11 (36) | Carmack; corrected by owner (0e H5) |
+| E7 | **Where the block lands: BEFORE `collapse_same_story`.** Withdrawing a same-story group's representative after the fold silently deletes every duplicate folded into it and trips `DigestDay`/placement count invariants. Drop/relegate before the fold so the next-best duplicate is promoted, and recompute run/vertical/desk counts. `DigestDay`'s `planned = published + failed` gains a `link_only` term (`planned = published + failed + link_only`), counted on `RunManifest`, with a test that the arithmetic closes. **(The `link_only` DigestDay term is SUPERSEDED by 0e H3: it is dropped - a withheld item counts in `failed`, so `published + failed <= planned` already holds and `digest_day.py` is untouched. The `collapse_same_story` placement above still applies.)** | Row 8 | Fowler (A1, B5) |
+| E8 | **The daily judge workflow may be renamed `LLM-JUDGES` -> `LLM-COUNCIL`.** The plan declares ONE dependency line and uses name-agnostic prose ("the daily judge council workflow") everywhere; the runtime (cache key, server start, matrix) is name-independent, so a rename touches only `name:`, `concurrency.group`, and the `_harness.py` expectation in one commit. | 0a, Row 6 | Fowler (B2), Carmack (A6) |
+| E9 | **Row 6 (G-Eval leg) depends on Row 10 (measure the call)**, or the leg timeout is a labelled estimate x generous margin - do not repeat plan 34 row 17's sequencing gap. G-Eval is a STEP inside the existing judge legs (reuse the hot server), not a new job. It is monitor-only and feeds no gate (delete-first justification: an operator drift alarm). | Row 6, Row 10 | Carmack (A3, A5), Fowler (C1) |
+| E10 | **Two guards to add.** (a) REVISED by 0e J6/J7 (2026-09-19): the corpus is NO LONGER byte-identical gate-off vs gate-on - Row 12 fences withheld items out of the corpus on purpose. The anti-Goodhart guard is instead that the fence reads the stamped `publish_decision` (not `hhem`) and `keeps_its_counterweights` stays faithfulness-free; the rejects ledger makes the fence auditable. (b) The G-Eval canary asserts CONTAINMENT (`geval` never reaches `publish_decision`) and that thinking is off, not just that the grammar parsed. | Row 8, Row 12, Row 6/10 | Andre (B3, B4); owner (J6/J7) |
+
+Also corrected: the committed HHEM count is 11,140 (8,461 at the current instrument identity), not ~6,966
+(E2); the design-of-record doc's remaining "block p01" phrasing is reconciled to the absolute-0.50 block
+in the same commit as Row 5.
+
+#### Plan 36 section 0d - round-2 restructure (Fowler + Carmack, 2026-09-18)
+
+The rows were written against 0b (D1-D8) and never reshaped to absorb the 0c corrections (E1-E10). Two
+custom agents verified against the tree: most E-items float in 0c with no row owning them, and the
+single biggest hole is that **E4 turned "withhold" into a link-only CARD but no row builds it** - Row 8
+still says a withheld item "is absent". These corrections bind the rows and add **Row 11**. (Section 0e,
+2026-09-19, later REVERSED the E4 link-only card that G1/G2/G3 describe and repurposed Row 11 - read 0e
+first; the link-only references in this section are historical.)
+
+**Table A - corrections-to-rows (each floating E-item and gap now has an owner)**
+
+| id | Correction | Owner row | What the row must now do |
+| --- | --- | --- | --- |
+| G1 | **E4 link-only card has no builder (the critical hole).** | NEW Row 11 | Build the reader-facing card: add published `DigestViewItem.link_only` (bool, default false) + `withheld_reason` (nullable); the `ITEM_FIELDS` allow-list in `frontend/src/lib/payload/project.ts`; a card component (headline + source + "we could not verify our summary" marker, NO summary); a browser smoke. Ships INERT (field false until Row 8). Level-5 additive published contract. |
+| G2 | E7 placement (the DigestDay `link_only` term is SUPERSEDED by 0e H3). | Row 8 | Drop/relegate a withheld item BEFORE `collapse_same_story` ([assemble.py:2038](../backend/idhazh/assemble.py)) so the next-best duplicate promotes; recompute run/vertical/desk counts. The `DigestDay` `link_only` term + validator rewrite are DROPPED by 0e H3 - a withheld item counts in `failed`, so `published + failed <= planned` holds and `digest_day.py` is untouched. |
+| G3 | E4 makes Row 8's gate self-contradict ("a withheld item is absent"). | Row 8 | The integration gate asserts the withheld item is PRESENT as a link-only card WITHOUT a summary, not absent; Row 8 writes `link_only=true` + `withheld_reason` using Row 11's field. |
+| G4 | E5 length pre-filter + the ~11% baseline float. | Row 8 | Add a length pre-filter (never summarise a sub-200-word stub); state the ~11% steady-state link-only baseline so D8's alarm does not read 11% as an anomaly. |
+| G5 | E10(a) corpus-harvest test. **REVISED by 0e J6/J7:** the fence (Row 12) excludes withheld items from the corpus, so byte-identity gate-off-vs-on no longer holds. | Row 12 | Integration test: an item stamped `publish_decision == withheld` is excluded by `harvest_rows`, and `keeps_its_counterweights` is unchanged (still reads no `hhem`) - the fence reads the decision, not the score. |
+| G6 | E1 all floors WATCH-only; the per-item downgrade band is empty by construction. | Rows 2, 5, 7 | Drop the per-item `downgrade` action; faithfulness's only per-item reader action is the absolute 0.50 block + the existing 0.80/0.50 display bands. Keep the `downgraded` enum value ONLY as a reserved future-promotion member said so on the field, or drop it (G12). |
+| G7 | E2 seed keys on the HHEM instrument sub-identity, not `scorer_version`. | Rows 4, 5 | Row 4 folds faithfulness by the HHEM sub-identity (`hhem_rev@rev + weights_digest + window=900/150/anchored`), not the whole `scorer_version` (plan 35 changes it -> 0 of 11,140 match). Row 5 seeds from that key. |
+| G8 | E3 symmetric damping floats. | Row 5 | Row 5 dec 2 + oracle: symmetric damping for every watch floor (the withhold is absolute+undamped; a watch floor is an operator signal, so asymmetric damping only ratchets the alarm down under noise). |
+| G9 | Row 5 seed is a growing read + a test that walks committed data. | Row 5 | The production seed declares Guardrail #12's escape-hatch (what it reads, why a bounded input cannot answer); the seed TEST uses a bounded fixture, never the committed archive (section 13); cite the PROPERTY ("rows at the current HHEM identity"), never the rotting cardinal 8,461. |
+| G10 | E6 coherence 3-model RAM. **SUPERSEDED by 0e H5 (2026-09-19): no peak - coherence runs in `assemble` where MiniLM is already loaded.** | Rows 4, 5, 11 | Row 11 confirms coherence is wired into `assemble` (not the `work` shard) and takes one cheap RSS reading; no eviction, no timeout bump. Coherence is same-day (in `assemble`, after `work`); its action stays `watch` (never gates). |
+| G11 | E8 rename touch-points; E9 Row 6/10 sequencing. | Rows 6, 10 | If the `LLM-COUNCIL` rename lands, Row 6 edits only `name:`, `concurrency.group`, `_harness.py`. Row 6's leg timeout is a LABELLED estimate x generous margin and does NOT hard-block on Row 10 (E9); Row 10 measures the merged call after. E10(b): Row 6 canary asserts containment (`geval` never reaches `publish_decision`) + thinking off. |
+| G12 | Row 3 dec 1 stale premise; the `downgraded` dead value. | Row 3 | Fix dec 1: a withheld item is ABSENT from the day but recorded in item-health telemetry (0e H1/H2); the `EvalRow` stamp still records every scored item including the withheld. Resolve `publish_decision`: values are `published` \| `withheld`; keep `downgraded` only if reserved for a named future promotion, else drop. |
+| G13 | Row 2 omits the contract fixtures + `export.py` tuple. | Row 2 | Name `tests/fixtures/contracts/<stem>/` fixtures for both new contracts and the `CONTRACTS` tuple + import in `export.py`. |
+| G14 | The design-of-record doc lags the corrections. | Row 5 + Row 8 commits | Widen the reconciliation: `docs/architecture/publishing/autotune-summary-quality.md` drops the faithfulness-downgrades-below-adaptive-floor language (E1), the `block p01` phrasing, and the asymmetric "damp the raise" (E3); the publish-gate section says withhold = absent + item-health telemetry, surfaced in the console (0e H1/H2/H4), NOT a link-only card. |
+
+**Table B - PR-wave grouping (11 PRs across 4 waves; each PR independently green)**
+
+| PR | Wave | Rows | Ships as / why grouped | Depends on |
+| --- | --- | --- | --- | --- |
+| fit-core | 1 | 1 | pure refactor; plan-34 tests are the oracle | 34 fit on main |
+| eval-columns | 1 | 3 | expand-only EvalRow width; `merge=union` carve-out (lands on main before any writer, never branch-stacked) | 35 EvalRow on main |
+| metric-fold-fit | 2 | 2, 4, 5 | all edit `ledger/__init__.py` + share the two new contracts; fold-before-fit; inert until Row 8 | fit-core, eval-columns |
+| geval-leg | 2 | 6 | disjoint island (`quality/geval.py` + the council workflow) | eval-columns |
+| publish-gate | 3 | 7 | backend veto chain, record-only, stamps `EvalRow` | metric-fold-fit |
+| geval-measure | 3 | 10 | MEASURES -> runs alone (`measure.yml` on a clean runner) | geval-leg |
+| coherence-place | 1 | 11 | confirm coherence runs in `assemble` (MiniLM already loaded there); one cheap RSS reading; no peak, no eviction, no timeout bump (0e H5-H7) | 35 coherence scorer |
+| console-panels | 3 | 9 | frontend island on `/console/judgement/`; + the not-published/withhold panel from item-health (0e H4) | metric-fold-fit, publish-gate |
+| apply-gate | 4 | 8 | ESCALATE, owner sign-off, first published-day change; withhold = absent + item-health (0e H1-H3, E7 placement) | publish-gate |
+| rejects-ledger | 3 | 12 | the `state/rejects/` ledger + its prune verb + the corpus fence; reads the stamped `publish_decision` (0e Table C) | publish-gate |
+| plan34-gaps | 4 | 13 | retro plan-34 latent gaps (space-trap re-set, thinking-variant, injection live-test note); the space-trap guard is shared with Row 6's G-Eval | 34 landed, geval-leg |
+
+**Peak pool width 2** (Carmack): Rows 1 and 3 are TWO co-roots from t0, not one width-1 head. The serial
+spine is `1 -> 2 -> 4 -> 5 -> 7 -> 8` (6 deep); the width-1 point is the TAIL (Row 8), by owner mandate.
+Provision 2 workers; `Parallel N = 4` never binds.
+
+**Table C - optimistic-dispatch rule (the CI-idle fix)**
+
+| Edge class | Dispatch base | Why |
+| --- | --- | --- |
+| Disjoint (1 vs 3; 4 vs 6; 5 vs 10; 11 vs 8) | `origin/main`, at once | no shared file (Row 11 is a backend measure utility, Row 8 is `assemble.py`) |
+| Shared-file, shape settled + mechanical (1->2 once `ClampOutcome`/`FitEnd` settle; 4->5 once the `ledger/__init__.py` helper settles) | predecessor's BRANCH tip, pre-merge | shape cannot move; pool never idles on CI |
+| New persisted contract (2->4/5/7) | wait on `main` | the contract shape is exactly what review moves; fold/fit WRITE it |
+| Measuring (6->10) | wait on `main` | Row 10 must call the merged `geval.py`; runs alone anyway |
+| ESCALATE / Level-5 (7->8) | wait on `main` + owner sign-off | first change to a published day; lands alone |
+| EvalRow width vs the external plan-35 widening | HARD wait on `main` (never optimistic) | `state/scores` is `merge=union`; two open widenings stack silently. After any EvalRow merge, census committed shards for a stacked header. |
+
+#### Plan 36 section 0e - owner rulings, 2026-09-19 (supersede 0d G1/G2/G3, refine E6/G10)
+
+The owner reversed the E4 link-only card and set the coherence-RAM approach. User approval supersedes
+the Editor's link-only recommendation and every advisor (CLAUDE.md section 0).
+
+**Table A - the withhold surface (supersedes E4, G1, G2, G3)**
+
+| id | Ruling |
+| --- | --- |
+| H1 | **A withheld item is NOT published - it is ABSENT from the reader's day.** No link-only card, no reader-facing surface. Row 11's link-only card is RETIRED. Rationale: a below-0.50 faithfulness says our prose is untrustworthy; the reader sees nothing rather than a card, and the signal lives on the operator surface. |
+| H2 | **The withhold is a METRIC in item-health telemetry.** A withheld item is `ItemOutcome.failed` with a NEW `FailureCode` member (the summary was written but failed the faithfulness floor) + the `detail`. "Expand columns are necessary" - the enum member is that expansion. The item-health census already feeds the console, so the metric ships with no new persisted reader surface. |
+| H3 | **Row 8 simplifies.** The `DigestDay` `link_only` arithmetic term (old G2) is DROPPED - a withheld item counts in `failed`, so `published + failed <= planned` already holds and `digest_day.py` is not touched. The E7 "drop BEFORE `collapse_same_story`" placement STILL applies (promote the next-best duplicate). |
+| H4 | **The console surfaces the signal (Row 9).** A not-published/withhold panel on `/console/judgement/` reads item-health: the withhold count, the ~11% baseline (E5), and the reason breakdown by `FailureCode` - the operator's view of what the gate withheld and why. |
+
+**Table B - coherence placement: no 3-model peak (owner + verified, 2026-09-19; supersedes the earlier eviction design)**
+
+| id | Ruling |
+| --- | --- |
+| H5 | **No 3-model peak: coherence runs in `assemble`.** MiniLM is already loaded in the `plan`/`assemble` jobs to build the search index, and the summariser is NOT resident there (it lives only in the `work` shard, with HHEM). So coherence scores in `assemble`, reusing the loaded MiniLM - summariser + HHEM + MiniLM never coexist in one process. The sequential-eviction machinery the earlier design feared is unnecessary. |
+| H6 | **Row 11 collapses to a confirmation.** It confirms coherence is wired into `assemble` (not the `work` shard, plan 35 Row 8) and takes one cheap RSS reading in `assemble` (MiniLM + the ROUGE work) to show it fits with headroom. No server-stop step, no two-phase `work` shard, no eviction. |
+| H7 | **The 200 -> 220 shard-timeout bump is RETIRED** - it existed only for the two-pass `work` shard, which is gone. `assemble` absorbs coherence's ~0.16 s/item (a few tens of seconds over a day). Keep a timeout bump only if a separate measurement asks for it; it is not part of this plan. |
+
+**Table C - the rejects ledger (owner, 2026-09-19; adds Row 12)**
+
+| id | Ruling |
+| --- | --- |
+| J1 | **Persist every withheld summary for troubleshooting.** Today a withheld summary's TEXT survives nowhere committed (only the discarded run intermediate); the `EvalRow` keeps the scores + a one-way hash, not the prose - so the gate deletes ~11% of items daily and erases its own evidence. Row 12 adds a committed, fully-sharded ledger: `state/rejects/<YYYY>/<MM>/<DD>/<item_id>.json`, one `RejectRow` per withheld item. |
+| J2 | **What the `RejectRow` carries** (for a person or a bigger model to judge later, never a reader): `title`, `summary` (the failing prose), `source_text` (the sanitised extract the model read), `prompt` (the rendered system + user turns), the failure (`hhem`, `withheld_reason`, `band`, `scorer_version`), the summariser fingerprint (model + decode), identity (`item_id`, `url_key`, `canonical_url`, `source_id`), provenance (`version`, `generated_at`, `run_id`). |
+| J3 | **Source text is committed here - a second carve-out beyond `corpus/` (CLAUDE.md 0a).** The owner authorised it (2026-09-19); the executing PR amends 0a to write BOTH carve-outs - the `corpus/` one (today only cross-referenced from section 8) and `state/rejects/` - so 0a becomes the canonical list (S5 A1). It is sanitised extract (crossed the trust boundary once at extraction, Guardrail #11), stored as data a person or an offline judge reads - never re-fed to a model as instruction. Bounded by J4. |
+| J4 | **Prune prose and source together, tightly: 30 days, config-driven.** A new knob (`finetune.reject_window_days`, default 30 - tighter than the corpus's 60) + its own verb (`retention.prune_rejects`) wired into the retention prune, deleting whole day directories past the window; the history bytes ride `prune.yml`'s force-push on the same schedule. |
+| J5 | **Never served.** `state/rejects/` stays unwired from `payload.ts`, the telemetry projection, the embed/index input, and the `DigestViewItem`/`ITEM_FIELDS` allow-list. The console (Row 9) plots only the aggregate - the rate, the reasons, the withheld-tail score distribution - never the prose or the source. |
+| J6 | **Fence the corpus: never train on a withheld summary.** The harvest reads `items/` directly ([corpus.py:217](../backend/idhazh/corpus.py)), so a withheld summary IS harvested today. Row 12 skips any `Scored` whose `EvalRow.publish_decision == withheld`, placed BEFORE `keeps_its_counterweights` - reading the stamped DECISION, not the raw `hhem`, so `keeps_its_counterweights` stays faithfulness-free (Andre's anti-monitor-selector rule holds). |
+| J7 | **This inverts E10(a) on purpose, and the ledger is the safety net.** E10(a) pinned "corpus byte-identical gate-off vs gate-on"; the fence deliberately breaks that (do not train on what we blocked). The Goodhart risk - training only on high-HHEM prose teaches the model to game HHEM - is mitigated because the ledger makes the fence AUDITABLE: a bigger model or a human reads the withheld tail offline and confirms the floor catches real failures rather than deleting good summaries. E10(a) + G5 + Row 8's gate are revised to match. |
+| J8 | **Replaces the "extend the human label draw" idea.** That would feed withheld items back into the live label queue and muddy the distribution-based autotune (owner). Instead the ledger is the substrate for offline judging (bigger model or human), never reader-facing; the label queue is untouched. |
+
+Note: `state/rejects/` is committed, so the withheld prose lives in the repository (not the digest, not
+the Pages site). If the repository is public it is browsable there for the 30-day window; the prune +
+`prune.yml` force-push bound it. The owner accepts this to have a committed, queryable ledger rather than
+an expiring CI artifact - revisit if the repository's visibility changes.
+
+TODO (a note, not a plan row; distils to `docs/` per distill-a-plan.md): the OFFLINE JUDGE that reads
+the rejects ledger - a bigger model or a person auditing the withheld tail (J7/J8) - is a deferred
+follow-up with no row in this plan. When this plan distils it moves to
+`docs/architecture/publishing/autotune-summary-quality.md` as the named future consumer that makes the corpus-fence
+auditable.
+
+### Plan 36 section 1 - Status Reckoner
+
+Every plan 36 row was PENDING on 2026-10-11, and none had started. The rows now sit in this plan's Table D as rows #16 to #28, with plan 36's dependencies renumbered and the question that holds each.
+
+### Plan 36 section 2 - Row detail
+
+#### Plan 36 row #1 - extract the fit core, direction-parameterised (plan 65 row #16)
+
+- **Scope:** move plan 34's fit arithmetic into a neutral, contract-free logic package both plans call,
+  parameterised on which tail it walks. Behaviour-preserving for plan 34.
+- **Files touched:** new `backend/idhazh/fitting/edge.py` (imports stdlib only; takes a `Sequence[int]`
+  of cost-counts, the band edges, `bin_width`, `previous`, the knobs; returns plain values and a frozen
+  `ClampOutcome`); `backend/idhazh/similarity/fit.py` becomes a thin adapter (Distribution -> primitives
+  -> core).
+- **Acceptance gates:** plan 34's `backend/tests/test_similarity_fit.py` stays byte-for-byte green;
+  new unit tests drive `edge.py` with both `FitEnd.TOP` and `FitEnd.BOTTOM` primitives.
+- **Oracle:** for a built count array, `FitEnd.TOP` returns the upper edge plan 34 returns and
+  `FitEnd.BOTTOM` returns the lower edge; it cannot settle whether the quality direction is
+  semantically right (that is Row 5 against real scores).
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | Extract at the second user; the `+ bin_width` boundary is a reader-facing correctness invariant, so rule-of-three yields | Fowler |
+  | 2 | Direction is one parameter (`FitEnd`), so a caller cannot mismatch walk and returned edge | Fowler |
+  | 3 | `ClampKind` stays a per-Band wire enum; the core returns a neutral `ClampOutcome.kind` each adapter maps | Fowler |
+
+#### Plan 36 row #2 - the two contracts + the per-metric knob block (plan 65 row #17)
+
+- **Scope:** `MetricScoreDistribution` (fixed-size, one file per metric) and `FittedMetricBand` (one
+  row per metric per day), both carrying a `metric: MetricId` enum, plus a per-metric `MetricBandConfig`
+  knob block, `enabled` off. Nothing reads or writes them yet.
+- **Files touched:** `backend/idhazh/contracts/metric_score_distribution.py`,
+  `backend/idhazh/contracts/fitted_metric_band.py` (declares `MetricId`, `ClampKind`, `HeldReason`,
+  `MetricAction`), `backend/idhazh/contracts/knobs/evaluation.py` (the `MetricBandConfig` block),
+  `backend/idhazh/contracts/export.py` + regenerated schemas, `backend/idhazh/ledger/__init__.py` (paths),
+  committed seed distributions, `config/idhazh.json`, `config/appearance.json` if a console knob lands.
+- **Acceptance gates:** contract drift gate; contract tests over the validators (band divides into
+  slots, slot count matches, a date folds once - the plan 34 shapes); a fresh clone runs on the
+  defaults with `enabled` off.
+- **Oracle:** a fitted band without its two floors, or a distribution whose slots miss the grid, is
+  refused; it cannot settle whether the seeded faithfulness floor is a good number (Row 5).
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | One Distribution + one Band contract, data-parameterised by `metric`; adding a metric is an enum member + a config block, not a new contract | Fowler |
+  | 2 | One file per metric under `state/summary-quality/<metric>/`, so the fold-once guard and the input-change archive fire per metric | Fowler |
+  | 3 | `MetricAction` is `block`, `downgrade`, or `watch`; the knob's default is `block` for faithfulness, `watch` for the rest (D2) | Andre, Editor |
+  | 4 | The band carries two floors - a block floor and a watch floor - not one line (D3) | Andre |
+
+- **Rejected alternatives:**
+
+  | # | Option | Why rejected | What it would cost to take | Authority |
+  | --- | --- | --- | --- | --- |
+  | 1 | One shared distribution file for all four metrics | Couples their cadence; a single archive-on-input-change would reset all four when one scorer moves | - | Fowler |
+  | 2 | A `scored-pairs`-style per-item tree | Per-item scores already persist in `EvalRow`; a second copy is a second answer | - | Fowler |
+
+#### Plan 36 row #3 - `EvalRow`: the three new columns (plan 65 row #18)
+
+- **Scope:** add `geval` (fluency 0-1, nullable), `publish_decision` (`published`|`withheld`, default
+  `published`; `downgraded` is a RESERVED future-promotion value that nothing stamps today - E1 makes the
+  per-item downgrade band empty, G6/G12), `withheld_reason` (a `MetricId`-or-`unsupported_number` enum,
+  nullable) to the committed eval ledger. Expand only; nothing writes the decision yet.
+- **Files touched:** `backend/idhazh/contracts/eval_row.py` (+ schema + changelog + version), the
+  read-side tolerance for old shards, the affected tests.
+- **Acceptance gates:** contract drift gate; a fixture read of an old shard that omits all three columns
+  (defaults on read); no positional CSV reader exists (header-keyed).
+- **Oracle:** an old `state/scores` row without the columns validates and reads back `published`; it
+  cannot settle whether the gate ever writes `withheld` (Row 7).
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | The stamp lives on `EvalRow`, not the published item: a withheld item is ABSENT from the day, so it cannot be stamped there, and `EvalRow` records every scored item including the withheld | Fowler |
+  | 2 | `hhem` exists; `coherence`/`semantic_coverage` were added by plan 35 row 8; plan 36 only adds `geval` + the two decision columns | Fowler |
+  | 3 | There is no `coverage` column to fold. Plan 35 row 7 retired it into `DROPPED_CELLS` (it measured the survival of the article's opening, on a different scale), so row 8 named the new one `semantic_coverage` rather than reuse a name committed shards already carry meaning something else | plan 35 row 8, Fowler |
+
+#### Plan 36 row #4 - the fold (plan 65 row #19)
+
+- **Scope:** read one committed day's `EvalRow`s and fold each metric's scores into that metric's
+  fixed-size distribution, one slot each, dropping nothing. Archive and restart a distribution when its
+  scorer version, band edges or slot width moved (plan 34's `inputs_changed`).
+- **Files touched:** new `backend/idhazh/quality/fold.py`, `backend/idhazh/stages/quality_fold.py`,
+  `backend/idhazh/ledger/__init__.py` (append/load for the distribution).
+- **Acceptance gates:** unit tests over a built day of `EvalRow`s and a built distribution; a fold of a
+  date already folded raises; a moved `scorer_version` archives and restarts.
+- **Oracle:** a score lands in the slot whose edge it clears, and a re-fold of one date is refused; it
+  reads one named day file, never the ledger tree (Guardrail #12).
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | The fold reads `EvalRow` one day at a time by date, never the whole ledger | Fowler, Carmack |
+  | 2 | Faithfulness folds only rows under the current `scorer_version` (D5), so p01 is not a mixture artefact | Andre |
+
+#### Plan 36 row #5 - the fit (plan 65 row #20)
+
+- **Scope:** for each metric, walk its distribution from the low tail and write a `FittedMetricBand`
+  row: the block floor (absolute, from config), the watch floor (adaptive p05, damped/clamped/gated),
+  and the held reason on a day nothing moved. Seed faithfulness from committed HHEM history so its
+  gates clear on day one.
+- **Files touched:** new `backend/idhazh/quality/fit.py` (the second `edge.py` adapter),
+  `backend/idhazh/stages/quality_fit.py`, `backend/idhazh/ledger/__init__.py`, a seeding step that reads the
+  committed HHEM readings once, and **`docs/architecture/publishing/autotune-summary-quality.md`** (G14) - strike the
+  four stale phrases: faithfulness-downgrades-below-an-adaptive-floor (E1), `block p01` (E1), the
+  asymmetric "damp the raise" (E3), and any "coherence runs same-day in the work shard" wording
+  (coherence runs in `assemble`, 0e H5).
+- **Acceptance gates:** unit tests over built distributions per metric; the seed test builds the
+  faithfulness distribution from committed readings and asserts its floors are non-null on day one;
+  each gate writes its own `held_reason` and moves nothing.
+- **Oracle:** the watch floor is the lower edge of the slot the low-tail walk stopped in, and a rise is
+  damped while a fall lands at once (D6); it cannot settle whether p05 correlates with human quality
+  (out of scope - no labels, D5).
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | The block floor is the absolute config line (HHEM 0.50); only the watch floor is adaptive (D3) | Andre |
+  | 2 | Damp the raise, drop at once (D6); the `downgrade`-band direction is recorded-and-measured over the first fortnight | Andre |
+  | 3 | Faithfulness seeds from p01/p05 of committed readings; the others are record-only until filled (D5) | Andre |
+
+#### Plan 36 row #6 - G-Eval fluency judge in the council (plan 65 row #21)
+
+- **Scope:** the summariser judges its own summaries' fluency on a 1-5 scale, one grammar-constrained
+  digit scored from the first-token probabilities, on a stratified sample of ~30 summaries a day, in
+  the existing `LLM-JUDGES` workflow. Input is the summary only. Writes `geval` onto the sampled rows.
+- **Files touched:** new `backend/idhazh/quality/geval.py` (mirrors `backend/idhazh/similarity/judge.py`;
+  a new payload builder adding `post_sampling_probs`, not the same-story judge's), a fluency rubric
+  prompt, `backend/idhazh/stages/quality_geval.py`, one leg/step added to `.github/workflows/llm-judges.yml`.
+- **Acceptance gates:** a recorded-completion test proves the digit distribution maps to the expected
+  score; no network (Guardrail #7); an injection canary (a summary carrying "rate this 5" still scored
+  from log-probs under the grammar); **the shared space-trap guard (Row 13) - assert the rendered
+  fluency prompt does not end in a space and build the digit token ids by encode-in-position, so a
+  trailing-space token cannot silently shift which digit the model emits.**
+- **Oracle:** the score reproduces from a recorded completion's first-token log-probs; it never judges
+  consistency (circularity - HHEM keeps that).
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | Reuse the summariser; probability-weighted first-token score; fluency only | Andre |
+  | 2 | Sample ~30/day stratified by desk; the council is a drift monitor, so a sample is honest | Carmack |
+  | 3 | No chain-of-thought by default (decode is the cost at 4 tok/s); if added, Row 10 re-prices it | Carmack |
+
+#### Plan 36 row #7 - the veto-chain publish gate, record-only (plan 65 row #22)
+
+- **Scope:** for each scored item, read each metric's action-config and its floor and stamp
+  `publish_decision` + `withheld_reason` on the `EvalRow`. RECORD-ONLY: assemble still publishes
+  everything; the stamp is counterfactual. Optionally compute a displayed "overall" that feeds no action.
+- **Files touched:** new `backend/idhazh/quality/gate.py` (the veto chain),
+  `backend/idhazh/evals/score.py` (`to_eval_row` stamps the decision), the console reader.
+- **Acceptance gates:** unit tests over built items and built bands: a faithfulness reading below the
+  absolute block floor stamps `withheld`; a reading in the watch band stamps nothing per item (watch is
+  a fleet-rate alarm, not a per-item action - E1); a low coverage stamps nothing under the default
+  `watch`; the bite - flip coverage's action to `block` and the same item stamps `withheld`.
+- **Oracle:** the veto chain stamps the most severe action any metric earned and names the metric that
+  earned it; it changes no published day (record-only).
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | Veto chain, not a composite; the reason names the metric (D4) | Andre, Fowler |
+  | 2 | Record-only first; a person reads the counterfactual withheld list once as go/no-go before Row 8 (D7) | Fowler, Editor |
+  | 3 | A displayed "overall", if built, is labelled a display aggregate that feeds no action | Andre |
+
+#### Plan 36 row #8 - flip the flag - ESCALATE (plan 65 row #23)
+
+- **Scope:** assemble reads the `EvalRow` stamp and acts. A `withheld` (below-absolute-floor)
+  faithfulness item does NOT publish - it is ABSENT from the reader's day, no card, no reader-facing
+  surface (0e H1). The withhold is recorded in item-health telemetry as `ItemOutcome.failed` with a new
+  `FailureCode` (the summary was written but failed the faithfulness floor) + the `detail`, so the
+  operator has the metric and the reason (0e H2). The drop/relegate happens BEFORE `collapse_same_story`
+  ([assemble.py:2038](../backend/idhazh/assemble.py)) so the next-best duplicate promotes (E7). A length
+  pre-filter never summarises a sub-200-word stub (E5). Behind `publish_gate.enabled`, ships off; the
+  first row that changes a published day.
+- **Files touched:** `backend/idhazh/stages/assemble.py` (drop a withheld item before the fold, record
+  the item-health row, recompute run/vertical/desk counts), `backend/idhazh/contracts/item_health.py`
+  (the new `FailureCode` member + schema/version/changelog, 0e H2), `config/idhazh.json`
+  (`publish_gate.enabled` + the stub-length floor, removal condition on the declaring line).
+  `digest_day.py` is NOT touched - a withheld item counts in `failed`, so `published + failed <= planned`
+  already holds (0e H3).
+- **Acceptance gates:** integration over the canary day, built once gate-off and once gate-on, asserting
+  a withheld item is ABSENT from the day and PRESENT in item-health with the new `FailureCode` + detail
+  (0e H2), and the `published + failed <= planned` invariant still closes; browser smoke that the day
+  renders with an item withheld and when the band tree is absent. (The corpus fence + its test move to
+  Row 12; the old byte-identity assertion is retired, 0e J6/J7.)
+- **Oracle:** with the flag off, every published day is byte-identical to today; with it on, a
+  below-absolute-floor item is absent from the day and carries an item-health row naming why, and the
+  story's next-best duplicate is promoted; it cannot settle the editorial cost of a thin day (D8 - the
+  not-published rate is watched on the console at the stated ~11% baseline, E5).
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | Lands alone, after a corpus turn of record-only review; owner sign-off (Level 5) | owner, Fowler |
+  | 2 | Only faithfulness withholds; coverage/coherence are watch-only (E1) and never withhold; the owner sets the absolute floor and permits withholding (reader-safety boundary) | Editor, owner |
+
+#### Plan 36 row #9 - console: the quality bands (plan 65 row #24)
+
+- **Scope:** add panels to `/console/judgement/` drawing each metric's distribution, its fitted floors
+  over time, and the record-only counterfactual list a person reviews before Row 8. Add a not-published
+  / withhold panel that reads item-health: the withhold count, the ~11% baseline (E5), and the reason
+  breakdown by `FailureCode` - the operator's view of what the gate withheld and why (0e H4).
+- **Files touched:** `frontend/src/routes/console/judgement/*.svelte`, a console reader under
+  `frontend/src/lib/console/`, the affected browser specs.
+- **Acceptance gates:** frontend `test:changed`; browser smoke per section 12, including the data-absent
+  check (rebuild with an empty band tree, confirm the panel draws its axis and its empty-state copy).
+- **Oracle:** the browser oracle re-derives each drawn floor from the committed band shard; it cannot
+  settle whether the panel reads well (Susan's sufficiency check).
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | The not-published/withhold rate is a first-class panel with its own alarm, read from item-health (D8, 0e H4) | Editor |
+  | 2 | A tiny glyph links each metric to `docs/architecture/publishing/autotune-summary-quality.md` | Susan |
+
+#### Plan 36 row #10 - measure a real G-Eval call (plan 65 row #25)
+
+- **Scope:** measure a real fluency G-Eval call on a stock `ubuntu-latest`, prefill and decode
+  separately, over at least 20 calls, and replace the ~28 s estimate that sizes the council leg.
+- **Files touched:** new `backend/utilities/measure_geval_call.py`, a `workflow_dispatch` job in
+  `.github/workflows/measure.yml`, `docs/reference/benchmarks/what-a-geval-call-costs.md`,
+  `docs/reference/measurements.md`.
+- **Acceptance gates:** unit tests over built readings (the cold call is reported not averaged, a run
+  stopped on the clock reports what it got); the record names the weights and the processor it drew.
+- **Oracle:** the record reproduces its statistics from the committed `calls.jsonl`; it cannot settle a
+  different runner's number (the processor lottery is named).
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | Measure prefill (summary + rubric) and decode (confirm it is one digit, not generated CoT) separately; worst x 30 sizes the leg, never the mean | Carmack |
+
+#### Plan 36 row #11 - confirm coherence runs in `assemble` (no 3-model peak) (plan 65 row #26)
+
+- **Scope:** confirm coherence (plan 35's MiniLM scorer) is wired into the `assemble` job, where MiniLM
+  is ALREADY loaded to build the search index and the summariser is NOT resident - so the feared
+  3-model peak (summariser + HHEM + MiniLM) never occurs (0e H5). Take one cheap RSS reading in
+  `assemble` to show MiniLM + the coherence/ROUGE work fits with headroom.
+- **Files touched:** confirm plan 35 Row 8 wired coherence into `assemble` (not `work`); a one-off RSS
+  reading recorded in `docs/reference/measurements.md`. NO server-stop step, NO two-phase `work` shard,
+  NO `shard_timeout_minutes` change - all retired with the eviction (0e H7).
+- **Acceptance gates:** the reading shows the `assemble` peak RSS (MiniLM + ROUGE, no summariser) fits
+  16 GB with headroom, hardware + date named (Guardrail #10); coherence scores land on the same day's
+  eval rows.
+- **Oracle:** coherence is computed in `assemble` and the `work` shard's peak is unchanged (summariser
+  + HHEM only). It cannot settle a future model swap's footprint (re-measure then).
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | Coherence runs in `assemble`, reusing the MiniLM already loaded for the search index; no 3-model peak (0e H5, corrected 2026-09-19) | owner, Carmack |
+  | 2 | The sequential server-eviction + two-phase `work` shard + the 200->220 timeout are RETIRED - they solved a peak that does not occur | owner |
+
+#### Plan 36 row #12 - the rejects ledger + the corpus fence (`state/rejects/`, 30-day prune) (plan 65 row #27)
+
+- **Intent:** capture every withheld summary with enough context to investigate WHY it failed - offline,
+  by a person or a bigger model, NEVER shown to a reader - and stop training the model on summaries we
+  blocked. Row 8 removes the item; Row 12 keeps the evidence and fences the corpus (owner, 2026-09-19;
+  section 0e Table C).
+- **Scope + files touched:**
+  - **The contract:** new `RejectRow` in `backend/idhazh/contracts/reject_row.py` + generated
+    `schemas/reject-row.schema.json` + the `CONTRACTS` tuple/import in `contracts/export.py` + a
+    `tests/fixtures/contracts/reject-row/` round-trip fixture. Fields per 0e J2; `version` + one
+    `changelog`.
+  - **The write:** at the record-only gate (`backend/idhazh/quality/gate.py`, Row 7), when an item is
+    stamped `withheld`, write `state/rejects/<YYYY>/<MM>/<DD>/<item_id>.json` (temp-file-plus-rename,
+    one item one file - no `merge=union`). The summary, article extract and scores are already in hand;
+    render the prompt with `summarize.system_prompt(...)` + `summarize.user_turn(...)` (the same
+    reconstruction the corpus harvest uses at [corpus.py:400](../backend/idhazh/corpus.py)) so the
+    stored prompt is the exact one the model saw. Reuse the `ledger` / day-partition helpers.
+  - **The prune:** a `finetune.reject_window_days` knob (default 30) + `retention.prune_rejects` wired
+    into `backend/idhazh/stages/prune_state.py` beside `prune_traces`, deleting whole day directories
+    past the window (the `keep-future-dated` guard applies unchanged).
+  - **The corpus fence:** in `backend/idhazh/corpus.py` `harvest_rows`, skip any `Scored` whose
+    `row.publish_decision == withheld` BEFORE `keeps_its_counterweights` (which stays `hhem`-free). Do
+    NOT add `hhem` to `keeps_its_counterweights` (0e J6).
+  - **The 0a amendment + docs:** amend `CLAUDE.md` section 0a to write BOTH committed-article-text
+    carve-outs (S5 A1, owner 2026-09-19): the `corpus/` one FIRST (today it is only cross-referenced
+    from section 8, never stated in 0a) and `state/rejects/` SECOND, bounded by the 30-day prune (0e J3),
+    so section 0a becomes the canonical list. Document the ledger + the fence in
+    `docs/how-to/fine-tune-a-model.md` and the design-of-record.
+- **Acceptance gates:** contract drift gate (the new schema regenerates byte-identical); a unit test
+  that a withheld item writes exactly one `RejectRow` carrying the prose + source + rendered prompt
+  (driven from a bounded fixture, never the archive); a `harvest_rows` test that an item stamped
+  `withheld` is excluded from the corpus while a published sibling stays, and `keeps_its_counterweights`
+  still reads no `hhem`; a prune test on a bounded fixture that a day past the window is deleted. No
+  test walks the committed ledger (section 13, Guardrail #12).
+- **Oracle:** for a built withheld item, a `RejectRow` round-trips with the failing prose, the source
+  extract and the exact rendered prompt, and the corpus harvest drops it. It cannot settle whether the
+  0.50 floor is well-calibrated - that is the offline judge the ledger exists to feed (J8), out of scope.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | A committed ledger of JSON payloads rather than CSV rows - prose has newlines - one file per item, day-sharded, on the `state/traces/` pattern | Fowler |
+  | 2 | Source text committed here, a second 0a carve-out, bounded by a 30-day config-driven prune | owner (J3/J4) |
+  | 3 | The corpus fence reads the stamped `publish_decision`, never `hhem`; `keeps_its_counterweights` stays faithfulness-free | Andre, owner (J6) |
+  | 4 | The ledger is the auditable safety net that makes fencing the corpus sound despite the Goodhart risk; offline judging (bigger model or human) reads it, never a reader (J7/J8) | Andre, owner |
+
+#### Plan 36 row #13 - retro: plan-34 latent gaps + the shared space-trap guard (plan 65 row #28)
+
+- **Intent:** three defects flagged during the plan-34 review were never given a home (out of scope for
+  plan 34's merge). They land here as the last row because one - the first-token-probability space trap -
+  is re-introduced by Row 6's G-Eval fluency judge, so the guard is shared (owner, 2026-09-19).
+- **Scope + files touched:**
+  - **Space-trap re-set:** a trailing-space token in a rendered prompt silently shifts which
+    digit/verdict the model emits from its first-token probabilities, and the output still parses.
+    Assert the rendered prompt does not end in a space; build the digit/verdict token ids by
+    encode-in-position (not by string); log all first-token probabilities. Covers
+    `backend/idhazh/similarity/judge.py` (plan 34) and `backend/idhazh/quality/geval.py` (Row 6).
+  - **Thinking-variant:** confirm `thinking` is OFF for every judge/council call and pin it with a canary
+    that a thinking-on recorded completion is REJECTED, not silently scored (plan 34 + Row 6).
+  - **Injection live-test note:** the injection canary runs against a RECORDED completion only (Guardrail
+    #7 forbids a live server in tests), so it proves the grammar + log-prob read resists a side-loaded
+    instruction in the fixture, not a live model. State this as accepted-by-contract in one line; a live
+    red-team is a separate, out-of-scope follow-up.
+- **Acceptance gates:** the space-trap + thinking-off canaries pass against recorded fixtures for BOTH
+  the plan-34 judge and Row 6's G-Eval; no network (Guardrail #7).
+- **Oracle:** a rendered prompt ending in a space fails the guard, and a thinking-on recorded completion
+  is rejected. It cannot settle live-model injection resistance (accepted-by-contract, Guardrail #7).
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | Retro plan-34 gaps re-homed here as the last row (owner, 2026-09-19); the space-trap guard is shared with Row 6 because both read first-token probabilities | owner, Andre |
+  | 2 | The injection test stays recorded-fixture only (Guardrail #7); a live red-team is a separate, out-of-scope follow-up | Andre |
+
+### Plan 36 section 3 - the loop, and where it is documented
+
+The design of record, with the mermaid and the formulas, is
+[`docs/architecture/publishing/autotune-summary-quality.md`](../docs/architecture/publishing/autotune-summary-quality.md). That page
+carries the four metrics, how each is measured, the fold-fit loop, and the publish gate; this plan
+sizes the rows that build it. When Row 8 lands, the page's "target design (in flight)" framing is
+removed in the same commit.
+
+### Plan 36: See also
+
+- [`docs/architecture/publishing/autotune-content-similarity.md`](../docs/architecture/publishing/autotune-content-similarity.md) - the
+  merge line that fits itself: the loop this plan mirrors, and the fit core Row 1 extracts.
+- [`docs/concepts/evaluation.md`](../docs/concepts/evaluation.md) - the two measures that left the
+  eval row and the two that arrived, and what the departure did to `scorer_version`.
+- [`docs/architecture/publishing/autotune-summary-quality.md`](../docs/architecture/publishing/autotune-summary-quality.md) - the
+  metrics, the formulas, and the loop diagram.

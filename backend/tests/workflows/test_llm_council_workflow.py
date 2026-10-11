@@ -46,6 +46,22 @@ pytestmark = pytest.mark.workflow
 
 FILENAME: Final = "llm-council.yml"
 
+
+def test_collector_keeps_a_failed_or_cancelled_judging_job_red() -> None:
+    step = _step(
+        _load_workflows()[FILENAME],
+        "save_council_results",
+        "name",
+        "Settle and publish every completed tenant output",
+    )
+    environment = step["env"]
+    script = step["run"]
+    assert isinstance(environment, dict)
+    assert isinstance(script, str)
+    assert environment["COUNCIL_UNITS_RESULT"] == "${{ needs.judge.result }}"
+    assert '--units-result "$COUNCIL_UNITS_RESULT"' in script
+
+
 #: The dotted path the unit's bound is read from. Spelled once here and asserted
 #: in the file, so a workflow that read a different knob fails rather than
 #: bounding the unit by the work shard's clock - or by a tenant's block, which a

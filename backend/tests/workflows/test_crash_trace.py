@@ -11,12 +11,13 @@ it crashes is `test_gardener_crash_trace.py`.
 from __future__ import annotations
 
 import json
+import sys
 import traceback
 from typing import Final
 
 import pytest
 
-from idhazh import crash_trace
+from idhazh import crash_trace, event_lines
 
 pytestmark = pytest.mark.workflow
 
@@ -28,6 +29,14 @@ PLANTED: Final = "example.invalid"
 HEADER: Final = "Traceback (most recent call last):"
 CAUSE: Final = "The above exception was the direct cause of the following exception:"
 CONTEXT: Final = "During handling of the above exception, another exception occurred:"
+
+
+def test_existing_install_entry_uses_the_shared_printer(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys, "excepthook", sys.excepthook)
+    crash_trace.install()
+    hook = sys.excepthook
+    event_lines.install_crash_printer()
+    assert sys.excepthook is hook
 
 
 class Unprintable:
