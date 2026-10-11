@@ -18,10 +18,13 @@ pytestmark = pytest.mark.contract
 
 
 @pytest.fixture
-def evidence_workspace() -> Iterator[Path]:
+def evidence_workspace(tmp_path: Path) -> Iterator[Path]:
     from idhazh.telemetry.host_evidence_inputs import ROOT
 
     root = ROOT / "backend/var"
+    if tmp_path.is_relative_to(root):
+        yield tmp_path
+        return
     root.mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory(prefix="d5-test-", dir=root) as directory:
         yield Path(directory)
@@ -576,6 +579,13 @@ def test_real_partial_worker_cleanup_refuses_reused_identity_and_verifies_exit(
         assert read_model(
             evidence_workspace / "cleanup.json", CleanupEvidence, native.limits.max_result_bytes
         ).targets == (target,)
+        (evidence_workspace / "worker.log").write_text(
+            "recorded worker failure\n", encoding="ascii"
+        )
+        from utilities.host_telemetry_session import request
+
+        with pytest.raises(ValueError, match=r"worker stopped.*recorded worker failure"):
+            request(evidence_workspace, 1, "reference")
     finally:
         if child.poll() is None:
             child.terminate()

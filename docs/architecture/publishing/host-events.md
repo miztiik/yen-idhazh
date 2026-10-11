@@ -335,6 +335,9 @@ native JSON bytes and must keep session identity, increasing emitter order,
 triggering worker/window commands and a drain with no aborted windows. Sample
 totals preserve the unchanged legacy HWM-or-RSS rule, including zero-HWM fallback;
 that is independent of corrected window memory precedence.
+Unreadable optional executable or argument metadata does not remove readable
+Python memory from this population. Reference argument captures retain only the
+program and the existing three argument fields, never the full command line.
 
 Always-run cleanup names only recorded owned worker, sampler and monitor targets,
 checks PID/start identity, and verifies termination within the existing drain
@@ -342,6 +345,9 @@ bound. Partial preparation can stop its recorded worker without a completed
 manifest. `cleanup.json` is separate termination evidence. An actual Linux stage
 integration and partial-failure cleanup test run in this workflow; Windows tests
 exercise explicit refusals, not live Linux certification.
+Response waits check the recorded worker identity and surface bounded worker and
+sampler logs when it stops. The dedicated Linux tests retain their task-owned
+workspace under the uploaded test directory, including failed-stage diagnostics.
 
 Local delivery alone leaves D5 in flight. A report never authorizes adoption or
 history replacement, asserts a general speedup, or substitutes for the exact

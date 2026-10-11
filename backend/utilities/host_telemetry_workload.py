@@ -9,6 +9,7 @@ import platform
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -225,9 +226,12 @@ def wait_for(
     poll_ms: int,
     *,
     child: subprocess.Popen[bytes] | None = None,
+    check_producer: Callable[[], None] | None = None,
 ) -> None:
     deadline = time.monotonic() + timeout
     while not path.exists():
+        if check_producer is not None:
+            check_producer()
         if child is not None and child.poll() is not None:
             raise ValueError(
                 f"required evidence {path.name}: producer exited with code {child.returncode}"

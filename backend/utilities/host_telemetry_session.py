@@ -93,7 +93,27 @@ def request(workspace: Path, sequence: int, mode: str) -> WorkloadResult:
     value = WorkloadRequest.model_validate({"sequence": sequence, "mode": mode})
     write_document(workspace / f"requests/{sequence}.json", value)
     path = workspace / f"responses/{sequence}.json"
-    wait_for(path, compare.worker_timeout_seconds, native.limits.poll_ms)
+    target = read_model(
+        workspace / "worker-launched.json", ProcessTarget, native.limits.max_result_bytes
+    )
+
+    def check_worker() -> None:
+        if stopped(target):
+            logs = [
+                read_bytes(workspace / name, compare.max_command_output_bytes).decode(
+                    "utf-8", "replace"
+                )
+                for name in ("worker.log", f"sampler-{sequence}.log")
+                if (workspace / name).exists()
+            ]
+            raise ValueError(f"owned workload worker stopped before {path.name}: " + "".join(logs))
+
+    wait_for(
+        path,
+        compare.worker_timeout_seconds,
+        native.limits.poll_ms,
+        check_producer=check_worker,
+    )
     return read_model(path, WorkloadResult, native.limits.max_result_bytes)
 
 
