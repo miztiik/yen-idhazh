@@ -84,7 +84,21 @@
 
 	/** The day a pointer or a key has picked, or null for the resting one. */
 	let selected = $state<number | null>(null);
-	const supplied = $derived(readout ?? (geometry !== null && geometry.boundaries.length > 0 ? geometry.readout : null));
+	const supplied = $derived.by(() => {
+		if (readout === null) {
+			return geometry !== null && (geometry.boundaries.length > 0 || geometry.reconciliation !== undefined) ? geometry.readout : null;
+		}
+		if (geometry?.reconciliation === undefined) return readout;
+		if (readout.columns.length !== geometry.dates.length) {
+			throw new Error('An elapsed reconciliation readout must contain every drawn day.');
+		}
+		const labels = [geometry.reconciliation.elapsed.label, geometry.reconciliation.overlap.label];
+		return {
+			...readout,
+			series: [...readout.series, ...geometry.readout.series.filter((series) =>
+				labels.includes(series.label) && !readout.series.some((supplied) => supplied.label === series.label))]
+		};
+	});
 	/** A day held open is the strip's resting day until it is closed, so a tap
 	 * that opened a list leaves that day's numbers under the plot. */
 	const shown = $derived(selected ?? picked);
@@ -203,6 +217,23 @@
 					{/each}
 				{/if}
 			</g>
+			{#if geometry.reconciliation !== undefined}
+				{#each geometry.reconciliation.marks as mark (mark.date)}
+					{#if mark.overlap > 0}
+						<g stroke={`var(${geometry.reconciliation.overlap.token})`} fill="none"
+							data-stack-overlap={mark.date} data-overlap-value={mark.overlap}>
+							<line x1={mark.bracket} x2={mark.bracket} y1={mark.top} y2={mark.y} />
+							<line x1={mark.end} x2={mark.bracket} y1={mark.top} y2={mark.top} />
+							<line x1={mark.end} x2={mark.bracket} y1={mark.y} y2={mark.y} />
+						</g>
+					{/if}
+					<line x1={mark.x} x2={mark.end} y1={mark.y} y2={mark.y}
+						stroke="var(--color-surface)" stroke-width={LINE + JOIN} />
+					<line x1={mark.x} x2={mark.end} y1={mark.y} y2={mark.y}
+						stroke={`var(${geometry.reconciliation.elapsed.token})`} stroke-width={LINE}
+						data-stack-elapsed={mark.date} data-elapsed-value={mark.elapsed} />
+				{/each}
+			{/if}
 
 			{#each geometry.rules as rule (rule.label)}
 				<line x1={box.left} x2={box.right} y1={rule.y} y2={rule.y} stroke="var(--chart-marker)" stroke-dasharray="3 3" />
@@ -239,6 +270,12 @@
 				/>
 			{/if}
 		</svg>
+		{#if geometry.reconciliation !== undefined}
+			<p class="model-rule-note" data-stack-reconciliation-key>
+				Solid crossbar: {geometry.reconciliation.elapsed.label}.
+				Bracket beside the stack: {geometry.reconciliation.overlap.label}, deducted from the full stage durations.
+			</p>
+		{/if}
 		{#if withEvents !== null}
 			<!-- Below the plot, never over it, and the same strip every chart on this
 			     console prints: it is the key as well, so no second key is drawn. -->

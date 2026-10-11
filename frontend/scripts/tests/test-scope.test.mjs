@@ -19,14 +19,15 @@ test('native Rust and its actual file fixture select focused checks without brow
 	for (const path of ['backend/rust/host-telemetry/src/codec/parquet.rs',
 		'backend/rust/host-telemetry/rust-toolchain.toml', 'backend/rust/host-telemetry/Cargo.lock',
 		'tests/fixtures/host-events/file-parity.json', 'backend/tests/contracts/test_rust_host_file_parity.py',
-		'backend/rust/host-telemetry/src/ledger/store.rs', 'backend/tests/test_rust_host_store_parity.py']) {
+		'backend/rust/host-telemetry/src/ledger/store.rs', 'backend/tests/test_rust_host_store_parity.py',
+		'backend/rust/host-telemetry/src/probe_inputs/hierarchy.rs', 'backend/tests/contracts/test_host_event_rust_parity.py']) {
 		const selected = selectPaths([path]);
 		assert.deepEqual(selected.groups, ['backend']);
 		assert.equal(selected.rust, true);
 		assert.equal(selected.contracts, false);
 		assert.deepEqual(selected.backendFiles, path === 'tests/fixtures/host-events/file-parity.json'
 			? ['backend/tests/contracts/test_rust_host_file_parity.py']
-			: ['backend/tests/contracts/test_rust_host_file_parity.py', 'backend/tests/test_rust_host_receipts.py',
+			: ['backend/tests/contracts/test_host_event_rust_parity.py', 'backend/tests/contracts/test_rust_host_file_parity.py', 'backend/tests/test_rust_host_receipts.py',
 				'backend/tests/test_rust_host_store_parity.py']);
 		assert.equal(ciAnswer([path], true).browser, false);
 		assert.equal(ciAnswer([path], true).modelAbsent, false);
@@ -40,6 +41,14 @@ test('native Rust and its actual file fixture select focused checks without brow
 	assert.equal(receipts.rust, true);
 	assert.deepEqual(receipts.groups, ['backend']);
 	assert.deepEqual(receipts.backendFiles, ['backend/tests/test_rust_host_receipts.py']);
+	for (const path of ['tests/fixtures/host-events/probe-clock.json',
+		'tests/fixtures/runtime/2026-08-29-3-shard-0.server-head.txt',
+		'tests/fixtures/runtime/2026-08-26-5-shard-0.prom']) {
+		const producer = selectPaths([path]);
+		assert.equal(producer.rust, true);
+		assert.deepEqual(producer.groups, ['backend']);
+		assert.deepEqual(producer.backendFiles, ['backend/tests/contracts/test_host_event_rust_parity.py']);
+	}
 });
 
 test('isolated host contracts and verification have finite consumers; unknowns stay broad', () => {
