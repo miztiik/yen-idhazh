@@ -662,11 +662,12 @@ Table Q - every owner request on these plans since 2026-10-10, and where it land
 | Q29 | 2026-10-11 | What Display and Display only mean in the research record's table 5.1; what the redesign takes from the research, what it does not, and why | Answered | Research record, under table 5.1 (the terms); review record SP1 row s9 and section 4 of this plan (taken and not taken) | - |
 | Q30 | 2026-10-11 | Number the council plan 64 and commit it to main directly | Done | TODO/20261011-64-council-follows-gardener-plan.md, titled Plan 64 | - |
 | Q31 | 2026-10-11 | Find the ambiguities in plan 64 and ask about them in the CLAUDE.md options format | Ruled | Plan 64's Table P: P10 to P18 ruled, P9 declined | - |
+| Q37 | 2026-10-11 | Deliver plan 64 as merged pull requests, with Fowler resolving any ambiguity | In progress | Plan 64's Status Reckoner | Each row lands as its own pull request, merged on green CI |
 | Q32 | 2026-10-11 | A paused or retired judge is not processed by the council, and retirement does not mean deleting code; is that how the gardener works? | Done in design | Plan 64 P15, row #11. The gardener skips paused and retired tasks but refuses a module no active or paused task uses | - |
 | Q33 | 2026-10-11 | Pair each exit code with a label that says what it means, per pipeline | Done in design | Plan 64 P16, row #3 | - |
 | Q34 | 2026-10-11 | Allow judges to be run by hand | Done in design | Plan 64 P17 and P11, row #7: one date per manual run | - |
 | Q35 | 2026-10-11 | The council has its own config, each judge has its own config, and judges register with the council, as the gardener does | Done in design | Plan 64 P18, rows #10, #11 and #1 | This judge's file carries lifecycle_status and runs_model, and its package is summary_fidelity_judge, when this plan's rows are rewritten |
-| Q36 | 2026-10-11 | Record a judge's switch to active in the commit message and docs, not in a test; the gardener may be wrong to use one | Done in design; the gardener's change is in review | Plan 64 P9 declined, E1.5; the gardener's test dropped in #1548 (branch chore/gardener-drop-named-decision-test) | #1548 merges once CI is green |
+| Q36 | 2026-10-11 | Record a judge's switch to active in the commit message and docs, not in a test; the gardener may be wrong to use one | Done | Plan 64 P9 declined, E1.5; the gardener's test dropped in #1548, merged 2026-10-11 | - |
 
 Table R - the review changes the owner approved on 2026-10-10, and where each lands now
 
