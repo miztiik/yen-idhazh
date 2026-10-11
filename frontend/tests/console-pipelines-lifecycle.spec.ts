@@ -50,7 +50,7 @@ test('a late wide response cannot replace a short request or fabricate a short r
 	const held = new Promise<void>((resolve) => release = resolve);
 	let requested = false;
 	const older = dayBefore(THROUGH, 6).replaceAll('-', '/');
-	await page.route(`**/state/compact/item-health/daily/${older}.parquet`, async (route) => {
+	await page.route((url) => url.pathname.endsWith(`/state/compact/item-health/daily/${older}.parquet`), async (route) => {
 		requested = true;
 		await held;
 		await route.fallback();
@@ -77,7 +77,7 @@ test('an evaluator still in flight does not hide the loaded extractor or invent 
 	await servePipelines(page, root);
 	let release!: () => void;
 	const held = new Promise<void>((resolve) => release = resolve);
-	await page.route(`**/state/compact/summary-quality-evals/daily/${THROUGH.replaceAll('-', '/')}.parquet`, async (route) => {
+	await page.route((url) => url.pathname.endsWith(`/state/compact/summary-quality-evals/daily/${THROUGH.replaceAll('-', '/')}.parquet`), async (route) => {
 		await held;
 		await route.fallback();
 	});

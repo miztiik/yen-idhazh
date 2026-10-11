@@ -171,7 +171,7 @@ test('a late wide-window completion cannot replace a newer short request or its 
 	const held = new Promise<void>((resolve) => release = resolve);
 	let requested = false;
 	const older = dayBefore(THROUGH, 6);
-	await page.route(`**/state/compact/item-health/daily/${older.replaceAll('-', '/')}.parquet`, async (route) => {
+	await page.route((url) => url.pathname.endsWith(`/state/compact/item-health/daily/${older.replaceAll('-', '/')}.parquet`), async (route) => {
 		requested = true;
 		await held;
 		await route.fallback();
