@@ -164,7 +164,7 @@ All metrics listed need no reference summary unless noted. "bAcc" means balanced
 - **[DiverseSumm](https://aclanthology.org/2024.naacl-long.32/):** GPT-4 covered under 40% of the diverse information in multi-document news. Coverage metrics built on GPT-4 showed position and verbosity bias.
 - **[LongEval](https://aclanthology.org/2023.eacl-main.121/):**
  - Judging finer units (clauses) reduced annotator spread, with the standard deviation falling from 18.5 to 6.8.
- - Judging half the units preserved system rankings (Kendall's tau 0.89).
+ - Judging half the units preserved system rankings (Kendall's $\tau = 0.89$).
  - This supports sampling sentences or key facts rather than judging everything.
 - **No paper validated a top-k frequent-word recall proxy.** It is a reference-free cousin of ROUGE-1 and moves with copying and article length [inference].
 
@@ -298,8 +298,10 @@ All figures here are estimates; benchmark them before relying on them. Volume is
 | Pareto / dominance | Keep the options that no other option beats on every dimension | Comparing options against several objectives | Only a partial order; gives no single decision | For comparing two configurations |
 | Social-choice rules (Borda, Copeland) | Aggregate rankings | [Vote'n'Rank 2023](https://arxiv.org/abs/2210.05769) | Built for ranking systems, not for monitoring one system | Low |
 | Learned aggregator | Fit weights to human preferences or labels | [QAFactEval](https://arxiv.org/abs/2112.08542) combines QA and NLI signals; [SEAHORSE](https://aclanthology.org/2023.emnlp-main.584/) learns its metrics; [EvalGen](https://arxiv.org/abs/2404.12272) aligns checks with users' grades | Needs labels, which you forbid. Using an LLM judge as the teacher is circular. Goodhart effects. | Not available |
-| Statistical distance (Mahalanobis / Hotelling T^2) | Distance of today's vector from the reference period, using the covariance | MEWMA and T^2 charts ([Lowry 1992](https://doi.org/10.1080/00401706.1992.10485232)) | Does not say which direction moved; harder to interpret | Omnibus drift check |
-| Correlation-aware weighted z (Stouffer-type) | C = sum w_k z_k / sqrt(w^T R w) | Standard statistics; recommended here (section 7.4) | Needs R estimated over a stable window; only detects shifts in the weighted direction | **Main drift composite** |
+| Statistical distance (Mahalanobis / Hotelling $T^2$) | Distance of today's vector from the reference period, using the covariance | MEWMA and $T^2$ charts ([Lowry 1992](https://doi.org/10.1080/00401706.1992.10485232)) | Does not say which direction moved; harder to interpret | Omnibus drift check |
+| Correlation-aware weighted $z$ (Stouffer-type) | $C = \frac{\sum_k w_k z_k}{\sqrt{w^\top R w}}$ | Standard statistics; recommended here (section 7.4) | Needs $R$ estimated over a stable window; only detects shifts in the weighted direction | **Main drift composite** |
+
+**Fit for us** names the most a method may do here. **Display**: a number a person reads on the console; no gate, alarm or publish decision reads it. **Display only**: shown at most, never used to decide, because a strong metric hides a failing one. **Display, with gates**: the shown number drops to 0 when any per-summary gate fails (section 7.4, item 6).
 
 ### 5.2 Documented pitfalls
 
@@ -328,20 +330,20 @@ All figures here are estimates; benchmark them before relying on them. Volume is
 
 | Method | What it detects | Key assumption | Pitfall or mitigation | Fit for us |
 |---|---|---|---|---|
-| Shewhart charts (p-chart, X-bar) on daily rates or means | Large sudden shifts | Days are independent; in-control mean and SD known | Insensitive to small shifts | Gate rates. Low-volume days need limits that widen as n shrinks. |
-| EWMA (Roberts 1959; [Lucas & Saccucci 1990](https://www.jstor.org/stable/1269835)) | Small persistent shifts. A small lambda suits small shifts. Optional fast-initial-response feature and combined Shewhart-EWMA. | Independence | Inertia. The authors advise that "a statistical control scheme should always be applied to the residuals from the model". | Daily residual mean of each metric |
+| Shewhart charts ($p$-chart, $\bar{X}$-chart) on daily rates or means | Large sudden shifts | Days are independent; in-control mean and SD known | Insensitive to small shifts | Gate rates. Low-volume days need limits that widen as the day's row count $n$ shrinks. |
+| EWMA (Roberts 1959; [Lucas & Saccucci 1990](https://www.jstor.org/stable/1269835)) | Small persistent shifts. A small $\lambda$ suits small shifts. Optional fast-initial-response feature and combined Shewhart-EWMA. | Independence | Inertia. The authors advise that "a statistical control scheme should always be applied to the residuals from the model". | Daily residual mean of each metric |
 | CUSUM ([Page 1954](https://doi.org/10.1093/biomet/41.1-2.100)) | A sustained shift of a chosen size | In-control parameters known | You must choose the shift size; one-sided | Gate rates |
 | Risk-adjusted CUSUM ([Steiner 2000](https://doi.org/10.1093/biostatistics/1.4.441)) | A change in outcomes after adjusting each case for its risk | The per-case risk model is valid | Model misspecification | **Your input-mix problem** |
 | Residual (special-cause) charts ([Alwan & Roberts 1988](https://doi.org/10.1080/07350015.1988.10509640)) | Shifts in an autocorrelated series | A fitted time-series model | Must be refitted | Day-to-day correlation from the news cycle |
 | Self-starting CUSUM ([Hawkins 1987](https://doi.org/10.2307/2348827)) | Drift from start-up conditions, using the running mean and SD as the baseline | A stable start | Slow drifts can be absorbed into the baseline | Fits the "no golden set" rule |
 | Effects of estimated parameters ([Jensen 2006](https://doi.org/10.1080/00224065.2006.11918623)) | - | - | Limits estimated from short reference windows change the false-alarm rate | Use long windows; calibrate by simulation or bootstrap |
-| MEWMA plus Hotelling T^2 ([Lowry 1992](https://doi.org/10.1080/00401706.1992.10485232)) | Joint shifts in correlated metrics; T^2 catches large shifts | Multivariate normal; covariance taken from the reference period | Inertia; pair the MEWMA with T^2 | Omnibus check |
+| MEWMA plus Hotelling $T^2$ ([Lowry 1992](https://doi.org/10.1080/00401706.1992.10485232)) | Joint shifts in correlated metrics; $T^2$ catches large shifts | Multivariate normal; covariance taken from the reference period | Inertia; pair the MEWMA with $T^2$ | Omnibus check |
 | Two-sample tests such as KS or MMD ([Rabanser 2019](https://arxiv.org/abs/1810.11953)) | A change in distribution between two windows | Independent samples | Items within a day are correlated, so permute whole days [inference] | Input drift (length, source mix, page-furniture rate); quantile shifts |
 | Benjamini-Hochberg FDR ([1995](https://doi.org/10.1111/j.2517-6161.1995.tb02031.x)) | Controls false discoveries across many tests | Independence or positive dependence. Wilson 2019 notes that BH is robust to positive correlation. | - | Many metrics x strata |
-| Fisher / Stouffer p-value combination | Combine p-values | Independence | Too liberal (more false alarms than alpha) when tests are positively correlated [standard result] | Avoid unless the metrics are independent |
+| Fisher / Stouffer p-value combination | Combine p-values | Independence | Too liberal (more false alarms than $\alpha$) when tests are positively correlated [standard result] | Avoid unless the metrics are independent |
 | Cauchy combination ([Liu & Xie 2020](https://doi.org/10.1080/01621459.2018.1554485)) | Combine p-values under arbitrary dependence | A tail approximation | Accurate when p is small | Global "something is wrong" test |
 | Harmonic mean p-value ([Wilson 2019](https://doi.org/10.1073/pnas.1814092116)) | Combine dependent tests | - | Debated: a published letter disputes strong versus weak error control | Second choice |
-| Confidence sequences ([Howard 2021](https://arxiv.org/abs/1810.08240)) | Inference that stays valid when you check the data at any time | - | Wider intervals | If you run a fixed-alpha test every day |
+| Confidence sequences ([Howard 2021](https://arxiv.org/abs/1810.08240)) | Inference that stays valid when you check the data at any time | - | Wider intervals | If you run a fixed-$\alpha$ test every day |
 | LLM behaviour drift ([Chen, Zaharia & Zou 2024](https://arxiv.org/abs/2307.09009)) | The behaviour of hosted LLMs changed within months | - | - | Motivation. Pinning a self-hosted model reduces drift but does not remove it (prompts, runtime, inputs). |
 
 ### 6.2 Combining several monitored metrics
@@ -349,12 +351,15 @@ All figures here are estimates; benchmark them before relying on them. Volume is
 Ranked options:
 
 1. **Weighted composite with known direction (matches the owner's request).**
-  - Let z_{d,k} be the standardised daily residual of metric k on day d, oriented so that positive means worse.
-  - Compute C_d = sum w_k z_{d,k} / sqrt(w^T R w), where R is the correlation matrix of the z values in the reference window.
-  - When nothing has changed, C_d is roughly standard normal however many metrics are added or re-weighted. Correlated metrics are therefore not double-counted [standard algebra; assumes approximate normality and a stable R].
-  - Chart C_d with an EWMA.
-  - If a degradation is expected to move the metrics in direction delta, the most powerful linear weights are w proportional to R^-1 delta [standard result for a mean shift with known direction under multivariate normality]. This gives a principled way to tune weights from injected changes.
-2. **MEWMA with Hotelling T^2** ([Lowry 1992](https://doi.org/10.1080/00401706.1992.10485232)). An omnibus check that catches shifts in directions nobody anticipated.
+  - Let $z_{d,k}$ be the standardised daily residual of metric $k$ on day $d$, oriented so that positive means worse.
+  - Compute the composite for day $d$, where $w_k$ is the weight of metric $k$ and $R$ is the correlation matrix of the $z$ values in the reference window:
+
+    $$C_d = \frac{\sum_k w_k z_{d,k}}{\sqrt{w^\top R w}}$$
+
+  - When nothing has changed, $C_d$ is roughly standard normal however many metrics are added or re-weighted. Correlated metrics are therefore not double-counted [standard algebra; assumes approximate normality and a stable $R$].
+  - Chart $C_d$ with an EWMA.
+  - If a degradation is expected to move the metrics in direction $\delta$, the most powerful linear weights are $w \propto R^{-1} \delta$ [standard result for a mean shift with known direction under multivariate normality]. This gives a principled way to tune weights from injected changes.
+2. **MEWMA with Hotelling $T^2$** ([Lowry 1992](https://doi.org/10.1080/00401706.1992.10485232)). An omnibus check that catches shifts in directions nobody anticipated.
 3. **Cauchy combination** ([Liu & Xie 2020](https://doi.org/10.1080/01621459.2018.1554485)) of one-sided p-values per metric, when you want a single p-value that stays valid under dependence.
 4. **Fisher or Stouffer combination** only if the metrics are close to independent. Yours are not.
 
@@ -378,7 +383,7 @@ Ranked options:
 - Calibrate the false-alarm rate by bootstrapping days or by simulation.
 - Aim for an in-control average run length chosen by a person, for example about one false alarm per quarter.
 
-**Low-volume days.** Use limits that depend on n, or weight days by n.
+**Low-volume days.** Use limits that depend on the day's row count $n$, or weight days by $n$.
 
 **Version boundaries.** A change of model, prompt, quantisation, llama.cpp build or scorer starts a new series, consistent with your P14.
 
@@ -458,8 +463,8 @@ Ranked options:
   - For each, take the day's mean of per-summary residuals (observed minus expected given the input covariates).
   - Standardise by the between-day SD in the reference window.
 4. **Two combined statistics.**
-  - **"Quality got worse"** (the owner's weighted composite): C_d = sum w_k z_k / sqrt(w^T R w), smoothed with an EWMA and tested one-sided. The weights are tunable.
-  - **"Something changed"**: MEWMA plus Hotelling T^2 ([Lowry 1992](https://doi.org/10.1080/00401706.1992.10485232)).
+  - **"Quality got worse"** (the owner's weighted composite): $C_d = \frac{\sum_k w_k z_{d,k}}{\sqrt{w^\top R w}}$ (section 6.2), smoothed with an EWMA and tested one-sided. The weights are tunable.
+  - **"Something changed"**: MEWMA plus Hotelling $T^2$ ([Lowry 1992](https://doi.org/10.1080/00401706.1992.10485232)).
   - If you instead compute many per-metric tests, combine them with the Cauchy test and apply BH within strata.
 5. **Decision levels.** None of these actions is automatic; a person decides (your P15).
   - **Watch:** any single chart signals.
@@ -469,8 +474,8 @@ Ranked options:
 
 **Setting the weights (your P17).**
 - Replay injected changes on recent items: swap numbers or entities, negate predicates, drop hedges, truncate, copy the lead, inject repetition. These follow FRANK's error types and SummEdits-style seeded edits ([SummEdits](https://arxiv.org/abs/2305.14540)).
-- Estimate each change's shift vector delta.
-- Choose w to maximise the worst-case detection rate across the change types at a fixed in-control false-alarm rate.
+- Estimate each change's shift vector $\delta$.
+- Choose the weights $w$ to maximise the worst-case detection rate across the change types at a fixed in-control false-alarm rate.
 - A person commits the result.
 
 ### 7.5 How to validate without human labels
