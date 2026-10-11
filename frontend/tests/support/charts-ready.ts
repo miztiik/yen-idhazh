@@ -25,8 +25,16 @@ export async function chartsReady(page: Page, why = 'a chart near the viewport n
 				page.evaluate(() => {
 					const queries = [...document.querySelectorAll('[data-model-query][data-query-state]')];
 					const asked = document.querySelector('[data-window-control]')?.getAttribute('data-window-days');
-					if (queries.some((query) => query.getAttribute('data-query-state') === 'loading' ||
-						asked !== null && asked !== undefined && query.getAttribute('data-query-asked') !== asked)) return false;
+					const widest = Math.max(...[...document.querySelectorAll('[data-window-preset]')]
+						.map((preset) => Number(preset.getAttribute('data-window-preset'))));
+					if (queries.some((query) => {
+						if (query.getAttribute('data-query-state') === 'loading') return true;
+						const selected = query.getAttribute('data-query-asked');
+						if (selected === null || asked === null || asked === undefined) return false;
+						// The change compares the widest recorded populations, not the page window.
+						const expected = query.getAttribute('data-model-query') === 'model-change' ? String(widest) : asked;
+						return selected !== expected;
+					})) return false;
 					const reach = window.innerHeight * 2;
 					return [...document.querySelectorAll('figure[data-chart-drawn]')].every((figure) => {
 						const host = figure.querySelector('[data-chart]');

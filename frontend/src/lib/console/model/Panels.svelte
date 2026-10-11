@@ -59,7 +59,7 @@
 {:else if refusals !== null}
 	<p data-lede>{refusals.top === undefined ? 'No named rule refused a model reply.' : `${refusals.top.label}: ${refusals.top.count} refusals`} at summarization</p>
 	<p data-comparison="the rule that refused most against every other rule">The rule that refused most against every other rule.</p>
-	<div data-model-rule="no" data-model-rule-none="A ranking pools the window and has no dated change position.">
+	<div data-model-rule="no" data-model-rule-name="refusing-rule" data-model-rule-none="A ranking pools the window and has no dated change position.">
 		<FailureList ranking={refusals.ranking} stages={{ options: [...MODEL_STAGES], chosen: 'summarize' }}
 			{window} selectedCode={null} max={knobs.failure_list_max} sourceMax={knobs.source_rows} readoutMaxShare={chart.readout_max_share} />
 	</div>
@@ -82,7 +82,7 @@
 	<p data-comparison="each source's doubted share against all sources' share">Each source's doubted share against all sources' share.</p>
 	<div data-eval-panel="source-doubts" data-model-doubt data-model-doubt-days={range.days}
 		data-model-doubt-from={range.from} data-model-doubt-to={range.to}
-		data-model-rule="no" data-model-rule-none="A source ranking pools the selected window, so a change has no dated position.">
+		data-model-rule="no" data-model-rule-name="source-doubts" data-model-rule-none="A source ranking pools the selected window, so a change has no dated position.">
 		<p data-model-doubt-rule>The order is the count and never the share.</p>
 		<p data-model-doubt-intro>The checker counted sources {range.days === 1 ? 'over this one day' : `over these ${range.days} days`}. For example, 2 doubted of 3 is a larger share but a smaller count than 40 of 400.</p>
 		<div data-model-doubt-list>
