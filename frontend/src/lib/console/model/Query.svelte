@@ -1,9 +1,11 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import type { Row, LedgerReach, SliceResult } from '../../data/ledger';
-	import { rangeFor, sliceOnce, type PanelQuery, type Range, type RouteReach } from '../queries/window';
-	import Reserved from '../../components/Reserved.svelte';
-	import type { PanelState } from '../waiting';
+	import { rangeFor, type PanelQuery, type Range, type RouteReach } from '../queries/window';
+	import EmptyState from '../../charts/d3/EmptyState.svelte';
+	import { recordEmptyState } from '../../charts/d3/empty';
+	import { modelSlice } from './slice';
+	import { noRecordSentence, setAsideSentence } from '../recording';
 
 	let { queries, reach, preset, presets, retry, height, width, name, onAnswer, children }: {
 		queries: readonly PanelQuery[]; reach: RouteReach | null; preset: number; presets: readonly number[];
@@ -13,7 +15,7 @@
 	} = $props();
 	let rows = $state<Row[][]>([]);
 	let range = $state<Range | null>(null);
-	let panelState = $state<PanelState>('loading');
+	let panelState = $state<'loading' | 'ready' | 'quiet' | 'missing' | 'unreachable'>('loading');
 	let notes = $state<string[]>([]);
 	$effect(() => {
 		const currentReach = reach;
@@ -29,7 +31,7 @@
 		onAnswer(name, 'pending');
 		void Promise.all(asked.map(async (query) => {
 			const selected = rangeFor(query, currentPreset, currentReach, presets);
-			return { selected, answer: 'from' in selected ? await sliceOnce(query, selected) : selected };
+			return { selected, answer: 'from' in selected ? await modelSlice(query, selected) : selected };
 		})).then((results) => {
 			if (!current) return;
 			const answers = results.map(({ answer }) => answer);
@@ -40,13 +42,14 @@
 			const selected = results.find((r) => 'from' in r.selected)?.selected;
 			range = selected !== undefined && 'from' in selected ? selected : null;
 			rows = answers.map((answer) => 'rows' in answer ? answer.rows : []);
-			notes = results.flatMap(({ answer, selected }) => {
-				if (answer.state !== 'ok' || !('rows' in answer) || !('from' in selected)) return [];
+			notes = results.flatMap(({ answer, selected }, index) => {
+				if ((answer.state !== 'ok' && answer.state !== 'quiet') || !('rows' in answer) || !('from' in selected)) return [];
 				const lines: string[] = [];
-				if (answer.first > selected.from) lines.push(`Recorded from ${answer.first}.`);
-				if (answer.lostDays.length) lines.push(`${answer.lostDays.length} recorded days were lost.`);
-				const unread = Object.values(answer.setAside).reduce((a, b) => a + b, 0);
-				if (unread) lines.push(`${unread} files were set aside unread; these figures may be short.`);
+				const first = Object.values(currentReach.ledgers).flatMap((ledger) => ledger?.state === 'ok' ? [ledger.first] : []).sort()[0];
+				if (first !== undefined && answer.first > first) lines.push(`Recorded from ${answer.first}; earlier days on this page have no ${asked[index].ledger} record.`);
+				if (answer.lostDays.length) lines.push(noRecordSentence('This record', answer.lostDays, (days) => `these figures do not show ${days}`));
+				const aside = setAsideSentence('This record', asked[index].ledger, answer.setAside, 'these figures');
+				if (aside !== null) lines.push(aside);
 				return lines;
 			});
 		});
@@ -54,11 +57,14 @@
 	});
 </script>
 
-<div data-readout-fetched={queries.map((query) => query.ledger).join(' ')} data-model-query={name}>
-	<Reserved record {panelState} {height} {width} {name} label={name}>
+<div data-readout-fetched={queries.map((query) => query.ledger).join(' ')} data-model-query={name}
+	data-query-state={panelState} data-window-days={range?.days}>
+	{#if panelState === 'ready'}
 		{#if range !== null}
 			{@render children(rows, range)}
-			{#each notes as note}<p data-record-note>{note}</p>{/each}
 		{/if}
-	</Reserved>
+	{:else}
+		<EmptyState drawing={recordEmptyState(panelState)} {height} {width} {name} label={name} />
+	{/if}
+	{#each notes as note}<p data-record-note>{note}</p>{/each}
 </div>

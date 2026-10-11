@@ -1,15 +1,30 @@
 # Why a summary was doubted, and what the checker measures
 
-**Last Updated**: 2026-10-07
+**Last Updated**: 2026-10-11
 
 `/console/model/` answers what the model wrote, how long it took, and what it got
-wrong. Four panels are on this page: the five reasons a summary was doubted, the
-faithfulness score, the lead coverage, and the table of instruments nothing acts
-on. The eleven measure cards and the two distributions above them are drawn to
+wrong. Its eleven panels are the measure cards, throughput, call endings, refusing
+rules, doubt reasons, faithfulness, source doubts, writing cost, checking cost,
+summary length and the newest model change. The eleven original card labels stay
+verbatim; determinism is the twelfth card. The cards and distributions are drawn to
 the rules in
 [../../concepts/console-design/what-the-quality-and-source-panels-draw.md](../../concepts/console-design/what-the-quality-and-source-panels-draw.md).
 
 Which panel sits on which route is [console.md](console.md).
+
+The nine eligible panels read the declarations in
+`frontend/src/lib/console/queries/model.ts` through `sliceOnce`, at view time.
+The cards and their daily disclosure remain private build-time inputs; their
+published-summary and determinism counts come from distinct day metrics, not
+score-row counts. The reasons remain private published-item decisions. No live
+ledger values or ledger-read metadata are serialized into the route page data.
+A missing private input and a recorded quiet input say different things.
+
+The page owns one window control and one recording frame. Sampling, measurement
+off, recording start, coverage by another record and private partial-read notes
+keep the shared recording helpers' words. Live doors retain lost-day and
+set-aside-file notes even when the surviving record is quiet. A missing value is
+not a zero, and a failed read never supplies a success-shaped fallback.
 
 ## Why a summary was doubted, and the one ledger that can answer it
 
@@ -21,8 +36,8 @@ often the checker stopped; this says which check failed.
 decided by `verdict` and written onto the published item by `assemble.build_day`.
 The eval ledger's 35 columns carry the inputs a reason is decided from - `hhem`,
 `coverage`, `unsupported_numbers`, `hedge_dropped` - and the band, and no reason
-column at all. So the route walks `DIGEST_ROOT` the way `publishedCharts` already
-does for the Pipelines route, and what ships is one count per reason per day
+column at all. The route reads only the publication inventory's named day payloads,
+and what ships is one count per reason per day
 rather than the payloads. Re-deriving the reason from the ledger's inputs was
 refused: it puts a second copy of `verdict` in a second language, and the day the
 two disagree the console is wrong about the item a reader was shown
@@ -33,16 +48,14 @@ number says how often the checker stopped and never says which fault to go and
 fix. Each item carries at most one reason, so the five add up with nothing
 counted twice - which is what makes the stack legal and what the oracle checks.
 
-**Stacked, with a switch to lines.** The same array draws both with only `type`
-and `stack` moving, which is the condition
+**Stacked, on `dateSeries`.** Each reason has one named series token, and the
+stack counts decisions from the same day. It is not a sum of unrelated scores.
+The drawing follows
 [../../concepts/console-design/the-mark-shapes-a-panel-may-reach-for.md](../../concepts/console-design/the-mark-shapes-a-panel-may-reach-for.md)
-sets for that control. Picking `Lines` reaches the live chart, not only the
-prerendered one. A chart carries an explicit lifetime - it hydrates, draws when a
-reader comes within a screen of it, takes a changed option through `update`, and
-is destroyed once - and a small `$effect` in
-[../../../frontend/src/lib/charts/Chart.svelte](../../../frontend/src/lib/charts/Chart.svelte)
-hands the live chart each new option, so a control that moves the shape or the
-window is followed without a rebuild.
+without the former engine chart or its shape control. Every recorded checker
+change marks the reason chart; faithfulness marks only changes whose
+`score_moved` is true. Settings are dashed, checker changes dotted; a day with
+both draws the settings boundary and prints both changes in its readout.
 
 **A reason with no items draws nothing, so the panel names it in a sentence.**
 `not_scored` has never fired: it needs a missing faithfulness score, and the
@@ -58,9 +71,8 @@ would make three days look clean.
 
 ## Every instrument the checker writes, and the panel that owes it a number
 
-Three more panels: the faithfulness score, the lead coverage, and a table of the
-six instruments nothing acts on. What matters more than any of the three is the
-map they ship with.
+The recorded-only panel is gone. Its eight instruments now sit beside the
+measure each explains, and the map still owes every measured field a receiver.
 
 **The artefact is `DRAWN_BY`, not the charts.**
 [../../../frontend/src/lib/console/eval-instruments.ts](../../../frontend/src/lib/console/eval-instruments.ts)
@@ -70,17 +82,30 @@ identity and provenance columns, each with a sentence. Between them the two must
 name every property of
 `EvalRow`,
 once, and name nothing else.
+`backend/tests/contracts/test_frontend_console_lists.py` compares the sets;
 [../../../frontend/tests/console-model-instruments.spec.ts](../../../frontend/tests/console-model-instruments.spec.ts)
-compares the two sets in the ninety-second gate. So a column added to `EvalRow`
+visits each receiver's declared route. So a column added to `EvalRow`
 next month fails a test rather than going undrawn - which is the defect the map
 exists for: `hhem` and `coverage` were scored on every summary from the first
 published day and read by nothing on the site for two weeks.
 
-**Two panels was the scope and six more columns was the survey.** Counted
-2026-09-06, ten of the ledger's twenty measured columns had no reader anywhere in
-`frontend/src`. Faithfulness and lead coverage got their own panels; the other
-eight went to the third. Drawing two and calling the goal met would have left the
-map failing its own test on the day it was written.
+| Instrument | Receiver and reading |
+| --- | --- |
+| Compression | Summary length: median percent on the run's row, no mark of its own |
+| Self repetition | Daily figures: median percent, adjacent to coherence |
+| Coherence | Daily figures: median signed cosine to two decimal places |
+| Semantic coverage | Daily figures: median percent; before 24 September 2026, not measured |
+| Evidential density | Source doubts: median per 1,000 article words on its source row |
+| Speculative density | Source doubts: the same unit, beside the hedge count |
+| Extraction suspect | Pipelines extraction: distinct published articles and days |
+| Determinism violation | Twelfth model card and daily figures: distinct published articles per day |
+
+The authoritative labels and notes remain `RECORDED` and `FLAGS`. None receives a
+threshold, direction, tint or worst marker. Each receiving panel says once:
+**Nothing acts on these numbers.** Densities are figures, never parts of a bar.
+Sources meet score and item records only on the declared URL key, keeping the
+later score of a repeated URL. Unmatched scores are counted, never assigned a
+fabricated source; a small sample refuses its share instead of drawing zero.
 
 **`hhem_full` and `hhem_delta` are a sentence, not a second chart.** The checker
 scores each summary twice, once against the text the machine was given and once
@@ -126,28 +151,21 @@ The one threshold this page did draw until 2026-09-24 - the share of an article'
 opening a summary had to keep - stays retired, because plenty of good articles
 open slowly.
 
-**Two lines on faithfulness.** Measured 2026-09-06 over the
+**A median line and its quartile spread on faithfulness.** Measured 2026-09-06 over the
 fifteen committed days, the middle summary's faithfulness sat between 88 and 95
 percent while the lower quarter swung from 73 to 94 - so the level and the tail
-are two different facts and both are drawn. Lead coverage does the opposite: the
-middle summary sat between 57 and 64 percent every single day, so a line of it
-beside a moving one would read as the important one. What moves there is the
-share of a day that fell under the floor, and that is what is drawn; the level is
-in the readout strip and the headline.
+are different facts. The median is the line; the lower and upper quarters are
+its spread, not separate percentile lines. The table prints all three readings.
 
-**Lines, and no shape switch on either.** One percentile added to another is not
+**A line, and no shape switch.** One percentile added to another is not
 a quantity, and neither is one day's share added to the next day's. The condition
 for carrying that control is that both shapes read the same array honestly. Bars
 here would not.
 
-**A day is that day's middle summary, and the recorded table says so in full.** A
-median over the whole window needs every summary's reading, and carrying 6,966 of
-them into the page to print four figures is not a trade worth making. The table
-prints the quietest day, the middle day and the loudest day, each by its own
-middle summary. It used to name that in four words - "that day's middle summary" -
-which is only a definition to somebody who already knew it. It now spells the
-median out: half of that day's summaries scored higher, half lower. Susan,
-2026-09-25.
+**A daily figure is that day's middle measured summary.** Medians and percentiles
+use the project's nearest-rank rule: an actual observation, never an average of
+two observations. The daily disclosure does not replace an unavailable reading
+with zero. A coherence cosine keeps its sign and is not mislabeled a percentage.
 
 **The two densities are drawn per thousand words, not per word.** Per word they
 are 0.011 and 0.004 - two numbers a reader cannot tell apart, neither of which
@@ -203,6 +221,21 @@ three refusals are specific to this plot.
 **`uplot` was tried on this plot and removed.** It drew a second, smaller chart
 beneath a complete SVG, and the pan and zoom it was bought for live in the window
 control rather than in the plot (Guardrail #8).
+
+`RunLengths`, `Sparkline` and `ThroughputTrend` accept the optional structured
+model rule; callers that omit it retain their legacy behavior. `completeModelRule`
+(also exported as `fullModelRule`) preserves changes on unmeasured days in a note
+rather than moving their boundary to another measured day. Throughput keeps its
+candles and adds the window-median rule; call endings skip empty cells and put
+length endings at the bottom. Writing and checking keep `TimeHistogram` and its
+domains. Refusing rules use the same identity-free `failedRuleQuery`,
+`failureRuleRows` and `FailureList.ranking` as Pipelines, restricted to model stages.
+
+The newest model change compares dated model-ID sets over the widest declared
+span, splitting independent score and timing populations at the change date.
+It never joins the before and after article populations. The approved declaration
+does not carry a faithfulness-score column: its median-score change therefore says
+not measured rather than inventing a score or broadening the query.
 
 ## See also
 

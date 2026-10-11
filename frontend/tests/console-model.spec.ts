@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from './support/door-page';
+import type { Page } from '@playwright/test';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -8,6 +9,8 @@ import { render } from 'svelte/server';
 import { sparklineMarks } from '../src/lib/charts/sparkline';
 import { shortDate } from '../src/lib/format';
 import { CONSOLE_MODEL_LABELS_PAGE } from '../scripts/doc-test-inputs';
+import { cardColumns } from '../src/lib/console/model/cards';
+import { RECORDED } from '../src/lib/console/eval-instruments';
 
 /**
  * `What the model did` is eleven measures, so it is eleven cards.
@@ -39,25 +42,7 @@ const CARDS = '[data-model-cards]';
  * the one nobody updates.
  */
 function columns(): { key: string; label: string; line: string; polarity: string }[] {
-	const source = readFileSync(
-		path.join(frontend, 'src', 'routes', 'console', 'model', '+page.svelte'),
-		'utf8'
-	);
-	const start = source.indexOf('const COLUMNS');
-	expect(start, 'the console page no longer names COLUMNS').toBeGreaterThan(-1);
-	const block = source.slice(start, source.indexOf('\n\t];', start));
-	// A label is single-quoted and holds no single quote; a line may be quoted
-	// either way, because two of them hold an apostrophe. The polarity is
-	// captured too: which way is better is declared beside the label, so a
-	// column that lost it is a column that would paint from the sign again.
-	const entry =
-		/\{\s*key:\s*'([^']*)',\s*label:\s*'([^']*)',\s*line:\s*(?:'([^']*)'|"([^"]*)"),\s*polarity:\s*'([^']*)'\s*\}/g;
-	return [...block.matchAll(entry)].map((match) => ({
-		key: match[1],
-		label: match[2],
-		line: match[3] ?? match[4] ?? '',
-		polarity: match[5]
-	}));
+	return cardColumns.map((column) => ({ ...column }));
 }
 
 /** The same eleven, from the doc that rules the copy.
@@ -121,7 +106,7 @@ async function newestDay(page: Page): Promise<string> {
 test.describe('the eleven measures, as cards', () => {
 	test('every card carries its label byte for byte', async ({ page }) => {
 		const wanted = columns();
-		expect(wanted, 'the source no longer holds eleven columns').toHaveLength(11);
+		expect(wanted, 'the source lost an original card or the determinism card').toHaveLength(12);
 
 		await page.goto('/console/model/');
 		await expect(page.locator(CARDS), 'the model section draws no card grid').toHaveCount(1);
@@ -160,8 +145,8 @@ test.describe('the eleven measures, as cards', () => {
 		const wanted = columns();
 		const ruled = documented();
 		expect(ruled, 'the doc no longer lists eleven labels').toHaveLength(11);
-		expect(wanted.map((column) => column.label)).toEqual(ruled.map((row) => row.label));
-		expect(wanted.map((column) => column.line)).toEqual(ruled.map((row) => row.line));
+		expect(wanted.slice(0, 11).map((column) => column.label)).toEqual(ruled.map((row) => row.label));
+		expect(wanted.slice(0, 11).map((column) => column.line)).toEqual(ruled.map((row) => row.line));
 
 		await page.goto('/console/model/');
 		for (const column of ruled) {
@@ -223,9 +208,9 @@ test.describe('the eleven measures, as cards', () => {
 				)
 			}))
 		);
-		expect(read, 'the scan found no cards').toHaveLength(11);
+		expect(read, 'the scan found no cards').toHaveLength(12);
 
-		const checked = read.filter((entry) => entry.drawn && entry.figure !== '-');
+		const checked = read.filter((entry) => entry.drawn && entry.figure !== 'not measured');
 		expect(checked.length, 'no card drew a line over a measured newest day').toBeGreaterThan(0);
 		for (const entry of checked) {
 			expect(entry.heading, `${entry.label} draws a line with no strip under it`).not.toBeNull();
@@ -286,7 +271,7 @@ test.describe('the eleven measures, as cards', () => {
 		const tones = await page
 			.locator(`${CARDS} [data-kpi]`)
 			.evaluateAll((cards) => cards.map((node) => node.getAttribute('data-tone')));
-		expect(tones).toHaveLength(11);
+		expect(tones).toHaveLength(12);
 		expect(tones.filter((tone) => tone !== 'neutral')).toEqual([]);
 	});
 
@@ -322,7 +307,7 @@ test.describe('the eleven measures, as cards', () => {
 			})
 		);
 
-		expect(drawn, 'the scan found no cards').toHaveLength(11);
+		expect(drawn, 'the scan found no cards').toHaveLength(12);
 		expect(drawn.filter((entry) => !entry.drew).map((entry) => entry.label)).toEqual([]);
 		// A line narrower than this is a smudge, and one wider than its card pushes
 		// a scrollbar under the whole grid.
@@ -341,7 +326,7 @@ test.describe('the daily figures, behind a control', () => {
 		// it names the span - a table that ignored the control above it would be two
 		// windows on one page. `console-window.spec.ts` owns the day count.
 		await expect(page.locator('[data-model-table-control] > summary')).toContainText(
-			'Show these figures day by day'
+			'The days behind the cards'
 		);
 		// Closed, so the section leads with the shape. The rows are in the document
 		// either way: this costs no fetch and needs no script.
@@ -372,7 +357,8 @@ test.describe('the daily figures, behind a control', () => {
 			.evaluateAll((cells) => cells.map((cell) => (cell.textContent ?? '').trim()));
 		// The day column, then the eleven. A sentence left in a header as well as
 		// on a card is the same words twice on one screen.
-		expect(headers).toEqual(['Day', ...columns().map((column) => column.label)]);
+		expect(headers).toEqual(['Day', ...columns().map((column) => column.label),
+			...RECORDED.filter((instrument) => ['self_repetition', 'coherence', 'semantic_coverage'].includes(instrument.id)).map((instrument) => instrument.label)]);
 	});
 });
 

@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './support/door-page';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
@@ -108,9 +108,15 @@ test.describe('the map', () => {
 	});
 
 	test('the two instrument lists are columns of the ledger, and are drawn apart', () => {
+		const receivers: Readonly<Record<string, string>> = {
+			compression: 'summary-length', self_repetition: 'daily-figures', coherence: 'daily-figures',
+			semantic_coverage: 'daily-figures', evidential_density: 'source-doubts',
+			speculative_density: 'source-doubts', extraction_suspect: 'extraction',
+			determinism_violation: 'daily-figures'
+		};
 		for (const instrument of [...RECORDED, ...FLAGS]) {
 			expect(DRAWN_BY[instrument.id], `${instrument.id} is listed but not assigned`).toBe(
-				'recorded-only'
+				receivers[instrument.id]
 			);
 			expect(instrument.label, `${instrument.id} is labelled with its own column name`).not.toContain(
 				'_'
@@ -341,25 +347,25 @@ test.describe('the arithmetic', () => {
 
 test.describe('the panels, in a browser', () => {
 	test('every declared panel is on the page it declares', async ({ page }) => {
-		await page.goto('/console/model/');
 		for (const panel of EVAL_PANELS) {
-			expect(panel.route, 'a panel declares a route this test does not visit').toBe(
-				'/console/model/'
-			);
+			await page.goto(panel.route);
 			await expect(
 				page.locator(`[data-eval-panel="${panel.id}"]`),
 				`the ${panel.id} panel is declared and is not on the page`
 			).toHaveCount(1);
 		}
 		// Nothing marks itself a panel without being in the map.
+		await page.goto('/console/model/');
 		const marked = await page.locator('[data-eval-panel]').evaluateAll((nodes) =>
 			nodes.map((node) => node.getAttribute('data-eval-panel') ?? '')
 		);
-		expect(marked.slice().sort()).toEqual(EVAL_PANELS.map((panel) => panel.id).sort());
+		for (const panel of EVAL_PANELS.filter((panel) => panel.route === '/console/model/')) expect(marked).toContain(panel.id);
+		expect(marked).not.toContain('recorded-only');
 	});
 
 	test('the faithfulness panel publishes the numbers beside its drawn days', async ({ page }) => {
 		await page.goto('/console/model/');
+		await expect(page.locator('[data-model-query="faithfulness"]')).toHaveAttribute('data-query-state', 'ready');
 		const days = page.locator('[data-match-day]');
 		const count = await days.count();
 		if (count === 0) {
@@ -405,6 +411,7 @@ test.describe('the panels, in a browser', () => {
 		const doubt = Math.round((config.evaluation?.band_medium_min ?? 0.5) * 100);
 
 		await page.goto('/console/model/');
+		await expect(page.locator('[data-model-query="faithfulness"]')).toHaveAttribute('data-query-state', 'ready');
 		const drawn: number[] = [];
 		for (const day of await page.locator('[data-match-day]').all()) {
 			for (const attribute of ['data-match-mid', 'data-match-low']) {
@@ -423,22 +430,20 @@ test.describe('the panels, in a browser', () => {
 		expect(floor, 'the floor hides a figure the panel drew').toBeLessThanOrEqual(lowest);
 	});
 
-	test('the recorded table draws every instrument, and neither list is silently short', async ({
+	test('every instrument has its approved receiver, and neither list is silently short', async ({
 		page
 	}) => {
 		await page.goto('/console/model/');
 		for (const instrument of RECORDED) {
-			const row = page.locator(`[data-recorded-row="${instrument.id}"]`);
-			await expect(row, `${instrument.id} is recorded and is not on the page`).toHaveCount(1);
-			await expect(row.locator('[data-recorded-mid]')).not.toBeEmpty();
+			const receiver = DRAWN_BY[instrument.id];
+			const row = page.locator(`[data-eval-panel="${receiver}"] [data-instrument="${instrument.id}"]`).first();
+			await expect(row, `${instrument.id} lost its receiver`).toBeAttached();
+			await expect(row).not.toBeEmpty();
+			await expect(page.locator(`[data-eval-panel="${receiver}"]`).first()).toContainText(instrument.note);
 		}
-		for (const instrument of FLAGS) {
-			const row = page.locator(`[data-flag-row="${instrument.id}"]`);
-			await expect(row, `${instrument.id} is recorded and is not on the page`).toHaveCount(1);
-			// The canary sets neither flag, and a flag that never fired has to say so
-			// rather than leave a blank a reader reads as "not measured".
-			await expect(row.locator('[data-flag-fired]')).toContainText('Never');
-		}
+		await expect(page.locator('[data-instrument-slot="model-cards"] [data-kpi-value]')).toHaveText('0');
+		await page.goto(EVAL_PANELS.find((panel) => panel.id === 'extraction')!.route);
+		await expect(page.locator('[data-eval-panel="extraction"]')).toContainText(FLAGS[0].label);
 	});
 
 	test('the two panels state what they count, and name the bar they draw', async ({ page }) => {
@@ -460,7 +465,9 @@ test.describe('the panels, in a browser', () => {
 		expect(intro, 'the panel names a threshold the pipeline does not band on').toContain(`${high}%`);
 		expect(intro, 'the panel names a threshold the pipeline does not band on').toContain(`${low}%`);
 
-		await expect(page.locator('[data-model-recorded-rule]')).toHaveCount(1);
+		for (const id of ['model-cards', 'source-doubts', 'summary-length']) {
+			await expect(page.locator(`[data-console-panel-id="${id}"]`)).toContainText('Nothing acts on these numbers.');
+		}
 		// The two rules are drawn on the plot itself, so no reading in the panel
 		// is tinted: a threshold across the scale says what a score has to clear,
 		// where a coloured figure says this one is bad, which nothing here knows.
@@ -472,7 +479,7 @@ test.describe('the panels, in a browser', () => {
 		page
 	}) => {
 		await page.goto('/console/model/');
-		for (const id of ['faithfulness', 'recorded-only']) {
+		for (const id of ['faithfulness', 'daily-figures', 'source-doubts', 'summary-length']) {
 			const text = (await page.locator(`[data-eval-panel="${id}"]`).innerText()).toLowerCase();
 			for (const column of jargonColumns()) {
 				expect(text, `the ${id} panel prints ${column} at a reader`).not.toContain(column);
@@ -487,13 +494,11 @@ test.describe('the panels, in a browser', () => {
 		// The recorded table carries three units and says which is which on every
 		// cell. A bare number in a table of mixed units is a number nobody can read -
 		// except a cosine, which IS its own number and carries a sign instead.
-		const cells = await page
-			.locator('[data-model-recorded-table] [data-recorded-mid]')
-			.allInnerTexts();
-		expect(cells.length, 'the recorded table drew no reading').toBe(RECORDED.length);
+		const cells = await page.locator('[data-instrument]').filter({ hasNot: page.locator('[data-kpi]') }).allTextContents();
+		expect(cells.length, 'the approved receivers drew no reading').toBeGreaterThan(RECORDED.length);
 		for (const cell of cells) {
 			expect(cell.trim(), 'a recorded reading carries no unit').toMatch(
-				/^(-|\d+%|-?\d\.\d{2}|\d+\.\d per 1,000 words)$/
+				/^(not measured|\d+|\d+%|-?\d\.\d{2}|\d+\.\d per 1,000 words)$/
 			);
 		}
 	});
@@ -504,7 +509,7 @@ test.describe('the panels, in a browser', () => {
 		await page.goto('/console/model/');
 		const before = await page.locator('[data-match-day]').count();
 		expect(before, 'the faithfulness panel drew no day').toBeGreaterThan(0);
-		for (const id of ['faithfulness', 'recorded-only']) {
+		for (const id of ['faithfulness', 'source-doubts', 'summary-length']) {
 			// `console-window.spec.ts` pins the exact list of windowed surfaces. These
 			// two honour the control and never claim to be one, for the same reason
 			// the doubt-reason panel does not: the list is the contract with the

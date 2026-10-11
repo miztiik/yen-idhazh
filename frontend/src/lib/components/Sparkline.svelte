@@ -23,7 +23,7 @@
 		type SparklineSeries
 	} from '$lib/charts/sparkline';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
-	import { ruleEvents, type ModelRule } from '$lib/charts/d3/model-rule';
+	import { completeModelRule, ruleEvents, type ModelRule } from '$lib/charts/d3/model-rule';
 
 	/** Where the line's strip is printed. Under the line itself, named `name`;
 	 * or by the list the line sits in, which is told every change - a column, or
@@ -66,15 +66,16 @@
 	let picked = $state<number | null>(null);
 	const at = $derived('onSelect' in strip ? strip.selected : picked);
 	const effectiveRules = $derived(modelRule === undefined ? rules : []);
-	const boundaries = $derived(modelRule === undefined || 'declined' in modelRule ? [] : modelRule.changes.flatMap((change) => {
-		const point = marks.dates.findIndex((date) => date >= change.date);
+	const fullRule = $derived(modelRule === undefined ? undefined : completeModelRule(modelRule, marks.dates));
+	const boundaries = $derived(fullRule === undefined || 'declined' in fullRule ? [] : fullRule.changes.flatMap((change) => {
+		const point = marks.dates.findIndex((date) => date === change.date);
 		return point < 0 ? [] : [{ ...change, point }];
 	}));
 	const readout = $derived.by(() => {
 		if (own === null) return null;
 		const result = sparklineReadout(marks, series, effectiveRules);
 		if (modelRule === undefined) return result;
-		return { ...result, events: ruleEvents(modelRule, marks.dates).lines.map((lines) => [...lines]) };
+		return { ...result, events: ruleEvents(fullRule!, marks.dates).lines.map((lines) => [...lines]) };
 	});
 
 	// Inset by the stroke, or a point sitting on the domain's edge is drawn half

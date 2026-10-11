@@ -32,7 +32,17 @@ export function cardText(value: number | null, key: string): string {
 	if (value === null) return 'not measured';
 	if (key === 'per-item' || key === 'minutes') {
 		const rounded = Math.round(value / (key === 'minutes' ? 60000 : 1000));
-		return rounded === 0 && value > 0 ? '<1' : String(rounded);
+		const figure = rounded === 0 && value > 0 ? '<1' : String(rounded);
+		return key === 'minutes' ? `${figure} min` : `${figure} s`;
 	}
+
 	return `${value}${key === 'part-pct' || key === 'copied' ? '%' : ''}`;
+}
+
+export function cardTrendDays<T extends { date: string }>(days: readonly T[]): T[] {
+	const newest = days.at(-1)?.date;
+	if (newest === undefined) return [];
+	const first = new Date(`${newest}T00:00:00Z`);
+	first.setUTCDate(first.getUTCDate() - 13);
+	return days.filter((day) => day.date >= first.toISOString().slice(0, 10));
 }

@@ -241,6 +241,10 @@ export function selectPaths(paths: readonly string[]): Selection {
 		} else if (/^config\/console\//.test(path)) {
 			selected = CONSOLE;
 			reason = 'route-owned console config and panel checks';
+		} else if (/^frontend\/src\/lib\/console\/model\//.test(path) ||
+			/^frontend\/tests\/support\/model-(?:route|record-state)\.ts$/.test(path)) {
+			selected = CONSOLE;
+			reason = 'Summaries declarations, private builder and state consumers';
 		} else if (/^frontend\/tests\/support\/(?:console-expect|panel-drivers)\//.test(path)) {
 			selected = CONSOLE;
 			reason = 'route-owned console expectations and drivers';

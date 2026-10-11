@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from './support/door-page';
+import type { Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { shortDate } from '../src/lib/format';
@@ -49,6 +50,7 @@ interface Candle {
 
 /** The days the chart actually drew a candle for, oldest first. */
 async function drawnDays(page: Page): Promise<Candle[]> {
+	await expect(page.locator(PLOT)).toBeVisible();
 	return page.locator('[data-candle="read"]').evaluateAll((nodes) =>
 		nodes.map((node) => ({
 			date: node.getAttribute('data-date') ?? '',
@@ -61,6 +63,7 @@ async function drawnDays(page: Page): Promise<Candle[]> {
  * The chart publishes it, so the count cannot rot when the fixture moves. */
 async function axisDays(page: Page): Promise<{ days: number; first: string; last: string }> {
 	const svg = page.locator(PLOT);
+	await expect(svg).toBeVisible();
 	return {
 		days: Number(await svg.getAttribute('data-throughput-days')),
 		first: (await svg.getAttribute('data-throughput-first')) ?? '',
@@ -83,6 +86,8 @@ async function setWindow(page: Page, days: number) {
 		'data-window-days',
 		String(days)
 	);
+	await expect(page.locator('[data-model-query="model-throughput"]')).toHaveAttribute('data-window-days', String(days));
+	await expect(page.locator('[data-model-query="model-throughput"]')).toHaveAttribute('data-query-state', 'ready');
 }
 
 test('the chart draws the selected window, not the whole published history', async ({ page }) => {
@@ -239,6 +244,7 @@ test('the keyboard reaches every column, and Escape gives the newest day back', 
 
 test('the heading survives a window with nothing in it, and says so', async ({ page }) => {
 	await page.goto('/console/model/');
+	await expect(page.locator('[data-model-query="model-throughput"]')).toHaveAttribute('data-query-state', 'ready');
 
 	// The canary window has days, so this asserts the pair rather than the empty
 	// branch: exactly one of the chart and the notice is on the page, never both
@@ -248,59 +254,19 @@ test('the heading survives a window with nothing in it, and says so', async ({ p
 	const chart = await page.locator('[data-throughput="chart"]').count();
 	const empty = await page.locator('[data-throughput="empty"]').count();
 	expect(chart + empty).toBe(1);
-	await expect(page.locator('h3', { hasText: 'Model tokens per second' })).toHaveCount(1);
+	await expect(page.locator('h2', { hasText: 'Model tokens per second' })).toHaveCount(1);
 });
 
-test('a day whose model differs from the day before it draws a rule', async ({ page }) => {
+test('the live throughput chart declares settings changes and the window median, not a model-step rule', async ({ page }) => {
 	await page.goto('/console/model/');
-
 	const drawn = await drawnDays(page);
-
-	// Every candle carries the attribute the rule reads, or the rest of this test
-	// would pass on a chart that had stopped looking at models at all. The canary
-	// scores name none, so the value is the empty string - the binding running is
-	// what this half proves, not the name.
 	expect(drawn.length).toBeGreaterThan(0);
-	expect(drawn.every((day) => day.model !== null)).toBe(true);
-
-	// Both models named, or there is nothing to compare - the same rule the
-	// verdict sentence uses. An unknown model ends the comparison.
-	const expected = drawn
-		.filter(
-			(day, index) =>
-				index > 0 &&
-				day.model !== '' &&
-				day.model !== null &&
-				drawn[index - 1].model !== '' &&
-				drawn[index - 1].model !== null &&
-				day.model !== drawn[index - 1].model
-		)
-		.map((day) => day.date);
-
-	const rules = await page
-		.locator('[data-throughput-swap]')
-		.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-throughput-swap') ?? ''));
-	expect(rules).toEqual(expected);
-
-	// A key only where a rule was drawn. A legend entry for a mark that is not on
-	// the chart sends a reader looking for something that is not there.
-	await expect(page.locator('[data-series="swap"]')).toHaveCount(expected.length > 0 ? 1 : 0);
-
-	// The canary's throughput days are older than the first row in the scores
-	// ledger, so no day here names a model, `expected` is empty, and the two
-	// assertions above cannot watch a rule being drawn. On the published console
-	// they can and do: the committed ledger names `qwen3-8b-q4-k-m` to
-	// 2026-08-26 and `qwen3-5-9b-q4-k-m` from 2026-08-27, and the production
-	// build drew exactly one rule, on 2026-08-27, measured 2026-08-30. This
-	// early return is where the canary stops being able to check it - the
-	// assertions below run unchanged the day the fixture carries two names.
-	if (expected.length === 0) return;
-
-	// The rule says which two models, so the step is attributable rather than
-	// merely marked. It is the rule's name, and the strip says it on that day.
-	const first = page.locator(`[data-throughput-swap="${rules[0]}"]`);
-	await expect(first).toHaveAttribute(
-		'aria-label',
-		/Model changed from .+ to .+ on \d{1,2} \w{3} \d{4}\./
-	);
+	await expect(page.locator('[data-throughput="chart"]')).toHaveAttribute('data-model-rule', /yes|no/);
+	await expect(page.locator('[data-throughput-swap]')).toHaveCount(0);
+	await expect(page.locator('[data-throughput-median]')).toHaveCount(1);
+	await expect(page.locator('[data-throughput="verdict"]')).toContainText("window's median writing rate");
+	const changes = await page.locator('[data-throughput="chart"] [data-model-rule-date]').evaluateAll((nodes) =>
+		nodes.map((node) => node.getAttribute('data-model-rule-date')!));
+	expect(changes.every((date) => drawn.some((day) => day.date === date))).toBe(true);
+	if (changes.length === 0) await expect(page.locator('[data-model-rule-empty="model-throughput"]')).not.toHaveText('');
 });

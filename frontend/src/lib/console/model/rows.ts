@@ -1,4 +1,5 @@
 import type { Row } from '../../data/ledger';
+import { nearestRank } from '../rates';
 
 /** Keep the declared cells only; the native door uses numbers and booleans. */
 export function textRows(rows: readonly Row[]): Record<string, string>[] {
@@ -13,6 +14,5 @@ export function number(value: Row[string] | undefined): number | null {
 }
 
 export function median(values: readonly number[]): number | null {
-	const sorted = [...values].sort((a, b) => a - b);
-	return sorted.length === 0 ? null : sorted[Math.min(sorted.length - 1, Math.floor(sorted.length / 2))];
+	return nearestRank(values, 0.5);
 }

@@ -61,8 +61,8 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	'src/lib/console/queries': ['machine.ts', 'model.ts', 'pipelines.ts', 'shared.ts', 'voices.ts', 'window.ts'],
 	'src/lib/console/model': [
 		'rows.ts', 'call-ending.ts', 'faithfulness.ts', 'source-doubts.ts', 'summary-length.ts',
-		'model-change.ts', 'model-throughput.ts', 'cost.ts', 'Query.svelte', 'Series.svelte',
-		'Cards.svelte', 'cards.ts', 'Panels.svelte', 'panels.ts', 'Reasons.svelte', 'doubt-reasons.ts', 'work.ts'
+		'model-change.ts', 'model-throughput.ts', 'model-rule.ts', 'refusing-rule.ts', 'cost.ts', 'Query.svelte', 'Series.svelte',
+		'Cards.svelte', 'cards.ts', 'Panels.svelte', 'panels.ts', 'Reasons.svelte', 'doubt-reasons.ts', 'slice.ts', 'work.ts'
 	],
 	'src/lib/console/explorer': [
 		'address.ts', 'answer.ts', 'AnswerTable.svelte', 'chart-roles.ts', 'column-groups.ts',
@@ -126,7 +126,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'backend-python.ts', 'browser.ts', 'door-page.ts', 'canary-config.ts', 'charts-ready.ts', 'check-addons.ts',
 		'consecutive-days.ts', 'console-panels.ts', 'console-sources.ts', 'console-widths.ts', 'day-drawings.ts',
 		'day-loader.ts', 'day-ready.ts', 'explorer-answer.ts', 'in-zone.ts', 'judgement-route.ts',
-		'ledger-lifecycle.ts', 'machine-record-state.ts', 'machine-rows.ts', 'model-swap.ts',
+		'ledger-lifecycle.ts', 'machine-record-state.ts', 'machine-rows.ts', 'model-swap.ts', 'model-route.ts', 'model-record-state.ts',
 		'month-shard.ts', 'panel-gates.ts', 'panel-tab.ts', 'published-site.ts', 'published.ts',
 		'range-host.ts', 'reduction-input.ts', 'served-telemetry.ts', 'server-render.ts', 'span-said.ts',
 		'telemetry-row.ts', 'views.ts'

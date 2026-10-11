@@ -190,8 +190,10 @@ function summarizeMs(health: Record<string, string>[]): number[] {
  * paragraph. Taking the larger cannot under-report copying, which is the only
  * direction that matters here.
  */
-function copied(row: Record<string, string>): number {
-	return Math.max(measured(row.extractiveness) ?? 0, measured(row.verbatim_run) ?? 0);
+function copied(row: Record<string, string>): number | null {
+	const overlap = measured(row.extractiveness);
+	const verbatim = measured(row.verbatim_run);
+	return overlap === null && verbatim === null ? null : Math.max(overlap ?? 0, verbatim ?? 0);
 }
 
 /** Did the checker doubt this summary - any one of the three signals.
@@ -223,7 +225,7 @@ function day(
 ): ModelDay {
 	const scored = scores.length > 0;
 	const times = summarizeMs(health);
-	const share = median(scores.map(copied));
+	const share = median(scores.map(copied).filter((value): value is number => value !== null));
 	const count = (of: (row: Record<string, string>) => boolean) =>
 		scored ? scores.filter(of).length : null;
 	// Only the rows whose cut flag still means a cut. The rest answer an older
@@ -1250,8 +1252,8 @@ function sideMeasures(
 	const words = scores
 		.map((row) => measured(row.summary_words))
 		.filter((count): count is number => count !== null);
-	const copies = scores.map(copied);
-	const rates = health.map(itemRates);
+	const copies = scores.map(copied).filter((value): value is number => value !== null);
+	const rates = health.map(itemRates).filter((rate) => rate.read !== null && rate.write !== null);
 	const outside = scores.filter((row) => {
 		const wrote = measured(row.summary_words);
 		const read = measured(row.source_words_before_cap) ?? measured(row.source_words);
@@ -1341,21 +1343,23 @@ export function modelSwap(
 	minArticles: number
 ): ModelSwap | null {
 	const onDate = modelByDate(scores);
+	const sets = new Map([...byDate(scores)].map(([date, rows]) =>
+		[date, new Set(rows.map((row) => row.model_id ?? '').filter(Boolean))]));
 	const dates = [...onDate.keys()].sort();
 	let at = '';
 	for (let index = 1; index < dates.length; index += 1) {
-		if (onDate.get(dates[index]) !== onDate.get(dates[index - 1])) at = dates[index];
+		const before = sets.get(dates[index - 1])!;
+		const after = sets.get(dates[index])!;
+		if (before.size !== after.size || [...before].some((model) => !after.has(model))) at = dates[index];
 	}
 	if (at === '') return null;
 
 	const older = dates.filter((date) => date < at);
 	const newer = dates.filter((date) => date >= at);
-	const beforeDates = new Set(older);
-	const afterDates = new Set(newer);
-	const beforeScores = scores.filter((row) => beforeDates.has(row.date ?? ''));
-	const afterScores = scores.filter((row) => afterDates.has(row.date ?? ''));
-	const beforeHealth = health.filter((row) => beforeDates.has(row.date ?? ''));
-	const afterHealth = health.filter((row) => afterDates.has(row.date ?? ''));
+	const beforeScores = scores.filter((row) => Boolean(row.date) && row.date < at);
+	const afterScores = scores.filter((row) => (row.date ?? '') >= at);
+	const beforeHealth = health.filter((row) => Boolean(row.date) && row.date < at);
+	const afterHealth = health.filter((row) => (row.date ?? '') >= at);
 
 	const left = sideMeasures(beforeScores, beforeHealth, bands);
 	const right = sideMeasures(afterScores, afterHealth, bands);

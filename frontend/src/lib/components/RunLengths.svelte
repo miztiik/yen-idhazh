@@ -31,7 +31,7 @@
 	import { shortDate } from '$lib/format';
 	import ChartReadout from './ChartReadout.svelte';
 	import type { RunLength } from '../../routes/console/model/+page.server';
-	import { ruleDeclaration, ruleEvents, type ModelRule } from '$lib/charts/d3/model-rule';
+	import { completeModelRule, ruleDeclaration, ruleEvents, type ModelRule } from '$lib/charts/d3/model-rule';
 
 	let {
 		runs,
@@ -68,9 +68,10 @@
 			...(run.askHigh === null ? [] : [run.askHigh])
 		])
 	);
-	const declaration = $derived(rule === undefined ? null : ruleDeclaration(rule));
-	const boundaries = $derived(rule === undefined || 'declined' in rule ? [] : rule.changes.flatMap((change) => {
-		const index = runs.findIndex((run) => run.date >= change.date);
+	const fullRule = $derived(rule === undefined ? undefined : completeModelRule(rule, runs.map((run) => run.date)));
+	const declaration = $derived(fullRule === undefined ? null : ruleDeclaration(fullRule));
+	const boundaries = $derived(fullRule === undefined || 'declined' in fullRule ? [] : fullRule.changes.flatMap((change) => {
+		const index = runs.findIndex((run) => run.date === change.date);
 		if (index < 0) return [];
 		return [{ ...change, at: box.left + pitch * index }];
 	}));
@@ -253,6 +254,7 @@
 	data-run-lengths="chart"
 	data-chart-type="dateSeries"
 	data-model-rule={declaration?.value}
+	data-model-rule-name={rule === undefined ? undefined : 'summary-length'}
 	data-model-rule-none={declaration?.none}
 	data-run-lengths-runs={runs.length}
 	data-run-domain={runExtent}
@@ -327,7 +329,7 @@
 			{#each boundaries as boundary (`${boundary.date}-${boundary.kind}`)}
 				<line x1={boundary.at} x2={boundary.at} y1={box.top} y2={box.bottom}
 					stroke="var(--color-text-tertiary)" stroke-dasharray={boundary.kind === 'checker' ? '1 3' : '3 3'}
-					data-model-rule-date={boundary.date} data-model-rule-kind={boundary.kind} />
+					data-model-rule-line data-model-rule-date={boundary.date} data-model-rule-kind={boundary.kind} />
 			{/each}
 
 			{#if guide !== null}

@@ -30,6 +30,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'console-mark-parity', 'console-memory-board',
 		'console-memory-held', 'console-model-instruments', 'console-model-panels',
 		'console-model-ledgers',
+		'console-model-builder',
 		'console-model-reasons', 'console-model-rule', 'console-model', 'console-nav',
 		'console-pipeline-timeline', 'console-polarity', 'console-processor-lost',
 		'console-published', 'console-query-door', 'console-ranked', 'console-readout',
@@ -41,7 +42,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 	],
 	logic: [
 		'console-canary-host-halves', 'console-drawn-cells', 'console-panel-queries', 'console-waiting', 'recorded-slices',
-		'console-judgement-nothings',
+		'console-judgement-nothings', 'console-model-nothings',
 		'appearance-config', 'applied-line', 'archive-scope', 'asset-base', 'assist-guard', 'browser-selection', 'chart-types', 'chart-vocabulary', 'day-list', 'day-metrics', 'day-search',
 		'console-data-explorer-address', 'console-data-explorer-cells', 'console-data-explorer-examples', 'console-data-explorer-gaps', 'console-data-explorer-keep', 'console-data-explorer-shape',
 		'explorer-column-groups', 'explorer-strip-fit', 'explorer-type-colour', 'explorer-type-family',

@@ -6,7 +6,7 @@
 	import * as queries from '$lib/console/queries/model';
 	import { settingsRules } from '$lib/console/settings-moved';
 	import { windowOfDays } from '$lib/charts/viewport';
-	import { BAND_UNREAD } from '$lib/console/band';
+	import RecordNotes from '$lib/console/RecordNotes.svelte';
 	import RouteStatus from '$lib/components/RouteStatus.svelte';
 	import WindowControlSource from '$lib/components/WindowControlSource.svelte';
 	import Panel from '$lib/components/Panel.svelte';
@@ -33,6 +33,8 @@
 	const shell = $derived(data);
 	const cardRule = $derived(settingsRules(shell, { from: span.start, to: span.end }, 'none'));
 	const checkerRule = $derived(settingsRules(shell, { from: span.start, to: span.end }, 'every'));
+	const recording = $derived(data.recordingNotes[String(windowDays)]);
+	const measurementOff = $derived(data.measurementOff[String(windowDays)]);
 	onMount(() => {
 		ready = true;
 		const saved = Number(localStorage.getItem(WINDOW_KEY));
@@ -54,20 +56,24 @@
 	}
 </script>
 
+<WindowControlSource days={windowDays} presets={knobs.window_presets} {ready} busy={tally.state === 'loading'}
+	record={{ asked: windowDays, first, through: reach?.through ?? null }} monthsFor={() => 0} onChange={show} />
 <RouteStatus route="model" answers={allAnswers} days={windowDays} through={reach?.through ?? null}
 	shimmerAfterMs={knobs.shimmer_after_ms} onRetry={retryFailed}>
-	<WindowControlSource days={windowDays} presets={knobs.window_presets} {ready} busy={tally.state === 'loading'}
-		record={{ asked: windowDays, first, through: reach?.through ?? null }} monthsFor={() => 0} onChange={show} />
-	<p data-recording>Quality figures are recorded by the checker. {data.recording.evaluationEnabled ? 'The checker is enabled.' : 'Measurement is off.'}</p>
-	<p data-recording>The checker records a share of {data.recording.sampleRate} of the eligible work.</p>
-	<p data-recording>A missing reading is not a recorded zero.</p>
-	<p data-recording>The cards and doubt reasons were read when this site was built; the other panels read the published record now.</p>
+	<div data-recording-lines>
+		{#if measurementOff != null}<p data-recording="off">{measurementOff}</p>{/if}
+		{#if recording?.sampled != null}<p data-recording="sampled">{recording.sampled}</p>{/if}
+		{#if recording?.startedMidWindow != null}<p data-recording="started">{recording.startedMidWindow}</p>{/if}
+		{#if recording?.coveredElsewhere != null}<p data-recording="covered-elsewhere">{recording.coveredElsewhere}</p>{/if}
+	</div>
+	<RecordNotes notes={data.recordNotes[String(windowDays)] ?? []} />
 	<p>A dashed line marks a day a recorded setting changed: the model, its settings, the prompt, the chat template, the runtime or the weights file. A dotted line marks a day the checker changed.</p>
 	{#each configured.panel_groups as group (group.id)}
 		<div data-console-panel-group={group.id}>
 			{#each group.panels as id (id)}
 				<Panel {id} title={titles[id]} verdict={id === 'model-cards'}
 					note={id === 'model-cards' ? "What the model wrote for the day's own articles, how long it took, and what it got wrong." : null}>
+					<div data-panel-question={titles[id]}>
 					{#if id === 'model-cards'}
 						<Cards days={data.cardDays} instruments={data.instruments} start={span.start} end={span.end}
 							rule={cardRule} {checkerRule} chart={data.chart} {windowDays} />
@@ -85,6 +91,7 @@
 							{/snippet}
 						</Query>
 					{/if}
+					</div>
 				</Panel>
 			{/each}
 		</div>

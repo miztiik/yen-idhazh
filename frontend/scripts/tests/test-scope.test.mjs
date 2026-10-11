@@ -9,6 +9,18 @@ import { FRONTEND_GROUPS, groupedSpecs, groupForSpec } from '../test-groups.ts';
 import { changedPaths, ciAnswer, selectPaths, selectionForChange } from '../test-scope.ts';
 
 const FRONTEND = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+test('Summaries modules and native private fixtures select console consumers without narrowing shared inputs', () => {
+	for (const path of ['frontend/src/lib/console/model/Cards.svelte',
+		'frontend/src/lib/console/model/model-change.ts', 'frontend/tests/support/model-route.ts',
+		'frontend/tests/support/model-record-state.ts']) {
+		const selected = selectPaths([path]);
+		assert.deepEqual(selected.groups, ['logic', 'console', 'panels', 'publishing']);
+		assert.equal(selected.rust, false);
+	}
+	assert.deepEqual(selectPaths(['frontend/src/lib/components/Sparkline.svelte']).groups, [...FRONTEND_GROUPS]);
+	assert.equal(groupForSpec('frontend/tests/console-model-nothings.spec.ts'), 'logic');
+	assert.equal(groupForSpec('frontend/tests/console-model-builder.spec.ts'), 'console');
+});
 function tmpdir() {
 	const path = resolve(FRONTEND, '../backend/var/checks/scope-tests');
 	mkdirSync(path, { recursive: true });

@@ -1,5 +1,5 @@
 /** Summaries speed charts name one day and require a second only when the window can hold it. */
-import { expect, test, type Page } from './support/browser';
+import { expect, test, type Page } from './support/door-page';
 
 import { resolve } from 'node:path';
 

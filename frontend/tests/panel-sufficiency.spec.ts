@@ -39,6 +39,7 @@ import {
 import { serverCompiler } from './support/server-render';
 import { explorerConfig } from '../src/lib/server/config';
 import { judgementRoute } from './support/judgement-route';
+import { modelRoute } from './support/model-route';
 
 const judgementTest = browserTest.extend<object, { judgement: Awaited<ReturnType<typeof judgementRoute>> }>({
 	judgement: [async ({}, use, info) => {
@@ -51,6 +52,14 @@ const judgementTest = browserTest.extend<object, { judgement: Awaited<ReturnType
 	}, { scope: 'worker', timeout: 150_000 }]
 });
 const test = browserTest;
+const modelTest = browserTest.extend<object, { summaries: Awaited<ReturnType<typeof modelRoute>> }>({
+	summaries: [async ({}, use, info) => {
+		const recorded = await modelRoute(
+			path.join(info.project.outputDir, 'model-sufficiency', String(info.workerIndex)), 'sufficient');
+		try { await use(recorded); }
+		finally { await recorded.close(); }
+	}, { scope: 'worker', timeout: 150_000 }]
+});
 import { showPanel } from './support/panel-tab';
 
 const PINNED = '2026-08-20';
@@ -374,6 +383,7 @@ test.describe('the judged panels', () => {
 			}
 			const title = `every ${route} judged panel clears gates 1, 2, 3, 5 and 6 at ${width} in ${theme}`;
 			if (route === 'judgement') judgementTest(title, async ({ page, judgement }) => { await checkJudged(page, judgement.origin); });
+			else if (route === 'model') modelTest(title, async ({ page, summaries }) => { await checkJudged(page, summaries.origin); });
 			else test(title, async ({ page }) => { await checkJudged(page); });
 		}
 

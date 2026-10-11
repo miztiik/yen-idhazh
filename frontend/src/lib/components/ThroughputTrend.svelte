@@ -38,8 +38,8 @@
 	import type { ThroughputDay } from '$lib/charts/series';
 	import { daysInWindow } from '$lib/charts/viewport';
 	import { shortDate } from '$lib/format';
-	import { ruleBoundaries, ruleDeclaration, ruleEvents, type ModelRule } from '$lib/charts/d3/model-rule';
-	import { median } from '$lib/console/model/rows';
+	import { completeModelRule, ruleBoundaries, ruleDeclaration, ruleEvents, type ModelRule } from '$lib/charts/d3/model-rule';
+	import { nearestRank } from '$lib/console/rates';
 	import { SERIES_TOKENS } from '$lib/console/series-tokens';
 
 	let {
@@ -148,9 +148,10 @@
 	/** Half a pair of candles, so the oldest and the newest day sit inside the
 	 * plot rather than straddling its edge. */
 	const pad = $derived(Math.min(offset + candle / 2, box.innerWidth / 2));
-	const declaration = $derived(rule === undefined ? null : ruleDeclaration(rule));
-	const boundaries = $derived(rule === undefined ? [] : ruleBoundaries(rule, calendar, calendar.map((_, index) => x(index)), box.left));
-	const windowMedian = $derived(median(ordered.map((day) => day.write.median)));
+	const fullRule = $derived(rule === undefined ? undefined : completeModelRule(rule, ordered.map((day) => day.date)));
+	const declaration = $derived(fullRule === undefined ? null : ruleDeclaration(fullRule));
+	const boundaries = $derived(fullRule === undefined ? [] : ruleBoundaries(fullRule, calendar, calendar.map((_, index) => x(index)), box.left));
+	const windowMedian = $derived(nearestRank(ordered.map((day) => day.write.median), 0.5));
 	const step = $derived((box.innerWidth - pad * 2) / Math.max(1, calendar.length - 1));
 
 	/** Which columns carry a date. The pad is part of it, so the fit is measured
@@ -322,6 +323,7 @@
 		data-throughput="chart"
 		data-chart-type="dateSeries"
 		data-model-rule={declaration?.value}
+		data-model-rule-name={rule === undefined ? undefined : 'model-throughput'}
 		data-model-rule-none={declaration?.none}
 		data-readout-columns={readout.columns.length}
 	>
@@ -389,7 +391,7 @@
 				{#each boundaries as boundary (boundary.date)}
 					<line x1={boundary.x} x2={boundary.x} y1={box.top} y2={box.bottom}
 						stroke="var(--color-text-tertiary)" stroke-dasharray={boundary.kind === 'checker' ? '1 3' : '3 3'}
-						data-model-rule-date={boundary.date} data-model-rule-kind={boundary.kind} />
+						data-model-rule-line data-model-rule-date={boundary.date} data-model-rule-kind={boundary.kind} />
 				{/each}
 				{#if rule !== undefined && windowMedian !== null}
 					<line x1={box.left} x2={box.right} y1={y.scale(windowMedian)} y2={y.scale(windowMedian)}
@@ -543,8 +545,8 @@
 				{/if}
 			</p>
 		{/if}
-		{#if rule !== undefined && 'changes' in rule && rule.note !== null}
-			<p data-model-rule-empty={rule.changes.length === 0 ? '' : undefined} data-model-rule-note={rule.changes.length ? '' : undefined}>{rule.note}</p>
+		{#if fullRule !== undefined && 'changes' in fullRule && fullRule.note !== null}
+			<p data-model-rule-empty={fullRule.changes.length === 0 ? 'model-throughput' : undefined} data-model-rule-note={fullRule.changes.length ? 'model-throughput' : undefined}>{fullRule.note}</p>
 		{/if}
 	</div>
 {/if}

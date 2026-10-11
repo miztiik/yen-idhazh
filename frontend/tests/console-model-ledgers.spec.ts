@@ -8,11 +8,12 @@ import { summaryLength } from '../src/lib/console/model/summary-length';
 import { modelChange } from '../src/lib/console/model/model-change';
 import { modelThroughput } from '../src/lib/console/model/model-throughput';
 import { cost } from '../src/lib/console/model/cost';
+import { completeModelRule, ruleEvents } from '../src/lib/charts/d3/model-rule';
 import { failureRuleRows, failureRules } from '../src/lib/console/failure-rules';
 import { settingsRules } from '../src/lib/console/settings-moved';
 import { BAND_UNREAD } from '../src/lib/console/band';
 import { consoleConfig, summarizeConfig } from '../src/lib/server/config';
-import { buildRows, serveToPage } from './support/ledger-lifecycle';
+import { buildLedger, buildRows, serveToPage } from './support/ledger-lifecycle';
 import type { SliceResult, Row } from '../src/lib/data/ledger';
 
 function recorded(name: string): Row[] {
@@ -22,6 +23,50 @@ function recorded(name: string): Row[] {
 }
 const panelIds = ['model-cards', 'model-throughput', 'call-ending', 'refusing-rule', 'doubt-reasons', 'faithfulness',
 	'source-doubts', 'write-cost', 'score-cost', 'summary-length', 'model-change'];
+
+test('sparse rules retain every dated fact without moving a boundary onto another measured day', () => {
+	const full = completeModelRule({ changes: [
+		{ date: '2030-06-12', kind: 'settings', words: 'The prompt changed.' },
+		{ date: '2030-06-13', kind: 'checker', words: 'The checker changed.' },
+		{ date: '2030-06-14', kind: 'settings', words: 'The runtime changed.' }
+	], note: null }, ['2030-06-11', '2030-06-14']);
+	if ('declined' in full) throw new Error('A recorded rule was declined.');
+	expect(full.changes.map((change) => change.date)).toEqual(['2030-06-14']);
+	expect(full.note).toContain('2030-06-12');
+	expect(full.note).toContain('2030-06-13');
+	expect(ruleEvents(full, ['2030-06-11', '2030-06-14']).lines[1]?.[0]?.value).toBe('The runtime changed.');
+});
+
+test('source attribution takes the later URL score and refuses unknown small shares instead of drawing zero', () => {
+	const scores: Row[] = [
+		{ date: '2030-06-12', url_key: 'same', band: 'high', unsupported_numbers: 0, hedge_dropped: false, evidential_density: 0.1, speculative_density: 0.1 },
+		{ date: '2030-06-14', url_key: 'same', band: 'low', unsupported_numbers: 1, hedge_dropped: true, evidential_density: 0.004, speculative_density: 0.009 },
+		{ date: '2030-06-14', url_key: 'orphan', band: 'low', unsupported_numbers: 0, hedge_dropped: false, evidential_density: null, speculative_density: null }
+	];
+	const result = sourceDoubts(scores, [{ url_key: 'same', source_id: 'matching-source' }],
+		{ start: '2030-06-01', end: '2030-06-14', days: 14 }, { limit: 10, minForShare: 5 });
+	expect(result.rows).toHaveLength(1);
+	expect(result.rows[0]).toMatchObject({ sourceId: 'matching-source', summaries: 1, doubted: 1, sharePct: null, evidential: 4, speculative: 9 });
+	expect(result.unattributed).toBe(1);
+	expect(result.geometry?.rows[0].refused).toContain('Too few');
+});
+
+test('model change compares the newest dated set difference and independent date populations', () => {
+	const score = (date: string, model_id: string): Row => ({
+		date, model_id, summary_words: 100, source_words_before_cap: 500, source_words: 500,
+		extractiveness: null, verbatim_run: null, band: 'high', unsupported_numbers: 0, hedge_dropped: false
+	});
+	const result = modelChange([
+		score('2030-06-10', 'a'), score('2030-06-10', 'b'), score('2030-06-12', 'a'),
+		score('2030-06-14', 'c')
+	], [{ date: '2030-06-11', summarize_ms: 1000 }, { date: '2030-06-15', summarize_ms: 3000 }],
+	summarizeConfig().bands, 1);
+	expect(result?.at).toBe('2030-06-14');
+	expect(result?.before.model).toBe('a');
+	expect(result?.after.model).toBe('c');
+	expect(result?.measures.find((measure) => measure.label === 'Time to write one')).toMatchObject({ before: 1, after: 3 });
+	expect(result?.measures.find((measure) => measure.label === 'Copied, not rewritten')).toMatchObject({ before: null, after: null });
+});
 
 test('recorded native slices drive all eligible model reducers without broadening cells', () => {
 	const endingRows = recorded('callEndingQuery');
@@ -44,6 +89,7 @@ test('recorded native slices drive all eligible model reducers without broadenin
 	expect(new Set(lengths.map((r) => r.runId)).size).toBe(lengths.length);
 	expect(modelThroughput(recorded('modelThroughputQuery'), { start: '2026-08-01', end: '2026-08-20' }).length).toBeGreaterThan(0);
 	const rules = failureRuleRows(recorded('failedRuleQuery'));
+	expect(rules.some((row) => row.code === null)).toBe(true);
 	expect(failureRules(rules, { start: '2026-08-01', end: '2026-08-20' }, 'summarize').failed).toBeGreaterThanOrEqual(0);
 	const sources = sourceDoubts(recorded('sourceDoubtsQuery'), [], { start: '2026-08-01', end: '2026-08-20', days: 20 }, { limit: 10, minForShare: 1 });
 	expect(sources.unattributed).toBeGreaterThan(0);
@@ -95,13 +141,41 @@ for (const state of ['quiet', 'missing', 'unreachable'] as const) {
 			if (state !== 'missing') await buildRows(root, ledger, [{ covers: '2026-08-20', rows: [] }]);
 			await serveToPage(context, root, ledger);
 		}
+
+		test('pending native doors keep the waiting frame without a settled answer', async ({ page }) => {
+			await page.route('**/state/compact/*/index/*.json', () => {});
+			await page.goto('/console/model/');
+			await expect(page.locator('[data-console-panels="model"]')).toHaveAttribute('data-route-state', 'loading');
+			for (const id of panelIds.filter((id) => !['model-cards', 'doubt-reasons'].includes(id))) {
+				await expect(page.locator(`[data-console-panel-id="${id}"] [data-reserved]`)).toHaveAttribute('data-panel-state', 'loading');
+				await expect(page.locator(`[data-console-panel-id="${id}"] [data-lede]`)).toHaveCount(0);
+			}
+		});
+
+		test('a quiet native window still names lost days and unread files', async ({ page, context }, info) => {
+			const root = info.outputPath('native-partial');
+			mkdirSync(root, { recursive: true });
+			for (const ledger of ['item-health', 'summary-quality-evals'] as const) {
+				await buildLedger(root, { ledger, pinned: '2026-08-20',
+					days: [{ ago: 2, state: 'lost', setAside: 2 }, { ago: 0, state: 'empty' }] });
+				await serveToPage(context, root, ledger);
+			}
+			await page.goto('/console/model/');
+			await expect(page.locator('[data-console-panels="model"]')).toHaveAttribute('data-route-state', 'quiet');
+			for (const id of panelIds.filter((id) => !['model-cards', 'doubt-reasons'].includes(id))) {
+				const panel = page.locator(`[data-console-panel-id="${id}"]`);
+				await expect(panel.locator('[data-record-note]').first()).toContainText('18 Aug 2026');
+				await expect(panel).toContainText('set aside');
+				await expect(panel.locator('[data-lede]')).toHaveCount(0);
+			}
+		});
 		if (state === 'unreachable') {
 			await context.route('**/state/compact/*/index/daily.json', (route) => route.abort('failed'));
 		}
 		await page.goto('/console/model/');
 		await expect(page.locator('[data-console-panels="model"]')).toHaveAttribute('data-route-state', state);
 		for (const id of panelIds.filter((id) => !['model-cards', 'doubt-reasons'].includes(id))) {
-			await expect(page.locator(`[data-console-panel-id="${id}"] .record-state`))
+			await expect(page.locator(`[data-console-panel-id="${id}"] [data-empty-state]`))
 				.toHaveText(state === 'quiet' ? 'Nothing recorded.' : state === 'missing' ? 'Not published yet.' : 'Did not arrive.');
 			await expect(page.locator(`[data-console-panel-id="${id}"] [data-lede]`)).toHaveCount(0);
 		}
