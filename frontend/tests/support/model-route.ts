@@ -1,5 +1,5 @@
 /** Compile the actual private Summaries builder against owned native records. */
-import { appendFileSync, copyFileSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import { appendFileSync, cpSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { FRONTEND, sourceFiles } from './console-sources';
@@ -7,8 +7,10 @@ import { buildRows, siteCopy, type BuiltRowsDay } from './ledger-lifecycle';
 import { publishedSite } from './published-site';
 import { cachedParquetAddon, parquetAddon } from '../../scripts/duckdb-addon';
 import { ITEM_HEALTH_COLUMNS, SCORE_COLUMNS } from '../../src/lib/server/ledger-rows';
+import { assertBuild, REPO } from '../../scripts/build-state';
 
 export async function modelRoute(report: string, evidence: 'missing' | 'quiet' | 'populated' | 'sufficient') {
+	const verified = assertBuild(REPO, 'canary');
 	mkdirSync(report, { recursive: true });
 	const root = join(realpathSync.native(report), 'isolated-model');
 	mkdirSync(root, { recursive: true });
@@ -89,33 +91,20 @@ export async function modelRoute(report: string, evidence: 'missing' | 'quiet' |
 			}
 		}
 		const frontend = join(root, 'frontend');
-		const inputs = sourceFiles().filter((file) =>
-			file.startsWith('src/lib/') || (file.startsWith('src/routes/') &&
-				(file.startsWith('src/routes/console/model/') || ['src/routes/+layout.ts', 'src/routes/+layout.svelte',
-					'src/routes/+error.svelte', 'src/routes/console/+layout.ts', 'src/routes/console/+layout.svelte'].includes(file))) ||
-			['vite.config.ts', 'svelte.config.js', 'asset-base.js', 'src/app.d.ts', 'src/query-engine-assets.d.ts',
-				'src/service-worker.ts'].includes(file) || (file.startsWith('scripts/') && !file.startsWith('scripts/tests/')));
-		inputs.push('src/app.html', 'src/styles/app.css', 'src/styles/frame.generated.css', 'src/styles/tokens.css',
-			'package.json', 'tsconfig.json');
-		for (const file of inputs) {
-			const target = join(frontend, file);
-			mkdirSync(dirname(target), { recursive: true });
-			copyFileSync(join(FRONTEND, file), target);
-		}
-		const staticRoot = join(frontend, 'static');
-		mkdirSync(staticRoot, { recursive: true });
+		mkdirSync(frontend, { recursive: true });
+		// These are bounded output trees from the one verified compilation, not repository discovery.
+		cpSync(join(FRONTEND, '.svelte-kit', 'output', 'server'), join(frontend, 'server'), { recursive: true });
+		const staticRoot = join(frontend, 'build');
+		cpSync(join(FRONTEND, 'build'), staticRoot, { recursive: true });
+		writeFileSync(join(frontend, 'package.json'), '{"type":"module"}\n');
 		for (const [source, target] of [
 			[join(FRONTEND, 'node_modules'), join(frontend, 'node_modules')],
-			[join(FRONTEND, '..', 'config'), join(root, 'config')],
-			[join(FRONTEND, 'static', 'fonts'), join(staticRoot, 'fonts')],
-			[join(FRONTEND, 'static', 'icons'), join(staticRoot, 'icons')]
+			[join(FRONTEND, '..', 'config'), join(root, 'config')]
 		]) {
 			symlinkSync(source, target, 'junction');
 			links.push(target);
 		}
-		for (const file of ['favicon.svg', 'manifest.webmanifest', 'service-worker-kill.json']) {
-			copyFileSync(join(FRONTEND, 'static', file), join(staticRoot, file));
-		}
+		for (const ledger of ['item-health', 'summary-quality-evals']) rmSync(join(staticRoot, 'state', 'compact', ledger), { recursive: true, force: true });
 		if (evidence !== 'missing') for (const ledger of ['item-health', 'summary-quality-evals'] as const) {
 			siteCopy(state, join(staticRoot, 'state'), ledger, 365);
 		}
@@ -125,16 +114,52 @@ export async function modelRoute(report: string, evidence: 'missing' | 'quiet' |
 		const cached = join(home, '.duckdb', 'extensions', address.host, ...address.pathname.split('/').filter(Boolean));
 		mkdirSync(dirname(cached), { recursive: true });
 		writeFileSync(cached, cachedParquetAddon(addon));
-		writeFileSync(join(report, 'inputs.json'), JSON.stringify(inputs));
+		writeFileSync(join(report, 'inputs.json'), JSON.stringify({ verified, sources: sourceFiles() }));
 		const runner = join(frontend, 'model-preview.mjs');
 		writeFileSync(runner, `
-			import { build, preview } from 'vite';
-			await build({ cacheDir: ${JSON.stringify(join(root, 'vite-cache'))}, logLevel: 'warn',
-				build: { reportCompressedSize: false } });
-			const server = await preview({ preview: { host: '127.0.0.1', port: 0 } });
-			console.log('MODEL_ORIGIN=' + server.resolvedUrls.local[0]);
+			import { createServer } from 'node:http';
+			import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+			import { dirname, extname, join, resolve, sep } from 'node:path';
+			import { Server } from './server/index.js';
+			import { manifest } from './server/manifest-full.js';
+			import { set_building, set_prerendering } from './server/internal.js';
+			const output = ${JSON.stringify(staticRoot)};
+			set_building(true);
+			set_prerendering(true);
+			const builder = new Server(manifest);
+			await builder.init({ env: process.env, read: (file) => createReadStream(join('server', file)) });
+			const dependencies = new Map();
+			const response = await builder.respond(new Request('http://model.test/console/model/'), {
+				getClientAddress: () => { throw new Error('The private builder has no client address.'); },
+				prerendering: { dependencies, remote_responses: new Map() },
+				read: (file) => readFileSync(join(output, file))
+			});
+			if (response.status !== 200) throw new Error('Private builder returned ' + response.status + ': ' + await response.text());
+			const page = join(output, 'console', 'model', 'index.html');
+			const html = await response.text();
+			writeFileSync(page, html);
+			writeFileSync(${JSON.stringify(join(report, 'model.html'))}, html);
+			for (const [path, dependency] of dependencies) {
+				if (!path.startsWith('/console/model/')) continue;
+				const file = join(output, path.slice(1));
+				mkdirSync(dirname(file), { recursive: true });
+				writeFileSync(file, dependency.body);
+			}
+			const types = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript',
+				'.json': 'application/json', '.css': 'text/css', '.svg': 'image/svg+xml', '.wasm': 'application/wasm',
+				'.woff2': 'font/woff2', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
+			const server = createServer((request, reply) => {
+				let file = resolve(output, '.' + decodeURIComponent(new URL(request.url, 'http://model.test').pathname));
+				if (!file.startsWith(output + sep)) { reply.writeHead(403).end(); return; }
+				if (existsSync(file) && statSync(file).isDirectory()) file = join(file, 'index.html');
+				if (!existsSync(file)) { reply.writeHead(404).end(); return; }
+				reply.writeHead(200, { 'Content-Type': types[extname(file)] ?? 'application/octet-stream' });
+				createReadStream(file).pipe(reply);
+			});
+			await new Promise((done) => server.listen(0, '127.0.0.1', done));
+			console.log('MODEL_ORIGIN=http://127.0.0.1:' + server.address().port + '/');
 			process.stdin.resume();
-			process.stdin.on('data', () => server.httpServer.close(() => process.exit(0)));
+			process.stdin.on('data', () => server.close(() => process.exit(0)));
 		`);
 		child = spawn(process.execPath, [runner], { cwd: frontend,
 			env: { ...process.env, HOME: home, USERPROFILE: home, BASE_PATH: '', DIGEST_ROOT: site.digest,
@@ -145,7 +170,7 @@ export async function modelRoute(report: string, evidence: 'missing' | 'quiet' |
 		child.stderr?.on('data', record);
 		const running = child;
 		const origin = await new Promise<string>((done, fail) => {
-			const timer = setTimeout(() => fail(new Error(`Private Summaries compilation did not finish:\n${output}`)), 150_000);
+			const timer = setTimeout(() => fail(new Error(`Private Summaries builder did not finish:\n${output}`)), 150_000);
 			const exited = (code: number | null) => { clearTimeout(timer); fail(new Error(`Private Summaries exited ${code}:\n${output}`)); };
 			running.once('exit', exited);
 			running.once('error', (error) => { clearTimeout(timer); fail(error); });

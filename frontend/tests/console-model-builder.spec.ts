@@ -6,7 +6,7 @@ for (const evidence of ['missing', 'quiet', 'populated'] as const) {
 	test(`the real private Summaries builder preserves ${evidence} records`, async ({ page }, info) => {
 		const fixture = await modelRoute(info.outputPath(`private-${evidence}`), evidence);
 		try {
-			await page.goto(`${fixture.origin}/console/model/`);
+			await page.goto(new URL('console/model/', fixture.origin).href);
 			if (evidence !== 'populated') {
 				await expect(page.locator('[data-model-cards-empty]')).toHaveAttribute('data-model-cards-empty', evidence);
 				await expect(page.locator('[data-doubt-reasons-empty]')).toHaveAttribute('data-doubt-reasons-empty', evidence);
