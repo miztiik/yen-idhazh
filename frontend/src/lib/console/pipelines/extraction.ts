@@ -62,8 +62,8 @@ export function nativeExtraction(items: readonly Row[], evaluations: readonly Ro
 export function extractionYield(days: readonly ExtractionDay[], window: TimeWindow) {
 	const recorded = new Map(days.map((day) => [day.date, day]));
 	return [
-		{ label: 'Enough figures to draw', token: '--chart-1', key: 'chartable' as const },
-		{ label: 'Published carrying a chart', token: '--chart-4', key: 'charted' as const }
+		{ label: 'Enough figures to draw', token: '--chart-1' as const, key: 'chartable' as const },
+		{ label: 'Published carrying a chart', token: '--chart-4' as const, key: 'charted' as const }
 	].map(({ label, token, key }) => ({
 		label, token,
 		points: daysInWindow(window).map((date) => ({ date, value: recorded.get(date)?.[key] ?? null }))
