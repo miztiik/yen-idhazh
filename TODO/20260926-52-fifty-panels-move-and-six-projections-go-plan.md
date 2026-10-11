@@ -69,7 +69,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 4 | Every panel's question and shared loading state are declared before it is drawn | 2 | C | DONE | p52-panel-queries (`feat/console-panel-queries`) | #1542 | Owner and disjoint contract, canary and guard workers |
 | 5 | The band reads the ledgers and carries the settings changes, and the three remaining projections nothing draws go | 3, 4 | D | DONE | p52-band-ledgers (`feat/console-band-ledgers`) | #1547 | p52-row5-local-completion |
 | 6 | Pipelines asks the ledger | 5, 2b | E | PENDING | - | - | - |
-| 7 | Summaries asks the ledger | 5, 2b | E | PENDING | - | - | - |
+| 7 | Summaries asks the ledger | 5, 2b | E | LOCAL CANDIDATE | p52-model-ledgers (`feat/console-model-ledgers`) | #1560 (draft; integration and final CI pending) | Summaries worker |
 | 8 | Voices asks the ledger, and the ranking panels join it | 4 | D | PENDING | - | - | - |
 | 9 | Hardware asks the ledger, and its page carries no data | 5 | E | PENDING | - | - | - |
 | 10 | The `telemetry` and `run-timeline` projections go | 6 | F | PENDING | - | - | - |
