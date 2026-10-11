@@ -394,7 +394,7 @@ Table O2 - rejected alternatives
 
 ## 3. Owner rulings
 
-Owner requests that touch this plan are tracked, with their status, in Table Q of the summary-fidelity-judge plan (TODO/20261011-summary-fidelity-judge-plan.md).
+Owner requests that touch this plan are tracked, with their status, in Table Q of plan 65 (TODO/20261011-65-summary-fidelity-judge-plan.md).
 
 Table P - owner rulings: P1 to P18 ruled on 2026-10-11; P9 declined; P18 supersedes P1
 
