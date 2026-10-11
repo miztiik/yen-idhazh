@@ -1,6 +1,6 @@
 # What the Hardware route draws
 
-**Last Updated**: 2026-10-06
+**Last Updated**: 2026-10-11
 `/console/machine/` answers a question no other route can ask: what machine did
 the run actually get, and does the day's rate mean anything because of it.
 
@@ -69,10 +69,9 @@ answer changes what you do.** Neither prints the words question or answer, and a
 title borrows no word from how the thing is built - no column name, no subsystem
 term, no vendor. `Prompt cache` and `Context headroom` were the two worst: both
 named a mechanism and neither said what a reader would learn. The mechanical
-half of the rule - no trailing question mark, no opening auxiliary verb, no
-column name or vendor - is asserted in
-`frontend/tests/console-title.spec.ts`; what it cannot check is whether a title
-is *plain*, and Reader ruled all thirteen of the current ones on 2026-09-20.
+half of the rule is no trailing question mark, no opening auxiliary verb, no
+column name or vendor. Plain wording needs review, and Reader ruled all
+thirteen of the current ones on 2026-09-20.
 Authority: owner for the title-and-subtitle split, CLAUDE.md section 0b for the
 vocabulary, Reader for the wording.
 
@@ -628,11 +627,11 @@ read in these 44 runs", with the count from the record rather than a literal.
 The windowed sentence is also the more useful one: a feed that broke once in
 August and has answered every run since is permanently disqualified by "never
 failed", and the question on the desk is whether anything is broken now.
-`tests/console-window-claims.spec.ts` holds it - it reads the three built console
-documents, strips scripts and every attribute but `aria-label`, and refuses a
-claim in the present perfect.
 
-**What that guard does not catch, said out loud.** It bans a grammar, not a word: "has never failed" and "has ever reached" place a claim in an unbounded past, while "runs are never pooled" and "a counterfactual, never a bill" state rules and read over no span at all. Measured on the canary build 2026-09-09, the three console documents carry **42 remaining uses of `never` or `ever`, and every one is a rule, a domain term or a statement about named items** - 24 of them are the cell `Never checked:`, which is one of the checker's five reason names. A word list would have fired on all 42. A bare past tense - "the feeds that never failed" - makes the same claim as the perfect and is not matched, because the only pattern that would catch it is a list of verbs, and that list fires on "the part the machine never read" two sections up the same page. Those strings are held by review and by the assertions in `console.spec.ts`.
+**The rule is about claims, not a word list.** "Has never failed" and "the feeds
+that never failed" claim an unbounded past. "Runs are never pooled" and "a
+counterfactual, never a bill" state rules and read over no span at all. Review
+must distinguish them.
 
 **A refusal is not an ask.** A row that preserves the strike streak - a rest,
 or a robots answer - never asked the feed whether it still works, so it can make

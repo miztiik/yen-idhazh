@@ -43,11 +43,8 @@ export function options(args: string[]): Options {
 	if (!['canary', 'real'].includes(values.mode)) throw new Error('--mode must be canary or real.');
 	const specs = values.spec.map((name) => name.replace(/^tests\//, ''));
 	if (values.group.length && specs.length) throw new Error('Choose --group or --spec, not both.');
-	if (specs.includes('whole-day.spec.ts') && (values.mode !== 'canary' || specs.length !== 1)) {
-		throw new Error('The whole-day spec must run alone with --mode canary.');
-	}
-	if (values.mode === 'real' && (!specs.length || specs.some((name) => !/^(reading-page|item-visual)\.spec\.ts$/.test(name)))) {
-		throw new Error('A real-build run requires --spec for reading-page or item-visual.');
+	if (values.mode === 'real' && (!specs.length || specs.some((name) => name !== 'reading-page.spec.ts'))) {
+		throw new Error('A real-build run requires --spec reading-page.spec.ts.');
 	}
 	return { base: values.base, groups: values.group, specs, mode: values.mode as BuildMode,
 		list: values.list, fresh: values.fresh, status: values.status, inside: values['inside-lock'],
@@ -249,7 +246,7 @@ async function main(args: string[]): Promise<number> {
 	const python = pythonPath(root, opts.python);
 	const npm = npmPath();
 	const env: NodeJS.ProcessEnv = { ...process.env, PYTHONPATH: join(root, 'backend'), IDHAZH_PYTHON: python,
-		SKIP_CONSOLE_SUITE: 'false', SKIP_PANELS_SUITE: 'false', IDHAZH_TEST_BUILD: opts.mode };
+		IDHAZH_TEST_BUILD: opts.mode };
 	if (selected.rust) {
 		env.CARGO_TARGET_DIR = join(root, 'backend/var/rust-host-telemetry');
 		env.IDHAZH_HOST_CODEC_FIXTURE = join(env.CARGO_TARGET_DIR, 'debug', process.platform === 'win32' ? 'codec-fixture.exe' : 'codec-fixture');
@@ -393,9 +390,8 @@ async function main(args: string[]): Promise<number> {
 				}
 				const report = join(directory, `${id}-browser.json`);
 				rmSync(report, { force: true });
-				const wholeDay = opts.specs.includes('whole-day.spec.ts');
-				const projects = wholeDay ? [] : browserGroups.map((group) => `--project=${group}`);
-				const step = await run('browser tests', process.execPath, [npm, 'run', wholeDay ? 'test:whole-day' : 'test:browser', '--', '--forbid-only', '--max-failures=1', '--reporter=list,json',
+				const projects = browserGroups.map((group) => `--project=${group}`);
+				const step = await run('browser tests', process.execPath, [npm, 'run', 'test:browser', '--', '--forbid-only', '--max-failures=1', '--reporter=list,json',
 					...projects, ...filters], frontend,
 					{ ...env, PLAYWRIGHT_JSON_OUTPUT_NAME: report });
 				step.tests = playwrightCounts(report);

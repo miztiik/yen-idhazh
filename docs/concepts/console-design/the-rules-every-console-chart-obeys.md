@@ -1,6 +1,6 @@
 # The rules every console chart obeys
 
-**Last Updated**: 2026-10-09
+**Last Updated**: 2026-10-11
 
 Thirteen rules settled once so that no panel argues them again. Twelve are chart
 craft - what the drawing may do. The thirteenth is the question the panel
@@ -212,11 +212,8 @@ Two console axes are drawn by the engine, and the engine owns where its labels g
 grammar: `2026-08-25` is how the ledger spells a day and it is not how a page says
 one.
 
-The oracle is geometric and reads the page rather than the rule. At 1440, 768 and
-390 it collects the box of every element carrying `data-day-axis` and asserts
-that no two on one axis overlap and that none is drawn outside the `svg` that
-would clip it -
-[../../../frontend/tests/console-axis.spec.ts](../../../frontend/tests/console-axis.spec.ts).
+At wide, tablet and phone widths, no two labels on one day axis may overlap, and
+none may be drawn outside the `svg` that would clip it.
 
 ## A chart with a shared column prints every series together, in a fixed strip
 
@@ -382,17 +379,11 @@ with an attribute on it.
 The three declarations exist because of what the absence looks like otherwise. A
 chart somebody decided needs no hover and a chart where the readout was forgotten
 are the same chart on screen.
-[../../../frontend/tests/console-readout.spec.ts](../../../frontend/tests/console-readout.spec.ts)
-enumerates every drawn chart on the five console routes - every `svg`, every
-`role="img"` and every mark a strip reads - and fails on one that declares none
-of the three. It fails on a declared chart with no strip, on a swatch drawn
-inside a chart that has one, on a `title` attribute or an SVG `<title>` anywhere
-inside a declared chart, and on a strip that heads a day in the ledger's
-spelling, `2026-09-27`, rather than the reader's, `27 Sep 2026`.
-It points at every named mark and fails when a figure or a word of four letters
-or more in that mark's name is missing from the strip. It holds a reason to five
-words and to Susan's agreement, because `none` passes an attribute check and
-tells a reader nothing.
+Every drawn chart must declare one of the three. A chart that declares a strip
+must draw it, without an in-chart swatch or native tooltip. The strip must
+include the named mark's words and figures and print a day as `27 Sep 2026`,
+not `2026-09-27`. A `none` reason must have at least five words and Susan's
+agreement; an attribute alone tells a reader nothing.
 
 ## The holdout margin is drawn at the scale of the margin, not of the score
 

@@ -14,7 +14,7 @@
  * what it already prints carries `data-readout-none` with the reason in words
  * and who agreed it. "This chart has no hover" is a decision somebody took, and
  * an undeclared chart looks exactly like one where the strip was forgotten, so
- * `console-readout.spec.ts` fails on a chart that declares none of the three.
+ * every chart declares which reading it offers.
  */
 
 /** One reading as a chart hands it over. A number is formatted by its series;

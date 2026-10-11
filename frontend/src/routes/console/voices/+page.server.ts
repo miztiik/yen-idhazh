@@ -99,9 +99,7 @@ export interface Standing {
  *
  * Not exported. SvelteKit allows a `+page.server.ts` to export `load` and a
  * short list of options and nothing else, so an exported helper here fails the
- * build rather than a lint - which is what took `site`, `browser` and
- * `whole-day` red on this branch. The route next door keeps `sourceHealth` the
- * same way.
+ * build rather than a lint. The route next door keeps `sourceHealth` the same way.
  */
 function standing(view: SourceHealthView | null, rows: number): Standing | null {
 	if (view === null || !reliabilityPublished(view)) return null;

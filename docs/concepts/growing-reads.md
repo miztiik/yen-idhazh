@@ -1,6 +1,6 @@
 # Growing Reads
 
-**Last Updated**: 2026-10-09
+**Last Updated**: 2026-10-11
 One question, asked of every read:
 
 > **Does this read cost more when a run appended more?**
@@ -682,45 +682,20 @@ write time and a frozen day cannot grow a fault later.
 
 ### A walk can cost more than time: it can take the shape of the thing it walks (2026-09-14)
 
-`frontend/tests/malformed-day.spec.ts` did not walk the archive to assert per
-story. It walked it to pick ONE day - the newest - and broke that day three
-ways. The bill was a directory listing, so the measurement above says nothing
-against it and nobody costed it out of the suite.
+The earlier `frontend/tests/malformed-day.spec.ts` walked the published tree to
+select its newest day, then ran the publication command against four copies.
+On 2026-09-14 that newest day was empty and indexing its last story failed before
+either the command or browser assertions ran. Replacing the walk with a generated
+canary day fixed that input hazard, but kept expensive producer validation inside
+the browser job.
 
-It still had to go, and the reason is the one the cost argument does not reach.
-The spec takes the newest day, and on 2026-09-14 the newest day was empty, so
-`items[items.length - 1]` was `undefined`, the `TypeError` fired while the
-module was loading, and both cases of the file died - the guard case and the
-browser-survives-it case, neither of which has anything to do with an empty day.
-**A read over a collection a run appends to inherits every shape that collection
-can take**, and the shapes it can take are decided by a pipeline nobody runs
-while writing the test. A canary day cannot surprise a spec, because the spec
-and the builder are changed by the same person on the same afternoon.
-
-The second half of section 13's sentence is what paid for the move. The canary
-day carries eight stories against a seed of fifteen, so the spec stopped being
-able to demonstrate that the broken story sat past the seed. It is a real loss
-and nothing on the canary tree replaces it: there is one hostile article per
-file under `tests/fixtures/canaries` and the day is as long as that list. What
-survived is what was always load-bearing - that `check-publication` opens every
-story and names the contract that refused one.
-
-**The same day broke a second spec the same way, and that one lost nothing.**
-`frontend/tests/staged-day.spec.ts` proves the staging projection drops the
-vector block, and it needs one day on the source side of the projection to prove
-the block is still there to drop. It took the newest committed day. An empty day
-carries no vector block because it carries no stories, so the control failed
-over a day that was never its subject - and the message it printed, "carries no
-vector block, the index rebuild has no source left", accused the wrong thing. It
-reads the canary day now. That is the stronger reading rather than the weaker
-one: `backend/utilities/build_canary_day.py` runs the production
-`build_embeddings` over the production `Embedder`, so the block under test is
-one the pipeline wrote this minute, where the committed one was written by
-whatever code shipped the day it landed.
-
-Both moves point at the same rule, worth writing plainly. **A test that needs
-one real example of a shape wants a built one, not the latest one.** "Latest"
-is not a property of the example; it is a property of the calendar.
+The representative browser case now serves one fixed malformed response to the
+real reader loader and checks that the two renderable stories survive. It neither
+walks published data nor invokes the producer command. Producer validation stays
+in its own tier: `backend/tests/contracts/test_committed_days.py` exercises
+`check-publication` with bounded trees, and CI runs the publication check over
+the committed tree. A browser fixture proves the reader boundary; it need not
+repeat the producer's contract matrix.
 
 ## Design rationale
 

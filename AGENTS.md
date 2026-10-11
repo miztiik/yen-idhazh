@@ -1,6 +1,6 @@
 # AGENTS.md
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-11
 
 Derived pointer for coding agents. Not authoritative - if this disagrees with `docs/`, docs win (CLAUDE.md section 5).
 
@@ -57,6 +57,12 @@ Before any non-trivial work:
 5. Before claiming a change is done, read [`docs/how-to/run-the-gates.md`](docs/how-to/run-the-gates.md). **Use `npm --prefix frontend run test:changed -- --list`, then run the selected local checks. CI runs the full suite. Do not repeat a worker's unchanged check or launch a second copy while its first run is active.** A documentation-only closure needs no local application suite.
 6. Write new and generated text with LF before the first test. Git normalises at `git add`, which is too late for a test that reads the working file.
 7. Start code changes in a dedicated git worktree and named branch, not the shared main checkout. Follow [`docs/how-to/ship-a-pr.md`](docs/how-to/ship-a-pr.md) for transfer, PR and cleanup.
+
+Browser tests are a very narrow representative set, not a page, panel, width,
+theme, state or chart matrix. Delete duplicate presentation checks before
+parallelising. Each extra browser case needs a distinct failure mechanism that
+the representative journey and lower-tier tests cannot detect. The canonical
+policy and the coverage deliberately given up are in `CLAUDE.md` section 13.
 
 Seven persona advisors live in [`.github/agents/`](.github/agents/), each at a distinct altitude: Reader, Editor, Jony (UI/UX), Susan (Craft & Delight), Andre (AI/LLM), Fowler (Architecture & Engineering), Carmack (Engine & Runtime). Jony rules what survives on the page; Susan rules whether what survived is good enough to ship. A veto must name what the reader loses.
 
