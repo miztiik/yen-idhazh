@@ -80,12 +80,13 @@
 		note="Processor time, added memory and model time for a single article, so a change to the prompt, the model or how many articles a day runs can be priced before the run that pays for it - over {nameSpan(windowDays)}."
 	>
 		<p class="lede" data-lede
+			data-model-rule-name="machine-article-cost"
 			data-model-rule="no" data-model-rule-none="These are per-article prices, not a comparison between days.">
 			{processor.mid === null ? 'No processor price recorded.' : `${seconds(processor.mid)} of processor time for the middle article.`}
 		</p>
 		<p data-comparison="The middle article against the range most articles fall in">The middle article against the range most articles fall in.</p>
 		<ul class="costs" data-chart-type="rangeTrack" data-panel-question="is it working"
-			data-readout-none="Each track prints its endpoints and middle reading in words.">
+			data-readout-none="Each track prints its endpoints and middle reading in words; agreed with Susan">
 			<li
 				data-article-cost="processor"
 				data-cost-state={state(processor)}
