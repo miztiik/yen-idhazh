@@ -12,16 +12,6 @@ export function nativeExtraction(items: readonly Row[], evaluations: readonly Ro
 		byUrl.set(row.url_key, { ...held, ...Object.fromEntries(Object.entries(row).filter(([, value]) => value !== null)) });
 	}
 
-	export function extractionYield(days: readonly ExtractionDay[], window: TimeWindow) {
-		const recorded = new Map(days.map((day) => [day.date, day]));
-		return [
-			{ label: 'Enough figures to draw', token: '--chart-1', key: 'chartable' as const },
-			{ label: 'Published carrying a chart', token: '--chart-4', key: 'charted' as const }
-		].map(({ label, token, key }) => ({
-			label, token,
-			points: daysInWindow(window).map((date) => ({ date, value: recorded.get(date)?.[key] ?? null }))
-		}));
-	}
 	const classes = new Map<string, number>();
 	const wouldNotReslice = items.filter((row) => row.span_integrity === false).length;
 	let elementsFound = 0;
@@ -67,4 +57,15 @@ export function nativeExtraction(items: readonly Row[], evaluations: readonly Ro
 		suspectShare: evaluations === null || checked.size === 0 || unmeasured > 0 ? null : suspect / checked.size,
 		note: 'These counts include articles that were not published. Nothing acts on these numbers.'
 	};
+}
+
+export function extractionYield(days: readonly ExtractionDay[], window: TimeWindow) {
+	const recorded = new Map(days.map((day) => [day.date, day]));
+	return [
+		{ label: 'Enough figures to draw', token: '--chart-1', key: 'chartable' as const },
+		{ label: 'Published carrying a chart', token: '--chart-4', key: 'charted' as const }
+	].map(({ label, token, key }) => ({
+		label, token,
+		points: daysInWindow(window).map((date) => ({ date, value: recorded.get(date)?.[key] ?? null }))
+	}));
 }

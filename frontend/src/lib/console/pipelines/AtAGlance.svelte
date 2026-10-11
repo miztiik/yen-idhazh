@@ -31,7 +31,7 @@
 					data-model-rule-none={noRule.declined}>
 					<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 					<svg width="220" height="34" viewBox="0 0 220 34" role="img" tabindex="0" aria-label={card.label}
-						data-chart-type="dateSeries" data-chart-name="published-{card.name}"
+						data-chart="published-counts" data-chart-name="published-{card.name}"
 						data-published-measure={card.name} data-published-total={strip.total} data-published-days={strip.bars.length}
 						use:pointerReadout={{ marks: readoutMarks(strip.bars.map((bar) => (bar.x + bar.width / 2) * 220)), width: 220,
 							onSelect: (at) => selected[card.name] = at }}>
