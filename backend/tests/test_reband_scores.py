@@ -144,11 +144,14 @@ def test_a_ledger_with_no_day_says_so_rather_than_reporting_on_nothing(
 
 
 def test_the_operator_is_told_which_directory_was_read(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The first printed line names the state directory the ledger was read from."""
     state = tmp_path / "state"
     _file(state, "2026-02-09", band="high", hhem=0.91)
+    working = tmp_path / "working"
+    working.mkdir()
+    monkeypatch.chdir(working)
 
     assert main(["--state", str(state), "--config", str(CONFIG_DIR)]) == 0
 

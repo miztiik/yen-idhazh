@@ -396,10 +396,11 @@ class TestTheOutputPath:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """The test that would have caught it, and does now."""
-        assert _index_root() == REPO_ROOT / "frontend" / "public" / "assist" / "index"
+        original = _index_root()
+        assert original == REPO_ROOT / "frontend" / "public" / "assist" / "index"
 
         monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "public" / "digest")
         redirected = _index_root()
 
         assert redirected == tmp_path / "public" / "assist" / "index"
-        assert REPO_ROOT not in redirected.parents
+        assert original not in redirected.parents
