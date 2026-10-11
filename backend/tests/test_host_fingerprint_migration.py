@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import csv
 import hashlib
-import io
 import json
 import os
 import shutil
@@ -19,6 +17,7 @@ from typing import Any
 import pytest
 
 from idhazh.contracts.base import ServerJob
+from idhazh.contracts.console_band import ConsoleBand
 from idhazh.contracts.file_envelope import Format
 from idhazh.contracts.host_migration import HistoryManifest
 from idhazh.contracts.host_output import (
@@ -340,23 +339,14 @@ def run(root: Path, document: dict[str, Any]) -> Any:
     )
 
 
-def machine_view() -> bytes:
-    from idhazh.contracts.machine_shard import MachineShardRow
-
-    row = MachineShardRow.model_validate(
+def console_view() -> bytes:
+    return ConsoleBand.model_validate(
         {
-            "date": "2026-09-20",
-            "run_id": "2026-09-20-17",
-            "shard": 0,
-            "items": 0,
-            "cpu_model": "Recorded CPU",
+            "generated_at": "2026-10-01T12:00:00Z",
+            "verdict": {"sentence": "Recorded run.", "health": "green"},
+            "size": {"sentence": "Size not recorded."},
         }
-    )
-    output = io.StringIO(newline="")
-    writer = csv.DictWriter(output, fieldnames=MachineShardRow.csv_columns(), lineterminator="\n")
-    writer.writeheader()
-    writer.writerow(row.csv_row())
-    return output.getvalue().encode("ascii")
+    ).to_json().encode("ascii")
 
 
 @pytest.mark.parametrize("fmt", list(Format))
@@ -402,8 +392,8 @@ def test_duplicates_attempts_views_receipts(workspace: Path) -> None:
     view = add_source(
         workspace,
         document,
-        "frontend/public/machine/2026-09.csv",
-        machine_view(),
+        "frontend/public/console/band.json",
+        console_view(),
         "view",
         dependencies=[first, second, third],
     )
@@ -800,12 +790,13 @@ def test_final_compact_or_view_defect_cannot_publish(workspace: Path, fault: str
     document = manifest_document()
     generated_compact(workspace, document, Format.JSON, compact_only=False)
     if fault == "view_version":
-        view = machine_view().replace(b"2026-09-20T18:00", b"2099-01-01")
+        view_document = json.loads(console_view())
+        view_document["version"] = "2099-01-01"
         add_source(
             workspace,
             document,
-            "frontend/public/machine/2026-09.csv",
-            view,
+            "frontend/public/console/band.json",
+            (json.dumps(view_document) + "\n").encode("ascii"),
             "view",
             dependencies=[document["sources"][0]["path"]],
         )
@@ -914,23 +905,20 @@ def test_compact_actual_compression(workspace: Path, compression: str) -> None:
     assert report.files[0].row_count == 2
 
 
-def test_console_view_is_validated_but_not_fabricated(workspace: Path) -> None:
-    from idhazh.contracts.console_band import ConsoleBand
-
+@pytest.mark.parametrize("version", ["2026-10-02", None])
+def test_console_view_is_validated_but_not_fabricated(workspace: Path, version: str | None) -> None:
     document = manifest_document()
     raw, _ = generated_raw(workspace, document)
-    console = ConsoleBand.model_validate(
-        {
-            "generated_at": "2026-10-01T12:00:00Z",
-            "verdict": {"sentence": "Recorded run.", "health": "green"},
-            "size": {"sentence": "Size not recorded."},
-        }
-    )
+    view_bytes = console_view()
+    if version is not None:
+        payload = json.loads(view_bytes)
+        payload["version"] = version
+        view_bytes = (json.dumps(payload) + "\n").encode("ascii")
     view = add_source(
         workspace,
         document,
         "frontend/public/console/band.json",
-        console.to_json().encode("ascii"),
+        view_bytes,
         "view",
         dependencies=[raw],
     )
@@ -940,6 +928,45 @@ def test_console_view_is_validated_but_not_fabricated(workspace: Path) -> None:
     assert report.files[-1].new_physical_sha256 is None
     assert view not in report.maintenance_receipt_candidate.writes
     assert (workspace / view).read_bytes() == original
+
+
+@pytest.mark.parametrize("fault", ["retired_csv", "view_shape", "view_months"])
+def test_final_view_contract_defect_protects_entire_batch(workspace: Path, fault: str) -> None:
+    document = manifest_document()
+    generated_compact(workspace, document, Format.PARQUET, compact_only=False)
+    view_path = "frontend/public/console/band.json"
+    if fault == "retired_csv":
+        view_path = "frontend/public/machine/2026-09.csv"
+        view = (
+            b"version,date,run_id,shard,items,read_tokens,read_ms,cached_tokens,"
+            b"written_tokens,write_ms,longest_sequence,n_ctx_configured,cpu_model,"
+            b"cpu_busy_pct,llama_rss_peak_bytes,python_rss_bytes,model_load_ms,"
+            b"job_seconds,server_prompt_tokens,server_prompt_seconds\n"
+            b"2026-09-20T18:00,2026-09-20,2026-09-20-17,0,0,,,,,,,,Recorded CPU,,,,,,,\n"
+        )
+        reason = "retired historical machine CSV view has no current contract"
+    else:
+        payload = json.loads(console_view())
+        if fault == "view_shape":
+            payload["verdict"]["health"] = "unknown"
+            reason = "health"
+        else:
+            payload["months"] = ["2026-09", "2026-09"]
+            reason = "months must be distinct"
+        view = (json.dumps(payload) + "\n").encode("ascii")
+    add_source(
+        workspace,
+        document,
+        view_path,
+        view,
+        "view",
+        dependencies=[document["sources"][-2]["path"]],
+    )
+    before = {s["path"]: (workspace / s["path"]).read_bytes() for s in document["sources"]}
+    with pytest.raises(ValueError, match=reason):
+        run(workspace, document)
+    assert not (workspace / document["isolated_root"]).exists()
+    assert all((workspace / path).read_bytes() == data for path, data in before.items())
 
 
 def test_empty_scope_has_complete_inventory_but_no_historical_readiness(workspace: Path) -> None:
@@ -1051,8 +1078,8 @@ def test_finite_metadata_and_original_lineage_refusals(workspace: Path, fault: s
         add_source(
             workspace,
             document,
-            "frontend/public/machine/extra/2026-09.csv",
-            machine_view(),
+            "frontend/public/console/extra/band.json",
+            console_view(),
             "view",
             dependencies=[raw],
         )

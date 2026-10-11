@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-import csv
 import hashlib
-import io
 import struct
 import zlib
 from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Any
 
-from idhazh import month_partition
 from idhazh.contracts.console_band import ConsoleBand
 from idhazh.contracts.file_envelope import Format, Period, RowIdentity, Tier
 from idhazh.contracts.host_migration import HistoryManifest, HistoryRoot, HistorySource
@@ -24,7 +21,6 @@ from idhazh.contracts.host_output import (
     normalize_stored_host_rows,
 )
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.machine_shard import MachineShardRow
 from idhazh.ledger import json_lines, parquet, paths
 from idhazh.ledger.arrow_schema import Column, ColumnType
 from idhazh.ledger.filenames import unit_id
@@ -422,36 +418,7 @@ def decode_history(
             raise ValueError(f"{source.path}: set-aside source is outside declared host prefix")
         return HistoryFile(source, data, None, (), (), None, None)
     if source.kind == "view" and source.path.endswith(".csv"):
-        view_path = Path(source.path)
-        month = view_path.stem
-        if (
-            view_path.parent.as_posix() != "frontend/public/machine"
-            or not month_partition.is_month_stem(month)
-        ):
-            raise ValueError("unknown historical CSV view path")
-        reader = csv.DictReader(io.StringIO(data.decode("ascii"), newline=""))
-        header = tuple(reader.fieldnames or ())
-        if header != MachineShardRow.csv_columns():
-            raise ValueError("unknown historical machine CSV column shape")
-        records: list[dict[str, Any]] = []
-        for row in reader:
-            if (
-                len(records) >= limits.max_rows
-                or None in row
-                or any(value is None for value in row.values())
-            ):
-                raise ValueError("machine CSV row count/width exceeds its declared shape")
-            if row["version"] not in ("2026-09-19", MachineShardRow.schema_version()):
-                raise ValueError("unknown/mixed historical machine CSV version")
-            model = MachineShardRow.from_csv_row(row)
-            if not model.date.startswith(Path(source.path).stem + "-"):
-                raise ValueError("machine CSV row is outside its published month")
-            records.append(row)
-        if len({row["version"] for row in records}) > 1:
-            raise ValueError("mixed historical machine CSV versions")
-        return HistoryFile(
-            source, data, None, (), (), {"header": list(header), "rows": records}, None
-        )
+        raise ValueError("retired historical machine CSV view has no current contract")
     if source.kind not in ("raw", "compact"):
         document = _json(data, limits)
         if not isinstance(document, dict) or "version" not in document:
@@ -462,6 +429,7 @@ def decode_history(
                 "2026-09-12",
                 "2026-09-19",
                 "2026-09-23",
+                "2026-10-02",
                 ConsoleBand.schema_version(),
             ):
                 raise ValueError("unknown historical console view path/version")
