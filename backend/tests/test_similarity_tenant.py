@@ -17,12 +17,12 @@ import pytest
 from conftest import CONFIG_DIR
 
 from idhazh import config, ledger
+from idhazh.content_similarity_judge import tenant
 from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.council import registry
 from idhazh.council.tenancy import Tenant
 from idhazh.ledger import staging
-from idhazh.similarity import tenant
 
 #: A night the tests ask this judge about. Any date inside a window would do -
 #: what is asked is which of them come back, never which one it is.

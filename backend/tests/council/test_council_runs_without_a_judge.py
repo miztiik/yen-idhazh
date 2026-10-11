@@ -46,9 +46,8 @@ TONIGHT: Final = "2026-09-26"
 
 A_PLATFORM_RUN: Final = "35534060762"
 
-#: The judge's own code, by package. A prefix is right here and nowhere else in
-#: this file: everything under it belongs to one judge by construction.
-JUDGE_CODE_PACKAGE: Final = "idhazh.similarity"
+#: Both the judge's declaration and the similarity implementation it routes to.
+JUDGE_CODE_PACKAGES: Final = ("idhazh.content_similarity_judge", "idhazh.similarity")
 
 #: The stage modules the content-similarity judge owns, spelled one by one. A
 #: stage is named for the work it does rather than for whose loop it is in, so a
@@ -106,8 +105,7 @@ def reached() -> set[str]:
     return {
         name
         for name in routes
-        if name == JUDGE_CODE_PACKAGE
-        or name.startswith(f"{JUDGE_CODE_PACKAGE}.")
+        if any(name == package or name.startswith(f"{package}.") for package in JUDGE_CODE_PACKAGES)
         or name in JUDGE_STAGE_MODULES
         or name in JUDGE_CONTRACT_MODULES
     }
@@ -120,7 +118,7 @@ def test_every_judge_module_named_here_is_a_module_this_tree_has() -> None:
     module that moved would silently drop out of the two checks that use it. This
     is what makes them fail instead.
     """
-    named = (JUDGE_CODE_PACKAGE, *JUDGE_STAGE_MODULES, *JUDGE_CONTRACT_MODULES)
+    named = (*JUDGE_CODE_PACKAGES, *JUDGE_STAGE_MODULES, *JUDGE_CONTRACT_MODULES)
     missing = [name for name in named if module_file(name) is None]
 
     assert not missing, f"the judge surface names modules this tree does not have: {missing}"
@@ -148,8 +146,7 @@ def test_this_file_names_no_judge_either() -> None:
     judges = [
         name
         for name in mine
-        if name == JUDGE_CODE_PACKAGE
-        or name.startswith(f"{JUDGE_CODE_PACKAGE}.")
+        if any(name == package or name.startswith(f"{package}.") for package in JUDGE_CODE_PACKAGES)
         or name in JUDGE_STAGE_MODULES
         or name in JUDGE_CONTRACT_MODULES
     ]

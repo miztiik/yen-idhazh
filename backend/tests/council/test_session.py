@@ -604,7 +604,8 @@ def test_no_judge_module_is_in_the_import_closure_of_a_council_verb() -> None:
     checks in `test_council_runs_without_a_judge.py` hold the contract exception.
     """
     found = _judge_modules_reached(
-        "idhazh.council.session", ("idhazh.similarity", *JUDGE_STAGE_MODULES)
+        "idhazh.council.session",
+        ("idhazh.content_similarity_judge", "idhazh.similarity", *JUDGE_STAGE_MODULES),
     )
 
     assert found == [], f"a council verb imports {found}"

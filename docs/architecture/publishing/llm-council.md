@@ -62,7 +62,7 @@ council runs.
 `judge_names` is an ordered list of slugs in `config/llm_council.json`. It is the
 one place a judge is registered, and since 2026-09-21 it names one: the
 content-similarity judge, which declares itself in
-[../../../backend/idhazh/similarity/tenant.py](../../../backend/idhazh/similarity/tenant.py)
+[../../../backend/idhazh/content_similarity_judge/tenant.py](../../../backend/idhazh/content_similarity_judge/tenant.py)
 and routes the three units of work to its own four stages. An empty list is
 still a legal night - the venue runs every step it always runs and judges
 nothing.
