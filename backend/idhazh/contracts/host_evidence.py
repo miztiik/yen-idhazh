@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Annotated, ClassVar, Literal, Self
+from uuid import UUID
 
 from pydantic import Field, model_validator
 
@@ -16,9 +17,12 @@ from idhazh.contracts.base import (
     Timestamp,
 )
 from idhazh.contracts.host_events import (
+    Count,
     FiniteNonnegative,
     HostSessionManifest,
     HostWindowCells,
+    LegacyJobSample,
+    LegacyProcessRollcall,
     PositiveCount,
     ProcessTarget,
 )
@@ -40,6 +44,7 @@ _CHANGELOG = (
 class EvidenceRoots(Model):
     reference: RelPath
     native: RelPath
+    native_artifacts: RelPath
     generated_state: RelPath
     corpus: RelPath
     frontend: RelPath
@@ -49,6 +54,11 @@ class FieldBound(Model):
     field: str
     absolute: FiniteNonnegative
     observed_reference_spread: FiniteNonnegative
+
+
+class FieldClassification(Model):
+    field: str
+    classification: Literal["unchanged", "corrected", "context", "physical"]
 
 
 class WorkloadRequest(Contract):
@@ -65,14 +75,54 @@ class WorkloadResult(Contract):
     mode: Literal["reference", "native_only"]
     target: ProcessTarget
     wall_seconds: FiniteNonnegative
+    clock_skew_seconds: FiniteNonnegative
     cpu_seconds: FiniteNonnegative
+    instrument_wall_seconds: FiniteNonnegative
+    instrument_cpu_seconds: FiniteNonnegative
     digest: Sha256
     iterations: PositiveCount
-    samples: PositiveCount
+    samples: Count
     cells: HostWindowCells | None
     host: HostFingerprintRow | None
     population: tuple[ProcessTarget, ...]
     reference_files: tuple[RelPath, ...]
+
+
+class ReferenceSample(Contract):
+    __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = _CHANGELOG
+    __schema_stem__: ClassVar[str] = "host-reference-sample"
+    record: LegacyJobSample
+    population: tuple[ProcessTarget, ...]
+    rollcall: tuple[LegacyProcessRollcall, ...]
+
+
+class SamplerCompletion(Contract):
+    __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = _CHANGELOG
+    __schema_stem__: ClassVar[str] = "host-reference-sampler-completion"
+    samples: PositiveCount
+
+
+class MonitorMeasurement(Contract):
+    __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = _CHANGELOG
+    __schema_stem__: ClassVar[str] = "host-monitor-measurement"
+    target: ProcessTarget
+    cpu_seconds: FiniteNonnegative
+    rss_bytes: PositiveCount
+    startup_seconds: FiniteNonnegative | None
+
+
+class CleanupEvidence(Contract):
+    __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = _CHANGELOG
+    __schema_stem__: ClassVar[str] = "host-cleanup-evidence"
+    targets: tuple[ProcessTarget, ...]
+    stopped: Literal[True] = True
+
+
+class PairedEvidence(Contract):
+    __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = _CHANGELOG
+    __schema_stem__: ClassVar[str] = "host-paired-evidence"
+    rows: tuple[WorkloadResult, ...] = Field(min_length=2)
+    ack_seconds: tuple[FiniteNonnegative, ...] = Field(min_length=4)
 
 
 class EvidenceSession(Contract):
@@ -80,14 +130,43 @@ class EvidenceSession(Contract):
     __schema_stem__: ClassVar[str] = "host-evidence-session"
     created_at: Timestamp
     manifest: HostSessionManifest
+    host_manifest: HostSessionManifest
     roots: EvidenceRoots
     calibration: tuple[WorkloadResult, ...] = Field(min_length=2)
     bounds: tuple[FieldBound, ...]
     plain: WorkloadResult
     config_sha256: Sha256
+    field_classes: tuple[FieldClassification, ...] = Field(min_length=1)
 
     @model_validator(mode="after")
     def _one_target(self) -> Self:
+        shared = (
+            "date",
+            "run_id",
+            "attempt",
+            "job",
+            "shard",
+            "git_sha",
+            "boot_id",
+            "controls",
+            "limits",
+            "capture_limits",
+            "cpu_target",
+            "cpu_target_role",
+            "workers",
+            "output_roots",
+        )
+        if any(
+            getattr(self.manifest, name) != getattr(self.host_manifest, name) for name in shared
+        ):
+            raise ValueError(
+                "host and resource sessions must share the declared identity and target"
+            )
+        if (
+            self.manifest.session_id == self.host_manifest.session_id
+            or self.manifest.event_root == self.host_manifest.event_root
+        ):
+            raise ValueError("host and resource event sessions must be distinct")
         if any(row.target != self.manifest.cpu_target for row in (*self.calibration, self.plain)):
             raise ValueError("calibration must use the declared live worker")
         names = [bound.field for bound in self.bounds]
@@ -103,13 +182,14 @@ class CommandMeasurement(Contract):
     wall_seconds: FiniteNonnegative
     exit_code: Annotated[int, Field(strict=True)]
     executable_bytes: PositiveCount | None = None
+    executable_sha256: Sha256 | None = None
     rustc: str
     git_sha: CommitSha
 
 
 class EvidenceFile(Model):
     path: RelPath
-    bytes: PositiveCount
+    bytes: Count
     sha256: Sha256
 
 
@@ -128,6 +208,12 @@ class GateEvidence(Model):
     names: tuple[str, ...] = Field(min_length=1)
 
 
+class WindowSampleCoverage(Model):
+    window_id: UUID
+    samples: PositiveCount
+    python_pids: tuple[PositiveCount, ...]
+
+
 class HostEvidenceReport(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = _CHANGELOG
     __schema_stem__: ClassVar[str] = "host-evidence-report"
@@ -144,10 +230,12 @@ class HostEvidenceReport(Contract):
     monitor_rss_bytes: PositiveCount
     ack_seconds: tuple[FiniteNonnegative, ...] = Field(min_length=4)
     paired: tuple[WorkloadResult, ...] = Field(min_length=2)
-    native_population: tuple[ProcessTarget, ...]
-    population_reference_only: tuple[ProcessTarget, ...]
-    population_native_only: tuple[ProcessTarget, ...]
+    resource_event_ids: tuple[UUID, ...] = Field(min_length=1)
+    native_population: tuple[PositiveCount, ...]
+    population_reference_only: tuple[PositiveCount, ...]
+    population_native_only: tuple[PositiveCount, ...]
     native_sample_count: PositiveCount
+    window_sample_coverage: tuple[WindowSampleCoverage, ...] = Field(min_length=1)
     comparisons: tuple[FieldComparison, ...] = Field(min_length=1)
     files: tuple[EvidenceFile, ...] = Field(min_length=1)
     gates: GateEvidence
@@ -162,6 +250,12 @@ class HostEvidenceReport(Contract):
         passed = all(row.passed for row in self.comparisons)
         if passed != (self.correctness == "passed"):
             raise ValueError("correctness must match every comparison")
-        if self.compile.exit_code != 0 or self.compile.executable_bytes is None:
+        if (
+            self.compile.exit_code != 0
+            or self.compile.executable_bytes is None
+            or self.compile.executable_sha256 is None
+        ):
             raise ValueError("a successful native build and executable size are required")
+        if len(self.resource_event_ids) != len(set(self.resource_event_ids)):
+            raise ValueError("resource evidence cannot repeat event IDs")
         return self

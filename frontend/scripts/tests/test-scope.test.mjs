@@ -9,6 +9,34 @@ import { FRONTEND_GROUPS, groupedSpecs, groupForSpec } from '../test-groups.ts';
 import { changedPaths, ciAnswer, selectPaths, selectionForChange } from '../test-scope.ts';
 
 const FRONTEND = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+test('isolated comparison inputs select their exact evidence consumers without browser builds', () => {
+	for (const path of [
+		'.github/workflows/rust-host-telemetry.yml',
+		'config/host-telemetry-comparison.json',
+		'backend/idhazh/contracts/host_evidence.py',
+		'backend/idhazh/telemetry/host_evidence_inputs.py',
+		'backend/idhazh/telemetry/host_evidence_comparison.py',
+		'backend/idhazh/telemetry/host_evidence_artifacts.py',
+		'backend/idhazh/telemetry/host_evidence_samples.py',
+		'backend/utilities/host_telemetry_workload.py',
+		'backend/utilities/host_telemetry_reference.py',
+		'backend/utilities/host_telemetry_session.py',
+		'backend/utilities/compare_host_telemetry.py'
+	]) {
+		const selected = selectPaths([path]);
+		assert.deepEqual(selected.groups, ['backend']);
+		assert.equal(selected.rust, true);
+		assert.ok(selected.backendFiles.includes('backend/tests/test_compare_host_telemetry.py'));
+		assert.ok(selected.backendFiles.includes('backend/tests/workflows/test_rust_host_telemetry_workflow.py'));
+		assert.equal(ciAnswer([path], true).browser, false);
+	}
+	const cost = selectPaths(['backend/utilities/host_telemetry_measurement.py']);
+	assert.equal(cost.rust, true);
+	assert.deepEqual(cost.groups, ['backend']);
+	const shared = selectPaths(['config/host-telemetry-experiment.json']);
+	assert.ok(shared.backendFiles.includes('backend/tests/test_host_fingerprint_migration.py'));
+});
+
 function tmpdir() {
 	const path = resolve(FRONTEND, '../backend/var/checks/scope-tests');
 	mkdirSync(path, { recursive: true });
@@ -53,7 +81,8 @@ test('native Rust and its actual file fixture select focused checks without brow
 		assert.deepEqual(selected.backendFiles, path === 'tests/fixtures/host-events/file-parity.json'
 			? ['backend/tests/contracts/test_rust_host_file_parity.py']
 			: ['backend/tests/contracts/test_host_event_rust_parity.py', 'backend/tests/contracts/test_rust_host_file_parity.py', 'backend/tests/test_rust_host_receipts.py',
-				'backend/tests/test_rust_host_store_parity.py', 'backend/tests/test_host_event_resource_parity.py'].sort());
+				'backend/tests/test_rust_host_store_parity.py', 'backend/tests/test_host_event_resource_parity.py',
+				'backend/tests/test_compare_host_telemetry.py', 'backend/tests/workflows/test_rust_host_telemetry_workflow.py'].sort());
 		assert.equal(ciAnswer([path], true).browser, false);
 		assert.equal(ciAnswer([path], true).modelAbsent, false);
 		assert.equal(ciAnswer([path], true).robots, false);

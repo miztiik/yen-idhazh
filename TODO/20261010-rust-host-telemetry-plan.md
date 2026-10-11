@@ -68,7 +68,7 @@ Table D - authoritative execution queue
 | D3 | 3 | Produce machine probe and clock events in Rust | 12 | F | DONE | rust-d3-producers | - | owner; producer recovery and correctness workers |
 | D4 | 4 | Produce window and job resource events in Rust | 3 | D | DONE | rust-d4-resources | - | owner; bounded resource monitor, shutdown/fault corrections and real Linux lifecycle complete; candidate gates pass; production collectors unchanged; live-cost evidence belongs to D5 |
 | D15 | 15 | Build bounded historical inventory and dry-run migration | 4 | E | DONE | rust-d15-history | - | owner; disjoint path-portability and current-contract leaves integrated; 139 bounded D15 cases plus 5 current-band binding cases pass, Linux-platform typing passes 752 files; merge requires exact green Linux candidate; actual migrated-consumer historical evidence remains after D13/D14 |
-| D5 | 5 | Verify corrected Rust in an artifact-only YAML workflow | 15 | E | IN-FLIGHT | rust-d5-linux-evidence | - | rust-d5-linux-evidence; local implementation and selected gates in progress; real Linux artifacts and exact green merge pending |
+| D5 | 5 | Verify corrected Rust in an artifact-only YAML workflow | 15 | E | IN-FLIGHT | rust-d5-linux-evidence | rust-d5-linux-evidence | Local readiness: contract 2540339d0; 37 focused, 414 selected backend and 78 tooling cases pass; Windows/Linux mypy, Rust fmt/clippy/tests, Ruff and Svelte checks pass. Stock-ubuntu evidence and exact-head CI remain pending. |
 | D13 | 13 | Migrate shared schemas and readers before writers | 5 | F | PENDING | - | - | - |
 | D14 | 14 | Migrate contracted backend and frontend consumers | 5 | F | PENDING | - | - | - |
 | D6 | 6 | Add inactive event emitters at real production boundaries | 13, 14 | F | PENDING | - | - | - |
@@ -289,6 +289,7 @@ Table N - Row 2 rejected alternatives
   - `backend/tests/contracts/test_host_event_rust_parity.py`
   - `tests/fixtures/host-events/probe-clock.json`
   - `frontend/scripts/test-scope.ts`
+  - `frontend/scripts/tests/run-checks.test.mjs`
   - `frontend/scripts/tests/test-scope.test.mjs`
   - `frontend/scripts/tests/run-checks.test.mjs`
   - `docs/architecture/publishing/host-events.md`
@@ -378,6 +379,8 @@ Table R - Row 4 rejected alternatives
   - `backend/idhazh/contracts/host_evidence.py`
   - `backend/idhazh/telemetry/host_evidence_inputs.py`
   - `backend/idhazh/telemetry/host_evidence_comparison.py`
+  - `backend/idhazh/telemetry/host_evidence_artifacts.py`
+  - `backend/idhazh/telemetry/host_evidence_samples.py`
   - `backend/utilities/host_telemetry_session.py`
   - `backend/utilities/host_telemetry_reference.py`
   - `backend/utilities/host_telemetry_measurement.py`
@@ -390,6 +393,9 @@ Table R - Row 4 rejected alternatives
 - **Acceptance gates - CI:** Locked pinned Rust on stock `ubuntu-latest`; independent AN/AO vectors and historical dry-run fixtures; unchanged-field deterministic replay and same-target live comparison; native file/schema/receipt tests, off-control read tests, failure/cleanup and artifact upload under `always()`. Existing Python collectors/public contracts/readers are unchanged throughout isolated evidence.
 - **Oracle:** Independent corrected-input truth plus exact unchanged-field replay and predeclared live bounds validate the intended Rust implementation in isolated roots; this does not approve adoption, all production workloads or a general speedup.
 - **Execution reconciliation:** Workflow and CLI paths are new. Existing native CLI verbs are `probe`, `clock`, `monitor`, `event-send`, `event-wait` and `monitor-cleanup`; the crate is `backend/rust/host-telemetry`, not a separate collector. Existing named CPU/hash, resource, file/receipt and historical fixtures supply independent replay evidence. The strict native experiment config remains unchanged; comparison-only knobs use a separate file and reuse its verification/capture defaults. `host_evidence.py` declares the persisted report and bounded worker exchanges before their producers. Narrow helpers own input safety, read-only comparison, session lifetime, reference capture and command-cost measurement. Shared selector and named workflow/tier inventories are reconciled here before edits.
+
+- **Integration ruling:** Fowler found that standalone probe/clock results and resource-monitor results cannot restart one emitter's sequence in the same session (H1/H9). D5 generates a host-invocation manifest for both probe/clock and a separate resource manifest, with distinct session IDs/event roots but identical declared job identity, actual worker/CPU target and effective controls. Native raw output and probe-to-clock predecessor receipts remain one chain. This repairs local routing without native collector edits or relaxed ordering.
+- **Local implementation boundary:** Comparison config declares finite build/output/workload limits before any live observation. Actual checkout/toolchain/executable bytes, retained triggering commands, native result/completion/predecessor links and ordered resource ACK/drain evidence are verified. Generated recorded tests retain original native output; legacy population HWM fallback remains unchanged. Local delivery is not a Linux evidence or D16 readiness stamp.
 
 Table S - Row 5 decisions
 
