@@ -18,6 +18,7 @@ import { machineCounters, type MachineLimits, type MachineRun } from '../src/lib
 import { copySpeedSentence, clockSentence, machineCards, uptimeSentence } from '../src/lib/charts/machine-cards';
 import { splitByMachine } from '../src/lib/charts/machine-split';
 import { ledgers, plan, type ShardReading } from './support/machine-rows';
+import { openMachine } from './support/machine-record-state';
 
 const REPO = resolve(process.cwd(), '..');
 
@@ -194,25 +195,20 @@ test.describe('reading against writing, machine by machine', () => {
 		expect(byName.get('Intel Xeon Platinum 8370C')?.writeTokensPerSecond).toBe(4);
 	});
 
-	test('the built panel draws one group a machine, names one of them, and draws no pooled rate', async ({
+	test('the replacement compares kinds separately for reading and writing, never one pooled rate', async ({
 		page
 	}) => {
-		await page.goto('/console/machine/');
-		const panel = page.locator('[data-console-panel-id="reading-against-writing"]');
+		await openMachine(page);
+		const panel = page.locator('[data-console-panel-id="slower-machines"]');
 		await expect(panel).toBeVisible();
 
-		const keys = await panel
-			.locator('[data-machine-group]')
-			.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-machine-group') ?? ''));
-		expect(keys.length, 'the panel drew no machine group').toBeGreaterThan(0);
-		expect(new Set(keys).size, 'two groups share one machine').toBe(keys.length);
-
-		// The headline names a machine, never the run as a whole.
-		const headline = panel.locator('[data-machine-split-headline]');
-		if ((await headline.count()) > 0) {
-			expect(keys).toContain(await headline.getAttribute('data-machine-split-headline'));
+		for (const caption of ['Reading', 'Writing']) {
+			const list = panel.locator(`[data-ranked-list="${caption}"]`);
+			await expect(list).toHaveCount(1);
+			const keys = await list.locator('[data-ranked-row]').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-ranked-row')));
+			expect(keys.length).toBeGreaterThan(0);
+			expect(new Set(keys).size).toBe(keys.length);
 		}
-		// Nothing on the panel offers a rate over every shard of the run.
 		await expect(panel.locator('[data-reading-writing-sentence]')).toHaveCount(0);
 		await expect(panel.locator('[data-reading-writing]')).toHaveCount(0);
 	});
@@ -220,12 +216,12 @@ test.describe('reading against writing, machine by machine', () => {
 
 test.describe('the colour a machine takes', () => {
 	test('is the same at every window preset', async ({ page }) => {
-		await page.goto('/console/machine/');
+		await openMachine(page);
 		const read = async () =>
-			page.locator('[data-machine-group]').evaluateAll((nodes) =>
+			page.locator('[data-machine-card]').evaluateAll((nodes) =>
 				nodes.map(
 					(node) =>
-						`${node.getAttribute('data-machine-group')}:${getComputedStyle(node).borderInlineStartColor}`
+						`${node.getAttribute('data-machine-card')}:${getComputedStyle(node).borderInlineStartColor}`
 				)
 			);
 		const first = await read();
@@ -239,7 +235,7 @@ test.describe('the colour a machine takes', () => {
 	test('a machine keeps one step, the step follows its speed, and the grey is only an absence', async ({
 		page
 	}) => {
-		await page.goto('/console/machine/');
+		await openMachine(page);
 		const marks = await page
 			.locator('[data-machine-group], [data-machine-card]')
 			.evaluateAll((nodes) =>
@@ -279,7 +275,7 @@ test.describe('the colour a machine takes', () => {
 
 	test('every mark carries its machine name as text, in both themes', async ({ page }) => {
 		for (const theme of ['light', 'dark']) {
-			await page.goto('/console/machine/');
+			await openMachine(page);
 			await page.evaluate((mode) => document.documentElement.setAttribute('data-theme', mode), theme);
 			const named = await page
 				.locator('[data-machine-group], [data-machine-card]')
@@ -383,7 +379,7 @@ test.describe('the machines this run drew', () => {
 	test('the built cards draw every watched flag, and their sentences keep the shapes the cards make', async ({
 		page
 	}) => {
-		await page.goto('/console/machine/');
+		await openMachine(page);
 		const panel = page.locator('[data-console-panel-id="machine-cards"]');
 		await expect(panel).toBeVisible();
 		const cards = panel.locator('[data-machine-card]');
@@ -440,7 +436,7 @@ test.describe('the machines this run drew', () => {
 	});
 
 	test('the machine location disclosure is native and closed at rest', async ({ page }) => {
-		await page.goto('/console/machine/');
+		await openMachine(page);
 		const where = page.locator('[data-machine-where]');
 		const count = await where.count();
 		expect(count, 'no machine card carried a location disclosure').toBeGreaterThan(0);
@@ -453,7 +449,7 @@ test.describe('the machines this run drew', () => {
 	});
 
 	test('a reading with nothing to draw names its state and draws no track', async ({ page }) => {
-		await page.goto('/console/machine/');
+		await openMachine(page);
 		const panel = page.locator('[data-console-panel-id="machine-cards"]');
 		const bars = panel.locator('[data-machine-bar]');
 		const count = await bars.count();
@@ -498,7 +494,7 @@ test.describe('the machine record names which state it is in', () => {
 	const STATES = ['recorded', 'off', 'lost', 'none'];
 
 	test('the panel carries one of the four names, and its note matches it', async ({ page }) => {
-		await page.goto('/console/machine/');
+		await openMachine(page);
 		const panel = page.locator('[data-machine-record]');
 		await expect(panel).toHaveCount(1);
 		const state = await panel.getAttribute('data-machine-record');
@@ -562,7 +558,7 @@ test.describe('the machine record names which state it is in', () => {
 
 test.describe('which machines ran our jobs, day by day', () => {
 	test('THE ORACLE: the platform title names one day, while seven-day words stay unchanged', async ({ page }) => {
-		await page.goto('/console/machine/');
+		await openMachine(page);
 		for (const preset of [1, 7]) {
 			await page.locator(`[data-window-preset="${preset}"] input`).waitFor({ state: 'attached' });
 			await expect(page.locator(`[data-window-preset="${preset}"] input`)).toBeEnabled();
@@ -574,7 +570,7 @@ test.describe('which machines ran our jobs, day by day', () => {
 	});
 
 	async function openFleet(page: Page): Promise<void> {
-		await page.goto('/console/machine/');
+		await openMachine(page);
 		await expect(page.locator('[data-windowed="machine-fleet"]')).toHaveAttribute('data-fleet-state', 'ready');
 	}
 
@@ -702,79 +698,44 @@ function body(panel: import('@playwright/test').Locator) {
 test.describe('what a run reads against what it writes', () => {
 	const PANEL = '[data-console-panel-id="read-against-written"]';
 
-	test('one chart, two series, and one axis per unit', async ({ page }) => {
-		await page.goto('/console/machine/');
+	test('one date series carries read and written counts on the same axis', async ({ page }) => {
+		await openMachine(page);
 		const panel = page.locator(PANEL);
 		await expect(panel).toBeVisible();
-		// One drawing, not two panes. The predecessor drew a chart each for the
-		// two series and neither could be compared to the other.
-		await expect(panel.locator('[data-chart]')).toHaveCount(1);
-		const board = panel.locator('[data-read-write-unit]');
-		await expect(board).toHaveAttribute('data-panel-question', 'is it working');
-		// The shape is picked from a measurement, and the measurement is printed.
-		await expect(board).toHaveAttribute('data-read-write-split', 'no');
-		await expect(panel.locator('[data-read-write-measured]')).toContainText(
-			(await board.getAttribute('data-read-write-ratio')) ?? 'no ratio'
-		);
+		await expect(panel.locator('svg[data-chart-type="dateSeries"]')).toHaveCount(1);
+		await expect(panel.locator('[data-readout-row="Read tokens"]')).toHaveCount(1);
+		await expect(panel.locator('[data-readout-row="Written tokens"]')).toHaveCount(1);
 	});
 
-	test('the switch moves the unit, and both units read the same runs', async ({ page }) => {
-		await page.goto('/console/machine/');
-		const board = page.locator(PANEL).locator('[data-read-write-unit]');
-		await expect(board).toBeVisible();
-		// The server drew one unit and the radio for it is already checked, so the
-		// first paint and the control agree before a script has run.
-		const opened = await board.getAttribute('data-read-write-unit');
-		await expect(page.locator('[data-shape-switch="work-unit"]')).toHaveAttribute(
-			'data-shape',
-			opened ?? ''
-		);
-
-		const runs = await board.getAttribute('data-read-write-runs');
-		const other = opened === 'seconds' ? 'tokens' : 'seconds';
-		await page.locator(`[data-shape-switch="work-unit"] [data-shape-option="${other}"]`).click();
-		await expect(board).toHaveAttribute('data-read-write-unit', other);
-		// One row set answers both units, so the run count cannot move with the
-		// switch. A count that moved would mean the two grains covered different
-		// runs, and nothing on the page could say which.
-		await expect(board).toHaveAttribute('data-read-write-runs', runs ?? '');
+	test('the shared window changes the dated population and never offers a retired unit switch', async ({ page }) => {
+		await openMachine(page);
+		await expect(page.locator('[data-shape-switch="work-unit"]')).toHaveCount(0);
+		await setWindow(page, 1);
+		await expect(page.locator('[data-windowed="machine-tokens"]')).toHaveAttribute('data-window-days', '1');
+		await expect(page.locator(PANEL).locator('[data-readout] [data-readout-day]')).not.toHaveText('');
 	});
 
-	test('the seconds grain states its absence rather than drawing an empty chart', async ({
+	test('the count comparison names its units and supplies both readings at rest', async ({
 		page
 	}) => {
-		await page.goto('/console/machine/');
-		const board = page.locator(PANEL).locator('[data-read-write-unit]');
-		const units = page.locator('[data-shape-switch="work-unit"]');
-		await units.locator('[data-shape-option="seconds"]').click();
-		await expect(board).toHaveAttribute('data-read-write-unit', 'seconds');
-		const timed = Number(await board.getAttribute('data-read-write-timed-runs'));
-		if (timed === 0) {
-			await expect(board.locator('[data-work-absent="seconds"]')).toBeVisible();
-			await expect(board.locator('[data-chart]')).toHaveCount(0);
-			return;
-		}
-		// The other half: a run the ledger timed draws, and the count grain is
-		// never taken down with the clock.
-		await expect(board.locator('[data-work-absent="seconds"]')).toHaveCount(0);
-		await expect(board.locator('[data-chart]')).toHaveCount(1);
-		await units.locator('[data-shape-option="tokens"]').click();
-		await expect(board.locator('[data-chart]')).toHaveCount(1);
+		await openMachine(page);
+		const readout = page.locator(PANEL).locator('[data-readout]');
+		await expect(readout).toContainText('Read tokens');
+		await expect(readout).toContainText('Written tokens');
+		expect(await readout.locator('[data-readout-row]').count()).toBeGreaterThanOrEqual(2);
 	});
 });
 
 test.describe('what this would have cost somewhere else', () => {
 	const PANEL = '[data-console-panel-id="counterfactual-cost"]';
 
-	test('one chart beside the four numbers, and the switch opens where the server drew', async ({
+	test('one running date series sits beside all four editable-price figures', async ({
 		page
 	}) => {
-		await page.goto('/console/machine/');
+		await openMachine(page);
 		const panel = page.locator(PANEL);
 		await expect(panel).toBeVisible();
-		const board = panel.locator('[data-cost-shape]');
-		await expect(board).toHaveAttribute('data-panel-question', 'is it working');
-		await expect(panel.locator('[data-chart]')).toHaveCount(1);
+		await expect(panel.locator('svg[data-chart-type="dateSeries"]')).toHaveCount(1);
 		// The four figures stay. A chart that replaced them would have taken the
 		// per-article reading, which no shape of the chart carries.
 		expect(
@@ -782,39 +743,23 @@ test.describe('what this would have cost somewhere else', () => {
 				nodes.map((node) => node.getAttribute('data-cost') ?? '').sort()
 			)
 		).toEqual(['input', 'output', 'per-article', 'total']);
-		// The server drew one shape and the radio for it is already checked, so
-		// the first paint and the control agree before a script has run.
-		const opened = await board.getAttribute('data-cost-shape');
-		await expect(page.locator('[data-shape-switch="cost-shape"]')).toHaveAttribute(
-			'data-shape',
-			opened ?? ''
-		);
+		await expect(page.locator('[data-shape-switch="cost-shape"]')).toHaveCount(0);
 	});
 
-	test('the switch moves the shape and never the days it was taken over', async ({ page }) => {
-		await page.goto('/console/machine/');
-		const board = page.locator(PANEL).locator('[data-cost-shape]');
-		await expect(board).toBeVisible();
-		const days = await board.getAttribute('data-cost-days');
+	test('a resize keeps the running total and dated population', async ({ page }) => {
+		await openMachine(page);
+		const board = page.locator('[data-cost-running-total]');
 		const total = await board.getAttribute('data-cost-running-total');
-		expect(Number(days)).toBeGreaterThan(0);
-
-		const opened = await board.getAttribute('data-cost-shape');
-		const other = opened === 'running' ? 'daily' : 'running';
-		await page.locator(`[data-shape-switch="cost-shape"] [data-shape-option="${other}"]`).click();
-		await expect(board).toHaveAttribute('data-cost-shape', other);
-		// One builder call answers both shapes, so neither the day count nor the
-		// total can move with the switch. A total that moved would mean two
-		// derivations of one quantity, with nothing on screen saying which to
-		// believe.
-		await expect(board).toHaveAttribute('data-cost-days', days ?? '');
+		const day = await board.locator('[data-readout-day]').textContent();
+		await page.setViewportSize({ width: 390, height: 844 });
 		await expect(board).toHaveAttribute('data-cost-running-total', total ?? '');
+		await expect(board.locator('[data-readout-day]')).toHaveText(day ?? '');
 	});
 
 	test('the line ends where the four numbers above it say it should', async ({ page }) => {
-		await page.goto('/console/machine/');
+		await openMachine(page);
 		const panel = page.locator(PANEL);
-		const board = panel.locator('[data-cost-shape]');
+		const board = page.locator('[data-cost-running-total]');
 		// A typed rate, because the committed one puts the window total under the
 		// two decimals the headline figure prints, and a comparison taken across
 		// that floor would be decided by the rounding.
@@ -840,16 +785,14 @@ test.describe('what this would have cost somewhere else', () => {
 		expect(running).toBeCloseTo(printed, 2);
 	});
 
-	test('the split is drawn as bands or printed as a figure, and the panel says which', async ({
+	test('the running comparison prints a truthful settings declaration', async ({
 		page
 	}) => {
-		await page.goto('/console/machine/');
-		const board = page.locator(PANEL).locator('[data-cost-shape]');
-		const split = await board.getAttribute('data-cost-split');
-		expect(['drawn', 'printed']).toContain(split);
-		// Whichever branch it took, the measurement it took it on is on the page.
-		const measured = await board.getAttribute('data-cost-thinnest-pct');
-		expect(Number(measured)).toBeGreaterThan(0);
-		await expect(board.locator('[data-cost-measured]')).toContainText(measured ?? 'no measurement');
+		await openMachine(page);
+		const declared = page.locator(PANEL).locator('[data-model-rule-name="counterfactual-cost"]');
+		await expect(declared).toHaveAttribute('data-model-rule', 'yes');
+		if (await declared.locator('[data-model-rule-line]').count() === 0) {
+			await expect(page.locator(PANEL).locator('[data-model-rule-empty="counterfactual-cost"]')).not.toHaveText('');
+		}
 	});
 });

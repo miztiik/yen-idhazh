@@ -11,7 +11,6 @@ export const EXPECT: RouteExpect | null = {
 		'machine-latency',
 		'machine-processor-lost',
 		'machine-prompt-reuse',
-		'machine-runs',
 		'machine-tokens'
 	],
 	dailyTable: false

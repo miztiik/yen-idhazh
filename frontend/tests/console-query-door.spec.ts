@@ -2,14 +2,14 @@
 import { expect, test } from './support/door-page';
 import { machineRecordState, type MachineRecordState } from './support/machine-record-state';
 
-const PANEL = '[data-windowed="machine-fleet"]';
+const PANEL = '[data-panel-query="platform-mix"]';
 
 for (const state of ['loading', 'missing', 'quiet', 'unreachable'] as const satisfies readonly MachineRecordState[]) {
 	test(`the machine panel draws ${state} from the real index boundary`, async ({ page }) => {
 		await machineRecordState(page, state);
 		await page.goto('/console/machine/');
 		const panel = page.locator(PANEL);
-		await expect(panel).toHaveAttribute('data-fleet-state', state);
+		await expect(panel).toHaveAttribute('data-machine-panel-state', state);
 		if (state === 'loading') {
 			await expect(panel.locator('[data-panel-state="loading"]')).toBeVisible();
 			await expect(panel.locator('[data-readout]')).toHaveCount(0);
@@ -25,14 +25,13 @@ test('the machine panel says a published record with no compact folder is not pa
 	await machineRecordState(page, 'missing');
 	await page.goto('/console/machine/');
 	const panel = page.locator(PANEL);
-	await expect(panel).toHaveAttribute('data-fleet-state', 'missing');
-	await expect(panel.locator('[data-empty-state="missing"] .empty-sentence')).toHaveText('The machine record is not packed yet.');
-	await expect(panel).not.toContainText(/published/i);
+	await expect(panel).toHaveAttribute('data-machine-panel-state', 'missing');
+	await expect(panel.locator('[data-empty-state="missing"] .empty-sentence')).toHaveText('Not published yet.');
 });
 
 test('thirty days then seven query the real worker and fetch each whole file once', async ({ page, context, parquet }) => {
 	const document = await page.request.get('/console/machine/').then((response) => response.text());
-	expect(document).toContain('data-readout-fetched="host-fingerprint"');
+	expect(document).toContain('data-panel-query="platform-mix"');
 	expect(document).not.toContain('data-readout="machine-fleet"');
 	const fetched: string[] = [];
 	const addons: string[] = [];
@@ -42,7 +41,7 @@ test('thirty days then seven query the real worker and fetch each whole file onc
 	});
 	await page.addInitScript(() => localStorage.setItem('idhazh:console-window', '30'));
 	await page.goto('/console/machine/');
-	const panel = page.locator(PANEL);
+	const panel = page.locator('[data-windowed="machine-fleet"]');
 	await expect(panel).toHaveAttribute('data-fleet-state', 'ready');
 	await expect(panel.locator('[data-readout="machine-fleet"]')).toHaveCount(1);
 	await expect(panel.locator('[data-fleet-placements]')).toHaveAttribute('data-fleet-placements', /^[1-9]\d*$/);
@@ -66,7 +65,7 @@ test('the real query worker loads its cached add-on and obeys the page connectio
 		await route.abort();
 	});
 	await page.goto('/console/machine/');
-	await expect(page.locator(PANEL)).toHaveAttribute('data-fleet-state', 'ready');
+	await expect(page.locator(PANEL)).toHaveAttribute('data-machine-panel-state', 'ok');
 	const worker = page.workers().find((entry) => entry.url().startsWith('blob:'));
 	expect(worker, 'the real query engine has a dedicated blob worker').toBeDefined();
 	if (!worker) throw new Error('No query worker');
@@ -86,7 +85,7 @@ test.describe('the production service worker', () => {
 	test.use({ serviceWorkers: 'allow' });
 	test('sees the real query worker requests', async ({ page, context, parquet }) => {
 		await page.goto('/console/machine/');
-		await expect(page.locator(PANEL)).toHaveAttribute('data-fleet-state', 'ready');
+		await expect(page.locator(PANEL)).toHaveAttribute('data-machine-panel-state', 'ok');
 		await page.evaluate(async () => { await navigator.serviceWorker.ready; });
 		await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null)).toBe(true);
 		const serviceWorker = context.serviceWorkers()[0];
@@ -100,7 +99,7 @@ test.describe('the production service worker', () => {
 			});
 		});
 		await page.reload();
-		await expect(page.locator(PANEL)).toHaveAttribute('data-fleet-state', 'ready');
+		await expect(page.locator(PANEL)).toHaveAttribute('data-machine-panel-state', 'ok');
 		const controlled = await page.evaluate(() => navigator.serviceWorker.controller?.scriptURL ?? null);
 		const observed = await serviceWorker.evaluate(() =>
 			(globalThis as typeof globalThis & { observedWorkerRequests: string[] }).observedWorkerRequests

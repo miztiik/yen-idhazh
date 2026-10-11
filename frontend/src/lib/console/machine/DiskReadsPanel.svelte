@@ -208,7 +208,9 @@
 			? `one tile for ${nameSpan(windowDays)}`
 			: `one tile a day, over ${nameSpan(windowDays)}`}."
 	>
-		<p class="finding" data-disk-read-finding={verdict}>{finding}</p>
+		<p class="finding" data-lede data-disk-read-finding={verdict}
+			data-comparison="Disk waits against the named wait threshold"
+			data-model-rule="no" data-model-rule-none="The host's memory choices do not depend on model settings.">{finding}</p>
 
 		{#if reads.days.length === 0}
 			<p class="aside" data-machine-panel-empty="disk-reads">
@@ -223,6 +225,8 @@
 		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 		<div
 			class="strip"
+			data-chart-type="tileStrip"
+			data-panel-question="is it working"
 			tabindex="0"
 			role="group"
 			aria-label={days === 1
@@ -312,9 +316,10 @@
 
 <style>
 	.finding {
+		font-size: var(--text-2xl);
+		line-height: var(--leading-tight);
+		font-weight: 600;
 		margin: var(--space-2) 0 var(--space-3);
-		font-size: var(--text-base);
-		line-height: var(--leading-base);
 		color: var(--color-text);
 	}
 
@@ -326,7 +331,7 @@
 		padding: var(--space-3);
 		border: 1px solid var(--color-rule);
 		border-radius: var(--radius-sm);
-		background: var(--color-surface-sunken);
+		background: none;
 	}
 
 	.track {

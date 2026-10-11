@@ -23,6 +23,7 @@ export async function chartsReady(page: Page, why = 'a chart near the viewport n
 		.poll(
 			() =>
 				page.evaluate(() => {
+					if (document.querySelector('[data-console-panels][data-route-state="loading"]')) return false;
 					const reach = window.innerHeight * 2;
 					return [...document.querySelectorAll('figure[data-chart-drawn]')].every((figure) => {
 						const host = figure.querySelector('[data-chart]');

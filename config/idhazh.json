@@ -227,6 +227,7 @@
       "host-fingerprint",
       "item-health",
       "published",
+      "run-shards",
       "seen",
       "summary-quality-evals"
     ]
@@ -280,6 +281,7 @@
       "state/compact/host-fingerprint/index/": 2200,
       "state/compact/item-health/index/": 2200,
       "state/compact/published/index/": 2200,
+      "state/compact/run-shards/index/": 2200,
       "state/compact/seen/index/": 2200,
       "state/compact/summary-quality-evals/index/": 2200,
       "telemetry/": 1100000

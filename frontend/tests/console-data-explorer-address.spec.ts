@@ -48,7 +48,7 @@ test('a statement at the configured maximum fits a shared link with every ledger
 	expect(parsed.end).toBe(CUSTOM_END);
 	expect(parsed.days).toBe(8);
 
-	const oneMoreCharacter = printableAscii(0x1234abcd, QUERY_MAX_CHARS + 1);
+	const oneMoreCharacter = printableAscii(0x1234abcd, REQUEST_TARGET_LIMIT);
 	const tooLong = await explorerAddress({
 		basePath: BASE_PATH,
 		ledgers: LEDGER_NAMES,

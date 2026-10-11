@@ -70,7 +70,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	'src/lib/console/machine': [
 		'article-cost.ts', 'ArticleCostPanel.svelte', 'context-cost.ts', 'ContextCostPanel.svelte',
 		'CounterfactualCostPanel.svelte', 'disk-reads.ts', 'DiskReadsPanel.svelte', 'FleetDots.svelte',
-		'MachineCardsPanel.svelte', 'MachineSplitPanel.svelte', 'memory-held.ts',
+		'MachineCardsPanel.svelte', 'MachineCharts.svelte', 'RecordFrame.svelte', 'counters.ts', 'records.ts', 'MachineSplitPanel.svelte', 'memory-held.ts',
 		'MemoryBoardPanel.svelte', 'MemoryHeldPanel.svelte', 'PlatformMixPanel.svelte',
 		'processor-lost.ts', 'ProcessorLostPanel.svelte', 'prompt-reuse.ts', 'PromptReusePanel.svelte',
 		'ReadAgainstWrittenPanel.svelte', 'refused-runs.ts', 'run-axis.ts', 'ShardBoardPanel.svelte',

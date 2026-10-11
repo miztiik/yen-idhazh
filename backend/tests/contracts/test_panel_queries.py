@@ -18,6 +18,7 @@ from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import COLUMN_READERS as ITEM_READERS
 from idhazh.contracts.item_health import MACHINE_CELLS_RENAMED, UNREAD_CELLS, ItemHealthRow
 from idhazh.contracts.knobs.ledger import LedgerConfig
+from idhazh.contracts.run_shards import RunShards
 
 pytestmark = pytest.mark.contract
 
@@ -37,6 +38,7 @@ EXPECTED_NAMES: Final = {
         "summaryLengthQuery", "modelChangeQuery", "modelChangeItemsQuery",
     ),
     "machine": (
+        "runShardsQuery",
         "twoClocksQuery", "twoClocksHostsQuery", "processorLostQuery", "diskReadsQuery",
         "machineCardsQuery", "machineCardsItemsQuery", "slowerMachinesQuery", "platformMixQuery",
         "slowestArticlesQuery", "tailTrendQuery", "closestToMemoryQuery", "memoryHeldQuery",
@@ -49,6 +51,7 @@ EXPECTED_NAMES: Final = {
 
 #: Independent transcription of the panel tables, using the row's declared renames.
 EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
+    "runShardsQuery": ("date", "run_id", "shards"),
     "failedRuleQuery": ("date", "stage", "outcome", "code", "failed_rule"),
     "failureMixQuery": ("date", "stage", "outcome", "code", "failed_rule"),
     "itemTimeSplitQuery": ("date", "item_total_ms", "fetch_ms", "extract_ms", "summarize_ms", "label_ms", "summary_ms", "visual_plan_ms", "faithfulness_ms", "stage_gap_ms"),
@@ -76,7 +79,7 @@ EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
     "machineCardsQuery": ("date", "run_id", "job", "shard", "fingerprint", "cpu_model", "cpu_family", "cpu_model_number", "cpu_stepping", "microcode", "flags", "l3_cache_bytes", "boot_seconds", "mhz_at_probe", "memcpy_gib_s", "memcpy_probe_mib", "vm_size", "vm_location", "vm_zone", "vm_fault_domain"),
     "machineCardsItemsQuery": ("date", "run_id", "machine_job", "machine_shard", "cpu_model"),
     "slowerMachinesQuery": ("run_id", "cpu_model", "prefill_ms", "input_tokens", "cached_tokens", "decode_ms", "output_tokens"),
-    "platformMixQuery": ("date", "run_id", "job", "shard", "fingerprint", "cpu_model", "job_seconds", "server_prompt_tokens", "server_prompt_seconds"),
+    "platformMixQuery": ("date", "run_id", "job", "shard", "fingerprint", "cpu_model", "cores", "model_load_ms", "job_seconds", "server_prompt_tokens", "server_prompt_seconds"),
     "slowestArticlesQuery": ("run_id", "item_id", "source_id", "machine_shard", "item_total_ms", "fetch_ms", "extract_ms", "summarize_ms", "faithfulness_ms", "stage_gap_ms", "queue_wait_ms"),
     "tailTrendQuery": ("date", "run_id", "summarize_ms"),
     "closestToMemoryQuery": ("date", "item_id", "source_id", "os_mem_total_bytes", "os_mem_available_min_bytes", "source_words"),
@@ -163,6 +166,7 @@ def load_queries() -> tuple[QueryDeclaration, ...]:
 
 def row_columns() -> dict[str, tuple[str, ...]]:
     return {
+        "run-shards": tuple(RunShards.model_fields),
         "item-health": ItemHealthRow.csv_columns(),
         "host-fingerprint": HostFingerprintRow.csv_columns(),
         "summary-quality-evals": EvalRow.csv_columns(),
@@ -237,7 +241,7 @@ def test_platform_mix_names_exactly_the_shipped_fleet_columns() -> None:
     assert match is not None
     expected = tuple(re.findall(r"'([^']+)'", match[1]))
     query = next(query for query in load_queries() if query.name == "platformMixQuery")
-    assert query.columns == expected
+    assert set(query.columns) == {*expected, "cores", "model_load_ms"}
     assert query.ledger == "host-fingerprint"
 
 
@@ -261,7 +265,7 @@ def test_word_and_machine_renames_are_the_actual_contract_mappings() -> None:
 def test_query_span_and_fetch_predicate_match_the_panel_contracts() -> None:
     queries = load_queries()
     assert {query.name for query in queries if query.span == "widest"} == {
-        "modelChangeQuery", "modelChangeItemsQuery"
+        "modelChangeQuery", "modelChangeItemsQuery", "runShardsQuery", "platformMixQuery"
     }
     assert {query.name for query in queries if query.span == "newest-day"} == {
         "runTimelineQuery", "twoClocksQuery", "twoClocksHostsQuery", "machineCardsQuery",

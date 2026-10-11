@@ -151,21 +151,22 @@ test('built-page oracle refuses a figure, wrong pageData and every incorrect fir
 	]) expect(builtPageErrors(actual, changed, expected)).toContain('Route pageData keys differ');
 });
 
-test('limited Platform Mix contract still fails on missing panels, leaked reach and a settled first frame', () => {
+test('Hardware contract rejects missing panels, leaked facts and a settled first frame', () => {
 	const expected = BY_ROUTE.machine;
 	expect(expected).not.toBeNull();
-	if (expected === null) throw new Error('Hardware must retain its shipped door-panel contract');
-	expect(expected.scope).toBe('platform-mix-only');
+	if (expected === null) throw new Error('Hardware must declare its whole configuration-only route');
+	expect(expected.scope).toBe('route');
 	const payload = { type: 'data', nodes: [{ type: 'data', data: [Object.fromEntries(expected.pageData.map((key) => [key, 1]))] }] };
 	const actual: BuiltSnapshot = {
-		frames: 0, state: null, shimmer: null, standingCount: 0, standing: '',
-		panels: { 'platform-mix': { count: 1, bodies: 1, text: '', drawnSVG: 0, reservedSVG: 1, facts: 0 } },
-		pendingCount: 1, pendingState: 'loading', pendingAttributes: [null, null]
+		frames: 1, state: 'loading', shimmer: 'off', standingCount: 1, standing: '',
+		panels: Object.fromEntries(Object.keys(expected.doorPanels).map((id) =>
+			[id, { count: 1, bodies: 1, text: '', drawnSVG: 0, reservedSVG: 1, facts: 0 }])),
+		pendingCount: 0, pendingState: null, pendingAttributes: []
 	};
 	expect(builtPageErrors(actual, payload, expected)).toEqual([]);
 	expect(builtPageErrors({ ...actual, panels: {} }, payload, expected)).not.toEqual([]);
-	expect(builtPageErrors({ ...actual, pendingState: 'ready' }, payload, expected)).not.toEqual([]);
-	expect(builtPageErrors({ ...actual, pendingAttributes: ['2026-09-01', null] }, payload, expected)).not.toEqual([]);
+	expect(builtPageErrors({ ...actual, state: 'ok' }, payload, expected)).not.toEqual([]);
+	expect(builtPageErrors(actual, { type: 'data', nodes: [{ type: 'data', data: [{ machineConfig: {}, runs: [] }] }] }, expected)).not.toEqual([]);
 });
 
 test.describe('the genuine scriptless built page', () => {

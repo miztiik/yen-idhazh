@@ -7,7 +7,7 @@
         "processor-lost",
         "disk-reads",
         "machine-cards",
-        "reading-against-writing",
+        "slower-machines",
         "platform-mix"
       ],
       "title": "What the machine was doing"
@@ -15,7 +15,7 @@
     {
       "id": "where-the-time-went",
       "panels": [
-        "shard-board",
+        "slowest-articles",
         "tail-trend"
       ],
       "title": "Where the time went"
@@ -23,7 +23,7 @@
     {
       "id": "how-close-to-the-limits",
       "panels": [
-        "memory-board",
+        "closest-to-memory",
         "memory-held",
         "context-headroom"
       ],
@@ -41,7 +41,27 @@
     }
   ],
   "judged": [
-    "platform-mix"
+    "two-clocks",
+    "processor-lost",
+    "disk-reads",
+    "machine-cards",
+    "slower-machines",
+    "platform-mix",
+    "slowest-articles",
+    "tail-trend",
+    "closest-to-memory",
+    "memory-held",
+    "context-headroom",
+    "article-cost",
+    "prompt-reuse",
+    "read-against-written",
+    "counterfactual-cost"
   ],
-  "knobs": {}
+  "knobs": {
+    "clocks_agree_within_pct": 5,
+    "slower_machines_min_articles": 10,
+    "slowest_articles_rows": 20,
+    "closest_to_memory_rows": 20,
+    "context_min_values": 2
+  }
 }

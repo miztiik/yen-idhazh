@@ -1,7 +1,3 @@
-/** Which Hardware charts exercise deferred drawing, updates and release? */
+/** Hardware has no deferred ECharts instance; its d3 redraw is tested on the route. */
 import type { RouteExpect } from './index';
-export const EXPECT: RouteExpect = {
-	leaveTo: 'model',
-	shape: { control: 'cost-shape', initial: 'daily', next: 'running' },
-	window: { hostSelector: '[data-read-write-unit] [data-chart]' }
-};
+export const EXPECT: RouteExpect | null = null;

@@ -87,7 +87,6 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "runner_name",
             "cpu_vendor",
             "mhz_max",
-            "model_load_ms",
         ),
         "frontend/src/lib/console/queries/machine.ts": (
             "date",
@@ -114,8 +113,9 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "vm_fault_domain",
             "job_seconds",
             "threads",
+            "cores",
+            "model_load_ms",
         ),
-        "frontend/src/lib/charts/machine.ts": ("cores",),
     }
 )
 

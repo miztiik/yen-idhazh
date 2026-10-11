@@ -1,280 +1,153 @@
-/** The Machine route in a browser: what it draws, and what it does with a rate.
- *
- * The arithmetic is checked in `console-machine.spec.ts` against fixture rows.
- * What is checked here is everything that only a browser can answer - that the
- * marks reach the page at all, that the page is complete before any script runs,
- * and that a typed rate redraws every cost figure from one shared value rather
- * than from four copies that can drift.
- */
-
+/** Hardware reads only the declared public records and preserves the independent count refusal. */
 import { expect, test, type Page } from './support/door-page';
-import { chartsReady } from './support/charts-ready';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import * as queries from '../src/lib/console/queries/machine';
+import type { Row } from '../src/lib/data/ledger';
+import { buildRows, serveToPage } from './support/ledger-lifecycle';
+import { machineRecordState } from './support/machine-record-state';
 
-const CONFIG = JSON.parse(
-	readFileSync(resolve(process.cwd(), '..', 'config', 'idhazh.json'), 'utf8')
-) as {
-	run: { shard_timeout_minutes: number };
-	observability: {
-		cost_currency: string;
-		cost_input_per_million: number;
-		cost_output_per_million: number;
-	};
-};
+const DAY = '2026-08-20', RUN = `${DAY}-1`;
+const PANELS = ['two-clocks', 'processor-lost', 'disk-reads', 'machine-cards', 'slower-machines',
+	'platform-mix', 'slowest-articles', 'tail-trend', 'closest-to-memory', 'memory-held',
+	'context-headroom', 'article-cost', 'prompt-reuse', 'read-against-written', 'counterfactual-cost'];
 
-/** Digits out of a money string. `money` groups thousands and names the
- * currency, so a parser has to strip both. */
-function amount(text: string): number {
-	return Number(text.replace(/[^0-9.]/g, ''));
+function cells(ledger: string): Row {
+	return Object.fromEntries(Object.values(queries).filter((query) => query.ledger === ledger)
+		.flatMap((query) => query.columns).map((name) => [name, null]));
 }
 
-async function costs(page: Page): Promise<Record<string, number>> {
-	const cells = await page
-		.locator('[data-cost-figures] [data-cost]')
-		.evaluateAll((nodes) =>
-			nodes.map((node) => [
-				node.getAttribute('data-cost') ?? '',
-				(node.querySelector('dd')?.textContent ?? '').trim()
-			])
-		);
-	return Object.fromEntries(cells.map(([key, text]) => [key, amount(text)]));
+async function fixture(page: Page, count: number | null, conflict = false, hostConflict = false) {
+	const root = test.info().outputPath('machine-records');
+	await buildRows(root, 'host-fingerprint', [{ covers: DAY, rows: (hostConflict ? [0, 1, 0] : [0, 1]).map((shard, index) => ({
+		...cells('host-fingerprint'), date: DAY, run_id: RUN, job: 'work', shard,
+		fingerprint: '0123456789abcdef', cpu_model: 'Fixture CPU', cores: index === 2 ? 8 : 4, threads: 8,
+		model_load_ms: 1000, job_seconds: 30, server_prompt_tokens: 100, server_prompt_seconds: 1
+	})) }]);
+	await buildRows(root, 'item-health', [{ covers: DAY, rows: [0, 1].map((shard) => ({
+		...cells('item-health'), date: DAY, run_id: RUN, item_id: `article-${shard}`, source_id: 'fixture',
+		machine_job: 'work', machine_shard: shard, cpu_model: 'Fixture CPU',
+		item_index: shard, input_tokens: 100, cached_tokens: 0, output_tokens: 20,
+		prefill_ms: 2000, decode_ms: 500, item_total_ms: 4000, fetch_ms: 500, extract_ms: 500,
+		summarize_ms: 2000, faithfulness_ms: 500, stage_gap_ms: 500, queue_wait_ms: 100,
+		label_input_tokens: 100, label_cached_tokens: 10, summary_input_tokens: 200, summary_cached_tokens: 40,
+		n_ctx_configured: 8192, n_parallel: 2, os_mem_total_bytes: 16 * 2 ** 30,
+		os_mem_available_min_bytes: 6 * 2 ** 30, os_mem_available_bytes: 6 * 2 ** 30
+	})) }]);
+	await buildRows(root, 'run-shards', [{ covers: DAY, rows: [
+		{ date: DAY, run_id: RUN, shards: count },
+		...(conflict ? [{ date: DAY, run_id: RUN, shards: 3 }] : [])
+	] }]);
+	for (const ledger of ['host-fingerprint', 'item-health', 'run-shards'] as const) {
+		await serveToPage(page.context(), root, ledger);
+	}
+	await page.goto('/console/machine/');
+	await expect(page.locator('[data-console-panels="machine"]')).not.toHaveAttribute('data-route-state', 'loading');
 }
 
-async function typeRate(page: Page, which: 'input' | 'output', value: string): Promise<void> {
-	const field = page.locator(`[data-rate-input="${which}"]`);
-	await expect(field).toBeEnabled();
-	await field.fill(value);
-	await field.blur();
+test('all fifteen panels draw after public queries arrive, without a manifest request', async ({ page }) => {
+	const privateRequests: string[] = [];
+	page.on('request', (request) => {
+		if (/\/(?:run|plan)\.json|\/state\/.*(?:run-plan|prompt)/.test(request.url())) privateRequests.push(request.url());
+	});
+	await fixture(page, 2);
+	expect(privateRequests).toEqual([]);
+	expect(await page.locator('[data-console-panel-id]').evaluateAll((nodes) =>
+		nodes.map((node) => node.getAttribute('data-console-panel-id')))).toEqual(PANELS);
+	await expect(page.locator('[data-machine-refused]')).toHaveCount(0);
+	await expect(page.locator('[data-clock-pair]')).toHaveCount(2);
+	for (const pair of await page.locator('[data-clock-pair]').all()) {
+		await expect(pair).toHaveAttribute('data-clock-gap', '50.00');
+		await expect(pair).toHaveAttribute('data-clock-agrees', 'false');
+	}
+	await expect(page.locator('[data-console-panel-id="closest-to-memory"] [data-lede]')).toHaveText("The tightest article left 6.00 GiB of the machine's 16.00 GiB free.");
+	await expect(page.locator('[data-console-panel-id="slowest-articles"]')).toContainText('4.0 seconds');
+	const context = page.locator('[data-console-panel-id="context-headroom"]');
+	await expect(context.locator('[data-lede]')).toContainText('4.9 percent of the smallest reading limit');
+	await expect(context).toContainText('4096 tokens per request slot');
+	await expect(context.locator('[data-comparison]')).toHaveText('Each prompt against the reading limit.');
+	await expect(page.locator('[data-console-panel-id="prompt-reuse"] [data-lede]')).toHaveText('10 tokens held for the middle label request.');
+	for (const call of ['label', 'summary']) {
+		await expect(context.locator(`svg[data-chart-name="context-${call}"]`)).toContainText('Reading limit: 4096 tokens per slot');
+	}
+});
+
+test('a recorded count of one refuses two observed shards; unknown does not invent a denominator', async ({ page }) => {
+	await fixture(page, 1);
+	await expect(page.locator('[data-machine-refused]')).toHaveAttribute('data-machine-refused', '1');
+	await expect(page.locator('[data-refused-run]')).toContainText(RUN);
+	await expect(page.locator('[data-clock-pair]')).toHaveCount(0);
+});
+
+test('unknown count is retained without refusing or counting observed hosts as the plan', async ({ page }) => {
+	await fixture(page, null);
+	await expect(page.locator('[data-machine-refused]')).toHaveCount(0);
+	await expect(page.locator('[data-clock-pair]')).toHaveCount(2);
+	await expect(page.locator('[data-planned-shards]')).toHaveText('The planned shard count was not recorded.');
+});
+
+test('existing published host cells still refuse conflicting records after query migration', async ({ page }) => {
+	await fixture(page, 2, false, true);
+	await expect(page.locator('[data-refused-run]')).toContainText('two machine records that disagree');
+	await expect(page.locator('[data-clock-pair]')).toHaveCount(0);
+});
+
+test('the standing retries repaired indexes instead of keeping a failed read session', async ({ page }) => {
+	await machineRecordState(page, 'unreachable');
+	await fixture(page, 2);
+	await expect(page.locator('[data-console-retry]')).toBeVisible();
+	await page.unrouteAll({ behavior: 'ignoreErrors' });
+	await page.locator('[data-console-retry]').click();
+	await expect(page.locator('[data-console-panels="machine"]')).toHaveAttribute('data-route-state', 'ok');
+	await expect(page.locator('[data-clock-pair]')).toHaveCount(2);
+});
+
+test('an unsettled count correction is a visible refusal, not a reactive page crash', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', (error) => errors.push(error.message));
+	await fixture(page, 2, true);
+	await expect(page.locator('[data-machine-count-refusal]')).toContainText('unsettled corrections');
+	await expect(page.locator('[data-panel-query="two-clocks"]')).toHaveAttribute('data-machine-panel-state', 'unreachable');
+	expect(errors).toEqual([]);
+});
+
+for (const state of ['missing', 'quiet', 'unreachable'] as const) {
+	test(`all fifteen panels keep their ${state} state without inventing lost days`, async ({ page }) => {
+		await machineRecordState(page, state);
+		await page.goto('/console/machine/');
+		await expect(page.locator('[data-console-panels="machine"]')).toHaveAttribute('data-route-state', state);
+		for (const id of PANELS) await expect(page.locator(`[data-panel-query="${id}"]`)).toHaveAttribute('data-machine-panel-state', state);
+		await expect(page.locator('[data-recording="machine-destroyed"]')).toHaveCount(0);
+		await expect(page.locator('[data-machine-refused]')).toHaveCount(0);
+	});
 }
 
-test.describe('the shard board', () => {
-	test('draws a row per shard that reported, and each bar sums to that shard', async ({
-		page
-	}) => {
-		await page.goto('/console/machine/');
-		const board = page.locator('[data-shard-board]');
-		await expect(board).toHaveCount(1);
-		// The canary carries a counters ledger and so does the committed one, so an
-		// empty board here is a broken read rather than a state to tolerate. An
-		// assertion that returned early on it would pass having checked nothing.
-		await expect(board).not.toHaveAttribute('data-shard-board', 'empty');
-
-		const rows = await page.locator('[data-shard-row]').evaluateAll((nodes) =>
-			nodes.map((node) => ({
-				shard: Number(node.getAttribute('data-shard-row')),
-				read: node.getAttribute('data-shard-read-seconds') ?? '',
-				write: node.getAttribute('data-shard-write-seconds') ?? '',
-				model: node.getAttribute('data-shard-model-seconds') ?? '',
-				job: node.getAttribute('data-shard-job-seconds') ?? '',
-				cpu: node.getAttribute('data-shard-cpu') ?? ''
-			}))
-		);
-		expect(rows.length, 'the board drew no shard').toBeGreaterThan(0);
-		expect(rows.length).toBeLessThanOrEqual(Number(await board.getAttribute('data-shard-board-shards')));
-
-		for (const row of rows) {
-			if (row.model === '') continue;
-			// Reading and writing are never one figure, and the two of them are the
-			// whole of the model's seconds for that shard.
-			expect(Number(row.read) + Number(row.write)).toBeCloseTo(Number(row.model), 6);
+test('editable counterfactual prices redraw four figures, persist, and reset', async ({ page }) => {
+	await fixture(page, 2);
+	const total = page.locator('[data-cost="total"] dd');
+	async function price(input: number, output: number) {
+		for (const [name, value] of [['input', input], ['output', output]] as const) {
+			await page.locator(`[data-rate-input="${name}"]`).fill(String(value));
+			await page.locator(`[data-rate-input="${name}"]`).press('Tab');
 		}
-
-		// Ranked by the clock the platform kills a shard on, slowest first, with an
-		// unclocked shard last rather than sorted as though its clock were zero.
-		const clocked = rows.filter((row) => row.job !== '').map((row) => Number(row.job));
-		expect(clocked).toEqual([...clocked].sort((a, b) => b - a));
-		expect(rows.findIndex((row) => row.job === '')).toBe(
-			clocked.length === rows.length ? -1 : clocked.length
-		);
-	});
-
-	test('the job clock is read against the configured timeout', async ({ page }) => {
-		await page.goto('/console/machine/');
-		const board = page.locator('[data-shard-board]');
-		await expect(board).toHaveAttribute(
-			'data-shard-board-timeout-seconds',
-			String(CONFIG.run.shard_timeout_minutes * 60)
-		);
-	});
+	}
+	await price(100, 300);
+	await expect(total).toContainText('0.03');
+	await price(200, 600);
+	await expect(total).toContainText('0.06');
+	await page.reload();
+	await expect(page.locator('[data-cost-figures]')).toHaveAttribute('data-cost-source', 'yours');
+	await expect(total).toContainText('0.06');
+	await page.locator('[data-rate-reset]').click();
+	await expect(page.locator('[data-cost-figures]')).toHaveAttribute('data-cost-source', 'configured');
 });
 
-test.describe('the page as a whole', () => {
-	test('renders every panel with no console error and no failed request', async ({ page }) => {
-		const errors: string[] = [];
-		const bad: string[] = [];
-		page.on('console', (message) => {
-			if (message.type() === 'error') errors.push(message.text());
-		});
-		page.on('pageerror', (error) => errors.push(String(error)));
-		page.on('response', (response) => {
-			if (response.status() >= 400) bad.push(`${response.status()} ${response.url()}`);
-		});
-
-		await page.goto('/console/machine/', { waitUntil: 'domcontentloaded' });
-		await expect(page.locator('[data-windowed="machine-fleet"]')).toHaveAttribute('data-fleet-state', 'ready');
-		await chartsReady(page);
-
-		expect(await page.locator('[data-console-panel]').count()).toBeGreaterThan(5);
-		expect(errors).toEqual([]);
-		expect(bad).toEqual([]);
-	});
-
-	test('every chart on the route names itself for anybody who cannot see it', async ({ page }) => {
-		await page.goto('/console/machine/', { waitUntil: 'domcontentloaded' });
-		await expect(page.locator('[data-windowed="machine-fleet"]')).toHaveAttribute('data-fleet-state', 'ready');
-		await chartsReady(page);
-		const described = await page.evaluate(() =>
-			[...document.querySelectorAll('[data-surface="operator"] svg')]
-				.filter((svg) => svg.closest('[aria-hidden="true"]') === null)
-				.filter((svg) => svg.getBoundingClientRect().width > 0)
-				.map((svg) => (svg.closest('[aria-label]')?.getAttribute('aria-label') ?? '').trim())
-		);
-		expect(described.length, 'no chart found - the scan is broken').toBeGreaterThan(2);
-		expect(described.filter((label) => label === '')).toEqual([]);
-	});
-
-	test('a share prints its denominator rather than standing alone', async ({ page }) => {
-		await page.goto('/console/machine/');
-		// Every panel that divides says what it divided by: a rate with no
-		// denominator beside it is the defect the item-health census exists to
-		// prevent, and it is the same defect one layer up.
-		await expect(page.locator('[data-machine-split-basis]')).toContainText(
-			/of the run's \d+ shards/
-		);
-		// A run the ledger measured. A run it did not names the absence instead,
-		// which is a different sentence with no denominator to print.
-		await expect(
-			page.locator('[data-context-run]:not([data-context-largest=""])').first()
-		).toContainText(/over\s+\d+\s+articles?/);
-	});
-
-	test('a shard that reported nothing prints absence, never a zero', async ({ page }) => {
-		await page.goto('/console/machine/');
-		// The canary's newest run carries one shard written before `job_seconds`,
-		// `cpu_model` and the three host cells existed - the state 24 of the 54
-		// committed rows are in. A dash is the only honest reading of it, and a
-		// `0 s` there would say that shard finished instantly.
-		const blank = page.locator('[data-shard-row][data-shard-job-seconds=""]');
-		if ((await blank.count()) === 0) return;
-		await expect(blank.first().locator('[data-shard-cell="cpu"]')).toContainText('Not recorded');
-		await expect(blank.first().locator('[data-target-cell="value"]')).toHaveText('-');
-		await expect(blank.first().locator('[data-target-cell="empty"]')).toBeVisible();
-	});
-});
-
-test.describe('the rate the cost is counterfactual against', () => {
-	test('the prerendered page prices at the configured rate and says so', async ({ page }) => {
-		await page.goto('/console/machine/');
-		const figures = page.locator('[data-cost-figures]');
-		// Both the canary and the committed ledger carry token counts, so an absent
-		// cost panel is a broken read rather than a state to skip past.
-		await expect(figures).toHaveCount(1);
-		await expect(figures).toHaveAttribute('data-cost-source', 'configured');
-		await expect(page.locator('[data-rate-basis]')).toContainText('Using the configured rate');
-		await expect(page.locator('[data-rate-basis]')).toContainText(
-			CONFIG.observability.cost_currency
-		);
-		// Four figures, and the set is the whole point: a total with no per-article
-		// figure beside it cannot be compared with anything.
-		expect(Object.keys(await costs(page)).sort()).toEqual([
-			'input',
-			'output',
-			'per-article',
-			'total'
-		]);
-	});
-
-	test('a typed rate redraws every cost figure from one value', async ({ page }) => {
-		await page.goto('/console/machine/');
-
-		// Two typed rates, one exactly twice the other, rather than a comparison
-		// against the configured pair: the committed rate is small enough that the
-		// window's cost rounds away at two decimals, and a ratio taken across that
-		// floor would be decided by the rounding rather than by the arithmetic.
-		await typeRate(page, 'input', '100');
-		await typeRate(page, 'output', '300');
-		await expect(page.locator('[data-cost-figures]')).toHaveAttribute('data-cost-source', 'yours');
-		await expect(page.locator('[data-rate-basis]')).toContainText('Using your rate');
-		const single = await costs(page);
-		expect(single.total).toBeGreaterThan(0.1);
-
-		await typeRate(page, 'input', '200');
-		await typeRate(page, 'output', '600');
-		const doubled = await costs(page);
-
-		// Every figure has to move by the same factor, which is what says they come
-		// off one shared value rather than four copies of it.
-		for (const key of ['input', 'output', 'total'] as const) {
-			expect(doubled[key], `${key} did not follow the typed rate`).toBeCloseTo(single[key] * 2, 1);
-		}
-		// The prompts cost more than the answers here, because the run read far more
-		// than it wrote - so the two figures are not the same number twice.
-		expect(doubled.input).not.toBeCloseTo(doubled.output, 2);
-	});
-
-	test('the typed rate survives a reload, and the configured one is one click away', async ({
-		page
-	}) => {
-		await page.goto('/console/machine/');
-		const configured = (await page.locator('[data-cost="total"] dd').innerText()).trim();
-
-		await typeRate(page, 'input', '100');
-		await typeRate(page, 'output', '300');
-		const typed = await costs(page);
-		expect(typed.total).toBeGreaterThan(0.1);
-
-		await page.reload();
-		await expect(page.locator('[data-cost-figures]')).toHaveAttribute('data-cost-source', 'yours');
-		expect((await costs(page)).total).toBeCloseTo(typed.total, 2);
-
-		await page.locator('[data-rate-reset]').click();
-		await expect(page.locator('[data-cost-figures]')).toHaveAttribute(
-			'data-cost-source',
-			'configured'
-		);
-		expect((await page.locator('[data-cost="total"] dd').innerText()).trim()).toBe(configured);
-	});
-});
-
-test.describe('with no script at all', () => {
-	test('the route is complete, and the rate control is inert rather than broken', async ({
-		browser
-	}) => {
-		// A prerendered operator page owes a reader every mark it can honestly
-		// draw before a script runs. On this route that is still every mark: the
-		// Hardware panels are reduced from the ledger at build time and their
-		// SVG is in the document, so nothing here waits on a fetch.
-		//
-		// It said "every mark" flatly until 2026-09-09, and owner decision D2
-		// narrowed it. `/console/` now draws four charts from rows it fetches, so
-		// a mark that needs those rows cannot be in any document - what it owes
-		// instead is a named absence first and the mark when the payload lands,
-		// and `console-readout.spec.ts` holds it to both halves. The rule this
-		// route is held to did not move, and the sentence is here rather than
-		// deleted so the next reader can see that it was weighed.
-		const context = await browser.newContext({ javaScriptEnabled: false });
-		const page = await context.newPage();
-		await page.goto('/console/machine/');
-
-		expect(await page.locator('[data-console-panel]').count()).toBeGreaterThan(5);
-		await expect(page.locator('[data-shard-board]')).toHaveCount(1);
-		// The server drew every chart, so the marks are in the document itself.
-		expect(await page.locator('[data-surface="operator"] svg').count()).toBeGreaterThan(2);
-
-		if ((await page.locator('[data-cost-figures]').count()) === 1) {
-			await expect(page.locator('[data-cost-figures]')).toHaveAttribute(
-				'data-cost-source',
-				'configured'
-			);
-			await expect(page.locator('[data-rate-input="input"]')).toBeDisabled();
-			await expect(page.locator('[data-rate-static]')).toBeVisible();
-			// A cost that rounds away prints `<0.01`, never `0.00`: a zero there
-			// would say the work was free.
-			const total = (await page.locator('[data-cost="total"] dd').innerText()).trim();
-			expect(total).toMatch(/\d/);
-			expect(total).not.toBe(`0.00 ${CONFIG.observability.cost_currency}`);
-		}
-		await context.close();
-	});
+test('without script the configuration-only shell contains fifteen empty reserved frames', async ({ browser }) => {
+	const context = await browser.newContext({ javaScriptEnabled: false });
+	const page = await context.newPage();
+	await page.goto('/console/machine/');
+	await expect(page.locator('[data-console-panel-id]')).toHaveCount(15);
+	await expect(page.locator('[data-panel-query] svg')).toHaveCount(15);
+	await expect(page.locator('[data-panel-query] svg rect:not([data-reserved-ground]), [data-panel-query] svg path')).toHaveCount(0);
+	await expect(page.locator('[data-console-standing]')).toHaveText('');
+	await expect(page.locator('[data-machine-refused], [data-cost-figures]')).toHaveCount(0);
+	await context.close();
 });

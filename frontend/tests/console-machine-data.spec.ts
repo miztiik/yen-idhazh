@@ -43,6 +43,7 @@ import { machineRecord } from '../src/lib/server/host-fingerprint';
 import { itemHealthRows } from '../src/lib/server/ledger-rows';
 import { buildLedger } from './support/ledger-lifecycle';
 import { hostRow, itemRow, ledgers, plan, type ShardReading } from './support/machine-rows';
+import { openMachine } from './support/machine-record-state';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -624,7 +625,7 @@ const DESKTOP = { width: 1440, height: 1000 };
 /** Every visible text node in the board, with the lines it was drawn over and
  * the rectangles it was drawn in. */
 const READ_BOARD = () => {
-	const board = document.querySelector('[data-shard-board]');
+	const board = document.querySelector('[data-console-panel-id="slowest-articles"]');
 	if (board === null) return null;
 
 	const boxes: {
@@ -653,7 +654,7 @@ const READ_BOARD = () => {
 			// when an inline element splits it.
 			lines: new Set(rects.map((r) => Math.round(r.top))).size,
 			width: Math.round(range.getBoundingClientRect().width),
-			inCard: parent.closest('[data-shard-row]') !== null,
+			inCard: parent.closest('[data-ranked-row]') !== null,
 			rects: rects.map((r) => ({
 				x: Math.round(r.x),
 				y: Math.round(r.y),
@@ -663,18 +664,16 @@ const READ_BOARD = () => {
 		});
 	}
 
-	const rows = [...board.querySelectorAll('[data-shard-row]')].map((row) => {
-		const clock = row.querySelector('[data-shard-cell="clock"]');
-		const bar = clock?.querySelector('[data-target-bar]') ?? null;
+	const rows = [...board.querySelectorAll('[data-ranked-row]')].map((row) => {
+		const clock = row.querySelector('[data-ranked-cell="value"]');
+		const title = row.querySelector('.ranked-title');
 		return {
-			shard: row.getAttribute('data-shard-row') ?? '',
-			figures: [...row.querySelectorAll('[data-shard-figure]')].map((cell) => ({
-				name: cell.getAttribute('data-shard-figure') ?? '',
+			shard: row.getAttribute('data-ranked-row') ?? '',
+			figures: [...row.querySelectorAll('[data-ranked-cell="value"]')].map((cell) => ({
+				name: 'Elapsed seconds',
 				value: (cell.textContent ?? '').replace(/\s+/g, ' ').trim(),
 				named: (() => {
-					const label = row.querySelector(
-						`[data-shard-name="${cell.getAttribute('data-shard-figure')}"]`
-					);
+					const label = title;
 					if (label === null) return '';
 					const drawn = label.getBoundingClientRect();
 					if (drawn.width < 1 || drawn.height < 1) return '';
@@ -683,31 +682,29 @@ const READ_BOARD = () => {
 			})),
 			// The bar prints its own name at every width, so it needs no cell
 			// label - but it still has to be printed, not just declared.
-			clockName: bar?.getAttribute('data-target-bar') ?? '',
-			clockPrinted: (clock?.textContent ?? '').replace(/\s+/g, ' ').trim(),
-			clockValue: (
-				clock?.querySelector('[data-target-cell="value"]')?.textContent ?? ''
-			).trim()
+			clockName: (title?.textContent ?? '').trim(),
+			clockPrinted: (row.textContent ?? '').replace(/\s+/g, ' ').trim(),
+			clockValue: (clock?.textContent ?? '').trim()
 		};
 	});
 
-	const wide = [board, ...board.querySelectorAll('[data-shard-row]')]
+	const wide = [board, ...board.querySelectorAll('[data-ranked-row]')]
 		.map((el) => ({
-			what: el.getAttribute('data-shard-row') ?? 'board',
+			what: el.getAttribute('data-ranked-row') ?? 'board',
 			scroll: el.scrollWidth,
 			client: el.clientWidth
 		}))
 		.filter((el) => el.scroll > el.client + 1);
 
-	return { boxes, rows, wide, spelled: board.querySelectorAll('[data-shard-values] li').length };
+	return { boxes, rows, wide, spelled: board.querySelectorAll('ol[aria-label="Longest articles"] li').length };
 };
 
-test.describe('the shard board survives a phone', () => {
+test.describe('the article ranking replacing the shard board survives a phone', () => {
 	test('THE ORACLE: at 360px no string in the board is squeezed onto more lines than it has characters for', async ({
 		page
 	}) => {
 		await page.setViewportSize(PHONE);
-		await page.goto('/console/machine/');
+		await openMachine(page);
 		await page.evaluate(() => document.fonts.ready.then(() => true));
 		const board = await page.evaluate(READ_BOARD);
 
@@ -737,13 +734,13 @@ test.describe('the shard board survives a phone', () => {
 		// below the breakpoint. A value whose only name went with it is a number
 		// nobody can act on.
 		await page.setViewportSize(PHONE);
-		await page.goto('/console/machine/');
+		await openMachine(page);
 		await page.evaluate(() => document.fonts.ready.then(() => true));
 		const board = await page.evaluate(READ_BOARD);
 
 		const orphans: string[] = [];
 		for (const row of board!.rows) {
-			expect(row.figures.length, `shard ${row.shard} drew no figure`).toBeGreaterThan(3);
+			expect(row.figures.length, `article ${row.shard} drew no elapsed figure`).toBe(1);
 			for (const figure of row.figures) {
 				if (figure.named === '') orphans.push(`shard ${row.shard}: ${figure.name} = ${figure.value}`);
 			}
@@ -764,12 +761,12 @@ test.describe('the shard board survives a phone', () => {
 		// is a different instrument, and the phone would answer a question the
 		// desktop does not.
 		await page.setViewportSize(DESKTOP);
-		await page.goto('/console/machine/');
+		await openMachine(page);
 		await page.evaluate(() => document.fonts.ready.then(() => true));
 		const wide = await page.evaluate(READ_BOARD);
 
 		await page.setViewportSize(PHONE);
-		await page.goto('/console/machine/');
+		await openMachine(page);
 		await page.evaluate(() => document.fonts.ready.then(() => true));
 		const narrow = await page.evaluate(READ_BOARD);
 
@@ -787,7 +784,7 @@ test.describe('the shard board survives a phone', () => {
 		page
 	}) => {
 		await page.setViewportSize(PHONE);
-		await page.goto('/console/machine/');
+		await openMachine(page);
 		await page.evaluate(() => document.fonts.ready.then(() => true));
 		const board = await page.evaluate(READ_BOARD);
 
@@ -844,6 +841,7 @@ async function widen(page: import('@playwright/test').Page, days: number) {
 		'data-window-days',
 		String(days)
 	);
+	await expect(page.locator('[data-console-panels="machine"]')).not.toHaveAttribute('data-route-state', 'loading');
 }
 
 test.describe('Row #21 - the context panel says what the limit already costs', () => {
@@ -1012,134 +1010,43 @@ test.describe('Row #21 - the context panel says what the limit already costs', (
 		expect(highLabel(95)).toBe('All but the longest 5 in 100');
 	});
 
-	test('THE ORACLE: the built page draws both ends a run, in date order, under the rule', async ({
+	test('the replacement draws both distributions without inventing an unrecorded slot limit', async ({
 		page
 	}) => {
-		await page.goto('/console/machine/');
+		await openMachine(page);
 		await expect(page.locator(`[data-window-preset="${WIDEST}"] input`)).toBeEnabled();
 		await widen(page, WIDEST);
 
-		const drawn = await page.evaluate(() => {
-			const panel = document.querySelector('[data-windowed="machine-context"]');
-			if (panel === null) return null;
-			const svg = panel.querySelector('svg');
-			const rule = panel.querySelector('[data-context-limit]');
-			const marksOf = (name: string) =>
-				svg === null ? [] : [...svg.querySelectorAll(`[data-context-series="${name}"] circle`)];
-			return {
-				runs: [...panel.querySelectorAll('[data-context-run]')].map((li) => ({
-					runId: li.getAttribute('data-context-run') ?? '',
-					largest: li.getAttribute('data-context-largest') ?? '',
-					high: li.getAttribute('data-context-high') ?? '',
-					said: (li.textContent ?? '').replace(/\s+/g, ' ').trim()
-				})),
-				largestMarks: marksOf('largest').length,
-				highMarks: marksOf('high').length,
-				limit: rule?.getAttribute('data-context-limit') ?? '',
-				ruleY: rule === null ? null : Number(rule.getAttribute('y1')),
-				markYs: marksOf('largest').map((mark) => Number(mark.getAttribute('cy'))),
-				unused: panel.querySelector('[data-context-cost]')?.getAttribute('data-context-unused-pct') ?? '',
-				cost: (panel.querySelector('[data-context-cost]')?.textContent ?? '').replace(/\s+/g, ' ').trim(),
-				cutOff: panel.querySelector('[data-context-cutoff]')?.getAttribute('data-context-cutoff-calls') ?? ''
-			};
-		});
-
-		expect(drawn, 'no context panel on the page').not.toBeNull();
-		// Which runs there are, and how far each reached, is the record's own
-		// arithmetic, pinned above over rows written here. What the page owes is to
-		// draw both ends of every run that measured an article, in date order, under
-		// the limit, and to print the numbers it draws.
-		const runs = drawn!.runs;
-		const measured = runs.filter((run) => run.largest !== '');
-		expect(measured.length, 'no run in the window measured an article').toBeGreaterThan(0);
-		// Both ends, one mark each a run that measured something. One series alone is
-		// the state this row replaced: a single mark cannot say both what an ordinary
-		// article takes and what the worst one takes. A run that measured nothing
-		// keeps its column and draws no mark, so the two counts differ.
-		expect(drawn!.largestMarks, 'the chart drew no worst-case mark').toBe(measured.length);
-		expect(drawn!.highMarks, 'the chart drew only one end a run').toBe(measured.length);
-		for (const run of runs) {
-			if (run.largest === '') {
-				expect(run.said, `${run.runId} was dropped instead of drawn as an absence`).toContain(
-					'no article recorded'
-				);
-				continue;
-			}
-			expect(Number(run.high), `${run.runId} drew its second end above its largest`).toBeLessThanOrEqual(
-				Number(run.largest)
-			);
-			expect(run.said, `${run.runId} prints no denominator`).toMatch(/over \d+ articles?/);
+		const panel = page.locator('[data-console-panel-id="context-headroom"]');
+		await expect(panel.locator('svg[data-chart-type="distribution"]')).toHaveCount(2);
+		for (const call of ['label', 'summary']) {
+			const plot = panel.locator(`svg[data-chart-name="context-${call}"]`);
+			await expect(plot).toHaveAttribute('aria-label', `${call} request tokens, logarithmic scale`);
+			await expect(plot).not.toContainText('Reading limit:');
 		}
-		// Date order, oldest first: a run id is `<date>-<n>`, so a plain sort is
-		// the order the chart must be in.
-		expect(runs.map((run) => run.runId)).toEqual([...runs.map((run) => run.runId)].sort());
-		// The rule is the limit the rows ran under, and it sits above every mark,
-		// which is the geometry that makes it a limit rather than a series.
-		const limit = Number(drawn!.limit);
-		expect(limit, 'the rule names no limit').toBeGreaterThan(0);
-		expect(drawn!.markYs.length).toBeGreaterThan(0);
-		expect(
-			Math.min(...drawn!.markYs),
-			'a mark is drawn above the limit it cannot exceed'
-		).toBeGreaterThanOrEqual(drawn!.ruleY as number);
-
-		// THE ORACLE: the printed unused share is the largest article the page draws,
-		// against the limit it draws.
-		const largest = Math.max(...measured.map((run) => Number(run.largest)));
-		expect(drawn!.unused, 'the printed unused share is not the drawn largest article inverted').toBe(
-			String(100 - Math.round((largest / limit) * 100))
-		);
-		expect(drawn!.cost, 'the page prints a share without saying what it means').toContain(
-			'went spare every time'
-		);
-		// The canary carries one cut-off reply, which no committed day has ever
-		// produced, so the state a shrinking budget reaches is drawn rather than
-		// argued about.
-		expect(Number(drawn!.cutOff), 'the page counted no cut-off reply').toBeGreaterThan(0);
+		await expect(panel.locator('[data-lede]')).toHaveText('No request-slot limit was recorded.');
+		await expect(panel).not.toContainText('went spare every time');
 	});
 
-	test('THE ORACLE: hovering a run prints that run own numbers', async ({ page }) => {
-		await page.goto('/console/machine/');
+	test('each request distribution has its own keyboard-readable bin population', async ({ page }) => {
+		await openMachine(page);
 		await expect(page.locator(`[data-window-preset="${WIDEST}"] input`)).toBeEnabled();
 		await widen(page, WIDEST);
 
 		const panel = page.locator('[data-windowed="machine-context"]');
-		// Go to the panel, not to the plot inside it. `hydrate` observes
-		// intersection, so a chart more than a screen down has no `svg` until
-		// somebody goes to it, and waiting on that `svg` first waits for the one
-		// thing only this scroll produces.
 		await panel.evaluate((node) => node.scrollIntoView({ behavior: 'instant', block: 'center' }));
-		const plot = panel.locator('svg').first();
-		await expect(plot, 'the context chart drew nothing after scrolling to it').toBeVisible({
-			timeout: 15000
-		});
-		const box = await plot.boundingBox();
-		expect(box, 'the context chart has no box to point at').not.toBeNull();
-
-		const runs = await panel
-			.locator('[data-context-run]')
-			.evaluateAll((nodes) => nodes.map((n) => n.getAttribute('data-context-run') ?? ''));
-
-		await page.mouse.move(box!.x + 4, box!.y + box!.height / 2);
-		await page.waitForTimeout(150);
-		const first = await panel.locator('[data-readout="context"] [data-readout-day]').innerText();
-		await page.mouse.move(box!.x + box!.width - 4, box!.y + box!.height / 2);
-		await page.waitForTimeout(150);
-		const last = await panel.locator('[data-readout="context"] [data-readout-day]').innerText();
-
-		// The strip names the run it is on, and the two ends are two runs.
-		expect(first.trim()).toBe(runs[0]);
-		expect(last.trim()).toBe(runs[runs.length - 1]);
-		expect(first).not.toBe(last);
-		// And the numbers under that heading are the ones the list prints for it.
-		// The last column is the newest run, which the canary measures; a run it
-		// did not measure prints a dash and there would be no number to compare.
-		const said = await panel.locator('[data-readout="context"]').innerText();
-		const listed = await panel
-			.locator(`[data-context-run="${runs[runs.length - 1]}"]`)
-			.getAttribute('data-context-largest');
-		expect(listed, 'the newest run measured no article, so the readout has no number').not.toBe('');
-		expect(said.replace(/,/g, '')).toContain(String(listed));
+		for (const call of ['label', 'summary']) {
+			const plot = panel.locator(`svg[data-chart-name="context-${call}"]`);
+			const readout = panel.locator(`[data-readout="context-${call}"]`);
+			await expect(readout.locator('[data-readout-subject]')).not.toHaveText('');
+			await plot.focus();
+			await plot.press('Home');
+			const first = await readout.locator('[data-readout-subject]').innerText();
+			await plot.press('End');
+			await expect(readout.locator('[data-readout-subject]')).not.toHaveText(first);
+			await expect(readout).toContainText('Rows');
+			await expect(readout).toContainText('At or below');
+		}
 	});
 });
 
@@ -1186,7 +1093,7 @@ test.describe('one plot a percentile, on one shared scale', () => {
 	test('THE ORACLE: the printed spread is the newest run slowest over its middle', async ({
 		page
 	}) => {
-		await page.goto('/console/machine/');
+		await openMachine(page);
 		await expect(page.locator(`[data-window-preset="${WIDEST}"] input`)).toBeEnabled();
 		await widen(page, WIDEST);
 
@@ -1203,7 +1110,7 @@ test.describe('one plot a percentile, on one shared scale', () => {
 	test('THE ORACLE: the built page draws a plot a percentile on one shared scale', async ({
 		page
 	}) => {
-		await page.goto('/console/machine/');
+		await openMachine(page);
 		await expect(page.locator(`[data-window-preset="${WIDEST}"] input`)).toBeEnabled();
 		await widen(page, WIDEST);
 

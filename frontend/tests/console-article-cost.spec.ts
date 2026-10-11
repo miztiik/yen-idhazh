@@ -44,6 +44,19 @@ function itemRow(cells: Partial<Record<string, string | number>>): Record<string
 }
 
 test.describe('the three costs, as arithmetic', () => {
+	test('processor and memory readings never cross a job or invent an unknown shard', () => {
+		const base = { date: '2026-08-20', run_id: '2026-08-20-1', cpu_busy_pct: 50, item_total_ms: 1000 };
+		const health = [
+			itemRow({ ...base, machine_job: 'work', machine_shard: 0, item_index: 0, llama_rss_bytes: 100 }),
+			itemRow({ ...base, machine_job: 'assemble', machine_shard: 0, item_index: 1, llama_rss_bytes: 300 }),
+			itemRow({ ...base, item_index: 2, llama_rss_bytes: 600 }),
+			itemRow({ ...base, item_index: 3, llama_rss_bytes: 900 })
+		];
+		const cost = articleCost(health, [{ date: base.date, run_id: base.run_id, job: 'assemble', shard: 0, threads: 8 }]);
+		expect(cost.processorSeconds).toMatchObject({ from: 1, outOf: 4, mid: 4 });
+		expect(cost.addedBytes).toMatchObject({ from: 0, mid: null });
+	});
+
 	test('processor time is the busy share across the LOGICAL processors, not the cores', () => {
 		const health = [
 			itemRow({ date: '2026-08-20', run_id: 'r1', machine_shard: 0, cpu_busy_pct: 50, item_total_ms: 1000 }),

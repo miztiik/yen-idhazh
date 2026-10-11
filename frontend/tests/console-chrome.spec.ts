@@ -953,13 +953,20 @@ test.describe('what the recording was doing, in fixed words', () => {
 	});
 });
 
+async function openSettledConsole(page: import('@playwright/test').Page, route: string) {
+	await page.goto(route, { waitUntil: 'domcontentloaded' });
+	if (await page.locator('[data-console-panels]').count()) {
+		await page.locator('[data-console-panels]:not([data-route-state="loading"])').waitFor();
+	}
+}
+
 for (const { id, href: route, label } of BAND_UNREAD.routes) {
 	const expected = BY_ROUTE[id];
 	if (expected === null) continue;
 	test.describe(label, () => {
 	if (expected.readout) {
 	test(`every chart on ${route} resolves to non-empty accessible text`, async ({ page }) => {
-		await page.goto(route, { waitUntil: 'domcontentloaded' });
+		await openSettledConsole(page, route);
 
 		// Prose cut from the visible page lives here, so this is the oracle that
 		// says a screen-reader reader lost nothing. It may not regress.
@@ -985,7 +992,7 @@ for (const { id, href: route, label } of BAND_UNREAD.routes) {
 	test(`every readout strip on ${route} stays inside its cap and lays its entries side by side`, async ({
 		page
 	}) => {
-		await page.goto(route, { waitUntil: 'domcontentloaded' });
+		await openSettledConsole(page, route);
 
 		const strips = page.locator('[data-readout]');
 		const count = await strips.count();
@@ -1034,7 +1041,7 @@ for (const { id, href: route, label } of BAND_UNREAD.routes) {
 	});
 
 	test(`every readout strip on ${route} opens on a column rather than blank`, async ({ page }) => {
-		await page.goto(route, { waitUntil: 'domcontentloaded' });
+		await openSettledConsole(page, route);
 
 		const heads = page.locator('[data-readout] [data-readout-day]');
 		const count = await heads.count();
@@ -1048,7 +1055,7 @@ for (const { id, href: route, label } of BAND_UNREAD.routes) {
 	const handWritten = expected.handWritten;
 	if (handWritten !== null) {
 test('a hand-written multi-series chart prints every series at one column', async ({ page }) => {
-	await page.goto(route, { waitUntil: 'domcontentloaded' });
+	await openSettledConsole(page, route);
 
 	// The failure chart is the hardest shape on the page to read one band off:
 	// columns on the left axis, a rate line per stage on the right. Comparing them
@@ -1070,7 +1077,7 @@ test('a hand-written multi-series chart prints every series at one column', asyn
 	const engineSeries = expected.engineSeries;
 	if (engineSeries !== null) {
 test('an engine-drawn chart prints both its series at one column', async ({ page }) => {
-	await page.goto(route, { waitUntil: 'domcontentloaded' });
+	await openSettledConsole(page, route);
 
 	// The two-clocks chart is the one this rule exists for: two readings of one
 	// quantity on a shared axis, which is exactly the comparison a reader would
@@ -1089,11 +1096,12 @@ test('an engine-drawn chart prints both its series at one column', async ({ page
 	const keyboard = expected.keyboard;
 	if (keyboard !== null) {
 test('an arrow key moves an engine chart readout and draws a guide', async ({ page }) => {
-	await page.goto(route, { waitUntil: 'domcontentloaded' });
+	await openSettledConsole(page, route);
 
 	// One column a run, and a run id is unique, so the column Home lands on can
 	// never print what the resting column prints.
-	const frame = page.locator(`[data-chart-readout="${keyboard.id}"]`);
+	const frame = page.locator(keyboard.dateSeries ? `svg[data-chart-name="${keyboard.id}"]` : `[data-chart-readout="${keyboard.id}"]`);
+	const guide = keyboard.dateSeries ? frame.locator('[data-date-series-guide]') : page.locator(`[data-chart-guide="${keyboard.id}"]`);
 	await expect(frame).toHaveCount(1);
 	const head = page.locator(`[data-readout="${keyboard.id}"] [data-readout-day]`);
 	const resting = await head.textContent();
@@ -1102,12 +1110,12 @@ test('an arrow key moves an engine chart readout and draws a guide', async ({ pa
 	// a value with nowhere to appear on a phone or under a screen reader.
 	await frame.focus();
 	await page.keyboard.press('Home');
-	await expect(page.locator(`[data-chart-guide="${keyboard.id}"]`)).toHaveCount(1);
+	await expect(guide).toHaveCount(1);
 	expect(await head.textContent()).not.toBe(resting);
 
 	// Escape returns it to rest, and the guide goes with it.
 	await page.keyboard.press('Escape');
-	await expect(page.locator(`[data-chart-guide="${keyboard.id}"]`)).toHaveCount(0);
+	await expect(guide).toHaveCount(0);
 	expect(await head.textContent()).toBe(resting);
 });
 	}
@@ -1115,7 +1123,7 @@ test('an arrow key moves an engine chart readout and draws a guide', async ({ pa
 	const shape = expected.shape;
 	if (shape !== null) {
 test('the shape switch is one control per panel and reaches the chart', async ({ page }) => {
-	await page.goto(route, { waitUntil: 'domcontentloaded' });
+	await openSettledConsole(page, route);
 
 	// The counterfactual panel carries the one switch on this route that names
 	// shapes; the other two name units and grains.
@@ -1145,7 +1153,7 @@ test('the shape switch is one control per panel and reaches the chart', async ({
 	const recording = expected.recording;
 	if (recording !== null) {
 test('a route in a state says which state, in fixed words', async ({ page }) => {
-	await page.goto(route, { waitUntil: 'domcontentloaded' });
+	await openSettledConsole(page, route);
 
 	// The states are the panel rather than a replacement for it, so the heading
 	// above them is still there. A route that hid itself until it had data would
@@ -1174,7 +1182,7 @@ test('a route in a state says which state, in fixed words', async ({ page }) => 
 	const recordingLines = expected.recordingLines;
 	if (recordingLines !== null) {
 test('Summaries prints its recording lines before its first section, never inside it', async ({ page }) => {
-	await page.goto(route, { waitUntil: 'domcontentloaded' });
+	await openSettledConsole(page, route);
 
 	// One group, printed whatever the sections below hold. Inside the section, which
 	// prints only when the widest window holds model data, the "Measurement is off"

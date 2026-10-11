@@ -15,6 +15,7 @@
 import { expect, test } from './support/browser';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { closestToMemory, contextReadings, countersFrom, fingerprints, labelHeldMedian, reuseChecks, shardCounts, slowestArticles, slowerMachines } from '../src/lib/console/machine/records';
 import {
 	clockAgreement,
 	costOf,
@@ -1594,5 +1595,97 @@ test.describe('the committed ledger, read as the page reads it', () => {
 		expect(refused[0].rows).toBe(6);
 		expect(refused[0].why.length).toBeGreaterThan(20);
 		expect(refused[0].why).toContain('shard 1');
+	});
+});
+
+test.describe('the Hardware browser redraws, from stated readings', () => {
+	test('same-work comparisons keep reading and writing separate and omit runs without the reference', () => {
+		const rows = [
+			...Array.from({ length: 20 }, () => ({ run_id: 'one', cpu_model: 'A', input_tokens: 100, cached_tokens: 0, output_tokens: 10, prefill_ms: 1000, decode_ms: 1000 })),
+			...Array.from({ length: 10 }, () => ({ run_id: 'one', cpu_model: 'B', input_tokens: 100, cached_tokens: 0, output_tokens: 10, prefill_ms: 2000, decode_ms: 500 })),
+			{ run_id: 'two', cpu_model: 'B', input_tokens: 100, cached_tokens: 0, output_tokens: 10, prefill_ms: 9000, decode_ms: 9000 }
+		];
+		const actual = slowerMachines(rows);
+		expect(actual.reference.cpuModel).toBe('A');
+		expect(actual.reading.find((row) => row.label === 'B')).toMatchObject({ value: 2, range: { high: 2, count: 10 } });
+		expect(actual.writing.find((row) => row.label === 'B')).toMatchObject({ value: 0.5, range: { high: 0.5, count: 10 } });
+		expect(actual.withoutReference).toBe(1);
+	});
+
+	test('the slowest list names the newest numeric run and never stacks a negative gap', () => {
+		const actual = slowestArticles([
+			{ run_id: '2026-09-01-9', item_id: 'old', item_total_ms: 99000 },
+			{ run_id: '2026-09-01-10', item_id: 'new', item_total_ms: 4000, fetch_ms: 1000, extract_ms: 1000,
+				summarize_ms: 1000, faithfulness_ms: 2000, stage_gap_ms: -1000, queue_wait_ms: 500 }
+		]);
+		expect(actual.run).toBe('2026-09-01-10');
+		expect(actual.rows).toHaveLength(1);
+		expect(actual.rows[0]).toMatchObject({ value: 4, context: 'waited 0.5 s first; stages overlapped by 1.0 s' });
+		expect(actual.rows[0]).not.toHaveProperty('segments');
+	});
+
+	test('a card never fabricates a job, shard or private unasked field', () => {
+		const row = { date: '2026-09-01', run_id: '2026-09-01-1', job: 'work', shard: 2, fingerprint: '0123456789abcdef' };
+		expect(fingerprints([{ ...row, shard: null }, { ...row, job: null }])).toEqual([]);
+		const held = fingerprints([row]);
+		expect(held[0]).toMatchObject({ job: 'work', shard: 2, fingerprint: row.fingerprint });
+		expect(held[0]).not.toHaveProperty('version');
+		expect(held[0]).not.toHaveProperty('cores');
+	});
+
+	test('held memory is total less the low-water available, with a total endpoint, never a process total', () => {
+		const rows = closestToMemory([
+			{ item_id: 'a', source_id: 's', os_mem_total_bytes: 16 * 2 ** 30, os_mem_available_min_bytes: 6 * 2 ** 30 },
+			{ item_id: 'missing', os_mem_total_bytes: 16 * 2 ** 30, os_mem_available_min_bytes: null },
+			{ item_id: 'invalid', os_mem_total_bytes: 16 * 2 ** 30, os_mem_available_min_bytes: -1 }
+		]);
+		expect(rows).toHaveLength(1);
+		expect(rows[0]).toMatchObject({ value: 10, ends: { end: 16 } });
+		const repeated = closestToMemory([
+			{ date: '2026-09-01', item_id: 'same', os_mem_total_bytes: 16 * 2 ** 30, os_mem_available_min_bytes: 6 * 2 ** 30 },
+			{ date: '2026-09-01', item_id: 'same', os_mem_total_bytes: 16 * 2 ** 30, os_mem_available_min_bytes: 4 * 2 ** 30 },
+			{ date: '2026-09-02', item_id: 'same', os_mem_total_bytes: 16 * 2 ** 30, os_mem_available_min_bytes: 3 * 2 ** 30 }
+		]);
+		expect(repeated.map((row) => row.value)).toEqual([12, 13]);
+	});
+
+	test('context rules use the smallest per-slot limit and the middle label reading among cut rows', () => {
+		const actual = contextReadings([
+			{ n_ctx_configured: 8192, n_parallel: 2, label_input_tokens: 100, summary_input_tokens: 200, truncation_cap_tokens: 500 },
+			{ n_ctx_configured: 4096, n_parallel: 2, label_input_tokens: 300, summary_input_tokens: 400, truncation_cap_tokens: 500 }
+		]);
+		expect(actual.limits).toEqual([2048, 4096]);
+		expect(actual.rules.map((rule) => rule.at)).toEqual([2048, 300]);
+	});
+
+	test('cache share pairs cells on the same article; equal counts cannot pair two different missing rows', () => {
+		const actual = reuseChecks([
+			{ label_input_tokens: 100, label_cached_tokens: null },
+			{ label_input_tokens: null, label_cached_tokens: 80 },
+			{ label_input_tokens: 200, label_cached_tokens: 50, label_cache_pct: 40 }
+		]);
+		expect(actual[0]).toMatchObject({ ours: 25, server: 40, count: 1 });
+	});
+
+	test('the held-text lede quotes the middle request, not a median of unequal daily medians', () => {
+		expect(labelHeldMedian([
+			{ date: '2026-09-01', label_cached_tokens: 1000 },
+			...([10, 20, 30].map((label_cached_tokens) => ({ date: '2026-09-02', label_cached_tokens }))),
+			{ date: '2026-09-02', label_cached_tokens: null }
+		])).toBe(30);
+		expect(labelHeldMedian([{ label_cached_tokens: null }])).toBeNull();
+		expect(labelHeldMedian([{ label_cached_tokens: 0 }])).toBe(0);
+	});
+
+	test('count corrections must already be settled, while a null remains unknown', () => {
+		expect(shardCounts([{ run_id: 'one', shards: null }]).has('one')).toBe(false);
+		for (const shards of ['3', true, 1.5, 0, -1]) {
+			expect(() => shardCounts([{ run_id: 'one', shards }])).toThrow('Invalid recorded shard count');
+		}
+		expect(() => shardCounts([{ run_id: 'one', shards: 1 }, { run_id: 'one', shards: 2 }])).toThrow('unsettled corrections');
+		const hosts = [0, 1].map((shard) => ({ date: '2026-09-01', run_id: 'one', job: 'work', shard, cpu_model: 'A' }));
+		const limits = { contextWindow: 8192, jobTimeoutSeconds: 9000 };
+		expect(countersFrom(hosts, [], [{ run_id: 'one', shards: 1 }], limits).refused).toHaveLength(1);
+		expect(countersFrom(hosts, [], [{ run_id: 'one', shards: null }], limits).runs[0].shards).toBeNull();
 	});
 });

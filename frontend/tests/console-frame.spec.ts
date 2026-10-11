@@ -279,6 +279,7 @@ test.describe(`the console frame on ${label}`, () => {
 		// guessing which of the two a figure is.
 		await page.setViewportSize(DESKTOP);
 		await page.goto(route);
+		await page.locator('[data-console-panels]:not([data-route-state="loading"])').waitFor();
 
 		const notes = await page
 			.locator('[data-console-panel-id]')
@@ -312,6 +313,9 @@ test.describe(`the console frame on ${label}`, () => {
 		// check on this page.
 		await page.setViewportSize(DESKTOP);
 		await page.goto(route);
+		if (await page.locator('[data-console-panels]').count()) {
+			await page.locator('[data-console-panels]:not([data-route-state="loading"])').waitFor();
+		}
 
 		const sizes = await page.evaluate(() => {
 			const group = document.querySelector('[data-console-group]');

@@ -101,6 +101,7 @@ RETENTION_LEDGERS: Final = (
     "candidate-models", "council-run-records", "counterfactual-scores", "feed-health",
     "feed-retirements", "gardener", "host-fingerprint", "item-health",
     "item-health-summary", "published", "run-plan", "seen", "summary-quality-evals",
+    "run-shards",
     "visual-prunes",
 )
 YEARLY_RETENTION_DECISION: Final = (
@@ -124,6 +125,13 @@ TRIAL_PACKING_DECISION: Final = (
     "monthly deletion remains report-only and yearly expiry stays disabled"
 )
 LIVE_BY_DECISION: Final = {
+    **{
+        ("compact-run-shards", switch): (
+            "@kumarsnaveen_microsoft approved the narrow count ledger and its existing "
+            "packing/retention lifecycle on 2026-10-11 at 14:30 Europe/Berlin (Plan52 A1)"
+        )
+        for switch in ("dry_run", "yearly_prune_enable")
+    },
     **{
         (f"compact-{name}", switch): YEARLY_RETENTION_DECISION
         for name in RETENTION_LEDGERS

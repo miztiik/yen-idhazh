@@ -221,7 +221,7 @@ for (const held of ['data', 'engine'] as const) {
 			await expect.poll(() => heldResponses).toBeGreaterThan(0);
 			await expect.poll(() => held === 'data' ? engineStarted : dataFinished,
 				{ message: `the other branch must progress before ${held} responses are released` }).toBeGreaterThan(0);
-			await expect(page.locator('[data-windowed="machine-fleet"]')).toHaveAttribute('data-fleet-state', 'loading');
+			await expect(page.locator('[data-panel-query="platform-mix"]')).toHaveAttribute('data-machine-panel-state', 'loading');
 		} finally {
 			release();
 		}

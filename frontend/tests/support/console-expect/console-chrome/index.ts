@@ -11,7 +11,7 @@ export interface RouteExpect {
 	readonly readout: boolean;
 	readonly handWritten: { readonly id: string; readonly rateSuffix: string } | null;
 	readonly engineSeries: { readonly id: string; readonly labels: readonly string[] } | null;
-	readonly keyboard: { readonly id: string } | null;
+	readonly keyboard: { readonly id: string; readonly dateSeries?: boolean } | null;
 	readonly shape: {
 		readonly control: string;
 		readonly chart: string;

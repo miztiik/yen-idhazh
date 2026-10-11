@@ -43,6 +43,10 @@
 		: `one bar for the tightest moment of each day, over ${nameSpan(days)}`}."
 	wide
 >
+	<p class="lede" data-lede data-comparison="Memory held against the whole machine and each measured bound"
+		data-model-rule="no" data-model-rule-none="This is one day's memory partition, not a comparison between days.">
+		{view.days[0]?.totalFigure ?? 'No reading'} of total machine memory at the tightest recorded moment.
+	</p>
 	{#if view.empty}
 		<p class="empty" data-machine-panel-empty="memory-held">
 			{#if record.firstDate === null}
@@ -58,6 +62,8 @@
 	{:else}
 		<ul
 			class="days"
+			data-chart-type="memoryHeld"
+			data-panel-question="is it working"
 			data-memory-days={view.days.length}
 			data-readout-none="one bar a day, and every part, bracket and swap it draws is printed in words under it; agreed with Susan"
 		>
@@ -206,6 +212,7 @@
 </Panel>
 
 <style>
+	.lede { font-size: var(--text-2xl); font-weight: 600; line-height: var(--leading-tight); }
 	.empty,
 	.reads,
 	.overlap,
