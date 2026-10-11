@@ -144,15 +144,15 @@ def test_writer_uses_only_named_files_and_preserves_other_days(tmp_path: Path) -
 
 def test_month_refresh_removes_only_named_missing_files(tmp_path: Path) -> None:
     empty_inventory(tmp_path)
-    old = "run-timeline/2026-07.csv"
-    current = "run-timeline/2026-08.csv"
+    old = "assist/index/2026-07.json"
+    current = "assist/index/2026-08.json"
     put(tmp_path, old)
     target = put(tmp_path, current)
-    put(tmp_path, "telemetry/2026-08.csv")
+    put(tmp_path, "console/band.json")
     record_files(tmp_path, paths=[old, current])
     target.unlink()
     inventory = record_month(tmp_path, "2026-08")
-    assert paths(inventory, "public") == [old, "telemetry/2026-08.csv"]
+    assert paths(inventory, "public") == [old, "console/band.json"]
     assert inventory.total_bytes == 4
 
 

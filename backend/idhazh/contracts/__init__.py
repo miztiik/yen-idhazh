@@ -63,7 +63,6 @@ from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.machine_panels import MachinePanels
 from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
 from idhazh.contracts.pipeline_tests import PipelineTestsConfig
-from idhazh.contracts.public_telemetry import PublicTelemetryRow
 from idhazh.contracts.publication_inventory import PublicationInventory
 from idhazh.contracts.publication_receipt import PublicationReceipt
 from idhazh.contracts.qualification import (
@@ -90,7 +89,6 @@ from idhazh.contracts.run_manifest import (
     VerticalCount,
 )
 from idhazh.contracts.run_plan import PlannedItem, RunPlan, VerticalPlan
-from idhazh.contracts.run_timeline import RunTimelineRow
 from idhazh.contracts.search_index import SearchIndex
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
@@ -154,7 +152,6 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     MachinePanels,
     MergeLineHoldoutScore,
     PipelineTestsConfig,
-    PublicTelemetryRow,
     PublicationInventory,
     PublicationReceipt,
     QualificationReport,
@@ -172,7 +169,6 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     RunManifest,
     PublishedRow,
     RunPlan,
-    RunTimelineRow,
     SearchIndex,
     SeenRow,
     SimilarityHoldoutPair,

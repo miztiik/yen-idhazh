@@ -91,11 +91,11 @@ test('the widest window this control offers never names a shard the cleanup age 
 	// It reads both windows rather than 366 and 14, because the two configs are
 	// where the pair is set and a test that repeated the numbers would agree with
 	// itself after an edit moved them.
-	const publicCopy = telemetry().series?.['public-copy'];
-	expect(publicCopy?.unit, 'the public copy is kept in whole months').toBe('months');
-	const keepMonths = publicCopy?.value ?? 0;
+	const fullGrain = telemetry().series?.['full-grain'];
+	expect(fullGrain?.unit, 'native full grain is kept in whole months').toBe('months');
+	const keepMonths = fullGrain?.value ?? 0;
 	const maxDays = config().console?.max_window_days ?? 366;
-	expect(keepMonths).toBe(telemetry().series?.['full-grain']?.value);
+	expect(telemetry().series?.['public-copy']).toBeUndefined();
 
 	for (let offset = 0; offset < 366; offset += 1) {
 		const today = minus('2026-12-31', offset);

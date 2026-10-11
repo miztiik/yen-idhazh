@@ -16,9 +16,6 @@ Every path below is under `frontend/public/`. Every shape is a contract under `b
 | Dataset | Reader it replaces | Published to | Schema |
 | --- | --- | --- | --- |
 | Verdict band | `console-shell.ts` `consoleShell` | `console/band.json` | `console-band` |
-| Telemetry rows | `payload.ts` `telemetryRows` | `telemetry/<YYYY-MM>.csv` | `public-telemetry` |
-| Item health | `ledger-rows.ts` `itemHealthRows` | `telemetry/<YYYY-MM>.csv` | `public-telemetry` |
-| Run timeline | `run-timeline.ts` `loadRunTimeline` | `run-timeline/<YYYY-MM>.csv` | `run-timeline-row` |
 | Source health | `payload.ts` `sourceHealthView` | `source-health.json` | `source-health-view` |
 
 **Two datasets left this table on 2026-09-16.** `scores/<YYYY-MM>.csv` and
@@ -37,44 +34,15 @@ staged into `frontend/static/` and never reaches the build. A
 `page_weight.payload_ceilings_bytes` key naming it would therefore match nothing
 and fail the bundle gate.
 
-**Five datasets, four schemas.** The two telemetry datasets share one
-public shard. `itemHealthRows`
-reads the census the telemetry shard already projects, so a second projection
-of it would be two schemas for one row.
+**Two remaining public shapes.** The band and source-health view have producers.
+Pipelines reads item-health through the native query door. Its run clock is
+derived from those rows in the browser, with no monthly public copy.
 
-### The run timeline is a second cut of the census, and that is the point
+### The timeline is derived from native rows
 
-`run-timeline/<YYYY-MM>.csv` is projected from the item-health ledger, which the
-telemetry shard beside it also projects. It is not the two-schemas-for-one-row
-case the paragraph above refuses: the telemetry shard is the census narrowed for
-a browser and keyed by item, and this is the census **re-filed against a clock**
-and keyed by run. Six of its durations are the census's own numbers under the
-census's own names, and the two that are not - `start_offset_ms` and
-`residual_ms` - are arithmetic no ledger holds. One account of each measurement,
-filed twice, with the census as the source
-([`run-timeline.md`](run-timeline.md)).
-
-It keeps two months, and
-`observability.public_run_timeline_keep_months` is the knob. No window preset
-reaches it - the panel draws one run and names it - so a third month would
-publish the widest row this project writes to answer a question nobody can ask.
-It has no separate window-preset floor. The removed machine, run-days and
-day-metrics copies no longer impose copy-retention floors either; native
-ledger retention remains governed by the gardener.
-
-### The timeline shape is declared and written
-
-`run-timeline-row` is the run timeline: one row an item, placed on the run's own
-clock. It landed ahead of its producer on purpose, so the writers produce what
-the chart reads rather than a shape the chart has to migrate, and it sat in the
-table above's place as a declared shape with no writer until 2026-09-16.
-`run_timeline.py` is that writer and the row above is the dataset.
-
-What it holds and why it holds it is
-[`run-timeline.md`](run-timeline.md). Two things about it belong here: it is
-**published whole**, because nothing on it identifies a page, and it has no
-`state/` counterpart, because the row is derivable from one month of the census
-and a committed ledger would be a third copy of numbers git already holds.
+[`run-timeline.md`](run-timeline.md) declares its clock arithmetic and missing
+data rules. The query reads native item-health cells; no public timeline
+contract, producer or retention knob remains. Native retention is unchanged.
 
 ## What may not cross
 
@@ -82,13 +50,9 @@ A projection cuts named cells out of a wider ledger row, and the list of what it
 cuts is the trust boundary. It is checked at **import**, so a forbidden field on
 a model stops the process rather than reaching the published tree.
 
-| Shape | Refuses | Why |
-| --- | --- | --- |
-| `public-telemetry` | `canonical_url`, `url_key`, `detail` | Two identify the page rather than the measurement; `detail` is diagnostic free text that can quote a fetched body |
-
 **An empty list is a real answer.** `console-band` is a set of sentences and
 named movement dates the pipeline composed about its own run: fetched text has
-no field to arrive in. Source-health and the retained run timeline describe
+no field to arrive in. Source-health and the native run timeline describe
 our own work, so they have no redaction projection.
 
 **One shape refuses anything, where three used to.** `public-eval` refused
@@ -124,7 +88,6 @@ day the run is publishing, and every projection's body stays in its own module
 | --- | --- | --- |
 | `console_band.py` | `console/band.json` | native run manifests and state day-metrics over the widest window; native feed-health, item-health and host-fingerprint through the ledger door; native summary-quality-evals for checker movement |
 | `day_metrics.py` | `state/day-metrics/<YYYY>/<MM>/<DD>.json` | the publication's day and manifest, with that day's native rows |
-| `run_timeline.py` | `run-timeline/<YYYY-MM>.csv` | one month of the item-health ledger, through `ledger.load_days` |
 
 The band finds its newest manifest over the bounded named-month cover,
 including the whole month of the plan being assembled. A delayed older plan
@@ -146,10 +109,8 @@ denominator and weighted rates are defined once in
 drifts from its ledger unwatched - so both modules went and `PROJECTIONS` is two
 rows shorter.
 
-`public_telemetry.py` predates this page. It keeps its own
-path helper because the gardener's `telemetry-aggregate` task finds a shard to
-delete by the same `<month>.csv` name the helper writes, and two spellings of it
-would delete a month nobody published and leave the published one behind.
+The retired public telemetry and timeline helpers are gone. The gardener
+keeps native full grain and aggregate summaries, with no public-copy series.
 
 `source_health.py` writes `source-health.json`, the one entry
 in the table above that nothing fetches, and it sits here rather than beside the

@@ -99,11 +99,6 @@ MOVED_TO_A_DECLARATION = [
         "item_health_aggregate_keep_months",
         "config/gardener/telemetry-aggregate.json",
     ),
-    (
-        "observability",
-        "public_telemetry_keep_months",
-        "config/gardener/telemetry-aggregate.json",
-    ),
     ("retention", "dry_run", "config/gardener/<task>.json"),
     ("retention", "max_deletes_per_run", "config/gardener/visual-prune.json"),
     ("retention", "trial_state_days", "config/gardener/trials.json"),

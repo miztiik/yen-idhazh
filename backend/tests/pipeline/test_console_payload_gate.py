@@ -47,7 +47,7 @@ def a_published_day(public_root: Path) -> Path:
     return where / "digest.json"
 
 
-def test_a_telemetry_shard_the_contract_refuses_is_named_by_the_gate(
+def test_a_band_the_contract_refuses_is_named_by_the_gate(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     """The seventh producer, which read back nowhere until 2026-09-13."""
@@ -56,11 +56,13 @@ def test_a_telemetry_shard_the_contract_refuses_is_named_by_the_gate(
     root = public / "digest"
     assert run_publication_checks(root, run_id="2026-08-21-1") == 0, "the day itself has to be clean"
 
-    shard = public / "telemetry" / "2026-08.csv"
-    shard.parent.mkdir(parents=True)
-    shard.write_text("date,not_the_contract\n2026-08-21,1\n", encoding="utf-8")
+    band = public / "console" / "band.json"
+    band.parent.mkdir(parents=True)
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "console-band" / "newest-day.json"))
+    payload["not_the_contract"] = True
+    band.write_text(json.dumps(payload), encoding="utf-8")
 
     with caplog.at_level(logging.ERROR):
         assert run_publication_checks(root, run_id="2026-08-21-1") == 1
-    assert "frontend/public/telemetry/2026-08.csv" in caplog.text, "name the file"
-    assert "header is" in caplog.text, "and say what the contract wanted instead"
+    assert "frontend/public/console/band.json" in caplog.text, "name the file"
+    assert "not_the_contract" in caplog.text, "and name the unknown field"

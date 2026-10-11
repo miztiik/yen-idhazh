@@ -120,9 +120,7 @@ claims anybody has agreed how much overhead is too much.
 
 The reader is
 [../../../frontend/src/lib/console/pipelines/run-timeline.ts](../../../frontend/src/lib/console/pipelines/run-timeline.ts);
-the producer of the published mirror is
-[../../../backend/idhazh/telemetry/publish/run_timeline.py](../../../backend/idhazh/telemetry/publish/run_timeline.py),
-its shape is [run-timeline.md](run-timeline.md) and every drawing rule is
+its native clock shape is [run-timeline.md](run-timeline.md) and every drawing rule is
 [../../concepts/console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md](../../concepts/console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md).
 [../../../frontend/tests/console-pipeline-timeline.spec.ts](../../../frontend/tests/console-pipeline-timeline.spec.ts)
 holds the shard grain against the item grain per shard and per step, and fails on

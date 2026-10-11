@@ -4,6 +4,15 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { canaryFiles } from '../canary-inventory.mjs';
+import { stagedPath } from '../staged-publication.mjs';
+
+test('retired public projections are not staged even from an old inventory', () => {
+	for (const elsewhere of [false, true]) {
+		assert.equal(stagedPath('telemetry/2026-08.csv', elsewhere), null);
+		assert.equal(stagedPath('run-timeline/2026-08.csv', elsewhere), null);
+		assert.equal(stagedPath('console/band.json', elsewhere), 'console/band.json');
+	}
+});
 
 test('one generated run inventories named drawings and current ledger files', () => {
 	const root = mkdtempSync(join(tmpdir(), 'idhazh-canary-inventory-'));

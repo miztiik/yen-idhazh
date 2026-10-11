@@ -81,7 +81,7 @@ function newestServedDay(): string {
 }
 
 /** A file the pipeline published that is not the shell and is not a day
- * payload: a drawing beside a day, or a telemetry shard.
+ * payload: a drawing beside a day, or a native ledger file.
  *
  * The shell cache used to keep whatever a page asked for, so this is the probe
  * that says whether it still does. It is discovered rather than named: a fixed
@@ -97,7 +97,7 @@ function publishedButNotShell(): string {
 			: [];
 	const found = [
 		...under(join(BUILD, 'digest'), '.svg'),
-		...under(join(BUILD, 'telemetry'), '.csv'),
+		...under(join(BUILD, 'state', 'compact', 'item-health'), '.parquet'),
 		...under(join(BUILD, 'index'), '.json')
 	].sort();
 	if (found.length === 0) {
@@ -309,7 +309,7 @@ test.describe('the bounds on what is kept', () => {
 
 		for (const published of [
 			'/digest/2026/09/06/ai-1234567890.svg',
-			'/telemetry/2026-09.csv',
+			'/state/compact/item-health/monthly/2026/09.parquet',
 			'/index/2026-09.json',
 			'/service-worker.js'
 		]) {

@@ -93,25 +93,21 @@ test('private date axes retain missing days without inventing zero readings', ()
 	]);
 });
 
-test('native timeline offsets and six-step residuals match the actual Python producer', () => {
+test('native timeline offsets and six-step residuals match independent clock arithmetic', () => {
 	const own = rows(queries.runTimelineQuery);
 	const native = runTimeline(own, consoleConfig().timeline_bars);
-	const source = own.map((row) => ({ ...Object.fromEntries(Object.entries(row).map(([key, value]) =>
-		[key, value === null ? '' : String(value)])), date: String(row.run_id).slice(0, 10) }));
-	const produced = JSON.parse(execFileSync(backendPython(REPO), ['-c', [
-		'import json, sys',
-		'from idhazh.telemetry.publish.run_timeline import project',
-		'print(json.dumps([row.csv_row() for row in project(json.load(sys.stdin))]))'
-	].join('\n')], { cwd: REPO, env: { ...process.env, PYTHONPATH: join(REPO, 'backend') },
-		input: JSON.stringify(source), encoding: 'utf8' }));
-	const chosen = produced.filter((row: Record<string, string>) => row.run_id === native.view.runId);
+	const chosen = own.filter((row) => row.run_id === native.view.runId &&
+		typeof row.item_started_at === 'string' && Number.isFinite(Date.parse(row.item_started_at)) &&
+		typeof row.machine_shard === 'number' && Number.isSafeInteger(row.machine_shard) && row.machine_shard >= 0 &&
+		typeof row.item_total_ms === 'number' && row.item_total_ms >= 0);
+	const zero = Math.min(...chosen.map((row) => Date.parse(String(row.item_started_at))));
 	expect(native.run?.rows.length).toBe(chosen.length);
 	for (const row of native.run!.rows) {
-		const expected = chosen.find((one: Record<string, string>) => one.item_id === row.itemId);
-		expect(row.startOffsetMs).toBe(Number(expected.start_offset_ms));
-		expect(row.totalMs).toBe(Number(expected.item_total_ms));
-		const sum = ['fetch_ms', 'extract_ms', 'label_ms', 'summary_ms', 'visual_plan_ms', 'score_ms']
-			.reduce((total, step) => total + (expected[step] === '' ? 0 : Number(expected[step])), 0);
+		const expected = chosen.find((one) => one.item_id === row.itemId)!;
+		expect(row.startOffsetMs).toBe(Date.parse(String(expected.item_started_at)) - zero);
+		expect(row.totalMs).toBe(expected.item_total_ms);
+		const sum = ['fetch_ms', 'extract_ms', 'label_ms', 'summary_ms', 'visual_plan_ms', 'faithfulness_ms']
+			.reduce((total, step) => total + (expected[step] === null ? 0 : Number(expected[step])), 0);
 		expect(row.residualMs).toBe(row.totalMs - sum);
 	}
 });

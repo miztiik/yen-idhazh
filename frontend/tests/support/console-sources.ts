@@ -94,7 +94,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	'src/lib/server': [
 		'chart-days.ts', 'chart-render.ts', 'config.ts', 'cuts-by-run.ts', 'host-fingerprint.ts',
 		'ledger-disk.ts', 'ledger-rows.ts', 'machine-counters.ts', 'model-work.ts', 'payload.ts',
-		'publication.ts', 'recorded-line.ts', 'run-days.ts', 'run-timeline.ts', 'server-counter-notes.ts',
+		'publication.ts', 'recorded-line.ts', 'run-days.ts', 'server-counter-notes.ts',
 		'content-similarity-holdout.ts', 'content-similarity-judge.ts', 'source-retiring.ts', 'stage-timing-days.ts', 'window-day.ts'
 	],
 	'src/lib/visual': ['bar.ts', 'width.ts'],

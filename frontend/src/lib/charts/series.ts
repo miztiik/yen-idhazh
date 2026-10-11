@@ -3,7 +3,7 @@ import { daysBetween, daysInWindow, type TimeWindow } from './viewport';
 
 /** The published projection's header, in `PUBLIC_COLUMNS` order.
  *
- * `backend/idhazh/telemetry/publish/public_telemetry.py` owns the list. This is the reader's
+ * `backend/idhazh/contracts/item_health.py` owns the native cells. This is the reader's
  * copy of it, and it names every cell `parseTelemetryCsv` looks up. The order is
  * the writer's order and is what `telemetryCsv` writes back; no cell is read by
  * its position in it.

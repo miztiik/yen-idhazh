@@ -148,12 +148,9 @@ def test_fresh_base_regeneration_preserves_completed_raw_and_newer_inventory(
         if path.is_relative_to(repo) and not path.is_relative_to(repo / "backend")
     }
     authority = digest_publish.permissions("assemble", date=run_plan.date)
-    month = run_plan.date[:7]
     projections = (
         "frontend/public/console/band.json",
-        f"frontend/public/run-timeline/{month}.csv",
         "frontend/public/source-health.json",
-        f"frontend/public/telemetry/{month}.csv",
     )
     assert set(projections) <= hashes.keys(), "every changed projection needs write evidence"
     day = "frontend/public/digest/" + run_plan.date.replace("-", "/")

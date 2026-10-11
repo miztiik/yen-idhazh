@@ -1,8 +1,8 @@
 """Write the verdict band the console reads before anything else.
 
 `frontend/public/console/band.json` answers three questions above every console
-route - did it work, what is worst, how much room is left - plus the list of
-months the console may ask for. It is derived once here, at publication, from
+route - did it work, what is worst, how much room is left.
+It is derived once here, at publication, from
 the ledgers and the payloads this run has already written.
 
 **It is a move, not a second copy.** `frontend/src/lib/server/console-shell.ts`
@@ -41,7 +41,7 @@ from __future__ import annotations
 import math
 from calendar import monthrange
 from collections import defaultdict
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -72,10 +72,9 @@ from idhazh.contracts.knobs.windows import months_a_window_can_touch
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_manifest import RunManifest, RunRecord
 from idhazh.contracts.source_health_view import SourceHealthRow
-from idhazh.month_partition import month_files, months_between, oldest_month_kept
+from idhazh.month_partition import oldest_month_kept
 from idhazh.telemetry.publish import (
     day_metrics,
-    public_telemetry,
     series,
     settings_moved,
 )
@@ -1044,7 +1043,6 @@ def build(
     record: DayMetrics | None,
     machine_rows: Sequence[Mapping[str, str]],
     planned_shards: Mapping[str, int] | None = None,
-    months: Sequence[str],
     run: RunConfig,
     collect: CollectConfig,
     sources: Sequence[SourceHealthRow] = (),
@@ -1149,7 +1147,6 @@ def build(
         worst=worst,
         size=_size(ordered, newest),
         routes=routes,
-        months=list(months),
         compaction_lag_days=compaction_lag_days,
         rows_uncompacted=rows_uncompacted,
         covers_through=covers_through,
@@ -1322,7 +1319,6 @@ def publish(
     run: RunConfig,
     collect: CollectConfig,
     sources: Sequence[SourceHealthRow] = (),
-    telemetry_root: Path | None = None,
     compaction_lag_days: int = 0,
     rows_uncompacted: int = 0,
     covers_through: str | None = None,
@@ -1447,13 +1443,6 @@ def publish(
             for row in (() if newest_date is None else manifests[newest_date].runs)
             if row.shards is not None
         },
-        months=fetchable_months(
-            digest_root,
-            telemetry_root,
-            months=months_between(
-                oldest_month_kept(today, months), today.isoformat()[:7]
-            ),
-        ),
         run=run,
         collect=collect,
         sources=sources,
@@ -1477,23 +1466,6 @@ def _within(day: str, anchor: str, window_days: int) -> bool:
     return (
         date.fromisoformat(anchor) - date.fromisoformat(day)
     ).days < window_days and day <= anchor
-
-
-def fetchable_months(
-    digest_root: Path,
-    telemetry_root: Path | None = None,
-    *,
-    months: Iterable[str],
-) -> list[str]:
-    """Only telemetry's named months, oldest first, with no row file opened.
-
-    The native ledgers have their own indexes. The canary's telemetry root is
-    handed in because it lives under state instead of beside the digest.
-    """
-    shards = telemetry_root or series.series_root(
-        digest_root, public_telemetry.PUBLIC_TELEMETRY_DIRNAME
-    )
-    return sorted(path.stem for path in month_files(shards, ".csv", months))
 
 
 def _machine_rows(

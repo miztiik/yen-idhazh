@@ -72,7 +72,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 7 | Summaries asks the ledger | 5, 2b | E | PENDING | - | - | - |
 | 8 | Voices asks the ledger, and the ranking panels join it | 4 | D | PENDING | - | - | - |
 | 9 | Hardware asks the ledger, and its page carries no data | 5 | E | PENDING | - | - | - |
-| 10 | The `telemetry` and `run-timeline` projections go | 6 | F | PENDING | - | - | - |
+| 10 | The `telemetry` and `run-timeline` projections go | 6 | F | REVIEW CANDIDATE: dependent preparation; focused gates and CI pending; merge waits for row 6 and an idle digest | p52-projections-retirement (`feat/console-projections-retirement`) | Read from merge | Row 10 worker |
 | 11 | ECharts leaves | 7, 8, 9, 10 | G | PENDING | - | - | - |
 | 12 | Moved to #1189: the aggregate is deleted and one item's trace is a command | - | H | COLLAPSED | - | - | - |
 

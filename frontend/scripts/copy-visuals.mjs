@@ -13,21 +13,18 @@ const digestRoot = process.env.DIGEST_ROOT
 	? resolve(process.env.DIGEST_ROOT)
 	: resolve('public', 'digest');
 const publicRoot = resolve(digestRoot, '..');
-const telemetryRoot = process.env.TELEMETRY_ROOT
-	? resolve(process.env.TELEMETRY_ROOT)
-	: resolve('public', 'telemetry');
 const stateRoot = process.env.STATE_ROOT
 	? resolve(process.env.STATE_ROOT)
 	: resolve('..', 'state');
 const servedElsewhere = assetBaseUrl() !== '';
-const stagedTrees = ['digest', 'index', 'telemetry', 'console', 'state'];
+const stagedTrees = ['digest', 'index', 'console', 'state'];
 
 // These are this build's generated output directories, not the committed input.
 // Replacing them also removes files the producer no longer names, with no
 // discovery of either the archive or the previous build's files.
 for (const tree of stagedTrees) rmSync(join('static', tree), { recursive: true, force: true });
 // Cleanup only: no retired public projection is staged into this build.
-for (const tree of ['machine', 'run-days', 'day-metrics']) {
+for (const tree of ['machine', 'run-days', 'day-metrics', 'telemetry', 'run-timeline']) {
 	rmSync(join('static', tree), { recursive: true, force: true });
 }
 
@@ -44,9 +41,7 @@ for (const file of publicFiles(publicRoot)) {
 	if (named === null) continue;
 	const destination = join('static', ...named.split('/'));
 	const dayPayload = /^digest\/\d{4}\/\d{2}\/\d{2}\/digest\.json$/.test(file);
-	const source = file.startsWith('telemetry/')
-		? join(telemetryRoot, file.slice('telemetry/'.length))
-		: join(publicRoot, ...file.split('/'));
+	const source = join(publicRoot, ...file.split('/'));
 	if (!existsSync(source)) {
 		console.warn(`published visuals: inventory file ${file} is missing, skipped.`);
 		skipped += 1;

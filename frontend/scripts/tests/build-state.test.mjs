@@ -90,7 +90,6 @@ test('canary changes invalidate the canary build independently of source changes
 		assert.equal(buildMode(root, {
 			DIGEST_ROOT: join(root, 'backend/var/canary/digest'),
 			STATE_ROOT: join(root, 'backend/var/canary/state'),
-			TELEMETRY_ROOT: join(root, 'backend/var/canary/state/telemetry')
 		}), 'canary');
 	} finally {
 		rmSync(root, { recursive: true, force: true });
@@ -228,7 +227,7 @@ test('a site build completes on a machine with no Python', () => {
 		writeFileSync(join(root, 'frontend/package.json'), '{ "type": "module" }\n');
 		copyFileSync(fileURLToPath(new URL('../build-state.ts', import.meta.url)), script);
 		const env = { ...process.env, IDHAZH_PYTHON: join(root, 'no-python-here') };
-		for (const name of ['DIGEST_ROOT', 'STATE_ROOT', 'TELEMETRY_ROOT']) delete env[name];
+		for (const name of ['DIGEST_ROOT', 'STATE_ROOT']) delete env[name];
 		execFileSync(process.execPath, [script, '--begin'], { env, stdio: 'pipe' });
 		mkdirSync(join(root, 'frontend/build'));
 		writeFileSync(join(root, 'frontend/build/index.html'), '<h1>A fresh build</h1>\n');

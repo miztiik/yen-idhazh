@@ -37,7 +37,6 @@ from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.console import ConsoleChrome
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
-from idhazh.contracts.run_timeline import RunTimelineRow
 from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
 from idhazh.telemetry.publish.console_band import ROUTES
 
@@ -200,36 +199,6 @@ def test_the_holdout_marks_ask_for_every_column_but_the_stamp_in_the_contract_or
         "HOLDOUT_PAIR_COLUMNS in content-similarity-holdout.ts is not every SimilarityHoldoutPair "
         f"column but version, in order. Not declared: {[n for n in asked if n not in declared]}; "
         f"not asked: {[n for n in declared if n not in asked]}."
-    )
-
-
-def test_the_run_timeline_reads_only_columns_every_row_carries() -> None:
-    """A column the timeline reads off every row has to be one no row leaves empty.
-
-    `run-timeline.ts` spells the columns the Pipelines run timeline reads off every
-    row, and draws an item's bar from them. Each has to be a `RunTimelineRow` field
-    that is required and does not allow null, so every published row carries it.
-    A column that may be absent, such as a step nothing timed, belongs with the
-    steps the panel names as not recorded, never in this list, where it would
-    draw an empty slice.
-    """
-    asked = quoted_strings(read_text(SERVER / "run-timeline.ts"), "TIMELINE_COLUMNS")
-    schema = RunTimelineRow.model_json_schema()
-    required = set(schema.get("required", []))
-
-    def nullable(name: str) -> bool:
-        field = schema["properties"][name]
-        return field.get("type") == "null" or any(
-            option.get("type") == "null" for option in field.get("anyOf", [])
-        )
-
-    always = [
-        name for name in RunTimelineRow.model_fields if name in required and not nullable(name)
-    ]
-    assert asked, "TIMELINE_COLUMNS in run-timeline.ts names no column"
-    assert [name for name in asked if name not in always] == [], (
-        "TIMELINE_COLUMNS in run-timeline.ts names a column a RunTimelineRow may leave "
-        f"empty or does not declare. Every row carries only: {always}"
     )
 
 

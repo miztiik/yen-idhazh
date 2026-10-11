@@ -278,6 +278,7 @@ def test_a_build_leaves_no_file_an_earlier_build_wrote(
         "digest/2026/10/01/digest.json",
         "assist/index/2026-10.json",
         "console/band.json",
+        "telemetry/2026-10.csv",
         "run-timeline/2026-10.csv",
         "state/day-metrics/2026/10/01.json",
     ]

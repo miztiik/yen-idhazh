@@ -1,203 +1,38 @@
-# The Run Timeline
+# The run timeline
 
 **Last Updated**: 2026-10-11
 
-**What shape does the run timeline have, and why that shape?** This page answers
-that one question. The shape landed before any producer so the writers produce
-what the chart reads rather than a shape the chart has to migrate (Guardrail #3);
-since 2026-09-16 both exist.
-[`backend/idhazh/telemetry/publish/run_timeline.py`](../../../backend/idhazh/telemetry/publish/run_timeline.py)
-is the writer and the panel on `/console/` is the reader. **How it is
-drawn is not on this page** -
-[`../../concepts/console-design.md`](../../concepts/console-design.md) owns that,
-because a drawing is not a contract and a person arrives holding one question or
-the other.
+What shape does the newest run's clock have, and where do its facts come from?
 
-The machine-readable copy is `backend/idhazh/contracts/run_timeline.py`, and it
-is the one a build reads. `RunTimelineRow` is the contract, and
-`RunTimelineRow.json_schema()` is the schema a reader outside Python is handed.
+The Pipelines `runTimelineQuery` reads native item-health cells at view time.
+The native contract is
+[`item_health.py`](../../../backend/idhazh/contracts/item_health.py).
+The browser derives the clock in
+[`console/pipelines/run-timeline.ts`](../../../frontend/src/lib/console/pipelines/run-timeline.ts).
+There is no public monthly timeline, producer, retention knob or second row
+contract. No source ledger was deleted.
 
-## The Pipelines native reader
+## Which rows can be placed
 
-Plan52's `/console/` reader no longer loads this projection. Its declared
-`runTimelineQuery` reads native item-health cells, with `machine_shard` rather
-than the projection's `shard`. The route-owned `console/pipelines/run-timeline.ts`
-chooses the newest numeric run suffix through `newestRunRows` (BigInt comparison,
-not lexical ordering), and places only rows with a valid UTC start, item id,
-nonnegative item clock and recorded whole shard.
+`newestRunRows` compares numeric run suffixes with BigInt, not lexical ordering.
+A placed row has an item id, a valid UTC start, a nonnegative item clock and a
+recorded whole `machine_shard`. Missing starts or shards remain unplaced; the
+reader does not invent either. Zero is the earliest eligible item start.
 
-Zero is the earliest **eligible** item start. The six producer parts are fetch,
-extract, label, summary, visual plan and faithfulness (called score in this
-view); their sum is subtracted from the item clock for the signed residual.
-Queue wait, robots and stage gap retain their native readings separately and
-are not subtracted again. Capping item bars does not cap run totals or shard
-folds. The source test compares offsets and residuals against the actual Python
-producer, not a second projected fixture.
+The six timed parts are fetch, extract, label, summary, visual plan and
+faithfulness (called score in the view). Their sum is subtracted from the item
+clock for the signed residual. Positive residual is unaccounted time; negative
+residual is overlapping work. Queue wait, robots and stage gap retain separate
+native readings and are not subtracted again.
 
-The projection and its public/native producer remain intact for the separately
-owned retirement row. No host-envelope fields, fabricated shard or clock
-inference were added to this declared query.
+## Both grains use one clock
 
-## The question the timeline answers
+The item grain places each item at its native start offset. The shard grain
+runs from that shard's first item start to its last item end. It adds the same
+item parts and names the time between items in its residual.
 
-The console can already say what a run cost and what each stage cost. It cannot
-say **where the time went, item by item, across one run** - which item started
-late, which one ran long, and how much of the run's wall clock sits inside no
-step anybody named. Five ledgers hold pieces of that answer and none of them
-holds the answer, because none of them places an item on a clock.
-
-## The shape
-
-One row is **one item**. The chart's y axis is items, so the row's key is the
-item and every column on it is about that one item.
-
-| Column | What it is |
-| --- | --- |
-| `date`, `run_id`, `shard`, `item_id` | which item, in which execution, on which work shard |
-| `start_offset_ms` | milliseconds from the run's start to the moment this item's own work began |
-| `item_total_ms` | how long the bar is, once the wait is taken out |
-| the eight step columns | what each named step cost, each one optional |
-| `residual_ms` | the bar minus the eight steps, signed |
-
-### The clock is an offset, never a timestamp
-
-An item that waited forty seconds for a worker sits forty seconds to the right,
-so the wait is the first thing a reader sees. A wall-clock timestamp would make
-the reader subtract, and a category axis - one evenly spaced column an item -
-would hide the queue entirely, which is the one thing this chart exists to show.
-
-The wait is drawn as **position and not length**: `start_offset_ms` places the
-bar and `item_total_ms` is the item's own cost with its wait already taken out,
-which is the same number `ItemHealthRow.item_total_ms` holds. Counting the wait
-in both would draw it twice.
-
-### Eight named steps, in the order they happen
-
-| # | Step | Column | Where the name comes from |
-| --- | --- | --- | --- |
-| 1 | plan | `plan_ms` | new - no ledger times choosing an item yet |
-| 2 | fetch | `fetch_ms` | `ItemHealthRow` |
-| 3 | extract | `extract_ms` | `ItemHealthRow` |
-| 4 | label call | `label_ms` | `ItemHealthRow` |
-| 5 | summary call | `summary_ms` | `ItemHealthRow` |
-| 6 | visual plan | `visual_plan_ms` | `ItemHealthRow` |
-| 7 | score | `score_ms` | `EvalRow` |
-| 8 | publish | `publish_ms` | new - no ledger times placing an item yet |
-
-**Six of the eight keep the spelling a ledger already gave them.** One vocabulary
-across the instrument is worth more than a shorter name, because the moment the
-names come apart a reader comparing a bar against the census is comparing two
-spellings of one number without knowing it.
-
-**Every step is optional, and an absent step is not a zero.** An item that died
-at fetch carries `fetch_ms` and seven nulls, and it still draws - a bar needs a
-start and a length and this row has both. An untimed step cannot be subtracted,
-so whatever it cost lands in the residual, where a reader can see there is time
-nobody accounted for.
-
-### Two numbers no ledger holds, and six re-filed on purpose
-
-`start_offset_ms` and `residual_ms` are new. The eight durations are the same
-numbers the census keeps, re-filed against a clock, and that is the row's job
-rather than an oversight: a chart cannot join five ledgers at fetch time, and a
-projection that cuts named cells out of a wider row is what every other console
-payload already is. It is one account of each measurement, filed twice, with the
-census as the source.
-
-### The residual is its own column
-
-`residual_ms` is `item_total_ms` minus the eight named steps, and it gets a
-column of its own because **a step that absorbed the leftover reads as slower
-than it was** and a reader cannot tell the overhead from the work.
-
-**It is signed, for the reason `ItemHealthRow.stage_gap_ms` is signed.** Two of
-the eight genuinely overlap: the visual plan is decoded inside the
-summarize-and-plan call, so `visual_plan_ms` is apportioned out of `summary_ms`
-rather than timed beside it, and adding the two counts part of one call twice. A
-negative residual says exactly that - two steps overlapped, or two clocks
-disagreed - and clamping it to zero would delete the only signal that says so.
-
-**The subtraction happens in the contract and nowhere else.** A row that omits
-`residual_ms` gets it filled from its own columns; a row that supplies one the
-arithmetic does not agree with is refused. Two subtractions in two modules is how
-a chart and a ledger start reporting different overheads for one item.
-
-## What the shape refuses to carry
-
-No address, no `url_key`, no title, no fetched text - only an item id the
-pipeline minted, a clock, and durations of our own work. So there is nothing to
-redact, and no second `public-run-timeline` shape to declare: this is published
-whole, without a separate public redaction shape. The writer chose a
-published mirror alone: every cell is either a census column or arithmetic over
-one, so a committed `state/run-timeline/` would be a third copy of numbers git
-already carries, and re-deriving a month costs one month of census day files.
-
-## Which cells a run can fill, and from where
-
-Six of the eight steps have a producer and two do not. The writer reads one
-ledger for all six - the item-health ledger - and joins nothing.
-
-| Step | Census column it is filled from |
-| --- | --- |
-| `fetch_ms`, `extract_ms`, `label_ms`, `summary_ms`, `visual_plan_ms` | the column of the same name |
-| `score_ms` | `faithfulness_ms` |
-| `plan_ms`, `publish_ms` | nothing times either step; written empty |
-
-**Step 7 takes its NAME from `EvalRow.score_ms` and its VALUE from the census.**
-They are one stopwatch: `stages/work.py` times the scorers once and files that
-integer in both places. The census copy is the one that matters here because it
-is taken inside the item's own clock, so it is the copy `item_total_ms` already
-contains - and a residual is only honest when every step subtracted from a total
-was counted inside it. Reading the eval ledger instead would open a second file a
-day for a number already in the first.
-
-**A row with no clock produces no row.** An item the planner listed and no shard
-ever picked up has no start, no total and no shard. The contract says an absent
-row reads as never worked, which is exactly true of it.
-
-**The run's zero is the earliest item start in that run, not the manifest's.**
-The manifest's `started_at` is when the process began, and that covers collecting
-feeds and planning the day - work no item is charged for and no bar can draw. A
-zero there would push every bar right by one constant and make x=0 a moment the
-chart never shows.
-
-## What this page does not settle
-
-**Whether the chart is readable.** How the eight steps are coloured, whether the
-residual drawn hollow is legible beside them, how many items fit on one screen,
-and what a negative residual looks like are all questions about a drawing, and a
-drawing is not a contract. Every one of them was settled on 2026-09-16 in
-[`../../concepts/console-design.md`](../../concepts/console-design.md), which is
-where a person changing the panel arrives. The one clause that was settled here
-first, because it is a property of the column rather than of the drawing: the
-residual is drawn hollow and never tinted, since nobody has agreed how much
-overhead is too much and a colour would publish an alarm that does not exist.
-
-## Design rationale
-
-**The contract landed before the producers.** A consumer that starts reading a
-shape the writers then change is a migration nobody needed, and the cost of
-getting it wrong is paid by every writer at once. The cost of getting it right
-early is one file with no caller for as long as it takes the writers to arrive.
-
-## Rejected alternatives
-
-| Option | Why rejected | What it would cost to take |
-| --- | --- | --- |
-| Build the chart first and infer the shape from what it needs | the chart would ship against empty columns and apologise, which is what the console already does on three panels | one rebuild of the projection after the columns fill |
-| Fold the residual into the step beside it | that step then reads as slower than it was, and no reader can tell the overhead from the work | nothing - it is cheaper to leave it out, which is what makes it a trap |
-| Clamp a negative residual to zero so every bar draws | the only signal that two steps overlapped disappears, and the known overlap is real rather than hypothetical | the same column, minus the one thing it catches |
-
-## See also
-
-- [`console-payloads.md`](console-payloads.md) - every dataset the operator
-  console reads, its producer, and what may not cross the boundary.
-- [`../../concepts/console-design.md`](../../concepts/console-design.md) - how
-  the panel draws this shape: the ramp, the gutter, the axis and the two ways a
-  residual is drawn.
-- [`../contracts/schemas.md`](../contracts/schemas.md) - how a persisted shape is
-  versioned, stamped and generated.
-- [`../../concepts/telemetry.md`](../../concepts/telemetry.md) - what the
-  pipeline records about itself, and the rule against two accounts of one number.
-- [`../sources/item-health.md`](../sources/item-health.md) - the per-item census
-  six of the eight step names come from.
+Capping item bars does not cap run totals or shard folds. Both grains share a
+scale that includes overlapping steps. Independent clock arithmetic over the
+recorded native fixture checks every offset, item clock and six-step residual.
+The chart's drawing rules belong in
+[`console-design.md`](../../concepts/console-design.md).

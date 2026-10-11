@@ -11,16 +11,11 @@ import pytest
 from conftest import CONTRACT_FIXTURES_DIR, read_text
 from pydantic import ValidationError
 
-from idhazh import config
 from idhazh.contracts import CONTRACTS
 from idhazh.contracts.base import Contract, StalePayloadError
 from idhazh.contracts.console_band import ConsoleBand, ConsoleRoute, RouteId
 from idhazh.contracts.console_payloads import CONSOLE_PAYLOADS, payloads_by_stem
 from idhazh.contracts.item_health import DROPPED_CELLS, RETIRED_CELLS, ItemHealthRow
-from idhazh.contracts.knobs.console import ConsoleConfig
-from idhazh.contracts.knobs.gardener import MonthsWindow, RetentionPolicy
-from idhazh.contracts.knobs.windows import months_a_window_can_touch
-from idhazh.contracts.public_telemetry import PublicTelemetryRow
 from idhazh.contracts.visual_decision import VisualDecision
 
 pytestmark = pytest.mark.contract
@@ -205,30 +200,6 @@ def test_a_console_payload_says_where_it_is_written_and_why_it_crosses() -> None
         assert entry.reader.strip() == entry.reader and entry.reader
 
 
-@pytest.mark.parametrize(
-    ("projection", "source", "expected"),
-    [
-        (PublicTelemetryRow, ItemHealthRow, {"canonical_url", "url_key", "detail"}),
-    ],
-)
-def test_a_forbidden_cell_is_on_the_ledger_and_off_the_projection(
-    projection: type[Contract], source: type[Contract], expected: set[str]
-) -> None:
-    """A refusal that names a cell nothing has is decoration.
-
-    Both halves matter. A name absent from the source ledger would be a list
-    that has drifted off the thing it guards, and would keep passing while the
-    real address column crossed under another name. A name present on the
-    projection is the leak itself, and the contract module already refuses that
-    at import - this says so a second time where a reader looking for the trust
-    boundary will find it (Guardrail #11).
-    """
-    entry = payloads_by_stem()[projection.__schema_stem__]
-    assert entry.forbidden == expected
-    assert expected <= set(source.model_fields), "the list has drifted off its ledger"
-    assert not (expected & set(projection.model_fields))
-
-
 def test_a_published_shape_with_no_refusals_says_so_in_its_own_words() -> None:
     """An empty list is a real answer and it needs a reason on the page.
 
@@ -299,15 +270,9 @@ def test_every_published_month_payload_has_a_window_that_ends() -> None:
     with the public-copy series of `config/gardener/telemetry-aggregate.json`;
     every other month folder has its own `public_*_keep_months` knob.
     """
-    telemetry = config.load_gardener().tasks["telemetry-aggregate"]
-    assert isinstance(telemetry, RetentionPolicy) and telemetry.series
-    widest = months_a_window_can_touch(ConsoleConfig().max_window_days)
     monthly = {
         entry.published_to.rsplit("/", 1)[0].removeprefix("frontend/public/")
         for entry in CONSOLE_PAYLOADS
         if "<YYYY-MM>" in entry.published_to
     }
-    assert monthly == {"telemetry"}
-    copy = telemetry.series[config.PUBLIC_COPY]
-    assert isinstance(copy, MonthsWindow), "the public-copy series may not be forever"
-    assert copy.value >= widest
+    assert monthly == set(), "the console publishes no monthly projections"

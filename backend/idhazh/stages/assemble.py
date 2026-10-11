@@ -66,8 +66,7 @@ def _index_root() -> Path:
     when a caller moves the days. A test that redirects `PUBLIC_ROOT` at a
     temporary tree used to leave this pointing at the repository, so the suite
     rebuilt the committed shard out of fixture days - which is how the shard on
-    `main` came to name one item no published day holds. `public_telemetry` is
-    passed its root the same way and for the same reason.
+    `main` came to name one item no published day holds.
     """
     return common.PUBLIC_ROOT.parent / "assist" / "index"
 

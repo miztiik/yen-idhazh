@@ -37,7 +37,7 @@ from idhazh.contracts.base import (
     field_column,
     fit_cell,
 )
-from idhazh.contracts.public_telemetry import PublicTelemetryRow
+from idhazh.contracts.item_health import ItemHealthRow
 
 pytestmark = pytest.mark.contract
 
@@ -543,10 +543,10 @@ def test_both_parsers_read_a_folded_shard_to_the_same_cells(tmp_path: Path) -> N
     if not _BROWSER_PARSER.exists():
         pytest.skip("the published bundle's parser is not in this checkout")
 
-    column = field_column(PublicTelemetryRow.model_fields["item_id"])
+    column = field_column(ItemHealthRow.model_fields["item_id"])
     expected = [fit_cell(raw, column=column, absent=ABSENT) for raw in HOSTILE.values()]
 
-    names = PublicTelemetryRow.csv_columns()
+    names = ItemHealthRow.csv_columns()
     shard = tmp_path / "telemetry.csv"
     with shard.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=names, lineterminator="\n")
