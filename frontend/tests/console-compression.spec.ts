@@ -198,7 +198,8 @@ test('the bounds are printed as numbers, and they are the ones the prompt asks f
 });
 
 test('the outlier list ranks by distance, prints its divisor, and caps itself', async ({ page }) => {
-	await open(page);
+	await openServed(page, ({ end }) => Array.from({ length: OUTLIER_ROWS + 2 }, (_, index) =>
+		published(end, `outlier-${index}`, 400, askedFor(400).target_words_max + index + 1)));
 
 	const list = page.locator('[data-band-outliers]');
 	const rows = list.locator('[data-ranked-row]');

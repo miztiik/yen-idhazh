@@ -229,7 +229,7 @@ for (const held of ['data', 'engine'] as const) {
 	});
 }
 
-test('a cold console load settles inside four serial round trips', async ({ page }) => {
+async function coldPipelines(page: Page, context: BrowserContext, serialWaits: boolean) {
 	const finished: Timed[] = [];
 	/** The browser's own network timing, never the moment this handler ran.
 	 *
@@ -241,20 +241,42 @@ test('a cold console load settles inside four serial round trips', async ({ page
 	 * `startTime`.
 	 */
 	const record = (request: Request) => {
-		if (!COUNTED.has(request.resourceType())) return;
+		const url = new URL(request.url());
+		const relevant = request.resourceType() === 'document'
+			|| /\/state\/compact\/(item-health|summary-quality-evals)\//.test(url.pathname)
+			|| url.pathname.endsWith('.wasm')
+			|| url.searchParams.has('serial-wait');
+		if (!relevant || !COUNTED.has(request.resourceType())) return;
 		const timing = request.timing();
 		const end = timing.responseEnd >= 0 ? timing.startTime + timing.responseEnd : timing.startTime;
 		finished.push({ url: request.url(), start: timing.startTime, end });
 	};
 
-	page.on('requestfinished', record);
+	context.on('requestfinished', record);
 	// A request that never answers is still a wait. Counting it keeps a broken
 	// fetch from reading as a shorter chain than a working one.
-	page.on('requestfailed', record);
+	context.on('requestfailed', record);
+	if (serialWaits) {
+		await page.addInitScript(() => {
+			const fetchResource = globalThis.fetch.bind(globalThis);
+			let serial: Promise<void> | null = null;
+			globalThis.fetch = async (...args: Parameters<typeof fetch>) => {
+				const address = args[0] instanceof Request ? args[0].url : String(args[0]);
+				if (/\/state\/compact\/(item-health|summary-quality-evals)\/index\//.test(address)) {
+					serial ??= (async () => {
+						for (const step of [1, 2]) {
+							const answer = await fetchResource(`/favicon.svg?serial-wait=${step}`);
+							await answer.arrayBuffer();
+						}
+					})();
+					await serial;
+				}
+				return fetchResource(...args);
+			};
+		});
+	}
 
 	await page.goto(PIPELINES_HREF);
-	// The count and not the flag: `data-telemetry-fetching` reads `no` before the
-	// first fetch starts as well as after the last one lands.
 	await page.waitForFunction(
 		() =>
 			document.querySelector('[data-console-panels="pipelines"]')?.getAttribute('data-route-state') === 'ok'
@@ -269,19 +291,69 @@ test('a cold console load settles inside four serial round trips', async ({ page
 		'the trace recorded no document and no fetch, so it proves nothing about the chain'
 	).toBeGreaterThan(0);
 
-	const chain = longestChain(finished);
+	const isWholeFile = (url: string) => /\/state\/compact\/(item-health|summary-quality-evals)\/(daily|monthly)\/.+\.parquet/.test(url);
+	const isCore = (url: string) => /\/duckdb-eh\.[^/]+\.wasm$/.test(new URL(url).pathname);
+	expect(finished.some((request) => isCore(request.url)), 'the cold native trace must include core wasm').toBe(true);
+	expect(finished.some((request) => request.url.endsWith('/parquet.duckdb_extension.wasm')), 'the cold native trace must include the real add-on').toBe(true);
+	const branches = ['item-health', 'summary-quality-evals'].flatMap((ledger) => {
+		const own = finished.filter((request) => !request.url.includes('/state/compact/')
+			|| request.url.includes(`/state/compact/${ledger}/`));
+		return [longestChain(own.filter((request) => !isCore(request.url))),
+			longestChain(own.filter((request) => !isWholeFile(request.url)))];
+	});
+	const chain = branches.reduce((longest, branch) => branch.length > longest.length ? branch : longest, [] as string[]);
+	await test.info().attach('pipelines-cold-network', {
+		body: JSON.stringify({ serialWaits, chain, branches, finished }, null, 2), contentType: 'application/json'
+	});
+	return chain;
+}
+
+test('a cold console load settles inside four serial round trips', async ({ page, context }) => {
+	const chain = await coldPipelines(page, context, false);
 	const report = chain.map((path, at) => `  ${at + 1}. ${path}`).join('\n');
 
 	expect(
 		chain.length,
 		`a cold ${PIPELINES_HREF} load took ${chain.length} serial round trips, over the ${MAX_HOPS} ` +
 			`the design allows at console.default_window_days=${CONFIG.console.default_window_days}.\n` +
-			'Each telemetry month is fetched after the one before it, so the usual cause is a\n' +
-			'wider default window or a payload that moved out of the document and landed\n' +
-			'behind something the page was already waiting for. The chain the browser walked:\n' +
+			'Native data and engine branches run independently after the indexes.\n' +
+			'The deepest native prerequisite branch the browser walked:\n' +
 			report
 	).toBeLessThanOrEqual(MAX_HOPS);
 });
+
+test('planted serial waits exceed the cold Pipelines budget', async ({ page, context }) => {
+	const chain = await coldPipelines(page, context, true);
+	expect(chain.length, 'the planted real requests must make the same four-hop check fail').toBeGreaterThan(MAX_HOPS);
+});
+
+for (const held of ['data', 'engine'] as const) {
+	test(`Pipelines data and engine progress independently while ${held} responses are held`, async ({ page, context }) => {
+		const dataFile = /\/state\/compact\/item-health\/(daily|monthly)\/.+\.parquet/;
+		const coreWasm = /\/duckdb-eh\.[^/]+\.wasm(?:\?.*)?$/;
+		let release = () => {};
+		const gate = new Promise<void>((resolveGate) => { release = resolveGate; });
+		let engineStarted = 0;
+		let dataFinished = 0;
+		let heldResponses = 0;
+		context.on('request', (request) => { if (coreWasm.test(request.url())) engineStarted += 1; });
+		context.on('requestfinished', (request) => { if (dataFile.test(request.url())) dataFinished += 1; });
+		await context.route(held === 'data' ? dataFile : coreWasm, async (route) => {
+			const response = await route.fetch();
+			heldResponses += 1;
+			await gate;
+			await route.fulfill({ response });
+		});
+		try {
+			await page.goto(PIPELINES_HREF);
+			await expect.poll(() => heldResponses).toBeGreaterThan(0);
+			await expect.poll(() => held === 'data' ? engineStarted : dataFinished,
+				{ message: `the native other branch must progress before ${held} responses are released` }).toBeGreaterThan(0);
+			await expect(page.locator('[data-console-panels="pipelines"]')).toHaveAttribute('data-route-state', 'loading');
+		} finally { release(); }
+		await expect(page.locator('[data-console-panels="pipelines"]')).toHaveAttribute('data-route-state', 'ok');
+	});
+}
 
 test('the verdict band costs a cold load no round trip of its own', async ({ page }) => {
 	const asked: string[] = [];

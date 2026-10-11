@@ -80,6 +80,7 @@
 	data-windowed={windowed}
 	data-window-days={windowDays}
 	data-model-rule={declaration?.value}
+	data-model-rule-name={declaration === null ? undefined : `kpi-${label}`}
 	data-model-rule-none={declaration?.none}
 >
 	<p class="kpi-label" data-kpi-label>{label}</p>

@@ -9,12 +9,15 @@ import { dayBefore, nativeRow, timedRow, packedPipelines, servePipelines } from 
 let populated: Promise<string> | undefined;
 export async function populatedPanels(page: Page, worker: number): Promise<void> {
 	const through = '2026-08-20';
+	const floor = JSON.parse(readFileSync(resolve('..', 'config', 'appearance.json'), 'utf8')).console.fleet_min_rows;
+	const itemsPerDay = Math.max(8, Math.ceil(floor / 8));
 	populated ??= packedPipelines(`sufficiency-${worker}`, Array.from({ length: 90 }, (_, index) => {
 		const date = dayBefore(through, 89 - index);
 		return { covers: date, rows: index < 82 ? [] : [
-			...Array.from({ length: 8 }, (_, item) => timedRow(date, {
+			...Array.from({ length: itemsPerDay }, (_, item) => timedRow(date, {
 				item_id: `article-${item}`, url_key: `article-${date}-${item}`, machine_shard: item % 2,
-				item_index: item, item_started_at: `${date}T12:00:0${item}Z`, item_ended_at: `${date}T12:00:0${item}.800Z`,
+				item_index: item, item_started_at: `${date}T12:00:${String(item).padStart(2, '0')}Z`,
+				item_ended_at: `${date}T12:00:${String(item).padStart(2, '0')}.800Z`,
 				cpu_model: 'fixture-reference-cpu',
 				prefill_ms: 100 + item, decode_ms: 400 + item, input_tokens: 100, cached_tokens: 10,
 				output_tokens: 40, published_at: `${date}T00:00:00Z`, time_source: 'feed',

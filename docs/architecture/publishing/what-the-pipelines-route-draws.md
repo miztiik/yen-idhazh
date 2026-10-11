@@ -74,6 +74,12 @@ inferred article timestamp is not treated as a measured age. With scripts
 disabled, native frames explicitly say the article record needs JavaScript;
 private published-day marks remain in the document.
 
+At a glance is the sole route verdict; run health remains its own comparison.
+Declared date plots name the exact calendar they drew, including null days, and
+opted-in count cards name their own declined settings rule. The native cold-load
+check keeps the four-hop ceiling on independent ledger/data/engine branches,
+with real held responses and planted serial requests proving the distinction.
+
 The flag count keeps the newest recorded boolean for each distinct article;
 null cells cannot replace a flag, and conflicting booleans on its latest
 recorded day stay unknown in any row order. Counts remain exactly the recorded

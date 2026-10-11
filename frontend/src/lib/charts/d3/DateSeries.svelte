@@ -122,7 +122,8 @@
 	{@const box = geometry.frame}
 	<div class="date-series-plot" data-readout-columns={supplied?.columns.length}
 		data-readout-none={supplied === null ? 'This kept caller provides no separate strip; agreed with Susan' : undefined}
-		data-model-rule={declaration?.value} data-model-rule-name={name} data-model-rule-none={declaration?.none}>
+		data-model-rule={declaration?.value} data-model-rule-name={name} data-model-rule-none={declaration?.none}
+		data-model-rule-from={geometry.dates[0]} data-model-rule-to={geometry.dates.at(-1)}>
 		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 		<svg
 			class="date-series"

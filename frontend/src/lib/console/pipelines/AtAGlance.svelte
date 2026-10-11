@@ -27,8 +27,7 @@
 				{@const readout = readoutOf({ type: 'dateSeries', columns: strip.bars.map((bar) => shortDate(bar.date)),
 					series: [{ label: card.label, swatch: 'var(--chart-3)', values: strip.bars.map((bar) => bar.published), format: String }],
 					notMeasured: 'No published day was measured.', resting: 'newest' })}
-				<div data-readout-columns={readout.columns.length} data-model-rule="no"
-					data-model-rule-none={noRule.declined}>
+				<div data-readout-columns={readout.columns.length}>
 					<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 					<svg width="220" height="34" viewBox="0 0 220 34" role="img" tabindex="0" aria-label={card.label}
 						data-chart="published-counts" data-chart-name="published-{card.name}"

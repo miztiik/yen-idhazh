@@ -10,8 +10,19 @@ test.beforeAll(async () => {
 		['FailureList', './src/lib/components/FailureList.svelte'],
 		['StageTimings', './src/lib/components/StageTimings.svelte'],
 		['TimeHistogram', './src/lib/components/TimeHistogram.svelte'],
-		['DurationStack', './tests/fixtures/panels/DurationStack.svelte']
+		['DurationStack', './tests/fixtures/panels/DurationStack.svelte'],
+		['KpiCard', './src/lib/components/KpiCard.svelte']
 	]);
+});
+
+test('an opted-in card names its rule while an unchanged card makes no declaration', async ({ page }) => {
+	await drawClient(page, code, 'KpiCard', {
+		label: 'Recorded articles', value: '8', rule: { declined: 'This count is not a dated settings comparison.' }
+	});
+	await expect(page.locator('[data-model-rule]')).toHaveCount(1);
+	await expect(page.locator('[data-model-rule]')).toHaveAttribute('data-model-rule-name', 'kpi-Recorded articles');
+	await drawClient(page, code, 'KpiCard', { label: 'Unchanged card', value: '8' });
+	await expect(page.locator('[data-model-rule]')).toHaveCount(0);
 });
 
 test('the stage choices change only the identity-free rule ranking', async ({ page }) => {
@@ -82,6 +93,8 @@ for (const width of [390, 1440]) {
 		await page.setViewportSize({ width, height: 900 });
 		await drawClient(page, code, 'DurationStack', { width: width - 24 });
 		await expect(page.locator('[data-stack-elapsed]')).toHaveCount(2);
+		await expect(page.locator('[data-model-rule-name="item-time"]')).toHaveAttribute('data-model-rule-from', '2026-09-01');
+		await expect(page.locator('[data-model-rule-name="item-time"]')).toHaveAttribute('data-model-rule-to', '2026-09-03');
 		await expect(page.locator('[data-stack-overlap]')).toHaveCount(1);
 		await expect(page.locator('[data-stack-elapsed="2026-09-02"]')).toHaveAttribute('data-elapsed-value', '0');
 		await expect(page.locator('[data-stack-elapsed="2026-09-03"]')).toHaveCount(0);
