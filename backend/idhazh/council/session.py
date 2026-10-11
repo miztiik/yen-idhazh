@@ -27,6 +27,7 @@ from typing import Final
 
 from idhazh import completed_writes, config, ledger, run_context
 from idhazh.contracts.base import DateStamp, RunId, ServerJob
+from idhazh.contracts.council_events import NightPlanned, RowsCollected, UnitFinished
 from idhazh.contracts.council_run_record import (
     CouncilRunRecord,
     EvaluationStep,
@@ -34,14 +35,12 @@ from idhazh.contracts.council_run_record import (
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.council import metrics_sink
+from idhazh.council import event_log, metrics_sink, outcome
 from idhazh.council.deadline import run_shard_under_the_clock
 from idhazh.council.registry import VENUE_LEDGERS as VENUE_LEDGERS
 from idhazh.council.registry import tenant, tenants
 from idhazh.council.tenancy import ShardResult, Tenant
 from idhazh.ledger import staging
-
-_log: Final = logging.getLogger(__name__)
 
 #: Where one night's work lands before a later job collects it. The council
 #: names the root because the council is what carries it between jobs as an
@@ -163,7 +162,6 @@ def prepare(council: CouncilConfig, *, date: DateStamp, run_id: RunId) -> tuple[
     return tuple(
         _recorded(
             host.judge_id,
-            unit="prepare",
             date=date,
             run_id=run_id,
             evaluation_step=EvaluationStep.SELECT_JUDGE_WORK,
@@ -205,7 +203,6 @@ def settle(
                 results.append(
                     _recorded(
                         host.judge_id,
-                        unit="settle",
                         date=date,
                         run_id=run_id,
                         evaluation_step=EvaluationStep.COMBINE_JUDGE_RESULTS,
@@ -267,7 +264,6 @@ def run_shard(
     host = tenant(slug, council=council)
     return _recorded(
         host.judge_id,
-        unit=f"shard {shard} of {shards}",
         date=date,
         run_id=run_id,
         evaluation_step=EvaluationStep.EVALUATE_WORK_PART,
@@ -290,14 +286,13 @@ def _hosted(council: CouncilConfig, date: DateStamp) -> tuple[Tenant, ...]:
     """The tenants this night hosts, said out loud so an empty night is readable."""
     hosted = tenants(council.running(), council=council)
     if not hosted:
-        _log.info("no judge is active, so %s is a night the council hosts nobody", date)
+        event_log.emit(NightPlanned(dates=(date,), judges=0, units=0))
     return hosted
 
 
 def _recorded(
     judge_id: str,
     *,
-    unit: str,
     date: DateStamp,
     run_id: RunId,
     evaluation_step: EvaluationStep,
@@ -307,37 +302,55 @@ def _recorded(
 ) -> ShardResult:
     """Run one unit of hosted work and file the council's own row on the way out.
 
-    The row is filed in a `finally`, so it survives anything that goes wrong
-    after the tenant handed its result back.
+    A returned result is filed before it is reported. A filing failure emits
+    a failed unit event and propagates rather than reporting success.
 
     **A unit that never handed one back files nothing**, and that is the design
     rather than a gap. The outcome vocabulary has three members and none of them
-    says "this died"; what says it is the missing row, read against the `shards`
-    cell its siblings carry. A unit the platform killed leaves the same gap, so
-    an operator reads one signal and not two.
+    says "this died"; the event says failed, and the ledger has a missing row
+    read against the `shards` cell its siblings carry. A unit the platform killed
+    leaves the same gap, so an operator reads one signal and not two.
     """
     began = datetime.now(UTC).strftime(STARTED_AT_FORMAT)
     started = time.monotonic()
+    outcome.start_unit()
+    failure: BaseException | None = None
     produced: ShardResult | None = None
     try:
         produced = work()
+        _file(
+            produced,
+            judge_id=judge_id,
+            date=date,
+            run_id=run_id,
+            evaluation_step=evaluation_step,
+            work_part_index=work_part_index,
+            work_part_count=work_part_count,
+            began=began,
+            seconds=time.monotonic() - started,
+        )
         return produced
+    except BaseException as error:
+        failure = error
+        raise
     finally:
-        if produced is not None:
-            _file(
-                produced,
+        error_name, where = event_log.cause_of(failure)
+        event_log.emit(
+            UnitFinished(
                 judge_id=judge_id,
                 date=date,
                 run_id=run_id,
                 evaluation_step=evaluation_step,
                 work_part_index=work_part_index,
                 work_part_count=work_part_count,
-                began=began,
-                seconds=time.monotonic() - started,
-            )
-            _log.info(
-                "council %s for %s on %s ended %s", unit, judge_id, date, produced.outcome.value
-            )
+                outcome=produced.outcome if failure is None and produced is not None else "failed",
+                error=error_name,
+                where=where,
+            ),
+            level=logging.ERROR
+            if failure is not None or (produced is not None and outcome.of_results((produced,)))
+            else logging.INFO,
+        )
 
 
 def _file(
@@ -434,5 +447,5 @@ def _collect(
         identity=identity,
     )
     landed = len(recorded) if written else 0
-    _log.info("the council recorded %d units of its own work on %s", landed, date)
+    event_log.emit(RowsCollected(date=date, rows=landed))
     return landed

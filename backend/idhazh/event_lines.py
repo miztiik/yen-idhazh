@@ -53,9 +53,23 @@ def cause_of(failure: BaseException | None) -> Cause:
     return Cause(type(failure).__name__, where)
 
 
-def emit(event: Model, *, logger: logging.Logger, level: int = logging.INFO) -> None:
+def emit(
+    event: Model, *, logger: logging.Logger, level: int = logging.INFO, force: bool = False
+) -> None:
     """Carry the event whole on a record, with its JSON as the record's message."""
-    if logger.isEnabledFor(level):
+    if force:
+        record = logger.makeRecord(
+            logger.name,
+            level,
+            __file__,
+            0,
+            _dumped(fields_of(event)),
+            (),
+            None,
+            extra={_ATTRIBUTE: event},
+        )
+        logger.handle(record)
+    elif logger.isEnabledFor(level):
         logger.log(level, _dumped(fields_of(event)), extra={_ATTRIBUTE: event})
 
 

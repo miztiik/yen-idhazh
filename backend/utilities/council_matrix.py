@@ -15,13 +15,14 @@ older date add one without the workflow changing.
 
 from __future__ import annotations
 
-import argparse
 import json
-import logging
 from pathlib import Path
 from typing import Final
 
 from idhazh import config
+from idhazh.contracts.council_events import CouncilProgram, JudgeDeclared, NightPlanned
+from idhazh.council import event_log, outcome
+from idhazh.council.night_plan import a_date
 from idhazh.council.registry import tenants
 from idhazh.council.session import VENUE_LEDGERS as VENUE_LEDGER_NAMES
 from idhazh.council.session import publication_paths, shard_width
@@ -50,8 +51,13 @@ def cells(config_dir: Path, *, dates: tuple[str, ...]) -> list[dict[str, object]
     council = config.load_council(config_dir)
     found: list[dict[str, object]] = []
     for name in council.judge_names:
-        logging.getLogger("idhazh").info(
-            "council judge=%s status=%s", name, council.declaration(name).lifecycle_status.value
+        declaration = council.declaration(name)
+        event_log.emit(
+            JudgeDeclared(
+                judge_id=name,
+                status=declaration.lifecycle_status,
+                runs_model=declaration.runs_model,
+            )
         )
     for host in tenants(council.running(), council=council):
         width = shard_width(council, host)
@@ -98,7 +104,11 @@ def _parallel(count: int) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    return outcome.run(CouncilProgram.MATRIX, lambda: _main(argv))
+
+
+def _main(argv: list[str] | None = None) -> int:
+    parser = outcome.Parser(description=__doc__)
     parser.add_argument("--config-root", type=Path, default=Path("config"))
     parser.add_argument(
         "--date",
@@ -113,14 +123,22 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     args = parser.parse_args(argv)
-    logging.basicConfig(level=config.load(args.config_root).app.logging.level.value)
+    event_log.install(config.load(args.config_root).app.logging.level.value)
 
-    dates = tuple(dict.fromkeys(str(date) for date in args.date))
+    dates = tuple(dict.fromkeys(a_date(str(date), what="--date") for date in args.date))
     matrix = cells(args.config_root, dates=dates)
+    paths = committed_paths(args.config_root)
+    event_log.emit(
+        NightPlanned(
+            dates=dates,
+            judges=len({cell["tenant"] for cell in matrix}),
+            units=len(matrix),
+        )
+    )
     print(f"matrix={json.dumps(matrix, separators=(',', ':'))}")
     print(f"max_parallel={_parallel(len(matrix))}")
     print(f"dates={json.dumps(list(dates), separators=(',', ':'))}")
-    print(f"committed_paths={' '.join(committed_paths(args.config_root))}")
+    print(f"committed_paths={' '.join(paths)}")
     return 0
 
 
