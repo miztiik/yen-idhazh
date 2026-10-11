@@ -31,13 +31,15 @@
 	import { shortDate } from '$lib/format';
 	import ChartReadout from './ChartReadout.svelte';
 	import type { RunLength } from '../../routes/console/model/+page.server';
+	import { ruleDeclaration, ruleEvents, type ModelRule } from '$lib/charts/d3/model-rule';
 
 	let {
 		runs,
 		width,
 		height,
 		tickDensity,
-		readoutMaxShare = 1
+		readoutMaxShare = 1,
+		rule
 	}: {
 		/** Oldest first. The chart reads left to right. */
 		runs: RunLength[];
@@ -46,6 +48,7 @@
 		tickDensity: number;
 		/** `chart.readout_max_share`. */
 		readoutMaxShare?: number;
+		rule?: ModelRule;
 	} = $props();
 
 	const MARGIN: Margin = { top: 12, right: 12, bottom: 40, left: 38 };
@@ -65,6 +68,12 @@
 			...(run.askHigh === null ? [] : [run.askHigh])
 		])
 	);
+	const declaration = $derived(rule === undefined ? null : ruleDeclaration(rule));
+	const boundaries = $derived(rule === undefined || 'declined' in rule ? [] : rule.changes.flatMap((change) => {
+		const index = runs.findIndex((run) => run.date >= change.date);
+		if (index < 0) return [];
+		return [{ ...change, at: box.left + pitch * index }];
+	}));
 	const yAxis = $derived(linearAxis(runValues, [box.bottom, box.top]));
 	/** The raw extent of the lengths, bound to the data alone: a resize cannot
 	 * move it and a window change can. Published so a test can hold the split. */
@@ -125,7 +134,7 @@
 	 * between two runs of one day, and two keys of one date would throw at
 	 * hydration while the prerendered document looked perfect. */
 	const swaps = $derived(
-		runs
+		rule !== undefined ? [] : runs
 			.map((run, index) => ({ run, index }))
 			.filter(
 				({ run, index }) =>
@@ -228,7 +237,7 @@
 			events: {
 				lines: runs.map((run) => {
 					const swap = swaps.find((one) => one.runId === run.runId);
-					return swap === undefined ? [] : [{ label: swapSentence(swap), value: '', swatch: null }];
+					return rule === undefined ? (swap === undefined ? [] : [{ label: swapSentence(swap), value: '', swatch: null }]) : ruleEvents(rule, [run.date]).lines?.[0] ?? [];
 				})
 			},
 			notMeasured: 'not recorded',
@@ -242,6 +251,9 @@
 <div
 	class="plot"
 	data-run-lengths="chart"
+	data-chart-type="dateSeries"
+	data-model-rule={declaration?.value}
+	data-model-rule-none={declaration?.none}
 	data-run-lengths-runs={runs.length}
 	data-run-domain={runExtent}
 	data-readout-columns={readout.columns.length}
@@ -310,6 +322,12 @@
 					aria-label={swapSentence(swap)}
 					data-run-swap={swap.date}
 				/>
+			{/each}
+
+			{#each boundaries as boundary (`${boundary.date}-${boundary.kind}`)}
+				<line x1={boundary.at} x2={boundary.at} y1={box.top} y2={box.bottom}
+					stroke="var(--color-text-tertiary)" stroke-dasharray={boundary.kind === 'checker' ? '1 3' : '3 3'}
+					data-model-rule-date={boundary.date} data-model-rule-kind={boundary.kind} />
 			{/each}
 
 			{#if guide !== null}

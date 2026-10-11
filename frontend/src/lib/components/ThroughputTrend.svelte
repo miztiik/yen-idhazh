@@ -38,6 +38,9 @@
 	import type { ThroughputDay } from '$lib/charts/series';
 	import { daysInWindow } from '$lib/charts/viewport';
 	import { shortDate } from '$lib/format';
+	import { ruleBoundaries, ruleDeclaration, ruleEvents, type ModelRule } from '$lib/charts/d3/model-rule';
+	import { median } from '$lib/console/model/rows';
+	import { SERIES_TOKENS } from '$lib/console/series-tokens';
 
 	let {
 		days,
@@ -46,7 +49,8 @@
 		reference,
 		tickDensity,
 		readoutMaxShare,
-		windowDays
+		windowDays,
+		rule
 	}: {
 		days: ThroughputDay[];
 		height: number;
@@ -57,12 +61,13 @@
 		/** The days the window holds. At one day no second day ever comes, so
 		 * the line under the chart does not wait for one. */
 		windowDays: number;
+		rule?: ModelRule;
 	} = $props();
 
-	const SERIES = [
-		{ key: 'read', label: 'read', colour: 'var(--color-accent)' },
-		{ key: 'write', label: 'write', colour: 'var(--color-text)' }
-	] as const;
+	const SERIES = $derived([
+		{ key: 'read', label: 'read', colour: rule === undefined ? 'var(--color-accent)' : `var(${SERIES_TOKENS['reading-prompt']})` },
+		{ key: 'write', label: 'write', colour: rule === undefined ? 'var(--color-text)' : `var(${SERIES_TOKENS['writing-reply']})` }
+	] as const);
 
 	type SeriesKey = (typeof SERIES)[number]['key'];
 
@@ -122,7 +127,7 @@
 	 * invent a swap; an unnamed model on either side ends the comparison the
 	 * same way the verdict sentence does. */
 	const swaps = $derived(
-		ordered.flatMap((day, index) => {
+		rule !== undefined ? [] : ordered.flatMap((day, index) => {
 			if (index === 0) return [];
 			const before = ordered[index - 1];
 			if (day.model === null || before.model === null || day.model === before.model) return [];
@@ -143,6 +148,9 @@
 	/** Half a pair of candles, so the oldest and the newest day sit inside the
 	 * plot rather than straddling its edge. */
 	const pad = $derived(Math.min(offset + candle / 2, box.innerWidth / 2));
+	const declaration = $derived(rule === undefined ? null : ruleDeclaration(rule));
+	const boundaries = $derived(rule === undefined ? [] : ruleBoundaries(rule, calendar, calendar.map((_, index) => x(index)), box.left));
+	const windowMedian = $derived(median(ordered.map((day) => day.write.median)));
 	const step = $derived((box.innerWidth - pad * 2) / Math.max(1, calendar.length - 1));
 
 	/** Which columns carry a date. The pad is part of it, so the fit is measured
@@ -249,7 +257,7 @@
 					const day = byDate.get(date);
 					const swap = swaps.find((one) => one.date === date);
 					return [
-						...(swap === undefined ? [] : [{ label: swapSentence(swap), value: '', swatch: null }]),
+						...(rule === undefined ? (swap === undefined ? [] : [{ label: swapSentence(swap), value: '', swatch: null }]) : ruleEvents(rule, [date]).lines?.[0] ?? []),
 						...(day === undefined
 							? []
 							: day.runs.map((run) => ({
@@ -312,6 +320,9 @@
 	<div
 		class="relative mt-4 rounded-md border border-rule bg-surface p-3"
 		data-throughput="chart"
+		data-chart-type="dateSeries"
+		data-model-rule={declaration?.value}
+		data-model-rule-none={declaration?.none}
 		data-readout-columns={readout.columns.length}
 	>
 		<!-- The measured element is this one, not the card: the card's padding and
@@ -375,6 +386,15 @@
 						data-throughput-swap={swap.date}
 					/>
 				{/each}
+				{#each boundaries as boundary (boundary.date)}
+					<line x1={boundary.x} x2={boundary.x} y1={box.top} y2={box.bottom}
+						stroke="var(--color-text-tertiary)" stroke-dasharray={boundary.kind === 'checker' ? '1 3' : '3 3'}
+						data-model-rule-date={boundary.date} data-model-rule-kind={boundary.kind} />
+				{/each}
+				{#if rule !== undefined && windowMedian !== null}
+					<line x1={box.left} x2={box.right} y1={y.scale(windowMedian)} y2={y.scale(windowMedian)}
+						stroke="var(--chart-axis)" data-throughput-median={windowMedian} />
+				{/if}
 
 				<!-- The column under the pointer, marked across both series, so a
 				     comparison between read and write is read off one line. -->
@@ -506,7 +526,9 @@
 				from {newest.items}
 				{newest.items === 1 ? 'item' : 'items'} across {newest.runs.length}
 				{newest.runs.length === 1 ? 'run' : 'runs'}.
-					{#if swapped}
+					{#if rule !== undefined}
+						The window's median writing rate is {windowMedian === null ? 'not recorded' : rate(windowMedian)}.
+					{:else if swapped}
 						<span data-throughput="swap"
 							>{previous?.date} ran on {previous?.model} and this day ran on {newest.model}, so the
 							two are not compared.</span
@@ -520,6 +542,9 @@
 					One day so far. A second day gives it something to move against.
 				{/if}
 			</p>
+		{/if}
+		{#if rule !== undefined && 'changes' in rule && rule.note !== null}
+			<p data-model-rule-empty={rule.changes.length === 0 ? '' : undefined} data-model-rule-note={rule.changes.length ? '' : undefined}>{rule.note}</p>
 		{/if}
 	</div>
 {/if}

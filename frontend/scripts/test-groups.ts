@@ -29,6 +29,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'console-machine-panels', 'console-machine-reuse',
 		'console-mark-parity', 'console-memory-board',
 		'console-memory-held', 'console-model-instruments', 'console-model-panels',
+		'console-model-ledgers',
 		'console-model-reasons', 'console-model-rule', 'console-model', 'console-nav',
 		'console-pipeline-timeline', 'console-polarity', 'console-processor-lost',
 		'console-published', 'console-query-door', 'console-ranked', 'console-readout',
