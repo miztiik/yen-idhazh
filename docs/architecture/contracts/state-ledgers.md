@@ -55,6 +55,11 @@ bounds. The last numeric record for a run survives a later unknown. The
 `compact-run-shards` task and normal site copy publish packed and unpacked days;
 whole manifests and plans are not added to the published ledger set.
 
+Before filing counts, the writer settles the named day's compact rows and
+pending raw corrections with their original filing provenance. A correction
+back to the packed value is still filed if a different count is pending.
+Repeating a pending count files nothing; an unknown never erases a number.
+
 The console reads the feed record at build time from its packed files under `state/compact/feed-health/`, so the Voices page stops at the newest packed day. There is no published mirror; the one that existed until 2026-09-16 was never fetched.
 
 `state/raw/item-health/` is the fastest-growing ledger in the table above. The console reads it a month at a time through the published projection, which stays monthly: `public_telemetry.publish` folds a month from that month's days, read through `ledger.load_days` ([persistence.md](persistence.md#reading-a-whole-ledger)).

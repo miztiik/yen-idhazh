@@ -36,9 +36,16 @@ def record(state: Path, manifest: RunManifest, *, identity: WriterIdentity) -> i
 
 
 def _persist(state: Path, rows: list[RunShards], on: str, identity: WriterIdentity) -> int:
+    files = [
+        [
+            row for row in ledger.load_stored([held.path], model=RunShards)
+            if row.identity.covers == on
+        ]
+        for held in ledger.find_holding_files(state, LedgerName.RUN_SHARDS, [on])
+    ]
     current = {
-        row.run_id: row.shards
-        for row in ledger.load_days(state, LedgerName.RUN_SHARDS, [on], model=RunShards)
+        held.row.run_id: held.row.shards
+        for held in ledger.settle_rows(files, ledger.door_key(LedgerName.RUN_SHARDS))
     }
     changed = [
         row for row in rows
