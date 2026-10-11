@@ -20,6 +20,7 @@ for (const [id, name] of PANELS) {
 			['./cards', lib('console/model/cards')], ['./model-rule', lib('console/model/model-rule')],
 			['../model-cards', lib('console/model-cards')], ['../eval-instruments', lib('console/eval-instruments')],
 			['../doubt-reasons', lib('console/doubt-reasons')], ['./doubt-reasons', lib('console/model/doubt-reasons')],
+			['../span-words', lib('console/span-words')], ['../../format', lib('format')],
 			['../../charts/d3/dateSeries', lib('charts/d3/dateSeries')],
 			['../../charts/d3/empty', lib('charts/d3/empty')], ['../../charts/frame', lib('charts/frame')],
 			['../../components/KpiCard.svelte', './KpiCard.server.mjs'],
