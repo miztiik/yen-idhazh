@@ -355,19 +355,44 @@ impl FileTransport {
             ReadOutcome::Missing(_) => Ok(None),
         }
     }
+    pub fn read_staged_result(&mut self, event_id: Uuid) -> Result<HostEvent> {
+        let path = crate::ledger::paths::resolve_document(
+            &self.workspace,
+            &format!(
+                "{}/results/.pending-{event_id}.json",
+                self.manifest.event_root
+            ),
+        )?;
+        require(
+            path.parent() == Some(self.root.join("results").as_path()),
+            "staged result aliases another session directory",
+        )?;
+        match self.read_classified_path(event_id, "results", &path)? {
+            ReadOutcome::Present(event) => Ok(event),
+            ReadOutcome::Missing(error) => Err(error.to_string()),
+        }
+    }
     fn read_classified(
         &mut self,
         event_id: Uuid,
         direction: &str,
     ) -> Result<ReadOutcome<HostEvent>> {
         let path = self.path(event_id, direction)?;
+        self.read_classified_path(event_id, direction, &path)
+    }
+    fn read_classified_path(
+        &mut self,
+        event_id: Uuid,
+        direction: &str,
+        path: &Path,
+    ) -> Result<ReadOutcome<HostEvent>> {
         let cap = if direction == "inbox" {
             self.manifest.limits.max_command_bytes
         } else {
             self.manifest.limits.max_result_bytes
         };
         self.budget.reserve(cap as usize)?;
-        let raw = match read_bounded_classified(&path, cap as usize)? {
+        let raw = match read_bounded_classified(path, cap as usize)? {
             ReadOutcome::Present(raw) => raw,
             ReadOutcome::Missing(error) => return Ok(ReadOutcome::Missing(error)),
         };

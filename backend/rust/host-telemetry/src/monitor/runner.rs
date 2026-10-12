@@ -304,6 +304,13 @@ fn native_host_output(
         files.relative_path(command.event_id, "inbox")?,
     );
     args.insert("--result-id".to_owned(), result_id.to_string());
+    let staged_result_path = format!(
+        "{}/results/.pending-{result_id}.json",
+        session.manifest.event_root
+    );
+    let staged_result = crate::ledger::paths::resolve_document(workspace, &staged_result_path)?;
+    let _staged_result = RemoveStagedResult(staged_result.clone());
+    args.insert("--result-output".to_owned(), staged_result_path.clone());
     args.insert(
         "--result-sequence".to_owned(),
         session.host_result_sequence().to_string(),
@@ -410,7 +417,7 @@ fn native_host_output(
         args.insert(key.to_owned(), input.name.clone());
     }
     crate::invocation::execute(verb, args)?;
-    let result_event = files.read(result_id, "results")?;
+    let result_event = files.read_staged_result(result_id)?;
     let EventBody::HostResult(result) = result_event.body else {
         return Err("native producer wrote a non-host result".to_owned());
     };
@@ -445,6 +452,15 @@ fn native_host_output(
         emitted_at: result_event.emitted_at,
     })
 }
+
+struct RemoveStagedResult(PathBuf);
+
+impl Drop for RemoveStagedResult {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
 fn publish_cancelled(
     session: &mut Session,
     files: &mut FileTransport,

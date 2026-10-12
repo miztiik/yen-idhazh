@@ -145,7 +145,15 @@ pub fn execute(verb: &str, args: BTreeMap<String, String>) -> Result<()> {
         &command,
         manifest.limits.max_command_bytes as usize,
     )?;
-    let result_path = format!("{}/results/{result_id}.json", manifest.event_root);
+    let result_path = args
+        .get("--result-output")
+        .cloned()
+        .unwrap_or_else(|| format!("{}/results/{result_id}.json", manifest.event_root));
+    require(
+        result_path == format!("{}/results/{result_id}.json", manifest.event_root)
+            || result_path == format!("{}/results/.pending-{result_id}.json", manifest.event_root),
+        "result output path is not bound to result ID",
+    )?;
     let plan_path = format!("{evidence}/{}.plan.json", command.event_id);
     let intent_path = format!("{evidence}/{}.intent.json", command.event_id);
     if paths::resolve_document(&workspace, &intent_path)?.exists() {
@@ -492,7 +500,7 @@ fn finish(
     })
     .map_err(|e| e.message.clone())?;
     completion.validate_plan(prepared.plan(), true)?;
-    immutable_document(workspace, result_path, &event, limits.max_document_bytes)?;
+    immutable_event(workspace, result_path, &event, limits.max_document_bytes)?;
     checkpoint("result");
     println!("{result_path}");
     Ok(())
@@ -520,6 +528,17 @@ fn immutable_document(
     let path: PathBuf = paths::resolve_document(workspace, relative)?;
     let mut bytes = serde_json::to_vec(value).map_err(|e| e.to_string())?;
     bytes.push(b'\n');
+    require(bytes.len() <= maximum, "event exceeds byte cap")?;
+    atomic::publish_immutable(&path, &bytes).map_err(|e| e.to_string())
+}
+fn immutable_event(
+    workspace: &Path,
+    relative: &str,
+    value: &HostEvent,
+    maximum: usize,
+) -> Result<()> {
+    let path = paths::resolve_document(workspace, relative)?;
+    let bytes = crate::canonical_json::row_line(value)?;
     require(bytes.len() <= maximum, "event exceeds byte cap")?;
     atomic::publish_immutable(&path, &bytes).map_err(|e| e.to_string())
 }

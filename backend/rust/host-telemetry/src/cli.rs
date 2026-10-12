@@ -69,6 +69,7 @@ pub fn run(mut arguments: impl Iterator<Item = String>) -> Result<()> {
         "--result-id",
         "--result-sequence",
         "--completion-id",
+        "--result-output",
         "--captured-at",
         "--affinity-input",
         "--hierarchy-input",
