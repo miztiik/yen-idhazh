@@ -437,13 +437,19 @@ impl FileTransport {
         } else {
             self.manifest.limits.max_result_bytes
         };
+        if path.exists() {
+            self.budget.reserve(cap as usize)?;
+            let existing = read_bounded(&path, cap as usize)?;
+            self.budget.used(existing.len());
+            require(existing == raw, "consumption differs from original event")?;
+            return Ok(());
+        }
         if !path.exists() {
             self.reserve_storage(1, raw.len() as u64, ordinary_reserve(&self.manifest.limits))?;
         }
         self.budget.reserve(cap as usize)?;
         let existing = read_bounded(&original, cap as usize)?;
         self.budget.used(existing.len());
-        require(existing == raw, "consumption differs from original event")?;
         crate::fs::atomic::publish_immutable(&path, &raw).map_err(|e| e.to_string())
     }
     pub fn remove_retired(&self, ids: &[Uuid]) -> Result<()> {
