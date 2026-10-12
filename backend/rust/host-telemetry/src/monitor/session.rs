@@ -324,15 +324,14 @@ impl Session {
                     "targetless host command produced target cells",
                 ));
             }
-            if command.kind == EventKind::HostClock {
-                if let Some((_, previous)) = &self.last_host
-                    && previous.cpu != output.result.cpu
-                {
-                    return Err(refuse(
-                        ProtocolFaultCode::State,
-                        "clock command remeasured CPU evidence",
-                    ));
-                }
+            if command.kind == EventKind::HostClock
+                && let Some((_, previous)) = &self.last_host
+                && previous.cpu != output.result.cpu
+            {
+                return Err(refuse(
+                    ProtocolFaultCode::State,
+                    "clock command remeasured CPU evidence",
+                ));
             }
             let (plan_id, completed_id, result_id) = self.host_reply_ids(command.event_id);
             let at = &command.emitted_at;
