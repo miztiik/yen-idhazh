@@ -211,7 +211,16 @@ def test_named_history_config_uses_shared_verification_and_computed_bounds() -> 
 
 
 @pytest.mark.parametrize(
-    "bound", ["max_roots", "max_periods", "max_manifest_bytes", "max_bundle_bytes"]
+    "bound",
+    [
+        "max_roots",
+        "max_periods",
+        "max_sources",
+        "max_history_file_rows",
+        "max_history_rows",
+        "max_manifest_bytes",
+        "max_bundle_bytes",
+    ],
 )
 @pytest.mark.parametrize("value", [0, -1, True, 1.5, "2", None])
 def test_invalid_history_bounds_protect_sources(
@@ -233,6 +242,46 @@ def test_invalid_history_bounds_protect_sources(
         )
     assert (workspace / source).read_bytes() == original
     assert not (workspace / document["isolated_root"]).exists()
+
+
+def test_history_source_bound_is_independent_of_single_output_file_bound(
+    workspace: Path,
+) -> None:
+    document = manifest_document()
+    for shard in range(65):
+        generated_raw(workspace, document, shard=shard)
+
+    config = limits_document()
+    assert config["verification_limits"]["max_files"] == 64
+    assert config["history_migration_limits"]["max_sources"] == 512
+    assert config["verification_limits"]["max_rows"] == 64
+    assert config["history_migration_limits"]["max_history_file_rows"] == 128
+    assert config["history_migration_limits"]["max_history_rows"] == 4096
+    report = dry_run(
+        HistoryManifest.model_validate(document),
+        workspace_root=workspace,
+        config_document=config,
+    )
+
+    assert report.inventory_complete
+    assert len(report.files) == 65
+
+
+def test_history_file_row_bound_is_independent_of_single_output_file_bound(
+    workspace: Path,
+) -> None:
+    document = manifest_document()
+    generated_compact(workspace, document, Format.PARQUET, compact_only=True)
+    config = limits_document()
+    config["verification_limits"]["max_rows"] = 1
+    report = dry_run(
+        HistoryManifest.model_validate(document),
+        workspace_root=workspace,
+        config_document=config,
+    )
+
+    assert report.inventory_complete
+    assert report.normalized_settled_keys == 2
 
 
 @pytest.mark.parametrize(
@@ -588,6 +637,42 @@ def generated_compact(
     return path
 
 
+def generated_empty_compact_parquet(workspace: Path, document: dict[str, Any]) -> str:
+    from idhazh.contracts.file_envelope import FileEnvelope
+    from idhazh.contracts.ledger_index import CompactIndex
+
+    path = generated_compact(workspace, document, Format.PARQUET, compact_only=True)
+    compact_path = workspace / path
+    metadata, _ = parquet.read(compact_path.read_bytes())
+    envelope = FileEnvelope.from_metadata(metadata)
+    empty_envelope = envelope.model_copy(
+        update={
+            "content_sha256": hashlib.sha256(b"").hexdigest(),
+            "built_from": 0,
+        }
+    )
+    empty_data = parquet.render(
+        host_output_columns(empty_envelope.row_schema_version),
+        [],
+        envelope=empty_envelope.as_metadata(),
+        compression=empty_envelope.compression,
+    )
+    compact_path.write_bytes(empty_data)
+    compact_source = next(source for source in document["sources"] if source["path"] == path)
+    compact_source.update(sha256=hashlib.sha256(empty_data).hexdigest(), bytes=len(empty_data))
+
+    index_source = next(source for source in document["sources"] if source["kind"] == "compact_index")
+    index_path = workspace / index_source["path"]
+    index = CompactIndex.model_validate(json.loads(index_path.read_bytes()))
+    index_document = index.model_dump()
+    index_document["entries"][0].update(rows=0, bytes=len(empty_data))
+    updated_index = CompactIndex.model_validate(index_document)
+    index_data = updated_index.to_json().encode("ascii")
+    index_path.write_bytes(index_data)
+    index_source.update(sha256=hashlib.sha256(index_data).hexdigest(), bytes=len(index_data))
+    return path
+
+
 @pytest.mark.parametrize("fmt", list(Format))
 @pytest.mark.parametrize("period", ["daily", "monthly", "yearly"])
 @pytest.mark.parametrize("compact_only", [True, False])
@@ -616,6 +701,195 @@ def test_compact_dependencies_and_index(
     )
     assert report.original_settled_keys == report.normalized_settled_keys == 2
     assert all((workspace / path).read_bytes() == data for path, data in before.items())
+
+
+def test_empty_packed_compact_parquet_is_preserved_and_consumable(workspace: Path) -> None:
+    from idhazh.contracts.file_envelope import FileEnvelope, Period
+    from idhazh.contracts.host_fingerprint import HostFingerprintRow
+    from idhazh.contracts.ledger_index import CompactIndex
+    from idhazh.contracts.ledger_name import LedgerName
+    from idhazh.ledger import paths
+    from idhazh.ledger.ledger_files import load_ledger_rows
+    from idhazh.ledger.persist import load_stored
+    from idhazh.ledger.stored_output import check_compact_period
+
+    document = manifest_document()
+    source_path = generated_empty_compact_parquet(workspace, document)
+    original_sources = {
+        source["path"]: (workspace / source["path"]).read_bytes() for source in document["sources"]
+    }
+
+    report = run(workspace, document)
+
+    compact = next(file for file in report.files if file.source.path == source_path)
+    index = next(file for file in report.files if file.source.kind == "compact_index")
+    assert compact.row_count == 0
+    assert compact.candidate_path is not None
+    assert index.candidate_path is not None
+    candidate_bytes = (workspace / report.bundle_root / compact.candidate_path).read_bytes()
+    candidate_index_bytes = (workspace / report.bundle_root / index.candidate_path).read_bytes()
+    candidate_metadata, candidate_rows = parquet.read(candidate_bytes)
+    candidate_envelope = FileEnvelope.from_metadata(candidate_metadata)
+    assert candidate_rows == []
+    assert candidate_envelope.content_sha256 == hashlib.sha256(b"").hexdigest()
+    assert candidate_envelope.built_from == 0
+    candidate_index = CompactIndex.model_validate(json.loads(candidate_index_bytes))
+    entry = candidate_index.entries[0]
+    assert entry.state == "packed"
+    assert entry.rows == 0
+    assert entry.bytes == len(candidate_bytes)
+
+    state_dir = workspace / "empty-consumer-state"
+    ledger = LedgerName.HOST_FINGERPRINT
+    covers = specification()["day"]
+    compact_path = paths.compact_path(state_dir, ledger, Period.DAILY, covers, fmt=Format.PARQUET)
+    index_path = paths.compact_index_path(state_dir, ledger, Period.DAILY)
+    compact_path.parent.mkdir(parents=True)
+    index_path.parent.mkdir(parents=True)
+    compact_path.write_bytes(candidate_bytes)
+    index_path.write_bytes(candidate_index_bytes)
+    assert check_compact_period(state_dir, ledger, Period.DAILY, covers)
+    assert load_stored([compact_path], model=HostFingerprintRow) == []
+    assert load_ledger_rows(state_dir, ledger, model=HostFingerprintRow) == []
+    assert all((workspace / path).read_bytes() == data for path, data in original_sources.items())
+
+
+def test_empty_raw_parquet_remains_refused(workspace: Path) -> None:
+    from idhazh.contracts.file_envelope import FileEnvelope
+
+    document = manifest_document()
+    path, _ = generated_raw(workspace, document, fmt=Format.PARQUET)
+    raw_path = workspace / path
+    metadata, _ = parquet.read(raw_path.read_bytes())
+    envelope = FileEnvelope.from_metadata(metadata).model_copy(
+        update={"content_sha256": hashlib.sha256(b"").hexdigest()}
+    )
+    empty_data = parquet.render(
+        host_output_columns(envelope.row_schema_version),
+        [],
+        envelope=envelope.as_metadata(),
+        compression=envelope.compression,
+    )
+    raw_path.write_bytes(empty_data)
+    source = next(item for item in document["sources"] if item["path"] == path)
+    source.update(sha256=hashlib.sha256(empty_data).hexdigest(), bytes=len(empty_data))
+
+    with pytest.raises(ValueError, match=r"one row|row count|cardinality"):
+        run(workspace, document)
+
+    assert raw_path.read_bytes() == empty_data
+
+
+def test_generated_candidate_replays_through_stored_reader_and_compact_index(
+    workspace: Path,
+) -> None:
+    from idhazh.contracts.file_envelope import Period
+    from idhazh.contracts.host_fingerprint import HostFingerprintRow
+    from idhazh.contracts.ledger_name import LedgerName
+    from idhazh.ledger import paths
+    from idhazh.ledger.ledger_files import load_ledger_rows
+    from idhazh.ledger.persist import load_stored
+    from idhazh.ledger.stored_output import check_compact_period
+
+    document = manifest_document()
+    source_path = generated_compact(
+        workspace, document, Format.PARQUET, period="daily", compact_only=True
+    )
+    original_sources = {
+        source["path"]: (workspace / source["path"]).read_bytes() for source in document["sources"]
+    }
+
+    report = run(workspace, document)
+
+    assert report.inventory_complete
+    assert report.consumer_mode == "candidate_reader"
+    assert report.historical_readiness == "blocked"
+    assert "actual_migrated_consumers_rerun_required" in report.blocked_by
+    compact = next(file for file in report.files if file.source.path == source_path)
+    index = next(file for file in report.files if file.source.kind == "compact_index")
+    assert compact.candidate_path is not None
+    assert compact.new_physical_sha256 is not None
+    assert index.candidate_path is not None
+    assert index.new_physical_sha256 is not None
+
+    candidate_bytes = (workspace / report.bundle_root / compact.candidate_path).read_bytes()
+    candidate_index_bytes = (workspace / report.bundle_root / index.candidate_path).read_bytes()
+    assert len(candidate_bytes) == compact.candidate_bytes
+    assert hashlib.sha256(candidate_bytes).hexdigest() == compact.new_physical_sha256
+    assert hashlib.sha256(candidate_index_bytes).hexdigest() == index.new_physical_sha256
+    assert candidate_bytes != original_sources[source_path]
+
+    state_dir = workspace / "consumer-state"
+    ledger = LedgerName.HOST_FINGERPRINT
+    period = Period.DAILY
+    covers = specification()["day"]
+    compact_path = paths.compact_path(state_dir, ledger, period, covers, fmt=Format.PARQUET)
+    index_path = paths.compact_index_path(state_dir, ledger, period)
+    compact_path.parent.mkdir(parents=True)
+    index_path.parent.mkdir(parents=True)
+    compact_path.write_bytes(candidate_bytes)
+    index_path.write_bytes(candidate_index_bytes)
+    assert compact_path.read_bytes() == candidate_bytes
+    assert index_path.read_bytes() == candidate_index_bytes
+
+    assert check_compact_period(state_dir, ledger, period, covers)
+    stored = load_stored([compact_path], model=HostFingerprintRow)
+    run_id = specification()["run_id"]
+    expected = [
+        (
+            covers,
+            run_id,
+            "work",
+            shard,
+            1,
+            "Recorded CPU",
+            2300.0,
+            None,
+            None,
+            None,
+        )
+        for shard in (0, 1)
+    ]
+
+    def stored_values(rows: list[Any]) -> list[tuple[Any, ...]]:
+        return sorted(
+            (
+                row.identity.covers,
+                row.identity.run_id,
+                row.identity.job.value,
+                row.identity.shard,
+                row.row.fingerprint_version,
+                row.row.cpu_model,
+                row.row.cpu_observed_mhz,
+                row.row.cpu_reported_max_mhz,
+                row.row.cpu_physical_cores,
+                row.row.cpu_logical_processors,
+            )
+            for row in rows
+        )
+
+    assert stored_values(stored) == expected
+
+    indexed_rows = load_ledger_rows(state_dir, ledger, model=HostFingerprintRow)
+    assert (
+        sorted(
+            (
+                row.date,
+                row.run_id,
+                row.job.value,
+                row.shard,
+                row.fingerprint_version,
+                row.cpu_model,
+                row.cpu_observed_mhz,
+                row.cpu_reported_max_mhz,
+                row.cpu_physical_cores,
+                row.cpu_logical_processors,
+            )
+            for row in indexed_rows
+        )
+        == expected
+    )
+    assert all((workspace / path).read_bytes() == data for path, data in original_sources.items())
 
 
 def test_lost_and_empty_index_periods_are_not_recovered(workspace: Path) -> None:
@@ -672,12 +946,13 @@ def test_set_aside_is_an_explicit_unresolved_source(workspace: Path) -> None:
 @pytest.mark.parametrize(
     "bound",
     [
-        "max_files",
         "max_file_bytes",
         "max_total_bytes",
-        "max_rows",
         "max_periods",
         "max_roots",
+        "max_sources",
+        "max_history_file_rows",
+        "max_history_rows",
         "max_manifest_bytes",
         "max_bundle_bytes",
     ],

@@ -92,8 +92,11 @@ function item(day: string, cpu = 'machine-a'): Row {
 
 function host(day: string): Row {
 	return {
-		date: day, run_id: `${day}-10`, job: 'work', shard: 0, fingerprint: '0123456789abcdef',
-		cpu_model: 'machine-a', cores: 4, model_load_ms: 2000, job_seconds: 30, server_prompt_tokens: 200, server_prompt_seconds: 1
+		version: '2026-10-10', date: day, run_id: `${day}-10`, job: 'work', shard: 0,
+		fingerprint: '0123456789abcdef', fingerprint_version: 2,
+		cpu_model: 'machine-a', cpu_logical_processors: 8, model_load_ms: 2000,
+		job_seconds: 30, server_prompt_tokens: 200, server_prompt_seconds: 1,
+		cores: null, threads: null, mhz_max: null, mhz_at_probe: null
 	};
 }
 
@@ -224,8 +227,10 @@ test('the real three-ledger door anchors at the oldest end and asks each ledger 
 	}]);
 	expect(machines.rows).toEqual(['2026-09-24', '2026-09-25'].map(host));
 	expect(platformMixQuery.columns).toEqual([
-		'date', 'run_id', 'job', 'shard', 'fingerprint', 'cpu_model', 'cores', 'model_load_ms',
-		'job_seconds', 'server_prompt_tokens', 'server_prompt_seconds'
+		'version', 'date', 'run_id', 'job', 'shard', 'fingerprint', 'fingerprint_version',
+		'cpu_model', 'cpu_logical_processors', 'model_load_ms',
+		'job_seconds', 'server_prompt_tokens', 'server_prompt_seconds',
+		'cores', 'threads', 'mhz_max', 'mhz_at_probe'
 	]);
 	expect(platformMixQuery.columns).toEqual(expect.arrayContaining([...FLEET_COLUMNS]));
 });

@@ -80,21 +80,22 @@ export interface MachineProcessors {
 	date: string;
 	run_id: string;
 	job?: string;
-	shard: number;
+	shard: number | string | null;
 	/** Logical processors, which is what the kernel's busy share is taken over.
 	 * Null where the record reached the machine but named no count. */
-	threads: number | null;
+	cpu_logical_processors: number | null;
 }
 
 function cell(value: string | undefined): number | null {
-	if (value === undefined || value === '') return null;
+	if (value === undefined || value.trim() === '') return null;
 	const parsed = Number(value);
 	return Number.isFinite(parsed) ? parsed : null;
 }
 
 /** The run and shard an item ran on, which is what a machine record is keyed by. */
-function shardKey(date: string, runId: string, job: string | undefined, shard: number | string): string | null {
-	if (shard === '' || !Number.isSafeInteger(Number(shard)) || Number(shard) < 0) return null;
+function shardKey(date: string, runId: string, job: string | undefined, shard: number | string | null): string | null {
+	if (shard === null || (typeof shard === 'string' && shard.trim() === '') ||
+		!Number.isSafeInteger(Number(shard)) || Number(shard) < 0) return null;
 	// Historical machine_job is absent only for work. Keep all four host-key cells.
 	return JSON.stringify([date, runId, job || 'work', Number(shard)]);
 }
@@ -125,12 +126,13 @@ function figureOf(values: readonly number[], outOf: number): CostFigure {
 function processorsByShard(hosts: readonly MachineProcessors[]): Map<string, number> {
 	const named = new Map<string, Set<number>>();
 	for (const host of hosts) {
-		if (host.threads === null || host.threads <= 0) continue;
+		if (host.cpu_logical_processors === null || !Number.isSafeInteger(host.cpu_logical_processors) ||
+			host.cpu_logical_processors <= 0) continue;
 		const key = shardKey(host.date, host.run_id, host.job, host.shard);
 		if (key === null) continue;
 		const seen = named.get(key);
-		if (seen === undefined) named.set(key, new Set([host.threads]));
-		else seen.add(host.threads);
+		if (seen === undefined) named.set(key, new Set([host.cpu_logical_processors]));
+		else seen.add(host.cpu_logical_processors);
 	}
 	const found = new Map<string, number>();
 	for (const [key, counts] of named) {

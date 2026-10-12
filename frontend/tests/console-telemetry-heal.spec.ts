@@ -1,55 +1,48 @@
-import { expect, test, type Page } from './support/browser';
-import { telemetryCsv } from '../src/lib/charts/series';
-import { telemetryRow } from './support/telemetry-row';
+/** The native door must retry a failed packed file on a later widen. */
+import { expect, test } from './support/door-page';
+import { hydrated, setWindow } from './support/console-window/controls';
+import { THROUGH, FIRST, dayBefore, timedRow, packedPipelines, servePipelines, settled } from './support/pipelines-ledgers';
 
-/** A failed console month must remain retryable, independently of the day loader. */
-test('a failed telemetry month heals when the reader widens the window again', async ({ page }) => {
-	const opened = new Set<string>();
-	const asked: string[] = [];
-	let opening = true;
-	let refusing = true;
-	let windowStart = '';
-	await page.route('**/telemetry/*.csv', (route) => {
-		const match = /\/telemetry\/(\d{4}-\d{2})\.csv$/.exec(new URL(route.request().url()).pathname);
-		if (match === null) throw new Error(`Not a telemetry month: ${route.request().url()}`);
-		const month = match[1];
-		asked.push(month);
-		if (opening) opened.add(month);
-		if (!opened.has(month) && refusing) return route.abort();
-		const day = `${month}-01` > windowStart ? `${month}-01` : windowStart;
-		const rows = opened.has(month) ? [] : [
-			telemetryRow({ date: day, run_id: `${day}-1`, item_id: `healed-${month}` })
-		];
-		return route.fulfill({ status: 200, contentType: 'text/csv', body: telemetryCsv(rows) });
-	});
-
-	await page.goto('/console/');
-	await expect(page.locator('[data-window-preset="30"] input')).toBeEnabled();
-	await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-busy', 'false');
-	expect(opened.size, 'the page must ask for a telemetry month on opening').toBeGreaterThan(0);
-	opening = false;
-
-	await setWindow(page, 90);
-	const refused = asked.filter((month) => !opened.has(month));
-	expect(refused.length, 'widening must reach a month beyond the opening window').toBeGreaterThan(0);
-	await expect(page.locator('[data-windowed="telemetry-viewport"]')).toContainText('0 rows in view');
-	const start = await page.locator('[data-viewport-control]').getAttribute('data-window-start');
-	expect(start).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-	if (start === null) throw new Error('The viewport must expose its window start');
-	windowStart = start;
-
-	refusing = false;
-	const before = asked.length;
-	await setWindow(page, 1);
-	await setWindow(page, 90);
-	expect(asked.slice(before), 'only failed months should be fetched again').toEqual(refused);
-	await expect(page.locator('[data-windowed="telemetry-viewport"]')).toContainText(
-		`${refused.length} ${refused.length === 1 ? 'row' : 'rows'} in view`
-	);
+let root: string;
+const older = dayBefore(THROUGH, 60);
+test.beforeAll(async () => {
+	const count = Math.round((Date.parse(`${THROUGH}T00:00:00Z`) - Date.parse(`${FIRST}T00:00:00Z`)) / 86400000);
+	root = await packedPipelines('heal', Array.from({ length: count + 1 }, (_, at) => {
+		const covers = dayBefore(THROUGH, count - at);
+		return { covers, rows: covers === older ?
+			[timedRow(older), timedRow(older, { item_id: 'second' })] :
+			covers === THROUGH ? [timedRow(THROUGH)] : [] };
+	}));
 });
 
-async function setWindow(page: Page, days: number): Promise<void> {
-	await page.locator(`[data-window-preset="${days}"]`).click();
-	await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-days', String(days));
-	await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-busy', 'false');
-}
+test('a failed packed file load heals on a later widen', async ({ page }) => {
+	await servePipelines(page, root);
+	let refusing = true;
+	let asked = 0;
+	await page.route((url) => url.pathname.endsWith(`/state/compact/item-health/daily/${older.replaceAll('-', '/')}.parquet`), (route) => {
+		asked += 1;
+		return refusing ? route.abort('failed') : route.fallback();
+	});
+	await page.goto('/console/');
+	await hydrated(page);
+	await settled(page);
+	await expect(page.locator('[data-console-panels="pipelines"]')).toHaveAttribute('data-route-state', 'ok');
+	expect(asked).toBe(0);
+	await setWindow(page, 90);
+	await expect.poll(() => asked).toBeGreaterThan(0);
+	await settled(page);
+	expect(asked).toBeGreaterThan(0);
+	await expect(page.locator('[data-console-panels="pipelines"]')).toHaveAttribute('data-route-state', 'unreachable');
+	await expect(page.locator('[data-console-retry]')).toBeVisible();
+	refusing = false;
+	const before = asked;
+	await setWindow(page, 1);
+	await expect(page.locator('[data-console-panels="pipelines"]')).toHaveAttribute('data-route-state', 'ok');
+	await settled(page);
+	await setWindow(page, 90);
+	await expect.poll(() => asked).toBe(before + 1);
+	await settled(page);
+	expect(asked).toBe(before + 1);
+	await expect(page.locator('[data-duration-cohort]')).toContainText('3 of 3 recorded item clocks');
+	await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-days', '90');
+});

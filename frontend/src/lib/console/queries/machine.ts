@@ -33,7 +33,15 @@ export const diskReadsQuery = {
 
 export const machineCardsQuery = {
 	name: 'machineCardsQuery', ledger: 'host-fingerprint',
-	columns: ['date', 'run_id', 'job', 'shard', 'fingerprint', 'cpu_model', 'cpu_family', 'cpu_model_number', 'cpu_stepping', 'microcode', 'flags', 'l3_cache_bytes', 'boot_seconds', 'mhz_at_probe', 'memcpy_gib_s', 'memcpy_probe_mib', 'vm_size', 'vm_location', 'vm_zone', 'vm_fault_domain'],
+	columns: [
+		'version', 'date', 'run_id', 'job', 'shard', 'fingerprint', 'fingerprint_version',
+		'cpu_model', 'cpu_vendor', 'cpu_family', 'cpu_model_number', 'cpu_stepping', 'microcode',
+		'cpu_physical_cores', 'cpu_logical_processors', 'cpu_allowed_processors',
+		'cpu_quota_cores', 'cpu_quota_state', 'cpu_target_measured_at', 'l3_cache_bytes',
+		'cpu_observed_mhz', 'cpu_reported_max_mhz', 'flags', 'boot_seconds', 'memcpy_gib_s',
+		'memcpy_probe_mib', 'vm_size', 'vm_location', 'vm_zone', 'vm_fault_domain',
+		'cores', 'threads', 'mhz_max', 'mhz_at_probe'
+	],
 	span: 'newest-day'
 } as const satisfies PanelQuery;
 
@@ -51,7 +59,12 @@ export const slowerMachinesQuery = {
 
 export const platformMixQuery = {
 	name: 'platformMixQuery', ledger: 'host-fingerprint',
-	columns: ['date', 'run_id', 'job', 'shard', 'fingerprint', 'cpu_model', 'cores', 'model_load_ms', 'job_seconds', 'server_prompt_tokens', 'server_prompt_seconds'],
+	columns: [
+		'version', 'date', 'run_id', 'job', 'shard', 'fingerprint', 'fingerprint_version',
+		'cpu_model', 'cpu_logical_processors', 'model_load_ms', 'job_seconds',
+		'server_prompt_tokens', 'server_prompt_seconds',
+		'cores', 'threads', 'mhz_max', 'mhz_at_probe'
+	],
 	span: 'widest'
 } as const satisfies PanelQuery;
 
@@ -93,7 +106,10 @@ export const articleCostQuery = {
 
 export const articleCostHostsQuery = {
 	name: 'articleCostHostsQuery', ledger: 'host-fingerprint',
-	columns: ['date', 'run_id', 'job', 'shard', 'threads'],
+	columns: [
+		'version', 'date', 'run_id', 'job', 'shard', 'cpu_logical_processors',
+		'cores', 'threads', 'mhz_max', 'mhz_at_probe'
+	],
 	span: 'window'
 } as const satisfies PanelQuery;
 

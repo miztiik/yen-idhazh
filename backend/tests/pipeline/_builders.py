@@ -35,6 +35,7 @@ from idhazh.fetch import FetchResult
 from idhazh.stages import common
 from idhazh.stages.assemble import stage_assemble
 from idhazh.stages.work import stage_work
+from idhazh.telemetry.host_event_client import HostEventClient
 
 FULL_TEXT = (
     "Example Lab released a smaller model on Friday, claiming a 34 percent lower cost per "
@@ -42,6 +43,7 @@ FULL_TEXT = (
     "processors. The weights are published under a permissive licence. The company did not "
     "say when the model being replaced will be retired."
 )
+
 
 def article() -> Article:
     return Article.from_json(read_text(CONTRACT_FIXTURES_DIR / "article" / "ok.json"))
@@ -53,9 +55,7 @@ def summary() -> Summary:
 
 def plan(*, item_count: int | None = None) -> RunPlan:
     """The recorded day, optionally limited to the items a test needs."""
-    recorded = RunPlan.from_json(
-        read_text(CONTRACT_FIXTURES_DIR / "run-plan" / "one-day.json")
-    )
+    recorded = RunPlan.from_json(read_text(CONTRACT_FIXTURES_DIR / "run-plan" / "one-day.json"))
     if item_count is None:
         return recorded
     assert 0 < item_count <= len(recorded.items), "the fixture must supply every requested item"
@@ -92,7 +92,9 @@ REFUSED_COMPLETION: Final = FIXTURES_DIR / "completions" / "errors" / "server-un
 #: at all. Served with `drawable_article_fetch`.
 DRAWS_LABEL: Final = FIXTURES_DIR / "completions" / "label" / "wind-labelled.json"
 
-DRAWS_SUMMARIZE_AND_PLAN: Final = FIXTURES_DIR / "completions" / "summarize-and-plan" / "wind-summary-and-plan.json"
+DRAWS_SUMMARIZE_AND_PLAN: Final = (
+    FIXTURES_DIR / "completions" / "summarize-and-plan" / "wind-summary-and-plan.json"
+)
 
 
 @contextmanager
@@ -182,6 +184,7 @@ class SilentCompletionEndpoint:
         self._server.server_close()
         self._thread.join(timeout=5.0)
 
+
 def captured_article_fetch(_url: str) -> FetchResult:
     page = read_text(FIXTURES_DIR / "pages" / "article.html")
     extra = (
@@ -262,9 +265,7 @@ def isolate_ledgers(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     if not (tmp_path / "public" / "publication.json").exists():
         initialize_inventory(
             tmp_path / "public",
-            seed=PublicationInventory(
-                version=PublicationInventory.schema_version(), dates=[]
-            ),
+            seed=PublicationInventory(version=PublicationInventory.schema_version(), dates=[]),
         )
 
 
@@ -321,6 +322,7 @@ def _work_stage(
     fetcher: Callable[[str], FetchResult] = captured_article_fetch,
     run_plan: RunPlan | None = None,
     hold_s: float = 0.0,
+    host_events: HostEventClient | None = None,
 ) -> tuple[RunPlan, Path, RecordedEndpoint]:
     """One real work stage over captured pages and recorded replies.
 
@@ -346,6 +348,7 @@ def _work_stage(
             scorer=None,
             fetcher=fetcher,
             model_endpoint=server.endpoint,
+            host_events=host_events,
         )
     return run_plan, tmp_path / "run" / run_plan.date / "items", server
 
@@ -362,7 +365,5 @@ def worked(
     The third value is what tells two calls an item from one without reading a
     payload either could produce.
     """
-    run_plan, items, server = _work_stage(
-        tmp_path, monkeypatch, replies=replies, fetcher=fetcher
-    )
+    run_plan, items, server = _work_stage(tmp_path, monkeypatch, replies=replies, fetcher=fetcher)
     return run_plan, items, server.served

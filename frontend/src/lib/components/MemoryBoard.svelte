@@ -22,7 +22,7 @@
 	 * cannot add two brackets that visibly overlap.
 	 *
 	 * **Machine load is the second series and not a second panel.** A one-minute
-	 * load of 5.49 on four cores is a QUEUE, and processor busy runs near 100 on
+	 * load of 5.49 on four online logical processors indicates pressure, while busy runs near 100 on
 	 * every row and carries no signal on its own. Busy and queued are different
 	 * facts and neither implies the other, so both are drawn, beside the memory
 	 * they explain.
@@ -179,7 +179,7 @@
 	data-memory-kernel-begins={board.kernelBeginsOn ?? ''}
 	data-memory-read-from={board.readFrom ?? ''}
 	data-memory-load-high={board.loadHigh ?? ''}
-	data-memory-cores={board.cores ?? ''}
+	data-memory-logical-processors={board.logicalProcessors ?? ''}
 	data-memory-busy-low={board.busySpan.median ?? ''}
 	data-memory-busy-high={board.busySpan.max ?? ''}
 	data-panel-question="what is broken"
@@ -425,9 +425,11 @@
 		{/if}
 
 		<p class="track-name" id="load-name">
-			The queue when each item ended{board.cores === null
+			The one-minute load when each item ended{board.logicalProcessors === null
 				? ''
-				: `, against ${board.cores} ${board.cores === 1 ? 'core' : 'cores'}`}
+				: `, against ${board.logicalProcessors} online logical ${
+						board.logicalProcessors === 1 ? 'processor' : 'processors'
+					}`}
 		</p>
 		{#if board.loadFrom === 0}
 			<p class="note absent" data-memory-track-empty="load">
@@ -453,21 +455,21 @@
 			</div>
 			<dl class="readout">
 				<div data-memory-figure="load">
-					<dt>The longest queue</dt>
+					<dt>The highest one-minute load</dt>
 					<dd>
 						{#if board.loadHigh === null}
 							<span class="absent">No item of this run recorded the machine's load.</span>
 						{:else}
 							{board.loadHigh.toFixed(2)}
 							<span class="unit">
-								{board.cores === null
-									? "one-minute load, and this run did not record the host's core count - so whether that is a queue cannot be said"
-									: `one-minute load on ${board.cores} ${
-											board.cores === 1 ? 'core' : 'cores'
+								{board.logicalProcessors === null
+									? "one-minute load, and this run did not record the host's online logical processor count - so pressure cannot be qualified"
+									: `one-minute load on ${board.logicalProcessors} online logical ${
+											board.logicalProcessors === 1 ? 'processor' : 'processors'
 										}${
-											board.loadHigh > board.cores
-												? ' - past the cores, so work was waiting for a processor'
-												: ' - inside the cores, so nothing was waiting'
+											board.loadHigh > board.logicalProcessors
+												? ' - above that count, suggesting runnable or uninterruptible host pressure'
+												: ' - at or below that count; load alone does not prove whether work waited'
 										}`}. {busyText(board.busySpan)}.
 							</span>
 						{/if}

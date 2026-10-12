@@ -56,9 +56,11 @@ const MIB = 1024 * 1024;
 
 /** Only the public cells a machine card draws; full server rows also satisfy it. */
 export type CardHost = Pick<HostFingerprint,
-	'date' | 'run_id' | 'shard' | 'fingerprint' | 'cpu_model' |
+	'version' | 'date' | 'run_id' | 'shard' | 'fingerprint' | 'fingerprint_version' | 'cpu_model' | 'cpu_vendor' |
 	'cpu_family' | 'cpu_model_number' | 'cpu_stepping' | 'microcode' | 'flags' |
-	'l3_cache_bytes' | 'boot_seconds' | 'mhz_at_probe' | 'memcpy_gib_s' |
+	'cpu_physical_cores' | 'cpu_logical_processors' | 'cpu_allowed_processors' |
+	'cpu_quota_cores' | 'cpu_quota_state' | 'cpu_target_measured_at' |
+	'l3_cache_bytes' | 'boot_seconds' | 'cpu_observed_mhz' | 'cpu_reported_max_mhz' | 'memcpy_gib_s' |
 	'memcpy_probe_mib' | 'vm_size' | 'vm_location' | 'vm_zone' | 'vm_fault_domain'
 > & { readonly job?: string } & Partial<Pick<HostFingerprint, 'server_prompt_tokens' | 'server_prompt_seconds'>>;
 
@@ -129,11 +131,14 @@ export interface MachineCard {
 	 * explanations for a run that read its weights back off disk - so a card
 	 * without it leaves the fault strip with one cause instead of two. */
 	bootSeconds: number | null;
-	/** The mean clock across processors when the probe ran, in MHz. Idle rather
-	 * than under load: the probe runs before the job's heaviest step. Printed
-	 * alone, because the ceiling column the host would be measured against is
-	 * empty on every row anybody has committed. */
-	mhzAtProbe: number | null;
+	physicalCores: number | null;
+	logicalProcessors: number | null;
+	allowedProcessors: number | null;
+	quotaCores: number | null;
+	quotaState: string | null;
+	targetMeasuredAt: string | null;
+	observedMhz: number | null;
+	reportedMaxMhz: number | null;
 	/** True where the probe buffer cleared the cache by the configured margin, so
 	 * the copy rate is a memory reading somebody can compare. */
 	bufferClearedCache: boolean;
@@ -313,23 +318,35 @@ export function machineCards(
 	);
 
 	const seen: MachineSeen[] = [
-		...forRun.map((row) => ({ fingerprint: row.fingerprint, cpuModel: row.cpu_model })),
+		...forRun.map((row) => ({
+			fingerprint: row.fingerprint,
+			fingerprintVersion: row.fingerprint_version,
+			cpuModel: row.cpu_model
+		})),
 		...(run?.reported ?? [])
 			.filter((shard) => !covered.has(String(shard.shard)))
-			.map((shard) => ({ fingerprint: null, cpuModel: shard.cpuModel }))
+			.map((shard) => ({ fingerprint: null, fingerprintVersion: null, cpuModel: shard.cpuModel }))
 	];
 	const resolve = options.keys ?? machineKeys(seen);
 
 	const placements: Placement[] = [];
 	for (const row of forRun) {
 		placements.push({
-			...resolve({ fingerprint: row.fingerprint, cpuModel: row.cpu_model }),
+			...resolve({
+				fingerprint: row.fingerprint,
+				fingerprintVersion: row.fingerprint_version,
+				cpuModel: row.cpu_model
+			}),
 			row
 		});
 	}
 	for (const shard of run?.reported ?? []) {
 		if (covered.has(String(shard.shard))) continue;
-		const key = resolve({ fingerprint: null, cpuModel: shard.cpuModel });
+		const key = resolve({
+			fingerprint: null,
+			fingerprintVersion: null,
+			cpuModel: shard.cpuModel
+		});
 		if (key.name === '') continue;
 		placements.push({ ...key, row: null });
 	}
@@ -354,7 +371,14 @@ export function machineCards(
 		options.ramp ??
 		machineRamp(
 			placements.map((placement) => ({
-				machine: { key: placement.key, name: placement.name },
+				machine: {
+					key: placement.key,
+					name: placement.name,
+					fingerprintVersion:
+						placement.row?.fingerprint_version === 1 || placement.row?.fingerprint_version === 2
+							? placement.row.fingerprint_version
+							: null
+				},
 				rate:
 					placement.row === null
 						? null
@@ -375,10 +399,8 @@ export function machineCards(
 	for (const identity of ramp.rows) {
 		const drawn = byIdentity.get(identity.key) ?? [];
 		if (drawn.length === 0) continue;
-		// The richest row wins, and a row is richer when it read the instruction
-		// set. Every row for one fingerprint reports the same cells by
-		// construction - the digest is taken over exactly those cells - so this
-		// only ever chooses between a recorded row and an absent one.
+		// Keep one source row's snapshot intact. A class digest does not prove
+		// equal online counts, target constraints, capture times or frequency.
 		const row = drawn.find((placement) => placement.row !== null)?.row ?? null;
 		const l3 = row?.l3_cache_bytes ?? null;
 		const buffer = row?.memcpy_probe_mib ?? null;
@@ -392,7 +414,14 @@ export function machineCards(
 			memcpyGibPerSecond: row?.memcpy_gib_s ?? null,
 			memcpyProbeMib: buffer,
 			bootSeconds: row?.boot_seconds ?? null,
-			mhzAtProbe: row?.mhz_at_probe ?? null,
+			physicalCores: row?.cpu_physical_cores ?? null,
+			logicalProcessors: row?.cpu_logical_processors ?? null,
+			allowedProcessors: row?.cpu_allowed_processors ?? null,
+			quotaCores: row?.cpu_quota_cores ?? null,
+			quotaState: row?.cpu_quota_state ?? null,
+			targetMeasuredAt: row?.cpu_target_measured_at ?? null,
+			observedMhz: row?.cpu_observed_mhz ?? null,
+			reportedMaxMhz: row?.cpu_reported_max_mhz ?? null,
 			// A machine that reported no cache cannot be graded either way, and an
 			// ungradeable reading is withheld rather than drawn on somebody's track.
 			bufferClearedCache:
@@ -546,6 +575,16 @@ export function uptimeSentence(card: MachineCard): string {
  * assume it is the decode clock.
  */
 export function clockSentence(card: MachineCard): string {
-	if (card.mhzAtProbe === null) return 'Clock speed was not recorded on this job.';
-	return `${Math.round(card.mhzAtProbe)} MHz when the probe ran, before the job's heaviest step.`;
+	if (card.observedMhz === null && card.reportedMaxMhz === null) {
+		return 'Observed and reported maximum frequencies are unknown.';
+	}
+	const observed =
+		card.observedMhz === null
+			? 'Observed sample unknown'
+			: `Observed sample average ${Math.round(card.observedMhz)} MHz`;
+	const maximum =
+		card.reportedMaxMhz === null
+			? 'reported hardware maximum unknown'
+			: `reported hardware maximum ${Math.round(card.reportedMaxMhz)} MHz`;
+	return `${observed}; ${maximum}. The sample is not a sustained rate.`;
 }

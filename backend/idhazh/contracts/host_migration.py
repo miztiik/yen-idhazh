@@ -21,8 +21,8 @@ from idhazh.contracts.base import (
     Timestamp,
     compact_json,
 )
-from idhazh.contracts.file_envelope import Period, RowIdentity
-from idhazh.contracts.host_output import CandidateFileEnvelope, HostWriterIdentity
+from idhazh.contracts.file_envelope import FileEnvelope, Period, RowIdentity
+from idhazh.contracts.host_output import HostWriterIdentity
 from idhazh.contracts.publication_receipt import PublicationReceipt
 
 MIGRATION_VERSION = "2026-10-11"
@@ -231,8 +231,8 @@ class HistoryFileReport(HistoryModel):
     new_physical_sha256: Sha256 | None
     old_content_sha256: Sha256 | None = None
     new_content_sha256: Sha256 | None = None
-    old_envelope: CandidateFileEnvelope | None = None
-    new_envelope: CandidateFileEnvelope | None = None
+    old_envelope: FileEnvelope | None = None
+    new_envelope: FileEnvelope | None = None
     container: Literal["json", "parquet", "csv", "document", "unknown"]
     original_bytes: Nonnegative
     candidate_bytes: Nonnegative

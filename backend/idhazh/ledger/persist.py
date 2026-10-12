@@ -43,7 +43,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from functools import cache
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, Literal
 
 from pydantic import ValidationError
 
@@ -210,12 +210,13 @@ def _envelope(
     """
     unit = _unit(ledger, covers, identity)
     name = filenames.file_id(unit=unit, attempt=identity.attempt, written_at_ms=written_at_ms)
+    writer: Literal["idhazh.ledger.parquet", "idhazh.ledger.json_lines"]
     if fmt is Format.PARQUET:
         from idhazh.ledger import parquet
 
-        writer, engine = parquet.__name__, parquet.engine_version()
+        writer, engine = "idhazh.ledger.parquet", parquet.engine_version()
     else:
-        writer, engine = json_lines.__name__, json_lines.engine_version()
+        writer, engine = "idhazh.ledger.json_lines", json_lines.engine_version()
     envelope = FileEnvelope(
         version=FileEnvelope.schema_version(),
         row_schema_version=model.schema_version(),
@@ -613,8 +614,8 @@ def render_renamed[C: Contract](
     back is refused rather than rewritten. So is a column `model` does not
     declare, because the container would drop it in silence.
     """
+    envelope = FileEnvelope.from_metadata(metadata)
     renamed = {**metadata, b"ledger": ledger.value.encode("utf-8")}
-    envelope = FileEnvelope.from_metadata(renamed)
     where = f"{ledger.value} {envelope.covers}"
     if envelope.row_schema_version > model.schema_version():
         raise ValueError(
@@ -639,24 +640,29 @@ def render_renamed[C: Contract](
             raise ValueError(f"{where}: a row this build refuses: {refusal}") from refusal
     digest = hashlib.sha256(json_lines.rows_bytes(cells)).hexdigest()
 
-    def restamp(engine: str) -> dict[bytes, bytes]:
-        update = {b"content_sha256": digest.encode("ascii"), b"writer_version": engine.encode()}
-        FileEnvelope.from_metadata(renamed | update)
+    def restamp(engine: str, writer: str, fmt: Format) -> dict[bytes, bytes]:
+        update = {
+            b"content_sha256": digest.encode("ascii"),
+            b"writer": writer.encode(),
+            b"writer_version": engine.encode(),
+        }
+        FileEnvelope.from_metadata(renamed | update).validate_container(fmt)
         return renamed | update
 
-    if envelope.writer == json_lines.__name__:
+    if envelope.writer.endswith(".json_lines"):
         fmt = Format.JSON
-        data = json_lines.render(cells, envelope=restamp(json_lines.engine_version()))
+        data = json_lines.render(
+            cells,
+            envelope=restamp(json_lines.engine_version(), json_lines.__name__, fmt),
+        )
     else:
         from idhazh.ledger import parquet
 
-        if envelope.writer != parquet.__name__:
-            raise ValueError(f"{where}: {envelope.writer} wrote it, and no container here reads it")
         fmt = Format.PARQUET
         data = parquet.render(
             [known[name] for name in held],
             cells,
-            envelope=restamp(parquet.engine_version()),
+            envelope=restamp(parquet.engine_version(), parquet.__name__, fmt),
             compression=envelope.compression,
         )
     if envelope.period is None:
@@ -683,17 +689,13 @@ def _opened(path: Path) -> tuple[FileEnvelope, list[dict[str, Any]]]:
         from idhazh.ledger import parquet
 
         metadata, stored = parquet.read(data)
-        reader = parquet.__name__
+        container = Format.PARQUET
     elif data.startswith(json_lines.MAGIC):
         metadata, stored = json_lines.read(data)
-        reader = json_lines.__name__
+        container = Format.JSON
     else:
         raise ValueError(f"{path.name} is neither a parquet nor a JSON-lines ledger file")
-    envelope = FileEnvelope.from_metadata(metadata)
-    if envelope.writer != reader:
-        raise ValueError(
-            f"{path.name} says {envelope.writer} wrote it, and its bytes are {reader}'s"
-        )
+    envelope = FileEnvelope.from_metadata(metadata).validate_container(container)
     return envelope, stored
 
 
@@ -715,7 +717,10 @@ def read_footer(path: Path) -> FileFooter:
         from idhazh.ledger import parquet
 
         metadata, rows = parquet.read_footer(path)
-        return FileFooter(envelope=FileEnvelope.from_metadata(metadata), rows=rows)
+        return FileFooter(
+            envelope=FileEnvelope.from_metadata(metadata).validate_container(Format.PARQUET),
+            rows=rows,
+        )
     envelope, stored = _opened(path)
     return FileFooter(envelope=envelope, rows=len(stored))
 
@@ -780,6 +785,59 @@ def load_stored[C: Contract](paths: Sequence[Path], *, model: type[C]) -> list[S
                 f"build reads {model.__name__} {wanted}. Read it with a build at least as new"
             )
         try:
+            if envelope.ledger is LedgerName.HOST_FINGERPRINT:
+                from idhazh.contracts.host_fingerprint import (
+                    HostFingerprintRow,
+                    normalize_host_row,
+                    strip_null_legacy_placeholders,
+                )
+
+                if model is HostFingerprintRow:
+                    original = hashlib.sha256(json_lines.rows_bytes(stored)).hexdigest()
+                    if original != envelope.content_sha256:
+                        raise ValueError(f"{path.name} original host content_sha256 mismatch")
+                    normalized: list[StoredRow[C]] = []
+                    for cells in stored:
+                        identity = RowIdentity.model_validate(
+                            {column.name: cells.get(column.name) for column in _IDENTITY_COLUMNS}
+                        )
+                        expected_unit = (
+                            filenames.unit_id(
+                                ledger=LedgerName.HOST_FINGERPRINT,
+                                covers=identity.covers,
+                                run_id=identity.run_id,
+                                job=identity.job,
+                                shard=identity.shard,
+                                producer=(
+                                    "telemetry.silicon"
+                                    if envelope.writer.startswith("idhazh_rust.")
+                                    else envelope.identity.producer
+                                ),
+                            )
+                            if envelope.tier is Tier.RAW
+                            and envelope.writer.startswith("idhazh_rust.")
+                            else None
+                        )
+                        if (
+                            identity.ledger is not LedgerName.HOST_FINGERPRINT
+                            or identity.covers != cells.get(DATE_CELL)
+                            or (
+                                expected_unit is not None
+                                and identity.unit_id != str(expected_unit)
+                            )
+                        ):
+                            raise ValueError(f"{path.name} original host row identity mismatch")
+                        payload = {key: value for key, value in cells.items() if key not in added}
+                        normalized.append(
+                            StoredRow(
+                                identity=identity,
+                                row=model.model_validate(
+                                    normalize_host_row(strip_null_legacy_placeholders(payload))
+                                ),
+                            )
+                        )
+                    held.extend(normalized)
+                    continue
             held.extend(
                 StoredRow(
                     identity=RowIdentity.model_validate(

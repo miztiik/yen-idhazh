@@ -13,14 +13,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from idhazh.contracts.file_envelope import Format, RowIdentity, Tier
+from idhazh.contracts.file_envelope import FileEnvelope, Format, RowIdentity, Tier
 from idhazh.contracts.host_output import (
     HOST_OUTPUT_VERSION,
     HOST_PRODUCER,
     INT64_MAX,
     INT64_MIN,
     LEGACY_HOST_VERSIONS,
-    CandidateFileEnvelope,
     HostStoredRow,
     HostWriteCompletion,
     HostWritePlan,
@@ -62,7 +61,7 @@ class VerifiedHostFile:
 
     relative_path: str
     format: Format
-    envelope: CandidateFileEnvelope
+    envelope: FileEnvelope
     rows: tuple[HostStoredRow, ...]
     physical_sha256: str
     size_bytes: int
@@ -208,8 +207,8 @@ def host_output_columns(version: str) -> tuple[Column, ...]:
     return (*row, *(c for c in columns_of(RowIdentity) if c.name not in names))
 
 
-def _envelope(metadata: Mapping[bytes, bytes], container: Format) -> CandidateFileEnvelope:
-    env = CandidateFileEnvelope.from_metadata(metadata).validate_container(container)
+def _envelope(metadata: Mapping[bytes, bytes], container: Format) -> FileEnvelope:
+    env = FileEnvelope.from_metadata(metadata).validate_container(container)
     if env.ledger is not LedgerName.HOST_FINGERPRINT or env.tier is not Tier.RAW:
         raise ValueError("host verifier accepts only host-fingerprint raw files")
     host_output_columns(env.row_schema_version)
@@ -229,7 +228,7 @@ def _envelope(metadata: Mapping[bytes, bytes], container: Format) -> CandidateFi
 
 def _read_json(
     data: bytes, limits: VerificationLimits
-) -> tuple[CandidateFileEnvelope, list[dict[str, Any]]]:
+) -> tuple[FileEnvelope, list[dict[str, Any]]]:
     if not data.isascii() or b"\r" in data or not data.endswith(b"\n"):
         raise ValueError("JSONL host output must be ASCII with LF-terminated lines")
     if data.count(b"\n") != 2:
@@ -254,7 +253,7 @@ def _read_json(
 
 def _read_parquet(
     data: bytes, limits: VerificationLimits
-) -> tuple[CandidateFileEnvelope, list[dict[str, Any]], str]:
+) -> tuple[FileEnvelope, list[dict[str, Any]], str]:
     from idhazh.ledger import parquet
 
     footer_start = check_parquet_footer(
@@ -319,7 +318,7 @@ def _read_parquet(
 
 
 def _validate_rows(
-    rows: list[dict[str, Any]], env: CandidateFileEnvelope
+    rows: list[dict[str, Any]], env: FileEnvelope
 ) -> tuple[HostStoredRow, ...]:
     # Hash the original dictionaries, not coerced/normalized model dumps.
     normalized = normalize_stored_host_rows(rows, content_sha256=env.content_sha256)

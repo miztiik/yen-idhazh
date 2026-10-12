@@ -10,6 +10,55 @@ import { options, selection } from '../run-checks.ts';
 import { changedPaths, ciAnswer, selectPaths, selectionForChange } from '../test-scope.ts';
 
 const FRONTEND = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+test('Pipelines retained and native evidence joins representative groups without a panels matrix', () => {
+	for (const separator of ['/', '\\']) {
+		for (const path of [
+			['frontend', 'src', 'lib', 'console', 'pipelines', 'StageTimings.svelte'],
+			['frontend', 'tests', 'support', 'pipelines-ledgers.ts'],
+			['frontend', 'tests', 'support', 'retained-telemetry.ts']
+		]) {
+			assert.deepEqual(selectPaths([path.join(separator)]).groups, ['logic', 'console', 'publishing']);
+			assert.equal(ciAnswer([path.join(separator)], true).console, true);
+		}
+	}
+	for (const name of ['native', 'nothings']) {
+		assert.equal(groupForSpec(`console-pipelines-${name}.spec.ts`), 'logic');
+	}
+	for (const name of ['lifecycle', 'reserved', 'components', 'sufficiency',
+		'retained-failure', 'retained-failures', 'retained-compression', 'retained-item-cost', 'retained-window',
+		'cold', 'days', 'timeline-page', 'window-page']) {
+		assert.equal(groupForSpec(`console-pipelines-${name}.spec.ts`), 'console');
+	}
+	assert.equal(FRONTEND_GROUPS.includes('panels'), false);
+});
+test('isolated comparison inputs select their exact evidence consumers without browser builds', () => {
+	for (const path of [
+		'.github/workflows/rust-host-telemetry.yml',
+		'config/host-telemetry-comparison.json',
+		'backend/idhazh/contracts/host_evidence.py',
+		'backend/idhazh/telemetry/host_evidence_inputs.py',
+		'backend/idhazh/telemetry/host_evidence_comparison.py',
+		'backend/idhazh/telemetry/host_evidence_artifacts.py',
+		'backend/idhazh/telemetry/host_evidence_samples.py',
+		'backend/utilities/host_telemetry_workload.py',
+		'backend/utilities/host_telemetry_reference.py',
+		'backend/utilities/host_telemetry_session.py',
+		'backend/utilities/compare_host_telemetry.py'
+	]) {
+		const selected = selectPaths([path]);
+		assert.deepEqual(selected.groups, ['backend']);
+		assert.equal(selected.rust, true);
+		assert.ok(selected.backendFiles.includes('backend/tests/test_compare_host_telemetry.py'));
+		assert.ok(selected.backendFiles.includes('backend/tests/workflows/test_rust_host_telemetry_workflow.py'));
+		assert.equal(ciAnswer([path], true).browser, false);
+	}
+	const cost = selectPaths(['backend/utilities/host_telemetry_measurement.py']);
+	assert.equal(cost.rust, true);
+	assert.deepEqual(cost.groups, ['backend']);
+	const shared = selectPaths(['config/host-telemetry-experiment.json']);
+	assert.ok(shared.backendFiles.includes('backend/tests/test_host_fingerprint_migration.py'));
+});
+
 test('Summaries modules and native private fixtures select console consumers without narrowing shared inputs', () => {
 	for (const path of ['frontend/src/lib/console/model/Cards.svelte',
 		'frontend/src/lib/console/model/model-change.ts', 'frontend/tests/support/model-route.ts']) {
@@ -117,7 +166,8 @@ test('native Rust and its actual file fixture select focused checks without brow
 		assert.deepEqual(selected.backendFiles, path === 'tests/fixtures/host-events/file-parity.json'
 			? ['backend/tests/contracts/test_rust_host_file_parity.py']
 			: ['backend/tests/contracts/test_host_event_rust_parity.py', 'backend/tests/contracts/test_rust_host_file_parity.py', 'backend/tests/test_rust_host_receipts.py',
-				'backend/tests/test_rust_host_store_parity.py', 'backend/tests/test_host_event_resource_parity.py'].sort());
+				'backend/tests/test_rust_host_store_parity.py', 'backend/tests/test_host_event_resource_parity.py',
+				'backend/tests/test_compare_host_telemetry.py', 'backend/tests/workflows/test_rust_host_telemetry_workflow.py'].sort());
 		assert.equal(ciAnswer([path], true).browser, false);
 		assert.equal(ciAnswer([path], true).modelAbsent, false);
 		assert.equal(ciAnswer([path], true).robots, false);
@@ -245,7 +295,14 @@ test('Voices panel inputs keep narrow route consumers and unknown-path broad cov
 	assert.deepEqual(selectPaths(['frontend/src/lib/console/unmapped/panel.ts']).groups, [...FRONTEND_GROUPS]);
 	assert.deepEqual(groupedSpecs(join(FRONTEND, 'tests')).console,
 		['console-data-explorer-still.spec.ts', 'console-machine-journey.spec.ts', 'console-model-builder.spec.ts',
-			'console-model-ledgers.spec.ts', 'console-telemetry-heal.spec.ts', 'console-voices-journey.spec.ts']);
+			'console-model-ledgers.spec.ts',
+			'console-pipelines-cold.spec.ts', 'console-pipelines-components.spec.ts', 'console-pipelines-days.spec.ts',
+			'console-pipelines-lifecycle.spec.ts', 'console-pipelines-reserved.spec.ts',
+			'console-pipelines-retained-compression.spec.ts', 'console-pipelines-retained-failure.spec.ts',
+			'console-pipelines-retained-failures.spec.ts', 'console-pipelines-retained-item-cost.spec.ts',
+			'console-pipelines-retained-window.spec.ts', 'console-pipelines-sufficiency.spec.ts',
+			'console-pipelines-timeline-page.spec.ts', 'console-pipelines-window-page.spec.ts',
+			'console-telemetry-heal.spec.ts', 'console-voices-journey.spec.ts']);
 });
 
 test('Hardware native readers and representative boundaries remain in the closed inventory', () => {

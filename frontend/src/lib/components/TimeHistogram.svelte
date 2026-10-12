@@ -291,6 +291,8 @@
 	<div use:observeWidth={(next) => (measured = next)}>
 		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 		<svg
+			data-chart="time-histogram"
+			data-chart-name={name}
 			class="block max-w-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
 			width={box.width}
 			height={box.height}

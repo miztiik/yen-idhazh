@@ -2,9 +2,32 @@
 
 **Last Updated**: 2026-10-11
 
+Moved plots use the shared width observer and redraw in the CSS-pixel frame
+their panel actually occupies. Private date axes retain missing days as null,
+not zero, so a settings change on a day without a reading still has its place.
+The route resolves its record window before calling the private panels settled.
+Native reads start independently; request epochs prevent late windows replacing
+the current one, and the extractor and recorded flags retain separate states.
+Native record limitations sit after the failure plot, not above the private
+carry line: receiving the ledger must not move the window controls or chrome.
+The retained run-square cut wording is tested on that actual component with
+independent capped and uncapped records; no item-ledger cut identities cross
+the native page's private manifest boundary.
+After the representative-test consolidation, native disk/private contracts run
+in the logic group. Explicit Pipelines component, lifecycle, window, waiting,
+request-dependency and populated plot cases run in the console group. Retained
+compression and identity-list oracles mount the actual retained components,
+not retired route UI. There is no restored cross-route panels/capture matrix.
+
+The retained timing and histogram plots name their actual drawing elements for
+the shared chart checks. Timeline rows name their actual bar frames. An absent
+private chart-share record still has a headline, stating its absence rather
+than inventing a percentage. The first published-count card is the route verdict;
+its count note names the same calendar that its bars draw.
+
 `/console/` answers two questions: did the runs work, and what each stage cost.
-This page holds three of its panels - where a run's time went, what one item cost
-the model, and extraction. Chart drawing has its own page,
+This page holds its native stage and cost readings and its private run figures.
+Chart drawing has its own page,
 [how-chart-drawing-is-reported-and-the-rule-it-is-judged-against.md](how-chart-drawing-is-reported-and-the-rule-it-is-judged-against.md),
 and the feed and source panels belong to Voices
 ([who-supplied-the-day-and-which-feeds-failed.md](who-supplied-the-day-and-which-feeds-failed.md)).
@@ -13,6 +36,89 @@ How any figure here is allowed to read is
 [../../concepts/console-design.md](../../concepts/console-design.md). Which
 surfaces follow the window control is
 [which-console-surfaces-follow-the-window-and-which-say-why-not.md](which-console-surfaces-follow-the-window-and-which-say-why-not.md).
+
+## Plan52: native readings and private published-day facts
+
+The route now has twelve addressed panels, in this order: `at-a-glance`,
+`run-health`, `site-cost-per-item`, `failure-mix`, `item-time-split`,
+`slower-on-same-work`, `stage-timings`, `item-cost`, `run-timeline`,
+`chart-drawing`, `extraction`, `article-age`. Configuration comes from
+`consoleKnobs()` and `routeConsole('pipelines')`, not from page data.
+
+The browser uses the declared queries in `console/queries/pipelines.ts` and the
+shared `routeReach`, four-argument `rangeFor` and `sliceOnce` lifecycle. Failure
+mix, failed rules, item time split, fixed-reference work, stage timings, model
+cost, newest-run timeline and stated article ages read `item-health`. The
+recorded extraction flags separately read `summary-quality-evals`. It is not a ledger
+named `scores`. Neither route load nor the browser reads telemetry CSV,
+`run-timeline`, `span-rollup` or a month inventory for these panels.
+
+`at-a-glance`, `run-health`, `site-cost-per-item`, `chart-drawing`, and extraction's
+published-chart share and yield remain private BUILD_TIME readings of manifests,
+published-chart counts and day metrics. They are not newly published datasets
+and are not reconstructed from native queries. Extraction's private share is
+prepared for each permitted window and recorded endpoint, so a native endpoint
+earlier than the built day does not reuse the wrong day's share.
+
+Before native answers arrive their frames reserve space, without bars, dates or
+numbers posing as readings. Failure-rule and evaluator states are independent
+of the item sections. Retry re-asks only failed queries; successful returned
+answers keep their own ranges. A retry keeps the original common endpoint; only
+a new preset starts a new window. The record notice uses the ledger's actual
+first day, not the first plotted day. Lost days, set-aside files, unknown cells,
+and recorded zero remain distinct.
+
+The approved A1 contracts are wired: FailureList accepts identity-free rule rows
+with stage radios, StageTimings retains the complete settings/checker rule, and
+the two cost histograms use the named reading-prompt and writing-reply tokens.
+The rule ranking makes no source, detail or distinct-article claim. Failure
+percentages divide failed rows by recorded rows, since the declared slice carries
+no article identity. Private payload shrinkage is a signed reading, not a zero
+bar. No unavailable value is filled with zero to get a gate through.
+
+Retained telemetry components keep independent real-input correctness cases
+off-route; those fixtures do not restore compression, source rankings or item
+details to Pipelines. Populated native panel gates use packed declared records
+with explicit feed timestamps and measured clocks. The ordinary canary's
+inferred article timestamp is not treated as a measured age. With scripts
+disabled, native frames explicitly say the article record needs JavaScript;
+private published-day marks remain in the document.
+
+At a glance is the sole route verdict; run health remains its own comparison.
+Declared date plots name the exact calendar they drew, including null days, and
+opted-in count cards name their own declined settings rule. The native cold-load
+check keeps the four-hop ceiling on independent ledger/data/engine branches,
+with real held responses and planted serial requests proving the distinction.
+
+Native readout headings spell dates for readers and declare that their inputs
+are fetched. Private strips remain prerendered. The site-cost horizon states
+both measured rates and the Pages cap; its signed size delta names the selected
+span. Shared legacy month-price and reserved-tint contracts are still tested on
+their retained real components, while the route's waiting and retry tests hold
+its declared native index. A clipped native calendar is not widened with
+invented pre-record days to satisfy a legacy telemetry oracle.
+
+The flag count keeps the newest recorded boolean for each distinct article;
+null cells cannot replace a flag, and conflicting booleans on its latest
+recorded day stay unknown in any row order. Counts remain exactly the recorded
+counts, not claims that a checker ran. The panel states that checker identity
+and version are unavailable. The declared query has only date, article key and
+the flag. `EvalRow` defaults the flag to false, and `work.py`'s `to_eval_row`
+does not pass an extraction measurement. No contract guarantees that other
+evaluators leave null. A zero count therefore says only that no recorded flag
+is true. Proving instrument selection needs an owner-designed provenance
+producer and declared query contract; this route invents neither.
+Each native half states its returned dates beside the private published figures.
+Private payload-size rates require the immediately preceding manifest and the
+current manifest to both record a finite size; a missing size is not zero.
+
+The approved item-time composition uses one complete, reconciling cohort for
+fetch, extract, summarize, faithfulness, the total and the signed gap. Summarize
+is counted once. Label, summary and visual-plan calls remain non-additive details,
+including timed counts and null readings. Positive unnamed gaps and negative
+overlap are averaged separately, so cancellation cannot hide overlap. The chart
+draws every positive duration, an adjacent overlap deduction and an elapsed-time
+marker; formatted readouts, cohort counts and exclusions explain the arithmetic.
 
 ## Where a run's time went is one panel on Pipelines, at two grains
 
@@ -25,12 +131,12 @@ end to end, what its items cost added up, and how many ran at once - and it
 covers every item of the run rather than picking the worst one out. The grain
 switch changes the row and never the question.
 
-**It sits low on Pipelines, and `Run health` is the route's first panel.** A
+**It sits low on Pipelines, after the cost panels.** A
 window is a span and this panel is one run, so an operator reaches it after a
 windowed panel has told him which run to open it on - and the panel that
-verdicts the route goes first, which is the thirteenth chart rule applied
+verdicts the run remains near the top, which is the thirteenth chart rule applied
 ([../../concepts/console-design/the-rules-every-console-chart-obeys.md](../../concepts/console-design/the-rules-every-console-chart-obeys.md#thirteen-rules-hold-for-every-chart-on-this-console)).
-Pipelines takes one untitled group in `console.panel_groups`: what it needed was
+Pipelines takes one untitled group in `config/console/pipelines.json`: what it needed was
 an order, not headings, and it already carries four section headings of its own.
 
 **One panel, one source for both grains.** The panel folds item and shard rows in one
@@ -46,13 +152,12 @@ figures. The [item command](../../concepts/telemetry.md#the-committed-traces-bri
 prints recent trace trees with their run and attempt instead of adding item
 passes together. Expired detail remains unavailable.
 
-**Hollow is unclaimed, hatched is overclaimed, and both carry a legend key.** A
-reader cannot name the hatched notch on sight, which is the test: a texture
-nobody can read is a texture that says nothing. Neither is tinted - nobody has
-agreed how much overhead is too much.
+**Hollow is unclaimed; a solid 2 px tertiary rule is overclaimed.** The overrun
+is not the hatch for an unknown reading. Both have a written legend; neither
+claims anybody has agreed how much overhead is too much.
 
 The reader is
-[../../../frontend/src/lib/server/run-timeline.ts](../../../frontend/src/lib/server/run-timeline.ts);
+[../../../frontend/src/lib/console/pipelines/run-timeline.ts](../../../frontend/src/lib/console/pipelines/run-timeline.ts);
 the producer of the published mirror is
 [../../../backend/idhazh/telemetry/publish/run_timeline.py](../../../backend/idhazh/telemetry/publish/run_timeline.py),
 its shape is [run-timeline.md](run-timeline.md) and every drawing rule is
@@ -60,8 +165,9 @@ its shape is [run-timeline.md](run-timeline.md) and every drawing rule is
 
 **It is a snapshot, so the window control does not reach it.** A bar's position
 is measured from its own run's start and a span cannot narrow one run, so the
-panel names the run it drew. It reads one published directory bounded to two
-months. With that data absent, the view is empty and the route still renders.
+panel names the run it drew. It asks the newest recorded day of item-health for
+exactly its declared native clock columns. With that data absent, the view is
+empty and the route still renders.
 
 **Pipelines depends on `$lib/charts/machine` for its `seconds` formatter.**
 
@@ -391,15 +497,15 @@ as two rules.
 example of a panel that serves *is it working* and *what is broken* at once
 rather than choosing.
 
-The **verdict half** is four cards: articles the reading found enough figures of
-one kind in, the share of published chartable articles that went out with no
-chart, the share of articles whose every fact still cuts its own characters, and
-the facts kept over the window. Four levels, covering the whole reading. They
-carry `data-extraction-question="is it working"`.
+The **verdict half** counts distinct articles, found facts, non-prose articles
+and contaminated articles from the native extraction slice. A ranked list
+counts element classes and rows that would not re-slice. Separately, the
+published-chart share comes from private day records. Recorded boolean flags
+have their own source state and date range; neither a flag nor its false
+default establishes which checker ran.
 
-The **break half** is one chart, `Whether the yield is falling`, carrying
-`data-extraction-question="what is broken"`. Two of the cards' own lines tell the
-operator to read the direction rather than the level, so the panel plots one
+The **break half** is one private chart, `Whether the yield is falling`.
+The panel plots one
 point a day: articles the reading found enough figures in, against published
 articles carrying a chart. That pair is the discrimination the panel exists for -
 the planner stopping and the extractor stopping look identical in the published

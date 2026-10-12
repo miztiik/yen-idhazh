@@ -39,6 +39,8 @@
 
 // Relative, not `$lib`, for the reason in the module docstring.
 import { itemRead } from '../../charts/machine';
+import { promptRate } from '../../charts/machine-colour';
+import { normalizeHostRow } from '../../data/host-fingerprint';
 
 /** How far the two clocks may sit apart before one of them is wrong, in percent.
  *
@@ -124,11 +126,11 @@ export interface ShardCounters {
 	 * record's probe never reached the shard. The key the page colours a machine
 	 * by, so a shard and the machine card of the job that ran it are one machine. */
 	fingerprint: string | null;
+	fingerprintVersion: number | null;
 	/** The least busy the processor was over any one item's model window. */
 	cpuBusyPct: number | null;
-	/** Cores the host let this job see. What `loadMax` is read against: a queue
-	 * is load past the cores, and 6.1 is a queue on four and not on eight. */
-	cores: number | null;
+	/** Measured online logical processors, not affinity or target quota. */
+	logicalProcessors: number | null;
 	/** The middle item's mean CPU busy. A typical item, not the worst one. */
 	cpuBusyMedianPct: number | null;
 	/** The busiest any one item's model window got. */
@@ -323,7 +325,7 @@ export interface MachineCounters {
 
 /** An empty cell is an absent value, never a zero. */
 function measured(value: string | undefined): number | null {
-	if (value === undefined || value === '') return null;
+	if (value === undefined || value.trim() === '') return null;
 	const parsed = Number(value);
 	return Number.isFinite(parsed) ? parsed : null;
 }
@@ -366,8 +368,9 @@ const lowest = (values: number[]): number => Math.min(...values);
  */
 const HOST_CELLS = [
 	'fingerprint',
+	'fingerprint_version',
 	'cpu_model',
-	'cores',
+	'cpu_logical_processors',
 	'job_seconds',
 	'model_load_ms',
 	'server_prompt_tokens',
@@ -377,8 +380,9 @@ const HOST_CELLS = [
 /** One shard's machine cells, merged from however many halves the record holds. */
 interface HostCells {
 	fingerprint: string | null;
+	fingerprintVersion: number | null;
 	cpuModel: string | null;
-	cores: number | null;
+	logicalProcessors: number | null;
 	jobSeconds: number | null;
 	modelLoadMs: number | null;
 	serverPromptTokens: number | null;
@@ -544,8 +548,9 @@ function mergeHost(rows: Record<string, string>[]): HostCells | null {
 	}
 	return {
 		fingerprint: text(held.get('fingerprint')),
+		fingerprintVersion: measured(held.get('fingerprint_version')),
 		cpuModel: text(held.get('cpu_model')),
-		cores: measured(held.get('cores')),
+		logicalProcessors: measured(held.get('cpu_logical_processors')),
 		jobSeconds: measured(held.get('job_seconds')),
 		modelLoadMs: measured(held.get('model_load_ms')),
 		serverPromptTokens: measured(held.get('server_prompt_tokens')),
@@ -584,7 +589,7 @@ function shardCounters(
 				? null
 				: sharePct(fold.cachedTokens, promptTokens + fold.cachedTokens),
 		writtenTokens: fold.writtenTokens,
-		readTokensPerSecond: rate(promptTokens, readSeconds),
+		readTokensPerSecond: promptRate(promptTokens, readSeconds),
 		writeTokensPerSecond: rate(fold.writtenTokens, writeSeconds),
 		longestSequence: fold.longestSequence,
 		contextUsedPct: sharePct(fold.longestSequence, limits.contextWindow),
@@ -595,8 +600,9 @@ function shardCounters(
 		// which would otherwise draw as a machine nobody can name.
 		cpuModel: host.cpuModel ?? fold.cpuModel,
 		fingerprint: host.fingerprint,
+		fingerprintVersion: host.fingerprintVersion,
 		cpuBusyPct: fold.cpuBusyPct,
-		cores: host.cores,
+		logicalProcessors: host.logicalProcessors,
 		cpuBusyMedianPct: median(fold.busy),
 		cpuBusyMaxPct: fold.cpuBusyMaxPct,
 		cpuStolenMedianPct: median(fold.stolen),
@@ -742,9 +748,12 @@ function oneRun(
 		// other row, and reading it as shard zero would fold it into a real
 		// shard's record.
 		if (shard === null) return refuse('a machine record does not say which shard it came from');
+		if (!Number.isSafeInteger(shard) || shard < 0) return refuse('a machine record names an invalid shard');
+		const normalized = normalizeHostRow(row);
+		if (normalized === null) return refuse('a machine record has an unreadable host version or fingerprint algorithm');
 		const held = hostsByShard.get(shard);
-		if (held === undefined) hostsByShard.set(shard, [row]);
-		else held.push(row);
+		if (held === undefined) hostsByShard.set(shard, [normalized]);
+		else held.push(normalized);
 	}
 
 	const folds = new Map<number, ItemFold>();
@@ -753,6 +762,7 @@ function oneRun(
 		// are never read: they name the job that filed the row, not the one it ran on.
 		const shard = measured(row.machine_shard ?? '');
 		if (shard === null) continue;
+		if (!Number.isSafeInteger(shard) || shard < 0) return refuse('an article record names an invalid machine shard');
 		let carry = folds.get(shard);
 		if (carry === undefined) {
 			carry = emptyFold();

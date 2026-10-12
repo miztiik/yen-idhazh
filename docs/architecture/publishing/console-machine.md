@@ -115,12 +115,14 @@ one model-rule declaration and a plot on the panel's own ground.
 ### What may not be pooled
 
 Refusal is still the existing `mergeHost`/`machineCounters` rule: disagreeing
-dates, missing shard identities, conflicting host cells, too many reported
-shards, and an index outside the recorded count refuse the run rather than
-publish half of it. `cores` and `model_load_ms` are already published host
-cells; the widest host question explicitly includes them for that exact parity.
-No private manifest inputs are added. A conflicting count file is a visible
-unreachable record, never a reactive page crash.
+dates, missing or invalid shard identities, unreadable host versions, conflicting
+host cells, too many reported shards, and an index outside the recorded count
+refuse the run rather than publish half of it. The bounded widest host question
+includes measured `cpu_logical_processors` and `model_load_ms` for exact refusal
+parity, alongside versioned identity and independent server counters. Its four
+legacy columns are finite migration inputs only. No private manifest inputs are
+added. A conflicting count file is a visible unreachable record, never a
+reactive page crash.
 
 Slower machines chooses the kind with most qualifying articles as reference,
 with a deterministic name tie-break. Each article's read or write milliseconds
@@ -167,15 +169,30 @@ The dated lines still quote each day's own median.
 
 ### The retained measurements
 
-Article processor cost is the busy share times **threads**, not cores, times
-the article's elapsed clock. Missing or disagreeing thread readings stay absent.
+Host busy processor time is `cpu_busy_pct / 100 * cpu_logical_processors *
+item_total_ms / 1000`. The busy share covers the whole host, not exclusive model
+process work. Physical topology, target affinity, fractional quota and requested
+threads are not logical-processor measurements. Missing or disagreeing logical
+counts withhold cost, not the eligible item's coverage; recorded busy zero stays
+zero. A runner-hour supplies the smallest distinct measured logical count times
+3600, or remains unknown.
 Model time is `prefill_ms + decode_ms`. Incremental model memory is the step
 between neighbouring item indexes of the same shard, never across a restart or
 a missing index. Its signed track keeps zero. It cannot attribute memory to
 read versus written tokens without a call-boundary measurement.
 Both joins retain `date`, `run_id`, machine job and machine shard. An unknown
-shard is unmatched, never shard zero. Card rows carry only their declared
-public cells; they do not invent a job or shard or fill private unasked inputs.
+shard is unmatched, never shard zero. Missing historical item machine job means
+work only. Per-item costs remain independent of run-level clock refusal.
+
+The native adapters reuse the declared host read migration. Legacy cores,
+threads and maximum frequency remain unknown; a valid legacy probe frequency
+can supply the observed average. Cards carry only selected public cells. Each
+card's physical/logical counts, allowed processors, quota state and fraction,
+frozen UTC target capture, and observed/reported frequencies come from the same
+source row. Algorithm-2 identity does not prove equal constraints across jobs.
+Unlimited, unavailable and no target measurement remain distinct states.
+Fingerprint identity is the algorithm and digest pair; equal text under
+algorithms 1 and 2 never joins. Name-only evidence stays coarse.
 
 The tail retains all five percentiles on one domain; under-floor runs are
 printed rather than drawn. Settings-change rules cross the whole stack.
@@ -227,3 +244,4 @@ newest refused run; lost-state claims derived from a fetch failure.
 - [console.md](console.md) - the shared route frame.
 - [console-charts.md](console-charts.md) - the drawing and readout contract.
 - [The machine drawing rules](../../concepts/console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md) - why machines and calls stay separate.
+- [Host measurements](../../reference/host-metrics.md) - corrected cells and finite historical reads.

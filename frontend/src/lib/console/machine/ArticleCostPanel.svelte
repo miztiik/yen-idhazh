@@ -97,7 +97,7 @@
 				data-cost-outof={processor.outOf}
 				data-cost-processors={cost.processors.join(' ')}
 			>
-				<p class="name">Processor time</p>
+				<p class="name">Host busy processor time</p>
 				{#if processor.mid === null}
 					<p class="value">-</p>
 					<p class="reach">

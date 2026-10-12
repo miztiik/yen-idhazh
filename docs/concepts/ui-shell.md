@@ -1,6 +1,6 @@
 # UI Shell
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-11
 
 **Known noncompliance:** Existing prerendering does not meet [Telemetry Intent](telemetry-intent.md) and will be removed as existing pages migrate. All new designs, charts and visuals must render in the browser; none may be prerendered.
 
@@ -46,6 +46,11 @@ for panel titles and "the visual planner" for that actor.
 - **Page states:** shared loading, empty, missing and degraded behavior.
 - **Local logging:** the browser console records which payload failed and why. No remote log collector or reader tracking.
 - **Reader preferences:** read marks and theme choice use `localStorage`, never cookies. Bound reading history and tolerate unavailable or full storage.
+
+A storage permission or quota refusal must not stop page hydration or the
+theme control. Keep the current theme usable for this page, and report the
+unsaved preference in the local browser console. Other unexpected errors are
+not storage refusals and must remain visible.
 
 ## Every page handles five states
 

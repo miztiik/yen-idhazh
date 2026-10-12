@@ -3,11 +3,8 @@
  * Each panel is worked out first on shard rows and host records this file
  * writes, with every figure written out: one group a machine, rates that pool
  * only that machine's shards, and cards that draw the flags a machine does not
- * have rather than omitting them. The built page is then held to what a unit
- * test cannot see: that the colour a machine takes is the same at every window
- * preset, that no two named machines share a stop, that the name is on the row
- * as TEXT in both themes, and that what it draws keeps the shape of the figures
- * it was handed, whatever run it drew.
+ * have rather than omitting them. The route assertions that need a built page
+ * live in `console-machine-panels-page.spec.ts`.
  */
 import { expect, test } from './support/door-page';
 import { WATCHED_FLAG, type HostFingerprint } from '../src/lib/server/host-fingerprint';
@@ -46,40 +43,45 @@ function machineShard(over: ShardReading): ShardReading {
     };
 }
 function host(over: Partial<HostFingerprint>): HostFingerprint {
-    return {
-        version: '2026-09-18',
-        date: DATE,
-        run_id: RUN,
-        job: 'work',
-        shard: 0,
-        fingerprint: 'machine-a',
-        cpu_model: 'AMD EPYC 7763 64-Core Processor',
-        cpu_vendor: 'AuthenticAMD',
-        cpu_family: 25,
-        cpu_model_number: 1,
-        cpu_stepping: 1,
-        microcode: '0x1',
-        cores: 4,
-        threads: 8,
-        l3_cache_bytes: 32 * MIB,
-        mhz_max: null,
-        mhz_at_probe: 2800,
-        flags: '',
-        boot_seconds: 125,
-        memcpy_gib_s: 10,
-        memcpy_probe_mib: 128,
-        vm_size: 'Standard_D4s_v5',
-        vm_location: 'eastus',
-        vm_zone: '1',
-        vm_fault_domain: '0',
-        runner_name: 'runner-a',
-        measured_at: `${DATE}T00:00:00Z`,
-        model_load_ms: 400,
-        job_seconds: 100,
-        server_prompt_tokens: 200,
-        server_prompt_seconds: 10,
-        ...over
-    };
+	return {
+		version: '2026-10-10',
+		date: DATE,
+		run_id: RUN,
+		job: 'work',
+		shard: 0,
+		fingerprint: 'machine-a',
+		fingerprint_version: 2,
+		cpu_model: 'AMD EPYC 7763 64-Core Processor',
+		cpu_vendor: 'AuthenticAMD',
+		cpu_family: 25,
+		cpu_model_number: 1,
+		cpu_stepping: 1,
+		microcode: '0x1',
+		cpu_physical_cores: 4,
+		cpu_logical_processors: 8,
+		cpu_allowed_processors: null,
+		cpu_quota_cores: null,
+		cpu_quota_state: null,
+		cpu_target_measured_at: null,
+		l3_cache_bytes: 32 * MIB,
+		cpu_observed_mhz: 2800,
+		cpu_reported_max_mhz: null,
+		flags: '',
+		boot_seconds: 125,
+		memcpy_gib_s: 10,
+		memcpy_probe_mib: 128,
+		vm_size: 'Standard_D4s_v5',
+		vm_location: 'eastus',
+		vm_zone: '1',
+		vm_fault_domain: '0',
+		runner_name: 'runner-a',
+		measured_at: `${DATE}T00:00:00Z`,
+		model_load_ms: 400,
+		job_seconds: 100,
+		server_prompt_tokens: 200,
+		server_prompt_seconds: 10,
+		...over
+	};
 }
 test.describe('reading against writing, machine by machine', () => {
     test('one group a machine, and no element carries a rate pooled over all shards', () => {
@@ -167,73 +169,85 @@ test.describe('reading against writing, machine by machine', () => {
     });
 });
 test.describe('the machines this run drew', () => {
-    test('machine cards preserve flags, copy speed, clocks and L3 ratios on written rows', () => {
-        const run = foldedRun([
-            machineShard({
-                shard: 0,
-                cpuModel: 'AMD EPYC 7763 64-Core Processor',
-                fingerprint: 'full',
-                serverPromptTokens: 200,
-                serverPromptSeconds: 10,
-                writtenTokens: 90,
-                writeSeconds: 9
-            }),
-            machineShard({
-                shard: 1,
-                cpuModel: 'Intel Xeon Platinum 8370C CPU @ 2.80GHz',
-                fingerprint: 'empty',
-                serverPromptTokens: 50,
-                serverPromptSeconds: 10,
-                writtenTokens: 100,
-                writeSeconds: 25
-            })
-        ]);
-        const cards = machineCards(run, [
-            host({
-                fingerprint: 'full',
-                shard: 0,
-                cpu_model: 'AMD EPYC 7763 64-Core Processor',
-                flags: WATCHED.join(' '),
-                l3_cache_bytes: 64 * MIB,
-                memcpy_gib_s: 12,
-                memcpy_probe_mib: 256,
-                mhz_at_probe: 2750,
-                boot_seconds: 125
-            }),
-            host({
-                fingerprint: 'empty',
-                shard: 1,
-                cpu_model: 'Intel Xeon Platinum 8370C CPU @ 2.80GHz',
-                flags: '',
-                l3_cache_bytes: 32 * MIB,
-                memcpy_gib_s: 6,
-                memcpy_probe_mib: 32,
-                mhz_at_probe: null,
-                boot_seconds: null
-            })
-        ], {
-            watchedFlags: WATCHED,
-            colour: { stops: 4, floor: 0.35 },
-            recording: true,
-            cacheMargin: 2
-        });
-        expect(cards.record).toBe('recorded');
-        expect(cards.cards).toHaveLength(2);
-        const byName = new Map(cards.cards.map((card) => [card.identity.name, card]));
-        const full = byName.get('AMD EPYC 7763');
-        const empty = byName.get('Intel Xeon Platinum 8370C');
-        expect(full?.flags).toEqual(WATCHED.map((name) => ({ name, present: true })));
-        expect(empty?.flags).toEqual(WATCHED.map((name) => ({ name, present: false })));
-        expect(full?.l3Bar.state).toBe('drawn');
-        expect(empty?.l3Bar.state).toBe('drawn');
-        expect((full?.l3Bar.fraction ?? 0) / (empty?.l3Bar.fraction ?? 1)).toBeCloseTo(2, 4);
-        expect(copySpeedSentence(full!)).toBe('12.0 GiB/s, over a 256 MiB buffer against 64 MiB of L3 - 4.00 times it.');
-        expect(copySpeedSentence(empty!)).toBe('No copy speed: the probe used a 32 MiB buffer against 32 MiB of L3, 1.00 times it, and a reading has to clear 2 times to be sure the copy left the cache.');
-        expect(clockSentence(full!)).toBe("2750 MHz when the probe ran, before the job's heaviest step.");
-        expect(clockSentence(empty!)).toBe('Clock speed was not recorded on this job.');
-        expect(uptimeSentence(full!)).toBe('Up 2 m 5 s when we measured it.');
-        expect(uptimeSentence(empty!)).toBe('Uptime was not recorded on this job.');
-    });
+	test('machine cards preserve flags, copy speed, clocks and L3 ratios on written rows', () => {
+		const run = foldedRun([
+			machineShard({
+				shard: 0,
+				cpuModel: 'AMD EPYC 7763 64-Core Processor',
+				fingerprint: 'full',
+				serverPromptTokens: 200,
+				serverPromptSeconds: 10,
+				writtenTokens: 90,
+				writeSeconds: 9
+			}),
+			machineShard({
+				shard: 1,
+				cpuModel: 'Intel Xeon Platinum 8370C CPU @ 2.80GHz',
+				fingerprint: 'empty',
+				serverPromptTokens: 50,
+				serverPromptSeconds: 10,
+				writtenTokens: 100,
+				writeSeconds: 25
+			})
+		]);
+		const cards = machineCards(
+			run,
+			[
+				host({
+					fingerprint: 'full',
+					shard: 0,
+					cpu_model: 'AMD EPYC 7763 64-Core Processor',
+					flags: WATCHED.join(' '),
+					l3_cache_bytes: 64 * MIB,
+					memcpy_gib_s: 12,
+					memcpy_probe_mib: 256,
+					cpu_observed_mhz: 2750,
+					boot_seconds: 125
+				}),
+				host({
+					fingerprint: 'empty',
+					shard: 1,
+					cpu_model: 'Intel Xeon Platinum 8370C CPU @ 2.80GHz',
+					flags: '',
+					l3_cache_bytes: 32 * MIB,
+					memcpy_gib_s: 6,
+					memcpy_probe_mib: 32,
+					cpu_observed_mhz: null,
+					boot_seconds: null
+				})
+			],
+			{
+				watchedFlags: WATCHED,
+				colour: { stops: 4, floor: 0.35 },
+				recording: true,
+				cacheMargin: 2
+			}
+		);
+
+		expect(cards.record).toBe('recorded');
+		expect(cards.cards).toHaveLength(2);
+		const byName = new Map(cards.cards.map((card) => [card.identity.name, card]));
+		const full = byName.get('AMD EPYC 7763');
+		const empty = byName.get('Intel Xeon Platinum 8370C');
+		expect(full?.flags).toEqual(WATCHED.map((name) => ({ name, present: true })));
+		expect(empty?.flags).toEqual(WATCHED.map((name) => ({ name, present: false })));
+		expect(full?.l3Bar.state).toBe('drawn');
+		expect(empty?.l3Bar.state).toBe('drawn');
+		expect((full?.l3Bar.fraction ?? 0) / (empty?.l3Bar.fraction ?? 1)).toBeCloseTo(2, 4);
+		expect(copySpeedSentence(full!)).toBe(
+			'12.0 GiB/s, over a 256 MiB buffer against 64 MiB of L3 - 4.00 times it.'
+		);
+		expect(copySpeedSentence(empty!)).toBe(
+			'No copy speed: the probe used a 32 MiB buffer against 32 MiB of L3, 1.00 times it, and a reading has to clear 2 times to be sure the copy left the cache.'
+		);
+		expect(clockSentence(full!)).toBe(
+			'Observed sample average 2750 MHz; reported hardware maximum unknown. The sample is not a sustained rate.'
+		);
+		expect(clockSentence(empty!)).toBe('Observed and reported maximum frequencies are unknown.');
+		expect(uptimeSentence(full!)).toBe('Up 2 m 5 s when we measured it.');
+		expect(uptimeSentence(empty!)).toBe('Uptime was not recorded on this job.');
+	});
+
 });
 /** Which of the record's states the page is in, said in an attribute.
  *

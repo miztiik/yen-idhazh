@@ -160,7 +160,7 @@ def planned_file(
     row = stored(day=day, **cells)
     unit = uuid.UUID(row.unit_id)
     file_id = host_file_id(unit=unit, attempt=1, written_at_ms=clock)
-    env = CandidateFileEnvelope.model_validate(
+    env = FileEnvelope.model_validate(
         {
             "row_schema_version": HOST_OUTPUT_VERSION,
             "tier": "raw",
@@ -234,36 +234,13 @@ def original_stored(payload: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def test_full_field_order_baseline_annotations_defaults_and_arrow_types() -> None:
-    expected: list[str] = []
-    for name in HostFingerprintRow.model_fields:
-        if name == "cores":
-            expected.extend(
-                (
-                    "cpu_physical_cores",
-                    "cpu_logical_processors",
-                    "cpu_allowed_processors",
-                    "cpu_quota_cores",
-                    "cpu_quota_state",
-                    "cpu_target_measured_at",
-                )
-            )
-        elif name == "mhz_max":
-            expected.extend(("cpu_observed_mhz", "cpu_reported_max_mhz"))
-        elif name not in REMOVED:
-            expected.append(name)
-            if name == "fingerprint":
-                expected.append("fingerprint_version")
+    expected = list(HostFingerprintRow.model_fields)
     assert list(CorrectedHostFingerprintRow.model_fields) == expected
+    assert CorrectedHostFingerprintRow is HostFingerprintRow
     row = CorrectedHostFingerprintRow.model_validate(BASE)
     assert row.version == HOST_OUTPUT_VERSION
     assert row.job is ServerJob.WORK
     assert row.flags == ""
-    for name, field in HostFingerprintRow.model_fields.items():
-        if name not in REMOVED | {"version"}:
-            candidate = CorrectedHostFingerprintRow.model_fields[name]
-            assert candidate.annotation == field.annotation, name
-            assert candidate.default == field.default, name
-            assert candidate.is_required() == field.is_required(), name
     assert all(getattr(row, name) is None for name in ADDED)
     schema = CorrectedHostFingerprintRow.json_schema()
     assert schema["version"] == HOST_OUTPUT_VERSION
@@ -274,10 +251,6 @@ def test_full_field_order_baseline_annotations_defaults_and_arrow_types() -> Non
     assert row.csv_row()["cpu_logical_processors"] == ""
     assert not REMOVED.intersection(row.csv_row())
     columns = arrow_schema.columns_of(CorrectedHostFingerprintRow)
-    old_columns = {column.name: column for column in arrow_schema.columns_of(HostFingerprintRow)}
-    for column in columns:
-        if column.name not in ADDED | {"version"}:
-            assert column == old_columns[column.name]
     types = {column.name: column.type for column in columns}
     assert all(types[name] is arrow_schema.ColumnType.INT64 for name in INTEGERS)
     assert all(types[name] is arrow_schema.ColumnType.FLOAT64 for name in FLOATS)
@@ -344,10 +317,14 @@ def test_unchanged_zero_and_signed_baseline_fields_are_not_reinterpreted() -> No
         "server_prompt_tokens": 0,
         "server_prompt_seconds": 0,
     }
-    old = HostFingerprintRow.model_validate(BASE | cells)
+    old = LegacyHostFingerprintRow.model_validate(
+        {"version": "2026-09-20", **BASE, **cells}
+    )
     candidate = CorrectedHostFingerprintRow.model_validate(BASE | cells)
     assert all(getattr(old, name) == getattr(candidate, name) for name in cells)
-    assert HostFingerprintRow.model_validate(BASE | {"shard": "1"}).shard == 1
+    assert LegacyHostFingerprintRow.model_validate(
+        {"version": "2026-09-20", **BASE, "shard": "1"}
+    ).shard == 1
     with pytest.raises(ValidationError):
         CorrectedHostFingerprintRow.model_validate(BASE | {"shard": "1"})
 
@@ -577,7 +554,7 @@ def test_unknown_mixed_and_invalid_legacy_input_is_not_projected_away(
 
 
 def test_input_adapter_recognizes_only_the_exact_unstamped_probe_before_auto_stamp() -> None:
-    old = HostFingerprintRow.model_validate(
+    old = LegacyHostFingerprintRow.model_validate(
         fixture("cpu-snapshots.json")["legacy_row"]
     ).model_dump()
     for key in (
@@ -587,7 +564,7 @@ def test_input_adapter_recognizes_only_the_exact_unstamped_probe_before_auto_sta
         "server_prompt_tokens",
         "server_prompt_seconds",
     ):
-        old.pop(key)
+        old.pop(key, None)
     untouched = dict(old)
     row = HostFingerprintInput.model_validate(old)
     assert old == untouched
@@ -601,12 +578,11 @@ def test_input_adapter_recognizes_only_the_exact_unstamped_probe_before_auto_sta
     with pytest.raises(ValidationError):
         row.mhz_at_probe = 1  # type: ignore[misc]
     for bad in (
-        BASE,
         old | {"unknown": 1},
         old | {"cpu_quota_state": None},
         {key: value for key, value in old.items() if key != "mhz_max"},
     ):
-        with pytest.raises(ValueError, match="unstamped"):
+        with pytest.raises(ValueError, match=r"unstamped|legacy CPU"):
             HostFingerprintInput.model_validate(bad)
     assert (
         HostFingerprintInput.model_validate(
@@ -650,6 +626,30 @@ def test_stored_digest_and_identity_are_checked_before_defaults_or_migration() -
             )
 
 
+@pytest.mark.parametrize(
+    ("version", "placeholder"),
+    [
+        ("2026-09-17", "job_seconds"),
+        ("2026-09-18", "server_prompt_tokens"),
+    ],
+)
+def test_stored_legacy_rows_drop_only_null_widened_placeholders(
+    version: str, placeholder: str
+) -> None:
+    original = original_stored(fixture("cpu-snapshots.json")["legacy_row"] | {"version": version})
+    widened = original | {placeholder: None}
+    digest = hashlib.sha256(json_lines.rows_bytes([widened])).hexdigest()
+    rows = normalize_stored_host_rows([widened], content_sha256=digest)
+    assert rows[0].version == HOST_OUTPUT_VERSION
+
+    non_null = widened | {placeholder: 1}
+    with pytest.raises(ValueError, match="input carries fields"):
+        normalize_stored_host_rows(
+            [non_null],
+            content_sha256=hashlib.sha256(json_lines.rows_bytes([non_null])).hexdigest(),
+        )
+
+
 @pytest.mark.parametrize(("writer", "fmt"), WRITERS)
 def test_explicit_writer_container_pairs_and_unchanged_envelope_key_sets(
     writer: str, fmt: Format
@@ -661,16 +661,12 @@ def test_explicit_writer_container_pairs_and_unchanged_envelope_key_sets(
         "writer": "idhazh.ledger.parquet" if fmt is Format.PARQUET else "idhazh.ledger.json_lines"
     }
     assert set(env.as_metadata()) == set(FileEnvelope.model_validate(python_env).as_metadata())
-    assert CandidateFileEnvelope.from_metadata(env.as_metadata()) == env
+    assert CandidateFileEnvelope.from_metadata(env.as_metadata()).model_dump() == env.model_dump()
     with pytest.raises(ValueError, match="container"):
         env.validate_container(Format.JSON if fmt is Format.PARQUET else Format.PARQUET)
     with pytest.raises(ValueError):
         env.validate_container("csv")  # type: ignore[arg-type]
-    if writer.startswith("idhazh_rust"):
-        with pytest.raises(ValidationError):
-            FileEnvelope.model_validate(env.model_dump())
-    else:
-        assert FileEnvelope.model_validate(env.model_dump()).writer == writer
+    assert FileEnvelope.model_validate(env.model_dump()).writer == writer
 
 
 @pytest.mark.parametrize(
@@ -1143,8 +1139,8 @@ def test_output_contract_has_one_way_imports_and_no_transport_or_verifier_depend
         if isinstance(node, ast.Import):
             assert all(not alias.name.startswith("idhazh.") for alias in node.names)
     assert CorrectedHostFingerprintRow.schema_version() == HOST_OUTPUT_VERSION
-    assert FileEnvelope.schema_version() == "2026-10-06"
-    assert HostFingerprintRow.schema_version() == "2026-09-20"
+    assert FileEnvelope.schema_version() == HOST_OUTPUT_VERSION
+    assert HostFingerprintRow.schema_version() == HOST_OUTPUT_VERSION
     assert set(HostStoredRow.model_fields) - set(CorrectedHostFingerprintRow.model_fields) == set(
         RowIdentity.model_fields
     ) - {"run_id", "job", "shard"}

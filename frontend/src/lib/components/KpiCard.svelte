@@ -84,8 +84,8 @@
 	data-windowed={windowed}
 	data-window-days={windowDays}
 	data-model-rule={declaration?.value}
+	data-model-rule-name={declaration === null ? undefined : (ruleName ?? `kpi-${label}`)}
 	data-model-rule-none={declaration?.none}
-	data-model-rule-name={ruleName}
 	data-model-rule-from={ruleRange?.from}
 	data-model-rule-to={ruleRange?.to}
 >

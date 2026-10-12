@@ -61,10 +61,13 @@ export function machineRows(sizes: Sizes): Record<string, string>[] {
 			const promptTokens = 40_000 + Math.round(next() * 20_000);
 			const readSeconds = 900 + Math.round(next() * 600);
 			rows.push({
+				version: '2026-10-10',
 				date: dayOf(Math.floor(run / 2)),
 				run_id: runIdOf(run),
 				job: 'work',
 				shard: String(shard),
+				fingerprint: `fixture-${run}-${shard}`,
+				fingerprint_version: '2',
 				server_prompt_tokens: String(promptTokens),
 				server_prompt_seconds: String(readSeconds),
 				job_seconds: String(2_400 + Math.round(next() * 1_200)),

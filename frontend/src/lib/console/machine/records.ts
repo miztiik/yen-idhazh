@@ -1,6 +1,8 @@
 /** Hardware answers over only its declared query cells. No disk or manifest reads. */
 import type { Row } from '../../data/ledger';
 import type { CardHost } from '../../charts/machine-cards';
+import { normalizeHostRow } from '../../data/host-fingerprint';
+import type { MachineProcessors } from './article-cost';
 import { machineCounters, type MachineLimits } from './counters';
 import { finiteCell, nearestRank, qualifyingWork, referenceWork, typicalSeconds } from '../rates';
 import type { RankedInput } from '../../charts/d3/rankedList';
@@ -54,23 +56,42 @@ export function countersFrom(hosts: readonly Row[], items: readonly Row[], count
 export function fingerprints(rows: readonly Row[]): CardHost[] {
 	return rows.flatMap((row) => {
 		const shard = finiteCell(row.shard);
+		const normalized = normalizeHostRow(row);
 		if (typeof row.date !== 'string' || typeof row.run_id !== 'string' ||
 			typeof row.job !== 'string' || typeof row.fingerprint !== 'string' || !row.fingerprint ||
-			shard === null || !Number.isSafeInteger(shard) || shard < 0) return [];
-		const word = (name: string) => typeof row[name] === 'string' ? row[name] as string : null;
-		const number = (name: string) => finiteCell(row[name]);
+			shard === null || !Number.isSafeInteger(shard) || shard < 0 || normalized === null) return [];
+		const word = (name: string) => normalized[name] || null;
+		const number = (name: string) => finiteCell(normalized[name]);
 		return [{
-			date: row.date, run_id: row.run_id,
+			version: normalized.version, date: row.date, run_id: row.run_id,
 			job: row.job, shard,
-			fingerprint: row.fingerprint, cpu_model: word('cpu_model'),
+			fingerprint: normalized.fingerprint, fingerprint_version: number('fingerprint_version'),
+			cpu_model: word('cpu_model'), cpu_vendor: word('cpu_vendor'),
 			cpu_family: number('cpu_family'), cpu_model_number: number('cpu_model_number'),
 			cpu_stepping: number('cpu_stepping'), microcode: word('microcode'),
+			cpu_physical_cores: number('cpu_physical_cores'), cpu_logical_processors: number('cpu_logical_processors'),
+			cpu_allowed_processors: number('cpu_allowed_processors'), cpu_quota_cores: number('cpu_quota_cores'),
+			cpu_quota_state: word('cpu_quota_state'), cpu_target_measured_at: word('cpu_target_measured_at'),
 			l3_cache_bytes: number('l3_cache_bytes'),
-			mhz_at_probe: number('mhz_at_probe'), flags: word('flags') ?? '',
+			cpu_observed_mhz: number('cpu_observed_mhz'), cpu_reported_max_mhz: number('cpu_reported_max_mhz'),
+			flags: normalized.flags,
 			boot_seconds: number('boot_seconds'), memcpy_gib_s: number('memcpy_gib_s'),
 			memcpy_probe_mib: number('memcpy_probe_mib'), vm_size: word('vm_size'),
 			vm_location: word('vm_location'), vm_zone: word('vm_zone'), vm_fault_domain: word('vm_fault_domain')
 		}];
+	});
+}
+
+/** The cost join needs measured logical counts, not a fingerprint or private metadata. */
+export function processors(rows: readonly Row[]): MachineProcessors[] {
+	return rows.flatMap((row) => {
+		const shard = finiteCell(row.shard);
+		if (typeof row.date !== 'string' || typeof row.run_id !== 'string' || typeof row.job !== 'string' ||
+			shard === null || !Number.isSafeInteger(shard) || shard < 0) return [];
+		const normalized = normalizeHostRow(row);
+		if (normalized === null) return [];
+		return [{ date: row.date, run_id: row.run_id, job: row.job, shard,
+			cpu_logical_processors: finiteCell(normalized.cpu_logical_processors) }];
 	});
 }
 

@@ -7,11 +7,11 @@
 	import { consoleKnobs, routeConsole, routeKnobs } from '$lib/console/route-console';
 	import { routeReach, rangeFor, sliceOnce, retryAsks, tallyAsks, windowRange, type Range, type PanelQuery, type RouteReach } from '$lib/console/queries/window';
 	import type { LedgerReach, Row, SliceResult } from '$lib/data/ledger';
-	import { finiteCell } from '$lib/console/rates';
 	import * as queries from '$lib/console/queries/machine';
 	import { compareRuns } from '$lib/console/queries/shared';
-	import { PANEL_QUERIES, countersFrom, fingerprints, shardCounts, textRows } from '$lib/console/machine/records';
+	import { PANEL_QUERIES, countersFrom, fingerprints, processors, shardCounts, textRows } from '$lib/console/machine/records';
 	import { describeRefusedRuns } from '$lib/console/machine/refused-runs';
+	import { finiteCell } from '$lib/console/rates';
 	import { measurementOff, recordingNotes, type RecordRead } from '$lib/console/recording';
 	import { settingsRules } from '$lib/console/settings-moved';
 	import { machineKeys, machineRamp } from '$lib/charts/machine-colour';
@@ -148,9 +148,11 @@
 		rows('machineCardsItemsQuery'), rows('runShardsQuery'), { contextWindow: cfg.contextWindow, jobTimeoutSeconds: cfg.jobTimeoutSeconds }));
 	const refused = $derived(describeRefusedRuns(counters.refused.filter((run) => run.date >= start && run.date <= end)));
 	const jobs = $derived(fleetJobs(rows('platformMixQuery')));
-	const keys = $derived(machineKeys(jobs.map((job) => ({ fingerprint: job.fingerprint, cpuModel: job.cpuModel }))));
+	const keys = $derived(machineKeys(jobs.map((job) => ({
+		fingerprint: job.fingerprint, fingerprintVersion: job.fingerprintVersion, cpuModel: job.cpuModel
+	}))));
 	const ramp = $derived(machineRamp(jobs.map((job) => ({
-		machine: keys({ fingerprint: job.fingerprint, cpuModel: job.cpuModel }), rate: job.rate
+		machine: keys({ fingerprint: job.fingerprint, fingerprintVersion: job.fingerprintVersion, cpuModel: job.cpuModel }), rate: job.rate
 	})), { stops: shared.machine_colour_stops, floor: shared.machine_colour_floor_share }));
 	const healthDates = $derived([...new Set(rows('closestToMemoryQuery').map((row) => String(row.date)))]);
 	const hostDates = $derived(new Set(rows('platformMixQuery').map((row) => String(row.date))));
@@ -221,12 +223,8 @@
 					{#if id === 'platform-mix'}
 						<PlatformMixPanel {ramp} {start} {end} {windowDays} {lost} recordRows={rows('platformMixQuery')} recording={cfg.recording} chart={cfg.chart} knobs={shared} />
 					{:else if id === 'article-cost'}
-						<ArticleCostPanel cost={articleCost(textRows(rows('articleCostQuery')), rows('articleCostHostsQuery').flatMap((row) => {
-							const shard = finiteCell(row.shard);
-							return typeof row.date === 'string' && typeof row.run_id === 'string' && typeof row.job === 'string' &&
-								shard !== null && Number.isSafeInteger(shard) && shard >= 0
-								? [{ date: row.date, run_id: row.run_id, job: row.job, shard, threads: finiteCell(row.threads) }] : [];
-						}))} days={windowDays} {windowDays} chart={cfg.chart} />
+						<ArticleCostPanel cost={articleCost(textRows(rows('articleCostQuery')), processors(rows('articleCostHostsQuery')))}
+							days={windowDays} {windowDays} chart={cfg.chart} />
 					{:else if id === 'disk-reads'}
 						<DiskReadsPanel reads={diskReads(textRows(rows('diskReadsQuery')), { marked: shared.model_disk_reads_marked, named: shared.model_disk_reads_named })}
 							days={windowDays} {windowDays} readoutMaxShare={cfg.chart.readout_max_share} />

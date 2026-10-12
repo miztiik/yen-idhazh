@@ -1,17 +1,18 @@
 # Host telemetry through serialized events
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-10-12
 
 ## What is implemented
 
-The isolated contracts, native Rust producers/storage and read-only verifier do
-not change production collectors or shared ledger readers. Rust now collects,
+The native Rust producers/storage and read-only verifier do not change
+production collectors. Shared ledger readers now admit their finite truthful
+host provenance and normalize declared legacy rows before consumers. Rust collects,
 renders and atomically files real probe, target and clock host records.
 The isolated resource monitor now returns item-window cells and exports legacy
 job-memory and runtime server-status artifacts. Production invocation remains
 unchanged; this is not the single-writer cutover.
 The corrected host row removes the legacy CPU count and frequency columns.
-The candidate reads finite historical schemas without inventing measurements:
+The shared contract reads finite historical schemas without inventing measurements:
 old hashes retain algorithm 1, legitimate observed averages survive, and
 unmeasured corrected counts stay null.
 
@@ -32,7 +33,45 @@ Abort and shutdown resolve opening commands without silently dropping evidence.
 
 Memory collection defaults on. The manifest carries one strict Boolean; disabled
 memory cells are null and diagnosed separately from CPU and load readings.
-This candidate control does not yet turn off production Python instruments.
+`observability.memory_profiling_enabled` is the shared pipeline setting.
+`--memory-profiling on|off` is the per-process override; other strings and a
+missing value are refused. The isolated workflow dispatch accepts `inherit`,
+`on` or `off`. `inherit` writes no override and uses shared config. The resolved
+Boolean is written into the scratch native config and manifest before collection.
+The content and measurement workflows use the same three-value dispatch shape.
+
+The native off path takes no process-status, machine-memory, memory-cgroup or
+Python-population readings and creates no memory artifact directory. CPU, load,
+process identity, event boundaries, heartbeat and lifecycle remain active.
+The separate memory-bandwidth copy keeps its own controls. Production Python
+work collection has not cut over yet, so a Python work invocation resolved to
+off refuses before opening its legacy watch instead of claiming the legacy
+memory reads were disabled.
+
+## Inactive production boundaries
+
+`observability.host_event_shadow` defaults to false. In that mode the command
+router does not open a manifest and performs no event file read, write or wait.
+Python collection, item-health sealing and raw host writes remain unchanged.
+
+When an artifact-only comparison enables the switch, the command must name an
+isolated workspace, its session manifest and its effective native config.
+The Python client verifies those files against the existing finite limits. It
+registers the actual Python worker and selected server, opens a declared event
+window immediately after the existing Python `Watch` opens, and consumes the
+native result before the Python watch closes and before item health is sealed.
+Success without scoring, scored success, failed work and cancellation all use
+that same close boundary. Duplicate closes reuse the first close and emit no
+second event. An exited target stays explicit in the native result and never
+replaces the Python cells while shadow mode is active.
+
+The same client can bracket the existing job recorder with probe, optional
+target enrichment and clock commands. Only event I/O failures degrade under
+the recorder's existing warning policy. Invalid identities, ordering and
+protocol results still fail. Shadow roots remain below the named isolated
+workspace and are never returned as production files to stage or publish.
+YAML still owns native process lifetime. This boundary does not authorize the
+single-writer cutover or establish enabled-path latency.
 
 ## Probe, target and clock collection
 
@@ -257,22 +296,114 @@ closed exchange contracts; SHA-256 and Ryu serve canonical identity bytes.
 
 ## Configuration and verification command
 
-`config/host-telemetry-experiment.json` supplies collection, capture, exchange
+`config/host-telemetry-experiment.json` supplies native collection, capture, exchange
 and verification limits. It declares no production state root. Callers validate
 its sections with `CollectionControls`, `HostEventLimits`, `HostCaptureLimits`
 and `VerificationLimits`. Session manifests supply finite named inputs/outputs,
 workers and windows. Tunable intervals and byte limits are not source constants.
+The shared default is `observability.memory_profiling_enabled` in
+`config/idhazh.json`; native scratch config carries its already resolved value.
 
 `backend/utilities/verify_host_output.py` accepts a workspace root, independently
 expected target root/invocation, named plan/completion files and explicit
 verification limits. It returns verified physical hashes and completeness,
 or a named refusal. It neither collects nor publishes.
 
+## Artifact-only Linux comparison
+
+`.github/workflows/rust-host-telemetry.yml` uses one stock `ubuntu-latest`
+job with read-only repository permissions, credential-free checkout and seven-day
+artifacts. It does not call `measure.yml`, publish, migrate history or write
+production state. Its separate steps build/test the pinned crate, run independent
+CPU/hash and unchanged-input replay plus historical dry-run fixtures, measure the
+release build, prepare references, store the Rust probe, start the monitor, run
+paired workloads, drain, store the clock, compare the same files, and always
+clean up/upload. Dependency preparation happens before tests. The same native
+crate supplies fixture and live results; no collector delegates to Python.
+
+`utilities.compare_host_telemetry` routes the finite session operations. A new,
+explicit `backend/var/` workspace holds distinct reference, native raw-state,
+native-artifact, event, generated-state, corpus and frontend roots. Links,
+junctions, escapes, overlapping roots and production-root spellings fail.
+Reference rows use the existing Python decoders and raw-file writer only under
+`reference/state/`; native output preserves `state/raw/host-fingerprint/`
+grammar. Neither shared Python collectors nor readers change.
+
+The driver records the actual workflow attempt in both writers. Its resource
+`manifest.json` and standalone `host-manifest.json` have distinct session IDs,
+event roots and host/resource result emitters, while sharing the declared job,
+revision, boot identity, effective controls and real worker/CPU target. Both
+probe and clock use the same host session and native raw root; retained commands,
+sequences, predecessor IDs and completion references are checked. Resource
+readiness/window counters cannot collide with a standalone result counter.
+
+`config/host-telemetry-comparison.json` owns comparison-only counts, pacing,
+intervals, deadlines, inventories and numeric bounds. The strict native experiment
+configuration remains unchanged. Format, compression and cache sizing come from
+the existing application config. Four reference runs precede every live Rust result;
+their measured spread freezes each varying field's numeric allowance under a
+predeclared ceiling. Excess noise refuses the run, never widens the ceiling.
+Deterministic unchanged cells compare exactly. Corrected CPU facts rely on named
+independent declared-input fixtures and validated live source diagnostics, not
+equality to obsolete Python CPU columns. Canonical and identity tests use the
+same declared row bytes, not physical native/PyArrow equality.
+
+One real Python worker keeps a touched 32-MiB allocation and hashes it 128 times
+per run. Each run has a declared seven-second minimum wall duration so legacy
+second-resolution sample clocks have unambiguous interior coverage. This pacing
+is part of the bounded fixture, not a speed measurement adjustment. Five-second
+sampling respects native immutable retry retention; an unsafe faster cadence
+is refused before capture instead of changing native budgets. Two pairs
+alternate reference instrumentation and native-only instrumentation; native-only
+runs create no substitute Python sampler. Captures retain actual Python PID/start
+identities, sample/rollcall totals and per-window coverage. Population differences
+are reported separately: the Rust monitor is not a Python process.
+
+The bounded release measurement checks the actual checkout revision, pinned
+toolchain and declared target root. Its retained executable size/hash must match
+the binary used by the comparison; build output and elapsed time have committed
+caps. No compilation result is accepted merely because its supplied SHA agrees.
+
+The versioned `HostEvidenceReport` retains build wall time/executable bytes/hash,
+startup, monitor CPU/RSS, ACK latency, workload and reference-instrument costs,
+frozen bounds, every field classification/comparison, sample coverage, populations,
+fixture case names and physical artifact hashes. Missing build, reference,
+receipt, window, population, drain or coverage evidence fails. The bounded
+verifier and shared `load`/`load_stored` readers verify the same original native
+bytes. Verification compares inventory hashes
+before/after and never re-encodes a native file. Received resource events preserve
+native JSON bytes and must keep session identity, increasing emitter order,
+triggering worker/window commands and a drain with no aborted windows. Sample
+totals preserve the unchanged legacy HWM-or-RSS rule, including zero-HWM fallback;
+that is independent of corrected window memory precedence.
+Unreadable optional executable or argument metadata does not remove readable
+Python memory from this population. Reference argument captures retain only the
+program and the existing three argument fields, never the full command line.
+
+Always-run cleanup names only recorded owned worker, sampler and monitor targets,
+checks PID/start identity, and verifies termination within the existing drain
+bound. Partial preparation can stop its recorded worker without a completed
+manifest. `cleanup.json` is separate termination evidence. An actual Linux stage
+integration and partial-failure cleanup test run in this workflow; Windows tests
+exercise explicit refusals, not live Linux certification.
+Response waits check the recorded worker identity and surface bounded worker and
+sampler logs when it stops. The dedicated Linux tests retain their task-owned
+workspace under the uploaded test directory, including failed-stage diagnostics.
+Incomplete native timeout replies are retained as received and fail the required
+acknowledgement; they are never accepted as healthy windows. The live monitor
+retires validated, consumed events after their retry window before admitting the
+next sample, keeping active windows protected and shutdown capacity reserved.
+
+The merged D5 evidence report never authorizes adoption or
+history replacement, asserts a general speedup, or substitutes for the exact
+consumer and production gates.
+
 ## Bounded historical inventory and dry-run
 
 `utilities.migrate_host_fingerprints` now prepares real replacement candidates
 without writing historical files. It is a maintenance codec, not a CPU collector.
-The unchanged Python collectors and production readers remain unchanged.
+The unchanged Python collectors remain unchanged; migrated readers consume the
+candidate output without Python re-encoding.
 
 Supply a `HistoryManifest` from `idhazh.contracts.host_migration`. Its schema is
 available through `HistoryManifest.json_schema()`. The manifest requires:
@@ -313,11 +444,16 @@ workspace; persisted paths remain relative and POSIX-separated.
 The command reads exactly two repository-owned configuration files, resolved
 from the utility's location, not the operator's workspace or environment.
 `history_migration_limits` in `config/host-history-migration.json` caps roots,
-closed periods, manifest bytes and the complete bundle. It contains no copied
+closed periods, manifested sources, per-file and aggregate history rows,
+manifest bytes and the complete bundle. Its 512-source, 128-row/file and
+4096-row aggregate ceilings are independent of `verification_limits.max_files`
+and `max_rows`, which continue to cap an individual host output plan and file.
+This lets one explicitly bounded history manifest cover its complete input
+set without widening the D5 write-plan contract. It contains no copied
 verification defaults. `verification_limits` in
-`config/host-telemetry-experiment.json` caps files, individual and aggregate source
-bytes, rows, footer/decode bytes, JSON depth and Thrift items. Every source read
-is bounded and hash-checked.
+`config/host-telemetry-experiment.json` caps individual and aggregate source
+bytes, footer/decode bytes, JSON depth and Thrift items. Every source read is
+bounded and hash-checked.
 `HistoryLimits` validates the combined effective inputs before reading history.
 Missing files or invalid bounds refuse the dry-run without source or config
 writes. The shared experiment file retains only native settings; Rust still
@@ -347,6 +483,11 @@ re-encoded: already corrected files are explicitly excluded from replacement.
 Footer row counts must equal the bounded row-group sum before page decoding,
 and the actual decoded row count afterward. Contradictions refuse the entire
 source batch without a bundle or historical writes.
+A physical compact Parquet file may represent a packed zero-row period when its
+envelope and index agree. Its empty chunks and page totals remain bounded and
+validated; `empty` and `lost` index markers are not converted to packed files.
+Zero-row raw inputs remain refused, and producer verification retains its
+existing one-row requirement.
 
 Each legacy candidate preserves its path, UUID5 work unit, UUID8 file identity,
 allocation clock, attempts and original producer/git lineage. The canonical row
@@ -421,6 +562,12 @@ Each expression has one standard-library initialization slot. Unknown expression
 remain uncached. The predicates, error results and every validation call remain;
 the registry cannot grow from input. Original-result and concurrent-reuse tests
 hold this structural change separately from receipt behaviour.
+
+Fowler ruled that starting the resource monitor cannot restart one emitter's
+ordering inside a session already used by a standalone probe. The monitor's
+empty history is not an ordering exception. Separate host and resource sessions
+preserve H1/H9 without filtering evidence, fabricating populations or editing
+the native collector; the host probe-to-clock raw/receipt chain stays intact.
 
 A forged compressed-string fixture exposed allocation before an old
 post-decode check. Bounded actual-page admission fixes that boundary. Apache

@@ -11,7 +11,23 @@ use std::{
 use uuid::Uuid;
 
 pub fn read_bounded(path: &Path, maximum: usize) -> Result<Vec<u8>> {
-    let metadata = std::fs::symlink_metadata(path).map_err(|e| e.to_string())?;
+    match read_bounded_classified(path, maximum)? {
+        ReadOutcome::Present(raw) => Ok(raw),
+        ReadOutcome::Missing(error) => Err(error.to_string()),
+    }
+}
+enum ReadOutcome<T> {
+    Present(T),
+    Missing(std::io::Error),
+}
+fn read_bounded_classified(path: &Path, maximum: usize) -> Result<ReadOutcome<Vec<u8>>> {
+    let metadata = match std::fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(ReadOutcome::Missing(error));
+        }
+        Err(error) => return Err(error.to_string()),
+    };
     require(
         metadata.is_file()
             && !metadata.file_type().is_symlink()
@@ -19,13 +35,24 @@ pub fn read_bounded(path: &Path, maximum: usize) -> Result<Vec<u8>> {
         "named file exceeds bound or is not regular",
     )?;
     let mut raw = Vec::new();
-    std::fs::File::open(path)
-        .map_err(|e| e.to_string())?
+    let file = match std::fs::File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(ReadOutcome::Missing(error));
+        }
+        Err(error) => return Err(error.to_string()),
+    };
+    if let Err(error) = file
         .take(maximum.saturating_add(1) as u64)
         .read_to_end(&mut raw)
-        .map_err(|e| e.to_string())?;
+    {
+        if error.kind() == std::io::ErrorKind::NotFound {
+            return Ok(ReadOutcome::Missing(error));
+        }
+        return Err(error.to_string());
+    }
     require(raw.len() <= maximum, "named file grew beyond bound")?;
-    Ok(raw)
+    Ok(ReadOutcome::Present(raw))
 }
 pub fn decode_event(raw: &[u8]) -> Result<HostEvent> {
     require(
@@ -140,6 +167,33 @@ impl FileTransport {
             total_events: 0,
         })
     }
+    // Capacity scans and retirement share this lock so listed files cannot vanish mid-scan.
+    fn lock_lifecycle(&self) -> Result<std::fs::File> {
+        let path = self.root.join(".transport.lock");
+        let file = match std::fs::OpenOptions::new()
+            .create_new(true)
+            .read(true)
+            .write(true)
+            .open(&path)
+        {
+            Ok(file) => file,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                let metadata = std::fs::symlink_metadata(&path).map_err(|e| e.to_string())?;
+                require(
+                    metadata.is_file() && !metadata.file_type().is_symlink(),
+                    "transport lifecycle lock is not a regular file",
+                )?;
+                std::fs::OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .open(path)
+                    .map_err(|e| e.to_string())?
+            }
+            Err(error) => return Err(error.to_string()),
+        };
+        file.lock().map_err(|e| e.to_string())?;
+        Ok(file)
+    }
     pub fn path(&self, event_id: Uuid, direction: &str) -> Result<PathBuf> {
         let relative = self.relative_path(event_id, direction)?;
         let path = crate::ledger::paths::resolve_document(&self.workspace, &relative)?;
@@ -164,6 +218,7 @@ impl FileTransport {
         self.path(event.event_id, direction)
     }
     pub fn publish_batch(&mut self, events: &[HostEvent], direction: &str) -> Result<()> {
+        let _lifecycle = self.lock_lifecycle()?;
         require(
             events.len() <= self.manifest.limits.max_files as usize && direction != "consumed",
             "invalid publication batch",
@@ -265,6 +320,22 @@ impl FileTransport {
         )
     }
     pub fn read(&mut self, event_id: Uuid, direction: &str) -> Result<HostEvent> {
+        match self.read_classified(event_id, direction)? {
+            ReadOutcome::Present(event) => Ok(event),
+            ReadOutcome::Missing(error) => Err(error.to_string()),
+        }
+    }
+    pub fn read_listed_result(&mut self, event_id: Uuid) -> Result<Option<HostEvent>> {
+        match self.read_classified(event_id, "results")? {
+            ReadOutcome::Present(event) => Ok(Some(event)),
+            ReadOutcome::Missing(_) => Ok(None),
+        }
+    }
+    fn read_classified(
+        &mut self,
+        event_id: Uuid,
+        direction: &str,
+    ) -> Result<ReadOutcome<HostEvent>> {
         let path = self.path(event_id, direction)?;
         let cap = if direction == "inbox" {
             self.manifest.limits.max_command_bytes
@@ -272,7 +343,10 @@ impl FileTransport {
             self.manifest.limits.max_result_bytes
         };
         self.budget.reserve(cap as usize)?;
-        let raw = read_bounded(&path, cap as usize)?;
+        let raw = match read_bounded_classified(&path, cap as usize)? {
+            ReadOutcome::Present(raw) => raw,
+            ReadOutcome::Missing(error) => return Ok(ReadOutcome::Missing(error)),
+        };
         self.budget.used(raw.len());
         let event = decode_event(&raw)?;
         require(
@@ -280,7 +354,7 @@ impl FileTransport {
             "event filename identity mismatch",
         )?;
         self.identity(&event, direction)?;
-        Ok(event)
+        Ok(ReadOutcome::Present(event))
     }
     pub fn named(&self, name: &str) -> Result<PathBuf> {
         let input = self
@@ -369,6 +443,7 @@ impl FileTransport {
         Ok(bytes)
     }
     pub fn consume(&mut self, event: &HostEvent) -> Result<()> {
+        let _lifecycle = self.lock_lifecycle()?;
         event.validate()?;
         self.identity(event, "consumed")?;
         let raw = crate::canonical_json::row_line(event)?;
@@ -391,16 +466,23 @@ impl FileTransport {
         } else {
             self.manifest.limits.max_result_bytes
         };
+        if path.exists() {
+            self.budget.reserve(cap as usize)?;
+            let existing = read_bounded(&path, cap as usize)?;
+            self.budget.used(existing.len());
+            require(existing == raw, "consumption differs from original event")?;
+            return Ok(());
+        }
         if !path.exists() {
             self.reserve_storage(1, raw.len() as u64, ordinary_reserve(&self.manifest.limits))?;
         }
         self.budget.reserve(cap as usize)?;
         let existing = read_bounded(&original, cap as usize)?;
         self.budget.used(existing.len());
-        require(existing == raw, "consumption differs from original event")?;
         crate::fs::atomic::publish_immutable(&path, &raw).map_err(|e| e.to_string())
     }
     pub fn remove_retired(&self, ids: &[Uuid]) -> Result<()> {
+        let _lifecycle = self.lock_lifecycle()?;
         for id in ids {
             for direction in ["inbox", "results", "consumed"] {
                 let path = self.path(*id, direction)?;
@@ -497,5 +579,51 @@ impl FileTransport {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod lifecycle_lock_tests {
+    use super::*;
+
+    #[test]
+    fn capacity_snapshot_and_retirement_share_the_lifecycle_lock() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("var")
+            .join(format!(
+                "d5-transport-lifecycle-lock-{}",
+                std::process::id()
+            ));
+        if root.exists() {
+            std::fs::remove_dir_all(&root).unwrap();
+        }
+        std::fs::create_dir_all(&root).unwrap();
+        let manifest: HostSessionManifest = serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../tests/fixtures/host-events/manifest.json"
+        )))
+        .unwrap();
+        let files = FileTransport::new(&root, manifest).unwrap();
+        let id = Uuid::from_u128(42);
+        for direction in ["inbox", "results", "consumed"] {
+            std::fs::write(files.path(id, direction).unwrap(), b"x").unwrap();
+        }
+
+        let lock = files.lock_lifecycle().unwrap();
+        let contender = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(files.root.join(".transport.lock"))
+            .unwrap();
+        assert!(contender.try_lock().is_err());
+        assert_eq!(files.physical_bytes().unwrap(), 3);
+        drop(lock);
+
+        files.remove_retired(&[id]).unwrap();
+        assert_eq!(files.physical_bytes().unwrap(), 0);
+        drop(contender);
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

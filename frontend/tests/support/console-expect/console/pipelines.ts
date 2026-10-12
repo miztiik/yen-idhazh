@@ -4,7 +4,7 @@ import type { RouteExpect } from './index';
 export const EXPECT: RouteExpect | null = {
 	bansRouter: true,
 	failureListMax: 25,
-	stageHeading: 'Time per item, by stage',
+	stageHeading: 'Time per item by stage',
 	renamedFigures: [
 		{ selector: '[data-windowed="chart-drawing"] [data-rule-figure]', count: 2 },
 		{ selector: '[data-windowed="chart-drawing"] [data-target-bar]', count: 2 },

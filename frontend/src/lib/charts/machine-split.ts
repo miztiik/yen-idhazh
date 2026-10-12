@@ -33,7 +33,8 @@ import {
 	type MachineIdentity,
 	type MachineKey,
 	type MachineRamp,
-	type MachineSeen
+	type MachineSeen,
+	type VersionedFingerprint
 } from './machine-colour';
 import { percentOf } from './rank';
 import { grouped } from './series';
@@ -107,9 +108,14 @@ function whole(shard: ShardCounters): boolean {
  * digest `fingerprints` carries for its index; a shard neither reached carries
  * only the processor's own string, which the same record holds on its other half.
  */
-function seenBy(shard: ShardCounters, fingerprints: ReadonlyMap<number, string>): MachineSeen {
+function seenBy(
+	shard: ShardCounters,
+	fingerprints: ReadonlyMap<number, VersionedFingerprint>
+): MachineSeen {
+	const indexed = fingerprints.get(shard.shard);
 	return {
-		fingerprint: shard.fingerprint ?? fingerprints.get(shard.shard) ?? null,
+		fingerprint: shard.fingerprint ?? indexed?.fingerprint ?? null,
+		fingerprintVersion: shard.fingerprintVersion ?? indexed?.fingerprintVersion ?? null,
 		cpuModel: shard.cpuModel
 	};
 }
@@ -120,7 +126,7 @@ export function splitByMachine(
 		/** The speed ramp's steps and floor, for a ramp built over this run alone. */
 		colour: { stops: number; floor: number };
 		/** Shard index to fingerprint, for the shards the machine record reached. */
-		fingerprints?: ReadonlyMap<number, string>;
+		fingerprints?: ReadonlyMap<number, VersionedFingerprint>;
 		/** The page's own ramp, assigned over every machine any panel can show.
 		 * Without it the ramp is assigned over this run alone, which is right for a
 		 * test and wrong for a page whose window control can widen the key set. */
@@ -129,7 +135,7 @@ export function splitByMachine(
 		keys?: (seen: MachineSeen) => MachineKey;
 	}
 ): SplitByMachine {
-	const fingerprints = options.fingerprints ?? new Map<number, string>();
+	const fingerprints = options.fingerprints ?? new Map<number, VersionedFingerprint>();
 	const reported = run === null ? [] : run.reported.filter(whole);
 	if (run === null || reported.length === 0) {
 		return {

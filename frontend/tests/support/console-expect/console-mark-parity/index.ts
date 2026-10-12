@@ -14,6 +14,7 @@ export interface Chart {
 	readonly frame: string;
 	readonly itemSel: string;
 	readonly attrs: readonly string[];
+	readonly retainedTelemetry?: boolean;
 }
 
 export interface RouteExpect {

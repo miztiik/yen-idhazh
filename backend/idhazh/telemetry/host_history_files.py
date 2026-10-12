@@ -5,17 +5,16 @@ from __future__ import annotations
 import hashlib
 import struct
 import zlib
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, replace
 from pathlib import Path
 from typing import Any
 
 from idhazh.contracts.console_band import ConsoleBand
-from idhazh.contracts.file_envelope import Format, Period, RowIdentity, Tier
+from idhazh.contracts.file_envelope import FileEnvelope, Format, Period, RowIdentity, Tier
 from idhazh.contracts.host_migration import HistoryManifest, HistoryRoot, HistorySource
 from idhazh.contracts.host_output import (
     HOST_OUTPUT_VERSION,
     LEGACY_HOST_VERSIONS,
-    CandidateFileEnvelope,
     HostStoredRow,
     host_file_id,
     normalize_stored_host_rows,
@@ -62,6 +61,9 @@ class HistoryLimits:
     verification: VerificationLimits
     max_roots: int
     max_periods: int
+    max_sources: int
+    max_history_file_rows: int
+    max_history_rows: int
     max_manifest_bytes: int
     max_bundle_bytes: int
 
@@ -84,9 +86,13 @@ class HistoryLimits:
             if field.name != "verification"
         }
 
+    @property
+    def history_verification(self) -> VerificationLimits:
+        return replace(self.verification, max_rows=self.max_history_file_rows)
+
     def check_manifest(self, manifest: HistoryManifest) -> None:
-        if len(manifest.sources) > self.verification.max_files:
-            raise ValueError("manifest exceeds max_files")
+        if len(manifest.sources) > self.max_sources:
+            raise ValueError("manifest exceeds max_sources")
         if len(manifest.roots) > self.max_roots or len(manifest.closed_periods) > self.max_periods:
             raise ValueError("manifest exceeds root or period bounds")
         if any(s.bytes > self.verification.max_file_bytes for s in manifest.sources):
@@ -101,7 +107,7 @@ class HistoryLimits:
 class HistoryFile:
     source: HistorySource
     data: bytes
-    envelope: CandidateFileEnvelope | None
+    envelope: FileEnvelope | None
     original_rows: tuple[dict[str, Any], ...]
     rows: tuple[HostStoredRow, ...]
     document: dict[str, Any] | None
@@ -192,20 +198,25 @@ def _admit_compact_pages(
     opened: Any,
     start_footer: int,
     columns: tuple[Column, ...],
-    env: CandidateFileEnvelope,
+    env: FileEnvelope,
     limits: VerificationLimits,
 ) -> None:
     engine = parquet.pyarrow  # type: ignore[attr-defined]  # Existing adapter's engine import.
     footer = opened.metadata
     if (
-        not 0 < footer.num_rows <= limits.max_rows
+        not 0 <= footer.num_rows <= limits.max_rows
         or not 0 < footer.num_row_groups <= limits.max_rows
     ):
-        raise ValueError("compact Parquet exceeds row/group bounds or holds no rows")
+        raise ValueError("compact Parquet exceeds row/group bounds")
+    empty_compact = footer.num_rows == 0 and env.tier is Tier.COMPACT
+    if footer.num_rows == 0 and not empty_compact:
+        raise ValueError("zero-row Parquet is admitted only for compact history")
     group_counts = tuple(
         footer.row_group(group_id).num_rows for group_id in range(footer.num_row_groups)
     )
-    if any(not 0 < count <= limits.max_rows for count in group_counts):
+    if any(not 0 <= count <= limits.max_rows for count in group_counts) or (
+        not empty_compact and any(count == 0 for count in group_counts)
+    ):
         raise ValueError("compact Parquet row-group cardinality exceeds row bounds")
     if sum(group_counts) != footer.num_rows:
         raise ValueError("compact Parquet row-group cardinality contradicts its footer")
@@ -213,7 +224,7 @@ def _admit_compact_pages(
     intervals: list[tuple[int, int]] = []
     for group_id in range(footer.num_row_groups):
         group = footer.row_group(group_id)
-        if group.num_rows <= 0 or group.num_columns != len(columns):
+        if group.num_columns != len(columns):
             raise ValueError("compact Parquet row group has an invalid shape")
         group_size = 0
         for index, column in enumerate(columns):
@@ -354,7 +365,7 @@ def _admit_compact_pages(
 
 def _compact(
     data: bytes, limits: VerificationLimits
-) -> tuple[CandidateFileEnvelope, list[dict[str, Any]], Format]:
+) -> tuple[FileEnvelope, list[dict[str, Any]], Format]:
     if data.startswith(b"PAR1"):
         footer_start = check_parquet_footer(
             data,
@@ -371,9 +382,9 @@ def _compact(
                 thrift_container_size_limit=limits.max_thrift_items,
             ) as opened,
         ):
-            env = CandidateFileEnvelope.from_metadata(
+            env = FileEnvelope.from_metadata(
                 parquet._envelope_of(opened.metadata.metadata)
-            )
+            ).validate_container(Format.PARQUET)
             columns = host_output_columns(env.row_schema_version)
             if opened.schema_arrow.remove_metadata() != parquet.schema_of(columns):
                 raise ValueError("compact Parquet logical schema contradicts row version")
@@ -404,7 +415,7 @@ def _compact(
         raise ValueError("compact JSONL is not canonical")
     if len(json_lines.rows_bytes(rows)) > limits.max_decode_bytes:
         raise ValueError("compact JSONL exceeds decode byte cap")
-    return CandidateFileEnvelope.from_metadata(metadata), rows, Format.JSON
+    return FileEnvelope.from_metadata(metadata).validate_container(Format.JSON), rows, Format.JSON
 
 
 def decode_history(
@@ -445,7 +456,11 @@ def decode_history(
         normalized = _validate_rows(originals, env)
     else:
         env, originals, container = _compact(data, limits)
-        normalized = normalize_stored_host_rows(originals, content_sha256=env.content_sha256)
+        normalized = normalize_stored_host_rows(
+            originals,
+            content_sha256=env.content_sha256,
+            historical_envelope=env,
+        )
     if env.version not in ENVELOPE_VERSIONS or env.row_schema_version not in (
         *LEGACY_HOST_VERSIONS,
         HOST_OUTPUT_VERSION,

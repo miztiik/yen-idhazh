@@ -6,5 +6,6 @@ export const EXPECT: RouteExpect = {
 	records: true,
 	fleetReady: null,
 	fetchedRows: true,
+	fetchedRecord: { pattern: '**/state/compact/item-health/index/*.json', strip: '[data-readout="failure-mix"]' },
 	explorerShape: null
 };
