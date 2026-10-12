@@ -521,7 +521,16 @@ def decode_history(
         raise ValueError("original envelope UUID5/UUID8 or allocation clock contradicts lineage")
     columns = host_output_columns(env.row_schema_version)
     for row in originals:
-        if set(row) != {c.name for c in columns} or row["version"] != env.row_schema_version:
+        allowed_versions = (
+            {env.row_schema_version}
+            if env.row_schema_version == HOST_OUTPUT_VERSION
+            else {
+                version
+                for version in LEGACY_HOST_VERSIONS
+                if version <= env.row_schema_version
+            }
+        )
+        if set(row) != {c.name for c in columns} or row["version"] not in allowed_versions:
             raise ValueError("unknown/mixed historical row shape or version")
         for column in columns:
             if row[column.name] is None and not column.nullable:

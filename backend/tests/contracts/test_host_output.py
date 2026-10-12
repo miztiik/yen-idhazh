@@ -626,6 +626,62 @@ def test_stored_digest_and_identity_are_checked_before_defaults_or_migration() -
             )
 
 
+def test_converter_provenance_allows_rows_from_distinct_original_runs() -> None:
+    original = original_stored(fixture("cpu-snapshots.json")["legacy_row"])
+    converter_identity = {
+        "run_id": "2026-10-11-1",
+        "attempt": 1,
+        "job": "operator",
+        "shard": 0,
+        "producer": "utilities.migrate_to_parquet",
+        "git_sha": "b" * 40,
+    }
+    converter_unit = filenames.unit_id(
+        ledger="host-fingerprint",
+        covers=original["date"],
+        run_id=converter_identity["run_id"],
+        job=converter_identity["job"],
+        shard=converter_identity["shard"],
+        producer=converter_identity["producer"],
+    )
+    converted = original | {
+        "run_id": "2026-10-10-18",
+        "unit_id": str(converter_unit),
+    }
+    digest = hashlib.sha256(json_lines.rows_bytes([converted])).hexdigest()
+    envelope = FileEnvelope.model_validate(
+        {
+            "version": "2026-09-28",
+            "row_schema_version": "2026-09-20",
+            "tier": "compact",
+            "period": "daily",
+            "ledger": "host-fingerprint",
+            "covers": original["date"],
+            "written_at_ms": 1791633601000,
+            "identity": converter_identity,
+            "unit_id": converter_unit,
+            "file_id": host_file_id(
+                unit=converter_unit,
+                attempt=converter_identity["attempt"],
+                written_at_ms=1791633601000,
+            ),
+            "content_sha256": digest,
+            "writer": "idhazh.ledger.parquet",
+            "writer_version": parquet.engine_version(),
+            "compression": "none",
+        }
+    )
+
+    rows = normalize_stored_host_rows(
+        [converted],
+        content_sha256=digest,
+        historical_envelope=envelope,
+    )
+
+    assert rows[0].run_id == converted["run_id"]
+    assert rows[0].unit_id != converted["unit_id"]
+
+
 @pytest.mark.parametrize(
     ("version", "placeholder"),
     [

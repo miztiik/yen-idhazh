@@ -496,9 +496,8 @@ def normalize_stored_host_rows(
             and historical_envelope.writer == "idhazh.ledger.parquet"
             and historical_envelope.identity.producer == "utilities.migrate_to_parquet"
             and historical_envelope.row_schema_version in SHARED_LEGACY_HOST_VERSIONS
-            and original_identity.unit_id == historical_envelope.unit_id
+            and original_identity.unit_id == str(historical_envelope.unit_id)
             and original_identity.covers == historical_envelope.covers
-            and original_identity.run_id == historical_envelope.identity.run_id
             and original_identity.attempt == historical_envelope.identity.attempt
         )
         if (
@@ -514,7 +513,10 @@ def normalize_stored_host_rows(
         payload = {key: value for key, value in source.items() if key not in identity_keys}
         payload.update({key: source[key] for key in own_identity})
         row = normalize_host_row(strip_null_legacy_placeholders(payload))
-        normalized.append(HostStoredRow.model_validate(row.model_dump() | identity))
+        normalized_identity = dict(identity)
+        if converter_identity:
+            normalized_identity["unit_id"] = str(uuid.uuid5(HOST_NAMESPACE, seed))
+        normalized.append(HostStoredRow.model_validate(row.model_dump() | normalized_identity))
     return tuple(normalized)
 
 

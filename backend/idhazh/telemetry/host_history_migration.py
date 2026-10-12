@@ -80,6 +80,7 @@ def _row_reports(file: HistoryFile) -> tuple[RowMigration, ...]:
                 normalized_identity=_identity(new),
                 original_key=_record(original),
                 normalized_key=_record(new),
+                identity_repaired=_identity(original) != _identity(new),
                 dropped_values={key: original[key] for key in LEGACY_CPU_FIELDS if key in original},
                 null_fields=tuple(key for key, value in new.items() if value is None),
                 retained_average=normalized.cpu_observed_mhz,

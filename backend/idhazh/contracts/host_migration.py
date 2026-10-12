@@ -212,14 +212,22 @@ class RowMigration(HistoryModel):
     retained_average: float | None
     original_fingerprint: str | None
     fingerprint_version: Literal[1, 2] | None
+    identity_repaired: bool = False
 
     @model_validator(mode="after")
     def _preserved_rank(self) -> Self:
-        if (
-            self.original_identity != self.normalized_identity
-            or self.original_key != self.normalized_key
-        ):
+        identity_changed = self.original_identity != self.normalized_identity
+        if self.original_key != self.normalized_key:
             raise ValueError("normalization changed original identity or settlement key")
+        if identity_changed and (
+            not self.identity_repaired
+            or any(
+                getattr(self.original_identity, name) != getattr(self.normalized_identity, name)
+                for name in ("covers", "run_id", "job", "shard", "attempt")
+            )
+            or self.original_identity.unit_id == self.normalized_identity.unit_id
+        ):
+            raise ValueError("normalization changed original identity without a bounded repair")
         return self
 
 
