@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-12
 
-**Level**: 5 - a persisted contract changes: `RunPlan` gains a field and `RunRecord.shards` holds the dispatched count ([CLAUDE.md section 6](../CLAUDE.md#6-correction-levels)). The owner settled the design on 2026-10-12 (Tables I and K); execution waits for the user's authorization (Table C, C1).
+**Level**: 5 - a persisted contract changes: `RunPlan` gains a field and `RunRecord.shards` holds the dispatched count ([CLAUDE.md section 6](../CLAUDE.md#6-correction-levels)). The owner settled the design on 2026-10-12 (Tables I and K); the user authorized execution (Table C, C1).
 
 ## 0. Operating contract
 
@@ -18,7 +18,7 @@ Table A - operating contract
 | A6 | Execution | autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4; only rows 1 and 2 can be in flight together, and rows 3 and 4 both edit `backend/idhazh/cli.py`, so they run in order. |
 | A7 | Source inspected | main at `72569d67`; every receipt below is at that commit. Re-run the dispatch checks of execute-a-plan.md against the execution checkout. |
 
-Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0.
 
 Table B - exclusions and their cost
 
@@ -50,10 +50,10 @@ Table D - authoritative execution queue
 
 | ID | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| D1 | 1 | Move the shard count formula out of the command router | - | A | PENDING | - | - | - |
-| D2 | 2 | Let a run plan carry its dispatched shard count | - | A | PENDING | - | - | - |
-| D3 | 3 | Decide the count once in the plan step and fan out from it | 1, 2 | B | PENDING | - | - | - |
-| D4 | 4 | Record the plan's count at assembly and in the fresh-base rebuild | 3 | C | PENDING | - | - | - |
+| D1 | 1 | Move the shard count formula out of the command router | - | A | DONE | - | - | - |
+| D2 | 2 | Let a run plan carry its dispatched shard count | - | A | DONE | - | - | - |
+| D3 | 3 | Decide the count once in the plan step and fan out from it | 1, 2 | B | DONE | - | - | - |
+| D4 | 4 | Record the plan's count at assembly and in the fresh-base rebuild | 3 | C | DONE | - | - | - |
 
 ## 2. Row #1 - Move the shard count formula out of the command router
 

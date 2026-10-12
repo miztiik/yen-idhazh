@@ -17,10 +17,10 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, writer_identity
+from conftest import writer_identity
 from pytest import MonkeyPatch
 
-from idhazh import cli, config, ledger
+from idhazh import cli, ledger
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.stages import common
@@ -43,9 +43,17 @@ def _run_id(execution: int) -> str:
 def _file_two_plans(state: Path) -> None:
     """The fixture plan filed as two runs of one day, the later one generated later."""
     recorded = plan().model_dump(mode="json")
-    for execution, generated_at in ((EARLIER, f"{DAY}T06:00:04Z"), (LATER, f"{DAY}T10:00:04Z")):
+    for execution, generated_at, shards in (
+        (EARLIER, f"{DAY}T06:00:04Z", 3),
+        (LATER, f"{DAY}T10:00:04Z", 5),
+    ):
         filed = RunPlan.model_validate(
-            {**recorded, "run_id": _run_id(execution), "generated_at": generated_at}
+            {
+                **recorded,
+                "run_id": _run_id(execution),
+                "generated_at": generated_at,
+                "shards": shards,
+            }
         )
         ledger.persist(
             state,
@@ -93,5 +101,21 @@ def test_the_execution_a_step_passes_picks_the_plan_it_reads(
         cli.main(["shards", "--date", DAY, "--execution", str(UNPLANNED)])
 
     assert cli.main(["shards", "--date", DAY, "--execution", str(EARLIER)]) == 0
-    expected = cli.shard_count(len(plan().items), run=config.load(CONFIG_DIR).app.run)
-    assert capsys.readouterr().out.strip() == str(expected)
+    assert capsys.readouterr().out.strip() == "3"
+    assert cli.main(["shards", "--date", DAY, "--execution", str(LATER)]) == 0
+    assert capsys.readouterr().out.strip() == "5"
+
+    recorded = plan().model_dump(mode="json")
+    legacy = RunPlan.model_validate(
+        {**recorded, "run_id": _run_id(UNPLANNED), "shards": None}
+    )
+    ledger.persist(
+        common.STATE_ROOT,
+        [legacy],
+        ledger=LedgerName.RUN_PLAN,
+        covers=DAY,
+        identity=writer_identity(legacy.run_id),
+    )
+    with pytest.raises(SystemExit):
+        cli.main(["shards", "--date", DAY, "--execution", str(UNPLANNED)])
+    assert f"run {_run_id(UNPLANNED)} has no recorded shard count" in capsys.readouterr().err

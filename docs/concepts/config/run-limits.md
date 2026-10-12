@@ -1,6 +1,6 @@
 # Guards, alarms and limits
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-10-12
 
 Some numbers in `config/` are not there to be tuned. They are there to stop a
 bug running for six hours, to say out loud that something has changed, or to
@@ -11,15 +11,16 @@ one, is [../config.md](../config.md).
 
 ## The run shape, and who reads each number
 
-All three run-shape knobs are now enforced. `digest.yml` derives the worker
-count from the planned day as
-`min(ceil(items / run.shard_size), run.max_parallel)` from 2026-08-26, and reads
-the `work` job's own timeout out of `run.shard_timeout_minutes` from 2026-08-27.
-That last one had no reader at all while the workflow set the job to 330
-minutes, so config said 150 and production ran 330.
+The plan step records the count this run dispatches. Without an operator choice,
+it derives `min(ceil(items / run.shard_size), run.max_parallel)` from the final
+planned items; a manual dispatch keeps the operator's `shards` choice. The
+worker matrix and its concurrency cap both read that recorded count. A config
+test ensures `run.max_parallel` does not exceed the largest dispatch choice,
+so a derived count cannot be silently clamped after planning.
 
-The derivation is the automatic path; an operator dispatching the workflow names
-a count instead, up to the eight the workflow's own guard allows.
+The `work` job reads its own timeout from `run.shard_timeout_minutes` from
+2026-08-27. That knob had no reader while the workflow set the job to 330
+minutes, so config said 150 and production ran 330.
 
 Treating a worker as five items is still false, and for the opposite reason:
 `shard_size` decides how few workers a small day is worth, and a full day at the

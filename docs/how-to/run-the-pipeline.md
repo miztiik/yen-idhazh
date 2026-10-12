@@ -267,14 +267,15 @@ strikes and no inherited retirement
 day's plan in the run-plan ledger and hands that day's folder of plans to the
 later jobs, and every step after it names its run with `--execution`
 ([../architecture/contracts/state-ledgers.md](../architecture/contracts/state-ledgers.md)).
-A matrix of worker jobs each restores the weights once and works a shard. A scheduled run
-derives its own worker count from the day it just planned - at most four, and
-fewer on a small day. Manual runs accept one to eight and default to four; the
-plan rejects any other dispatched value before it creates the matrix. The `visuals` job uses
-their output, and assemble runs **even when a worker failed** - a run that publishes nothing
-on a bad day is a run whose bad days are invisible. Each run appends to the
-day's payload rather than replacing it, so the day grows through the day. The
-workflow names and triggers are pinned in
+A matrix of worker jobs each restores the weights once and works a shard. The
+plan records either the count derived from its final items and run config or
+the operator's chosen count on a manual dispatch. The matrix and its
+concurrency cap use that recorded count
+([run-limits](../concepts/config/run-limits.md)). The `visuals` job uses their
+output, and assemble runs **even when a worker failed** - a run that publishes
+nothing on a bad day is a run whose bad days are invisible. Each run appends to
+the day's payload rather than replacing it, so the day grows through the day.
+The workflow names and triggers are pinned in
 [../reference/github-actions.md](../reference/github-actions.md)
 ([../architecture/publishing/layout.md](../architecture/publishing/layout.md)).
 

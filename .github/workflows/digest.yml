@@ -152,6 +152,7 @@ jobs:
         env:
           # Pass dispatch input as data, not interpolated shell code.
           DISPATCH_ARTICLE_LIMIT: ${{ inputs.article_limit }}
+          DISPATCH_SHARDS: ${{ inputs.shards }}
         run: |
           set -euo pipefail
           LIMIT=()
@@ -162,11 +163,16 @@ jobs:
             fi
             LIMIT=(--article-limit "$DISPATCH_ARTICLE_LIMIT")
           fi
+          SHARD_ARGS=()
+          if [ -n "${DISPATCH_SHARDS:-}" ]; then
+            SHARD_ARGS=(--shards "$DISPATCH_SHARDS")
+          fi
           python backend/utilities/digest_publish.py run plan \
             --date "${{ steps.decide.outputs.date }}" \
             --execution "${{ github.run_id }}" \
             --commit "${{ github.sha }}" \
-            "${LIMIT[@]}"
+            "${LIMIT[@]}" \
+            "${SHARD_ARGS[@]}"
 
       # The probe needs the plan's execution ID and an otherwise idle runner.
       - name: What machine this job drew
@@ -185,14 +191,7 @@ jobs:
         run: |
           set -euo pipefail
           SHARD_PATTERN='^[1-8]$'
-          SHARDS="${{ inputs.shards }}"
-          if [ -z "$SHARDS" ]; then
-            SHARDS=$(python -m idhazh shards --date "${{ steps.decide.outputs.date }}" --execution "${{ github.run_id }}")
-            # Clamp derived counts to the dispatch range; reject invalid inputs below.
-            while [ "$SHARDS" -gt 1 ] && ! [[ "$SHARDS" =~ $SHARD_PATTERN ]]; do
-              SHARDS=$((SHARDS - 1))
-            done
-          fi
+          SHARDS=$(python -m idhazh shards --date "${{ steps.decide.outputs.date }}" --execution "${{ github.run_id }}")
           if ! [[ "$SHARDS" =~ $SHARD_PATTERN ]]; then
             echo "shards must be an integer from 1 through 8" >&2
             exit 1
