@@ -1,6 +1,6 @@
 # What a month out of a year file costs
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-11
 
 What a browser pays to read one month out of a packed year file by byte range,
 against the same month's own file read whole and read by byte range, what a
@@ -88,10 +88,10 @@ correctly, and the 29,996,389 bytes were 12 times what the month's own file cost
 On the slow 4G link above, the whole file alone takes about 158 seconds. At an
 address of its own the browser held nothing, so no request named the old ETag.
 
-`frontend/tests/ledger-ranges.spec.ts` reproduces both ways a deploy can fall
+At measurement time, `frontend/tests/ledger-ranges.spec.ts` reproduced both ways a deploy can fall
 between two reads on the small fixture - the same page reading again, and a new
 page opened while what an earlier page fetched is still fresh within Pages' 600
-seconds - and requires every GET for the year file to be answered 206 and every
+seconds - and required every GET for the year file to be answered 206 and every
 `If-Range` to name the ETag the host gave that read.
 
 ## What it settles
@@ -120,7 +120,10 @@ seconds - and requires every GET for the year file to be answered 206 and every
   trip the whole file does not make. Take the three reads again unslowed before
   moving month files to ranges.
 
-## How to take it again
+## How this historical measurement was run
+
+These commands describe the measured checkout. The browser range spec was
+removed on 2026-10-11; they are not commands for the current suite.
 
 1. Build a year file and one month file of the same year as above, named
    `year-<YYYY>.parquet` and `month-<YYYY>-<MM>.parquet`, in one folder outside
@@ -133,8 +136,8 @@ $env:IDHAZH_RANGE_BENCH_DIR = '<that folder>'
 npx playwright test tests/ledger-ranges.spec.ts -g measure
 ```
 
-The case writes every run to `frontend/test-results/ledger-ranges/measure.json`.
-It fails when the year file by range, read once or read again, costs more than
+The case wrote every run to `frontend/test-results/ledger-ranges/measure.json`.
+It failed when the year file by range, read once or read again, cost more than
 twice the month file's bytes, when any GET for it is not a range answered 206,
 when either draws later than the month file whole, or when the read after a
 deploy is answered with the whole year file.

@@ -1,5 +1,7 @@
 {
-  "panel_groups": [],
-  "judged": [],
+  "panel_groups": [
+    { "id": "summaries", "title": "", "panels": ["model-cards", "model-throughput", "call-ending", "refusing-rule", "doubt-reasons", "faithfulness", "source-doubts", "write-cost", "score-cost", "summary-length", "model-change"] }
+  ],
+  "judged": ["model-cards", "model-throughput", "call-ending", "refusing-rule", "doubt-reasons", "faithfulness", "source-doubts", "write-cost", "score-cost", "summary-length", "model-change"],
   "knobs": {}
 }

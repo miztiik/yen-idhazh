@@ -40,10 +40,22 @@ test.describe('route-owned console configuration', () => {
 			{ id: 'judgement', title: '', panels: judgementPanels }
 		]);
 		expect(routes.judgement.judged).toEqual(judgementPanels);
-		for (const id of ['model', 'voices'] as const) {
-			expect(routes[id].panel_groups).toEqual([]);
-			expect(routes[id].judged).toEqual([]);
-		}
+		const modelPanels = [
+			'model-cards', 'model-throughput', 'call-ending', 'refusing-rule',
+			'doubt-reasons', 'faithfulness', 'source-doubts', 'write-cost',
+			'score-cost', 'summary-length', 'model-change'
+		];
+		expect(routes.model.panel_groups).toEqual([
+			{ id: 'summaries', title: '', panels: modelPanels }
+		]);
+		expect(routes.model.judged).toEqual(modelPanels);
+		const sources = ['source-health', 'feeds-failed', 'fetch-time', 'retiring', 'source-cuts'];
+		const ranking = ['ranking-discount', 'why-chosen', 'watchlist'];
+		expect(routes.voices.panel_groups).toEqual([
+			{ id: 'what-the-sources-supplied', title: 'What the sources supplied', panels: sources },
+			{ id: 'what-the-ranking-did', title: 'What the ranking did', panels: ranking }
+		]);
+		expect(routes.voices.judged).toEqual([...sources, ...ranking]);
 		expect(consoleConfig()).not.toHaveProperty('panel_groups');
 		expect(consoleConfig()).not.toHaveProperty('judged_panel_ids');
 	});

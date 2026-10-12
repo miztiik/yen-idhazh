@@ -28,9 +28,8 @@
 	 * **The rows behind it arrive by fetch, and the figure says so.** Since
 	 * 2026-09-09 `/console/` holds no telemetry row until a month shard lands,
 	 * so this chart and its strip cannot be in the prerendered document - the
-	 * numbers are not there to print. `data-readout-fetched` is how
-	 * `console-readout.spec.ts` tells this panel from one drawn over inlined
-	 * data, and holds each to the promise it can actually keep.
+	 * numbers are not there to print. `data-readout-fetched` distinguishes this
+	 * panel from one drawn over inlined data.
 	 */
 	import {
 		chartWidth,

@@ -1,0 +1,165 @@
+name: Encode exact missing archive inputs
+
+on:
+  workflow_dispatch:
+    inputs:
+      input_artifact_id:
+        description: 'Approved archive-input artifact ID in this public repository'
+        default: ''
+      input_asset_id:
+        description: 'Approved release asset ID; use exactly one input acquisition route'
+        default: ''
+      archive_sha256:
+        description: 'Approved input ZIP SHA-256; required for release asset acquisition'
+        default: ''
+      package_sha256:
+        description: 'Exact approved package.json SHA-256'
+        required: true
+      shard:
+        description: 'One exact shard name; blank selects all manifest shards'
+        default: ''
+      resume_artifact_id:
+        description: 'Optional prior result artifact for the one selected shard'
+        default: ''
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: story-archive-${{ inputs.package_sha256 }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: backend
+  OMP_NUM_THREADS: '2'
+  MKL_NUM_THREADS: '2'
+  OPENBLAS_NUM_THREADS: '2'
+  TOKENIZERS_PARALLELISM: 'false'
+  HF_HUB_DISABLE_TELEMETRY: '1'
+  DO_NOT_TRACK: '1'
+
+jobs:
+  inputs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+      - name: Download only the approved public input artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT: ${{ inputs.input_artifact_id }}
+          ASSET: ${{ inputs.input_asset_id }}
+          ARCHIVE_SHA256: ${{ inputs.archive_sha256 }}
+          PACKAGE_SHA256: ${{ inputs.package_sha256 }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$ARTIFACT" && -z "$ASSET" ]]; then
+            python -m idhazh.story_dataset.runner_download \
+              --recipient "$GITHUB_REPOSITORY" --artifact-id "$ARTIFACT" \
+              --name archive-input --output backend/var/runner-input
+          elif [[ -n "$ASSET" && -z "$ARTIFACT" && -n "$ARCHIVE_SHA256" ]]; then
+            python -m idhazh.story_dataset.runner_download \
+              --recipient "$GITHUB_REPOSITORY" --asset-id "$ASSET" \
+              --sha256 "$ARCHIVE_SHA256" --output backend/var/runner-input
+          else
+            echo "select exactly one approved input route and its required hash" >&2
+            exit 1
+          fi
+          python -m idhazh.story_dataset.runner_bootstrap \
+            --root backend/var/runner-input --sha256 "$PACKAGE_SHA256"
+          python -m pip --isolated install --require-hashes --no-deps \
+            -r backend/var/runner-input/runtime-requirements.txt
+      - name: Validate source and select only manifest shards
+        id: matrix
+        env:
+          SHARD: ${{ inputs.shard }}
+          RESUME: ${{ inputs.resume_artifact_id }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$RESUME" && -z "$SHARD" ]]; then
+            echo "a resume artifact requires one exact shard" >&2
+            exit 1
+          fi
+          matrix="$(python -m idhazh.story_dataset.runner_cli matrix \
+            --package-root backend/var/runner-input ${SHARD:+--shard "$SHARD"})"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  encode:
+    needs: inputs
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        shard: ${{ fromJSON(needs.inputs.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+      - name: Download and verify the same approved package
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT: ${{ inputs.input_artifact_id }}
+          ASSET: ${{ inputs.input_asset_id }}
+          ARCHIVE_SHA256: ${{ inputs.archive_sha256 }}
+          PACKAGE_SHA256: ${{ inputs.package_sha256 }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$ARTIFACT" && -z "$ASSET" ]]; then
+            python -m idhazh.story_dataset.runner_download \
+              --recipient "$GITHUB_REPOSITORY" --artifact-id "$ARTIFACT" \
+              --name archive-input --output backend/var/runner-input
+          elif [[ -n "$ASSET" && -z "$ARTIFACT" && -n "$ARCHIVE_SHA256" ]]; then
+            python -m idhazh.story_dataset.runner_download \
+              --recipient "$GITHUB_REPOSITORY" --asset-id "$ASSET" \
+              --sha256 "$ARCHIVE_SHA256" --output backend/var/runner-input
+          else
+            echo "select exactly one approved input route and its required hash" >&2
+            exit 1
+          fi
+          python -m idhazh.story_dataset.runner_bootstrap \
+            --root backend/var/runner-input --sha256 "$PACKAGE_SHA256"
+          python -m pip --isolated install --require-hashes --no-deps \
+            -r backend/var/runner-input/runtime-requirements.txt
+      - name: Restore one explicitly selected prior result
+        if: inputs.resume_artifact_id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT: ${{ inputs.resume_artifact_id }}
+          SHARD: ${{ matrix.shard }}
+        run: |
+          set -euo pipefail
+          python -m idhazh.story_dataset.runner_download \
+            --recipient "$GITHUB_REPOSITORY" --artifact-id "$ARTIFACT" \
+            --name "archive-result-$SHARD" --output backend/var/runner-result
+      - name: Encode missing native units; stop starting work after five hours
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          set -euo pipefail
+          python -m idhazh.story_dataset.runner_cli run \
+            --package-root backend/var/runner-input --shard "$SHARD" \
+            --output backend/var/runner-result --soft-stop-minutes 300
+      - name: Preserve complete units even after a failed or partial shard
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: archive-result-${{ matrix.shard }}
+          path: |
+            backend/var/runner-result/result.json
+            backend/var/runner-result/units/*.json
+            backend/var/runner-result/vectors/*.npy
+          if-no-files-found: warn
+          retention-days: 90

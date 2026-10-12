@@ -22,7 +22,8 @@ from idhazh.contracts.council_events import (
     ProgramFinished,
     UnitFinished,
 )
-from idhazh.council import event_log, outcome, registry, session
+from idhazh.contracts.council_run_record import CouncilRunRecord, ShardOutcome
+from idhazh.council import event_log, metrics_sink, outcome, registry, session
 
 from ._tenants import TENANT_SOURCE, a_scripted_venue, a_venue, forget
 from .test_publication import configuration
@@ -84,7 +85,7 @@ def test_unstructured_library_logs_cannot_carry_source_or_exception_text(
         Diagnostic(kind="exception", where=HOSTILE)
 
 
-def test_a_raised_unit_has_one_failure_event_and_no_new_persisted_failed_record(
+def test_a_raised_unit_has_one_failure_event_and_one_failed_record(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     source = TENANT_SOURCE.replace(
@@ -116,7 +117,14 @@ def test_a_raised_unit_has_one_failure_event_and_no_new_persisted_failed_record(
         )
         assert str(said["where"]).startswith("idhazh.council.deadline:")
         assert "SOURCE-TEXT" not in json.dumps(said)
-        assert not session.outcomes_dir(DATE).exists()
+        (row,) = metrics_sink.shipped_rows(
+            session.outcomes_dir(DATE), judge_id="one-judge", contract=CouncilRunRecord
+        )
+        assert (row.outcome, row.fault) == (ShardOutcome.FAILED, "raised")
+        assert row.seconds_spent >= 0
+        assert row.model_calls is None and row.model_seconds is None
+        assert row.tokens_in is None and row.tokens_out is None
+        assert HOSTILE not in row.to_json()
     finally:
         forget(PACKAGE)
 
@@ -191,14 +199,15 @@ def test_success_exit_is_printed_even_when_configured_logging_level_is_error() -
     assert (said["code"], said["label"]) == (0, "ok")
 
 
-@pytest.mark.parametrize("result", ["completed", "stopped_on_deadline", "raised"])
+@pytest.mark.parametrize("result", ["completed", "stopped_on_deadline", "raised", "exit-zero"])
 def test_actual_shard_entrypoint_prints_only_json_and_earns_its_real_code(
     result: str, tmp_path: Path
 ) -> None:
-    if result == "raised":
+    if result in ("raised", "exit-zero"):
+        raised = f"RuntimeError({HOSTILE!r})" if result == "raised" else "SystemExit(0)"
         source = TENANT_SOURCE.replace(
             "        self.ran.append((date, run_id, shard, shards))",
-            f"        raise RuntimeError({HOSTILE!r})",
+            f"        raise {raised}",
         )
         a_venue(tmp_path, package=PACKAGE, slugs={"one-judge": (1, ())}, source=source)
     else:

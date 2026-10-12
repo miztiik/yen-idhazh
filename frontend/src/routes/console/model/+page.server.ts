@@ -1,380 +1,77 @@
-import {
-	chartConfig,
-	consoleConfig,
-	evaluationConfig,
-	observabilityConfig,
-	summarizeConfig,
-	uiConfig
-} from '$lib/server/config';
-import { measurementOff, recordingNotes, recordNotesByWindow } from '$lib/console/recording';
-import {
-	evalColumnLabels,
-	evalDays,
-	evalWithin,
-	matchDays,
-	matchFloor,
-	matchNotes,
-	matchRules,
-	matchSeries,
-	type DayScoredCounts
-} from '$lib/console/eval-instruments';
-import {
-	reasonColumnLabels,
-	reasonDays,
-	reasonSeries,
-	reasonsWithin,
-	type ReasonDay
-} from '$lib/console/doubt-reasons';
-import {
-	modelByDate,
-	modelSwap,
-	modelWork,
-	runLengths,
-	scoreCost,
-	sourceDoubts,
-	throughputWithin,
-	workDates,
-	writeTimes,
-	type DayWindow
-} from '$lib/server/model-work';
-import { stacked } from '$lib/charts/stacked';
-import { windowOfDays } from '$lib/charts/viewport';
-import { renderToSvg } from '$lib/server/chart-render';
+import { chartConfig, consoleConfig, evaluationConfig, observabilityConfig, summarizeConfig, uiConfig } from '$lib/server/config';
+import { evalDays, type DayScoredCounts } from '$lib/console/eval-instruments';
+import { reasonDays } from '$lib/console/doubt-reasons';
+import { modelWork, workDates } from '$lib/server/model-work';
 import { evalRows, itemHealthRows } from '$lib/server/ledger-rows';
-import { dayMetrics, latestDate, loadDay, publishedDates } from '$lib/server/payload';
+import { dayMetrics, loadDay, publishedDates } from '$lib/server/payload';
 import { windowDay } from '$lib/server/window-day';
+import { windowOfDays } from '$lib/charts/viewport';
+import { measurementOff, recordingNotes, recordNotesByWindow } from '$lib/console/recording';
 
 export const prerender = true;
-
-export type {
-	CapPoint,
-	DayWindow,
-	Distribution,
-	ModelDay,
-	ModelRow,
-	ModelSwap,
-	RunLength,
-	ScoreCost,
-	SourceDoubt,
-	SourceDoubts,
-	SwapMeasure,
-	WriteBin,
-	WriteTimes
-} from '$lib/server/model-work';
-
+export type { CapPoint, DayWindow, Distribution, ModelDay, ModelRow, ModelSwap, RunLength, ScoreCost, SourceDoubt, SourceDoubts, SwapMeasure, WriteBin, WriteTimes } from '$lib/server/model-work';
 export type { ReasonDay } from '$lib/console/doubt-reasons';
 export type { EvalDay } from '$lib/console/eval-instruments';
 
-/** Why the checker doubted each day's summaries, from the committed payloads.
- *
- * The reason is a field on the published item, decided by
- * `backend/idhazh/evals/score.py` and written by `assemble.build_day`. It is not
- * a column of the `summary-quality-evals` ledger, which carries the inputs it was decided from, so
- * this is the only ledger on disk that can answer the question.
- *
- * `windowDays` is the cover. The caller filters what comes back to the widest
- * span the control offers, so a day older than that was opened and thrown away
- * (`CLAUDE.md` Guardrail #12). Nothing about the read reaches a browser: what ships
- * is one count per reason per day.
- */
-function doubtReasonDays(windowDays: number): ReasonDay[] {
-	return reasonDays(
-		publishedDates(undefined, windowDays)
-			.map((date) => {
-				const day = loadDay(date);
-				if (day === null) return null;
-				return {
-					date,
-					items: day.items.map((item) => ({
-						band: item.band,
-						reason: item.band_reason
-					}))
-				};
-			})
-			.filter((day) => day !== null)
-	);
-}
-
-function byDate(rows: Record<string, string>[]): Map<string, Record<string, string>[]> {
-	const grouped = new Map<string, Record<string, string>[]>();
-	for (const row of rows) {
-		const date = row.date ?? '';
-		if (!date) continue;
-		grouped.set(date, [...(grouped.get(date) ?? []), row]);
-	}
-	return grouped;
-}
-
-/** What the model did to the day's own articles.
- *
- * The same two ledgers the Pipelines route reads, asked a different question.
- * Nothing here is a rate the pipeline stored: every ratio is one committed
- * count over another, computed at read time, so a ratio can never disagree with
- * the counts printed beside it.
- */
+/** Only the approved cards, daily disclosure and item decisions cross this boundary. */
 export async function load() {
-	const console = consoleConfig();
-	// The widest span the control can reach, worked out before the ledgers are
-	// read rather than after: nothing older than this can be drawn whatever the
-	// operator does, so nothing older is opened either (`CLAUDE.md` Guardrail #12).
-	// Every window ends on the site's newest published day, so the widest one is
-	// every day both ledgers are read for.
-	const widestDays = Math.max(...console.window_presets);
+	const shared = consoleConfig();
+	const widest = Math.max(...shared.window_presets);
 	const day = windowDay();
-	const readSpan = windowOfDays(day, widestDays, console.today_anchor);
-	// Both from their packed files, so both stop at the newest packed day and say
-	// so on the page rather than drawing the days after it as quiet ones.
-	const scores = await evalRows(readSpan);
-	const items = await itemHealthRows(readSpan);
-	const { rows } = scores;
-	const itemRows = items.rows;
-	const modelOnDate = modelByDate(rows);
-	const itemHealthByDate = byDate(itemRows);
-	const bands = summarizeConfig().bands;
-
-	// Every span the control offers, worked out once here. The two distribution
-	// panels have to re-read every millisecond to answer for a different span,
-	// and a percentile taken off a drawn bar is a guess at where inside the bar
-	// it fell - so each span is measured over the values themselves, at build
-	// time, and the browser picks the answer rather than recomputing it. Four
-	// presets is four small objects; the alternative was inlining every timing
-	// the ledger holds so the page could re-bin them.
-	//
-	// Every span ends on the site's newest published day, the day the cards'
-	// lines end on too, so every panel on the page names one span.
-	const dated = workDates(rows, itemRows);
-	const windows = new Map<number, DayWindow>(
-		console.window_presets.map((days) => {
-			const span = windowOfDays(day, days, console.today_anchor);
-			return [days, { start: span.start, end: span.end, days }];
-		})
-	);
-	// The widest span the control can reach. Nothing older than this can be drawn
-	// whatever the operator does, so nothing older is inlined.
-	const widest = [...windows.values()].reduce((a, b) => (a.days >= b.days ? a : b));
-	// The distinct-published counts each day settled, read one record a day for
-	// the days the widest span reaches and no wider - never a walk over the whole
-	// `state/day-metrics/` tree (CLAUDE.md Guardrail #12). A day the record does not
-	// cover falls back to the ledger row count, exactly as before. This corrects
-	// the scored count on the days a re-score or a dropped item ran it high, and
-	// leaves every measurement distribution reading the same rows it always did.
-	const settledCounts = new Map<string, DayScoredCounts>();
-	for (const [date, record] of dayMetrics(
-		dated.filter((date) => date >= widest.start && date <= widest.end)
-	)) {
-		settledCounts.set(date, {
-			scored: record.summariesScored,
-			determinismViolations: record.determinismViolations,
-			extractionSuspect: record.extractionSuspect
-		});
-	}
-	const work = modelWork(rows, itemRows, settledCounts);
-
-	// Why each day's summaries were doubted. Seeded to the widest span for the
-	// same reason `runLengths` is: each day is already seven small numbers, so
-	// narrowing the window is a filter and never a re-aggregation, and a day
-	// older than the widest preset could never be drawn.
-	const reasons = reasonsWithin(doubtReasonDays(widestDays), {
-		start: widest.start,
-		end: widest.end
+	const span = windowOfDays(day, widest, shared.today_anchor);
+	const windows = shared.window_presets.map((days) => ({ days, ...windowOfDays(day, days, shared.today_anchor) }));
+	const [scores, health] = await Promise.all([evalRows(span), itemHealthRows(span)]);
+	const metrics = dayMetrics(workDates(scores.rows, health.rows));
+	const counts = new Map<string, DayScoredCounts>([...metrics].map(([date, record]) => [
+		date, { scored: record.summariesScored, determinismViolations: record.determinismViolations, extractionSuspect: record.extractionSuspect }
+	]));
+	const days = modelWork(scores.rows, health.rows, counts).flatMap((row) => {
+		if (row.kind !== 'day') return [];
+		const settled = counts.get(row.day.date);
+		return [{ ...row.day, models: [], summaries: settled?.scored ?? null,
+			determinismViolations: settled?.determinismViolations ?? null }];
 	});
-	// Drawn on the server at the span the page opens on, so every mark is on the
-	// page before any script runs. The browser re-draws from the same array when
-	// the operator moves the control.
-	const openReasons = reasonsWithin(reasons, windows.get(console.default_window_days) ?? widest);
-	const reasonsPlot = stacked(reasonColumnLabels(openReasons), reasonSeries(openReasons));
-	const reasonsSvg = reasonsPlot.empty
-		? null
-		: await renderToSvg(reasonsPlot.option, {
-				width: console.chart_width,
-				height: console.chart_height
-			});
-
-	// What the checker measured on every summary, reduced to one small object a
-	// day. Seeded to the widest span for the same reason the reasons are: the
-	// browser filters this array and re-aggregates nothing, so the number in the
-	// strip and the number in the sentence cannot drift apart.
-	//
-	// The reduction is here rather than in the browser because the ledger is
-	// 6,966 rows and growing, and the page draws about a dozen numbers a day off
-	// it. Inlining the rows to re-derive those numbers in a browser would put the
-	// whole checker's output into every prerendered document.
-	const evaluated = evalWithin(evalDays(rows, settledCounts), {
-		start: widest.start,
-		end: widest.end
+	const instruments = evalDays(scores.rows, counts).map((value) => ({
+		date: value.date,
+		recorded: {
+			self_repetition: value.recorded.self_repetition ?? null,
+			coherence: value.recorded.coherence ?? null,
+			semantic_coverage: value.date < '2026-09-24' ? null : value.recorded.semantic_coverage ?? null
+		}
+	}));
+	const published = publishedDates(undefined, widest);
+	const decisions = published.flatMap((date) => {
+		const payload = loadDay(date);
+		return payload === null ? [] : [{ date, items: payload.items.map((item) => ({
+			band: item.band, reason: item.band_reason
+		})) }];
 	});
-	const openEval = evalWithin(evaluated, windows.get(console.default_window_days) ?? widest);
-	// Lines, never bars, and no shape switch on either. One percentile added to
-	// another is not a quantity, and neither is one day's share added to the
-	// next day's - so the second shape `stacked()` offers would be a lie here.
-	const openMatch = matchDays(openEval);
-	// Whole percents, converted once, here. The plot is drawn in percent and the
-	// pipeline bands in scores between zero and one, so converting anywhere else
-	// would mean a second place that has to agree about which unit it holds.
+	const reasons = published.length === 0 || decisions.length !== published.length ? null : reasonDays(decisions);
 	const evaluation = evaluationConfig();
-	const matchThresholds = {
-		high: Math.round(evaluation.band_high_min * 100),
-		low: Math.round(evaluation.band_medium_min * 100)
-	};
-	const matchAxisFloor = matchFloor(openMatch, matchThresholds, {
-		step: console.faithfulness_axis_step,
-		floorMax: console.faithfulness_axis_floor_max
-	});
-	const matchPlot = stacked(evalColumnLabels(openMatch), matchSeries(openMatch), 'lines', {
-		min: matchAxisFloor,
-		// A percentage has a ceiling and it is not one the data gets to move. A
-		// fitted top would redraw the scale every time the best day changed.
-		max: 100,
-		rules: matchRules(matchThresholds, matchAxisFloor),
-		columnNotes: matchNotes(openMatch),
-		unit: '%'
-	});
-	const matchSvg = matchPlot.empty
-		? null
-		: await renderToSvg(matchPlot.option, {
-				width: console.chart_width,
-				height: console.chart_height
-			});
-	const observability = observabilityConfig();
-	/** The days each instrument answered for, so the page can name a day one of
-	 * them missed rather than drawing it as a day nothing happened. */
-	const scoredDays = [...new Set(rows.map((row) => row.date ?? ''))].filter((date) => date !== '').sort();
-	const timedDays = [...itemHealthByDate.keys()].sort();
-	/** The days either instrument answered for: a run happened on each of them. */
-	const answeredDays = [...new Set([...scoredDays, ...timedDays])].sort();
-
-	// One candle a timed day, bounded to the widest span the control can reach -
-	// the same seed the doubt reasons and the eval days take. A day older than the
-	// widest preset can never be drawn, so nothing older is built into the
-	// payload; the browser narrows this array and re-aggregates nothing.
-	const throughputDays = throughputWithin(itemHealthByDate, modelOnDate, {
-		start: widest.start,
-		end: widest.end
-	});
-
+	const repo = uiConfig().repo_url.replace(/\/+$/, '');
+	const recording = observabilityConfig();
+	const scoredDays = [...new Set(scores.rows.map((row) => row.date).filter(Boolean))];
+	const answeredDays = [...new Set(health.rows.map((row) => row.date).filter(Boolean))];
+	const timedDays = [...new Set(health.rows.filter((row) => Number(row.summarize_ms) > 0).map((row) => row.date))];
+	const notes = Object.fromEntries(windows.map((open) => [String(open.days), recordingNotes({
+		enabled: recording.evaluation_enabled, rate: recording.sample_rate,
+		recorded: scoredDays, window: answeredDays, reads: [scores.read], from: span.start, open,
+		figures: 'quality figures', coveredElsewhere: timedDays, missing: 'scores'
+	})]));
+	const off = Object.fromEntries(windows.map((open) => [String(open.days), measurementOff({
+		enabled: recording.evaluation_enabled, recorded: scoredDays, read: scores.read, open, offered: windows
+	})]));
 	return {
-		modelWork: work,
-		throughputDays,
-		// What the recording itself was doing, once for each span the control
-		// offers, so a day a line names is one that span shows. Every quality figure
-		// on this route comes from the faithfulness scorer, so a day it was switched
-		// off for or sampled past has summaries nobody counted - which is not the
-		// same fact as a day the model wrote nothing, and a zero cannot tell them
-		// apart. Each span is handed the whole read and the score record's read, so
-		// a start is dated only where the read reaches back to the record's first day.
-		// The article record is the other instrument: a day the machine ran and was
-		// timed that nothing scored is named rather than drawn as a quiet day.
-		recording: Object.fromEntries(
-			[...windows].map(([days, window]) => [
-				days,
-				recordingNotes({
-					enabled: observability.evaluation_enabled,
-					rate: observability.sample_rate,
-					recorded: scoredDays,
-					window: answeredDays,
-					reads: [scores.read],
-					from: readSpan.start,
-					open: window,
-					figures: 'quality figures',
-					coveredElsewhere: timedDays,
-					missing: 'scores'
-				})
-			])
-		),
-		// Whether the scorer is switched off, once for each span the control offers:
-		// a day the line names is one that span shows, and a span that holds none of
-		// the score record's rows names the span that reaches back to them instead.
-		measurementOff: Object.fromEntries(
-			[...windows].map(([days, window]) => [
-				days,
-				measurementOff({
-					enabled: observability.evaluation_enabled,
-					recorded: scoredDays,
-					read: scores.read,
-					open: window,
-					offered: [...windows.values()]
-				})
-			])
-		),
-		// One entry per span the control offers. Null where the span timed
-		// nothing, which the panel prints as a sentence rather than as an empty
-		// chart of zeroes.
-		writeTimes: Object.fromEntries(
-			[...windows].map(([days, window]) => [days, writeTimes(itemRows, window)])
-		),
-		scoreCost: Object.fromEntries(
-			[...windows].map(([days, window]) => [days, scoreCost(rows, window)])
-		),
-		// Which sources the checker doubts, once per span the control offers. The
-		// list is capped on the server: an uncapped one inlines a row for every
-		// source the window scored, and the tail of it is a source with a single
-		// doubt in a month.
-		sourceDoubts: Object.fromEntries(
-			[...windows].map(([days, window]) => [
-				days,
-				sourceDoubts(rows, itemRows, window, {
-					limit: console.doubt_rows,
-					minForShare: console.min_attempts_for_rate
-				})
-			])
-		),
-		windows: Object.fromEntries(windows),
-		// Every run inside the widest span the control offers. The panel filters it
-		// to the open window, so each entry is already three numbers and narrowing
-		// recomputes nothing - but a run older than the widest preset can never be
-		// drawn, and inlining it would grow this document for as long as the
-		// pipeline runs. Trimming a seed the first paint cannot use is a saving,
-		// not a cut.
-		runLengths: runLengths(rows, bands).filter((run) => run.date >= widest.start),
-		// One entry per committed day inside the widest span: the day's own item
-		// count, the summaries carrying a reason, the summaries doubted with none,
-		// and one count per reason. The browser filters this to the open window.
-		reasons,
-		reasonsSvg,
-		// One entry per scored day inside the widest span, holding what the checker
-		// measured on that day's summaries: the faithfulness quartiles, how many
-		// summaries the whole article scores differently, and the six instruments
-		// nothing bands. The browser filters this array.
-		evaluated,
-		matchSvg,
-		// Not windowed. A swap is a point in time and its two sides are however
-		// many articles ran on each model.
-		modelSwap: modelSwap(rows, itemRows, bands, console.min_attempts_for_rate),
-		// The explanation lives in docs/, which the site does not publish, so the
-		// chart points at the repository rather than restating it in a caption.
-		throughputReference: `${uiConfig().repo_url.replace(/\/+$/, '')}/blob/main/docs/architecture/summarize/throughput.md`,
-		// Every fixed benchmark figure lives in the write-up and none of them is
-		// copied onto this page: two machines and two workloads, so a gap between a
-		// bench number and a run reads as a regression nobody measured.
-		measurementsReference: `${uiConfig().repo_url.replace(/\/+$/, '')}/blob/main/docs/reference/pipeline-cost.md`,
-		// What each eval name means and how its checker arrives at a score. The
-		// panel names four measures and defines none of them on the page: an
-		// operator who needs the definition needs the whole one, and a paraphrase
-		// beside a chart is a second definition that drifts from the first.
-		faithfulnessReference: `${uiConfig().repo_url.replace(/\/+$/, '')}/blob/main/docs/architecture/publishing/autotune-summary-quality.md`,
-		// The two scores a published item is banded on, in whole percents, so the
-		// page can say what the drawn rules mean without holding the number twice.
-		matchThresholds,
-		// The bands the strip buckets and labels on, so the page reads one ladder.
-		summarizeBands: bands,
-		console,
-		chart: chartConfig(),
-		// What the page says about the two records it read before any panel draws
-		// from them, one set for each span the control offers: one not packed yet,
-		// one that did not load, one packed short of the newest published day, one
-		// whose rows stop before the span, or one with a day it has no record for or
-		// files it set aside unread.
-		recordNotes: recordNotesByWindow(
-			[
-				{ record: 'article', read: items.read },
-				// The "Measurement is off" line below already says why this record's
-				// panels are empty when its switch is off.
-				{ record: 'score', read: scores.read, switchedOff: !observability.evaluation_enabled }
-			],
-			latestDate(undefined, 1),
-			[...windows.values()]
-		),
-		// The day every window on this route ends on: the site's newest published day.
-		windowDay: day
+		cardDays: scores.read.state === 'read' || health.read.state === 'read' ? days : null,
+		instruments, reasons, windowDay: day, chart: chartConfig(),
+		summarizeBands: summarizeConfig().bands,
+		matchThresholds: { high: Math.round(evaluation.band_high_min * 100), low: Math.round(evaluation.band_medium_min * 100) },
+		recordingNotes: notes, measurementOff: off,
+		recordNotes: recordNotesByWindow([
+			{ record: 'article', read: health.read },
+			{ record: 'score', read: scores.read, switchedOff: !recording.evaluation_enabled }
+		], day, windows),
+		throughputReference: `${repo}/blob/main/docs/architecture/summarize/throughput.md`,
+		faithfulnessReference: `${repo}/blob/main/docs/architecture/publishing/autotune-summary-quality.md`
 	};
 }

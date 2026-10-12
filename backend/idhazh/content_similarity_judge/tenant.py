@@ -24,7 +24,7 @@ from idhazh.contracts.council_run_record import ShardOutcome
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.story_similarity_pair import ContentSimilarityJudgeId
-from idhazh.council import metrics_sink, session
+from idhazh.council import metrics_sink, session, trial_paths
 from idhazh.council.tenancy import ShardResult
 from idhazh.ledger import staging
 from idhazh.similarity.budget import refuse_a_night_this_tenant_cannot_finish
@@ -265,7 +265,7 @@ class ContentSimilarityJudge:
             settings=settings,
             identity=identity,
             state_dir=state_dir,
-            digest_root=common.PUBLIC_ROOT,
+            digest_root=trial_paths.public_root(common.PUBLIC_ROOT),
         )
         return ShardResult(
             outcome=ShardOutcome.COMPLETED if counted.counted else ShardOutcome.NOTHING_TO_DO

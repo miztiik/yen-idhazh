@@ -90,6 +90,7 @@ from idhazh.contracts.run_manifest import (
     VerticalCount,
 )
 from idhazh.contracts.run_plan import PlannedItem, RunPlan, VerticalPlan
+from idhazh.contracts.run_shards import RunShards
 from idhazh.contracts.run_timeline import RunTimelineRow
 from idhazh.contracts.search_index import SearchIndex
 from idhazh.contracts.seen import PublishedRow, SeenRow
@@ -172,6 +173,7 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     RunManifest,
     PublishedRow,
     RunPlan,
+    RunShards,
     RunTimelineRow,
     SearchIndex,
     SeenRow,
@@ -232,6 +234,7 @@ __all__ = [
     "RunManifest",
     "RunPlan",
     "RunRecord",
+    "RunShards",
     "RunStatus",
     "SalienceFeedDef",
     "SourceForm",

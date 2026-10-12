@@ -64,4 +64,5 @@ class LedgerName(StrEnum):
     DIGEST_FRAGMENTS = "digest-fragments"
     GARDENER = "gardener"
     RUN_PLAN = "run-plan"
+    RUN_SHARDS = "run-shards"
     COUNCIL_RUN_RECORDS = "council-run-records"

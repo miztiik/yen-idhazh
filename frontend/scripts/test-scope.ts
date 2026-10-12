@@ -17,58 +17,36 @@ export type Selection = {
 
 const ALL: TestGroup[] = ['backend', ...FRONTEND_GROUPS];
 const READER: TestGroup[] = ['logic', 'reader', 'publishing'];
-const CONSOLE: TestGroup[] = ['logic', 'console', 'panels', 'publishing'];
+const CONSOLE: TestGroup[] = ['logic', 'console', 'publishing'];
 
 /** The operator console's own files.
  *
- * The console's specs are 584 of the browser suite's 997 tests, measured
- * 2026-09-05, and the console is a page one operator opens rather than anything
- * a reader is served. So a pull request buys them only when the change is the
- * console's own; every other change reaches them on the merge push to `main`,
- * which runs every group. What that costs is stated rather than implied: a
- * shared component or a token edit that breaks the console is found on that
- * push, not at the pull request. The shared panel frame is an exception: every
- * console route renders it, so its edits buy the console on the pull request.
+ * The browser group covers representative query-worker and recovery journeys;
+ * deterministic console rules run with logic. The console is an operator page,
+ * not a reader surface, so a pull request buys its browser journeys only for
+ * console-owned changes. Shared changes reach them on the merge push to `main`,
+ * which runs every group. The shared panel frame is an exception: every console
+ * route renders it, so its edits buy the console on the pull request.
  */
 const CONSOLE_OWNED =
-	/^(frontend\/(tests\/(?:console[-.]|support\/(?:console-expect|console-window|panel-drivers)\/)|src\/(routes|lib)\/console\/|src\/lib\/components\/(?:Console[A-Z]|Panel\.svelte$)|src\/lib\/server\/console-shell\.ts$)|config\/console\/)/;
-
-/** What a console panel's picture is drawn from, beyond the console's own files.
- *
- * The `panels` group is two spec files against the console's hundreds of
- * tests, so it is bought by a wider set: the panel frame and the readout strip
- * every panel shares, the chart modules, the stylesheets and tokens, the
- * appearance config the panels read, and the captures' own specs, fixture and
- * helpers. These are the edits that move every panel image at once, and
- * deferring them to the merge push would mean their first pictures arrive
- * after the change is already on `main`.
- */
-const PANELS_DRAWN =
-	/^(frontend\/(tests\/(panel-|fixtures\/panels\/|support\/)|src\/(styles|lib\/charts)\/|src\/lib\/components\/(Panel|PanelGroup|ChartReadout|Reserved)\.svelte$)|config\/(?:appearance\.json$|console\/))/;
+	/^(frontend\/(tests\/(?:console[-.]|support\/(?:console-expect|console-window)\/)|src\/(routes|lib)\/console\/|src\/lib\/components\/(?:Console[A-Z]|Panel\.svelte$)|src\/lib\/server\/console-shell\.ts$)|config\/console\/)/;
 
 /** A document a test reads is that test's input, not documentation.
  *
- * `frontend/tests/console-model.spec.ts` asserts the console's label set
- * against this page, so an edit to it can redden a suite the documentation
- * branch below would otherwise have answered for. The key is the constant the
- * spec reads its page from, so the two cannot name different pages.
- * `chart-vocabulary.spec.ts` reads the chart-type list the same way, and it is a
- * logic spec, so an edit to that page buys the logic group and no browser.
+ * `chart-vocabulary.spec.ts` reads the chart-type list from this page, so an edit
+ * buys the logic group and no browser. The key is the constant the spec reads
+ * its page from, so the selector and test cannot name different pages.
  */
 const DOC_TEST_INPUTS: Record<string, TestGroup[]> = {
-	[CONSOLE_MODEL_LABELS_PAGE]: ['console'],
+	[CONSOLE_MODEL_LABELS_PAGE]: ['logic'],
 	[CHART_VOCABULARY_PAGE]: ['logic']
 };
 
 function consoleIsTheSubject(paths: readonly string[]): boolean {
 	return paths.some((path) => {
 		const clean = path.replaceAll('\\', '/');
-		return CONSOLE_OWNED.test(clean) || (DOC_TEST_INPUTS[clean]?.includes('console') ?? false);
+		return CONSOLE_OWNED.test(clean);
 	});
-}
-
-function panelsAreTheSubject(paths: readonly string[]): boolean {
-	return paths.some((path) => PANELS_DRAWN.test(path.replaceAll('\\', '/')));
 }
 
 export type CiAnswer = {
@@ -76,7 +54,6 @@ export type CiAnswer = {
 	code: boolean;
 	modelAbsent: boolean;
 	console: boolean;
-	panels: boolean;
 	robots: boolean;
 	validateAll: boolean;
 };
@@ -116,8 +93,6 @@ export function ciAnswer(paths: readonly string[], isPr: boolean): CiAnswer {
 			return groups.some((group) => group !== 'backend');
 		})),
 		console: selection.groups.includes('console') && !deferred,
-		// Whatever buys the console buys panel assertions, as do shared drawing inputs.
-		panels: selection.groups.includes('panels') && (!deferred || panelsAreTheSubject(paths)),
 		// A full backend selection (null) is an unknown change, so it buys the job.
 		robots: selection.backendFiles?.includes(ROBOTS_TESTS) ?? true,
 		// A published day is frozen, so the only thing that can invalidate one is a
@@ -253,20 +228,27 @@ export function selectPaths(paths: readonly string[]): Selection {
 			selected = group ? [group] : [...FRONTEND_GROUPS];
 			reason = group ? 'changed frontend spec' : 'unmapped spec; all frontend groups';
 		} else if (/^frontend\/tests\/fixtures\/panels\//.test(path)) {
-			selected = ['panels'];
-			reason = 'the panel the sufficiency gates are proven against';
+			selected = ['logic'];
+			reason = 'deterministic panel fixture';
 		} else if (/^config\/console\//.test(path)) {
 			selected = CONSOLE;
 			reason = 'route-owned console config and panel checks';
-		} else if (/^frontend\/tests\/support\/(?:console-expect|panel-drivers)\//.test(path)) {
+		} else if (/^frontend\/src\/lib\/console\/model\//.test(path) ||
+			path === 'frontend/tests/support/model-route.ts') {
 			selected = CONSOLE;
-			reason = 'route-owned console expectations and drivers';
+			reason = 'Summaries declarations, private builder and state consumers';
+		} else if (/^frontend\/tests\/support\/console-expect\//.test(path)) {
+			selected = CONSOLE;
+			reason = 'route-owned console expectations';
 		} else if (/^frontend\/tests\/support\/console-window\//.test(path)) {
 			selected = CONSOLE;
 			reason = 'shared window controls and focused route window consumers';
 		} else if (/^frontend\/src\/routes\/(?:console)(?:\/|$)/.test(path)) {
 			selected = CONSOLE;
 			reason = 'console route and publishing checks';
+		} else if (/^frontend\/src\/lib\/console\/voices\//.test(path)) {
+			selected = CONSOLE;
+			reason = 'route-owned Voices panels and publishing checks';
 		} else if (/^frontend\/src\/routes\/archive\//.test(path)) {
 			selected = ['logic', 'archive', 'model-search', 'publishing'];
 			reason = 'archive route and search consumer';
@@ -374,7 +356,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
 		console.log(`code=${answer.code}`);
 		console.log(`model_absent=${answer.modelAbsent}`);
 		console.log(`console=${answer.console}`);
-		console.log(`panels=${answer.panels}`);
 		console.log(`robots=${answer.robots}`);
 		console.log(`validate_all=${answer.validateAll}`);
 	} else {

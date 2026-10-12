@@ -646,6 +646,10 @@ def _main(argv: Sequence[str] | None = None) -> int:
 def _dispatch(
     parser: argparse.ArgumentParser, args: argparse.Namespace, settings: config.Settings
 ) -> int:
+    if args.stage.startswith("council-"):
+        from idhazh.council.selection import from_environment
+
+        council_selection = from_environment(settings.council)
     if args.stage == "derived-paths":
         # Above everything, including the config-dependent verbs: it reads one
         # tuple and prints one line, and the commit step that consumes it runs
@@ -744,6 +748,7 @@ def _dispatch(
             settings.council,
             date=a_date(args.date or _today(), what="--date"),
             run_id=_council_run(parser, args.stage, args.run_id),
+            selection=council_selection,
         )
         return outcome.of_results(results)
 
@@ -770,7 +775,11 @@ def _dispatch(
                 if args.job_started_at
                 else None,
             )
-            if settings.council.running()
+            if (
+                settings.council.running()
+                if council_selection is None
+                else council_selection.names(publish=True)
+            )
             else contextlib.nullcontext()
         )
         with machine:
@@ -780,6 +789,7 @@ def _dispatch(
                 run_id=night,
                 state_dir=state_dir,
                 commit_sha=args.commit,
+                selection=council_selection,
             )
         return outcome.of_results(results)
 
@@ -807,6 +817,7 @@ def _dispatch(
             # install and the weights restore ran before this process, and the
             # council's own preamble knob is what accounts for them.
             started=time.monotonic(),
+            selection=council_selection,
         )
         return outcome.of_results((result,))
 
