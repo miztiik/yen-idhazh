@@ -167,6 +167,33 @@ impl FileTransport {
             total_events: 0,
         })
     }
+    // Capacity scans and retirement share this lock so listed files cannot vanish mid-scan.
+    fn lock_lifecycle(&self) -> Result<std::fs::File> {
+        let path = self.root.join(".transport.lock");
+        let file = match std::fs::OpenOptions::new()
+            .create_new(true)
+            .read(true)
+            .write(true)
+            .open(&path)
+        {
+            Ok(file) => file,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                let metadata = std::fs::symlink_metadata(&path).map_err(|e| e.to_string())?;
+                require(
+                    metadata.is_file() && !metadata.file_type().is_symlink(),
+                    "transport lifecycle lock is not a regular file",
+                )?;
+                std::fs::OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .open(path)
+                    .map_err(|e| e.to_string())?
+            }
+            Err(error) => return Err(error.to_string()),
+        };
+        file.lock().map_err(|e| e.to_string())?;
+        Ok(file)
+    }
     pub fn path(&self, event_id: Uuid, direction: &str) -> Result<PathBuf> {
         let relative = self.relative_path(event_id, direction)?;
         let path = crate::ledger::paths::resolve_document(&self.workspace, &relative)?;
@@ -191,6 +218,7 @@ impl FileTransport {
         self.path(event.event_id, direction)
     }
     pub fn publish_batch(&mut self, events: &[HostEvent], direction: &str) -> Result<()> {
+        let _lifecycle = self.lock_lifecycle()?;
         require(
             events.len() <= self.manifest.limits.max_files as usize && direction != "consumed",
             "invalid publication batch",
@@ -415,6 +443,7 @@ impl FileTransport {
         Ok(bytes)
     }
     pub fn consume(&mut self, event: &HostEvent) -> Result<()> {
+        let _lifecycle = self.lock_lifecycle()?;
         event.validate()?;
         self.identity(event, "consumed")?;
         let raw = crate::canonical_json::row_line(event)?;
@@ -453,6 +482,7 @@ impl FileTransport {
         crate::fs::atomic::publish_immutable(&path, &raw).map_err(|e| e.to_string())
     }
     pub fn remove_retired(&self, ids: &[Uuid]) -> Result<()> {
+        let _lifecycle = self.lock_lifecycle()?;
         for id in ids {
             for direction in ["inbox", "results", "consumed"] {
                 let path = self.path(*id, direction)?;
@@ -549,5 +579,51 @@ impl FileTransport {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod lifecycle_lock_tests {
+    use super::*;
+
+    #[test]
+    fn capacity_snapshot_and_retirement_share_the_lifecycle_lock() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("var")
+            .join(format!(
+                "d5-transport-lifecycle-lock-{}",
+                std::process::id()
+            ));
+        if root.exists() {
+            std::fs::remove_dir_all(&root).unwrap();
+        }
+        std::fs::create_dir_all(&root).unwrap();
+        let manifest: HostSessionManifest = serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../tests/fixtures/host-events/manifest.json"
+        )))
+        .unwrap();
+        let files = FileTransport::new(&root, manifest).unwrap();
+        let id = Uuid::from_u128(42);
+        for direction in ["inbox", "results", "consumed"] {
+            std::fs::write(files.path(id, direction).unwrap(), b"x").unwrap();
+        }
+
+        let lock = files.lock_lifecycle().unwrap();
+        let contender = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(files.root.join(".transport.lock"))
+            .unwrap();
+        assert!(contender.try_lock().is_err());
+        assert_eq!(files.physical_bytes().unwrap(), 3);
+        drop(lock);
+
+        files.remove_retired(&[id]).unwrap();
+        assert_eq!(files.physical_bytes().unwrap(), 0);
+        drop(contender);
+        std::fs::remove_dir_all(root).unwrap();
     }
 }
