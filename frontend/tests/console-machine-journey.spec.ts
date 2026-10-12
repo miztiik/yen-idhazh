@@ -30,7 +30,7 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	await expect(page.locator('[data-console-panel-id] > header > h3')).toHaveCount(15);
 	for (const ledger of ['item-health', 'host-fingerprint', 'run-shards']) {
 		expect(arrived.some((url) => url.includes(`/${ledger}/index/`)), `${ledger} index arrived`).toBe(true);
-		expect(arrived.some((url) => url.includes(`/${ledger}/`) && url.endsWith('.parquet')),
+		expect(arrived.some((url) => url.includes(`/${ledger}/`) && new URL(url).pathname.endsWith('.parquet')),
 			`${ledger} native rows arrived`).toBe(true);
 	}
 	expect(await page.locator('[data-clock-pair]').count(), 'the independent clocks arrived').toBeGreaterThan(0);
@@ -73,8 +73,8 @@ test('a failed host index alone is retried while successful article and count fi
 	await expect(page.locator('[data-panel-query="memory-held"]')).toHaveAttribute('data-machine-panel-state', 'ok');
 	await expect(page.locator('[data-console-retry]')).toBeVisible();
 	const before = [...successfulRequests];
-	expect(before.some((url) => url.includes('/run-shards/') && url.endsWith('.parquet'))).toBe(true);
-	expect(before.some((url) => url.includes('/item-health/') && url.endsWith('.parquet'))).toBe(true);
+	expect(before.some((url) => url.includes('/run-shards/') && new URL(url).pathname.endsWith('.parquet'))).toBe(true);
+	expect(before.some((url) => url.includes('/item-health/') && new URL(url).pathname.endsWith('.parquet'))).toBe(true);
 	await page.unroute(/\/state\/compact\/host-fingerprint\/index\/[^/]+\.json/);
 	await page.locator('[data-console-retry]').click();
 	await settled(page);
