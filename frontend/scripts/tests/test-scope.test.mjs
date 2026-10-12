@@ -10,6 +10,21 @@ import { options, selection } from '../run-checks.ts';
 import { changedPaths, ciAnswer, selectPaths, selectionForChange } from '../test-scope.ts';
 
 const FRONTEND = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+test('Summaries modules and native private fixtures select console consumers without narrowing shared inputs', () => {
+	for (const path of ['frontend/src/lib/console/model/Cards.svelte',
+		'frontend/src/lib/console/model/model-change.ts', 'frontend/tests/support/model-route.ts']) {
+		const selected = selectPaths([path]);
+		assert.deepEqual(selected.groups, ['logic', 'console', 'publishing']);
+		assert.equal(selected.rust, false);
+	}
+	assert.deepEqual(selectPaths(['frontend/src/lib/components/Sparkline.svelte']).groups, [...FRONTEND_GROUPS]);
+	assert.equal(groupForSpec('frontend/tests/console-model-nothings.spec.ts'), 'logic');
+	assert.equal(groupForSpec('frontend/tests/console-model-builder.spec.ts'), 'console');
+	assert.equal(groupForSpec('frontend/tests/console-model-ledgers.spec.ts'), 'console');
+	assert.equal(groupForSpec('frontend/tests/console-model-reductions.spec.ts'), 'logic');
+	assert.equal(groupForSpec('frontend/tests/console-model-instruments.spec.ts'), 'logic');
+	assert.equal(groupForSpec('frontend/tests/console-model-window.spec.ts'), undefined);
+});
 function tmpdir() {
 	const path = resolve(FRONTEND, '../backend/var/checks/scope-tests');
 	mkdirSync(path, { recursive: true });
@@ -229,7 +244,8 @@ test('Voices panel inputs keep narrow route consumers and unknown-path broad cov
 		['backend', ...FRONTEND_GROUPS]);
 	assert.deepEqual(selectPaths(['frontend/src/lib/console/unmapped/panel.ts']).groups, [...FRONTEND_GROUPS]);
 	assert.deepEqual(groupedSpecs(join(FRONTEND, 'tests')).console,
-		['console-data-explorer-still.spec.ts', 'console-telemetry-heal.spec.ts', 'console-voices-journey.spec.ts']);
+		['console-data-explorer-still.spec.ts', 'console-model-builder.spec.ts', 'console-model-ledgers.spec.ts',
+			'console-telemetry-heal.spec.ts', 'console-voices-journey.spec.ts']);
 });
 
 test('grouped specs follow only the explicit inventory', () => {
@@ -422,13 +438,13 @@ test('a change carrying no code buys no code job, on a merge as well as a branch
 	assert.equal(ciAnswer(['docs/a.md'], false).browser, false);
 });
 
-test('the retired model-label document input no longer selects console browser journeys', () => {
+test('the protected model-label document selects its logic contract and no browser journey', () => {
 	const page = CONSOLE_MODEL_LABELS_PAGE;
 	assert.ok(existsSync(join(FRONTEND, '..', page)));
-	assert.deepEqual(selectPaths([page]).groups, []);
-	assert.equal(selectPaths([page]).reasons[0].reason, 'documentation only');
+	assert.deepEqual(selectPaths([page]).groups, ['logic']);
+	assert.equal(selectPaths([page]).reasons[0].reason, 'documentation a test reads');
 	const answer = ciAnswer([page], true);
-	assert.equal(answer.code, false);
+	assert.equal(answer.code, true);
 	assert.equal(answer.browser, false);
 	assert.equal(answer.console, false);
 });

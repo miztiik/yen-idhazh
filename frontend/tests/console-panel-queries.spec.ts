@@ -9,6 +9,8 @@ import { modelChangeQuery, summaryLengthQuery } from '../src/lib/console/queries
 import { slowerOnSameWorkQuery } from '../src/lib/console/queries/pipelines';
 import { compareRuns, failedRuleQuery, hostKey, joinItemHosts, newestRunRows } from '../src/lib/console/queries/shared';
 import { feedsFailedQuery } from '../src/lib/console/queries/voices';
+import { modelThroughput } from '../src/lib/console/model/model-throughput';
+import { throughputWithin } from '../src/lib/server/model-work';
 import {
 	createQueryWindow, rangeFor, tallyAsks, windowRange,
 	type PanelDoor, type Range, type RouteReach
@@ -21,6 +23,61 @@ import { buildRows } from './support/ledger-lifecycle';
 import { readSession, renewReadSession } from '../src/lib/data/read-session';
 
 const PRESETS = [3, 7, 30] as const;
+
+test('native throughput uses the same nearest-rank readings for a day and its single run', () => {
+	const date = '2030-06-14';
+	const rows: Row[] = [10, 100].map((rate) => ({
+		date, run_id: `${date}-1`, input_tokens: 100, cached_tokens: 0,
+		output_tokens: 100, prefill_ms: 100_000 / rate, decode_ms: 200_000 / rate
+	}));
+	const [day] = modelThroughput(rows, { start: date, end: date });
+	expect(day.items).toBe(2);
+	expect(day.read).toEqual({ min: 10, p25: 10, median: 100, p75: 100, max: 100 });
+	expect(day.write).toEqual({ min: 5, p25: 5, median: 50, p75: 50, max: 50 });
+	expect(day.runs).toEqual([{ runId: `${date}-1`, items: 2, read: 100, write: 50 }]);
+	expect(day.readTps).toBeCloseTo(200 / 11);
+	expect(day.writeTps).toBeCloseTo(200 / 22);
+});
+
+test('native throughput keeps separate run populations and excludes an incomplete paired reading', () => {
+	const date = '2030-06-14';
+	const rows: Row[] = [10, 100, 20, 200].map((rate, index) => ({
+		date, run_id: `${date}-${index < 2 ? 1 : 2}`, input_tokens: 100, cached_tokens: 0,
+		output_tokens: 100, prefill_ms: 100_000 / rate, decode_ms: 200_000 / rate
+	}));
+	rows.push({ ...rows[0], prefill_ms: 1, decode_ms: null });
+	const [day] = modelThroughput(rows, { start: date, end: date });
+	expect(day.items).toBe(4);
+	expect(day.read.median).toBe(100);
+	expect(day.write.median).toBe(50);
+	expect(day.runs).toEqual([
+		{ runId: `${date}-1`, items: 2, read: 100, write: 50 },
+		{ runId: `${date}-2`, items: 2, read: 200, write: 100 }
+	]);
+	expect(modelThroughput(rows, { start: '2030-06-15', end: '2030-06-15' })).toEqual([]);
+});
+
+test('build-time throughput keeps interpolated readings without changing its weighted totals', () => {
+	const date = '2030-06-14';
+	const row = (run: string, prefill: string, input: string, decode: string, output: string) => ({
+		date, run_id: run, prefill_ms: prefill, input_tokens: input,
+		cached_tokens: '100', decode_ms: decode, output_tokens: output
+	});
+	const [day] = throughputWithin(new Map([[date, [
+		row(`${date}-1`, '1000', '1100', '2000', '100'),
+		row(`${date}-1`, '3000', '1600', '1000', '100'),
+		row(`${date}-2`, '1000', '600', '1000', '50')
+	]]]), new Map(), { start: date, end: date });
+	expect(day.readTps).toBe(600);
+	expect(day.writeTps).toBe(62.5);
+	expect(day.items).toBe(3);
+	expect(day.read).toEqual({ min: 500, p25: 500, median: 500, p75: 750, max: 1000 });
+	expect(day.write).toEqual({ min: 50, p25: 50, median: 50, p75: 75, max: 100 });
+	expect(day.runs).toEqual([
+		{ runId: `${date}-1`, items: 2, read: 750, write: 75 },
+		{ runId: `${date}-2`, items: 1, read: 500, write: 50 }
+	]);
+});
 
 /** A named, bounded day fixture; numeric and boolean cells really enter Parquet. */
 function item(day: string, cpu = 'machine-a'): Row {

@@ -40,6 +40,23 @@ export function ruleDeclaration(rule: ModelRule): { value: 'yes' | 'no'; none?: 
 	return 'declined' in rule ? { value: 'no', none: rule.declined } : { value: 'yes' };
 }
 
+/** A compact plot cannot place a boundary on an unmeasured day. Keep its words. */
+export function completeModelRule(rule: ModelRule, dates: readonly string[]): ModelRule {
+	checkedRule(rule);
+	if ('declined' in rule) return rule;
+	const drawn = new Set(dates);
+	const unread = rule.changes.filter((change) => !drawn.has(change.date));
+	if (unread.length === 0) return rule;
+	return {
+		changes: rule.changes.filter((change) => drawn.has(change.date)),
+		note: [rule.note, ...unread.map((change) =>
+			`${change.kind === 'checker' ? 'The checker' : 'A setting'} changed on ${change.date}: ${change.words}. Nothing here measured that day, so a reading either side crosses a change this chart cannot draw.`
+		)].filter((note) => note !== null).join(' ')
+	};
+}
+
+export const fullModelRule = completeModelRule;
+
 export function ruleEvents(rule: ModelRule, dates: readonly string[]): NonNullable<ReadoutInput['events']> {
 	checkedRule(rule);
 	const lines = dates.map((date): ReadoutLine[] =>

@@ -1,6 +1,6 @@
 /** Deterministic model instruments rules over bounded fixtures; no browser, build, or layout matrix. */
 import { expect, test } from '@playwright/test';
-import { FLAGS, evalDays, flagReadings, recordedReadings, recordedText, type EvalInput } from '../src/lib/console/eval-instruments';
+import { DRAWN_BY, EVAL_PANELS, RECORDED, FLAGS, evalDays, flagReadings, recordedReadings, recordedText, type EvalInput } from '../src/lib/console/eval-instruments';
 const FIXTURE: EvalInput[] = [
     { date: '2026-04-02', hhem: '0.90', hhem_delta: '0', compression: '0.20', coherence: '0.10' },
     { date: '2026-04-02', hhem: '0.80', hhem_delta: '0', compression: '0.40', coherence: '-0.30' },
@@ -13,6 +13,23 @@ const FIXTURE: EvalInput[] = [
     { date: '2026-04-04', hhem: 'n/a', extraction_suspect: 'true' },
     { date: '2026-04-04', hhem: '0.85', determinism_violation: 'True' }
 ];
+test('every measurement receiver is declared once and every declared receiver answers for a measurement', () => {
+    const panels = EVAL_PANELS.map((panel) => panel.id);
+    expect(new Set(panels).size).toBe(panels.length);
+    for (const receiver of Object.values(DRAWN_BY)) expect(panels).toContain(receiver);
+    for (const panel of panels) expect(Object.values(DRAWN_BY)).toContain(panel);
+});
+test('recorded instruments retain their approved receivers without inventing a checker result', () => {
+    const receivers: Readonly<Record<string, string>> = {
+        compression: 'summary-length', self_repetition: 'daily-figures', coherence: 'daily-figures',
+        semantic_coverage: 'daily-figures', evidential_density: 'source-doubts',
+        speculative_density: 'source-doubts', extraction_suspect: 'extraction',
+        determinism_violation: 'daily-figures'
+    };
+    expect([...RECORDED, ...FLAGS].map((instrument) => instrument.id).sort()).toEqual(Object.keys(receivers).sort());
+    for (const instrument of [...RECORDED, ...FLAGS]) expect(DRAWN_BY[instrument.id]).toBe(receivers[instrument.id]);
+    expect(EVAL_PANELS.find((panel) => panel.id === 'extraction')?.route).toBe('/console/');
+});
 test.describe('the arithmetic', () => {
     test('a day is reduced by position, and a missing reading never enters as a zero', () => {
         const days = evalDays(FIXTURE);
