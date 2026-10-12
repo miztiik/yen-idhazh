@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-12
 
-**Author**: Fowler (architecture), 2026-10-12, plan 65 Q68. **Status**: design for plan 65.2. The owner ruled T1, U1 and V1 on 2026-10-12 (plan 65, Table Q, Q69 to Q71); everything else here is proposed until 65.2 is approved. In this record "source" means a feed or publisher only; a summary is checked against its article. "Estimate" marks an estimate.
+**Author**: Fowler (architecture), 2026-10-12, plan 65 Q68. **Status**: design for plan 65.2. The owner ruled T1, U1 and V1 on 2026-10-12 (plan 65, Table Q, Q69 to Q71), and named the unified judge summary-fidelity-judge, with the drift judge renamed summary-drift-judge (Q72); "the drift judge" below is summary-drift-judge; everything else here is proposed until 65.2 is approved. In this record "source" means a feed or publisher only; a summary is checked against its article. "Estimate" marks an estimate.
 **Ids**: Q61, QQ28, P15, X8.4 cite plan 65 (`TODO/20261011-65-summary-fidelity-judge-plan.md`), as "plan 65 B2" where a row here could be meant; "research Q5" cites `TODO/20261012-unsupervised-summary-improvement-research-record.md`. Code paths are repository paths.
 
 ## Answer first
@@ -357,7 +357,7 @@ Table V - one judge for the sampled pipeline?
 
 | # | Option | Benefit | Cost | Gives up |
 | --- | --- | --- | --- | --- |
-| V1 | **Recommended**. One judge hosts every sampled slot and the bench (its name is open: plan 65, Table Q, Q71); the ruled ledger names stay | one prepare, sentence rule, cell plan and record set: "the judge itself as a pipeline" | reverses the split of QQ11 C1 and QQ16 C1, in plan text only | pausing grounding and completeness apart |
+| V1 | **Recommended**. One judge hosts every sampled slot and the bench (named summary-fidelity-judge, and the drift judge renamed summary-drift-judge: plan 65, Table Q, Q72); the ruled ledger names stay | one prepare, sentence rule, cell plan and record set: "the judge itself as a pipeline" | reverses the split of QQ11 C1 and QQ16 C1, in plan text only | pausing grounding and completeness apart |
 | V2 | Two judges; shared ledgers in one family both write | no ruling changes | two prepares that must segment alike | one pipeline in one place |
 | V3 | Two judges with their own copies | self-contained families | six ledgers for three records | one record per question |
 
