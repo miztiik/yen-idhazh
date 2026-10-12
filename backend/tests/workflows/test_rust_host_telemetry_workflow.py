@@ -152,6 +152,121 @@ def test_dispatch_memory_choice_resolves_into_the_effective_scratch_config() -> 
     assert not live_controls(native, comparison, False).memory_profiling_enabled
 
 
+def test_workflow_memory_off_survives_session_preparation_in_manifest_and_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from hashlib import sha256
+    from pathlib import Path
+    from tempfile import TemporaryDirectory
+    from types import SimpleNamespace
+
+    from idhazh.contracts.host_events import HostSessionManifest, ProcessTarget
+    from idhazh.contracts.host_evidence import EVIDENCE_VERSION, EvidenceSession, WorkloadResult
+    from idhazh.telemetry.host_evidence_inputs import NativeSettings
+    from utilities import compare_host_telemetry, host_telemetry_session
+
+    dispatch = workflow()["on"]["workflow_dispatch"]
+    assert isinstance(dispatch, dict)
+    memory_choice = dispatch["inputs"]["memory_profiling"]["options"][-1]
+    assert memory_choice == "off"
+    override = compare_host_telemetry.memory_profiling(memory_choice)
+
+    _, comparison, _ = settings()
+    assert comparison.source.observability.memory_profiling_enabled
+
+    target = ProcessTarget(pid=1234, start_ticks=5678)
+    child = SimpleNamespace(pid=target.pid)
+    process_calls: list[list[str]] = []
+
+    def fake_popen(args: list[str], **_: object) -> SimpleNamespace:
+        process_calls.append(args)
+        return child
+
+    monkeypatch.setattr(host_telemetry_session.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(host_telemetry_session, "binary", lambda: None)
+    monkeypatch.setattr(
+        host_telemetry_session,
+        "subprocess",
+        SimpleNamespace(
+            Popen=fake_popen, DEVNULL=subprocess.DEVNULL, STDOUT=subprocess.STDOUT
+        ),
+    )
+    monkeypatch.setattr(host_telemetry_session, "identity", lambda *_: target)
+
+    def fake_wait_for(path: Path, *_: object, **__: object) -> None:
+        path.write_text(target.model_dump_json(), encoding="ascii")
+
+    monkeypatch.setattr(host_telemetry_session, "wait_for", fake_wait_for)
+
+    def fake_request(_: Path, sequence: int, mode: str) -> WorkloadResult:
+        return WorkloadResult(
+            version=EVIDENCE_VERSION,
+            sequence=sequence,
+            mode=mode,
+            target=target,
+            wall_seconds=0.0,
+            clock_skew_seconds=0.0,
+            cpu_seconds=0.0,
+            instrument_wall_seconds=0.0,
+            instrument_cpu_seconds=0.0,
+            digest=sha256(f"{sequence}:{mode}".encode("ascii")).hexdigest(),
+            iterations=1,
+            samples=0,
+            cells=None,
+            host=None,
+            population=(),
+            reference_files=(),
+        )
+
+    monkeypatch.setattr(host_telemetry_session, "request", fake_request)
+    monkeypatch.setattr(host_telemetry_session, "freeze_bounds", lambda *_: ())
+    read_bytes = host_telemetry_session.read_bytes
+
+    def fake_boot_id(path: Path, maximum: int) -> bytes:
+        if str(path).replace("\\", "/").lstrip("/") == "proc/sys/kernel/random/boot_id":
+            return b"00000000-0000-0000-0000-000000000001"
+        return read_bytes(path, maximum)
+
+    monkeypatch.setattr(host_telemetry_session, "read_bytes", fake_boot_id)
+
+    var_root = ROOT / "backend/var"
+    var_root.mkdir(parents=True, exist_ok=True)
+    with TemporaryDirectory(prefix="d16-memory-off-", dir=var_root) as directory:
+        evidence_root = Path(directory)
+        compile_file = evidence_root / "compile.json"
+        compile_file.write_text("{}", encoding="ascii")
+        gates = evidence_root / "gates.xml"
+        gates.write_text("<testsuites />", encoding="ascii")
+        workspace = evidence_root / "workspace"
+        host_telemetry_session.prepare(
+            workspace,
+            git_sha="0" * 40,
+            run_number="17",
+            attempt=1,
+            compile_file=compile_file,
+            gates=gates,
+            memory_profiling=override,
+        )
+
+        effective_config = NativeSettings.model_validate_json(
+            (workspace / "native-config.json").read_bytes()
+        )
+        manifest = HostSessionManifest.model_validate_json(
+            (workspace / "manifest.json").read_bytes()
+        )
+        host_manifest = HostSessionManifest.model_validate_json(
+            (workspace / "host-manifest.json").read_bytes()
+        )
+        session = EvidenceSession.model_validate_json((workspace / "session.json").read_bytes())
+
+    assert len(process_calls) == 1
+    assert process_calls[0][1:4] == ["-m", "utilities.host_telemetry_workload", "worker"]
+    assert effective_config.controls.memory_profiling_enabled is False
+    assert manifest.controls.memory_profiling_enabled is False
+    assert host_manifest.controls.memory_profiling_enabled is False
+    assert session.manifest.controls.memory_profiling_enabled is False
+
+
 def test_memory_dispatch_vocabulary_and_launcher_propagation_are_shared() -> None:
     workflows = _load_workflows()
     for name in ("digest.yml", "measure.yml", "rust-host-telemetry.yml"):
