@@ -901,7 +901,7 @@ def test_pending_event_bound_has_no_silent_drop_and_recovers_after_safe_retireme
 ) -> None:
     files = store(tmp_path)
     startup = ready(files)
-    limit = 4 * 0 + files.manifest.limits.max_concurrent_windows + 8
+    limit = files.manifest.pending_event_limit
     events = [startup]
     for sequence in range(2, limit + 1):
         event = message(

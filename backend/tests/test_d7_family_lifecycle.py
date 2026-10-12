@@ -17,11 +17,14 @@ from conftest import CONFIG_DIR, REPO_ROOT
 
 from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob
+from idhazh.contracts.collection_prune import CollectionPruneRow
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.host_output import HostPublicationReceipt
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.publication_inventory import PublicationInventory
 from idhazh.contracts.run_plan import RunPlan
+from idhazh.publication import initialize_inventory
 from idhazh.telemetry.host_evidence_inputs import NativeSettings
 from idhazh.telemetry.host_publication import verify_host_publication
 from utilities.model_runtime import server_identity
@@ -180,13 +183,17 @@ def isolate(
             root / "backend" / package,
             ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
         )
+    initialize_inventory(
+        root / "public",
+        seed=PublicationInventory(version=PublicationInventory.schema_version(), dates=[]),
+    )
     support = root / "test-support"
     support.mkdir()
     (support / "sitecustomize.py").write_text(PUBLISH_AND_NETWORK_BOUNDARY, encoding="utf-8")
     git(root, "init", "-q")
     git(root, "config", "user.email", "d7-fixture@example.invalid")
     git(root, "config", "user.name", "D7 fixture")
-    git(root, "add", "config", "backend")
+    git(root, "add", "config", "backend", "public")
     git(root, "commit", "-qm", "bounded D7 fixture")
     commit = git(root, "rev-parse", "HEAD").strip()
     return root, commit
@@ -545,9 +552,12 @@ def test_real_native_family_lifecycle_keeps_single_writer_paths(
         )
         assert len(publications) == 1
         published_writes = publications[0]["writes"]
+        assert isinstance(published_writes, dict)
         assert set(native) <= set(published_writes)
         for name, digest in native.items():
-            assert published_writes[name]["sha256"] == digest
+            entry = published_writes[name]
+            assert isinstance(entry, dict)
+            assert entry.get("sha256") == digest
     if job == ServerJob.COLLECT:
         assert row.job_seconds >= 1
         reading = json.loads(
@@ -562,16 +572,18 @@ def test_real_native_family_lifecycle_keeps_single_writer_paths(
             == "d7-fixture"
         )
     if job == ServerJob.RUN_TASKS:
-        gardener_rows = ledger.load_days(repo / "state", LedgerName.GARDENER, [DAY])
+        gardener_rows = ledger.load_days(
+            repo / "state", LedgerName.GARDENER, [DAY], model=CollectionPruneRow
+        )
         assert gardener_rows
         publications = [
             json.loads(line) for line in capture.read_text(encoding="utf-8").splitlines()
         ]
         assert len(publications) == 1
-        assert any(
-            path.startswith("state/raw/host-fingerprint/") for path in publications[0]["writes"]
-        )
-        assert any(path.startswith("state/raw/gardener/") for path in publications[0]["writes"])
+        published_writes = publications[0]["writes"]
+        assert isinstance(published_writes, dict)
+        assert any(path.startswith("state/raw/host-fingerprint/") for path in published_writes)
+        assert any(path.startswith("state/raw/gardener/") for path in published_writes)
     session = Path(handoff["IDHAZH_HOST_TELEMETRY_SESSION"])
     drained = json.loads((session / "drained.json").read_text(encoding="utf-8"))
     assert drained["kind"] == "monitor.stopped"
@@ -691,9 +703,9 @@ def test_real_digest_producer_and_publisher_keep_host_collection_disabled(tmp_pa
     )
     publications = run_digest_landing(repo, commit=commit, handoff=handoff, environment=environment)
     assert len(publications) == 1
-    assert not any(
-        path.startswith("state/raw/host-fingerprint/") for path in publications[0]["writes"]
-    )
+    published_writes = publications[0]["writes"]
+    assert isinstance(published_writes, dict)
+    assert not any(path.startswith("state/raw/host-fingerprint/") for path in published_writes)
 
 
 @pytest.mark.skipif(not LIVE or sys.platform != "linux", reason="isolated Ubuntu D7 gate only")

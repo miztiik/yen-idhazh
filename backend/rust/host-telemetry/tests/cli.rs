@@ -206,6 +206,8 @@ fn killed_cli_resumes_intent_plan_publication_receipt_and_result_without_recaptu
                     if codec == "json" { "none" } else { codec },
                     "--result-id",
                     "00000000-0000-0000-0000-000000002001",
+                    "--result-sequence",
+                    "3",
                 ]);
                 process
             };
@@ -392,6 +394,8 @@ fn native_replay_finish(
             "json",
             "--result-id",
             "00000000-0000-0000-0000-000000002001",
+            "--result-sequence",
+            "3",
         ]);
         if let Some(prefix) = ledger_prefix {
             process.args(["--ledger-prefix", prefix]);

@@ -367,10 +367,7 @@ class HostEventClient:
 
     def _publish(self, command: HostEvent) -> None:
         limits = self.manifest.limits
-        capacity = min(
-            limits.max_files,
-            4 * len(self.files.bookkeeping._registered) + limits.max_concurrent_windows + 8,
-        )
+        capacity = min(limits.max_files, self.manifest.pending_event_limit)
         reserve = (4 if command.kind in {"host.probe", "host.target", "host.clock"} else 2) + (
             2 if self.manifest.controls.memory_profiling_enabled else 0
         )

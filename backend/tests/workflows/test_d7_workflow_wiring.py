@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import cast
 
 import pytest
-import yaml
+import yaml  # type: ignore[import-untyped]
 
 from idhazh.cli import _workflow_host_event_mode
 from utilities.d7_host_telemetry import _native_command_supported
@@ -22,7 +23,18 @@ WORKFLOWS = (
 
 
 def _workflow(name: str) -> dict[str, object]:
-    return yaml.safe_load((ROOT / ".github/workflows" / name).read_text(encoding="utf-8"))
+    document = yaml.safe_load((ROOT / ".github/workflows" / name).read_text(encoding="utf-8"))
+    assert isinstance(document, dict)
+    return cast(dict[str, object], document)
+
+
+def _is_host_crate_cache(step: dict[str, object]) -> bool:
+    settings = step.get("with")
+    return (
+        step.get("uses") == "actions/cache@v6"
+        and isinstance(settings, dict)
+        and "host-crates-" in str(settings.get("key", ""))
+    )
 
 
 def test_named_producers_select_one_reversible_telemetry_writer() -> None:
@@ -91,6 +103,7 @@ def test_workflow_wrappers_name_only_the_measured_families() -> None:
         assert invoked == jobs
     encoder_score = _step(_workflow("encoder-comparison.yml"), "score", "name", "Score it")
     score_run = encoder_score["run"]
+    assert isinstance(score_run, str)
     assert "d7_host_telemetry.py run" in score_run
     assert "compare_summary_encoders.py score" in score_run
     assert score_run.index("d7_host_telemetry.py run") < score_run.index(
@@ -110,9 +123,9 @@ def test_workflow_selection_maps_to_native_or_legacy_without_config_flags() -> N
     digest = (ROOT / ".github/workflows/digest.yml").read_text(encoding="utf-8")
     assert "IDHAZH_HOST_TELEMETRY_MODE" in digest
     for name in ("plan", "work", "assemble"):
-        assert "IDHAZH_HOST_TELEMETRY_MODE" not in _job(_workflow("digest.yml"), name).get(
-            "env", {}
-        )
+        environment = _job(_workflow("digest.yml"), name).get("env", {})
+        assert isinstance(environment, dict)
+        assert "IDHAZH_HOST_TELEMETRY_MODE" not in environment
 
 
 def test_model_server_exports_pid_reuse_safe_identity() -> None:
@@ -136,10 +149,16 @@ def test_native_runtime_memory_is_summarized_and_uploaded_from_the_session() -> 
     workflow = _workflow("digest.yml")
     summary = _step(workflow, "work", "name", "What memory this shard used")
     upload = _step(workflow, "work", "name", "Upload runtime log")
-    assert "native-artifacts/rss-samples.jsonl" in summary["run"]
-    assert "native-artifacts/python-procs.jsonl" in summary["run"]
-    assert "native-artifacts/cgroup-memory-peak.txt" in summary["run"]
-    assert "backend/var/d7-host-telemetry/**/native-artifacts/**" in upload["with"]["path"]
+    summary_run = summary["run"]
+    upload_with = upload["with"]
+    assert isinstance(summary_run, str)
+    assert isinstance(upload_with, dict)
+    upload_path = upload_with.get("path")
+    assert isinstance(upload_path, str)
+    assert "native-artifacts/rss-samples.jsonl" in summary_run
+    assert "native-artifacts/python-procs.jsonl" in summary_run
+    assert "native-artifacts/cgroup-memory-peak.txt" in summary_run
+    assert "backend/var/d7-host-telemetry/**/native-artifacts/**" in upload_path
 
 
 def test_council_workflow_allows_only_the_explicit_no_work_skip() -> None:
@@ -163,10 +182,7 @@ def test_each_measured_job_builds_the_pinned_native_binary_before_its_producer()
                 step for step in steps if step.get("name") == "Select the pinned host toolchain"
             )
             cache = next(
-                step
-                for step in steps
-                if step.get("uses") == "actions/cache@v6"
-                and "host-crates-" in str(step.get("with", {}).get("key", ""))
+                step for step in steps if _is_host_crate_cache(step)
             )
             build = next(
                 step for step in steps if step.get("uses") == "./.github/actions/d7-host-telemetry"
@@ -189,7 +205,9 @@ def test_unmeasured_jobs_do_not_inherit_native_sessions() -> None:
     }
     for filename, jobs in expected.items():
         for job in jobs:
-            assert _job(_workflow(filename), job)["env"]["IDHAZH_HOST_TELEMETRY_MODE"] == ("legacy")
+            environment = _job(_workflow(filename), job)["env"]
+            assert isinstance(environment, dict)
+            assert environment.get("IDHAZH_HOST_TELEMETRY_MODE") == "legacy"
 
 
 def test_cleanup_uses_the_session_not_the_repository_file_workspace() -> None:
@@ -205,9 +223,13 @@ def test_native_family_evidence_runs_only_in_the_isolated_artifact_workflow() ->
     step = _step(
         workflow, "work", "name", "Generated D7 families and single-writer publication evidence"
     )
-    assert step["env"]["IDHAZH_D7_LIVE_TEST"] == "1"
-    assert "backend/tests/test_d7_family_lifecycle.py" in step["run"]
-    assert "-n 0" in step["run"]
+    step_environment = step["env"]
+    step_run = step["run"]
+    assert isinstance(step_environment, dict)
+    assert isinstance(step_run, str)
+    assert step_environment["IDHAZH_D7_LIVE_TEST"] == "1"
+    assert "backend/tests/test_d7_family_lifecycle.py" in step_run
+    assert "-n 0" in step_run
     text = (ROOT / ".github/workflows/rust-host-telemetry.yml").read_text(encoding="utf-8")
     assert "persist-credentials: false" in text
     assert "backend/var/d7-family-tests.xml" in text

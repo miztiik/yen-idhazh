@@ -274,7 +274,7 @@ fn replay_retires_expired_samples_without_losing_artifacts_or_protected_evidence
     let mut manifest = resources::manifest();
     manifest.workers.truncate(1);
     manifest.windows.truncate(1);
-    assert_eq!(manifest.pending_event_limit().unwrap(), 14);
+    assert_eq!(manifest.pending_event_limit().unwrap(), 31);
     assert_eq!(manifest.limits.retry_window_ms, 5000);
     assert_eq!(manifest.limits.max_session_events, 128);
     let interval_ms = (manifest.controls.job_sample_interval_seconds * 1000.0).ceil() as u64;

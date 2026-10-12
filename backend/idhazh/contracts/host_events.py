@@ -272,8 +272,8 @@ class HostSessionManifest(ExchangeModel, Contract):
 
     @property
     def pending_event_limit(self) -> int:
-        """J4's four worker slots, declared active-window allowance and eight lifecycle slots."""
-        return 4 * len(self.workers) + self.limits.max_concurrent_windows + 8
+        """Bound three host replies and the declared window lifecycle within retry retention."""
+        return 4 * len(self.workers) + 6 * self.limits.max_concurrent_windows + 15
 
 
 class SourceCoverage(ExchangeModel):

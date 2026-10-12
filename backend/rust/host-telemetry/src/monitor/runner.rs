@@ -304,6 +304,10 @@ fn native_host_output(
         files.relative_path(command.event_id, "inbox")?,
     );
     args.insert("--result-id".to_owned(), result_id.to_string());
+    args.insert(
+        "--result-sequence".to_owned(),
+        session.host_result_sequence().to_string(),
+    );
     args.insert("--completion-id".to_owned(), completed_id.to_string());
     args.insert(
         "--proc-root".to_owned(),
@@ -960,7 +964,7 @@ mod tests {
             manifest.windows.truncate(1);
             manifest.controls.job_sample_interval_seconds =
                 manifest.limits.retry_window_ms as f64 / 1000.0;
-            assert_eq!(manifest.pending_event_limit().unwrap(), 14);
+            assert_eq!(manifest.pending_event_limit().unwrap(), 31);
             let recorded: serde_json::Value = serde_json::from_str(include_str!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
                 "/../../../tests/fixtures/host-events/resource-windows.json"

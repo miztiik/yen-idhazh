@@ -118,6 +118,9 @@ pub fn execute(verb: &str, args: BTreeMap<String, String>) -> Result<()> {
     let result_id: Uuid = required("--result-id")?
         .parse()
         .map_err(|e: uuid::Error| e.to_string())?;
+    let result_sequence = required("--result-sequence")?
+        .parse::<i64>()
+        .map_err(|e| e.to_string())?;
     let completion_id = args
         .get("--completion-id")
         .map(|value| value.parse().map_err(|e: uuid::Error| e.to_string()))
@@ -445,6 +448,7 @@ pub fn execute(verb: &str, args: BTreeMap<String, String>) -> Result<()> {
     event.event_id = result_id;
     event.reply_to = Some(command.event_id);
     event.emitter_id = manifest.monitor_emitter_id.clone();
+    event.sequence = result_sequence;
     event.emitted_at = captured_at.to_owned();
     event.body = EventBody::HostResult(Box::new(result));
     event.validate()?;
@@ -625,6 +629,7 @@ mod tests {
                 "--result-id".to_owned(),
                 "00000000-0000-0000-0000-000000002001".to_owned(),
             ),
+            ("--result-sequence".to_owned(), "3".to_owned()),
         ]);
         if let Some(prefix) = prefix {
             args.insert("--ledger-prefix".to_owned(), prefix.to_owned());

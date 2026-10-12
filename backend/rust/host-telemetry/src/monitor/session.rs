@@ -162,6 +162,9 @@ impl Session {
             self.event_id(EventKind::HostResult, Some(command_id), self.sequence + 3),
         )
     }
+    pub fn host_result_sequence(&self) -> i64 {
+        self.sequence + 3
+    }
     pub fn last_host_command_id(&self) -> Option<Uuid> {
         self.last_plan.as_ref().map(|plan| plan.event_id)
     }
