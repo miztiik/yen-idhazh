@@ -62,7 +62,13 @@ council runs.
 The console's Data explorer also lists `council-run-records` as published,
 through `ledger.published` in `config/idhazh.json`. The site build copies its
 three compact indexes and the files those indexes name inside the shared
-console window. A query can group completed and failed steps, read the closed
+console window.
+`page_weight.payload_ceilings_bytes` bounds each council index at 2,088
+compressed bytes, twice the heavier generated index at the declared retention
+limit: 76 daily entries weigh 1,044 bytes at Node gzip level 5, while 17 monthly
+entries weigh 384 bytes. The existing page-ceiling contract test holds that
+bound to the retention settings.
+A query can group completed and failed steps, read the closed
 `raised` fault, and compare counts and UTC instants. No exception text is
 stored or shown. A record not packed yet reports missing data; an empty packed
 span reports no rows, not a failed night. Isolated paused trials still file no
