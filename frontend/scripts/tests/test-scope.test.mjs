@@ -10,6 +10,27 @@ import { options, selection } from '../run-checks.ts';
 import { changedPaths, ciAnswer, selectPaths, selectionForChange } from '../test-scope.ts';
 
 const FRONTEND = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+test('Pipelines retained and native evidence joins representative groups without a panels matrix', () => {
+	for (const separator of ['/', '\\']) {
+		for (const path of [
+			['frontend', 'src', 'lib', 'console', 'pipelines', 'StageTimings.svelte'],
+			['frontend', 'tests', 'support', 'pipelines-ledgers.ts'],
+			['frontend', 'tests', 'support', 'retained-telemetry.ts']
+		]) {
+			assert.deepEqual(selectPaths([path.join(separator)]).groups, ['logic', 'console', 'publishing']);
+			assert.equal(ciAnswer([path.join(separator)], true).console, true);
+		}
+	}
+	for (const name of ['native', 'nothings']) {
+		assert.equal(groupForSpec(`console-pipelines-${name}.spec.ts`), 'logic');
+	}
+	for (const name of ['lifecycle', 'reserved', 'components', 'sufficiency',
+		'retained-failure', 'retained-failures', 'retained-compression', 'retained-item-cost', 'retained-window',
+		'cold', 'days', 'timeline-page', 'window-page']) {
+		assert.equal(groupForSpec(`console-pipelines-${name}.spec.ts`), 'console');
+	}
+	assert.equal(FRONTEND_GROUPS.includes('panels'), false);
+});
 test('isolated comparison inputs select their exact evidence consumers without browser builds', () => {
 	for (const path of [
 		'.github/workflows/rust-host-telemetry.yml',
@@ -275,7 +296,14 @@ test('Voices panel inputs keep narrow route consumers and unknown-path broad cov
 	assert.deepEqual(groupedSpecs(join(FRONTEND, 'tests')).console,
 		['console-data-explorer-still.spec.ts', 'console-machine-panels-page.spec.ts',
 			'console-memory-board-page.spec.ts', 'console-model-builder.spec.ts',
-			'console-model-ledgers.spec.ts', 'console-shard-board-page.spec.ts',
+			'console-model-ledgers.spec.ts',
+			'console-pipelines-cold.spec.ts', 'console-pipelines-components.spec.ts', 'console-pipelines-days.spec.ts',
+			'console-pipelines-lifecycle.spec.ts', 'console-pipelines-reserved.spec.ts',
+			'console-pipelines-retained-compression.spec.ts', 'console-pipelines-retained-failure.spec.ts',
+			'console-pipelines-retained-failures.spec.ts', 'console-pipelines-retained-item-cost.spec.ts',
+			'console-pipelines-retained-window.spec.ts', 'console-pipelines-sufficiency.spec.ts',
+			'console-pipelines-timeline-page.spec.ts', 'console-pipelines-window-page.spec.ts',
+			'console-shard-board-page.spec.ts',
 			'console-telemetry-heal.spec.ts', 'console-voices-journey.spec.ts']);
 });
 

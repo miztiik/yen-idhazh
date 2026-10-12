@@ -26,6 +26,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'console-model-reasons', 'console-model-reductions',
 		'console-model-rule', 'console-model-work', 'console-nav', 'console-panel-queries',
 		'console-pipelines-window', 'console-polarity',
+		'console-pipelines-native', 'console-pipelines-nothings',
 		'console-published', 'console-ranked', 'console-readout-data',
 		'console-run-health', 'console-shard-board', 'console-shell', 'console-site-size',
 		'console-stage-timing-days', 'console-timings', 'console-voices', 'console-voices-cuts',
@@ -51,7 +52,13 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 	console: [
 		'console-data-explorer-still', 'console-model-builder', 'console-model-ledgers',
 		'console-machine-panels-page', 'console-memory-board-page', 'console-shard-board-page',
-		'console-telemetry-heal', 'console-voices-journey'
+		'console-telemetry-heal', 'console-voices-journey',
+		'console-pipelines-lifecycle', 'console-pipelines-components',
+		'console-pipelines-cold', 'console-pipelines-days', 'console-pipelines-reserved',
+		'console-pipelines-retained-compression', 'console-pipelines-retained-failure',
+		'console-pipelines-retained-failures', 'console-pipelines-retained-item-cost',
+		'console-pipelines-retained-window', 'console-pipelines-sufficiency',
+		'console-pipelines-timeline-page', 'console-pipelines-window-page'
 	],
 	archive: ['archive'],
 	'model-search': ['search'],

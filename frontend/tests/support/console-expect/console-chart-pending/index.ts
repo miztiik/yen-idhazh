@@ -10,6 +10,7 @@ import { EXPECT as dataExplorer } from './data-explorer';
 export interface RouteExpect {
 	readonly browserDrawn: boolean;
 	readonly serverPictures: boolean;
+	readonly nativeLedger?: boolean;
 }
 
 export const BY_ROUTE: Readonly<Record<RouteId, RouteExpect | null>> = {

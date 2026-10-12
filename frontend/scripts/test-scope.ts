@@ -29,7 +29,7 @@ const CONSOLE: TestGroup[] = ['logic', 'console', 'publishing'];
  * route renders it, so its edits buy the console on the pull request.
  */
 const CONSOLE_OWNED =
-	/^(frontend\/(tests\/(?:console[-.]|support\/(?:console-expect|console-window)\/)|src\/(routes|lib)\/console\/|src\/lib\/components\/(?:Console[A-Z]|Panel\.svelte$)|src\/lib\/server\/console-shell\.ts$)|config\/console\/)/;
+	/^(frontend\/(tests\/(?:console[-.]|support\/(?:(?:console-expect|console-window|panel-drivers)\/|(?:pipelines-ledgers|pipelines-span|retained-telemetry)\.ts$))|src\/(routes|lib)\/console\/|src\/lib\/components\/(?:Console[A-Z]|Panel\.svelte$)|src\/lib\/server\/console-shell\.ts$)|config\/console\/)/;
 
 /** A document a test reads is that test's input, not documentation.
  *
@@ -246,7 +246,9 @@ export function selectPaths(paths: readonly string[]): Selection {
 		} else if (/^frontend\/src\/routes\/(?:console)(?:\/|$)/.test(path)) {
 			selected = CONSOLE;
 			reason = 'console route and publishing checks';
-		} else if (/^frontend\/src\/lib\/console\/voices\//.test(path)) {
+		} else if (/^frontend\/src\/lib\/console\/(?:voices|pipelines)\//.test(path) ||
+			/^frontend\/tests\/support\/(?:pipelines-ledgers|pipelines-span|retained-telemetry)\.ts$/.test(path) ||
+			path === 'frontend/tests/support/panel-drivers/pipelines.ts') {
 			selected = CONSOLE;
 			reason = 'route-owned Voices panels and publishing checks';
 		} else if (/^frontend\/src\/routes\/archive\//.test(path)) {
