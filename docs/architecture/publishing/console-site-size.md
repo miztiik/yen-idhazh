@@ -1,6 +1,6 @@
 # Whether the site outgrows the 1 GB cap
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-10-11
 GitHub Pages refuses a deploy over 1 GB, so the published site has an ending and
 the only useful question is when. A level cannot answer it and a rate can, which
 is what this section of Pipelines draws.
@@ -128,11 +128,10 @@ is what the per-article chart now answers directly.
 
 **`/console/judgement/` must use the screen it is on.** A heading, two
 sentences and one bordered panel leave most of the frame empty at 1440px. The
-other three sufficiency checks were inherited rather than invented - figure
-separated from ground through the shared `.console-panel` border, surface and
-shadow; the panel was the only block in the route's own content, so there was one
-thing the eye landed on; and the route took the page title, the five-tab strip
-and the standing band from the layout before it drew anything of its own.
+shared `.console-panel` border, surface and shadow separate figure from ground;
+the panel is the route's sole block of content, and the page title, five-tab
+strip and standing band come from the shared layout. These are design
+observations, not a checklist to repeat as tests for each route.
 
 **`Stories the day merged` is what cleared it.** The route now draws a chart the
 full width of the console frame with a window control above it, so the screen

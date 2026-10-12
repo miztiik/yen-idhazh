@@ -11,8 +11,7 @@ import { daysBetween } from '../src/lib/data/slice';
  * `scripts/published-ledgers.mjs` reads each published ledger's three indexes and
  * lists what they name; `copy-visuals.mjs` stages that list. Each case below
  * writes a small state tree holding one fault, or one stage of a ledger's life,
- * and reads the answer, so none of them needs a site build. What the built site
- * holds is `published-ledgers.spec.ts`.
+ * and reads the answer, so none of them needs a site build.
  */
 
 /** A state tree under this test's own output directory: path under the root -> text. */

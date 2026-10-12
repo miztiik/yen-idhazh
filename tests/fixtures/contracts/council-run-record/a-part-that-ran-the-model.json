@@ -1,6 +1,7 @@
 {
   "date": "2026-09-19",
   "evaluation_step": "evaluate_work_part",
+  "fault": null,
   "judge_id": "content-similarity-judge",
   "model_calls": 386,
   "model_seconds": 18102.5,

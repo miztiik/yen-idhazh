@@ -4,9 +4,7 @@
  * and the canary runs one model start to finish, so no built console page draws
  * one. A spec that checks the panel builds the swap from rows it writes,
  * through the `modelSwap` the model route calls, and draws `SwapDots.svelte` on
- * it with no build. `console-model-panels.spec.ts` checks the panel's layout and
- * `console-mark-parity.spec.ts` checks the extent it publishes, so the swap is
- * written once, here, and both draw the same one.
+ * it with no build, so the swap is written once here.
  */
 
 import { expect, type Locator, type Page, type TestInfo } from '@playwright/test';

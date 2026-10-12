@@ -145,7 +145,8 @@ def test_many_tenants_and_later_dates_survive_a_failure(
             ["2026-10-08", "2026-10-09"],
             model=CouncilRunRecord,
         )
-        assert len(rows) == 5
+        assert len(rows) == 6
+        assert sum(row.outcome == "failed" and row.fault == "raised" for row in rows) == 1
         assert sum(row.date == "2026-10-09" for row in rows) == 3
         receipts = [
             PublicationReceipt.read(path)

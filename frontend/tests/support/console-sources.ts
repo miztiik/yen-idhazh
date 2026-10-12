@@ -11,7 +11,7 @@ export const FRONTEND = fileURLToPath(new URL('../..', import.meta.url));
 export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	'': [
 		'vite.config.ts', 'svelte.config.js', 'asset-base.js', 'playwright.config.ts',
-		'playwright.logic.config.ts', 'playwright.whole-day.config.ts'
+		'playwright.logic.config.ts'
 	],
 	src: ['app.d.ts', 'query-engine-assets.d.ts', 'service-worker.ts'],
 	'src/lib': [
@@ -130,18 +130,18 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'query-engine-assets.test.mjs', 'run-checks.test.mjs', 'test-results.test.mjs', 'test-scope.test.mjs'
 	],
 	'tests/support': [
-		'backend-python.ts', 'browser.ts', 'door-page.ts', 'canary-config.ts', 'charts-ready.ts', 'check-addons.ts',
-		'consecutive-days.ts', 'console-panels.ts', 'console-sources.ts', 'console-widths.ts', 'day-drawings.ts',
-		'day-loader.ts', 'day-ready.ts', 'explorer-answer.ts', 'in-zone.ts', 'judgement-route.ts',
-		'ledger-lifecycle.ts', 'machine-record-state.ts', 'machine-rows.ts', 'model-swap.ts', 'model-route.ts', 'model-record-state.ts',
+		'backend-python.ts', 'browser.ts', 'door-page.ts', 'check-addons.ts',
+		'consecutive-days.ts', 'console-sources.ts', 'console-widths.ts',
+		'day-loader.ts', 'day-ready.ts', 'explorer-answer.ts', 'in-zone.ts',
+		'ledger-lifecycle.ts', 'machine-record-state.ts', 'machine-rows.ts', 'model-swap.ts',
+		'model-route.ts', 'model-record-state.ts',
 		'month-shard.ts', 'panel-gates.ts', 'panel-tab.ts', 'published-site.ts', 'published.ts',
-		'range-host.ts', 'reduction-input.ts', 'served-telemetry.ts', 'server-render.ts', 'span-said.ts',
+		'range-host.ts', 'reduction-input.ts', 'server-render.ts',
 		'telemetry-row.ts', 'views.ts'
 	],
 	'tests/fixtures/panels': ['WitnessPanel.svelte', 'DurationStack.svelte'],
 	'tests/support/console-window': [
-		'controls.ts', 'readout.ts', 'judgement-fixtures.ts', 'machine-spans.ts',
-		'client-render.ts', 'server-panels.ts'
+		'controls.ts', 'readout.ts', 'judgement-fixtures.ts', 'server-panels.ts'
 	]
 };
 

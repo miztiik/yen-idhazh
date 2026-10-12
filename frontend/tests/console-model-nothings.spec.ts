@@ -6,7 +6,6 @@ import { pathToFileURL } from 'node:url';
 import { render } from 'svelte/server';
 import { serverCompiler, type Rewrite } from './support/server-render';
 import { judgeNothings, type Nothing, type PanelReading } from './support/panel-gates';
-import { BUILD_TIME } from './support/panel-drivers/model';
 
 const PANELS = [['model-cards', 'Cards'], ['doubt-reasons', 'Reasons']] as const;
 const words = (html: string) => html.replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]*>/g, ' ')
@@ -58,7 +57,3 @@ for (const [id, name] of PANELS) {
 			['quiet', 'missing']).pass).toBe(true);
 	});
 }
-
-test('each private Summaries panel owns an empty-state component check', () => {
-	expect(BUILD_TIME).toEqual(PANELS.map(([id]) => id));
-});

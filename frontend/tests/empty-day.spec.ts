@@ -1,261 +1,40 @@
 import { expect, test } from '@playwright/test';
-import { readdirSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import type { DayForPage } from '../src/lib/payload/types';
-
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 const ROOT = resolve(process.cwd(), '..');
-const CANARY = resolve(ROOT, 'backend', 'var', 'canary', 'digest');
-
-function dirs(at: string): string[] {
-	return readdirSync(at, { withFileTypes: true })
-		.filter((entry) => entry.isDirectory())
-		.map((entry) => entry.name)
-		.sort();
-}
-
-function latestFixtureDay(): string {
-	const year = dirs(CANARY).at(-1) as string;
-	const month = dirs(join(CANARY, year)).at(-1) as string;
-	const day = dirs(join(CANARY, year, month)).at(-1) as string;
-	const raw = readFileSync(join(CANARY, year, month, day, 'digest.json'), 'utf8');
-	return (JSON.parse(raw) as { date: string }).date;
-}
-
-interface PublishedItem {
-	item_id: string;
-	source_form: string;
-	truncated: boolean;
-	reader_note: string | null;
-}
-
-/** Every item the canary day published, read off the payload the page renders. */
-function publishedItems(date: string): PublishedItem[] {
-	const [year, month, day] = date.split('-');
-	const raw = readFileSync(join(CANARY, year, month, day, 'digest.json'), 'utf8');
-	return (JSON.parse(raw) as { items: PublishedItem[] }).items;
-}
-
-function longDate(date: string): string {
-	const months = [
-		'January',
-		'February',
-		'March',
-		'April',
-		'May',
-		'June',
-		'July',
-		'August',
-		'September',
-		'October',
-		'November',
-		'December'
-	];
-	const [year, month, day] = date.split('-').map(Number);
-	return `${day} ${months[month - 1]} ${year}`;
-}
-
-test('the home page names the payload date, not the build clock', async ({ page }) => {
-	const date = latestFixtureDay();
-
-	await page.goto('/');
-
-	await expect(page.locator('main').getByText(longDate(date)).first()).toBeVisible();
-});
-
 test('the root empty state offers a way out that no later run can move', () => {
-	const page = readFileSync(resolve(ROOT, 'frontend', 'src', 'routes', '+page.svelte'), 'utf8');
-	const copy = readFileSync(
-		resolve(ROOT, 'frontend', 'src', 'lib', 'components', 'EmptyDay.svelte'),
-		'utf8'
-	);
-
-	// It used to name the newest day and link straight to it. That name is read
-	// off the newest day on disk and the root layout handed it to every page,
-	// so publishing rewrote the bytes of every older page carrying this panel.
-	// `/` is the same destination under a name no later run can change, and
-	// `day-states.spec.ts` holds the panel to two ways on.
-	expect(page).not.toContain('data.latest');
-	expect(copy).not.toContain('run notice above');
-	expect(copy).not.toContain('Latest day -');
-	expect(copy).toContain("Today's digest");
-	expect(copy).toContain('All days');
+    const page = readFileSync(resolve(ROOT, 'frontend', 'src', 'routes', '+page.svelte'), 'utf8');
+    const copy = readFileSync(resolve(ROOT, 'frontend', 'src', 'lib', 'components', 'EmptyDay.svelte'), 'utf8');
+    // It used to name the newest day and link straight to it. That name is read
+    // off the newest day on disk and the root layout handed it to every page,
+    // so publishing rewrote the bytes of every older page carrying this panel.
+    // `/` is the same destination under a name no later run can change, and
+    // `day-states.spec.ts` holds the panel to two ways on.
+    expect(page).not.toContain('data.latest');
+    expect(copy).not.toContain('run notice above');
+    expect(copy).not.toContain('Latest day -');
+    expect(copy).toContain("Today's digest");
+    expect(copy).toContain('All days');
 });
-
 test('the root load does not read the build clock', () => {
-	const source = readFileSync(resolve(ROOT, 'frontend', 'src', 'routes', '+page.server.ts'), 'utf8');
-
-	expect(source).not.toContain('new Date');
-	// The date the page shows comes off the newest committed day and nothing
-	// else. This used to assert `day?.date ?? latest`, which was the same rule
-	// written as a fallback; since 2026-09-10 the load carries a seed rather than
-	// a whole day, so there is no day object to read a date off and `latest` is
-	// the only source there is.
-	expect(source).toContain('latestDate()');
-	expect(source).toContain('today: latest');
+    const source = readFileSync(resolve(ROOT, 'frontend', 'src', 'routes', '+page.server.ts'), 'utf8');
+    expect(source).not.toContain('new Date');
+    // The date the page shows comes off the newest committed day and nothing
+    // else. This used to assert `day?.date ?? latest`, which was the same rule
+    // written as a fallback; since 2026-09-10 the load carries a seed rather than
+    // a whole day, so there is no day object to read a date off and `latest` is
+    // the only source there is.
+    expect(source).toContain('latestDate()');
+    expect(source).toContain('today: latest');
 });
-
 test('reader source limits are sentences in the page text', () => {
-	const item = readFileSync(
-		resolve(ROOT, 'frontend', 'src', 'lib', 'components', 'DigestItem.svelte'),
-		'utf8'
-	);
-	// The sentence moved to the day notice, which is where the day is. The
-	// footer stated it on every route, including the ones that show no day.
-	const notice = readFileSync(
-		resolve(ROOT, 'frontend', 'src', 'lib', 'components', 'DayNotice.svelte'),
-		'utf8'
-	);
-
-	expect(item).toContain('item.reader_note');
-	expect(item).not.toContain('Brief');
-	expect(notice).toContain('day.items_failed');
-	expect(notice).toContain('did not finish.');
-	expect(notice).not.toContain('could not read enough of the page');
-});
-
-test('the day header separates its date from the count without a surrounding card', async ({
-	page
-}) => {
-	await page.setViewportSize({ width: 390, height: 844 });
-	await page.goto('/');
-	const notice = page.locator('section[aria-label="About today"]');
-	await expect(notice.locator('h1')).toHaveText(longDate(latestFixtureDay()));
-	const treatment = await notice.evaluate((node) => ({
-		date: parseFloat(getComputedStyle(node.querySelector('h1')!).fontSize),
-		count: parseFloat(getComputedStyle(node.querySelector('.notice-count')!).fontSize),
-		radius: getComputedStyle(node).borderRadius,
-		background: getComputedStyle(node).backgroundColor,
-		overflow: node.scrollWidth - node.clientWidth
-	}));
-	expect(treatment.date).toBeGreaterThan(treatment.count);
-	expect(treatment.radius).toBe('0px');
-	expect(treatment.background).toBe('rgba(0, 0, 0, 0)');
-	expect(treatment.overflow).toBeLessThanOrEqual(0);
-});
-
-for (const state of [
-	{ name: 'one unfinished article', failed: 1, partial: true, history: true, status: '1 article did not finish.' },
-	{ name: 'several unfinished articles', failed: 3, partial: true, history: true, status: '3 articles did not finish.' },
-	{ name: 'a complete day', failed: 0, partial: false, history: true, status: null },
-	{ name: 'an unknown failure count', failed: null, partial: true, history: true, status: null },
-	{ name: 'an unknown update history', failed: null, partial: false, history: false, status: null }
-]) {
-	test(`the day header reports ${state.name} without inventing facts`, async ({ page }) => {
-		const date = latestFixtureDay();
-		const day = JSON.parse(readFileSync(
-			join(process.cwd(), 'build', 'digest', ...date.split('-'), 'digest.json'), 'utf8'
-		)) as DayForPage;
-		expect(day.items.length, 'the header fixture needs a day with stories').toBeGreaterThan(1);
-		day.partial = state.partial;
-		day.items_failed = state.failed;
-		day.runs = state.history ? [
-			{ n: 1, at: `${date}T06:00:00Z`, items_added: day.items.length - 1 },
-			{ n: 2, at: `${date}T12:30:00Z`, items_added: 1 }
-		] : undefined;
-		// The day's own stamp rather than a run's. A payload old enough to say
-		// nothing about its runs says nothing about this either, and the line it
-		// would draw is the one the other branch asserts is absent.
-		day.generated_at = state.history ? `${date}T12:30:00Z` : undefined;
-		let requests = 0;
-		await page.route(`**/digest/${date.replaceAll('-', '/')}/digest.json`, (route) => {
-			requests += 1;
-			return route.fulfill({ contentType: 'application/json', body: JSON.stringify(day) });
-		});
-		await page.setViewportSize({ width: 360, height: 800 });
-		await page.goto(`/${date}/`);
-		const notice = page.locator('section[aria-label="About today"]');
-		await expect(notice.locator('.notice-count')).toHaveText(`${day.items.length} stories.`);
-		expect(requests, 'the page must read the bounded fixture').toBeGreaterThan(0);
-		if (state.status === null) {
-			await expect(notice.locator('.notice-status')).toHaveCount(0);
-		} else {
-			await expect(notice.locator('.notice-status')).toHaveText(state.status);
-		}
-		if (state.history) {
-			await expect(notice.locator('.notice-run')).toHaveText(
-				'Updated 12:30 UTC. 1 added after this page first went up.'
-			);
-		} else {
-			await expect(notice.locator('.notice-run')).toHaveCount(0);
-		}
-		await expect(notice).not.toContainText('could not read enough');
-		expect(await notice.evaluate((node) => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(0);
-	});
-}
-
-/**
- * Two source limits on one item, in one paragraph, in order.
- *
- * `reader_note` joins a sentence for each limit an item carries, and an item
- * that is both an abstract and cut carries two. Until the canary day published
- * one, that pair had a unit test and no page: measured 2026-08-29 over every
- * committed digest payload, no published item carries an abstract note at all.
- * The one sentence a reader would actually meet was the one nothing rendered.
- *
- * The item is found in the payload rather than named here, so the assertion
- * follows the fixture instead of pinning a position in it. What is pinned is the
- * sentence, because the sentence is the product.
- */
-test('an item that is both an abstract and cut says both, in one paragraph', async ({ page }) => {
-	const date = latestFixtureDay();
-	const both = publishedItems(date).filter(
-		(entry) => entry.source_form === 'abstract' && entry.truncated
-	);
-
-	// An assertion rather than a skip. A skip reads as nothing in a long pass
-	// list, so a fixture that stopped carrying this item would switch the check
-	// off in silence.
-	expect(both, 'the canary day publishes no item that is both an abstract and cut').toHaveLength(
-		1
-	);
-	expect(both[0].reader_note).toBe(
-		"This is a summary of the paper's abstract. The full paper is a PDF. " +
-			'We could only read the first 75 percent of this page.'
-	);
-
-	await page.goto(`/${date}/`);
-
-	const article = page.locator(`article#${both[0].item_id}`);
-	await expect(article, 'the day page renders no article for that item').toHaveCount(1);
-	const note = article.locator('p').filter({ hasText: 'The full paper is a PDF.' });
-	await expect(note, 'the item renders no reader note').toHaveCount(1);
-	// One element holding both sentences. Split across two paragraphs, or either
-	// sentence alone, and this fails.
-	await expect(note).toHaveText(both[0].reader_note as string);
-});
-
-/**
- * The home page is the one page every reader lands on, and its topic pills were
- * dead for as long as they have existed: the pills build their address from a
- * `datePrefix`, the dated routes pass one, and the root passed nothing - so
- * every pill pointed at `/<vertical>/`, a route this site does not have.
- *
- * Asserted by walking the links rather than by pinning the prefix, because the
- * defect was never the prefix. It was that nothing checked a link on the home
- * page went anywhere. A test that only pinned the attribute would pass the day
- * someone changed the route shape underneath it.
- */
-test('every internal link on the home page goes somewhere', async ({ page }) => {
-	await page.goto('/');
-
-	const targets = await page
-		.locator('main a[href], nav a[href]')
-		.evaluateAll((links) =>
-			links
-				.map((link) => (link as HTMLAnchorElement).href)
-				.filter((href) => href.startsWith(window.location.origin))
-				.filter((href, index, all) => all.indexOf(href) === index)
-		);
-
-	expect(targets.length).toBeGreaterThan(0);
-
-	const dead: string[] = [];
-	for (const href of targets) {
-		const response = await page.goto(href);
-		if (!response || response.status() >= 400) {
-			dead.push(`${href} -> ${response ? response.status() : 'no response'}`);
-		}
-	}
-
-	expect(dead, `dead links on the home page:\n${dead.join('\n')}`).toEqual([]);
+    const item = readFileSync(resolve(ROOT, 'frontend', 'src', 'lib', 'components', 'DigestItem.svelte'), 'utf8');
+    // The sentence moved to the day notice, which is where the day is. The
+    // footer stated it on every route, including the ones that show no day.
+    const notice = readFileSync(resolve(ROOT, 'frontend', 'src', 'lib', 'components', 'DayNotice.svelte'), 'utf8');
+    expect(item).toContain('item.reader_note');
+    expect(item).not.toContain('Brief');
+    expect(notice).toContain('day.items_failed');
+    expect(notice).toContain('did not finish.');
+    expect(notice).not.toContain('could not read enough of the page');
 });

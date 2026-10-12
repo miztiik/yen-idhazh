@@ -91,7 +91,10 @@ name every property of
 once, and name nothing else.
 `backend/tests/contracts/test_frontend_console_lists.py` compares the sets;
 [../../../frontend/tests/console-model-instruments.spec.ts](../../../frontend/tests/console-model-instruments.spec.ts)
-visits each receiver's declared route. So a column added to `EvalRow`
+holds each instrument to its approved receiver and checks the numeric reductions.
+One native Summaries journey checks arrival and a window change; real private
+server rendering checks absent, quiet and populated build-time records. These
+are distinct boundaries, not page, panel, width or theme matrices. So a column added to `EvalRow`
 next month fails a test rather than going undrawn - which is the defect the map
 exists for: `hhem` and `coverage` were scored on every summary from the first
 published day and read by nothing on the site for two weeks.

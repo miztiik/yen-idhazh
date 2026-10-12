@@ -1,6 +1,6 @@
 # What a story shows, and where each fact sits
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-10-11
 
 One story on the page: what it prints above the title, what it prints under the
 summary, which of those facts is a claim about the article and which is a claim
@@ -192,7 +192,7 @@ A reader can mark an item read. The mark lives in `localStorage` and nowhere els
 
 A date makes a mark answerable, and answerable is what lets an old one be dropped. `ui.read_mark_days` (14) is the window, and since 2026-09-06 it means **14 calendar days back from today** rather than the newest 14 dates `localStorage` happens to hold. That swap costs something and the knob says so: expiry by calendar needs the device clock, and the rule it replaced deliberately needed none. It is worth it because the old rule bounded the read state by how often a reader came back rather than by how long ago they read - a reader who opened one day a month kept marks from seven different months, and each greyed out an article last seen most of a year ago. One more thing follows from the calendar, and it is a real loss rather than a rounding error: **a mark made on an archive day the window no longer reaches does not survive the next load.** The window is the promise, and it is the same span `ui.archive_recent_days` lists as rows of its own, so the days the archive offers as shortcuts are exactly the days a mark still lives on. Only a date OLDER than the floor goes, so a device clock running slow loses a reader nothing.
 
-**A click writes one day.** Every mark used to sit under a single key holding every date, so marking one story re-read, re-parsed and re-serialised everything the reader had ever read - a cost that grew with the reading history and never with the day in hand. One key a date makes that write the day's own marks and nothing else, and it makes the pruning a walk over key names rather than a parse of every mark. Proved as bytes rather than argued: `readstate.spec.ts` marks the same story twice, once against empty `localStorage` and once with twelve other days of forty marks each, and holds the two writes to the same key and the same length.
+**A click writes one day.** Every mark used to sit under a single key holding every date, so marking one story re-read, re-parsed and re-serialised everything the reader had ever read - a cost that grew with the reading history and never with the day in hand. One key a date makes that write the day's own marks and nothing else, and it makes the pruning a walk over key names rather than a parse of every mark.
 
 **The dated map is carried over; the undated list is not.** Read state written under the old single key is folded into one key a date on the next load and then forgotten, because it holds marks a reader really made. The bare list that came before it is still dropped rather than guessed at: there is no honest way to decide which day an undated mark belonged to, and a wrong mark costs a reader an article where a lost one costs them a click.
 

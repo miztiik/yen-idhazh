@@ -2,87 +2,59 @@ import { existsSync } from 'node:fs';
 import { basename, join } from 'node:path';
 
 export const FRONTEND_GROUPS = [
-	'logic', 'reader', 'offline', 'console', 'panels', 'archive', 'model-search', 'publishing'
+	'logic', 'reader', 'offline', 'console', 'archive', 'model-search', 'publishing'
 ] as const;
 
 export type FrontendGroup = (typeof FRONTEND_GROUPS)[number];
 
 const FILES: Record<FrontendGroup, readonly string[]> = {
-	console: [
-		'console-built-page', 'console-route-waiting',
-		'console-shared-contracts',
-		'console', 'console-article-cost', 'console-axis', 'console-band',
-		'console-chart-lifetime', 'console-chart-pending', 'console-charts-rule',
-		'console-chrome', 'console-cold-load', 'console-compression', 'console-coverage',
-		'console-data-explorer', 'console-data-explorer-still', 'console-data-explorer-window',
-		'console-disk-reads', 'console-doubt', 'console-explorer-rails', 'console-extraction', 'console-failure',
-		'console-failures', 'console-flow', 'console-frame',
-		'console-item-cost', 'console-judgement-agreement', 'console-judgement-holdout',
-		'console-judgement-evidence',
-		'console-judgement-window-spans', 'console-judgement-agreement-readout',
-		'console-judgement-agreement-marks', 'console-judgement-day-labels',
-		'console-judgement-record-window', 'console-machine-window', 'console-machine-day-labels',
-		'console-pipelines-window', 'console-pipelines-day-labels', 'console-model-window',
-		'console-voices-window', 'console-window-readout',
-		'console-judgement-line', 'console-judgement-merges', 'console-judgement-verdict',
-		'console-machine-data', 'console-machine-page',
-		'console-machine-panels', 'console-machine-reuse',
-		'console-mark-parity', 'console-memory-board',
-		'console-memory-held', 'console-model-instruments', 'console-model-panels',
-		'console-model-ledgers',
-		'console-model-builder',
-		'console-model-reasons', 'console-model-rule', 'console-model', 'console-nav',
-		'console-pipeline-timeline', 'console-polarity', 'console-processor-lost',
-		'console-published', 'console-query-door', 'console-ranked', 'console-readout',
-		'console-reserved', 'console-run-health', 'console-run-yield',
-		'console-shard-board', 'console-shell', 'console-site-size',
-		'console-telemetry-heal', 'console-throughput', 'console-timings', 'console-title',
-		'console-voices-cuts', 'console-voices-feeds', 'console-voices-retiring',
-		'console-voices-build-time', 'console-voices-ledgers', 'console-voices-nothings',
-		'console-voices-sources', 'console-voices', 'console-window-claims', 'console-window'
-	],
 	logic: [
-		'console-canary-host-halves', 'console-drawn-cells', 'console-panel-queries', 'console-waiting', 'recorded-slices',
-		'console-judgement-nothings', 'console-model-nothings',
-		'appearance-config', 'applied-line', 'archive-scope', 'asset-base', 'assist-guard', 'browser-selection', 'chart-types', 'chart-vocabulary', 'day-list', 'day-metrics', 'day-search',
-		'console-data-explorer-address', 'console-data-explorer-cells', 'console-data-explorer-examples', 'console-data-explorer-gaps', 'console-data-explorer-keep', 'console-data-explorer-shape',
-		'explorer-column-groups', 'explorer-strip-fit', 'explorer-type-colour', 'explorer-type-family',
-		'console-host-spans', 'console-machine-cards', 'console-machine-split', 'console-machine',
-		'console-chart-days', 'console-cuts-by-run', 'console-date-axis', 'console-compression-rows', 'console-model-work', 'console-readout-data',
-		'console-route-scope', 'console-stage-timing-days',
-		'extraction-trend', 'extraction-window', 'frame',
-		'glance-and-rank', 'holdout', 'holdout-domain', 'judgement-evidence', 'layout-overflow', 'ledger-copy', 'ledger-door', 'ledger-lifecycle', 'ledger-rows', 'memory-held', 'merge-line', 'model-cards',
-		'indexed-runs', 'one-pass-reductions',
-		'duration-cohort',
-		'payload-ceilings',
-		'platform-mix', 'preview-port',
-		'processor-lost', 'prompt-reuse',
-		'publication', 'recorded-line',
-		'run-axis', 'run-yield',
-		'settings-moved', 'similarity-ledgers', 'span-sentences', 'span-words', 'statement', 'raw-listed-through',
-		'telemetry-header', 'telemetry-hold', 'throughput-window', 'time-split',
-		'tokens', 'verdict-split', 'vocabulary',
-		'weights'
+		'appearance-config', 'applied-line', 'archive-calendar', 'archive-scope', 'asset-base',
+		'assist-guard', 'chart-types', 'chart-vocabulary', 'charts', 'console',
+		'console-article-cost', 'console-band', 'console-canary-host-halves',
+		'console-chart-days', 'console-charts-rule', 'console-chrome', 'console-compression',
+		'console-compression-rows', 'console-coverage', 'console-cuts-by-run',
+		'console-data-explorer', 'console-data-explorer-address', 'console-data-explorer-cells',
+		'console-data-explorer-examples', 'console-data-explorer-gaps',
+		'console-data-explorer-keep', 'console-data-explorer-shape', 'console-date-axis',
+		'console-disk-reads', 'console-doubt', 'console-drawn-cells', 'console-failure',
+		'console-failures', 'console-flow', 'console-frame', 'console-host-spans',
+		'console-item-cost', 'console-judgement-nothings', 'console-machine',
+		'console-machine-cards', 'console-machine-data', 'console-machine-panels',
+		'console-machine-split', 'console-memory-board', 'console-model',
+		'console-model-instruments', 'console-model-nothings', 'console-model-panels',
+		'console-model-reasons', 'console-model-reductions',
+		'console-model-rule', 'console-model-work', 'console-nav', 'console-panel-queries',
+		'console-pipelines-window', 'console-polarity',
+		'console-published', 'console-ranked', 'console-readout-data',
+		'console-run-health', 'console-shard-board', 'console-shell', 'console-site-size',
+		'console-stage-timing-days', 'console-timings', 'console-voices', 'console-voices-cuts',
+		'console-voices-feeds', 'console-voices-retiring', 'console-voices-sources',
+		'console-waiting', 'console-window', 'day-list',
+		'day-metrics', 'day-seam', 'day-search', 'day-states', 'duration-cohort', 'empty-day',
+		'explorer-column-groups', 'explorer-strip-fit', 'explorer-type-colour',
+		'explorer-type-family', 'extraction-trend', 'extraction-window', 'filter-bar',
+		'frame', 'glance-and-rank', 'holdout', 'holdout-domain', 'icons',
+		'indexed-runs', 'item-meta', 'item-time', 'item-visual', 'judgement-evidence',
+		'layout-overflow', 'ledger-copy', 'ledger-door', 'ledger-lifecycle', 'ledger-rows',
+		'lenses', 'manifest', 'memory-held', 'merge-line', 'model-cards',
+		'one-pass-reductions', 'payload-ceilings',
+		'platform-mix', 'preview-port', 'processor-lost', 'prompt-reuse',
+		'publication', 'raw-listed-through', 'recorded-line',
+		'recorded-slices', 'run-axis', 'run-yield', 'served-day', 'settings-moved',
+		'similarity-ledgers', 'span-sentences', 'span-words', 'statement',
+		'telemetry-header', 'telemetry-hold', 'throughput-window', 'time-split', 'tokens',
+		'topics', 'verdict-split', 'vocabulary', 'weights'
 	],
-	reader: [
-		'dated-day', 'day-states', 'filter-bar', 'footer-facts', 'item-card', 'item-meta',
-		'item-time', 'item-visual', 'item-zones', 'layout', 'leading-stories',
-		'lenses', 'manifest', 'payload-state', 'reading-page', 'readstate', 'source-mark',
-		'theme', 'topic-day', 'topics', 'whole-day'
-	],
-	// Alone, because it rewrites the kill switch the whole served site shares and
-	// `reading-page` installs the worker that reads it. See `playwright.config.ts`.
+	reader: ['payload-state', 'reading-page'],
 	offline: ['service-worker'],
-	// The console's panels as a reviewer sees them, and the gates a selector can
-	// decide about them. Apart from `console` so a change to what every panel is
-	// drawn from can buy these two without the console's hundreds of tests.
-	panels: ['panel-captures', 'panel-sufficiency'],
-	archive: ['archive', 'archive-calendar'],
+	console: [
+		'console-data-explorer-still', 'console-model-builder', 'console-model-ledgers',
+		'console-telemetry-heal', 'console-voices-journey'
+	],
+	archive: ['archive'],
 	'model-search': ['search'],
-	publishing: [
-		'canaries', 'charts', 'day-seam', 'empty-day', 'icons',
-		'explorer-boundary', 'ledger-ranges', 'malformed-day', 'payload-weight', 'published-ledgers', 'served-day', 'staged-day'
-	]
+	publishing: ['canaries', 'explorer-boundary', 'malformed-day']
 };
 
 export function groupForSpec(filename: string): FrontendGroup | undefined {
@@ -90,14 +62,14 @@ export function groupForSpec(filename: string): FrontendGroup | undefined {
 	for (const [group, names] of Object.entries(FILES)) {
 		if (names.includes(name)) return group as FrontendGroup;
 	}
-	if (/^console(?:-|$)/.test(name)) return 'console';
 	return undefined;
 }
 
 export function groupedSpecs(directory: string): Record<FrontendGroup, string[]> {
-	const groups: Record<FrontendGroup, string[]> = {
-		logic: [], reader: [], offline: [], console: [], panels: [], archive: [], 'model-search': [], publishing: []
-	};
+	const groups = Object.fromEntries(FRONTEND_GROUPS.map((group) => [group, []])) as unknown as Record<
+		FrontendGroup,
+		string[]
+	>;
 	for (const group of FRONTEND_GROUPS) {
 		for (const name of FILES[group]) {
 			const filename = `${name}.spec.ts`;

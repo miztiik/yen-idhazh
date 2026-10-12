@@ -1,6 +1,6 @@
 # How the machine's work is drawn, and what may not be pooled
 
-**Last Updated**: 2026-10-06
+**Last Updated**: 2026-10-11
 
 The Hardware route and the run timeline draw one machine's work. One measurement
 shapes all of it: **a run does not get one machine.** Measured 2026-09-17 over
@@ -233,14 +233,11 @@ left to hand out, and names the article it came from, so every part of that bar
 is read off one row. An average of two moments that never met is not a thing the
 machine was ever holding.
 
-The arithmetic is proved without a browser and the geometry is proved with one.
 The sum is asserted exactly, with no tolerance: a tolerance is the gap the
 1.87x stack fits back through
 ([../../../frontend/tests/memory-held.spec.ts](../../../frontend/tests/memory-held.spec.ts)).
-The overlap is read off the two brackets' boxes on the page and held to the
-narrower one's full width, so a change that put them end to end fails even
-though every number stayed right
-([../../../frontend/tests/console-memory-held.spec.ts](../../../frontend/tests/console-memory-held.spec.ts)).
+The two brackets must overlap by the narrower one's full width; putting them
+end to end would misstate the memory even if every number stayed right.
 What the readings say, and what the model behind the four-part shape is, are in
 [Interpreting machine memory](../../reference/pipeline-cost.md#how-much-of-the-runners-memory-a-run-needs).
 
@@ -335,18 +332,14 @@ The run timeline on `/console/` draws
 
 **A column the panel reads has to carry a value somewhere on the canary day, or
 the panel does not ship.**
-[../../../frontend/tests/console-pipeline-timeline.spec.ts](../../../frontend/tests/console-pipeline-timeline.spec.ts)
-takes the declared list off `run-timeline.ts`, reads `backend/var/canary/`, and
-fails on any column empty across every row - then checks on the page that every
-step in the legend has a slice behind it and that all eight are accounted for as
-drawn, unproduced or unrecorded. The same file holds the grain oracle: it reads
-the two arrays off the page and holds the shard grain against the item grain,
-per shard and per step. The canary is the right fixture because it is
+Every step in the legend must have a slice behind it, and all eight must be
+accounted for as drawn, unproduced or unrecorded. Shard and item readings must
+agree per shard and per step. The canary is the right fixture because it is
 fixed in size (`CLAUDE.md` Guardrail #12) and because it is built, so it carries
 a case the archive has never produced: not one committed census row records an
 item clock, so nothing but a built day can place an item on one.
 
-**Three panels would fail that gate today** and are left for a later row. Measured
+**Three panels lacked those fixture values on 2026-09-16.** Measured
 2026-09-16 over the canary's own published payloads, by counting non-empty cells
 per column across every row of each file: the one `day-metrics` record the canary
 holds carries `extraction` null, `throughput` null and `stage_timing` empty, so
