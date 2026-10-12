@@ -1,6 +1,6 @@
 /** Only configuration crosses the static page boundary. The browser asks for records. */
 import { chartConfig, inferenceConfig, observabilityConfig, runConfig } from '$lib/server/config';
-import { watchedFlags } from '$lib/server/host-fingerprint';
+import { watchedFlags } from '$lib/console/machine/host-types';
 
 export const prerender = true;
 

@@ -1,8 +1,12 @@
 /** Pipelines draws only the windowed telemetry and refuses a too-narrow rule. */
 import { expect, test } from './support/browser';
 import { windowOfDays } from '../src/lib/charts/viewport';
-import { failureSeries, timeSplit, type TelemetryRow } from '../src/lib/charts/series';
-import { failureMix, failureMixColumns, timeSplitChart, timeSplitColumns } from '../src/lib/charts/glance';
+import type { TelemetryRow } from '../src/lib/charts/series';
+import { daysInWindow } from '../src/lib/charts/viewport';
+import { nativeFailureMix } from '../src/lib/console/pipelines/failure-mix';
+import { nativeTimeSplit, timeSplitReadout } from '../src/lib/console/pipelines/item-time-split';
+import { dateSeries } from '../src/lib/charts/d3/dateSeries';
+import { frame } from '../src/lib/charts/frame';
 import { telemetryRow } from './support/telemetry-row';
 import { JUDGED_THROUGH } from './support/console-window/judgement-fixtures';
 /** An item that published, timed from start to finish: 800 ms in all. */
@@ -39,50 +43,25 @@ test.describe("Pipelines' failure mix and time split draw the window's days, on 
         // nothing ran on the second, and the third timed one item and failed none.
         const window = windowOfDays(JUDGED_THROUGH, 3, 'right');
         const rows = [failedItem('2030-06-13', 'a', 'fetch'), timedItem('2030-06-15', 'b')];
-        const series = failureSeries(rows, window);
-        const mixStrip = failureMixColumns(series);
-        expect(mixStrip.columns).toEqual(['13 Jun 2030', '14 Jun 2030', '15 Jun 2030']);
-        expect(mixStrip.series.map((stage) => [stage.label, stage.values])).toEqual([
-            ['fetch', ['1', null, '0']],
-            ['extract', ['0', null, '0']],
-            ['summarize', ['0', null, '0']]
+        const calendar = daysInWindow(window);
+        const mix = nativeFailureMix(rows.map((row) => ({ ...row })), calendar);
+        expect(mix.series.map((stage) => [stage.label, stage.points.map((point) => point.value)])).toEqual([
+            ['Fetch', [1, null, 0]], ['Extract', [0, null, 0]], ['Summarize', [0, null, 0]]
         ]);
-        expect(mixStrip.notMeasured).toBe('No item was planned on this day');
-        const mixBars = failureMix(series).option.series as {
-            name: string;
-            data: (number | null)[];
-        }[];
-        expect(mixBars.map((bar) => [bar.name, bar.data])).toEqual([['fetch', [1, null, 0]]]);
-        // Drawn as lines, the same array: the day with no row breaks the line.
-        const mixLines = failureMix(series, 'lines').option.series as {
-            data: (number | null)[];
-        }[];
-        expect(mixLines.map((line) => line.data)).toEqual([[1, null, 0]]);
-        const days = timeSplit(rows, window);
-        const splitStrip = timeSplitColumns(days);
-        expect(splitStrip.series.map((band) => band.values)).toEqual([
-            [null, null, '100 ms, 13%'],
-            [null, null, '20 ms, 3%'],
-            [null, null, '150 ms, 19%'],
-            [null, null, '370 ms, 46%'],
-            [null, null, '60 ms, 8%'],
-            [null, null, '20 ms, 3%'],
-            [null, null, '30 ms, 4%'],
-            [null, null, '50 ms, 6%']
+        const options = { frame: frame(760, 220), density: 6, valueTicks: 5, padding: 0.2, rule: { changes: [], note: null } };
+        const bars = dateSeries(mix.series, { ...options, stacked: true })!;
+        const lines = dateSeries(mix.series, options)!;
+        expect(bars.dates).toEqual(['2030-06-13', '2030-06-14', '2030-06-15']);
+        expect(bars.bars.map((bar) => [bar.date, bar.label, bar.value])).toEqual([['2030-06-13', 'Fetch', 1]]);
+        expect(lines.lines[0].points.map((point) => [point.date, point.value, point.alone])).toEqual([
+            ['2030-06-13', 1, true], ['2030-06-15', 0, true]
         ]);
-        expect(splitStrip.notMeasured).toBe('No item was timed from start to finish on this day');
-        const splitBars = timeSplitChart(days).option.series as {
-            data: (number | null)[];
-        }[];
-        expect(splitBars.map((bar) => bar.data)).toEqual([
-            [null, null, 100],
-            [null, null, 20],
-            [null, null, 150],
-            [null, null, 370],
-            [null, null, 60],
-            [null, null, 20],
-            [null, null, 30],
-            [null, null, 50]
-        ]);
+        const split = nativeTimeSplit(rows.map((row) => ({ ...row })), calendar);
+        const strip = timeSplitReadout(split);
+        expect(split.series.map((band) => band.points.map((point) => point.value))).toEqual(
+            [100, 20, 600, 30, 50].map((value) => [null, null, value]));
+        expect(strip.series.slice(0, 7).map((band) => band.values)).toEqual(
+            ['0.10 s', '0.02 s', '0.60 s', '0.03 s', '0.05 s', '0.80 s', '0.00 s'].map((value) => [null, null, value]));
+        expect(strip.notMeasured).toBe('Not measured for the complete cohort');
     });
 });

@@ -28,13 +28,14 @@ import {
 	uptimeSentence
 } from '../src/lib/charts/machine-cards';
 import { UNRECORDED_STOP } from '../src/lib/charts/machine-colour';
-import { fingerprintsOf, machineRecordDays, watchedFlags } from '../src/lib/server/host-fingerprint';
-import type { HostFingerprint } from '../src/lib/server/host-fingerprint';
+import { fingerprints, countersFrom } from '../src/lib/console/machine/records';
+import { fleetJobs } from '../src/lib/charts/fleet';
+import { watchedFlags, type HostFingerprint } from '../src/lib/console/machine/host-types';
 import {
 	machineCounters,
 	type MachineLimits,
 	type MachineRun
-} from '../src/lib/server/machine-counters';
+} from '../src/lib/console/machine/counters';
 import { ledgers, plan, type ShardReading } from './support/machine-rows';
 import { observabilityConfig } from '../src/lib/server/config';
 
@@ -610,12 +611,12 @@ test.describe('a day that published and kept no machine row', () => {
 
 		// Both days hold a row; only one row names its machine. 15 September holds
 		// none at all, and that is the day the record had not begun on.
-		expect(machineRecordDays(rows)).toEqual(['2026-09-16', '2026-09-17']);
-		expect(fingerprintsOf(rows).map((row) => row.date)).toEqual(['2026-09-17']);
+		expect(fleetJobs(rows).map((row) => row.date)).toEqual(['2026-09-16', '2026-09-17']);
+		expect(fingerprints(rows).map((row) => row.date)).toEqual(['2026-09-17']);
 	});
 
 	test('a record that holds no row reports no days rather than throwing', () => {
-		expect(machineRecordDays([])).toEqual([]);
+		expect(fleetJobs([])).toEqual([]);
 	});
 });
 
@@ -625,7 +626,7 @@ test.describe("one job's row", () => {
 		// row, so the newest row a job wrote names the machine AND what the job
 		// cost. The reader types that row whole, so the job's clock sits beside
 		// the machine it was measured on.
-		const rows = fingerprintsOf([
+		const input = [
 			{
 				version: '2026-09-20',
 				date: '2026-09-17',
@@ -638,18 +639,21 @@ test.describe("one job's row", () => {
 				model_load_ms: '2290.5',
 				job_seconds: '780'
 			}
-		]);
+		];
+		const rows = fingerprints(input);
 		expect(rows, 'one job is one placement').toHaveLength(1);
 		expect(rows[0].fingerprint).toBe('3a7f0b1c2d4e5f60');
 		expect(rows[0].cpu_model).toBe('AMD EPYC 7763 64-Core Processor');
 		expect(rows[0].fingerprint_version).toBe(1);
 		expect(rows[0].cpu_physical_cores).toBeNull();
-		expect(rows[0].job_seconds).toBe(780);
-		expect(rows[0].model_load_ms).toBe(2290.5);
+		const counter = countersFrom(input, [], [], LIMITS);
+		expect(counter.refused).toEqual([]);
+		expect(counter.runs[0].reported[0].jobSeconds).toBe(780);
+		expect(counter.runs[0].reported[0].modelLoadMs).toBe(2290.5);
 	});
 
 	test('mixed legacy and corrected rows normalize before consumers without invented counts', () => {
-		const rows = fingerprintsOf([
+		const rows = fingerprints([
 			{
 				version: '2026-09-20',
 				date: '2026-09-20',

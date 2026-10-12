@@ -1,5 +1,5 @@
-/** The retained identity list is tested on its own component, never on the native page. */
-import { expect, test } from './support/door-page';
+/** Independent partition, source-dedupe and ranking math; no retired identity-list rendering. */
+import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
@@ -13,8 +13,6 @@ import {
 } from '../src/lib/charts/series';
 import { rank, tailSentence, type Rankable, type RankedDisplay } from '../src/lib/charts/rank';
 import type { TimeWindow } from '../src/lib/charts/viewport';
-import { items } from './support/retained-telemetry';
-import { openRetained as openServed } from './support/retained-telemetry';
 import { telemetryRow } from './support/telemetry-row';
 
 /**
@@ -38,11 +36,8 @@ import { telemetryRow } from './support/telemetry-row';
  * per run. Counting rows would leave every bar in proportion, every name in the
  * right order, and every number too big.
  *
- * The interaction is proved twice over, in two places. The browser half here
- * serves the page telemetry it builds for the window the page opened on, and
- * asserts the shapes and the empty states over rows written out; the
- * click-through against real failures is the section-12 smoke against the
- * production build.
+ * Current identity-free stage selection and native empty states are exercised
+ * by console-pipelines-components and console-pipelines-retained-failure.
  */
 
 const frontend = process.cwd();
@@ -465,121 +460,5 @@ test.describe('THE ORACLE: sources ranked by the articles their failures cost', 
 		expect(empty.rows).toBe(0);
 		expect(empty.sources).toEqual([]);
 		expect(empty.lost).toBe(0);
-	});
-});
-
-test.describe('the failure section on the page', () => {
-	test('the two rankings sit above the rows they explain', async ({ page }) => {
-		await openServed(page, () => builtRows());
-
-		const order = await page.evaluate(() => {
-			const seen = ['[data-failure-ledger]', '[data-source-losses]', '[data-failure-list]'].map(
-				(selector) => document.querySelector(selector)
-			);
-			if (seen.some((node) => node === null)) return null;
-			const nodes = seen as Element[];
-			// 4 is DOCUMENT_POSITION_FOLLOWING: each one comes after the last.
-			return nodes.every(
-				(node, index) => index === 0 || (nodes[index - 1].compareDocumentPosition(node) & 4) > 0
-			)
-				? 'ranked-first'
-				: 'out-of-order';
-		});
-		expect(order, 'the failure section is missing one of its three parts').toBe('ranked-first');
-	});
-
-	test('the item rows start shut, and the summary says how many are behind it', async ({
-		page
-	}) => {
-		await openServed(page, () => builtRows());
-
-		// The rows are the only child of this page that can outgrow the screen.
-		// Uncapped and open they measured 7,824px against 800 rows and put the
-		// chart above them at document y=9,105.
-		const rows = page.locator('details[data-failure-rows]');
-		await expect(rows, 'the item rows are not behind a disclosure').toHaveCount(1);
-		expect(await rows.evaluate((node) => (node as HTMLDetailsElement).open)).toBe(false);
-		await expect(page.locator('[data-failure-toggle]')).toContainText('failed item');
-	});
-
-	test('the three empty states say different things', async ({ page }) => {
-		// Three published items on the window's newest day, from two sources, and no
-		// failure among them, so both rankings answer no.
-		await openServed(page, (window) => [
-			...items(window.end, 'a', 'publish', 'ok', 2, { source_id: 'a-wire' }),
-			...items(window.end, 'b', 'publish', 'ok', 1, { source_id: 'b-wire' })
-		]);
-
-		const ledger = page.locator('[data-failure-ledger]');
-		const sources = page.locator('[data-source-losses]');
-		await expect(ledger, 'the ledger must be on the page in every state').toHaveCount(1);
-		await expect(sources, 'the source ranking must be on the page in every state').toHaveCount(1);
-		await expect(sources.locator('[data-ranked="none"]')).toHaveText(
-			'No source lost an article in this window.'
-		);
-
-		// One step back the window holds no row at all. Now neither ranking can
-		// answer, and that is a different sentence from answering no.
-		const viewport = page.locator('[data-viewport-control]');
-		await viewport.focus();
-		await page.keyboard.press('ArrowLeft');
-		await expect(viewport).toContainText('0 rows in view');
-		await expect(sources.locator('[data-ranked="unmeasured"]')).toHaveText(
-			'Nothing was recorded in this window.'
-		);
-	});
-
-	test('the two empty states say different things', async ({ page }) => {
-		// Two published items on the window's newest day and no failure, so the
-		// ledger answers no.
-		await openServed(page, (window) => items(window.end, 'done', 'publish', 'ok', 2));
-
-		const ledger = page.locator('[data-failure-ledger]');
-		await expect(ledger, 'the ledger must be on the page in every state').toHaveCount(1);
-		await expect(ledger.locator('[data-ranked="none"]')).toHaveText('No item failed in this window.');
-
-		// One step back the window holds no row at all. Now the ledger cannot answer,
-		// and that is a different sentence from answering no.
-		const viewport = page.locator('[data-viewport-control]');
-		await viewport.focus();
-		await page.keyboard.press('ArrowLeft');
-		await expect(viewport).toContainText('0 rows in view');
-		await expect(ledger.locator('[data-ranked="unmeasured"]')).toHaveText(
-			'Nothing was recorded in this window.'
-		);
-	});
-
-	test('the rows carry the item id without spending a column on it', async ({ page }) => {
-		// One item failed at fetch on the window's newest day, beside two published ones.
-		await openServed(page, (window) => [
-			telemetryRow({
-				date: window.end,
-				run_id: `${window.end}-1`,
-				item_id: 'world-0000000042',
-				source_id: 'a-wire',
-				stage: 'fetch',
-				outcome: 'failed',
-				code: 'http_client_error'
-			}),
-			...items(window.end, 'done', 'publish', 'ok', 2, { source_id: 'a-wire' })
-		]);
-
-		const headers = await page
-			.locator('[data-failure-list="rows"] thead th')
-			.allTextContents();
-		expect(headers.map((text) => text.trim())).toEqual(['Day', 'Source', 'Stage', 'Code']);
-
-		const rows = page.locator('[data-failure-list="rows"] tbody tr');
-		await expect(rows).toHaveCount(1);
-		await expect(rows.first()).toHaveAttribute('title', 'world-0000000042');
-
-		// One step back no item failed, and the list says so rather than drawing an
-		// empty table.
-		const viewport = page.locator('[data-viewport-control]');
-		await viewport.focus();
-		await page.keyboard.press('ArrowLeft');
-		await expect(page.locator('[data-failure-list="empty"]')).toHaveText(
-			'No failed item is in this window.'
-		);
 	});
 });

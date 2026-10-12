@@ -4,9 +4,10 @@ import { serverCompiler } from './support/server-render';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { render } from 'svelte/server';
-import { windowOfDays } from '../src/lib/charts/viewport';
-import { failureSeries, timeSplit } from '../src/lib/charts/series';
-import { failureMix, failureMixColumns, timeSplitChart, timeSplitColumns } from '../src/lib/charts/glance';
+import { daysInWindow, windowOfDays } from '../src/lib/charts/viewport';
+import { readoutOf } from '../src/lib/charts/readout';
+import { nativeFailureMix } from '../src/lib/console/pipelines/failure-mix';
+import { nativeTimeSplit, timeSplitReadout } from '../src/lib/console/pipelines/item-time-split';
 import { telemetryRow } from './support/telemetry-row';
 import { hydrated, setWindow, routeHref } from './support/console-window/controls';
 import { THROUGH, FIRST, dayBefore, nativeRow, timedRow, packedPipelines, servePipelines, settled } from './support/pipelines-ledgers';
@@ -87,27 +88,22 @@ const timedItem = (date: string) => telemetryRow({ date, fetch_ms: 100, extract_
 test('a day with no row draws no column, and its strip says so, while a day that ran clean is a real zero', () => {
 	const window = windowOfDays(THROUGH, 3, 'right');
 	const rows = [failedItem('2030-06-13'), timedItem(THROUGH)];
-	const series = failureSeries(rows, window);
-	const mixStrip = failureMixColumns(series);
-	expect(mixStrip.columns).toEqual(['13 Jun 2030', '14 Jun 2030', '15 Jun 2030']);
-	expect(mixStrip.series.map((stage) => [stage.label, stage.values])).toEqual([
-		['fetch', ['1', null, '0']], ['extract', ['0', null, '0']], ['summarize', ['0', null, '0']]
+	const calendar = daysInWindow(window);
+	const nativeRows = rows.map((row) => ({ ...row }));
+	const mix = nativeFailureMix(nativeRows, calendar);
+	expect(mix.series.map((stage) => [stage.label, stage.points.map((point) => point.value)])).toEqual([
+		['Fetch', [1, null, 0]], ['Extract', [0, null, 0]], ['Summarize', [0, null, 0]]
 	]);
-	expect(mixStrip.notMeasured).toBe('No item was planned on this day');
-	expect((failureMix(series).option.series as { name: string; data: (number | null)[] }[]).map((bar) =>
-		[bar.name, bar.data])).toEqual([['fetch', [1, null, 0]]]);
-	expect((failureMix(series, 'lines').option.series as { data: (number | null)[] }[]).map((line) =>
-		line.data)).toEqual([[1, null, 0]]);
-	const days = timeSplit(rows, window);
-	const splitStrip = timeSplitColumns(days);
-	expect(splitStrip.series.map((band) => band.values)).toEqual([
-		[null, null, '100 ms, 13%'], [null, null, '20 ms, 3%'], [null, null, '150 ms, 19%'],
-		[null, null, '370 ms, 46%'], [null, null, '60 ms, 8%'], [null, null, '20 ms, 3%'],
-		[null, null, '30 ms, 4%'], [null, null, '50 ms, 6%']
-	]);
-	expect(splitStrip.notMeasured).toBe('No item was timed from start to finish on this day');
-	expect((timeSplitChart(days).option.series as { data: (number | null)[] }[]).map((bar) => bar.data)).toEqual(
-		[100, 20, 150, 370, 60, 20, 30, 50].map((value) => [null, null, value]));
+	expect(mix.recorded).toBe(2);
+	expect(mix.failures).toBe(1);
+	const split = nativeTimeSplit(nativeRows, calendar);
+	const splitStrip = timeSplitReadout(split);
+	expect(splitStrip.columns).toEqual(['2030-06-13', '2030-06-14', '2030-06-15']);
+	expect(splitStrip.series.slice(0, 7).map((band) => band.values)).toEqual(
+		['0.10 s', '0.02 s', '0.60 s', '0.03 s', '0.05 s', '0.80 s', '0.00 s'].map((value) => [null, null, value]));
+	expect(splitStrip.notMeasured).toBe('Not measured for the complete cohort');
+	expect(split.series.map((stage) => stage.points.map((point) => point.value))).toEqual(
+		[100, 20, 600, 30, 50].map((value) => [null, null, value]));
 });
 
 test.describe('a strip keeps room only for what each entry prints', () => {
@@ -119,16 +115,18 @@ test.describe('a strip keeps room only for what each entry prints', () => {
 		strip = (props) => render(component, { props }).body;
 	});
 	test('a day nothing measured holds no room in the entries of a day that was', async ({ page }) => {
-		const rows = [failedItem('2030-06-13'), timedItem(THROUGH)];
-		await page.setContent(`<main>${strip({ readout: timeSplitColumns(timeSplit(rows,
-			windowOfDays(THROUGH, 3, 'right'))), name: 'time-split', maxShare: 1 })}</main>`);
+		const readout = readoutOf({
+			type: 'dateSeries', columns: ['2030-06-13', '2030-06-14', THROUGH],
+			series: [
+				{ label: 'Fetch', swatch: '--chart-1', values: [null, null, 100], format: (ms) => `${(ms / 1000).toFixed(2)} s` },
+				{ label: 'Extract', swatch: '--chart-2', values: [null, null, 20], format: (ms) => `${(ms / 1000).toFixed(2)} s` }
+			], notMeasured: 'Not measured for the complete cohort', resting: 'newest'
+		});
+		await page.setContent(`<main>${strip({ readout, name: 'time-split', maxShare: 1 })}</main>`);
 		const entries = await page.locator('[data-readout="time-split"] [data-readout-row]').evaluateAll((nodes) =>
 			nodes.map((node) => [node.getAttribute('data-readout-row'), node.querySelector('.readout-value')?.getAttribute('style') ?? '']));
 		expect(entries).toEqual([
-			['Fetch', '--readout-reserve: 11ch'], ['Extract', '--readout-reserve: 9ch'],
-			['Label call', '--readout-reserve: 11ch'], ['Summary', '--readout-reserve: 11ch'],
-			['Visual plan', '--readout-reserve: 9ch'], ['Model, unsplit', '--readout-reserve: 9ch'],
-			['Faithfulness', '--readout-reserve: 9ch'], ['Unattributed', '--readout-reserve: 9ch']
+			['Fetch', '--readout-reserve: 6ch'], ['Extract', '--readout-reserve: 6ch']
 		]);
 	});
 });

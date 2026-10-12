@@ -1,11 +1,10 @@
 /** Deterministic machine data rules over bounded fixtures; no browser, build, or layout matrix. */
 import { expect, test } from '@playwright/test';
-import { mkdirSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { mkdirSync } from 'node:fs';
 import { clockAgreement } from '../src/lib/charts/machine';
-import { contextCost, type ContextOptions } from '../src/lib/console/machine/context-cost';
-import { CLOCKS_AGREE_WITHIN_PCT, machineCounters, machineLimits, type MachineLimits, type MachineRun } from '../src/lib/server/machine-counters';
-import { machineRecord } from '../src/lib/server/host-fingerprint';
+import { contextReadings } from '../src/lib/console/machine/records';
+import { CLOCKS_AGREE_WITHIN_PCT, machineCounters, type MachineLimits, type MachineRun } from '../src/lib/console/machine/counters';
+import type { Row } from '../src/lib/data/ledger';
 import { itemHealthRows } from '../src/lib/server/ledger-rows';
 import { buildLedger } from './support/ledger-lifecycle';
 import { hostRow, itemRow, ledgers, plan, type ShardReading } from './support/machine-rows';
@@ -318,7 +317,7 @@ test.describe('two machine records for one shard', () => {
     });
 });
 test.describe('the ledgers this reads, over a record written here', () => {
-    const limits = machineLimits();
+    const limits = LIMITS;
     const counted = () => {
         const { hosts, health } = ledgers([
             ...FULL,
@@ -362,13 +361,13 @@ test.describe('the ledgers this reads, over a record written here', () => {
 test.describe('ledger readers respect the fixture root', () => {
     test('an empty root cannot fall back to the populated canary or the archive', async () => {
         const state = test.info().outputPath('state');
-        for (const ledger of ['host-fingerprint', 'item-health'] as const) {
+        for (const ledger of ['item-health'] as const) {
             await buildLedger(state, { ledger, pinned: '2030-06-15', days: [{ ago: 1, rows: 2 }, { ago: 0, rows: 2 }] });
         }
         const empty = test.info().outputPath('empty');
         mkdirSync(empty, { recursive: true });
         const window = { start: '2030-06-14', end: '2030-06-15' };
-        for (const read of [machineRecord, itemHealthRows]) {
+        for (const read of [itemHealthRows]) {
             const built = await read(window, state);
             expect(built.read.state).toBe('read');
             expect(built.rows).toHaveLength(4);
@@ -380,118 +379,70 @@ test.describe('ledger readers respect the fixture root', () => {
         }
     });
 });
-const CONSOLE = JSON.parse(readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')).console as {
-    window_presets: number[];
-    min_attempts_for_rate: number;
-    context_high_percentile: number;
-    context_cut_off_reason: string;
-};
-test.describe('Row #21 - the context panel says what the limit already costs', () => {
-    const OPTIONS: ContextOptions = {
-        percentile: CONSOLE.context_high_percentile,
-        cutOffReason: CONSOLE.context_cut_off_reason
-    };
-    const AT_90: ContextOptions = { percentile: 90, cutOffReason: CONSOLE.context_cut_off_reason };
-    const RECORD: Record<string, string>[] = [
-        { run_id: '2030-06-14-1', date: '2030-06-14', n_ctx_configured: '8192', summary_input_tokens: '1000', summary_output_tokens: '24' },
-        { run_id: '2030-06-14-1', date: '2030-06-14', n_ctx_configured: '8192', summary_input_tokens: '2000', summary_output_tokens: '48' },
-        {
-            run_id: '2030-06-14-1',
-            date: '2030-06-14',
-            n_ctx_configured: '8192',
-            label_input_tokens: '900',
-            label_output_tokens: '100',
-            summary_input_tokens: '4000',
-            summary_output_tokens: '96'
-        },
-        { run_id: '2030-06-15-1', date: '2030-06-15', n_ctx_configured: '8192', summary_input_tokens: '3000', summary_output_tokens: '72' },
-        { run_id: '2030-06-15-1', date: '2030-06-15', summary_input_tokens: '500', summary_output_tokens: '20' },
-        { run_id: '2030-06-15-2', date: '2030-06-15' }
-    ];
-    test('THE ORACLE: the unused share is the largest article recomputed off the ledger', () => {
-        const { span } = contextCost(RECORD, AT_90);
-        expect(span.limits, 'the record ran under more than one limit').toEqual([8192]);
-        expect(span.rowsRead).toBe(6);
-        expect(span.items, 'the reader measured a different set of articles').toBe(4);
-        expect(span.largest, 'the largest article is not the largest in the record').toBe(4096);
-        expect(span.largestPct).toBe(50);
-        expect(span.unusedPct, 'the unused share is not the largest article inverted').toBe(50);
-        expect(span.median).toBe(2560);
-        expect(span.timesMedian).toBe(3.2);
-        expect(span.high).toBe(3789);
-        expect(span.percentile).toBe(90);
-    });
-    test('THE ORACLE: every run mark carries both ends, not one', () => {
-        const { runs } = contextCost(RECORD, AT_90);
-        expect(runs).toEqual([
-            { runId: '2030-06-14-1', date: '2030-06-14', items: 3, high: 3686, largest: 4096, highPct: 45, largestPct: 50 },
-            { runId: '2030-06-15-1', date: '2030-06-15', items: 1, high: 3072, largest: 3072, highPct: 38, largestPct: 38 },
-            { runId: '2030-06-15-2', date: '2030-06-15', items: 0, high: null, largest: null, highPct: null, largestPct: null }
-        ]);
-    });
-    test('a row that recorded no limit is not measured, and a total across calls is not a peak', () => {
-        const rows: Record<string, string>[] = [
-            { run_id: '2026-09-02-1', date: '2026-09-02', label_input_tokens: '900', label_output_tokens: '100' },
-            { run_id: '2026-09-02-1', date: '2026-09-02', n_ctx_configured: '8192', input_tokens: '4000', output_tokens: '500' },
-            { run_id: '2026-09-02-1', date: '2026-09-02', n_ctx_configured: '8192', summary_input_tokens: '1900', summary_output_tokens: '148' }
+test.describe('native context requests against recorded slot limits', () => {
+    test('label and summary inputs keep their own populations, even without a limit', () => {
+        const rows: Row[] = [
+            { n_ctx_configured: 8192, n_parallel: 2, label_input_tokens: 900, summary_input_tokens: 4000 },
+            { n_ctx_configured: 8192, n_parallel: 2, summary_input_tokens: 1000 },
+            { n_ctx_configured: 8192, n_parallel: 2, summary_input_tokens: 2000 },
+            { n_ctx_configured: 8192, n_parallel: 2, summary_input_tokens: 3000 },
+            { summary_input_tokens: 500 },
+            {}
         ];
-        const { span, runs } = contextCost(rows, OPTIONS);
-        expect(span.rowsRead).toBe(3);
-        expect(span.items, 'a row with no limit or no call cells was measured').toBe(1);
-        expect(span.largest).toBe(2048);
-        expect(span.largestPct).toBe(25);
-        expect(span.unusedPct).toBe(75);
-        expect(runs[0].items).toBe(1);
+        const reading = contextReadings(rows);
+        expect(reading.label).toEqual([900]);
+        expect(reading.summary).toEqual([4000, 1000, 2000, 3000, 500]);
+        expect(reading.limits).toEqual([4096]);
+        expect(reading.rules).toEqual([{ at: 4096, label: 'Reading limit: 4096 tokens per slot' }]);
+        expect(reading.cut).toBe(0);
     });
-    test('the peak is the largest call and never the calls added', () => {
-        const row: Record<string, string> = {
-            run_id: '2026-09-02-1',
-            date: '2026-09-02',
-            n_ctx_configured: '8192',
-            label_input_tokens: '900',
-            label_output_tokens: '100',
-            summary_input_tokens: '1950',
-            summary_output_tokens: '100'
-        };
-        const { span } = contextCost([row], OPTIONS);
-        expect(span.largest, 'the reader added the calls together').toBe(2050);
-        expect(span.largest).not.toBe(3050);
-    });
-    test('a limit that moved inside the span leaves the token figures unshared', () => {
-        const rows: Record<string, string>[] = [
-            { run_id: '2026-09-02-1', date: '2026-09-02', n_ctx_configured: '8192', summary_input_tokens: '1000', summary_output_tokens: '48' },
-            { run_id: '2026-09-03-1', date: '2026-09-03', n_ctx_configured: '65536', summary_input_tokens: '2000', summary_output_tokens: '48' }
-        ];
-        const { span } = contextCost(rows, OPTIONS);
-        expect(span.limits).toEqual([8192, 65536]);
-        expect(span.largest, 'the token figure survives a limit that moved').toBe(2048);
-        expect(span.largestPct, 'a share was taken against one of two limits').toBeNull();
-        expect(span.unusedPct).toBeNull();
-        expect(span.timesMedian).toBeNull();
-        expect(span.items).toBe(2);
-    });
-    test('a cut-off reply is counted and an unrecorded one is not called a clean stop', () => {
-        const clean = { label_finish_reason: 'stop', summary_finish_reason: 'stop' };
-        const cut = { label_finish_reason: 'stop', summary_finish_reason: CONSOLE.context_cut_off_reason };
-        const { span } = contextCost([clean, cut, {}], OPTIONS);
-        expect(span.calls, 'a row that named no reason was counted as a call').toBe(4);
-        expect(span.cutOff).toBe(1);
-        expect(span.reasons).toEqual([
-            { reason: 'stop', calls: 3 },
-            { reason: CONSOLE.context_cut_off_reason, calls: 1 }
+    test('the reading limit divides context by parallel slots and retains changing limits', () => {
+        const reading = contextReadings([
+            { n_ctx_configured: 65536, n_parallel: 8, summary_input_tokens: 2000 },
+            { n_ctx_configured: 8192, n_parallel: 4, summary_input_tokens: 1000 },
+            { n_ctx_configured: 8192, n_parallel: 2, label_input_tokens: 900 },
+            { n_ctx_configured: 16384, n_parallel: 8 }
         ]);
+        expect(reading.limits).toEqual([2048, 4096, 8192]);
+        expect(reading.rules).toEqual([{ at: 2048, label: 'Reading limit: 2048 tokens per slot' }]);
+        expect(reading.summary).toEqual([2000, 1000]);
+        expect(reading.label).toEqual([900]);
     });
-    test('no rows at all is an absence the panel can name, never a zero', () => {
-        const { runs, span } = contextCost([], OPTIONS);
-        expect(runs).toEqual([]);
-        expect(span.rowsRead).toBe(0);
-        expect(span.items).toBe(0);
-        expect(span.limits).toEqual([]);
-        expect(span.largest).toBeNull();
-        expect(span.unusedPct, 'an unread limit reported a share').toBeNull();
-        expect(span.timesMedian).toBeNull();
-        expect(span.calls).toBe(0);
-        expect(span.cutOff).toBe(0);
-        expect(span.reasons).toEqual([]);
+    test('a missing half of the slot limit cannot suppress a recorded request or invent a limit', () => {
+        const reading = contextReadings([
+            { n_ctx_configured: 8192, summary_input_tokens: 1900 },
+            { n_parallel: 2, label_input_tokens: 900 },
+            { n_ctx_configured: 8192, n_parallel: 0, summary_input_tokens: 1000 },
+            { n_ctx_configured: null, n_parallel: 2 }
+        ]);
+        expect(reading.label).toEqual([900]);
+        expect(reading.summary).toEqual([1900, 1000]);
+        expect(reading.limits).toEqual([]);
+        expect(reading.rules).toEqual([]);
+    });
+    test('the cut rule is the upper-middle label request of cut articles, not the cap or every request', () => {
+        const reading = contextReadings([
+            { truncation_cap_tokens: 1, label_input_tokens: 200 },
+            { truncation_cap_tokens: 8192, label_input_tokens: 1000 },
+            { truncation_cap_tokens: 0, label_input_tokens: 400 },
+            { truncation_cap_tokens: 64, label_input_tokens: 900 },
+            { truncation_cap_tokens: 64, label_input_tokens: null },
+            { truncation_cap_tokens: null, label_input_tokens: 90000 }
+        ]);
+        expect(reading.cut).toBe(5);
+        expect(reading.label).toEqual([200, 1000, 400, 900, 90000]);
+        expect(reading.rules).toEqual([{ at: 900, label: "Cut articles' middle label request: 900 tokens" }]);
+    });
+    test('the logarithmic request population excludes zero and invalid cells without losing a recorded zero cap', () => {
+        const reading = contextReadings([
+            { label_input_tokens: 0, summary_input_tokens: 'Infinity', n_ctx_configured: 0, n_parallel: 2, truncation_cap_tokens: 0 },
+            { label_input_tokens: -1, summary_input_tokens: NaN, n_ctx_configured: 8192, n_parallel: -1 },
+            { label_input_tokens: '', summary_input_tokens: null, n_ctx_configured: 'Infinity', n_parallel: 2 },
+            { label_input_tokens: true, summary_input_tokens: '12', n_ctx_configured: 8192, n_parallel: NaN }
+        ]);
+        expect(reading).toEqual({ label: [], summary: [12], rules: [], limits: [], cut: 1 });
+    });
+    test('no query rows produce no request population or inferred reading limit', () => {
+        expect(contextReadings([])).toEqual({ label: [], summary: [], rules: [], limits: [], cut: 0 });
     });
 });

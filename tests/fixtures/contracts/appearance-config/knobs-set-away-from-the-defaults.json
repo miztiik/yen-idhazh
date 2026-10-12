@@ -31,7 +31,6 @@
   },
   "console": {
     "absent_hatch_degrees": 30,
-    "band_outlier_rows": 10,
     "bandwidth_min_kinds": 3,
     "chart_coverage_pct": 5.0,
     "chart_height": 180,
@@ -148,8 +147,6 @@
     "min_window_days": 7,
     "model_disk_reads_marked": 1,
     "model_disk_reads_named": 1,
-    "pan_days": 7,
-    "plot_min_fill_share": 0.8,
     "precision_axis_multiple": 10.0,
     "processor_lost_pct_marked": 1.0,
     "processor_lost_pct_named": 10.0,
@@ -163,8 +160,7 @@
       14,
       30,
       90
-    ],
-    "zoom_factor": 1.5
+    ]
   },
   "digest": {
     "archive_page_size": 25,

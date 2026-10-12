@@ -170,6 +170,37 @@ test('the bar is one moment, so it reads the row with the least left to hand out
 	expect(free?.bytes, 'the parts came from more than one moment').toBe(5455843328);
 });
 
+test('process brackets come from the tightest moment, never maxima of different articles', () => {
+	const day = memoryHeld([
+		row({
+			...twoSegmentDay('2026-09-19', 9000000000, 'loose'),
+			llama_rss_bytes: 15000000000, python_rss_bytes: 2000000000
+		}),
+		row({
+			...twoSegmentDay('2026-09-19', 5455843328, 'tight'),
+			llama_rss_bytes: 12000000000, python_rss_bytes: 1000000000
+		})
+	]).days[0];
+	expect(day.itemId).toBe('tight');
+	expect(day.brackets.map((one) => one.bytes)).toEqual([12000000000, 1000000000]);
+	expect(day.overlapBytes).toBe(1000000000);
+});
+
+test('non-finite kernel cells stay unknown while measured zero available and anonymous bytes stay real', () => {
+	const invalid = memoryHeld([
+		row({ ...twoSegmentDay('2026-09-18', 1), os_mem_available_bytes: 'Infinity' }),
+		row({ ...twoSegmentDay('2026-09-19', 1), os_mem_total_bytes: 'NaN' })
+	]);
+	expect(invalid.days).toEqual([]);
+	expect(invalid.firstDate).toBeNull();
+	expect(invalid.daysRead).toBe(2);
+	const day = memoryHeld([fourSegmentDay('2026-09-20', 0, 0, 0)]).days[0];
+	expect(day.shape).toBe('four');
+	expect(day.segments.map((one) => [one.key, one.bytes])).toEqual([
+		['free', 0], ['server', 0], ['worker', 0], ['rest', MACHINE]
+	]);
+});
+
 test('the swap is read off the same row, and zero is not the same as no reading', () => {
 	const inUse = memoryHeld([twoSegmentDay('2026-09-19', 5455843328)]).days[0];
 	expect(inUse.swap?.usedBytes, 'the swap in use is not the difference of the two cells').toBe(

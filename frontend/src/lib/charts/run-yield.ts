@@ -12,7 +12,7 @@
  * skipped belongs to none of the three. That is why the caller draws three bars
  * side by side rather than one stack, and why `yield` is not bounded above by 1.
  *
- * Geometry only, like `glance.ts::failureLoad`. Nothing here knows a pixel; the
+ * Geometry only. Nothing here knows a pixel; the
  * component owns the axes and the marks. What each count is called and which
  * colour it is drawn in are here, because `Run health` prints them in a readout
  * the chart does not own, and a swatch set in one file and a bar in another is

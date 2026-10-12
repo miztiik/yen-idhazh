@@ -10,7 +10,6 @@ const rewrite: Rewrite[] = [
 	['../components/ChartReadout.svelte', './ChartReadout.server.mjs'],
 	['$lib/components/Panel.svelte', './Panel.server.mjs'],
 	['$lib/components/TargetBar.svelte', './TargetBar.server.mjs'],
-	['$lib/charts/Chart.svelte', './Chart.server.mjs'],
 	['$lib/components/RateControl.svelte', './RateControl.server.mjs'],
 	['$lib/components/ShapeSwitch.svelte', './ShapeSwitch.server.mjs'],
 	['./RankedList.svelte', './RankedList.server.mjs'],
@@ -18,14 +17,12 @@ const rewrite: Rewrite[] = [
 	['./FailureRuleRanking.svelte', './FailureRuleRanking.server.mjs'],
 	['./run-axis', '$lib/console/machine/run-axis'],
 	['./frame', '$lib/charts/frame'],
-	['./readout', '$lib/charts/readout'],
-	['./engine', '$lib/charts/engine']
+	['./readout', '$lib/charts/readout']
 ];
 const files = [
 	['src/lib/components/ChartReadout.svelte', 'ChartReadout'],
 	['src/lib/components/Panel.svelte', 'Panel'],
 	['src/lib/components/TargetBar.svelte', 'TargetBar'],
-	['src/lib/charts/Chart.svelte', 'Chart'],
 	['src/lib/components/RateControl.svelte', 'RateControl'],
 	['src/lib/components/ShapeSwitch.svelte', 'ShapeSwitch'],
 	['src/lib/components/RankedList.svelte', 'RankedList'],

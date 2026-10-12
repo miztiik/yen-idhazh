@@ -271,7 +271,7 @@ test('extracted console logic keeps source changes covered with browser consumer
 	for (const path of [
 		'frontend/src/lib/charts/run-history.ts', 'frontend/src/lib/charts/series.ts',
 		'frontend/src/lib/server/model-work.ts', 'frontend/src/lib/charts/readout.ts',
-		'frontend/src/lib/charts/machine.ts', 'frontend/src/lib/charts/stacked.ts'
+		'frontend/src/lib/charts/machine.ts', 'frontend/src/lib/charts/stack-types.ts'
 	]) {
 		assert.deepEqual(selectPaths([path]).groups, [...FRONTEND_GROUPS], path);
 		assert.equal(ciAnswer([path], true).browser, true, path);
@@ -594,7 +594,7 @@ const PULL_REQUEST_SCOPE = [
 	['frontend/tests/support/panel-gates.ts', true, false],
 	['frontend/src/lib/components/ChartReadout.svelte', true, false],
 	['frontend/src/lib/charts/d3/DateSeries.svelte', true, false],
-	['frontend/src/lib/charts/engine.ts', true, false],
+	['frontend/src/lib/charts/readout.ts', true, false],
 	['frontend/src/styles/tokens.css', true, false],
 	['config/appearance.json', true, false],
 	// Reaches a published page, but not the console before merge.
@@ -646,7 +646,7 @@ const REVALIDATES_THE_ARCHIVE = [
 
 const LEAVES_THE_ARCHIVE_ALONE = [
 	'frontend/src/routes/console/+page.svelte',
-	'frontend/src/lib/charts/engine.ts',
+	'frontend/src/lib/charts/readout.ts',
 	'frontend/src/styles/tokens.css',
 	'backend/idhazh/discover.py',
 	'backend/tests/test_discover.py',

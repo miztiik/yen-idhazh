@@ -1,5 +1,5 @@
 import { expect, test } from './support/door-page';
-import { WATCHED_FLAG } from '../src/lib/server/host-fingerprint';
+import { WATCHED_FLAG } from '../src/lib/console/machine/host-types';
 
 const WATCHED: readonly string[] = WATCHED_FLAG;
 

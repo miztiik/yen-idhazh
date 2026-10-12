@@ -1,6 +1,6 @@
 # The mark shapes a panel may reach for
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-10-12
 
 Nine chart types, the house style they draw with, five named mark shapes and
 three panel-level controls. **A panel is built from one chart type, and a mark
@@ -16,7 +16,7 @@ What a figure may say in words is [../console-design.md](../console-design.md).
 
 | Shape | Use it for | It cannot say |
 | --- | --- | --- |
-| Range mark | one quantity's typical reading and its worst | anything about the shape between the two ends |
+| Range mark | one quantity's typical reading and its named upper reading | anything about the shape between the two ends |
 | Two-named-ends mark | two different measurements of one thing | when inside the item either end fell |
 | Span track | one reading against the window it sits in | when in the window each end fell |
 | Tile strip | a reading that is quiet on most days | how big the reading was on the day it fired |
@@ -232,27 +232,25 @@ with them.
 ## A typical reading and the worst one are one mark, not two bars
 
 A **range mark** is a track with a fill and a notch. The fill runs to the median
-and the notch stands at the maximum, so the distance between them is the spread
-and the reader measures it with their eye rather than by subtracting two
-sentences.
+and the notch stands at the named upper reading. A maximum is the worst one; a
+percentile must name its rank instead. The distance between them is the spread,
+read by eye rather than by subtracting two sentences.
 
-**Why it exists: four bars a row is eighty bars.** The shard board carries a
-memory reading and a processor reading, each with a typical value and a worst
-one. Drawn as bars that is four per row, and a run of twenty shards is eighty
-bars in one panel with the reader pairing them by eye. Drawn as two range marks
-it is two tracks, and the pairing is already done.
+**The native caller compares machine kinds, not retired shard-board cells.**
+`Which machines do the same work slower` has separate reading and writing lists.
+`slowerMachines` in `frontend/src/lib/console/machine/records.ts` supplies each
+kind's middle time and slowest-tenth notch over its comparable article readings.
+`MachineCharts.svelte` passes those rows to `rankedList`, with the reference
+machine's typical time as a named rule and the configured article floor.
 
 **What the reader loses, named.** A range mark says nothing about the shape
-between its two ends: a shard whose items were all near the median and one that
-had a single spike draw identically. That distinction belongs to a distribution
-panel over items, which is a different grain and a different question - the
-board is a break panel over shards, and its job is the extreme and the shard
-that owns it.
+between its two ends. Different distributions can share the same median and
+upper reading. A percentile notch also says nothing about the worst item above
+it. That is a question for the distribution or the native slowest-article list,
+not a reason to call the slowest tenth a maximum.
 
-Both marks obey the first chart rule. The memory mark takes the runner's 16 GiB
-into the domain beside the drawn values rather than as the maximum, so a shard
-that went past the ceiling would still draw past the line, and the panel prints
-the ceiling. The processor mark is a share, so it runs nought to a hundred.
+Every drawn value, upper reading and reference rule contributes to the shared
+scale. A rule is a comparison, not a clipping limit.
 
 `rankedList` takes optional `range: {high, count}`, `ends: {end}`, `segments`,
 `context` and `status`. A row may carry only one of the three mark shapes.
@@ -267,33 +265,29 @@ dashed uprights at their value, with their name. Susan's ruling: a range remains
 a ranked-list row, not a tenth chart type.
 
 `RankedList.svelte` takes `RankedGeometry`. `rankedGeometry` preserves a kept
-caller's keys, formatted values and tie order. Its exported `rangeTrack` and
-`endsTrack` snippets also draw the shard and memory boards' existing cells.
-The boards retain their columns, labels, orientations, absent hatches and
-selection marks. `rangeMark` lives in `d3/rankedList.ts`, not `machine.ts`.
-Susan, 2026-10-10: extract the marks, not the board rows; the reader loses no
-spatial grouping.
+caller's keys, formatted values and tie order. Its `rangeTrack` and `endsTrack`
+snippets draw the native ranked rows. `rangeMark` lives in `d3/rankedList.ts`;
+the native record helper supplies the readings, not a second drawing rule.
 
 ## A mark with two named ends is not a range mark, and it says which end is which
 
-A range mark has a typical end and a worst end, and the reader learns that shape
+A range mark has a typical end and a named upper end, and the reader learns that shape
 once. **A mark whose two ends are two different measurements is a different
 mark**, and giving it the range mark's field names would have taught a reader to
 read a floor as a median. So it carries its own names.
 
-The shipped one is the kernel headroom mark on the memory panel of
-`/console/machine/`. Its fill runs to `os_mem_available_min_bytes` - the least
-memory the kernel had while the model worked on that item - and its notch stands
-at `os_mem_available_bytes`, which is what the item left when it ended. **A
-machine whose floor falls and whose end also falls is leaking; one whose floor
-falls and whose end recovers was only working hard.** The two states draw
-differently, and the floor alone draws them the same.
+The native `Which articles left the machine least memory` panel uses a fill for
+memory held at the item's tightest recorded point and a notch for that machine's
+total memory. `closestToMemory` in
+`frontend/src/lib/console/machine/records.ts` subtracts
+`os_mem_available_min_bytes` from `os_mem_total_bytes` and supplies the total as
+`ends.end`. Neither end is a median, and the total is not an end-of-item reading.
+Rows without a valid total and available-memory pair supply no mark.
 
 **What the reader loses, named.** The mark says nothing about when in the item
 the floor fell, so an item that dipped once and an item that sat at the floor
-throughout draw identically. That is a question for a sampled series over one
-item, which is a different grain and an instrument nobody has built - and the
-panel says it cannot answer it rather than leaving the reader to assume it did.
+throughout draw identically. It also says nothing about recovery after that
+point or a memory leak. Those need readings over time, not a machine-total notch.
 
 ## A dated line declares which settings it can compare
 
@@ -366,16 +360,14 @@ These internal arguments have no persisted-history migration.
 An optional `KpiCard.lede` raises its figure to `--text-3xl`. Its optional `rule`
 declares the same value and prints its note; its date-series trend draws any
 dated marks. A scalar card invents no date axis. Without either prop it keeps
-its old drawing. `FailureList.stages` supplies stage radio choices; the chosen
-stage ranks its `failed_rule`, with the legacy `code` when no new field exists.
-Omitting the prop keeps the existing cause and source lists.
-The alternative `FailureList.ranking` input contains only `date`, `stage`,
-`outcome`, `code` and nullable `failed_rule`. It is mutually exclusive with
-identity-bearing `rows`. This mode ranks recorded failure rows at the chosen
-stage, states their divisor, and counts unnamed rules separately. It never
-shows source breadth, item details or distinct-article counts because the query
-contains no identities. Its daily trend and unknown-rule count derive from
-the same rows on both routes.
+its old drawing. `FailureList` requires identity-free `ranking` rows and stage
+radio choices. The rows contain only `date`, `stage`, `outcome`, `code` and
+nullable `failed_rule`. The chosen stage ranks its recorded failed rules, states
+that stage's failed-row divisor, and counts unnamed rules separately.
+The configured cap prints a tail count. There is no identity-bearing `rows`
+mode, cause/source list or item-detail expansion in this component.
+Its daily trend and unknown-rule count derive from the same recorded rows on
+both routes; neither claims source breadth or distinct-article counts.
 
 Every drawing declares `data-chart-type` and its readout. Date-series and
 distribution columns use `readoutOf`; record shapes use `factsOf`. Kept parts,
@@ -433,19 +425,18 @@ with its ends buried mid-paragraph, makes a reader do the conversion by hand
 before they can say which of the two was the odd one this run. Two tracks make
 that comparison free.
 
-**No panel draws a span track today.** The shape is kept whole, with its rules
-held in `frontend/tests/console-host-spans.spec.ts`, because the honest version
-of the processor share - the one that separates out the time the host gave
-another tenant - needs this band rather than a second one. **What that costs:** a
-rule nothing currently obeys, which is a rule that can rot without a page going
-red. A panel that draws it owes a page oracle putting a real band against the
-numbers printed beside it.
+**No panel draws a span track today.** These are design rules, not an installed
+chart helper. `charts/span-track.ts` was removed because no production caller
+used it. `console-host-spans.spec.ts` checks the retained native host, article
+cost and independent-clock readers; it does not certify a drawn span track.
+A panel that adopts the shape must supply its geometry and check the band
+against the readings printed beside it.
 
-**One shape, one place it is written down, and no copy to keep in step.** The
-maths lives in `frontend/src/lib/charts/span-track.ts` and nowhere else. Two
-pieces of markup that have to agree by eye are how a marker in one panel and a
-verdict in another come to disagree about one number with nothing on screen
-looking wrong.
+**Native Hardware keeps its own arithmetic.** Declared record adapters live in
+`frontend/src/lib/console/machine/records.ts`; counters, article cost and clock
+comparisons retain their actual native owners. They do not depend on a span-track
+helper. A future span drawing must compute its band and marker together so two
+pieces of markup cannot disagree about the same reading.
 
 **What the reader loses, named.** A span track says nothing about the shape
 between its ends, and nothing about when in the window each end fell: a figure
@@ -535,7 +526,12 @@ figure counted stolen time as ours until 2026-09-20
 
 > **A reserved box with no failure state lies, and a failure state with no reserved box shifts the layout.** They are one decision.
 
-Every row the console draws arrives by fetch, which splits one "nothing" into
+Native ledger panels keep independent query states and reserve their own frames.
+They do not wait for telemetry months or draw dates and numbers before an answer.
+A retry re-asks failed queries without replacing successful answers; the
+query's returned range remains beside its readings.
+
+For retained month-backed readers, a fetch splits one "nothing" into
 four - and three of them would draw the same unmarked gap, so **a quiet pipeline
 and a broken fetch would be the same picture.** That is the exact pair this
 section exists to tell apart.
@@ -611,12 +607,12 @@ never two calls and never a second fetch.
 
 What the rule protects against is **two derivations that can disagree**, where a
 reader who finds both has nothing on screen saying which to believe. The
-strongest form of it is mechanical and is the one to prefer: hand the engine the
-identical `data` list in both shapes and change only `type` and `stack`. Two
-charts qualify under that form today - `What is failing, by stage` and `How much
-text the model has to read again each time`, both callers of `stacked` - and
-`console-chrome.spec.ts` fails the build if their two shapes ever draw different
-numbers.
+strongest form of it is mechanical and is the one to prefer: pass the identical
+`SeriesInput` readings to `dateSeries` and change only the stacked option.
+`console-chrome.spec.ts` compares native lines and stacks against the same dates,
+values and readout. This is a shared shape contract, not a claim that current
+FailureMix or Hardware prompt reuse offers a shape switch. FailureMix draws one
+stack of failed-row counts; native prompt reuse draws its dated call readings.
 
 **What the widened form costs.** A running total IS a re-shape, so the identical
 array test alone would refuse a cumulative line - and the only shape a cost has
@@ -625,31 +621,23 @@ one builder call admits it, and the price is that the byte-identical assertion n
 longer covers every switch. A panel whose shapes come out of one call but are not
 the same array owes its own oracle comparing the two shapes' numbers.
 
-**The counterfactual-cost panel is the first to ship under the widened form, and
-this is the oracle it paid.** `costOverDays` walks the window's runs once and
-returns one array of days, each carrying what reading cost, what writing cost,
-and the running total to that day. The bars read the first two, the line reads
-the third, and neither derives anything. `console-machine.spec.ts` asserts the
-line's last point equals every bar added up, and asserts it a second time against
-the window total the four figures above the chart print - so the two shapes and
-the headline number are one piece of arithmetic reached three ways.
-`console-machine-panels.spec.ts` then asserts in a browser that moving the switch
-changes neither the day count nor that total, which is what a second derivation
-would have moved.
+**Counterfactual cost retains one arithmetic result.** `costOverDays` walks the
+qualified runs once and returns dated reading cost, writing cost and running
+total. Native `MachineCharts.svelte` draws that running total and prints the
+reading, writing, window and per-article figures from the same result. Its
+rate controls recompute the result without fetching. The last dated total equals
+the whole-window total, and each day's total is reading plus writing.
+`console-machine.spec.ts` checks that arithmetic. The current native panel has
+no daily-bars/cumulative-line switch; the helper's readings do not imply one.
 
 One control per panel, never one per series and never a preference that follows
 the reader across the site. A Sankey is not a line and a histogram is not a
 stacked bar; forcing the control everywhere would mean massaging data to fit it.
 
-**Reading is the bottom band and writing the top, and the panel measures whether
-the split may be drawn at all.** At the committed rate, over the 25 days the
-ledger held on 2026-09-20, the writing half ran between 27.4 and 45.4 percent of
-its own day, and the thinnest band of all measured 2.0 percent of the tallest
-column - 3.3 px of a 164 px plot, so the split draws. The rate is the operator's
-to type, though, and a writing rate near zero takes that band under a pixel. The
-builder measures the thinnest band against the tallest column before it picks a
-shape; under a pixel the column draws whole and the split becomes the printed
-figure beside it, with the measurement it was decided on printed too.
+**A running currency total is a counterfactual, never a bill.** The native panel
+prints the currency, configured or operator-supplied rates and their source.
+Both token counts must be recorded for a row to enter its priced cohort;
+cached prompt tokens still count in that counterfactual input price.
 
 ## A comparison drawn in one unit can be confidently wrong, so it carries both
 
@@ -658,31 +646,29 @@ tokens they are one quantity in two directions, and so are they counted in
 seconds. What the two counts do not have to agree about is which side is bigger,
 and where they disagree the unit is the whole answer.
 
-The shipped case is `How much of a run is reading and how much is writing` on
-`/console/machine/`. A run reads far more tokens than it writes, so in tokens the
-read bar towers. **Reading is batched prefill and writing is sequential decode,
-so a tall read bar is not a run that spent itself reading.** A panel that offers
-only the count teaches that it is, fast and without a caveat, and a reader who
-acts on it tunes the prompt when the clock belongs to the answer. So the panel
-carries a unit switch, and the switch is the finding rather than a convenience:
-which side is taller in each unit is exactly the question "where did the model
-time go", answered by looking rather than by a caption.
+**Reading is batched prefill and writing is sequential decode, so a tall token
+count is not a run that spent itself reading.** Tokens and seconds answer
+different questions. The retained `readAgainstWritten`, `workValues` and
+`workSeries` helpers in `charts/machine.ts` can supply both units.
+The native `What a run reads against what it writes` panel currently draws token
+totals; it offers no unit switch and makes no elapsed-time claim from those counts.
 
-**The switch qualifies because one call returns both units, and the row set is
-decided once.** An item row is admitted on its token counts, and its `prefill_ms`
-and `decode_ms` are then summed over exactly those rows. Two independent filters
-would let the two units cover different runs, and a panel whose units disagree
-about what they measured cannot be recovered by reading it harder. It needs no
-new column: both durations already reach the frontend for the read and write
-rates on the shard board.
+**A unit switch qualifies only when one result supplies both units.** An item
+row enters `readAgainstWritten` on its two token counts. Of those rows, only
+ones with both `prefill_ms` and `decode_ms` enter the duration sums.
+`items` and `timed` retain those separate coverage counts; no timed row leaves
+either duration sum. A run with no paired clock remains null in seconds,
+not zero. A switch must state that timed coverage rather than silently claiming
+that every token-qualified row recorded a clock.
 
-**Each unit measures its own ratio and prints it**, so the 20x threshold is taken
-from the data drawn rather than assumed - and where one unit passes 20:1 the
+**A caller offering both units measures each unit's own ratio and prints it**,
+so the 20x threshold is taken from the data drawn rather than assumed - and where one unit passes 20:1 the
 smaller series takes its own row in that unit only. **What the reader loses,
 named:** a unit switch is a state to remember, and an operator who reads the
 panel in tokens on Monday and in seconds on Tuesday is comparing two pictures.
 The panel opens on the same unit every time and prints the unit beside the ratio,
-which is the most a switch can do about that.
+which is the most a switch can do about that. This is a rule for a caller that
+offers the switch, not an extra control on native Hardware today.
 
 ## A chart says how much of its window it measured, once, above the plot
 
@@ -708,11 +694,11 @@ and five rules hold it.
 
 Not in the hover strip: `ChartReadout` is one contract capped at
 `chart.readout_max_share` and it prints one column's values, so a window-level
-sentence there would be a second thing that strip means. The oracle asserts
-exactly one `[data-timing-coverage]` and holds its two numbers to an independent
-reading of the canary ledger. **The series count appears in no assertion** -
-that is what proves the sentence stopped scaling with the series
-([../../../frontend/tests/console-timings.spec.ts](../../../frontend/tests/console-timings.spec.ts)).
+sentence there would be a second thing that strip means. The retained
+`StageTimings.svelte` prints one coverage paragraph for the chart.
+[console-timings.spec.ts](../../../frontend/tests/console-timings.spec.ts)
+checks the shared coverage arithmetic and sentence independently of the number
+of plotted series.
 
 ## Design rationale
 
@@ -744,9 +730,10 @@ config, and a knob that nothing reads is a knob whose substitution test cannot
 pass, so `console.absent_hatch_degrees` is minted by the change that first draws
 the hatch, beside its reader, and `absentHatch` takes the angle and the stripe
 spacing as arguments. The hatch means "a known thing with no reading" and nothing
-else. **The run timeline's hatched overrun means "time counted twice"** - the
-same texture for a different fact - and that clash is named here so the change
-that moves that panel resolves it rather than copies it. The stripes sit on the
+else. **The retained run timeline draws overclaimed time as a solid 2 px
+tertiary rule**, not a hatch: two steps counted time already on the bar.
+Its hollow segment means unclaimed time. Both have written legends and neither
+is an unknown-reading texture. The absent-reading stripes sit on the
 page surface and never over a grey fill, because flat grey already means "not
 recorded" and a hatch on grey would read the same. Authority: Fowler, Susan and
 Carmack, 2026-09-27.
@@ -793,9 +780,10 @@ claims more readings than it shows.
 ## Design rationale
 
 Owner, 2026-10-08: these three charts carry only the shared changes they need,
-through optional props. Existing callers retain their drawing and native
-tooltip defaults. The explorer supplies the existing common readout API and
-suppresses native tooltips, so pointer, keyboard and touch read the same values.
+through optional props. Existing callers retain their drawing. The explorer
+supplies the common readout API, so pointer, keyboard and touch read the same
+values. Native title tooltips are not a second readout; legacy callers without
+a supplied readout keep the explicit printed-facts exception stated above.
 No new chart library, type classifier or picker behaviour is added.
 
 Flow's optional explorer readout also places the last column's labels toward

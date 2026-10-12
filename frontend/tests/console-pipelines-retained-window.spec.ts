@@ -4,11 +4,7 @@ import { telemetryRow } from './support/telemetry-row';
 import { presets, setWindow, windowed } from './support/console-window/controls';
 import { spanSaid, ONE_DAYS } from './support/pipelines-span';
 import { BY_ROUTE } from './support/console-expect/console-window';
-import { clientCode, drawClient } from './support/console-window/client-render';
-import { cutsByRun } from '../src/lib/server/cuts-by-run';
-import { health, runOutcome, squareLabel, type RunFacts } from '../src/lib/console/run-square';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { runHealthGrid } from '../src/lib/console/pipelines/run-health';
 
 test('retained timing columns span the selected calendar, not the lone measured day', async ({ page }) => {
 	await openRetained(page, (window) => [
@@ -79,31 +75,12 @@ test('every native Pipelines surface follows the common control and says one day
 	}
 });
 
-test('the retained run square names only the run that actually cut an article', async ({ page }) => {
+test('native run health uses the private run facts without inventing item-ledger cuts', () => {
 	const date = '2026-08-20';
-	const cuts = cutsByRun([
-		{ run_id: `${date}-1`, url_key: 'cut', source_words_before_cap: '2000', source_words: '1000' },
-		{ run_id: `${date}-2`, url_key: 'whole', source_words_before_cap: '200', source_words: '200' }
-	]);
-	expect([...cuts]).toEqual([[`${date}-1`, 1]]);
-	const runs: RunFacts[] = [1, 2].map((n) => ({
-		n, status: 'completed', succeeded: 2, failed: 0, skipped: 0, sourceListStale: false
-	}));
-	const code = await clientCode([['RunHealthPanel', './src/routes/console/RunHealthPanel.svelte']]);
-	const html = readFileSync(resolve('build', 'index.html'), 'utf8');
-	await drawClient(page, code, 'RunHealthPanel', {
-		yieldDays: [{ date, itemsPlanned: 4, itemsPublished: 4, itemsFailed: 0 }],
-		grid: [{ date, squares: runs.map((run) => {
-			const runId = `${date}-${run.n}`;
-			const count = cuts.get(runId) ?? 0;
-			return { runId, n: run.n, health: health(run, 70), label: squareLabel(date, run, 70, count),
-				outcome: runOutcome(run, 70, count) };
-		}) }],
-		window: { start: '2026-08-19', end: date }, floorPct: 70,
-		height: 220, width: 760, tickDensity: 6, readoutMaxShare: 1
-	}, [...html.matchAll(/href="([^"]+\.css)"/g)].map((match) => match[1]));
-	await expect(page.locator('[data-health]')).toHaveCount(2);
-	await expect(page.locator('[data-health]').nth(0)).toHaveAttribute('aria-label', /1 read only in part/);
-	await expect(page.locator('[data-health]').nth(1)).not.toHaveAttribute('aria-label', /read only in part/);
-	await expect(page.locator('[data-readout-row="Run 1"]')).toContainText('1 read only in part');
+	const grid = runHealthGrid([{ date, records: [1, 2].map((n) => ({
+		runId: `${date}-${n}`, n, status: 'completed', succeeded: 2, failed: 0, skipped: 0, sourceListStale: false
+	})) }], 70);
+	expect(grid[0].squares.map((square) => square.runId)).toEqual([`${date}-1`, `${date}-2`]);
+	expect(grid[0].squares.map((square) => square.outcome)).toEqual(['2 of 2 succeeded', '2 of 2 succeeded']);
+	expect(grid[0].squares.every((square) => !square.label.includes('read only in part'))).toBe(true);
 });
