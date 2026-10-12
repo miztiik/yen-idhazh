@@ -693,7 +693,7 @@ def _stop(
             "reply_to": None,
             "emitter_id": manifest.operator_emitter_id,
             "sequence": sequence,
-            "emitted_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+            "emitted_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "body": {"reason": reason},
         }
     )

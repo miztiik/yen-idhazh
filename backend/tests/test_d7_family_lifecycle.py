@@ -159,6 +159,7 @@ def bounded_config(
     gardener_path = destination / "idhazh_gardener.json"
     gardener = json.loads(gardener_path.read_text(encoding="utf-8"))
     gardener["shards"] = 1
+    gardener["task_names"] = ["compact-gardener"]
     gardener_path.write_text(json.dumps(gardener), encoding="utf-8")
     if council_paused:
         judge_path = destination / "judges" / "content-similarity-judge.json"
