@@ -1,6 +1,6 @@
 # CLAUDE.md - Yen Idhazh: Engineering Contract
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-10-12
 
 Non-negotiable contract for any human or AI agent working in this repo.
 
@@ -98,7 +98,7 @@ Routine progress updates do not need this structure.
 These operationalize the guardrails and shape every subsystem.
 
 - **Event-driven.** Stages communicate through structured-payload events, never direct calls into each other's internals. A stage consumes one validated payload and emits another; the contract between stages, and between `backend/` and `frontend/`, is a typed payload - not a function signature.
-- **Pydantic models are the source of truth.** Every event, every persisted payload, and every config file is a Pydantic model under `backend/idhazh/contracts/`. A contract can produce its own JSON Schema on demand through `json_schema()`. The frontend carries a small hand-written copy of the few shapes it needs. Two tests hold the hand copy in step: one over the field set, one over the vocabularies.
+- **Pydantic models are the source of truth.** Every event and every persisted payload is a Pydantic model under `backend/idhazh/contracts/`. Repository-authored config follows Guardrail #3: declare only what its own readers compute on, not values passed unchanged to another program (owner ruling, 2026-09-21). A contract can produce its own JSON Schema on demand through `json_schema()`. The frontend carries a small hand-written copy of the few shapes it needs. Two tests hold the hand copy in step: one over the field set, one over the vocabularies.
 - **Payloads, not calls.** Data crossing any boundary is a serializable structured payload (JSON-shaped), so it can be logged, validated, replayed, and tested with real fixtures.
 - **Atomic, resumable units.** One work item is one content-addressed file written with a temp-file-plus-rename. A failed item never damages a sibling, and a re-run costs only the unfinished items.
 - **A source file answers one narrow question, and its first sentence states which one.** Read that sentence before you add to the file. If what you add requires widening it, the file now holds two answers - put yours in a new file beside it. A sentence that names a tier, layer, or subsystem names no question, turning the file into a dumping ground. Keep files short and focused: an answer should not sprawl. If answering the question requires a long file, the question is too broad - decompose it into smaller, composable units. A file must never hold two answers, nor should it grow long when it can be split. A router is the sharpest case: a file that dispatches work contains only the routing logic, while the execution lives strictly in the unit's own module. A file every change touches is a file no change owns; its bloat remains hidden from the author and penalizes the next reader.
