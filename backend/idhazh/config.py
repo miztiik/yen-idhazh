@@ -28,7 +28,7 @@ import hashlib
 import json
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date as date_type
 from functools import cache
 from itertools import combinations
@@ -250,6 +250,17 @@ def load(config_dir: Path = DEFAULT_CONFIG_DIR) -> Settings:
         ),
         config_dir=config_dir,
     )
+
+
+def with_memory_profiling_override(settings: Settings, override: bool | None) -> Settings:
+    """Resolve the invocation's memory control once, without mutating loaded config."""
+    if override is None:
+        return settings
+    observability = settings.app.observability.model_copy(
+        update={"memory_profiling_enabled": override}
+    )
+    app = settings.app.model_copy(update={"observability": observability})
+    return replace(settings, app=app)
 
 
 # --- the gardener ------------------------------------------------------------

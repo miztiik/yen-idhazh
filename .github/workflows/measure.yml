@@ -17,6 +17,14 @@ on:
           - corpus
           - batched
           - budgets
+      memory_profiling:
+        description: 'OS memory and fault collection; inherit reads shared config'
+        type: choice
+        default: inherit
+        options:
+          - inherit
+          - 'on'
+          - 'off'
       # ONE argument names the candidate, and it is the same line a swap moves:
       # the models file. Every fact about a candidate is already written there,
       # and a form that asked for them again could bench one set of bytes while
@@ -242,6 +250,15 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: pip install -e .
+
       - name: Record runner hardware
         run: |
           set -euo pipefail
@@ -379,8 +396,15 @@ jobs:
           CANDIDATE_ID: ${{ needs.models.outputs.candidate_id }}
           CANDIDATE_QUANTISATION: ${{ needs.models.outputs.candidate_quantisation }}
           THREAD_COUNTS: ${{ inputs.threads }}
+          MEMORY_PROFILING: ${{ inputs.memory_profiling }}
         run: |
           set -euo pipefail
+          RESOLVED=$(python3 backend/utilities/memory_profiling_control.py \
+            "${MEMORY_PROFILING:-inherit}")
+          if [ "$RESOLVED" = "off" ]; then
+            echo "llama-bench memory qualification requires memory profiling" >&2
+            exit 2
+          fi
           max_threads=$(( $(nproc) * 2 ))
           IFS=',' read -ra THREADS <<< "$THREAD_COUNTS"
           for threads in "${THREADS[@]}"; do
@@ -651,6 +675,15 @@ jobs:
         with:
           models_file: ${{ needs.models.outputs.candidate_models_file }}
           trial_state: pipeline-tests
+
+      - name: Resolve runtime memory collection
+        env:
+          MEMORY_PROFILING: ${{ inputs.memory_profiling }}
+        run: >-
+          python3 backend/utilities/memory_profiling_control.py
+          "${MEMORY_PROFILING:-inherit}"
+          --config-root backend/var/candidate-config
+          --write
 
       # `--execution` is the GitHub run id for the reason digest.yml gives: two
       # dispatches on one day would otherwise compute the same run id, and the

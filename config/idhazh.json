@@ -247,6 +247,7 @@
     "host_fingerprint_bandwidth_jobs": [
       "runtime"
     ],
+    "memory_profiling_enabled": true,
     "public_run_timeline_keep_months": 2,
     "sample_rate": 1.0,
     "telemetry_publish": true,

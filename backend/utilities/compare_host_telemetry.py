@@ -10,6 +10,14 @@ from idhazh.telemetry.host_evidence_inputs import isolated_workspace
 from utilities.host_telemetry_session import cleanup, drain, prepare, start, workload
 
 
+def memory_profiling(value: str) -> bool:
+    if value == "on":
+        return True
+    if value == "off":
+        return False
+    raise argparse.ArgumentTypeError("memory profiling must be 'on' or 'off'")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -23,6 +31,7 @@ def main() -> None:
     parser.add_argument("--gates", type=Path)
     parser.add_argument("--probe")
     parser.add_argument("--clock")
+    parser.add_argument("--memory-profiling", type=memory_profiling)
     args = parser.parse_args()
     if args.verb == "prepare":
         if not all((args.git_sha, args.run_number, args.attempt, args.compile, args.gates)):
@@ -34,11 +43,17 @@ def main() -> None:
             attempt=args.attempt,
             compile_file=args.compile,
             gates=args.gates,
+            memory_profiling=args.memory_profiling,
         )
     elif args.verb == "compare":
         if not args.probe or not args.clock:
             parser.error("compare requires the exact native probe and clock result paths")
-        report = compare(isolated_workspace(args.workspace), probe=args.probe, clock=args.clock)
+        report = compare(
+            isolated_workspace(args.workspace),
+            probe=args.probe,
+            clock=args.clock,
+            memory_profiling=args.memory_profiling,
+        )
         if report.correctness != "passed":
             raise SystemExit(
                 "isolated comparison failed; retain the report without widening bounds"

@@ -72,7 +72,7 @@ Table D - authoritative execution queue
 | D13 | 13 | Migrate shared schemas and readers before writers | 5 | F | DONE | rust-d13-d14-schema-consumers | - | owner; shipped atomically with D14 |
 | D14 | 14 | Migrate contracted backend and frontend consumers | 5 | F | DONE | rust-d13-d14-schema-consumers | - | owner; shipped atomically with D13 |
 | D6 | 6 | Add inactive event emitters at real production boundaries | 13, 14 | F | DONE | rust-d6-inactive-emitters | - | Copilot |
-| D8 | 8 | Expose and test the independent memory off control | 6 | G | PENDING | - | - | - |
+| D8 | 8 | Expose and test the independent memory off control | 6 | G | DONE | rust-d8-memory-off | - | Copilot |
 | D16 | 16 | Verify evidence and record unattended adoption authority | 8, 5, 14, 15 | H | PENDING | - | - | - |
 | D7 | 7 | Switch instrumented producers through events | 16 | I | PENDING | - | - | - |
 | D17 | 17 | Rewrite the approved historical manifest once | 7, 15, 16 | J | PENDING | - | - | - |

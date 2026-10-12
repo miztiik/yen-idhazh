@@ -9,7 +9,7 @@ import sys
 
 import pytest
 
-from idhazh.telemetry.host_evidence_inputs import ROOT, settings
+from idhazh.telemetry.host_evidence_inputs import ROOT, live_controls, settings
 
 from ._harness import _load_workflows, _strings
 
@@ -120,6 +120,61 @@ def test_yaml_separates_every_required_event_lifetime_boundary() -> None:
     assert (ROOT / "backend/rust/host-telemetry/rust-toolchain.toml").read_text().find(
         '"1.95.0"'
     ) >= 0
+
+
+def test_dispatch_memory_choice_resolves_into_the_effective_scratch_config() -> None:
+    value = workflow()
+    triggers = value["on"]
+    assert isinstance(triggers, dict)
+    dispatch = triggers["workflow_dispatch"]
+    assert isinstance(dispatch, dict)
+    control = dispatch["inputs"]["memory_profiling"]
+    assert isinstance(control, dict)
+    assert control["default"] == "inherit"
+    assert control["options"] == ["inherit", "on", "off"]
+    jobs = value["jobs"]
+    assert isinstance(jobs, dict)
+    work = jobs["work"]
+    assert isinstance(work, dict)
+    steps = work["steps"]
+    assert isinstance(steps, list)
+    prepare = next(
+        step
+        for step in steps
+        if step.get("name") == "Prepare captures and freeze repeated reference bounds"
+    )
+    assert prepare["env"]["MEMORY_PROFILING"] == "${{ inputs.memory_profiling || 'inherit' }}"
+    assert '!= "inherit"' in prepare["run"]
+    assert "--memory-profiling" in prepare["run"]
+
+    native, comparison, _ = settings()
+    assert live_controls(native, comparison).memory_profiling_enabled
+    assert not live_controls(native, comparison, False).memory_profiling_enabled
+
+
+def test_memory_dispatch_vocabulary_and_launcher_propagation_are_shared() -> None:
+    workflows = _load_workflows()
+    for name in ("digest.yml", "measure.yml", "rust-host-telemetry.yml"):
+        triggers = workflows[name]["on"]
+        assert isinstance(triggers, dict)
+        dispatch = triggers["workflow_dispatch"]
+        assert isinstance(dispatch, dict)
+        inputs = dispatch["inputs"]
+        assert isinstance(inputs, dict)
+        control = inputs["memory_profiling"]
+        assert isinstance(control, dict)
+        assert control["default"] == "inherit"
+        assert control["options"] == ["inherit", "on", "off"]
+
+    digest_text = "\n".join(_strings(workflows["digest.yml"]))
+    assert "memory_profiling_control.py" in digest_text
+    assert 'MEMORY_ARGS=(--memory-profiling "$MEMORY_PROFILING")' in digest_text
+    assert "no sampler started" in digest_text
+
+    measure_text = "\n".join(_strings(workflows["measure.yml"]))
+    assert "--config-root backend/var/candidate-config" in measure_text
+    assert "Resolve runtime memory collection" in measure_text
+    assert "llama-bench memory qualification requires memory profiling" in measure_text
 
 
 def test_cli_requires_an_explicit_root_and_can_not_dispatch_measurements() -> None:

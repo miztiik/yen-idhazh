@@ -447,6 +447,7 @@ def run_once(
     """One server start, one pass over the fixed corpus, one set of readings."""
     cfg = write_config(f"{label}-{repeat}", update)
     settings = config.load(cfg)
+    require_memory_for_sweep(settings.app.observability.memory_profiling_enabled)
     log_path = ROOT / f"{label}-{repeat}.llama-server.log"
     items_dir = RUN_ROOT / date / "items"
     # Both, and for the same reason: a repeat starts from an empty run directory
@@ -539,6 +540,15 @@ def run_once(
         "per_item": found.per_item,
         "captures": keep_the_captures(date, label, repeat),
     }
+
+
+def require_memory_for_sweep(enabled: bool) -> None:
+    """Refuse a memory-dependent benchmark before it starts a server or sampler."""
+    if not enabled:
+        raise RuntimeError(
+            "runtime sweep requires memory profiling; no memory-dependent "
+            "qualification is produced while it is off"
+        )
 
 
 def corpus_offset(dispatch: str) -> int:

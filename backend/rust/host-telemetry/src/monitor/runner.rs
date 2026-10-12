@@ -35,7 +35,8 @@ fn load(args: &BTreeMap<String, String>) -> Result<(PathBuf, HostSessionManifest
     config.validate()?;
     let path = crate::ledger::paths::resolve_document(&workspace, argument(args, "--manifest")?)?;
     let raw = read_bounded(&path, config.limits.max_manifest_bytes as usize)?;
-    let manifest: HostSessionManifest = serde_json::from_slice(&raw).map_err(|e| e.to_string())?;
+    let mut manifest: HostSessionManifest =
+        serde_json::from_slice(&raw).map_err(|e| e.to_string())?;
     manifest.validate()?;
     require(
         manifest.limits == config.limits
@@ -43,6 +44,9 @@ fn load(args: &BTreeMap<String, String>) -> Result<(PathBuf, HostSessionManifest
             && manifest.controls == config.controls,
         "manifest effective configuration differs from named config",
     )?;
+    manifest.controls = config.effective_controls(crate::config::memory_profiling_override(
+        args.get("--memory-profiling").map(String::as_str),
+    )?);
     Ok((workspace, manifest))
 }
 pub fn execute(verb: &str, args: BTreeMap<String, String>) -> Result<()> {

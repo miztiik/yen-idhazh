@@ -82,6 +82,99 @@ fn artifacts_are_actual_plain_records_and_memory_off_creates_nothing() {
         "234567\n"
     );
 }
+
+#[test]
+fn cli_override_turns_memory_off_before_replay_collection() {
+    let root = resources::workspace("cli-memory-off");
+    let mut manifest = resources::manifest();
+    manifest.workers.truncate(1);
+    manifest.windows.truncate(1);
+    manifest.named_inputs = vec![NamedHostInput {
+        name: "resource".to_owned(),
+        source: CaptureSource::CpuStat,
+        relative_path: "captures/resource.json".to_owned(),
+    }];
+    resources::setup(&root, &manifest);
+    let mut register = resources::command(EventKind::WorkerRegister, 0, 1);
+    let EventBody::Worker(body) = &mut register.body else {
+        panic!("registration body")
+    };
+    body.memory_profiling_enabled = false;
+    let replay = ResourceReplay {
+        version: manifest.version.clone(),
+        frames: resources::frames(),
+        actions: vec![
+            ReplayAction {
+                frame: 0,
+                at_ms: 0,
+                event: Some(register),
+            },
+            ReplayAction {
+                frame: 0,
+                at_ms: 0,
+                event: Some(resources::command(EventKind::WindowBegin, 0, 2)),
+            },
+            ReplayAction {
+                frame: 3,
+                at_ms: 1000,
+                event: Some(resources::command(EventKind::WindowEnd, 0, 3)),
+            },
+            ReplayAction {
+                frame: 3,
+                at_ms: 1000,
+                event: Some(resources::command(EventKind::MonitorStop, 0, 4)),
+            },
+        ],
+    };
+    let input = root
+        .join(&manifest.event_root)
+        .join("captures")
+        .join("resource.json");
+    std::fs::create_dir_all(input.parent().unwrap()).unwrap();
+    std::fs::write(input, serde_json::to_vec(&replay).unwrap()).unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_idhazh-host-telemetry"))
+        .args([
+            "resource-replay",
+            "--workspace",
+            root.to_str().unwrap(),
+            "--manifest",
+            "manifest.json",
+            "--config",
+            "config.json",
+            "--snapshot",
+            "resource",
+            "--artifact-root",
+            "artifacts",
+            "--memory-profiling",
+            "off",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!root.join("artifacts").exists());
+    let events: Vec<HostEvent> = serde_json::from_slice(&output.stdout).unwrap();
+    let result = events
+        .iter()
+        .find_map(|event| match &event.body {
+            EventBody::WindowResult(body) => Some(body),
+            _ => None,
+        })
+        .unwrap();
+    assert!(result.cells.cpu_busy_pct.is_some());
+    assert!(result.cells.python_rss_bytes.is_none());
+    assert!(
+        result
+            .unavailable
+            .iter()
+            .all(|diagnostic| diagnostic.reason == UnavailableReason::Disabled)
+    );
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 #[test]
 fn capacity_and_missing_population_never_publish_a_partial_sum() {
     let root = resources::workspace("artifact-caps");

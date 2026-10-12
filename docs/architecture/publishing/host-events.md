@@ -33,7 +33,20 @@ Abort and shutdown resolve opening commands without silently dropping evidence.
 
 Memory collection defaults on. The manifest carries one strict Boolean; disabled
 memory cells are null and diagnosed separately from CPU and load readings.
-This control does not yet turn off production Python instruments.
+`observability.memory_profiling_enabled` is the shared pipeline setting.
+`--memory-profiling on|off` is the per-process override; other strings and a
+missing value are refused. The isolated workflow dispatch accepts `inherit`,
+`on` or `off`. `inherit` writes no override and uses shared config. The resolved
+Boolean is written into the scratch native config and manifest before collection.
+The content and measurement workflows use the same three-value dispatch shape.
+
+The native off path takes no process-status, machine-memory, memory-cgroup or
+Python-population readings and creates no memory artifact directory. CPU, load,
+process identity, event boundaries, heartbeat and lifecycle remain active.
+The separate memory-bandwidth copy keeps its own controls. Production Python
+work collection has not cut over yet, so a Python work invocation resolved to
+off refuses before opening its legacy watch instead of claiming the legacy
+memory reads were disabled.
 
 ## Inactive production boundaries
 
@@ -283,11 +296,13 @@ closed exchange contracts; SHA-256 and Ryu serve canonical identity bytes.
 
 ## Configuration and verification command
 
-`config/host-telemetry-experiment.json` supplies collection, capture, exchange
+`config/host-telemetry-experiment.json` supplies native collection, capture, exchange
 and verification limits. It declares no production state root. Callers validate
 its sections with `CollectionControls`, `HostEventLimits`, `HostCaptureLimits`
 and `VerificationLimits`. Session manifests supply finite named inputs/outputs,
 workers and windows. Tunable intervals and byte limits are not source constants.
+The shared default is `observability.memory_profiling_enabled` in
+`config/idhazh.json`; native scratch config carries its already resolved value.
 
 `backend/utilities/verify_host_output.py` accepts a workspace root, independently
 expected target root/invocation, named plan/completion files and explicit

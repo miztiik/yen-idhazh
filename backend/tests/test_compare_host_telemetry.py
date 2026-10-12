@@ -942,16 +942,26 @@ def test_real_native_resource_exchange_rejects_reordered_or_foreign_received_evi
         path.write_bytes(raw)
 
 
-def test_live_controls_refuse_memory_off_or_copy_allocation_before_any_capture() -> None:
+def test_live_controls_resolve_memory_once_and_refuse_copy_before_capture() -> None:
     from idhazh.telemetry.host_evidence_inputs import live_controls, settings
 
     native, config, _ = settings()
     controls = live_controls(native, config)
     assert controls.resource_interval_seconds == config.resource_interval_seconds
     assert controls.job_sample_interval_seconds == config.sample_interval_seconds
-    for change in ({"memory_profiling_enabled": False}, {"memcpy_enabled": True}):
-        changed = native.model_copy(update={"controls": native.controls.model_copy(update=change)})
-        with pytest.raises(ValueError, match="requires memory on"):
-            live_controls(changed, config)
+    assert not live_controls(native, config, False).memory_profiling_enabled
+    changed = native.model_copy(
+        update={
+            "controls": native.controls.model_copy(
+                update={"memory_profiling_enabled": False}
+            )
+        }
+    )
+    assert live_controls(changed, config).memory_profiling_enabled
+    changed = native.model_copy(
+        update={"controls": native.controls.model_copy(update={"memcpy_enabled": True})}
+    )
+    with pytest.raises(ValueError, match="copy probe off"):
+        live_controls(changed, config)
     with pytest.raises(ValueError, match="retry retention"):
         live_controls(native, config.model_copy(update={"sample_interval_seconds": 0.5}))
