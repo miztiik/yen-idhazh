@@ -483,6 +483,11 @@ re-encoded: already corrected files are explicitly excluded from replacement.
 Footer row counts must equal the bounded row-group sum before page decoding,
 and the actual decoded row count afterward. Contradictions refuse the entire
 source batch without a bundle or historical writes.
+A physical compact Parquet file may represent a packed zero-row period when its
+envelope and index agree. Its empty chunks and page totals remain bounded and
+validated; `empty` and `lost` index markers are not converted to packed files.
+Zero-row raw inputs remain refused, and producer verification retains its
+existing one-row requirement.
 
 Each legacy candidate preserves its path, UUID5 work unit, UUID8 file identity,
 allocation clock, attempts and original producer/git lineage. The canonical row
