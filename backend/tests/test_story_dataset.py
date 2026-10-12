@@ -14,6 +14,7 @@ from idhazh.contracts.story_annotation import (
     AnnotationRecord,
     ArticleDecision,
     CatalogReview,
+    CatalogSnapshot,
     IdentityProposal,
     Kind,
     WorkerBatch,
@@ -25,9 +26,13 @@ from idhazh.contracts.story_examples import ApprovedFixtures
 from idhazh.contracts.story_source import ArticleEvidence, SourceFreeze
 from idhazh.story_dataset.catalog import (
     empty_catalog,
+    identity_id,
     read_catalog,
+    resolve_ref,
+    resolved_paths,
     review_catalog,
     validate_catalog,
+    validate_decision,
 )
 from idhazh.story_dataset.checkpoints import export_checkpoint, restore_checkpoint
 from idhazh.story_dataset.source import freeze, load_articles, load_policy, validate_freeze
@@ -516,6 +521,230 @@ def test_catalog_rejects_unknown_parents_and_alias_cycles(work: Path) -> None:
         catalog.aliases = {event_ids[0]: event_ids[1], event_ids[1]: event_ids[0]}
         with pytest.raises(ValueError, match="cycle"):
             validate_catalog(catalog, set(articles()))
+    finally:
+        store.close()
+
+
+def reviewed_alias_fixture() -> tuple[CatalogSnapshot, ArticleDecision, dict[str, str]]:
+    approved = fixtures()
+    decision = approved.examples[0].a_decision.model_copy(deep=True)
+    path = decision.memberships[0]
+    used = {path.topic, path.event, path.story, *path.occurrence_refs}
+    originals = [item for item in approved.catalog.entities if item.id in used]
+    renamed = {}
+    additions = []
+    for item in originals:
+        key = "reviewed-alias-fixture:" + item.identity_key
+        renamed[item.id] = identity_id(item.kind, key)
+        additions.append(
+            item.model_copy(deep=True, update={"id": renamed[item.id], "identity_key": key})
+        )
+    catalog = CatalogSnapshot(
+        revision=digest("bounded approved alias fixture"),
+        entities=[*approved.catalog.entities, *additions],
+        aliases=renamed,
+    )
+    validate_catalog(catalog, set(articles()))
+    return catalog, decision, renamed
+
+
+def decision_record(decision: ArticleDecision) -> AnnotationRecord:
+    return AnnotationRecord(
+        record_id=digest(decision), recorded_at=now(), submission_sha256=digest(decision),
+        batch_id="1" * 64, article_id=fixtures().examples[0].a.article_id,
+        operation="primary", label_source="model", labeler="gpt-6.1-sol",
+        worker_id="bounded-alias-fixture", independent_of=[], decision=decision,
+    )
+
+
+@pytest.mark.parametrize("mask", range(16))
+def test_reviewed_aliases_preserve_each_typed_membership_and_raw_bytes(mask: int) -> None:
+    catalog, decision, aliases = reviewed_alias_fixture()
+    path = decision.memberships[0]
+    refs = [path.topic, path.event, path.story, *path.occurrence_refs]
+    mixed = [aliases[ref] if mask & (1 << index) else ref for index, ref in enumerate(refs)]
+    path.topic, path.event, path.story = mixed[:3]
+    path.occurrence_refs = mixed[3:]
+    before = canonical((catalog, decision))
+    validate_decision(decision, catalog, [], set(articles()))
+    record = decision_record(decision)
+    assert resolved_paths(record, catalog) == [
+        (aliases[refs[0]], aliases[refs[1]], aliases[refs[2]], (aliases[refs[3]],))
+    ]
+    assert all(resolve_ref(catalog, record.batch_id, ref) == aliases[ref] for ref in refs)
+    assert canonical((catalog, decision)) == before
+
+
+def test_reviewed_alias_uses_only_declared_canonical_parents_not_automatic_union() -> None:
+    catalog, decision, aliases = reviewed_alias_fixture()
+    path = decision.memberships[0]
+    nodes = {item.id: item for item in catalog.entities}
+    topic = nodes[path.topic]
+    key = "bounded-second-topic:" + topic.identity_key
+    second = topic.model_copy(update={"id": identity_id("topic", key), "identity_key": key})
+    catalog.entities.append(second)
+    canonical_event = nodes[aliases[path.event]]
+    canonical_event.parent_ids.append(second.id)
+    decision.memberships.append(path.model_copy(update={"topic": second.id}))
+    before = canonical(decision)
+    validate_catalog(catalog, set(articles()))
+    validate_decision(decision, catalog, [], set(articles()))
+    assert len(resolved_paths(decision_record(decision), catalog) or []) == 2
+    assert canonical(decision) == before
+    # A historical parent's extra link must not override the reviewed identity.
+    canonical_event.parent_ids.remove(second.id)
+    nodes[path.event].parent_ids.append(second.id)
+    with pytest.raises(ValueError, match="unsupported typed parent"):
+        validate_decision(decision, catalog, [], set(articles()))
+    with pytest.raises(ValueError, match="breaks a membership path"):
+        resolved_paths(decision_record(decision), catalog)
+
+
+@pytest.mark.parametrize("kind", ["event", "story", "occurrence"])
+def test_proposal_declared_parents_use_reviewed_alias_identity(kind: Kind) -> None:
+    catalog, decision, aliases = reviewed_alias_fixture()
+    path = decision.memberships[0]
+    refs = {"topic": path.topic, "event": path.event, "story": path.story,
+            "occurrence": path.occurrence_refs[0]}
+    node = next(item for item in catalog.entities if item.id == refs[kind])
+    proposal = IdentityProposal(
+        ref="proposal:bounded-alias", kind=kind, name=node.name,
+        parent_refs=node.parent_ids, definition=node.definition,
+        evidence_article_ids=node.evidence_article_ids,
+    )
+    proposals = [proposal]
+    path.topic, path.event, path.story = [aliases[refs[k]] for k in ("topic", "event", "story")]
+    if kind == "occurrence":
+        path.occurrence_refs = [proposal.ref]
+    else:
+        setattr(path, kind, proposal.ref)
+        path.occurrence_refs = []
+        if kind == "event":
+            story = next(item for item in catalog.entities if item.id == refs["story"])
+            decision_proposal = IdentityProposal(
+                ref="proposal:bounded-story", kind="story", name=story.name,
+                parent_refs=[proposal.ref], definition=story.definition,
+                evidence_article_ids=story.evidence_article_ids,
+            )
+            path.story = decision_proposal.ref
+            proposals.append(decision_proposal)
+    validate_decision(decision, catalog, proposals, set(articles()))
+    record = decision_record(decision)
+    assert resolved_paths(record, catalog) is None
+    catalog.proposal_resolutions = {
+        record.batch_id + ":" + item.ref: refs[item.kind] for item in proposals
+    }
+    assert resolved_paths(record, catalog) is not None
+
+
+@pytest.mark.parametrize(
+    "defect",
+    ["unknown", "wrong-kind", "foreign-evidence", "missing-proposal-parent",
+     "cycle", "unapproved-alias", "same-name-different-event"],
+)
+def test_alias_validation_refuses_unsupported_relations(defect: str) -> None:
+    catalog, decision, aliases = reviewed_alias_fixture()
+    path = decision.memberships[0]
+    proposals = []
+    if defect == "unknown":
+        path.event = "event-" + "0" * 64
+    elif defect == "wrong-kind":
+        path.event = path.topic
+    elif defect in ("foreign-evidence", "missing-proposal-parent"):
+        proposal = IdentityProposal(
+            ref="proposal:invalid-story", kind="story", name="Bounded invalid Story",
+            parent_refs=[path.event] if defect == "foreign-evidence" else [],
+            definition="Exercise the evidence and declared-parent boundaries.",
+            evidence_article_ids=["a-" + "0" * 64],
+        )
+        if defect == "missing-proposal-parent":
+            proposal.evidence_article_ids = [fixtures().examples[0].a.article_id]
+        proposals = [proposal]
+        path.story, path.occurrence_refs = proposal.ref, []
+    elif defect == "cycle":
+        catalog.aliases[aliases[path.event]] = path.event
+    elif defect == "unapproved-alias":
+        del catalog.aliases[path.event]
+        path.event = aliases[path.event]
+    else:
+        approved = next(example for example in fixtures().examples if example.id == "B4")
+        decision = approved.a_decision.model_copy(deep=True)
+        path = decision.memberships[0]
+        sibling = approved.b_decision.memberships[0].event
+        nodes = {item.id: item for item in catalog.entities}
+        nodes[sibling].name = nodes[path.event].name
+        path.event = sibling
+    before = canonical((catalog, decision, proposals))
+    with pytest.raises(ValueError):
+        validate_decision(decision, catalog, proposals, set(articles()))
+    assert canonical((catalog, decision, proposals)) == before
+
+
+@pytest.mark.parametrize("pending", ["topic", "story", "occurrence", "earlier-membership"])
+def test_pending_resolution_does_not_hide_known_unsupported_links(pending: str) -> None:
+    catalog, decision, aliases = reviewed_alias_fixture()
+    path = decision.memberships[0]
+    path.event = aliases[path.event]
+    if pending == "earlier-membership":
+        decision.memberships.insert(0, path.model_copy(update={"story": "proposal:pending"}))
+    elif pending == "occurrence":
+        path.occurrence_refs.append("proposal:pending")
+    else:
+        setattr(path, pending, "proposal:pending")
+    record = decision_record(decision)
+    assert resolved_paths(record, catalog) is None
+    if pending == "story":
+        event = next(item for item in catalog.entities if item.id == path.event)
+        event.parent_ids = [fixtures().examples[1].a_decision.memberships[0].topic]
+    else:
+        occurrence = next(item for item in catalog.entities if item.id == aliases[path.occurrence_refs[0]])
+        occurrence.parent_ids = [fixtures().examples[1].a_decision.memberships[0].story]
+    with pytest.raises(ValueError, match="breaks a membership path"):
+        resolved_paths(record, catalog)
+
+
+@pytest.mark.parametrize("operation", ["primary", "review"])
+def test_alias_links_import_through_both_worker_paths_without_label_changes(
+    work: Path, operation: str,
+) -> None:
+    store = seeded_store(work)
+    try:
+        catalog, decision, aliases = reviewed_alias_fixture()
+        current = read_catalog(store)
+        additions = [item for item in catalog.entities if item.id in aliases.values()]
+        review_catalog(store, CatalogReview(
+            expected_revision=current.revision, reviewer="bounded alias reviewer",
+            reason="Explicitly approve the existing fixture's same identities.",
+            entities=additions, aliases=aliases,
+        ), set(articles()))
+        identity = fixtures().examples[0].a.article_id
+        primary = export_batch(store, manifest(), articles(), policy(), article_ids=[identity])
+        if operation == "review":
+            import_submission(store, manifest(), articles(), answer(primary))
+            batch = export_batch(
+                store, manifest(), articles(), policy(), operation="review", article_ids=[identity],
+            )
+        else:
+            batch = primary
+        submission = answer(batch, "independent-alias-fixture")
+        submission.independent_of = batch.independent_of_workers
+        path = decision.memberships[0]
+        path.event = aliases[path.event]
+        submission.decisions[identity] = decision
+        before = canonical(submission)
+        history_before = canonical(store.records("annotation", AnnotationRecord))
+        assert import_submission(store, manifest(), articles(), submission) == 1
+        assert canonical(submission) == before
+        kind = "review" if operation == "review" else "annotation"
+        record = store.records(kind, AnnotationRecord)[-1]
+        assert canonical(record.decision) == canonical(decision)
+        assert record.review_target == batch.review_targets.get(identity)
+        assert resolved_paths(record, read_catalog(store)) is not None
+        if operation == "review":
+            assert canonical(store.records("annotation", AnnotationRecord)) == history_before
+            same_worker = submission.model_copy(update={"worker_id": "primary-example-fixture"})
+            with pytest.raises(ValueError, match="independent"):
+                import_submission(store, manifest(), articles(), same_worker)
     finally:
         store.close()
 
