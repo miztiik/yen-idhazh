@@ -15,6 +15,7 @@ from idhazh.contracts.story_annotation import (
     ArticleDecision,
     CatalogReview,
     CatalogSnapshot,
+    Identity,
     IdentityProposal,
     Kind,
     WorkerBatch,
@@ -34,6 +35,7 @@ from idhazh.story_dataset.catalog import (
     validate_catalog,
     validate_decision,
 )
+from idhazh.story_dataset.catalog_context import CatalogContext
 from idhazh.story_dataset.checkpoints import export_checkpoint, restore_checkpoint
 from idhazh.story_dataset.source import freeze, load_articles, load_policy, validate_freeze
 from idhazh.story_dataset.status import dataset_status
@@ -555,6 +557,184 @@ def decision_record(decision: ArticleDecision) -> AnnotationRecord:
         operation="primary", label_source="model", labeler="gpt-6.1-sol",
         worker_id="bounded-alias-fixture", independent_of=[], decision=decision,
     )
+
+
+def test_catalog_context_indexes_once_and_does_not_rebuild_for_records_or_decisions() -> None:
+    class CountedEntities(list[Identity]):
+        scans = 0
+
+        def __iter__(self) -> Iterator[Identity]:
+            self.scans += 1
+            return super().__iter__()
+
+    catalog, decision, _ = reviewed_alias_fixture()
+    entities = CountedEntities(catalog.entities)
+    catalog = catalog.model_copy(update={"entities": entities})
+    context = CatalogContext(catalog)
+    record = decision_record(decision)
+    expected = resolved_paths(record, catalog)
+    assert expected is not None
+    scans = entities.scans
+    for _ in range(64):
+        assert context.resolved_paths(record) == expected
+        context.validate_decision(decision, [], set(articles()))
+        assert context.resolve_ref(record.batch_id, decision.memberships[0].event) == expected[0][1]
+    assert entities.scans == scans
+
+
+def test_catalog_context_owns_exact_links_even_when_snapshot_containers_change() -> None:
+    catalog, decision, aliases = reviewed_alias_fixture()
+    record = decision_record(decision)
+    context = CatalogContext(catalog)
+    before = canonical((catalog, record))
+    expected = context.resolved_paths(record)
+    assert canonical((catalog, record)) == before
+    event = next(item for item in catalog.entities if item.id == aliases[decision.memberships[0].event])
+    event.parent_ids = [fixtures().examples[1].a_decision.memberships[0].topic]
+    catalog.aliases.clear()
+    catalog.proposal_resolutions[record.batch_id + ":proposal:pending"] = event.id
+    assert context.resolved_paths(record) == expected
+    assert context.resolve_ref(record.batch_id, "proposal:pending") is None
+    new_context = CatalogContext(catalog)
+    assert new_context.resolve_ref(record.batch_id, "proposal:pending") == event.id
+    decision.memberships[0].event = event.id
+    with pytest.raises(ValueError, match="breaks a membership path"):
+        new_context.resolved_paths(record)
+
+
+def test_catalog_context_resolution_is_batch_bound_not_local_ref_bound() -> None:
+    catalog, decision, _ = reviewed_alias_fixture()
+    topic = decision.memberships[0].topic
+    catalog.proposal_resolutions = {"1" * 64 + ":proposal:local": topic}
+    context = CatalogContext(catalog)
+    assert context.resolve_ref("1" * 64, "proposal:local") == resolve_ref(catalog, "1" * 64, topic)
+    assert context.resolve_ref("2" * 64, "proposal:local") is None
+    with pytest.raises(ValueError, match="unknown canonical identity"):
+        context.resolve_ref("", "event-" + "0" * 64)
+
+
+@pytest.mark.parametrize("operation", ["primary", "review"])
+def test_worker_context_uses_exact_frozen_batch_not_newer_catalogue(
+    work: Path, operation: str,
+) -> None:
+    store = seeded_store(work)
+    try:
+        identity = fixtures().examples[0].a.article_id
+        batch = export_batch(store, manifest(), articles(), policy(), article_ids=[identity])
+        if operation == "review":
+            import_submission(store, manifest(), articles(), answer(batch))
+            batch = export_batch(
+                store, manifest(), articles(), policy(), operation="review", article_ids=[identity],
+            )
+        catalog, decision, aliases = reviewed_alias_fixture()
+        review_catalog(store, CatalogReview(
+            expected_revision=read_catalog(store).revision, reviewer="generated frozen batch test",
+            reason="New reviewed identities cannot change an outstanding batch's meaning.",
+            entities=[item for item in catalog.entities if item.id in aliases.values()],
+            aliases=aliases,
+        ), set(articles()))
+        path = decision.memberships[0]
+        path.topic, path.event, path.story = [aliases[ref] for ref in (path.topic, path.event, path.story)]
+        path.occurrence_refs = [aliases[ref] for ref in path.occurrence_refs]
+        wrong = answer(batch, "independent-frozen-fixture")
+        wrong.independent_of = batch.independent_of_workers
+        wrong.decisions[identity] = decision
+        with pytest.raises(ValueError, match="unknown identity"):
+            import_submission(store, manifest(), articles(), wrong)
+        correct = answer(batch, "independent-frozen-fixture")
+        correct.independent_of = batch.independent_of_workers
+        before = canonical(correct)
+        assert import_submission(store, manifest(), articles(), correct) == 1
+        assert canonical(correct) == before
+        kind = "review" if operation == "review" else "annotation"
+        record = store.records(kind, AnnotationRecord)[-1]
+        assert canonical(record.decision) == canonical(correct.decisions[identity])
+        assert resolved_paths(record, read_catalog(store)) is not None
+    finally:
+        store.close()
+
+
+@pytest.mark.parametrize("kind", ["annotation", "review"])
+@pytest.mark.parametrize("pending", [False, True])
+def test_catalog_review_validates_all_immutable_history_and_rolls_back(
+    work: Path, kind: str, pending: bool,
+) -> None:
+    store = seeded_store(work)
+    try:
+        catalog = read_catalog(store)
+        approved = fixtures()
+        decision = approved.examples[0].a_decision.model_copy(deep=True)
+        path = decision.memberships[0]
+        occurrence = path.occurrence_refs[0]
+        other = next(
+            item for item in catalog.entities
+            if item.kind == "occurrence" and path.story not in item.parent_ids
+        )
+        if pending:
+            path.topic = "proposal:pending"
+        first = decision_record(decision)
+        if kind == "review":
+            first = first.model_copy(update={"operation": "review", "review_target": "4" * 64})
+        later = decision_record(approved.examples[1].a_decision)
+        later = later.model_copy(update={
+            "article_id": first.article_id, "operation": first.operation,
+            "supersedes": first.record_id if kind == "annotation" else None,
+            "review_target": first.review_target,
+            "record_id": digest({"later-generated": first.record_id}),
+        })
+        with store.transaction():
+            store.append(kind, first.record_id, first.article_id, first)
+            store.append(kind, later.record_id, later.article_id, later)
+        before = list(store.db.execute("SELECT * FROM records ORDER BY sequence"))
+        artifacts = list(store.db.execute("SELECT * FROM artifacts ORDER BY kind,id"))
+        review = CatalogReview(
+            expected_revision=catalog.revision, reviewer="generated rollback test",
+            reason="A later valid label must not hide an incompatible historical alias.",
+            aliases={occurrence: other.id},
+        )
+        with pytest.raises(ValueError, match="breaks a membership path"):
+            review_catalog(store, review, set(articles()))
+        assert read_catalog(store) == catalog
+        assert list(store.db.execute("SELECT * FROM records ORDER BY sequence")) == before
+        assert list(store.db.execute("SELECT * FROM artifacts ORDER BY kind,id")) == artifacts
+    finally:
+        store.close()
+
+
+def test_concurrent_catalog_reviews_serialize_and_recheck_revision(work: Path) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    store = seeded_store(work)
+    revision = read_catalog(store).revision
+    store.close()
+    barrier = Barrier(2)
+
+    def submit(index: int) -> str:
+        connection = Store(work)
+        try:
+            review = CatalogReview(
+                expected_revision=revision, reviewer=f"generated-concurrent-{index}",
+                reason="Competing real SQLite transactions against one exact snapshot.",
+            )
+            barrier.wait(timeout=30)
+            try:
+                return review_catalog(connection, review, set(articles())).revision
+            except ValueError as error:
+                assert "catalog changed" in str(error)
+                return "stale"
+        finally:
+            connection.close()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(submit, range(2)))
+    assert results.count("stale") == 1
+    store = Store(work)
+    try:
+        assert read_catalog(store).revision in results
+        assert len(store.records("catalog-review", CatalogReview)) == 2
+    finally:
+        store.close()
 
 
 @pytest.mark.parametrize("mask", range(16))

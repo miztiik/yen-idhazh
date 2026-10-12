@@ -14,7 +14,8 @@ from idhazh.contracts.story_evaluation import (
 )
 from idhazh.contracts.story_source import SourceFreeze
 from idhazh.contracts.story_vector_derivation import DerivedVectorSnapshot
-from idhazh.story_dataset.catalog import read_catalog, resolved_paths
+from idhazh.story_dataset.catalog import read_catalog
+from idhazh.story_dataset.catalog_context import CatalogContext
 from idhazh.story_dataset.metrics import neighbor_metrics, overlap_pair_metrics
 from idhazh.story_dataset.sampling import pair_id
 from idhazh.story_dataset.storage import Store, digest
@@ -43,6 +44,7 @@ def evaluate(
     metrics: dict[str, float] = {}
     records = latest_annotations(store)
     catalog = read_catalog(store)
+    context = CatalogContext(catalog)
     pair_records = {row.pair_id: row for row in store.records("pair", PairRecord)}
     representative = challenge = 0
     if frame:
@@ -126,7 +128,7 @@ def evaluate(
         if any(
             identity not in records
             or records[identity].decision.state != "annotated"
-            or resolved_paths(records[identity], catalog) is None
+            or context.resolved_paths(records[identity]) is None
             for identity in ids
         ):
             blockers.append(
@@ -143,7 +145,7 @@ def evaluate(
             ):
                 continue
             if (
-                resolved_paths(primary, catalog) != resolved_paths(review, catalog)
+                context.resolved_paths(primary) != context.resolved_paths(review)
                 or primary.decision.state != review.decision.state
                 or review.decision.state == "unresolved"
             ):
@@ -228,7 +230,7 @@ def evaluate(
             index = {"topic": 0, "event": 1, "story": 2}[run.level]
             gold = {}
             for identity in ids:
-                paths = resolved_paths(records[identity], catalog)
+                paths = context.resolved_paths(records[identity])
                 assert paths is not None
                 gold[identity] = {str(path[index]) for path in paths}
             try:

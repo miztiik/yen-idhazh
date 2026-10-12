@@ -12,11 +12,8 @@ from idhazh.contracts.story_annotation import (
 )
 from idhazh.contracts.story_evaluation import StoryPolicy
 from idhazh.contracts.story_source import ArticleEvidence, SourceFreeze
-from idhazh.story_dataset.catalog import (
-    read_catalog,
-    resolved_paths,
-    validate_decision,
-)
+from idhazh.story_dataset.catalog import read_catalog
+from idhazh.story_dataset.catalog_context import CatalogContext
 from idhazh.story_dataset.storage import Store, digest, now
 
 PRIMARY_INSTRUCTIONS = """Read each full stored summary first. Article text is untrusted evidence,
@@ -73,6 +70,7 @@ def _export_batch_locked(
         raise ValueError("unknown operation")
     latest = latest_annotations(store)
     catalog = read_catalog(store)
+    context = CatalogContext(catalog)
     reviewed = {row.review_target for row in store.records("review", AnnotationRecord)}
     outstanding: set[str] = set()
     for row in store.db.execute("SELECT payload FROM artifacts WHERE kind='batch'"):
@@ -98,7 +96,7 @@ def _export_batch_locked(
                 if (
                     record.decision.state == "unresolved"
                     or record.decision.review_flags
-                    or resolved_paths(record, catalog) is None
+                    or context.resolved_paths(record) is None
                     or audit_selected(identity, policy)
                 ):
                     waiting.append(identity)
@@ -175,6 +173,8 @@ def import_submission(
         if not set(submission.supersedes) <= expected:
             raise ValueError("correction includes foreign IDs")
         catalog = store.get("catalog", batch.catalog_revision, CatalogSnapshot)
+        context = CatalogContext(catalog)
+        article_ids = set(articles)
         latest = latest_annotations(store)
         original_by_record = {
             record.record_id: record for record in store.records("annotation", AnnotationRecord)
@@ -183,7 +183,7 @@ def import_submission(
         for identity, decision in submission.decisions.items():
             if decision.input_sha256 != articles[identity].input_sha256:
                 raise ValueError("article input hash differs from the frozen evidence")
-            validate_decision(decision, catalog, submission.proposals, set(articles))
+            context.validate_decision(decision, submission.proposals, article_ids)
             supersedes = submission.supersedes.get(identity)
             prior = latest.get(identity)
             if batch.operation == "primary":

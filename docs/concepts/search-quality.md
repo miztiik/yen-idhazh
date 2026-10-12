@@ -485,6 +485,17 @@ collect parents from historical identities. Local proposals stay pending until
 their batch has an explicit resolution. Pending paths still check every known
 parent link. Validation changes no stored labels, evidence or history bytes.
 
+Catalogue review builds one immutable `CatalogContext` for the updated snapshot
+and uses it to check every retained primary and independent review, including
+superseded records. The context indexes identities, explicit alias chains and
+the resolved child's declared parents once, rather than rebuilding the catalogue
+for each record or edge. The write transaction still covers the revision check,
+all history validation and publication, so concurrent imports cannot escape the
+check. Helpers that audit many records should build one context from their exact
+snapshot and call its `resolved_paths` method. Never reuse it for a later
+snapshot. Worker imports build their context from the batch's frozen catalogue,
+not from the latest catalogue.
+
 `python -m idhazh.story_dataset.runner_cli materialize-candidate` takes
 `--candidate-root`, `--candidate`, `--state`, `--source-root` and
 `--output-root`. It concatenates only registered units for that pinned candidate
