@@ -354,9 +354,9 @@ acknowledgement; they are never accepted as healthy windows. The live monitor
 retires validated, consumed events after their retry window before admitting the
 next sample, keeping active windows protected and shutdown capacity reserved.
 
-Local delivery alone leaves D5 in flight. A report never authorizes adoption or
+The merged D5 evidence report never authorizes adoption or
 history replacement, asserts a general speedup, or substitutes for the exact
-Linux candidate/artifact review and green merge.
+consumer and production gates.
 
 ## Bounded historical inventory and dry-run
 
