@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import copy
+import platform
 import re
 import subprocess
 import sys
+from typing import Literal
 
 import pytest
 
-from idhazh.telemetry.host_evidence_inputs import ROOT, live_controls, settings
+from idhazh.telemetry.host_evidence_inputs import ROOT, live_controls, read_bytes, settings
 
 from ._harness import _load_workflows, _strings
 
@@ -165,7 +167,9 @@ def test_workflow_memory_off_survives_session_preparation_in_manifest_and_config
     from idhazh.telemetry.host_evidence_inputs import NativeSettings
     from utilities import compare_host_telemetry, host_telemetry_session
 
-    dispatch = workflow()["on"]["workflow_dispatch"]
+    triggers = workflow()["on"]
+    assert isinstance(triggers, dict)
+    dispatch = triggers["workflow_dispatch"]
     assert isinstance(dispatch, dict)
     memory_choice = dispatch["inputs"]["memory_profiling"]["options"][-1]
     assert memory_choice == "off"
@@ -182,7 +186,7 @@ def test_workflow_memory_off_survives_session_preparation_in_manifest_and_config
         process_calls.append(args)
         return child
 
-    monkeypatch.setattr(host_telemetry_session.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(platform, "system", lambda: "Linux")
     monkeypatch.setattr(host_telemetry_session, "binary", lambda: None)
     monkeypatch.setattr(
         host_telemetry_session,
@@ -198,7 +202,9 @@ def test_workflow_memory_off_survives_session_preparation_in_manifest_and_config
 
     monkeypatch.setattr(host_telemetry_session, "wait_for", fake_wait_for)
 
-    def fake_request(_: Path, sequence: int, mode: str) -> WorkloadResult:
+    def fake_request(
+        _: Path, sequence: int, mode: Literal["reference", "native_only"]
+    ) -> WorkloadResult:
         return WorkloadResult(
             version=EVIDENCE_VERSION,
             sequence=sequence,
@@ -220,14 +226,12 @@ def test_workflow_memory_off_survives_session_preparation_in_manifest_and_config
 
     monkeypatch.setattr(host_telemetry_session, "request", fake_request)
     monkeypatch.setattr(host_telemetry_session, "freeze_bounds", lambda *_: ())
-    read_bytes = host_telemetry_session.read_bytes
-
     def fake_boot_id(path: Path, maximum: int) -> bytes:
         if str(path).replace("\\", "/").lstrip("/") == "proc/sys/kernel/random/boot_id":
             return b"00000000-0000-0000-0000-000000000001"
         return read_bytes(path, maximum)
 
-    monkeypatch.setattr(host_telemetry_session, "read_bytes", fake_boot_id)
+    monkeypatch.setattr("utilities.host_telemetry_session.read_bytes", fake_boot_id)
 
     var_root = ROOT / "backend/var"
     var_root.mkdir(parents=True, exist_ok=True)
