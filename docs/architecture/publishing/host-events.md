@@ -444,15 +444,16 @@ workspace; persisted paths remain relative and POSIX-separated.
 The command reads exactly two repository-owned configuration files, resolved
 from the utility's location, not the operator's workspace or environment.
 `history_migration_limits` in `config/host-history-migration.json` caps roots,
-closed periods, manifested sources, aggregate history rows, manifest bytes and
-the complete bundle. Its 512-source and 4096-row ceilings are independent of
-`verification_limits.max_files` and `max_rows`, which continue to cap an
-individual host write plan and source file. This lets one explicitly bounded
-history manifest cover its complete input set without widening the D5 write-plan
-contract. It contains no copied verification defaults. `verification_limits` in
+closed periods, manifested sources, per-file and aggregate history rows,
+manifest bytes and the complete bundle. Its 512-source, 128-row/file and
+4096-row aggregate ceilings are independent of `verification_limits.max_files`
+and `max_rows`, which continue to cap an individual host output plan and file.
+This lets one explicitly bounded history manifest cover its complete input
+set without widening the D5 write-plan contract. It contains no copied
+verification defaults. `verification_limits` in
 `config/host-telemetry-experiment.json` caps individual and aggregate source
-bytes, per-file rows, footer/decode bytes, JSON depth and Thrift items. Every
-source read is bounded and hash-checked.
+bytes, footer/decode bytes, JSON depth and Thrift items. Every source read is
+bounded and hash-checked.
 `HistoryLimits` validates the combined effective inputs before reading history.
 Missing files or invalid bounds refuse the dry-run without source or config
 writes. The shared experiment file retains only native settings; Rust still

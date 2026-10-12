@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import struct
 import zlib
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, replace
 from pathlib import Path
 from typing import Any
 
@@ -62,6 +62,7 @@ class HistoryLimits:
     max_roots: int
     max_periods: int
     max_sources: int
+    max_history_file_rows: int
     max_history_rows: int
     max_manifest_bytes: int
     max_bundle_bytes: int
@@ -84,6 +85,10 @@ class HistoryLimits:
             for field in fields(self)
             if field.name != "verification"
         }
+
+    @property
+    def history_verification(self) -> VerificationLimits:
+        return replace(self.verification, max_rows=self.max_history_file_rows)
 
     def check_manifest(self, manifest: HistoryManifest) -> None:
         if len(manifest.sources) > self.max_sources:
