@@ -211,7 +211,15 @@ def test_named_history_config_uses_shared_verification_and_computed_bounds() -> 
 
 
 @pytest.mark.parametrize(
-    "bound", ["max_roots", "max_periods", "max_manifest_bytes", "max_bundle_bytes"]
+    "bound",
+    [
+        "max_roots",
+        "max_periods",
+        "max_sources",
+        "max_history_rows",
+        "max_manifest_bytes",
+        "max_bundle_bytes",
+    ],
 )
 @pytest.mark.parametrize("value", [0, -1, True, 1.5, "2", None])
 def test_invalid_history_bounds_protect_sources(
@@ -233,6 +241,28 @@ def test_invalid_history_bounds_protect_sources(
         )
     assert (workspace / source).read_bytes() == original
     assert not (workspace / document["isolated_root"]).exists()
+
+
+def test_history_source_bound_is_independent_of_single_output_file_bound(
+    workspace: Path,
+) -> None:
+    document = manifest_document()
+    for shard in range(65):
+        generated_raw(workspace, document, shard=shard)
+
+    config = limits_document()
+    assert config["verification_limits"]["max_files"] == 64
+    assert config["history_migration_limits"]["max_sources"] == 512
+    assert config["verification_limits"]["max_rows"] == 64
+    assert config["history_migration_limits"]["max_history_rows"] == 4096
+    report = dry_run(
+        HistoryManifest.model_validate(document),
+        workspace_root=workspace,
+        config_document=config,
+    )
+
+    assert report.inventory_complete
+    assert len(report.files) == 65
 
 
 @pytest.mark.parametrize(
@@ -784,12 +814,13 @@ def test_set_aside_is_an_explicit_unresolved_source(workspace: Path) -> None:
 @pytest.mark.parametrize(
     "bound",
     [
-        "max_files",
         "max_file_bytes",
         "max_total_bytes",
         "max_rows",
         "max_periods",
         "max_roots",
+        "max_sources",
+        "max_history_rows",
         "max_manifest_bytes",
         "max_bundle_bytes",
     ],

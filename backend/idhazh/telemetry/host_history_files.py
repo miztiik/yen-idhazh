@@ -61,6 +61,8 @@ class HistoryLimits:
     verification: VerificationLimits
     max_roots: int
     max_periods: int
+    max_sources: int
+    max_history_rows: int
     max_manifest_bytes: int
     max_bundle_bytes: int
 
@@ -84,8 +86,8 @@ class HistoryLimits:
         }
 
     def check_manifest(self, manifest: HistoryManifest) -> None:
-        if len(manifest.sources) > self.verification.max_files:
-            raise ValueError("manifest exceeds max_files")
+        if len(manifest.sources) > self.max_sources:
+            raise ValueError("manifest exceeds max_sources")
         if len(manifest.roots) > self.max_roots or len(manifest.closed_periods) > self.max_periods:
             raise ValueError("manifest exceeds root or period bounds")
         if any(s.bytes > self.verification.max_file_bytes for s in manifest.sources):

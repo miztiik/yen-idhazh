@@ -376,8 +376,8 @@ def prepare_history(
         read_history(source, roots[source.root], workspace=workspace, limits=limits.verification)
         for source in manifest.sources
     )
-    if sum(len(file.rows) for file in files) > limits.verification.max_rows:
-        raise ValueError("complete inventory exceeds total row cap")
+    if sum(len(file.rows) for file in files) > limits.max_history_rows:
+        raise ValueError("complete inventory exceeds max_history_rows")
     by_path = {file.source.path: file for file in files}
     reports: dict[str, HistoryFileReport] = {}
     artifacts: dict[str, bytes] = {}
