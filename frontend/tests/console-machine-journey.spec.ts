@@ -37,13 +37,16 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	const fleet = page.locator('[data-fleet-shape]');
 	await expect(fleet).toHaveCount(1);
 	expect(Number(await fleet.getAttribute('data-fleet-placements'))).toBeGreaterThan(0);
-	const prompt = page.locator('[data-console-panel-id="prompt-reuse"]');
-	const plot = prompt.locator('[data-chart-type="dateSeries"]');
+	const tokens = page.locator('[data-console-panel-id="read-against-written"]');
+	const plot = tokens.locator('[data-chart-type="dateSeries"]');
 	await expect(plot).toBeVisible();
 	await plot.focus();
 	await page.keyboard.press('ArrowLeft');
-	await expect(prompt.locator('[data-readout]')).toContainText('Label');
-	await expect(prompt.locator('[data-readout]')).not.toContainText('Not measured');
+	await page.keyboard.press('Escape');
+	await expect(tokens.locator('[data-readout]')).toContainText('Read tokens');
+	await expect(tokens.locator('[data-readout]')).toContainText('Written tokens');
+	await expect(tokens.locator('[data-readout]')).toContainText('20 Aug 2026');
+	await expect(tokens.locator('[data-readout]')).not.toContainText('Not recorded');
 
 	await page.locator('[data-window-preset="7"]').click();
 	await settled(page);
