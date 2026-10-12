@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-12
 
-**Status**: Rows 1, 2, 3a, 3 and 4 are merged in #1529, #1537, #1538 and #1542. Shared-support row 2b is merged in #1546. Row 5 is merged in #1547, Voices, row 8, is merged in #1557, and Summaries, row 7, is merged in #1560. This change delivers Pipelines, row 6, with declared native queries, the approved shared chart contracts and retained private inputs. Rows 9, 10 and 11 still require delivery. Row 12 and its related public-projection and reader deletions are complete in merged #1189 and stay COLLAPSED.
+**Status**: Rows 1, 2, 3a, 3 and 4 are merged in #1529, #1537, #1538 and #1542. Shared-support row 2b is merged in #1546. Row 5 is merged in #1547, Voices, row 8, is merged in #1557, Summaries, row 7, is merged in #1560, Pipelines, row 6, is merged in #1559, and projection retirement, row 10, is merged in #1563. This change delivers Hardware, row 9, with native ledger answers, corrected measured host meaning and no ledger values in its prerendered document. Only row 11, ECharts removal, still requires delivery. Row 12 and its related public-projection and reader deletions are complete in merged #1189 and stay COLLAPSED.
 
 **Level**: 5 (CLAUDE.md section 6). Rows 5 and 10 change a persisted payload every console document carries. The route rows are Level 3: each crosses code and published data on one route. **Authorizing this plan is the design consultation section 6 asks of rows 5 and 10.** Row 12's approved deletion is carried by #1189.
 
@@ -77,7 +77,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 6 | Pipelines asks the ledger | 5, 2b | E | DONE | p52-pipelines-ledgers (`feat/console-pipelines-ledgers`) | Read from merge | Pipelines worker; parent owns delivery |
 | 7 | Summaries asks the ledger | 5, 2b | E | DONE | p52-model-ledgers (`feat/console-model-ledgers`) | Read from merge | Summaries worker; representative integration owner |
 | 8 | Voices asks the ledger, and the ranking panels join it | 4 | D | DONE | p52-voices-ledgers (`feat/console-voices-ledgers`) | Read from merge | Row8 finishing worker; actual Susan/Fowler consultations |
-| 9 | Hardware asks the ledger, and its page carries no data | 5 | E | IN-FLIGHT: count foundation ready/reader pending | p52-hardware-counts (`feat/console-hardware-counts`); reader retained in p52-machine-ledgers | Read from merge | Count foundation owner; parent owns reader integration |
+| 9 | Hardware asks the ledger, and its page carries no data | 5 | E | DONE | p52-machine-ledgers (`feat/console-machine-ledgers`); count foundation delivered | Read from merge | Hardware workers; host compatibility owner; parent owns delivery |
 | 10 | The `telemetry` and `run-timeline` projections go | 6 | F | PENDING | - | - | - |
 | 11 | ECharts leaves | 7, 8, 9, 10 | G | PENDING | - | - | - |
 | 12 | Moved to #1189: the aggregate is deleted and one item's trace is a command | - | H | COLLAPSED | - | - | - |
