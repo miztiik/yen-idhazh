@@ -158,10 +158,12 @@ claims anybody has agreed how much overhead is too much.
 
 The reader is
 [../../../frontend/src/lib/console/pipelines/run-timeline.ts](../../../frontend/src/lib/console/pipelines/run-timeline.ts);
-the producer of the published mirror is
-[../../../backend/idhazh/telemetry/publish/run_timeline.py](../../../backend/idhazh/telemetry/publish/run_timeline.py),
-its shape is [run-timeline.md](run-timeline.md) and every drawing rule is
+its native clock shape is [run-timeline.md](run-timeline.md) and every drawing rule is
 [../../concepts/console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md](../../concepts/console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md).
+[../../../frontend/tests/console-pipeline-timeline.spec.ts](../../../frontend/tests/console-pipeline-timeline.spec.ts)
+holds the shard grain against the item grain per shard and per step, and fails on
+a declared column that is empty across every canary row.
+It also checks that no separate sub-step readout remains.
 
 **It is a snapshot, so the window control does not reach it.** A bar's position
 is measured from its own run's start and a span cannot narrow one run, so the
@@ -336,11 +338,9 @@ The axis, the three marks a missing number can take and the model-change rule
 are [console-charts.md](console-charts.md)'s, because the throughput chart beside
 this one has to draw them the same way.
 
-**The console reads committed records in two ways.** The run strip, feed list and
-timing medians read the ledgers at build time. The item-health viewport fetches
-the browser-safe monthly projection under `telemetry/<YYYY-MM>.csv`. Nothing
-under `state/` is ever served - the browser reads only the narrow projection that
-drops `canonical_url`, `url_key` and `detail`
+**The Pipelines panels read native records through declared queries.** The
+ledger door selects raw or compact files for the requested window. There is no
+public telemetry or run-timeline mirror and no build-time timeline reader
 ([telemetry-series.md](telemetry-series.md),
 [console-payloads.md](console-payloads.md)).
 

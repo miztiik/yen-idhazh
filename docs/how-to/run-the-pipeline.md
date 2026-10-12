@@ -110,9 +110,9 @@ declaration, and this is the order:
  --log`. Each task logs one `task-finished` line of JSON
  ([the gardener page](../architecture/publishing/idhazh-gardener.md#what-a-shard-logs)):
  `outcome` says `dry-run`, and `taken` lists every file a live pass would take.
-3. Check the list against what you expect. On 2027-10-01 the retention tasks
- name one tree - `frontend/public/telemetry/2026-08.csv`. A second name, or a
- month that is not the oldest, means a boundary is wrong and the switch waits.
+3. Check the list against the task's current owned trees. The telemetry
+ aggregate owns no public tree and never deletes native source rows; its old
+ public-copy deletion is retired. An unexpected path means the switch waits.
  The item-health and feed-health rows are not on that list: their compactions
  delete them, and a compaction's own list is read as
  [the compaction page](../architecture/publishing/ledger-compaction.md#what-a-dry-run-does-and-what-the-record-says)

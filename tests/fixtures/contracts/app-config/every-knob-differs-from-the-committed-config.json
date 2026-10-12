@@ -347,9 +347,7 @@
       "work"
     ],
     "memory_profiling_enabled": false,
-    "public_run_timeline_keep_months": 5,
     "sample_rate": 0.25,
-    "telemetry_publish": false,
     "tracing_enabled": true,
     "visual_aggregate_keep_months": 42,
     "visuals_full_grain_months": 26
@@ -362,8 +360,7 @@
     },
     "cold_console_load_bytes": 900000,
     "payload_ceilings_bytes": {
-      "console/band.json": 4096,
-      "telemetry/": 500000
+      "console/band.json": 4096
     }
   },
   "placement": {

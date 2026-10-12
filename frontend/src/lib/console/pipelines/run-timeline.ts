@@ -3,9 +3,34 @@ import type { Row } from '../../data/ledger';
 import { newestRunRows } from '../queries/shared';
 import { finiteCell } from '../rates';
 import { SERIES_TOKENS } from '../series-tokens';
-import type { RunTimelineView, TimelineBar, TimelineRow, TimelineRun, TimelineStep } from '../../server/run-timeline';
+export type TimelineStep = 'plan_ms' | 'fetch_ms' | 'extract_ms' | 'label_ms' |
+	'summary_ms' | 'visual_plan_ms' | 'score_ms' | 'publish_ms';
 
-export type { RunTimelineView, TimelineBar } from '../../server/run-timeline';
+export interface TimelineRow {
+	date: string; runId: string; shard: number; itemId: string;
+	startOffsetMs: number; totalMs: number; residualMs: number;
+	steps: { name: TimelineStep; ms: number }[];
+}
+
+export interface TimelineRun {
+	runId: string; date: string; rows: TimelineRow[];
+}
+
+export interface TimelineBar {
+	id: string; label: string; shard: number; startOffsetMs: number; totalMs: number;
+	workMs: number; itemCount: number; residualMs: number; offset: string;
+	residualWidth: string; overrunOffset: string; overrunWidth: string;
+	segments: { name: TimelineStep; label: string; stop: number; ms: number; width: string }[];
+}
+
+export interface RunTimelineView {
+	empty: boolean; runId: string; date: string; bars: TimelineBar[];
+	shardOrder: number[]; shardBars: TimelineBar[]; itemCount: number; shards: number[];
+	spanMs: number; scaleMs: number; ticks: { at: string; ms: number }[]; workMs: number;
+	drawn: TimelineStep[]; legend: { name: TimelineStep; label: string; stop: number }[];
+	unproduced: TimelineStep[]; unrecorded: TimelineStep[]; overrunCount: number;
+	residualMs: number; shardResidualMs: number;
+}
 
 const STEPS: readonly { name: TimelineStep; cell: string; label: string; token: string }[] = [
 	{ name: 'fetch_ms', cell: 'fetch_ms', label: 'reading the page', token: SERIES_TOKENS.fetch },
@@ -30,7 +55,7 @@ export interface NativeTimeline {
 	readonly robots: readonly { itemId: string; milliseconds: number | null }[];
 }
 
-/** Match run_timeline.project: only eligible starts determine zero; clocks are not inferred. */
+/** Only eligible native starts determine zero; clocks are not inferred. */
 export function timelineRun(rows: readonly Row[]): NativeTimeline {
 	const newest = newestRunRows(rows);
 	const timed = newest.flatMap((row) => {

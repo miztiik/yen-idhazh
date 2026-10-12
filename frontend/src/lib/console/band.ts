@@ -129,13 +129,6 @@ export interface ConsoleShell {
 	routes: ConsoleRoute[];
 	/** One sentence per route pointing at the panel another route owns. */
 	carries: Record<RouteId, string>;
-	/** Every month a telemetry shard exists for, newest last.
-	 *
-	 * It rides on the band because a page cannot ask for a month until it knows
-	 * which months exist, and a list fetched on its own would be a fifth serial
-	 * hop before the first row of data (Carmack, 2026-09-08).
-	 */
-	months: string[];
 	settingsMoved: BandSettingsMoved | null;
 	checkerMoved: BandCheckerMoved | null;
 	/** False when no band payload could be read. The page prints a named absence
@@ -231,7 +224,6 @@ export const BAND_UNREAD: ConsoleShell = {
 		severity: CLEAR
 	})),
 	carries: blankCarries(),
-	months: [],
 	settingsMoved: null,
 	checkerMoved: null,
 	read: false
@@ -342,7 +334,6 @@ export function readBand(payload: unknown): ConsoleShell {
 		carries: Object.fromEntries(
 			ROUTE_IDS.map((id) => [id, text(byId.get(id)?.carries, NO_CARRY)])
 		) as Record<RouteId, string>,
-		months: Array.isArray(raw.months) ? raw.months.filter((m): m is string => typeof m === 'string') : [],
 		settingsMoved: readChanges<SettingsMove>(raw.settings_moved, (change) =>
 			Array.isArray(change.inputs) && change.inputs.length > 0 &&
 			change.inputs.every((name) => typeof name === 'string' && name.length <= 64 &&

@@ -251,7 +251,7 @@ async function main(args: string[]): Promise<number> {
 		env.CARGO_TARGET_DIR = join(root, 'backend/var/rust-host-telemetry');
 		env.IDHAZH_HOST_CODEC_FIXTURE = join(env.CARGO_TARGET_DIR, 'debug', process.platform === 'win32' ? 'codec-fixture.exe' : 'codec-fixture');
 	}
-	for (const name of ['DIGEST_ROOT', 'STATE_ROOT', 'TELEMETRY_ROOT', 'PYTEST_ADDOPTS']) delete env[name];
+	for (const name of ['DIGEST_ROOT', 'STATE_ROOT', 'PYTEST_ADDOPTS']) delete env[name];
 	const packages: Record<string, string> = {};
 	if (selected.groups.some((group) => group !== 'backend')) {
 		const manifest = JSON.parse(readFileSync(join(frontend, 'package.json'), 'utf8')) as {

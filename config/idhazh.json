@@ -248,9 +248,7 @@
       "runtime"
     ],
     "memory_profiling_enabled": true,
-    "public_run_timeline_keep_months": 2,
     "sample_rate": 1.0,
-    "telemetry_publish": true,
     "tracing_enabled": true,
     "visual_aggregate_keep_months": null,
     "visuals_full_grain_months": 14
@@ -272,8 +270,7 @@
       "state/compact/published/index/": 2200,
       "state/compact/run-shards/index/": 2200,
       "state/compact/seen/index/": 2200,
-      "state/compact/summary-quality-evals/index/": 2200,
-      "telemetry/": 1100000
+      "state/compact/summary-quality-evals/index/": 2200
     }
   },
   "placement": {

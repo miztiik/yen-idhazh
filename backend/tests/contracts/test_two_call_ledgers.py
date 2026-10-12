@@ -14,7 +14,6 @@ from idhazh.contracts.call_cost import CallCost, CallKind
 from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.item_health import CALL_SLOTS, RETIRED_CELLS, ItemHealthRow
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.public_telemetry import PublicTelemetryRow
 from idhazh.contracts.summary import Summary
 from utilities import build_canary_day
 
@@ -148,46 +147,6 @@ def test_a_row_that_records_one_call_may_not_keep_the_other_call_s_total() -> No
         ItemHealthRow.model_validate({**row.model_dump(), **whole, **totals, "model_calls": 1})
 
 
-def test_the_published_projection_carries_both_calls_rather_than_a_subtraction() -> None:
-    """The Oracle for the defect this row was opened on.
-
-    The projection used to publish the first call and the total and stop, on the
-    reasoning that a browser could subtract. The shard it wrote was 26 columns
-    ending at `label_cached_tokens`, so the second call had no kind on the page,
-    the remainder was one call only where `model_calls` said 2 - and that cell is
-    empty on every row published before 2026-09-12 - and a cache rate for the
-    second call cost the reader two subtractions and a division.
-
-    So the test is the shape of the row rather than the arithmetic: both slots
-    are published, both fill whole, and the flat cells are their sum.
-    """
-    first, second = _two_calls()
-    row = PublicTelemetryRow.model_validate(
-        json.loads(read_text(CONTRACT_FIXTURES_DIR / "public-telemetry" / "published.json"))
-    )
-    fields = ("prefill_ms", "decode_ms", "input_tokens", "output_tokens", "cached_tokens")
-    published: dict[str, object] = {
-        "model_calls": 2,
-        **{name: getattr(first, name) + getattr(second, name) for name in fields},
-    }
-    for slot, call in zip(CALL_SLOTS, (first, second), strict=True):
-        published[f"{slot}_kind"] = call.kind
-        published |= {f"{slot}_{name}": getattr(call, name) for name in fields}
-    split = row.model_copy(update=published)
-
-    assert split.summary_kind == second.kind, "the second call is named and not inferred"
-    for name in fields:
-        assert getattr(split, f"summary_{name}") == getattr(second, name)
-        assert getattr(split, name) == getattr(first, name) + getattr(second, name)
-
-    with pytest.raises(ValidationError, match="sum over the published calls"):
-        PublicTelemetryRow.model_validate(
-            {**row.model_dump(), **published, "prefill_ms": first.prefill_ms - 1}
-        )
-    with pytest.raises(ValidationError, match="whole or not at all"):
-        PublicTelemetryRow.model_validate({**row.model_dump(), **published, "label_kind": None})
-
-
 def test_a_shard_written_under_the_retired_headings_still_reads() -> None:
     """The read-side proof for the rename, taken by removing the new keys.
 
@@ -219,18 +178,6 @@ def test_a_shard_written_under_the_retired_headings_still_reads() -> None:
     assert not set(retired) & set(RETIRED_CELLS.values())
 
     assert ItemHealthRow.from_csv_row(retired) == row
-
-    published = PublicTelemetryRow.model_validate(
-        json.loads(read_text(CONTRACT_FIXTURES_DIR / "public-telemetry" / "published.json"))
-    ).model_copy(update=split)
-    shard = published.csv_row()
-    for old, new in RETIRED_CELLS.items():
-        if new in shard:
-            shard[old] = shard.pop(new)
-    # By its cells rather than by the model: a shard carries no version cell, so
-    # the reader stamps the row with the current one on the way back in.
-    assert PublicTelemetryRow.from_csv_row(shard).csv_row() == published.csv_row()
-
 
 def test_the_canary_writes_every_column_the_feed_health_ledger_defines(tmp_path: Path) -> None:
     """Every column filled by at least one canary feed, not merely present in the file.

@@ -7,9 +7,7 @@
   "appends_to": [
     "item-health-summary"
   ],
-  "owns": [
-    "frontend/public/telemetry"
-  ],
+  "owns": [],
   "reads": [
     "state/compact/item-health",
     "state/raw/item-health",
@@ -20,10 +18,6 @@
       "unit": "forever"
     },
     "full-grain": {
-      "unit": "months",
-      "value": 14
-    },
-    "public-copy": {
       "unit": "months",
       "value": 14
     }

@@ -133,7 +133,7 @@ function outputFingerprint(root: string): string {
 }
 
 export function buildMode(root: string, env: NodeJS.ProcessEnv): BuildRecord['mode'] {
-	const overrides = ['DIGEST_ROOT', 'STATE_ROOT', 'TELEMETRY_ROOT'] as const;
+	const overrides = ['DIGEST_ROOT', 'STATE_ROOT'] as const;
 	if (overrides.every((name) => !env[name])) return 'real';
 	const canary = resolve(root, 'backend/var/canary');
 	const expected = [join(canary, 'digest'), join(canary, 'state'), join(canary, 'state/telemetry')];

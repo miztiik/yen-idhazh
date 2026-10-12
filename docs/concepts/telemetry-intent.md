@@ -1,12 +1,18 @@
 # Telemetry Intent
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-11
 
 What must be true about telemetry once this workstream is done - how a measurement is written, where it sits, how it reaches a browser, and how it is drawn. A thing that contradicts one of the eleven below is not a trade-off, it is a defect.
 
 "Intent" is [`CLAUDE.md`](../../CLAUDE.md) section 0d's word: what the user wants to be true when the work is done. Intent sits above the contract and the contract sits above the code, so where this page and the tree disagree, **the tree is what changes**. That is also the warning label: several of these are not true yet, and a reader must not take a row here as a description of what the pipeline does today. For today's shape read [telemetry.md](telemetry.md), [partitions.md](partitions.md) and [../architecture/publishing/console-payloads.md](../architecture/publishing/console-payloads.md).
 
 ## The eleven
+
+The telemetry and run-timeline public copies have been retired after Pipelines
+stopped reading them. Their source ledgers remain intact. The standing band
+remains a small public payload; its retired months field is read-compatible,
+but new bands do not write it. This does not claim the other route migrations
+or ECharts retirement are complete.
 
 | # | Intent | What it replaces |
 | --- | --- | --- |

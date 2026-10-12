@@ -290,10 +290,6 @@ _WINDOW_FLOORS: Final[Mapping[LedgerName, str]] = MappingProxyType(
 #: one by one, which every task that keeps series has.
 FULL_GRAIN: Final = "full-grain"
 
-#: The telemetry task's series for the browser's copy of the ledger it folds.
-PUBLIC_COPY: Final = "public-copy"
-
-
 @dataclass(frozen=True, slots=True)
 class _Series:
     """One series a task may keep, and the ledger under `state/` whose files it deletes."""
@@ -309,7 +305,6 @@ _SERIES: Final[Mapping[str, Mapping[str, _Series]]] = MappingProxyType(
         "telemetry-aggregate": MappingProxyType(
             {
                 FULL_GRAIN: _Series(LedgerName.ITEM_HEALTH),
-                PUBLIC_COPY: _Series(None),
                 "aggregate": _Series(None),
             }
         ),
@@ -329,7 +324,6 @@ _CONSOLE_READ_LEDGERS: Final[tuple[LedgerName, ...]] = (
 #: Each task series whose files a console read can still open, held the same way.
 _CONSOLE_READ_SERIES: Final[tuple[tuple[str, str], ...]] = (
     ("telemetry-aggregate", FULL_GRAIN),
-    ("telemetry-aggregate", PUBLIC_COPY),
 )
 
 #: The tasks that delete what the archive page promises to keep for
@@ -420,7 +414,6 @@ def refuse_what_the_declarations_break(
     _refuse_a_window_under_its_floor(tasks, app)
     _refuse_a_series_the_task_cannot_keep(tasks)
     _refuse_a_summary_that_goes_first(tasks)
-    _refuse_a_copy_that_is_not_its_source(tasks)
     _refuse_a_window_a_console_read_still_opens(tasks, appearance)
     _refuse_a_picture_window_the_archive_does_not_state(tasks, app)
     for name, policy in tasks.items():
@@ -760,21 +753,6 @@ def _refuse_a_summary_that_goes_first(tasks: Mapping[str, TaskPolicy]) -> None:
                 f"{FULL_GRAIN} series {_spelled(rows)}. The {summary} must sit above the "
                 f"{FULL_GRAIN}, or a month is deleted before it is ever summarised"
             )
-
-
-def _refuse_a_copy_that_is_not_its_source(tasks: Mapping[str, TaskPolicy]) -> None:
-    """The browser's copy of a ledger and the ledger itself age as one number."""
-    policy = tasks.get("telemetry-aggregate")
-    if policy is None:
-        return
-    copy, source = _series_of(policy, PUBLIC_COPY), _series_of(policy, FULL_GRAIN)
-    if copy != source:
-        raise ValueError(
-            f"{_where('telemetry-aggregate')} keeps its {PUBLIC_COPY} series "
-            f"{_spelled(copy)} and its {FULL_GRAIN} series {_spelled(source)}. The copy is "
-            "the browser's copy of that ledger, so any other pair leaves either a published "
-            "month nothing can check or a window the console cannot draw"
-        )
 
 
 def _refuse_a_window_a_console_read_still_opens(

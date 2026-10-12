@@ -78,7 +78,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 7 | Summaries asks the ledger | 5, 2b | E | DONE | p52-model-ledgers (`feat/console-model-ledgers`) | Read from merge | Summaries worker; representative integration owner |
 | 8 | Voices asks the ledger, and the ranking panels join it | 4 | D | DONE | p52-voices-ledgers (`feat/console-voices-ledgers`) | Read from merge | Row8 finishing worker; actual Susan/Fowler consultations |
 | 9 | Hardware asks the ledger, and its page carries no data | 5 | E | DONE | p52-machine-ledgers (`feat/console-machine-ledgers`); count foundation delivered | Read from merge | Hardware workers; host compatibility owner; parent owns delivery |
-| 10 | The `telemetry` and `run-timeline` projections go | 6 | F | PENDING | - | - | - |
+| 10 | The `telemetry` and `run-timeline` projections go | 6 | F | DONE | p52-projections-retirement (`feat/console-projections-retirement`) | Read from merge | Row 10 worker; parent owns delivery |
 | 11 | ECharts leaves | 7, 8, 9, 10 | G | PENDING | - | - | - |
 | 12 | Moved to #1189: the aggregate is deleted and one item's trace is a command | - | H | COLLAPSED | - | - | - |
 

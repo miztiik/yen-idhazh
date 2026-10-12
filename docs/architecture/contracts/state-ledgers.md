@@ -66,7 +66,7 @@ Repeating a pending count files nothing; an unknown never erases a number.
 
 The console reads the feed record at build time from its packed files under `state/compact/feed-health/`, so the Voices page stops at the newest packed day. There is no published mirror; the one that existed until 2026-09-16 was never fetched.
 
-`state/raw/item-health/` is the fastest-growing ledger in the table above. The console reads it a month at a time through the published projection, which stays monthly: `public_telemetry.publish` folds a month from that month's days, read through `ledger.load_days` ([persistence.md](persistence.md#reading-a-whole-ledger)).
+`state/raw/item-health/` is the fastest-growing ledger in the table above. The console reads native raw and compact rows through the ledger query door and compact indexes. There is no monthly public telemetry projection. Backend windowed reads still use `ledger.load_days` ([persistence.md](persistence.md#reading-a-whole-ledger)).
 
 `state/raw/feed-retirements/` is read whole because a retirement has no time bound. It files by day anyway, for the reason the section on the two whole-read ledgers gives below. It is also the smallest: a row is written only when a server has reported one address permanently gone on five distinct runs, and none had been written when it moved under `state/raw/` on 2026-09-28.
 

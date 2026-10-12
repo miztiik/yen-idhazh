@@ -23,10 +23,8 @@ from typing import Final
 
 from idhazh.contracts import (
     console_band,
-    public_telemetry,
 )
 from idhazh.contracts.base import Contract
-from idhazh.contracts.public_telemetry import PublicTelemetryRow
 from idhazh.contracts.source_health_view import SourceHealthView
 
 
@@ -51,9 +49,7 @@ class ConsolePayload:
 
 #: The remaining public projections, in the order a cold load needs them.
 #:
-#: The band is first because every route carries it and nothing else can be
-#: asked for until its months list has landed. The rest are month or day shards
-#: the console asks for by name as the operator pans.
+#: The band is fetched first. Native ledger indexes own the route's date reach.
 CONSOLE_PAYLOADS: Final[tuple[ConsolePayload, ...]] = (
     ConsolePayload(
         reader="console-shell.ts consoleShell()",
@@ -63,26 +59,6 @@ CONSOLE_PAYLOADS: Final[tuple[ConsolePayload, ...]] = (
         why=(
             "The one thing an operator reads first: did it work, what is worst, how "
             "much room is left."
-        ),
-    ),
-    ConsolePayload(
-        reader="payload.ts telemetryRows()",
-        published_to="frontend/public/telemetry/<YYYY-MM>.csv",
-        contract=PublicTelemetryRow,
-        forbidden=public_telemetry.FORBIDDEN_COLUMNS,
-        why="One planned item per run: the stage that failed, and what each stage cost.",
-    ),
-    ConsolePayload(
-        reader="ledger-rows.ts itemHealthRows()",
-        published_to="frontend/public/telemetry/<YYYY-MM>.csv",
-        contract=PublicTelemetryRow,
-        forbidden=public_telemetry.FORBIDDEN_COLUMNS,
-        why=(
-            "The same census under a second reader. It resolves to the telemetry "
-            "shard rather than a shape of its own, because a second projection of one "
-            "ledger is two schemas for one row - and the two columns the console reads "
-            "from the census and not from the projection, span_integrity and "
-            "elements_found, arrive on the day-metrics payload instead."
         ),
     ),
     ConsolePayload(

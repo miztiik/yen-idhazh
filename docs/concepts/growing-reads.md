@@ -183,7 +183,7 @@ reads are here and not how many. These are `backend/`'s;
 | --- | --- | --- |
 | `ledger.load_seen` | the days it is handed, through `ledger.load_days`: the compact indexes of `state/compact/seen/`, the compact file that serves each day, and the raw files under `state/raw/seen/` of only the days no index names | `collect.seen_window_days`, committed at 90 |
 | `ledger.load_health` | the newest `within_days` days the feed-health ledger holds a row for, named from its indexes and raw folder names alone (`ledger_files.held_days`), then those days through `ledger.load_days`: the compact indexes of `state/compact/feed-health/`, the compact file that serves each day, and the raw files under `state/raw/feed-health/` of only the days no index names | `ledger.HEALTH_WINDOW_DAYS`, 31 |
-| `ledger.load_days` | the compact indexes of one door ledger, the one compact file that serves each day it is handed, and the raw files of only the days no index names. A day of a packed year opens that year's whole file, once however many of its days are asked | the days its caller names. Every reader of `item-health`, `summary-quality-evals` and `host-fingerprint` that asks about a window or a date calls it: the drift review, `console_band.publish`'s machine rows, `machine.publish`, `run_timeline.publish`, `public_telemetry.publish`, `day_metrics`, `source_health._recent_item_health`, `reconcile_prefill.py` and the `telemetry-aggregate` task among them |
+| `ledger.load_days` | the compact indexes of one door ledger, the one compact file that serves each day it is handed, and the raw files of only the days no index names. A day of a packed year opens that year's whole file, once however many of its days are asked | the days its caller names. Native readers include the drift review, `console_band.publish`, `day_metrics`, `source_health._recent_item_health`, `reconcile_prefill.py` and the `telemetry-aggregate` task |
 | `ledger.load_fitted_thresholds` | the days of the caller's window, through `ledger.load_days`: the compact indexes of `state/compact/content-similarity-judge/fitted-thresholds/`, the compact file that serves each day, and the raw files under `state/raw/content-similarity-judge/fitted-thresholds/` of only the days no index names | the caller's `within_days`, and the fit asks for `max(settled_window_days, step_change_window_rows * 2)` - 28 days on the committed knobs. **The cover is in days and the guard's median is in rows, which is why it is twice the row count rather than equal to it.** One missed run leaves 13 rows inside a 14-day cover, the median returns nothing, and a guard that silently never fires is worse than one that fires too readily. A bound set by two knobs, never by what the archive holds |
 | `similarity.applied.applied_line` | the same days, through `load_fitted_thresholds` | `assemble.same_story.adaptive_dedup_threshold.applied_lookback_days`, committed at 7. It runs on every publish, so the bound is the one that matters most on this page: 8 days on the thousandth day and on the third. A gap longer than the lookback means the judge has been down that long, and the committed config floor is the honest answer - so the cover is also the policy |
 | the window refusal count | the item-health days, through `ledger.load_days` since the ledger moved to the door | 30 days ending at the run date. **It took no new read.** The question - how many items the two-call sequence would not fit the window - is about the recent tail, and an answer over a longer span is dominated by shapes the pipeline no longer sends. The 30 dates are named by date arithmetic, never by a directory walk, so the cost is 30 days whatever the archive holds. Read once on 2026-09-13 and written up in [the throughput page](../architecture/summarize/throughput.md); it is a verb a person types, off the daily path |
@@ -204,7 +204,7 @@ reads are here and not how many. These are `backend/`'s;
 | `ledger.load_story_similarity_pairs` | one day of `content-similarity-judge/scored-pairs`, through `ledger.load_days` | one date. The fold counts a date into `score-distribution.json` once and the fit then reads only that record, so the day is opened by name and never walked. It costs the same on the thousandth day as on the third |
 | `ledger.load_source_counts` | one item-health day, through `ledger.load_days` | one date |
 | `telemetry.silicon`'s clock step | the host-fingerprint raw files of one day, through `ledger.list_raw_files` | one date: it reads back the row its own probe filed |
-| `ledger.held_days`, `ledger.held_months` | the compact indexes of one door ledger and the names of its raw day folders, never a data file | the days and months the ledger holds. It grows by one name a raw day until a compaction packs it, and by one index entry a packed day, month or year. `source_health._recent_item_health`, `machine.publish`, `public_telemetry.publish`, `run_timeline.publish` and the `telemetry-aggregate` task ask it which days or months exist. `idhazh telemetry prune` on a door ledger asks it how many days lie outside its range, and reads the same indexes through `ledger.find_holding_files` to find the files that hold the range |
+| `ledger.held_days`, `ledger.held_months` | the compact indexes of one door ledger and the names of its raw day folders, never a data file | the days and months the ledger holds. It grows by one name a raw day until a compaction packs it, and by one index entry a packed day, month or year. `source_health._recent_item_health` and the `telemetry-aggregate` task ask it which days or months exist. `idhazh telemetry prune` on a door ledger asks it how many days lie outside its range, and reads the same indexes through `ledger.find_holding_files` to find the files that hold the range |
 | `similarity.holdout.marked_pairs`, then `similarity.holdout.score_marks` | the holdout marks filed inside `similarity.holdout_reach_days` of the scoring date, through `ledger.load_days`, then one published day payload for each distinct date those marks name | the reach and the marks inside it, and nothing else. The verb that calls them is typed by a person; another year of archive adds no read, and a day nothing marks is never opened. This is the backend twin of `content-similarity-holdout.holdoutReading` below, and it has the same cover for the same reason |
 | `corpus.scored_from_items` | one run's items directory | one run |
 | `evals.retrieval.index_months` | one listing of `frontend/public/assist/index/` | the shards' own names. The question is which months exist, and a file answers it without being opened. The eval's knob check used to load every shard to learn the same thing |
@@ -249,118 +249,24 @@ and the capped fine-tuning window. Measured 2026-09-13 on an Intel Core i7-1265U
 The rest declare it in the sentence the docstring opens with, or in the signature
 itself, and either is enough. What is not enough is nothing.
 
-### The console payload producers, 2026-09-09
+### Native console reads after projection retirement
 
-**Eight producers** write the console's own payloads at publication
-([console-payloads.md](../architecture/publishing/console-payloads.md)). They
-are listed apart because their cover is a **collection** bound rather than a read
-bound: each published directory is pruned to its own
-`observability.public_*_keep_months`, so it holds at most fourteen files however
-long the project runs, and every later listing of it is bounded by that. This is
-the shape the note above describes: a cover enforced on what holds the data
-rather than on the read.
-
-**`frontend/public/telemetry/` is the one directory where that bound is declared
-and not yet enforced, and it says so here rather than in a sentence that would be
-wrong.** Six of the seven series are trimmed on every assemble, because their
-publishers reach `series.publish_series`, which calls `prune_months`.
-`public_telemetry.publish` does not: its deletion lives in the gardener's
-`telemetry-aggregate` task, which ships `dry_run: true`. So its `public-copy`
-series is 14 months and the directory holds every month it has
-ever published - 2 files on 2026-09-13, gaining one a month. Every listing of it
-grows with it, including the one
-`publication_checks.checks.console` takes on its contract sweep. What closes it is
-switching that prune on, which is a decision about the whole repository rather
-than about this read ([run-the-pipeline.md](../how-to/run-the-pipeline.md#turning-state-cleanup-on)).
+The console no longer has monthly telemetry or run-timeline producers
+([console-payloads.md](../architecture/publishing/console-payloads.md)).
+Native ledger indexes select the dates and files each panel query needs.
+The band's own settings, checker and counts remain bounded by its configured
+native span.
 
 | Read | What it opens | Its cover |
 | --- | --- | --- |
-| `series.published_months` | one listing of a published directory | the directory's own knob, so at most `keep_months` entries - except `telemetry`, per the paragraph above |
-| `scores.publish`, `feed_health.publish` | the `state/` day files of the month named | the month the run appended to, which is at most 31 files. Both ledgers file by day and both mirrors stay monthly, so the publisher is where the two grains meet |
 | `telemetry.item.report` | the requested UTC day's item-health rows through `ledger.load_days`, and only that day's trace files | one named day; the trace declaration's retention is enforced before opening files, even when old files remain. Each matching writer's tree is printed separately |
-| `public_telemetry.publish` | the item-health days of the months the caller names, through `ledger.load_days`, or every month `ledger.held_months` names when it names none | **the month the run appended to**, which is what `stages.assemble.stage_assemble` passes; `months=None` is unbounded on purpose |
 | `console_band.publish` | native manifests and state day-metrics; native host-fingerprint, feed-health, item-health and eval rows through the ledger door | the widest configured console span, plus at most one equal-length walkback independently for settings and checker movement; never `digest.json` |
 
 **The obsolete public mirrors no longer list source trees.** The band finds its
 newest native manifest within the configured month cover, then reads a bounded
-day span. Telemetry alone supplies its months list; native ledgers keep their
-own indexes.
-
-**None is unbounded any more.** `machine.months_on_file` was the last, and it
-streamed `state/runtime-counters.csv` - one appended file with no shards and no
-prune, so a run that wanted September's rows walked every row ever appended to
-find them. That ledger was deleted on 2026-09-20 and the machine series is folded
-from the host-fingerprint and item-health ledgers instead. That public machine
-projection is now retired too; native reads continue through `ledger.load_days`.
-
-**The eighth answers to a different knob, and that knob has never bitten,
-2026-09-12.** `public_telemetry.publish` is the odd member of this block: it
-reads the **source ledger** rather than a published directory, so what caps it is
-the `full-grain` series of `config/gardener/telemetry-aggregate.json` and not one of the
-`public_*_keep_months` the other seven answer to. The two are held **equal** by
-the gardener loader, because a projection and the ledger it projects have to age
-together. What makes the daily cover hold is that a run appends to one month, so
-the month it names is the only one that can have changed - and the filter is
-skipped for any month whose mirror is missing, which is what lets a fresh clone
-rebuild one it never published and is why no cover in months belongs on the
-`months=None` case. **Fourteen is not yet a bound on what that case reads**: the
-oldest partition on disk is `2026-08` and the `telemetry-aggregate` task first has a
-candidate to fold on **2027-10-01**, so today it reads every partition there has
-ever been - two of them, 3,824,328 bytes over 11,143 rows and 20 days on
-2026-09-12, which is 186.7 KB a day and exact. Fourteen partitions at that rate
-would be 58 to 80 MB, an **estimate** whose range is source yield rather than
-measurement noise. `public_telemetry.migrate` is the module's other growing read
-and declares `-1`: rewriting every shard is the job, and it is an operator
-command a person runs once on a contract change rather than a per-run cost.
-
-**The ledger moved to day files on 2026-09-13, and this read got worse in
-handles and not in rows.** `state/item-health/` filed
-`<YYYY>/<MM>/<DD>.csv` from then, so the publisher folded a month from that month's day
-files through `day_partition.days_by_month`. The daily case still opens one
-month's worth - at most 31 files rather than one - and the unbounded case opens
-every recorded day rather than every month: **2 opens became 20 on 2026-09-13,
-11,223 rows over 20 days, and about 365 a year.** It is declared here under
-Guardrail #12's escape hatch rather than bounded, because the bound belongs on
-the collection: the same fourteen-month cap answers it, and a cover in months on the
-read would leave a fresh clone permanently short of a mirror it never published.
-The count is checked rather than asserted in prose -
-`backend/tests/test_publish_telemetry.py` counts the handles both cases open, over
-a twelve-month ledger the test builds.
-
-**It has since moved to the ledger door.** The publisher asks `ledger.held_months`
-which months exist and reads each through `ledger.load_days`, so a month the
-compaction has absorbed is one file again, a packed day is one file, and a day
-not packed yet is its raw files.
-
-**What the two cases open is counted rather than timed**, in
-`backend/tests/test_publish_telemetry.py`, over a twelve-partition ledger the
-test builds: the backfill opens twelve and the daily pass opens one. The count is
-also the tripwire the day-grain move was measured against - `publish`'s glob was
-`*.csv` and not recursive, so a ledger that filed by day would have taken the
-backfill to **zero** rather than to an error, and the count went red before the
-move landed rather than after.
-
-### The oracle, and what it caught
-
-Measured 2026-09-09 against a built fixture of twenty months - twenty state
-shards a ledger, twenty day payloads, twenty run manifests - by counting the
-files each pass opens with a `sys.addaudithook` hook rather than by timing it.
-A stopwatch on this box cannot tell one month from twenty: a sibling row
-measured 16.6 percent run-to-run variance on identical work, which is more than
-nineteen months of fixture could ever cost. What the reads open is arithmetic
-and has no spread at all.
-
-The first pass reads every month, because every target is missing. The second
-names the month it appended to and reads **that month and no other**, which is
-what `backend/tests/test_console_payloads_producer.py` asserts on the set of
-month stems opened.
-
-**The oracle found a defect the design did not.** The missing-file rule and the
-prune disagreed about the boundary: the prune deleted the six months past
-fourteen, the next pass found them missing and wrote them, and the prune deleted
-them again - every run, for ever, on months no console window can reach.
-`months_to_write` now refuses a month below `oldest_month_kept`, and the second
-pass reads one month rather than seven.
+day span. It carries no public months list. The native telemetry aggregate
+retains its full-grain and summary policy, without a public-copy series or
+public deletion.
 
 ## The site reads the same collections, 2026-09-09
 
@@ -403,7 +309,7 @@ the last day there was.
 | `payload.latestDate` | the first entry of the above | the same 90, and it only needs the first |
 | `payload.loadManifests` | one `run.json` a day in range | its caller's `windowDays` |
 | `payload.publishedCharts` | one day payload a day in range | its caller's `windowDays` |
-| `payload.telemetryRows` | the telemetry shards the window touches, and only the rows inside it | the window its caller hands over: the console's home page hands over its widest preset, which ends on the site's newest published day |
+| Legacy `payload.telemetryRows` helper | named fixture shards only; retained until the last legacy component is removed | no active Pipelines route calls it; native panel queries own its windowed reads |
 
 ### A cover that is not a clock
 

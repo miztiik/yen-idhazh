@@ -1125,7 +1125,6 @@ def test_a_fresh_clone_measures_itself_and_the_committed_config_agrees() -> None
 
     assert committed.observability.model_dump() == fresh.observability.model_dump()
     assert fresh.observability.evaluation_enabled
-    assert fresh.observability.telemetry_publish
     assert fresh.observability.tracing_enabled
 
 
@@ -1162,7 +1161,6 @@ def test_the_item_health_census_is_not_switchable() -> None:
     }
     assert switches == {
         "evaluation_enabled",
-        "telemetry_publish",
         "tracing_enabled",
         "host_fingerprint",
         "host_event_shadow",
