@@ -1,9 +1,12 @@
 import { expect, test } from '@playwright/test';
-import { cpSync, mkdirSync, writeFileSync } from 'node:fs';
+import { cpSync, copyFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { ledgerCopy, publishedLedgers } from '../scripts/published-ledgers.mjs';
 import { siteKeepsFrom, siteMayHaveTrimmed } from '../src/lib/data/site-window';
 import { daysBetween } from '../src/lib/data/slice';
+import { backendPython } from './support/backend-python';
+import { sliceFromDisk } from '../src/lib/server/ledger-disk';
 
 /**
  * Which files of `state/` the build copies for a published ledger, and when it stops.
@@ -48,6 +51,57 @@ function aWholeLedger(ledger: string): Record<string, string> {
 		[`compact/${ledger}/daily/2026/09/03.parquet`]: 'PAR1'
 	};
 }
+
+test('THE ORACLE: committed publication copies real council records and the query door reads their outcomes', async () => {
+	test.setTimeout(300_000);
+	const repo = join(process.cwd(), '..');
+	const source = test.info().outputPath('council-source');
+	const published = test.info().outputPath('council-site');
+	execFileSync(backendPython(repo), ['-c', [
+		'from pathlib import Path',
+		'import sys',
+		'from utilities import build_canary_day as canary',
+		'root = Path(sys.argv[1])',
+		'canary.file_published_fixture_rows(root / "state")',
+		'canary.pack_fixture_ledgers(root / "state", root)',
+	].join('\n'), source], {
+		cwd: repo, env: { ...process.env, PYTHONPATH: join(repo, 'backend') }, encoding: 'utf8'
+	});
+	const names = publishedLedgers();
+	expect(names).toContain('council-run-records');
+	const copy = ledgerCopy(join(source, 'state'), names);
+	expect(copy.refused).toEqual([]);
+	expect(copy.missing).toEqual([]);
+	expect(copy.files.filter((file) => file.startsWith('compact/council-run-records/'))).toEqual([
+		'compact/council-run-records/daily/2026/08/20.parquet',
+		'compact/council-run-records/index/daily.json',
+		'compact/council-run-records/index/monthly.json',
+		'compact/council-run-records/index/yearly.json'
+	]);
+	for (const file of copy.files) {
+		const target = join(published, ...file.split('/'));
+		mkdirSync(dirname(target), { recursive: true });
+		const index = copy.indexes[file];
+		if (index === undefined) copyFileSync(join(source, 'state', ...file.split('/')), target);
+		else writeFileSync(target, index);
+	}
+	const query = {
+		ledger: 'council-run-records' as const,
+		from: '2026-08-20', to: '2026-08-20',
+		columns: ['outcome', 'fault', 'started_at']
+	};
+	const answer = await sliceFromDisk(published, query.ledger, query);
+	expect(answer.state).toBe('ok');
+	expect(answer.rows).toEqual(expect.arrayContaining([
+		{ outcome: 'completed', fault: null, started_at: '2026-08-20T22:04:11Z' },
+		{ outcome: 'failed', fault: 'raised', started_at: '2026-08-20T22:04:11Z' }
+	]));
+	expect(answer.rows).toHaveLength(2);
+	const quiet = await sliceFromDisk(published, query.ledger, { ...query, from: '2026-08-21', to: '2026-08-21' });
+	expect(quiet.state).toBe('quiet');
+	const missing = await sliceFromDisk(test.info().outputPath('not-packed'), query.ledger, query);
+	expect(missing.state).toBe('missing');
+});
 
 test('a whole ledger publishes its three indexes and the files they name, and nothing else', () => {
 	const copy = ledgerCopy(aStateTree(aWholeLedger('summary-quality-evals')), ['summary-quality-evals']);

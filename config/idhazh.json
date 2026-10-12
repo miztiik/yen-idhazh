@@ -208,6 +208,7 @@
     "published": [
       "candidate-models",
       "counterfactual-scores",
+      "council-run-records",
       "gardener",
       "host-fingerprint",
       "item-health",
@@ -261,6 +262,7 @@
       "config/ledgers.json": 3400,
       "console/band.json": 2000,
       "state/compact/candidate-models/index/": 2200,
+      "state/compact/council-run-records/index/": 2088,
       "state/compact/counterfactual-scores/index/": 2200,
       "state/compact/gardener/index/": 2064,
       "state/compact/host-fingerprint/index/": 2200,
