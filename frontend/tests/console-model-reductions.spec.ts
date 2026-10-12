@@ -66,6 +66,23 @@ test('model change compares the newest dated set difference and independent date
 	expect(result?.measures.find((measure) => measure.label === 'Copied, not rewritten')).toMatchObject({ before: null, after: null });
 });
 
+test('the faithfulness scale stays bounded, never hides a measurement and keeps missing readings null', () => {
+	const reduce = (hhem: number | null) => faithfulness([{ date: '2030-06-14', hhem }],
+		{ high: 80, low: 50 }, { step: 5, floorMax: 75 });
+	const high = reduce(0.97);
+	expect(high.floor).toBe(75);
+	expect(high.rules.map((rule) => rule.at)).toEqual([80]);
+	expect(high.series[0].points[0]).toMatchObject({ value: 97, spread: { low: 97, high: 97 } });
+	const low = reduce(0.42);
+	expect(low.floor).toBe(40);
+	expect(low.floor).toBeLessThanOrEqual(low.days[0].matchLow!);
+	expect(low.rules.map((rule) => rule.at)).toEqual([80, 50]);
+	const missing = reduce(null);
+	expect(missing.floor).toBe(75);
+	expect(missing.days[0].matched).toBe(0);
+	expect(missing.series[0].points).toEqual([{ date: '2030-06-14', value: null }]);
+});
+
 test('recorded native slices drive all eligible model reducers without broadening cells', () => {
 	const endingRows = recorded('callEndingQuery');
 	const ending = callEnding(endingRows);
