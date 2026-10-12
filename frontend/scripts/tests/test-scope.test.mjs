@@ -12,8 +12,7 @@ import { changedPaths, ciAnswer, selectPaths, selectionForChange } from '../test
 const FRONTEND = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 test('Summaries modules and native private fixtures select console consumers without narrowing shared inputs', () => {
 	for (const path of ['frontend/src/lib/console/model/Cards.svelte',
-		'frontend/src/lib/console/model/model-change.ts', 'frontend/tests/support/model-route.ts',
-		'frontend/tests/support/model-record-state.ts']) {
+		'frontend/src/lib/console/model/model-change.ts', 'frontend/tests/support/model-route.ts']) {
 		const selected = selectPaths([path]);
 		assert.deepEqual(selected.groups, ['logic', 'console', 'publishing']);
 		assert.equal(selected.rust, false);
