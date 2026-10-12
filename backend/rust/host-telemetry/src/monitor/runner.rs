@@ -955,11 +955,18 @@ mod tests {
     }
     impl Fixture {
         fn new(name: &str, artifacts_enabled: bool) -> Self {
-            let mut manifest: HostSessionManifest = serde_json::from_str(include_str!(concat!(
+            Self::with_max_files(name, artifacts_enabled, None)
+        }
+        fn with_max_files(name: &str, artifacts_enabled: bool, max_files: Option<i64>) -> Self {
+            let mut manifest_json: serde_json::Value = serde_json::from_str(include_str!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
                 "/../../../tests/fixtures/host-events/manifest.json"
             )))
             .unwrap();
+            if let Some(max_files) = max_files {
+                manifest_json["limits"]["max_files"] = serde_json::json!(max_files);
+            }
+            let mut manifest: HostSessionManifest = serde_json::from_value(manifest_json).unwrap();
             manifest.workers.truncate(1);
             manifest.windows.truncate(1);
             manifest.controls.job_sample_interval_seconds =
@@ -1117,7 +1124,7 @@ mod tests {
 
     #[test]
     fn unconsumed_samples_cannot_be_reclaimed_for_admission() {
-        let mut fixture = Fixture::new("unconsumed", false);
+        let mut fixture = Fixture::with_max_files("unconsumed", false, Some(14));
         let samples = fixture.files.ids("results").unwrap();
         fixture.open_window();
         assert_eq!(fixture.session.book.retained(), 7);
