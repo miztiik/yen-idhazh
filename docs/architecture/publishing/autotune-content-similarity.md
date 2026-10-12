@@ -1,6 +1,6 @@
 # Autotuning the similarity line that groups one story
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-10-12
 
 A day runs the same story from more than one of our feeds. This page owns the
 line that decides when two items are one story, how that line fits itself once a
@@ -700,6 +700,30 @@ it is null everywhere, and a second entry is refused unless it names the weights
 whatever the running one has open. What it may move is the decode. It is filled
 the day a replay says a reasoned verdict is a better verdict, and that replay is
 priced and unrun.
+
+**Three risks in how this judge reads its first answer token were checked
+against the code on 2026-10-12, and one is still open.** They were flagged on
+2026-09-19 and carried by the summary-fidelity work until 2026-10-12. They
+belong to this judge, so they are recorded here.
+
+- **A prompt that ends in a space - open.** A rendered prompt that ends in a
+  space starts the answer from a position the model rarely sees, so the
+  first-token probabilities move and the reply still parses. The prompt ends on
+  the reply opening read off the model's own template (`render_prompt` in
+  [../../../backend/idhazh/llm/server.py](../../../backend/idhazh/llm/server.py)),
+  and nothing refuses an opening that ends in a space. The grammar's optional
+  leading space and the prefix bucketing decide which verdict a token counts
+  for; they do not undo the shift. The smallest fix is to refuse such an opening
+  when the markers are derived, before any pair is judged.
+- **Token ids built from a string - closed on 2026-09-21.** The margin credits
+  each returned token to a verdict by its text, and no token id is built, so a
+  vocabulary that splits a word differently changes nothing the margin reads.
+- **Thinking left on - closed by the design.** The judge sends its own prompt
+  bytes, and the reply opening is read off the template rendered with the
+  thinking keyword off, so a template cannot turn reasoning on behind it.
+  Reasoning runs only through the declared two-span path, and the verdict is
+  read off the answer. A proposal of 2026-10-12 to close that path for every
+  judge call was not taken: it would reverse the paragraph above.
 
 ## Rejected alternatives
 
