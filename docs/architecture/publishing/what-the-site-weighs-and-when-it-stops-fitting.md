@@ -1,6 +1,6 @@
 # What the site weighs, and when it stops fitting
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-10-11
 
 GitHub Pages refuses a site over 1 GB. This page holds the instrument that
 measures against that: which tree it measures, why a page-weight failure and a
@@ -67,7 +67,7 @@ Two failures with nothing in common used to be welded into one step before the c
 
 **Leaving it before the commit was the alternative, and it was rejected on the trade rather than on the principle.** It buys something real: `main` stays green, and the ceiling is discussed before any reader sees the heavy page. It buys that by spending a published day and the runner budget that produced it (Guardrail #2) on a page nobody would have complained about. A digest that never arrives is the larger failure.
 
-**It stays fatal, and that costs something.** The day publishes, then the `assemble` job goes red. A page-weight number crossed on a Tuesday leaves `main` red until somebody looks at it. That is the price of the trade and it is not hidden. The property the four deleted ceilings stood in for is asserted by `frontend/tests/payload-weight.spec.ts` with no number in it ([../../how-to/run-the-gates.md](../../how-to/run-the-gates.md#the-console-has-no-page-number)). A warning was rejected for the same reason a green light on a broken alarm was: nobody reads it.
+**It stays fatal, and that costs something.** The day publishes, then the `assemble` job goes red. A page-weight number crossed on a Tuesday leaves `main` red until somebody looks at it. That is the price of the trade and it is not hidden. The property the four deleted ceilings stood in for is asserted by `frontend/scripts/bundle-gate.mjs` with no size number in it: non-home documents may carry no `introduced_by_run:` day-item marker, and dated documents may not be generated ([../../how-to/run-the-gates.md](../../how-to/run-the-gates.md#the-console-has-no-page-number)). A warning was rejected for the same reason a green light on a broken alarm was: nobody reads it.
 
 **"At the next CI run" is not "at the next push", and the difference is a delay.** `ci.yml` triggers on every push to `main`, but the pipeline's own pushes never start it: GitHub does not begin a workflow from a push made with the job's `GITHUB_TOKEN`. So the red job the pipeline produces is the `assemble` job inside the digest run, and `main`'s own CI stays green until the next merge somebody pushes. **Read a red `site` job as a page that has been over its ceiling since some earlier publish**, not as something the merge in front of you did.
 

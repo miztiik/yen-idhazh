@@ -205,6 +205,10 @@ def test_a_dispatched_date_replaces_the_plan_and_asks_nobody(
             TONIGHT,
             "--dispatched",
             THE_NIGHT_BEFORE,
+            "--mode",
+            "manual",
+            "--judges",
+            '["one-judge"]',
         ],
     )
 

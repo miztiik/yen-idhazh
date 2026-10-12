@@ -1,6 +1,6 @@
 # Dispatch inputs
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-11
 
 What shape a `workflow_dispatch` input has to have, which shapes exist, and what
 checks each one. One of them decides a published address, which is why the list
@@ -9,8 +9,8 @@ is closed rather than open. The workflows that take these inputs are in
 
 ## Every dispatch input has a shape, and one of them decides a published address
 
-A `workflow_dispatch` form is free text unless somebody constrained it. Nine
-workflows declare 28 inputs between them. Until 2026-08-27 one of those was
+A `workflow_dispatch` form is free text unless somebody constrained it. Eight
+workflows declare 27 inputs between them. Until 2026-08-27 one of those was
 constrained by nothing at all, and it was the one that decides where a day is
 published.
 
@@ -41,20 +41,20 @@ under the paste is reading a script the input has already edited.
 
 ### Three shapes, and a closed list
 
-Every one of the 28 inputs is one of three things, and a contract test finds
+Every one of the 27 inputs is one of three things, and a contract test finds
 them by reading the workflow files rather than by consulting a list - so a new
 input fails the test until somebody says which one it is and the test finds the
 evidence in the file.
 
 | Shape | What it means | Count |
 | --- | --- | --- |
-| Enumerated | `type: choice` with an option list, or `type: boolean`. GitHub renders a menu or a checkbox and no other value can be submitted. | 8 |
+| Enumerated | `type: choice` with an option list, or `type: boolean`. GitHub renders a menu or a checkbox and no other value can be submitted. | 7 |
 | Read by name | The value never lands in a script. It reaches a step as an environment variable, and the program that reads it decides what it means. | 9 |
 | Matched | The workflow matches the value against an anchored pattern before anything acts on it. | 11 |
 
 The named inputs:
 
-- **Enumerated** - `ci.panel_captures`, `backfill.commit`,
+- **Enumerated** - `backfill.commit`,
  `digest.faithfulness`, `digest.shards`, `measure.target`,
  `measure.runtime_candidate`, `measure.model_speed_case`,
  `idhazh-gardener.force`.

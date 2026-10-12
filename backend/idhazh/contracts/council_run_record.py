@@ -21,7 +21,7 @@ index, and neither can be read as the job that saved them.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any, ClassVar, Self
+from typing import Any, ClassVar, Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -32,7 +32,7 @@ JUDGE_ID_MAX_LENGTH = 64
 
 
 class ShardOutcome(StrEnum):
-    """The three ways one unit of hosted work ends."""
+    """The four ways one unit of hosted work ends."""
 
     #: The unit reached the end of the work it owned.
     COMPLETED = "completed"
@@ -42,6 +42,9 @@ class ShardOutcome(StrEnum):
 
     #: The unit was given nothing to do.
     NOTHING_TO_DO = "nothing_to_do"
+
+    #: The unit raised before it could report a result.
+    FAILED = "failed"
 
 
 class EvaluationStep(StrEnum):
@@ -62,6 +65,11 @@ class CouncilRunRecord(Contract):
 
     __schema_stem__: ClassVar[str] = "council-run-record"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-11",
+            change="Failed outcome and raised fault added; older rows read with no fault.",
+            why="A raised unit and a missing report need different repairs.",
+        ),
         ChangelogEntry(
             version="2026-10-04",
             change="Step and part fields replace `shard` and `shards`, and `host_model` goes.",
@@ -115,7 +123,11 @@ class CouncilRunRecord(Contract):
         description=(
             "How the step ended. A step the platform killed files no row at all, and the "
             "row missing against the count is what says so."
-        )
+        ),
+    )
+    fault: Literal["raised"] | None = Field(
+        default=None,
+        description="Raised exactly when the outcome is failed; empty on earlier rows.",
     )
     started_at: Timestamp = Field(description="When the step began, in UTC.")
     seconds_spent: float = Field(
@@ -147,6 +159,12 @@ class CouncilRunRecord(Contract):
             "much of a step was the model and how much was everything else."
         ),
     )
+
+    @model_validator(mode="after")
+    def _a_failed_step_names_its_fault(self) -> Self:
+        if (self.outcome is ShardOutcome.FAILED) != (self.fault == "raised"):
+            raise ValueError("fault is raised exactly when outcome is failed")
+        return self
 
     @model_validator(mode="after")
     def _a_part_is_named_only_where_the_work_was_split(self) -> Self:

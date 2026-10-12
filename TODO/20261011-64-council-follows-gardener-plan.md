@@ -57,8 +57,8 @@ Table D - rows
 | 4 | The council refuses a bad judge set before any unit runs | 1, 3 | D | DONE | council-early-refusals | - | Council early refusals |
 | 5 | The collecting job writes the night's summary on its job page | 3 | D | DONE | council-night-summary | - | Council night summary |
 | 6 | The collecting job checks out code and config and fetches only named inputs | 1 | C | DONE | council-named-collecting-inputs | - | Council named collecting inputs |
-| 7 | Each judge runs over its own outstanding dates | 1 | C | PENDING | - | - | - |
-| 8 | A unit that raises files a failed council record | 3 | D | PENDING | - | - | - |
+| 7 | Each judge runs over its own outstanding dates | 1 | C | DONE | council-judge-dates-and-trials | - | Council judge dates and trials |
+| 8 | A unit that raises files a failed council record | 3 | D | DONE | council-failed-unit-records | - | Council failed unit records |
 | 9 | The council's record is published for the console | 8 | E | PENDING | - | - | - |
 | 10 | The council reads its own config file | - | A | DONE | symmetrical-broccoli | - | Council config file |
 | 11 | The council finds each judge by its slug | - | A | DONE | council-judge-lookup | - | Council judge lookup |

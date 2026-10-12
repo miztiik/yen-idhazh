@@ -358,15 +358,10 @@ def test_a_judge_id_no_path_can_hold_is_refused_before_it_becomes_one() -> None:
             session.unit_dir(A_DATE, slot="verdicts", judge_id=spelled)
 
 
-def test_a_unit_that_died_leaves_a_gap_the_recorded_width_makes_readable(
+def test_a_unit_that_raised_files_one_failed_row_beside_its_completed_siblings(
     venue: Path, tmp_path: Path
 ) -> None:
-    """The Oracle: three of four units recorded, and the pair says which is missing.
-
-    The outcome vocabulary has no word for a unit that died, and that is the
-    design - a unit the platform kills cannot write one either. What an operator
-    reads is the count: three rows that each say the work was split four ways.
-    """
+    """The Oracle: four parts recorded, exactly one failed, with no invented model cost."""
     a_scripted_venue(venue, package=A_VENUE, slug=A_SLUG, shard_count=4, dead_units=(2,))
     config_root = _config_registering(venue, A_SLUG)
     state_root = tmp_path / "state"
@@ -377,6 +372,7 @@ def test_a_unit_that_died_leaves_a_gap_the_recorded_width_makes_readable(
     assert {path.name for path in shipped.glob("*.csv")} == {
         "0.csv",
         "1.csv",
+        "2.csv",
         "3.csv",
         "select-judge-work.csv",
         "combine-judge-results.csv",
@@ -391,12 +387,18 @@ def test_a_unit_that_died_leaves_a_gap_the_recorded_width_makes_readable(
             (EvaluationStep.SELECT_JUDGE_WORK, None),
             (EvaluationStep.EVALUATE_WORK_PART, 0),
             (EvaluationStep.EVALUATE_WORK_PART, 1),
+            (EvaluationStep.EVALUATE_WORK_PART, 2),
             (EvaluationStep.EVALUATE_WORK_PART, 3),
         ]
     )
-    assert [row.work_part_index for row in ran] == [0, 1, 3], "the unit that died filed nothing"
+    assert [row.work_part_index for row in ran] == [0, 1, 2, 3]
     assert {row.work_part_count for row in recorded} == {4}
-    assert len(ran) < ran[0].work_part_count, "the pair is what an operator reads as a missing unit"
+    assert len(ran) == ran[0].work_part_count
+    (failed,) = [row for row in ran if row.outcome is ShardOutcome.FAILED]
+    assert failed.work_part_index == 2 and failed.fault == "raised"
+    assert failed.model_calls is None and failed.model_seconds is None
+    assert failed.tokens_in is None and failed.tokens_out is None
+    assert all(row.fault is None for row in recorded if row is not failed)
     assert {row.judge_id for row in recorded} == {A_SLUG}
 
 

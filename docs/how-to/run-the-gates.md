@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-10-09
+**Last Updated**: 2026-10-11
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -30,12 +30,12 @@ Documentation-only changes run a whitespace check, not either application suite.
 | --- | --- | --- |
 | `backend` | Named module and integration tests, or the full backend for shared or unknown inputs; ruff and mypy | Existing Python development environment |
 | `logic` | Verified build-independent frontend functions | No site build, preview server or Chromium. One spec, `similarity-ledgers.spec.ts`, runs the Python backend |
-| `reader` | Reading pages, layout, filters, themes and read state | Canary build |
-| `console` | The operator dashboards | Canary build |
-| `panels` | A picture of every console panel that carries an id, at three widths in both themes; the sufficiency gates' witness panel; the panels `console.judged_panel_ids` opts in | Canary build |
-| `archive` | Browsing, calendar and pagination | Canary build |
-| `model-search` | On-device search and recovery | Canary build |
-| `publishing` | Payloads, projections, canaries and malformed-day handling | Canary build and Python |
+| `reader` | A representative reading journey and shared layout | Canary build |
+| `console` | One real ledger query, answer and chart interaction, plus independent telemetry-month recovery | Canary build |
+| `offline` | Cached reading and service-worker retirement | Canary build |
+| `archive` | A representative archive-to-day navigation | Canary build |
+| `model-search` | Real search startup/query and an independent recovery boundary | Canary build |
+| `publishing` | Representative payload transport and hostile-input browser boundaries | Canary build and Python |
 
 For the inner loop, request a group or one existing spec explicitly. Such a
 result certifies that selection, not every check the automatic selector chose:
@@ -44,7 +44,6 @@ result certifies that selection, not every check the automatic selector chose:
 npm run test:changed -- --group logic
 npm run test:changed -- --group console
 npm run test:changed -- --spec archive.spec.ts
-npm run test:changed -- --spec whole-day.spec.ts
 npm run test:changed -- --mode real --spec reading-page.spec.ts
 ```
 
@@ -52,9 +51,8 @@ npm run test:changed -- --mode real --spec reading-page.spec.ts
 and the tooling tests.
 Choose group flags or spec flags for one invocation, not both. Several spec
 flags can select tests from different groups.
-A real-build run requires an explicitly supported reading or visual spec, so
+A real-build run requires `--spec reading-page.spec.ts`, so
 canary-dependent console assertions cannot accidentally run against real data.
-The whole-day spec runs alone against the fixed canary, never the real archive.
 Keep the section 12 browser smoke for a published-site change.
 
 The launcher checks the dependencies the selection needs before waiting for a
@@ -143,16 +141,15 @@ carries code.
 Build-independent machine arithmetic (`console-host-spans`, `console-machine-cards`,
 `console-machine-split`, `console-machine`) and token-file checks belong to
 `logic`, despite their filenames. A change confined to one of those specs needs
-no canary build or preview server. Checks that read built HTML or canary ledgers
-remain in their build-dependent groups.
+no canary build or preview server. Logic checks generate any temporary fixture
+they read; they never depend on an earlier site or canary build.
 The selector job and the backend test job declare the same Node version,
 because the workflow tests execute that TypeScript selector. The backend job
 does not install frontend packages for it; the selector uses Node's built-ins.
 
 **A pull request runs the operator console's specs only when the change is the
-console's own, or the harness that chooses.** They are most of the browser
-suite, and the console is a page one operator opens rather than anything a
-reader is served. What that costs, stated rather
+console's own, or the harness that chooses.** The console is a page one
+operator opens rather than anything a reader is served. What that costs, stated rather
 than implied: a shared component or a token edit that breaks the console is
 found on the merge push to `main` instead of on the pull request. A `main` push
 carrying code runs every group, which is what the deferral leans on - there is
@@ -161,7 +158,7 @@ second thing to keep correct. `ciAnswer` in `test-scope.ts` is the one place
 that decides, and the truth table is in
 `frontend/scripts/tests/test-scope.test.mjs`.
 
-`ciAnswer` returns seven answers. **`code` says whether the change carries
+`ciAnswer` returns six answers. **`code` says whether the change carries
 anything but documentation, and `gates` and `site` skip when it does
 not** - a changed sentence cannot break an application check, on a branch or on
 a merge. **`robots` says whether the change selects
@@ -170,7 +167,7 @@ newest supported interpreter; an unknown change and every `main` push carrying
 code select it. That branch is a closed list of prefixes rather than a guess, so a path
 nobody classified falls to full coverage instead; and a document that a test
 reads is that test's input rather than documentation, which is why an edit to
-the page ruling the console's model labels buys the console specs. Such a page
+the page listing chart vocabulary buys its logic spec. Such a page
 is named once, in `frontend/scripts/doc-test-inputs.ts`: the spec reads its
 path from there and the selector keys on the same constant, so a page that
 moves takes the selector with it. `validate_all` decides
@@ -185,31 +182,16 @@ test-only changes, and changes confined to console routes, charts, data helpers
 or styles skip it. Asset loading, build tooling, contracts, config and unknown
 inputs still run it.
 
-**`panels` buys the sufficiency gates** whenever `console`
-is bought, and also for anything every panel is drawn from: the panel frame and
-readout strip, the chart modules, the stylesheets, `config/appearance.json`, and
-the pictures' own specs, fixture and helpers. The browser job sets
-`SKIP_PANELS_SUITE` from it. Routine CI also sets `SKIP_PANEL_CAPTURES=true`,
-so it retains the sufficiency checks without generating review pictures.
-For a design review, dispatch CI on the review branch with `panel_captures=true`.
-That run uploads the `panel-captures` artifact on a pass or a fail. Locally,
-prepare the canary build, then run
-`npx playwright test --project=panels tests/panel-captures.spec.ts`. Keep the
-`=`: with a space, Playwright reads the spec's path as a second project name
-and runs nothing.
-Leave `SKIP_PANEL_CAPTURES` unset for that command. The
-pictures land in `frontend/test-results/panels/` as
-`<panel-id>--<width>--<theme>--<state>.png` - every width in light and the
-narrowest in dark, since width moves layout and theme moves colour - and each capture test writes one
-`_notes--<route>--<width>--<theme>.txt` beside them naming each panel's state,
-the share of the panel's width its plots cover, and the test's own run time. The
-argument for the wider set is in
-[../reference/test-selection.md](../reference/test-selection.md).
+**There is no panel browser group or bulk capture job.** Shared drawing rules
+run in the logic tier; the representative journeys cover live layout and chart
+interaction. Design review uses a representative screen, not a generated
+width/theme/state collection.
 
 The browser job also uploads `browser-results`, a Playwright JSON report with
-each test's group, file, result and duration. Compare equivalent runs using this
-report before removing more checks. Test durations sum worker time, not elapsed
-job time.
+each test's group, file, result and duration. Compare equivalent runs when
+measuring elapsed savings. Redundant coverage is removed on its merits, not
+retained until a timing threshold is met. Test durations sum worker time,
+not elapsed job time.
 
 **A push to `main` keeps the run it started.** A pull request cancels its own
 older run, because a newer commit supersedes it. A push does not, and the two
@@ -623,11 +605,13 @@ type, a newer file, or a published ledger without a door contract fails the
 build. A run that reads no parquet file for any published ledger with a door
 contract also fails, because the tree was probably not the built site.
 
-`bundle-gate` does three things. It asserts no encoder lands on the first-load
-path, it holds every route named in `config/idhazh.json` under the gzip guardrail
-set there, and it holds every payload a reader's browser fetches under one too.
+`bundle-gate` checks first-load library isolation, generated-document payload
+isolation, and page and payload weight. No encoder or query engine may land on
+the first-load path. No non-home document may carry the `introduced_by_run:`
+day-item marker, and no dated document may be generated. Every route and payload
+named in `config/idhazh.json` stays under its gzip guardrail.
 
-**A per-route byte ratchet is not a fourth, and must not be added** - the reasons
+**A per-route byte ratchet is not another check, and must not be added** - the reasons
 are [below](#the-bundle-gate).
 
 **The page guardrail is one-sided, and it bounds the document rather than the
@@ -637,10 +621,10 @@ lighter needs no permission, so there is no lower bound. A day page and the home
 page weigh what the day published, so a fixed number on either would cap the news
 instead of catching a regression - the only way under it is to publish fewer
 items, which
-[layout.md](../architecture/publishing/layout.md) forbids. Those two are covered
-by the marker count in `frontend/tests/payload-weight.spec.ts`, which runs in the
-browser suite. A route the config does not name is reported by the gate without
-failing it.
+[layout.md](../architecture/publishing/layout.md) forbids. The bundle gate
+rejects generated dated documents instead of giving them a size ceiling. The
+home page may carry its seed. A route the config does not name is reported by
+the gate without failing it.
 
 **The comparison unit is `gzip -5`.** Use the same compression level as the gate
 when comparing against its limits. A local compressed size is not a guarantee of
@@ -655,11 +639,8 @@ exists because a payload that moves out of a document and into a file the browse
 fetches leaves every page guardrail behind, while a reader still waits for it. `page_weight.cold_console_load_bytes` bounds the sum
 one cold opening of the console asks for - the design rather than the data, so
 what it catches is a widened `console.default_window_days` rather than a heavier
-shard. Its partner is `frontend/tests/console-cold-load.spec.ts`, which counts
-the serial round trips instead of the bytes: four is the ceiling, three is the
-most a cold load takes at the 14-day default window - the document, then one
-telemetry month, then the next, because fourteen days touch at most two months -
-and each extra telemetry month is one more.
+shard. The cold-load design allows four serial round trips. There is no browser
+round-trip gate in the representative suite.
 
 **A route takes a number only if its weight does not move when a run publishes.**
 `/404` qualifies: it moves only when a person edits source.
@@ -679,11 +660,10 @@ readings are in
 regression this surface has ever had is a layout inlining a day payload, and that
 is a yes-or-no fact about a document rather than a size with a middle value to
 threshold.
-`frontend/tests/payload-weight.spec.ts` looks for a day-payload marker in every
-document that does not render a day, and fails on one. **It has no number in it**,
-so it returns the same verdict whatever the archive holds, and it already covered
-this before the numbers went - one of its tests is named `the archive carries no
-day payload at all`.
+`frontend/scripts/bundle-gate.mjs` looks for the `introduced_by_run:` day-item
+marker in every non-home document and fails on one. It also rejects dated
+documents. **It has no size number in it**, so it returns the same verdict
+whatever the archive holds.
 
 `page_weight.payload_ceilings_bytes` and `page_weight.cold_console_load_bytes`
 all survive, and not by luck. Each is derived from a bounded knob rather than
@@ -706,9 +686,8 @@ are worth telling apart:
 **Before adding a key here, ask the one question.** Does this number have to move
 when nobody wrote any code, because a run appended more? Yes means the route does
 not take a number - find the property it would have stood in for and assert that.
-That is Guardrail #12's own test with one noun changed, and it is why `MAX_HOPS = 4`
-in the cold-load spec is fine while a page ceiling was not: a hop is a month, so
-it moves when somebody widens the window and never when we publish.
+That is Guardrail #12's own test with one noun changed: a month-fetch budget
+moves when somebody widens the window and never when we publish.
 
 ## The browser suite
 
@@ -740,91 +719,31 @@ slower there - and both cases pass, so the local result reads as a clean win and
 is not one. Raise it locally only on an idle box, and never read a local worker
 figure as a runner figure.
 
-**Do not drop the font packages from the browser install.** `npx playwright
-install --with-deps chromium` spends much of its time in `apt-get`, and every
-package it downloads there is a font: Japanese, Chinese, Thai, Cyrillic and
-Unifont, plus the X font utilities. The digest publishes English, so they look
-removable. They are not: `reading-page.spec.ts` measures text against its
-container, and a missing font changes what fontconfig substitutes and therefore
-what the browser measures. What that risks is a check that goes on passing in CI
-while disagreeing with a developer box. Nobody has measured the swap, so it
-stays as it is (Guardrail #10).
+**Delete redundant coverage before parallelising.** The browser set is very
+narrow and representative, as required by
+[CLAUDE.md section 13](../../CLAUDE.md#13-test-coverage-policy). One explorer
+journey covers real ledger loading, a query, its answer, one chart transition
+and usable shared layout. Do not restore its former per-region checks or the
+chart-to-chart transition matrix.
 
-Every skip reads a fact the fixture owns rather than a locator
-count - the canary day is eight stories on one desk, so it cannot fill a leading
-block and it never fetches. The
-failure surface has a file of its own, `console-failure.spec.ts`, split by what
-the fixture can reach: the canary records no failure at all, so the two facts
-that need one - a denominator walked down the pipeline, and a rate withheld
-under `console.min_attempts_for_rate` - are driven as pure functions, and every
-state the fixture does reach is driven in the browser through the controls an
-operator has. A hundred and four of that historical inventory were pure-function
-tests over `frontend/src/lib/charts/`. Build-independent specs now use
-`playwright.logic.config.ts`, with no preview server. Mixed specs remain in
-their feature group. Both configurations use the existing Playwright runner.
+Keep deterministic rules, evidence semantics, boundary values and generated
+payload compatibility below the browser. Existing real reader/render
+integration tests cover Judgement evidence; it has no special private site
+build or width/theme/state sweep. The ordinary site build checks packaging.
+Delete incidental exact-word, DOM, import and pixel assertions rather than
+moving them into another exhaustive suite.
 
-**One spec asks a question the canary day cannot answer, and says so.**
-`reading-page.spec.ts` reads the reading surface whole - every reader route at
-360, 801 and 1536 CSS px in dark and at 360 in light, the story's own time against the day's
-zone caption, the aside against the sticky filter panel, and a day whose stories
-are broken at the network. Four of its cases need a day longer than
-`ui.shell_seed_items`, because a document that already carries its whole day
-never fetches, and the canary is eight stories against a seed of fifteen. They
-skip here on a fact the served payload owns and run against the real digest:
+Reader, archive and search checks are representative user journeys. Extra
+browser cases are reserved for independent runtime mechanisms such as hostile
+input, worker transport, request recovery and offline retirement. A case must
+prove it reached that boundary. Do not multiply those cases by presentation
+combinations or revive removed cases in a nightly job.
 
-```powershell
-npm run build
-$env:IDHAZH_TEST_BUILD = 'real'
-npx playwright test tests/reading-page.spec.ts
-Remove-Item Env:IDHAZH_TEST_BUILD
-```
-
-Run it before `build:canary`, which overwrites the same `build/`
-directory. **Two of its cases are expected to fail and are annotated
-`test.fail`**, because the composed page has two defects nobody has decided
-how to fix ([../architecture/publishing/layout.md](../architecture/publishing/layout.md#two-rules-a-reading-page-owes-an-address)).
-An expected failure turns the suite red the day it starts passing, which is
-when the annotation comes off.
-
-**A second spec cannot run here at all, and it fails rather than skips when it
-is handed the canary.** `whole-day.spec.ts` draws the heaviest committed day
-whole - every story, every chart, at 390 and 1440 CSS px, in both themes - and
-asks the four things a per-chart check cannot see: whether the day ever
-finishes arriving, whether every chart it published reached the page, whether
-any two of them turned out to be the same picture, and whether every mark takes
-its colour from a page token. The
-canary is eight stories on one desk against a seed of fifteen, so it never
-fetches and never reaches that scale. A skip there would be a check that quietly
-stopped existing, so the module refuses to load unless the tree under test
-serves exactly the days this repository has committed, and `playwright.config.ts`
-keeps the file out of the default suite - `npm run test:browser` cannot reach it
-and neither can naming it on the command line, because `testIgnore` filters
-before an argument does.
-
-**It answers nothing about a committed day until a run publishes one under the
-new shape.** The 495 drawings that were committed before 2026-09-13 are deleted
-and no marks file was ever written for one, so every committed day currently
-publishes no chart at all ([../architecture/publishing/visuals.md](../architecture/publishing/visuals.md)).
-The spec's own refusal is what says so rather than a green: it reports a day
-that declares no chart instead of passing over one.
-
-```powershell
-npm run build
-npm run test:whole-day
-```
-
-**A few minutes end to end**, dominated by the build rather than the spec. The
-spec is 7 tests: three read the day off disk in milliseconds, and four are
-browser cases. Which day it looks at is derived and never written down: the
-committed day staging the most drawings. Run it before `build:canary`, which
-overwrites the same `build/` directory.
-
-**It does not run in CI.** It reads committed days rather than a fixture, so a
-pipeline run alone can change its answer, which makes it a data check rather
-than a code check (`CLAUDE.md` section 13). It also skipped all 7 of its tests
-on every run while no committed day publishes a chart, so its CI job spent a
-build to report nothing. Run it by hand when a reading-page change needs the
-day-scale picture.
+Build-independent specs use `playwright.logic.config.ts`, with no preview
+server or pre-existing generated artifacts. Build-output gates run after the
+ordinary build, not by relabelling artifact readers as logic tests.
+The full suite means every case in this deliberately narrowed inventory, not
+every historical assertion.
 
 **A component with no call site proves itself here too.** A shared component
 lands before the sections that render it, so the build tree-shakes it away and
@@ -976,9 +895,9 @@ it first.
 
 **After a load, wait for the charts, never for a fixed time.** Each chart host
 carries `data-chart`: `waiting` until the engine draws it, then `live` or
-`failed`. `chartsReady(page)` in
-[`frontend/tests/support/charts-ready.ts`](../../frontend/tests/support/charts-ready.ts)
-waits until every chart near the viewport has left `waiting`. A sleep after
+`failed`. Wait on the representative chart's visible result, as
+[`frontend/tests/console-data-explorer-still.spec.ts`](../../frontend/tests/console-data-explorer-still.spec.ts)
+does. A sleep after
 `goto` was too short on a slow runner and wasted time on a fast one. After a key
 press or a pointer move, assert the new text with `expect(...).toHaveText` -
 it retries, so it needs no sleep either.
@@ -1080,8 +999,9 @@ it took a hand-over from 0.7 s to about 10 s.
 
 ## The bundle gate
 
-`npm run bundle-gate` asserts that no encoder reaches the first-load path, and
-that every guarded page is under the number `config/idhazh.json` sets for it.
+`npm run bundle-gate` checks first-load library and document payload isolation,
+and holds guarded pages and fetched payloads under the limits in
+`config/idhazh.json`.
 
 **It weighs no script, whatever its name suggests.** The encoder check searches
 the first-load modules for three names and weighs nothing, and the number checks
@@ -1090,11 +1010,9 @@ the check on a JavaScript package's size.
 
 The page guardrails are absolute limits somebody priced, so nothing has to
 re-record them to merge and a page that got lighter needs no permission. The
-encoder grep names a cause a byte count never could. And
-`frontend/tests/payload-weight.spec.ts` covers the pages a number cannot bound -
-a page that renders a day weighs whatever the day published - by counting a
-marker instead of bytes, which is the same number whatever the published history
-holds.
+library check names a cause a byte count never could. The document sweep rejects
+the `introduced_by_run:` marker in every non-home document and forbids dated
+documents. Neither rule depends on the size of the published history.
 
 **A per-route byte ratchet is not one of the checks, and must not be added.**
 Three reasons, each of which stays true. It defines bad as *different*, which is
@@ -1112,10 +1030,9 @@ one legal outcome is a notification with a build failure attached.** The console
 routes therefore carry no page number, and adding one back reintroduces that.
 
 The regression a number was reaching for has a direct check that needs no number.
-`frontend/tests/payload-weight.spec.ts` fails when any document that does not
-render a day contains a day-payload marker. It sweeps every prerendered document
-including all three console routes, and it carries its own negative test, so a
-renamed field fails loudly instead of passing silently.
+`frontend/scripts/bundle-gate.mjs` fails when a non-home document contains the
+`introduced_by_run:` day-item marker. It sweeps every prerendered document,
+including every console route, and rejects dated documents as well.
 
 **A number that bounds a growing surface drifts loose as readily as it binds**,
 and nothing fails when it does - which is the failure mode to look for rather

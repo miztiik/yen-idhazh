@@ -1,6 +1,6 @@
 # What the Pipelines route draws
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-11
 
 `/console/` answers two questions: did the runs work, and what each stage cost.
 This page holds three of its panels - where a run's time went, what one item cost
@@ -57,10 +57,6 @@ the producer of the published mirror is
 [../../../backend/idhazh/telemetry/publish/run_timeline.py](../../../backend/idhazh/telemetry/publish/run_timeline.py),
 its shape is [run-timeline.md](run-timeline.md) and every drawing rule is
 [../../concepts/console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md](../../concepts/console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md).
-[../../../frontend/tests/console-pipeline-timeline.spec.ts](../../../frontend/tests/console-pipeline-timeline.spec.ts)
-holds the shard grain against the item grain per shard and per step, and fails on
-a declared column that is empty across every canary row.
-It also checks that no separate sub-step readout remains.
 
 **It is a snapshot, so the window control does not reach it.** A bar's position
 is measured from its own run's start and a span cannot narrow one run, so the

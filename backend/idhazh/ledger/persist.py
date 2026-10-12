@@ -335,8 +335,10 @@ def persist(
     is filed under the day it names. `fmt` of `None` means `config/idhazh.json`'s
     `ledger.format`, and nothing else.
 
-    A write into a paused or retired family writes nothing and returns an empty
-    list, with one warning. Every raw write is gated that way, whatever job it
+    A production write into a paused or retired family writes nothing and returns an empty
+    list, with one warning. An explicitly selected paused council trial can write
+    raw rows only under its authorized isolated root, run and attempt. Retired
+    families remain closed. Every other raw write is gated, whatever job it
     carries: a row nothing recorded before is a new row even when the job that
     writes it maintains other rows. The compact tier is the exemption, and
     `persist_period` is where it is stated - repacking a day that is already
@@ -350,7 +352,7 @@ def persist(
     if not rows:
         return []
     model = _one_contract(rows)
-    if not lifecycle.accepts_new_rows(ledger, len(rows)):
+    if not lifecycle.accepts_new_rows(ledger, len(rows), state_dir=state_dir, identity=identity):
         return []
     knobs = _knobs()
     chosen = knobs.format if fmt is None else fmt

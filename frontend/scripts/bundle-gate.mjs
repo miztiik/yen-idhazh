@@ -47,8 +47,8 @@
  *
  * The ceilings below answer the question that survives - has this page, or this
  * file, grown past what somebody priced - and they are absolute, so nothing has
- * to re-record them to merge. `tests/payload-weight.spec.ts` covers the pages a
- * ceiling cannot bound, by counting a marker instead of bytes.
+ * to re-record them to merge. The document sweep also covers pages a ceiling
+ * cannot bound, by counting a day-item marker instead of bytes.
  *
  * So all three promises are checked mechanically rather than remembered.
  */
@@ -181,15 +181,28 @@ function gzipBytes(file) {
 // The document is measured over one walk. A route class holds one page per
 // published day, so the heaviest instance stands for the class.
 const heaviestPage = new Map();
+const documentProblems = [];
 for (const page of pagesUnder(BUILD)) {
 	const route = `/${relative(BUILD, page).split(sep).slice(0, -1).join(posix.sep)}`.replace(
 		/\/$/,
 		''
 	);
 	const name = page.endsWith('404.html') ? '/404' : routeClass(route);
+	const markers = readFileSync(page, 'utf8').split('introduced_by_run:').length - 1;
+	if (name !== '/' && markers > 0) {
+		documentProblems.push(`${page} inlines ${markers} day items on a route that renders no day`);
+	}
+	if (name.startsWith('/<date>')) {
+		documentProblems.push(`${page} is a dated document; dated addresses must use the fallback shell`);
+	}
 	const html = gzipBytes(page);
 	const worstPage = heaviestPage.get(name);
 	if (!worstPage || html > worstPage.bytes) heaviestPage.set(name, { bytes: html, page });
+}
+if (documentProblems.length > 0) {
+	console.error('bundle gate FAILED - generated documents broke the payload isolation boundary:');
+	for (const problem of documentProblems) console.error(`  ${problem}`);
+	process.exit(1);
 }
 
 const commas = (value) => String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
@@ -214,7 +227,7 @@ let failed = false;
  * failed when it is over; a route it does not name is measured and printed
  * here, but never failed. **The regression this file used to be asked to catch
  * - a layout inlining a day payload, 313,300 gzipped bytes on 2026-08-26 - is
- * asserted directly by `tests/payload-weight.spec.ts`**, which looks for a
+ * asserted directly by the document sweep above**, which looks for a
  * day-payload marker in every document that should not carry one. That check has
  * no number in it, so it returns the same verdict whatever the archive holds.
  */
@@ -274,7 +287,7 @@ if (uncapped.length > 0) {
 			'a route whose weight moves when the pipeline publishes, and it is deliberate:\n' +
 			'a number on one of those has to be raised every time we publish, so it teaches\n' +
 			'the operator to raise numbers and catches nothing. What a document must not do\n' +
-			'is carry a payload it does not render, and tests/payload-weight.spec.ts asserts\n' +
+			'is carry a payload it does not render, and this gate asserts\n' +
 			'that with no number in it. Add a key here only for a route that moves when a\n' +
 			'person edits source and never when a run appends a day.'
 	);
@@ -333,8 +346,7 @@ for (const { key, bytes } of payloads.weighed) {
  * want, which is the thing a widened default window changes and no per-file
  * number can see. A key naming a file is fetched once. A key naming a directory
  * of month shards is fetched once per month the window reaches into, and the
- * page fetches those one after another, so this number and the four-hop chain
- * ceiling in `tests/console-cold-load.spec.ts` are two readings of one design.
+ * page fetches those one after another, so this number bounds that design.
  *
  * The worst case is arithmetic, not a date: a run of N consecutive days lands in
  * at most `1 + ceil((N - 1) / 28)` calendar months, because February is the

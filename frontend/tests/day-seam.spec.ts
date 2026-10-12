@@ -1,10 +1,10 @@
 import { expect, test } from '@playwright/test';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { deskOf, orderByTime } from '../src/lib/day-shape';
 import { dayShell, homeShell, loadDay, publishedDates } from '../src/lib/server/payload';
 import type { DigestDay, DigestItem, SeededVisual } from '../src/lib/payload/types';
+import { publishedSite } from './support/published-site';
 
 /**
  * The seam's oracle, as a function rather than as a build, and the seed
@@ -35,8 +35,26 @@ import type { DigestDay, DigestItem, SeededVisual } from '../src/lib/payload/typ
  * the day is.
  */
 
-const ROOT = resolve(process.cwd(), '..');
-const CANARY = resolve(ROOT, 'backend', 'var', 'canary', 'digest');
+let FIXTURE = '';
+test.beforeEach(() => {
+	const date = '2026-08-20';
+	FIXTURE = publishedSite(test.info().outputPath('site'), { published: [date] }).digest;
+	const items = Array.from({ length: 8 }, (_, index) => ({
+		item_id: `story-${index}`,
+		title: `Story ${index}`,
+		summary: `Summary ${index}`,
+		source_url: `https://example.invalid/${index}`,
+		source_name: 'Example',
+		source_id: 'example',
+		vertical: index < 6 ? 'ai' : 'energy',
+		published_at: `${date}T${String(index + 1).padStart(2, '0')}:00:00Z`,
+		visual: index === 0 ? { kind: 'bar', state: 'rendered', data_path: 'digest/2026/08/20/story-00.json', alt: 'A comparison' } : null
+	}));
+	writeFileSync(join(FIXTURE, '2026', '08', '20', 'digest.json'), JSON.stringify({
+		date, items,
+		verticals: [{ id: 'ai', count: 6 }, { id: 'energy', count: 2 }]
+	}));
+});
 
 /** Every split worth trying: nothing seeded, a partial seed, the exact length,
  * and a seed longer than the day. */
@@ -64,14 +82,14 @@ function inlinedDrawings(items: DigestItem[]): number {
 
 test.describe('the reading routes load a day in two halves', () => {
 	test('the halves put back together are the day the loader read', () => {
-		const dates = publishedDates(CANARY);
-		expect(dates.length, 'the canary tree published no day').toBeGreaterThan(0);
+		const dates = publishedDates(FIXTURE);
+		expect(dates.length, 'the local fixture published no day').toBeGreaterThan(0);
 		let inlined = 0;
 		for (const date of dates) {
-			const whole = loadDay(date, CANARY);
+			const whole = loadDay(date, FIXTURE);
 			expect(whole, `${date} did not load`).not.toBeNull();
 			for (const seed of SEEDS) {
-				const shell = dayShell(date, seed, { root: CANARY });
+				const shell = dayShell(date, seed, { root: FIXTURE });
 				expect(shell, `${date} at a seed of ${seed} did not load`).not.toBeNull();
 				inlined += inlinedDrawings(shell!.seed);
 				expect(
@@ -97,10 +115,10 @@ test.describe('the reading routes load a day in two halves', () => {
 	});
 
 	test('the seed is the head of the reading order and the rest is the tail', () => {
-		const date = publishedDates(CANARY).find((d) => (loadDay(d, CANARY)?.items.length ?? 0) > 1);
-		expect(date, 'no canary day carries more than one story').toBeDefined();
-		const items = orderByTime(loadDay(date!, CANARY)!.items);
-		const shell = dayShell(date!, 3, { root: CANARY })!;
+		const date = publishedDates(FIXTURE).find((d) => (loadDay(d, FIXTURE)?.items.length ?? 0) > 1);
+		expect(date, 'no fixture day carries more than one story').toBeDefined();
+		const items = orderByTime(loadDay(date!, FIXTURE)!.items);
+		const shell = dayShell(date!, 3, { root: FIXTURE })!;
 		expect(shell.seed.map((item) => item.item_id)).toEqual(
 			items.slice(0, 3).map((item) => item.item_id)
 		);
@@ -110,30 +128,30 @@ test.describe('the reading routes load a day in two halves', () => {
 	});
 
 	test('the facts carry no stories, so they do not grow with the day', () => {
-		const date = publishedDates(CANARY)[0];
-		const shell = dayShell(date, 3, { root: CANARY })!;
+		const date = publishedDates(FIXTURE)[0];
+		const shell = dayShell(date, 3, { root: FIXTURE })!;
 		expect(shell.facts.items).toEqual([]);
 		expect(shell.facts.date).toBe(date);
 		expect(shell.facts.verticals.length).toBeGreaterThan(0);
 	});
 
 	test('a date that was never published has no shell', () => {
-		expect(dayShell('1999-01-01', 3, { root: CANARY })).toBeNull();
+		expect(dayShell('1999-01-01', 3, { root: FIXTURE })).toBeNull();
 	});
 });
 
-/** The newest canary day carrying more than one story, and a topic it holds.
+/** The fixture day carrying more than one story, and a topic it holds.
  *
  * `items` is in the order the page draws, so every expectation built from it is
  * about the list the seam actually splits. */
 function busiest(): { date: string; vertical: string; items: DigestItem[] } {
-	for (const date of publishedDates(CANARY)) {
-		const day = loadDay(date, CANARY);
+	for (const date of publishedDates(FIXTURE)) {
+		const day = loadDay(date, FIXTURE);
 		if (!day || day.items.length < 2) continue;
 		const items = orderByTime(day.items);
 		return { date, vertical: deskOf(items[0]), items };
 	}
-	throw new Error('no canary day carries more than one story');
+	throw new Error('no fixture day carries more than one story');
 }
 
 test.describe('a topic route splits its own list', () => {
@@ -142,7 +160,7 @@ test.describe('a topic route splits its own list', () => {
 		const own = items.filter((item) => deskOf(item) === vertical).map((item) => item.item_id);
 		expect(own.length, `${date} published nothing under ${vertical}`).toBeGreaterThan(0);
 		for (const seed of SEEDS) {
-			const shell = dayShell(date, seed, { vertical, root: CANARY })!;
+			const shell = dayShell(date, seed, { vertical, root: FIXTURE })!;
 			expect(
 				[...shell.seed, ...shell.rest].map((item) => item.item_id),
 				`${date}/${vertical} at a seed of ${seed} did not hold its topic`
@@ -155,7 +173,7 @@ test.describe('a topic route splits its own list', () => {
 
 	test('the facts are the whole day, so the pill row still counts every topic', () => {
 		const { date, vertical, items } = busiest();
-		const shell = dayShell(date, 1, { vertical, root: CANARY })!;
+		const shell = dayShell(date, 1, { vertical, root: FIXTURE })!;
 		expect(shell.facts.verticals.map((ref) => ref.id).sort()).toEqual(
 			[...new Set(items.map((item) => deskOf(item)))].sort()
 		);
@@ -163,7 +181,7 @@ test.describe('a topic route splits its own list', () => {
 
 	test('a topic nobody published splits to nothing rather than to the day', () => {
 		const { date } = busiest();
-		const shell = dayShell(date, 5, { vertical: 'no-such-desk', root: CANARY })!;
+		const shell = dayShell(date, 5, { vertical: 'no-such-desk', root: FIXTURE })!;
 		expect(shell.seed).toEqual([]);
 		expect(shell.rest).toEqual([]);
 	});
@@ -173,15 +191,15 @@ test.describe('the seed is the head union what the page must anchor', () => {
 	test('a story past the head is in the seed when it is kept, exactly once', () => {
 		const { date, vertical, items } = busiest();
 		const own = items.filter((item) => deskOf(item) === vertical);
-		expect(own.length, 'the canary topic is too small to have a tail').toBeGreaterThan(1);
+		expect(own.length, 'the fixture topic is too small to have a tail').toBeGreaterThan(1);
 		const last = own[own.length - 1].item_id;
 
-		const plain = dayShell(date, 1, { vertical, root: CANARY })!;
+		const plain = dayShell(date, 1, { vertical, root: FIXTURE })!;
 		expect(plain.seed.map((item) => item.item_id), 'the head already held the tail').not.toContain(
 			last
 		);
 
-		const kept = dayShell(date, 1, { vertical, keep: [last], root: CANARY })!;
+		const kept = dayShell(date, 1, { vertical, keep: [last], root: FIXTURE })!;
 		expect(kept.seed.map((item) => item.item_id)).toEqual([own[0].item_id, last]);
 		expect(kept.rest.map((item) => item.item_id)).not.toContain(last);
 		// The set is what reachability rests on: a story pulled forward must not
@@ -194,8 +212,8 @@ test.describe('the seed is the head union what the page must anchor', () => {
 	test('keeping a story the head already holds changes nothing', () => {
 		const { date, vertical, items } = busiest();
 		const first = items.filter((item) => deskOf(item) === vertical)[0].item_id;
-		const plain = dayShell(date, 3, { vertical, root: CANARY })!;
-		const kept = dayShell(date, 3, { vertical, keep: [first], root: CANARY })!;
+		const plain = dayShell(date, 3, { vertical, root: FIXTURE })!;
+		const kept = dayShell(date, 3, { vertical, keep: [first], root: FIXTURE })!;
 		expect(kept.seed.map((item) => item.item_id)).toEqual(
 			plain.seed.map((item) => item.item_id)
 		);
@@ -203,18 +221,14 @@ test.describe('the seed is the head union what the page must anchor', () => {
 
 	test('keeping a story no day holds adds nothing', () => {
 		const { date, vertical } = busiest();
-		const plain = dayShell(date, 2, { vertical, root: CANARY })!;
-		const kept = dayShell(date, 2, { vertical, keep: ['no-such-story'], root: CANARY })!;
+		const plain = dayShell(date, 2, { vertical, root: FIXTURE })!;
+		const kept = dayShell(date, 2, { vertical, keep: ['no-such-story'], root: FIXTURE })!;
 		expect(kept.seed.map((item) => item.item_id)).toEqual(plain.seed.map((item) => item.item_id));
 	});
 });
 
 test.describe('the home page anchors its leads', () => {
-	/** A day the canary cannot stand in for.
-	 *
-	 * The canary's biggest day holds 8 stories against a 15-story seed and
-	 * publishes no leads, so a seed built from it is always the whole day and this
-	 * rule is invisible in it. The shape is built rather than found: 40 stories,
+	/** A day with leads beyond the seed: 40 stories,
 	 * with the two leads at positions 25 and 39 so neither is inside any head a
 	 * page would take. Fixed in size, so it costs the same whatever the archive
 	 * grows to (Guardrail #12).
@@ -249,7 +263,7 @@ test.describe('the home page anchors its leads', () => {
 	}
 
 	test('every lead is in the seed, however far down the day it sits', () => {
-		const root = mkdtempSync(join(tmpdir(), 'home-shell-'));
+		const root = test.info().outputPath('home-digest');
 		const date = '2026-08-20';
 		const { leads, total } = dayWithOutlyingLeads(root, date);
 
@@ -269,7 +283,7 @@ test.describe('the home page anchors its leads', () => {
 	});
 
 	test('a day nobody published gives the home page no shell', () => {
-		const root = mkdtempSync(join(tmpdir(), 'home-shell-'));
+		const root = test.info().outputPath('missing-home-digest');
 		expect(homeShell('2026-08-20', 15, root)).toBeNull();
 	});
 });

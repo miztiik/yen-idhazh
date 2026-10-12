@@ -1,6 +1,7 @@
 {
   "date": "2026-10-03",
   "evaluation_step": "combine_judge_results",
+  "fault": null,
   "judge_id": "content-similarity-judge",
   "model_calls": null,
   "model_seconds": null,

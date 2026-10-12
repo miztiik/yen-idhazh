@@ -88,7 +88,7 @@ class UnitFinished(Model):
     evaluation_step: EvaluationStep
     work_part_index: int | None = Field(default=None, ge=0)
     work_part_count: int = Field(ge=1)
-    outcome: ShardOutcome | Literal["failed"]
+    outcome: ShardOutcome
     error: ErrorName | None = None
     where: CodePlace | None = None
 
