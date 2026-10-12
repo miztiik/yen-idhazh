@@ -20,8 +20,8 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'console-disk-reads', 'console-doubt', 'console-drawn-cells', 'console-failure',
 		'console-failures', 'console-flow', 'console-frame', 'console-host-spans',
 		'console-item-cost', 'console-judgement-nothings', 'console-machine',
-		'console-machine-cards', 'console-machine-data', 'console-machine-panels',
-		'console-machine-split', 'console-memory-board', 'console-model',
+		'console-machine-cards', 'console-machine-data', 'console-machine-split', 'console-model',
+		'console-memory-board',
 		'console-model-instruments', 'console-model-nothings', 'console-model-panels',
 		'console-model-reasons', 'console-model-reductions',
 		'console-model-rule', 'console-model-work', 'console-nav', 'console-panel-queries',
@@ -50,6 +50,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 	offline: ['service-worker'],
 	console: [
 		'console-data-explorer-still', 'console-model-builder', 'console-model-ledgers',
+		'console-machine-panels-page', 'console-memory-board-page', 'console-shard-board-page',
 		'console-telemetry-heal', 'console-voices-journey'
 	],
 	archive: ['archive'],
