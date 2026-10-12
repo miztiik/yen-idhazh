@@ -45,7 +45,7 @@ from idhazh.stages.common import (
     _load_manifest,
     _run_dir,
 )
-from idhazh.telemetry import source_health
+from idhazh.telemetry import run_shards, source_health
 from idhazh.telemetry.publish import day_metrics, dispatch
 from idhazh.telemetry.publish import source_health as source_health_publish
 
@@ -414,6 +414,7 @@ def stage_assemble(
         producer=PRODUCER,
         git_sha=commit_sha,
     )
+    run_shards.record(common.STATE_ROOT, manifest, identity=identity)
     published = (
         0
         if regenerate_only

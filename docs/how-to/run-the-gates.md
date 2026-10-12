@@ -89,6 +89,8 @@ fixture's unpublished source census and packed feed records. Only the generated
 page, its dependencies and published ledgers are served. Changing a native
 record does not require compiling the source again. The generic Judgement
 fixture builder still compiles its fixed named source inventory.
+A removed item-health file returns HTTP 404 even when a held request resumes
+during a state transition. Other filesystem errors still fail the private preview.
 
 ### Native host codec checks
 
