@@ -618,6 +618,118 @@ def test_compact_dependencies_and_index(
     assert all((workspace / path).read_bytes() == data for path, data in before.items())
 
 
+def test_generated_candidate_replays_through_stored_reader_and_compact_index(
+    workspace: Path,
+) -> None:
+    from idhazh.contracts.file_envelope import Period
+    from idhazh.contracts.host_fingerprint import HostFingerprintRow
+    from idhazh.contracts.ledger_name import LedgerName
+    from idhazh.ledger import paths
+    from idhazh.ledger.ledger_files import load_ledger_rows
+    from idhazh.ledger.persist import load_stored
+    from idhazh.ledger.stored_output import check_compact_period
+
+    document = manifest_document()
+    source_path = generated_compact(
+        workspace, document, Format.PARQUET, period="daily", compact_only=True
+    )
+    original_sources = {
+        source["path"]: (workspace / source["path"]).read_bytes() for source in document["sources"]
+    }
+
+    report = run(workspace, document)
+
+    assert report.inventory_complete
+    assert report.consumer_mode == "candidate_reader"
+    assert report.historical_readiness == "blocked"
+    assert "actual_migrated_consumers_rerun_required" in report.blocked_by
+    compact = next(file for file in report.files if file.source.path == source_path)
+    index = next(file for file in report.files if file.source.kind == "compact_index")
+    assert compact.candidate_path is not None
+    assert compact.new_physical_sha256 is not None
+    assert index.candidate_path is not None
+    assert index.new_physical_sha256 is not None
+
+    candidate_bytes = (workspace / report.bundle_root / compact.candidate_path).read_bytes()
+    candidate_index_bytes = (workspace / report.bundle_root / index.candidate_path).read_bytes()
+    assert len(candidate_bytes) == compact.candidate_bytes
+    assert hashlib.sha256(candidate_bytes).hexdigest() == compact.new_physical_sha256
+    assert hashlib.sha256(candidate_index_bytes).hexdigest() == index.new_physical_sha256
+    assert candidate_bytes != original_sources[source_path]
+
+    state_dir = workspace / "consumer-state"
+    ledger = LedgerName.HOST_FINGERPRINT
+    period = Period.DAILY
+    covers = specification()["day"]
+    compact_path = paths.compact_path(state_dir, ledger, period, covers, fmt=Format.PARQUET)
+    index_path = paths.compact_index_path(state_dir, ledger, period)
+    compact_path.parent.mkdir(parents=True)
+    index_path.parent.mkdir(parents=True)
+    compact_path.write_bytes(candidate_bytes)
+    index_path.write_bytes(candidate_index_bytes)
+    assert compact_path.read_bytes() == candidate_bytes
+    assert index_path.read_bytes() == candidate_index_bytes
+
+    assert check_compact_period(state_dir, ledger, period, covers)
+    stored = load_stored([compact_path], model=HostFingerprintRow)
+    run_id = specification()["run_id"]
+    expected = [
+        (
+            covers,
+            run_id,
+            "work",
+            shard,
+            1,
+            "Recorded CPU",
+            2300.0,
+            None,
+            None,
+            None,
+        )
+        for shard in (0, 1)
+    ]
+
+    def stored_values(rows: list[Any]) -> list[tuple[Any, ...]]:
+        return sorted(
+            (
+                row.identity.covers,
+                row.identity.run_id,
+                row.identity.job.value,
+                row.identity.shard,
+                row.row.fingerprint_version,
+                row.row.cpu_model,
+                row.row.cpu_observed_mhz,
+                row.row.cpu_reported_max_mhz,
+                row.row.cpu_physical_cores,
+                row.row.cpu_logical_processors,
+            )
+            for row in rows
+        )
+
+    assert stored_values(stored) == expected
+
+    indexed_rows = load_ledger_rows(state_dir, ledger, model=HostFingerprintRow)
+    assert (
+        sorted(
+            (
+                row.date,
+                row.run_id,
+                row.job.value,
+                row.shard,
+                row.fingerprint_version,
+                row.cpu_model,
+                row.cpu_observed_mhz,
+                row.cpu_reported_max_mhz,
+                row.cpu_physical_cores,
+                row.cpu_logical_processors,
+            )
+            for row in indexed_rows
+        )
+        == expected
+    )
+    assert all((workspace / path).read_bytes() == data for path, data in original_sources.items())
+
+
 def test_lost_and_empty_index_periods_are_not_recovered(workspace: Path) -> None:
     from idhazh.contracts.ledger_index import CompactIndex
 
