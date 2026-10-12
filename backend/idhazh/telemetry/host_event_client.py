@@ -672,7 +672,20 @@ class HostEventClient:
         if self._job_begun:
             return self._healthy
         if self._native and not self._registered:
-            if not self.register_worker(server_pid=host.llama_server_pid()):
+            worker = next(
+                (
+                    entry
+                    for entry in self.manifest.workers
+                    if entry.target.pid == os.getpid()
+                ),
+                None,
+            )
+            selected_server_pid = (
+                worker.server.pid
+                if worker is not None and worker.server is not None
+                else host.llama_server_pid()
+            )
+            if not self.register_worker(server_pid=selected_server_pid):
                 return False
         if not self._healthy:
             return False
