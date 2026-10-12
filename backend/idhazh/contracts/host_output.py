@@ -45,6 +45,7 @@ from idhazh.contracts.host_fingerprint import (
     HOST_FINGERPRINT_VERSION,
     WATCHED_FLAGS,
     HostFingerprintRow,
+    strip_null_legacy_placeholders,
 )
 from idhazh.contracts.host_fingerprint import (
     LEGACY_HOST_VERSIONS as SHARED_LEGACY_HOST_VERSIONS,
@@ -461,6 +462,7 @@ def normalize_stored_host_rows(
     rows: Sequence[Mapping[str, object]],
     *,
     content_sha256: str,
+    historical_envelope: FileEnvelope | None = None,
 ) -> tuple[HostStoredRow, ...]:
     """Check the original canonical digest and RowIdentity BEFORE legacy migration."""
     original = b"".join(
@@ -483,20 +485,35 @@ def normalize_stored_host_rows(
         identity = {key: source[key] for key in identity_keys if key in source}
         _check_numbers(identity, RowIdentity)
         original_identity = RowIdentity.model_validate(identity)
+        seed = (
+            f"host-fingerprint|{original_identity.covers}|{original_identity.run_id}|"
+            f"{original_identity.job.value}|{original_identity.shard}|{HOST_PRODUCER}"
+        )
+        converter_identity = (
+            historical_envelope is not None
+            and historical_envelope.tier is Tier.COMPACT
+            and historical_envelope.ledger is LedgerName.HOST_FINGERPRINT
+            and historical_envelope.writer == "idhazh.ledger.parquet"
+            and historical_envelope.identity.producer == "utilities.migrate_to_parquet"
+            and historical_envelope.row_schema_version in SHARED_LEGACY_HOST_VERSIONS
+            and original_identity.unit_id == historical_envelope.unit_id
+            and original_identity.covers == historical_envelope.covers
+            and original_identity.run_id == historical_envelope.identity.run_id
+            and original_identity.attempt == historical_envelope.identity.attempt
+        )
         if (
             original_identity.ledger is not LedgerName.HOST_FINGERPRINT
             or original_identity.covers != source.get("date")
         ):
             raise ValueError("original stored host identity contradicts its date or ledger")
-        seed = (
-            f"host-fingerprint|{original_identity.covers}|{original_identity.run_id}|"
-            f"{original_identity.job.value}|{original_identity.shard}|{HOST_PRODUCER}"
-        )
-        if original_identity.unit_id != str(uuid.uuid5(HOST_NAMESPACE, seed)):
+        if (
+            original_identity.unit_id != str(uuid.uuid5(HOST_NAMESPACE, seed))
+            and not converter_identity
+        ):
             raise ValueError("original stored host unit_id does not name its logical producer")
         payload = {key: value for key, value in source.items() if key not in identity_keys}
         payload.update({key: source[key] for key in own_identity})
-        row = normalize_host_row(payload)
+        row = normalize_host_row(strip_null_legacy_placeholders(payload))
         normalized.append(HostStoredRow.model_validate(row.model_dump() | identity))
     return tuple(normalized)
 

@@ -708,3 +708,21 @@ def normalize_host_row(data: Mapping[str, object]) -> HostFingerprintRow:
         cpu_observed_mhz=average,
     )
     return HostFingerprintRow.model_validate(cells)
+
+
+def strip_null_legacy_placeholders(data: Mapping[str, object]) -> dict[str, object]:
+    """Drop null columns added by a later Parquet schema widening."""
+    payload = dict(data)
+    version = payload.get("version")
+    if not isinstance(version, str) or version not in LEGACY_HOST_VERSIONS:
+        return payload
+    forbidden: set[str] = set()
+    if version < "2026-09-18":
+        forbidden.update(_CLOCK_FIELDS)
+    if version < "2026-09-19":
+        forbidden.update({"server_prompt_tokens", "server_prompt_seconds"})
+    return {
+        key: value
+        for key, value in payload.items()
+        if key not in forbidden or value is not None
+    }

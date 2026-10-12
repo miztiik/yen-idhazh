@@ -373,11 +373,16 @@ def prepare_history(
     preflight_history(manifest, workspace=workspace)
     roots = {root.name: root for root in manifest.roots}
     files = tuple(
-        read_history(source, roots[source.root], workspace=workspace, limits=limits.verification)
+        read_history(
+            source,
+            roots[source.root],
+            workspace=workspace,
+            limits=limits.history_verification,
+        )
         for source in manifest.sources
     )
-    if sum(len(file.rows) for file in files) > limits.verification.max_rows:
-        raise ValueError("complete inventory exceeds total row cap")
+    if sum(len(file.rows) for file in files) > limits.max_history_rows:
+        raise ValueError("complete inventory exceeds max_history_rows")
     by_path = {file.source.path: file for file in files}
     reports: dict[str, HistoryFileReport] = {}
     artifacts: dict[str, bytes] = {}
@@ -393,7 +398,7 @@ def prepare_history(
                 ),
                 roots[file.source.root],
                 data=data,
-                limits=limits.verification,
+                limits=limits.history_verification,
             )
             if checked.rows != file.rows:
                 raise ValueError("replacement codec changed corrected rows")

@@ -444,11 +444,16 @@ workspace; persisted paths remain relative and POSIX-separated.
 The command reads exactly two repository-owned configuration files, resolved
 from the utility's location, not the operator's workspace or environment.
 `history_migration_limits` in `config/host-history-migration.json` caps roots,
-closed periods, manifest bytes and the complete bundle. It contains no copied
+closed periods, manifested sources, per-file and aggregate history rows,
+manifest bytes and the complete bundle. Its 512-source, 128-row/file and
+4096-row aggregate ceilings are independent of `verification_limits.max_files`
+and `max_rows`, which continue to cap an individual host output plan and file.
+This lets one explicitly bounded history manifest cover its complete input
+set without widening the D5 write-plan contract. It contains no copied
 verification defaults. `verification_limits` in
-`config/host-telemetry-experiment.json` caps files, individual and aggregate source
-bytes, rows, footer/decode bytes, JSON depth and Thrift items. Every source read
-is bounded and hash-checked.
+`config/host-telemetry-experiment.json` caps individual and aggregate source
+bytes, footer/decode bytes, JSON depth and Thrift items. Every source read is
+bounded and hash-checked.
 `HistoryLimits` validates the combined effective inputs before reading history.
 Missing files or invalid bounds refuse the dry-run without source or config
 writes. The shared experiment file retains only native settings; Rust still
@@ -478,6 +483,11 @@ re-encoded: already corrected files are explicitly excluded from replacement.
 Footer row counts must equal the bounded row-group sum before page decoding,
 and the actual decoded row count afterward. Contradictions refuse the entire
 source batch without a bundle or historical writes.
+A physical compact Parquet file may represent a packed zero-row period when its
+envelope and index agree. Its empty chunks and page totals remain bounded and
+validated; `empty` and `lost` index markers are not converted to packed files.
+Zero-row raw inputs remain refused, and producer verification retains its
+existing one-row requirement.
 
 Each legacy candidate preserves its path, UUID5 work unit, UUID8 file identity,
 allocation clock, attempts and original producer/git lineage. The canonical row
