@@ -1,7 +1,7 @@
 import { expect, test, type Page, type Route } from './support/door-page';
 import { FIRST, THROUGH, dayBefore, packedPipelines, servePipelines } from './support/pipelines-ledgers';
 import { clientCode, drawClient } from './support/console-window/client-render';
-import { readFileSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 /**
@@ -36,8 +36,9 @@ import { resolve } from 'node:path';
 
 test.use({ serviceWorkers: 'block' });
 
-const INDEX = (url: URL) => url.pathname === '/state/compact/item-health/daily/index.json';
+const INDEX = (url: URL) => url.pathname.endsWith('/state/compact/item-health/index/daily.json');
 let release: (() => void) | undefined;
+let heldRequests = 0;
 let quietRoot: string;
 let missingRoot: string;
 let legacyCode: string;
@@ -46,11 +47,17 @@ test.beforeAll(async () => {
 	quietRoot = await packedPipelines('reserved-quiet', Array.from({ length: count + 1 }, (_, at) =>
 		({ covers: dayBefore(THROUGH, count - at), rows: [] })));
 	missingRoot = await packedPipelines('reserved-missing', []);
+	for (const ledger of ['item-health', 'summary-quality-evals']) {
+		for (const period of ['daily', 'monthly', 'yearly']) {
+			rmSync(resolve(missingRoot, 'compact', ledger, 'index', `${period}.json`));
+		}
+	}
 	legacyCode = await clientCode([['LegacyReserved', './tests/fixtures/panels/LegacyReserved.svelte']]);
 });
 test.afterEach(() => { release?.(); release = undefined; });
 
 async function hydrated(page: Page) {
+	if (release !== undefined) await expect.poll(() => heldRequests).toBeGreaterThan(0);
 	await expect(page.locator('[data-console-panels="pipelines"]')).toHaveAttribute(
 		'data-route-state',
 		/loading|ok|quiet|missing|unreachable/
@@ -89,8 +96,10 @@ async function panelBoxes(page: Page): Promise<Record<string, [number, number, n
 
 /** Release the actual declared index only after the waiting frame is measured. */
 async function holdMonths(page: Page) {
+	heldRequests = 0;
 	const held = new Promise<void>((resolve) => release = resolve);
 	await page.route(INDEX, async (route: Route) => {
+		heldRequests += 1;
 		await held;
 		await route.continue();
 	});
@@ -265,7 +274,7 @@ test('THE ORACLE: the reserved chart box is the box the chart takes', async ({ p
 	// the same panel.
 	await expect(reserved).toHaveCount(0);
 	const settledPanel = ((await panel.boundingBox()) as { y: number }).y;
-	const replaced = await panel.locator('svg[data-chart]').first().boundingBox();
+	const replaced = await panel.locator('svg[data-chart-type="dateSeries"]').first().boundingBox();
 	expect(waiting, 'nothing was reserved').not.toBeNull();
 	expect(replaced, 'nothing replaced the reserved box').not.toBeNull();
 	expect(Math.round((replaced as { y: number }).y - settledPanel)).toBe(

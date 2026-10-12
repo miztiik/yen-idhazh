@@ -8,6 +8,11 @@ not zero, so a settings change on a day without a reading still has its place.
 The route resolves its record window before calling the private panels settled.
 Native reads start independently; request epochs prevent late windows replacing
 the current one, and the extractor and recorded flags retain separate states.
+Native record limitations sit after the failure plot, not above the private
+carry line: receiving the ledger must not move the window controls or chrome.
+The retained run-square cut wording is tested on that actual component with
+independent capped and uncapped records; no item-ledger cut identities cross
+the native page's private manifest boundary.
 
 The retained timing and histogram plots name their actual drawing elements for
 the shared chart checks. Timeline rows name their actual bar frames. An absent

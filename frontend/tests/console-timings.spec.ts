@@ -346,8 +346,8 @@ test.describe('the timing chart on the page', () => {
 	});
 
 	test('the columns are the window the control set, not the days with rows', async ({ page }) => {
-		await openRetained(page, (window) => days(window.start, 2).map((date) =>
-			telemetryRow({ date, fetch_ms: 300, extract_ms: 40, summarize_ms: 1_000 })));
+		await openRetained(page, (window) => [
+			telemetryRow({ date: window.end, fetch_ms: 300, extract_ms: 40, summarize_ms: 1_000 })]);
 
 		const control = page.locator('[data-window-control]');
 		const plot = page.locator('[data-timing="plot"]');

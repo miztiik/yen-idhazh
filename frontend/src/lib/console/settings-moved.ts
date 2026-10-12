@@ -355,9 +355,10 @@ export function settingsRules(
 		a.kind === b.kind ? 0 : a.kind === 'settings' ? -1 : 1);
 	if (changes.length === 0 && notes.length === 0) {
 		const days = (Date.parse(window.to) - Date.parse(window.from)) / 86_400_000 + 1;
+		const inside = days === 1 ? 'inside this one day' : `inside these ${days} days`;
 		notes.push(checker === 'score'
-			? `Nothing changed about how the summaries are written or the faithfulness scorer inside these ${days} days.`
-			: `Nothing changed about how the summaries are written${checker === 'none' ? '' : ' or checked'} inside these ${days} days.`);
+			? `Nothing changed about how the summaries are written or the faithfulness scorer ${inside}.`
+			: `Nothing changed about how the summaries are written${checker === 'none' ? '' : ' or checked'} ${inside}.`);
 	}
 	return { changes, note: notes.length > 0 ? notes.join(' ') : null };
 }

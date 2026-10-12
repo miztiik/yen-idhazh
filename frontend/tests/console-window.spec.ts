@@ -463,7 +463,8 @@ for (const width of [390, 768, 1440]) {
 		await openRetained(page, () => [], 'ready', {
 			months: ['2026-06', '2026-07', '2026-08'], held: ['2026-08']
 		});
-		await expect(page.locator('[data-window-status]')).toContainText('90D would fetch 2 more months');
+		await expect(page.locator('[data-window-status]')).toContainText('30D would fetch 1 more month');
+		await expect(page.locator('[data-window-status]')).toContainText('90D 2 more');
 		await page.goto(routeHref('pipelines'));
 		await expect(page.locator('[data-window-preset="1"] input')).toBeEnabled();
 		await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-days', '1');

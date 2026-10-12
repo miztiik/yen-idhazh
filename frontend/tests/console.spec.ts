@@ -16,6 +16,9 @@ import { publishedSite } from './support/published-site';
 import { openRetained } from './support/retained-telemetry';
 import { serverCompiler } from './support/server-render';
 import { telemetryRow } from './support/telemetry-row';
+import { clientCode, drawClient } from './support/console-window/client-render';
+import { cutsByRun } from '../src/lib/server/cuts-by-run';
+import { health, runOutcome, squareLabel, type RunFacts } from '../src/lib/console/run-square';
 
 /**
  * The console says whether the runs worked and which feeds are broken.
@@ -498,7 +501,28 @@ test('a square says what happened without a mouse', async ({ page }) => {
 test('the run that read only the start of an article says so on its own square', async ({
 	page
 }) => {
-	await openOnWindow(page, WIDEST);
+	const date = '2026-08-20';
+	const cuts = cutsByRun([
+		{ run_id: `${date}-1`, url_key: 'cut', source_words_before_cap: '2000', source_words: '1000' },
+		{ run_id: `${date}-2`, url_key: 'whole', source_words_before_cap: '200', source_words: '200' }
+	]);
+	expect([...cuts]).toEqual([[`${date}-1`, 1]]);
+	const runs: RunFacts[] = [1, 2].map((n) => ({
+		n, status: 'completed', succeeded: 2, failed: 0, skipped: 0, sourceListStale: false
+	}));
+	const code = await clientCode([['RunHealthPanel', './src/routes/console/RunHealthPanel.svelte']]);
+	const html = readFileSync(resolve('build', 'index.html'), 'utf8');
+	await drawClient(page, code, 'RunHealthPanel', {
+		yieldDays: [{ date, itemsPlanned: 4, itemsPublished: 4, itemsFailed: 0 }],
+		grid: [{ date, squares: runs.map((run) => {
+			const runId = `${date}-${run.n}`;
+			const count = cuts.get(runId) ?? 0;
+			return { runId, n: run.n, health: health(run, 70), label: squareLabel(date, run, 70, count),
+				outcome: runOutcome(run, 70, count) };
+		}) }],
+		window: { start: '2026-08-19', end: date }, floorPct: 70,
+		height: 220, width: 760, tickDensity: 6, readoutMaxShare: 1
+	}, [...html.matchAll(/href="([^"]+\.css)"/g)].map((match) => match[1]));
 
 	// Per run, and only here. Measured 2026-08-29 over 19 committed runs the
 	// count is 1 to 12 articles of 160 to 200 - which is the article mix on that

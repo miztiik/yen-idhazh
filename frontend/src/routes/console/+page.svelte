@@ -174,7 +174,6 @@
 	ready={mounted} {busy} {record} statusLine={recordReady ? null : 'The record window is not ready.'} onChange={show} />
 <RouteStatus route="pipelines" answers={allAnswers} days={windowDays} through={recordReady ? reach?.through : null}
 	shimmerAfterMs={knobs.shimmer_after_ms} onRetry={retry}>
-	{#each [...new Set(notes)] as note}<p data-record-note>{note}</p>{/each}
 	<p class="console-carry" data-console-carry="model" data-pipelines-window-from={viewport.start} data-pipelines-window-to={viewport.end}>{data.carries.pipelines} <a href="{base}/console/model/">Summaries →</a></p>
 	{#each configured.panel_groups as group (group.id)}
 		<PanelGroup id={group.id} title={group.title} panels={group.panels.length}>
@@ -208,6 +207,7 @@
 								nativeState={panelState(queries.failureMixQuery)} rulesState={panelState(queries.failedRuleQuery)}
 								rulesWindow={queryWindow(queries.failedRuleQuery)}
 								calendar={calendar(queries.failureMixQuery)} {knobs} chart={data.chart} rule={queryRule(queries.failureMixQuery)} />
+							{#each [...new Set(notes)] as note}<p data-record-note>{note}</p>{/each}
 						{:else if panelQueries[id] !== undefined}
 							{@const query = panelQueries[id]}
 							<Reserved record panelState={panelState(query)} height={knobs.chart_height} width={knobs.chart_width} name={id} label={titles[id]}>
