@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { render } from 'svelte/server';
+import type { Component } from 'svelte';
 import { serverCompiler } from './support/server-render';
 import { telemetryRow } from './support/telemetry-row';
 import { frame } from '../src/lib/charts/frame';
@@ -31,8 +32,23 @@ const points = [
 ];
 const options = { frame: box, density: 6, valueTicks: 4, padding: 0.2 };
 const common = { empty: emptyState('quiet', 'Nothing recorded.'), name: 'contract', label: 'Contract rows', width: 390, height: 220 };
+const compiledDrawings = new Map<string, Promise<{ default: Component<Record<string, unknown>> }>>();
 
 async function draw(name: string, props: Record<string, unknown>): Promise<string> {
+	let drawing = compiledDrawings.get(name);
+	if (drawing === undefined) {
+		drawing = compileDrawing(name);
+		compiledDrawings.set(name, drawing);
+	}
+	const loaded = await drawing;
+	const html = render(loaded.default, { props }).body;
+	for (const match of html.matchAll(/data-readout-none="([^"]+)"/g)) {
+		expect(match[1].endsWith('; agreed with Susan')).toBe(true);
+	}
+	return html;
+}
+
+async function compileDrawing(name: string): Promise<{ default: Component<Record<string, unknown>> }> {
 	const compiled = serverCompiler(path.join(frontend, 'test-results', 'chart-types', name));
 	const files: readonly [string, string][] = [
 		['Reserved', 'src/lib/components/Reserved.svelte'],
@@ -50,12 +66,7 @@ async function draw(name: string, props: Record<string, unknown>): Promise<strin
 	const file = ['RankedList', 'KpiCard', 'FailureList', 'TimeHistogram', 'StageTimings'].includes(name)
 		? `src/lib/components/${name}.svelte` : `src/lib/charts/d3/${name}.svelte`;
 	const module = await compiled(file, name, rewrites);
-	const loaded = await import(pathToFileURL(module).href);
-	const html = render(loaded.default, { props }).body;
-	for (const match of html.matchAll(/data-readout-none="([^"]+)"/g)) {
-		expect(match[1].endsWith('; agreed with Susan')).toBe(true);
-	}
-	return html;
+	return import(pathToFileURL(module).href);
 }
 
 test('a range shares the divisor with ends and named rules; short rows rank last and draw no mark', async () => {

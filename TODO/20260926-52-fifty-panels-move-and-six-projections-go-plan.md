@@ -1,8 +1,8 @@
 # Plan 52 - The console's panels ask the ledger when they are looked at, ECharts leaves, and six projections go
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-10-12
 
-**Status**: Rows 1, 2, 3a, 3 and 4 are merged in #1529, #1537, #1538 and #1542. Shared-support row 2b is merged in #1546. Row 5 is merged in #1547. This change delivers Voices, row 8, with its native queries, private inputs and missing-data states. Rows 6, 7, 9, 10 and 11 still require delivery. Row 12 and its related public-projection and reader deletions are complete in merged #1189 and stay COLLAPSED.
+**Status**: Rows 1, 2, 3a, 3 and 4 are merged in #1529, #1537, #1538 and #1542. Shared-support row 2b is merged in #1546. Row 5 is merged in #1547, and Voices, row 8, is merged in #1557. This change delivers Summaries, row 7, with declared native queries, retained private cards and reasons, and truthful unknown states. Rows 6, 9, 10 and 11 still require delivery. Row 12 and its related public-projection and reader deletions are complete in merged #1189 and stay COLLAPSED.
 
 **Level**: 5 (CLAUDE.md section 6). Rows 5 and 10 change a persisted payload every console document carries. The route rows are Level 3: each crosses code and published data on one route. **Authorizing this plan is the design consultation section 6 asks of rows 5 and 10.** Row 12's approved deletion is carried by #1189.
 
@@ -75,7 +75,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 4 | Every panel's question and shared loading state are declared before it is drawn | 2 | C | DONE | p52-panel-queries (`feat/console-panel-queries`) | #1542 | Owner and disjoint contract, canary and guard workers |
 | 5 | The band reads the ledgers and carries the settings changes, and the three remaining projections nothing draws go | 3, 4 | D | DONE | p52-band-ledgers (`feat/console-band-ledgers`) | #1547 | p52-row5-local-completion |
 | 6 | Pipelines asks the ledger | 5, 2b | E | PENDING | - | - | - |
-| 7 | Summaries asks the ledger | 5, 2b | E | PENDING | - | - | - |
+| 7 | Summaries asks the ledger | 5, 2b | E | DONE | p52-model-ledgers (`feat/console-model-ledgers`) | Read from merge | Summaries worker; representative integration owner |
 | 8 | Voices asks the ledger, and the ranking panels join it | 4 | D | DONE | p52-voices-ledgers (`feat/console-voices-ledgers`) | Read from merge | Row8 finishing worker; actual Susan/Fowler consultations |
 | 9 | Hardware asks the ledger, and its page carries no data | 5 | E | IN-FLIGHT: count foundation ready/reader pending | p52-hardware-counts (`feat/console-hardware-counts`); reader retained in p52-machine-ledgers | Read from merge | Count foundation owner; parent owns reader integration |
 | 10 | The `telemetry` and `run-timeline` projections go | 6 | F | PENDING | - | - | - |

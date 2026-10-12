@@ -4,17 +4,18 @@ import type { RouteExpect } from './index';
 export const EXPECT: RouteExpect | null = {
 	bansRouter: true,
 	cellFormats: {
-		summaries: /^(-|\d+)$/,
-		'not-sure': /^(-|\d+)$/,
-		unsupported: /^(-|\d+)$/,
-		hedge: /^(-|\d+)$/,
-		part: /^(-|\d+)$/,
-		'part-pct': /^(-|\d+%)$/,
-		copied: /^(-|\d+%)$/,
-		'per-item': /^(-|(<1|\d+)( (<1|\d+) when cut short)?)$/,
-		minutes: /^(-|<1|\d+)$/,
-		'too-long': /^(-|\d+)$/,
-		failed: /^(-|\d+)$/
+		summaries: /^(not measured|\d+)$/,
+		'not-sure': /^(not measured|\d+)$/,
+		unsupported: /^(not measured|\d+)$/,
+		hedge: /^(not measured|\d+)$/,
+		part: /^(not measured|\d+)$/,
+		'part-pct': /^(not measured|\d+%)$/,
+		copied: /^(not measured|\d+%)$/,
+		'per-item': /^(not measured|(<1|\d+) s( (<1|\d+) s when cut short)?)$/,
+		minutes: /^(not measured|(<1|\d+) min)$/,
+		'too-long': /^(not measured|\d+)$/,
+		failed: /^(not measured|\d+)$/,
+		determinism: /^(not measured|\d+)$/
 	},
 	unscoredCells: ['not-sure', 'unsupported', 'hedge', 'part', 'part-pct', 'copied'],
 	internalColumns: [
@@ -48,5 +49,5 @@ export const EXPECT: RouteExpect | null = {
 	readoutRows: ['read', 'write', 'items'],
 	readoutSeries: ['read', 'write'],
 	readoutHint: 'Point at a day to read it. Left and Right step through the days, Escape returns to the newest.',
-	sectionOrder: ['chart', 'table']
+	sectionOrder: ['table', 'chart']
 };

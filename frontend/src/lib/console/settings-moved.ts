@@ -313,7 +313,8 @@ export function settingsMoved(runs: readonly RecordedRunDay[]): SettingsMoved[] 
 export function settingsRules(
 	shell: ConsoleShell,
 	window: { from: DateStamp; to: DateStamp },
-	checker: 'none' | 'score' | 'every'
+	checker: 'none' | 'score' | 'every',
+	spanWords?: string
 ): ModelRule {
 	const requested = [
 		{ kind: 'settings' as const, record: shell.settingsMoved, verb: 'written' },
@@ -357,8 +358,8 @@ export function settingsRules(
 	if (changes.length === 0 && notes.length === 0) {
 		const days = (Date.parse(window.to) - Date.parse(window.from)) / 86_400_000 + 1;
 		notes.push(checker === 'score'
-			? `Nothing changed about how the summaries are written or the faithfulness scorer inside ${nameSpan(days)}.`
-			: `Nothing changed about how the summaries are written${checker === 'none' ? '' : ' or checked'} inside ${nameSpan(days)}.`);
+			? `Nothing changed about how the summaries are written or the faithfulness scorer inside ${spanWords ?? nameSpan(days)}.`
+			: `Nothing changed about how the summaries are written${checker === 'none' ? '' : ' or checked'} inside ${spanWords ?? nameSpan(days)}.`);
 	}
 	return { changes, note: notes.length > 0 ? notes.join(' ') : null };
 }

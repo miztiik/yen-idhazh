@@ -22,7 +22,8 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'console-item-cost', 'console-judgement-nothings', 'console-machine',
 		'console-machine-cards', 'console-machine-data', 'console-machine-panels',
 		'console-machine-split', 'console-memory-board', 'console-model',
-		'console-model-instruments', 'console-model-panels', 'console-model-reasons',
+		'console-model-instruments', 'console-model-nothings', 'console-model-panels',
+		'console-model-reasons', 'console-model-reductions',
 		'console-model-rule', 'console-model-work', 'console-nav', 'console-panel-queries',
 		'console-pipelines-window', 'console-polarity',
 		'console-published', 'console-ranked', 'console-readout-data',
@@ -47,7 +48,10 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 	],
 	reader: ['payload-state', 'reading-page'],
 	offline: ['service-worker'],
-	console: ['console-data-explorer-still', 'console-machine-journey', 'console-telemetry-heal', 'console-voices-journey'],
+	console: [
+		'console-data-explorer-still', 'console-machine-journey', 'console-model-builder', 'console-model-ledgers',
+		'console-telemetry-heal', 'console-voices-journey'
+	],
 	archive: ['archive'],
 	'model-search': ['search'],
 	publishing: ['canaries', 'explorer-boundary', 'malformed-day']

@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { CHART_VOCABULARY_PAGE } from './doc-test-inputs.ts';
+import { CHART_VOCABULARY_PAGE, CONSOLE_MODEL_LABELS_PAGE } from './doc-test-inputs.ts';
 import { FRONTEND_GROUPS, groupForSpec } from './test-groups.ts';
 import type { FrontendGroup } from './test-groups.ts';
 
@@ -38,6 +38,7 @@ const CONSOLE_OWNED =
  * its page from, so the selector and test cannot name different pages.
  */
 const DOC_TEST_INPUTS: Record<string, TestGroup[]> = {
+	[CONSOLE_MODEL_LABELS_PAGE]: ['logic'],
 	[CHART_VOCABULARY_PAGE]: ['logic']
 };
 
@@ -215,6 +216,10 @@ export function selectPaths(paths: readonly string[]): Selection {
 		} else if (/^config\/console\//.test(path)) {
 			selected = CONSOLE;
 			reason = 'route-owned console config and panel checks';
+		} else if (/^frontend\/src\/lib\/console\/model\//.test(path) ||
+			path === 'frontend/tests/support/model-route.ts') {
+			selected = CONSOLE;
+			reason = 'Summaries declarations, private builder and state consumers';
 		} else if (/^frontend\/tests\/support\/console-expect\//.test(path)) {
 			selected = CONSOLE;
 			reason = 'route-owned console expectations';

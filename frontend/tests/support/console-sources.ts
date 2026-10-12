@@ -15,7 +15,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	],
 	src: ['app.d.ts', 'query-engine-assets.d.ts', 'service-worker.ts'],
 	'src/lib': [
-		'archive-calendar.ts', 'bands.ts', 'day-shape.ts', 'feed-health.ts', 'format.ts',
+		'archive-calendar.ts', 'bands.ts', 'chart-evidence.ts', 'day-shape.ts', 'feed-health.ts', 'format.ts',
 		'links.ts', 'offline.generated.ts', 'offline.ts', 'readstate.ts', 'reveal.ts', 'theme.ts'
 	],
 	'src/lib/assist': [
@@ -59,6 +59,11 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'settings-moved.ts', 'span-words.ts', 'strip.ts', 'verdict-split.ts', 'waiting.ts', 'window-slot.ts'
 	],
 	'src/lib/console/queries': ['machine.ts', 'model.ts', 'pipelines.ts', 'shared.ts', 'voices.ts', 'window.ts'],
+	'src/lib/console/model': [
+		'rows.ts', 'call-ending.ts', 'faithfulness.ts', 'source-doubts.ts', 'summary-length.ts',
+		'model-change.ts', 'model-throughput.ts', 'model-rule.ts', 'refusing-rule.ts', 'cost.ts', 'Query.svelte', 'Series.svelte',
+		'Cards.svelte', 'cards.ts', 'Panels.svelte', 'panels.ts', 'Reasons.svelte', 'doubt-reasons.ts', 'slice.ts', 'work.ts'
+	],
 	'src/lib/console/voices': [
 		'record.ts', 'source-health.ts', 'feeds-failed.ts', 'fetch-time.ts',
 		'retiring.ts', 'source-cuts.ts', 'ranking-discount.ts', 'why-chosen.ts', 'watchlist.ts',
@@ -129,6 +134,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'consecutive-days.ts', 'console-sources.ts', 'console-widths.ts',
 		'day-loader.ts', 'day-ready.ts', 'explorer-answer.ts', 'in-zone.ts',
 		'ledger-lifecycle.ts', 'machine-record-state.ts', 'machine-rows.ts', 'model-swap.ts',
+		'model-route.ts',
 		'month-shard.ts', 'panel-gates.ts', 'panel-tab.ts', 'published-site.ts', 'published.ts',
 		'range-host.ts', 'reduction-input.ts', 'server-render.ts',
 		'telemetry-row.ts', 'views.ts'

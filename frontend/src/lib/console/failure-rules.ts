@@ -7,7 +7,7 @@ export interface FailureRuleRow {
 	readonly date: string;
 	readonly stage: string;
 	readonly outcome: string;
-	readonly code: string;
+	readonly code: string | null;
 	readonly failed_rule: string | null;
 }
 
@@ -15,8 +15,8 @@ export function failureRuleRows(rows: readonly Row[]): FailureRuleRow[] {
 	return rows.map((row) => {
 		const { date, stage, outcome, code, failed_rule } = row;
 		if (typeof date !== 'string' || !isDay(date)) throw new Error('A failure rule row needs a UTC date.');
-		if (typeof stage !== 'string' || typeof outcome !== 'string' || typeof code !== 'string') {
-			throw new Error('A failure rule row needs stage, outcome and code strings.');
+		if (typeof stage !== 'string' || typeof outcome !== 'string' || (code !== null && typeof code !== 'string')) {
+			throw new Error('A failure rule row needs stage and outcome strings, and a code string or null.');
 		}
 		if (failed_rule !== null && typeof failed_rule !== 'string') {
 			throw new Error('A failure rule row needs a failed_rule string or null.');
