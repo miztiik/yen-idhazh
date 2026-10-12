@@ -31,6 +31,7 @@ from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.item_health_summary import ItemHealthSummaryRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import RunPlan
+from idhazh.contracts.run_shards import RunShards
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.validation_row import ValidationRow
 from idhazh.contracts.visual_prune import VisualPruneRow
@@ -338,6 +339,7 @@ _DOOR_SHAPES: Final[dict[LedgerName, _DoorShape]] = {
     LedgerName.SEEN: _DoorShape(SEEN_KEY, SeenRow),
     LedgerName.PUBLISHED: _DoorShape(PUBLISHED_KEY, PublishedRow),
     LedgerName.RUN_PLAN: _DoorShape(RUN_PLAN_KEY, RunPlan),
+    LedgerName.RUN_SHARDS: _DoorShape(("date", "run_id"), RunShards),
     LedgerName.COUNCIL_RUN_RECORDS: _DoorShape(
         COUNCIL_RUN_RECORD_KEY, CouncilRunRecord
     ),

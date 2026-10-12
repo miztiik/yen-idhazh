@@ -26,6 +26,10 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 **Shared support approved, 2026-10-11.** The owner selected A1: an identity-free failed-rule ranking, structured timing rules, explicit histogram bar colours, and an item-duration stack with a separately labelled overlap deduction and elapsed-time marker. Count summarization once and keep calls as non-additive details. Use one stated article cohort; retain unknowns separately from recorded zero and positive gaps separately from overlap. Row 2b owns the shared APIs, their dependent compiler inputs, test registration and inventory. Route rows wire those APIs without broadening a query or publishing private build-time inputs.
 
+**Hardware foundation approved, 2026-10-11 12:30 UTC.** After the actual Fowler consultation the owner selected A1: a narrow native `run-shards` ledger with only business `date`, `run_id`, nullable positive `shards`, inherited version and existing writer provenance, plus the necessary Hardware query fields. The exact historical and future source is `RunManifest.RunRecord.shards`, never observed hosts, maximum index, configuration or workflow dispatch count. Last numeric per run wins; later unknown never erases numeric. Preserve corrected-repeat settlement through packing without changing `run-plan`. Whole manifests, plans, article data and prompts remain unpublished. Future workflow dispatch versus CLI recomputation semantics are unchanged.
+
+**Row 9 delivery order.** Publish and merge the count foundation first, then verify its live daily/monthly coverage before the existing Hardware reader can merge. These are two stages of the same approved row, not a new counted row. This foundation registers the count vocabulary and bounded fixtures only; existing Hardware queries, panels and build-time manifest refusal stay unchanged until the reader stage.
+
 | Field | Value |
 | --- | --- |
 | **Blocked by** | Row 1 is in flight; rows 2 and 3 follow it. Plan 50 rows 9 and 12 are complete (#1166, #1161); publication and page-cache prerequisites are complete (#1169, #1157). The remaining dependencies are the rows in section 1, not a new measurement. **A route row (6 to 9) merges only when the live site carries what it reads** (section 1, "Before a route row merges"); until then its branch waits and the pool keeps running |
@@ -73,7 +77,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 6 | Pipelines asks the ledger | 5, 2b | E | PENDING | - | - | - |
 | 7 | Summaries asks the ledger | 5, 2b | E | PENDING | - | - | - |
 | 8 | Voices asks the ledger, and the ranking panels join it | 4 | D | DONE | p52-voices-ledgers (`feat/console-voices-ledgers`) | Read from merge | Row8 finishing worker; actual Susan/Fowler consultations |
-| 9 | Hardware asks the ledger, and its page carries no data | 5 | E | PENDING | - | - | - |
+| 9 | Hardware asks the ledger, and its page carries no data | 5 | E | IN-FLIGHT: count foundation ready/reader pending | p52-hardware-counts (`feat/console-hardware-counts`); reader retained in p52-machine-ledgers | Read from merge | Count foundation owner; parent owns reader integration |
 | 10 | The `telemetry` and `run-timeline` projections go | 6 | F | PENDING | - | - | - |
 | 11 | ECharts leaves | 7, 8, 9, 10 | G | PENDING | - | - | - |
 | 12 | Moved to #1189: the aggregate is deleted and one item's trace is a command | - | H | COLLAPSED | - | - | - |

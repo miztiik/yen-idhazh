@@ -20,6 +20,14 @@ The machine mix queries the packed host-fingerprint ledger in the browser
 through [the shared query reader](how-the-query-door-answers-a-panel.md).
 The other panels still read their ledgers at build time under `$lib/server/`.
 
+The native `run-shards` count foundation is published before the remaining
+Hardware readers move. It carries only the manifest's recorded date, run
+identity and nullable positive shard count, with existing writer provenance.
+See [the state ledgers](../contracts/state-ledgers.md). This foundation does
+not change the current panels, their build-time manifest refusal or their
+queries. A later reader must distinguish an unavailable count read from a
+successfully read historical null.
+
 | Group | Panel | Grain | The sentence it is for |
 | --- | --- | --- | --- |
 | What the machine was doing | Whether the speed numbers can be trusted | one bar a shard | Whether the day's rates can be trusted at all. |

@@ -18,6 +18,7 @@ from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import COLUMN_READERS as ITEM_READERS
 from idhazh.contracts.item_health import MACHINE_CELLS_RENAMED, UNREAD_CELLS, ItemHealthRow
 from idhazh.contracts.knobs.ledger import LedgerConfig
+from idhazh.contracts.run_shards import RunShards
 
 pytestmark = pytest.mark.contract
 
@@ -163,10 +164,23 @@ def load_queries() -> tuple[QueryDeclaration, ...]:
 
 def row_columns() -> dict[str, tuple[str, ...]]:
     return {
+        "run-shards": tuple(RunShards.model_fields),
         "item-health": ItemHealthRow.csv_columns(),
         "host-fingerprint": HostFingerprintRow.csv_columns(),
         "summary-quality-evals": EvalRow.csv_columns(),
     }
+
+
+def test_count_capability_binds_only_the_approved_business_columns() -> None:
+    settings = LedgerConfig.model_validate(
+        json.loads(read_text(REPO_ROOT / "config/idhazh.json"))["ledger"]
+    )
+    count = QueryDeclaration(
+        module="machine", name="runShardsQuery", ledger="run-shards",
+        columns=("date", "run_id", "shards"), span="widest",
+    )
+    assert query_faults(count, settings.published, row_columns(), {}) == ()
+    assert set(RunShards.model_fields) == {"version", *count.columns}
 
 
 def test_every_declared_query_uses_a_published_ledger_and_its_actual_row() -> None:
