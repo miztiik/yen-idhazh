@@ -19,6 +19,22 @@ RUN = f"{DAY}-18012345678"
 START = datetime(2026, 9, 27, 0, 40, tzinfo=UTC)
 
 
+class _NativeEvents:
+    native = True
+
+    def __init__(self, *, started: bool, active: bool = True) -> None:
+        self.native_started = started
+        self._active = active
+
+    def begin_job(self) -> bool:
+        if self.native_started:
+            raise OSError("native command already published")
+        return self._active
+
+    def end_job(self) -> bool:
+        return True
+
+
 @pytest.mark.parametrize("fails", [False, True], ids=["success", "failed-work"])
 def test_both_halves_name_one_attempt_and_clock_the_work(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fails: bool
@@ -99,3 +115,71 @@ def test_instrument_io_failure_is_reported_without_losing_the_work(
     assert written == []
     assert "machine probe not written" in caplog.text
     assert "machine clock not written" in caplog.text
+
+
+def test_native_boundary_is_the_sole_raw_host_writer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = config.load()
+    events = _NativeEvents(started=False)
+    monkeypatch.setattr(
+        job_machine.silicon,
+        "file_machine_row",
+        lambda **_: pytest.fail("Python machine writer competed with native output"),
+    )
+    monkeypatch.setattr(
+        job_machine.silicon,
+        "file_job_clock",
+        lambda **_: pytest.fail("Python clock writer competed with native output"),
+    )
+
+    with job_machine.record(
+        date=DAY,
+        run_id=RUN,
+        settings=settings,
+        state_root=tmp_path,
+        commit_sha=SEED_COMMIT,
+        job=ServerJob.RUN_TASKS,
+        host_events=events,  # type: ignore[arg-type]
+    ) as written:
+        assert written == []
+
+
+def test_native_failure_after_publication_does_not_fall_back(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = config.load()
+    events = _NativeEvents(started=True)
+    monkeypatch.setattr(
+        job_machine.silicon,
+        "file_machine_row",
+        lambda **_: pytest.fail("partial native session must not write a Python row"),
+    )
+    with pytest.raises(OSError, match="native command already published"):
+        with job_machine.record(
+            date=DAY,
+            run_id=RUN,
+            settings=settings,
+            state_root=tmp_path,
+            commit_sha=SEED_COMMIT,
+            job=ServerJob.RUN_TASKS,
+            host_events=events,  # type: ignore[arg-type]
+        ):
+            raise AssertionError("native setup should fail before work starts")
+
+
+def test_native_unavailable_before_publication_keeps_legacy_writer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = config.load()
+    events = _NativeEvents(started=False, active=False)
+    with job_machine.record(
+        date=DAY,
+        run_id=RUN,
+        settings=settings,
+        state_root=tmp_path,
+        commit_sha=SEED_COMMIT,
+        job=ServerJob.RUN_TASKS,
+        host_events=events,  # type: ignore[arg-type]
+    ) as written:
+        assert written

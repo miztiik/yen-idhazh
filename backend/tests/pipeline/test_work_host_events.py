@@ -7,6 +7,7 @@ from pathlib import Path
 from pytest import MonkeyPatch
 from test_host_event_client import SessionPeer, _manifest
 
+from idhazh.telemetry import host
 from idhazh.telemetry.host_event_client import HostEventClient
 from idhazh.telemetry.record import HEALTH_SUFFIX
 
@@ -39,5 +40,36 @@ def test_no_scoring_window_finishes_before_health_is_sealed(
             kind for _ in plan.items for kind in ("window.begin", "window.end")
         ]
         assert (items / f"{item.item_id}{HEALTH_SUFFIX}").is_file()
+    finally:
+        peer.close()
+
+
+def test_native_window_cells_feed_item_health_without_python_watch(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    plan = headless_plan()
+    item = plan.items[0]
+    manifest = _manifest(tmp_path, item_id=tuple(value.item_id for value in plan.items))
+    peer = SessionPeer(tmp_path, manifest)
+    client = HostEventClient(tmp_path, Path("manifest.json"), Path("config.json"), native=True)
+    monkeypatch.setattr(
+        host,
+        "Watch",
+        lambda **_: (_ for _ in ()).throw(AssertionError("native path opened Python Watch")),
+    )
+    try:
+        _, items, _ = _work_stage(
+            tmp_path,
+            monkeypatch,
+            replies=(LABEL_REPLY.read_bytes(), SUMMARIZE_AND_PLAN_REPLY.read_bytes()),
+            fetcher=headless_page_fetch,
+            run_plan=plan,
+            host_events=client,
+        )
+        assert (items / f"{item.item_id}{HEALTH_SUFFIX}").is_file()
+        assert [event.kind for event in peer.seen] == [
+            "worker.register",
+            *[kind for _ in plan.items for kind in ("window.begin", "window.end")],
+        ]
     finally:
         peer.close()

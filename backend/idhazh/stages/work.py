@@ -366,7 +366,12 @@ def stage_work(
     # 80 scans for an answer that cannot change inside a shard.
     server_pid = host.llama_server_pid()
     if host_events is not None:
-        host_events.register_worker(server_pid=server_pid)
+        if not host_events.register_worker(server_pid=server_pid) and host_events.native:
+            # Readiness is checked before any native command is published.  In
+            # that one pre-publication case the legacy collector remains a
+            # deliberate, reversible fallback; native failures after this point
+            # propagate and cannot create a second writer.
+            host_events = None
     shard_facts = host.host_facts(job=ServerJob.WORK)
     shard_cells = _shard_cells(settings, shard=shard, shard_item_count=len(mine), facts=shard_facts)
     failures: dict[str, int] = {}
@@ -482,16 +487,20 @@ def stage_work(
         )
         recorder.note(queue_wait_ms=queue_wait_ms)
         recorder.parked(queue_wait_ms)
-        python_watch = host.Watch(
-            interval_s=flags.waiting_heartbeat_seconds,
-            server_pid=server_pid,
-            on_tick=_heartbeat(recorder),
-        )
-        watch_context = (
-            host_events.shadow_watch(python_watch, item_id=item.item_id)
-            if host_events is not None
-            else python_watch
-        )
+        watch_context: Any
+        if host_events is not None and host_events.native:
+            watch_context = host_events.native_watch(item_id=item.item_id)
+        else:
+            python_watch = host.Watch(
+                interval_s=flags.waiting_heartbeat_seconds,
+                server_pid=server_pid,
+                on_tick=_heartbeat(recorder),
+            )
+            watch_context = (
+                host_events.shadow_watch(python_watch, item_id=item.item_id)
+                if host_events is not None
+                else python_watch
+            )
         with (
             tracer.trace(_trace_id(plan.run_id, item)),
             tracer.span(telemetry.SpanName.ITEM) as item_span,

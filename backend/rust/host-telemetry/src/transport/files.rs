@@ -450,7 +450,10 @@ impl FileTransport {
         let path = self.path(event.event_id, "consumed")?;
         let direction = if matches!(
             event.kind,
-            EventKind::WorkerRegister
+            EventKind::HostProbe
+                | EventKind::HostTarget
+                | EventKind::HostClock
+                | EventKind::WorkerRegister
                 | EventKind::WindowBegin
                 | EventKind::WindowEnd
                 | EventKind::WindowAbort

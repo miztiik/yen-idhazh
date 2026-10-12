@@ -4,6 +4,7 @@ mod support;
 use idhazh_host_telemetry::{
     config::{CodecConfig, Lifecycle},
     contracts::{events::*, file_envelope::*},
+    monitor::session::{NativeHostOutput, Session},
     probe_inputs::placement,
     producers::{
         job_clock,
@@ -187,6 +188,109 @@ fn whole_native_files_and_receipts_preserve_hardware_across_target_and_clock() {
         .unwrap();
     }
 }
+
+#[test]
+fn probe_leaves_manifest_target_for_the_explicit_target_command() {
+    let manifest = support::manifest();
+    assert!(manifest.cpu_target.is_some());
+    let replay = support::replay();
+    let result = job_probe::probe(
+        &manifest,
+        &support::command(&manifest, EventKind::HostProbe, 1, None, false),
+        &replay.attempts[0],
+        &placement::recorded(replay.placement_json.value.as_ref().unwrap().as_bytes()),
+        replay.runner_name,
+        "2026-10-10T12:00:00Z",
+        2,
+    )
+    .unwrap();
+    assert_eq!(result.cpu.target, None);
+    assert_eq!(result.row.cpu_target_measured_at, None);
+}
+
+#[test]
+fn monitor_admits_native_probe_only_after_plan_and_completion_are_bound() {
+    let workspace = support::workspace("monitor-native-probe");
+    let manifest = support::manifest();
+    let replay = support::replay();
+    let command = support::command(&manifest, EventKind::HostProbe, 1, None, false);
+    let result = job_probe::probe(
+        &manifest,
+        &command,
+        &replay.attempts[0],
+        &placement::recorded(replay.placement_json.value.as_ref().unwrap().as_bytes()),
+        replay.runner_name,
+        "2026-10-10T12:00:00Z",
+        2,
+    )
+    .unwrap();
+    let identity = HostWriterIdentity {
+        run_id: manifest.run_id.clone(),
+        attempt: manifest.attempt,
+        job: manifest.job,
+        shard: manifest.shard,
+        producer: "telemetry.silicon".to_owned(),
+        git_sha: manifest.git_sha.clone(),
+    };
+    let prefix = vec!["host-fingerprint".to_owned()];
+    let codec = CodecConfig {
+        format: Format::Json,
+        compression: Compression::None,
+    };
+    let limits = receipts::ReceiptLimits {
+        max_files: 64,
+        max_file_bytes: 1048576,
+        max_total_bytes: 16777216,
+        max_document_bytes: 262144,
+    };
+    let publication = Publication {
+        workspace: &workspace,
+        target_root: &manifest.output_roots[0],
+        evidence_root: &manifest.event_root,
+        prefix: &prefix,
+        identity: &identity,
+        codec: &codec,
+        lifecycle: Lifecycle::Active,
+        event_id: command.event_id,
+        written_at_ms: replay.written_at_ms,
+        limits: &limits,
+    };
+    let produced = job_probe::publish(&publication, result, None)
+        .unwrap()
+        .unwrap();
+    let mut session = Session::new(manifest).unwrap();
+    session.ready("2026-10-10T12:00:00Z", 0).unwrap();
+    let replies = session
+        .handle_host(
+            &command,
+            NativeHostOutput {
+                result: produced.result,
+                plan: produced.plan,
+                completion: produced.completion,
+                emitted_at: replay.captured_at.clone(),
+            },
+            1,
+        )
+        .unwrap();
+    assert_eq!(
+        replies.iter().map(|event| event.kind).collect::<Vec<_>>(),
+        vec![
+            EventKind::WritePlan,
+            EventKind::WriteCompleted,
+            EventKind::HostResult
+        ]
+    );
+    let EventBody::HostResult(result) = &replies[2].body else {
+        panic!("native probe did not return host.result");
+    };
+    let EventBody::Completed(completed) = &replies[1].body else {
+        panic!("native probe did not return host.write.completed");
+    };
+    assert_eq!(result.completion_event_ids, vec![replies[1].event_id]);
+    assert_eq!(completed.completion.event_id, command.event_id);
+    assert_eq!(replies[2].emitted_at, replay.captured_at);
+}
+
 #[test]
 fn conflicting_target_and_foreign_attempt_are_refused_before_publication() {
     let mut manifest = support::manifest();

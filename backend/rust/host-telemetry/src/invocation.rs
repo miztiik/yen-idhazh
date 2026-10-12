@@ -71,6 +71,10 @@ pub fn execute(verb: &str, args: BTreeMap<String, String>) -> Result<()> {
     let result_id: Uuid = required("--result-id")?
         .parse()
         .map_err(|e: uuid::Error| e.to_string())?;
+    let completion_id = args
+        .get("--completion-id")
+        .map(|value| value.parse().map_err(|e: uuid::Error| e.to_string()))
+        .transpose()?;
     let target_root = args
         .get("--output-root")
         .map(String::as_str)
@@ -136,7 +140,7 @@ pub fn execute(verb: &str, args: BTreeMap<String, String>) -> Result<()> {
             intended.plan.files.len() == 1
                 && intended.plan.files[0].rows.len() == 1
                 && intended.plan.files[0].rows[0].host == result.row
-                && result.completion_event_ids == [command.event_id],
+                && result.completion_event_ids == [completion_id.unwrap_or(command.event_id)],
             "intended row differs from native plan",
         )?;
         let prepared = store::prepare_plan(&workspace, intended.plan)?;
@@ -217,7 +221,10 @@ pub fn execute(verb: &str, args: BTreeMap<String, String>) -> Result<()> {
             cpu: Path::new(required("--cpu-root")?),
             namespace: Path::new(required("--namespace-root")?),
         };
-        let selected = body.target.as_ref().or(manifest.cpu_target.as_ref());
+        // Probe and target are separate lifecycle commands.  The manifest
+        // selects the legal target, but a probe must not silently capture it;
+        // host.target owns that enrichment and its successor checks.
+        let selected = body.target.as_ref();
         if let Some(text) = named_text(
             "--affinity-input",
             manifest.capture_limits.max_proc_text_bytes as usize,
@@ -262,7 +269,7 @@ pub fn execute(verb: &str, args: BTreeMap<String, String>) -> Result<()> {
                 .ok_or_else(|| "missing CPU capture".to_owned())
         }
     };
-    let result = match verb {
+    let mut result = match verb {
         "probe" => {
             let where_ = if let Some(replay) = &replay {
                 placement::recorded(
@@ -333,6 +340,9 @@ pub fn execute(verb: &str, args: BTreeMap<String, String>) -> Result<()> {
         }
         _ => return Err("unknown producer command".to_owned()),
     };
+    if let Some(completion_id) = completion_id {
+        result.completion_event_ids = vec![completion_id];
+    }
     let codec = CodecConfig {
         format: match args
             .get("--format")

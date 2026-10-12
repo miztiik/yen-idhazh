@@ -45,10 +45,13 @@ def record(
     """
     started = started_at if started_at is not None else clock()
     written: list[Path] = []
+    native_active = False
     if host_events is not None:
         try:
-            host_events.begin_job()
+            native_active = host_events.begin_job()
         except OSError as error:
+            if host_events.native and host_events.native_started:
+                raise
             _LOG.warning(
                 "native machine probe unavailable run=%s job=%s error=%s",
                 run_id,
@@ -56,36 +59,8 @@ def record(
                 type(error).__name__,
             )
     try:
-        _, paths = silicon.file_machine_row(
-            date=date,
-            run_id=run_id,
-            settings=settings,
-            state_root=state_root,
-            commit_sha=commit_sha,
-            job=job,
-            shard=shard,
-            attempt=attempt,
-        )
-        written.extend(paths)
-    except OSError as error:
-        _LOG.warning(
-            "machine probe not written run=%s job=%s error=%s", run_id, job, type(error).__name__
-        )
-    try:
-        yield written
-    finally:
-        if host_events is not None:
-            try:
-                host_events.end_job()
-            except OSError as error:
-                _LOG.warning(
-                    "native machine clock unavailable run=%s job=%s error=%s",
-                    run_id,
-                    job,
-                    type(error).__name__,
-                )
-        try:
-            _, paths = silicon.file_job_clock(
+        if not native_active:
+            _, paths = silicon.file_machine_row(
                 date=date,
                 run_id=run_id,
                 settings=settings,
@@ -94,14 +69,46 @@ def record(
                 job=job,
                 shard=shard,
                 attempt=attempt,
-                job_started_at=int(started.timestamp()),
-                finished_at=clock().strftime("%Y-%m-%dT%H:%M:%SZ"),
             )
             written.extend(paths)
-        except OSError as error:
-            _LOG.warning(
-                "machine clock not written run=%s job=%s error=%s",
-                run_id,
-                job,
-                type(error).__name__,
-            )
+    except OSError as error:
+        _LOG.warning(
+            "machine probe not written run=%s job=%s error=%s", run_id, job, type(error).__name__
+        )
+    try:
+        yield written
+    finally:
+        if native_active and host_events is not None:
+            try:
+                host_events.end_job()
+            except OSError as error:
+                if host_events.native_started:
+                    raise
+                _LOG.warning(
+                    "native machine clock unavailable run=%s job=%s error=%s",
+                    run_id,
+                    job,
+                    type(error).__name__,
+                )
+        if not native_active:
+            try:
+                _, paths = silicon.file_job_clock(
+                    date=date,
+                    run_id=run_id,
+                    settings=settings,
+                    state_root=state_root,
+                    commit_sha=commit_sha,
+                    job=job,
+                    shard=shard,
+                    attempt=attempt,
+                    job_started_at=int(started.timestamp()),
+                    finished_at=clock().strftime("%Y-%m-%dT%H:%M:%SZ"),
+                )
+                written.extend(paths)
+            except OSError as error:
+                _LOG.warning(
+                    "machine clock not written run=%s job=%s error=%s",
+                    run_id,
+                    job,
+                    type(error).__name__,
+                )

@@ -3,9 +3,11 @@
 use crate::config::ExperimentConfig;
 use crate::contracts::events::*;
 use crate::contracts::host::require;
-use crate::monitor::session::Session;
+use crate::contracts::write_plan::HostWritePlan;
+use crate::monitor::session::{NativeHostOutput, Session};
 use crate::producers::job_samples::{self, Artifacts};
 use crate::sampling::capture::{LiveCapture, ResourceFrame, ResourceReplay, utc_now};
+use crate::transport::bounds::refuse;
 use crate::transport::files::{FileTransport, read_bounded};
 use crate::{Result, Validate};
 use std::{
@@ -260,6 +262,182 @@ fn artifact_root(
     )?;
     Ok(root)
 }
+
+fn native_host_output(
+    workspace: &Path,
+    session: &Session,
+    files: &mut FileTransport,
+    command: &HostEvent,
+    monitor_args: &BTreeMap<String, String>,
+) -> Result<NativeHostOutput> {
+    let EventBody::HostCommand(body) = &command.body else {
+        return Err("host command has wrong body".to_owned());
+    };
+    let (_, completed_id, result_id) = session.host_reply_ids(command.event_id);
+    let verb = match command.kind {
+        EventKind::HostProbe => "probe",
+        EventKind::HostTarget => "target",
+        EventKind::HostClock => "clock",
+        _ => return Err("native output requested for a non-host command".to_owned()),
+    };
+    let mut args = BTreeMap::new();
+    args.insert(
+        "--workspace".to_owned(),
+        workspace.to_string_lossy().into_owned(),
+    );
+    args.insert(
+        "--manifest".to_owned(),
+        monitor_args
+            .get("--manifest")
+            .ok_or("monitor requires --manifest for native host commands")?
+            .clone(),
+    );
+    args.insert(
+        "--config".to_owned(),
+        monitor_args
+            .get("--config")
+            .ok_or("monitor requires --config for native host commands")?
+            .clone(),
+    );
+    args.insert(
+        "--command".to_owned(),
+        files.relative_path(command.event_id, "inbox")?,
+    );
+    args.insert("--result-id".to_owned(), result_id.to_string());
+    args.insert("--completion-id".to_owned(), completed_id.to_string());
+    args.insert(
+        "--proc-root".to_owned(),
+        monitor_args
+            .get("--proc-root")
+            .cloned()
+            .unwrap_or_else(|| "/proc".to_owned()),
+    );
+    args.insert(
+        "--cpu-root".to_owned(),
+        monitor_args
+            .get("--cpu-root")
+            .cloned()
+            .unwrap_or_else(|| "/sys/devices/system/cpu".to_owned()),
+    );
+    args.insert(
+        "--namespace-root".to_owned(),
+        monitor_args
+            .get("--namespace-root")
+            .cloned()
+            .unwrap_or_else(|| "/".to_owned()),
+    );
+    args.insert(
+        "--output-root".to_owned(),
+        monitor_args
+            .get("--output-root")
+            .cloned()
+            .unwrap_or_else(|| session.manifest.output_roots[0].clone()),
+    );
+    args.insert(
+        "--format".to_owned(),
+        monitor_args
+            .get("--format")
+            .cloned()
+            .unwrap_or_else(|| "parquet".to_owned()),
+    );
+    args.insert(
+        "--compression".to_owned(),
+        monitor_args
+            .get("--compression")
+            .cloned()
+            .unwrap_or_else(|| "zstd".to_owned()),
+    );
+    args.insert(
+        "--cache-multiple".to_owned(),
+        monitor_args
+            .get("--cache-multiple")
+            .cloned()
+            .unwrap_or_else(|| "2".to_owned()),
+    );
+    args.insert(
+        "--memory-profiling".to_owned(),
+        if session.manifest.controls.memory_profiling_enabled {
+            "on".to_owned()
+        } else {
+            "off".to_owned()
+        },
+    );
+    if let Some(previous) = body.previous_result_id {
+        args.insert(
+            "--previous-result".to_owned(),
+            files.relative_path(previous, "results")?,
+        );
+        let previous_plan = format!(
+            "{}/writes/{}.plan.json",
+            session.manifest.event_root,
+            session
+                .last_host_command_id()
+                .ok_or("missing prior native host command")?
+        );
+        args.insert("--previous-plan".to_owned(), previous_plan);
+    }
+    for name in &body.input_names {
+        let input = session
+            .manifest
+            .named_inputs
+            .iter()
+            .find(|entry| &entry.name == name)
+            .ok_or("host command names an undeclared input")?;
+        let key = match input.name.as_str() {
+            "metadata" => "--metadata-input",
+            "snapshot" => "--snapshot",
+            "affinity" => "--affinity-input",
+            "hierarchy" => "--hierarchy-input",
+            "start" => "--job-start-input",
+            "log" | "clock" => "--log-input",
+            "metrics" => "--metrics-input",
+            _ => match input.source {
+                CaptureSource::Cpuinfo => "--metadata-input",
+                CaptureSource::ClockLog => "--log-input",
+                CaptureSource::Affinity => "--affinity-input",
+                _ => continue,
+            },
+        };
+        // Producer arguments name a manifest input; invocation resolves the
+        // declared relative path only after validating command selection.
+        args.insert(key.to_owned(), input.name.clone());
+    }
+    crate::invocation::execute(verb, args)?;
+    let result_event = files.read(result_id, "results")?;
+    let EventBody::HostResult(result) = result_event.body else {
+        return Err("native producer wrote a non-host result".to_owned());
+    };
+    let evidence = format!("{}/writes", session.manifest.event_root);
+    let plan_path = format!("{evidence}/{}.plan.json", command.event_id);
+    let plan: HostWritePlan = serde_json::from_slice(&crate::transport::files::read_bounded(
+        &crate::ledger::paths::resolve_document(workspace, &plan_path)?,
+        session.manifest.limits.max_result_bytes as usize,
+    )?)
+    .map_err(|e| e.to_string())?;
+    let completion = crate::receipts::load_latest_completion(
+        workspace,
+        &evidence,
+        command.event_id,
+        session.manifest.limits.max_result_bytes as usize,
+    )?;
+    // The IDs are checked by Session; keeping this assertion here makes a
+    // producer that silently changes the deterministic reply reservation fail
+    // before any event is admitted.
+    require(
+        plan.event_id == command.event_id,
+        "native plan event ID differs",
+    )?;
+    require(
+        completed_id != result_event.event_id && result_event.event_id == result_id,
+        "native reply IDs drifted",
+    )?;
+    Ok(NativeHostOutput {
+        result: *result,
+        plan,
+        completion,
+        emitted_at: result_event.emitted_at,
+    })
+}
 fn publish_cancelled(
     session: &mut Session,
     files: &mut FileTransport,
@@ -316,6 +494,80 @@ fn replay(
                     if let Some(command) = &action.event {
                         files.publish(command, "inbox")?;
                         let command = files.read(command.event_id, "inbox")?;
+                        if matches!(
+                            command.kind,
+                            EventKind::HostProbe | EventKind::HostTarget | EventKind::HostClock
+                        ) {
+                            match session.preflight_host_command(&command, action.at_ms) {
+                                Ok(Some(replies)) => {
+                                    files.publish_batch(&replies, "results")?;
+                                    events.extend(replies.iter().cloned());
+                                    for event in std::iter::once(&command).chain(replies.iter()) {
+                                        files.consume(event)?;
+                                        session
+                                            .book
+                                            .consume(event.event_id)
+                                            .map_err(|error| error.to_string())?;
+                                    }
+                                    return Ok(());
+                                }
+                                Ok(None) => {}
+                                Err(error) => {
+                                    let fault = session.protocol_fault(
+                                        &error,
+                                        Some(command.event_id),
+                                        &frame.captured_at,
+                                        action.at_ms,
+                                    )?;
+                                    files.publish(&fault, "results")?;
+                                    events.push(fault);
+                                    return Err(error.to_string());
+                                }
+                            }
+                            let output =
+                                match native_host_output(workspace, session, files, &command, args)
+                                {
+                                    Ok(value) => value,
+                                    Err(error) => {
+                                        let native_error = refuse(ProtocolFaultCode::Store, &error);
+                                        let fault = session.protocol_fault(
+                                            &native_error,
+                                            Some(command.event_id),
+                                            &frame.captured_at,
+                                            action.at_ms,
+                                        )?;
+                                        files.publish(&fault, "results")?;
+                                        events.push(fault);
+                                        return Err(error);
+                                    }
+                                };
+                            let mut staged = session.clone();
+                            let replies = match staged.handle_host(&command, output, action.at_ms) {
+                                Ok(replies) => replies,
+                                Err(error) => {
+                                    let fault = session.protocol_fault(
+                                        &error,
+                                        Some(command.event_id),
+                                        &frame.captured_at,
+                                        action.at_ms,
+                                    )?;
+                                    files.publish(&fault, "results")?;
+                                    events.push(fault);
+                                    return Err(error.to_string());
+                                }
+                            };
+                            files.publish_batch(&replies, "results")?;
+                            *session = staged;
+                            events.extend(replies.iter().cloned());
+                            for event in std::iter::once(&command).chain(replies.iter()) {
+                                files.consume(event)?;
+                                session
+                                    .book
+                                    .consume(event.event_id)
+                                    .map_err(|error| error.to_string())?;
+                            }
+                            return Ok(());
+                        }
                         let mut staged = session.clone();
                         match staged.handle(&command, frame, action.at_ms) {
                             Ok(replies) => {
@@ -421,7 +673,10 @@ fn with_retired_consumed<T>(
         // Consumed evidence is the original closed event, not a second protocol shape.
         let direction = if matches!(
             evidence.kind,
-            EventKind::WorkerRegister
+            EventKind::HostProbe
+                | EventKind::HostTarget
+                | EventKind::HostClock
+                | EventKind::WorkerRegister
                 | EventKind::WindowBegin
                 | EventKind::WindowEnd
                 | EventKind::WindowAbort
@@ -544,6 +799,62 @@ fn live(
                             .cmp(&(b.emitter_id.as_str(), b.sequence))
                     });
                     for command in commands {
+                        if matches!(
+                            command.kind,
+                            EventKind::HostProbe | EventKind::HostTarget | EventKind::HostClock
+                        ) {
+                            match session.preflight_host_command(&command, now_ms) {
+                                Ok(Some(replies)) => {
+                                    files.publish_batch(&replies, "results")?;
+                                    continue;
+                                }
+                                Ok(None) => {}
+                                Err(error) => {
+                                    let fault = session.protocol_fault(
+                                        &error,
+                                        Some(command.event_id),
+                                        &utc_now(),
+                                        now_ms,
+                                    )?;
+                                    files.publish(&fault, "results")?;
+                                    return Err(error.to_string());
+                                }
+                            }
+                            let output =
+                                match native_host_output(workspace, session, files, &command, args)
+                                {
+                                    Ok(value) => value,
+                                    Err(error) => {
+                                        let native_error = refuse(ProtocolFaultCode::Store, &error);
+                                        let fault = session.protocol_fault(
+                                            &native_error,
+                                            Some(command.event_id),
+                                            &utc_now(),
+                                            now_ms,
+                                        )?;
+                                        files.publish(&fault, "results")?;
+                                        return Err(error);
+                                    }
+                                };
+                            let mut staged = session.clone();
+                            match staged.handle_host(&command, output, now_ms) {
+                                Ok(replies) => {
+                                    files.publish_batch(&replies, "results")?;
+                                    *session = staged;
+                                }
+                                Err(error) => {
+                                    let fault = session.protocol_fault(
+                                        &error,
+                                        Some(command.event_id),
+                                        &utc_now(),
+                                        now_ms,
+                                    )?;
+                                    files.publish(&fault, "results")?;
+                                    return Err(error.to_string());
+                                }
+                            }
+                            continue;
+                        }
                         require(
                             captures < session.manifest.limits.max_reads as u64,
                             "resource capture budget exhausted",

@@ -21,8 +21,12 @@ from idhazh.contracts.host_events import (
     ProtocolFaultCode,
     WindowAbortBody,
     WindowBody,
+    WindowResultBody,
     WorkerBody,
+    WriteCompletedBody,
+    WritePlanBody,
 )
+from idhazh.telemetry import host
 from idhazh.telemetry.host_event_files import HostEventFiles, HostProtocolError, event_bytes
 from idhazh.telemetry.host_evidence_inputs import CONFIG_BYTES, NativeSettings, read_bytes
 
@@ -38,7 +42,7 @@ def _monotonic_ms() -> int:
 
 
 class HostEventClient:
-    """One bounded file-event session used only when the shadow knob is on."""
+    """One bounded file-event session for shadow observation or native ownership."""
 
     def __init__(
         self,
@@ -47,24 +51,25 @@ class HostEventClient:
         config_path: Path,
         *,
         memory_profiling_enabled: bool | None = None,
+        native: bool = False,
     ) -> None:
         self.workspace = workspace.resolve(strict=True)
         self.config_path = self._inside(config_path)
-        native = NativeSettings.model_validate_json(read_bytes(self.config_path, CONFIG_BYTES))
+        effective = NativeSettings.model_validate_json(read_bytes(self.config_path, CONFIG_BYTES))
         self.files = HostEventFiles.open(
             self.workspace,
             self._inside(manifest_path),
-            limits=native.limits,
+            limits=effective.limits,
         )
         self.manifest = self.files.manifest
         if (
-            native.controls != self.manifest.controls
-            or native.capture_limits != self.manifest.capture_limits
+            effective.controls != self.manifest.controls
+            or effective.capture_limits != self.manifest.capture_limits
         ):
             raise ValueError("host event manifest differs from its named effective config")
         if (
             memory_profiling_enabled is not None
-            and native.controls.memory_profiling_enabled != memory_profiling_enabled
+            and effective.controls.memory_profiling_enabled != memory_profiling_enabled
         ):
             raise ValueError(
                 "host event effective memory control differs from the resolved invocation"
@@ -75,6 +80,18 @@ class HostEventClient:
         self._registered = False
         self._healthy = True
         self._last_host_result: UUID | None = None
+        self._native = native
+        self._native_started = False
+
+    @property
+    def native(self) -> bool:
+        """Whether this client owns the production host-row boundary."""
+        return self._native
+
+    @property
+    def native_started(self) -> bool:
+        """Whether a native command has been published in this session."""
+        return self._native_started
 
     def _inside(self, path: Path) -> Path:
         resolved = path if path.is_absolute() else self.workspace / path
@@ -319,6 +336,8 @@ class HostEventClient:
             memory_profiling_enabled=self.manifest.controls.memory_profiling_enabled,
         )
         command = self._event("worker.register", worker.emitter_id, body)
+        if self._native:
+            self._native_started = True
         self.files.publish(command, now_ms=_monotonic_ms())
         reply = self._wait(
             command,
@@ -326,6 +345,10 @@ class HostEventClient:
             timeout_ms=self.manifest.limits.ack_timeout_ms,
         )
         if reply is None:
+            if self._native:
+                raise HostProtocolError(
+                    ProtocolFaultCode.STORE, "native worker registration timed out"
+                )
             self._healthy = False
             _LOG.warning("host event registration unavailable reason=timed_out")
             return False
@@ -361,6 +384,32 @@ class HostEventClient:
         )
         return ShadowWatch(self, watch, body)
 
+    def native_watch(self, *, item_id: str) -> NativeWatch:
+        if self._worker_id is None:
+            raise ValueError("host event worker must register before opening a window")
+        declared = next(
+            (
+                entry
+                for entry in self.manifest.windows
+                if entry.item_id == item_id and entry.emitter_id == self._worker_id
+            ),
+            None,
+        )
+        if declared is None:
+            raise ValueError("host event manifest does not declare this item window")
+        worker = next(
+            entry for entry in self.manifest.workers if entry.emitter_id == self._worker_id
+        )
+        return NativeWatch(
+            self,
+            WindowBody(
+                window_id=declared.window_id,
+                item_id=declared.item_id,
+                target=worker.target,
+                server=worker.server,
+            ),
+        )
+
     def _window_command(
         self,
         kind: str,
@@ -377,14 +426,23 @@ class HostEventClient:
             _LOG.warning("host event window unavailable kind=%s reason=timed_out", kind)
         return reply
 
-    def begin_job(self) -> None:
+    def begin_job(self) -> bool:
+        if self._native and not self._registered:
+            if not self.register_worker(server_pid=host.llama_server_pid()):
+                return False
+        if not self._healthy:
+            return False
         self._host_command("host.probe")
         if self._last_host_result is not None and self.manifest.cpu_target is not None:
             self._host_command("host.target")
+        return True
 
-    def end_job(self) -> None:
+    def end_job(self) -> bool:
+        if not self._healthy:
+            return False
         if self._last_host_result is not None:
             self._host_command("host.clock")
+        return True
 
     def _host_command(self, kind: str) -> None:
         sources = {
@@ -404,8 +462,18 @@ class HostEventClient:
             previous_result_id=None if kind == "host.probe" else self._last_host_result,
         )
         command = self._event(kind, self.manifest.operator_emitter_id, body)
+        if self._native:
+            self._native_started = True
         self._publish_unchecked(command)
-        result = self._wait_unchecked(command)
+        result = self._wait_unchecked(
+            command,
+            expected={
+                "host.result",
+                "host.write.plan",
+                "host.write.completed",
+                "instrument.skipped",
+            },
+        )
         if result is None:
             raise TimeoutError(f"{kind} result timed out")
         if isinstance(result.body, HostResultBody):
@@ -442,7 +510,14 @@ class HostEventClient:
         finally:
             staging.unlink(missing_ok=True)
 
-    def _wait_unchecked(self, command: HostEvent) -> HostEvent | None:
+    def _wait_unchecked(
+        self, command: HostEvent, *, expected: set[str] | None = None
+    ) -> HostEvent | None:
+        expected = expected or {"host.result", "instrument.skipped", "protocol.fault"}
+        seen_kinds: set[str] = set()
+        completion_event_id: UUID | None = None
+        host_result: HostResultBody | None = None
+        host_result_event: HostEvent | None = None
         deadline = _monotonic_ms() + self.manifest.limits.ack_timeout_ms
         while True:
             for event_id in self._result_ids():
@@ -456,11 +531,7 @@ class HostEventClient:
                 if any(
                     getattr(result, name) != getattr(self.manifest, name)
                     for name in ("date", "run_id", "attempt", "job", "shard", "session_id")
-                ) or result.kind not in {
-                    "host.result",
-                    "instrument.skipped",
-                    "protocol.fault",
-                }:
+                ) or result.kind not in expected | {"protocol.fault"}:
                     raise HostProtocolError(
                         ProtocolFaultCode.IDENTITY, "host result invocation or kind differs"
                     )
@@ -470,9 +541,58 @@ class HostEventClient:
                     )
                 if isinstance(result.body, ProtocolFaultBody):
                     raise HostProtocolError(result.body.code, "host command failed")
+                if result.kind == "host.write.plan":
+                    if (
+                        not isinstance(result.body, WritePlanBody)
+                        or result.body.plan.event_id != command.event_id
+                    ):
+                        raise HostProtocolError(
+                            ProtocolFaultCode.IDENTITY, "host write plan differs from command"
+                        )
+                elif result.kind == "host.write.completed":
+                    if (
+                        not isinstance(result.body, WriteCompletedBody)
+                        or result.body.completion.event_id != command.event_id
+                    ):
+                        raise HostProtocolError(
+                            ProtocolFaultCode.IDENTITY,
+                            "host completion receipt differs from command",
+                        )
+                    completion_event_id = result.event_id
+                elif result.kind == "host.result":
+                    if not isinstance(result.body, HostResultBody):
+                        raise HostProtocolError(
+                            ProtocolFaultCode.IDENTITY, "host result body differs from command"
+                        )
+                    host_result = result.body
+                    host_result_event = result
                 self._consume(result)
-                self._consume(command)
-                return result
+                seen_kinds.add(result.kind)
+                if result.kind == "instrument.skipped" and "instrument.skipped" in expected:
+                    self._consume(command)
+                    return result
+                if (
+                    host_result_event is not None
+                    and "host.result" in expected
+                    and (
+                        not {"host.write.plan", "host.write.completed"} <= expected
+                        or {"host.write.plan", "host.write.completed"} <= seen_kinds
+                    )
+                ):
+                    if (
+                        {"host.write.plan", "host.write.completed"} <= expected
+                        and (
+                            completion_event_id is None
+                            or host_result is None
+                            or completion_event_id not in host_result.completion_event_ids
+                        )
+                    ):
+                        raise HostProtocolError(
+                            ProtocolFaultCode.IDENTITY,
+                            "host result does not reference its completion receipt",
+                        )
+                    self._consume(command)
+                    return host_result_event
             if _monotonic_ms() >= deadline:
                 return None
             time.sleep(self.manifest.limits.poll_ms / 1000)
@@ -526,3 +646,54 @@ class ShadowWatch:
             self._closed = True
         suppressed = self._watch.__exit__(exc_type, exc, traceback)
         return suppressed if isinstance(suppressed, bool) else None
+
+
+class NativeWatch:
+    """Use the Rust window result as the item-health host-cell source."""
+
+    def __init__(self, client: HostEventClient, body: WindowBody) -> None:
+        self._client = client
+        self._body = body
+        self._closed = False
+        self._result: WindowResultBody | None = None
+
+    def __enter__(self) -> NativeWatch:
+        begun = self._client._window_command("window.begin", self._body)
+        if begun is None:
+            raise HostProtocolError(ProtocolFaultCode.STORE, "native window begin timed out")
+        return self
+
+    def close(self) -> host.HostCells:
+        if not self._closed:
+            result = self._client._window_command("window.end", self._body)
+            if result is None or not isinstance(result.body, WindowResultBody):
+                raise HostProtocolError(
+                    ProtocolFaultCode.IDENTITY, "native window result body differs"
+                )
+            self._result = result.body
+            self._closed = True
+        if self._result is None:
+            raise HostProtocolError(ProtocolFaultCode.STATE, "native window has no result")
+        return host.HostCells(**self._result.cells.model_dump())
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> bool | None:
+        if not self._closed:
+            if exc_type is None:
+                self.close()
+            else:
+                reason: Literal["cancelled", "work_failed"] = (
+                    "cancelled" if not issubclass(exc_type, Exception) else "work_failed"
+                )
+                abort = WindowAbortBody(**self._body.model_dump(), reason=reason)
+                try:
+                    self._client._window_command("window.abort", abort)
+                except Exception as event_error:
+                    assert exc is not None
+                    exc.add_note(f"native host abort also failed: {type(event_error).__name__}")
+                self._closed = True
+        return None

@@ -16,6 +16,7 @@ from idhazh.contracts.host_events import (
     HostEvent,
     HostSessionManifest,
     HostWindowCells,
+    InstrumentSkippedBody,
     MonitorReadyBody,
     UnavailableDiagnostic,
     UnavailableReason,
@@ -194,6 +195,17 @@ class SessionPeer:
                     assert isinstance(command.body, WorkerBody)
                     body: object = command.body
                     kind = "worker.registered"
+                elif command.kind in {"host.probe", "host.target", "host.clock"}:
+                    body = InstrumentSkippedBody(
+                        command_kind=command.kind,
+                        unavailable=(
+                            UnavailableDiagnostic(
+                                source=CaptureSource.CPUINFO,
+                                reason=UnavailableReason.PERMISSION_DENIED,
+                            ),
+                        ),
+                    )
+                    kind = "instrument.skipped"
                 elif command.kind == "window.begin":
                     body = WindowBegunBody(
                         **command.body.model_dump(), captured_at="2026-10-10T12:00:01Z"
@@ -269,10 +281,12 @@ class SessionPeer:
         self.thread.join(timeout=1)
 
 
-def _client(root: Path, *, incomplete_end: bool = False) -> tuple[HostEventClient, SessionPeer]:
+def _client(
+    root: Path, *, incomplete_end: bool = False, native: bool = False
+) -> tuple[HostEventClient, SessionPeer]:
     manifest = _manifest(root)
     peer = SessionPeer(root, manifest, incomplete_end=incomplete_end)
-    return HostEventClient(root, Path("manifest.json"), Path("config.json")), peer
+    return HostEventClient(root, Path("manifest.json"), Path("config.json"), native=native), peer
 
 
 def test_window_events_bracket_the_authoritative_watch_once(tmp_path: Path) -> None:
@@ -326,5 +340,35 @@ def test_exited_target_result_does_not_replace_python_cells(tmp_path: Path) -> N
             cells = watch.close()
         assert isinstance(cells, host.HostCells)
         assert peer.seen[-1].kind == "window.end"
+    finally:
+        peer.close()
+
+
+def test_native_window_result_becomes_item_health_cells(tmp_path: Path) -> None:
+    client, peer = _client(tmp_path, native=True)
+    try:
+        assert client.register_worker(server_pid=None)
+        with client.native_watch(item_id="item-01") as watch:
+            cells = watch.close()
+        assert cells.cpu_busy_pct == 0.0
+        assert cells.load_1m == 0.0
+        assert [event.kind for event in peer.seen] == [
+            "worker.register",
+            "window.begin",
+            "window.end",
+        ]
+    finally:
+        peer.close()
+
+
+def test_native_unavailable_command_is_a_typed_refusal_without_python_fallback(
+    tmp_path: Path,
+) -> None:
+    client, peer = _client(tmp_path, native=True)
+    try:
+        assert client.register_worker(server_pid=None)
+        assert client.begin_job()
+        assert client.native_started
+        assert [event.kind for event in peer.seen] == ["worker.register", "host.probe"]
     finally:
         peer.close()

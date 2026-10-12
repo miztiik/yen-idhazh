@@ -144,9 +144,15 @@ def _host_event_client(
     args: argparse.Namespace,
     settings: config.Settings,
 ) -> HostEventClient | None:
-    """Open the isolated event session only when its temporary switch is on."""
-    if not settings.app.observability.host_event_shadow:
+    """Open the isolated event session for the selected legacy/shadow/native mode."""
+    observability = settings.app.observability
+    mode = observability.host_event_mode
+    if mode == "legacy" and observability.host_event_shadow:
+        mode = "shadow"
+    if mode == "legacy":
         return None
+    if mode == "native" and observability.host_event_shadow:
+        parser.error("host_event_shadow cannot be combined with host_event_mode=native")
     values = {
         "--host-event-workspace": args.host_event_workspace,
         "--host-event-manifest": args.host_event_manifest,
@@ -163,6 +169,7 @@ def _host_event_client(
         args.host_event_manifest,
         args.host_event_config,
         memory_profiling_enabled=settings.app.observability.memory_profiling_enabled,
+        native=mode == "native",
     )
 
 
@@ -587,6 +594,15 @@ def _main(argv: Sequence[str] | None = None) -> int:
         help="The named effective native config, relative to its isolated workspace.",
     )
     parser.add_argument(
+        "--host-event-mode",
+        choices=("legacy", "shadow", "native"),
+        default=None,
+        help=(
+            "Override the host-row boundary for this invocation. Native requires the "
+            "workflow's validated Rust session; the default remains legacy."
+        ),
+    )
+    parser.add_argument(
         "--server-log",
         type=Path,
         default=Path("llama-server.log"),
@@ -673,6 +689,8 @@ def _main(argv: Sequence[str] | None = None) -> int:
     settings = config.with_memory_profiling_override(
         config.load(args.config), args.memory_profiling
     )
+    if args.host_event_mode is not None:
+        settings.app.observability.host_event_mode = args.host_event_mode
     if (
         args.stage in {"work", "run"}
         and not settings.app.observability.memory_profiling_enabled
