@@ -15,7 +15,11 @@ from idhazh.contracts.host_events import (
     ProcessTarget,
 )
 from idhazh.contracts.host_evidence import EVIDENCE_VERSION, ReferenceSample
-from idhazh.contracts.host_fingerprint import HostFingerprintRow, normalize_host_row
+from idhazh.contracts.host_fingerprint import (
+    LEGACY_HOST_VERSIONS,
+    HostFingerprintRow,
+    normalize_host_row,
+)
 from idhazh.telemetry import host, silicon
 from idhazh.telemetry.host_evidence_inputs import ComparisonSettings, NativeSettings, read_bytes
 from utilities import memory_sampler
@@ -258,6 +262,7 @@ def host_row(
             "run_id": run_id,
             "job": ServerJob.WORK,
             "shard": 0,
+            "version": LEGACY_HOST_VERSIONS[-1],
             "fingerprint": silicon.fingerprint_of(cells),
             "mhz_max": silicon._as_float(fields.get("cpu MHz")),
             "mhz_at_probe": statistics.mean(clocks) if clocks else None,
