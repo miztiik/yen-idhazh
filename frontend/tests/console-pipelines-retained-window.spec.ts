@@ -103,7 +103,7 @@ test('the retained run square names only the run that actually cut an article', 
 		height: 220, width: 760, tickDensity: 6, readoutMaxShare: 1
 	}, [...html.matchAll(/href="([^"]+\.css)"/g)].map((match) => match[1]));
 	await expect(page.locator('[data-health]')).toHaveCount(2);
-	await expect(page.locator('[data-health]').nth(0)).toHaveAttribute('aria-label', /1 article read only in part/);
+	await expect(page.locator('[data-health]').nth(0)).toHaveAttribute('aria-label', /1 read only in part/);
 	await expect(page.locator('[data-health]').nth(1)).not.toHaveAttribute('aria-label', /read only in part/);
-	await expect(page.locator('[data-readout-row="Run 1"]')).toContainText('1 article read only in part');
+	await expect(page.locator('[data-readout-row="Run 1"]')).toContainText('1 read only in part');
 });

@@ -17,7 +17,12 @@ for (const width of [390, 1280]) {
 			'item-cost', 'run-timeline', 'article-age'];
 		for (const id of native) {
 			const panel = page.locator(`[data-console-panel-id="${id}"]`);
-			await expect(panel.locator('svg')).not.toHaveCount(0);
+			const marks = panel.locator(id === 'run-timeline' ? '[data-timeline-bar]' : 'svg');
+			await expect(marks).not.toHaveCount(0);
+			const box = await marks.first().boundingBox();
+			expect(box).not.toBeNull();
+			expect(box!.width).toBeGreaterThan(0);
+			expect(box!.height).toBeGreaterThan(0);
 		}
 		const count = 8 * Math.max(8, Math.ceil(appearance.console.fleet_min_rows / 8));
 		await expect(page.locator('[data-duration-cohort]')).toContainText(`${count} of ${count} recorded item clocks`);
