@@ -370,18 +370,10 @@ def _month_read(path: str) -> str | None:
     return None
 
 
-def test_a_knob_below_one_month_would_delete_the_month_being_written(
-    tree: tuple[Path, Path],
-) -> None:
-    _state, digest = tree
-    with pytest.raises(ValueError, match="fewer than one month"):
-        series.prune_months(digest, "run-timeline", ".csv", keep_months=0, today=TODAY)
-
-
 # --- the band ----------------------------------------------------------------
 
 
-def _band(state: Path, digest: Path, *, months: set[str] | None = None) -> Any:
+def _band(state: Path, digest: Path) -> Any:
     console_band.publish(
         state_root=state,
         digest_root=digest,
@@ -406,7 +398,7 @@ def test_the_band_names_the_newest_day_in_every_sentence(tree: tuple[Path, Path]
     assert band.verdict.sentence.startswith(f"{NEWEST_DAY} ran 1 run and published 3 of 4")
     assert band.verdict.health is Health.AMBER
     assert [square.label for square in band.verdict.runs] == ["Run 1 is worth a look"]
-    assert band.months == []
+    assert "months" not in band.model_dump()
 
 
 @pytest.mark.parametrize(
@@ -464,7 +456,7 @@ def test_the_band_ignores_public_mirrors_and_never_opens_a_day_payload(
     (telemetry / f"{NEWEST}.csv").write_text("", encoding="utf-8")
     _OPENED.clear()
     band = _band(state, digest)
-    assert band.months == [NEWEST]
+    assert "months" not in band.model_dump()
     assert band.verdict.date == NEWEST_DAY
     assert band.size.bytes == 1_060_000
     assert band.settings_moved is not None and band.checker_moved is not None
@@ -867,12 +859,12 @@ def test_a_tree_with_no_run_says_so_rather_than_printing_a_zero(tmp_path: Path) 
     digest = tmp_path / "frontend" / "public" / "digest"
     digest.mkdir(parents=True)
 
-    band = _band(state, digest, months=set())
+    band = _band(state, digest)
 
     assert band.verdict.date is None
     assert band.verdict.health is Health.AMBER
     assert band.size.bytes is None
-    assert band.months == []
+    assert "months" not in band.model_dump()
 
 
 def test_a_re_run_that_drew_another_machine_replaces_the_first_host(
@@ -1032,9 +1024,7 @@ def test_a_count_prints_at_the_precision_its_basis_supports() -> None:
 def test_the_band_root_list_and_the_published_series_agree() -> None:
     """One list of roots, so a series added without a seed cannot pass the
     fresh-checkout guard by being absent from it."""
-    dirnames = {dirname for dirname, _suffix in series.MONTH_SERIES}
-
-    assert dirnames | {series.CONSOLE_DIRNAME} == set(series.PUBLISHED_ROOTS)
+    assert series.PUBLISHED_ROOTS == (series.CONSOLE_DIRNAME,)
 
 
 def test_every_published_root_is_derived_from_the_digest_root(tmp_path: Path) -> None:
@@ -1042,9 +1032,6 @@ def test_every_published_root_is_derived_from_the_digest_root(tmp_path: Path) ->
     tree, and every canary assertion non-deterministic."""
     canary = tmp_path / "canary" / "digest"
 
-    for dirname, suffix in series.MONTH_SERIES:
-        path = series.month_path(canary, dirname, "2026-09", suffix)
-        assert path.is_relative_to(tmp_path / "canary")
     assert console_band.band_path(canary).is_relative_to(tmp_path / "canary")
 
 
@@ -1196,10 +1183,11 @@ def test_the_dispatcher_routes_every_registered_projection_exactly_once(
 
     declared = tuple(projection.name for projection in dispatch.PROJECTIONS)
     assert declared == (
-        "telemetry", "source-health", "day-metrics", "run-timeline", "console-band",
+        "source-health", "day-metrics", "console-band",
     )
     assert not any(
-        (digest.parent / name).exists() for name in ("machine", "run-days", "day-metrics")
+        (digest.parent / name).exists()
+        for name in ("machine", "run-days", "day-metrics", "telemetry", "run-timeline")
     )
     assert published.dispatched == declared
     assert len(set(declared)) == len(declared), "two entries would share one writer"

@@ -152,20 +152,10 @@ def test_no_page_number_names_a_route_that_grows_when_a_run_publishes() -> None:
 
 
 def test_the_committed_config_caps_what_a_cold_console_load_fetches() -> None:
-    """The page ceilings above cannot see these bytes, and that is why they exist.
+    """Active payload ceilings fit the retained cold-load bound.
 
-    The console stopped inlining its telemetry on 2026-09-09. That took 3.4 MB out
-    of a document a ceiling watched and put it into files nothing watched, and a
-    reader still waits for them - measured 2026-09-10 in a real browser, a cold
-    `/console/` load fetches two telemetry shards worth 303,306 bytes on the wire
-    and no other payload at all. A document ceiling now reads as a bound on what
-    the console costs a reader, and it is not one.
-
-    `cold_console_load_bytes` bounds the design rather than the data: the per-file
-    ceilings say how heavy one shard may be, this says how many of them one
-    opening of the page is allowed to want. The two are asserted against each
-    other here, because a total below the sum of its parts is a gate that cannot
-    be satisfied at the limit and a total far above it is a gate that never fires.
+    The retired telemetry ceiling has no term in the sum. Native index and
+    registry ceilings remain checked independently.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
     weight = committed.page_weight
@@ -174,7 +164,8 @@ def test_the_committed_config_caps_what_a_cold_console_load_fetches() -> None:
     assert PageWeightConfig().payload_ceilings_bytes == {}, "the model default must stay empty"
     assert PageWeightConfig().cold_console_load_bytes == 0, "the model default must stay empty"
 
-    for path in ("console/band.json", "telemetry/"):
+    assert "telemetry/" not in payloads, "retired projections must not retain a ceiling"
+    for path in ("console/band.json",):
         assert path in payloads, (
             f"{path} is fetched by a reader's browser and has no ceiling - the bundle "
             "gate cannot fail a file nobody named, so this one would grow unwatched"
@@ -203,11 +194,9 @@ def test_the_committed_config_caps_what_a_cold_console_load_fetches() -> None:
         f"over cold_console_load_bytes ({worst} against "
         f"{weight.cold_console_load_bytes}) - the two gates contradict each other"
     )
-    assert weight.cold_console_load_bytes < worst + payloads["telemetry/"], (
-        "cold_console_load_bytes has room for one more telemetry shard than the "
-        "default window reaches, so widening console.default_window_days past a "
-        "month would not fire it - which is the one thing it exists to catch"
-    )
+    assert {
+        path for path in payloads if not path.startswith(LEDGERS) and path != LEDGER_REGISTRY
+    } == {"console/band.json"}, "no monthly public projection remains in the cold-load sum"
 
 
 def test_every_published_ledger_bounds_its_indexes_at_twice_their_longest() -> None:

@@ -19,7 +19,6 @@ from idhazh.contracts.item_health import (
     ItemStage,
 )
 from idhazh.contracts.taxonomy import LifecycleStatus, Taxonomy
-from idhazh.telemetry.publish.public_telemetry import PUBLIC_COLUMNS
 
 from ._fixtures import (
     DOC_ITEM_HEALTH,
@@ -175,9 +174,9 @@ def test_the_console_reads_only_telemetry_columns_the_writer_writes() -> None:
     assert declared is not None, "series.ts no longer declares a TELEMETRY_COLUMNS array"
     names = tuple(re.findall(r"'([^']+)'", declared.group(1)))
     assert names, "TELEMETRY_COLUMNS matched but held no column names"
-    unwritten = [name for name in names if name not in PUBLIC_COLUMNS]
+    unwritten = [name for name in names if name not in ItemHealthRow.csv_columns()]
     assert not unwritten, (
-        "series.ts reads telemetry columns public_telemetry.py never writes: "
+        "series.ts reads columns the native item-health contract does not carry: "
         f"{unwritten}"
     )
 

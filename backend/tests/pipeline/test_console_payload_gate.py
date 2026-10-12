@@ -1,10 +1,7 @@
 """Does the publication gate name a console payload its own contract refuses?
 
-`frontend/public/telemetry/` is a published mirror a reader's console fetches,
-and it was the one producer output no gate opened. A pytest walk over the
-committed shards stood in for it, which `CLAUDE.md` section 13 refuses, so the
-check belongs to the producer's own gate - where it runs against the tree the
-run wrote rather than against whatever the repository has accumulated.
+The band check belongs to the producer's own gate, where it runs against the
+tree the run wrote rather than whatever the repository has accumulated.
 
 Every fixture below is built in the test from the committed contract fixture.
 None of it reads `frontend/public/digest`, whose cost follows what the pipeline
@@ -20,6 +17,7 @@ from pathlib import Path
 import pytest
 from conftest import CONTRACT_FIXTURES_DIR, read_text, record_fixture_day
 
+from idhazh.contracts.console_band import ConsoleBand
 from idhazh.publication_checks import run_publication_checks
 
 A_COMMITTED_DAY = CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"
@@ -47,7 +45,7 @@ def a_published_day(public_root: Path) -> Path:
     return where / "digest.json"
 
 
-def test_a_telemetry_shard_the_contract_refuses_is_named_by_the_gate(
+def test_a_band_the_contract_refuses_is_named_by_the_gate(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     """The seventh producer, which read back nowhere until 2026-09-13."""
@@ -56,11 +54,35 @@ def test_a_telemetry_shard_the_contract_refuses_is_named_by_the_gate(
     root = public / "digest"
     assert run_publication_checks(root, run_id="2026-08-21-1") == 0, "the day itself has to be clean"
 
-    shard = public / "telemetry" / "2026-08.csv"
-    shard.parent.mkdir(parents=True)
-    shard.write_text("date,not_the_contract\n2026-08-21,1\n", encoding="utf-8")
+    band = public / "console" / "band.json"
+    band.parent.mkdir(parents=True)
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "console-band" / "newest-day.json"))
+    payload["version"] = ConsoleBand.schema_version()
+    payload["not_the_contract"] = True
+    band.write_text(json.dumps(payload), encoding="utf-8")
 
     with caplog.at_level(logging.ERROR):
         assert run_publication_checks(root, run_id="2026-08-21-1") == 1
-    assert "frontend/public/telemetry/2026-08.csv" in caplog.text, "name the file"
-    assert "header is" in caplog.text, "and say what the contract wanted instead"
+    assert "frontend/public/console/band.json" in caplog.text, "name the file"
+    assert "not_the_contract" in caplog.text, "and name the unknown field"
+
+
+def test_an_older_band_drops_only_months_and_a_stale_defect_is_reported(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    public = tmp_path / "public"
+    a_published_day(public)
+    root = public / "digest"
+    band = public / "console" / "band.json"
+    band.parent.mkdir(parents=True)
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "console-band" / "newest-day.json"))
+    payload.update(version="2026-10-11", months=["2026-08", "2026-09"])
+    band.write_text(json.dumps(payload), encoding="utf-8")
+    assert run_publication_checks(root, run_id="2026-08-21-1") == 0
+
+    payload["not_the_contract"] = True
+    band.write_text(json.dumps(payload), encoding="utf-8")
+    with caplog.at_level(logging.ERROR):
+        assert run_publication_checks(root, run_id="2026-08-21-1") == 1
+    assert "frontend/public/console/band.json" in caplog.text
+    assert "re-run the stage" in caplog.text

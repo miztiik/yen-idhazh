@@ -587,7 +587,7 @@ def test_the_holdout_reach_is_held_against_the_marks_compaction(
     ("change", "refusal"),
     [
         ("unknown", "keeps a series called hourly, which is not one of its trees"),
-        ("missing", "names no window for its public-copy series"),
+        ("missing", "names no window for its aggregate series"),
         ("none", "keeps no series"),
     ],
 )
@@ -597,7 +597,7 @@ def test_a_series_task_names_every_series_it_keeps_and_no_other(
     kept: dict[str, Any] = fixture("telemetry-aggregate")["series"]
     series = {
         "unknown": kept | {"hourly": {"unit": "days", "value": 7}},
-        "missing": {name: window for name, window in kept.items() if name != "public-copy"},
+        "missing": {name: window for name, window in kept.items() if name != "aggregate"},
         "none": {},
     }[change]
     declared = fixture("telemetry-aggregate", series=series)
@@ -637,18 +637,14 @@ def test_a_summary_series_sits_above_the_rows_it_summarises(
         assert "or a month is deleted before it is ever summarised" in message
 
 
-@pytest.mark.parametrize("months", [13, 15])
-def test_the_public_copy_lasts_exactly_as_long_as_the_ledger_it_copies(
-    tmp_path: Path, months: int
-) -> None:
-    """Either way round leaves a month nothing can answer for."""
+def test_the_retired_public_copy_is_not_a_task_series(tmp_path: Path) -> None:
     kept = fixture("telemetry-aggregate")["series"] | {
-        "public-copy": {"unit": "months", "value": months}
+        "public-copy": {"unit": "months", "value": 14}
     }
     message = refused(
         a_garden(tmp_path, telemetry_aggregate=fixture("telemetry-aggregate", series=kept))
     )
-    assert f"keeps its public-copy series {months} months and its full-grain series" in message
+    assert "keeps a series called public-copy, which is not one of its trees" in message
 
 
 def _thirteen_months(name: str) -> dict[str, Any]:
@@ -657,8 +653,6 @@ def _thirteen_months(name: str) -> dict[str, Any]:
     declared = fixture(name, window=short)
     if declared.get("series"):
         declared["series"] = declared["series"] | {"full-grain": short}
-        if "public-copy" in declared["series"]:
-            declared["series"]["public-copy"] = short
     return declared
 
 

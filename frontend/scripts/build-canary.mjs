@@ -1229,22 +1229,6 @@ python([
 	STATE
 ]);
 
-const telemetryMonths = canaryDays.map((day) => day.slice(0, 7)).sort();
-const telemetryFromMonth = telemetryMonths[0];
-const telemetryThroughMonth = telemetryMonths[telemetryMonths.length - 1];
-python([
-	'-m',
-	'idhazh.telemetry.publish.public_telemetry',
-	'--state',
-	STATE,
-	'--public',
-	join(STATE, 'telemetry'),
-	'--from-month',
-	telemetryFromMonth,
-	'--through-month',
-	telemetryThroughMonth
-]);
-
 // The payloads the console fetches, written here and not in `build_canary_day.py`
 // because every source they read is written above: the item-health rows, the
 // counters, the span rollup and the telemetry projection all land in this file.
@@ -1262,9 +1246,6 @@ python([
 
 // This inventory describes one generated fixture run, not the archive. The
 // original eight-item producer remains the only writer of its stories.
-const publicTelemetry = join(CANARY, 'telemetry');
-rmSync(publicTelemetry, { recursive: true, force: true });
-cpSync(join(STATE, 'telemetry'), publicTelemetry, { recursive: true });
 const inventoryNames = canaryFiles(CANARY, STATE);
 const publicNames = join(CANARY, 'public-files.txt');
 const stateNames = join(CANARY, 'state-files.txt');
@@ -1286,7 +1267,7 @@ if (!options['fixtures-only']) {
 		shell: process.platform === 'win32',
 		env: {
 			...process.env, CANARY_BUILD: '1', DIGEST_ROOT: ROOT,
-			STATE_ROOT: STATE, TELEMETRY_ROOT: join(STATE, 'telemetry')
+			STATE_ROOT: STATE
 		}
 	});
 }

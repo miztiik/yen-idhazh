@@ -37,9 +37,9 @@ SUPERSEDED_RETENTION_NAMES: Final[Mapping[str, str]] = MappingProxyType(
         "item_health_aggregate_keep_months": (
             "series.aggregate in config/gardener/telemetry-aggregate.json"
         ),
-        "public_telemetry_keep_months": (
-            "series.public-copy.value in config/gardener/telemetry-aggregate.json"
-        ),
+        "public_telemetry_keep_months": "",
+        "public_run_timeline_keep_months": "",
+        "telemetry_publish": "",
         "feed_health_keep_months": (
             "monthly_window.value in config/gardener/compact-feed-health.json"
         ),
@@ -191,17 +191,6 @@ class ObservabilityConfig(Model):
             "Every run records the state of this switch on its run manifest."
         ),
     )
-    telemetry_publish: bool = Field(
-        default=True,
-        description=(
-            "Whether a run copies its item-health rows into "
-            "frontend/public/telemetry/<YYYY-MM>.csv. False leaves that month file at "
-            "whatever the last publishing run wrote, so every console chart ends on "
-            "that date and the page says which day it read to. Nothing is lost: "
-            "the item-health ledger still holds every row, so switching it back on "
-            "republishes the gap."
-        ),
-    )
     host_fingerprint: bool = Field(
         default=True,
         description=(
@@ -347,19 +336,6 @@ class ObservabilityConfig(Model):
             "never, on the same argument as the other two aggregates: the fold is the "
             "only record that a gate ever refused anything, and it is kilobytes. Set, "
             "it must sit ABOVE visuals_full_grain_months."
-        ),
-    )
-    public_run_timeline_keep_months: int = Field(
-        default=2,
-        ge=1,
-        description=(
-            "How long frontend/public/run-timeline/ keeps a published shard. Two, not "
-            "fourteen, and it is the one published series no window preset can reach: "
-            "the panel draws ONE run and names it, so a month older than the newest "
-            "buys nothing a reader can select. The second month is there so a run on "
-            "the first of a month still has the day before it. At roughly a kilobyte "
-            "per item this is the widest published row we write, so keeping it at the "
-            "console's window would publish megabytes nothing fetches."
         ),
     )
     cost_currency: str = Field(

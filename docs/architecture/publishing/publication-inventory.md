@@ -24,10 +24,10 @@ inventory excludes itself so its changing size cannot change its own total.
 an archive or infers history from the current day. Assemble records the day,
 its run manifest and visuals after writing them. A visual filename comes from
 the validated day and item identity, not fetched prose or a supplied path.
-The telemetry dispatcher records the month files after its projections finish.
-The inventory includes search JSON and binary shards, telemetry CSV,
-run-day JSON, day-metrics JSON, machine CSV and run-timeline CSV when present.
-It also names the source-health view and console band.
+The dispatcher refreshes the named search JSON and binary shards, source-health
+view and console band after publication. It writes no monthly telemetry or
+timeline copies. Retirement removes only the public entries for those copies;
+native state entries, dates and public item counts remain unchanged.
 
 Every writer that changes a published file must refresh its inventory entry
 and commit `publication.json` with that file. Vector backfill records each

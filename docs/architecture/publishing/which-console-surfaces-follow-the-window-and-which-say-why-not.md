@@ -223,11 +223,9 @@ growth, and it was measured before it arrived rather than after.
 
 Two consequences worth stating, because both are the reason this is safe:
 
-- **Nothing became unreachable.** The monthly shards are untouched. Panning back
- fetches `telemetry/<YYYY-MM>.csv` exactly as it always did, so the dropped days
- are one arrow key away rather than gone. That fetch path already existed and
- was dead code: with every month in the seed, there was never a month left to
- fetch.
+- **Native history remains reachable.** Pipelines now asks its ledger query
+ door for the selected window. Retiring the unused public month mirrors
+ deletes no native records.
 - **The read ends on the newest published day, never on the build clock.**
  Anchored on the build clock, a pipeline that stopped last month would draw an
  empty console - the page would go blank precisely when the pipeline broke,

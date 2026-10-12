@@ -3,10 +3,6 @@
   "compaction_lag_days": 2,
   "covers_through": "2026-09-09",
   "generated_at": "2026-09-09T06:12:41Z",
-  "months": [
-    "2026-08",
-    "2026-09"
-  ],
   "routes": [
     {"carries": "Summary quality is on Summaries.","description": "Did the runs work, which feeds broke, and what each stage cost.","href": "/console/","id": "pipelines","label": "Pipelines","severity": 0,"worst": null},
     {"carries": "Feed failures are on Pipelines.","description": "What the model wrote, how long it took, and what it got wrong.","href": "/console/model/","id": "model","label": "Summaries","severity": 2,"worst": "2 low-band days"},
@@ -34,7 +30,7 @@
     ],
     "sentence": "Five runs on 2026-09-09 and all five ran clean."
   },
-  "version": "2026-10-11",
+  "version": "2026-10-11T21:00",
   "worst": {
     "href": "/console/machine/",
     "id": "machine",

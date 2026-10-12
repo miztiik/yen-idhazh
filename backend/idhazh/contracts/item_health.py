@@ -1089,7 +1089,7 @@ class ItemHealthRow(Contract):
     # with `machine_shard` is what reaches that record - a second copy of it here
     # was a thing that could disagree. `cpu_model` stays, and its reason is the
     # one thing that separates the two: it crosses to the browser as
-    # `PublicTelemetryRow.cpu_model`, and a browser cannot join.
+    # the native CPU column, and a browser cannot join.
     cpu_model: OneLine | None = Field(
         default=None, description="The CPU the runner reported, verbatim."
     )

@@ -11,16 +11,11 @@ import pytest
 from conftest import CONTRACT_FIXTURES_DIR, read_text
 from pydantic import ValidationError
 
-from idhazh import config
 from idhazh.contracts import CONTRACTS
 from idhazh.contracts.base import Contract, StalePayloadError
 from idhazh.contracts.console_band import ConsoleBand, ConsoleRoute, RouteId
 from idhazh.contracts.console_payloads import CONSOLE_PAYLOADS, payloads_by_stem
 from idhazh.contracts.item_health import DROPPED_CELLS, RETIRED_CELLS, ItemHealthRow
-from idhazh.contracts.knobs.console import ConsoleConfig
-from idhazh.contracts.knobs.gardener import MonthsWindow, RetentionPolicy
-from idhazh.contracts.knobs.windows import months_a_window_can_touch
-from idhazh.contracts.public_telemetry import PublicTelemetryRow
 from idhazh.contracts.visual_decision import VisualDecision
 
 pytestmark = pytest.mark.contract
@@ -147,13 +142,14 @@ def test_a_sealed_row_carrying_a_column_the_contract_renamed_is_still_named_stal
 
 
 def test_the_payload_a_stale_error_names_leaves_the_process_posix_and_relative(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """CLAUDE.md section 2, at the one boundary this error crosses."""
     payload = _a_decision()
     payload["version"] = "2026-01-01"
     payload["routed_at"] = payload.pop("decided_at")
 
+    monkeypatch.chdir(tmp_path)
     with pytest.raises(StalePayloadError) as raised:
         VisualDecision.read(_staged(tmp_path, payload, "world-01.visual.json"))
 
@@ -186,7 +182,7 @@ def test_every_console_read_resolves_to_exactly_one_declared_shape() -> None:
         assert entry.contract in CONTRACTS, f"{stem} is not a registered contract ({entry.reader})"
 
     stems = payloads_by_stem()
-    assert len(stems) == 3, "only the band, telemetry and source-health projections remain"
+    assert set(stems) == {"console-band", "source-health-view"}
     assert set(stems) == {entry.contract.__schema_stem__ for entry in CONSOLE_PAYLOADS}
 
 
@@ -203,30 +199,6 @@ def test_a_console_payload_says_where_it_is_written_and_why_it_crosses() -> None
         assert "\\" not in entry.published_to and ":" not in entry.published_to
         assert entry.why.endswith("."), entry.reader
         assert entry.reader.strip() == entry.reader and entry.reader
-
-
-@pytest.mark.parametrize(
-    ("projection", "source", "expected"),
-    [
-        (PublicTelemetryRow, ItemHealthRow, {"canonical_url", "url_key", "detail"}),
-    ],
-)
-def test_a_forbidden_cell_is_on_the_ledger_and_off_the_projection(
-    projection: type[Contract], source: type[Contract], expected: set[str]
-) -> None:
-    """A refusal that names a cell nothing has is decoration.
-
-    Both halves matter. A name absent from the source ledger would be a list
-    that has drifted off the thing it guards, and would keep passing while the
-    real address column crossed under another name. A name present on the
-    projection is the leak itself, and the contract module already refuses that
-    at import - this says so a second time where a reader looking for the trust
-    boundary will find it (Guardrail #11).
-    """
-    entry = payloads_by_stem()[projection.__schema_stem__]
-    assert entry.forbidden == expected
-    assert expected <= set(source.model_fields), "the list has drifted off its ledger"
-    assert not (expected & set(projection.model_fields))
 
 
 def test_a_published_shape_with_no_refusals_says_so_in_its_own_words() -> None:
@@ -279,35 +251,18 @@ def test_the_band_refuses_a_worst_route_the_strip_does_not_carry() -> None:
         ConsoleBand.model_validate(payload | {"routes": []})
 
 
-def test_the_band_refuses_months_that_run_backwards() -> None:
-    """The console pans by index, so a repeat or an inversion reads as a jump
-    backwards in time rather than as a malformed payload."""
+def test_the_band_drops_legacy_months_without_interpreting_the_retired_order() -> None:
     band = ConsoleBand.read(CONTRACT_FIXTURES_DIR / "console-band" / "newest-day.json")
     payload = band.model_dump(mode="json")
     for months in (["2026-09", "2026-08"], ["2026-08", "2026-08"]):
-        with pytest.raises(ValidationError, match="oldest first"):
-            ConsoleBand.model_validate(payload | {"months": months})
+        assert ConsoleBand.model_validate(payload | {"months": months}) == band
 
 
 def test_every_published_month_payload_has_a_window_that_ends() -> None:
-    """A payload a run appends to with no age is a directory that grows for ever.
-
-    The item-health aggregate and the score archive are kept forever today, and
-    each declaration under `config/gardener/` says so. Nothing minted for the
-    console may join them: a forever that spreads stops reading as a decision
-    (CLAUDE.md Guardrail #12). The browser's copy of the item-health ledger ages
-    with the public-copy series of `config/gardener/telemetry-aggregate.json`;
-    every other month folder has its own `public_*_keep_months` knob.
-    """
-    telemetry = config.load_gardener().tasks["telemetry-aggregate"]
-    assert isinstance(telemetry, RetentionPolicy) and telemetry.series
-    widest = months_a_window_can_touch(ConsoleConfig().max_window_days)
+    """The console registry must not reintroduce monthly projections."""
     monthly = {
         entry.published_to.rsplit("/", 1)[0].removeprefix("frontend/public/")
         for entry in CONSOLE_PAYLOADS
         if "<YYYY-MM>" in entry.published_to
     }
-    assert monthly == {"telemetry"}
-    copy = telemetry.series[config.PUBLIC_COPY]
-    assert isinstance(copy, MonthsWindow), "the public-copy series may not be forever"
-    assert copy.value >= widest
+    assert monthly == set(), "the console publishes no monthly projections"

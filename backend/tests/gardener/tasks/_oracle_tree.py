@@ -58,9 +58,8 @@ RUN_ID: Final = "2027-11-15-19000000001"
 #: What each task's own removal set was recorded into, by the pass it replaced.
 REMOVALS: Final = FIXTURES_DIR / "gardener" / "prune-oracle" / "removals.json"
 
-#: Where the published tree and its copies sit, relative to the checkout.
+#: Where the published days sit, relative to the checkout.
 DIGEST: Final = "frontend/public/digest"
-TELEMETRY: Final = "frontend/public/telemetry"
 
 #: The months the month-windowed ledgers hold: two past the fourteen-month
 #: window, the oldest month it keeps, and the month `TODAY` sits in.
@@ -99,11 +98,6 @@ TRIAL_FILES: Final = (
     "raw/traces/pipeline-tests/no-visual-plan/2026/01/01/old.jsonl",
 )
 
-#: The browser's copies of the item-health months, and one whose source month is
-#: already gone.
-PUBLIC_MONTHS: Final = ("2026-07", *MONTHS)
-
-
 def build(root: Path) -> Path:
     """The whole tree under `root`, a checkout. Returns `root`."""
     state = root / ledger.STATE_DIRNAME
@@ -131,8 +125,6 @@ def build(root: Path) -> Path:
         _write(state / relative, "{}\n")
     for index, month in enumerate(MONTHS):
         _item_health_month(state, month, index)
-    for month in PUBLIC_MONTHS:
-        _write(root / TELEMETRY / f"{month}.csv", "version,date\n")
     return root
 
 

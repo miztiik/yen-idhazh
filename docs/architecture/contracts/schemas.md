@@ -129,7 +129,6 @@ The shapes, and where each one lives once written:
 | `FeedHealthRow` | `feed-health-row` | one row of `state/raw/feed-health/<YYYY>/<MM>/<DD>/`, in the raw file the plan job files through the ledger door, packed later under `state/compact/feed-health/` |
 | `FeedRetirementRow` | `feed-retirement-row` | one row of `state/raw/feed-retirements/<YYYY>/<MM>/<DD>/`, in the file its writer owns, filed under the day the address was retired |
 | `ItemHealthRow` | `item-health-row` | one row of `state/raw/item-health/<YYYY>/<MM>/<DD>/`, in the raw file its writer files through the ledger door, packed later under `state/compact/item-health/` |
-| `PublicTelemetryRow` | `public-telemetry` | one row of `frontend/public/telemetry/<YYYY-MM>.csv`, the browser-safe projection of the row above |
 | `ItemHealthSummaryRow` | `item-health-summary-row` | one row of `state/raw/item-health-summary/<YYYY>/<MM>/<DD>/`, filed through the ledger door and packed later under `state/compact/item-health-summary/` |
 | `DayMetrics` | `day-metrics` | `state/day-metrics/<YYYY>/<MM>/<DD>.json`, one whole document per published day, rewritten when that day is corrected |
 | `StorySimilarityPair` | `story-similarity-pair` | one row of `state/raw/content-similarity-judge/scored-pairs/<YYYY>/<MM>/<DD>/`, in the raw file the council's save job files through the ledger door under the judged date, packed later under `state/compact/content-similarity-judge/scored-pairs/` - one borderline pair, what it scored, what a judge said in both orders, the instrument that said it, and the part that judged it, `work_part_index`. The same shape holds the day's draw under `backend/var/council/<date>/selection/<judge>/` before a judging unit reads it |
@@ -171,34 +170,16 @@ The training corpus ships the same way and for the same reason: `corpus/corpus.j
 
 `state/content-similarity-judge/holdout-pairs.csv` was the fourth. It was committed as a header on 2026-09-18 and held marks from 2026-09-19, so a fresh clone got the marks rather than an empty file. Each harvest now files its marks through the ledger door under the day they were made, and the earlier marks were copied onto the door before the file was retired.
 
-### The one row contract whose CSV omits `version`
+### The retired public row contracts
 
-Every other row ledger writes `version` as its first cell, because
-`csv_columns` is `tuple(cls.model_fields)` and `version` is the first field the
-base contract declares. `PublicTelemetryRow` overrides that and writes nineteen
-cells, none of them `version`.
+The telemetry and run-timeline public row contracts and producers are gone.
+Their native item-health source remains unchanged. Native query declarations
+name each panel's columns; no public monthly copy is needed.
 
-The reason was on the far side of the boundary. Until 2026-09-16 `parseTelemetryCsv`
-in `frontend/src/lib/charts/series.ts` checked the header **position by position as
-a prefix**, so a name at position zero shifted every position the console read and
-blanked its charts on every cached bundle. It resolves every cell by its column
-name now, so an insert no longer blanks anything
-([../publishing/telemetry-series.md](../publishing/telemetry-series.md)). What
-keeps `version` off the row is what is left once that hazard is gone: a cell in
-every row of a payload the reader downloads, which no panel reads.
-
-The stamp is not lost: it is a field of the shape, and
-`PublicTelemetryRow` is where a reader of an old shard looks it
-up. What the row loses is the ability to say which *row* predates a change, which
-is the thing the eval ledger needs and this file does not - the console reads the
-projection for rates and never branches on a row's age.
-
-It is also the only contract here whose forbidden fields are a rule rather than
-an omission. `canonical_url`, `url_key` and `detail` are named in
-`FORBIDDEN_COLUMNS`, and the module raises at **import** if any of them ever
-appears on the model. A trust boundary spelled as a list of strings in the writer
-gains a cell by a one-word edit and nothing refuses it; spelled as a model, the
-edit does not start (Guardrail #11).
+The console band's `months` field is also retired. Its same-day version stamp
+and changelog record the removal. Before validation, an older band's dictionary
+is copied without that one field; every other unknown key still fails. Keep
+this migration only while a committed band still carries `months`.
 
 ### Two of these are contracts and are deliberately not migration surfaces
 
@@ -249,12 +230,9 @@ it any more** - `drift.read_windows` was the last and moved on 2026-09-13 with
 the eval ledger's month files. What it still answers is how many month-shaped buckets a
 day-counted window reaches, which is what sizes the `keep_months` knobs.
 
-**A ledger and its published mirror may file at different grains, and the
-item-health ledger is the worked example.** The ledger files by day because a
-run writes one day; the projection under `frontend/public/telemetry/` stays
-monthly because the console prices a window in the files a browser fetches. The
-publisher is the bridge: it folds a month from that month's days, read through
-`ledger.load_days`, at most 31. Both rules and what the bridge costs are in
+**Native write grain and read grain may differ.** Item health files each
+write by day; compact indexes select the packed files for a window. Its former
+monthly public telemetry mirror is retired. The native rules remain in
 [../../concepts/partitions.md](../../concepts/partitions.md#a-ledger-and-its-mirror-may-file-at-different-grains).
 
 For a whole-history scan, time sharding is a cost with no matching read saving.
