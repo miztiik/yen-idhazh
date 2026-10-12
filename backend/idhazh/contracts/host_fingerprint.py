@@ -564,10 +564,10 @@ class HostFingerprintRow(Contract):
     def __init__(
         self,
         *,
-        cores: int | None | _Unset = _UNSET,
-        threads: int | None | _Unset = _UNSET,
-        mhz_max: float | None | _Unset = _UNSET,
-        mhz_at_probe: float | None | _Unset = _UNSET,
+        cores: int | _Unset | None = _UNSET,
+        threads: int | _Unset | None = _UNSET,
+        mhz_max: float | _Unset | None = _UNSET,
+        mhz_at_probe: float | _Unset | None = _UNSET,
         **data: Any,
     ) -> None:
         """Keep the exact legacy keyword constructor available to the unchanged collector."""
