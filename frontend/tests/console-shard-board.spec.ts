@@ -18,6 +18,10 @@ import { ledgers, plan, type ShardReading } from './support/machine-rows';
 const DATE = '2026-09-18';
 const RUN = '2026-09-18-1';
 const MIB = 1024 * 1024;
+function measured(value: string | null): number | null {
+	const parsed = value === null || value === '' ? NaN : Number(value);
+	return Number.isFinite(parsed) ? parsed : null;
+}
 const TEST_LIMITS: MachineLimits = {
     contextWindow: 8192,
     jobTimeoutSeconds: 3600

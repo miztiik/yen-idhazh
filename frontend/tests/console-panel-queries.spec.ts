@@ -92,8 +92,10 @@ function item(day: string, cpu = 'machine-a'): Row {
 
 function host(day: string): Row {
 	return {
-		date: day, run_id: `${day}-10`, job: 'work', shard: 0, fingerprint: '0123456789abcdef',
-		cpu_model: 'machine-a', job_seconds: 30, server_prompt_tokens: 200, server_prompt_seconds: 1
+		version: '2026-10-10', date: day, run_id: `${day}-10`, job: 'work', shard: 0,
+		fingerprint: '0123456789abcdef', fingerprint_version: 2,
+		cpu_model: 'machine-a', job_seconds: 30, server_prompt_tokens: 200, server_prompt_seconds: 1,
+		cores: null, threads: null, mhz_max: null, mhz_at_probe: null
 	};
 }
 

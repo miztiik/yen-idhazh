@@ -176,7 +176,7 @@ test('16 native records settle to 15 jobs and Hardware keeps both halves of work
 		REPO, 'tests', 'fixtures', 'console', 'machine', 'platformMixQuery.json'
 	), 'utf8'));
 	const legacy = normalizeHostRows(
-		recorded.rows.filter(sameJob).map((row) => ({ version: '2026-09-20', ...row }))
+		recorded.rows.filter(sameJob).map((row) => ({ ...row, version: '2026-09-20' }))
 	);
 	const corrected = normalizeHostRows(answer.rows.filter(sameJob));
 	expect(legacy).toHaveLength(1);

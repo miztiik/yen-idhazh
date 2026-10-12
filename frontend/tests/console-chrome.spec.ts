@@ -573,11 +573,13 @@ test.describe('what the recording was doing, in fixed words', () => {
         /** Shard 0 of run `run` on `date`, as the machine record files it from the work job: the probe
          *  and the clocks, and the two cells the server itself wrote where `server` is true. */
         const machineRow = (date: string, server: boolean, run = 1): Record<string, string> => ({
+            version: '2026-10-10',
             date,
             run_id: `${date}-${run}`,
             job: 'work',
             shard: '0',
             fingerprint: 'f00d',
+            fingerprint_version: '2',
             cpu_model: 'Test CPU',
             job_seconds: '600',
             model_load_ms: '2000',
