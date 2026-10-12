@@ -456,7 +456,11 @@ def decode_history(
         normalized = _validate_rows(originals, env)
     else:
         env, originals, container = _compact(data, limits)
-        normalized = normalize_stored_host_rows(originals, content_sha256=env.content_sha256)
+        normalized = normalize_stored_host_rows(
+            originals,
+            content_sha256=env.content_sha256,
+            historical_envelope=env,
+        )
     if env.version not in ENVELOPE_VERSIONS or env.row_schema_version not in (
         *LEGACY_HOST_VERSIONS,
         HOST_OUTPUT_VERSION,
