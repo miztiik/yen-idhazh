@@ -89,6 +89,15 @@ def test_workflow_wrappers_name_only_the_measured_families() -> None:
         text = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
         invoked = set(re.findall(r"d7_host_telemetry\.py run.*?--job ([a-z_-]+)", text, re.DOTALL))
         assert invoked == jobs
+    encoder_score = _step(_workflow("encoder-comparison.yml"), "score", "name", "Score it")
+    score_run = encoder_score["run"]
+    assert "d7_host_telemetry.py run" in score_run
+    assert "compare_summary_encoders.py score" in score_run
+    assert score_run.index("d7_host_telemetry.py run") < score_run.index(
+        "compare_summary_encoders.py score"
+    )
+    assert "record_publish.py run measure fingerprint" not in score_run
+    assert "IDHAZH_HOST_TELEMETRY_MODE=legacy" not in score_run
     assert _native_command_supported(
         ["python", "backend/utilities/digest_publish.py", "run", "work"]
     )

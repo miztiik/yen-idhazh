@@ -281,6 +281,39 @@ def stage_pairs(args: argparse.Namespace) -> None:
 
 
 def stage_score(args: argparse.Namespace) -> None:
+    from idhazh import config
+    from idhazh.contracts.base import ServerJob
+    from idhazh.stages import common
+    from idhazh.telemetry import job_machine
+
+    host_settings = config.load()
+    events = job_machine.from_environment(host_settings)
+    if events is None:
+        _score(args)
+        return
+
+    date = args.date
+    execution = args.execution or os.environ.get("GITHUB_RUN_ID")
+    commit = args.commit or os.environ.get("GITHUB_SHA")
+    if events.native and (not date or not execution or not commit):
+        raise ValueError("native encoder scoring requires --date, --execution and --commit")
+    date = date or time.strftime("%Y-%m-%d", time.gmtime())
+    if not execution or not commit:
+        raise ValueError("encoder scoring events require a run execution and commit")
+    with job_machine.record(
+        date=date,
+        run_id=f"{date}-{execution}",
+        settings=host_settings,
+        state_root=common.state_root_of(host_settings, base=common.STATE_ROOT),
+        commit_sha=commit,
+        job=ServerJob.COLLECT,
+        shard=args.shard,
+        host_events=events,
+    ):
+        _score(args)
+
+
+def _score(args: argparse.Namespace) -> None:
     """Encode in batches, writing the reading after every one.
 
     The write is atomic - a temporary file and a rename - so a shard killed
@@ -654,6 +687,10 @@ def main() -> None:
         type=Path,
         help="keep the vectors, so a later job can ask where encoders disagree",
     )
+    one.add_argument("--date")
+    one.add_argument("--execution")
+    one.add_argument("--commit")
+    one.add_argument("--shard", type=int, default=0)
     one.set_defaults(run=stage_score)
 
     merge = stages.add_parser("collect", help="merge the readings")

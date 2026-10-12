@@ -177,28 +177,9 @@ jobs:
       # model and its cache size say whether that was the silicon or the model,
       # and nothing else in the reading could tell them apart.
       - name: What machine this shard drew
-        env:
-          MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
-          ENCODER_SHARD: ${{ strategy.job-index }}
         run: |
           set -euo pipefail
           pip install --quiet -e .
-          DATE="$(date -u +%F)"
-          MEMORY_ARGS=()
-          if [ "$MEMORY_PROFILING" != "inherit" ]; then
-            MEMORY_ARGS=(--memory-profiling "$MEMORY_PROFILING")
-          fi
-          python3 backend/utilities/d7_host_telemetry.py run \
-            --mode "$IDHAZH_HOST_TELEMETRY_MODE" --job collect \
-            --run-id "${DATE}-${GITHUB_RUN_ID}" --git-sha "$GITHUB_SHA" \
-            --shard "$ENCODER_SHARD" --memory-profiling "$MEMORY_PROFILING" -- \
-            python backend/utilities/record_publish.py run measure fingerprint \
-            --date "$DATE" \
-            --execution "${{ github.run_id }}" \
-            --commit "${{ github.sha }}" \
-            --shard "$ENCODER_SHARD" \
-            "${MEMORY_ARGS[@]}" \
-            --job collect 2>&1 | tee -a "host.log"
           {
             echo "processors: $(nproc)"
             grep -m1 'model name' /proc/cpuinfo || true
@@ -229,6 +210,9 @@ jobs:
           PYTHONUNBUFFERED: '1'
         run: |
           set -euo pipefail
+          DATE="$(date -u +%F)"
+          MEMORY_PROFILING="${{ inputs.memory_profiling || 'inherit' }}"
+          ENCODER_SHARD="${{ strategy.job-index }}"
           # The maths libraries under the encoder read these, and they do not
           # read the thread count the program asks for. Left unset, a library
           # can pick its own number - often the physical core count rather than
@@ -244,11 +228,19 @@ jobs:
             exit 1
           fi
           mkdir -p readings logs vectors
-          IDHAZH_HOST_TELEMETRY_MODE=legacy python3 backend/utilities/compare_summary_encoders.py score \
+          python3 backend/utilities/d7_host_telemetry.py run \
+            --mode "$IDHAZH_HOST_TELEMETRY_MODE" --job collect \
+            --run-id "${DATE}-${GITHUB_RUN_ID}" --git-sha "$GITHUB_SHA" \
+            --shard "$ENCODER_SHARD" --memory-profiling "$MEMORY_PROFILING" -- \
+            python3 backend/utilities/compare_summary_encoders.py score \
             --slug "$ENCODER" \
             --pairs "$SET_DIRECTORY/pairs.json" \
             --out "readings/$ENCODER.json" \
-            --vectors-out "vectors/$ENCODER.npy" 2>&1 | tee "logs/$ENCODER.log"
+            --vectors-out "vectors/$ENCODER.npy" \
+            --date "$DATE" \
+            --execution "$GITHUB_RUN_ID" \
+            --commit "$GITHUB_SHA" \
+            --shard "$ENCODER_SHARD" 2>&1 | tee "logs/$ENCODER.log"
           python3 -c 'import json, os, sys
           reading = json.load(open("readings/" + os.environ["ENCODER"] + ".json"))
           if reading["state"] != "measured":
