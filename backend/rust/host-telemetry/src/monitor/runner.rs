@@ -292,6 +292,7 @@ fn replay(
     files.publish(&ready, "results")?;
     let mut events = vec![ready];
     let mut schedule = SampleSchedule::new();
+    let mut consumed = HashSet::new();
     let mut last_frame = &recorded.frames[0];
     let mut last_ms = 0;
     let run = (|| -> Result<()> {
@@ -302,47 +303,57 @@ fn replay(
             if session.stopped {
                 break;
             }
-            if let Some(command) = &action.event {
-                files.publish(command, "inbox")?;
-                let command = files.read(command.event_id, "inbox")?;
-                let mut staged = session.clone();
-                match staged.handle(&command, frame, action.at_ms) {
-                    Ok(replies) => {
-                        files.publish_batch(&replies, "results")?;
-                        session = staged;
-                        events.extend(replies);
-                    }
-                    Err(error) => {
-                        let fault = session.protocol_fault(
-                            &error,
-                            Some(command.event_id),
-                            &frame.captured_at,
-                            action.at_ms,
-                        )?;
-                        files.publish(&fault, "results")?;
-                        if error.code == ProtocolFaultCode::Bounds {
-                            return Err(error.to_string());
+            with_retired_consumed(
+                &mut session,
+                &mut files,
+                &mut consumed,
+                action.at_ms,
+                |session, files| {
+                    if let Some(command) = &action.event {
+                        files.publish(command, "inbox")?;
+                        let command = files.read(command.event_id, "inbox")?;
+                        let mut staged = session.clone();
+                        match staged.handle(&command, frame, action.at_ms) {
+                            Ok(replies) => {
+                                files.publish_batch(&replies, "results")?;
+                                *session = staged;
+                                events.extend(replies.iter().cloned());
+                                for event in std::iter::once(&command).chain(replies.iter()) {
+                                    files.consume(event)?;
+                                    session
+                                        .book
+                                        .consume(event.event_id)
+                                        .map_err(|error| error.to_string())?;
+                                }
+                            }
+                            Err(error) => {
+                                let fault = session.protocol_fault(
+                                    &error,
+                                    Some(command.event_id),
+                                    &frame.captured_at,
+                                    action.at_ms,
+                                )?;
+                                files.publish(&fault, "results")?;
+                                if error.code == ProtocolFaultCode::Bounds {
+                                    return Err(error.to_string());
+                                }
+                                events.push(fault);
+                            }
                         }
-                        events.push(fault);
+                    } else {
+                        session.tick(frame, action.at_ms)?;
                     }
-                }
-            } else {
-                session.tick(frame, action.at_ms)?;
-            }
-            if !session.stopped {
-                schedule.collect(
-                    &mut session,
-                    &mut files,
-                    &mut artifacts,
-                    frame,
-                    action.at_ms,
-                )?;
-            }
-            if session.stopped
-                && let Some(artifacts) = &mut artifacts
-            {
-                artifacts.write_peak(&frame.cgroup_peak)?;
-            }
+                    if !session.stopped {
+                        schedule.collect(session, files, &mut artifacts, frame, action.at_ms)?;
+                    }
+                    if session.stopped
+                        && let Some(artifacts) = &mut artifacts
+                    {
+                        artifacts.write_peak(&frame.cgroup_peak)?;
+                    }
+                    Ok(())
+                },
+            )?;
         }
         require(session.stopped, "replay lacks explicit monitor.stop/drain")?;
         Ok(())
@@ -390,6 +401,42 @@ fn cancelled() -> bool {
     {
         false
     }
+}
+fn with_retired_consumed<T>(
+    session: &mut Session,
+    files: &mut FileTransport,
+    consumed: &mut HashSet<uuid::Uuid>,
+    now_ms: u64,
+    admit: impl FnOnce(&mut Session, &mut FileTransport) -> Result<T>,
+) -> Result<T> {
+    for id in files.ids("consumed")? {
+        if !consumed.insert(id) {
+            continue;
+        }
+        let evidence = files.read(id, "consumed")?;
+        // Consumed evidence is the original closed event, not a second protocol shape.
+        let direction = if matches!(
+            evidence.kind,
+            EventKind::WorkerRegister
+                | EventKind::WindowBegin
+                | EventKind::WindowEnd
+                | EventKind::WindowAbort
+                | EventKind::MonitorStop
+        ) {
+            "inbox"
+        } else {
+            "results"
+        };
+        require(
+            files.read(id, direction)? == evidence,
+            "consumption differs from original event",
+        )?;
+        session.book.consume(id).map_err(|e| e.to_string())?;
+    }
+    // Reclaim validated, expired evidence before admission at this same timestamp.
+    let retired = session.retire(now_ms);
+    files.remove_retired(&retired)?;
+    admit(session, files)
 }
 fn live(
     workspace: &Path,
@@ -462,108 +509,94 @@ fn live(
                 }
                 break;
             }
-            let mut commands = Vec::new();
-            for id in files.ids("inbox")? {
-                let metadata =
-                    std::fs::metadata(files.path(id, "inbox")?).map_err(|e| e.to_string())?;
-                let fingerprint = (
-                    metadata.len(),
-                    metadata.modified().map_err(|e| e.to_string())?,
-                );
-                if seen.get(&id) == Some(&fingerprint) {
-                    continue;
-                }
-                require(
-                    seen.len() < session.manifest.limits.max_session_events as usize
-                        || seen.contains_key(&id),
-                    "inbox history exhausted",
-                )?;
-                let event = files.read(id, "inbox")?;
-                seen.insert(id, fingerprint);
-                commands.push(event);
-            }
-            commands.sort_by(|a, b| {
-                (a.emitter_id.as_str(), a.sequence).cmp(&(b.emitter_id.as_str(), b.sequence))
-            });
-            for command in commands {
-                require(
-                    captures < session.manifest.limits.max_reads as u64,
-                    "resource capture budget exhausted",
-                )?;
-                captures += 1;
-                let frame = source.capture(&targets, command.kind == EventKind::MonitorStop);
-                let mut staged = session.clone();
-                match staged.handle(&command, &frame, now_ms) {
-                    Ok(replies) => {
-                        files.publish_batch(&replies, "results")?;
-                        session = staged;
-                    }
-                    Err(error) => {
-                        let fault = session.protocol_fault(
-                            &error,
-                            Some(command.event_id),
-                            &frame.captured_at,
-                            now_ms,
+            with_retired_consumed(
+                &mut session,
+                &mut files,
+                &mut consumed,
+                now_ms,
+                |session, files| {
+                    let mut commands = Vec::new();
+                    for id in files.ids("inbox")? {
+                        let metadata = std::fs::metadata(files.path(id, "inbox")?)
+                            .map_err(|e| e.to_string())?;
+                        let fingerprint = (
+                            metadata.len(),
+                            metadata.modified().map_err(|e| e.to_string())?,
+                        );
+                        if seen.get(&id) == Some(&fingerprint) {
+                            continue;
+                        }
+                        require(
+                            seen.len() < session.manifest.limits.max_session_events as usize
+                                || seen.contains_key(&id),
+                            "inbox history exhausted",
                         )?;
-                        files.publish(&fault, "results")?;
-                        return Err(error.to_string());
+                        let event = files.read(id, "inbox")?;
+                        seen.insert(id, fingerprint);
+                        commands.push(event);
                     }
-                }
-                if session.stopped
-                    && let Some(artifacts) = &mut artifacts
-                {
-                    artifacts.write_peak(&frame.cgroup_peak)?;
-                }
-                if session.stopped {
-                    break;
-                }
-            }
-            if !session.stopped
-                && (session.needs_tick(now_ms) || schedule.needs_capture(&session, now_ms))
-            {
-                require(
-                    captures < session.manifest.limits.max_reads as u64,
-                    "resource capture budget exhausted",
-                )?;
-                captures += 1;
-                let frame = source.capture(&targets, schedule.needs_capture(&session, now_ms));
-                session.tick(&frame, now_ms)?;
-                schedule.collect(&mut session, &mut files, &mut artifacts, &frame, now_ms)?;
-                if session.active_count() > 0 {
-                    eprintln!(
-                        "host resource heartbeat: {} ms; active={} registered={}",
-                        now_ms,
-                        session.active_count(),
-                        session.registered_count()
-                    );
-                }
-            }
-            for id in files.ids("consumed")? {
-                if !consumed.insert(id) {
-                    continue;
-                }
-                let evidence = files.read(id, "consumed")?;
-                // Consumed evidence is the original closed event, not a second protocol shape.
-                let direction = if matches!(
-                    evidence.kind,
-                    EventKind::WorkerRegister
-                        | EventKind::WindowBegin
-                        | EventKind::WindowEnd
-                        | EventKind::WindowAbort
-                        | EventKind::MonitorStop
-                ) {
-                    "inbox"
-                } else {
-                    "results"
-                };
-                require(
-                    files.read(id, direction)? == evidence,
-                    "consumption differs from original event",
-                )?;
-                session.book.consume(id).map_err(|e| e.to_string())?;
-            }
-            let retired = session.retire(now_ms);
-            files.remove_retired(&retired)?;
+                    commands.sort_by(|a, b| {
+                        (a.emitter_id.as_str(), a.sequence)
+                            .cmp(&(b.emitter_id.as_str(), b.sequence))
+                    });
+                    for command in commands {
+                        require(
+                            captures < session.manifest.limits.max_reads as u64,
+                            "resource capture budget exhausted",
+                        )?;
+                        captures += 1;
+                        let frame =
+                            source.capture(&targets, command.kind == EventKind::MonitorStop);
+                        let mut staged = session.clone();
+                        match staged.handle(&command, &frame, now_ms) {
+                            Ok(replies) => {
+                                files.publish_batch(&replies, "results")?;
+                                *session = staged;
+                            }
+                            Err(error) => {
+                                let fault = session.protocol_fault(
+                                    &error,
+                                    Some(command.event_id),
+                                    &frame.captured_at,
+                                    now_ms,
+                                )?;
+                                files.publish(&fault, "results")?;
+                                return Err(error.to_string());
+                            }
+                        }
+                        if session.stopped
+                            && let Some(artifacts) = &mut artifacts
+                        {
+                            artifacts.write_peak(&frame.cgroup_peak)?;
+                        }
+                        if session.stopped {
+                            break;
+                        }
+                    }
+                    if !session.stopped
+                        && (session.needs_tick(now_ms) || schedule.needs_capture(session, now_ms))
+                    {
+                        require(
+                            captures < session.manifest.limits.max_reads as u64,
+                            "resource capture budget exhausted",
+                        )?;
+                        captures += 1;
+                        let frame =
+                            source.capture(&targets, schedule.needs_capture(session, now_ms));
+                        session.tick(&frame, now_ms)?;
+                        schedule.collect(session, files, &mut artifacts, &frame, now_ms)?;
+                        if session.active_count() > 0 {
+                            eprintln!(
+                                "host resource heartbeat: {} ms; active={} registered={}",
+                                now_ms,
+                                session.active_count(),
+                                session.registered_count()
+                            );
+                        }
+                    }
+                    Ok(())
+                },
+            )?;
             std::thread::sleep(Duration::from_millis(
                 session.manifest.limits.poll_ms as u64,
             ));
@@ -582,4 +615,234 @@ fn live(
         }
     }
     run
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct Fixture {
+        root: PathBuf,
+        session: Session,
+        files: FileTransport,
+        artifacts: Option<Artifacts>,
+        schedule: SampleSchedule,
+        consumed: HashSet<uuid::Uuid>,
+        frame: ResourceFrame,
+        ready: HostEvent,
+    }
+    impl Fixture {
+        fn new(name: &str, artifacts_enabled: bool) -> Self {
+            let mut manifest: HostSessionManifest = serde_json::from_str(include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../../tests/fixtures/host-events/manifest.json"
+            )))
+            .unwrap();
+            manifest.workers.truncate(1);
+            manifest.windows.truncate(1);
+            manifest.controls.job_sample_interval_seconds =
+                manifest.limits.retry_window_ms as f64 / 1000.0;
+            assert_eq!(manifest.pending_event_limit().unwrap(), 14);
+            let recorded: serde_json::Value = serde_json::from_str(include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../../tests/fixtures/host-events/resource-windows.json"
+            )))
+            .unwrap();
+            let mut frame: ResourceFrame =
+                serde_json::from_value(recorded["replay"]["frames"][0].clone()).unwrap();
+            frame.population.value = Some(
+                frame
+                    .processes
+                    .iter()
+                    .filter(|p| p.target.pid != 100)
+                    .cloned()
+                    .collect(),
+            );
+            let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("..")
+                .join("..")
+                .join("var")
+                .join(format!("d5-retirement-{name}"));
+            if root.exists() {
+                std::fs::remove_dir_all(&root).unwrap();
+            }
+            std::fs::create_dir_all(&root).unwrap();
+            let root = root.canonicalize().unwrap();
+            let artifacts =
+                Artifacts::create(&root, "artifacts", &manifest.limits, artifacts_enabled).unwrap();
+            let mut session = Session::new(manifest.clone()).unwrap();
+            let mut files = FileTransport::new(&root, manifest).unwrap();
+            let ready = session.ready(&frame.captured_at, 0).unwrap();
+            files.publish(&ready, "results").unwrap();
+            let mut fixture = Self {
+                root,
+                session,
+                files,
+                artifacts,
+                schedule: SampleSchedule::new(),
+                consumed: HashSet::new(),
+                frame,
+                ready,
+            };
+            fixture.collect(0).unwrap();
+            fixture
+        }
+        fn collect(&mut self, now_ms: u64) -> Result<()> {
+            with_retired_consumed(
+                &mut self.session,
+                &mut self.files,
+                &mut self.consumed,
+                now_ms,
+                |session, files| {
+                    session.tick(&self.frame, now_ms)?;
+                    self.schedule
+                        .collect(session, files, &mut self.artifacts, &self.frame, now_ms)
+                },
+            )
+        }
+        fn open_window(&mut self) -> Vec<HostEvent> {
+            let worker = &self.session.manifest.workers[0];
+            let mut register = self.ready.clone();
+            register.kind = EventKind::WorkerRegister;
+            register.event_id = uuid::Uuid::from_u128(1001);
+            register.emitter_id = worker.emitter_id.clone();
+            register.sequence = 1;
+            register.body = EventBody::Worker(WorkerBody {
+                target: worker.target.clone(),
+                server: worker.server.clone(),
+                memory_profiling_enabled: true,
+            });
+            let mut begin = register.clone();
+            begin.kind = EventKind::WindowBegin;
+            begin.event_id = uuid::Uuid::from_u128(1002);
+            begin.sequence = 2;
+            let window = &self.session.manifest.windows[0];
+            begin.body = EventBody::Window(WindowBody {
+                window_id: window.window_id,
+                item_id: window.item_id.clone(),
+                target: worker.target.clone(),
+                server: worker.server.clone(),
+            });
+            let mut events = Vec::new();
+            for command in [register, begin] {
+                self.files.publish(&command, "inbox").unwrap();
+                let replies = self.session.handle(&command, &self.frame, 0).unwrap();
+                self.files.publish_batch(&replies, "results").unwrap();
+                events.push(command);
+                events.extend(replies);
+            }
+            events
+        }
+    }
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            self.artifacts.take();
+            std::fs::remove_dir_all(&self.root).unwrap();
+        }
+    }
+
+    #[test]
+    fn retry_boundary_retires_consumed_samples_before_next_pair() {
+        let mut fixture = Fixture::new("boundary", true);
+        let samples = fixture.files.ids("consumed").unwrap();
+        assert_eq!(samples.len(), 2);
+        let events = fixture.open_window();
+        for event in &events[2..] {
+            fixture.files.consume(event).unwrap();
+        }
+        assert_eq!(fixture.session.book.retained(), 7);
+        let retry = fixture.session.manifest.limits.retry_window_ms as u64;
+        fixture.collect(retry - 1).unwrap();
+        assert_eq!(fixture.session.book.retained(), 7);
+        for id in &samples {
+            assert!(fixture.files.path(*id, "results").unwrap().is_file());
+            assert!(fixture.files.path(*id, "consumed").unwrap().is_file());
+        }
+
+        fixture.collect(retry).unwrap();
+        assert_eq!(fixture.session.book.retained(), 7);
+        assert_eq!(fixture.session.book.total_events, 9);
+        assert_eq!(fixture.session.book.history_len(), 9);
+        assert_eq!(fixture.files.total_events, 9);
+        for id in &samples {
+            for direction in ["results", "consumed"] {
+                assert!(!fixture.files.path(*id, direction).unwrap().exists());
+            }
+        }
+        assert!(
+            fixture
+                .files
+                .path(fixture.ready.event_id, "results")
+                .unwrap()
+                .is_file()
+        );
+        for (index, event) in events.iter().enumerate() {
+            let direction = if index % 2 == 0 { "inbox" } else { "results" };
+            assert_eq!(
+                fixture.files.read(event.event_id, direction).unwrap(),
+                *event
+            );
+        }
+        assert_eq!(fixture.session.active_count(), 1);
+        assert_eq!(
+            fixture
+                .session
+                .handle(&events[2], &fixture.frame, retry)
+                .unwrap(),
+            vec![events[3].clone()]
+        );
+    }
+
+    #[test]
+    fn unconsumed_samples_cannot_be_reclaimed_for_admission() {
+        let mut fixture = Fixture::new("unconsumed", false);
+        let samples = fixture.files.ids("results").unwrap();
+        fixture.open_window();
+        assert_eq!(fixture.session.book.retained(), 7);
+        let retry = fixture.session.manifest.limits.retry_window_ms as u64;
+        let error = fixture.collect(retry).unwrap_err();
+        assert!(error.contains("session total or pending capacity exhausted"));
+        for id in samples {
+            assert!(fixture.files.path(id, "results").unwrap().is_file());
+        }
+        assert_eq!(fixture.session.active_count(), 1);
+        assert!(fixture.files.ids("consumed").unwrap().is_empty());
+        let events = fixture
+            .session
+            .cancelled(&fixture.frame.captured_at, retry)
+            .unwrap();
+        fixture.files.publish_batch(&events, "results").unwrap();
+        assert_eq!(events.last().unwrap().kind, EventKind::MonitorStopped);
+    }
+
+    #[test]
+    fn invalid_consumed_bytes_block_retirement_and_admission() {
+        let mut fixture = Fixture::new("invalid", true);
+        let id = fixture.files.ids("consumed").unwrap()[0];
+        let mut altered = fixture.files.read(id, "results").unwrap();
+        altered.emitted_at = "2026-10-10T12:00:01Z".to_owned();
+        std::fs::write(
+            fixture.files.path(id, "consumed").unwrap(),
+            crate::canonical_json::row_line(&altered).unwrap(),
+        )
+        .unwrap();
+        fixture.consumed.clear();
+        let mut admitted = false;
+        let retry = fixture.session.manifest.limits.retry_window_ms as u64;
+        let error = with_retired_consumed(
+            &mut fixture.session,
+            &mut fixture.files,
+            &mut fixture.consumed,
+            retry,
+            |_, _| {
+                admitted = true;
+                Ok(())
+            },
+        )
+        .unwrap_err();
+        assert!(error.contains("consumption differs from original event"));
+        assert!(!admitted);
+        assert_eq!(fixture.session.book.retained(), 3);
+        assert!(fixture.files.path(id, "results").unwrap().is_file());
+    }
 }

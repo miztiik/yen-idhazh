@@ -69,6 +69,9 @@ EXPECTED_WORKFLOWS: Final = {
     "idhazh-pipeline-tests.yaml": ("Pipeline tests", frozenset({"workflow_dispatch"})),
     "llm-council.yml": ("LLM-COUNCIL", frozenset({"schedule", "workflow_dispatch"})),
     "measure.yml": ("Measurements", frozenset({"workflow_dispatch"})),
+    "rust-host-telemetry.yml": (
+        "Isolated Rust host evidence", frozenset({"workflow_dispatch", "pull_request"}),
+    ),
     "pages.yml": (
         "Pages publication",
         frozenset({"workflow_run", "workflow_dispatch"}),

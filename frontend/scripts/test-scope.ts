@@ -142,12 +142,29 @@ export const RUST_STORE_TEST = 'backend/tests/test_rust_host_store_parity.py';
 export const RUST_RECEIPTS_TEST = 'backend/tests/test_rust_host_receipts.py';
 export const RUST_PRODUCERS_TEST = 'backend/tests/contracts/test_host_event_rust_parity.py';
 export const RUST_RESOURCES_TEST = 'backend/tests/test_host_event_resource_parity.py';
-export const RUST_TESTS = [RUST_PARITY_TEST, RUST_STORE_TEST, RUST_RECEIPTS_TEST, RUST_PRODUCERS_TEST, RUST_RESOURCES_TEST];
+const HOST_EVIDENCE_TESTS = [
+	'backend/tests/test_compare_host_telemetry.py',
+	'backend/tests/workflows/test_rust_host_telemetry_workflow.py'
+];
+export const RUST_TESTS = [RUST_PARITY_TEST, RUST_STORE_TEST, RUST_RECEIPTS_TEST, RUST_PRODUCERS_TEST, RUST_RESOURCES_TEST, ...HOST_EVIDENCE_TESTS];
 export const HOST_MIGRATION_TESTS = [
 	'backend/tests/contracts/test_host_migration.py',
 	'backend/tests/test_host_fingerprint_migration.py'
 ];
 const HOST_TESTS: Record<string, string[]> = {
+	'.github/workflows/rust-host-telemetry.yml': [...HOST_EVIDENCE_TESTS, ...RUST_TESTS, ...HOST_MIGRATION_TESTS],
+	'config/host-telemetry-comparison.json': [...HOST_EVIDENCE_TESTS, ...RUST_TESTS, ...HOST_MIGRATION_TESTS],
+	'backend/idhazh/contracts/host_evidence.py': [...HOST_EVIDENCE_TESTS, ...RUST_TESTS],
+	'backend/idhazh/telemetry/host_evidence_inputs.py': [...HOST_EVIDENCE_TESTS, ...RUST_TESTS, ...HOST_MIGRATION_TESTS],
+	'backend/idhazh/telemetry/host_evidence_comparison.py': [...HOST_EVIDENCE_TESTS, ...RUST_TESTS, ...HOST_MIGRATION_TESTS],
+	'backend/idhazh/telemetry/host_evidence_artifacts.py': [...HOST_EVIDENCE_TESTS, ...RUST_TESTS, ...HOST_MIGRATION_TESTS],
+	'backend/idhazh/telemetry/host_evidence_samples.py': [...HOST_EVIDENCE_TESTS, RUST_RESOURCES_TEST],
+	'backend/utilities/compare_host_telemetry.py': [...HOST_EVIDENCE_TESTS, ...RUST_TESTS],
+	'backend/utilities/host_telemetry_session.py': [...HOST_EVIDENCE_TESTS, ...RUST_TESTS],
+	'backend/utilities/host_telemetry_reference.py': [...HOST_EVIDENCE_TESTS, ...RUST_TESTS],
+	'backend/utilities/host_telemetry_workload.py': [...HOST_EVIDENCE_TESTS, ...RUST_TESTS],
+	'backend/utilities/host_telemetry_measurement.py': HOST_EVIDENCE_TESTS,
+	'backend/tests/workflows/_harness.py': ['backend/tests/workflows/test_triggers.py', 'backend/tests/workflows/test_workflow_inputs.py', ...HOST_EVIDENCE_TESTS],
 	'config/host-history-migration.json': HOST_MIGRATION_TESTS,
 	'backend/idhazh/contracts/host_migration.py': HOST_MIGRATION_TESTS,
 	'backend/idhazh/telemetry/host_history_files.py': HOST_MIGRATION_TESTS,
