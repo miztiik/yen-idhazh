@@ -147,6 +147,8 @@ domain. The reading rule is the smallest recorded `n_ctx_configured/n_parallel`;
 other limits are named. A recorded truncation cap contributes the upper-middle
 label-request rule. No cut rows means `No article was cut in this window.`
 Too few readings keep an honest empty distribution instead of invented marks.
+Each distribution measures its own shrinking grid cell. The share axis keeps
+space for its percentage labels, including on a narrow screen.
 
 Prompt reuse compares paired input and cached cells on the same article:
 invalid, negative or over-input cache counts do not cross-pair with another

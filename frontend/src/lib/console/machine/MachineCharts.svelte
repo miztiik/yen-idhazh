@@ -8,7 +8,7 @@
 	import { dateSeries, type SeriesInput } from '$lib/charts/d3/dateSeries';
 	import { distribution } from '$lib/charts/d3/distribution';
 	import { emptyState } from '$lib/charts/d3/empty';
-	import { chartWidth, frame, observeWidth } from '$lib/charts/frame';
+	import { AXIS_LABEL_GAP_PX, chartWidth, frame, labelWidth, MARGIN, observeWidth } from '$lib/charts/frame';
 	import { clockAgreement, readAgainstWritten, money, type CostRate } from '$lib/charts/machine';
 	import { costOverDays } from '$lib/charts/cost';
 	import { settingsRules } from '$lib/console/settings-moved';
@@ -27,6 +27,8 @@
 	} = $props();
 	let width = $state<number | null>(null);
 	const box = $derived(frame(chartWidth(width, chart.width_px), chart.height_px));
+	const contextBox = $derived(frame(chartWidth(width, chart.width_px), chart.height_px,
+		{ ...MARGIN, right: Math.ceil(labelWidth('100%') + AXIS_LABEL_GAP_PX) }));
 	const declined = { declined: 'This compares records within one run or kind, not a change over days.' };
 	const rule = $derived(settingsRules(shell, { from: start, to: end }, 'none'));
 	const work = $derived(readAgainstWritten(textRows(rows)));
@@ -164,9 +166,9 @@
 			<div class="halves">
 				{#each ['label', 'summary'] as call}
 					<div use:observeWidth={(px) => (width = px)}><Distribution geometry={distribution(call === 'label' ? context.label : context.summary, {
-						frame: box, minValues: knobs.context_min_values, valueTicks: 4, scale: 'log', domain: contextDomain, rules: context.rules
+						frame: contextBox, minValues: knobs.context_min_values, valueTicks: 4, scale: 'log', domain: contextDomain, rules: context.rules
 					})} empty={emptyState('quiet', 'Too few positive request readings to draw a distribution.')}
-						name={`context-${call}`} label={`${call} request tokens, logarithmic scale`} width={box.width} height={box.height} readoutMaxShare={chart.readout_max_share} /></div>
+						name={`context-${call}`} label={`${call} request tokens, logarithmic scale`} width={contextBox.width} height={contextBox.height} readoutMaxShare={chart.readout_max_share} /></div>
 				{/each}
 			</div>
 			<p>{context.cut ? `${context.cut} articles were cut.` : 'No article was cut in this window.'}
@@ -202,7 +204,8 @@
 <style>
 	.lede { font-size: var(--text-xl); line-height: var(--leading-tight); font-weight: 600; }
 	.halves { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+	.halves > div { min-width: 0; }
 	.costs { display: flex; flex-wrap: wrap; gap: var(--space-4); }
 	.costs dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
-	@media (max-width: 48rem) { .halves { grid-template-columns: 1fr; } }
+	@media (max-width: 48rem) { .halves { grid-template-columns: minmax(0, 1fr); } }
 </style>

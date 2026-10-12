@@ -48,6 +48,20 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	await expect(tokens.locator('[data-readout]')).toContainText('20 Aug 2026');
 	await expect(tokens.locator('[data-readout]')).not.toContainText('Not recorded');
 
+	const context = page.locator('[data-console-panel-id="context-headroom"]');
+	await expect(context.locator('svg[data-chart-type="distribution"]')).toHaveCount(2);
+	const contextFits = () => context.locator('svg[data-chart-type="distribution"]').evaluateAll((plots) =>
+		plots.every((plot) => {
+			const bounds = plot.getBoundingClientRect();
+			const cell = plot.parentElement!.parentElement!.getBoundingClientRect();
+			return bounds.left >= cell.left && bounds.right <= cell.right + 1;
+		}));
+	await expect.poll(contextFits).toBe(true);
+	await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+	await page.setViewportSize({ width: 390, height: 844 });
+	await expect.poll(contextFits).toBe(true);
+	await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+
 	await page.locator('[data-window-preset="7"]').click();
 	await settled(page);
 	await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-days', '7');
