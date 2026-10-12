@@ -628,21 +628,26 @@ def test_stored_digest_and_identity_are_checked_before_defaults_or_migration() -
 
 def test_converter_provenance_allows_rows_from_distinct_original_runs() -> None:
     original = original_stored(fixture("cpu-snapshots.json")["legacy_row"])
+    converter_run_id = "2026-10-11-1"
+    converter_attempt = 1
+    converter_job = "operator"
+    converter_shard = 0
+    converter_producer = "utilities.migrate_to_parquet"
     converter_identity = {
-        "run_id": "2026-10-11-1",
-        "attempt": 1,
-        "job": "operator",
-        "shard": 0,
-        "producer": "utilities.migrate_to_parquet",
+        "run_id": converter_run_id,
+        "attempt": converter_attempt,
+        "job": converter_job,
+        "shard": converter_shard,
+        "producer": converter_producer,
         "git_sha": "b" * 40,
     }
     converter_unit = filenames.unit_id(
         ledger="host-fingerprint",
         covers=original["date"],
-        run_id=converter_identity["run_id"],
-        job=converter_identity["job"],
-        shard=converter_identity["shard"],
-        producer=converter_identity["producer"],
+        run_id=converter_run_id,
+        job=converter_job,
+        shard=converter_shard,
+        producer=converter_producer,
     )
     converted = original | {
         "run_id": "2026-10-10-18",
@@ -662,7 +667,7 @@ def test_converter_provenance_allows_rows_from_distinct_original_runs() -> None:
             "unit_id": converter_unit,
             "file_id": host_file_id(
                 unit=converter_unit,
-                attempt=converter_identity["attempt"],
+                attempt=converter_attempt,
                 written_at_ms=1791633601000,
             ),
             "content_sha256": digest,
@@ -683,9 +688,10 @@ def test_converter_provenance_allows_rows_from_distinct_original_runs() -> None:
 
 
 def gardener_envelope(*, digest: str) -> FileEnvelope:
+    gardener_attempt = 1
     gardener_identity = {
         "run_id": "2026-10-02-36972027650",
-        "attempt": 1,
+        "attempt": gardener_attempt,
         "job": "run-tasks",
         "shard": 4,
         "producer": "gardener.tasks.compaction",
@@ -706,7 +712,7 @@ def gardener_envelope(*, digest: str) -> FileEnvelope:
             "unit_id": unit,
             "file_id": host_file_id(
                 unit=unit,
-                attempt=gardener_identity["attempt"],
+                attempt=gardener_attempt,
                 written_at_ms=written_at_ms,
             ),
             "content_sha256": digest,
