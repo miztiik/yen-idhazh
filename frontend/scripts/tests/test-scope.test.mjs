@@ -294,8 +294,7 @@ test('Voices panel inputs keep narrow route consumers and unknown-path broad cov
 		['backend', ...FRONTEND_GROUPS]);
 	assert.deepEqual(selectPaths(['frontend/src/lib/console/unmapped/panel.ts']).groups, [...FRONTEND_GROUPS]);
 	assert.deepEqual(groupedSpecs(join(FRONTEND, 'tests')).console,
-		['console-data-explorer-still.spec.ts', 'console-machine-panels-page.spec.ts',
-			'console-memory-board-page.spec.ts', 'console-model-builder.spec.ts',
+		['console-data-explorer-still.spec.ts', 'console-machine-journey.spec.ts', 'console-model-builder.spec.ts',
 			'console-model-ledgers.spec.ts',
 			'console-pipelines-cold.spec.ts', 'console-pipelines-components.spec.ts', 'console-pipelines-days.spec.ts',
 			'console-pipelines-lifecycle.spec.ts', 'console-pipelines-reserved.spec.ts',
@@ -303,8 +302,20 @@ test('Voices panel inputs keep narrow route consumers and unknown-path broad cov
 			'console-pipelines-retained-failures.spec.ts', 'console-pipelines-retained-item-cost.spec.ts',
 			'console-pipelines-retained-window.spec.ts', 'console-pipelines-sufficiency.spec.ts',
 			'console-pipelines-timeline-page.spec.ts', 'console-pipelines-window-page.spec.ts',
-			'console-shard-board-page.spec.ts',
 			'console-telemetry-heal.spec.ts', 'console-voices-journey.spec.ts']);
+});
+
+test('Hardware native readers and representative boundaries remain in the closed inventory', () => {
+	assert.equal(groupForSpec('console-machine-journey.spec.ts'), 'console');
+	assert.deepEqual(selectPaths(['frontend/tests/console-machine-journey.spec.ts']).groups, ['console']);
+	assert.equal(ciAnswer(['frontend/tests/console-machine-journey.spec.ts'], true).console, true);
+	for (const name of ['records.ts', 'MachineCharts.svelte', 'RecordFrame.svelte']) {
+		for (const separator of ['/', '\\']) {
+			const path = ['frontend', 'src', 'lib', 'console', 'machine', name].join(separator);
+			assert.deepEqual(selectPaths([path]).groups, ['logic', 'console', 'publishing'], path);
+			assert.equal(ciAnswer([path], true).console, true, path);
+		}
+	}
 });
 
 test('grouped specs follow only the explicit inventory', () => {

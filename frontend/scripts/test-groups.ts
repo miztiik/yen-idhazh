@@ -50,8 +50,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 	reader: ['payload-state', 'reading-page'],
 	offline: ['service-worker'],
 	console: [
-		'console-data-explorer-still', 'console-model-builder', 'console-model-ledgers',
-		'console-machine-panels-page', 'console-memory-board-page', 'console-shard-board-page',
+		'console-data-explorer-still', 'console-machine-journey', 'console-model-builder', 'console-model-ledgers',
 		'console-telemetry-heal', 'console-voices-journey',
 		'console-pipelines-lifecycle', 'console-pipelines-components',
 		'console-pipelines-cold', 'console-pipelines-days', 'console-pipelines-reserved',

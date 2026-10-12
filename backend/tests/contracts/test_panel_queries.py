@@ -39,6 +39,7 @@ EXPECTED_NAMES: Final = {
         "summaryLengthQuery", "modelChangeQuery", "modelChangeItemsQuery",
     ),
     "machine": (
+        "runShardsQuery",
         "twoClocksQuery", "twoClocksHostsQuery", "processorLostQuery", "diskReadsQuery",
         "machineCardsQuery", "machineCardsItemsQuery", "slowerMachinesQuery", "platformMixQuery",
         "slowestArticlesQuery", "tailTrendQuery", "closestToMemoryQuery", "memoryHeldQuery",
@@ -51,6 +52,7 @@ EXPECTED_NAMES: Final = {
 
 #: Independent transcription of the panel tables, using the row's declared renames.
 EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
+    "runShardsQuery": ("date", "run_id", "shards"),
     "failedRuleQuery": ("date", "stage", "outcome", "code", "failed_rule"),
     "failureMixQuery": ("date", "stage", "outcome", "code", "failed_rule"),
     "itemTimeSplitQuery": ("date", "item_total_ms", "fetch_ms", "extract_ms", "summarize_ms", "label_ms", "summary_ms", "visual_plan_ms", "faithfulness_ms", "stage_gap_ms"),
@@ -89,7 +91,8 @@ EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
     "slowerMachinesQuery": ("run_id", "cpu_model", "prefill_ms", "input_tokens", "cached_tokens", "decode_ms", "output_tokens"),
     "platformMixQuery": (
         "version", "date", "run_id", "job", "shard", "fingerprint", "fingerprint_version",
-        "cpu_model", "job_seconds", "server_prompt_tokens", "server_prompt_seconds",
+        "cpu_model", "cpu_logical_processors", "model_load_ms", "job_seconds",
+        "server_prompt_tokens", "server_prompt_seconds",
         *LEGACY_HOST_INPUT_COLUMNS,
     ),
     "slowestArticlesQuery": ("run_id", "item_id", "source_id", "machine_shard", "item_total_ms", "fetch_ms", "extract_ms", "summarize_ms", "faithfulness_ms", "stage_gap_ms", "queue_wait_ms"),
@@ -271,7 +274,7 @@ def test_platform_mix_names_exactly_the_shipped_fleet_columns() -> None:
     assert match is not None
     expected = tuple(re.findall(r"'([^']+)'", match[1]))
     query = next(query for query in load_queries() if query.name == "platformMixQuery")
-    assert query.columns == expected
+    assert set(query.columns) == {*expected, "cpu_logical_processors", "model_load_ms"}
     assert query.ledger == "host-fingerprint"
 
 
@@ -295,7 +298,7 @@ def test_word_and_machine_renames_are_the_actual_contract_mappings() -> None:
 def test_query_span_and_fetch_predicate_match_the_panel_contracts() -> None:
     queries = load_queries()
     assert {query.name for query in queries if query.span == "widest"} == {
-        "modelChangeQuery", "modelChangeItemsQuery"
+        "modelChangeQuery", "modelChangeItemsQuery", "runShardsQuery", "platformMixQuery"
     }
     assert {query.name for query in queries if query.span == "newest-day"} == {
         "runTimelineQuery", "twoClocksQuery", "twoClocksHostsQuery", "machineCardsQuery",

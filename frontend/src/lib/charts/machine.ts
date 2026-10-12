@@ -22,6 +22,7 @@ import { rangeMark, type RangeMark } from './d3/rankedList';
 export type { RangeMark } from './d3/rankedList';
 import type { MachineRun, ShardCounters } from '$lib/server/machine-counters';
 import { dayMonth } from '../format';
+import { compareRuns } from '../console/queries/shared';
 import { AXIS_LABEL_GAP_PX, LABEL_ADVANCE_EM, labelWidth } from './frame';
 import { readoutOf, type Readout, type ReadoutInput } from './readout';
 import { percentOf } from './rank';
@@ -1062,9 +1063,7 @@ export function percentileHistory(
 
 	const runs: LatencyRun[] = [];
 	const tooFew: { runId: string; date: string; items: number }[] = [];
-	// Run ids are `<date>-<n>`, so a plain string sort orders a day's runs and
-	// orders the days too.
-	for (const runId of [...byRun.keys()].sort()) {
+	for (const runId of [...byRun.keys()].sort(compareRuns)) {
 		const bucket = byRun.get(runId) as { date: string; ms: number[] };
 		const values = [...bucket.ms].sort((a, b) => a - b);
 		if (values.length < floor) {

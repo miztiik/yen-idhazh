@@ -11,6 +11,7 @@
 		answers = ['pending'],
 		days,
 		through = null,
+		settledSuffix = '',
 		shimmerAfterMs,
 		onRetry,
 		children
@@ -19,6 +20,7 @@
 		answers?: readonly (SliceResult | LedgerReach | 'pending')[];
 		days: number;
 		through?: string | null;
+		settledSuffix?: string;
 		shimmerAfterMs: number;
 		onRetry: () => void;
 		children: Snippet;
@@ -44,6 +46,7 @@
 <div data-console-panels={route} data-route-state={tally.state} data-shimmer={shimmer ? 'on' : 'off'}>
 	<p class="route-standing" data-console-standing>
 		{standing}
+		{#if tally.state === 'ok' && settledSuffix} {settledSuffix}{/if}
 		{#if tally.state === 'unreachable'}
 			<button type="button" data-console-retry onclick={onRetry}>Fetch the record again</button>
 		{/if}

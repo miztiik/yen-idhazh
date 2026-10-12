@@ -276,7 +276,7 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "n_threads",
             "n_batch",
         ),
-        "frontend/src/lib/server/machine-counters.ts": ("llama_rss_peak_bytes",),
+        "frontend/src/lib/console/machine/counters.ts": ("llama_rss_peak_bytes",),
         "frontend/src/lib/console/model/work.ts": ("version",),
         "frontend/src/lib/server/payload.ts": ("detail",),
         "backend/utilities/slot_probe.py": (

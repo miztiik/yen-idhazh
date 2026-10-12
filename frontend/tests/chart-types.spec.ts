@@ -161,7 +161,9 @@ test('log distributions bin by decade and common domains place the same rule at 
 	const html = await draw('Distribution', { ...common, geometry: a });
 	expect(html).toContain('Limit');
 	expect(html).toContain('data-chart-type="distribution"');
-	expect(html).toContain('data-readout-columns="3"');
+	expect(html).toContain('data-readout-records="3"');
+	expect(html).toContain('data-readout-shape="record"');
+	expect(html).toContain('data-readout-subject');
 	expect(html).toContain('data-readout-row="share"');
 });
 

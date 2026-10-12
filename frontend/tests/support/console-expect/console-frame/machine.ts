@@ -6,17 +6,17 @@ export const EXPECT: RouteExpect = {
 		{
 			id: 'what-the-machine-was-doing',
 			title: 'What the machine was doing',
-			panels: ['two-clocks', 'processor-lost', 'disk-reads', 'machine-cards', 'reading-against-writing', 'platform-mix']
+			panels: ['two-clocks', 'processor-lost', 'disk-reads', 'machine-cards', 'slower-machines', 'platform-mix']
 		},
 		{
 			id: 'where-the-time-went',
 			title: 'Where the time went',
-			panels: ['shard-board', 'tail-trend']
+			panels: ['slowest-articles', 'tail-trend']
 		},
 		{
 			id: 'how-close-to-the-limits',
 			title: 'How close we are to the limits',
-			panels: ['memory-board', 'memory-held', 'context-headroom']
+			panels: ['closest-to-memory', 'memory-held', 'context-headroom']
 		},
 		{
 			id: 'what-the-model-spends',
@@ -26,5 +26,5 @@ export const EXPECT: RouteExpect = {
 	],
 	verdict: { state: 'route', question: 'is it working' },
 	runSquares: false,
-	prerender: false
+	prerender: true
 };

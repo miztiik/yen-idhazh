@@ -1,3 +1,3 @@
-/** Hardware keeps every server picture when the chart library fails. */
+/** Hardware draws with d3; no legacy chart engine or server picture is requested. */
 import type { RouteExpect } from './index';
-export const EXPECT: RouteExpect = { browserDrawn: false, serverPictures: true };
+export const EXPECT: RouteExpect | null = null;

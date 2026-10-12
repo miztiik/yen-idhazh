@@ -177,6 +177,7 @@
 					<text
 						x={geometry.columns[tick.index]}
 						y={box.bottom + TICK + AXIS_LABEL_PX}
+						data-day-axis
 						text-anchor={tick.anchor}
 						fill="var(--color-text-tertiary)"
 						font-size={AXIS_LABEL_PX}>{tick.text}</text

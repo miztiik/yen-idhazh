@@ -150,7 +150,6 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
         "frontend/src/lib/server/host-fingerprint.ts": (
             "measured_at",
             "runner_name",
-            "model_load_ms",
         ),
         "frontend/src/lib/console/queries/machine.ts": (
             "version",
@@ -186,6 +185,7 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "vm_fault_domain",
             "job_seconds",
             "cpu_logical_processors",
+            "model_load_ms",
         ),
     }
 )

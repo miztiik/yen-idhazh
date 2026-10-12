@@ -163,6 +163,19 @@ test('score-only notes and windows before coverage make no checker-wide certaint
 	});
 });
 
+test('one-day unchanged settings notes keep the common control singular', () => {
+	const empty = { ...BAND_UNREAD,
+		settingsMoved: { compared_from: '2026-09-16', changes: [] },
+		checkerMoved: { compared_from: '2026-09-16', changes: [] } };
+	const window = { from: '2026-09-20', to: '2026-09-20' };
+	for (const checker of ['none', 'score', 'every'] as const) {
+		const rule = settingsRules(empty, window, checker);
+		expect('note' in rule && rule.note).toContain('inside this one day.');
+		expect('note' in rule && rule.note).not.toContain('1 days');
+		expect('changes' in rule && rule.changes).toEqual([]);
+	}
+});
+
 test('one-day rule notes use the singular without changing multi-day or checker claims', () => {
 	const empty = {
 		...ruleShell(), settingsMoved: { compared_from: '2026-09-16', changes: [] },

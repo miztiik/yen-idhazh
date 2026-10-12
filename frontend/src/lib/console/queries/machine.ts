@@ -1,6 +1,12 @@
 /** What does each Hardware panel ask the published ledgers? */
 import type { PanelQuery } from './window';
 
+export const runShardsQuery = {
+	name: 'runShardsQuery', ledger: 'run-shards',
+	columns: ['date', 'run_id', 'shards'],
+	span: 'widest'
+} as const satisfies PanelQuery;
+
 export const twoClocksQuery = {
 	name: 'twoClocksQuery', ledger: 'item-health',
 	columns: ['date', 'run_id', 'machine_job', 'machine_shard', 'prefill_ms', 'input_tokens', 'cached_tokens'],
@@ -55,10 +61,11 @@ export const platformMixQuery = {
 	name: 'platformMixQuery', ledger: 'host-fingerprint',
 	columns: [
 		'version', 'date', 'run_id', 'job', 'shard', 'fingerprint', 'fingerprint_version',
-		'cpu_model', 'job_seconds', 'server_prompt_tokens', 'server_prompt_seconds',
+		'cpu_model', 'cpu_logical_processors', 'model_load_ms', 'job_seconds',
+		'server_prompt_tokens', 'server_prompt_seconds',
 		'cores', 'threads', 'mhz_max', 'mhz_at_probe'
 	],
-	span: 'window'
+	span: 'widest'
 } as const satisfies PanelQuery;
 
 export const slowestArticlesQuery = {

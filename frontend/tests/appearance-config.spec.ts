@@ -30,7 +30,11 @@ test.describe('route-owned console configuration', () => {
 	test('preserves the committed six routes and their judged panels', () => {
 		const routes = routeConsoles();
 		expect(Object.keys(routes).sort()).toEqual(BAND_UNREAD.routes.map(({ id }) => id).sort());
-		expect(routes.machine.judged).toEqual(['platform-mix']);
+		expect(routes.machine.judged).toEqual([
+			'two-clocks', 'processor-lost', 'disk-reads', 'machine-cards', 'slower-machines', 'platform-mix',
+			'slowest-articles', 'tail-trend', 'closest-to-memory', 'memory-held', 'context-headroom',
+			'article-cost', 'prompt-reuse', 'read-against-written', 'counterfactual-cost'
+		]);
 		expect(routes['data-explorer'].judged).toEqual(['data-explorer-rows', 'data-explorer-shape']);
 		const judgementPanels = [
 			'merged-stories', 'merge-line', 'judge-agreement',

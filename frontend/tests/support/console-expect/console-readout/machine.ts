@@ -6,5 +6,6 @@ export const EXPECT: RouteExpect = {
 	records: true,
 	fleetReady: '[data-windowed="machine-fleet"]',
 	fetchedRows: false,
+	nativeRows: true,
 	explorerShape: null
 };

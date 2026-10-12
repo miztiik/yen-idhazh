@@ -54,6 +54,16 @@ import {
 
 const MIB = 1024 * 1024;
 
+/** Only the public cells a machine card draws; full server rows also satisfy it. */
+export type CardHost = Pick<HostFingerprint,
+	'version' | 'date' | 'run_id' | 'shard' | 'fingerprint' | 'fingerprint_version' | 'cpu_model' | 'cpu_vendor' |
+	'cpu_family' | 'cpu_model_number' | 'cpu_stepping' | 'microcode' | 'flags' |
+	'cpu_physical_cores' | 'cpu_logical_processors' | 'cpu_allowed_processors' |
+	'cpu_quota_cores' | 'cpu_quota_state' | 'cpu_target_measured_at' |
+	'l3_cache_bytes' | 'boot_seconds' | 'cpu_observed_mhz' | 'cpu_reported_max_mhz' | 'memcpy_gib_s' |
+	'memcpy_probe_mib' | 'vm_size' | 'vm_location' | 'vm_zone' | 'vm_fault_domain'
+> & { readonly job?: string } & Partial<Pick<HostFingerprint, 'server_prompt_tokens' | 'server_prompt_seconds'>>;
+
 /** One chip: a watched flag, and whether this machine reported it. */
 export interface FlagChip {
 	name: string;
@@ -188,20 +198,20 @@ export interface MachineCards {
 interface Placement {
 	key: string;
 	name: string;
-	row: HostFingerprint | null;
+	row: CardHost | null;
 }
 
 /** A card before its bars. The tracks are built over every card, so no card
  * can carry one until all of them exist. */
 type CardParts = Omit<MachineCard, 'l3Bar' | 'bandwidthBar'>;
 
-function part(row: HostFingerprint): string | null {
+function part(row: CardHost): string | null {
 	const cells = [row.cpu_family, row.cpu_model_number, row.cpu_stepping];
 	if (cells.some((cell) => cell === null)) return null;
 	return cells.join('/');
 }
 
-function chips(row: HostFingerprint | null, watched: readonly string[]): FlagChip[] {
+function chips(row: CardHost | null, watched: readonly string[]): FlagChip[] {
 	if (row === null || watched.length === 0) return [];
 	// The contract's own shape is one space-joined cell, split here rather than in
 	// the reader: that module is server-only and this one is bundled for a browser.
@@ -279,7 +289,7 @@ function cardBar(
  */
 export function machineCards(
 	run: MachineRun | null,
-	fingerprints: readonly HostFingerprint[],
+	fingerprints: readonly CardHost[],
 	options: {
 		watchedFlags: readonly string[];
 		/** The speed ramp's steps and floor, for a ramp built over this run alone. */
@@ -372,7 +382,7 @@ export function machineCards(
 				rate:
 					placement.row === null
 						? null
-						: promptRate(placement.row.server_prompt_tokens, placement.row.server_prompt_seconds)
+						: promptRate(placement.row.server_prompt_tokens ?? null, placement.row.server_prompt_seconds ?? null)
 			})),
 			options.colour
 		);
@@ -389,10 +399,8 @@ export function machineCards(
 	for (const identity of ramp.rows) {
 		const drawn = byIdentity.get(identity.key) ?? [];
 		if (drawn.length === 0) continue;
-		// The richest row wins, and a row is richer when it read the instruction
-		// set. Every row for one fingerprint reports the same cells by
-		// construction - the digest is taken over exactly those cells - so this
-		// only ever chooses between a recorded row and an absent one.
+		// Keep one source row's snapshot intact. A class digest does not prove
+		// equal online counts, target constraints, capture times or frequency.
 		const row = drawn.find((placement) => placement.row !== null)?.row ?? null;
 		const l3 = row?.l3_cache_bytes ?? null;
 		const buffer = row?.memcpy_probe_mib ?? null;
