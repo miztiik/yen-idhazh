@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-12
 
-**Author**: Fowler (architecture), 2026-10-12, plan 65 Q68. **Status**: design for the owner's review before plan 65.2; nothing here is ruled. It changes no ruling, and Section 9 asks for the three it needs. "Estimate" marks an estimate.
+**Author**: Fowler (architecture), 2026-10-12, plan 65 Q68. **Status**: design for plan 65.2. The owner ruled T1, U1 and V1 on 2026-10-12 (plan 65, Table Q, Q69 to Q71); everything else here is proposed until 65.2 is approved. In this record "source" means a feed or publisher only; a summary is checked against its article. "Estimate" marks an estimate.
 **Ids**: Q61, QQ28, P15, X8.4 cite plan 65 (`TODO/20261011-65-summary-fidelity-judge-plan.md`), as "plan 65 B2" where a row here could be meant; "research Q5" cites `TODO/20261012-unsupervised-summary-improvement-research-record.md`. Code paths are repository paths.
 
 ## Answer first
@@ -53,8 +53,8 @@ Table B - the tasks
 
 | # | Task | Premise; claims | Unit | Slot |
 | --- | --- | --- | --- | --- |
-| B1 | sentence_against_source | text the summarizer saw; each summary sentence | sentence | sentence_support, sentence_support_held_out |
-| B2 | summary_against_source | text seen, then full text; the summary | summary | summary_support (every summary) |
+| B1 | sentence_against_article | text the summarizer saw; each summary sentence | sentence | sentence_support, sentence_support_held_out |
+| B2 | summary_against_article | text seen, then full text; the summary | summary | summary_support (every summary) |
 | B3 | key_fact_against_summary | the summary; each listed key fact | key fact | key_fact_coverage (completeness) |
 | B4 | sentence_against_key_facts | the key-fact list; each summary sentence | sentence | key_fact_coverage (conciseness) |
 | B5 | list_key_facts | text seen; writes a list (GGUF only) | article | key_fact_listing |
@@ -198,7 +198,7 @@ Table J - contract: scoring protocols
 | J2 | instrument | id, spelled form and parts (Table C); raises before load, like `weights_digest` |
 | J3 | check(premise, claims, *, deadline) | one premise, many claims: the server pays the article's prefill once (prompt cache, `llm/server.py`); an encoder batches |
 | J4 | ClaimReading | supported_probability, label (or None), parsed, best_window, seconds; a reply outside the grammar is recorded, never read as prose (`similarity/judge.py`) |
-| J5 | list_facts(source, *, deadline) | a grammar-held list, or None; untrusted data |
+| J5 | list_facts(article, *, deadline) | a grammar-held list, or None; untrusted data |
 
 Table K - contract: sample draw record
 
@@ -357,7 +357,7 @@ Table V - one judge for the sampled pipeline?
 
 | # | Option | Benefit | Cost | Gives up |
 | --- | --- | --- | --- | --- |
-| V1 | **Recommended**. One judge hosts every sampled slot and the bench (proposed name summary-source-judge: it judges summaries against their source); the ruled ledger names stay | one prepare, sentence rule, cell plan and record set: "the judge itself as a pipeline" | reverses the split of QQ11 C1 and QQ16 C1, in plan text only | pausing grounding and completeness apart |
+| V1 | **Recommended**. One judge hosts every sampled slot and the bench (its name is open: plan 65, Table Q, Q71); the ruled ledger names stay | one prepare, sentence rule, cell plan and record set: "the judge itself as a pipeline" | reverses the split of QQ11 C1 and QQ16 C1, in plan text only | pausing grounding and completeness apart |
 | V2 | Two judges; shared ledgers in one family both write | no ruling changes | two prepares that must segment alike | one pipeline in one place |
 | V3 | Two judges with their own copies | self-contained families | six ledgers for three records | one record per question |
 
