@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-12
 
-**Status**: Rows 1, 2, 3a, 3 and 4 are merged in #1529, #1537, #1538 and #1542. Shared-support row 2b is merged in #1546. Row 5 is merged in #1547, Voices, row 8, is merged in #1557, Summaries, row 7, is merged in #1560, Pipelines, row 6, is merged in #1559, and projection retirement, row 10, is merged in #1563. This change delivers Hardware, row 9, with native ledger answers, corrected measured host meaning and no ledger values in its prerendered document. Only row 11, ECharts removal, still requires delivery. Row 12 and its related public-projection and reader deletions are complete in merged #1189 and stay COLLAPSED.
+**Status**: Rows 1, 2, 3a, 3 and 4 are merged in #1529, #1537, #1538 and #1542. Shared-support row 2b is merged in #1546. Row 5 is merged in #1547, Voices, row 8, is merged in #1557, Summaries, row 7, is merged in #1560, Pipelines, row 6, is merged in #1559, Hardware, row 9, is merged in #1558, and projection retirement, row 10, is merged in #1563. This change completes row 11: ECharts and obsolete readers are removed, while live helpers and native and private data remain. After this change merges, all fourteen tracked rows are resolved. Row 12 and its related public-projection and reader deletions are complete in merged #1189 and stay COLLAPSED. Close the plan only after the final deployment is confirmed.
 
 **Level**: 5 (CLAUDE.md section 6). Rows 5 and 10 change a persisted payload every console document carries. The route rows are Level 3: each crosses code and published data on one route. **Authorizing this plan is the design consultation section 6 asks of rows 5 and 10.** Row 12's approved deletion is carried by #1189.
 
@@ -63,7 +63,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ## 1. Status Reckoner
 
-**Eleven remaining pull requests.** Row 12 was completed by #1189. One active row is one pull request. The dispatcher is a running pool: a slot frees when a worker returns, never when a pull request merges. `Depends-on` and `Files touched` are the readiness test; `Parallel-group` is a hint.
+**Fourteen tracked rows.** Row 12 was completed by #1189. One active row is one pull request. The dispatcher is a running pool: a slot frees when a worker returns, never when a pull request merges. `Depends-on` and `Files touched` are the readiness test; `Parallel-group` is a hint.
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -79,7 +79,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 8 | Voices asks the ledger, and the ranking panels join it | 4 | D | DONE | p52-voices-ledgers (`feat/console-voices-ledgers`) | Read from merge | Row8 finishing worker; actual Susan/Fowler consultations |
 | 9 | Hardware asks the ledger, and its page carries no data | 5 | E | DONE | p52-machine-ledgers (`feat/console-machine-ledgers`); count foundation delivered | Read from merge | Hardware workers; host compatibility owner; parent owns delivery |
 | 10 | The `telemetry` and `run-timeline` projections go | 6 | F | DONE | p52-projections-retirement (`feat/console-projections-retirement`) | Read from merge | Row 10 worker; parent owns delivery |
-| 11 | ECharts leaves | 7, 8, 9, 10 | G | LOCAL CANDIDATE | p52-echarts-retirement (`chore/console-echarts-retirement`) | Read from candidate | Row 11 retirement owner and disjoint file workers; parent owns merge and live closure |
+| 11 | ECharts leaves | 7, 8, 9, 10 | G | DONE | p52-echarts-retirement (`chore/console-echarts-retirement`) | Read from merge | Row 11 retirement owner and disjoint file workers; parent owns final integration and live closure |
 | 12 | Moved to #1189: the aggregate is deleted and one item's trace is a command | - | H | COLLAPSED | - | - | - |
 
 **External prerequisites and completed foundations.** Unresolved row dependencies retain their `plan N row M` cells; completed foundations are named by their shipped change:

@@ -98,7 +98,7 @@ test('a day with no row draws no column, and its strip says so, while a day that
 	expect(mix.failures).toBe(1);
 	const split = nativeTimeSplit(nativeRows, calendar);
 	const splitStrip = timeSplitReadout(split);
-	expect(splitStrip.columns).toEqual(['13 Jun 2030', '14 Jun 2030', '15 Jun 2030']);
+	expect(splitStrip.columns).toEqual(['2030-06-13', '2030-06-14', '2030-06-15']);
 	expect(splitStrip.series.slice(0, 7).map((band) => band.values)).toEqual(
 		['0.10 s', '0.02 s', '0.60 s', '0.03 s', '0.05 s', '0.80 s', '0.00 s'].map((value) => [null, null, value]));
 	expect(splitStrip.notMeasured).toBe('Not measured for the complete cohort');

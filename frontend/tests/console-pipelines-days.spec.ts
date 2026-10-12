@@ -50,7 +50,10 @@ test('THE ORACLE: one-day identity-free rules name their actual stage and record
 	await draw(page, 'FailureList', failureProps(1));
 	expect(await said(page, '[data-ranked-row="Fetch rule"] [data-ranked-cell="context"]')).toBe(`at fetch; last ${JUDGED_THROUGH}`);
 	await expect(page.locator('[data-source-losses], [data-failure-rows]')).toHaveCount(0);
-	await expect(page.locator('[data-failure-ranking]')).toHaveAttribute('data-readout-columns', '1');
+	// One dated count is not a trend; the native sparkline requires two points.
+	await expect(page.locator('[data-failure-ranking] [data-sparkline="empty"]')).toHaveCount(1);
+	await expect(page.locator('[data-failure-ranking] [data-sparkline="line"]')).toHaveCount(0);
+	await expect(page.locator('[data-readout="failed-rule-trends"]')).toHaveCount(0);
 });
 
 test('a seven-day identity-free ranking retains the same last measured date and its full calendar', async ({
