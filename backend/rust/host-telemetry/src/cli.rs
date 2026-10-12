@@ -22,11 +22,15 @@ pub fn run(mut arguments: impl Iterator<Item = String>) -> Result<()> {
             "--command",
             "--pid",
             "--start-ticks",
+            "--memory-profiling",
         ];
         let mut args = BTreeMap::new();
         while let Some(key) = arguments.next() {
             require(known.contains(&key.as_str()), "unknown resource argument")?;
             let value = arguments.next().ok_or("argument lacks value")?;
+            if key == "--memory-profiling" {
+                crate::config::memory_profiling_override(Some(&value))?;
+            }
             require(args.insert(key, value).is_none(), "duplicate argument")?;
         }
         return crate::monitor::runner::execute(&verb, args);
@@ -58,11 +62,15 @@ pub fn run(mut arguments: impl Iterator<Item = String>) -> Result<()> {
         "--captured-at",
         "--affinity-input",
         "--hierarchy-input",
+        "--memory-profiling",
     ];
     let mut args = BTreeMap::new();
     while let Some(key) = arguments.next() {
         require(known.contains(&key.as_str()), "unknown argument")?;
         let value = arguments.next().ok_or("argument lacks value")?;
+        if key == "--memory-profiling" {
+            crate::config::memory_profiling_override(Some(&value))?;
+        }
         require(args.insert(key, value).is_none(), "duplicate argument")?;
     }
     crate::invocation::execute(&verb, args)

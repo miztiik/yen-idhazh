@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 from idhazh.contracts.base import ServerJob
 from idhazh.telemetry import silicon
+from idhazh.telemetry.host_event_client import HostEventClient
 
 if TYPE_CHECKING:
     from idhazh import config
@@ -35,6 +36,7 @@ def record(
     attempt: int | None = None,
     started_at: datetime | None = None,
     clock: Callable[[], datetime] = utc_now,
+    host_events: HostEventClient | None = None,
 ) -> Iterator[list[Path]]:
     """Yield the exact files to stage, including the clock even if the work fails.
 
@@ -43,6 +45,16 @@ def record(
     """
     started = started_at if started_at is not None else clock()
     written: list[Path] = []
+    if host_events is not None:
+        try:
+            host_events.begin_job()
+        except OSError as error:
+            _LOG.warning(
+                "native machine probe unavailable run=%s job=%s error=%s",
+                run_id,
+                job,
+                type(error).__name__,
+            )
     try:
         _, paths = silicon.file_machine_row(
             date=date,
@@ -62,6 +74,16 @@ def record(
     try:
         yield written
     finally:
+        if host_events is not None:
+            try:
+                host_events.end_job()
+            except OSError as error:
+                _LOG.warning(
+                    "native machine clock unavailable run=%s job=%s error=%s",
+                    run_id,
+                    job,
+                    type(error).__name__,
+                )
         try:
             _, paths = silicon.file_job_clock(
                 date=date,

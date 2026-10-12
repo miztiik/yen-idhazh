@@ -138,6 +138,9 @@ export interface ObservabilityConfig {
 	/** Whether a job records what machine it drew. False is why three panels have
 	 * nothing, and each says so in words that never name the setting. */
 	host_fingerprint: boolean;
+	/** Whether operating-system memory and fault collection is enabled. CPU and
+	 * lifecycle telemetry remain available when this is false. */
+	memory_profiling_enabled: boolean;
 	/** How many times a machine's cache the bandwidth probe's buffer has to be
 	 * before its copy rate is a memory reading. The probe sizes its buffer by it
 	 * and a machine card grades a committed row by it, so it has to be the same
@@ -541,6 +544,7 @@ const OBSERVABILITY_DEFAULTS: ObservabilityConfig = {
 	evaluation_enabled: true,
 	host_fingerprint: true,
 	host_fingerprint_bandwidth_cache_multiple: 2,
+	memory_profiling_enabled: true,
 	sample_rate: 1
 };
 const COLLECT_DEFAULTS: CollectConfig = { availability_strikes_before_rest: 5 };

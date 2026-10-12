@@ -402,7 +402,11 @@ const STRAINED: Partial<ShardReading> = {
 	cpuBusyMax: 71
 };
 
-const HOST_JOB = { cores: 4, cpuModel: 'AMD EPYC 7763 64-Core Processor', modelLoadMs: 2400 };
+const HOST_JOB = {
+	logicalProcessors: 4,
+	cpuModel: 'AMD EPYC 7763 64-Core Processor',
+	modelLoadMs: 2400
+};
 
 /** Shard 1 took twice shard 0's clock on the same two items, reading at a
  * quarter of its rate on a host that is queueing and swapping. */
@@ -466,9 +470,8 @@ test.describe('work or the host, decided on the row', () => {
 		// Same work, a quarter of the rate. That is the machine, not the queue.
 		expect(slow.items).toBe(fast.items);
 		expect(slow.readTokensPerSecond).toBeCloseTo((fast.readTokensPerSecond ?? 0) / 4, 6);
-		// Load past the cores the host reported is a queue, and the target bar
-		// says so rather than leaving the reader to divide.
-		expect(slow.cores).toBe(4);
+		// Load past the online logical processor count indicates host pressure.
+		expect(slow.logicalProcessors).toBe(4);
 		expect(slow.loadMax).toBeCloseTo(6.5, 6);
 		expect(slow.load.band).toBe('past');
 		expect(fast.load.band).not.toBe('past');
@@ -485,7 +488,7 @@ test.describe('work or the host, decided on the row', () => {
 		// 24,000 over 600 is 40, the same rate its neighbour read at.
 		expect(slow.readTokensPerSecond).toBeCloseTo(fast.readTokensPerSecond ?? 0, 6);
 		expect(slow.items).toBe(fast.items * 3);
-		expect(slow.loadMax).toBeLessThan(slow.cores ?? 0);
+		expect(slow.loadMax).toBeLessThan(slow.logicalProcessors ?? 0);
 		expect(slow.load.band).not.toBe('past');
 		expect(slow.swapFreeBytes).toBe(4 * GIB);
 	});
@@ -1079,7 +1082,7 @@ test.describe('a run the counters refuse, handed to every figure built from arti
 			date: '2026-09-04',
 			run_id: runId,
 			shard: 0,
-			threads: 4
+			cpu_logical_processors: 4
 		}));
 		const accepted = articleCost(acceptedRows, processors);
 		expect(accepted.rowsRead).toBe(2);
@@ -1103,8 +1106,8 @@ test.describe('a run the counters refuse, handed to every figure built from arti
 		// orders and counted in `outOf`.
 		const shardArticle = [refusedRows[0]];
 		const namedLast8 = [
-			{ date: '2026-09-04', run_id: REFUSED, shard: 0, threads: 4 },
-			{ date: '2026-09-04', run_id: REFUSED, shard: 0, threads: 8 }
+			{ date: '2026-09-04', run_id: REFUSED, shard: 0, cpu_logical_processors: 4 },
+			{ date: '2026-09-04', run_id: REFUSED, shard: 0, cpu_logical_processors: 8 }
 		];
 		const namedLast4 = [...namedLast8].reverse();
 		const forward = articleCost(shardArticle, namedLast8);
@@ -1187,6 +1190,7 @@ test.describe('a run the counters refuse, handed to every figure built from arti
 				evaluation_enabled: true,
 				host_fingerprint: true,
 				host_fingerprint_bandwidth_cache_multiple: 2,
+				memory_profiling_enabled: true,
 				sample_rate: 1
 			}
 		}).intro;
@@ -1251,6 +1255,7 @@ test.describe("a refused run is a run the server's figures were written down for
 		evaluation_enabled: true,
 		host_fingerprint: true,
 		host_fingerprint_bandwidth_cache_multiple: 2,
+		memory_profiling_enabled: true,
 		sample_rate: 1
 	};
 	/** Shard 0's machine record for the run on `date`: the probe and the clock, and the server's two

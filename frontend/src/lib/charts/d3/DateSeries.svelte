@@ -292,6 +292,7 @@
 		{/if}
 		{#if 'changes' in geometry.rule && geometry.rule.note !== null}
 			<p class="model-rule-note" data-model-rule-empty={geometry.rule.changes.length === 0 ? name : undefined}
+				data-model-rule-unread={name}
 				data-model-rule-note={geometry.rule.changes.length > 0 ? name : undefined}>{geometry.rule.note}</p>
 		{/if}
 	</div>

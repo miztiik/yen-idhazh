@@ -1,6 +1,6 @@
 # The LLM-COUNCIL, and why judging has its own clock
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-10-12
 
 The room a model verdict is taken in. `LLM-COUNCIL` is a workflow of its own -
 [../../../.github/workflows/llm-council.yml](../../../.github/workflows/llm-council.yml) -
@@ -59,6 +59,25 @@ memory and now pulls two, and both of those arrive through the digest
 pipeline's own use of the applied merge line rather than through anything the
 council runs.
 
+The console's Data explorer also lists `council-run-records` as published,
+through `ledger.published` in `config/idhazh.json`. The site build copies its
+three compact indexes and the files those indexes name inside the shared
+console window.
+`page_weight.payload_ceilings_bytes` bounds each council index at 2,088
+compressed bytes, twice the heavier generated index at the declared retention
+limit: 76 daily entries weigh 1,044 bytes at Node gzip level 5, while 17 monthly
+entries weigh 384 bytes. The existing page-ceiling contract test holds that
+bound to the retention settings.
+A query can group completed and failed steps, read the closed
+`raised` fault, and compare counts and UTC instants. No exception text is
+stored or shown. A record not packed yet reports missing data; an empty packed
+span reports no rows, not a failed night. Isolated paused trials keep their
+council records in the downloadable trial tree and publish nothing.
+
+The canary builder reads the two named council contract fixtures from its
+source checkout, not its working directory. A caller may place generated
+digest and state files elsewhere without moving those recorded inputs.
+
 ### Events and exit codes
 
 Every council program writes one JSON event per log line on stderr through
@@ -83,9 +102,8 @@ The collector retains completed work from earlier and later judges and dates
 after a failure. It also receives the judging job's result, so a failed or
 cancelled cell stays red even when its siblings' bytes land. Publication never
 reruns a judge. An integrity failure found after work earns 1 and publishes
-nothing; it cannot claim that no unit ran. A raised unit emits a failure event
-but still leaves a missing persisted council record. Adding that record is a
-separate contract change.
+nothing; it cannot claim that no unit ran. A raised unit emits one failure
+event and files one failed council record before its exception escapes.
 
 Each entrypoint installs the shared text-free crash printer. Caught failures
 become diagnostic events. An uncaught crash prints exception types and code
@@ -169,7 +187,7 @@ Table A - judge status
 | Id | Status | Council work | Existing rows |
 | --- | --- | --- | --- |
 | A1 | `active` | Import, ask about outstanding nights, build cells, prepare, run shards, settle and publish. Start a model server only where `runs_model` is true. | Families must accept every committed ledger. |
-| A2 | `paused` | No scheduled work or import. Explicit manual selection runs an isolated downloadable trial, with no committed output or council record. Keep its name and file. | Readers, other writers, packing and ageing keep their own rules. |
+| A2 | `paused` | No scheduled work or import. Explicit manual selection runs an isolated downloadable trial, with no committed output or production council record. Keep its name and file. | Readers, other writers, packing and ageing keep their own rules. |
 | A3 | `retired` | As paused, for good. Keep the name and file; its package may stay. Never reuse its slug. | Keep row contracts while retained rows need them. |
 
 Every scheduled step uses `CouncilConfig.running()` before resolving code.
@@ -713,13 +731,24 @@ contract. A tenant with no model hands back empty cells, and empty is not zero:
 zero would read as a model that answered nothing, which is a different fact and
 only one of the two is a defect.
 
-**A step that died before returning files no row, and that is the record.** The
-outcome vocabulary is three words - `completed`, `stopped_on_deadline`,
-`nothing_to_do` - and none says "this died". A step the platform killed could
-not write one anyway. For evaluation, a missing row against `work_part_count`
-shows which part did not report. A step that ran out of its own clock is the
-opposite case and does file a row, because it stopped itself and had something
-to report.
+**A step that raises files one failed row before its exception escapes.**
+The outcome vocabulary is `completed`, `stopped_on_deadline`, `nothing_to_do`
+and `failed`. The `fault` cell is `raised` exactly when the outcome is `failed`;
+it is empty on every other outcome and on rows written before this field
+existed. No exception text, type or code place enters the row. Without a
+returned result, model cost cells stay empty, not invented zeros.
+
+The venue attempts to file each result once. A filing failure never reports
+success and never retries the unit. If both work and recording raise, both
+exceptions escape together. Completed sibling records stay intact. Selected
+active records follow the existing collection and Git publication path.
+Failed paused-trial records stay inside that trial's run and attempt root,
+including the narrowly permitted raw writes into a paused family; they never
+enter a publication request or receipt.
+
+A platform kill cannot write a row. For evaluation, a missing row against
+`work_part_count` means no report arrived; it does not prove what caused the
+absence. A returned deadline stop still files its reported result and cost.
 
 **The raw ledger is not seeded with a `.gitkeep` or a header-only file.** A
 header with no rows under it is a real day to the partition walker, so one
@@ -733,7 +762,7 @@ An earlier draft had the judge's own stages write this row. That made the
 venue's record of a unit depend on a tenant's diligence: a judge that forgot the
 line, or died before reaching it, left nothing behind at the one moment the
 record mattered. The council owns the invocation, so it owns the outcome - the
-row is filed in a `finally`, and it survives anything that goes wrong after the
+row is filed on the protected exit path, and it survives anything that goes wrong after the
 tenant handed its result back. Owner ruling, 2026-09-21.
 
 **`judge_id` is in the settlement key**, beside the date, the run and the unit

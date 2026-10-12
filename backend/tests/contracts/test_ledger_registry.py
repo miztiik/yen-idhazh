@@ -476,6 +476,7 @@ def test_the_claimed_roots_differ_from_the_base_only_by_the_names_given() -> Non
         "gardener",
         "raw",
         "run-plan",
+        "run-shards",
         "compact",
     }
     assert CLAIMED_AT_THE_BASE - ledger.claimed_roots() == {

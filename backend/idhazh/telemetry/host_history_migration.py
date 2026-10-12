@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from idhazh.contracts.base import Contract, compact_json
-from idhazh.contracts.file_envelope import Format, Period, RowIdentity, Tier
+from idhazh.contracts.file_envelope import FileEnvelope, Format, Period, RowIdentity, Tier
 from idhazh.contracts.host_migration import (
     MIGRATION_VERSION,
     FileStatus,
@@ -21,7 +21,6 @@ from idhazh.contracts.host_migration import (
 )
 from idhazh.contracts.host_output import (
     HOST_OUTPUT_VERSION,
-    CandidateFileEnvelope,
     HostStoredRow,
     LegacyHostFingerprintRow,
 )
@@ -97,7 +96,7 @@ def _replace_file(file: HistoryFile) -> tuple[HistoryFileReport, bytes | None]:
     status: FileStatus = "retained"
     data: bytes | None = None
     candidate: str | None = None
-    new_env: CandidateFileEnvelope | None = None
+    new_env: FileEnvelope | None = None
     diagnosis: str | None = None
     if env is not None:
         if file.container is None:
@@ -121,7 +120,7 @@ def _replace_file(file: HistoryFile) -> tuple[HistoryFileReport, bytes | None]:
                 if file.container is Format.PARQUET
                 else json_lines.engine_version(),
             )
-            new_env = CandidateFileEnvelope.model_validate(new)
+            new_env = FileEnvelope.model_validate(new)
             rows = [row.model_dump(mode="json") for row in file.rows]
             data = (
                 parquet.render(

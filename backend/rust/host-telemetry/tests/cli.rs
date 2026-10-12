@@ -7,6 +7,36 @@ use std::process::Command;
 use uuid::Uuid;
 
 #[test]
+fn memory_override_accepts_only_explicit_on_or_off() {
+    for verb in ["monitor", "probe"] {
+        for value in ["true", "false", "1", "yes", "OFF"] {
+            let result = idhazh_host_telemetry::cli::run(
+                [verb, "--memory-profiling", value]
+                    .into_iter()
+                    .map(str::to_owned),
+            );
+            assert_eq!(
+                result.unwrap_err(),
+                "memory profiling must be 'on' or 'off'"
+            );
+        }
+        let result = idhazh_host_telemetry::cli::run(
+            [verb, "--memory-profiling"].into_iter().map(str::to_owned),
+        );
+        assert_eq!(result.unwrap_err(), "argument lacks value");
+        for value in ["on", "off"] {
+            let error = idhazh_host_telemetry::cli::run(
+                [verb, "--memory-profiling", value]
+                    .into_iter()
+                    .map(str::to_owned),
+            )
+            .unwrap_err();
+            assert!(error.starts_with("missing --workspace"), "{error}");
+        }
+    }
+}
+
+#[test]
 fn native_replay_uses_the_real_producer_and_refuses_conflicting_retries() {
     native_replay_check();
 }

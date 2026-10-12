@@ -37,6 +37,14 @@ on:
       article_limit:
         description: 'Plan at most this many articles, best first, for a short test run. Blank plans the full day.'
         default: ''
+      memory_profiling:
+        description: 'OS memory and fault collection; inherit reads shared config'
+        type: choice
+        default: inherit
+        options:
+          - inherit
+          - 'on'
+          - 'off'
 
 permissions:
   contents: write
@@ -311,8 +319,16 @@ jobs:
 
       # Detach the sampler so it survives this step; track the sampler's own PID.
       - name: Sample memory
+        env:
+          MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
         run: |
           set -euo pipefail
+          RESOLVED=$(python3 backend/utilities/memory_profiling_control.py \
+            "$MEMORY_PROFILING")
+          if [ "$RESOLVED" = "off" ]; then
+            echo "memory profiling is off; no sampler started"
+            exit 0
+          fi
           python3 backend/utilities/memory_sampler.py start-sampler \
             --pid "$(cat llama-server.pid)"
 
@@ -320,12 +336,18 @@ jobs:
       - name: Work the shard
         env:
           LLAMA_CPP_BUILD: ${{ needs.plan.outputs.llama_cpp_build }}
+          MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
         run: |
+          MEMORY_ARGS=()
+          if [ "$MEMORY_PROFILING" != "inherit" ]; then
+            MEMORY_ARGS=(--memory-profiling "$MEMORY_PROFILING")
+          fi
           python backend/utilities/digest_publish.py run work \
             --date "${{ needs.plan.outputs.date }}" \
             --execution "${{ github.run_id }}" \
             --shard ${{ matrix.shard }} \
             --shards ${{ needs.plan.outputs.shards }} \
+            "${MEMORY_ARGS[@]}" \
             ${{ needs.plan.outputs.faithfulness == 'false' && '--no-faithfulness' || '' }}
 
       - name: Runtime log on failure
@@ -349,6 +371,8 @@ jobs:
       - name: What the server counted
         if: always()
         continue-on-error: true
+        env:
+          MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
         run: |
           curl -sf --max-time 30 "${MODEL_SERVER_PROBE}/metrics" -o llama-metrics.prom || true
           if [ -s llama-metrics.prom ]; then
@@ -363,7 +387,11 @@ jobs:
             echo "no metrics: llama-server was already gone, or the role's inference.metrics is off"
           fi
           # Capture the runner's cgroup peak here; the portable stage reads this file.
-          if [ -f /sys/fs/cgroup/memory.peak ]; then
+          RESOLVED=$(python3 backend/utilities/memory_profiling_control.py \
+            "$MEMORY_PROFILING")
+          if [ "$RESOLVED" = "off" ]; then
+            rm -f memory-peak.txt
+          elif [ -f /sys/fs/cgroup/memory.peak ]; then
             echo "cgroup_memory_peak_bytes=$(cat /sys/fs/cgroup/memory.peak)" > memory-peak.txt
           else
             echo "cgroup_memory_peak_bytes=unavailable" > memory-peak.txt
@@ -428,7 +456,7 @@ jobs:
           done
 
       - name: What memory this shard used
-        if: always()
+        if: always() && inputs.memory_profiling != 'off'
         run: |
           cat memory-peak.txt 2>/dev/null || echo "memory-peak.txt not found"
           python3 backend/utilities/memory_sampler.py summarize

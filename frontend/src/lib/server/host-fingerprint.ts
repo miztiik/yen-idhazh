@@ -31,6 +31,11 @@
 
 // Relative, not `$lib`: the browser suite loads this module in plain Node.
 import type { TimeWindow } from '../charts/viewport';
+import {
+	CORRECTED_HOST_COLUMNS,
+	HOST_INPUT_COLUMNS,
+	normalizeHostRows
+} from '../data/host-fingerprint';
 import { sliceFromDisk } from './ledger-disk';
 import { datedFirst, windowRows, type LedgerTable } from './ledger-rows';
 import { STATE_ROOT } from './payload';
@@ -85,17 +90,22 @@ export interface HostFingerprintRow {
 	job?: ServerJob;
 	shard: number;
 	fingerprint?: string | null;
+	fingerprint_version?: number | null;
 	cpu_model?: string | null;
 	cpu_vendor?: string | null;
 	cpu_family?: number | null;
 	cpu_model_number?: number | null;
 	cpu_stepping?: number | null;
 	microcode?: string | null;
-	cores?: number | null;
-	threads?: number | null;
+	cpu_physical_cores?: number | null;
+	cpu_logical_processors?: number | null;
+	cpu_allowed_processors?: number | null;
+	cpu_quota_cores?: number | null;
+	cpu_quota_state?: string | null;
+	cpu_target_measured_at?: string | null;
 	l3_cache_bytes?: number | null;
-	mhz_max?: number | null;
-	mhz_at_probe?: number | null;
+	cpu_observed_mhz?: number | null;
+	cpu_reported_max_mhz?: number | null;
 	flags?: string;
 	boot_seconds?: number | null;
 	memcpy_gib_s?: number | null;
@@ -133,24 +143,29 @@ export type HostFingerprint = Required<HostFingerprintRow> & { fingerprint: stri
  * know - and the interface is the copy the field-set test already holds to the
  * contract. A second list that could drift is the one thing this is not.
  */
-export const HOST_FINGERPRINT_COLUMNS = Object.keys({
+const HOST_FINGERPRINT_COLUMN_COPY = Object.keys({
 	version: true,
 	date: true,
 	run_id: true,
 	job: true,
 	shard: true,
 	fingerprint: true,
+	fingerprint_version: true,
 	cpu_model: true,
 	cpu_vendor: true,
 	cpu_family: true,
 	cpu_model_number: true,
 	cpu_stepping: true,
 	microcode: true,
-	cores: true,
-	threads: true,
+	cpu_physical_cores: true,
+	cpu_logical_processors: true,
+	cpu_allowed_processors: true,
+	cpu_quota_cores: true,
+	cpu_quota_state: true,
+	cpu_target_measured_at: true,
 	l3_cache_bytes: true,
-	mhz_max: true,
-	mhz_at_probe: true,
+	cpu_observed_mhz: true,
+	cpu_reported_max_mhz: true,
 	flags: true,
 	boot_seconds: true,
 	memcpy_gib_s: true,
@@ -166,6 +181,12 @@ export const HOST_FINGERPRINT_COLUMNS = Object.keys({
 	server_prompt_tokens: true,
 	server_prompt_seconds: true
 } satisfies Record<keyof HostFingerprintRow, true>) as (keyof HostFingerprintRow)[];
+
+export const HOST_FINGERPRINT_COLUMNS = [...CORRECTED_HOST_COLUMNS] as (keyof HostFingerprintRow)[];
+
+if (HOST_FINGERPRINT_COLUMN_COPY.join('|') !== HOST_FINGERPRINT_COLUMNS.join('|')) {
+	throw new Error('the host row hand-copy and corrected read columns disagree');
+}
 
 function text(cell: string | undefined): string | null {
 	const trimmed = (cell ?? '').trim();
@@ -198,13 +219,14 @@ function serverJob(cell: string | undefined): ServerJob | null {
  * answer over different days.
  */
 export async function machineRecord(window: TimeWindow, root: string = STATE_ROOT): Promise<LedgerTable> {
-	return windowRows(root, 'host-fingerprint', window, HOST_FINGERPRINT_COLUMNS, (start, end) =>
+	const table = await windowRows(root, 'host-fingerprint', window, HOST_FINGERPRINT_COLUMNS, (start, end) =>
 		sliceFromDisk(root, 'host-fingerprint', {
-			columns: [...datedFirst(HOST_FINGERPRINT_COLUMNS)],
+			columns: [...datedFirst(HOST_INPUT_COLUMNS)],
 			from: start,
 			to: end
 		})
 	);
+	return { ...table, rows: normalizeHostRows(table.rows) };
 }
 
 /** The machine record's rows as typed rows, one a job.
@@ -216,7 +238,7 @@ export async function machineRecord(window: TimeWindow, root: string = STATE_ROO
  */
 export function fingerprintsOf(rows: readonly Record<string, string>[]): HostFingerprint[] {
 	const found: HostFingerprint[] = [];
-	for (const row of rows) {
+	for (const row of normalizeHostRows(rows)) {
 		const runId = text(row.run_id);
 		const fingerprint = text(row.fingerprint);
 		const job = serverJob(row.job);
@@ -228,17 +250,22 @@ export function fingerprintsOf(rows: readonly Record<string, string>[]): HostFin
 			job,
 			shard: figure(row.shard) ?? 0,
 			fingerprint,
+			fingerprint_version: figure(row.fingerprint_version),
 			cpu_model: text(row.cpu_model),
 			cpu_vendor: text(row.cpu_vendor),
 			cpu_family: figure(row.cpu_family),
 			cpu_model_number: figure(row.cpu_model_number),
 			cpu_stepping: figure(row.cpu_stepping),
 			microcode: text(row.microcode),
-			cores: figure(row.cores),
-			threads: figure(row.threads),
+			cpu_physical_cores: figure(row.cpu_physical_cores),
+			cpu_logical_processors: figure(row.cpu_logical_processors),
+			cpu_allowed_processors: figure(row.cpu_allowed_processors),
+			cpu_quota_cores: figure(row.cpu_quota_cores),
+			cpu_quota_state: text(row.cpu_quota_state),
+			cpu_target_measured_at: text(row.cpu_target_measured_at),
 			l3_cache_bytes: figure(row.l3_cache_bytes),
-			mhz_max: figure(row.mhz_max),
-			mhz_at_probe: figure(row.mhz_at_probe),
+			cpu_observed_mhz: figure(row.cpu_observed_mhz),
+			cpu_reported_max_mhz: figure(row.cpu_reported_max_mhz),
 			// The contract's own shape: the watched flags this host reported, space
 			// joined. Empty is a reading and not a gap, so a consumer that wants the
 			// set splits it rather than this reader guessing at one.
@@ -275,7 +302,7 @@ export function fingerprintsOf(rows: readonly Record<string, string>[]): HostFin
  * answer over different days.
  */
 export function machineRecordDays(rows: readonly Record<string, string>[]): string[] {
-	return [...new Set(rows.map((row) => row.date ?? '').filter((date) => date !== ''))];
+	return [...new Set(normalizeHostRows(rows).map((row) => row.date ?? '').filter((date) => date !== ''))];
 }
 
 /** The flags a card draws a chip for, in the order the probe records them.

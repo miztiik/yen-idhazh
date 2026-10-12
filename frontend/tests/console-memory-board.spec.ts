@@ -12,30 +12,16 @@
  * shard maximum cannot show it: one item can take the machine to its floor
  * while the shard it sits in reads as a normal shard.
  *
- * Two halves, for the two things that can be wrong. The builder tests drive the
- * fold over ledger rows this file writes, so every expectation follows from rows
- * a test chose. The browser tests hold the built page to the figures it
- * publishes about itself: the lead is the lowest floor its marks carry, one mark
- * owns it, and an absent reading reaches the page as an empty attribute, whatever
- * run the page drew.
+ * The builder tests drive the fold over ledger rows this file writes, so every
+ * expectation follows from rows a test chose. Route assertions live in
+ * `console-memory-board-page.spec.ts`.
  */
-
 import { expect, test } from './support/door-page';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import {
-	memoryBoard,
-	MEM_TOTAL_AGREES_WITHIN_PCT,
-	RUNNER_MEMORY_BYTES
-} from '../src/lib/charts/machine';
-import {
-	machineCounters,
-	machineLimits,
-	type MachineLimits,
-	type MachineRun
-} from '../src/lib/server/machine-counters';
+import { memoryBoard, MEM_TOTAL_AGREES_WITHIN_PCT, RUNNER_MEMORY_BYTES } from '../src/lib/charts/machine';
+import { machineCounters, type MachineLimits, type MachineRun } from '../src/lib/server/machine-counters';
 import { ledgers, plan, type ShardReading } from './support/machine-rows';
-
 const REPO = resolve(process.cwd(), '..');
 const DATE = '2026-09-04';
 const RUN = '2026-09-04-1';
@@ -43,40 +29,44 @@ const RUN = '2026-09-04-1';
 // in fractions of a gibibyte turns every subtraction below into a float compare.
 const MIB = 1024 * 1024;
 const GIB = 1024 * MIB;
-
 /** `config/idhazh.json` off disk, so an expectation comes from the committed
  * file rather than from the reader it is checking. */
 function limits(): MachineLimits {
-	const idhazh = JSON.parse(
-		readFileSync(join(REPO, 'config', 'idhazh.json'), 'utf8')
-	) as { run: { shard_timeout_minutes: number }; models_file: string };
-	const models = JSON.parse(
-		readFileSync(join(REPO, 'config', idhazh.models_file), 'utf8')
-	) as { summarizer: { server: { '--ctx-size': number } } };
-	return {
-		contextWindow: models.summarizer.server['--ctx-size'],
-		jobTimeoutSeconds: idhazh.run.shard_timeout_minutes * 60
-	};
+    const idhazh = JSON.parse(readFileSync(join(REPO, 'config', 'idhazh.json'), 'utf8')) as {
+        run: {
+            shard_timeout_minutes: number;
+        };
+        models_file: string;
+    };
+    const models = JSON.parse(readFileSync(join(REPO, 'config', idhazh.models_file), 'utf8')) as {
+        summarizer: {
+            server: {
+                '--ctx-size': number;
+            };
+        };
+    };
+    return {
+        contextWindow: models.summarizer.server['--ctx-size'],
+        jobTimeoutSeconds: idhazh.run.shard_timeout_minutes * 60
+    };
 }
-
 /** The fixture ledgers, and the run the reader folds them into. */
 function fixture(readings: ShardReading[]): {
-	run: MachineRun;
-	health: Record<string, string>[];
+    run: MachineRun;
+    health: Record<string, string>[];
 } {
-	const stamped = readings.map((reading) => ({ date: DATE, runId: RUN, ...reading }));
-	const { hosts, health } = ledgers(stamped);
-	const { runs, refused } = machineCounters(hosts, health, plan([RUN, 2]), limits());
-	expect(refused, 'the fixture was refused').toEqual([]);
-	expect(runs, 'the fixture folded into no run').toHaveLength(1);
-	return { run: runs[0], health };
+    const stamped = readings.map((reading) => ({ date: DATE, runId: RUN, ...reading }));
+    const { hosts, health } = ledgers(stamped);
+    const { runs, refused } = machineCounters(hosts, health, plan([RUN, 2]), limits());
+    expect(refused, 'the fixture was refused').toEqual([]);
+    expect(runs, 'the fixture folded into no run').toHaveLength(1);
+    return { run: runs[0], health };
 }
-
 /** One item that filled every cell this panel reads. */
 function item(over: ShardReading): ShardReading {
 	return {
 		shard: 0,
-		cores: 4,
+		logicalProcessors: 4,
 		cachedTokens: 0,
 		writtenTokens: 100,
 		writeSeconds: 20,
@@ -90,48 +80,46 @@ function item(over: ShardReading): ShardReading {
 		...over
 	};
 }
-
 /** Three items on one shard, chosen so every derived figure checks with a
  * pencil. The middle item is the one that took the machine furthest. */
 const THREE_ITEMS: ShardReading[] = [
-	item({
-		itemId: 'item-a',
-		startedAt: '2026-09-04T06:00:00Z',
-		peakRssBytes: 11 * GIB,
-		serverRssBytes: 10 * GIB,
-		workerRssBytes: 1 * GIB,
-		memAvailableMin: 4 * GIB,
-		memAvailable: 5 * GIB,
-		load: 2.5,
-		cpuBusyMin: 90,
-		cpuBusyMax: 99
-	}),
-	item({
-		itemId: 'item-b',
-		startedAt: '2026-09-04T06:10:00Z',
-		peakRssBytes: 13 * GIB,
-		serverRssBytes: 12 * GIB,
-		workerRssBytes: 1229 * MIB,
-		memAvailableMin: 2 * GIB,
-		memAvailable: 2 * GIB + 205 * MIB,
-		load: 6.5,
-		cpuBusyMin: 96,
-		cpuBusyMax: 100
-	}),
-	item({
-		itemId: 'item-c',
-		startedAt: '2026-09-04T06:20:00Z',
-		peakRssBytes: 12 * GIB,
-		serverRssBytes: 11 * GIB,
-		workerRssBytes: 1536 * MIB,
-		memAvailableMin: 3 * GIB,
-		memAvailable: 3 * GIB + 410 * MIB,
-		load: 3.1,
-		cpuBusyMin: 88,
-		cpuBusyMax: 97
-	})
+    item({
+        itemId: 'item-a',
+        startedAt: '2026-09-04T06:00:00Z',
+        peakRssBytes: 11 * GIB,
+        serverRssBytes: 10 * GIB,
+        workerRssBytes: 1 * GIB,
+        memAvailableMin: 4 * GIB,
+        memAvailable: 5 * GIB,
+        load: 2.5,
+        cpuBusyMin: 90,
+        cpuBusyMax: 99
+    }),
+    item({
+        itemId: 'item-b',
+        startedAt: '2026-09-04T06:10:00Z',
+        peakRssBytes: 13 * GIB,
+        serverRssBytes: 12 * GIB,
+        workerRssBytes: 1229 * MIB,
+        memAvailableMin: 2 * GIB,
+        memAvailable: 2 * GIB + 205 * MIB,
+        load: 6.5,
+        cpuBusyMin: 96,
+        cpuBusyMax: 100
+    }),
+    item({
+        itemId: 'item-c',
+        startedAt: '2026-09-04T06:20:00Z',
+        peakRssBytes: 12 * GIB,
+        serverRssBytes: 11 * GIB,
+        workerRssBytes: 1536 * MIB,
+        memAvailableMin: 3 * GIB,
+        memAvailable: 3 * GIB + 410 * MIB,
+        load: 3.1,
+        cpuBusyMin: 88,
+        cpuBusyMax: 97
+    })
 ];
-
 test.describe('the memory board, at item grain', () => {
 	test('THE ORACLE: the printed item minimum is the minimum over the item rows', () => {
 		const { run, health } = fixture(THREE_ITEMS);
@@ -317,7 +305,7 @@ test.describe('the memory board, at item grain', () => {
 		// One entry an item, in run order off the item's own clock.
 		expect(board.items.map((one) => one.itemId)).toEqual(['item-a', 'item-b', 'item-c']);
 		expect(board.loadHigh).toBe(6.5);
-		expect(board.cores).toBe(4);
+		expect(board.logicalProcessors).toBe(4);
 		expect(board.load.empty, 'load has no core count to be read against').toBe(false);
 		// Busy runs near 100 on every row, which is why load is drawn beside it.
 		expect(board.busySpan.median).toBe(88);
@@ -424,153 +412,5 @@ test.describe('the memory board, at item grain', () => {
 		expect(board.items).toEqual([]);
 		expect(board.floorLowBytes).toBeNull();
 		expect(board.runId).toBe('');
-	});
-});
-
-function measuredAttribute(cell: string | null | undefined): number | null {
-	const text = (cell ?? '').trim();
-	if (text === '') return null;
-	const value = Number(text);
-	return Number.isFinite(value) ? value : null;
-}
-
-test.describe('the memory panel puts the item grain on the page', () => {
-	test('the page names one tightest item, and the lead matches that item', async ({
-		page
-	}) => {
-		await page.goto('/console/machine/');
-		const board = page.locator('[data-memory-board]');
-		await expect(board).toBeVisible();
-
-		await expect(board).toHaveAttribute('data-panel-question', 'what is broken');
-		const runId = await board.getAttribute('data-memory-board');
-		expect(runId, 'the panel drew no run').not.toBe('empty');
-		const floor = measuredAttribute(await board.getAttribute('data-memory-floor-low'));
-		const ceiling = measuredAttribute(await board.getAttribute('data-memory-ceiling'));
-		expect(floor, 'the panel names no lead floor').not.toBeNull();
-		expect(ceiling, 'the panel names no memory ceiling').not.toBeNull();
-		expect(floor, 'the floor is outside the ceiling it is drawn against').toBeLessThanOrEqual(
-			ceiling ?? 0
-		);
-		const owner = await board.getAttribute('data-memory-floor-item');
-		expect(owner, 'the minimum reached the page with no item owning it').not.toBe('');
-
-		const tightest = board.locator('[data-memory-item-tightest="true"]');
-		await expect(tightest).toHaveCount(1);
-		expect(await tightest.getAttribute('data-memory-item')).toBe(owner);
-		expect(measuredAttribute(await tightest.getAttribute('data-memory-item-floor'))).toBe(floor);
-
-		// The lead is the lowest floor any drawn item carries, read off the marks
-		// the page drew rather than off a ledger.
-		const floors = (
-			await board
-				.locator('[data-memory-item]')
-				.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-memory-item-floor') ?? ''))
-		)
-			.filter((cell) => cell !== '')
-			.map(Number);
-		expect(floors.length, 'no item mark carries a kernel floor').toBeGreaterThan(0);
-		expect(floor, 'the lead floor is not the lowest floor the marks carry').toBe(Math.min(...floors));
-	});
-
-	test('the kernel gap sentence follows the skipped count and bounded dates', async ({
-		page
-	}) => {
-		await page.goto('/console/machine/');
-		const board = page.locator('[data-memory-board]');
-		const skipped = Number(await board.getAttribute('data-memory-kernel-skipped'));
-		const from = Number(await board.getAttribute('data-memory-kernel-from'));
-		const total = Number(await board.getAttribute('data-memory-items'));
-		expect(skipped + from, 'kernel coverage does not add to the items drawn').toBe(total);
-		const gap = board.locator('[data-memory-kernel-gap]');
-		if (skipped === 0) {
-			await expect(gap).toHaveCount(0);
-			return;
-		}
-		await expect(gap).toBeVisible();
-		await expect(gap).toContainText('no kernel reading');
-		for (const attribute of ['data-memory-kernel-begins', 'data-memory-read-from'] as const) {
-			const date = await board.getAttribute(attribute);
-			expect(date, `${attribute} is missing`).not.toBe('');
-			await expect(gap).toContainText(date ?? '');
-		}
-	});
-
-	test('the page says the disputed high-water mark is not drawn', async ({ page }) => {
-		await page.goto('/console/machine/');
-		const board = page.locator('[data-memory-board]');
-		const drawnValues = await board.evaluate((node) =>
-			[...node.attributes]
-				.filter((one) => one.name.startsWith('data-memory-'))
-				.map((one) => one.name)
-		);
-		expect(drawnValues, 'the disputed maximum has a drawing attribute').not.toContain(
-			'data-memory-peak'
-		);
-		await expect(board.locator('[data-memory-not-drawn]')).toBeVisible();
-		await expect(board.locator('[data-memory-not-drawn]')).toContainText(
-			'not drawn here'
-		);
-	});
-
-	test('every item mark carries parseable figures, and absent cells stay empty', async ({ page }) => {
-		await page.goto('/console/machine/');
-		const board = page.locator('[data-memory-board]');
-
-		const marks = board.locator('[data-memory-item]');
-		const count = await marks.count();
-		expect(count, 'the panel drew no item marks').toBeGreaterThan(0);
-		for (let index = 0; index < count; index += 1) {
-			const mark = marks.nth(index);
-			const id = (await mark.getAttribute('data-memory-item')) ?? '';
-			expect(id, 'a memory mark has no item id').not.toBe('');
-			for (const attribute of [
-				'data-memory-item-server-end',
-				'data-memory-item-worker',
-				'data-memory-item-floor',
-				'data-memory-item-end',
-				'data-memory-item-load'
-			] as const) {
-				const drawn = await mark.getAttribute(attribute);
-				if ((drawn ?? '') === '') continue;
-				expect(Number.isFinite(Number(drawn)), `${id} ${attribute} is not a number`).toBe(true);
-			}
-		}
-	});
-
-	test('the brackets are labelled at most and drawn against the larger of themselves', async ({
-		page
-	}) => {
-		await page.goto('/console/machine/');
-		const board = page.locator('[data-memory-board]');
-
-		const server = measuredAttribute(await board.getAttribute('data-memory-server-end-high-water'));
-		const worker = measuredAttribute(await board.getAttribute('data-memory-worker-high-water'));
-		const scale = Number(await board.getAttribute('data-memory-bracket-scale'));
-		expect(server, 'the model server bracket has no figure').not.toBeNull();
-		expect(worker, 'the worker bracket has no figure').not.toBeNull();
-		// Against the larger of the two and never against the machine, so the pair
-		// cannot be read as a share of a budget.
-		expect(scale).toBe(Math.max(server!, worker!));
-		expect(scale).not.toBe(Number(await board.getAttribute('data-memory-ceiling')));
-		await expect(board.locator('[data-memory-figure="server-end"]')).toContainText('at most');
-		await expect(board.locator('[data-memory-figure="worker-end"]')).toContainText('at most');
-	});
-
-	test('the panel names its denominator and says what it cannot separate', async ({ page }) => {
-		await page.goto('/console/machine/');
-		const board = page.locator('[data-memory-board]');
-
-		// The denominator is on the panel as an attribute, so the drawn lengths
-		// can be checked against the number they were drawn from.
-		const ceiling = Number(await board.getAttribute('data-memory-ceiling'));
-		expect(ceiling, 'the panel drew against no ceiling').toBeGreaterThan(0);
-		const measuredTotal = measuredAttribute(await board.getAttribute('data-memory-total-measured'));
-		expect(ceiling).toBe(measuredTotal ?? RUNNER_MEMORY_BYTES);
-
-		// The one thing this panel cannot answer is said on the panel rather than
-		// left for the reader to assume it was answered.
-		await expect(board.locator('[data-memory-cannot-separate]')).toBeAttached();
-		await expect(board.locator('[data-memory-denominator]')).toBeAttached();
 	});
 });

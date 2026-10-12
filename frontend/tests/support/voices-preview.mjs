@@ -35,7 +35,17 @@ let held = process.argv[2] === 'true';
 const pending = new Set();
 const serve = sirv(output, { dev: true });
 const http = createServer((request, response) => {
-	const next = () => serve(request, response, () => { response.writeHead(404); response.end(); });
+	const missing = () => { response.writeHead(404); response.end(); };
+	const next = () => {
+		try {
+			serve(request, response, missing);
+		} catch (error) {
+			// A released request may reach an index the next fixture state removed.
+			if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT' &&
+				request.url?.startsWith('/state/compact/item-health/'))) throw error;
+			missing();
+		}
+	};
 	if (held && request.url?.includes('/state/compact/item-health/index/')) {
 		pending.add(next);
 		response.once('close', () => pending.delete(next));

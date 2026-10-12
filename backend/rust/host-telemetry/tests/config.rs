@@ -13,6 +13,12 @@ fn real_configuration_bounds_controls_and_override() {
             .memory_profiling_enabled
     );
     assert_eq!(config.effective_controls(None), config.controls);
+    assert_eq!(memory_profiling_override(None).unwrap(), None);
+    assert_eq!(memory_profiling_override(Some("on")).unwrap(), Some(true));
+    assert_eq!(memory_profiling_override(Some("off")).unwrap(), Some(false));
+    for invalid in ["true", "false", "1", "yes", "OFF"] {
+        assert!(memory_profiling_override(Some(invalid)).is_err());
+    }
     assert!(ExperimentConfig::from_bytes(bytes, 1).is_err());
     let mut data: serde_json::Value = serde_json::from_slice(bytes).unwrap();
     data["controls"]["memory_profiling_enabled"] = serde_json::json!("false");

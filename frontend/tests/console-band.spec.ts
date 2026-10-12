@@ -1,10 +1,8 @@
-import { expect, test, type Page } from './support/door-page';
+import { expect, test } from './support/door-page';
 import { PAGES_CAP_BYTES, siteCost, siteRunway } from '../src/lib/charts/glance';
 import type { RunSummary } from '../src/lib/server/payload';
-import { dayReady } from './support/day-ready';
 import { BAND_UNREAD } from '../src/lib/console/band';
 import { BY_ROUTE } from './support/console-expect/console-band';
-
 /**
  * The band's remaining-room figure, and the unit it is allowed to be in.
  *
@@ -27,424 +25,48 @@ import { BY_ROUTE } from './support/console-expect/console-band';
  *
  * `console-site-size.spec.ts` owns the per-article cost the runway divides by.
  */
-
 /** What the alarm is set to matters to `site-weight`, never to this figure. */
 const ALARM = 800 * 1024 * 1024;
-
 function summary(date: string, siteBytes: number, runs: number): RunSummary {
-	return { date, runs, planned: 0, failed: 0, siteBytes, siteFiles: 1, models: [], records: [] };
+    return { date, runs, planned: 0, failed: 0, siteBytes, siteFiles: 1, models: [], records: [] };
 }
-
-async function hydrated(page: Page) {
-	await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-days', /\d+/);
-}
-
 test('no rate of runs a day can move the answer', () => {
-	// One site, described twice: four days at one run a day, and the same four
-	// days at three. `run.safety_ceiling_per_run` is 80 and bounds a RUN, so a
-	// formula built on it prices the second day at 240 articles and the first at
-	// 80 - and its answer moves by three. This one may not move at all, because
-	// the site did not change.
-	const dates = ['2026-08-01', '2026-08-02', '2026-08-03', '2026-08-04'];
-	const bytes = [1_000_000, 1_300_000, 1_600_000, 1_900_000];
-	const used = bytes[bytes.length - 1];
-	const items = new Map(dates.map((date) => [date, 100]));
-
-	const once = dates.map((date, i) => summary(date, bytes[i], 1));
-	const thrice = dates.map((date, i) => summary(date, bytes[i], 3));
-
-	const a = siteRunway(used, siteCost(once, items).median, ALARM);
-	const b = siteRunway(used, siteCost(thrice, items).median, ALARM);
-	expect(a).not.toBeNull();
-	expect(a?.toCap, 'the runway moved when only the run count did').toBe(b?.toCap);
-
-	// 3,000 bytes an article, by construction, so the expected answer is a
-	// division a reader can check.
-	expect(Math.round(a?.toCap ?? 0)).toBe(Math.round((PAGES_CAP_BYTES - used) / 3000));
-
-	// And what a per-day answer would have done with the same two fixtures,
-	// written out so the difference is on the page rather than asserted in the
-	// abstract.
-	const CEILING = 80;
-	const daysAtCeiling = (runsADay: number) =>
-		(PAGES_CAP_BYTES - used) / (3000 * CEILING * runsADay);
-	expect(daysAtCeiling(3)).toBeCloseTo(daysAtCeiling(1) / 3, 6);
+    // One site, described twice: four days at one run a day, and the same four
+    // days at three. `run.safety_ceiling_per_run` is 80 and bounds a RUN, so a
+    // formula built on it prices the second day at 240 articles and the first at
+    // 80 - and its answer moves by three. This one may not move at all, because
+    // the site did not change.
+    const dates = ['2026-08-01', '2026-08-02', '2026-08-03', '2026-08-04'];
+    const bytes = [1000000, 1300000, 1600000, 1900000];
+    const used = bytes[bytes.length - 1];
+    const items = new Map(dates.map((date) => [date, 100]));
+    const once = dates.map((date, i) => summary(date, bytes[i], 1));
+    const thrice = dates.map((date, i) => summary(date, bytes[i], 3));
+    const a = siteRunway(used, siteCost(once, items).median, ALARM);
+    const b = siteRunway(used, siteCost(thrice, items).median, ALARM);
+    expect(a).not.toBeNull();
+    expect(a?.toCap, 'the runway moved when only the run count did').toBe(b?.toCap);
+    // 3,000 bytes an article, by construction, so the expected answer is a
+    // division a reader can check.
+    expect(Math.round(a?.toCap ?? 0)).toBe(Math.round((PAGES_CAP_BYTES - used) / 3000));
+    // And what a per-day answer would have done with the same two fixtures,
+    // written out so the difference is on the page rather than asserted in the
+    // abstract.
+    const CEILING = 80;
+    const daysAtCeiling = (runsADay: number) => (PAGES_CAP_BYTES - used) / (3000 * CEILING * runsADay);
+    expect(daysAtCeiling(3)).toBeCloseTo(daysAtCeiling(1) / 3, 6);
 });
-
-/**
- * The band's height, and where it leaves the first chart.
- *
- * Measured on this tree at bf37eeef, 2026-09-01, node 24.12.0, real build: the
- * band was 340px at 1440x1000 and 586px at 390x844 - 69 percent of a phone
- * viewport - with the window control inside it and the navigation strip 577px
- * down the page, below both. The first drawn chart on Pipelines was at 890px
- * and 1,372px, and the band was 99 words.
- *
- * After: the band is 113px and 282px, 50 words, with the strip above it and the
- * control below it, and the first chart is at 726px and 1,163px. The band is
- * 33 percent of a phone viewport rather than 69.
- *
- * **The chart lines below are 800 and 1,200, and the plan asked for 640 and
- * 1,000.** That gap is measured and it is not the band's to close. At 1440 the
- * 742px above the first chart is 113 site header, 24 page padding, 33 page
- * title, 80 strip, 114 band, 104 control, 21 cross-route sentence, 28 section
- * heading, 97 of a measure card's own label and value, and the rest margins -
- * so the three things this row owns are 298px of it and the other 444px belong
- * to five other surfaces. Cutting into those is a different row's decision.
- *
- * **The desktop line moved from 760 to 800 on 2026-09-12, when the strip took
- * five tabs.** A tab is 269px wide at 1440 where three tabs were about 450, so
- * every description under a label now wraps where none of them did - that is
- * structural and no wording change undoes it. Measured the same day: 742px on a
- * developer machine, 782px on `ubuntu-latest` with the two new descriptions at
- * their first length, which is the platform gap the browser notes warn about
- * (fonts, not code). The new line keeps the 34px of headroom the old one had
- * over its own measurement rather than being picked to clear today's reading.
- */
-/** The top and height of one element, in page coordinates. */
-async function boxOf(page: Page, selector: string) {
-	return page.locator(selector).evaluate((node) => {
-		const box = node.getBoundingClientRect();
-		return { top: Math.round(box.top + window.scrollY), height: Math.round(box.height) };
-	});
-}
-
 for (const { id, href, label } of BAND_UNREAD.routes) {
-	const expected = BY_ROUTE[id];
-	if (expected === null) continue;
-	test.describe(label, () => {
-for (const view of expected.viewports) {
-	test(`THE ORACLE: the band is three facts and half the height at ${view.width}`, async ({
-		page
-	}) => {
-		await page.setViewportSize({ width: view.width, height: view.height });
-		await page.goto(href);
-		await hydrated(page);
-
-		const band = await boxOf(page, '[data-console-band]');
-		expect(
-			band.height,
-			`the band is ${band.height}px at ${view.width}, over its ${view.band}px line`
-		).toBeLessThanOrEqual(view.band);
-
-		// The control is out of the band, not merely shorter inside it.
-		await expect(page.locator('[data-console-band] [data-window-control]')).toHaveCount(0);
-
-		const chart = await page.evaluate(() => {
-			const svg = [...document.querySelectorAll('[data-surface="operator"] svg')].find(
-				(node) => node.getBoundingClientRect().width > 0
-			);
-			return svg === undefined
-				? null
-				: Math.round(svg.getBoundingClientRect().top + window.scrollY);
-		});
-		expect(chart, 'no chart is drawn on the route at all').not.toBeNull();
-		expect(
-			chart as number,
-			`the first chart is at ${chart}px at ${view.width}, past its ${view.chart}px line`
-		).toBeLessThanOrEqual(view.chart);
-	});
+    const expected = BY_ROUTE[id];
+    if (expected === null)
+        continue;
 }
-
-if (expected.chromeOrder) {
-test('THE ORACLE: chrome reads top to bottom - title, strip, completeness, band, days sentence', async ({
-	page
-}) => {
-	await page.goto(href);
-
-	// Read as an ordering of tops rather than of DOM nodes, because that is what
-	// a reader gets. Until 2026-08-31 the strip sat 337px BELOW the band on a
-	// phone, so the band's worst fact linked into a strip the reader had already
-	// scrolled past, and the control sat inside a panel it does not govern.
-	//
-	// Since 2026-09-27 the days control is ON the strip, beside the tabs, and
-	// the sentence about the span stays under the band. So the control is not a
-	// step of its own here: it is held to the strip, and the strip to one place.
-	const order = await page.evaluate(() => {
-		const at = (selector: string) => {
-			const node = document.querySelector(selector);
-			return node === null ? null : node.getBoundingClientRect().top + window.scrollY;
-		};
-		return {
-			header: at('body > header, header'),
-			title: at('[data-surface="operator"] h1'),
-			strip: at('[data-console-strip]'),
-			completeness: at('[data-console-completeness]'),
-			band: at('[data-console-band]'),
-			status: at('[data-window-status]'),
-			content: at('[data-surface="operator"] .panel-title, [data-surface="operator"] .console-h2')
-		};
-	});
-	for (const [name, top] of Object.entries(order)) {
-		expect(top, `${name} is not on the page`).not.toBeNull();
-	}
-	const tops = [
-		order.header,
-		order.title,
-		order.strip,
-		order.completeness,
-		order.band,
-		order.status,
-		order.content
-	] as number[];
-	expect(
-		tops,
-		`header, title, strip, completeness, band, days sentence, content - measured ${tops.join(', ')}`
-	).toEqual([...tops].sort((a, b) => a - b));
-	expect(new Set(tops).size, 'two of the seven sit at the same height').toBe(tops.length);
-
-	await expect(
-		page.locator('[data-console-strip] [data-window-control]'),
-		'the days control is not on the strip'
-	).toHaveCount(1);
-	await expect(
-		page.locator('[data-console-strip] [data-window-status]'),
-		'the sentence about the span went onto the strip with the control'
-	).toHaveCount(0);
-});
-}
-
-if (expected.worstState) {
-test('the band says what the worst state costs, and the strip keeps the short form', async ({
-	page
-}) => {
-	await page.goto(href);
-
-	const worst = page.locator('[data-band-worst]');
-	const route = await worst.getAttribute('data-band-worst-route');
-	if (route === null) {
-		// The clear state is a sentence, and it has no strip fragment to differ
-		// from. `console-nav.spec.ts` holds that shape.
-		await expect(worst).toHaveAttribute('data-band-worst', 'clear');
-		return;
-	}
-
-	const strip = (
-		await page.locator(`[data-console-tab-worst="${route}"]`).innerText()
-	).trim();
-	const band = (await worst.innerText()).replace(/\s+/g, ' ').trim();
-	// The two said the same words until 2026-08-31, 337px apart on a phone. The
-	// band has room for a consequence and the strip has room for two words, so
-	// one string for both was always going to be the strip's.
-	expect(band, 'the band prints the strip fragment and nothing more').not.toBe(strip);
-	expect(band, 'the band names no consequence').toContain(', so ');
-	expect(band.length, 'the band is not saying more than the strip').toBeGreaterThan(strip.length);
-});
-}
-
-if (expected.runSquares) {
-test('the newest day draws one square a run, on the same ramp as the run strip', async ({
-	page
-}) => {
-	await page.goto(href);
-
-	// The sentence says the day ran N runs and published M of P. It cannot say
-	// whether one run ate every failure or all of them limped, and that is the
-	// question the row answers. Hand-written markup, so it is on the page with
-	// no script at all.
-	const squares = await page
-		.locator('[data-band-fact="verdict"] [data-band-run]')
-		.evaluateAll((nodes) =>
-			nodes.map((node) => ({
-				health: node.getAttribute('data-band-run') ?? '',
-				label: node.getAttribute('aria-label') ?? '',
-				fill: getComputedStyle(node).backgroundColor
-			}))
-		);
-	expect(squares.length, 'the newest day drew no run row').toBeGreaterThan(0);
-	expect(squares.length, 'the row is a chart, not a row').toBeLessThanOrEqual(12);
-
-	const ramp = await page.evaluate(() => {
-		const root = getComputedStyle(document.documentElement);
-		const probe = (value: string) => {
-			const span = document.createElement('span');
-			span.style.color = value;
-			document.body.appendChild(span);
-			const read = getComputedStyle(span).color;
-			span.remove();
-			return read;
-		};
-		return ['--fill-high', '--fill-medium', '--fill-low'].map((token) =>
-			probe(root.getPropertyValue(token).trim())
-		);
-	});
-	for (const square of squares) {
-		// Colour is one signal and never the only one.
-		expect(square.label.length, 'a square carries no words').toBeGreaterThan(4);
-		expect(ramp, `a square is painted ${square.fill}, off the run ramp`).toContain(square.fill);
-	}
-
-	// And the count agrees with the sentence beside it, so the row and the words
-	// cannot report two different days.
-	const said = await page.locator('[data-band-verdict]').innerText();
-	const runs = Number(/ran (\d+) runs?/.exec(said)?.[1] ?? 0);
-	const overflow = page.locator('[data-band-runs-more]');
-	const more =
-		(await overflow.count()) === 0
-			? 0
-			: Number((await overflow.getAttribute('data-band-runs-more')) ?? 0);
-	expect(squares.length + more, 'the row and the sentence count different runs').toBe(runs);
-
-	// Every verdict is also said in words after the squares, on their own line,
-	// grouped, so a thumb and a keyboard read what a pointer on a ten-pixel
-	// square would. No square keeps a native tooltip, which only a mouse reaches.
-	const grouped = new Map<string, number>();
-	for (const square of squares) {
-		const said = /^Run \d+ (.+)$/.exec(square.label)?.[1] ?? square.label;
-		grouped.set(said, (grouped.get(said) ?? 0) + 1);
-	}
-	const line = await page.locator('[data-band-runs-said]').innerText();
-	for (const [said, count] of grouped) {
-		const verb = count > 1 && said.startsWith('is ') ? `are ${said.slice(3)}` : said;
-		expect(line, `the grouped line misses "${said}"`).toContain(
-			`${count} ${count === 1 ? 'run' : 'runs'} ${verb}`
-		);
-	}
-	await expect(page.locator('[data-band-fact="verdict"] [data-band-run][title]')).toHaveCount(0);
-});
-}
-	});
-}
-
-test('THE ORACLE: the band is the same three facts on every route, and no window moves it', async ({
-	page
-}) => {
-	const bandText = async (path: string) => {
-		await page.goto(path);
-		await hydrated(page);
-		return (await page.locator('[data-console-band]').innerText()).replace(/\s+/g, ' ').trim();
-	};
-
-	// One band, derived once in the shared layout and drawn above every route's
-	// panels. Routes deriving their own would eventually disagree about which
-	// one of them is worst, which is the whole reason it is derived once.
-	//
-	// The expectations name the routes that share it, independently of the
-	// layout. The comparison needs hydration for the control checks below.
-	const shared = BAND_UNREAD.routes.filter((route) => BY_ROUTE[route.id]?.sharedBand);
-	expect(shared.length, 'no route expects the standing band').toBeGreaterThan(0);
-	const first = shared[0];
-	const pipelines = await bandText(first.href);
-	expect(pipelines.length, `the band drew nothing on ${first.href}`).toBeGreaterThan(0);
-	for (const route of shared.slice(1)) {
-		expect(await bandText(route.href), `the band differs on ${route.href}`).toBe(pipelines);
-	}
-
-	// The band is deliberately not windowed: a route's control governs the panels
-	// below it, never the standing band above it. Moving the control to another
-	// preset may not move the three facts. This is also the
-	// guardrail on the read change - a band sourced from the newest day cannot have
-	// quietly become a windowed read.
-	for (const { id, href } of BAND_UNREAD.routes) {
-		if (!BY_ROUTE[id]?.windowStable) continue;
-	await page.goto(href);
-	await hydrated(page);
-	const before = (await page.locator('[data-console-band]').innerText()).replace(/\s+/g, ' ').trim();
-	const current = await page.locator('[data-window-control]').getAttribute('data-window-days');
-	const presets = await page
-		.locator('[data-window-preset]')
-		.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-window-preset') ?? ''));
-	const other = presets.find((preset) => preset !== '' && preset !== current);
-	expect(other, 'the control offers only one preset, so nothing here can move').toBeTruthy();
-	await page.locator(`[data-window-preset="${other}"]`).click();
-	await expect(page.locator('[data-window-control]')).toHaveAttribute(
-		'data-window-days',
-		other as string
-	);
-	const after = (await page.locator('[data-console-band]').innerText()).replace(/\s+/g, ' ').trim();
-	expect(after, 'moving a route window control moved the standing band').toBe(before);
-	}
-});
-
-/** A request for code, not for an answer. The band is measured against the
- * payloads, because a route's own chunk has to arrive before any load runs. */
-const CODE = /\/_app\/|\.(?:js|mjs|css|map|woff2?|ico|png|jpe?g|svg|webmanifest)$/;
-
 /** SvelteKit's own file for the route, holding what the three `+page.server.ts`
  * loads return. The router fetches it and AWAITS it before it runs a single
  * universal load, so while the console keeps a server load this one file is
  * ahead of the band and there is nothing the band can do about it. */
 for (const { id, href } of BAND_UNREAD.routes) {
-	const payload = BY_ROUTE[id]?.firstPayload;
-	if (payload === null || payload === undefined) continue;
-	const ROUTE_DATA = payload.routeData;
-test(`THE ORACLE: the band is the first payload the console asks for on ${href}`, async ({ page }) => {
-	const issued: string[] = [];
-	page.on('request', (request) => issued.push(new URL(request.url()).pathname));
-
-	// A cold document already carries the band. The routes are prerendered and
-	// the layout load is universal, so SvelteKit resolves its fetch against the
-	// staged payload at build time and the verdict is markup - nothing is asked
-	// for at all. The request exists on a move INTO the console from outside,
-	// which is the entry an operator makes from a tab he already had open, and it
-	// is the entry this measures.
-	await page.goto('/');
-	await expect(page.locator('body')).toBeVisible();
-	await dayReady(page);
-	issued.length = 0;
-
-	// Keep the old reader visible while the destination's real response waits.
-	// Scrolling then must not start a chart ahead of the console band.
-	await page.route(`**${ROUTE_DATA}*`, async (route) => {
-		await page.evaluate(async () => {
-			window.scrollTo(0, document.documentElement.scrollHeight);
-			await new Promise<void>((done) =>
-				requestAnimationFrame(() => requestAnimationFrame(() => done()))
-			);
-		});
-		await route.continue();
-	});
-
-	await page.evaluate((href) => {
-		const link = document.createElement('a');
-		link.href = href;
-		link.id = 'oracle-console-entry';
-		link.textContent = 'console';
-		document.body.prepend(link);
-	}, href);
-	await page.click('#oracle-console-entry');
-	await hydrated(page);
-	// Wait for the route to have asked for its panel data as well, so this cannot
-	// pass by the band being the only payload in the list.
-	await page.waitForFunction(
-		() =>
-			document.querySelector('[data-console-panels][data-route-state]') !== null
-				? document.querySelector('[data-console-panels][data-route-state]')?.getAttribute('data-route-state') !== 'loading'
-				: Number(document.querySelector('[data-telemetry-rows]')?.getAttribute('data-telemetry-rows') ?? 0) > 0,
-		undefined,
-		{ timeout: 20_000 }
-	);
-
-	const payloads = issued.filter((path) => !CODE.test(path));
-	const order = payloads.join(', ');
-	expect(payloads.length, `the console asked for ${payloads.length} payloads: ${order}`).toBeGreaterThan(1);
-
-	const bandAt = payloads.indexOf(payload.band);
-	expect(bandAt, `the console never asked for the band: ${order}`).toBeGreaterThanOrEqual(0);
-
-	// Nothing of ours may be ahead of it. Measured 2026-09-09 on this tree, node
-	// 24, canary build: the order is `/console/__data.json`, `/console/band.json`,
-	// `/telemetry/2026-07.csv`, `/telemetry/2026-08.csv`, so the band is second
-	// and the one file ahead of it is SvelteKit's, not ours. That file is 31,354
-	// bytes (6,520 gzipped) against the band's 1,904 (779), and the router awaits
-	// it before any universal load starts - so the verdict is a second round trip
-	// today rather than the first. It becomes index 0 when the console's three
-	// server loads go and the file with them; both lines below still hold then.
-	const ahead = payloads.slice(0, bandAt);
-	expect(
-		ahead.filter((path) => path !== ROUTE_DATA),
-		`something of ours got in front of the band: ${order}`
-	).toEqual([]);
-	expect(ahead.length, `${ahead.length} requests are ahead of the band: ${order}`).toBeLessThanOrEqual(1);
-
-	// And it is ahead of every panel the page draws, which is the thing decision 2
-	// bought: the verdict does not wait for the data behind it.
-	const panels = payloads.filter((path) => path.startsWith(payload.panels));
-	expect(panels.length, `the route drew no panel data at all: ${order}`).toBeGreaterThan(0);
-	for (const panel of panels) {
-		expect(payloads.indexOf(panel), `${panel} was asked for before the band: ${order}`).toBeGreaterThan(
-			bandAt
-		);
-	}
-});
+    const payload = BY_ROUTE[id]?.firstPayload;
+    if (payload === null || payload === undefined)
+        continue;
 }

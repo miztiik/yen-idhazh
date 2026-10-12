@@ -42,6 +42,7 @@
 // Relative, not `$lib`, for the reason in the module docstring.
 import { itemRead } from '../charts/machine';
 import { daysBetween, type TimeWindow } from '../charts/viewport';
+import { normalizeHostRows } from '../data/host-fingerprint';
 import { inferenceConfig, runConfig } from './config';
 import { machineRecord } from './host-fingerprint';
 import { itemHealthRows } from './ledger-rows';
@@ -130,11 +131,12 @@ export interface ShardCounters {
 	 * record's probe never reached the shard. The key the page colours a machine
 	 * by, so a shard and the machine card of the job that ran it are one machine. */
 	fingerprint: string | null;
+	fingerprintVersion: number | null;
 	/** The least busy the processor was over any one item's model window. */
 	cpuBusyPct: number | null;
-	/** Cores the host let this job see. What `loadMax` is read against: a queue
-	 * is load past the cores, and 6.1 is a queue on four and not on eight. */
-	cores: number | null;
+	/** Validated online logical processors. Load above this denominator indicates
+	 * pressure but cannot distinguish runnable from uninterruptible work. */
+	logicalProcessors: number | null;
 	/** The middle item's mean CPU busy. A typical item, not the worst one. */
 	cpuBusyMedianPct: number | null;
 	/** The busiest any one item's model window got. */
@@ -372,8 +374,9 @@ const lowest = (values: number[]): number => Math.min(...values);
  */
 const HOST_CELLS = [
 	'fingerprint',
+	'fingerprint_version',
 	'cpu_model',
-	'cores',
+	'cpu_logical_processors',
 	'job_seconds',
 	'model_load_ms',
 	'server_prompt_tokens',
@@ -383,8 +386,9 @@ const HOST_CELLS = [
 /** One shard's machine cells, merged from however many halves the record holds. */
 interface HostCells {
 	fingerprint: string | null;
+	fingerprintVersion: number | null;
 	cpuModel: string | null;
-	cores: number | null;
+	logicalProcessors: number | null;
 	jobSeconds: number | null;
 	modelLoadMs: number | null;
 	serverPromptTokens: number | null;
@@ -550,8 +554,9 @@ function mergeHost(rows: Record<string, string>[]): HostCells | null {
 	}
 	return {
 		fingerprint: text(held.get('fingerprint')),
+		fingerprintVersion: measured(held.get('fingerprint_version')),
 		cpuModel: text(held.get('cpu_model')),
-		cores: measured(held.get('cores')),
+		logicalProcessors: measured(held.get('cpu_logical_processors')),
 		jobSeconds: measured(held.get('job_seconds')),
 		modelLoadMs: measured(held.get('model_load_ms')),
 		serverPromptTokens: measured(held.get('server_prompt_tokens')),
@@ -601,8 +606,9 @@ function shardCounters(
 		// which would otherwise draw as a machine nobody can name.
 		cpuModel: host.cpuModel ?? fold.cpuModel,
 		fingerprint: host.fingerprint,
+		fingerprintVersion: host.fingerprintVersion,
 		cpuBusyPct: fold.cpuBusyPct,
-		cores: host.cores,
+		logicalProcessors: host.logicalProcessors,
 		cpuBusyMedianPct: median(fold.busy),
 		cpuBusyMaxPct: fold.cpuBusyMaxPct,
 		cpuStolenMedianPct: median(fold.stolen),
@@ -742,7 +748,7 @@ function oneRun(
 	}
 
 	const hostsByShard = new Map<number, Record<string, string>[]>();
-	for (const row of hosts) {
+	for (const row of normalizeHostRows(hosts)) {
 		const shard = measured(row.shard ?? '');
 		// A row that does not say which shard it is cannot be merged against any
 		// other row, and reading it as shard zero would fold it into a real

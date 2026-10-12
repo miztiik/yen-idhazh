@@ -1,6 +1,6 @@
 # What the Hardware route draws
 
-**Last Updated**: 2026-10-06
+**Last Updated**: 2026-10-11
 `/console/machine/` answers a question no other route can ask: what machine did
 the run actually get, and does the day's rate mean anything because of it.
 
@@ -19,6 +19,14 @@ and the split take the processor and the flags off the machine record as well.
 The machine mix queries the packed host-fingerprint ledger in the browser
 through [the shared query reader](how-the-query-door-answers-a-panel.md).
 The other panels still read their ledgers at build time under `$lib/server/`.
+
+The native `run-shards` count foundation is published before the remaining
+Hardware readers move. It carries only the manifest's recorded date, run
+identity and nullable positive shard count, with existing writer provenance.
+See [the state ledgers](../contracts/state-ledgers.md). This foundation does
+not change the current panels, their build-time manifest refusal or their
+queries. A later reader must distinguish an unavailable count read from a
+successfully read historical null.
 
 | Group | Panel | Grain | The sentence it is for |
 | --- | --- | --- | --- |
@@ -69,10 +77,9 @@ answer changes what you do.** Neither prints the words question or answer, and a
 title borrows no word from how the thing is built - no column name, no subsystem
 term, no vendor. `Prompt cache` and `Context headroom` were the two worst: both
 named a mechanism and neither said what a reader would learn. The mechanical
-half of the rule - no trailing question mark, no opening auxiliary verb, no
-column name or vendor - is asserted in
-`frontend/tests/console-title.spec.ts`; what it cannot check is whether a title
-is *plain*, and Reader ruled all thirteen of the current ones on 2026-09-20.
+half of the rule is no trailing question mark, no opening auxiliary verb, no
+column name or vendor. Plain wording needs review, and Reader ruled all
+thirteen of the current ones on 2026-09-20.
 Authority: owner for the title-and-subtitle split, CLAUDE.md section 0b for the
 vocabulary, Reader for the wording.
 
@@ -135,8 +142,8 @@ memory and processor range marks, and the job clock with the weights load under
 it. They were five until 2026-09-20, and the board's own claim - a long clock at
 a quarter of its neighbour's read rate is the host - could not be checked on the
 board, because every host fact behind it was on one of four other panels. The
-row now carries the item count, the write rate, the load against the cores the
-host reported, the free swap against the swap it has, and the two range marks.
+row now carries the item count, the write rate, the load against validated online
+logical processors, the free swap against the swap it has, and the two range marks.
 Authority: Susan, 2026-09-17, decisions 1 to 3 of Row #19.
 
 **The card is an edge, not a fill.** Every quiet line in a row is
@@ -242,13 +249,11 @@ that pays for it. Rejected alternative: Fowler, Row #12.
 
 **Three costs, three instruments, and they are not interchangeable.**
 
-- **Processor time** is `cpu_busy_pct` times the processors the machine record
+- **Host busy processor time** is `cpu_busy_pct` times the processors the machine record
   names, times the item's own clock. The kernel counts every logical processor
   on one `/proc/stat` line, so the share is a share of all of them and the
-  multiplier is `threads`, never `cores`. On a machine running two threads a
-  core - which is what every committed record describes - using `cores` halves
-  every figure. `frontend/tests/console-article-cost.spec.ts` runs the same
-  arithmetic both ways and refuses the answer that used the wrong one.
+  multiplier is `cpu_logical_processors`, never target affinity, quota or
+  physical topology. Unknown counts withhold the figure rather than guessing.
 - **Model time** is `prefill_ms + decode_ms`, which the summarize stage sums
   over whatever calls the article made before the row is written. It is a total
   over the work the article needed, so nothing on this panel is keyed to how
@@ -628,11 +633,11 @@ read in these 44 runs", with the count from the record rather than a literal.
 The windowed sentence is also the more useful one: a feed that broke once in
 August and has answered every run since is permanently disqualified by "never
 failed", and the question on the desk is whether anything is broken now.
-`tests/console-window-claims.spec.ts` holds it - it reads the three built console
-documents, strips scripts and every attribute but `aria-label`, and refuses a
-claim in the present perfect.
 
-**What that guard does not catch, said out loud.** It bans a grammar, not a word: "has never failed" and "has ever reached" place a claim in an unbounded past, while "runs are never pooled" and "a counterfactual, never a bill" state rules and read over no span at all. Measured on the canary build 2026-09-09, the three console documents carry **42 remaining uses of `never` or `ever`, and every one is a rule, a domain term or a statement about named items** - 24 of them are the cell `Never checked:`, which is one of the checker's five reason names. A word list would have fired on all 42. A bare past tense - "the feeds that never failed" - makes the same claim as the perfect and is not matched, because the only pattern that would catch it is a list of verbs, and that list fires on "the part the machine never read" two sections up the same page. Those strings are held by review and by the assertions in `console.spec.ts`.
+**The rule is about claims, not a word list.** "Has never failed" and "the feeds
+that never failed" claim an unbounded past. "Runs are never pooled" and "a
+counterfactual, never a bill" state rules and read over no span at all. Review
+must distinguish them.
 
 **A refusal is not an ask.** A row that preserves the strike streak - a rest,
 or a robots answer - never asked the feed whether it still works, so it can make

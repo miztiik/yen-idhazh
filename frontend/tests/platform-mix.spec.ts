@@ -70,15 +70,28 @@ function recorded(): Row[] {
 		readFileSync(path.join(repo, 'tests', 'fixtures', 'platform-mix', 'door-answer-26-to-28-september.json'), 'utf8')
 	) as SliceResult;
 	expect(answer.state, 'the recorded answer is a door answer with rows').toBe('ok');
-	return answer.rows;
+	return answer.rows.map((row) => ({ version: '2026-09-20', ...row }));
 }
 
 /** The page's one ramp, cut over every job handed in. */
 function rampOf(jobs: readonly FleetJob[]): MachineRamp {
 	const config = knobs();
-	const keys = machineKeys(jobs.map((job) => ({ fingerprint: job.fingerprint, cpuModel: job.cpuModel })));
+	const keys = machineKeys(
+		jobs.map((job) => ({
+			fingerprint: job.fingerprint,
+			fingerprintVersion: job.fingerprintVersion,
+			cpuModel: job.cpuModel
+		}))
+	);
 	return machineRamp(
-		jobs.map((job) => ({ machine: keys({ fingerprint: job.fingerprint, cpuModel: job.cpuModel }), rate: job.rate })),
+		jobs.map((job) => ({
+			machine: keys({
+				fingerprint: job.fingerprint,
+				fingerprintVersion: job.fingerprintVersion,
+				cpuModel: job.cpuModel
+			}),
+			rate: job.rate
+		})),
 		{ stops: config.machine_colour_stops, floor: config.machine_colour_floor_share }
 	);
 }
@@ -107,6 +120,7 @@ function middle(values: readonly number[]): number {
 /** One job row in the door's shape. Every cell may be left to its default. */
 function job(over: Partial<Record<(typeof FLEET_COLUMNS)[number], string | number | null>>): Row {
 	return {
+		version: '2026-09-20',
 		date: '2026-09-12',
 		run_id: '2026-09-12-1',
 		job: 'work',
@@ -155,7 +169,7 @@ test.describe('THE ORACLE: the recorded door answer, drawn', () => {
 		expect(bars.dates).toEqual(days);
 		const byKind = new Map<string, { rates: number[]; perDay: Map<string, number> }>();
 		for (const row of rows) {
-			const kind = String(row.fingerprint);
+			const kind = `v1:${String(row.fingerprint)}`;
 			const held: { rates: number[]; perDay: Map<string, number> } = byKind.get(kind) ?? {
 				rates: [],
 				perDay: new Map()
@@ -233,11 +247,11 @@ test.describe('which kinds get a row of their own', () => {
 		const jobs = fleetJobs(rows);
 		const view = fleetView(jobs, options(jobs, { start: '2026-09-11', end: '2026-09-12', windowDays: 2, topKinds: 4 }));
 		const own = view.rows.filter((row) => row.members.length === 0).map((row) => row.key);
-		expect(own).toEqual(['k1', 'k2', 'k3', 'k5']);
+		expect(own).toEqual(['v1:k1', 'v1:k2', 'v1:k3', 'v1:k5']);
 		const fold = view.rows.find((row) => row.members.length > 0);
 		expect(fold?.members.sort()).toEqual(['Machine D', 'Machine F']);
 		expect(fold?.placements).toBe(5);
-		expect(view.mostPlaced?.key).toBe('k1');
+		expect(view.mostPlaced?.key).toBe('v1:k1');
 	});
 
 	test('leftovers fold once per step they share, and a step holding one leftover names it', () => {
@@ -263,11 +277,11 @@ test.describe('which kinds get a row of their own', () => {
 		// The two lone leftovers keep rows of their own, named; Left Three shares
 		// its step with a named kind, which is no fold.
 		expect(view.rows.filter((row) => row.members.length === 0).map((row) => row.key).sort()).toEqual([
-			'l3',
-			'l4',
-			'n1',
-			'n2',
-			'n3'
+			'v1:l3',
+			'v1:l4',
+			'v1:n1',
+			'v1:n2',
+			'v1:n3'
 		]);
 		// The fold stands on its step: first, because step 1 is the slowest.
 		expect(view.rows[0]).toBe(fold);

@@ -82,7 +82,7 @@ export interface MachineProcessors {
 	shard: number;
 	/** Logical processors, which is what the kernel's busy share is taken over.
 	 * Null where the record reached the machine but named no count. */
-	threads: number | null;
+	cpu_logical_processors: number | null;
 }
 
 function cell(value: string | undefined): number | null {
@@ -122,11 +122,11 @@ function figureOf(values: readonly number[], outOf: number): CostFigure {
 function processorsByShard(hosts: readonly MachineProcessors[]): Map<string, number> {
 	const named = new Map<string, Set<number>>();
 	for (const host of hosts) {
-		if (host.threads === null || host.threads <= 0) continue;
+		if (host.cpu_logical_processors === null || host.cpu_logical_processors <= 0) continue;
 		const key = shardKey(host.date, host.run_id, host.shard);
 		const seen = named.get(key);
-		if (seen === undefined) named.set(key, new Set([host.threads]));
-		else seen.add(host.threads);
+		if (seen === undefined) named.set(key, new Set([host.cpu_logical_processors]));
+		else seen.add(host.cpu_logical_processors);
 	}
 	const found = new Map<string, number>();
 	for (const [key, counts] of named) {

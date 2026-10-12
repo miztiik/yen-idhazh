@@ -72,12 +72,12 @@ const ADDRESS_ALLOWED: readonly ReviewedSink[] = [
 		origin: 'Page docsBase is authored ui.repo_url; suffix is a fixed documentation path.' },
 	{ file: 'src/routes/console/data-explorer/+page.svelte', attribute: 'href', value: 'href={answerLink}',
 		origin: 'Only the fixed #data-explorer-rows fragment or empty string, never the operator-written SQL.' },
-	{ file: 'src/routes/console/model/+page.svelte', attribute: 'href', value: 'href={data.measurementsReference}',
-		origin: 'Server page joins authored ui.repo_url with fixed docs/reference/pipeline-cost.md.' },
 	{ file: 'src/routes/console/model/+page.svelte', attribute: 'href', value: 'href={data.faithfulnessReference}',
 		origin: 'Server page joins authored ui.repo_url with fixed summary-quality documentation path.' },
-	{ file: 'src/routes/console/model/+page.svelte', attribute: 'reference', value: 'reference={data.throughputReference}',
-		origin: 'Legacy ThroughputTrend receives the authored repository documentation reference, not a ledger cell.' },
+	{ file: 'src/routes/console/model/+page.svelte', attribute: 'throughputReference', value: 'throughputReference={data.throughputReference}',
+		origin: 'Model Panels receives the authored repository documentation reference, not a ledger cell.' },
+	{ file: 'src/lib/console/model/Panels.svelte', attribute: 'reference', value: 'reference={throughputReference}',
+		origin: 'ThroughputTrend receives the same authored repository documentation reference through Model Panels.' },
 	{ file: 'src/lib/components/ChoiceTiles.svelte', attribute: 'spread', value: '{...{ [tileAttribute]: item.value }}',
 		origin: 'The single computed attribute is typed data-${string}, not a URL or HTML attribute.' }
 ];

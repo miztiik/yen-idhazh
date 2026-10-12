@@ -2,81 +2,136 @@
   "state": "ok",
   "rows": [
     {
+      "version": "2026-10-10",
       "date": "2026-08-19",
       "run_id": "2026-08-19-1",
       "job": "assemble",
       "shard": 0,
-      "threads": 4
+      "cpu_logical_processors": 4,
+      "cores": null,
+      "threads": null,
+      "mhz_max": null,
+      "mhz_at_probe": null
     },
     {
+      "version": "2026-10-10",
       "date": "2026-08-19",
       "run_id": "2026-08-19-1",
       "job": "plan",
       "shard": 0,
-      "threads": 4
+      "cpu_logical_processors": 4,
+      "cores": null,
+      "threads": null,
+      "mhz_max": null,
+      "mhz_at_probe": null
     },
     {
+      "version": "2026-10-10",
       "date": "2026-08-19",
       "run_id": "2026-08-19-1",
       "job": "work",
       "shard": 0,
-      "threads": 4
+      "cpu_logical_processors": 4,
+      "cores": null,
+      "threads": null,
+      "mhz_max": null,
+      "mhz_at_probe": null
     },
     {
+      "version": "2026-10-10",
       "date": "2026-08-19",
       "run_id": "2026-08-19-1",
       "job": "work",
       "shard": 1,
-      "threads": 4
+      "cpu_logical_processors": 4,
+      "cores": null,
+      "threads": null,
+      "mhz_max": null,
+      "mhz_at_probe": null
     },
     {
+      "version": "2026-10-10",
       "date": "2026-08-20",
       "run_id": "2026-08-20-1",
       "job": "plan",
       "shard": 0,
-      "threads": 4
+      "cpu_logical_processors": 4,
+      "cores": null,
+      "threads": null,
+      "mhz_max": null,
+      "mhz_at_probe": null
     },
     {
+      "version": "2026-10-10",
       "date": "2026-08-20",
       "run_id": "2026-08-20-1",
       "job": "work",
       "shard": 0,
-      "threads": 4
+      "cpu_logical_processors": 4,
+      "cores": null,
+      "threads": null,
+      "mhz_max": null,
+      "mhz_at_probe": null
     },
     {
+      "version": "2026-10-10",
       "date": "2026-08-20",
       "run_id": "2026-08-20-1",
       "job": "work",
       "shard": 1,
-      "threads": 4
+      "cpu_logical_processors": 4,
+      "cores": null,
+      "threads": null,
+      "mhz_max": null,
+      "mhz_at_probe": null
     },
     {
+      "version": "2026-10-10",
       "date": "2026-08-20",
       "run_id": "2026-08-20-2",
       "job": "assemble",
       "shard": 0,
-      "threads": 4
+      "cpu_logical_processors": 4,
+      "cores": null,
+      "threads": null,
+      "mhz_max": null,
+      "mhz_at_probe": null
     },
     {
+      "version": "2026-10-10",
       "date": "2026-08-20",
       "run_id": "2026-08-20-2",
       "job": "plan",
       "shard": 0,
-      "threads": 4
+      "cpu_logical_processors": 4,
+      "cores": null,
+      "threads": null,
+      "mhz_max": null,
+      "mhz_at_probe": null
     },
     {
+      "version": "2026-10-10",
       "date": "2026-08-20",
       "run_id": "2026-08-20-2",
       "job": "work",
       "shard": 0,
-      "threads": 4
+      "cpu_logical_processors": 4,
+      "cores": null,
+      "threads": null,
+      "mhz_max": null,
+      "mhz_at_probe": null
     },
     {
+      "version": "2026-10-10",
       "date": "2026-08-20",
       "run_id": "2026-08-20-2",
       "job": "work",
       "shard": 1,
-      "threads": null
+      "cpu_logical_processors": null,
+      "cores": null,
+      "threads": null,
+      "mhz_max": null,
+      "mhz_at_probe": null
     }
   ],
   "first": "2026-08-07",

@@ -1,6 +1,6 @@
 # The Ledger Door: Parquet and JSON Lines Under state/raw and state/compact
 
-**Last Updated**: 2026-10-09
+**Last Updated**: 2026-10-11
 
 How a contract payload reaches disk under `state/raw/` and `state/compact/`, how it comes back, and how the parquet engine is swapped. The door is `backend/idhazh/ledger/persist.py`; everything a producer needs is two calls, `ledger.persist` and `ledger.load`. The registry and the lifecycle statuses are [ledger-registry.md](ledger-registry.md), what each ledger answers is [state-ledgers.md](state-ledgers.md), and the shape of a contract is [schemas.md](schemas.md).
 
@@ -65,7 +65,7 @@ The paths come back ascending by the day each file covers, never by path string.
 
 **A raw write into a paused or retired family from a pipeline job writes nothing**, returns an empty list and logs one warning, through `ledger.accepts_new_rows` ([ledger-registry.md](ledger-registry.md)). A `persist_period` write, and a raw write from `migrate`, `run-tasks` or `history` - the members of `MAINTENANCE_JOBS` beside `ServerJob` - are never skipped, because each files rows again that were already recorded.
 
-**`load` is the inverse of `persist` and nothing else.** It reads each file's container from the file's own first bytes, never from its suffix, and refuses a file whose envelope names a different writer. It refuses a file written under a newer shape of the contract than this build declares, naming the file, the stamp it holds and the stamp this build reads. `load_stored` is the same read with each row's identity cells kept beside it. Neither removes duplicates: choosing which rows are current is the reader's half, in [Reading a raw ledger](#reading-a-raw-ledger).
+**`load` is the inverse of `persist` and nothing else.** It reads each file's container from the file's own first bytes, never from its suffix, and validates the envelope against four finite provenance pairs: Python or Rust Parquet, and Python or Rust JSON lines. Rust provenance is admitted only for corrected raw `host-fingerprint` files from `telemetry.silicon`; no regex admits another native writer. It refuses a mismatched container/writer pair and a file written under a newer shape than this build declares. `load_stored` is the same read with identity cells retained. Host history has its original canonical digest and row identity checked before finite legacy normalization. Neither read removes duplicates.
 
 ## The two identifiers
 
@@ -97,6 +97,13 @@ The paths come back ascending by the day each file covers, never by path string.
 | `load_current_rows(state_dir, ledger, model=, key=, days=None)` | the raw files' rows, settled |
 
 **Oldest first is an explicit sort, read from each file's envelope**: the day it covers, then `written_at_ms`, then `file_id`. A directory listing agrees today only because a `file_id` starts with its clock, and a reader that leaned on it would change its answer the day the name grammar did. Every file in a day folder is read whatever its suffix, because `ledger.format` may be JSON lines.
+
+`run-shards` alone retains the original envelope's `written_at_ms` and `file_id`
+on each stored row as `RunShardsProvenance`. Its latest numeric correction wins
+by that order; a later null cannot erase a count. Daily and reopened-month
+packing retain the original order, not the packing clock. This ledger-specific
+rule does not change `run-plan` settlement, despite their shared business key
+`(date, run_id)`. Missing count provenance is a named read refusal.
 
 **The first row of a key wins, unless the key declares a preference.** Every ledger that reads this way keeps one record per key: a retirement per `endpoint_key`, a cleanup pass per `(date, run_id)`, a gardener task's pass per `(date, run_id, task)`, a census row per `(date, run_id, item_id)`, a measurement per `(url_key, output_digest, scorer_version)`, and a machine row per `(date, run_id, job, shard)`. Two stale checkouts can each file one address, as two work units, and the earlier one is kept. A key that declares a preference in `ledger/keys.py` keeps the later row where the preference says so. Item-health's does: a work shard files a census row as the item settles and assemble files one for the whole day afterwards, and the row that names the machine that ran the item, `machine_job`, is kept. The hand marks' does too: of two marks of one pair of addresses, the one with the later `marked_on` is kept, and on the same day the one filed later. Either way a row is kept or dropped whole, and a cell only the dropped row filled is named in a warning.
 

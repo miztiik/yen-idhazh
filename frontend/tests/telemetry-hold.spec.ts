@@ -3,9 +3,7 @@
  * The console holds telemetry as revision-owned month shards. This proves the
  * three things the row settled and the one the handback did, at the tier they
  * belong to - a pure reducer over built rows, no browser (`CLAUDE.md` section
- * 13). The wired oracle (a failed fetch heals on a later widen) is the browser
- * spec `console-telemetry-heal.spec.ts`; this file is the data structure under
- * it.
+ * 13).
  */
 
 import { expect, test } from '@playwright/test';

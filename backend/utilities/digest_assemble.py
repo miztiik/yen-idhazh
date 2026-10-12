@@ -22,6 +22,7 @@ from idhazh.contracts.ledgers import Grain
 from idhazh.contracts.publication_inventory import PublicationInventory
 from idhazh.ledger import paths, staging
 from idhazh.path_classes import DERIVED
+from utilities import publication_evidence
 from utilities.publication_git import Repository
 from utilities.publication_inputs import ledger_window, materialize
 from utilities.publication_request import (
@@ -202,6 +203,11 @@ def resolved_inputs(
     return tuple(sorted(asked))
 
 
+def count_scope(date: str) -> str:
+    """Only this assemble day's newly completed count corrections may be added."""
+    return f"{staging.staged_path(LedgerName.RUN_SHARDS)}/{date.replace('-', '/')}"
+
+
 def preparation(
     repo: Path, original: PublicationRequest, *, date: str, settings: config.Settings
 ) -> Callable[[str, PublicationRequest], PublicationRequest]:
@@ -226,12 +232,6 @@ def preparation(
         corpus.read_meta(repo / "corpus") if "corpus/corpus.jsonl" in original.writes else None
     )
     scopes = original.preparation_scopes
-    immutable = {
-        path: write
-        for path, write in original.writes.items()
-        if not any(contains(scope, path) for scope in scopes)
-    }
-
     def prepare(base: str, active: PublicationRequest) -> PublicationRequest:
         from idhazh.cli import shard_count
         from idhazh.publication_checks import runner as checks
@@ -240,6 +240,11 @@ def preparation(
         scratch = repo / "backend" / "var" / "publication" / f"assemble-{uuid4().hex}"
         scratch.mkdir(parents=True)
         try:
+            immutable = {
+                path: write
+                for path, write in active.writes.items()
+                if write.immutable or not any(contains(scope, path) for scope in scopes)
+            }
             materialize(
                 git, base, resolved_inputs(git, base, date=date, settings=settings), scratch
             )
@@ -272,9 +277,7 @@ def preparation(
                     )
                 ]
                 materialize(git, base, names, scratch)
-            for path in original.writes:
-                if any(contains(scope, path) for scope in scopes):
-                    continue
+            for path in immutable:
                 target = safe_file(scratch, path, exists=False)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes((repo / path).read_bytes())
@@ -337,8 +340,17 @@ def preparation(
                 path: dataclasses.replace(write, baseline=git.entry(base, path), baseline_tip=base)
                 for path, write in immutable.items()
             }
+            count_day = count_scope(date)
             for target, digest in rebuilt.items():
                 path = target.relative_to(scratch).as_posix()
+                if contains(count_day, path) and target.suffix == ".parquet":
+                    if path in immutable or git.entry(base, path) is not None:
+                        raise IntegrityError(
+                            "count correction would replace completed raw bytes", (path,)
+                        )
+                    publication_evidence.identified(scratch, original.identity, {path: digest})
+                    writes[path] = Write(digest, None, immutable=True, baseline_tip=base)
+                    continue
                 if not any(contains(scope, path) for scope in scopes):
                     raise IntegrityError("rebuild wrote outside derived declaration", (path,))
                 writes[path] = Write(digest, git.entry(base, path), baseline_tip=base)

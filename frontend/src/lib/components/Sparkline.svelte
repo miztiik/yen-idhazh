@@ -23,6 +23,7 @@
 		type SparklineSeries
 	} from '$lib/charts/sparkline';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
+	import { completeModelRule, ruleEvents, type ModelRule } from '$lib/charts/d3/model-rule';
 
 	/** Where the line's strip is printed. Under the line itself, named `name`;
 	 * or by the list the line sits in, which is told every change - a column, or
@@ -39,7 +40,8 @@
 		strip,
 		width = 96,
 		height = 22,
-		rules = []
+		rules = [],
+		modelRule
 	}: {
 		marks: SparklineMarks;
 		/** What the line is, for anyone who cannot see it. A sentence. */
@@ -56,13 +58,25 @@
 		 * day. It carries no arrow and no delta: a rule says the ground moved, and
 		 * nothing measured says it moved the line. */
 		rules?: SparklineRule[];
+		modelRule?: ModelRule;
 	} = $props();
 
 	const own = $derived('name' in strip ? strip : null);
 	/** The day a line that prints its own strip has picked, or null for rest. */
 	let picked = $state<number | null>(null);
 	const at = $derived('onSelect' in strip ? strip.selected : picked);
-	const readout = $derived(own === null ? null : sparklineReadout(marks, series, rules));
+	const effectiveRules = $derived(modelRule === undefined ? rules : []);
+	const fullRule = $derived(modelRule === undefined ? undefined : completeModelRule(modelRule, marks.dates));
+	const boundaries = $derived(fullRule === undefined || 'declined' in fullRule ? [] : fullRule.changes.flatMap((change) => {
+		const point = marks.dates.findIndex((date) => date === change.date);
+		return point < 0 ? [] : [{ ...change, point }];
+	}));
+	const readout = $derived.by(() => {
+		if (own === null) return null;
+		const result = sparklineReadout(marks, series, effectiveRules);
+		if (modelRule === undefined) return result;
+		return { ...result, events: ruleEvents(fullRule!, marks.dates).lines.map((lines) => [...lines]) };
+	});
 
 	// Inset by the stroke, or a point sitting on the domain's edge is drawn half
 	// outside the box.
@@ -99,7 +113,7 @@
 		<!-- Under the line, never over it: the rule is the context and the line is
 		     the answer. Its sentence stays on it as its name, and the strip prints
 		     it on the day it lands on. -->
-		{#each rules as rule (rule.point)}
+		{#each effectiveRules as rule (rule.point)}
 			{@const x = atX(marks.points[rule.point]?.x ?? 0)}
 			<line
 				class="spark-rule"
@@ -111,6 +125,12 @@
 				role="img"
 				aria-label={rule.label}
 			/>
+		{/each}
+		{#each boundaries as boundary (`${boundary.date}-${boundary.kind}`)}
+			{@const x = atX(marks.points[boundary.point]?.x ?? 0)}
+			<line x1={x} x2={x} y1="0" y2={height} stroke="var(--color-text-tertiary)"
+				stroke-dasharray={boundary.kind === 'checker' ? '1 3' : '3 3'}
+				data-model-rule-date={boundary.date} data-model-rule-line={boundary.date} data-model-rule-kind={boundary.kind} />
 		{/each}
 		<polyline points={drawn} style="stroke: {SPARKLINE_SWATCH}" />
 		{#if spot !== null}

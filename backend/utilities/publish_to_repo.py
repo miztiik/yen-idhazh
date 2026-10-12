@@ -112,8 +112,10 @@ def _verify_preparation(
         raise IntegrityError("preparation changed identity or authority")
     scopes = original.preparation_scopes
     for path in set(original.writes) | set(prepared.writes):
-        if not any(contains(scope, path) for scope in scopes):
-            before, after = original.writes.get(path), prepared.writes.get(path)
+        before, after = original.writes.get(path), prepared.writes.get(path)
+        if (before is not None and before.immutable) or not any(
+            contains(scope, path) for scope in scopes
+        ):
             if (
                 before is None
                 or after is None

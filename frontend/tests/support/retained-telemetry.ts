@@ -6,6 +6,16 @@ import { clientCode, drawClient } from './console-window/client-render';
 import { windowOfDays, type TimeWindow } from '../../src/lib/charts/viewport';
 import type { TelemetryRow } from '../../src/lib/charts/series';
 import type { PanelState } from '../../src/lib/console/waiting';
+import { telemetryRow } from './telemetry-row';
+export { dayBefore } from './pipelines-ledgers';
+
+export function items(date: string, prefix: string, stage: string, outcome: string,
+	count: number, over: Partial<TelemetryRow> = {}): TelemetryRow[] {
+	return Array.from({ length: count }, (_, at) => telemetryRow({
+		date, run_id: `${date}-1`, item_id: `${prefix}-${String(at + 1).padStart(4, '0')}`,
+		stage, outcome, code: outcome === 'failed' ? `${stage}_failed` : '', ...over
+	}));
+}
 
 let code: Promise<string> | undefined;
 export async function openRetained(

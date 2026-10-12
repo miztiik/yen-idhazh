@@ -13,6 +13,11 @@ carry line: receiving the ledger must not move the window controls or chrome.
 The retained run-square cut wording is tested on that actual component with
 independent capped and uncapped records; no item-ledger cut identities cross
 the native page's private manifest boundary.
+After the representative-test consolidation, native disk/private contracts run
+in the logic group. Explicit Pipelines component, lifecycle, window, waiting,
+request-dependency and populated plot cases run in the console group. Retained
+compression and identity-list oracles mount the actual retained components,
+not retired route UI. There is no restored cross-route panels/capture matrix.
 
 The retained timing and histogram plots name their actual drawing elements for
 the shared chart checks. Timeline rows name their actual bar frames. An absent
@@ -157,10 +162,6 @@ the producer of the published mirror is
 [../../../backend/idhazh/telemetry/publish/run_timeline.py](../../../backend/idhazh/telemetry/publish/run_timeline.py),
 its shape is [run-timeline.md](run-timeline.md) and every drawing rule is
 [../../concepts/console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md](../../concepts/console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md).
-[../../../frontend/tests/console-pipeline-timeline.spec.ts](../../../frontend/tests/console-pipeline-timeline.spec.ts)
-holds the shard grain against the item grain per shard and per step, and fails on
-a declared column that is empty across every canary row.
-It also checks that no separate sub-step readout remains.
 
 **It is a snapshot, so the window control does not reach it.** A bar's position
 is measured from its own run's start and a span cannot narrow one run, so the
