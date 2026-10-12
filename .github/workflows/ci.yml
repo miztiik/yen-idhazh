@@ -270,7 +270,11 @@ jobs:
         working-directory: frontend
         run: npm run test:tooling
 
-      - name: Frontend logic without a build or browser
+      - name: Install Chromium for frontend logic tests
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Frontend logic in Chromium
         working-directory: frontend
         run: npm run test:logic -- --forbid-only
 

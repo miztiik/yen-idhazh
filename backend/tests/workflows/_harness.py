@@ -141,6 +141,7 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     # Blank plans the full day; a number lowers the run's crash guard to it.
     ("digest.yml", "article_limit"): "^[1-9][0-9]*$",
     ("digest.yml", "faithfulness"): DISPATCH_BOOLEAN,
+    ("digest.yml", "memory_profiling"): DISPATCH_CHOICE,
     ("digest.yml", "shards"): DISPATCH_CHOICE,
     ("drift.yml", "baseline_days"): "^[0-9]{1,4}$",
     ("drift.yml", "recent_days"): "^[0-9]{1,4}$",
@@ -167,8 +168,10 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("measure.yml", "runtime_threads_batch"): DISPATCH_READ_BY_NAME,
     ("measure.yml", "budget_samples"): "^[1-9][0-9]{0,4}$",
     ("measure.yml", "model_speed_case"): DISPATCH_CHOICE,
+    ("measure.yml", "memory_profiling"): DISPATCH_CHOICE,
     ("measure.yml", "target"): DISPATCH_CHOICE,
     ("measure.yml", "threads"): "^[1-9][0-9]*$",
+    ("rust-host-telemetry.yml", "memory_profiling"): DISPATCH_CHOICE,
     ("idhazh-gardener.yml", "force"): DISPATCH_BOOLEAN,
     ("validate.yml", "candidate_models_file"): DISPATCH_READ_BY_NAME,
     ("validate.yml", "corpus_per_shard"): "^[1-9][0-9]{0,3}$",
