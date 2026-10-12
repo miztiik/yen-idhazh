@@ -421,6 +421,10 @@ available through `HistoryManifest.json_schema()`. The manifest requires:
   SHA-256 and byte count. Raw, compact, raw-index and set-aside sources name
   their closed period. Compact files, indexes, views and receipts declare their
   exact source-path `dependencies`; raw files have no dependencies.
+- `legacy_raw_evidence`, when a compact repair needs an original CSV row, pins
+  its bytes and Git commit/path. The verifier resolves that exact path in the
+  commit tree and requires its blob ID to match the evidence, not only the
+  evidence bytes' computed blob hash.
 - An `isolated_root` under `backend/var/`, outside all historical state roots.
 
 Source kinds are `raw`, `compact`, `raw_index`, `compact_index`, `view`, `receipt`
@@ -541,6 +545,13 @@ no fabricated future-consumer calls or copied views described as rebuilt.
 After shared schemas and consumers migrate, the same closed manifest must run
 against those actual consumers, freeze view/receipt bytes in a new evidence
 generation, and satisfy the historical evidence gate before application.
+
+`HistoryReport` version `2026-10-12` records production cutover separately from
+historical readiness. A successful migrated-consumer replay can make only the
+historical decision ready. Production remains `blocked` until D7's all-family,
+single-writer Ubuntu evidence is verified; replay and elapsed time cannot satisfy
+that gate. The existing Python default remains the production writer meanwhile.
+The report names this unmet evidence explicitly.
 
 The artifact-only workflow can run these bounded, generated-file tests before
 its verdict; no test scans committed archives or installs tools:

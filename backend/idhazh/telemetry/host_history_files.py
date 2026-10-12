@@ -5,7 +5,9 @@ from __future__ import annotations
 import csv
 import hashlib
 import io
+import os
 import struct
+import subprocess
 import zlib
 from collections.abc import Mapping
 from dataclasses import dataclass, fields, replace
@@ -66,6 +68,7 @@ ENVELOPE_VERSIONS = frozenset(
         HOST_OUTPUT_VERSION,
     }
 )
+_GIT_TREE_LOOKUP_TIMEOUT_SECONDS = 10
 
 
 @dataclass(frozen=True)
@@ -160,7 +163,65 @@ def _read_evidence(
     ).hexdigest()
     if git_blob != evidence.git_blob:
         raise ValueError(f"{evidence.path}: Git blob evidence does not match its bytes")
+    _verify_git_tree_entry(evidence, workspace=workspace)
     return data
+
+
+def _verify_git_tree_entry(evidence: LegacyRawEvidence, *, workspace: Path) -> None:
+    environment = {
+        key: value for key, value in os.environ.items() if not key.startswith("GIT_")
+    }
+    environment["GIT_NO_LAZY_FETCH"] = "1"
+    environment["GIT_TERMINAL_PROMPT"] = "0"
+    common = ["git", "--no-replace-objects", "cat-file", "-t", evidence.git_commit]
+    try:
+        commit = subprocess.run(
+            common,
+            cwd=workspace,
+            env=environment,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            check=False,
+            timeout=_GIT_TREE_LOOKUP_TIMEOUT_SECONDS,
+        )
+        if commit.returncode != 0 or commit.stdout.strip() != b"commit":
+            raise ValueError(f"{evidence.path}: Git commit evidence is unavailable")
+        entry = subprocess.run(
+            [
+                "git",
+                "--no-replace-objects",
+                "--literal-pathspecs",
+                "ls-tree",
+                "-z",
+                "--full-tree",
+                evidence.git_commit,
+                "--",
+                evidence.path,
+            ],
+            cwd=workspace,
+            env=environment,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            check=False,
+            timeout=_GIT_TREE_LOOKUP_TIMEOUT_SECONDS,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise ValueError(f"{evidence.path}: Git tree evidence could not be read") from error
+    if entry.returncode != 0:
+        raise ValueError(f"{evidence.path}: Git commit tree is unavailable")
+    records = entry.stdout.split(b"\0")
+    if len(records) != 2 or not records[0] or records[1]:
+        raise ValueError(f"{evidence.path}: Git commit tree has no exact file entry")
+    header, separator, tree_path = records[0].partition(b"\t")
+    metadata = header.split(b" ")
+    if (
+        not separator
+        or len(metadata) != 3
+        or metadata[1] != b"blob"
+        or metadata[2] != evidence.git_blob.encode("ascii")
+        or tree_path != evidence.path.encode("utf-8")
+    ):
+        raise ValueError(f"{evidence.path}: Git commit path does not name the claimed blob")
 
 
 _LEGACY_INT_FIELDS = frozenset(
