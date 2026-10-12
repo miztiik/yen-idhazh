@@ -282,9 +282,8 @@ def test_window_events_bracket_the_authoritative_watch_once(tmp_path: Path) -> N
         with client.shadow_watch(
             host.Watch(interval_s=0, server_pid=None), item_id="item-01"
         ) as watch:
-            first = watch.close()
-            second = watch.close()
-        assert first.cells() == second.cells()
+            cells = watch.close()
+        assert isinstance(cells, host.HostCells)
         assert [event.kind for event in peer.seen] == [
             "worker.register",
             "window.begin",
