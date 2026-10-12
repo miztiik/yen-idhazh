@@ -78,11 +78,21 @@ on:
         description: 'Squash now, even if every_days in config/gardener/corpus-squash.json says it is not due. Every other task runs at every wake anyway'
         type: boolean
         default: false
+      host_telemetry:
+        description: 'D7 host telemetry producer (legacy is the rollback path)'
+        type: choice
+        default: rust
+        options:
+          - rust
+          - legacy
 
 # Reading only, at workflow level. Each job names the whole of what it uses, so
 # the job that force-pushes holds no Actions permission it never calls.
 permissions:
   contents: read
+
+env:
+  IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry || vars.IDHAZH_HOST_TELEMETRY_MODE || 'rust' }}
 
 # Never two of these at once, and never cancelled half way: the history job
 # rewrites a branch, and a second copy racing the first would push two different
@@ -184,6 +194,9 @@ jobs:
 
       - name: Install
         run: pip install -e .
+      - uses: ./.github/actions/d7-host-telemetry
+        with:
+          enabled: ${{ env.IDHAZH_HOST_TELEMETRY_MODE == 'rust' }}
 
       # Runs the shard's tasks, writes its one record and pushes it, trying again
       # on a newer tip when another shard pushed first. It exits with the worst
@@ -200,7 +213,28 @@ jobs:
           RUN_ID: ${{ needs.plan.outputs.run_id }}
           ATTEMPT: ${{ github.run_attempt }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python backend/utilities/gardener_publish.py --shard "$SHARD" --run-id "$RUN_ID" --attempt "$ATTEMPT"
+        run: |
+          python backend/utilities/d7_host_telemetry.py run \
+            --mode "$IDHAZH_HOST_TELEMETRY_MODE" --job run-tasks \
+            --shard "$SHARD" --memory-profiling inherit -- \
+            python backend/utilities/gardener_publish.py \
+            --shard "$SHARD" --run-id "$RUN_ID" --attempt "$ATTEMPT"
+      - name: Refuse to publish without a verified D7 receipt
+        if: always()
+        run: |
+          if [ "$IDHAZH_HOST_TELEMETRY_MODE" = rust ] \
+             && [ "${IDHAZH_HOST_TELEMETRY_VERIFIED:-0}" != 1 ]; then
+            echo "D7 receipt verification failed; refusing to land gardener output" >&2
+            exit 1
+          fi
+      - name: Clean up the owned D7 monitor
+        if: always()
+        run: |
+          if [ "$IDHAZH_HOST_TELEMETRY_MODE" = rust ] \
+             && [ -n "${IDHAZH_HOST_TELEMETRY_WORKSPACE:-}" ]; then
+            python backend/utilities/d7_host_telemetry.py cleanup \
+              --workspace "$IDHAZH_HOST_TELEMETRY_WORKSPACE"
+          fi
 
   history:
     # After every shard has ended, so history is rewritten last, and whatever

@@ -25,6 +25,13 @@ on:
           - inherit
           - 'on'
           - 'off'
+      host_telemetry:
+        description: 'D7 host telemetry producer (legacy is the rollback path)'
+        type: choice
+        default: rust
+        options:
+          - rust
+          - legacy
       # ONE argument names the candidate, and it is the same line a swap moves:
       # the models file. Every fact about a candidate is already written there,
       # and a form that asked for them again could bench one set of bytes while
@@ -139,6 +146,7 @@ env:
   # root's `model_server.base_url`, so no part of this repository spells the
   # number twice (Guardrail #6).
   MODEL_SERVER_PROBE: 'http://127.0.0.1:8080'
+  IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry || vars.IDHAZH_HOST_TELEMETRY_MODE || 'rust' }}
 
 jobs:
   # The model refs, read once from config and published to every target that
@@ -258,6 +266,9 @@ jobs:
 
       - name: Install
         run: pip install -e .
+      - uses: ./.github/actions/d7-host-telemetry
+        with:
+          enabled: ${{ env.IDHAZH_HOST_TELEMETRY_MODE == 'rust' }}
 
       - name: Record runner hardware
         run: |
@@ -417,7 +428,10 @@ jobs:
               exit 2
             fi
           done
-          python3 backend/utilities/measure_llm.py bench \
+          python3 backend/utilities/d7_host_telemetry.py run \
+            --mode "$IDHAZH_HOST_TELEMETRY_MODE" --job runtime \
+            --memory-profiling "$MEMORY_PROFILING" -- \
+            python3 backend/utilities/measure_llm.py bench \
             --models "$CANDIDATE_REF" \
             --expect-sha256 "$CANDIDATE_SHA256" \
             --candidate-id "$CANDIDATE_ID" \
@@ -425,6 +439,23 @@ jobs:
             --threads "$THREAD_COUNTS" \
             --binary "$LLAMA_BIN/llama-bench" \
             --readings backend/var/bench/raw-case.json
+
+      - name: Refuse to publish an unverified benchmark
+        if: always()
+        run: |
+          if [ "$IDHAZH_HOST_TELEMETRY_MODE" = rust ] \
+             && [ "${IDHAZH_HOST_TELEMETRY_VERIFIED:-0}" != 1 ]; then
+            echo "D7 receipt verification failed; refusing to publish benchmark evidence" >&2
+            exit 1
+          fi
+      - name: Clean up the owned D7 monitor
+        if: always()
+        run: |
+          if [ "$IDHAZH_HOST_TELEMETRY_MODE" = rust ] \
+             && [ -n "${IDHAZH_HOST_TELEMETRY_WORKSPACE:-}" ]; then
+            python3 backend/utilities/d7_host_telemetry.py cleanup \
+              --workspace "$IDHAZH_HOST_TELEMETRY_WORKSPACE"
+          fi
 
       # The rates, on the run page. They used to reach a reader only through a
       # 90-day artifact, so reading them meant downloading a file - and the
@@ -579,6 +610,9 @@ jobs:
 
       - name: Install
         run: pip install -e .
+      - uses: ./.github/actions/d7-host-telemetry
+        with:
+          enabled: ${{ env.IDHAZH_HOST_TELEMETRY_MODE == 'rust' }}
 
       # The same key the raw case wrote, so this job restores what that job
       # already paid for. A miss here is a second download of the same bytes,
@@ -750,7 +784,10 @@ jobs:
       - name: What machine this bench drew
         run: |
           set -euo pipefail
-          python backend/utilities/record_publish.py run measure fingerprint \
+          python3 backend/utilities/d7_host_telemetry.py run \
+            --mode "$IDHAZH_HOST_TELEMETRY_MODE" --job runtime \
+            --memory-profiling "${{ inputs.memory_profiling || 'inherit' }}" -- \
+            python backend/utilities/record_publish.py run measure fingerprint \
             --config backend/var/candidate-config \
             --date "$RUNTIME_DATE" \
             --execution "${{ github.run_id }}" \
@@ -770,7 +807,10 @@ jobs:
           GGUF_CACHE_HIT: ${{ steps.weights.outputs.cache-hit == 'true' }}
         run: |
           set -euo pipefail
-          python3 backend/utilities/runtime_sweep.py sweep \
+          python3 backend/utilities/d7_host_telemetry.py run \
+            --mode "$IDHAZH_HOST_TELEMETRY_MODE" --job runtime \
+            --memory-profiling "${{ inputs.memory_profiling || 'inherit' }}" -- \
+            python3 backend/utilities/runtime_sweep.py sweep \
             --date "$RUNTIME_DATE" \
             --execution "${{ github.run_id }}" \
             --candidate "$RUNTIME_CANDIDATE" \
@@ -780,6 +820,23 @@ jobs:
             --threads "$RUNTIME_THREADS" \
             --threads-batch "$RUNTIME_THREADS_BATCH" \
             --gguf-cache-hit "$GGUF_CACHE_HIT"
+
+      - name: Refuse to publish an unverified runtime sweep
+        if: always()
+        run: |
+          if [ "$IDHAZH_HOST_TELEMETRY_MODE" = rust ] \
+             && [ "${IDHAZH_HOST_TELEMETRY_VERIFIED:-0}" != 1 ]; then
+            echo "D7 receipt verification failed; refusing to publish runtime evidence" >&2
+            exit 1
+          fi
+      - name: Clean up the owned D7 monitor
+        if: always()
+        run: |
+          if [ "$IDHAZH_HOST_TELEMETRY_MODE" = rust ] \
+             && [ -n "${IDHAZH_HOST_TELEMETRY_WORKSPACE:-}" ]; then
+            python3 backend/utilities/d7_host_telemetry.py cleanup \
+              --workspace "$IDHAZH_HOST_TELEMETRY_WORKSPACE"
+          fi
 
       # Only when there is one to read. A bypassed speed case writes no
       # `bench-raw` artifact at all, and a download that named a missing

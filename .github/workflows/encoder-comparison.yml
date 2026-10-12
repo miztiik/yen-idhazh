@@ -31,6 +31,13 @@ on:
         description: 'Reuse the committed pair set and retain saved readings'
         type: boolean
         default: false
+      host_telemetry:
+        description: 'D7 host telemetry producer (legacy is the rollback path)'
+        type: choice
+        default: rust
+        options:
+          - rust
+          - legacy
 
 permissions:
   contents: write
@@ -46,6 +53,8 @@ concurrency:
 
 env:
   SET_DIRECTORY: corpus/encoder-comparison-1
+  PYTHONPATH: ${{ github.workspace }}/backend
+  IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry || vars.IDHAZH_HOST_TELEMETRY_MODE || 'rust' }}
 
 jobs:
   pairs:
@@ -62,7 +71,6 @@ jobs:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: pyproject.toml
-
       # Through `env`, never pasted into the program: a dispatch input is text
       # somebody typed, and the shape check below runs before it reaches disk.
       - name: Build the pairs
@@ -136,6 +144,9 @@ jobs:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: pyproject.toml
+      - uses: ./.github/actions/d7-host-telemetry
+        with:
+          enabled: ${{ env.IDHAZH_HOST_TELEMETRY_MODE == 'rust' }}
 
       - uses: actions/download-artifact@v4
         with:
@@ -149,13 +160,17 @@ jobs:
       - name: What machine this shard drew
         run: |
           set -euo pipefail
-          python -m idhazh fingerprint \
+          if [ "$IDHAZH_HOST_TELEMETRY_MODE" = legacy ]; then
+            python -m idhazh fingerprint \
             --date "$(date -u +%F)" \
             --execution "${{ github.run_id }}" \
             --commit "${{ github.sha }}" \
             --shard 0 \
             --job work 2>&1 | tee -a "host.log" || \
             echo "no fingerprint written; the comparison does not depend on it"
+          else
+            echo "D7 Rust score lifecycle owns host telemetry; legacy fingerprint disabled"
+          fi
           {
             echo "processors: $(nproc)"
             grep -m1 'model name' /proc/cpuinfo || true
@@ -201,7 +216,10 @@ jobs:
             exit 1
           fi
           mkdir -p readings logs vectors
-          python3 backend/utilities/compare_summary_encoders.py score \
+          python3 backend/utilities/d7_host_telemetry.py run \
+            --mode "$IDHAZH_HOST_TELEMETRY_MODE" --job encoder-comparison \
+            --shard 0 --memory-profiling inherit -- \
+            python3 backend/utilities/compare_summary_encoders.py score \
             --slug "$ENCODER" \
             --pairs "$SET_DIRECTORY/pairs.json" \
             --out "readings/$ENCODER.json" \
@@ -210,6 +228,23 @@ jobs:
           reading = json.load(open("readings/" + os.environ["ENCODER"] + ".json"))
           if reading["state"] != "measured":
              sys.exit(reading.get("reason") or reading["state"])'
+
+      - name: Refuse to publish an unverified encoder reading
+        if: always()
+        run: |
+          if [ "$IDHAZH_HOST_TELEMETRY_MODE" = rust ] \
+             && [ "${IDHAZH_HOST_TELEMETRY_VERIFIED:-0}" != 1 ]; then
+            echo "D7 receipt verification failed; refusing to publish encoder evidence" >&2
+            exit 1
+          fi
+      - name: Clean up the owned D7 monitor
+        if: always()
+        run: |
+          if [ "$IDHAZH_HOST_TELEMETRY_MODE" = rust ] \
+             && [ -n "${IDHAZH_HOST_TELEMETRY_WORKSPACE:-}" ]; then
+            python3 backend/utilities/d7_host_telemetry.py cleanup \
+              --workspace "$IDHAZH_HOST_TELEMETRY_WORKSPACE"
+          fi
 
       # `always()`, so a shard stopped at the deadline still hands over the
       # part-finished reading and the log that says where it stopped.

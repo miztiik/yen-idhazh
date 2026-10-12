@@ -65,6 +65,12 @@ outputs:
   weights_file:
     description: 'The bare weights filename, for a loaded-path assertion.'
     value: ${{ steps.model.outputs.summarizer_file }}
+  server_pid:
+    description: 'The live llama-server PID after the readiness boundary.'
+    value: ${{ steps.identity.outputs.server_pid }}
+  server_start_ticks:
+    description: 'Linux /proc start ticks for PID-reuse-safe ownership.'
+    value: ${{ steps.identity.outputs.server_start_ticks }}
 
 runs:
   using: composite
@@ -182,6 +188,26 @@ runs:
         set -euo pipefail
         python3 backend/utilities/model_runtime.py start-server \
           --config-root "$CONFIG_ROOT"
+
+    - name: Export the server identity boundary
+      id: identity
+      shell: bash
+      run: |
+        set -euo pipefail
+        pid="$(cat llama-server.pid)"
+        test -r "/proc/${pid}/stat" || {
+          echo "model server pid ${pid} has no live /proc identity" >&2
+          exit 1
+        }
+        start_ticks="$(sed 's/^[^)]*) //' "/proc/${pid}/stat" | awk '{print $20}')"
+        [[ "$pid" =~ ^[1-9][0-9]*$ ]] || exit 1
+        [[ "$start_ticks" =~ ^[0-9]+$ ]] || exit 1
+        {
+          echo "IDHAZH_MODEL_SERVER_PID=$pid"
+          echo "IDHAZH_MODEL_SERVER_START_TICKS=$start_ticks"
+        } >> "$GITHUB_ENV"
+        echo "server_pid=$pid" >> "$GITHUB_OUTPUT"
+        echo "server_start_ticks=$start_ticks" >> "$GITHUB_OUTPUT"
 
     - name: Check model health
       shell: bash

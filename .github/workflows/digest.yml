@@ -45,6 +45,13 @@ on:
           - inherit
           - 'on'
           - 'off'
+      host_telemetry:
+        description: 'D7 host telemetry producer (legacy is the rollback path)'
+        type: choice
+        default: rust
+        options:
+          - rust
+          - legacy
 
 permissions:
   contents: write
@@ -55,6 +62,7 @@ permissions:
 env:
   # Runner-local health probe; inference uses model_server.base_url from config.
   MODEL_SERVER_PROBE: 'http://127.0.0.1:8080'
+  IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry || vars.IDHAZH_HOST_TELEMETRY_MODE || 'rust' }}
 
 jobs:
   plan:
@@ -86,6 +94,9 @@ jobs:
 
       - name: Install
         run: pip install -e .
+      - uses: ./.github/actions/d7-host-telemetry
+        with:
+          enabled: ${{ env.IDHAZH_HOST_TELEMETRY_MODE == 'rust' }}
 
       - id: decide
         env:
@@ -162,7 +173,10 @@ jobs:
             fi
             LIMIT=(--article-limit "$DISPATCH_ARTICLE_LIMIT")
           fi
-          python backend/utilities/digest_publish.py run plan \
+          python backend/utilities/d7_host_telemetry.py run \
+            --mode "$IDHAZH_HOST_TELEMETRY_MODE" --job plan --shard 0 \
+            --memory-profiling "${{ inputs.memory_profiling || 'inherit' }}" -- \
+            python backend/utilities/digest_publish.py run plan \
             --date "${{ steps.decide.outputs.date }}" \
             --execution "${{ github.run_id }}" \
             --commit "${{ github.sha }}" \
@@ -172,7 +186,10 @@ jobs:
       - name: What machine this job drew
         run: |
           set -euo pipefail
-          python backend/utilities/digest_publish.py run fingerprint \
+          python backend/utilities/d7_host_telemetry.py run \
+            --mode "$IDHAZH_HOST_TELEMETRY_MODE" --job plan --shard 0 \
+            --memory-profiling "${{ inputs.memory_profiling || 'inherit' }}" -- \
+            python backend/utilities/digest_publish.py run fingerprint \
             --date "${{ steps.decide.outputs.date }}" \
             --execution "${{ github.run_id }}" \
             --commit "${{ github.sha }}" \
@@ -269,6 +286,9 @@ jobs:
             pip install --index-url https://download.pytorch.org/whl/cpu torch
             pip install -e ".[faithfulness]"
           fi
+      - uses: ./.github/actions/d7-host-telemetry
+        with:
+          enabled: ${{ env.IDHAZH_HOST_TELEMETRY_MODE == 'rust' }}
 
       - uses: actions/download-artifact@v8
         with:
@@ -279,7 +299,11 @@ jobs:
       - name: What machine this job drew
         run: |
           set -euo pipefail
-          python backend/utilities/digest_publish.py run fingerprint \
+          python backend/utilities/d7_host_telemetry.py run \
+            --mode "$IDHAZH_HOST_TELEMETRY_MODE" --job work \
+            --shard ${{ matrix.shard }} --server-pid-file llama-server.pid \
+            --memory-profiling "${{ inputs.memory_profiling || 'inherit' }}" -- \
+            python backend/utilities/digest_publish.py run fingerprint \
             --date "${{ needs.plan.outputs.date }}" \
             --execution "${{ github.run_id }}" \
             --commit "${{ github.sha }}" \
@@ -342,13 +366,34 @@ jobs:
           if [ "$MEMORY_PROFILING" != "inherit" ]; then
             MEMORY_ARGS=(--memory-profiling "$MEMORY_PROFILING")
           fi
-          python backend/utilities/digest_publish.py run work \
+          python backend/utilities/d7_host_telemetry.py run \
+            --mode "$IDHAZH_HOST_TELEMETRY_MODE" --job work \
+            --shard "${{ matrix.shard }}" --server-pid-file llama-server.pid \
+            --memory-profiling "$MEMORY_PROFILING" -- \
+            python backend/utilities/digest_publish.py run work \
             --date "${{ needs.plan.outputs.date }}" \
             --execution "${{ github.run_id }}" \
             --shard ${{ matrix.shard }} \
             --shards ${{ needs.plan.outputs.shards }} \
             "${MEMORY_ARGS[@]}" \
             ${{ needs.plan.outputs.faithfulness == 'false' && '--no-faithfulness' || '' }}
+
+      - name: Refuse to record without a verified D7 receipt
+        if: always()
+        run: |
+          if [ "$IDHAZH_HOST_TELEMETRY_MODE" = rust ] \
+             && [ "${IDHAZH_HOST_TELEMETRY_VERIFIED:-0}" != 1 ]; then
+            echo "D7 receipt verification failed; refusing to record this shard" >&2
+            exit 1
+          fi
+      - name: Clean up the owned D7 monitor
+        if: always()
+        run: |
+          if [ "$IDHAZH_HOST_TELEMETRY_MODE" = rust ] \
+             && [ -n "${IDHAZH_HOST_TELEMETRY_WORKSPACE:-}" ]; then
+            python backend/utilities/d7_host_telemetry.py cleanup \
+              --workspace "$IDHAZH_HOST_TELEMETRY_WORKSPACE"
+          fi
 
       - name: Runtime log on failure
         if: failure()
@@ -529,6 +574,9 @@ jobs:
 
       - name: Install
         run: pip install -e .
+      - uses: ./.github/actions/d7-host-telemetry
+        with:
+          enabled: ${{ env.IDHAZH_HOST_TELEMETRY_MODE == 'rust' }}
 
       - uses: actions/download-artifact@v8
         with:
@@ -541,7 +589,10 @@ jobs:
         continue-on-error: true
         run: |
           set -euo pipefail
-          python backend/utilities/digest_publish.py run fingerprint \
+          python backend/utilities/d7_host_telemetry.py run \
+            --mode "$IDHAZH_HOST_TELEMETRY_MODE" --job assemble \
+            --memory-profiling "${{ inputs.memory_profiling || 'inherit' }}" -- \
+            python backend/utilities/digest_publish.py run fingerprint \
             --date "${{ needs.plan.outputs.date }}" \
             --execution "${{ github.run_id }}" \
             --commit "${{ github.sha }}" \
@@ -556,7 +607,10 @@ jobs:
 
       - name: Assemble and publish
         run: |
-          python backend/utilities/digest_publish.py run assemble \
+          python backend/utilities/d7_host_telemetry.py run \
+            --mode "$IDHAZH_HOST_TELEMETRY_MODE" --job assemble \
+            --memory-profiling "${{ inputs.memory_profiling || 'inherit' }}" -- \
+            python backend/utilities/digest_publish.py run assemble \
             --date "${{ needs.plan.outputs.date }}" \
             --execution "${{ github.run_id }}" \
             --commit "${{ github.sha }}" \
