@@ -1424,58 +1424,49 @@ def _composite_action_script(name: str) -> str:
     return "\n".join(scripts)
 
 
-def _evaluate_shard_matrix(script: str, requested_shards: str, derived: int) -> list[int] | None:
-    """Read the fan-out step's shell and answer what matrix it writes.
-
-    The step takes two inputs, so the harness does too: what an operator typed,
-    and what the derivation printed when nobody typed anything.
-    """
+def _evaluate_shard_matrix(script: str, printed: str) -> list[int] | None:
+    """Read the fan-out step's shell and answer what matrix a printed count writes."""
     lines = [line.strip() for line in script.splitlines()]
     pattern_line = "SHARD_PATTERN='^[1-8]$'"
-    input_line = 'SHARDS="${{ inputs.shards }}"'
     derive_line = (
         'SHARDS=$(python -m idhazh shards --date "${{ steps.decide.outputs.date }}"'
         ' --execution "${{ github.run_id }}")'
     )
-    clamp_line = 'while [ "$SHARDS" -gt 1 ] && ! [[ "$SHARDS" =~ $SHARD_PATTERN ]]; do'
     guard_block = [
         'if ! [[ "$SHARDS" =~ $SHARD_PATTERN ]]; then',
         'echo "shards must be an integer from 1 through 8" >&2',
         "exit 1",
         "fi",
     ]
+    shards_line = 'echo "shards=$SHARDS" >> "$GITHUB_OUTPUT"'
     matrix_line = 'echo "matrix=$(seq 0 $((SHARDS - 1)) | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"'
 
     assert [line for line in lines if line.startswith("SHARD_PATTERN=")] == [pattern_line]
-    assert lines.count(input_line) == 1
     assert lines.count(derive_line) == 1, "the count comes from the plan, not from a literal"
-    assert lines.count(clamp_line) == 1, "a derived count is clamped, never fatal"
-    assert not [line for line in lines if line.startswith('[ -n "$SHARDS" ]')], (
-        "the fixed default is what the derivation replaces"
+    assert not [line for line in lines if "inputs.shards" in line], (
+        "the operator count was already recorded in the plan"
     )
+    assert not [line for line in lines if line.startswith("while ")], (
+        "a count that cannot be dispatched is refused, never clamped"
+    )
+    assert [line for line in lines if line.startswith('echo "shards=')] == [shards_line]
     assert [line for line in lines if line.startswith('echo "matrix=')] == [matrix_line]
     guard_index = lines.index(guard_block[0])
     assert lines[guard_index : guard_index + len(guard_block)] == guard_block
     assert (
         lines.index(pattern_line)
-        < lines.index(input_line)
         < lines.index(derive_line)
-        < lines.index(clamp_line)
         < guard_index
+        < lines.index(shards_line)
         < lines.index(matrix_line)
     )
 
     pattern_match = re.fullmatch(r"SHARD_PATTERN='([^']+)'", pattern_line)
     assert pattern_match is not None
     pattern = pattern_match.group(1)
-    shards = requested_shards
-    if not shards:
-        shards = str(derived)
-        while int(shards) > 1 and re.fullmatch(pattern, shards) is None:
-            shards = str(int(shards) - 1)
-    if re.fullmatch(pattern, shards) is None:
+    if re.fullmatch(pattern, printed) is None:
         return None
-    return list(range(int(shards)))
+    return list(range(int(printed)))
 
 
 def _normalize_condition(value: object, description: str) -> str:

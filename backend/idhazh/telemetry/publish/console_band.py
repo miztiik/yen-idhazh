@@ -598,7 +598,7 @@ class MachineFacts:
     What the band needs is four numbers, so four are derived here rather than
     the twenty the route draws.
 
-    `shards` is the count the plan derived, read off the run manifest, and
+    `shards` is the count the plan decided, read off the run manifest, and
     `reported` is how many work jobs filed a host row. **They come from two
     different files on purpose.** Counted off the host rows themselves the
     denominator would equal the numerator on every run, `N shards reported

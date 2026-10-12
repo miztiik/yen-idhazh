@@ -233,7 +233,6 @@ def preparation(
     )
     scopes = original.preparation_scopes
     def prepare(base: str, active: PublicationRequest) -> PublicationRequest:
-        from idhazh.cli import shard_count
         from idhazh.publication_checks import runner as checks
         from idhazh.stages import assemble as producer
 
@@ -304,7 +303,6 @@ def preparation(
                         settings=settings,
                         commit_sha=original.identity.git_sha,
                         runner="ubuntu-latest",
-                        shards=shard_count(len(plan.items), run=settings.app.run),
                         regenerate_only=True,
                     )
             finally:
