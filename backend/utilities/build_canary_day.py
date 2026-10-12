@@ -1730,7 +1730,8 @@ def file_published_fixture_rows(state: Path) -> dict[LedgerName, int]:
         LedgerName.COUNCIL_RUN_RECORDS: [
             CouncilRunRecord.model_validate(
                 CouncilRunRecord.read(
-                    Path("tests/fixtures/contracts/council-run-record") / name
+                    Path(__file__).resolve().parents[2]
+                    / "tests" / "fixtures" / "contracts" / "council-run-record" / name
                 ).model_dump() | {
                     "date": DATE,
                     "run_id": SCORE_RUN_ID,

@@ -74,6 +74,10 @@ stored or shown. A record not packed yet reports missing data; an empty packed
 span reports no rows, not a failed night. Isolated paused trials still file no
 council record and publish nothing.
 
+The canary builder reads the two named council contract fixtures from its
+source checkout, not its working directory. A caller may place generated
+digest and state files elsewhere without moving those recorded inputs.
+
 ### Events and exit codes
 
 Every council program writes one JSON event per log line on stderr through
