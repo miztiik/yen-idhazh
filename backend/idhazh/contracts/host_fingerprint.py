@@ -21,11 +21,15 @@ down in `docs/reference/host-metrics.md`.
 
 from __future__ import annotations
 
+import hashlib
+import json
+import math
 from collections.abc import Mapping
+from datetime import datetime
 from types import MappingProxyType
-from typing import Any, ClassVar, Final, Self
+from typing import Any, ClassVar, Final, Literal, Self
 
-from pydantic import Field
+from pydantic import ConfigDict, Field, model_validator
 
 from idhazh.contracts.base import (
     WORK_JOB,
@@ -58,6 +62,68 @@ WATCHED_FLAGS: tuple[str, ...] = (
     "sse4_2",
 )
 
+HOST_FINGERPRINT_VERSION: Final = "2026-10-10"
+LEGACY_HOST_VERSIONS: Final = (
+    "2026-09-16",
+    "2026-09-17",
+    "2026-09-18",
+    "2026-09-19",
+    "2026-09-20",
+)
+INT64_MAX: Final = (1 << 63) - 1
+INT64_MIN: Final = -(1 << 63)
+LEGACY_CPU_FIELDS: Final = frozenset({"cores", "threads", "mhz_max", "mhz_at_probe"})
+_CLOCK_FIELDS: Final = frozenset(
+    {"model_load_ms", "job_seconds", "server_prompt_tokens", "server_prompt_seconds"}
+)
+_TARGET_FIELDS: Final = frozenset(
+    {"cpu_allowed_processors", "cpu_quota_cores", "cpu_quota_state", "cpu_target_measured_at"}
+)
+_FINGERPRINT_V2_KEYS: Final = (
+    "cpu_vendor",
+    "cpu_family",
+    "cpu_model_number",
+    "cpu_stepping",
+    "cpu_model",
+    "l3_cache_bytes",
+    "flags",
+)
+_FINGERPRINT_V1_KEYS: Final = (*_FINGERPRINT_V2_KEYS, "cores", "threads")
+_CORRECTED_INT_FIELDS: Final = frozenset(
+    {
+        "shard",
+        "fingerprint_version",
+        "cpu_family",
+        "cpu_model_number",
+        "cpu_stepping",
+        "cpu_physical_cores",
+        "cpu_logical_processors",
+        "cpu_allowed_processors",
+        "l3_cache_bytes",
+        "memcpy_probe_mib",
+        "job_seconds",
+        "server_prompt_tokens",
+    }
+)
+_CORRECTED_FLOAT_FIELDS: Final = frozenset(
+    {
+        "cpu_quota_cores",
+        "cpu_observed_mhz",
+        "cpu_reported_max_mhz",
+        "boot_seconds",
+        "memcpy_gib_s",
+        "model_load_ms",
+        "server_prompt_seconds",
+    }
+)
+
+
+class _Unset:
+    __slots__ = ()
+
+
+_UNSET: Final = _Unset()
+
 #: The surface that reads each column, by the path that reads it. Every column of
 #: this row appears exactly once, so minting a column without saying who will
 #: read it fails `backend/tests/contracts/test_column_readers.py` rather than
@@ -82,14 +148,12 @@ WATCHED_FLAGS: tuple[str, ...] = (
 COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
     {
         "frontend/src/lib/server/host-fingerprint.ts": (
-            "version",
             "measured_at",
             "runner_name",
-            "cpu_vendor",
-            "mhz_max",
             "model_load_ms",
         ),
         "frontend/src/lib/console/queries/machine.ts": (
+            "version",
             "date",
             "run_id",
             "job",
@@ -97,13 +161,21 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "server_prompt_tokens",
             "server_prompt_seconds",
             "fingerprint",
+            "fingerprint_version",
             "cpu_model",
+            "cpu_vendor",
             "cpu_family",
             "cpu_model_number",
             "cpu_stepping",
             "microcode",
+            "cpu_physical_cores",
+            "cpu_allowed_processors",
+            "cpu_quota_cores",
+            "cpu_quota_state",
+            "cpu_target_measured_at",
             "l3_cache_bytes",
-            "mhz_at_probe",
+            "cpu_observed_mhz",
+            "cpu_reported_max_mhz",
             "flags",
             "boot_seconds",
             "memcpy_gib_s",
@@ -113,15 +185,14 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "vm_zone",
             "vm_fault_domain",
             "job_seconds",
-            "threads",
+            "cpu_logical_processors",
         ),
-        "frontend/src/lib/charts/machine.ts": ("cores",),
     }
 )
 
 
-class HostFingerprintRow(Contract):
-    """One job, one machine, one row: what the host said it was."""
+class LegacyHostFingerprintRow(Contract):
+    """One declared pre-correction host row, validated before normalization."""
 
     __schema_stem__: ClassVar[str] = "host-fingerprint-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
@@ -325,6 +396,25 @@ class HostFingerprintRow(Contract):
         ),
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def _declared_input(cls, data: Any) -> Any:
+        if not isinstance(data, Mapping) or data.get("version") not in LEGACY_HOST_VERSIONS:
+            raise ValueError("legacy input requires a declared historical schema version")
+        version = data["version"]
+        forbidden: set[str] = set()
+        if version < "2026-09-18":
+            forbidden.update(_CLOCK_FIELDS)
+            if data.get("fingerprint") is None or data.get("measured_at") is None:
+                raise ValueError("pre-clock schemas require fingerprint and measured_at")
+        if version < "2026-09-19":
+            forbidden.update({"server_prompt_tokens", "server_prompt_seconds"})
+        if version == "2026-09-16" and data.get("job", WORK_JOB) != WORK_JOB:
+            raise ValueError("the initial host schema only records work jobs")
+        if forbidden.intersection(data):
+            raise ValueError("input carries fields not declared by its historical schema")
+        return data
+
     @classmethod
     def csv_columns(cls) -> tuple[str, ...]:
         """One definition, so a writer and a reader cannot disagree about the shape."""
@@ -368,3 +458,253 @@ class HostFingerprintRow(Contract):
     def _absent_when_blank(cls) -> tuple[str, ...]:
         """Every optional cell, derived rather than listed a second time."""
         return tuple(name for name, field in cls.model_fields.items() if field.default is None)
+
+
+def _check_numbers(data: Any, model: type[Contract]) -> Any:
+    """Refuse coercion and non-finite protocol numbers at the shared boundary."""
+    if not isinstance(data, Mapping):
+        return data
+    for name, field in model.model_fields.items():
+        value = data.get(name)
+        if value is None:
+            continue
+        annotation = field.annotation
+        if annotation in (int, int | None):
+            if type(value) is not int or not INT64_MIN <= value <= INT64_MAX:
+                raise ValueError(f"{name} must be an int64, not a Boolean or coerced number")
+        elif annotation in (float, float | None):
+            if type(value) not in (int, float):
+                raise ValueError(f"{name} must be a finite number without coercion")
+            try:
+                finite = math.isfinite(value)
+            except OverflowError:
+                finite = False
+            if not finite:
+                raise ValueError(f"{name} must be finite")
+        elif name == "fingerprint_version" and type(value) is not int:
+            raise ValueError("fingerprint_version must be an integer, not a Boolean")
+    return data
+
+
+def _fingerprint_bytes(cells: Mapping[str, object], keys: tuple[str, ...]) -> bytes:
+    return json.dumps(
+        {key: cells.get(key) for key in keys},
+        sort_keys=True,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("ascii")
+
+
+def fingerprint_v1(row: LegacyHostFingerprintRow) -> str:
+    """AO1's historical preimage, including explicit null core/thread facts."""
+    return hashlib.sha256(_fingerprint_bytes(row.model_dump(), _FINGERPRINT_V1_KEYS)).hexdigest()[
+        :16
+    ]
+
+
+class HostFingerprintRow(Contract):
+    """One normalized host row with corrected CPU meanings and versioned identity."""
+
+    model_config = ConfigDict(frozen=True, allow_inf_nan=False)
+    __schema_stem__: ClassVar[str] = "host-fingerprint-row"
+    __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-10",
+            change="Replace ambiguous CPU cells and add versioned fingerprints.",
+            why="Topology, target constraints and frequencies are different measurements.",
+        ),
+        *LegacyHostFingerprintRow.__changelog__[:3],
+        ChangelogEntry(
+            version="2026-09-17",
+            change="Earlier changes are in this contract's git history.",
+            why="The changelog stays newest-first and bounded.",
+        ),
+    )
+
+    date: DateStamp
+    run_id: RunId
+    job: ServerJob = Field(default=WORK_JOB)
+    shard: int = Field(ge=0, le=INT64_MAX, strict=True)
+
+    fingerprint: FingerprintId | None = None
+    fingerprint_version: Literal[1, 2] | None = None
+    cpu_model: str | None = None
+    cpu_vendor: str | None = None
+    cpu_family: int | None = None
+    cpu_model_number: int | None = None
+    cpu_stepping: int | None = None
+    microcode: str | None = None
+
+    cpu_physical_cores: int | None = Field(default=None, ge=1, le=INT64_MAX, strict=True)
+    cpu_logical_processors: int | None = Field(default=None, ge=1, le=INT64_MAX, strict=True)
+    cpu_allowed_processors: int | None = Field(default=None, ge=1, le=INT64_MAX, strict=True)
+    cpu_quota_cores: float | None = Field(default=None, gt=0, strict=True)
+    cpu_quota_state: Literal["finite", "unlimited", "unavailable"] | None = None
+    cpu_target_measured_at: Timestamp | None = None
+
+    l3_cache_bytes: int | None = Field(default=None, ge=0)
+    cpu_observed_mhz: float | None = Field(default=None, gt=0, strict=True)
+    cpu_reported_max_mhz: float | None = Field(default=None, gt=0, strict=True)
+    flags: str = ""
+    boot_seconds: float | None = Field(default=None, ge=0)
+    memcpy_gib_s: float | None = Field(default=None, gt=0)
+    memcpy_probe_mib: int | None = Field(default=None, ge=0)
+    vm_size: str | None = None
+    vm_location: str | None = None
+    vm_zone: str | None = None
+    vm_fault_domain: str | None = None
+    runner_name: str | None = None
+    measured_at: Timestamp | None = None
+    model_load_ms: float | None = Field(default=None, ge=0)
+    job_seconds: int | None = Field(default=None, ge=0)
+    server_prompt_tokens: int | None = Field(default=None, ge=0)
+    server_prompt_seconds: float | None = Field(default=None, ge=0)
+
+    def __init__(
+        self,
+        *,
+        cores: int | None | _Unset = _UNSET,
+        threads: int | None | _Unset = _UNSET,
+        mhz_max: float | None | _Unset = _UNSET,
+        mhz_at_probe: float | None | _Unset = _UNSET,
+        **data: Any,
+    ) -> None:
+        """Keep the exact legacy keyword constructor available to the unchanged collector."""
+        for name, value in (
+            ("cores", cores),
+            ("threads", threads),
+            ("mhz_max", mhz_max),
+            ("mhz_at_probe", mhz_at_probe),
+        ):
+            if value is not _UNSET:
+                data[name] = value
+        super().__init__(**data)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_before_stamping(cls, data: Any) -> Any:
+        if not isinstance(data, Mapping):
+            return data
+        payload = dict(data)
+        probe_keys = set(LegacyHostFingerprintRow.model_fields) - {"version"} - _CLOCK_FIELDS
+        if "version" not in payload and set(payload) == probe_keys:
+            return normalize_host_row(payload).model_dump()
+        if payload.get("version") in LEGACY_HOST_VERSIONS:
+            return normalize_host_row(payload).model_dump()
+        if LEGACY_CPU_FIELDS.intersection(payload):
+            raise ValueError(
+                "legacy CPU fields require a declared legacy or exact constructor shape"
+            )
+        return _check_numbers(payload, cls)
+
+    @model_validator(mode="after")
+    def _consistent_measurements(self) -> Self:
+        for name in ("measured_at", "cpu_target_measured_at"):
+            value = getattr(self, name)
+            if value is not None:
+                datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
+        if self.version != HOST_FINGERPRINT_VERSION:
+            raise ValueError("normalized host rows require the corrected schema version")
+        if (self.fingerprint is None) != (self.fingerprint_version is None):
+            raise ValueError("fingerprint and fingerprint_version must be present together")
+        if self.fingerprint_version == 2 and self.fingerprint != fingerprint_v2(self):
+            raise ValueError("fingerprint does not match algorithm 2 hardware facts")
+        if (self.cpu_quota_cores is not None) != (self.cpu_quota_state == "finite"):
+            raise ValueError("cpu_quota_state is finite iff cpu_quota_cores is present")
+        has_target = self.cpu_target_measured_at is not None
+        if has_target != (self.cpu_quota_state is not None):
+            raise ValueError("target capture time and quota state must be present together")
+        if self.cpu_allowed_processors is not None and (
+            not has_target or self.cpu_logical_processors is None
+        ):
+            raise ValueError("allowed processors require a target capture and logical count")
+        if self.cpu_logical_processors is not None:
+            for name in ("cpu_physical_cores", "cpu_allowed_processors"):
+                count = getattr(self, name)
+                if count is not None and count > self.cpu_logical_processors:
+                    raise ValueError(f"{name} cannot exceed cpu_logical_processors")
+        if self.cpu_target_measured_at is not None and self.measured_at is not None:
+            if datetime.fromisoformat(self.cpu_target_measured_at) < datetime.fromisoformat(
+                self.measured_at
+            ):
+                raise ValueError("target capture cannot precede the original machine probe")
+        return self
+
+    @property
+    def mhz_at_probe(self) -> float | None:
+        """Temporary read-only compatibility for the unchanged Python collector's log."""
+        return self.cpu_observed_mhz
+
+    @classmethod
+    def csv_columns(cls) -> tuple[str, ...]:
+        return tuple(cls.model_fields)
+
+    def csv_row(self) -> dict[str, str]:
+        payload = self.model_dump(mode="json")
+        return {name: "" if payload[name] is None else str(payload[name]) for name in payload}
+
+    @classmethod
+    def from_csv_row(cls, row: dict[str, str]) -> Self:
+        legacy = any(name in row for name in LEGACY_CPU_FIELDS)
+        model = LegacyHostFingerprintRow if legacy else cls
+        payload: dict[str, Any] = dict.fromkeys(model.model_fields, "") | dict(row)
+        payload["flags"] = row["flags"]
+        for name, field in model.model_fields.items():
+            if field.default is None and payload.get(name) == "":
+                payload[name] = None
+        if legacy:
+            payload = LegacyHostFingerprintRow.model_validate(payload).model_dump()
+        else:
+            for name in _CORRECTED_INT_FIELDS:
+                if payload.get(name) not in (None, ""):
+                    payload[name] = int(payload[name])
+            for name in _CORRECTED_FLOAT_FIELDS:
+                if payload.get(name) not in (None, ""):
+                    payload[name] = float(payload[name])
+        return cls.model_validate(payload)
+
+
+def fingerprint_v2(row: HostFingerprintRow) -> str | None:
+    """AO2's static hardware class, or no identity when no fact was sourced."""
+    cells = row.model_dump()
+    flags = row.flags.split()
+    if row.flags != " ".join(sorted(set(flags))) or set(flags) - set(WATCHED_FLAGS):
+        raise ValueError("fingerprint flags must be watched, sorted and space-joined")
+    numbers = (row.cpu_family, row.cpu_model_number, row.cpu_stepping)
+    if any(value is not None and value < 0 for value in numbers):
+        raise ValueError("algorithm 2 CPU identifiers must be nonnegative")
+    sourced = (
+        any(value is not None and value.strip() for value in (row.cpu_model, row.cpu_vendor))
+        or any(value is not None for value in numbers)
+        or (row.l3_cache_bytes is not None and row.l3_cache_bytes > 0)
+        or bool(flags)
+    )
+    if not sourced:
+        return None
+    return hashlib.sha256(_fingerprint_bytes(cells, _FINGERPRINT_V2_KEYS)).hexdigest()[:16]
+
+
+def normalize_host_row(data: Mapping[str, object]) -> HostFingerprintRow:
+    """Normalize only finite declared legacy shapes or the exact old probe constructor."""
+    payload = dict(data)
+    if "version" not in payload:
+        probe_keys = set(LegacyHostFingerprintRow.model_fields) - {"version"} - _CLOCK_FIELDS
+        if set(payload) != probe_keys:
+            raise ValueError("unstamped input is not an unchanged silicon constructor shape")
+        payload["version"] = LEGACY_HOST_VERSIONS[-1]
+    if payload["version"] == HOST_FINGERPRINT_VERSION:
+        return HostFingerprintRow.model_validate(payload)
+    if payload["version"] not in LEGACY_HOST_VERSIONS:
+        raise ValueError("unrecognized host row schema version")
+    old = LegacyHostFingerprintRow.model_validate(_check_numbers(payload, LegacyHostFingerprintRow))
+    cells = old.model_dump()
+    average = cells.pop("mhz_at_probe")
+    for key in LEGACY_CPU_FIELDS - {"mhz_at_probe"}:
+        cells.pop(key)
+    cells.update(
+        version=HOST_FINGERPRINT_VERSION,
+        fingerprint_version=1 if old.fingerprint is not None else None,
+        cpu_observed_mhz=average,
+    )
+    return HostFingerprintRow.model_validate(cells)

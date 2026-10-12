@@ -6,6 +6,7 @@ import ctypes
 import stat
 import sys
 from pathlib import Path
+from typing import ClassVar
 
 from idhazh.contracts.host_migration import HistoryManifest
 from idhazh.telemetry.host_output_verify import _safe_path
@@ -19,7 +20,7 @@ def _missing_names(anchor: Path, names: tuple[str, ...]) -> tuple[str, ...]:
         # Windows directories can opt into case-sensitive names. Query the real
         # parent read-only; only a missing suffix needs prospective name comparison.
         class CaseSensitiveInfo(ctypes.Structure):
-            _fields_ = [("flags", ctypes.c_uint32)]
+            _fields_: ClassVar = [("flags", ctypes.c_uint32)]
 
         kernel = ctypes.WinDLL("kernel32", use_last_error=True)
         kernel.CreateFileW.argtypes = (

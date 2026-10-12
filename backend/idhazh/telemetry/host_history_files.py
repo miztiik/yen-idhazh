@@ -10,12 +10,11 @@ from pathlib import Path
 from typing import Any
 
 from idhazh.contracts.console_band import ConsoleBand
-from idhazh.contracts.file_envelope import Format, Period, RowIdentity, Tier
+from idhazh.contracts.file_envelope import FileEnvelope, Format, Period, RowIdentity, Tier
 from idhazh.contracts.host_migration import HistoryManifest, HistoryRoot, HistorySource
 from idhazh.contracts.host_output import (
     HOST_OUTPUT_VERSION,
     LEGACY_HOST_VERSIONS,
-    CandidateFileEnvelope,
     HostStoredRow,
     host_file_id,
     normalize_stored_host_rows,
@@ -101,7 +100,7 @@ class HistoryLimits:
 class HistoryFile:
     source: HistorySource
     data: bytes
-    envelope: CandidateFileEnvelope | None
+    envelope: FileEnvelope | None
     original_rows: tuple[dict[str, Any], ...]
     rows: tuple[HostStoredRow, ...]
     document: dict[str, Any] | None
@@ -192,7 +191,7 @@ def _admit_compact_pages(
     opened: Any,
     start_footer: int,
     columns: tuple[Column, ...],
-    env: CandidateFileEnvelope,
+    env: FileEnvelope,
     limits: VerificationLimits,
 ) -> None:
     engine = parquet.pyarrow  # type: ignore[attr-defined]  # Existing adapter's engine import.
@@ -354,7 +353,7 @@ def _admit_compact_pages(
 
 def _compact(
     data: bytes, limits: VerificationLimits
-) -> tuple[CandidateFileEnvelope, list[dict[str, Any]], Format]:
+) -> tuple[FileEnvelope, list[dict[str, Any]], Format]:
     if data.startswith(b"PAR1"):
         footer_start = check_parquet_footer(
             data,
@@ -371,9 +370,9 @@ def _compact(
                 thrift_container_size_limit=limits.max_thrift_items,
             ) as opened,
         ):
-            env = CandidateFileEnvelope.from_metadata(
+            env = FileEnvelope.from_metadata(
                 parquet._envelope_of(opened.metadata.metadata)
-            )
+            ).validate_container(Format.PARQUET)
             columns = host_output_columns(env.row_schema_version)
             if opened.schema_arrow.remove_metadata() != parquet.schema_of(columns):
                 raise ValueError("compact Parquet logical schema contradicts row version")
@@ -404,7 +403,7 @@ def _compact(
         raise ValueError("compact JSONL is not canonical")
     if len(json_lines.rows_bytes(rows)) > limits.max_decode_bytes:
         raise ValueError("compact JSONL exceeds decode byte cap")
-    return CandidateFileEnvelope.from_metadata(metadata), rows, Format.JSON
+    return FileEnvelope.from_metadata(metadata).validate_container(Format.JSON), rows, Format.JSON
 
 
 def decode_history(

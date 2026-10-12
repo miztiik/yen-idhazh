@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { fleetJobs, fleetView } from '../src/lib/charts/fleet';
 import { machineKeys, machineRamp } from '../src/lib/charts/machine-colour';
 import { platformMixQuery } from '../src/lib/console/queries/machine';
+import { normalizeHostRows } from '../src/lib/data/host-fingerprint';
 import type { Row, SliceResult } from '../src/lib/data/slice-shapes';
 import { consoleConfig } from '../src/lib/server/config';
 import { sliceFromDisk } from '../src/lib/server/ledger-disk';
@@ -43,7 +44,7 @@ const FILE_HOSTS = [
 	'from datetime import date, timedelta',
 	'from pathlib import Path',
 	'from idhazh import ledger',
-	'from idhazh.contracts.host_fingerprint import HostFingerprintRow',
+	'from idhazh.contracts.host_fingerprint import HostFingerprintRow, fingerprint_v2',
 	'from idhazh.contracts.ledger_name import LedgerName',
 	'from idhazh.ledger import parquet',
 	'from utilities import build_canary_day as canary',
@@ -95,9 +96,10 @@ const FILE_HOSTS = [
 	'halves = [row for row in raw if row["date"] == canary.DATE and row["run_id"] == canary.DATE + "-2" and row["job"] == "work" and row["shard"] == 0]',
 	'assert len(halves) == 2',
 	'assert any(row["cpu_model"] is not None and row["job_seconds"] is None for row in halves)',
-	'assert any(row["cpu_model"] == "INTEL(R) XEON(R) PLATINUM 8573C" and row["fingerprint"] == "c81d9e0a1b2c3d4e" and row["job_seconds"] == 900 for row in halves)',
 	'probe = next(row for row in halves if row["job_seconds"] is None)',
 	'completion = next(row for row in halves if row["job_seconds"] == 900)',
+	'contract = HostFingerprintRow.model_validate({name: completion[name] for name in HostFingerprintRow.model_fields})',
+	'assert contract.fingerprint_version == 2 and contract.fingerprint == fingerprint_v2(contract)',
 	'clocks = {"model_load_ms": 2470.828, "job_seconds": 900, "server_prompt_tokens": 1700, "server_prompt_seconds": 73.72}',
 	'assert all(probe[name] is None and completion[name] == value for name, value in clocks.items())',
 	'assert {name: value for name, value in completion.items() if name not in clocks} == {name: value for name, value in probe.items() if name not in clocks}',
@@ -122,7 +124,8 @@ test('16 native records settle to 15 jobs and Hardware keeps both halves of work
 	} = JSON.parse(python(['-c', FILE_HOSTS, canary, root]).trim().split('\n').at(-1)!);
 	expect([proof.raw_records, proof.logical]).toEqual([16, 15]);
 	expect(proof.merged).toMatchObject({
-		cpu_model: 'INTEL(R) XEON(R) PLATINUM 8573C', fingerprint: 'c81d9e0a1b2c3d4e',
+		cpu_model: 'INTEL(R) XEON(R) PLATINUM 8573C',
+		fingerprint: expect.stringMatching(/^[0-9a-f]{16}$/), fingerprint_version: 2,
 		flags: expect.stringContaining('avx512f'), job_seconds: 900,
 		model_load_ms: 2470.828, server_prompt_tokens: 1700, server_prompt_seconds: 73.72
 	});
@@ -142,9 +145,20 @@ test('16 native records settle to 15 jobs and Hardware keeps both halves of work
 	});
 	expect(merged[0].rate).toBeCloseTo(1700 / 73.72, 10);
 	const knobs = consoleConfig();
-	const keys = machineKeys(jobs.map((job) => ({ fingerprint: job.fingerprint, cpuModel: job.cpuModel })));
+	const keys = machineKeys(
+		jobs.map((job) => ({
+			fingerprint: job.fingerprint,
+			fingerprintVersion: job.fingerprintVersion,
+			cpuModel: job.cpuModel
+		}))
+	);
 	const ramp = machineRamp(jobs.map((job) => ({
-		machine: keys({ fingerprint: job.fingerprint, cpuModel: job.cpuModel }), rate: job.rate
+		machine: keys({
+			fingerprint: job.fingerprint,
+			fingerprintVersion: job.fingerprintVersion,
+			cpuModel: job.cpuModel
+		}),
+		rate: job.rate
 	})), { stops: knobs.machine_colour_stops, floor: knobs.machine_colour_floor_share });
 	const view = fleetView(jobs, {
 		ramp, start: proof.from, end: proof.through, windowDays: 41,
@@ -161,7 +175,26 @@ test('16 native records settle to 15 jobs and Hardware keeps both halves of work
 	const recorded: SliceResult = JSON.parse(readFileSync(path.join(
 		REPO, 'tests', 'fixtures', 'console', 'machine', 'platformMixQuery.json'
 	), 'utf8'));
-	expect(recorded.rows.filter(sameJob)).toEqual(answer.rows.filter(sameJob));
+	const legacy = normalizeHostRows(
+		recorded.rows.filter(sameJob).map((row) => ({ version: '2026-09-20', ...row }))
+	);
+	const corrected = normalizeHostRows(answer.rows.filter(sameJob));
+	expect(legacy).toHaveLength(1);
+	expect(corrected).toHaveLength(1);
+	expect(legacy[0].fingerprint_version).toBe('1');
+	expect(corrected[0].fingerprint_version).toBe('2');
+	for (const name of [
+		'date',
+		'run_id',
+		'job',
+		'shard',
+		'cpu_model',
+		'job_seconds',
+		'server_prompt_tokens',
+		'server_prompt_seconds'
+	]) {
+		expect(corrected[0][name]).toBe(legacy[0][name]);
+	}
 });
 
 test('native host half-writing does not excuse a duplicate staged fixture record', () => {

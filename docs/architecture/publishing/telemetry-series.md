@@ -612,7 +612,7 @@ ledger had been committed for four days with no page reading a cell of it.
 | What one item held at its end | the item ledger's `llama_rss_bytes` and `python_rss_bytes` | two brackets labelled AT MOST, drawn against the larger of themselves and never against the machine's total. The two added are an UPPER BOUND unless one item held both |
 | How close an item took the machine to running out | `os_mem_available_min_bytes` | the MINIMUM over the run's items, named with the item that owns it. A per-shard maximum cannot show it |
 | What one item left the kernel | `os_mem_available_min_bytes` to `os_mem_available_bytes` | one range mark an item, floor to recovery - a floor that falls with an end that falls is a leak, a floor that falls with an end that recovers is hard work |
-| The queue behind an item | `load_1m` against the host's `cores`, with `cpu_busy_min` to `cpu_busy_max` | one mark an item. Busy and queued are different facts and neither implies the other, so both are drawn |
+| Host pressure at item end | `load_1m` against `cpu_logical_processors`, with `cpu_busy_min` to `cpu_busy_max` | one mark an item. Load also counts uninterruptible tasks, so exceeding the denominator suggests pressure and does not prove CPU-only queuing |
 | The shape of a run | the item ledger's `summarize_ms` | one ladder a run at the five configured percentiles, interpolated between the two nearest ranks, never pooled between runs |
 | Whether the speed numbers can be trusted | the item ledger's `prefill_ms` and `input_tokens - cached_tokens` against the server's own totals | the same pooling and the same 5 percent bound `backend/utilities/reconcile_prefill.py` gates on |
 

@@ -4,14 +4,15 @@
 
 ## What is implemented
 
-The isolated contracts, native Rust producers/storage and read-only verifier do
-not change production collectors or shared ledger readers. Rust now collects,
+The native Rust producers/storage and read-only verifier do not change
+production collectors. Shared ledger readers now admit their finite truthful
+host provenance and normalize declared legacy rows before consumers. Rust collects,
 renders and atomically files real probe, target and clock host records.
 The isolated resource monitor now returns item-window cells and exports legacy
 job-memory and runtime server-status artifacts. Production invocation remains
 unchanged; this is not the single-writer cutover.
 The corrected host row removes the legacy CPU count and frequency columns.
-The candidate reads finite historical schemas without inventing measurements:
+The shared contract reads finite historical schemas without inventing measurements:
 old hashes retain algorithm 1, legitimate observed averages survive, and
 unmeasured corrected counts stay null.
 
@@ -32,7 +33,7 @@ Abort and shutdown resolve opening commands without silently dropping evidence.
 
 Memory collection defaults on. The manifest carries one strict Boolean; disabled
 memory cells are null and diagnosed separately from CPU and load readings.
-This candidate control does not yet turn off production Python instruments.
+This control does not yet turn off production Python instruments.
 
 ## Probe, target and clock collection
 
@@ -327,9 +328,9 @@ The versioned `HostEvidenceReport` retains build wall time/executable bytes/hash
 startup, monitor CPU/RSS, ACK latency, workload and reference-instrument costs,
 frozen bounds, every field classification/comparison, sample coverage, populations,
 fixture case names and physical artifact hashes. Missing build, reference,
-receipt, window, population, drain or coverage evidence fails. The named candidate
-reader verifies the original native bytes; the current shared reader must reject
-those bytes before reader migration. Verification compares inventory hashes
+receipt, window, population, drain or coverage evidence fails. The bounded
+verifier and shared `load`/`load_stored` readers verify the same original native
+bytes. Verification compares inventory hashes
 before/after and never re-encodes a native file. Received resource events preserve
 native JSON bytes and must keep session identity, increasing emitter order,
 triggering worker/window commands and a drain with no aborted windows. Sample
@@ -361,7 +362,8 @@ Linux candidate/artifact review and green merge.
 
 `utilities.migrate_host_fingerprints` now prepares real replacement candidates
 without writing historical files. It is a maintenance codec, not a CPU collector.
-The unchanged Python collectors and production readers remain unchanged.
+The unchanged Python collectors remain unchanged; migrated readers consume the
+candidate output without Python re-encoding.
 
 Supply a `HistoryManifest` from `idhazh.contracts.host_migration`. Its schema is
 available through `HistoryManifest.json_schema()`. The manifest requires:

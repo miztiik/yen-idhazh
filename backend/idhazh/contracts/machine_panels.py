@@ -26,7 +26,7 @@ show. `MachineCard` refuses a flag list that is not the full set.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import ClassVar, Self
+from typing import ClassVar, Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -142,6 +142,10 @@ class MachineIdentity(Model):
     """
 
     key: str = Field(min_length=1)
+    fingerprint_version: Literal[1, 2] | None = Field(
+        default=None,
+        description="Fingerprint algorithm, or null for name-only and unrecorded groups.",
+    )
     name: str = Field(
         min_length=1,
         description=(
@@ -205,6 +209,14 @@ class MachineCard(Model):
         ),
     )
     l3_cache_bytes: int | None = Field(default=None, ge=0)
+    cpu_physical_cores: int | None = Field(default=None, ge=1)
+    cpu_logical_processors: int | None = Field(default=None, ge=1)
+    cpu_allowed_processors: int | None = Field(default=None, ge=1)
+    cpu_quota_cores: float | None = Field(default=None, gt=0)
+    cpu_quota_state: Literal["finite", "unlimited", "unavailable"] | None = None
+    cpu_target_measured_at: str | None = None
+    cpu_observed_mhz: float | None = Field(default=None, gt=0)
+    cpu_reported_max_mhz: float | None = Field(default=None, gt=0)
     memcpy_gib_s: float | None = Field(
         default=None,
         gt=0,
@@ -299,6 +311,11 @@ class MachinePanels(Contract):
 
     __schema_stem__: ClassVar[str] = "machine-panels"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-10",
+            change="Carry corrected CPU readings and versioned machine identity.",
+            why="Cards must not merge fingerprint algorithms or derive missing capacity.",
+        ),
         ChangelogEntry(
             version="2026-09-20",
             change="FleetKind records that the fleet panel's day grain is derived.",

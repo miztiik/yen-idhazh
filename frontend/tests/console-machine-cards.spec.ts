@@ -63,23 +63,28 @@ function shardOf(reading: ShardReading): ShardReading {
 
 function fingerprint(over: Partial<HostFingerprint>): HostFingerprint {
 	return {
-		version: '2026-09-19',
+		version: '2026-10-10',
 		date: '2026-09-12',
 		run_id: '2026-09-12-1',
 		job: 'work',
 		shard: 0,
 		fingerprint: '3a7f0b1c2d4e5f60',
+		fingerprint_version: 2,
 		cpu_model: 'AMD EPYC 7763 64-Core Processor',
 		cpu_vendor: 'AuthenticAMD',
 		cpu_family: 25,
 		cpu_model_number: 1,
 		cpu_stepping: 1,
 		microcode: '0xa0011d3',
-		cores: 2,
-		threads: 4,
+		cpu_physical_cores: 2,
+		cpu_logical_processors: 4,
+		cpu_allowed_processors: null,
+		cpu_quota_cores: null,
+		cpu_quota_state: null,
+		cpu_target_measured_at: null,
 		l3_cache_bytes: 32 * MIB,
-		mhz_max: null,
-		mhz_at_probe: 2664.85,
+		cpu_observed_mhz: 2664.85,
+		cpu_reported_max_mhz: null,
 		flags: 'avx2 f16c fma sse4_2',
 		boot_seconds: 226.59,
 		memcpy_gib_s: 12.4,
@@ -159,23 +164,21 @@ test.describe('what a card says a machine can do', () => {
 	});
 
 	test('the heading is the name a person reads and the raw string survives behind it', () => {
-		const [card] = cardsFor([
+		const card = cardsFor([
 			fingerprint({ cpu_model: 'INTEL(R) XEON(R) PLATINUM 8573C', fingerprint: 'c81d9e0a1b2c3d4e' })
-		]).cards;
+		]).cards.find((one) => one.source === 'fingerprint');
+		if (card === undefined) throw new Error('the fixture drew no fingerprint card');
 		expect(card.identity.name).toBe('Intel Xeon Platinum 8573C');
 		expect(card.where?.cpuModelRaw).toBe('INTEL(R) XEON(R) PLATINUM 8573C');
 	});
 
-	test('a job the record missed joins the machine of its own name, not a card of its own', () => {
-		// The record reached work shard 0 and reported a Xeon; shard 1 reported the
-		// same processor name and nothing else. One machine, one card - two cards
-		// under one heading reads as a defect rather than as the absence it is.
+	test('a name-only job remains coarse and is never inferred into a fingerprint class', () => {
 		const view = cardsFor([
 			fingerprint({ cpu_model: 'INTEL(R) XEON(R) PLATINUM 8573C', fingerprint: 'c81d9e0a1b2c3d4e' })
 		]);
-		expect(view.cards).toHaveLength(1);
-		expect(view.cards[0].jobsDrawn).toBe(2);
-		expect(view.cards[0].source).toBe('fingerprint');
+		expect(view.cards).toHaveLength(2);
+		expect(view.cards.map((card) => card.source).sort()).toEqual(['fingerprint', 'name-only']);
+		expect(view.cards.every((card) => card.jobsDrawn === 1)).toBe(true);
 	});
 
 	test('the disclosure carries where the platform put it, and the microcode', () => {
@@ -294,19 +297,22 @@ test.describe('what the machine was doing when we asked', () => {
 		expect(uptimeSentence(card)).toBe('Uptime was not recorded on this job.');
 	});
 
-	test('the clock prints alone, never as a share of a ceiling nothing writes', () => {
-		// `mhz_max` is empty on all 65 committed rows, measured 2026-09-21. A card
-		// that divided by it would draw the empty-column defect a second time.
-		const [card] = cardsFor([fingerprint({ mhz_at_probe: 2664.85, mhz_max: null })]).cards;
-		expect(card.mhzAtProbe).toBe(2664.85);
+	test('the observed sample is distinct from the reported maximum', () => {
+		const [card] = cardsFor([
+			fingerprint({ cpu_observed_mhz: 2664.85, cpu_reported_max_mhz: null })
+		]).cards;
+		expect(card.observedMhz).toBe(2664.85);
 		const said = clockSentence(card);
-		expect(said).toBe("2665 MHz when the probe ran, before the job's heaviest step.");
-		expect(said).not.toContain('%');
+		expect(said).toContain('Observed sample average 2665 MHz');
+		expect(said).toContain('reported hardware maximum unknown');
+		expect(said).toContain('not a sustained rate');
 	});
 
 	test('a clock nobody recorded is a sentence, never a clock of zero', () => {
-		const [card] = cardsFor([fingerprint({ mhz_at_probe: null })]).cards;
-		expect(clockSentence(card)).toBe('Clock speed was not recorded on this job.');
+		const [card] = cardsFor([
+			fingerprint({ cpu_observed_mhz: null, cpu_reported_max_mhz: null })
+		]).cards;
+		expect(clockSentence(card)).toBe('Observed and reported maximum frequencies are unknown.');
 	});
 
 	test('a machine the record never reached carries neither, and both say so', () => {
@@ -315,9 +321,9 @@ test.describe('what the machine was doing when we asked', () => {
 		);
 		if (named === undefined) throw new Error('the fixture drew no name-only card');
 		expect(named.bootSeconds).toBeNull();
-		expect(named.mhzAtProbe).toBeNull();
+		expect(named.observedMhz).toBeNull();
 		expect(uptimeSentence(named)).toContain('not recorded');
-		expect(clockSentence(named)).toContain('not recorded');
+		expect(clockSentence(named)).toContain('unknown');
 	});
 });
 
@@ -636,8 +642,52 @@ test.describe("one job's row", () => {
 		expect(rows, 'one job is one placement').toHaveLength(1);
 		expect(rows[0].fingerprint).toBe('3a7f0b1c2d4e5f60');
 		expect(rows[0].cpu_model).toBe('AMD EPYC 7763 64-Core Processor');
-		expect(rows[0].cores).toBe(2);
+		expect(rows[0].fingerprint_version).toBe(1);
+		expect(rows[0].cpu_physical_cores).toBeNull();
 		expect(rows[0].job_seconds).toBe(780);
 		expect(rows[0].model_load_ms).toBe(2290.5);
+	});
+
+	test('mixed legacy and corrected rows normalize before consumers without invented counts', () => {
+		const rows = fingerprintsOf([
+			{
+				version: '2026-09-20',
+				date: '2026-09-20',
+				run_id: '2026-09-20-1',
+				job: 'work',
+				shard: '0',
+				fingerprint: 'aaaaaaaaaaaaaaaa',
+				mhz_at_probe: '2400',
+				cores: '2',
+				threads: '4'
+			},
+			{
+				version: '2026-10-10',
+				date: '2026-10-10',
+				run_id: '2026-10-10-1',
+				job: 'work',
+				shard: '0',
+				fingerprint: 'aaaaaaaaaaaaaaaa',
+				fingerprint_version: '2',
+				cpu_logical_processors: '8',
+				cpu_observed_mhz: '2800',
+				cpu_reported_max_mhz: '3200'
+			},
+			{ version: '2099-01-01', date: '2099-01-01', run_id: 'bad', job: 'work', shard: '0' }
+		]);
+		expect(rows).toHaveLength(2);
+		expect(rows[0]).toMatchObject({
+			version: '2026-10-10',
+			fingerprint_version: 1,
+			cpu_logical_processors: null,
+			cpu_observed_mhz: 2400,
+			cpu_reported_max_mhz: null
+		});
+		expect(rows[1]).toMatchObject({
+			fingerprint_version: 2,
+			cpu_logical_processors: 8,
+			cpu_observed_mhz: 2800,
+			cpu_reported_max_mhz: 3200
+		});
 	});
 });

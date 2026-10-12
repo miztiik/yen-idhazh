@@ -849,7 +849,7 @@ def test_a_file_whose_envelope_names_another_writer_is_refused(tmp_path: Path) -
     )
     _rewritten(written, writer=parquet.__name__)
 
-    with pytest.raises(ValueError, match="its bytes are"):
+    with pytest.raises(ValueError, match="container"):
         ledger.load([written], model=EveryColumn)
 
 
