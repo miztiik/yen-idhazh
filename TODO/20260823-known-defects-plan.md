@@ -143,8 +143,44 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 70 | The raw-listing test does not check the value included in the built site | 2 | **OPEN - check the real build on generated data against written-out days** |
 | 71 | The canary uses one model, so the model-swap plots have no browser parity case | 2 | **OPEN - record a model swap in the canary and check the drawn points** |
 | 72 | A chart test excludes all reader pages when the worktree name contains console | 1 | **OPEN - filter the build-relative console route segment, not the absolute path** |
-| 73 | The manifest shard count can differ from the dispatched worker matrix | 5 | **OPEN - separate owner decision; keep the manifest-only count contract** |
+| 73 | The manifest shard count can differ from the dispatched worker matrix | 5 | **OPEN - owner ruled 2026-10-12; [the dispatched shard count plan](20261012-dispatched-shard-count-plan.md) carries the fix** |
 | 74 | A stale-payload test assumes its scratch folder is outside the repository | 2 | **OPEN - check both repository-owned and external scratch paths** |
+| 75 | A full re-run that plans again leaves the earlier plan's rows under the same run id | 5 | **OPEN - reasoned, not measured; first count the run ids with run-plan rows from attempt 2 or later** |
+
+## 75 - A full re-run that plans again leaves the earlier plan's rows under the same run id (OPEN)
+
+**"Re-run all jobs" keeps the GitHub run id, so a re-run on the same UTC day
+plans again under the same run id.** The new attempt's plan job files a second
+plan for that run, and the ledger door keeps the highest attempt of each
+writer, so every later job of the attempt reads the new plan. The new plan can
+be smaller, because the published ledger now refuses what the first attempt
+published, so its fan-out can start fewer workers. The machine and article rows
+that the first attempt's other workers filed stay under the run id, because the
+new attempt filed nothing for those shards. Reasoned from the code at `72569d67`
+(`backend/idhazh/run_context.py`, and `settle_rows` in
+`backend/idhazh/ledger/raw_files.py`), not measured.
+
+**One consequence is visible and one is silent.** When the new attempt
+assembles, the run records the new plan's shard count, so Hardware, and on the
+newest day the band above every console route, see more shards reporting than
+the run recorded and refuse it. When the new attempt stops before assembly, its
+workers' rows replace the first attempt's for the shards it reached, the record
+keeps the first count, and the run reads as one run made of two plans.
+
+**The first step is one count, not code.** Count the run ids whose run-plan
+rows carry an attempt of 2 or later, over a named window of days: one ledger,
+named days, and the door's own `attempt` cell. That count prices this defect
+before anyone designs a fix.
+
+**A run id of its own for each re-run that plans again is the candidate
+structural fix. It is an option for a later owner ruling, not a decision.** It
+would change the run identity that every ledger and `run.json` carry, which is
+why this defect is level 5. Recording the plan's attempt beside the shard count
+and reading only later rows was set aside on 2026-10-12, because it still
+misreads an attempt that stops before assembly.
+
+Found by Fowler's review of defect 73 and filed on 2026-10-12 with the owner's
+ruling on that defect.
 
 ## 74 - A stale-payload test assumes its scratch folder is outside the repository (OPEN)
 
@@ -166,23 +202,33 @@ Status: OPEN; the known-defects execution owner takes this row.
 
 ## 73 - The manifest shard count can differ from the dispatched worker matrix (OPEN)
 
-The workflow chooses its work matrix, but the assembly command in
-`backend/idhazh/cli.py` recomputes the count from the plan it reads then. A
-regenerated or reconfigured plan can record a count different from the jobs
-actually dispatched. The native `run-shards` ledger deliberately records the
-manifest value; observed host rows are not a substitute.
+The fan-out step in `.github/workflows/digest.yml` gives the workers a manual
+dispatch's `shards` input as it is, and derives a count from the plan only when
+that input is empty, which is every scheduled run. The assembly command in
+`backend/idhazh/cli.py`, and the fresh-base rebuild in
+`backend/utilities/digest_assemble.py`, recompute the derived count from the
+same plan. So a manual dispatch whose count differs from the derived one
+records a count different from the jobs actually dispatched: the default of 8
+with an article limit of 10 starts 8 workers and records 2, and Hardware
+refuses that run, while a dispatch below the derived count shows shards as
+missing that never ran. The plan does not change within one attempt: every job
+reads its own run's plan, and config comes from the trigger commit. A config
+with `run.max_parallel` above 8 would also diverge, because the workflow clamps
+the derived count and assembly does not. The native `run-shards` ledger
+deliberately records the manifest value; observed host rows are not a
+substitute.
 
-**Execution row 73.** Scope: price and obtain the owner's decision on preserving
-the dispatched count through assembly, including resumed and regenerated
-plans. Files: `.github/workflows/digest.yml`, `backend/idhazh/cli.py`,
-`backend/idhazh/assemble.py`, `backend/idhazh/contracts/run_manifest.py`, the
-count ledger writer and generated workflow/manifest fixtures. Oracle: a real
-dispatch fixture with a changed plan distinguishes the dispatched and
-recomputed counts; the approved contract states which is recorded, how old
-records remain readable, and how count-ledger corrections settle. Status:
-OPEN, awaiting that separate decision; no implementation approval is implied.
-The shipped [Hardware count contract](../docs/architecture/publishing/console-machine.md#a-narrow-recorded-shard-count)
-remains unchanged until this row settles it.
+**The owner ruled on 2026-10-12.** The run records the count it dispatched, and
+the operator keeps the one-to-eight choice. `RunRecord.shards` keeps its key,
+type and readers and holds that count from the change on. The plan step
+decides the count once and stores it on the run's plan; the fan-out, assembly
+and the fresh-base rebuild read it there. A full re-run that plans again
+records its newer plan's count, and the rows it leaves under the same run id
+are defect 75. The
+[dispatched shard count plan](20261012-dispatched-shard-count-plan.md) carries
+the fix and amends the shipped
+[Hardware count contract](../docs/architecture/publishing/console-machine.md#a-narrow-recorded-shard-count)
+when it lands. Status: OPEN until that fix lands.
 
 ## 72 - A chart test excludes all reader pages when the worktree name contains console (OPEN)
 
