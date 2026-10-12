@@ -245,7 +245,8 @@ test('Voices panel inputs keep narrow route consumers and unknown-path broad cov
 		['backend', ...FRONTEND_GROUPS]);
 	assert.deepEqual(selectPaths(['frontend/src/lib/console/unmapped/panel.ts']).groups, [...FRONTEND_GROUPS]);
 	assert.deepEqual(groupedSpecs(join(FRONTEND, 'tests')).console,
-		['console-data-explorer-still.spec.ts', 'console-telemetry-heal.spec.ts', 'console-voices-journey.spec.ts']);
+		['console-data-explorer-still.spec.ts', 'console-model-builder.spec.ts', 'console-model-ledgers.spec.ts',
+			'console-telemetry-heal.spec.ts', 'console-voices-journey.spec.ts']);
 });
 
 test('grouped specs follow only the explicit inventory', () => {
