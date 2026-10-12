@@ -135,6 +135,20 @@ def preflight_history(manifest: HistoryManifest, *, workspace: Path) -> None:
         sources.add(identity)
         if _contains(workspace, isolated, path):
             raise ValueError(f"{source.path}: source overlaps the isolated report root")
+    for evidence in manifest.legacy_raw_evidence:
+        try:
+            path = _safe_path(workspace, workspace / evidence.path)
+            info = path.stat()
+        except OSError as error:
+            raise ValueError(
+                f"{evidence.path}: missing or unreadable legacy evidence ({type(error).__name__})"
+            ) from error
+        identity = (info.st_dev, info.st_ino)
+        if identity in sources:
+            raise ValueError(f"{evidence.path}: duplicate physical history source")
+        sources.add(identity)
+        if _contains(workspace, isolated, path):
+            raise ValueError(f"{evidence.path}: evidence overlaps the isolated report root")
 
 
 def preflight_targets(
@@ -145,6 +159,10 @@ def preflight_targets(
     source_identities = {
         preflight_path(workspace, workspace / source.path)[0] for source in manifest.sources
     }
+    source_identities.update(
+        preflight_path(workspace, workspace / evidence.path)[0]
+        for evidence in manifest.legacy_raw_evidence
+    )
     isolated = workspace / manifest.isolated_root
     addresses: set[PathAddress] = set()
     for target in targets:

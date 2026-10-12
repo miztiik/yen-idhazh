@@ -12,6 +12,7 @@ from pydantic import ConfigDict, Field, JsonValue, model_validator
 
 from idhazh.contracts.base import (
     ChangelogEntry,
+    CommitSha,
     Contract,
     DateStamp,
     Model,
@@ -32,7 +33,9 @@ FileStatus = Literal[
     "candidate_complete", "excluded_corrected", "deferred", "unresolved", "retained"
 ]
 CandidateStatus = Literal["not_applicable", "candidate_complete", "frozen"]
-ViewStatus = Literal["not_applicable", "deferred", "frozen"]
+ViewStatus = Literal[
+    "not_applicable", "candidate_complete", "deferred", "frozen"
+]
 _CHANGELOG = (
     ChangelogEntry(
         version=MIGRATION_VERSION,
@@ -108,6 +111,18 @@ class HistorySource(HistoryModel):
     dependencies: tuple[RelPath, ...] = ()
 
 
+class LegacyRawEvidence(HistoryModel):
+    """A bounded, Git-anchored legacy CSV source for a compact row repair."""
+
+    compact_path: RelPath
+    path: RelPath
+    sha256: Sha256
+    bytes: Nonnegative
+    git_commit: CommitSha
+    git_blob: CommitSha
+    attempt: Positive
+
+
 class HistoryManifest(HistoryModel, Contract):
     __schema_stem__: ClassVar[str] = "host-history-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = _CHANGELOG
@@ -120,6 +135,7 @@ class HistoryManifest(HistoryModel, Contract):
     roots: tuple[HistoryRoot, ...] = Field(min_length=1)
     closed_periods: tuple[ClosedHistoryPeriod, ...] = Field(min_length=1)
     sources: tuple[HistorySource, ...]
+    legacy_raw_evidence: tuple[LegacyRawEvidence, ...] = ()
 
     @model_validator(mode="before")
     @classmethod
@@ -154,6 +170,18 @@ class HistoryManifest(HistoryModel, Contract):
         source_paths = {source.path for source in self.sources}
         if len(source_paths) != len(self.sources):
             raise ValueError("duplicate manifested source path")
+        evidence_paths = {evidence.path for evidence in self.legacy_raw_evidence}
+        if len(evidence_paths) != len(self.legacy_raw_evidence):
+            raise ValueError("duplicate legacy evidence path")
+        source_by_path = {source.path: source for source in self.sources}
+        for evidence in self.legacy_raw_evidence:
+            compact = source_by_path.get(evidence.compact_path)
+            if compact is None or compact.kind != "compact":
+                raise ValueError("legacy evidence must name a manifested compact source")
+            if evidence.path in source_paths or evidence.path == self.isolated_root:
+                raise ValueError("legacy evidence path overlaps a manifested source")
+            if PurePosixPath(evidence.path).is_relative_to(self.isolated_root):
+                raise ValueError("legacy evidence overlaps the isolated report root")
         for root in self.roots:
             if PurePosixPath(self.isolated_root).is_relative_to(
                 root.state_root
@@ -212,14 +240,22 @@ class RowMigration(HistoryModel):
     retained_average: float | None
     original_fingerprint: str | None
     fingerprint_version: Literal[1, 2] | None
+    identity_repaired: bool = False
 
     @model_validator(mode="after")
     def _preserved_rank(self) -> Self:
-        if (
-            self.original_identity != self.normalized_identity
-            or self.original_key != self.normalized_key
-        ):
+        identity_changed = self.original_identity != self.normalized_identity
+        if self.original_key != self.normalized_key:
             raise ValueError("normalization changed original identity or settlement key")
+        if identity_changed and (
+            not self.identity_repaired
+            or any(
+                getattr(self.original_identity, name) != getattr(self.normalized_identity, name)
+                for name in ("covers", "run_id", "job", "shard", "attempt")
+            )
+            or self.original_identity.unit_id == self.normalized_identity.unit_id
+        ):
+            raise ValueError("normalization changed original identity without a bounded repair")
         return self
 
 
@@ -286,6 +322,20 @@ class HistorySettlement(HistoryModel):
     identity: RowIdentity
 
 
+class ConsumerReplayEvidence(HistoryModel):
+    """Proof that the migrated candidate was consumed by the real publishers."""
+
+    reader: Literal["idhazh.ledger.load_days"]
+    publisher: Literal["idhazh.telemetry.publish.console_band.publish"]
+    input_mode: Literal["materialized_candidate_state"]
+    candidate_source_count: Positive
+    host_rows_read: Nonnegative
+    work_rows_read: Nonnegative
+    view_path: RelPath
+    view_sha256: Sha256
+    view_bytes: Positive
+
+
 class HistoryReport(HistoryModel, Contract):
     __schema_stem__: ClassVar[str] = "host-history-report"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = _CHANGELOG
@@ -312,6 +362,7 @@ class HistoryReport(HistoryModel, Contract):
     original_settled_keys: Nonnegative
     normalized_settled_keys: Nonnegative
     maintenance_receipt_candidate: PublicationReceipt
+    consumer_replay: ConsumerReplayEvidence | None = None
     estimated_read_bytes: Nonnegative
     estimated_candidate_bytes: Nonnegative
     backup_policy: Literal["verified_source_bytes_before_replace; retain_original_receipts"]
@@ -348,6 +399,10 @@ class HistoryReport(HistoryModel, Contract):
             raise ValueError("candidate receipt must name the exact maintenance invocation")
         if self.consumer_mode == "candidate_reader" and self.historical_readiness != "blocked":
             raise ValueError("candidate reader cannot establish historical readiness")
+        if self.consumer_mode == "candidate_reader" and self.consumer_replay is not None:
+            raise ValueError("candidate reader cannot claim consumer replay evidence")
+        if self.consumer_mode == "migrated_consumers" and self.consumer_replay is None:
+            raise ValueError("migrated consumers require exact replay evidence")
         if self.historical_readiness == "ready" and (
             not self.inventory_complete
             or self.blocked_by

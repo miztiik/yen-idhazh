@@ -10,6 +10,7 @@ from typing import Any
 
 from idhazh.contracts.base import Contract, compact_json
 from idhazh.contracts.file_envelope import FileEnvelope, Format, Period, RowIdentity, Tier
+from idhazh.contracts.host_fingerprint import strip_null_legacy_placeholders
 from idhazh.contracts.host_migration import (
     MIGRATION_VERSION,
     FileStatus,
@@ -36,6 +37,7 @@ from idhazh.telemetry.host_history_files import (
     HistoryLimits,
     decode_history,
     read_history,
+    read_legacy_raw_evidence,
 )
 from idhazh.telemetry.host_history_paths import preflight_history
 from idhazh.telemetry.host_output_verify import host_output_columns
@@ -80,6 +82,7 @@ def _row_reports(file: HistoryFile) -> tuple[RowMigration, ...]:
                 normalized_identity=_identity(new),
                 original_key=_record(original),
                 normalized_key=_record(new),
+                identity_repaired=_identity(original) != _identity(new),
                 dropped_values={key: original[key] for key in LEGACY_CPU_FIELDS if key in original},
                 null_fields=tuple(key for key, value in new.items() if value is None),
                 retained_average=normalized.cpu_observed_mhz,
@@ -343,7 +346,9 @@ def _settlement(
                         for key, value in raw.items()
                         if key not in RowIdentity.model_fields or key in ("run_id", "job", "shard")
                     }
-                    row: Contract = LegacyHostFingerprintRow.model_validate(payload)
+                    row: Contract = LegacyHostFingerprintRow.model_validate(
+                        strip_null_legacy_placeholders(payload)
+                    )
                 else:
                     row = HostStoredRow.model_validate(raw) if original else corrected
                 group.append(StoredRow(identity=_identity(raw), row=row))
@@ -372,12 +377,25 @@ def prepare_history(
     limits.check_manifest(manifest)
     preflight_history(manifest, workspace=workspace)
     roots = {root.name: root for root in manifest.roots}
+    legacy_evidence: dict[str, dict[tuple[str, str, int], dict[str, Any]]] = {}
+    for evidence in manifest.legacy_raw_evidence:
+        rows = read_legacy_raw_evidence(
+            evidence,
+            workspace=workspace,
+            limits=limits.history_verification,
+        )
+        target = legacy_evidence.setdefault(evidence.compact_path, {})
+        duplicate_keys = target.keys() & rows.keys()
+        if duplicate_keys:
+            raise ValueError("legacy evidence contains duplicate compact row identity")
+        target.update(rows)
     files = tuple(
         read_history(
             source,
             roots[source.root],
             workspace=workspace,
             limits=limits.history_verification,
+            legacy_raw_evidence=legacy_evidence.get(source.path),
         )
         for source in manifest.sources
     )
@@ -399,6 +417,7 @@ def prepare_history(
                 roots[file.source.root],
                 data=data,
                 limits=limits.history_verification,
+                legacy_raw_evidence=legacy_evidence.get(file.source.path),
             )
             if checked.rows != file.rows:
                 raise ValueError("replacement codec changed corrected rows")
@@ -523,8 +542,12 @@ def prepare_history(
         "retirement_policy": "no_source_retirement_in_dry_run",
     }
     provisional = HistoryReport.model_construct(**payload)
-    evidence = provisional.model_dump(mode="json", exclude={"evidence_hash", "bundle_root"})
-    evidence_hash = hashlib.sha256(compact_json(evidence).encode("ascii")).hexdigest()
+    evidence_document = provisional.model_dump(
+        mode="json", exclude={"evidence_hash", "bundle_root"}
+    )
+    evidence_hash = hashlib.sha256(
+        compact_json(evidence_document).encode("ascii")
+    ).hexdigest()
     final_report = HistoryReport.model_validate(
         provisional.model_dump()
         | {
