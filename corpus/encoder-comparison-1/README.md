@@ -896,8 +896,13 @@ file out of Git. Commit immutable typed checkpoints instead; `history --output <
 also exports typed JSONL history, but does not by itself freeze a coherent multi-file
 epoch. Do not push these commits.
 
-`checkpoint --output <new-directory>` reads the active database in one consistent
-read transaction. It exports exact typed history rows in sequence order, worker
+`checkpoint --output <new-directory>` reads the named database in one consistent
+read transaction. With active writers and a rollback journal, first use SQLite's
+online backup API through a read-only source connection into an integration-owned
+ignored index. Copy bounded page batches without a long live read transaction.
+Run the checkpoint exporter against that completed, private snapshot, not a
+file copy of the changing SQLite file or its worker logs.
+It exports exact typed history rows in sequence order, worker
 batches, submission metadata and proposals, current catalogue, active partition
 with its exposure lineage, and portable vector manifest. Submission decisions
 are reconstructed from the history and checked
@@ -1237,15 +1242,21 @@ universe can return a falsely perfect accepted evaluation.
 
 ### Validation and current scope
 
-The immutable local epoch `corpus/story-dataset-1/checkpoints/main-20261011-1930`
-is **partial model annotation, not full gold or accepted quality**. Its one
-read-only transaction captured 11,100 visited articles: 2,357 have resolved
-catalogue memberships, 8,252 are catalogue-pending and 491 are unresolved.
-Another 4,022 of the frozen 15,122 articles were unvisited at that epoch.
-Its 1,085 current article reviews and 1,588 judged pairs are review activity,
-not proof of label correctness. The 913 current article-review conflicts and
-88 pair-review conflicts include unresolved catalogue comparisons; they are
-not error-rate measurements.
+The current immutable local epoch is
+`corpus/story-dataset-1/checkpoints/main-20261012-1635`.
+It is **partial model annotation, not full gold or accepted quality**.
+SQLite's consistent read-only backup captured sequence 17,296 and catalogue
+revision `5f5b56b4ea0a5adf47847b22476b648ee0c5c971115cf3f2ebcece76641bfa13`.
+It contains 14,140 visited articles: 3,976 have resolved catalogue memberships,
+9,465 are catalogue-pending and 699 are unresolved. The raw primary decisions
+call 13,441 articles annotated; that is not the qualified count.
+Another 982 of the frozen 15,122 articles were unvisited.
+This adds 3,040 visited articles over the retained `main-20261011-1930` epoch.
+The frozen history contains 1,225 article reviews, of which 1,211 still target
+the current primary record, and 1,608 distinct judged pairs. Of 214 pair-review
+records, 212 pairs have a current independent review.
+The 1,026 current article-review conflicts and 96 pair-review conflicts include
+unresolved catalogue comparisons. They are not error-rate measurements.
 
 Quality acceptance is held. A 36-item nonblind diagnostic found one concrete
 main-body/source-scope failure, S09, and two uncertain parent identities.
@@ -1253,15 +1264,39 @@ That mixed targeted sample is not an archive-wide error-rate estimate. Fresh
 blind targeted review and evidence-backed reconciliation remain annotation
 coordinator work. Later review receipts cannot retroactively qualify this
 frozen epoch. Required unavailable sources and transcripts stay uncertain.
+The protected twenty-source review still needs its owning coordinator's
+completed reader and import; this checkpoint does not assert that it passed.
 
 The epoch keeps full history, canonical catalogue, submission bindings,
 vector metadata and exposure settings. An empty ignored index replays its
 exact file hashes and bindings. Omitted discovery frames and their active
 settings remain explicit rather than being silently restored. It contains
 no live SQLite index, worker directory, models, raw arrays or captures.
-The original frozen source and 935 judgments remain byte-identical.
-Fresh comparative evaluation and any final model/dimension choice are blocked.
-The actual Linux encoder runtime has not been executed locally or remotely.
+`replay-receipt.json` records exact typed file, submission binding, record
+payload and sequence equality after replay into an empty ignored index.
+The checkpoint hash is
+`54f925c0f5236ca79fc3dbfa97b4770fbeb4209b72d3ba7c098d5f5f18790745`.
+The original frozen source and 935 judgments remain byte-identical; those
+935 historical judgments are regression evidence, not fresh archive gold.
+
+The annotation index's historical four-control vector registration covers
+10,672 common articles. It is separate from the completed pinned MiniLM,
+pinned GTE and native Gemma evidence, each covering 15,122 articles.
+The already-approved Linux run `38174944453` succeeded; its twenty retained
+artifacts supplied 7,352 missing vectors. No new upload or dispatch occurred.
+`vector-preparation-receipt.json` ties their rechecked byte hashes and Gemma
+128/256/512-dimensional prefix-and-normalization replay to this annotation epoch.
+Arrays and weights remain in ignored local evidence, not in this commit.
+Jina still lacks 4,430 vectors; its prepared preview grants no outbound approval.
+
+`evaluation-preparation.json` is a typed blocked report with no measured scores.
+Catalogue identities are still changing, complete query relevance judgments
+are missing, and neither a stable outcome-blind partition nor development
+settings are frozen. No partition or relevance judgments were materialized from
+this unstable catalogue. Discovery candidates do not establish identity links.
+Fresh four-model comparison and any final model/dimension choice remain blocked.
+No confirmation results were inspected, settings tuned or production code changed.
+These archive checkpoints remain local Git data, not a public archive delivery.
 
 The named real fixture is
 `backend/tests/fixtures/story-dataset/approved.json`, with twenty actual approved
