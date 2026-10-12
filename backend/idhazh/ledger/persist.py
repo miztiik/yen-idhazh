@@ -786,7 +786,11 @@ def load_stored[C: Contract](paths: Sequence[Path], *, model: type[C]) -> list[S
             )
         try:
             if envelope.ledger is LedgerName.HOST_FINGERPRINT:
-                from idhazh.contracts.host_fingerprint import HostFingerprintRow, normalize_host_row
+                from idhazh.contracts.host_fingerprint import (
+                    HostFingerprintRow,
+                    normalize_host_row,
+                    strip_null_legacy_placeholders,
+                )
 
                 if model is HostFingerprintRow:
                     original = hashlib.sha256(json_lines.rows_bytes(stored)).hexdigest()
@@ -827,7 +831,9 @@ def load_stored[C: Contract](paths: Sequence[Path], *, model: type[C]) -> list[S
                         normalized.append(
                             StoredRow(
                                 identity=identity,
-                                row=model.model_validate(normalize_host_row(payload)),
+                                row=model.model_validate(
+                                    normalize_host_row(strip_null_legacy_placeholders(payload))
+                                ),
                             )
                         )
                     held.extend(normalized)

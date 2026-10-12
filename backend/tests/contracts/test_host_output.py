@@ -626,6 +626,30 @@ def test_stored_digest_and_identity_are_checked_before_defaults_or_migration() -
             )
 
 
+@pytest.mark.parametrize(
+    ("version", "placeholder"),
+    [
+        ("2026-09-17", "job_seconds"),
+        ("2026-09-18", "server_prompt_tokens"),
+    ],
+)
+def test_stored_legacy_rows_drop_only_null_widened_placeholders(
+    version: str, placeholder: str
+) -> None:
+    original = original_stored(fixture("cpu-snapshots.json")["legacy_row"] | {"version": version})
+    widened = original | {placeholder: None}
+    digest = hashlib.sha256(json_lines.rows_bytes([widened])).hexdigest()
+    rows = normalize_stored_host_rows([widened], content_sha256=digest)
+    assert rows[0].version == HOST_OUTPUT_VERSION
+
+    non_null = widened | {placeholder: 1}
+    with pytest.raises(ValueError, match="input carries fields"):
+        normalize_stored_host_rows(
+            [non_null],
+            content_sha256=hashlib.sha256(json_lines.rows_bytes([non_null])).hexdigest(),
+        )
+
+
 @pytest.mark.parametrize(("writer", "fmt"), WRITERS)
 def test_explicit_writer_container_pairs_and_unchanged_envelope_key_sets(
     writer: str, fmt: Format

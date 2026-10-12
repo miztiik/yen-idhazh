@@ -45,6 +45,7 @@ from idhazh.contracts.host_fingerprint import (
     HOST_FINGERPRINT_VERSION,
     WATCHED_FLAGS,
     HostFingerprintRow,
+    strip_null_legacy_placeholders,
 )
 from idhazh.contracts.host_fingerprint import (
     LEGACY_HOST_VERSIONS as SHARED_LEGACY_HOST_VERSIONS,
@@ -496,7 +497,7 @@ def normalize_stored_host_rows(
             raise ValueError("original stored host unit_id does not name its logical producer")
         payload = {key: value for key, value in source.items() if key not in identity_keys}
         payload.update({key: source[key] for key in own_identity})
-        row = normalize_host_row(payload)
+        row = normalize_host_row(strip_null_legacy_placeholders(payload))
         normalized.append(HostStoredRow.model_validate(row.model_dump() | identity))
     return tuple(normalized)
 
