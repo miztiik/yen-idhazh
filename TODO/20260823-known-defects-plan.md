@@ -143,7 +143,7 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 70 | The raw-listing test does not check the value included in the built site | 2 | **OPEN - check the real build on generated data against written-out days** |
 | 71 | The canary uses one model, so the model-swap plots have no browser parity case | 2 | **OPEN - record a model swap in the canary and check the drawn points** |
 | 72 | A chart test excludes all reader pages when the worktree name contains console | 1 | **OPEN - filter the build-relative console route segment, not the absolute path** |
-| 73 | The manifest shard count can differ from the dispatched worker matrix | 5 | **OPEN - owner ruled 2026-10-12; [the dispatched shard count plan](20261012-dispatched-shard-count-plan.md) carries the fix** |
+| 73 | The manifest shard count can differ from the dispatched worker matrix | 5 | CLOSED 2026-10-12 (PR #1588) |
 | 74 | A stale-payload test assumes its scratch folder is outside the repository | 2 | **OPEN - check both repository-owned and external scratch paths** |
 | 75 | A full re-run that plans again leaves the earlier plan's rows under the same run id | 5 | **OPEN - reasoned, not measured; first count the run ids with run-plan rows from attempt 2 or later** |
 
@@ -200,7 +200,7 @@ needs clarification. Oracle: both cases name their independently expected
 POSIX relative path, with no drive, backslash or absolute-path disclosure.
 Status: OPEN; the known-defects execution owner takes this row.
 
-## 73 - The manifest shard count can differ from the dispatched worker matrix (OPEN)
+## 73 - The manifest shard count can differ from the dispatched worker matrix (CLOSED 2026-10-12, PR #1588)
 
 The fan-out step in `.github/workflows/digest.yml` gives the workers a manual
 dispatch's `shards` input as it is, and derives a count from the plan only when
@@ -225,10 +225,9 @@ decides the count once and stores it on the run's plan; the fan-out, assembly
 and the fresh-base rebuild read it there. A full re-run that plans again
 records its newer plan's count, and the rows it leaves under the same run id
 are defect 75. The
-[dispatched shard count plan](20261012-dispatched-shard-count-plan.md) carries
-the fix and amends the shipped
-[Hardware count contract](../docs/architecture/publishing/console-machine.md#a-narrow-recorded-shard-count)
-when it lands. Status: OPEN until that fix lands.
+change landed in PR #1588 and amended the shipped
+[Hardware count contract](../docs/architecture/publishing/console-machine.md#a-narrow-recorded-shard-count).
+Status: CLOSED 2026-10-12 (PR #1588).
 
 ## 72 - A chart test excludes all reader pages when the worktree name contains console (OPEN)
 
