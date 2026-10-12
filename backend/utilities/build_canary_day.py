@@ -54,6 +54,7 @@ from idhazh.assemble import (
 from idhazh.atomic_write import write_atomic
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import Contract, ServerJob, derive_url_key, normalize_prose
+from idhazh.contracts.council_run_record import CouncilRunRecord
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestRunRef, DigestVerticalRef
 from idhazh.contracts.element import ElementTable
@@ -1726,6 +1727,18 @@ def file_published_fixture_rows(state: Path) -> dict[LedgerName, int]:
     url = "https://canary.example.com/published-ledger"
     url_key = derive_url_key(url)
     rows: dict[LedgerName, list[Contract]] = {
+        LedgerName.COUNCIL_RUN_RECORDS: [
+            CouncilRunRecord.model_validate(
+                CouncilRunRecord.read(
+                    Path("tests/fixtures/contracts/council-run-record") / name
+                ).model_dump() | {
+                    "date": DATE,
+                    "run_id": SCORE_RUN_ID,
+                    "started_at": f"{DATE}T22:04:11Z",
+                }
+            )
+            for name in ("a-selection-that-ran-no-model.json", "a-part-that-raised.json")
+        ],
         LedgerName.CANDIDATE_MODELS: [
             ValidationRow(
                 version=ValidationRow.schema_version(),
@@ -1786,7 +1799,14 @@ def file_published_fixture_rows(state: Path) -> dict[LedgerName, int]:
             ledger_rows,
             ledger=which,
             covers=DATE,
-            identity=_fixture_writer(SCORE_RUN_ID),
+            identity=(
+                _fixture_writer(SCORE_RUN_ID).model_copy(update={
+                    "job": ServerJob.SAVE_COUNCIL_RESULTS,
+                    "producer": "council.session",
+                })
+                if which is LedgerName.COUNCIL_RUN_RECORDS
+                else _fixture_writer(SCORE_RUN_ID)
+            ),
         )
         filed[which] = len(ledger_rows)
     return filed

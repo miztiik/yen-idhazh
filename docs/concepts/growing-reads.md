@@ -369,6 +369,12 @@ at build time, in the same CI job - and until 2026-09-09 eleven of its reads
 opened everything on disk and filtered afterwards. The three answers are the same
 three; only the language they are written in changed.
 
+The Data explorer's published ledgers include `council-run-records`. Its site
+copy reads three named compact indexes, trims them to the widest configured
+console span from the newest packed day, and copies only files they name.
+Queries read the selected UTC dates through the same ledger door. Adding
+council records does not add a scan of the archive or publish isolated trials.
+
 **The cover is a constant in `payload.ts` and not a config read.** `config.ts`
 imports `REPO_ROOT` from `payload.ts`, so importing the config reader back would
 close a cycle. `ARCHIVE_WINDOW_DAYS` is 90 because that is where

@@ -208,6 +208,7 @@
     "published": [
       "candidate-models",
       "counterfactual-scores",
+      "council-run-records",
       "gardener",
       "host-fingerprint",
       "item-health",

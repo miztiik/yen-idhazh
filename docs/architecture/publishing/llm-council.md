@@ -59,6 +59,15 @@ memory and now pulls two, and both of those arrive through the digest
 pipeline's own use of the applied merge line rather than through anything the
 council runs.
 
+The console's Data explorer also lists `council-run-records` as published,
+through `ledger.published` in `config/idhazh.json`. The site build copies its
+three compact indexes and the files those indexes name inside the shared
+console window. A query can group completed and failed steps, read the closed
+`raised` fault, and compare counts and UTC instants. No exception text is
+stored or shown. A record not packed yet reports missing data; an empty packed
+span reports no rows, not a failed night. Isolated paused trials still file no
+council record and publish nothing.
+
 ### Events and exit codes
 
 Every council program writes one JSON event per log line on stderr through
