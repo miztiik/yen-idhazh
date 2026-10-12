@@ -69,6 +69,9 @@ EXPECTED_WORKFLOWS: Final = {
     "idhazh-pipeline-tests.yaml": ("Pipeline tests", frozenset({"workflow_dispatch"})),
     "llm-council.yml": ("LLM-COUNCIL", frozenset({"schedule", "workflow_dispatch"})),
     "measure.yml": ("Measurements", frozenset({"workflow_dispatch"})),
+    "rust-host-telemetry.yml": (
+        "Isolated Rust host evidence", frozenset({"workflow_dispatch", "pull_request"}),
+    ),
     "pages.yml": (
         "Pages publication",
         frozenset({"workflow_run", "workflow_dispatch"}),
@@ -130,7 +133,6 @@ DISPATCH_BOOLEAN: Final = "boolean"
 DISPATCH_READ_BY_NAME: Final = "read by name"
 
 DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
-    ("ci.yml", "panel_captures"): DISPATCH_BOOLEAN,
     ("backfill.yml", "commit"): DISPATCH_BOOLEAN,
     ("backfill.yml", "days"): DISPATCH_READ_BY_NAME,
     # The one that decides a published address. See the two tests that run the
@@ -139,13 +141,17 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     # Blank plans the full day; a number lowers the run's crash guard to it.
     ("digest.yml", "article_limit"): "^[1-9][0-9]*$",
     ("digest.yml", "faithfulness"): DISPATCH_BOOLEAN,
+    ("digest.yml", "memory_profiling"): DISPATCH_CHOICE,
     ("digest.yml", "shards"): DISPATCH_CHOICE,
     ("drift.yml", "baseline_days"): "^[0-9]{1,4}$",
     ("drift.yml", "recent_days"): "^[0-9]{1,4}$",
     ("idhazh-pipeline-tests.yaml", "candidate_models_file"): DISPATCH_READ_BY_NAME,
-    # The judge's own date, shaped by the same pattern and for the same reason:
-    # it becomes the address the judged rows and the fitted row file under.
-    ("llm-council.yml", "date"): "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$",
+    # The planner checks both the date pattern and real UTC calendar day before
+    # resolving selected judges; the workflow passes it through env, not script source.
+    ("llm-council.yml", "date"): DISPATCH_READ_BY_NAME,
+    # The planner validates a nonempty unique JSON list of registered slugs,
+    # refuses retired judges, and allows paused judges only as isolated trials.
+    ("llm-council.yml", "judges"): DISPATCH_READ_BY_NAME,
     ("measure.yml", "candidate_models_file"): DISPATCH_READ_BY_NAME,
     ("measure.yml", "corpus_links"): "^[1-9][0-9]{0,4}$",
     ("measure.yml", "runtime_candidate"): DISPATCH_CHOICE,
@@ -162,8 +168,10 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("measure.yml", "runtime_threads_batch"): DISPATCH_READ_BY_NAME,
     ("measure.yml", "budget_samples"): "^[1-9][0-9]{0,4}$",
     ("measure.yml", "model_speed_case"): DISPATCH_CHOICE,
+    ("measure.yml", "memory_profiling"): DISPATCH_CHOICE,
     ("measure.yml", "target"): DISPATCH_CHOICE,
     ("measure.yml", "threads"): "^[1-9][0-9]*$",
+    ("rust-host-telemetry.yml", "memory_profiling"): DISPATCH_CHOICE,
     ("idhazh-gardener.yml", "force"): DISPATCH_BOOLEAN,
     ("validate.yml", "candidate_models_file"): DISPATCH_READ_BY_NAME,
     ("validate.yml", "corpus_per_shard"): "^[1-9][0-9]{0,3}$",

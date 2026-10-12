@@ -93,23 +93,23 @@ test('private date axes retain missing days without inventing zero readings', ()
 	]);
 });
 
-test('native timeline offsets and six-step residuals match independent clock arithmetic', () => {
-	const own = rows(queries.runTimelineQuery);
-	const native = runTimeline(own, consoleConfig().timeline_bars);
-	const chosen = own.filter((row) => row.run_id === native.view.runId &&
-		typeof row.item_started_at === 'string' && Number.isFinite(Date.parse(row.item_started_at)) &&
-		typeof row.machine_shard === 'number' && Number.isSafeInteger(row.machine_shard) && row.machine_shard >= 0 &&
-		typeof row.item_total_ms === 'number' && row.item_total_ms >= 0);
-	const zero = Math.min(...chosen.map((row) => Date.parse(String(row.item_started_at))));
-	expect(native.run?.rows.length).toBe(chosen.length);
-	for (const row of native.run!.rows) {
-		const expected = chosen.find((one) => one.item_id === row.itemId)!;
-		expect(row.startOffsetMs).toBe(Date.parse(String(expected.item_started_at)) - zero);
-		expect(row.totalMs).toBe(expected.item_total_ms);
-		const sum = ['fetch_ms', 'extract_ms', 'label_ms', 'summary_ms', 'visual_plan_ms', 'faithfulness_ms']
-			.reduce((total, step) => total + (expected[step] === null ? 0 : Number(expected[step])), 0);
-		expect(row.residualMs).toBe(row.totalMs - sum);
-	}
+test('native timeline offsets and signed six-step residuals retain independent producer-era oracles', () => {
+	const item = (id: string, start: string, total: number): Row => ({
+		run_id: '2030-06-01-2', item_id: id, machine_shard: 0, item_started_at: start,
+		item_total_ms: total, fetch_ms: 10, extract_ms: 20, label_ms: 30,
+		summary_ms: 40, visual_plan_ms: 50, faithfulness_ms: 60, summarize_ms: 250
+	});
+	const native = runTimeline([
+		item('overrun', '2030-06-01T00:00:01Z', 100),
+		item('elapsed', '2030-06-01T00:00:08Z', 400)
+	], 20);
+	expect(native.run?.rows.map((row) => ({
+		item: row.itemId, offset: row.startOffsetMs, total: row.totalMs, residual: row.residualMs
+	}))).toEqual([
+		{ item: 'overrun', offset: 0, total: 100, residual: -110 },
+		{ item: 'elapsed', offset: 7000, total: 400, residual: 190 }
+	]);
+	expect(native.view.workMs).toBe(500);
 });
 
 test('huge numeric run suffixes, missing shard/start, zero and capped totals remain honest', () => {

@@ -15,14 +15,16 @@ older date add one without the workflow changing.
 
 from __future__ import annotations
 
-import argparse
 import json
-import logging
 from pathlib import Path
 from typing import Final
 
 from idhazh import config
+from idhazh.contracts.council_events import CouncilProgram, JudgeDeclared, NightPlanned
+from idhazh.council import event_log, outcome
+from idhazh.council.night_plan import a_date
 from idhazh.council.registry import tenants
+from idhazh.council.selection import Selection, for_dates, from_environment
 from idhazh.council.session import VENUE_LEDGERS as VENUE_LEDGER_NAMES
 from idhazh.council.session import publication_paths, shard_width
 from idhazh.ledger import staging
@@ -41,21 +43,33 @@ VENUE_LEDGERS: Final = tuple(staging.staged_path(which) for which in VENUE_LEDGE
 COUNCIL_LEDGER: Final = VENUE_LEDGERS[0]
 
 
-def cells(config_dir: Path, *, dates: tuple[str, ...]) -> list[dict[str, object]]:
+def cells(
+    config_dir: Path,
+    *,
+    dates: tuple[str, ...] = (),
+    selection: Selection | None = None,
+) -> list[dict[str, object]]:
     """Every unit of work the night fans out to, tenant by tenant, date by date.
 
     A tenant narrows the venue's width downward through its own `shard_count`,
     so a tenant that runs no model takes one job rather than four.
     """
     council = config.load_council(config_dir)
+    selected = for_dates(council, dates) if selection is None else selection.check(council)
     found: list[dict[str, object]] = []
     for name in council.judge_names:
-        logging.getLogger("idhazh").info(
-            "council judge=%s status=%s", name, council.declaration(name).lifecycle_status.value
+        declaration = council.declaration(name)
+        event_log.emit(
+            JudgeDeclared(
+                judge_id=name,
+                status=declaration.lifecycle_status,
+                runs_model=declaration.runs_model,
+            )
         )
-    for host in tenants(council.running(), council=council):
+    for host in tenants(selected.names(), council=council, trials=selected.trials):
         width = shard_width(council, host)
-        for date in dates:
+        own_dates = next(judge.dates for judge in selected.judges if judge.tenant == host.judge_id)
+        for date in own_dates:
             found += [
                 {
                     "tenant": host.judge_id,
@@ -69,7 +83,7 @@ def cells(config_dir: Path, *, dates: tuple[str, ...]) -> list[dict[str, object]
     return found
 
 
-def committed_paths(config_dir: Path) -> tuple[str, ...]:
+def committed_paths(config_dir: Path, *, selection: Selection | None = None) -> tuple[str, ...]:
     """Every ledger path tonight's night writes, for the collecting job to stage.
 
     Asked of the tenants rather than spelled in the workflow. A second tenant's
@@ -80,7 +94,7 @@ def committed_paths(config_dir: Path) -> tuple[str, ...]:
     no tenant writes nothing at all and names nothing, which is what keeps the
     commit step skipped.
     """
-    return publication_paths(config.load_council(config_dir))
+    return publication_paths(config.load_council(config_dir), selection=selection)
 
 
 def _parallel(count: int) -> int:
@@ -98,14 +112,17 @@ def _parallel(count: int) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    return outcome.run(CouncilProgram.MATRIX, lambda: _main(argv))
+
+
+def _main(argv: list[str] | None = None) -> int:
+    parser = outcome.Parser(description=__doc__)
     parser.add_argument("--config-root", type=Path, default=Path("config"))
     parser.add_argument(
         "--date",
         action="append",
         default=[],
         metavar="YYYY-MM-DD",
-        required=True,
         help=(
             "A date this night covers, repeatable. Required and never defaulted: the "
             "planning job decides which day it judges, and a second answer here could "
@@ -113,14 +130,32 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     args = parser.parse_args(argv)
-    logging.basicConfig(level=config.load(args.config_root).app.logging.level.value)
+    event_log.install(config.load(args.config_root).app.logging.level.value)
 
-    dates = tuple(dict.fromkeys(str(date) for date in args.date))
-    matrix = cells(args.config_root, dates=dates)
+    council = config.load_council(args.config_root)
+    selected = from_environment(council)
+    dates = tuple(dict.fromkeys(a_date(str(date), what="--date") for date in args.date))
+    if selected is None:
+        if not dates:
+            raise SystemExit(outcome.CouncilExit.REFUSED)
+        selected = for_dates(council, dates)
+    elif dates and dates != selected.dates:
+        raise SystemExit(outcome.CouncilExit.REFUSED)
+    else:
+        dates = selected.dates
+    matrix = cells(args.config_root, selection=selected)
+    paths = committed_paths(args.config_root, selection=selected)
+    event_log.emit(
+        NightPlanned(
+            dates=dates,
+            judges=len({cell["tenant"] for cell in matrix}),
+            units=len(matrix),
+        )
+    )
     print(f"matrix={json.dumps(matrix, separators=(',', ':'))}")
     print(f"max_parallel={_parallel(len(matrix))}")
     print(f"dates={json.dumps(list(dates), separators=(',', ':'))}")
-    print(f"committed_paths={' '.join(committed_paths(args.config_root))}")
+    print(f"committed_paths={' '.join(paths)}")
     return 0
 
 

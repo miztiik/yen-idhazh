@@ -1,6 +1,6 @@
 # How completed output reaches the repository
 
-**Last Updated**: 2026-10-10
+**Last Updated**: 2026-10-11
 
 Start here when an agent adds a workflow that commits generated files.
 Gardener, council, digest and the additional clients below use one publisher:
@@ -94,8 +94,12 @@ Neither creates an empty commit or spends a push attempt.
 
 Results distinguish `landed`, `already-on-main`, `no-changes`, `stale`, `lost`,
 `integrity-refused`, `refused` and `preparation-failure`, with candidate/base/tip,
-push count, refusal paths and preparation status. Integrity exits 2.
-Unpublished council/digest work exits 1. Gardener deliberately warns and exits
+push count, refusal paths and preparation status. The shared publisher's
+integrity result exits 2. The council translates that result after work to
+failed, exit 1; rejected pushes with at least one actual push earn exit 3.
+Its [own vocabulary](llm-council.md#events-and-exit-codes) keeps stale/lost work
+red and combines unit failures with publication. Unpublished digest work exits
+1. Gardener deliberately warns and exits
 0 for stale/lost work, meaning SKIPPED rather than published; refusal exits 3.
 Producer failure remains separate: gardener may publish completed diagnostics
 after exceeding its download ceiling and still exits 1.

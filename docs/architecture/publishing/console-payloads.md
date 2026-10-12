@@ -282,16 +282,6 @@ the document, then one shard, then the next.** `loadVisibleMonths` awaits each
 month in turn, so a month is a hop and the single hop of headroom is one more
 month, not one more file.
 
-`frontend/tests/console-cold-load.spec.ts` holds both facts. It counts the
-longest run of requests that each had to wait for the one before it - the
-document and the page's own fetches, never the module graph, because the module
-graph's depth on any given run is a fact about how fast the machine ran. Two
-readings that looked equivalent are not, and the difference is written up in that
-file: grouping requests into waves lets one slow download absorb a whole serial
-chain beside it, and it was proved wrong by this row's own oracle, where two
-round trips added ahead of the telemetry took the real chain from three to five
-and left the wave count at three.
-
 ### The band is drawn once, in `console/+layout.svelte`
 
 The title, the strip, the sentence that dates the record and the band are the

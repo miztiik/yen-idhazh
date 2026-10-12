@@ -4,6 +4,7 @@
 	import DateSeries from '$lib/charts/d3/DateSeries.svelte';
 	import { emptyState } from '$lib/charts/d3/empty';
 	import { frame, MARGIN, chartWidth, observeWidth } from '$lib/charts/frame';
+	import { shortDate } from '$lib/format';
 	import type { Row } from '$lib/data/ledger';
 	import type { ModelRule } from '$lib/charts/d3/model-rule';
 	import type { ConsoleConfig, ChartConfig } from '$lib/server/config';
@@ -22,7 +23,7 @@
 <p data-comparison="The newest day's seconds against the window's median.">The newest day's seconds against the window's median, pricing the same article size on the same reference machine.</p>
 <DateSeries {geometry} empty={emptyState('quiet', 'No qualifying reference-machine work was measured.')}
 	name="slower-on-same-work" label="Seconds for the same typical article, one point a recorded day"
-	{width} height={knobs.chart_height} readout={geometry?.readout} readoutMaxShare={chart.readout_max_share} />
+	{width} height={knobs.chart_height} readout={geometry === null ? null : { ...geometry.readout, columns: geometry.dates.map(shortDate) }} readoutMaxShare={chart.readout_max_share} />
 <p data-reference-machine>{work.reference.cpuModel === null ? 'No reference machine was recorded.' :
 	`Reference: ${work.reference.cpuModel}; typical article: ${work.reference.freshInput} fresh prompt tokens and ${work.reference.output} written tokens.`}</p>
 <p>{work.reference.unqualified} rows lack comparable work; {work.reference.unnamedMachine} qualifying rows name no machine.</p>

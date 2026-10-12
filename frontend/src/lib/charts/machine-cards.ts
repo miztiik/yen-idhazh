@@ -121,11 +121,14 @@ export interface MachineCard {
 	 * explanations for a run that read its weights back off disk - so a card
 	 * without it leaves the fault strip with one cause instead of two. */
 	bootSeconds: number | null;
-	/** The mean clock across processors when the probe ran, in MHz. Idle rather
-	 * than under load: the probe runs before the job's heaviest step. Printed
-	 * alone, because the ceiling column the host would be measured against is
-	 * empty on every row anybody has committed. */
-	mhzAtProbe: number | null;
+	physicalCores: number | null;
+	logicalProcessors: number | null;
+	allowedProcessors: number | null;
+	quotaCores: number | null;
+	quotaState: string | null;
+	targetMeasuredAt: string | null;
+	observedMhz: number | null;
+	reportedMaxMhz: number | null;
 	/** True where the probe buffer cleared the cache by the configured margin, so
 	 * the copy rate is a memory reading somebody can compare. */
 	bufferClearedCache: boolean;
@@ -305,23 +308,35 @@ export function machineCards(
 	);
 
 	const seen: MachineSeen[] = [
-		...forRun.map((row) => ({ fingerprint: row.fingerprint, cpuModel: row.cpu_model })),
+		...forRun.map((row) => ({
+			fingerprint: row.fingerprint,
+			fingerprintVersion: row.fingerprint_version,
+			cpuModel: row.cpu_model
+		})),
 		...(run?.reported ?? [])
 			.filter((shard) => !covered.has(String(shard.shard)))
-			.map((shard) => ({ fingerprint: null, cpuModel: shard.cpuModel }))
+			.map((shard) => ({ fingerprint: null, fingerprintVersion: null, cpuModel: shard.cpuModel }))
 	];
 	const resolve = options.keys ?? machineKeys(seen);
 
 	const placements: Placement[] = [];
 	for (const row of forRun) {
 		placements.push({
-			...resolve({ fingerprint: row.fingerprint, cpuModel: row.cpu_model }),
+			...resolve({
+				fingerprint: row.fingerprint,
+				fingerprintVersion: row.fingerprint_version,
+				cpuModel: row.cpu_model
+			}),
 			row
 		});
 	}
 	for (const shard of run?.reported ?? []) {
 		if (covered.has(String(shard.shard))) continue;
-		const key = resolve({ fingerprint: null, cpuModel: shard.cpuModel });
+		const key = resolve({
+			fingerprint: null,
+			fingerprintVersion: null,
+			cpuModel: shard.cpuModel
+		});
 		if (key.name === '') continue;
 		placements.push({ ...key, row: null });
 	}
@@ -346,7 +361,14 @@ export function machineCards(
 		options.ramp ??
 		machineRamp(
 			placements.map((placement) => ({
-				machine: { key: placement.key, name: placement.name },
+				machine: {
+					key: placement.key,
+					name: placement.name,
+					fingerprintVersion:
+						placement.row?.fingerprint_version === 1 || placement.row?.fingerprint_version === 2
+							? placement.row.fingerprint_version
+							: null
+				},
 				rate:
 					placement.row === null
 						? null
@@ -384,7 +406,14 @@ export function machineCards(
 			memcpyGibPerSecond: row?.memcpy_gib_s ?? null,
 			memcpyProbeMib: buffer,
 			bootSeconds: row?.boot_seconds ?? null,
-			mhzAtProbe: row?.mhz_at_probe ?? null,
+			physicalCores: row?.cpu_physical_cores ?? null,
+			logicalProcessors: row?.cpu_logical_processors ?? null,
+			allowedProcessors: row?.cpu_allowed_processors ?? null,
+			quotaCores: row?.cpu_quota_cores ?? null,
+			quotaState: row?.cpu_quota_state ?? null,
+			targetMeasuredAt: row?.cpu_target_measured_at ?? null,
+			observedMhz: row?.cpu_observed_mhz ?? null,
+			reportedMaxMhz: row?.cpu_reported_max_mhz ?? null,
 			// A machine that reported no cache cannot be graded either way, and an
 			// ungradeable reading is withheld rather than drawn on somebody's track.
 			bufferClearedCache:
@@ -538,6 +567,16 @@ export function uptimeSentence(card: MachineCard): string {
  * assume it is the decode clock.
  */
 export function clockSentence(card: MachineCard): string {
-	if (card.mhzAtProbe === null) return 'Clock speed was not recorded on this job.';
-	return `${Math.round(card.mhzAtProbe)} MHz when the probe ran, before the job's heaviest step.`;
+	if (card.observedMhz === null && card.reportedMaxMhz === null) {
+		return 'Observed and reported maximum frequencies are unknown.';
+	}
+	const observed =
+		card.observedMhz === null
+			? 'Observed sample unknown'
+			: `Observed sample average ${Math.round(card.observedMhz)} MHz`;
+	const maximum =
+		card.reportedMaxMhz === null
+			? 'reported hardware maximum unknown'
+			: `reported hardware maximum ${Math.round(card.reportedMaxMhz)} MHz`;
+	return `${observed}; ${maximum}. The sample is not a sustained rate.`;
 }

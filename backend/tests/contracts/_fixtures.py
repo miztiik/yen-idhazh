@@ -32,6 +32,7 @@ CONFIG_FILES: dict[str, type[Contract]] = {
 }
 
 FIXTURE_FILES: Final = (
+    "run-shards/unknown.json",
     "app-config/every-knob-differs-from-the-committed-config.json",
     "appearance-config/knobs-set-away-from-the-defaults.json",
     "article/brief.json",
@@ -60,6 +61,7 @@ FIXTURE_FILES: Final = (
     "corpus-row/harvested.json",
     "council-run-record/a-migrated-count-that-had-nothing-to-do.json",
     "council-run-record/a-part-that-ran-the-model.json",
+    "council-run-record/a-part-that-raised.json",
     "council-run-record/a-selection-that-ran-no-model.json",
     "counterfactual-score-row/a-refused-candidate-a-heavier-lens-would-lift.json",
     "counterfactual-score-row/no-lens-matched-so-both-scores-agree.json",

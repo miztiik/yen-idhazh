@@ -100,6 +100,7 @@ RETENTION_LEDGERS: Final = (
     "candidate-models", "council-run-records", "counterfactual-scores", "feed-health",
     "feed-retirements", "gardener", "host-fingerprint", "item-health",
     "item-health-summary", "published", "run-plan", "seen", "summary-quality-evals",
+    "run-shards",
     "visual-prunes",
 )
 MOVED_LEDGER_TASKS: Final = (

@@ -440,6 +440,8 @@
 				tabindex="0"
 				aria-label={plotLabel}
 				data-timing="plot"
+				data-chart="stage-timings"
+				data-chart-name="timings"
 				data-timing-days={calendar.length}
 				data-timing-series={drawn.length}
 				data-timing-domain={timingExtent}

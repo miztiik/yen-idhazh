@@ -1,6 +1,6 @@
 # The LLM-COUNCIL, and why judging has its own clock
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-10-12
 
 The room a model verdict is taken in. `LLM-COUNCIL` is a workflow of its own -
 [../../../.github/workflows/llm-council.yml](../../../.github/workflows/llm-council.yml) -
@@ -31,9 +31,11 @@ nothing at all.
 ## Three verbs, and all three are the council's own
 
 The workflow runs `council-prepare`, `council-shard` and `council-settle`, and
-nothing else. Each one resolves the active names in `config/llm_council.json`, calls the
-matching member of the tenancy protocol on every tenant it got, and files what
-comes back. **Until 2026-09-21 it ran one judge's four commands instead**, and
+nothing else. Each one resolves the names selected from `config/llm_council.json`, calls the
+matching member of the tenancy protocol on the judges selected for that date,
+and files what comes back. Explicit manual selections can also run a paused
+judge as an isolated trial; [judge and date selection](llm-council-dates.md)
+owns those rules. **Until 2026-09-21 it ran one judge's four commands instead**, and
 the command router imported that judge's four stage modules at the top of the
 file - so deleting the judge broke every council verb, and the venue's whole
 runtime was one tenant's vocabulary.
@@ -57,6 +59,98 @@ memory and now pulls two, and both of those arrive through the digest
 pipeline's own use of the applied merge line rather than through anything the
 council runs.
 
+The console's Data explorer also lists `council-run-records` as published,
+through `ledger.published` in `config/idhazh.json`. The site build copies its
+three compact indexes and the files those indexes name inside the shared
+console window.
+`page_weight.payload_ceilings_bytes` bounds each council index at 2,088
+compressed bytes, twice the heavier generated index at the declared retention
+limit: 76 daily entries weigh 1,044 bytes at Node gzip level 5, while 17 monthly
+entries weigh 384 bytes. The existing page-ceiling contract test holds that
+bound to the retention settings.
+A query can group completed and failed steps, read the closed
+`raised` fault, and compare counts and UTC instants. No exception text is
+stored or shown. A record not packed yet reports missing data; an empty packed
+span reports no rows, not a failed night. Isolated paused trials keep their
+council records in the downloadable trial tree and publish nothing.
+
+The canary builder reads the two named council contract fixtures from its
+source checkout, not its working directory. A caller may place generated
+digest and state files elsewhere without moving those recorded inputs.
+
+### Events and exit codes
+
+Every council program writes one JSON event per log line on stderr through
+`backend/idhazh/event_lines.py`, the same writer the gardener uses.
+`backend/idhazh/contracts/council_events.py` declares the event fields.
+The planner records dates and counts, the matrix records committed judge
+declarations, each attempted unit records its result, and the collector records
+collection counts and publication status. No event carries article, judge or
+source text. An exception carries only its type and place in the code.
+Unstructured library messages are omitted, not copied into an event.
+
+The workflow's key-value outputs stay on stdout. Each entrypoint writes its
+final code, label and fixed sentence together in a `program-finished` event:
+`0 ok` means every unit finished and the rows landed; `1 failed` means a unit
+failed, or the rows did not land (stale or lost); `2 refused` means stopped
+before any unit ran; `3 push_refused` means main refused every push, so nothing
+landed. `backend/idhazh/council/outcome.py` combines actual outcomes, worst first:
+2, 3, 1, 0. A returned deadline stop earns 1, not success. The final event is
+printed even when the configured log level hides routine progress.
+
+The collector retains completed work from earlier and later judges and dates
+after a failure. It also receives the judging job's result, so a failed or
+cancelled cell stays red even when its siblings' bytes land. Publication never
+reruns a judge. An integrity failure found after work earns 1 and publishes
+nothing; it cannot claim that no unit ran. A raised unit emits one failure
+event and files one failed council record before its exception escapes.
+
+Each entrypoint installs the shared text-free crash printer. Caught failures
+become diagnostic events. An uncaught crash prints exception types and code
+places, never messages, paths, source lines or notes.
+
+### What a person reads on the collecting job's page
+
+The collector appends one Markdown summary to `GITHUB_STEP_SUMMARY`, including
+its final exit code and label, publication result, and one row per reported
+judge, UTC date and step. Prepare and settle rows come from their own events.
+Each planned judging cell has a row even when it sends nothing. Each judge has
+one folded log group; a failed unit gets an error annotation outside that group.
+The summary contains only validated identities, closed words, counts, dates and
+fixed sentences. It never repeats an article, a verdict or an exception message.
+
+`COUNCIL_EVENT_FILE` makes the shared event writer append declared events to a
+transient JSON-lines file, even when the configured log level hides progress.
+Its file writer is private, outside the process-wide logger registry, so log
+capture or configuration cannot propagate its copy as a second console event.
+The planner's `events/planner.jsonl` rides its existing selection bundle, which
+uploads even after preparation fails.
+Each judging cell writes `events/<judge>/<date>/<shard>.jsonl` in the existing
+always-uploaded metrics bundle. A cell excludes the planner's downloaded event
+file from its upload, so siblings cannot overwrite it. The collector reads only
+the files named by the planner's matrix and the one planner event file, not an
+archive or a directory census. These files are not committed and no later run
+uses them.
+
+No complete unit and exit report means **no report**, not success. A platform
+kill may cause it, but the summary does not claim that cause. An explicit
+refusal keeps its `2 refused` label, and a valid failed report keeps its failed
+outcome. Unknown events, unknown fields, unsafe text and mismatched job
+identities produce **invalid report** and a fixed error annotation; rejected
+data is never rendered. Failed or incomplete expected reports keep publication
+red, as does the upstream judging job's failed or cancelled result. The
+collector step runs even after an artifact download failure, so missing files
+are still reported. Publication keeps completed sibling work and never reruns
+a judge.
+
+### Design rationale: one log format does not mean one text policy
+
+The shared writer owns line format and UTC stamps. The gardener retains its
+existing text-event adapter and GitHub command handling. The council omits
+unstructured text because a judge or library may put source text in a message.
+The crash printer uses the standard library alone, so pre-install programs keep
+working. These policies do not import gardener or judge code into the council.
+
 ## The tenant list, and the judge in it
 
 `judge_names` is an ordered list of slugs in `config/llm_council.json`. It is the
@@ -65,7 +159,7 @@ content-similarity judge, which declares itself in
 [../../../backend/idhazh/content_similarity_judge/tenant.py](../../../backend/idhazh/content_similarity_judge/tenant.py)
 and routes the three units of work to its own four stages. Its declaration is
 `config/judges/content-similarity-judge.json`: active, and running a model.
-An empty list, or a list with no active judge, is
+For scheduled work, an empty list, or a list with no active judge, is
 still a legal night - the venue runs every step it always runs and judges
 nothing.
 
@@ -93,13 +187,20 @@ Table A - judge status
 | Id | Status | Council work | Existing rows |
 | --- | --- | --- | --- |
 | A1 | `active` | Import, ask about outstanding nights, build cells, prepare, run shards, settle and publish. Start a model server only where `runs_model` is true. | Families must accept every committed ledger. |
-| A2 | `paused` | No import, question, cell, work, staged path or council record. Keep its name and file. | Readers, other writers, packing and ageing keep their own rules. |
+| A2 | `paused` | No scheduled work or import. Explicit manual selection runs an isolated downloadable trial, with no committed output or production council record. Keep its name and file. | Readers, other writers, packing and ageing keep their own rules. |
 | A3 | `retired` | As paused, for good. Keep the name and file; its package may stay. Never reuse its slug. | Keep row contracts while retained rows need them. |
 
 Every scheduled step uses `CouncilConfig.running()` before resolving code.
 The planning job logs each registered name and status to stderr, never to its
 key-value outputs. A paused judge may have an unavailable or broken package;
 the scheduled night never imports or checks it.
+
+Scheduled planning validates the whole declaration set and resolves every active package
+before asking about outstanding nights or preparing any work. A missing judge
+file, duplicate name, missing active package or raising active import earns
+`2 refused`, with the configured judge's validated slug in the diagnostic.
+Dependency failures retain their cause; they are not called missing judges.
+Neither the diagnostic nor the output includes exception text.
 
 An active judge is refused by name if any ledger it will commit belongs to a
 paused or retired family. The refusal names the judge, ledger and family.
@@ -141,6 +242,11 @@ The config loader refuses a slug whose derived package is not a Python
 identifier or is a keyword. Imports stay inside the resolver, so no council
 module carries a judge in its import closure.
 
+Tenant binding imports no execution stages or heavy judge libraries. Import
+those inside the functions that use them, so planning needs no judge extras
+just to resolve a name. The content-similarity tenant imports its stage modules
+only when preparing, judging or settling.
+
 Three things follow, and each is the reason a simpler design was refused.
 
 - **No list in Python.** A map from slug to module would make adding a judge a
@@ -158,7 +264,7 @@ A tenant module may declare
 tenant that answered to the slug - on that one and on no other. An unrequested
 tenant is never imported and cannot stop a night it is not in.
 
-**The planning job resolves every active slug before it can build its
+**The planning job resolves every selected slug before it can build its
 matrix**, so a refusal lands there: before the matrix exists, before any job is
 dispatched, and before a runner has restored a model's weights. "Before a model
 call" would be a weaker claim - it is also true of a point after a cache restore
@@ -214,77 +320,26 @@ assertion fails the moment a fourth appears, so the exception limits itself
 rather than inviting the next one. Cutting either carrier means moving a shape
 every stage and the digest pipeline read, and that is a row of its own.
 
-**The empty case is the test.** With nobody registered the union is empty, the
+**The empty case is the test.** With nobody registered the selection is empty, the
 plan names tonight and every job is a no-op - and every one of those steps still
 runs and is still asserted. A venue that only works once somebody has moved in is
 not a venue.
 
 ## Tonight, and the older nights it repairs
 
-A night judges **tonight, plus the older nights its tenants say they are behind
-on**. [../../../backend/idhazh/council/night_plan.py](../../../backend/idhazh/council/night_plan.py)
-builds that list in the planning job and the fan-out turns it into one `--date`
-an entry, so the matrix, the artifact names and the collecting job all carry it
-without any of them changing shape.
+A scheduled night selects tonight plus each active judge's own outstanding
+dates. Cells, prepare and settle use that judge's list, not a cross-judge union.
+A manual run selects one or more judges and exactly one date; active judges
+publish, paused judges run isolated downloadable trials, and retired judges
+are refused before work.
 
-**The council asks; it does not look.** It calls `nights_outstanding(window=...)`
-on every active tenant and unions what comes back. It opens no tenant's
-ledger, so it needs to know nothing about how a tenant files anything - and
-**with nobody registered the union is empty and tonight is the whole plan**.
-Every step below still runs on that one date.
-
-Three knobs in `config/llm_council.json` draw the boundary, and all three are the council's because each one
-is another job a tenant a shard.
-
-| The knob | What it sets | Committed |
-| --- | --- | --- |
-| `repair_window_nights` | how many nights back the council asks about, ending the night before tonight | 7 |
-| `first_night` | the floor no window reaches past | 2026-09-19 |
-| `repair_dates_a_night` | how many older dates one night may repair, on top of tonight | 1 |
-
-**What counts as behind is the tenant's**, because only the tenant knows what it
-has read. **The window is the council's**, because only the council knows what a
-runner costs. The content-similarity judge answers from its own record, and what
-it counts as behind is in
-[autotune-content-similarity.md](autotune-content-similarity.md#the-nights-this-judge-says-it-is-behind-on).
-
-**The floor is why a first run does not backfill a month.** The council's ledger
-holds one day file against 30 published days, so an unfloored window names every
-one of those days as outstanding and nothing can tell "this night died" from
-"the council did not exist yet". The same sentence applies to a tenant that
-moves in later: on the council's floor alone it would report every date back to
-the venue's own birth. **So a tenant raises the floor for itself**, by naming no
-night from before it arrived. The council's floor is the default it gets.
-
-**The cap keeps the newest gap and drops the oldest.** A date that can never
-succeed then holds the ones behind it out only until the window slides past it;
-oldest-first, that one date would keep every newer date waiting for as long as it
-stayed in range. A cap without the floor would only slow a 29-date backfill down
-to 29 nights.
-
-**The window is the whole of what a tenant is handed**, so the cost of asking
-does not rise as the ledger fills up (`CLAUDE.md` Guardrail #12). A tenant that
-answers with a date the council did not ask about is refused by name: the
-council prices the window, so a date from outside one is a job nobody budgeted
-for, and it would reach a runner as silently as a date that was asked for.
-
-**A repaired date costs wall clock, not headroom.** `timeout-minutes` is per
-job, and every date is its own job - so nothing multiplies the per-shard time
-budget by the date cap. A check that did would be comparing parallel work
-against a per-job clock, and it would refuse a config the knob's own bound
-admits: 50 pairs at the measured 94.53 s over 3 dates is 14,179 s against a
-12,000 s bound, which would reject `repair_dates_a_night = 2` while the knob
-allows 4. What the cap does buy is matrix width: at 4 shards and 2 tenants, one
-repair is 16 jobs against the platform's 20-job ceiling and two is 24, which
-runs in two waves.
-
-**A dispatched date replaces the plan outright.** A person naming a date is
-asserting something the plan cannot know, so no tenant is asked and no older
-night rides along.
+[Which judges and dates the council runs](llm-council-dates.md) owns the bounded
+window, per-judge cap, manual inputs, transient selection and trial isolation.
+Those rules answer a separate question from the venue's clocks and publication.
 
 ### Design rationale: nobody has to notice a dead night
 
-**No operator action repairs a dead night, and there is no alarm to read.** The
+**Scheduled repair needs no operator action, and there is no alarm to read.** The
 next run finds the gap because finding the gap is how it picks its work. An
 alarm plus a person re-dispatching fails exactly when it is needed - a run that
 dies quietly is one nobody is watching for - and the council cannot re-trigger
@@ -360,7 +415,9 @@ the settle runs anyway and keeps everything the surviving units produced.
 `committed_paths` on the protocol. The venue declares `COUNCIL_RUN_RECORDS` and
 `HOST_FINGERPRINT` beside its resolver; their staging paths come from the ledger
 registry. The collecting utility uses these independent declarations and returns
-without a record or push when no judge is active.
+without a production record or push when no selected judge is active.
+Paused trial settlement remains downloadable and never grants publication
+permission.
 
 **A declared directory is not permission to sweep it.** As the collecting job
 finishes atomic writes, `council_publish.py` records exact paths and byte digests
@@ -371,8 +428,30 @@ UUID are refused, and mutable files require an unchanged baseline.
 
 There is one collecting job for any number of judges or shards. A tenant/date
 failure does not suppress earlier completed bytes or later tenants/dates.
-Sparse input discovery uses each tenant's separately declared named inputs,
-periods and indexes, never the number of judges or an archive checkout.
+
+The collecting job starts with a shallow, blob-less sparse checkout of `config`,
+`backend` and `.github`, plus Git's root-level files. It keeps a sparse index.
+After checkout, `GIT_NO_LAZY_FETCH=1` stops Git from downloading missing objects
+implicitly; the collecting entrypoint sets it too. Planning and judging cells
+keep their full checkout, with unchanged model, dependency and cache steps.
+
+Before settlement, the shared `publication_inputs.materialize` reads each
+active judge's `publication_inputs(date=...)` from the checkout's fixed commit.
+It lists only those named paths, periods and indexes and explicitly fetches
+their blobs. No declaration means refusal on a sparse checkout. An absent path
+in that commit remains absent; a listed blob that cannot be fetched fails
+collection, rather than being treated as missing data. Imported bytes are not
+completed writes. Earlier outputs are not replaced when a later date names them.
+The publisher still builds its private candidate on fresh main and never reruns
+a judge.
+
+`backend/tests/council/test_sparse_publication.py` uses real local partial
+clones and Git packet traces. It checks exact requested blobs, unavailable
+undeclared and out-of-window blobs, missing optional paths and failed input
+fetches. Sparse and full checkouts of the same fixed base publish identical
+completed tenant bytes to separate origins. Venue records retain their own
+execution clocks and file identities; the test does not require a rerun to
+repeat them.
 
 **The collecting job hands each tenant the identity it files under.**
 `council.session.settle` builds one writer identity for the night: `run_id` the
@@ -652,13 +731,24 @@ contract. A tenant with no model hands back empty cells, and empty is not zero:
 zero would read as a model that answered nothing, which is a different fact and
 only one of the two is a defect.
 
-**A step that died before returning files no row, and that is the record.** The
-outcome vocabulary is three words - `completed`, `stopped_on_deadline`,
-`nothing_to_do` - and none says "this died". A step the platform killed could
-not write one anyway. For evaluation, a missing row against `work_part_count`
-shows which part did not report. A step that ran out of its own clock is the
-opposite case and does file a row, because it stopped itself and had something
-to report.
+**A step that raises files one failed row before its exception escapes.**
+The outcome vocabulary is `completed`, `stopped_on_deadline`, `nothing_to_do`
+and `failed`. The `fault` cell is `raised` exactly when the outcome is `failed`;
+it is empty on every other outcome and on rows written before this field
+existed. No exception text, type or code place enters the row. Without a
+returned result, model cost cells stay empty, not invented zeros.
+
+The venue attempts to file each result once. A filing failure never reports
+success and never retries the unit. If both work and recording raise, both
+exceptions escape together. Completed sibling records stay intact. Selected
+active records follow the existing collection and Git publication path.
+Failed paused-trial records stay inside that trial's run and attempt root,
+including the narrowly permitted raw writes into a paused family; they never
+enter a publication request or receipt.
+
+A platform kill cannot write a row. For evaluation, a missing row against
+`work_part_count` means no report arrived; it does not prove what caused the
+absence. A returned deadline stop still files its reported result and cost.
 
 **The raw ledger is not seeded with a `.gitkeep` or a header-only file.** A
 header with no rows under it is a real day to the partition walker, so one
@@ -672,7 +762,7 @@ An earlier draft had the judge's own stages write this row. That made the
 venue's record of a unit depend on a tenant's diligence: a judge that forgot the
 line, or died before reaching it, left nothing behind at the one moment the
 record mattered. The council owns the invocation, so it owns the outcome - the
-row is filed in a `finally`, and it survives anything that goes wrong after the
+row is filed on the protected exit path, and it survives anything that goes wrong after the
 tenant handed its result back. Owner ruling, 2026-09-21.
 
 **`judge_id` is in the settlement key**, beside the date, the run and the unit

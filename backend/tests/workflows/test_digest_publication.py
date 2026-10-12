@@ -1,13 +1,14 @@
 """Does ASSEMBLE really rebuild against fresh main without replacing completed raw bytes?"""
 
 import dataclasses
+import hashlib
 import json
 from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REFILL_PUBLISHED
-from gardener._garden import an_origin, git, on_origin, quiet_git, write
+from gardener._garden import an_origin, git, quiet_git, write
 from pipeline._builders import FULL_TEXT, plan, score_one_item
 from pipeline.test_publish_window import stage_visual_payloads
 from retention._trees import health_row
@@ -22,6 +23,8 @@ from idhazh.contracts.item_health import ItemStage
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.publication_inventory import PublicationInventory
+from idhazh.contracts.run_manifest import RunManifest
+from idhazh.contracts.run_shards import RunShards
 from idhazh.contracts.summary import Summary
 from idhazh.contracts.visual_data import VisualData
 from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX, VisualDecision
@@ -30,10 +33,11 @@ from idhazh.publication import record_files
 from idhazh.render import asset_relpath
 from idhazh.stages import common
 from idhazh.stages.assemble import stage_assemble
+from idhazh.telemetry.run_shards import rows_of
 from utilities import digest_assemble, digest_publish, publication_evidence
 from utilities.publication_git import Repository
-from utilities.publication_request import IntegrityError, PublicationRequest
-from utilities.publish_to_repo import Status, publish
+from utilities.publication_request import IntegrityError, PublicationRequest, Write
+from utilities.publish_to_repo import Status, _verify_preparation, publish
 from utilities.push_retry import PushRetry
 
 
@@ -177,17 +181,22 @@ def test_fresh_base_regeneration_preserves_completed_raw_and_newer_inventory(
             permissions=authority,
             mutable=mutable,
         ),
-        preparation_scopes=mutable,
+        preparation_scopes=(*mutable, digest_assemble.count_scope(run_plan.date)),
     )
-    request = dataclasses.replace(
+    prepare = digest_assemble.preparation(
+        repo,
         request,
-        prepare=digest_assemble.preparation(
-            repo,
-            request,
-            date=run_plan.date,
-            settings=settings,
-        ),
+        date=run_plan.date,
+        settings=settings,
     )
+    prepared_requests: list[PublicationRequest] = []
+
+    def preparing(base: str, active: PublicationRequest) -> PublicationRequest:
+        prepared = prepare(base, active)
+        prepared_requests.append(prepared)
+        return prepared
+
+    request = dataclasses.replace(request, prepare=preparing)
     raw = {
         path: (repo / path).read_bytes()
         for path in request.writes
@@ -223,7 +232,7 @@ def test_fresh_base_regeneration_preserves_completed_raw_and_newer_inventory(
         refusal = publish(request, repo=repo, retry=PushRetry({"default": 300}, 0.001, 0.001, 1))
         assert refusal.status is Status.PREPARATION_FAILURE
         assert refusal.push_count == 0
-        assert git(origin, "rev-parse", "main").strip() == observed
+        assert git(origin, "--git-dir=.", "rev-parse", "main").strip() == observed
         assert {path: (repo / path).read_bytes() for path in request.writes} == original_bytes
     finally:
         summary_path.write_bytes(completed_summary)
@@ -232,34 +241,84 @@ def test_fresh_base_regeneration_preserves_completed_raw_and_newer_inventory(
     result = publish(request, repo=repo, retry=PushRetry({"default": 300}, 0.001, 0.001, 1))
     assert result.status is Status.LANDED, result
     assert result.prepared
+    prepared = prepared_requests[-1]
+    corrections = {
+        path: write
+        for path, write in prepared.writes.items()
+        if path.startswith("state/raw/run-shards/") and path not in raw
+    }
+    assert corrections and all(write.immutable for write in corrections.values())
+    git(mover, "fetch", "--quiet", "origin", "main")
+    remote = Repository(mover)
     for path in projections:
-        entry = Repository(origin).entry("main", path)
+        entry = remote.entry("origin/main", path)
         assert entry is not None, f"projection was omitted from publication: {path}"
-        assert Repository(origin).blob(entry.oid) == (repo / path).read_bytes()
+        assert remote.blob(entry.oid) == (repo / path).read_bytes()
     assert result.observed_tip is not None
     digest_publish.published_inputs(repo, result.observed_tip, date=run_plan.date, settings=settings)
-    manifest_text = on_origin(origin, f"{day}/run.json")
-    assert manifest_text is not None
+    manifest_text = git(mover, "show", f"origin/main:{day}/run.json")
     from idhazh.cli import shard_count
 
     assert json.loads(manifest_text)["runs"][-1]["shards"] == shard_count(
         len(run_plan.items), run=settings.app.run
     )
-    assert on_origin(origin, "frontend/public/other.json") == '{"newer":true}\n'
+    counts = ledger.load_days(repo / "state", LedgerName.RUN_SHARDS, [run_plan.date], model=RunShards)
+    assert {row.run_id: row.shards for row in counts} == {
+        row.run_id: row.shards for row in rows_of(RunManifest.from_json(manifest_text))
+    }
+    assert git(mover, "show", "origin/main:frontend/public/other.json") == '{"newer":true}\n'
     for path, data in raw.items():
-        entry = Repository(origin).entry("main", path)
+        entry = remote.entry("origin/main", path)
         assert entry is not None
-        assert Repository(origin).blob(entry.oid) == data
-    entry = Repository(origin).entry("main", asset)
+        assert remote.blob(entry.oid) == data
+    for path, completed in corrections.items():
+        entry = remote.entry("origin/main", path)
+        assert entry is not None
+        assert remote.blob(entry.oid) == (repo / path).read_bytes()
+        assert completed.sha256 == hashlib.sha256((repo / path).read_bytes()).hexdigest()
+    if not empty_harvest:
+        # Another fresh-base preparation keeps the already completed correction.
+        repeated = prepare(result.observed_tip, prepared)
+        _verify_preparation(prepared, repeated, result.observed_tip)
+        assert {
+            path: write.sha256
+            for path, write in repeated.writes.items()
+            if path.startswith("state/raw/run-shards/")
+        } == {
+            path: write.sha256
+            for path, write in prepared.writes.items()
+            if path.startswith("state/raw/run-shards/")
+        }
+    entry = remote.entry("origin/main", asset)
     assert entry is not None
-    assert Repository(origin).blob(entry.oid) == raced
+    assert remote.blob(entry.oid) == raced
     expected = corpus.roll(remote_rows, incoming, window=2)
     assert corpus.read_rows(repo / "corpus") == expected
     corpus.refuse_a_miscounted_census(expected, corpus.read_meta(repo / "corpus"))
     for path in ("corpus/corpus.jsonl", "corpus/corpus.meta.json"):
-        entry = Repository(origin).entry("main", path)
+        entry = remote.entry("origin/main", path)
         assert entry is not None
-        assert Repository(origin).blob(entry.oid) == (repo / path).read_bytes()
+        assert remote.blob(entry.oid) == (repo / path).read_bytes()
+
+
+def test_preparation_cannot_change_immutable_counts_inside_its_scope() -> None:
+    source, fresh = "a" * 40, "b" * 40
+    scope = digest_assemble.count_scope("2026-08-21")
+    path = f"{scope}/completed.parquet"
+    identity = WriterIdentity(
+        run_id="2026-08-21-1", attempt=1, job=ServerJob.ASSEMBLE, shard=0,
+        producer="tests.publisher", git_sha=source,
+    )
+    original = PublicationRequest(
+        identity, "assembled", source, (scope,), (),
+        {path: Write("c" * 64, None, immutable=True)},
+        preparation_scopes=(scope,),
+    )
+    changed = dataclasses.replace(
+        original, source_tip=fresh, writes={path: Write("d" * 64, None, immutable=True)}
+    )
+    with pytest.raises(IntegrityError, match="changed completed artifact"):
+        _verify_preparation(original, changed, fresh)
 
 
 @pytest.mark.parametrize("staged", [False, True])

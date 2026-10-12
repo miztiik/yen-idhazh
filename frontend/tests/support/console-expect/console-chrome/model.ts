@@ -5,7 +5,7 @@ export const EXPECT: RouteExpect = {
 	handWritten: null, engineSeries: null, keyboard: null, shape: null, recording: null,
 	recordingLines: {
 		group: '[data-recording-lines]',
-		section: '[data-model-section]',
+		section: '[data-console-panel-id="model-cards"]',
 		heading: 'What the model did'
 	}
 };

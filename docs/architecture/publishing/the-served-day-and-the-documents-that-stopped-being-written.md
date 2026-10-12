@@ -1,6 +1,6 @@
 # The served day, and the documents that stopped being written
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-10-11
 
 A dated address used to be answered by a document a build wrote for that date.
 It is answered by one shell and one fetched file now. This page holds that
@@ -189,7 +189,7 @@ Two copies of every day carried a block no browser opens, and there were two way
 
 So (b) is a persisted-contract change that buys a cleaner diagram and zero bytes. (a) was taken on that arithmetic rather than on taste. If a real reason to split the file turns up - a second encoder, or a day payload too large to fetch whole - (b) is still there, and this paragraph is its price list.
 
-**What (a) costs instead is a list that can drift.** Twenty-two field names in [../../../frontend/src/lib/payload/project.ts](../../../frontend/src/lib/payload/project.ts) decide what a fetched day is able to render, and dropping one fails nothing: the page comes out slightly shorter and the reader never learns what they lost. Four things hold it. The module refuses to load, and so fails the build, if a forbidden name reaches the list. `frontend/tests/staged-day.spec.ts` keeps its own copy of the names and holds the module's list against that copy, so widening the allow-list without widening the promise fails and names the field that arrived. `frontend/tests/search.spec.ts` drives the field where the loss would hurt most - the link out to the source - from the staged bytes through to the rendered link. And since 2026-08-31 the list is a generated schema as well: `test_the_projector_writes_exactly_the_shape_the_contract_names` reads the array out of the TypeScript and holds it against `DigestViewItem`, so a name added on one side of the language boundary and not the other fails rather than shipping a payload that does not match its own schema.
+**What (a) costs instead is a list that can drift.** The field names in [../../../frontend/src/lib/payload/project.ts](../../../frontend/src/lib/payload/project.ts) decide what a fetched day is able to render. The module refuses to load if a forbidden name reaches the list. In [../../../backend/tests/contracts/test_served_day.py](../../../backend/tests/contracts/test_served_day.py), `test_the_projector_writes_exactly_the_shape_the_contract_names` holds that list against `DigestViewItem`, and `test_the_block_this_projection_exists_to_drop_can_never_be_served` keeps the forbidden fields, including `embeddings`, outside the served shape. These are contract checks, not a browser assertion that each field reaches the rendered page.
 
 **The field that nearly came off the list is `source_url`.** A narrower set of title, summary, source name and band renders a result that looks complete and has no way out to the original. That is the reader's only means of checking what we wrote, so a projection that drops it trades their trust for about ten bytes an item.
 

@@ -1,0 +1,164 @@
+name: Isolated Rust host evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      memory_profiling:
+        description: 'OS memory and fault collection; inherit reads shared config'
+        type: choice
+        default: inherit
+        options:
+          - inherit
+          - 'on'
+          - 'off'
+  pull_request:
+    paths:
+      - '.github/workflows/rust-host-telemetry.yml'
+      - 'backend/rust/host-telemetry/**'
+      - 'backend/idhazh/contracts/host_evidence.py'
+      - 'backend/idhazh/contracts/host_events.py'
+      - 'backend/idhazh/contracts/host_output.py'
+      - 'backend/idhazh/contracts/host_fingerprint.py'
+      - 'backend/idhazh/contracts/file_envelope.py'
+      - 'backend/idhazh/telemetry/host_evidence_*.py'
+      - 'backend/idhazh/telemetry/host_output_verify.py'
+      - 'backend/idhazh/telemetry/host_parquet_admission.py'
+      - 'backend/idhazh/telemetry/host.py'
+      - 'backend/idhazh/telemetry/silicon.py'
+      - 'backend/utilities/host_telemetry_*.py'
+      - 'backend/utilities/compare_host_telemetry.py'
+      - 'backend/utilities/memory_sampler.py'
+      - 'backend/tests/test_compare_host_telemetry.py'
+      - 'backend/tests/workflows/test_rust_host_telemetry_workflow.py'
+      - 'config/host-telemetry-*.json'
+      - 'config/idhazh.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rust-host-evidence-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  work:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/backend/var/rust-host-telemetry
+      PYTHONPATH: ${{ github.workspace }}/backend
+      D5_WORKSPACE: backend/var/d5-live
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Prepare dependencies outside tests
+        run: |
+          pip install -e ".[dev]"
+          echo "IDHAZH_PYTHON=$(command -v python)" >> "$GITHUB_ENV"
+          cd backend/rust/host-telemetry
+          rustup show active-toolchain
+          cargo fetch --locked
+          cargo build --locked --all-targets
+      - name: Independent native module gates
+        working-directory: backend/rust/host-telemetry
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --locked --offline --all-targets -- -D warnings
+          cargo test --locked --offline
+      - name: Recorded independent truth and unchanged replay
+        run: |
+          python -m pytest -n 0 \
+            backend/tests/contracts/test_rust_host_file_parity.py \
+            backend/tests/test_rust_host_store_parity.py \
+            backend/tests/test_rust_host_receipts.py \
+            backend/tests/contracts/test_host_event_rust_parity.py \
+            backend/tests/test_host_event_resource_parity.py \
+            backend/tests/contracts/test_host_migration.py \
+            backend/tests/test_host_fingerprint_migration.py \
+            --junitxml=backend/var/d5-gates.xml
+      - name: Measure the same pinned release crate
+        env:
+          D5_REVISION: ${{ github.sha }}
+        run: |
+          python -m utilities.host_telemetry_measurement \
+            --output backend/var/d5-compile.json --git-sha "$D5_REVISION"
+      - name: Real Linux lifetime and generated refusal tests
+        env:
+          IDHAZH_D5_LIVE_TEST: '1'
+        run: |
+          python -m pytest -n 0 \
+            backend/tests/test_compare_host_telemetry.py \
+            backend/tests/workflows/test_rust_host_telemetry_workflow.py \
+            --basetemp backend/var/d5-workflow-tests \
+            --junitxml=backend/var/d5-workflow-tests.xml
+      - name: Prepare captures and freeze repeated reference bounds
+        env:
+          D5_REVISION: ${{ github.sha }}
+          D5_RUN_NUMBER: ${{ github.run_id }}
+          D5_ATTEMPT: ${{ github.run_attempt }}
+          MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
+        run: |
+          MEMORY_ARGS=()
+          if [ "$MEMORY_PROFILING" != "inherit" ]; then
+            MEMORY_ARGS=(--memory-profiling "$MEMORY_PROFILING")
+          fi
+          python -m utilities.compare_host_telemetry prepare \
+            --workspace "$D5_WORKSPACE" --git-sha "$D5_REVISION" \
+            --run-number "$D5_RUN_NUMBER" --compile backend/var/d5-compile.json \
+            --attempt "$D5_ATTEMPT" \
+            --gates backend/var/d5-gates.xml \
+            "${MEMORY_ARGS[@]}"
+          cat "$D5_WORKSPACE/workflow.env" >> "$GITHUB_ENV"
+      - name: Rust probe and native raw store
+        run: |
+          backend/var/rust-host-telemetry/release/idhazh-host-telemetry probe \
+            --workspace "$D5_WORKSPACE" --manifest host-manifest.json --config native-config.json \
+            --command probe.json --metadata-input metadata --cache-multiple "$D5_CACHE_MULTIPLE" \
+            --proc-root /proc --cpu-root /sys/devices/system/cpu --namespace-root / \
+            --format "$D5_FORMAT" --compression "$D5_COMPRESSION" --result-id "$D5_PROBE_ID"
+      - name: Start native monitor and verify readiness
+        run: python -m utilities.compare_host_telemetry start --workspace "$D5_WORKSPACE"
+      - name: Same-target reference and native-only paired workloads
+        run: python -m utilities.compare_host_telemetry workload --workspace "$D5_WORKSPACE"
+      - name: Close windows and drain
+        run: python -m utilities.compare_host_telemetry drain --workspace "$D5_WORKSPACE"
+      - name: Rust clock and native raw store
+        run: |
+          backend/var/rust-host-telemetry/release/idhazh-host-telemetry clock \
+            --workspace "$D5_WORKSPACE" --manifest host-manifest.json --config native-config.json \
+            --command clock.json --previous-result "$D5_PROBE_RESULT" \
+            --previous-plan "$D5_PROBE_PLAN" --job-start-input start \
+            --format "$D5_FORMAT" --compression "$D5_COMPRESSION" --result-id "$D5_CLOCK_ID"
+      - name: Read-only same-file and receipt comparison
+        env:
+          MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
+        run: |
+          MEMORY_ARGS=()
+          if [ "$MEMORY_PROFILING" != "inherit" ]; then
+            MEMORY_ARGS=(--memory-profiling "$MEMORY_PROFILING")
+          fi
+          python -m utilities.compare_host_telemetry compare --workspace "$D5_WORKSPACE" \
+            --probe "$D5_PROBE_RESULT" --clock "$D5_CLOCK_RESULT" \
+            "${MEMORY_ARGS[@]}"
+      - name: Stop only owned process identities
+        if: always()
+        run: |
+          if test -d "$D5_WORKSPACE"; then
+            python -m utilities.compare_host_telemetry cleanup --workspace "$D5_WORKSPACE"
+          fi
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: rust-host-evidence-${{ github.sha }}
+          path: |
+            backend/var/d5-live
+            backend/var/d5-gates.xml
+            backend/var/d5-workflow-tests.xml
+            backend/var/d5-workflow-tests
+            backend/var/d5-compile.*
+          retention-days: 7
+          if-no-files-found: error

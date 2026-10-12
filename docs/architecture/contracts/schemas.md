@@ -28,6 +28,13 @@ The ledger layer reads a field annotation as a recursive tree: scalar (`string`,
 
 **Three modules type a contract shape by hand.** `frontend/src/lib/server/config.ts` declares `ConsolePanelGroup`; `frontend/src/lib/server/host-fingerprint.ts` declares `HostFingerprintRow` and the two closed sets `SERVER_JOB` and `WATCHED_FLAG`. What each field means stays on the Pydantic model, which is the one place it is written.
 
+The host row is stamped `2026-10-10`. Its explicit read boundary requests the
+finite legacy CPU columns beside the corrected columns, validates the source
+version, then removes the legacy names before any consumer sees the row.
+Historical fingerprints retain algorithm 1 and legitimate observed averages;
+corrected counts, target constraints and reported maximum frequency remain null
+when history never measured them.
+
 **A closed vocabulary is copied as a frozen array, and the union its members form.**
 
 ```ts

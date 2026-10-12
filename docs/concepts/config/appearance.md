@@ -1,6 +1,6 @@
 # What the page is drawn from
 
-**Last Updated**: 2026-10-10
+**Last Updated**: 2026-10-11
 
 Every knob a reader's page or an operator's console is drawn from: the file that
 owns them, the rule that decides which file owns a key when two name it, the
@@ -324,15 +324,16 @@ on the 431-story day of 2026-08-30, `gzip -9`, the first fifteen stories cost a
 dated route 20,302 bytes across the two documents it emits, against 420,074 for
 all 431.
 
-**It is a floor and not the whole answer, and the day route spends the rest.**
+**It is a floor and not the whole answer, and the home page spends the rest.**
 Fifteen covers the twelve a flat list pages at and
 the five the leading block draws. But a lead is chosen across the WHOLE day, so
 it is not inside any prefix: measured 2026-09-01 on the 601-story day of
 2026-08-31, the five sat at positions 249, 285, 337, 344 and 493. The document
 carries those five as well as the seed, or their anchors land on nothing - so a
-day document is bounded at `shell_seed_items` plus `leading_stories` and a topic
-document at `shell_seed_items` alone, which is what
-`frontend/tests/payload-weight.spec.ts` holds them to.
+home document carries the seed plus any leads outside it. Dated day and topic
+addresses use the fallback shell and fetch the served day; they emit no dated
+document. `frontend/scripts/bundle-gate.mjs` enforces that document prohibition,
+not the home seed's count.
 
 `ui.payload_slow_ms` (1200) is the exact opposite knob, and the pair is worth
 reading together. It is how long a reader may wait for the rest of a day before
@@ -458,7 +459,7 @@ disagree. None of them reaches the prerendered `/archive/` document.
 ## See also
 
 - [../config.md](../config.md) - what a knob is, and what is not one.
-- [../design-system.md](../design-system.md) - the sufficiency checks a surface drawn from these knobs has to pass.
+- [../design-system.md](../design-system.md) - design review for surfaces drawn from these knobs.
 - [../console-design.md](../console-design.md) - what the operator viewport is for.
 - [../search-quality.md](../search-quality.md) - what the `assist` knobs are measured against.
 - [../../architecture/publishing/frontend.md](../../architecture/publishing/frontend.md) - how the published site reads them.

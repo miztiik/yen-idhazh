@@ -41,22 +41,35 @@ from idhazh.contracts.file_envelope import (
     Tier,
     WriterIdentity,
 )
-from idhazh.contracts.host_fingerprint import WATCHED_FLAGS
+from idhazh.contracts.host_fingerprint import (
+    HOST_FINGERPRINT_VERSION,
+    WATCHED_FLAGS,
+    HostFingerprintRow,
+)
+from idhazh.contracts.host_fingerprint import (
+    LEGACY_HOST_VERSIONS as SHARED_LEGACY_HOST_VERSIONS,
+)
+from idhazh.contracts.host_fingerprint import (
+    LegacyHostFingerprintRow as SharedLegacyHostFingerprintRow,
+)
+from idhazh.contracts.host_fingerprint import (
+    fingerprint_v1 as shared_fingerprint_v1,
+)
+from idhazh.contracts.host_fingerprint import (
+    fingerprint_v2 as shared_fingerprint_v2,
+)
+from idhazh.contracts.host_fingerprint import (
+    normalize_host_row as shared_normalize_host_row,
+)
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.publication_receipt import PublicationReceipt
 
-HOST_OUTPUT_VERSION: Final = "2026-10-10"
+HOST_OUTPUT_VERSION: Final = HOST_FINGERPRINT_VERSION
 HOST_PRODUCER: Final = "telemetry.silicon"
 INT64_MAX: Final = (1 << 63) - 1
 INT64_MIN: Final = -(1 << 63)
 HOST_NAMESPACE: Final = uuid.uuid5(uuid.NAMESPACE_URL, "github.com/miztiik/yen-idhazh")
-LEGACY_HOST_VERSIONS: Final = (
-    "2026-09-16",
-    "2026-09-17",
-    "2026-09-18",
-    "2026-09-19",
-    "2026-09-20",
-)
+LEGACY_HOST_VERSIONS: Final = SHARED_LEGACY_HOST_VERSIONS
 _LEGACY_CPU_FIELDS: Final = frozenset({"cores", "threads", "mhz_max", "mhz_at_probe"})
 _CLOCK_FIELDS: Final = frozenset(
     {
@@ -88,7 +101,7 @@ _OUTPUT_CHANGELOG: Final = (
 )
 
 
-class CorrectedHostFingerprintRow(Contract):
+class _CandidateCorrectedHostFingerprintRow(Contract):
     """AN's corrected row. Unchanged fields retain baseline types and defaults."""
 
     model_config = ConfigDict(frozen=True, allow_inf_nan=False)
@@ -147,7 +160,7 @@ class CorrectedHostFingerprintRow(Contract):
                 datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
         if (self.fingerprint is None) != (self.fingerprint_version is None):
             raise ValueError("fingerprint and fingerprint_version must be present together")
-        if self.fingerprint_version == 2 and self.fingerprint != fingerprint_v2(self):
+        if self.fingerprint_version == 2 and self.fingerprint != _candidate_fingerprint_v2(self):
             raise ValueError("fingerprint does not match algorithm 2 hardware facts")
         if (self.cpu_quota_cores is not None) != (self.cpu_quota_state == "finite"):
             raise ValueError("cpu_quota_state is finite iff cpu_quota_cores is present")
@@ -181,7 +194,7 @@ class CorrectedHostFingerprintRow(Contract):
         }
 
 
-class LegacyHostFingerprintRow(Contract):
+class _CandidateLegacyHostFingerprintRow(Contract):
     """The finite pre-correction schemas, validated before their fields are removed."""
 
     model_config = ConfigDict(frozen=True, allow_inf_nan=False)
@@ -281,14 +294,14 @@ def _fingerprint_bytes(cells: Mapping[str, object], keys: Sequence[str]) -> byte
     ).encode("ascii")
 
 
-def fingerprint_v1(row: LegacyHostFingerprintRow) -> str:
+def _candidate_fingerprint_v1(row: _CandidateLegacyHostFingerprintRow) -> str:
     """AO1's historical preimage, including explicit null core/thread facts."""
     return hashlib.sha256(_fingerprint_bytes(row.model_dump(), _FINGERPRINT_V1_KEYS)).hexdigest()[
         :16
     ]
 
 
-def fingerprint_v2(row: CorrectedHostFingerprintRow) -> str | None:
+def _candidate_fingerprint_v2(row: _CandidateCorrectedHostFingerprintRow) -> str | None:
     """AO2's static hardware class, or no identity when no fact was sourced."""
     cells = row.model_dump()
     flags = row.flags.split()
@@ -308,7 +321,9 @@ def fingerprint_v2(row: CorrectedHostFingerprintRow) -> str | None:
     return hashlib.sha256(_fingerprint_bytes(cells, _FINGERPRINT_V2_KEYS)).hexdigest()[:16]
 
 
-def normalize_host_row(data: Mapping[str, object]) -> CorrectedHostFingerprintRow:
+def _candidate_normalize_host_row(
+    data: Mapping[str, object],
+) -> _CandidateCorrectedHostFingerprintRow:
     """Normalize only recognized inputs; callers verify stored digests first."""
     payload = dict(data)
     if "version" not in payload:
@@ -317,8 +332,8 @@ def normalize_host_row(data: Mapping[str, object]) -> CorrectedHostFingerprintRo
             raise ValueError("unstamped input is not an unchanged silicon constructor shape")
         payload["version"] = LEGACY_HOST_VERSIONS[-1]
     if payload["version"] == HOST_OUTPUT_VERSION:
-        return CorrectedHostFingerprintRow.model_validate(payload)
-    old = LegacyHostFingerprintRow.model_validate(payload)
+        return _CandidateCorrectedHostFingerprintRow.model_validate(payload)
+    old = _CandidateLegacyHostFingerprintRow.model_validate(payload)
     cells = old.model_dump()
     average = cells.pop("mhz_at_probe")
     for key in _LEGACY_CPU_FIELDS - {"mhz_at_probe"}:
@@ -328,10 +343,10 @@ def normalize_host_row(data: Mapping[str, object]) -> CorrectedHostFingerprintRo
         fingerprint_version=1 if old.fingerprint is not None else None,
         cpu_observed_mhz=average,
     )
-    return CorrectedHostFingerprintRow.model_validate(cells)
+    return _CandidateCorrectedHostFingerprintRow.model_validate(cells)
 
 
-class HostFingerprintInput(CorrectedHostFingerprintRow):
+class _CandidateHostFingerprintInput(_CandidateCorrectedHostFingerprintRow):
     """Legacy producer adapter; the old MHz getter is not a persisted column."""
 
     __schema_stem__: ClassVar[str] = "host-output-input"
@@ -340,13 +355,23 @@ class HostFingerprintInput(CorrectedHostFingerprintRow):
     @classmethod
     def _normalize_before_stamping(cls, data: Any) -> Any:
         if isinstance(data, Mapping):
-            return normalize_host_row(data).model_dump()
+            return _candidate_normalize_host_row(data).model_dump()
         return data
 
     @property
     def mhz_at_probe(self) -> float | None:
         """Temporary logging getter; remove with the legacy producer."""
         return self.cpu_observed_mhz
+
+
+# Row 13 promotes AN/AO to the shared row contract. Keep these names as
+# compatibility imports for the already-published event/write-plan exchange.
+CorrectedHostFingerprintRow = HostFingerprintRow
+LegacyHostFingerprintRow = SharedLegacyHostFingerprintRow
+HostFingerprintInput = HostFingerprintRow
+fingerprint_v1 = shared_fingerprint_v1
+fingerprint_v2 = shared_fingerprint_v2
+normalize_host_row = shared_normalize_host_row
 
 
 class HostWriterIdentity(WriterIdentity):
@@ -481,19 +506,7 @@ class CandidateFileEnvelope(FileEnvelope):
 
     model_config = ConfigDict(frozen=True)
     __schema_stem__: ClassVar[str] = "host-output-file-envelope"
-    __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
-        ChangelogEntry(
-            version=HOST_OUTPUT_VERSION,
-            change="Allow explicit truthful native host raw writer/container pairs.",
-            why="Candidate validation must not pretend Rust bytes were written by Python.",
-        ),
-        *FileEnvelope.__changelog__[:3],
-        ChangelogEntry(
-            version="2026-09-30",
-            change="Earlier changes are in file-envelope git history.",
-            why="The candidate retains public fields and historical envelope semantics.",
-        ),
-    )
+    __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = FileEnvelope.__changelog__
 
     identity: HostWriterIdentity
     written_at_ms: int = Field(ge=0, le=INT64_MAX, strict=True)
@@ -510,6 +523,8 @@ class CandidateFileEnvelope(FileEnvelope):
     def _freeze_identity(cls, data: Any) -> Any:
         if isinstance(data, Mapping) and isinstance(data.get("identity"), WriterIdentity):
             return dict(data) | {"identity": data["identity"].model_dump()}
+        if isinstance(data, Mapping):
+            return dict(data)
         return data
 
     @model_validator(mode="after")
@@ -549,7 +564,7 @@ class HostPlannedFile(Model):
     """One validated immutable day group, ready for rendering before any write."""
 
     model_config = ConfigDict(frozen=True)
-    envelope: CandidateFileEnvelope
+    envelope: FileEnvelope
     format: Format
     relative_path: RelPath
     rows: tuple[HostStoredRow, ...] = Field(min_length=1)

@@ -7,6 +7,7 @@
 	import * as queries from '$lib/console/queries/pipelines';
 	import { settingsRules } from '$lib/console/settings-moved';
 	import { daysInWindow, windowOfDays } from '$lib/charts/viewport';
+	import { countDays } from '$lib/console/span-words';
 	import { noRecordSentence, setAsideSentence } from '$lib/console/recording';
 	import type { LedgerReach, Row, SliceResult } from '$lib/data/ledger';
 	import type { PanelState } from '$lib/console/waiting';
@@ -106,7 +107,9 @@
 		try {
 			if (value !== undefined) localStorage.setItem(WINDOW_KEY, value);
 			return localStorage.getItem(WINDOW_KEY);
-		} catch {
+		} catch (error) {
+			if (!(error instanceof DOMException) || (error.name !== 'SecurityError' && error.name !== 'QuotaExceededError')) throw error;
+			console.warn('[console] The window preference could not be read or saved; the selected window remains usable for this page.');
 			return null;
 		}
 	}
@@ -166,12 +169,12 @@
 </script>
 
 <svelte:head><title>Pipelines — Console — {data.ui.site_title}</title><meta name="robots" content="noindex" /></svelte:head>
+<noscript><p data-native-script-required>The article record needs JavaScript to load. Private published-day panels remain available below.</p></noscript>
 <WindowControlSource days={windowDays} presets={knobs.window_presets} monthsFor={() => 0}
 	ready={mounted} {busy} {record} statusLine={recordReady ? null : 'The record window is not ready.'} onChange={show} />
 <RouteStatus route="pipelines" answers={allAnswers} days={windowDays} through={recordReady ? reach?.through : null}
 	shimmerAfterMs={knobs.shimmer_after_ms} onRetry={retry}>
-	{#each [...new Set(notes)] as note}<p data-record-note>{note}</p>{/each}
-	<p class="console-carry" data-console-carry="model">{data.carries.pipelines} <a href="{base}/console/model/">Summaries →</a></p>
+	<p class="console-carry" data-console-carry="model" data-pipelines-window-from={viewport.start} data-pipelines-window-to={viewport.end}>{data.carries.pipelines} <a href="{base}/console/model/">Summaries →</a></p>
 	{#each configured.panel_groups as group (group.id)}
 		<PanelGroup id={group.id} title={group.title} panels={group.panels.length}>
 			{#each group.panels as id (id)}
@@ -180,9 +183,11 @@
 						windowPending={mounted && reach === null}
 						height={knobs.chart_height} width={knobs.chart_width} tickDensity={data.chart.tick_density} readoutMaxShare={data.chart.readout_max_share} />
 				{:else}
-					<Panel {id} title={titles[id]} wide>
-						<div data-windowed={id === 'run-timeline' ? undefined : id} data-window-days={id === 'run-timeline' ? undefined : windowDays}
-							data-panel-state={mounted && reach === null ? 'loading' : undefined}>
+					<Panel {id} title={titles[id]} wide verdict={id === 'at-a-glance'}>
+						<div data-windowed={id === 'run-timeline' || id === 'chart-drawing' ? undefined : id} data-window-days={id === 'run-timeline' || id === 'chart-drawing' ? undefined : windowDays}
+							aria-label={id === 'run-timeline' || id === 'chart-drawing' ? undefined : `${titles[id]}, selected window ${countDays(windowDays)}`}
+							data-readout-fetched={id !== 'extraction' && (panelQueries[id] !== undefined || id === 'run-timeline') ? '' : undefined}
+							data-panel-state={mounted && reach === null && ['at-a-glance', 'site-cost-per-item', 'chart-drawing'].includes(id) ? 'loading' : undefined}>
 						{#if id === 'at-a-glance'}
 							<AtAGlance days={data.charts} window={viewport} {knobs} chart={data.chart} />
 						{:else if id === 'site-cost-per-item'}
@@ -202,6 +207,7 @@
 								nativeState={panelState(queries.failureMixQuery)} rulesState={panelState(queries.failedRuleQuery)}
 								rulesWindow={queryWindow(queries.failedRuleQuery)}
 								calendar={calendar(queries.failureMixQuery)} {knobs} chart={data.chart} rule={queryRule(queries.failureMixQuery)} />
+							{#each [...new Set(notes)] as note}<p data-record-note>{note}</p>{/each}
 						{:else if panelQueries[id] !== undefined}
 							{@const query = panelQueries[id]}
 							<Reserved record panelState={panelState(query)} height={knobs.chart_height} width={knobs.chart_width} name={id} label={titles[id]}>

@@ -206,6 +206,29 @@ class ObservabilityConfig(Model):
             "constant and a constant is not a reading."
         ),
     )
+    host_event_shadow: bool = Field(
+        default=False,
+        description=(
+            "Whether Python emits host lifecycle events into an already prepared "
+            "isolated native session while remaining the authoritative production "
+            "collector and writer. False performs no event file reads, writes or "
+            "waits. This temporary comparison path is removed when the native "
+            "single-writer cutover is complete."
+        ),
+    )
+    memory_profiling_enabled: bool = Field(
+        default=True,
+        description=(
+            "Whether host telemetry collects operating-system process and machine "
+            "memory, faults, job samples and runtime memory artifacts. False keeps "
+            "CPU, load, process identity, timing, lifecycle events, heartbeats and "
+            "the item-health census active while memory cells stay empty with a "
+            "disabled reason. This does not control allocator profiling or the "
+            "separately configured memory-bandwidth copy. Remove this capability "
+            "only if host memory collection is removed and its consumers approve "
+            "the loss."
+        ),
+    )
     host_fingerprint_bandwidth_jobs: tuple[ServerJob, ...] = Field(
         default=(ServerJob.RUNTIME,),
         description=(

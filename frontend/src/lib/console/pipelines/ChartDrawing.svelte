@@ -28,7 +28,7 @@
 	{#if days.length === 0}<p data-empty="missing">The private chart-drawing day records are unavailable.</p>
 	{:else if flow.empty}<p data-empty="quiet">{flow.reason}</p>{/if}
 	<p data-comparison="Visuals published against articles that reached drawing.">Visuals published against articles that reached drawing.</p>
-	<p data-charts-rule>Over {thresholds.ruleDays} days with the chart-only gate on, chart drawing is retired above {thresholds.minutesTarget} minutes per visual or below {thresholds.coveragePct}% coverage.</p>
+	<p data-charts-rule>Over {thresholds.ruleDays} days with the chart-only gate on, chart drawing is retired above {thresholds.minutesTarget} minutes per published visual or below {thresholds.coveragePct}% of the items carrying a published visual.</p>
 	<div data-charts="rule">
 		{#if rule.narrow}<p data-window-too-narrow="chart-drawing">The rule reads {thresholds.ruleDays} days. Widen the window to see it.</p>
 		{:else}
@@ -69,4 +69,9 @@
 	{#if value !== null}<p data-rule-move={name}><span data-movement={value.toFixed(4)} data-polarity={sense}
 		data-movement-verdict={movementVerdict(value, sense)} data-movement-paint="color">{value >= 0 ? '+' : ''}{Math.round(value * 100)}%</span> across this window</p>{/if}
 {/snippet}
-<style>.lede { font-size: var(--text-2xl); }</style>
+<style>
+	.lede { font-size: var(--text-2xl); }
+	[data-flow="chart"] :global(svg) { inline-size: 100%; max-inline-size: 100%; block-size: auto; }
+	details { margin-block-start: var(--space-6); font-size: var(--text-sm); }
+	details[open] { padding: var(--space-5); border: 1px solid var(--color-rule); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
+</style>

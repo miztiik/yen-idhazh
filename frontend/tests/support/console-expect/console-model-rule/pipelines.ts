@@ -3,6 +3,6 @@ import type { RouteExpect } from './index';
 export const EXPECT: RouteExpect = {
 	boundaryReadout: {
 		chart: '[data-model-rule-name="timings"]',
-		row: '[data-readout-row="How summaries are written"]'
+		row: '[data-readout-row="Settings changed"]'
 	}
 };

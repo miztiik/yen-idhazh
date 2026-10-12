@@ -33,8 +33,8 @@ export interface ShardReading {
 	cpuModel?: string;
 	/** The machine record's digest of the host. Empty where the probe missed it. */
 	fingerprint?: string;
-	/** Cores the host let the job see. What a load reading is read against. */
-	cores?: number | '';
+	/** Validated online logical processors. What a load reading is read against. */
+	logicalProcessors?: number | '';
 	modelLoadMs?: number | '';
 	/** Prompt tokens the item reused instead of reading. */
 	cachedTokens?: number | '';
@@ -47,7 +47,7 @@ export interface ShardReading {
 	cpuBusyPct?: number | '';
 	/** The busiest the processor got over the item's model window. */
 	cpuBusyMax?: number | '';
-	/** The one-minute load when the item ended. A queue once it passes `cores`. */
+	/** The one-minute load when the item ended. */
 	load?: number | '';
 	/** Swap left when the item ended, and swap the host has. */
 	swapFree?: number | '';
@@ -96,14 +96,15 @@ function cell(value: number | string | undefined): string {
 /** The machine record's row for one shard. */
 export function hostRow(reading: ShardReading): Record<string, string> {
 	return {
-		version: '2026-09-18',
+		version: '2026-10-10',
 		date: reading.date ?? DATE,
 		run_id: reading.runId ?? RUN,
 		job: reading.job ?? '',
 		shard: cell(reading.shard ?? 0),
 		fingerprint: cell(reading.fingerprint),
+		fingerprint_version: reading.fingerprint ? '2' : '',
 		cpu_model: cell(reading.cpuModel),
-		cores: cell(reading.cores),
+		cpu_logical_processors: cell(reading.logicalProcessors),
 		model_load_ms: cell(reading.modelLoadMs),
 		job_seconds: cell(reading.jobSeconds),
 		server_prompt_tokens: cell(reading.serverPromptTokens),

@@ -203,7 +203,9 @@ def land(*, repo: Path, identity: WriterIdentity, date: str) -> PublicationResul
     if identity.job == ServerJob.ASSEMBLE and writes:
         from utilities import digest_assemble
 
-        request = dataclasses.replace(request, preparation_scopes=mutable)
+        request = dataclasses.replace(
+            request, preparation_scopes=(*mutable, digest_assemble.count_scope(date))
+        )
         request = dataclasses.replace(
             request,
             prepare=digest_assemble.preparation(

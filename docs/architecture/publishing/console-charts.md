@@ -248,12 +248,13 @@ absence from a forgotten marker.
 
 ## Verification
 
-Use bounded fixtures with empty, missing, partial and zero measurements. Include
-a mid-window setup change, missing input records and multiple changed settings.
-Verify bin totals, stage denominators and marker placement independently of the
-chart's own calculations. Exercise keyboard, touch, both themes, narrow containers,
-failed downloads and scripts-off behavior. Existing tests must move with their
-chart; they must not preserve a server-rendered picture as the required fallback.
+Test calculations, readers and date bounds with small fixtures below the browser.
+Use one representative browser journey to check shared drawing and readout
+behaviour. Add another runtime case only for a distinct boundary the ordinary
+journey cannot reach, such as an actual failed fetch or scripts-off rendering.
+Do not repeat chart, theme, width and input-state combinations in browser tests.
+When a chart changes, review that chart in context rather than adding a new
+per-chart interaction matrix.
 
 ## Design rationale
 

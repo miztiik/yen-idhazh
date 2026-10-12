@@ -9,6 +9,7 @@
 	import type { TimeWindow } from '$lib/charts/viewport';
 	import { emptyState } from '$lib/charts/d3/empty';
 	import { frame, MARGIN, chartWidth, observeWidth } from '$lib/charts/frame';
+	import { shortDate } from '$lib/format';
 	import type { Row } from '$lib/data/ledger';
 	import type { ModelRule } from '$lib/charts/d3/model-rule';
 	import type { ConsoleConfig, ChartConfig } from '$lib/server/config';
@@ -29,19 +30,14 @@
 	}));
 </script>
 <div use:observeWidth={(next) => measured = next}>
-{#if nativeState === 'loading' && rulesState === 'loading'}
-	<Reserved record panelState="loading" height={knobs.chart_height} width={knobs.chart_width} name="failure-mix" label="Native failures and rules">
-		{#snippet children()}{/snippet}
-	</Reserved>
-{:else}
 <p data-comparison="Each failed stage against the other stages in the same day's stack.">Each failed stage against the other stages in the same day's stack, not a rate against another day's volume.</p>
-<Reserved record panelState={nativeState} height={knobs.chart_height} width={knobs.chart_width} name="failure-mix" label="Native failures by day and stage">
-<p data-lede class="lede">{mix.recorded === 0 ? 'No recorded row supplies a failure divisor.' : `${(100 * mix.failures / mix.recorded).toFixed(1)}% of recorded rows failed.`}</p>
+<p data-lede class="lede">{nativeState === 'loading' ? 'The failure record is still loading.' : mix.recorded === 0 ? 'No recorded row supplies a failure divisor.' : `${(100 * mix.failures / mix.recorded).toFixed(1)}% of recorded rows failed.`}</p>
 <p>The query has no article identity; this counts rows, not distinct articles.</p>
 {#if mix.failures === 0 && mix.recorded > 0}<p data-nothing-fired>No recorded row failed at any step in these recorded days.</p>{/if}
+<Reserved record panelState={nativeState} height={knobs.chart_height} width={knobs.chart_width} name="failure-mix" label="Native failures by day and stage">
 <DateSeries {geometry} empty={emptyState('quiet', 'No failure is recorded in these rows.')}
 	name="failure-mix" label="One stack a recorded day, split by failed stage"
-	{width} height={knobs.chart_height} readout={geometry?.readout} readoutMaxShare={chart.readout_max_share} />
+	{width} height={knobs.chart_height} readout={geometry === null ? null : { ...geometry.readout, columns: geometry.dates.map(shortDate) }} readoutMaxShare={chart.readout_max_share} />
 </Reserved>
 <Reserved record panelState={rulesState} height={knobs.chart_height} width={knobs.chart_width} name="failed-rule" label="Native failed-rule readings">
 {#if failed.stages.length > 0}
@@ -52,6 +48,5 @@
 	<p>No recorded row failed at any stage in this window.</p>
 {/if}
 </Reserved>
-{/if}
 </div>
 <style>.lede { font-size: var(--text-2xl); font-variant-numeric: tabular-nums; }</style>

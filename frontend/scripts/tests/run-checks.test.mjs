@@ -44,7 +44,8 @@ test('an explicit Rust selection keeps Python to the concrete native parity test
 	assert.deepEqual(selected.backendFiles, [
 		'backend/tests/contracts/test_rust_host_file_parity.py', 'backend/tests/test_rust_host_store_parity.py',
 		'backend/tests/test_rust_host_receipts.py', 'backend/tests/contracts/test_host_event_rust_parity.py',
-		'backend/tests/test_host_event_resource_parity.py'
+		'backend/tests/test_host_event_resource_parity.py', 'backend/tests/test_compare_host_telemetry.py',
+		'backend/tests/workflows/test_rust_host_telemetry_workflow.py'
 	]);
 	assert.equal(selected.rust, true);
 	assert.equal(selected.tooling, false);
@@ -71,10 +72,9 @@ test('ambiguous group/spec selection is rejected before preparation', () => {
 		['frame.spec.ts', 'archive.spec.ts']);
 });
 
-test('whole-day checks use the canary and cannot be mixed with other spec selections', () => {
-	assert.throws(() => options(['--mode', 'real', '--spec', 'whole-day.spec.ts']), /alone with --mode canary/);
-	assert.throws(() => options(['--spec', 'whole-day.spec.ts', '--spec', 'reading-page.spec.ts']), /alone with --mode canary/);
-	assert.deepEqual(options(['--spec', 'whole-day.spec.ts']).specs, ['whole-day.spec.ts']);
+test('real-build checks are limited to the representative reader journey', () => {
+	assert.throws(() => options(['--mode', 'real', '--spec', 'archive.spec.ts']), /requires --spec reading-page/);
+	assert.deepEqual(options(['--mode', 'real', '--spec', 'reading-page.spec.ts']).specs, ['reading-page.spec.ts']);
 });
 
 test('an explicit all selection includes the tooling checks', () => {

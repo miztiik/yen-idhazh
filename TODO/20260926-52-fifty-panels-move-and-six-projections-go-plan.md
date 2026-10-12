@@ -1,8 +1,8 @@
 # Plan 52 - The console's panels ask the ledger when they are looked at, ECharts leaves, and six projections go
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-10-12
 
-**Status**: Rows 1, 2, 3a, 3 and 4 are merged in #1529, #1537, #1538 and #1542. Shared-support row 2b is merged in #1546 and row 5 in #1547. Rows 6 to 11 still require delivery. Row 12 and its related public-projection and reader deletions are complete in merged #1189 and stay COLLAPSED.
+**Status**: Rows 1, 2, 3a, 3 and 4 are merged in #1529, #1537, #1538 and #1542. Shared-support row 2b is merged in #1546. Row 5 is merged in #1547, Voices, row 8, is merged in #1557, and Summaries, row 7, is merged in #1560. This change delivers Pipelines, row 6, with declared native queries, the approved shared chart contracts and retained private inputs. Rows 9, 10 and 11 still require delivery. Row 12 and its related public-projection and reader deletions are complete in merged #1189 and stay COLLAPSED.
 
 **Level**: 5 (CLAUDE.md section 6). Rows 5 and 10 change a persisted payload every console document carries. The route rows are Level 3: each crosses code and published data on one route. **Authorizing this plan is the design consultation section 6 asks of rows 5 and 10.** Row 12's approved deletion is carried by #1189.
 
@@ -22,7 +22,13 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 **Remaining delivery authorized, 2026-10-10.** The owner authorized the remaining pull requests and merges without another implementation approval round. Row 4 builds the real query, fixture and loading capability only. Its former measurement worker, volume harness, benchmark page, CI timing comparison and measured engine-download figure are suspended. The loading standing says `Fetching the record.`; no missing measurement delays implementation and no guessed size is printed.
 
+**Voices integration delegated by Naveen, 2026-10-11.** Row 8 owns the eight feed-case extraction from `console.spec.ts`, truthful native settlement in the shared ownership/readout scans, Voices scope mapping and its tests, inherited route inventories/knob fixtures, and actual packed-fixture staging in the bounded private builder. Keep all cases and independent assertions. This is test integration, not a shared chart or query API change. The owner retains public merge and CI.
+
 **Shared support approved, 2026-10-11.** The owner selected A1: an identity-free failed-rule ranking, structured timing rules, explicit histogram bar colours, and an item-duration stack with a separately labelled overlap deduction and elapsed-time marker. Count summarization once and keep calls as non-additive details. Use one stated article cohort; retain unknowns separately from recorded zero and positive gaps separately from overlap. Row 2b owns the shared APIs, their dependent compiler inputs, test registration and inventory. Route rows wire those APIs without broadening a query or publishing private build-time inputs.
+
+**Hardware foundation approved, 2026-10-11 12:30 UTC.** After the actual Fowler consultation the owner selected A1: a narrow native `run-shards` ledger with only business `date`, `run_id`, nullable positive `shards`, inherited version and existing writer provenance, plus the necessary Hardware query fields. The exact historical and future source is `RunManifest.RunRecord.shards`, never observed hosts, maximum index, configuration or workflow dispatch count. Last numeric per run wins; later unknown never erases numeric. Preserve corrected-repeat settlement through packing without changing `run-plan`. Whole manifests, plans, article data and prompts remain unpublished. Future workflow dispatch versus CLI recomputation semantics are unchanged.
+
+**Row 9 delivery order.** Publish and merge the count foundation first, then verify its live daily/monthly coverage before the existing Hardware reader can merge. These are two stages of the same approved row, not a new counted row. This foundation registers the count vocabulary and bounded fixtures only; existing Hardware queries, panels and build-time manifest refusal stay unchanged until the reader stage.
 
 | Field | Value |
 | --- | --- |
@@ -68,11 +74,11 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 3 | Judgement carries its ids and gates, and preserves what the evidence can establish | 1, 3a | B | DONE | p52-judgement (`feat/console-judgement-panels`) | #1538 | Susan, Fowler and owner |
 | 4 | Every panel's question and shared loading state are declared before it is drawn | 2 | C | DONE | p52-panel-queries (`feat/console-panel-queries`) | #1542 | Owner and disjoint contract, canary and guard workers |
 | 5 | The band reads the ledgers and carries the settings changes, and the three remaining projections nothing draws go | 3, 4 | D | DONE | p52-band-ledgers (`feat/console-band-ledgers`) | #1547 | p52-row5-local-completion |
-| 6 | Pipelines asks the ledger | 5, 2b | E | REVIEW CANDIDATE: native code parity repaired; final integration and CI pending | p52-pipelines-ledgers (`feat/console-pipelines-ledgers`) | Read from merge | Owner |
-| 7 | Summaries asks the ledger | 5, 2b | E | PENDING | - | - | - |
-| 8 | Voices asks the ledger, and the ranking panels join it | 4 | D | PENDING | - | - | - |
-| 9 | Hardware asks the ledger, and its page carries no data | 5 | E | PENDING | - | - | - |
-| 10 | The `telemetry` and `run-timeline` projections go | 6 | F | REVIEW CANDIDATE: dependent preparation; focused gates and CI pending; merge waits for row 6 and an idle digest | p52-projections-retirement (`feat/console-projections-retirement`) | Read from merge | Row 10 worker |
+| 6 | Pipelines asks the ledger | 5, 2b | E | DONE | p52-pipelines-ledgers (`feat/console-pipelines-ledgers`) | Read from merge | Pipelines worker; parent owns delivery |
+| 7 | Summaries asks the ledger | 5, 2b | E | DONE | p52-model-ledgers (`feat/console-model-ledgers`) | Read from merge | Summaries worker; representative integration owner |
+| 8 | Voices asks the ledger, and the ranking panels join it | 4 | D | DONE | p52-voices-ledgers (`feat/console-voices-ledgers`) | Read from merge | Row8 finishing worker; actual Susan/Fowler consultations |
+| 9 | Hardware asks the ledger, and its page carries no data | 5 | E | IN-FLIGHT: count foundation ready/reader pending | p52-hardware-counts (`feat/console-hardware-counts`); reader retained in p52-machine-ledgers | Read from merge | Count foundation owner; parent owns reader integration |
+| 10 | The `telemetry` and `run-timeline` projections go | 6 | F | LOCAL CANDIDATE: approved retirement integrated with merged row 6; current gates pending; merge requires an idle digest | p52-projections-retirement (`feat/console-projections-retirement`) | Read from merge | Row 10 worker |
 | 11 | ECharts leaves | 7, 8, 9, 10 | G | PENDING | - | - | - |
 | 12 | Moved to #1189: the aggregate is deleted and one item's trace is a command | - | H | COLLAPSED | - | - | - |
 

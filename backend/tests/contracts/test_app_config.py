@@ -1016,9 +1016,7 @@ def test_the_side_a_figure_sits_on_is_a_knob_the_frontend_agrees_with() -> None:
     assert mirrored is not None, "the frontend dropped its visual_side default"
     assert mirrored.group(1) == UiConfig().visual_side.value
 
-    card = read_text(
-        REPO_ROOT / "frontend" / "src" / "lib" / "components" / "DigestItem.svelte"
-    )
+    card = read_text(REPO_ROOT / "frontend" / "src" / "lib" / "components" / "DigestItem.svelte")
     assert card.index("<ItemVisual") > card.index("data-item-summary"), (
         "the card draws its figure before the summary, so `trailing` is the wrong default"
     )
@@ -1152,17 +1150,36 @@ def test_the_item_health_census_is_not_switchable() -> None:
     throughput figure taken with no fingerprint beside it cannot be set against
     another run's, because the machine moved 3.7x between draws and nothing says
     which one produced the number.
+
+    `host_event_shadow` is the fifth. It copies lifecycle boundaries into an
+    isolated native comparison session. It does not switch off the census or
+    select a production writer, and its declaring field names the cutover that
+    removes it.
     """
     switches = {
-        name
-        for name, field in ObservabilityConfig.model_fields.items()
-        if field.annotation is bool
+        name for name, field in ObservabilityConfig.model_fields.items() if field.annotation is bool
     }
     assert switches == {
         "evaluation_enabled",
         "tracing_enabled",
         "host_fingerprint",
+        "host_event_shadow",
+        "memory_profiling_enabled",
     }
+    assert ObservabilityConfig().host_event_shadow is False
+    assert ObservabilityConfig().memory_profiling_enabled is True
+    assert (
+        AppConfig.from_json(
+            read_text(APP_CONFIG_EVERY_KNOB_DIFFERS)
+        ).observability.host_event_shadow
+        is True
+    )
+    assert (
+        AppConfig.from_json(
+            read_text(APP_CONFIG_EVERY_KNOB_DIFFERS)
+        ).observability.memory_profiling_enabled
+        is False
+    )
     assert "census" in (ObservabilityConfig.__doc__ or "")
 
 
@@ -1191,7 +1208,8 @@ def test_every_published_window_outlives_the_shards_a_console_read_selects() -> 
     assert 13 * 30 > window, "the retired check passed 13, which is the whole point"
 
     for name in (
-        "public_run_days_keep_months", "public_day_metrics_keep_months",
+        "public_run_days_keep_months",
+        "public_day_metrics_keep_months",
         "public_machine_keep_months",
     ):
         with pytest.raises(ValidationError, match="Extra inputs"):
@@ -1267,11 +1285,7 @@ def test_every_flag_but_the_permanent_one_names_the_reading_that_retires_it() ->
     every one of them is measured over. `item_lines` is the declared exception
     and has to say so; `level` is not a flag and carries no condition either.
     """
-    flags = {
-        name
-        for name, field in LoggingConfig.model_fields.items()
-        if name != "level"
-    }
+    flags = {name for name, field in LoggingConfig.model_fields.items() if name != "level"}
     assert flags == {
         "item_lines",
         "stage_lines",
@@ -1491,8 +1505,7 @@ def test_the_committed_defaults_build_a_record_the_contract_accepts() -> None:
         band_high=knobs.band_high,
         bin_width=knobs.bin_width,
         slots=tuple(
-            ScoreSlot(bin_low=round(knobs.band_low + i * knobs.bin_width, 3))
-            for i in range(slots)
+            ScoreSlot(bin_low=round(knobs.band_low + i * knobs.bin_width, 3)) for i in range(slots)
         ),
     )
 

@@ -107,6 +107,7 @@ from idhazh.telemetry import (
     job_machine,
     silicon,
 )
+from idhazh.telemetry.host_event_client import HostEventClient
 
 
 def _today() -> str:
@@ -129,6 +130,42 @@ def _positive_int(text: str) -> int:
     return value
 
 
+def _memory_profiling(text: str) -> bool:
+    """Parse the public control without accepting truthy strings."""
+    if text == "on":
+        return True
+    if text == "off":
+        return False
+    raise argparse.ArgumentTypeError("memory profiling must be 'on' or 'off'")
+
+
+def _host_event_client(
+    parser: argparse.ArgumentParser,
+    args: argparse.Namespace,
+    settings: config.Settings,
+) -> HostEventClient | None:
+    """Open the isolated event session only when its temporary switch is on."""
+    if not settings.app.observability.host_event_shadow:
+        return None
+    values = {
+        "--host-event-workspace": args.host_event_workspace,
+        "--host-event-manifest": args.host_event_manifest,
+        "--host-event-config": args.host_event_config,
+    }
+    missing = [name for name, value in values.items() if value is None]
+    if missing:
+        parser.error("observability.host_event_shadow needs " + ", ".join(missing))
+    assert args.host_event_workspace is not None
+    assert args.host_event_manifest is not None
+    assert args.host_event_config is not None
+    return HostEventClient(
+        args.host_event_workspace,
+        args.host_event_manifest,
+        args.host_event_config,
+        memory_profiling_enabled=settings.app.observability.memory_profiling_enabled,
+    )
+
+
 def _council_run(parser: argparse.ArgumentParser, stage: str, given: str | None) -> str:
     """The run a council verb is, refused rather than invented when a step forgets it.
 
@@ -143,6 +180,12 @@ def _council_run(parser: argparse.ArgumentParser, stage: str, given: str | None)
             "and a row filed under a digest run's id claims a machine and a clock "
             "this night never drew"
         )
+    from idhazh.council.run_identity import opened_on
+
+    try:
+        opened_on(given)
+    except ValueError:
+        parser.error(f"{stage} needs a valid --run-id")
     return given
 
 
@@ -303,9 +346,7 @@ def _scorer(enabled: bool) -> object | None:
     return scorer
 
 
-def _scores_this_run(
-    observability: ObservabilityConfig, *, run_id: str, flag_allows: bool
-) -> bool:
+def _scores_this_run(observability: ObservabilityConfig, *, run_id: str, flag_allows: bool) -> bool:
     """Whether the work stage should load a scorer for this run at all.
 
     Three things have to agree. `observability.evaluation_enabled` is the
@@ -346,6 +387,18 @@ def _planned(date: str, execution: int | None) -> RunPlan:
 def main(argv: Sequence[str] | None = None) -> int:
     crash_trace.install()
     words = list(sys.argv[1:]) if argv is None else list(argv)
+    if words and words[0] in ("council-prepare", "council-shard", "council-settle"):
+        from idhazh.contracts.council_events import CouncilProgram
+        from idhazh.council import outcome
+
+        program = CouncilProgram(words[0].removeprefix("council-"))
+        return outcome.run(program, lambda: _main(words))
+    return _main(words)
+
+
+def _main(argv: Sequence[str] | None = None) -> int:
+    crash_trace.install()
+    words = list(sys.argv[1:]) if argv is None else list(argv)
     if words and words[0] == telemetry_cli.VERB:
         # The one verb whose rest-of-line belongs to somebody else. Its
         # subcommands are the telemetry package's own surface, so handing over
@@ -364,7 +417,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         # checkout, because what it runs in is a checkout rather than a state tree.
         return gardener_cli.main(words[1:])
 
-    parser = argparse.ArgumentParser(prog="idhazh", description=__doc__)
+    council_command = bool(words and words[0].startswith("council-"))
+    parser: argparse.ArgumentParser
+    if council_command:
+        from idhazh.council.outcome import Parser
+
+        parser = Parser(prog="idhazh", description=__doc__)
+    else:
+        parser = argparse.ArgumentParser(prog="idhazh", description=__doc__)
     parser.add_argument("stage", choices=STAGES)
     parser.add_argument("--date", default=None, help="Defaults to today, UTC.")
     parser.add_argument("--config", type=Path, default=config.DEFAULT_CONFIG_DIR)
@@ -408,6 +468,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--no-faithfulness",
         action="store_true",
         help="Skip the scorer. The digest still publishes; the ledger stays empty.",
+    )
+    parser.add_argument(
+        "--memory-profiling",
+        type=_memory_profiling,
+        default=None,
+        metavar="{on,off}",
+        help=(
+            "Override observability.memory_profiling_enabled for this invocation. "
+            "The value must be exactly on or off."
+        ),
     )
     parser.add_argument(
         "--leaderboard",
@@ -499,6 +569,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--host-event-workspace",
+        type=Path,
+        default=None,
+        help="The isolated workspace that owns the optional native event session.",
+    )
+    parser.add_argument(
+        "--host-event-manifest",
+        type=Path,
+        default=None,
+        help="The named host session manifest, relative to its isolated workspace.",
+    )
+    parser.add_argument(
+        "--host-event-config",
+        type=Path,
+        default=None,
+        help="The named effective native config, relative to its isolated workspace.",
+    )
+    parser.add_argument(
         "--server-log",
         type=Path,
         default=Path("llama-server.log"),
@@ -582,8 +670,23 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    settings = config.load(args.config)
-    configure_command_logging(settings.app.logging.level.value)
+    settings = config.with_memory_profiling_override(
+        config.load(args.config), args.memory_profiling
+    )
+    if (
+        args.stage in {"work", "run"}
+        and not settings.app.observability.memory_profiling_enabled
+    ):
+        parser.error(
+            "memory profiling off is unavailable while Python remains the "
+            "authoritative work-stage collector; native cutover has not occurred"
+        )
+    if council_command:
+        from idhazh.council import event_log
+
+        event_log.install(settings.app.logging.level.value)
+    else:
+        configure_command_logging(settings.app.logging.level.value)
     # One place, once, before any stage opens a ledger. A trial run exercises
     # production's code path and must not be readable as a production day, and
     # the only way to guarantee that for every ledger at once is to overlay
@@ -616,6 +719,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 def _dispatch(
     parser: argparse.ArgumentParser, args: argparse.Namespace, settings: config.Settings
 ) -> int:
+    if args.stage.startswith("council-"):
+        from idhazh.council.selection import from_environment
+
+        council_selection = from_environment(settings.council)
     if args.stage == "derived-paths":
         # Above everything, including the config-dependent verbs: it reads one
         # tuple and prints one line, and the commit step that consumes it runs
@@ -707,17 +814,24 @@ def _dispatch(
         # Above the fetcher because picking the work is the council resolving its
         # own config and handing a date to whatever answers to a slug. Starting a
         # fetcher here would read every host's robots.txt for nothing.
-        council_session.prepare(
+        from idhazh.council import outcome
+        from idhazh.council.night_plan import a_date
+
+        results = council_session.prepare(
             settings.council,
-            date=args.date or _today(),
+            date=a_date(args.date or _today(), what="--date"),
             run_id=_council_run(parser, args.stage, args.run_id),
+            selection=council_selection,
         )
-        return 0
+        return outcome.of_results(results)
 
     if args.stage == "council-settle":
         # Beside its siblings: it runs after every shard has reported and calls
         # no model of its own. It is also the one council verb that writes under
         # `state/`, so it is the one that is handed the root.
+        from idhazh.council import outcome
+        from idhazh.council.night_plan import a_date
+
         night = _council_run(parser, args.stage, args.run_id)
         state_dir = common.STATE_ROOT if args.state_root is None else args.state_root
         # Instrument the command without adding telemetry imports to the venue.
@@ -733,34 +847,43 @@ def _dispatch(
                 started_at=datetime.fromtimestamp(int(args.job_started_at), UTC)
                 if args.job_started_at
                 else None,
+                host_events=_host_event_client(parser, args, settings),
             )
-            if settings.council.judge_names
+            if (
+                settings.council.running()
+                if council_selection is None
+                else council_selection.names(publish=True)
+            )
             else contextlib.nullcontext()
         )
         with machine:
-            council_session.settle(
+            results = council_session.settle(
                 settings.council,
-                date=args.date or _today(),
+                date=a_date(args.date or _today(), what="--date"),
                 run_id=night,
                 state_dir=state_dir,
                 commit_sha=args.commit,
+                selection=council_selection,
             )
-        return 0
+        return outcome.of_results(results)
 
     if args.stage == "council-shard":
         # Above the fetcher because a hosted unit reads committed files and posts
         # to loopback. Starting a fetcher here would read every host's robots.txt
         # to answer a question about files already on disk.
+        from idhazh.council import outcome
+        from idhazh.council.night_plan import a_date
+
         if args.tenant is None:
             parser.error(
                 "council-shard needs --tenant: a cell of the matrix names which "
                 "registered tenant it is a shard of, and a shard with no tenant would "
                 "spend a whole runner deciding it had nothing to do"
             )
-        council_session.run_shard(
+        result = council_session.run_shard(
             settings.council,
             slug=args.tenant,
-            date=args.date or _today(),
+            date=a_date(args.date or _today(), what="--date"),
             run_id=_council_run(parser, args.stage, args.run_id),
             shard=args.shard,
             shards=args.shards,
@@ -768,8 +891,9 @@ def _dispatch(
             # install and the weights restore ran before this process, and the
             # council's own preamble knob is what accounts for them.
             started=time.monotonic(),
+            selection=council_selection,
         )
-        return 0
+        return outcome.of_results((result,))
 
     date = args.date or _today()
     # One fetcher for the whole invocation, so `idhazh run` reads each host's
@@ -867,6 +991,7 @@ def _dispatch(
             shard=args.shard,
             shards=args.shards,
             fetcher=read_url,
+            host_events=_host_event_client(parser, args, settings),
         )
 
     if args.stage == "record":
@@ -885,9 +1010,7 @@ def _dispatch(
     if args.stage == "fingerprint":
         silicon.stage_fingerprint(
             date=date,
-            run_id=_machine_run(
-                parser, date=date, given=args.run_id, execution=args.execution
-            ),
+            run_id=_machine_run(parser, date=date, given=args.run_id, execution=args.execution),
             settings=settings,
             state_root=common.STATE_ROOT,
             commit_sha=args.commit,
@@ -899,9 +1022,7 @@ def _dispatch(
     if args.stage == "job-clock":
         silicon.stage_job_clock(
             date=date,
-            run_id=_machine_run(
-                parser, date=date, given=args.run_id, execution=args.execution
-            ),
+            run_id=_machine_run(parser, date=date, given=args.run_id, execution=args.execution),
             settings=settings,
             state_root=common.STATE_ROOT,
             commit_sha=args.commit,

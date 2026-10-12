@@ -28,7 +28,7 @@ import hashlib
 import json
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date as date_type
 from functools import cache
 from itertools import combinations
@@ -42,7 +42,7 @@ from pydantic import TypeAdapter, ValidationError
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.appearance_config import AppearanceConfig
 from idhazh.contracts.base import SLUG_PATTERN
-from idhazh.contracts.knobs.council import CouncilConfig, JudgeDeclaration
+from idhazh.contracts.knobs.council import CouncilConfig, JudgeDeclaration, JudgeRefusalError
 from idhazh.contracts.knobs.gardener import (
     CollectionTaskPolicy,
     CompactionPolicy,
@@ -206,8 +206,8 @@ def load_judge_declarations(
             declarations[name] = JudgeDeclaration.model_validate(
                 {key: raw[key] for key in JudgeDeclaration.model_fields if key in raw}
             )
-        except (ValidationError, json.JSONDecodeError) as error:
-            raise ValueError(f"config/judges/{name}.json is refused: {error}") from error
+        except (OSError, ValidationError, json.JSONDecodeError) as error:
+            raise JudgeRefusalError(name, f"config/judges/{name}.json is refused") from error
     return declarations
 
 
@@ -250,6 +250,17 @@ def load(config_dir: Path = DEFAULT_CONFIG_DIR) -> Settings:
         ),
         config_dir=config_dir,
     )
+
+
+def with_memory_profiling_override(settings: Settings, override: bool | None) -> Settings:
+    """Resolve the invocation's memory control once, without mutating loaded config."""
+    if override is None:
+        return settings
+    observability = settings.app.observability.model_copy(
+        update={"memory_profiling_enabled": override}
+    )
+    app = settings.app.model_copy(update={"observability": observability})
+    return replace(settings, app=app)
 
 
 # --- the gardener ------------------------------------------------------------

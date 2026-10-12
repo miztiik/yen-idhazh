@@ -379,7 +379,15 @@ fn wait_kind(files: &mut FileTransport, kind: EventKind) -> HostEvent {
             if !seen.insert(id) {
                 continue;
             }
-            let event = files.read(id, "results").unwrap();
+            let event = match files.read(id, "results") {
+                Ok(event) => event,
+                Err(error)
+                    if error.contains("No such file") || error.contains("cannot find the file") =>
+                {
+                    continue;
+                }
+                Err(error) => panic!("failed to read result evidence: {error}"),
+            };
             if event.kind == kind {
                 return event;
             }
@@ -397,6 +405,7 @@ fn real_monitor_keeps_twelve_file_shutdown_evidence_after_consumption_refusal() 
     m.windows.truncate(1);
     m.limits.max_concurrent_windows = 1;
     m.limits.max_files = 12;
+    m.limits.retry_window_ms = 60_000;
     m.limits.poll_ms = 5;
     m.controls.memory_profiling_enabled = false;
     resources::setup(&root, &m);

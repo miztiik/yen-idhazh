@@ -23,7 +23,7 @@
 </script>
 
 <section data-windowed="run-health" data-window-days={days} aria-label="Run health, over {countDays(days)}">
-	<Panel id="run-health" verdict title="Run health">
+	<Panel id="run-health" title="Run health">
 		<div data-panel-state={windowPending ? 'loading' : undefined}>
 		<p data-lede style="font-size: var(--text-2xl)">The published day beside the runs that tried it.</p>
 		<p data-comparison="Planned against published articles, and each run's own recorded outcome.">Planned against published articles, and each run's own recorded outcome.</p>

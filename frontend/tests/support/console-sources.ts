@@ -11,11 +11,11 @@ export const FRONTEND = fileURLToPath(new URL('../..', import.meta.url));
 export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	'': [
 		'vite.config.ts', 'svelte.config.js', 'asset-base.js', 'playwright.config.ts',
-		'playwright.logic.config.ts', 'playwright.whole-day.config.ts'
+		'playwright.logic.config.ts'
 	],
 	src: ['app.d.ts', 'query-engine-assets.d.ts', 'service-worker.ts'],
 	'src/lib': [
-		'archive-calendar.ts', 'bands.ts', 'day-shape.ts', 'feed-health.ts', 'format.ts',
+		'archive-calendar.ts', 'bands.ts', 'chart-evidence.ts', 'day-shape.ts', 'feed-health.ts', 'format.ts',
 		'links.ts', 'offline.generated.ts', 'offline.ts', 'readstate.ts', 'reveal.ts', 'theme.ts'
 	],
 	'src/lib/assist': [
@@ -66,6 +66,18 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'article-age.ts', 'at-a-glance.ts', 'chart-drawing.ts', 'extraction.ts', 'failure-mix.ts',
 		'item-cost.ts', 'item-time-split.ts', 'record-window.ts', 'run-health.ts',
 		'run-timeline.ts', 'site-cost-per-item.ts', 'slower-on-same-work.ts', 'stage-timings.ts'
+	],
+	'src/lib/console/model': [
+		'rows.ts', 'call-ending.ts', 'faithfulness.ts', 'source-doubts.ts', 'summary-length.ts',
+		'model-change.ts', 'model-throughput.ts', 'model-rule.ts', 'refusing-rule.ts', 'cost.ts', 'Query.svelte', 'Series.svelte',
+		'Cards.svelte', 'cards.ts', 'Panels.svelte', 'panels.ts', 'Reasons.svelte', 'doubt-reasons.ts', 'slice.ts', 'work.ts'
+	],
+	'src/lib/console/voices': [
+		'record.ts', 'source-health.ts', 'feeds-failed.ts', 'fetch-time.ts',
+		'retiring.ts', 'source-cuts.ts', 'ranking-discount.ts', 'why-chosen.ts', 'watchlist.ts',
+		'VoicesPanel.svelte', 'RecordFrame.svelte', 'SourceHealthPanel.svelte', 'FeedsFailedPanel.svelte', 'FeedTiles.svelte',
+		'FetchTimePanel.svelte', 'RetiringPanel.svelte', 'SourceCutsPanel.svelte',
+		'RankingDiscountPanel.svelte', 'WhyChosenPanel.svelte', 'WatchlistPanel.svelte'
 	],
 	'src/lib/console/explorer': [
 		'address.ts', 'answer.ts', 'AnswerTable.svelte', 'chart-roles.ts', 'column-groups.ts',
@@ -126,19 +138,20 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'query-engine-assets.test.mjs', 'run-checks.test.mjs', 'test-results.test.mjs', 'test-scope.test.mjs'
 	],
 	'tests/support': [
-		'backend-python.ts', 'browser.ts', 'door-page.ts', 'canary-config.ts', 'charts-ready.ts', 'check-addons.ts',
-		'consecutive-days.ts', 'console-panels.ts', 'console-sources.ts', 'console-widths.ts', 'day-drawings.ts',
-		'day-loader.ts', 'day-ready.ts', 'explorer-answer.ts', 'in-zone.ts', 'judgement-route.ts',
+		'backend-python.ts', 'browser.ts', 'door-page.ts', 'check-addons.ts', 'charts-ready.ts',
+		'consecutive-days.ts', 'console-sources.ts', 'console-widths.ts',
+		'day-loader.ts', 'day-ready.ts', 'explorer-answer.ts', 'in-zone.ts',
 		'ledger-lifecycle.ts', 'machine-record-state.ts', 'machine-rows.ts', 'model-swap.ts',
-		'month-shard.ts', 'panel-gates.ts', 'panel-tab.ts', 'pipelines-ledgers.ts', 'published-site.ts', 'published.ts',
-		'range-host.ts', 'reduction-input.ts', 'served-telemetry.ts', 'server-render.ts', 'span-said.ts',
-		'telemetry-row.ts', 'views.ts'
+		'model-route.ts',
+		'month-shard.ts', 'panel-gates.ts', 'panel-tab.ts', 'published-site.ts', 'published.ts',
+		'range-host.ts', 'reduction-input.ts', 'server-render.ts',
+		'telemetry-row.ts', 'views.ts', 'pipelines-ledgers.ts', 'pipelines-span.ts', 'retained-telemetry.ts'
 	],
-	'tests/fixtures/panels': ['WitnessPanel.svelte', 'DurationStack.svelte'],
+	'tests/fixtures/panels': ['WitnessPanel.svelte', 'DurationStack.svelte', 'LegacyReserved.svelte', 'RetainedTelemetry.svelte'],
 	'tests/support/console-window': [
-		'controls.ts', 'readout.ts', 'judgement-fixtures.ts', 'machine-spans.ts',
-		'client-render.ts', 'server-panels.ts'
-	]
+		'controls.ts', 'readout.ts', 'judgement-fixtures.ts', 'server-panels.ts', 'client-render.ts'
+	],
+	'tests/support/panel-drivers': ['pipelines.ts']
 };
 
 export function sourceFiles(): string[] {

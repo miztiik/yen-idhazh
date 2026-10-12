@@ -208,10 +208,12 @@
     "published": [
       "candidate-models",
       "counterfactual-scores",
+      "council-run-records",
       "gardener",
       "host-fingerprint",
       "item-health",
       "published",
+      "run-shards",
       "seen",
       "summary-quality-evals"
     ]
@@ -238,12 +240,14 @@
     "cost_input_per_million": 0.2,
     "cost_output_per_million": 0.6,
     "evaluation_enabled": true,
+    "host_event_shadow": false,
     "host_fingerprint": true,
     "host_fingerprint_bandwidth_cache_multiple": 2,
     "host_fingerprint_bandwidth_floor_mib": 512,
     "host_fingerprint_bandwidth_jobs": [
       "runtime"
     ],
+    "memory_profiling_enabled": true,
     "sample_rate": 1.0,
     "tracing_enabled": true,
     "visual_aggregate_keep_months": null,
@@ -258,11 +262,13 @@
       "config/ledgers.json": 3400,
       "console/band.json": 2000,
       "state/compact/candidate-models/index/": 2200,
+      "state/compact/council-run-records/index/": 2088,
       "state/compact/counterfactual-scores/index/": 2200,
       "state/compact/gardener/index/": 2064,
       "state/compact/host-fingerprint/index/": 2200,
       "state/compact/item-health/index/": 2200,
       "state/compact/published/index/": 2200,
+      "state/compact/run-shards/index/": 2200,
       "state/compact/seen/index/": 2200,
       "state/compact/summary-quality-evals/index/": 2200
     }

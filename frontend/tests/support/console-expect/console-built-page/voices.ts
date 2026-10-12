@@ -1,3 +1,9 @@
-/** Voices adopts its complete door first frames in row 8, not row 4. */
+/** Voices reserves every native-query surface and serializes only unpublished inputs. */
 import type { RouteExpect } from './index';
-export const EXPECT: RouteExpect | null = null;
+export const EXPECT: RouteExpect | null = {
+	scope: 'route',
+	doorPanels: { 'feeds-failed': '', 'fetch-time': '', 'source-cuts': '', 'why-chosen': '', watchlist: '' },
+	pageData: ['sourceView', 'retiring', 'feedInput', 'chart'],
+	reservedPanels: ['feeds-failed', 'fetch-time', 'source-cuts', 'why-chosen', 'watchlist'],
+	pendingPanel: null
+};

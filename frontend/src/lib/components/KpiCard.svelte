@@ -33,7 +33,9 @@
 		windowed = null,
 		windowDays = null,
 		lede = false,
-		rule
+		rule,
+		ruleName,
+		ruleRange
 	}: {
 		label: string;
 		/** Already formatted. The card never does arithmetic on a number. */
@@ -64,6 +66,8 @@
 		windowDays?: number | null;
 		lede?: boolean;
 		rule?: ModelRule;
+		ruleName?: string;
+		ruleRange?: { from: string; to: string };
 	} = $props();
 
 	const percent = $derived(
@@ -80,7 +84,10 @@
 	data-windowed={windowed}
 	data-window-days={windowDays}
 	data-model-rule={declaration?.value}
+	data-model-rule-name={declaration === null ? undefined : (ruleName ?? `kpi-${label}`)}
 	data-model-rule-none={declaration?.none}
+	data-model-rule-from={ruleRange?.from}
+	data-model-rule-to={ruleRange?.to}
 >
 	<p class="kpi-label" data-kpi-label>{label}</p>
 	<p class="kpi-value tabular-nums" class:lede data-kpi-value data-lede={lede ? '' : undefined}>{value}</p>
@@ -123,7 +130,7 @@
 	{/if}
 	{#if line}<p class="kpi-line" data-kpi-line>{line}</p>{/if}
 	{#if rule !== undefined && 'changes' in rule && rule.note !== null}
-		<p class="kpi-line" data-model-rule-empty={rule.changes.length === 0 ? '' : undefined} data-model-rule-note={rule.changes.length > 0 ? '' : undefined}>{rule.note}</p>
+		<p class="kpi-line" data-model-rule-empty={rule.changes.length === 0 ? ruleName ?? '' : undefined} data-model-rule-unread={ruleName} data-model-rule-note={rule.changes.length > 0 ? '' : undefined}>{rule.note}</p>
 	{/if}
 </div>
 

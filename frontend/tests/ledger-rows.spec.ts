@@ -130,7 +130,14 @@ test.describe('reading a packed record', () => {
 			ledger: 'host-fingerprint',
 			pinned: PINNED,
 			days: [{ ago: 1, rows: 1 }, { ago: 0, rows: 2 }],
-			columns: { run_id: '2030-06-15-1', job: 'work', cpu_model: 'AMD EPYC 7763 64-Core Processor', cores: 4, job_seconds: 612.5 }
+			columns: {
+				run_id: '2030-06-15-1',
+				job: 'work',
+				cpu_model: 'AMD EPYC 7763 64-Core Processor',
+				cores: 4,
+				mhz_at_probe: 2445,
+				job_seconds: 612.5
+			}
 		});
 		const table = await machineRecord(days('2030-06-15', '2030-06-15'), state);
 		expect(table.read).toEqual({
@@ -148,7 +155,8 @@ test.describe('reading a packed record', () => {
 			run_id: '2030-06-15-1',
 			job: 'work',
 			cpu_model: 'AMD EPYC 7763 64-Core Processor',
-			cores: '4',
+			version: '2026-10-10',
+			cpu_observed_mhz: '2445',
 			job_seconds: '612.5'
 		};
 		expect(table.rows).toEqual([spelled, spelled]);
@@ -933,6 +941,7 @@ const OBSERVABILITY: ObservabilityConfig = {
 	evaluation_enabled: true,
 	host_fingerprint: true,
 	host_fingerprint_bandwidth_cache_multiple: 2,
+	memory_profiling_enabled: true,
 	sample_rate: 1
 };
 

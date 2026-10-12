@@ -871,7 +871,7 @@ test.describe('a console window ends on the newest published day, and reads only
 });
 
 /** The three columns every file of a built ledger holds. */
-const BUILT_COLUMNS = ['covers', 'date', 'n'];
+const BUILT_COLUMNS = ['covers', 'date', 'n', 'version'];
 /** A fetch ceiling that no file built here reaches. */
 const ROOMY_CEILING = 100_000_000;
 const columnNames = (columns: readonly Column[]): string[] => columns.map((column) => column.name);

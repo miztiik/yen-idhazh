@@ -20,6 +20,7 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Callable, Sequence
+from contextlib import nullcontext
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
@@ -27,21 +28,22 @@ from typing import Final
 
 from idhazh import completed_writes, config, ledger, run_context
 from idhazh.contracts.base import DateStamp, RunId, ServerJob
+from idhazh.contracts.council_events import NightPlanned, RowsCollected, UnitFinished
 from idhazh.contracts.council_run_record import (
     CouncilRunRecord,
     EvaluationStep,
+    ShardOutcome,
 )
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.council import metrics_sink
+from idhazh.council import event_log, metrics_sink, outcome, trial_paths
 from idhazh.council.deadline import run_shard_under_the_clock
 from idhazh.council.registry import VENUE_LEDGERS as VENUE_LEDGERS
 from idhazh.council.registry import tenant, tenants
+from idhazh.council.selection import Selection
 from idhazh.council.tenancy import ShardResult, Tenant
-from idhazh.ledger import staging
-
-_log: Final = logging.getLogger(__name__)
+from idhazh.ledger import lifecycle, staging
 
 #: Where one night's work lands before a later job collects it. The council
 #: names the root because the council is what carries it between jobs as an
@@ -66,9 +68,12 @@ OUTCOMES_DIRNAME: Final = "outcomes"
 STARTED_AT_FORMAT: Final = "%Y-%m-%dT%H:%M:%SZ"
 
 
-def publication_paths(council: CouncilConfig) -> tuple[str, ...]:
+def publication_paths(
+    council: CouncilConfig, *, selection: Selection | None = None
+) -> tuple[str, ...]:
     """The venue's and hosted tenants' declarations, never a blanket state claim."""
-    hosted = tenants(council.running(), council=council)
+    names = council.running() if selection is None else selection.check(council).names(publish=True)
+    hosted = tenants(names, council=council)
     if not hosted:
         return ()
     if any(
@@ -89,7 +94,7 @@ def publication_paths(council: CouncilConfig) -> tuple[str, ...]:
 
 def scratch_root(date: DateStamp) -> Path:
     """The directory one date's work is written under, on whichever runner runs it."""
-    return COUNCIL_ROOT / date
+    return trial_paths.scratch(COUNCIL_ROOT) / date
 
 
 def outcomes_dir(date: DateStamp) -> Path:
@@ -154,25 +159,33 @@ def shard_width(council: CouncilConfig, host: Tenant) -> int:
     return min(host.shard_count, council.shards)
 
 
-def prepare(council: CouncilConfig, *, date: DateStamp, run_id: RunId) -> tuple[ShardResult, ...]:
+def prepare(
+    council: CouncilConfig,
+    *,
+    date: DateStamp,
+    run_id: RunId,
+    selection: Selection | None = None,
+) -> tuple[ShardResult, ...]:
     """Pick the work, once a date, before any shard runs.
 
     In the order the config names the tenants, because a venue that ran them in
     an order it never declared could not be re-run into the same state.
     """
-    return tuple(
-        _recorded(
-            host.judge_id,
-            unit="prepare",
-            date=date,
-            run_id=run_id,
-            evaluation_step=EvaluationStep.SELECT_JUDGE_WORK,
-            work_part_index=None,
-            work_part_count=shard_width(council, host),
-            work=partial(host.prepare, date=date, run_id=run_id),
-        )
-        for host in _hosted(council, date)
-    )
+    results: list[ShardResult] = []
+    for host in _hosted(council, date, selection):
+        with trial_paths.route(_trial_root(selection, host.judge_id, run_id)):
+            results.append(
+                _recorded(
+                    host.judge_id,
+                    date=date,
+                    run_id=run_id,
+                    evaluation_step=EvaluationStep.SELECT_JUDGE_WORK,
+                    work_part_index=None,
+                    work_part_count=shard_width(council, host),
+                    work=partial(host.prepare, date=date, run_id=run_id),
+                )
+            )
+    return tuple(results)
 
 
 def settle(
@@ -183,6 +196,8 @@ def settle(
     state_dir: Path,
     commit_sha: str,
     completed: Callable[[Tenant | None, dict[Path, str]], None] | None = None,
+    selection: Selection | None = None,
+    prepare_inputs: Callable[[Tenant], None] | None = None,
 ) -> tuple[ShardResult, ...]:
     """Count, fit, or do nothing, once a date after every shard has reported.
 
@@ -196,16 +211,24 @@ def settle(
     one attempt and one commit.
     """
     identity = _identify_writer(run_id=run_id, commit_sha=commit_sha)
-    hosted = _hosted(council, date)
+    hosted = _hosted(council, date, selection)
+    active = tuple(host for host in hosted if _trial_root(selection, host.judge_id, run_id) is None)
     results: list[ShardResult] = []
     failures: list[Exception] = []
     for host in hosted:
-        with completed_writes.collect() as evidence:
+        trial = _trial_root(selection, host.judge_id, run_id)
+        trial_writes = (
+            nullcontext()
+            if trial is None
+            else lifecycle.isolated_trial(trial / "state", identity=identity)
+        )
+        with trial_paths.route(trial), trial_writes, completed_writes.collect() as evidence:
             try:
+                if prepare_inputs is not None:
+                    prepare_inputs(host)
                 results.append(
                     _recorded(
                         host.judge_id,
-                        unit="settle",
                         date=date,
                         run_id=run_id,
                         evaluation_step=EvaluationStep.COMBINE_JUDGE_RESULTS,
@@ -215,7 +238,7 @@ def settle(
                             host.settle,
                             date=date,
                             run_id=run_id,
-                            state_dir=state_dir,
+                            state_dir=state_dir if trial is None else trial / "state",
                             identity=identity,
                         ),
                     )
@@ -223,18 +246,23 @@ def settle(
             except Exception as error:
                 failures.append(error)
             finally:
-                if completed is not None:
+                if completed is not None and trial is None:
                     try:
                         completed(host, evidence)
                     except Exception as error:
                         failures.append(error)
+            if trial is not None:
+                try:
+                    _collect((host,), date=date, state_dir=trial / "state", identity=identity)
+                except Exception as error:
+                    failures.append(error)
     with completed_writes.collect() as evidence:
         try:
-            _collect(hosted, date=date, state_dir=state_dir, identity=identity)
+            _collect(active, date=date, state_dir=state_dir, identity=identity)
         except Exception as error:
             failures.append(error)
         finally:
-            if completed is not None:
+            if completed is not None and active:
                 try:
                     completed(None, evidence)
                 except Exception as error:
@@ -255,6 +283,7 @@ def run_shard(
     shard: int,
     shards: int,
     started: float,
+    selection: Selection | None = None,
 ) -> ShardResult:
     """One shard of one tenant's work, stopped on the council's own clock.
 
@@ -262,42 +291,56 @@ def run_shard(
     invocation, so two tenants sharing a job would each be handed the whole span
     the venue meant for one of them.
     """
-    if slug not in council.running():
+    names = council.running() if selection is None else selection.check(council).names(date=date)
+    if slug not in names:
         raise ValueError(f"judge '{slug}' is not active in this council")
-    host = tenant(slug, council=council)
-    return _recorded(
-        host.judge_id,
-        unit=f"shard {shard} of {shards}",
-        date=date,
-        run_id=run_id,
-        evaluation_step=EvaluationStep.EVALUATE_WORK_PART,
-        work_part_index=shard,
-        work_part_count=shards,
-        work=partial(
-            run_shard_under_the_clock,
-            host,
+    trial = _trial_root(selection, slug, run_id)
+    host = tenant(slug, council=council, trial=trial is not None)
+    if shards != shard_width(council, host) or not 0 <= shard < shards:
+        raise ValueError("shard differs from its selected width")
+    with trial_paths.route(trial):
+        return _recorded(
+            host.judge_id,
             date=date,
             run_id=run_id,
-            shard=shard,
-            shards=shards,
-            council=council,
-            started=started,
-        ),
+            evaluation_step=EvaluationStep.EVALUATE_WORK_PART,
+            work_part_index=shard,
+            work_part_count=shards,
+            work=partial(
+                run_shard_under_the_clock,
+                host,
+                date=date,
+                run_id=run_id,
+                shard=shard,
+                shards=shards,
+                council=council,
+                started=started,
+            ),
+        )
+
+
+def _trial_root(selection: Selection | None, name: str, run_id: RunId) -> Path | None:
+    return (
+        trial_paths.root(COUNCIL_ROOT, run_id=run_id, judge_id=name)
+        if selection is not None and selection.trial(name)
+        else None
     )
 
 
-def _hosted(council: CouncilConfig, date: DateStamp) -> tuple[Tenant, ...]:
+def _hosted(
+    council: CouncilConfig, date: DateStamp, selection: Selection | None = None
+) -> tuple[Tenant, ...]:
     """The tenants this night hosts, said out loud so an empty night is readable."""
-    hosted = tenants(council.running(), council=council)
+    names = council.running() if selection is None else selection.check(council).names(date=date)
+    hosted = tenants(names, council=council, trials=() if selection is None else selection.trials)
     if not hosted:
-        _log.info("no judge is active, so %s is a night the council hosts nobody", date)
+        event_log.emit(NightPlanned(dates=(date,), judges=0, units=0))
     return hosted
 
 
 def _recorded(
     judge_id: str,
     *,
-    unit: str,
     date: DateStamp,
     run_id: RunId,
     evaluation_step: EvaluationStep,
@@ -307,37 +350,63 @@ def _recorded(
 ) -> ShardResult:
     """Run one unit of hosted work and file the council's own row on the way out.
 
-    The row is filed in a `finally`, so it survives anything that goes wrong
-    after the tenant handed its result back.
+    A returned result is filed before it is reported. A filing failure emits
+    a failed unit event and propagates rather than reporting success.
 
-    **A unit that never handed one back files nothing**, and that is the design
-    rather than a gap. The outcome vocabulary has three members and none of them
-    says "this died"; what says it is the missing row, read against the `shards`
-    cell its siblings carry. A unit the platform killed leaves the same gap, so
-    an operator reads one signal and not two.
+    A raised unit files a failed row before propagating its exception. If filing
+    also raises, both failures escape together. A platform kill cannot file a row.
     """
     began = datetime.now(UTC).strftime(STARTED_AT_FORMAT)
     started = time.monotonic()
+    outcome.start_unit()
+    failure: BaseException | None = None
     produced: ShardResult | None = None
     try:
-        produced = work()
+        file_result = partial(
+            _file, judge_id=judge_id, date=date, run_id=run_id,
+            evaluation_step=evaluation_step, work_part_index=work_part_index,
+            work_part_count=work_part_count, began=began,
+        )
+        try:
+            produced = work()
+            if produced.outcome is ShardOutcome.FAILED:
+                raise ValueError("a failed council result requires a raised unit")
+        except BaseException as work_error:
+            try:
+                file_result(
+                    ShardResult(outcome=ShardOutcome.FAILED),
+                    seconds=time.monotonic() - started,
+                )
+            except BaseException as filing_error:
+                raise BaseExceptionGroup(
+                    "council work and recording failures", [work_error, filing_error]
+                ) from None
+            raise
+        else:
+            file_result(produced, seconds=time.monotonic() - started)
         return produced
+    except BaseException as error:
+        failure = error
+        raise
     finally:
-        if produced is not None:
-            _file(
-                produced,
+        error_name, where = event_log.cause_of(failure)
+        event_log.emit(
+            UnitFinished(
                 judge_id=judge_id,
                 date=date,
                 run_id=run_id,
                 evaluation_step=evaluation_step,
                 work_part_index=work_part_index,
                 work_part_count=work_part_count,
-                began=began,
-                seconds=time.monotonic() - started,
-            )
-            _log.info(
-                "council %s for %s on %s ended %s", unit, judge_id, date, produced.outcome.value
-            )
+                outcome=produced.outcome
+                if failure is None and produced is not None else ShardOutcome.FAILED,
+                error=error_name,
+                where=where,
+            ),
+            level=logging.ERROR
+            if failure is not None or (produced is not None and outcome.of_results((produced,)))
+            else logging.INFO,
+        )
 
 
 def _file(
@@ -368,6 +437,7 @@ def _file(
             "work_part_index": work_part_index,
             "work_part_count": work_part_count,
             "outcome": result.outcome,
+            "fault": "raised" if result.outcome is ShardOutcome.FAILED else None,
             "started_at": began,
             "seconds_spent": seconds,
             "model_calls": result.model_calls,
@@ -434,5 +504,5 @@ def _collect(
         identity=identity,
     )
     landed = len(recorded) if written else 0
-    _log.info("the council recorded %d units of its own work on %s", landed, date)
+    event_log.emit(RowsCollected(date=date, rows=landed))
     return landed

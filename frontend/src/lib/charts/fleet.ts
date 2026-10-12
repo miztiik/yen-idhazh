@@ -34,6 +34,7 @@
 import type { LostDay } from '../console/recording';
 import { nameSpan } from '../console/span-words';
 import type { Row } from '../data/ledger';
+import { normalizeHostRows } from '../data/host-fingerprint';
 import { plural, shortDate } from '../format';
 import { dayTicks, type DayTick, type Frame } from './frame';
 import {
@@ -54,15 +55,21 @@ import { bandScale } from './d3/scale';
 
 /** The columns the panel reads, and the only ones: what a query for it names. */
 export const FLEET_COLUMNS = [
+	'version',
 	'date',
 	'run_id',
 	'job',
 	'shard',
 	'fingerprint',
+	'fingerprint_version',
 	'cpu_model',
 	'job_seconds',
 	'server_prompt_tokens',
-	'server_prompt_seconds'
+	'server_prompt_seconds',
+	'cores',
+	'threads',
+	'mhz_max',
+	'mhz_at_probe'
 ] as const;
 
 /** One job as the panel reads it. */
@@ -74,6 +81,7 @@ export interface FleetJob {
 	job: string;
 	shard: number | null;
 	fingerprint: string | null;
+	fingerprintVersion: number | null;
 	cpuModel: string | null;
 	/** The job's own clock, in seconds. */
 	seconds: number | null;
@@ -191,7 +199,7 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
  */
 export function fleetJobs(rows: readonly Row[]): FleetJob[] {
 	const jobs: FleetJob[] = [];
-	for (const row of rows) {
+	for (const row of normalizeHostRows(rows)) {
 		const date = text(row.date);
 		const runId = text(row.run_id);
 		if (date === null || !DAY.test(date) || runId === null) continue;
@@ -201,6 +209,7 @@ export function fleetJobs(rows: readonly Row[]): FleetJob[] {
 			job: text(row.job) ?? 'work',
 			shard: figure(row.shard),
 			fingerprint: text(row.fingerprint),
+			fingerprintVersion: figure(row.fingerprint_version),
 			cpuModel: text(row.cpu_model),
 			seconds: figure(row.job_seconds),
 			rate: promptRate(figure(row.server_prompt_tokens), figure(row.server_prompt_seconds))
@@ -241,17 +250,32 @@ function rangeNote(rates: readonly number[]): string | null {
 
 /** A known machine the ramp has no identity for: a machine with no reading. */
 function untimed(machine: MachineKey): MachineIdentity {
-	return { key: machine.key, name: machine.name, step: null, rate: null, colour: RESERVED_GREY_INK };
+	return {
+		key: machine.key,
+		name: machine.name,
+		fingerprintVersion: machine.fingerprintVersion,
+		step: null,
+		rate: null,
+		colour: RESERVED_GREY_INK
+	};
 }
 
 /** The kinds, folds and absence the open span draws, day by day. */
 export function fleetView(jobs: readonly FleetJob[], options: FleetOptions): FleetView {
 	const inSpan = jobs.filter((job) => job.date >= options.start && job.date <= options.end);
 	const resolve = machineKeys(
-		jobs.map((job) => ({ fingerprint: job.fingerprint, cpuModel: job.cpuModel }))
+		jobs.map((job) => ({
+			fingerprint: job.fingerprint,
+			fingerprintVersion: job.fingerprintVersion,
+			cpuModel: job.cpuModel
+		}))
 	);
 	const placed = inSpan.map((job) => {
-		const machine = resolve({ fingerprint: job.fingerprint, cpuModel: job.cpuModel });
+		const machine = resolve({
+			fingerprint: job.fingerprint,
+			fingerprintVersion: job.fingerprintVersion,
+			cpuModel: job.cpuModel
+		});
 		return { job, identity: options.ramp.at.get(machine.key) ?? untimed(machine) };
 	});
 	const days = [...new Set(inSpan.map((job) => job.date))].sort();

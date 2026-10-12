@@ -88,6 +88,14 @@ impl ExperimentConfig {
         controls
     }
 }
+pub fn memory_profiling_override(value: Option<&str>) -> Result<Option<bool>> {
+    match value {
+        None => Ok(None),
+        Some("on") => Ok(Some(true)),
+        Some("off") => Ok(Some(false)),
+        Some(_) => Err("memory profiling must be 'on' or 'off'".to_owned()),
+    }
+}
 pub fn admits_raw(lifecycle: Lifecycle, _job: ServerJob) -> bool {
     lifecycle == Lifecycle::Active
 }

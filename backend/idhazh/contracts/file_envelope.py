@@ -30,9 +30,9 @@ import re
 import uuid
 from collections.abc import Mapping
 from enum import StrEnum
-from typing import Annotated, ClassVar, Final, Self, assert_never
+from typing import Annotated, ClassVar, Final, Literal, Self, assert_never, cast
 
-from pydantic import Field, StringConstraints, model_validator
+from pydantic import ConfigDict, Field, StringConstraints, model_validator
 
 from idhazh.contracts.base import (
     DATE_PATTERN,
@@ -94,9 +94,6 @@ _DAY: Final = re.compile(DATE_PATTERN)
 _MONTH: Final = re.compile(MONTH_PATTERN)
 _YEAR: Final = re.compile(YEAR_PATTERN)
 
-#: The module that wrote a file, as a dotted name inside the ledger package.
-_WRITER_PATTERN: Final = r"^idhazh\.ledger\.[a-z_]+$"
-
 #: The keys `as_metadata` writes, in the order the envelope's table lists them.
 #: A key outside this set is refused on the way back in, the way `extra="forbid"`
 #: refuses an unknown field.
@@ -125,6 +122,18 @@ _KEYS: Final = (
 
 #: The keys that may be absent: a raw file names no period and read no sources.
 _OPTIONAL_KEYS: Final = frozenset({"period", "built_from"})
+_ENVELOPE_VERSIONS: Final = frozenset(
+    {
+        "2026-09-25",
+        "2026-09-27",
+        "2026-09-28",
+        "2026-09-30",
+        "2026-10-01",
+        "2026-10-01T16:50",
+        "2026-10-06",
+        "2026-10-10",
+    }
+)
 
 
 def covers_fits(covers: str, *, tier: Tier, period: Period | None) -> bool:
@@ -181,6 +190,18 @@ class WriterIdentity(Model):
     )
 
 
+class EnvelopeWriterIdentity(WriterIdentity):
+    """The immutable identity nested inside a file envelope."""
+
+    model_config = ConfigDict(frozen=True, revalidate_instances="always")
+
+    def __eq__(self, other: object) -> bool:
+        """Keep identity equality structural across the mutable/immutable boundary."""
+        if isinstance(other, WriterIdentity):
+            return self.model_dump() == other.model_dump()
+        return NotImplemented
+
+
 #: A version 5 UUID in its canonical lower-case spelling: a row's `unit_id` cell.
 _UNIT_ID_PATTERN: Final = (
     r"^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
@@ -219,8 +240,14 @@ class RowIdentity(Model):
 class FileEnvelope(Contract):
     """What one ledger file holds, written inside the file so its name is never parsed."""
 
+    model_config = ConfigDict(frozen=True, revalidate_instances="always")
     __schema_stem__: ClassVar[str] = "file-envelope"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-10",
+            change="Admit finite truthful native host writer/container pairs.",
+            why="Rust host bytes must not claim a Python codec identity.",
+        ),
         ChangelogEntry(
             version="2026-10-06",
             change="Writer identity `job` may name `operator`.",
@@ -237,14 +264,9 @@ class FileEnvelope(Contract):
             why="The eval ledger is named for what it holds; its files were rewritten.",
         ),
         ChangelogEntry(
-            version="2026-09-30",
-            change="period may be yearly, and covers then holds a UTC year, YYYY.",
-            why="A finished year's month files may be packed into one year file.",
-        ),
-        ChangelogEntry(
             version="2026-09-28",
             change="Earlier changes are in this file's git history.",
-            why="The changelog keeps the four newest changes and one history pointer.",
+            why="The changelog keeps the newest changes and one history pointer.",
         ),
     )
 
@@ -296,7 +318,12 @@ class FileEnvelope(Contract):
             "two files can be told apart after a rename and a copy proven a copy."
         )
     )
-    writer: Annotated[str, StringConstraints(pattern=_WRITER_PATTERN)] = Field(
+    writer: Literal[
+        "idhazh.ledger.parquet",
+        "idhazh_rust.ledger.parquet",
+        "idhazh.ledger.json_lines",
+        "idhazh_rust.ledger.json_lines",
+    ] = Field(
         description=(
             "The ledger module that wrote the file. A parquet footer's own `created_by` "
             "names the engine, not this project."
@@ -315,6 +342,19 @@ class FileEnvelope(Contract):
         ge=0,
         description="On a compact file, how many files were read to make it. Absent on raw.",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _freeze_writer_identity(cls, data: object) -> object:
+        if isinstance(data, Mapping):
+            identity = data.get("identity")
+            if isinstance(identity, WriterIdentity):
+                identity = identity.model_dump()
+            if isinstance(identity, Mapping):
+                declared = cast("type[WriterIdentity]", cls.model_fields["identity"].annotation)
+                target = EnvelopeWriterIdentity if declared is WriterIdentity else declared
+                return dict(data) | {"identity": target.model_validate(identity)}
+        return data
 
     @model_validator(mode="after")
     def _the_period_fits_the_tier(self) -> Self:
@@ -348,6 +388,30 @@ class FileEnvelope(Contract):
                 "unit_id must be a version 5 UUID and file_id a version 8 one, got "
                 f"versions {self.unit_id.version} and {self.file_id.version}"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _writer_scope_is_finite(self) -> Self:
+        if self.version not in _ENVELOPE_VERSIONS:
+            raise ValueError("unrecognized file envelope version")
+        if self.writer.startswith("idhazh_rust.") and (
+            self.version != "2026-10-10"
+            or self.row_schema_version != "2026-10-10"
+            or self.ledger is not LedgerName.HOST_FINGERPRINT
+            or self.tier is not Tier.RAW
+            or self.identity.producer != "telemetry.silicon"
+        ):
+            raise ValueError("native writer requires the corrected raw host contract")
+        if self.writer.endswith(".json_lines") and self.compression is not Compression.NONE:
+            raise ValueError("JSON lines must record compression none")
+        return self
+
+    def validate_container(self, container: Format) -> Self:
+        """Validate provenance against the container detected from the file bytes."""
+        container = Format(container)
+        expected = ".parquet" if container is Format.PARQUET else ".json_lines"
+        if not self.writer.endswith(expected):
+            raise ValueError("writer does not match the observed container")
         return self
 
     def as_metadata(self) -> dict[bytes, bytes]:
@@ -395,6 +459,9 @@ class FileEnvelope(Contract):
         refuses an unknown field; a required key that is missing is refused too.
         Every value is then validated by the fields themselves.
         """
+        for key in (b"attempt", b"shard", b"written_at_ms", b"built_from"):
+            if key in mapping and re.fullmatch(rb"[0-9]+", mapping[key]) is None:
+                raise ValueError(f"{key.decode()} metadata must be ASCII decimal")
         text = {key.decode("utf-8"): value.decode("utf-8") for key, value in mapping.items()}
         unknown = sorted(set(text) - set(_KEYS))
         if unknown:

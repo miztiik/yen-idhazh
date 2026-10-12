@@ -20,6 +20,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { machineName } from '../src/lib/charts/machine-name';
 import {
+	machineKeys,
 	machineRamp,
 	MACHINE_HUE,
 	UNRECORDED_KEY,
@@ -139,12 +140,26 @@ test.describe('what a processor is called', () => {
 		expect(machineName('')).toBe('');
 		expect(machineName('   ')).toBe('');
 	});
+
+	test('fingerprint algorithms are distinct and name-only rows never join either', () => {
+		const rows = [
+			{ fingerprint: 'aaaaaaaaaaaaaaaa', fingerprintVersion: 1, cpuModel: 'Same CPU' },
+			{ fingerprint: 'aaaaaaaaaaaaaaaa', fingerprintVersion: 2, cpuModel: 'Same CPU' },
+			{ fingerprint: null, fingerprintVersion: null, cpuModel: 'Same CPU' }
+		];
+		const resolve = machineKeys(rows);
+		expect(rows.map(resolve).map((row) => row.key)).toEqual([
+			'v1:aaaaaaaaaaaaaaaa',
+			'v2:aaaaaaaaaaaaaaaa',
+			'name:Same Cpu'
+		]);
+	});
 });
 
 test.describe('which colour a machine takes', () => {
 	/** A kind's jobs, each reading at the rate given. */
 	const jobs = (key: string, name: string, rates: (number | null)[]): Placement[] =>
-		rates.map((rate) => ({ machine: { key, name }, rate }));
+		rates.map((rate) => ({ machine: { key, name, fingerprintVersion: null }, rate }));
 
 	test('five steps for a machine, which is console.machine_colour_stops', () => {
 		// Five, because a reader cannot rank many steps of one hue on a thin bar.
@@ -369,8 +384,8 @@ test.describe('reading against writing, machine by machine', () => {
 		const byFingerprint = splitByMachine(onlyRun(rows), {
 			colour: COLOUR,
 			fingerprints: new Map([
-				[0, '1111111111111111'],
-				[1, '2222222222222222']
+				[0, { fingerprint: '1111111111111111', fingerprintVersion: 1 }],
+				[1, { fingerprint: '2222222222222222', fingerprintVersion: 2 }]
 			])
 		});
 		expect(byFingerprint.groups).toHaveLength(2);
@@ -393,8 +408,8 @@ test.describe('reading against writing, machine by machine', () => {
 		]);
 		const split = splitByMachine(run, { colour: COLOUR });
 		expect(split.groups.map((group) => group.identity.key).sort()).toEqual([
-			'1111111111111111',
-			'2222222222222222'
+			'v2:1111111111111111',
+			'v2:2222222222222222'
 		]);
 	});
 });

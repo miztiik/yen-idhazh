@@ -155,9 +155,9 @@ export interface BoardRow {
 	stolenItems: number;
 	/** The highest load any of the shard's items ended under. */
 	loadMax: number | null;
-	/** Cores the host let the job see. The load figure's denominator. */
-	cores: number | null;
-	/** The load against those cores. Empty where either is missing. */
+	/** Validated online logical processors. The load figure's denominator. */
+	logicalProcessors: number | null;
+	/** The load against those processors. Empty where either is missing. */
 	load: TargetMarks;
 	/** What the host had left to swap into, and what it has. */
 	swapFreeBytes: number | null;
@@ -383,8 +383,8 @@ export function shardBoard(
 			stolen: rangeMark(shard.cpuStolenMedianPct, shard.cpuStolenMaxPct, 100),
 			stolenItems: shard.cpuStolenItems,
 			loadMax: shard.loadMax,
-			cores: shard.cores,
-			load: targetMarks(shard.loadMax, shard.cores ?? 0, 'lower-is-better'),
+			logicalProcessors: shard.logicalProcessors,
+			load: targetMarks(shard.loadMax, shard.logicalProcessors ?? 0, 'lower-is-better'),
 			swapFreeBytes: shard.swapFreeMinBytes,
 			swapTotalBytes: shard.swapTotalBytes,
 			swapState: swapStateOf(shard.swapTotalBytes),
@@ -548,9 +548,9 @@ export interface MemoryBoardView {
 	totalAgrees: boolean | null;
 	/** The highest load any item of the run ended under. */
 	loadHigh: number | null;
-	/** Cores the run's hosts let the jobs see. The smaller where they disagree,
+	/** Online logical processors on the run's hosts. The smaller where they disagree,
 	 * for the same reason the memory denominator takes the smaller. */
-	cores: number | null;
+	logicalProcessors: number | null;
 	load: TargetMarks;
 	/** Processor busy across the whole run, trough to peak. */
 	busySpan: RangeMark;
@@ -708,8 +708,9 @@ export function memoryBoard(
 		.map((row) => numberCell(row, 'load_1m'))
 		.filter((value): value is number => value !== null);
 	const loadHigh = loads.length === 0 ? null : Math.max(...loads);
-	const cores = run === null ? null : smallest(run.reported.map((one) => one.cores));
-	const loadScale = Math.max(loadHigh ?? 0, cores ?? 0);
+	const logicalProcessors =
+		run === null ? null : smallest(run.reported.map((one) => one.logicalProcessors));
+	const loadScale = Math.max(loadHigh ?? 0, logicalProcessors ?? 0);
 	const busyLow = smallest(ordered.map((row) => numberCell(row, 'cpu_busy_min')));
 	const busyHighs = ordered
 		.map((row) => numberCell(row, 'cpu_busy_max'))
@@ -778,8 +779,8 @@ export function memoryBoard(
 		totalsSeen,
 		totalAgrees,
 		loadHigh,
-		cores,
-		load: targetMarks(loadHigh, cores ?? 0, 'lower-is-better'),
+		logicalProcessors,
+		load: targetMarks(loadHigh, logicalProcessors ?? 0, 'lower-is-better'),
 		busySpan: rangeMark(busyLow, busyHighs.length === 0 ? null : Math.max(...busyHighs), 100),
 		from: items.length,
 		outOf: planned.size === 0 ? null : sum([...planned.values()]),

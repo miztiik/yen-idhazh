@@ -12,12 +12,13 @@ shards on a sparse checkout, and installs nothing at all. The Pages workflow
 decides whether to publish on a bare checkout, before any install.
 The gardener's programs import the package's crash printer as they start, to
 print a crash without its text, so the printer is held to the same, and so is
-the package's `__init__.py`, which Python runs first.
+the package's `__init__.py`, which Python runs first. The printer's one named
+dependency is the shared event writer, also checked here.
 
 Module scope only. A name imported inside a function is resolved when that
 function runs, and the squash program imports `idhazh` in the one function that
 reads its declaration. A relative import names a module of ours, so it counts as
-outside the standard library.
+outside the standard library unless it is the printer's checked shared writer.
 """
 
 from __future__ import annotations
@@ -42,7 +43,7 @@ from ._harness import (
 
 pytestmark = pytest.mark.workflow
 
-#: Every program held to this, and the two files Python runs when the gardener's
+#: Every program held to this, and the three files Python runs when the gardener's
 #: programs import the printer as they start, named one by one. A sixth program
 #: a broken job reaches for is declared here or it is held to nothing.
 STANDALONE_PROGRAMS: Final = (
@@ -52,6 +53,7 @@ STANDALONE_PROGRAMS: Final = (
     GARDENER_PLAN_MODULE,
     PUBLISH_DECISION_MODULE,
     CRASH_TRACE_MODULE,
+    CRASH_TRACE_MODULE.with_name("event_lines.py"),
     PACKAGE_INIT_MODULE,
 )
 
@@ -76,7 +78,9 @@ def test_a_program_a_broken_job_runs_imports_only_the_standard_library(program: 
     outside = sorted(
         name
         for name in _imports_at_module_scope(read_text(program), program.name)
-        if name != "__future__" and name.split(".")[0] not in sys.stdlib_module_names
+        if name != "__future__"
+        and name.split(".")[0] not in sys.stdlib_module_names
+        and not (program == CRASH_TRACE_MODULE and name == "idhazh.event_lines")
     )
     assert not outside, (
         f"{program.name} resolves {', '.join(outside)} at import time, so it dies "

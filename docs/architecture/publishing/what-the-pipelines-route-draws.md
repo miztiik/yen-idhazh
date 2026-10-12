@@ -8,6 +8,22 @@ not zero, so a settings change on a day without a reading still has its place.
 The route resolves its record window before calling the private panels settled.
 Native reads start independently; request epochs prevent late windows replacing
 the current one, and the extractor and recorded flags retain separate states.
+Native record limitations sit after the failure plot, not above the private
+carry line: receiving the ledger must not move the window controls or chrome.
+The retained run-square cut wording is tested on that actual component with
+independent capped and uncapped records; no item-ledger cut identities cross
+the native page's private manifest boundary.
+After the representative-test consolidation, native disk/private contracts run
+in the logic group. Explicit Pipelines component, lifecycle, window, waiting,
+request-dependency and populated plot cases run in the console group. Retained
+compression and identity-list oracles mount the actual retained components,
+not retired route UI. There is no restored cross-route panels/capture matrix.
+
+The retained timing and histogram plots name their actual drawing elements for
+the shared chart checks. Timeline rows name their actual bar frames. An absent
+private chart-share record still has a headline, stating its absence rather
+than inventing a percentage. The first published-count card is the route verdict;
+its count note names the same calendar that its bars draw.
 
 `/console/` answers two questions: did the runs work, and what each stage cost.
 This page holds its native stage and cost readings and its private run figures.
@@ -59,6 +75,28 @@ The rule ranking makes no source, detail or distinct-article claim. Failure
 percentages divide failed rows by recorded rows, since the declared slice carries
 no article identity. Private payload shrinkage is a signed reading, not a zero
 bar. No unavailable value is filled with zero to get a gate through.
+
+Retained telemetry components keep independent real-input correctness cases
+off-route; those fixtures do not restore compression, source rankings or item
+details to Pipelines. Populated native panel gates use packed declared records
+with explicit feed timestamps and measured clocks. The ordinary canary's
+inferred article timestamp is not treated as a measured age. With scripts
+disabled, native frames explicitly say the article record needs JavaScript;
+private published-day marks remain in the document.
+
+At a glance is the sole route verdict; run health remains its own comparison.
+Declared date plots name the exact calendar they drew, including null days, and
+opted-in count cards name their own declined settings rule. The native cold-load
+check keeps the four-hop ceiling on independent ledger/data/engine branches,
+with real held responses and planted serial requests proving the distinction.
+
+Native readout headings spell dates for readers and declare that their inputs
+are fetched. Private strips remain prerendered. The site-cost horizon states
+both measured rates and the Pages cap; its signed size delta names the selected
+span. Shared legacy month-price and reserved-tint contracts are still tested on
+their retained real components, while the route's waiting and retry tests hold
+its declared native index. A clipped native calendar is not widened with
+invented pre-record days to satisfy a legacy telemetry oracle.
 
 The flag count keeps the newest recorded boolean for each distinct article;
 null cells cannot replace a flag, and conflicting booleans on its latest
