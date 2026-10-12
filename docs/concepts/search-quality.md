@@ -1,6 +1,6 @@
 # Search Quality
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-10-12
 Whether the archive's on-device search finds the right story: the metric, the
 label set, how an operator measures it, and why no test gates it.
 
@@ -476,6 +476,14 @@ the encoder, the floor or the ranking. Authority: owner.
 The offline `story_dataset` instrument compares an article with other articles,
 not a reader's query with search results. It does not change the browser metric,
 its labels or production settings.
+
+Primary and independent review memberships use the same typed-parent check.
+It resolves only explicitly reviewed catalogue aliases, then uses the resolved
+child's declared parents. It also resolves aliases in those parent references,
+including the declared parents of local proposals. It does not merge names or
+collect parents from historical identities. Local proposals stay pending until
+their batch has an explicit resolution. Pending paths still check every known
+parent link. Validation changes no stored labels, evidence or history bytes.
 
 `python -m idhazh.story_dataset.runner_cli materialize-candidate` takes
 `--candidate-root`, `--candidate`, `--state`, `--source-root` and
