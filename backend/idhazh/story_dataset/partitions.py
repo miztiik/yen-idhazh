@@ -8,7 +8,8 @@ from typing import Literal
 from idhazh.contracts.story_candidates import PairFrame
 from idhazh.contracts.story_evaluation import Partition, StoryPolicy
 from idhazh.contracts.story_source import SourceFreeze
-from idhazh.story_dataset.catalog import read_catalog, resolve_ref, resolved_paths
+from idhazh.story_dataset.catalog import read_catalog
+from idhazh.story_dataset.catalog_context import CatalogContext
 from idhazh.story_dataset.storage import Store, digest
 from idhazh.story_dataset.workers import latest_annotations
 
@@ -23,6 +24,7 @@ def build_partition(
     previous: Partition | None = None,
 ) -> Partition:
     catalog = read_catalog(store)
+    context = CatalogContext(catalog)
     records = latest_annotations(store)
     parents = {identity: identity for identity in article_ids}
 
@@ -41,12 +43,12 @@ def build_partition(
     for identity, record in records.items():
         if identity not in article_ids:
             continue
-        paths = resolved_paths(record, catalog)
+        paths = context.resolved_paths(record)
         if paths is None or record.decision.state != "annotated":
             unqualified.add(identity)
         # Qualification requires the whole path; leakage only needs its known Event.
         for membership in record.decision.memberships:
-            event = resolve_ref(catalog, record.batch_id, membership.event)
+            event = context.resolve_ref(record.batch_id, membership.event)
             if event is None:
                 continue
             if event in first_by_event:

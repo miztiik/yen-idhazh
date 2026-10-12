@@ -4,7 +4,8 @@ from idhazh.contracts.story_annotation import AnnotationRecord
 from idhazh.contracts.story_candidates import PairRecord
 from idhazh.contracts.story_evaluation import DatasetStatus
 from idhazh.contracts.story_source import SourceFreeze
-from idhazh.story_dataset.catalog import read_catalog, resolved_paths
+from idhazh.story_dataset.catalog import read_catalog
+from idhazh.story_dataset.catalog_context import CatalogContext
 from idhazh.story_dataset.storage import Store
 from idhazh.story_dataset.vector_files import read_vectors
 from idhazh.story_dataset.vectors import covered_ids
@@ -13,13 +14,14 @@ from idhazh.story_dataset.workers import latest_annotations
 
 def dataset_status(store: Store, manifest: SourceFreeze) -> DatasetStatus:
     catalog = read_catalog(store)
+    context = CatalogContext(catalog)
     latest = latest_annotations(store)
     reviews = store.records("review", AnnotationRecord)
     pending = unresolved = annotated = 0
     for record in latest.values():
         if record.decision.state == "unresolved":
             unresolved += 1
-        elif resolved_paths(record, catalog) is None:
+        elif context.resolved_paths(record) is None:
             pending += 1
         else:
             annotated += 1
@@ -29,8 +31,8 @@ def dataset_status(store: Store, manifest: SourceFreeze) -> DatasetStatus:
         original = by_record[str(review.review_target)]
         if latest[review.article_id].record_id != review.review_target:
             continue
-        a = resolved_paths(original, catalog)
-        b = resolved_paths(review, catalog)
+        a = context.resolved_paths(original)
+        b = context.resolved_paths(review)
         if (
             a is None
             or b is None

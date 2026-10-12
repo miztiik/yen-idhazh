@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-
 from idhazh.contracts.story_annotation import (
     AnnotationRecord,
     ArticleDecision,
     CatalogReview,
     CatalogSnapshot,
-    Identity,
     IdentityProposal,
 )
+from idhazh.story_dataset.catalog_context import CatalogContext, ResolvedPath
 from idhazh.story_dataset.storage import Store, digest
 
 
@@ -45,35 +43,18 @@ def validate_catalog(catalog: CatalogSnapshot, article_ids: set[str]) -> None:
         expected = {"topic": set(), "event": {"topic"}, "story": {"event"}, "occurrence": {"story"}}
         if kinds != expected[item.kind] or len(item.parent_ids) != len(set(item.parent_ids)):
             raise ValueError("catalog parents do not form Topic > Event > Story > occurrence")
+    context = CatalogContext(catalog)
     for old, new in catalog.aliases.items():
         if old not in entities or new not in entities or entities[old].kind != entities[new].kind:
             raise ValueError("alias endpoints must be known identities of the same kind")
-        _resolve_ref(catalog, "", old, entities)
+        context.resolve_ref("", old)
     for target in catalog.proposal_resolutions.values():
         if target not in entities:
             raise ValueError("proposal resolution names an unknown identity")
 
 
 def resolve_ref(catalog: CatalogSnapshot, batch_id: str, ref: str) -> str | None:
-    return _resolve_ref(catalog, batch_id, ref, {item.id: item for item in catalog.entities})
-
-
-def _resolve_ref(
-    catalog: CatalogSnapshot, batch_id: str, ref: str, entities: Mapping[str, Identity]
-) -> str | None:
-    if ref.startswith("proposal:"):
-        ref = catalog.proposal_resolutions.get(batch_id + ":" + ref, "")
-        if not ref:
-            return None
-    seen = set()
-    while ref in catalog.aliases:
-        if ref in seen:
-            raise ValueError("catalog alias cycle")
-        seen.add(ref)
-        ref = catalog.aliases[ref]
-    if ref not in entities:
-        raise ValueError(f"unknown canonical identity: {ref}")
-    return ref
+    return CatalogContext(catalog).resolve_ref(batch_id, ref)
 
 
 def validate_decision(
@@ -82,84 +63,13 @@ def validate_decision(
     proposals: list[IdentityProposal],
     article_ids: set[str],
 ) -> None:
-    entities = {item.id: item for item in catalog.entities}
-    nodes: dict[str, Identity | IdentityProposal] = dict(entities)
-    if len({item.ref for item in proposals}) != len(proposals):
-        raise ValueError("duplicate local proposal references")
-    nodes.update({item.ref: item for item in proposals})
-
-    def approved_ref(ref: str) -> str:
-        # Local proposals have no approved identity until their batch is reviewed.
-        if ref.startswith("proposal:"):
-            return ref
-        resolved = _resolve_ref(catalog, "", ref, entities)
-        assert resolved is not None
-        return resolved
-
-    for proposal in proposals:
-        if not set(proposal.evidence_article_ids) <= article_ids:
-            raise ValueError("proposal evidence contains foreign article IDs")
-        kinds = {nodes[approved_ref(p)].kind for p in proposal.parent_refs if p in nodes}
-        expected = {"topic": set(), "event": {"topic"}, "story": {"event"}, "occurrence": {"story"}}
-        if (
-            any(p not in nodes for p in proposal.parent_refs)
-            or kinds != expected[proposal.kind]
-            or (proposal.kind != "topic" and not proposal.parent_refs)
-        ):
-            raise ValueError("proposal has unknown or wrongly typed parents")
-    for path in decision.memberships:
-        refs = [path.topic, path.event, path.story, *path.occurrence_refs]
-        if any(ref not in nodes for ref in refs):
-            raise ValueError("membership names an unknown identity")
-        for ref, kind in zip(
-            refs,
-            ["topic", "event", "story", *["occurrence"] * len(path.occurrence_refs)],
-            strict=True,
-        ):
-            if nodes[approved_ref(ref)].kind != kind:
-                raise ValueError("wrongly typed membership")
-        for child, parent in [
-            (path.event, path.topic),
-            (path.story, path.event),
-            *[(r, path.story) for r in path.occurrence_refs],
-        ]:
-            node = nodes[approved_ref(child)]
-            parents = node.parent_refs if isinstance(node, IdentityProposal) else node.parent_ids
-            if approved_ref(parent) not in {approved_ref(p) for p in parents}:
-                raise ValueError("membership uses an unsupported typed parent link")
+    CatalogContext(catalog).validate_decision(decision, proposals, article_ids)
 
 
 def resolved_paths(
     record: AnnotationRecord, catalog: CatalogSnapshot
-) -> list[tuple[str, str, str, tuple[str, ...]]] | None:
-    paths = []
-    pending = False
-    entities = {item.id: item for item in catalog.entities}
-    for path in record.decision.memberships:
-        refs = [path.topic, path.event, path.story, *path.occurrence_refs]
-        resolved = [_resolve_ref(catalog, record.batch_id, ref, entities) for ref in refs]
-        for ref, kind in zip(
-            resolved,
-            ["topic", "event", "story", *["occurrence"] * len(path.occurrence_refs)],
-            strict=True,
-        ):
-            if ref is not None and entities[ref].kind != kind:
-                raise ValueError("wrongly typed reviewed membership")
-        topic, event, story, *occurrences = resolved
-        for child, parent in [(event, topic), (story, event), *[(r, story) for r in occurrences]]:
-            if child is None or parent is None:
-                continue
-            canonical_parents = {
-                _resolve_ref(catalog, "", p, entities) for p in entities[child].parent_ids
-            }
-            if parent not in canonical_parents:
-                raise ValueError("reviewed canonicalization breaks a membership path")
-        if any(ref is None for ref in resolved):
-            pending = True
-        else:
-            complete = [str(ref) for ref in resolved]
-            paths.append((complete[0], complete[1], complete[2], tuple(sorted(complete[3:]))))
-    return None if pending else sorted(paths)
+) -> list[ResolvedPath] | None:
+    return CatalogContext(catalog).resolved_paths(record)
 
 
 def review_catalog(store: Store, review: CatalogReview, article_ids: set[str]) -> CatalogSnapshot:
@@ -192,9 +102,10 @@ def review_catalog(store: Store, review: CatalogReview, article_ids: set[str]) -
             proposal_resolutions=resolutions,
         )
         validate_catalog(updated, article_ids)
+        context = CatalogContext(updated)
         for kind in ("annotation", "review"):
             for record in store.records(kind, AnnotationRecord):
-                resolved_paths(record, updated)
+                context.resolved_paths(record)
         store.save("catalog", revision, updated)
         store.append("catalog-review", digest(review), revision, review)
         store.set_setting("catalog", revision)
