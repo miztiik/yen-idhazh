@@ -15,7 +15,7 @@ from idhazh.contracts.host_events import (
     ProcessTarget,
 )
 from idhazh.contracts.host_evidence import EVIDENCE_VERSION, ReferenceSample
-from idhazh.contracts.host_fingerprint import HostFingerprintRow
+from idhazh.contracts.host_fingerprint import HostFingerprintRow, normalize_host_row
 from idhazh.telemetry import host, silicon
 from idhazh.telemetry.host_evidence_inputs import ComparisonSettings, NativeSettings, read_bytes
 from utilities import memory_sampler
@@ -251,7 +251,7 @@ def host_row(
     }
     import statistics
 
-    return HostFingerprintRow.model_validate(
+    return normalize_host_row(
         {
             **cells,
             "date": day,

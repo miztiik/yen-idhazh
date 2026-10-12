@@ -195,6 +195,12 @@ class EnvelopeWriterIdentity(WriterIdentity):
 
     model_config = ConfigDict(frozen=True, revalidate_instances="always")
 
+    def __eq__(self, other: object) -> bool:
+        """Keep identity equality structural across the mutable/immutable boundary."""
+        if isinstance(other, WriterIdentity):
+            return self.model_dump() == other.model_dump()
+        return NotImplemented
+
 
 #: A version 5 UUID in its canonical lower-case spelling: a row's `unit_id` cell.
 _UNIT_ID_PATTERN: Final = (
