@@ -43,6 +43,7 @@
 		measured = true,
 		unmeasuredNote,
 		emptyNote,
+		fitRuleLabels = false,
 		tail = null,
 		selectedKey = null,
 		onSelect = null,
@@ -61,6 +62,8 @@
 		measured?: boolean;
 		unmeasuredNote: string;
 		emptyNote: string;
+		/** Keep rule names within the track, including a rule at either endpoint. */
+		fitRuleLabels?: boolean;
 		/** What the cap left out, in one sentence. */
 		tail?: string | null;
 		selectedKey?: string | null;
@@ -136,7 +139,12 @@
 						{/if}
 						{#if !row.refused}
 							{#each ranked.rules as rule (rule.label)}
-								<span class="ranked-rule" style="inset-inline-start: {rule.percent}" aria-label="{rule.label}: {rule.at}"><span>{rule.label}</span></span>
+								<span class="ranked-rule" style="inset-inline-start: {rule.percent}" aria-label="{rule.label}: {rule.at}">
+									{#if !fitRuleLabels}<span>{rule.label}</span>{/if}
+								</span>
+								{#if fitRuleLabels}
+									<span class="ranked-rule-label" style="inset-inline-start: {rule.percent}; transform: translateX(-{rule.percent})">{rule.label}</span>
+								{/if}
 							{/each}
 						{/if}
 					</span>
@@ -166,6 +174,7 @@
 	.ranked-part { position: absolute; inset-block: 0; }
 	.ranked-rule { position: absolute; inset-block: -4px; border-inline-start: 1px dashed var(--chart-marker); }
 	.ranked-rule span { position: absolute; inset-block-end: 100%; font-size: var(--text-xs); color: var(--color-text-secondary); white-space: nowrap; }
+	.ranked-rule-label { position: absolute; inset-block-end: calc(100% + 4px); inline-size: max-content; max-inline-size: 100%; overflow-wrap: anywhere; font-size: var(--text-xs); color: var(--color-text-secondary); }
 	.ranked {
 		display: flex;
 		flex-direction: column;

@@ -1,6 +1,6 @@
 # What the Hardware route draws
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-10-12
 
 `/console/machine/` asks what machine the work actually got, whether its two
 clocks agree, and what would change the cost of that work.
@@ -149,6 +149,10 @@ label-request rule. No cut rows means `No article was cut in this window.`
 Too few readings keep an honest empty distribution instead of invented marks.
 Each distribution measures its own shrinking grid cell. The share axis keeps
 space for its percentage labels, including on a narrow screen.
+Hardware's ranked rule names also stay inside their own tracks. A rule at the
+maximum must not push its name beyond the document. The label's position uses
+the same track fraction as the marker, offset by that fraction of its own width;
+long names wrap within the track. The marker and numeric rule do not move.
 
 Prompt reuse compares paired input and cached cells on the same article:
 invalid, negative or over-input cache counts do not cross-pair with another
@@ -199,7 +203,9 @@ a quiet machine. The original recording and threshold detail remains beside it.
 
 `console-machine-journey.spec.ts` follows one production-built Hardware journey:
 native index and Parquet arrival, a dated readout, and a carried window across
-the Pipelines tab. Independent cases check failed-host-only retry, unpublished
+the Pipelines tab. Its two context distributions must contain readings and fit
+their cells; the clock-rule names and whole document must fit at desktop and
+390 pixels. Independent cases check failed-host-only retry, unpublished
 indexes, and the actual scriptless prerendered document. Pure native oracles in
 `console-machine.spec.ts` retain count refusal, unknowns, identity, signed
 timings, paired measurements and null semantics. Backend count tests retain

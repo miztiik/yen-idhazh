@@ -119,7 +119,7 @@
 					newest?.shards !== null && newest?.reported.length === newest?.shards
 					? `Every shard's two clocks agreed within ${knobs.clocks_agree_within_pct} percent in the newest run.`
 					: `${widestGap.toFixed(2)} percent was the widest gap between the two clocks.`}</p>
-			<RankedList geometry={clockRows} caption="The two clocks" maxText={`${clockRows?.max.toFixed(1) ?? '0'}% apart`}
+			<RankedList geometry={clockRows} caption="The two clocks" maxText={`${clockRows?.max.toFixed(1) ?? '0'}% apart`} fitRuleLabels
 				unmeasuredNote="One instrument recorded nothing." emptyNote="One instrument recorded nothing." />
 			{#each clocks.pairs as pair (pair.label)}
 				<p data-clock-pair={pair.label} data-clock-gap={pair.gapPct?.toFixed(2) ?? ''} data-clock-agrees={pair.agrees === null ? 'unknown' : String(pair.agrees)}>
@@ -141,7 +141,7 @@
 					{@const target = kind === 'reading' ? slower.typical.read : slower.typical.write}
 					{@const geometry = rankedList(readings, { max: knobs.fleet_top_kinds, minCount: knobs.slower_machines_min_articles,
 						rules: target === null ? [] : [{ at: target, label: slower.reference.cpuModel ?? 'Reference machine' }] })}
-					<RankedList {geometry} caption={kind === 'reading' ? 'Reading' : 'Writing'} maxText={`${geometry?.max.toFixed(2) ?? '0'} seconds`}
+					<RankedList {geometry} caption={kind === 'reading' ? 'Reading' : 'Writing'} maxText={`${geometry?.max.toFixed(2) ?? '0'} seconds`} fitRuleLabels
 						unmeasuredNote="No comparable reading." emptyNote="No comparable reading." />
 				{/each}
 			</div>
