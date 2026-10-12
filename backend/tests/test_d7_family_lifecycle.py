@@ -156,6 +156,7 @@ def bounded_config(
     app = json.loads(app_path.read_text(encoding="utf-8"))
     app["observability"]["host_fingerprint_bandwidth_floor_mib"] = 0
     app["observability"]["host_fingerprint"] = host_enabled
+    app["observability"]["evaluation_enabled"] = False
     app["run"]["trial_state_dirname"] = None
     app["run"]["trial_case_dirname"] = None
     app_path.write_text(json.dumps(app), encoding="utf-8")
@@ -184,7 +185,7 @@ def isolate(
             ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
         )
     initialize_inventory(
-        root / "public",
+        root / "frontend" / "public" / "digest",
         seed=PublicationInventory(version=PublicationInventory.schema_version(), dates=[]),
     )
     support = root / "test-support"
@@ -193,7 +194,7 @@ def isolate(
     git(root, "init", "-q")
     git(root, "config", "user.email", "d7-fixture@example.invalid")
     git(root, "config", "user.name", "D7 fixture")
-    git(root, "add", "config", "backend", "public")
+    git(root, "add", "config", "backend", "frontend")
     git(root, "commit", "-qm", "bounded D7 fixture")
     commit = git(root, "rev-parse", "HEAD").strip()
     return root, commit
