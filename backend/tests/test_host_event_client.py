@@ -6,6 +6,7 @@ import json
 import os
 import threading
 from pathlib import Path
+from typing import Literal
 from uuid import uuid4
 
 import pytest
@@ -18,6 +19,7 @@ from idhazh.contracts.host_events import (
     MonitorReadyBody,
     UnavailableDiagnostic,
     UnavailableReason,
+    WindowAbortBody,
     WindowBegunBody,
     WindowResultBody,
     WorkerBody,
@@ -77,6 +79,17 @@ def _manifest(root: Path, *, item_id: str | tuple[str, ...] = "item-01") -> Host
         json.dumps(native, sort_keys=True) + "\n", encoding="ascii", newline="\n"
     )
     return manifest
+
+
+def test_client_refuses_a_different_resolved_memory_control(tmp_path: Path) -> None:
+    _manifest(tmp_path)
+    with pytest.raises(ValueError, match="effective memory control"):
+        HostEventClient(
+            tmp_path,
+            Path("manifest.json"),
+            Path("config.json"),
+            memory_profiling_enabled=False,
+        )
 
 
 def _reply(
@@ -207,7 +220,7 @@ class SessionPeer:
                             }
                         },
                     )
-                    status = "complete"
+                    status: Literal["complete", "incomplete"] = "complete"
                     opened_at: str | None = "2026-10-10T12:00:01Z"
                     closed_at: str | None = "2026-10-10T12:00:02Z"
                     if command.kind == "window.abort" or self.incomplete_end:
@@ -298,6 +311,7 @@ def test_failed_and_cancelled_work_abort_before_watch_exit(
                 raise raised()
         abort = peer.seen[-1]
         assert abort.kind == "window.abort"
+        assert isinstance(abort.body, WindowAbortBody)
         assert abort.body.reason == reason
     finally:
         peer.close()

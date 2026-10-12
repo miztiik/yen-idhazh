@@ -1166,13 +1166,21 @@ def test_the_item_health_census_is_not_switchable() -> None:
         "tracing_enabled",
         "host_fingerprint",
         "host_event_shadow",
+        "memory_profiling_enabled",
     }
     assert ObservabilityConfig().host_event_shadow is False
+    assert ObservabilityConfig().memory_profiling_enabled is True
     assert (
         AppConfig.from_json(
             read_text(APP_CONFIG_EVERY_KNOB_DIFFERS)
         ).observability.host_event_shadow
         is True
+    )
+    assert (
+        AppConfig.from_json(
+            read_text(APP_CONFIG_EVERY_KNOB_DIFFERS)
+        ).observability.memory_profiling_enabled
+        is False
     )
     assert "census" in (ObservabilityConfig.__doc__ or "")
 

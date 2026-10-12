@@ -1190,6 +1190,7 @@ test.describe('a run the counters refuse, handed to every figure built from arti
 				evaluation_enabled: true,
 				host_fingerprint: true,
 				host_fingerprint_bandwidth_cache_multiple: 2,
+				memory_profiling_enabled: true,
 				sample_rate: 1
 			}
 		}).intro;
@@ -1254,6 +1255,7 @@ test.describe("a refused run is a run the server's figures were written down for
 		evaluation_enabled: true,
 		host_fingerprint: true,
 		host_fingerprint_bandwidth_cache_multiple: 2,
+		memory_profiling_enabled: true,
 		sample_rate: 1
 	};
 	/** Shard 0's machine record for the run on `date`: the probe and the clock, and the server's two

@@ -568,6 +568,7 @@ test.describe('what the recording was doing, in fixed words', () => {
             evaluation_enabled: true,
             host_fingerprint: true,
             host_fingerprint_bandwidth_cache_multiple: 2,
+            memory_profiling_enabled: true,
             sample_rate: 1
         };
         /** Shard 0 of run `run` on `date`, as the machine record files it from the work job: the probe

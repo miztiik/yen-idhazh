@@ -124,14 +124,24 @@ def comparison_settings(raw: bytes, source: AppConfig) -> ComparisonSettings:
     return ComparisonSettings.model_validate({**comparison, "source": source})
 
 
-def live_controls(native: NativeSettings, config: ComparisonSettings) -> CollectionControls:
-    if not native.controls.memory_profiling_enabled or native.controls.memcpy_enabled:
-        raise ValueError("live evidence requires memory on and the bounded copy probe off")
+def live_controls(
+    native: NativeSettings,
+    config: ComparisonSettings,
+    memory_override: bool | None = None,
+) -> CollectionControls:
+    if native.controls.memcpy_enabled:
+        raise ValueError("live evidence requires the bounded copy probe off")
     if config.sample_interval_seconds * 1000 < native.limits.retry_window_ms:
         raise ValueError("sample cadence cannot outrun the native immutable retry retention window")
+    memory = (
+        config.source.observability.memory_profiling_enabled
+        if memory_override is None
+        else memory_override
+    )
     return CollectionControls.model_validate(
         {
             **native.controls.model_dump(),
+            "memory_profiling_enabled": memory,
             "resource_interval_seconds": config.resource_interval_seconds,
             "job_sample_interval_seconds": config.sample_interval_seconds,
         }

@@ -130,6 +130,15 @@ def _positive_int(text: str) -> int:
     return value
 
 
+def _memory_profiling(text: str) -> bool:
+    """Parse the public control without accepting truthy strings."""
+    if text == "on":
+        return True
+    if text == "off":
+        return False
+    raise argparse.ArgumentTypeError("memory profiling must be 'on' or 'off'")
+
+
 def _host_event_client(
     parser: argparse.ArgumentParser,
     args: argparse.Namespace,
@@ -153,6 +162,7 @@ def _host_event_client(
         args.host_event_workspace,
         args.host_event_manifest,
         args.host_event_config,
+        memory_profiling_enabled=settings.app.observability.memory_profiling_enabled,
     )
 
 
@@ -460,6 +470,16 @@ def _main(argv: Sequence[str] | None = None) -> int:
         help="Skip the scorer. The digest still publishes; the ledger stays empty.",
     )
     parser.add_argument(
+        "--memory-profiling",
+        type=_memory_profiling,
+        default=None,
+        metavar="{on,off}",
+        help=(
+            "Override observability.memory_profiling_enabled for this invocation. "
+            "The value must be exactly on or off."
+        ),
+    )
+    parser.add_argument(
         "--leaderboard",
         type=float,
         default=0.0,
@@ -650,7 +670,17 @@ def _main(argv: Sequence[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    settings = config.load(args.config)
+    settings = config.with_memory_profiling_override(
+        config.load(args.config), args.memory_profiling
+    )
+    if (
+        args.stage in {"work", "run"}
+        and not settings.app.observability.memory_profiling_enabled
+    ):
+        parser.error(
+            "memory profiling off is unavailable while Python remains the "
+            "authoritative work-stage collector; native cutover has not occurred"
+        )
     if council_command:
         from idhazh.council import event_log
 

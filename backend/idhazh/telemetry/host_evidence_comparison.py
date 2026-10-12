@@ -10,6 +10,8 @@ from pathlib import Path
 
 from idhazh.contracts.file_envelope import FileEnvelope, RowIdentity, WriterIdentity
 from idhazh.contracts.host_events import (
+    MEMORY_SOURCES,
+    WINDOW_CELL_SOURCES,
     CollectionControls,
     CpuDiagnostics,
     HostCaptureLimits,
@@ -314,11 +316,18 @@ def verify_result(
     return event.body
 
 
-def compare(workspace: Path, *, probe: str, clock: str) -> HostEvidenceReport:
+def compare(
+    workspace: Path,
+    *,
+    probe: str,
+    clock: str,
+    memory_profiling: bool | None = None,
+) -> HostEvidenceReport:
     if platform.system() != "Linux":
         raise ValueError("live Linux evidence cannot be certified from another operating system")
     comparison_utc = datetime.now(UTC)
     native, config, digest = settings()
+    controls = live_controls(native, config, memory_profiling)
     workspace = isolated_workspace(workspace)
     session = read_model(
         workspace / "session.json", EvidenceSession, native.limits.max_result_bytes
@@ -338,7 +347,7 @@ def compare(workspace: Path, *, probe: str, clock: str) -> HostEvidenceReport:
     expected_native = NativeSettings.model_validate(
         {
             **native.model_dump(),
-            "controls": live_controls(native, config),
+            "controls": controls,
         }
     )
     if (
@@ -350,7 +359,7 @@ def compare(workspace: Path, *, probe: str, clock: str) -> HostEvidenceReport:
     if session.config_sha256 != digest or session.field_classes != field_classes():
         raise ValueError("comparison config or field classification changed after calibration")
     if (
-        session.manifest.controls != live_controls(native, config)
+        session.manifest.controls != controls
         or len(session.manifest.workers) != 1
         or session.manifest.workers[0].server is not None
         or session.manifest.cpu_target_role != "python_worker"
@@ -520,6 +529,19 @@ def compare(workspace: Path, *, probe: str, clock: str) -> HostEvidenceReport:
             if row.cells is None:
                 raise ValueError("paired reference window evidence is absent")
             for field in HostWindowCells.model_fields:
+                if (
+                    not controls.memory_profiling_enabled
+                    and WINDOW_CELL_SOURCES[field] in MEMORY_SOURCES
+                ):
+                    comparisons.append(
+                        compare_cell(
+                            f"window.{index}.{field}",
+                            None,
+                            getattr(event.body.cells, field),
+                            0.0,
+                        )
+                    )
+                    continue
                 comparisons.append(
                     compare_cell(
                         f"window.{index}.{field}",
@@ -531,12 +553,20 @@ def compare(workspace: Path, *, probe: str, clock: str) -> HostEvidenceReport:
     drained = read_model(workspace / "drained.json", HostEvent, native.limits.max_result_bytes)
     if drained.kind != "monitor.stopped":
         raise ValueError("required native drain evidence is absent")
-    sample_count, coverage = sample_coverage(workspace, tuple(windows), config)
-    population: set[int] = set().union(
-        *(window.python_pids for index, window in enumerate(coverage) if index % 2)
-    )
+    if controls.memory_profiling_enabled:
+        sample_count, coverage = sample_coverage(workspace, tuple(windows), config)
+        population: set[int] = set().union(
+            *(window.python_pids for index, window in enumerate(coverage) if index % 2)
+        )
+    else:
+        artifact_root = resolve(workspace, session.roots.native_artifacts)
+        if artifact_root.exists():
+            raise ValueError("memory-off session created native memory artifacts")
+        sample_count, coverage, population = 0, (), set()
     reference_population = {p.pid for row in paired for p in row.population}
-    if session.manifest.cpu_target is None or session.manifest.cpu_target.pid not in population:
+    if controls.memory_profiling_enabled and (
+        session.manifest.cpu_target is None or session.manifest.cpu_target.pid not in population
+    ):
         raise ValueError(
             "the actual selected Python worker is absent from native population evidence"
         )
@@ -548,6 +578,10 @@ def compare(workspace: Path, *, probe: str, clock: str) -> HostEvidenceReport:
     )
     if startup.startup_seconds is None or startup.target != monitor.target:
         raise ValueError("monitor startup or process-cost identity evidence is absent")
+    if controls.memory_profiling_enabled != (
+        startup.rss_bytes is not None and monitor.rss_bytes is not None
+    ):
+        raise ValueError("monitor RSS evidence contradicts the resolved memory control")
     if monitor.target.pid in population:
         raise ValueError("the Rust monitor must not be counted as Python")
     ack = pair_evidence.ack_seconds

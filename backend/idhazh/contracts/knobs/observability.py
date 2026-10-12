@@ -227,6 +227,19 @@ class ObservabilityConfig(Model):
             "single-writer cutover is complete."
         ),
     )
+    memory_profiling_enabled: bool = Field(
+        default=True,
+        description=(
+            "Whether host telemetry collects operating-system process and machine "
+            "memory, faults, job samples and runtime memory artifacts. False keeps "
+            "CPU, load, process identity, timing, lifecycle events, heartbeats and "
+            "the item-health census active while memory cells stay empty with a "
+            "disabled reason. This does not control allocator profiling or the "
+            "separately configured memory-bandwidth copy. Remove this capability "
+            "only if host memory collection is removed and its consumers approve "
+            "the loss."
+        ),
+    )
     host_fingerprint_bandwidth_jobs: tuple[ServerJob, ...] = Field(
         default=(ServerJob.RUNTIME,),
         description=(

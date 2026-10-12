@@ -941,6 +941,7 @@ const OBSERVABILITY: ObservabilityConfig = {
 	evaluation_enabled: true,
 	host_fingerprint: true,
 	host_fingerprint_bandwidth_cache_multiple: 2,
+	memory_profiling_enabled: true,
 	sample_rate: 1
 };
 

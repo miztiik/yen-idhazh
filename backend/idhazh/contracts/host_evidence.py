@@ -107,7 +107,7 @@ class MonitorMeasurement(Contract):
     __schema_stem__: ClassVar[str] = "host-monitor-measurement"
     target: ProcessTarget
     cpu_seconds: FiniteNonnegative
-    rss_bytes: PositiveCount
+    rss_bytes: PositiveCount | None
     startup_seconds: FiniteNonnegative | None
 
 
@@ -227,7 +227,7 @@ class HostEvidenceReport(Contract):
     compile: CommandMeasurement
     startup_seconds: FiniteNonnegative
     monitor_cpu_seconds: FiniteNonnegative
-    monitor_rss_bytes: PositiveCount
+    monitor_rss_bytes: PositiveCount | None
     ack_seconds: tuple[FiniteNonnegative, ...] = Field(min_length=4)
     paired: tuple[WorkloadResult, ...] = Field(min_length=2)
     resource_event_ids: tuple[UUID, ...] = Field(min_length=1)

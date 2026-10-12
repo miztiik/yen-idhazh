@@ -45,6 +45,8 @@ class HostEventClient:
         workspace: Path,
         manifest_path: Path,
         config_path: Path,
+        *,
+        memory_profiling_enabled: bool | None = None,
     ) -> None:
         self.workspace = workspace.resolve(strict=True)
         self.config_path = self._inside(config_path)
@@ -60,6 +62,13 @@ class HostEventClient:
             or native.capture_limits != self.manifest.capture_limits
         ):
             raise ValueError("host event manifest differs from its named effective config")
+        if (
+            memory_profiling_enabled is not None
+            and native.controls.memory_profiling_enabled != memory_profiling_enabled
+        ):
+            raise ValueError(
+                "host event effective memory control differs from the resolved invocation"
+            )
         self._sequence: dict[str, int] = {}
         self._seen_results: set[UUID] = set()
         self._worker_id: str | None = None

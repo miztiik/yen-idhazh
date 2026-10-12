@@ -41,11 +41,18 @@ pub fn execute(verb: &str, args: BTreeMap<String, String>) -> Result<()> {
     };
     let workspace = std::fs::canonicalize(required("--workspace")?).map_err(|e| e.to_string())?;
     let config: ExperimentConfig = document(&workspace, required("--config")?, 65536)?;
-    let manifest: HostSessionManifest = document(
+    config.validate()?;
+    let mut manifest: HostSessionManifest = document(
         &workspace,
         required("--manifest")?,
         config.limits.max_manifest_bytes as usize,
     )?;
+    manifest.validate()?;
+    manifest.controls.memory_profiling_enabled = config
+        .effective_controls(crate::config::memory_profiling_override(
+            args.get("--memory-profiling").map(String::as_str),
+        )?)
+        .memory_profiling_enabled;
     let command: HostEvent = document(
         &workspace,
         required("--command")?,

@@ -179,12 +179,19 @@ def event(
 
 
 def prepare(
-    workspace: Path, *, git_sha: str, run_number: str, attempt: int, compile_file: Path, gates: Path
+    workspace: Path,
+    *,
+    git_sha: str,
+    run_number: str,
+    attempt: int,
+    compile_file: Path,
+    gates: Path,
+    memory_profiling: bool | None = None,
 ) -> None:
     if platform.system() != "Linux":
         raise ValueError("live preparation requires Linux")
     native, compare, digest = settings()
-    controls = live_controls(native, compare)
+    controls = live_controls(native, compare, memory_profiling)
     if not run_number.isdecimal():
         raise ValueError("run number must be an operator-derived decimal identity")
     binary()
@@ -414,7 +421,11 @@ def start(workspace: Path) -> None:
     if ready.kind != "monitor.ready" or ready.session_id != session.manifest.session_id:
         raise ValueError("native monitor did not become ready")
     retain_native(workspace / "ready.json", ready_raw, native.limits.max_result_bytes)
-    cpu, rss = process_cost(target, native)
+    cpu, rss = process_cost(
+        target,
+        native,
+        memory=session.manifest.controls.memory_profiling_enabled,
+    )
     write_document(
         workspace / "startup.json",
         MonitorMeasurement(
@@ -500,7 +511,11 @@ def drain(workspace: Path) -> None:
     command = event(session.manifest, "monitor.stop", 1, {"reason": "completed"}, "operator")
     write_document(workspace / "stop.json", command)
     target = read_model(workspace / "monitor.json", ProcessTarget, native.limits.max_result_bytes)
-    cpu, rss = process_cost(target, native)
+    cpu, rss = process_cost(
+        target,
+        native,
+        memory=session.manifest.controls.memory_profiling_enabled,
+    )
     write_document(
         workspace / "monitor-cost.json",
         MonitorMeasurement(

@@ -346,6 +346,7 @@
     "host_fingerprint_bandwidth_jobs": [
       "work"
     ],
+    "memory_profiling_enabled": false,
     "public_run_timeline_keep_months": 5,
     "sample_rate": 0.25,
     "telemetry_publish": false,

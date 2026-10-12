@@ -31,7 +31,7 @@ set is still operator-only: the console reads it at build time under
 | Producer | [`backend/idhazh/telemetry/silicon.py`](../../backend/idhazh/telemetry/silicon.py), through the two CLI verbs or [`job_machine.record`](../../backend/idhazh/telemetry/job_machine.py). All writes use `ledger.persist` |
 | Read by | `/console/machine/`, at build time through `frontend/src/lib/server/host-fingerprint.ts` |
 | Key | `date`, `run_id`, `job`, `shard` - one row a job |
-| Switch | `observability.host_fingerprint` |
+| Switch | `observability.host_fingerprint` for the host row; `observability.memory_profiling_enabled` independently controls OS memory/fault collection |
 | Committed | **from 2026-09-16.** Each job's own commit step stages its ledger; every row taken before that date was deleted with its runner |
 | Published to a reader | **no.** Operator surface only |
 
@@ -171,6 +171,16 @@ its flags. Memory moves inside a job, so it is sampled per item instead: six
 the lowest headroom seen while the model worked on that one item
 ([../architecture/sources/item-health.md](../architecture/sources/item-health.md#what-the-machine-had-against-what-a-process-held)).
 Neither table repeats the other's cells.
+
+Set `observability.memory_profiling_enabled` to false to disable OS process and
+machine memory, major-fault, job-rollcall and runtime-memory artifact collection.
+The command-line override is `--memory-profiling on|off`; workflow dispatches use
+`inherit|on|off`. False leaves memory and fault cells empty with a disabled
+reason. It does not stop CPU/load collection, process start-tick identity,
+heartbeat, lifecycle events, the item census or the separately controlled
+memory-bandwidth copy. Until the native writer cutover, the production Python
+work path refuses false before collection because its legacy watch cannot honor
+the switch.
 
 ## Identity
 

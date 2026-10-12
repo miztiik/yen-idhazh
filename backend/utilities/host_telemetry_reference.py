@@ -38,7 +38,9 @@ def identity(pid: int, native: NativeSettings, proc: Path = Path("/proc")) -> Pr
     return ProcessTarget(pid=pid, start_ticks=int(tail.split()[START_TICKS_TAIL]))
 
 
-def process_cost(target: ProcessTarget, native: NativeSettings) -> tuple[float, int]:
+def process_cost(
+    target: ProcessTarget, native: NativeSettings, *, memory: bool = True
+) -> tuple[float, int | None]:
     if identity(target.pid, native) != target:
         raise ValueError("monitor PID was reused")
     stat = (
@@ -47,14 +49,17 @@ def process_cost(target: ProcessTarget, native: NativeSettings) -> tuple[float, 
         .rpartition(") ")[2]
         .split()
     )
-    status = read_bytes(
-        Path(f"/proc/{target.pid}/status"), native.capture_limits.max_proc_text_bytes
-    ).decode()
     ticks = sum(int(stat[index]) for index in CPU_TICKS_TAIL)
-    rss = host._kb_keys(status, ("VmRSS",))["VmRSS"]
-    if rss is None:
-        raise ValueError("required monitor RSS is absent")
     if sys.platform == "linux":
+        rss = None
+        if memory:
+            status = read_bytes(
+                Path(f"/proc/{target.pid}/status"),
+                native.capture_limits.max_proc_text_bytes,
+            ).decode()
+            rss = host._kb_keys(status, ("VmRSS",))["VmRSS"]
+            if rss is None:
+                raise ValueError("required monitor RSS is absent")
         return ticks / os.sysconf("SC_CLK_TCK"), rss
     raise ValueError("process CPU clocks require Linux")
 
