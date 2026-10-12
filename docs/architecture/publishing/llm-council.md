@@ -1,6 +1,6 @@
 # The LLM-COUNCIL, and why judging has its own clock
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-10-12
 
 The room a model verdict is taken in. `LLM-COUNCIL` is a workflow of its own -
 [../../../.github/workflows/llm-council.yml](../../../.github/workflows/llm-council.yml) -
@@ -71,8 +71,8 @@ bound to the retention settings.
 A query can group completed and failed steps, read the closed
 `raised` fault, and compare counts and UTC instants. No exception text is
 stored or shown. A record not packed yet reports missing data; an empty packed
-span reports no rows, not a failed night. Isolated paused trials still file no
-council record and publish nothing.
+span reports no rows, not a failed night. Isolated paused trials keep their
+council records in the downloadable trial tree and publish nothing.
 
 The canary builder reads the two named council contract fixtures from its
 source checkout, not its working directory. A caller may place generated
@@ -187,7 +187,7 @@ Table A - judge status
 | Id | Status | Council work | Existing rows |
 | --- | --- | --- | --- |
 | A1 | `active` | Import, ask about outstanding nights, build cells, prepare, run shards, settle and publish. Start a model server only where `runs_model` is true. | Families must accept every committed ledger. |
-| A2 | `paused` | No scheduled work or import. Explicit manual selection runs an isolated downloadable trial, with no committed output or council record. Keep its name and file. | Readers, other writers, packing and ageing keep their own rules. |
+| A2 | `paused` | No scheduled work or import. Explicit manual selection runs an isolated downloadable trial, with no committed output or production council record. Keep its name and file. | Readers, other writers, packing and ageing keep their own rules. |
 | A3 | `retired` | As paused, for good. Keep the name and file; its package may stay. Never reuse its slug. | Keep row contracts while retained rows need them. |
 
 Every scheduled step uses `CouncilConfig.running()` before resolving code.
