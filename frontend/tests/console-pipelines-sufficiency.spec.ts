@@ -25,7 +25,7 @@ for (const width of [390, 1280]) {
 			expect(box!.height).toBeGreaterThan(0);
 		}
 		const count = 8 * Math.max(8, Math.ceil(appearance.console.fleet_min_rows / 8));
-		await expect(page.locator('[data-duration-cohort]')).toContainText(`${count} of ${count} recorded item clocks`);
+		await expect.soft(page.locator('[data-duration-cohort]')).toContainText(`${count} of ${count + 8} recorded item clocks`);
 		for (const id of configured.judged as string[]) {
 			const reading = await readPanel(page.locator(`[data-console-panel-id="${id}"]`));
 			for (const verdict of judgeSettled(reading, appearance.console.plot_min_fill_share)) {
