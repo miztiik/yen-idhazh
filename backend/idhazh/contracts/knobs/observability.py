@@ -217,6 +217,16 @@ class ObservabilityConfig(Model):
             "constant and a constant is not a reading."
         ),
     )
+    host_event_shadow: bool = Field(
+        default=False,
+        description=(
+            "Whether Python emits host lifecycle events into an already prepared "
+            "isolated native session while remaining the authoritative production "
+            "collector and writer. False performs no event file reads, writes or "
+            "waits. This temporary comparison path is removed when the native "
+            "single-writer cutover is complete."
+        ),
+    )
     host_fingerprint_bandwidth_jobs: tuple[ServerJob, ...] = Field(
         default=(ServerJob.RUNTIME,),
         description=(

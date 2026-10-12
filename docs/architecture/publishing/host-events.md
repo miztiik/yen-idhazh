@@ -1,6 +1,6 @@
 # Host telemetry through serialized events
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-10-12
 
 ## What is implemented
 
@@ -34,6 +34,31 @@ Abort and shutdown resolve opening commands without silently dropping evidence.
 Memory collection defaults on. The manifest carries one strict Boolean; disabled
 memory cells are null and diagnosed separately from CPU and load readings.
 This control does not yet turn off production Python instruments.
+
+## Inactive production boundaries
+
+`observability.host_event_shadow` defaults to false. In that mode the command
+router does not open a manifest and performs no event file read, write or wait.
+Python collection, item-health sealing and raw host writes remain unchanged.
+
+When an artifact-only comparison enables the switch, the command must name an
+isolated workspace, its session manifest and its effective native config.
+The Python client verifies those files against the existing finite limits. It
+registers the actual Python worker and selected server, opens a declared event
+window immediately after the existing Python `Watch` opens, and consumes the
+native result before the Python watch closes and before item health is sealed.
+Success without scoring, scored success, failed work and cancellation all use
+that same close boundary. Duplicate closes reuse the first close and emit no
+second event. An exited target stays explicit in the native result and never
+replaces the Python cells while shadow mode is active.
+
+The same client can bracket the existing job recorder with probe, optional
+target enrichment and clock commands. Only event I/O failures degrade under
+the recorder's existing warning policy. Invalid identities, ordering and
+protocol results still fail. Shadow roots remain below the named isolated
+workspace and are never returned as production files to stage or publish.
+YAML still owns native process lifetime. This boundary does not authorize the
+single-writer cutover or establish enabled-path latency.
 
 ## Probe, target and clock collection
 

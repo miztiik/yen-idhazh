@@ -339,6 +339,7 @@
     "cost_input_per_million": 1.5,
     "cost_output_per_million": 7.5,
     "evaluation_enabled": false,
+    "host_event_shadow": true,
     "host_fingerprint": false,
     "host_fingerprint_bandwidth_cache_multiple": 3,
     "host_fingerprint_bandwidth_floor_mib": 256,
