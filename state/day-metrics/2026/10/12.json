@@ -1,0 +1,92 @@
+{
+  "addresses_considered": 8950,
+  "bands": {
+    "high": 7,
+    "low": 0,
+    "medium": 1
+  },
+  "date": "2026-10-12",
+  "determinism_violations": 0,
+  "extraction": {
+    "chartable": 4,
+    "chartable_charted": 0,
+    "chartable_published": 4,
+    "elements_found": 72,
+    "items": 8,
+    "narrative": 0,
+    "span_integrity_pass": 8,
+    "unclassified": 4
+  },
+  "extraction_suspect": 0,
+  "instruments": [
+    {"column": "coherence","stat": {"count": 8,"maximum": 0.45403830343644236,"minimum": 0.14683878346726084,"p25": 0.2854954755442113,"p50": 0.3346075124634116,"p75": 0.37486014093967474,"total": 2.4426586797049334}},
+    {"column": "compression","stat": {"count": 8,"maximum": 0.5487804878048781,"minimum": 0.10359869138495092,"p25": 0.12141280353200883,"p50": 0.22151898734177214,"p75": 0.2986111111111111,"total": 1.8557814456101505}},
+    {"column": "evidential_density","stat": {"count": 8,"maximum": 0.00949367088607595,"minimum": 0.0,"p25": 0.0,"p50": 0.0,"p75": 0.004901960784313725,"total": 0.01881064270791727}},
+    {"column": "extractiveness","stat": {"count": 8,"maximum": 0.5178571428571429,"minimum": 0.05,"p25": 0.07608695652173914,"p50": 0.16666666666666666,"p75": 0.23076923076923078,"total": 1.4206621881016583}},
+    {"column": "hhem","stat": {"count": 8,"maximum": 0.9827977418899536,"minimum": 0.5159637331962585,"p25": 0.9359517693519592,"p50": 0.9595788717269897,"p75": 0.977540910243988,"total": 7.16732531785965}},
+    {"column": "hhem_delta","stat": {"count": 8,"maximum": 0.0,"minimum": 0.0,"p25": 0.0,"p50": 0.0,"p75": 0.0,"total": 0.0}},
+    {"column": "hhem_full","stat": {"count": 8,"maximum": 0.9827977418899536,"minimum": 0.5159637331962585,"p25": 0.9359517693519592,"p50": 0.9595788717269897,"p75": 0.977540910243988,"total": 7.16732531785965}},
+    {"column": "score_ms","stat": {"count": 8,"maximum": 3612.0,"minimum": 216.0,"p25": 316.0,"p50": 626.0,"p75": 1940.0,"total": 8584.0}},
+    {"column": "self_repetition","stat": {"count": 8,"maximum": 0.0,"minimum": 0.0,"p25": 0.0,"p50": 0.0,"p75": 0.0,"total": 0.0}},
+    {"column": "semantic_coverage","stat": {"count": 8,"maximum": 0.7,"minimum": 0.35,"p25": 0.55,"p50": 0.6,"p75": 0.65,"total": 4.5}},
+    {"column": "source_words","stat": {"count": 8,"maximum": 913.0,"minimum": 82.0,"p25": 196.0,"p50": 399.0,"p75": 870.0,"total": 3373.0}},
+    {"column": "source_words_before_cap","stat": {"count": 8,"maximum": 913.0,"minimum": 82.0,"p25": 196.0,"p50": 399.0,"p75": 870.0,"total": 3373.0}},
+    {"column": "speculative_density","stat": {"count": 8,"maximum": 0.036585365853658534,"minimum": 0.0,"p25": 0.0025,"p50": 0.008830022075055188,"p75": 0.024509803921568627,"total": 0.10123799132274909}},
+    {"column": "summary_words","stat": {"count": 8,"maximum": 98.0,"minimum": 43.0,"p25": 55.0,"p50": 64.0,"p75": 95.0,"total": 529.0}},
+    {"column": "verbatim_run","stat": {"count": 8,"maximum": 0.1864406779661017,"minimum": 0.061224489795918366,"p25": 0.1,"p50": 0.12727272727272726,"p75": 0.15625,"total": 0.9767067308840606}}
+  ],
+  "items_failed": 0,
+  "items_planned": 8,
+  "items_published": 8,
+  "items_truncated": 0,
+  "label_similarity": {
+    "encoder_ref": "all-minilm-l6-v2-quantized/2026-08-22",
+    "nearest": {
+      "count": 8,
+      "maximum": 0.460259967391588,
+      "minimum": 0.1960094977546852,
+      "p25": 0.2752963142567257,
+      "p50": 0.3438898265373676,
+      "p75": 0.39423144321272513,
+      "total": 2.5525203549007918
+    },
+    "taxonomy_digest": "364e4557f4b0c60cc3b4dc8c9a8c4a33eb5312b785fe732e92e0592031765edc"
+  },
+  "model_id": "qwen3-5-9b-q4-k-m",
+  "reasons": {
+    "faithfulness": 1,
+    "hedge_dropped": 0,
+    "lead_missing": 0,
+    "not_scored": 0,
+    "unattributed": 0,
+    "unsupported_number": 0
+  },
+  "revision": 1,
+  "runs": 1,
+  "sources": [
+    {"doubted": 0,"published": 1,"source_id": "business-today-in","truncated": 0},
+    {"doubted": 0,"published": 1,"source_id": "cgtn-business","truncated": 0},
+    {"doubted": 0,"published": 1,"source_id": "free-press-journal","truncated": 0},
+    {"doubted": 0,"published": 1,"source_id": "nber-new","truncated": 0},
+    {"doubted": 0,"published": 1,"source_id": "straitstimes-business","truncated": 0},
+    {"doubted": 0,"published": 1,"source_id": "thehindu-all","truncated": 0},
+    {"doubted": 1,"published": 2,"source_id": "thehindu-business","truncated": 0}
+  ],
+  "sources_present": 7,
+  "stage_timing": [
+    {"max_ms": 1585,"p50_ms": 733,"p90_ms": 1269,"stage": "fetch","sum_ms": 6893,"timed": 8},
+    {"max_ms": 111,"p50_ms": 36,"p90_ms": 86,"stage": "extract","sum_ms": 372,"timed": 8},
+    {"max_ms": 944473,"p50_ms": 556918,"p90_ms": 817174,"stage": "summarize","sum_ms": 4277886,"timed": 8}
+  ],
+  "summaries_scored": 8,
+  "throughput": {
+    "cached_tokens": 33805,
+    "decode_ms": 2347990,
+    "input_tokens": 60022,
+    "items": 8,
+    "output_tokens": 10416,
+    "prefill_ms": 1929414
+  },
+  "version": "2026-09-29",
+  "visuals_rendered": 0
+}
