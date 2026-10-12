@@ -11,18 +11,12 @@
  */
 
 import { expect, test } from '@playwright/test';
-import { costLabel, costShapeOptions } from '../src/lib/charts/cost';
-import { extractionLabel } from '../src/lib/charts/extraction-trend';
 import { FLEET_HINT, fleetHintOne } from '../src/lib/charts/fleet';
 import { coverage, coverageSentence, noModelRuleNote } from '../src/lib/charts/frame';
 import {
 	chartRule,
 	horizonRate,
-	publishedSkyline,
-	ruleTrendLabel,
-	siteCostLabel,
 	siteCostMeasure,
-	skylineLabel,
 	type GlanceDay
 } from '../src/lib/charts/glance';
 import { dailyFiguresPointer, dailyFiguresRows, dailyFiguresSummary } from '../src/lib/console/daily-figures';
@@ -98,34 +92,10 @@ test('a sparse chart counts its measured days over the days it drew', () => {
 	expect(coverageSentence(coverage([true]), 'We timed')).toBeNull();
 });
 
-test('the counterfactual cost chart names the days it prices', () => {
-	// A column a day and a total added day by day both need a second day, so one
-	// day is one column, or its total.
-	const owed = "What the work would have cost at a hosted provider's rate, never an amount owed.";
-	expect(costLabel('daily', 1)).toBe(
-		`The counterfactual cost of this one day, one column, reading at the bottom and writing on top. ${owed}`
-	);
-	expect(costLabel('daily', 7)).toBe(
-		`The counterfactual cost of these 7 days, one column a day, reading at the bottom and writing on top. ${owed}`
-	);
-	expect(costLabel('running', 1)).toBe(`The counterfactual cost of this one day, in total. ${owed}`);
-	expect(costLabel('running', 7)).toBe(
-		`The counterfactual cost of these 7 days, added up day by day. ${owed}`
-	);
-});
-
-test('THE ORACLE: one-day titles and cost choices name one day, while seven-day words stay unchanged', () => {
+test('one-day titles name one day, while seven-day words stay unchanged', () => {
 	expect(matchTitle(1)).toBe('Summary faithfulness for this one day');
 	expect(matchTitle(7)).toBe('Summary faithfulness, day by day');
 	expect(EVAL_PANELS.find((panel) => panel.id === 'faithfulness')?.title).toBe(matchTitle(7));
-	expect(costShapeOptions(1)).toEqual([
-		{ value: 'daily', text: 'This one day' },
-		{ value: 'running', text: 'Running total' }
-	]);
-	expect(costShapeOptions(7)).toEqual([
-		{ value: 'daily', text: 'Day by day' },
-		{ value: 'running', text: 'Running total' }
-	]);
 });
 
 test('the chart-drawing verdict names the one day, since one day has no median day', () => {
@@ -146,45 +116,6 @@ test('the chart-drawing verdict names the one day, since one day has no median d
 	expect(chartRule([quiet], thresholds, 7).verdict).toBe(
 		'The median day has no minutes on record over these 7 days, and no day published anything to put a visual on.'
 	);
-});
-
-/** One day of the chart-drawing record: articles published, visuals on some. */
-function glanceDay(date: string, items: number, published = 0): GlanceDay {
-	return { date, published, items, minutesPerChart: null };
-}
-
-test('a card skyline gives one day its count, and seven days their total and busiest day', () => {
-	const oneDay = { start: '2026-10-06', end: '2026-10-06' };
-	const days = [glanceDay('2026-10-06', 300, 4)];
-	expect(skylineLabel('Articles published', publishedSkyline(days, oneDay, 'items'), 1)).toBe(
-		'Articles published in this one day, 300'
-	);
-	expect(skylineLabel('Visuals published', publishedSkyline(days, oneDay, 'published'), 1)).toBe(
-		'Visuals published in this one day, 4'
-	);
-
-	const sevenDays = { start: '2026-09-30', end: '2026-10-06' };
-	const week = [glanceDay('2026-10-01', 1200), glanceDay('2026-10-06', 300)];
-	expect(skylineLabel('Articles published', publishedSkyline(week, sevenDays, 'items'), 7)).toBe(
-		'Articles published each day over 7 days, 1,500 over the window, 1,200 on the busiest day'
-	);
-});
-
-test('a trend of the chart-drawing rule counts its measured days, and one is not day by day', () => {
-	expect(ruleTrendLabel('Minutes per visual', 1)).toBe('Minutes per visual, over 1 measured day');
-	expect(ruleTrendLabel('Share of published articles carrying a visual', 1)).toBe(
-		'Share of published articles carrying a visual, over 1 measured day'
-	);
-	expect(ruleTrendLabel('Minutes per visual', 9)).toBe(
-		'Minutes per visual, day by day, over 9 measured days'
-	);
-});
-
-test('the extraction trend has one point for one day, and one a day over seven', () => {
-	const lead =
-		'Articles the reading found enough figures of one kind in, against published articles carrying a chart';
-	expect(extractionLabel(1)).toBe(`${lead}, one point for this one day`);
-	expect(extractionLabel(7)).toBe(`${lead}, one point a day over 7 days`);
 });
 
 test('a table of daily figures opens on one day, and on seven day by day, newest first', () => {
@@ -221,11 +152,7 @@ test('the faithfulness plot names its two points at one day, and its lines over 
 	expect(matchPoints(7)).toBe('One point is one day over these 7 days.');
 });
 
-test('the per-article cost names one day, and over seven each published day and its spread', () => {
-	expect(siteCostLabel(1)).toBe('Payload bytes per article in this one day');
-	expect(siteCostLabel(7)).toBe(
-		'Payload bytes per article on each published day, over 7 days, against the median and one standard deviation either side of it'
-	);
+test('the per-article measurement names the published articles and payload days it counts', () => {
 	expect(siteCostMeasure(1)).toBe(
 		'Bytes the committed payload tree gained in this one day, over the articles the day published.'
 	);

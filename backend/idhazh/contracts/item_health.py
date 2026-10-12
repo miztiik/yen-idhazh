@@ -172,12 +172,6 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "label_decode_tokens_per_s",
             "summary_decode_tokens_per_s",
         ),
-        "frontend/src/lib/charts/machine.ts": (
-            "shard_item_count",
-            "cpu_busy_max",
-            "cpu_busy_min",
-            "load_1m",
-        ),
         "frontend/src/lib/console/queries/shared.ts": (
             "date",
             "stage",
@@ -272,10 +266,6 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "watchlist_hit",
             "on_front_page",
         ),
-        "frontend/src/lib/console/settings-moved.ts": (
-            "n_threads",
-            "n_batch",
-        ),
         "frontend/src/lib/console/machine/counters.ts": ("llama_rss_peak_bytes",),
         "frontend/src/lib/console/model/work.ts": ("version",),
         "frontend/src/lib/server/payload.ts": ("detail",),
@@ -316,12 +306,20 @@ UNREAD_CELLS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
         "how a call ended, and how much of its prompt the server already held": (
             "recovered",
         ),
-        "which settings the run used, beyond the three a panel already names": (
+        "which recorded settings no current item panel reads": (
+            "n_threads",
+            "n_batch",
             "model_quantisation",
             "temperature",
             "label_budget_tokens",
             "summary_budget_tokens",
             "run_visual_decision",
+        ),
+        "how shard size and processor load explain a slow item": (
+            "shard_item_count",
+            "cpu_busy_max",
+            "cpu_busy_min",
+            "load_1m",
         ),
         "which rule refused a reply, and on which field": (
             "failed_field",

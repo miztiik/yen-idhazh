@@ -1,104 +1,131 @@
-/** A reading and the window it is read against, as one band and one upright.
- *
- * Every rule the shape has is checked here as arithmetic: where the band
- * starts, where it ends, where the run's own mark falls on it, and the three
- * states an absent reading or an unread window leave it in.
- *
- * **No panel draws this today.** The shape is kept whole, with its rules held
- * here, because the honest version of the processor share it was drawn for is
- * the one that separates out the time another tenant took - and that figure
- * needs the same band rather than a second one. A panel that draws it owes a
- * page oracle putting a real band against the numbers printed beside it.
- *
- * These are pure functions over built parameters rather than the committed
- * archive, so they cost the same on the day the archive is a thousand runs long.
- */
-
+/** Native host measurements keep their own clocks, logical processors and four-cell joins. */
 import { expect, test } from '@playwright/test';
-import { spanTrack } from '../src/lib/charts/span-track';
+import { articleCost } from '../src/lib/console/machine/article-cost';
+import { countersFrom, processors, textRows } from '../src/lib/console/machine/records';
+import type { Row } from '../src/lib/data/ledger';
 
-/** A drawing width wide enough that a band of any real width is a length. */
-const WIDE = 760;
+const DATE = '2030-06-15';
+const RUN = '2030-06-15-1';
+const LIMITS = { contextWindow: 8192, jobTimeoutSeconds: 9000 };
 
-test.describe('a figure with a span is a track, not a sentence', () => {
-	test('the band is the window and the upright is this run inside it', () => {
-		const track = spanTrack(75, { low: 50, high: 100, from: 9, outOf: 12 }, { width: WIDE });
-		expect(track.spanned).toBe(true);
-		if (!track.spanned) return;
-		// No ceiling, so the track ends at the largest reading drawn on it.
-		expect(track.scale).toBe(100);
-		expect(track.start).toBe('50.0000%');
-		expect(track.length).toBe('50.0000%');
-		expect(track.at).toBe('75.0000%');
-		expect(track.drawn).toBe(true);
+function host(cells: Row = {}): Row {
+	return {
+		version: '2026-10-10', date: DATE, run_id: RUN, job: 'work', shard: 0,
+		cpu_logical_processors: 4, ...cells
+	};
+}
+
+function item(cells: Row = {}): Row {
+	return {
+		date: DATE, run_id: RUN, machine_job: 'work', machine_shard: 0,
+		item_total_ms: 1000, cpu_busy_pct: 50, ...cells
+	};
+}
+
+test.describe('the actual native host and article readers', () => {
+	test('whole-host logical processors and the two independent clocks survive the native adapter', () => {
+		const hosts = [host({
+			cpu_allowed_processors: 1, cpu_quota_cores: 0.5, cores: 128, threads: 256,
+			server_prompt_tokens: 1000, server_prompt_seconds: 100
+		})];
+		const items = [item({
+			input_tokens: 1100, cached_tokens: 100, prefill_ms: 200000,
+			output_tokens: 10, decode_ms: 5000
+		})];
+		const counters = countersFrom(hosts, items, [{ run_id: RUN, shards: 4 }], LIMITS);
+		expect(counters.refused).toEqual([]);
+		expect(counters.runs).toHaveLength(1);
+		const run = counters.runs[0];
+		expect(run.reported[0].logicalProcessors).toBe(4);
+		expect(run.readTokensPerSecond).toEqual({ value: 10, from: 1, outOf: 4 });
+		expect(run.writeTokensPerSecond).toEqual({ value: 2, from: 1, outOf: 4 });
+		expect(run.clocks.server).toEqual({ tokens: 1000, seconds: 100, parts: 1, rate: 10 });
+		expect(run.clocks.ledger).toEqual({ tokens: 1000, seconds: 200, parts: 1, rate: 5 });
+		expect(run.clocks.gapPct).toBe(50);
+		expect(run.clocks.agrees).toBe(false);
+		const cost = articleCost(textRows(items), processors(hosts));
+		expect(cost.processors).toEqual([4]);
+		expect(cost.processorSeconds).toEqual({ low: 2, mid: 2, high: 2, from: 1, outOf: 1 });
+		expect(cost.modelSeconds).toEqual({ low: 205, mid: 205, high: 205, from: 1, outOf: 1 });
 	});
 
-	test('a ceiling ends the track even where no run reached it', () => {
-		const track = spanTrack(94, { low: 90, high: 96, from: 9, outOf: 12 }, {
-			ceiling: 100,
-			width: WIDE
-		});
-		expect(track.spanned).toBe(true);
-		if (!track.spanned) return;
-		// The gap between 96 and 100 is the point of the figure, so the track has
-		// to keep it. A track that ended at 96 would draw the worst run as full.
-		expect(track.scale).toBe(100);
-		expect(track.start).toBe('90.0000%');
-		expect(track.length).toBe('6.0000%');
+	test('date, run, job and shard each remain part of the article-to-host join', () => {
+		const hosts = [
+			host(),
+			host({ date: '2030-06-16', cpu_logical_processors: 8 }),
+			host({ run_id: '2030-06-15-2', cpu_logical_processors: 12 }),
+			host({ job: 'plan', cpu_logical_processors: 16 }),
+			host({ shard: 1, cpu_logical_processors: 2 })
+		];
+		const items = [
+			item(),
+			item({ date: '2030-06-16' }),
+			item({ run_id: '2030-06-15-2' }),
+			item({ machine_job: 'plan' }),
+			item({ machine_shard: 1 })
+		];
+		const named = processors(hosts);
+		expect(items.map((row) => articleCost(textRows([row]), named).processorSeconds.mid))
+			.toEqual([2, 4, 6, 8, 1]);
+		const cost = articleCost(textRows(items), named);
+		expect(cost.processors).toEqual([2, 4, 8, 12, 16]);
+		expect(cost.processorSeconds).toEqual({ low: 1, mid: 4, high: 8, from: 5, outOf: 5 });
+		// An absent historical job is work; an absent shard is never shard zero.
+		expect(articleCost(textRows([item({ machine_job: '' })]), named).processorSeconds.mid).toBe(2);
 	});
 
-	test('a reading past its ceiling draws past the band, never on the end of it', () => {
-		const track = spanTrack(120, { low: 80, high: 120, from: 4, outOf: 4 }, {
-			ceiling: 100,
-			width: WIDE
-		});
-		expect(track.spanned).toBe(true);
-		if (!track.spanned) return;
-		// The ceiling joins the readings rather than capping them: a breach that
-		// drew at the ceiling would report a run that just reached it.
-		expect(track.scale).toBe(120);
-		expect(track.at).toBe('100.0000%');
+	test('invalid or unknown shard cells cannot join to shard zero', () => {
+		const hosts = processors([host()]);
+		for (const shard of ['', null, -1, 0.5, NaN, 'Infinity']) {
+			const cost = articleCost(textRows([item({
+				machine_shard: shard, prefill_ms: 0, decode_ms: 0
+			})]), hosts);
+			expect(cost.processorSeconds).toEqual({ low: null, mid: null, high: null, from: 0, outOf: 1 });
+			expect(cost.modelSeconds).toEqual({ low: 0, mid: 0, high: 0, from: 1, outOf: 1 });
+			expect(cost.processors).toEqual([]);
+		}
 	});
 
-	test('a window that recorded nothing is unread, so there is no band', () => {
-		const track = spanTrack(75, { low: null, high: null, from: 0, outOf: 12 }, { width: WIDE });
-		expect(track.spanned).toBe(false);
-		// The run's own reading survives the absence. A window with no span and a
-		// run with no reading are different facts, and the panel says so.
-		expect(track.value).toBe(75);
-		expect(track.low).toBeNull();
-		expect(track.high).toBeNull();
-		expect(track.outOf).toBe(12);
+	test('the finite legacy versions preserve unknown logical counts instead of promoting threads', () => {
+		for (const version of ['2026-09-16', '2026-09-17', '2026-09-18', '2026-09-19', '2026-09-20']) {
+			const hosts = [host({
+				version, cpu_logical_processors: 64, cores: 4, threads: 8,
+				server_prompt_tokens: 1000, server_prompt_seconds: 100
+			})];
+			const named = processors(hosts);
+			expect(named).toEqual([{ date: DATE, run_id: RUN, job: 'work', shard: 0, cpu_logical_processors: null }]);
+			const cost = articleCost(textRows([item()]), named);
+			expect(cost.processorSeconds).toEqual({ low: null, mid: null, high: null, from: 0, outOf: 1 });
+			const counters = countersFrom(hosts, [], [{ run_id: RUN, shards: 1 }], LIMITS);
+			expect(counters.refused).toEqual([]);
+			expect(counters.runs[0].reported[0].logicalProcessors).toBeNull();
+			expect(counters.runs[0].readTokensPerSecond).toEqual({ value: 10, from: 1, outOf: 1 });
+		}
+		expect(processors([host({ version: '2099-01-01' })])).toEqual([]);
 	});
 
-	test('a run that recorded nothing keeps the window it cannot be placed on', () => {
-		const track = spanTrack(null, { low: 50, high: 100, from: 9, outOf: 12 }, { width: WIDE });
-		expect(track.spanned).toBe(true);
-		if (!track.spanned) return;
-		expect(track.value).toBeNull();
-		expect(track.low).toBe(50);
-		expect(track.high).toBe(100);
+	test('repeated host readings count once and conflicting logical counts leave an offered article unmeasured', () => {
+		const health = textRows([item()]);
+		expect(articleCost(health, processors([host(), host()])).processorSeconds)
+			.toEqual({ low: 2, mid: 2, high: 2, from: 1, outOf: 1 });
+		for (const hosts of [
+			[host(), host({ cpu_logical_processors: 8 })],
+			[host({ cpu_logical_processors: 8 }), host()]
+		]) {
+			expect(articleCost(health, processors(hosts)).processorSeconds)
+				.toEqual({ low: null, mid: null, high: null, from: 0, outOf: 1 });
+			expect(countersFrom(hosts, [], [{ run_id: RUN, shards: 1 }], LIMITS).runs).toEqual([]);
+		}
 	});
 
-	test('a span every run agreed on is a mark, not a hairline', () => {
-		const flat = spanTrack(500, { low: 500, high: 500, from: 9, outOf: 12 }, { width: WIDE });
-		expect(flat.spanned).toBe(true);
-		if (!flat.spanned) return;
-		// Under one pixel at the drawing width, so it is printed rather than
-		// drawn as a length nobody can see.
-		expect(flat.drawn).toBe(false);
-		expect(flat.length).toBe('0.0000%');
-
-		// The same pair on a narrow track is still a mark, and a wider gap on the
-		// same track is a length: the rule is the pixel, not the pair of readings.
-		const thin = spanTrack(1000, { low: 999, high: 1000, from: 9, outOf: 12 }, { width: 100 });
-		expect(thin.spanned).toBe(true);
-		if (!thin.spanned) return;
-		expect(thin.drawn).toBe(false);
-
-		const wide = spanTrack(1000, { low: 990, high: 1000, from: 9, outOf: 12 }, { width: WIDE });
-		expect(wide.spanned).toBe(true);
-		if (!wide.spanned) return;
-		expect(wide.drawn).toBe(true);
+	test('unknown or invalid logical counts are not zero processor cost, while measured idle time is zero', () => {
+		for (const count of [null, '', 0, -1, 0.5, NaN, Infinity]) {
+			const cost = articleCost(textRows([item()]), processors([host({ cpu_logical_processors: count })]));
+			expect(cost.processorSeconds).toEqual({ low: null, mid: null, high: null, from: 0, outOf: 1 });
+			expect(cost.processors).toEqual([]);
+		}
+		const idle = articleCost(textRows([item({ cpu_busy_pct: 0 })]), processors([host()]));
+		expect(idle.processorSeconds).toEqual({ low: 0, mid: 0, high: 0, from: 1, outOf: 1 });
+		expect(idle.processors).toEqual([4]);
 	});
 });

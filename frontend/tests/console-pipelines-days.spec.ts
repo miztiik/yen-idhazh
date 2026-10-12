@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 
 import { windowOfDays } from '../src/lib/charts/viewport';
 
-import { telemetryRow } from './support/telemetry-row';
+import { failureRuleRows } from '../src/lib/console/failure-rules';
 
 import { windowDates, said } from './support/console-window/readout';
 import { DRAWN_THROUGH as JUDGED_THROUGH, DRAWN_AT } from './support/console-window/readout';
@@ -28,47 +28,37 @@ async function draw(page: Page, name: string, props: Record<string, unknown>) {
 
 function failureProps(preset: number): Record<string, unknown> {
 	return {
-		rows: [
-			telemetryRow({
+		ranking: failureRuleRows([
+			{
 				date: JUDGED_THROUGH,
-				item_id: 'a',
-				source_id: 'alpha',
 				stage: 'fetch',
 				outcome: 'failed',
-				code: 'timeout'
-			}),
-			telemetryRow({ date: JUDGED_THROUGH, item_id: 'b', source_id: 'beta', outcome: 'ok' })
-		],
+				code: 'timeout', failed_rule: 'Fetch rule'
+			},
+			{ date: JUDGED_THROUGH, stage: 'fetch', outcome: 'ok', code: null, failed_rule: null }
+		]),
+		stages: { options: ['fetch'], chosen: 'fetch' },
 		window: windowOfDays(JUDGED_THROUGH, preset, 'right'),
-		selectedCode: null,
 		max: 10,
-		sourceMax: 10,
 		readoutMaxShare: 1
 	};
 }
 
-test('THE ORACLE: a failure cause, and a source that lost articles, say nothing about when at one day', async ({
+test('THE ORACLE: one-day identity-free rules name their actual stage and recorded date', async ({
 	page
 }) => {
 	await draw(page, 'FailureList', failureProps(1));
-	expect(await said(page, '[data-ranked-row="fetch/timeout"] [data-ranked-cell="context"]')).toBe(
-		'sources hit: 1 of 2'
-	);
-	expect(await said(page, '[data-ranked-row="alpha"] [data-ranked-cell="context"]')).toBe(
-		'fetch/timeout'
-	);
+	expect(await said(page, '[data-ranked-row="Fetch rule"] [data-ranked-cell="context"]')).toBe(`at fetch; last ${JUDGED_THROUGH}`);
+	await expect(page.locator('[data-source-losses], [data-failure-rows]')).toHaveCount(0);
+	await expect(page.locator('[data-failure-ranking]')).toHaveAttribute('data-readout-columns', '1');
 });
 
-test('a failure cause, and a source that lost articles, say they were last seen on the newest day in view', async ({
+test('a seven-day identity-free ranking retains the same last measured date and its full calendar', async ({
 	page
 }) => {
 	await draw(page, 'FailureList', failureProps(7));
-	expect(await said(page, '[data-ranked-row="fetch/timeout"] [data-ranked-cell="context"]')).toBe(
-		'sources hit: 1 of 2 - last on the newest day in view'
-	);
-	expect(await said(page, '[data-ranked-row="alpha"] [data-ranked-cell="context"]')).toBe(
-		'fetch/timeout - last on the newest day in view'
-	);
+	expect(await said(page, '[data-ranked-row="Fetch rule"] [data-ranked-cell="context"]')).toBe(`at fetch; last ${JUDGED_THROUGH}`);
+	await expect(page.locator('[data-failure-ranking]')).toHaveAttribute('data-readout-columns', '7');
 });
 test.describe("remaining one-day words and keys on generated records", () => {
 

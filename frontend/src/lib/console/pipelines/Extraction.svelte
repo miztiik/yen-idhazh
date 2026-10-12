@@ -11,7 +11,7 @@
 	import type { PanelState } from '../waiting';
 	import type { Range } from '../queries/window';
 	import type { TimeWindow } from '$lib/charts/viewport';
-	import type { ExtractionDay } from '$lib/charts/extraction-trend';
+	import type { ExtractionDay } from './extraction';
 	import type { Row } from '$lib/data/ledger';
 	import type { ModelRule } from '$lib/charts/d3/model-rule';
 	import type { ConsoleConfig, ChartConfig } from '$lib/server/config';

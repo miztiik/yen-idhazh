@@ -17,16 +17,16 @@
  *
  * Relative imports only, and nothing from `$lib/server`: a panel draws this, so
  * the module has to be loadable in a browser bundle and in plain Node. That is
- * why the cutover date and the run-day shape live here rather than beside the
- * boundary derivation that also reads them.
+ * why the live comparison shape and word tables stay beside the readout rules,
+ * rather than a second production derivation of the movement answer.
  */
 
-import type { BandSettingsMoved, ConsoleShell } from './band';
+import type { ConsoleShell } from './band';
 import type { ModelRule, RuleChange } from '../charts/d3/model-rule';
 import type { DateStamp } from '../data/ledger';
 import { nameSpan } from './span-words';
 
-/** The slice of a published day's runs both derivations need.
+/** The slice of a published day's runs the native model work comparison needs.
  *
  * Structural rather than imported, so `RunSummary` from the payload loader
  * satisfies it and this module goes on importing nothing at all.
@@ -237,76 +237,6 @@ export interface SettingsMoved {
 	 * was one yesterday used too, and then the boundary is real with nothing to
 	 * name. The readout falls back to the sentence that names no field. */
 	settings: string[];
-}
-
-/** Every day the recorded inputs named a value the last recorded day did not.
- *
- * The same rule the whole-manifest boundary uses, asked once per setting: a day
- * is a change when it ran something the previous RECORDED day did not run, and
- * a day that only stopped using one of yesterday's values changed nothing. The
- * comparison is between consecutive recorded days, so a day with no record is
- * skipped rather than read as a day nothing moved on (`CLAUDE.md` Guardrail
- * #10, and the same refusal Row #10 made of a zero theft figure).
- *
- * **Once per setting rather than once per field**, because two of the fields
- * hold many settings each. Compared whole they moved as a block, so the day the
- * model file took llama-server's own flag names read as every switch changing
- * at once - a permanent rule on a published day where the decode had not moved.
- * Per key, a renamed switch compares against itself and a setting that stopped
- * being sent is a key that is absent, which this rule already treats as no
- * change.
- *
- * A run that recorded no inputs is skipped by the check below rather than by a
- * date. Before the record existed every run carries a null, so the two rules
- * remove the same days - and the check says why the day is skipped where a date
- * could only say when.
- */
-export function inputsMoved(runs: readonly RecordedRunDay[], first: string): BandSettingsMoved {
-	const byDate = new Map<string, Map<string, Set<string>>>();
-	for (const day of runs) {
-		for (const record of day.records) {
-			const inputs = record.inputs;
-			if (inputs === null || inputs === undefined || typeof inputs !== 'object') continue;
-			const held = byDate.get(day.date) ?? new Map<string, Set<string>>();
-			for (const [name, value] of comparableInputs(inputs)) {
-				const values = held.get(name) ?? new Set<string>();
-				values.add(value);
-				held.set(name, values);
-			}
-			byDate.set(day.date, held);
-		}
-	}
-	const dates = [...byDate.keys()].sort();
-	const changes: BandSettingsMoved['changes'] = [];
-	const before = new Map<string, Set<string>>();
-	for (const date of dates) {
-		const now = byDate.get(date) as Map<string, Set<string>>;
-		const changed = [...now.keys()].filter((name) =>
-			before.has(name) && [...(now.get(name) ?? new Set<string>())].some(
-				(value) => !(before.get(name) ?? new Set<string>()).has(value)
-			)
-		);
-		const fields = Object.keys(SETTING_WORDS);
-		changed.sort((a, b) => fields.indexOf(a.split('.')[0]) - fields.indexOf(b.split('.')[0]) ||
-			(a < b ? -1 : a > b ? 1 : 0));
-		if (date >= first && changed.length > 0) {
-			changes.push({ date, inputs: changed });
-		}
-		for (const [name, values] of now) before.set(name, values);
-	}
-	const afterOldest = dates.length === 0 ? null : new Date(`${dates[0]}T00:00:00Z`);
-	afterOldest?.setUTCDate(afterOldest.getUTCDate() + 1);
-	return {
-		compared_from: dates.length === 0 ? null : dates[0] < first ? first :
-			afterOldest!.toISOString().slice(0, 10),
-		changes
-	};
-}
-
-export function settingsMoved(runs: readonly RecordedRunDay[]): SettingsMoved[] {
-	return inputsMoved(runs, [...runs].map((day) => day.date).sort()[0] ?? '').changes.map((change) => ({
-		date: change.date, settings: [...new Set(change.inputs.map(wordsFor))]
-	}));
 }
 
 /** Retain each available rule independently when another kind did not arrive. */

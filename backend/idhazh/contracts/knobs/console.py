@@ -82,8 +82,6 @@ class ConsoleConfig(Model):
             "today, so at least one, which is why zero is refused."
         ),
     )
-    pan_days: int = Field(default=7, ge=1, description="Days moved by one arrow-key pan.")
-    zoom_factor: float = Field(default=1.5, gt=1.0)
     min_window_days: int = Field(
         default=1,
         ge=1,
@@ -168,15 +166,11 @@ class ConsoleConfig(Model):
         default=760,
         ge=240,
         description=(
-            "The width a console chart is drawn at on the server, in CSS pixels. A "
-            "prerendered chart has no element to measure, and a chart drawn in "
-            "arbitrary units and then stretched by its viewBox renders its labels at "
-            "whatever the stretch factor happens to be - measured 2026-08-25, one page "
-            "put the same font-size at 4.5px and at 16.6px. It is a seed rather than "
-            "the final width: the client re-measures its container once a script runs, "
-            "and the drawn SVG was its host's width to within a pixel at 1440, 768 and "
-            "390 (measured 2026-09-01). 760 is the same number `chart.width_px` "
-            "carries, so a console page has one answer to how wide a chart starts. "
+            "The seed width of a console chart's coordinate frame, in CSS pixels. "
+            "Native charts measure their browser container and redraw when it "
+            "changes; kept helpers also use this width to decide whether a segment "
+            "would be too narrow to draw. 760 is the same number `chart.width_px` "
+            "carries, so a console page has one initial coordinate frame. "
             "`config/appearance.json` owns the value, as `console.chart_width`."
         ),
     )
@@ -228,16 +222,6 @@ class ConsoleConfig(Model):
             "sentence. Measured 2026-09-01 over the committed ledger, 26 of 182 "
             "checked feeds have failed at least once. Ten, matching "
             "`console.source_rows`."
-        ),
-    )
-    band_outlier_rows: int = Field(
-        default=10,
-        ge=1,
-        description=(
-            "How many summaries the console names as furthest from the length the "
-            "prompt asked for. Capped, with the tail stated in a sentence, because the "
-            "list exists to be acted on and the far tail is a one-word miss nobody "
-            "chases. Ten, matching the source-cut table beside it."
         ),
     )
     doubt_rows: int = Field(
@@ -331,12 +315,11 @@ class ConsoleConfig(Model):
         default=3,
         ge=2,
         description=(
-            "How many distinct machine kinds must carry a memory-bandwidth reading "
-            "before bandwidth may be plotted against decode speed. Two points define "
+            "How many distinct subjects a paired scatter needs before it draws. "
+            "Two points define "
             "a line, so a scatter of two is a claim rather than a measurement. "
-            "Nothing plots it today - the panel was refused on 2026-09-17 and this "
-            "is half of the trigger that would bring it back, the other half being "
-            "fleet_min_rows."
+            "The Data explorer passes this floor to its paired-scatter chart. "
+            "It governs the drawing, not which records the query returns."
         ),
     )
     machine_colour_stops: int = Field(
@@ -693,22 +676,6 @@ class ConsoleConfig(Model):
         description=(
             "Example questions shown on the Data explorer page. Each statement is written "
             "against its ledgers' row contracts and answers what its title says."
-        ),
-    )
-
-    plot_min_fill_share: float = Field(
-        default=0.85,
-        gt=0.0,
-        le=1.0,
-        description=(
-            "The share of a judged panel's content width its drawn plots must "
-            "cover, at every width the console is pictured at. Width and not area: "
-            "a full-width chart under a title, a note and a readout strip covers "
-            "well under this share of the panel's area, and a floor on area would "
-            "teach people to stretch a chart to pass. An estimate, not a "
-            "measurement: no panel is judged yet, so nothing has been measured "
-            "against it. What replaces it is the share the first judged panels "
-            "cover at 390 CSS px, the narrowest width."
         ),
     )
 

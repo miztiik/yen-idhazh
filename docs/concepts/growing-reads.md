@@ -1,6 +1,6 @@
 # Growing Reads
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-10-12
 One question, asked of every read:
 
 > **Does this read cost more when a run appended more?**
@@ -309,20 +309,18 @@ the last day there was.
 | `payload.latestDate` | the first entry of the above | the same 90, and it only needs the first |
 | `payload.loadManifests` | one `run.json` a day in range | its caller's `windowDays` |
 | `payload.publishedCharts` | one day payload a day in range | its caller's `windowDays` |
-| Legacy `payload.telemetryRows` helper | named fixture shards only; retained until the last legacy component is removed | no active Pipelines route calls it; native panel queries own its windowed reads |
 
 ### A cover that is not a clock
 
 | Read | What it opens | Its cover |
 | --- | --- | --- |
-| `payload.readShards` | the newest `months` shards of a month-sharded series | `LEDGER_WINDOW_MONTHS`, which is `shardMonths(90)` and so 5 |
-| `ledger-rows.itemHealthRows`, `ledger-rows.evalRows`, `ledger-rows.feedHealthRows`, `host-fingerprint.machineRecord`, `content-similarity-holdout.mergeLineHoldoutScore`, `content-similarity-judge.fittedLines` | the ledger's compact indexes, then the packed days of the item-health, summary-quality-evals, feed-health, host-fingerprint, merge-line holdout score or fitted merge line ledger inside the window the caller hands over, through the query door's `sliceFromDisk`. Never a raw file. A span that reaches a packed year reads that year's whole file | the window: a console route hands over its widest preset, 90 days that end on the site's newest published day, and no day before it is read, even when the packed days in it hold no row. `yearly.json` grows by one entry a year, and a year file is kept for ever: a published ledger that packs years ships one more file a year to the site |
+| `ledger-rows.itemHealthRows`, `ledger-rows.evalRows`, `ledger-rows.feedHealthRows`, `content-similarity-holdout.mergeLineHoldoutScore`, `content-similarity-judge.fittedLines` | the ledger's compact indexes, then the packed days of the item-health, summary-quality-evals, feed-health, merge-line holdout score or fitted merge line ledger inside the window the caller hands over, through the query door's `sliceFromDisk`. Never a raw file. A span that reaches a packed year reads that year's whole file | the window: a console route hands over its widest preset, 90 days that end on the site's newest published day, and no day before it is read, even when the packed days in it hold no row. `yearly.json` grows by one entry a year, and a year file is kept for ever: a published ledger that packs years ships one more file a year to the site |
 | `payload.feedResults` | through `ledger-rows.feedHealthRows` above | the same window |
 | `recorded-line.readRecordedLine` | the one `run.json` of the date it is handed, opened by name | one file. The Judgement route hands it the newest published day. The file gains one record for each build of that day - 7 to 12 a day on 6 to 8 Oct 2026 - and nothing as the archive grows |
 | `content-similarity-holdout.holdoutReading` | the packed holdout marks inside the reach, through `content-similarity-holdout.markedPairs` and the query door's `sliceFromDisk`, then one published day payload for each distinct date those marks name | `similarity.holdout_reach_days`, 730 days that end on the site's newest published day, then the marks inside it - see below |
-| `machine-counters.loadMachineCounters` | the machine and census records through `machineRecord` and `itemHealthRows` above, and the run manifests through `loadManifests` | the window it is handed, for all three |
+| Hardware's declared questions in `frontend/src/lib/console/queries/machine.ts` | published compact indexes and selected native cells from host-fingerprint, item-health and run-shards through the browser query door. `console/machine/records.ts` and `console/machine/counters.ts` consume those answers, not private manifests | each question declares `newest-day`, `window` or `widest`; the route's selected window or widest configured preset bounds the read. `runShardsQuery` uses `widest` for the exact recorded shard counts |
 | `payload.dayMetrics` | one record a date | the dates handed in |
-| `payload.telemetryMonths`, `payload.indexMonths` | one directory listing, sliced to the newest months | `LEDGER_WINDOW_MONTHS`, where the caller takes it |
+| `payload.indexMonths` | the published search-index listing, sliced to the newest months | `LEDGER_WINDOW_MONTHS`, where the caller takes it |
 
 **The holdout read is the one on this page that reaches outside the window, and
 its cover is a reach of its own.** It asks whether the merge line still sits
@@ -356,8 +354,8 @@ matters, because the vector block is most of what a day payload weighs.
 
 **Two residues are named rather than hidden.** `publishedDates` lists the root
 once to find the newest year, which costs one directory entry a year for ever.
-`readShards`, `telemetryMonths` and `indexMonths` list their directory to learn
-which shards are newest, which costs one entry a month for ever.
+`indexMonths` reads the search-index listing, which gains one entry a month.
+Unused telemetry helper exports are not active console readers.
 
 ### Unbounded, and it says so
 
@@ -365,7 +363,6 @@ which shards are newest, which costs one entry a month for ever.
 | --- | --- | --- |
 | `routes/archive` -> `publishedDates(root, -1)` and `loadDay` | every committed day payload | this page **is** the archive: the calendar names every published day, the topic pills count stories across all of them, and a cover would delete the older half of the page rather than make it cheaper to draw |
 | `routes/archive` -> `indexMonths(root, -1)` | the index directory listing | it is the list of months a reader may ask for, so a cover hides the older ones |
-| `routes/console` -> `telemetryMonths(root, -1)` | the telemetry directory listing | it is how far the operator can pan, which is a different question from how far a panel can draw; it opens no file, and what crosses is seven characters a month |
 
 **Two entries retired on 2026-09-09, and they were the two the build paid for
 every run.** `routes/[date]` and `routes/[date]/[vertical]` each took a `-1`

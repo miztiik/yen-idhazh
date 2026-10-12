@@ -65,7 +65,7 @@
 		windowed?: string | null;
 		windowDays?: number | null;
 		lede?: boolean;
-		rule?: ModelRule;
+		rule: ModelRule;
 		ruleName?: string;
 		ruleRange?: { from: string; to: string };
 	} = $props();
@@ -74,7 +74,7 @@
 		movement === null ? '' : `${movement >= 0 ? '+' : ''}${Math.round(movement * 100)}%`
 	);
 	const verdict = $derived(movementVerdict(movement, polarity));
-	const declaration = $derived(rule === undefined ? null : ruleDeclaration(rule));
+	const declaration = $derived(ruleDeclaration(rule));
 </script>
 
 <div
@@ -83,9 +83,9 @@
 	data-tone={tone}
 	data-windowed={windowed}
 	data-window-days={windowDays}
-	data-model-rule={declaration?.value}
-	data-model-rule-name={declaration === null ? undefined : (ruleName ?? `kpi-${label}`)}
-	data-model-rule-none={declaration?.none}
+	data-model-rule={declaration.value}
+	data-model-rule-name={ruleName ?? `kpi-${label}`}
+	data-model-rule-none={declaration.none}
 	data-model-rule-from={ruleRange?.from}
 	data-model-rule-to={ruleRange?.to}
 >
@@ -129,7 +129,7 @@
 		</p>
 	{/if}
 	{#if line}<p class="kpi-line" data-kpi-line>{line}</p>{/if}
-	{#if rule !== undefined && 'changes' in rule && rule.note !== null}
+	{#if 'changes' in rule && rule.note !== null}
 		<p class="kpi-line" data-model-rule-empty={rule.changes.length === 0 ? ruleName ?? '' : undefined} data-model-rule-unread={ruleName} data-model-rule-note={rule.changes.length > 0 ? '' : undefined}>{rule.note}</p>
 	{/if}
 </div>

@@ -1,5 +1,5 @@
 import { daysInWindow, windowOfDays } from '$lib/charts/viewport';
-import type { ExtractionDay } from '$lib/charts/extraction-trend';
+import type { ExtractionDay } from '$lib/console/pipelines/extraction';
 import type { RunYieldSource } from '$lib/charts/run-yield';
 import { extraction } from '$lib/console/extraction';
 import { runHealthGrid } from '$lib/console/pipelines/run-health';

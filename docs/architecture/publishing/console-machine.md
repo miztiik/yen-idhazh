@@ -230,8 +230,12 @@ the twelve compact-plus-pending-raw correction cases.
 
 The shipped representative-browser policy replaces repetitive panel, width,
 theme, layout, readout and mode matrices. Deleted charts-ready and panel-driver
-frameworks stay deleted. Retained production components and ECharts remain
-until Row 11's approved retirement; test integration does not remove them.
+frameworks stay deleted. `MachineCharts.svelte`, `MemoryHeldPanel.svelte` and
+`ArticleCostPanel.svelte` remain live native owners. Their declared queries,
+`records.ts`, `counters.ts` and `article-cost.ts` supply the actual answers.
+Shared chart helpers retain only arithmetic and types used by live callers, not
+board constructors or orphan panel wrappers. The finite host normalizer,
+recorded counts and native provenance keep their existing semantics.
 
 Rejected: whole manifest or plan publication; fetching whole GitHub manifests
 from the browser; substituting observed counts for unknown planned counts;

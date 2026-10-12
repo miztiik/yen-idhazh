@@ -1,4 +1,4 @@
-/** Retained telemetry components keep their real-input tests after leaving Pipelines. */
+/** Actual native Pipelines components receive independently authored numeric rows. */
 import { expect, type Page } from './door-page';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -19,11 +19,10 @@ export function items(date: string, prefix: string, stage: string, outcome: stri
 
 let code: Promise<string> | undefined;
 export async function openRetained(
-	page: Page, build: (window: TimeWindow) => readonly TelemetryRow[], panelState: PanelState = 'ready',
+	page: Page, build: (window: TimeWindow) => readonly (TelemetryRow & { failed_rule?: string | null })[], panelState: PanelState = 'ready',
 	monthInputs: { months?: string[]; held?: string[] } = {}
 ): Promise<{ window: TimeWindow }> {
 	const appearance = JSON.parse(readFileSync(resolve('..', 'config', 'appearance.json'), 'utf8'));
-	const bands = JSON.parse(readFileSync(resolve('..', 'config', 'idhazh.json'), 'utf8')).summarize.bands;
 	await page.goto('/');
 	const stored = Number(await page.evaluate(() => localStorage.getItem('idhazh:console-window')));
 	const initialDays = appearance.console.window_presets.includes(stored) ? stored : appearance.console.default_window_days;
@@ -34,7 +33,7 @@ export async function openRetained(
 	const html = readFileSync(resolve('build', 'index.html'), 'utf8');
 	const styles = [...html.matchAll(/href="([^"]+\.css)"/g)].map((match) => match[1]);
 	await drawClient(page, await code, 'RetainedTelemetry', {
-		rows, bands, config: appearance.console, chart: appearance.chart, pinned, initialDays, panelState, ...monthInputs
+		rows, config: appearance.console, chart: appearance.chart, pinned, initialDays, panelState, ...monthInputs
 	}, styles);
 	await expect(page.locator('[data-telemetry-rows]')).toHaveAttribute('data-telemetry-rows', String(rows.length));
 	return { window };

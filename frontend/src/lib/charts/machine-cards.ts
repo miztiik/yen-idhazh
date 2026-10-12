@@ -36,8 +36,8 @@
  * knobs in `config/`.
  */
 
-import type { HostFingerprint } from '$lib/server/host-fingerprint';
-import type { MachineRun } from '$lib/server/machine-counters';
+import type { HostFingerprint } from '$lib/console/machine/host-types';
+import type { MachineRun } from '$lib/console/machine/counters';
 import { recordDestroyed, type LostDay } from '$lib/console/recording';
 import { linearAxis } from './frame';
 import { seconds } from './machine';

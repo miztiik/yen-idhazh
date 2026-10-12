@@ -1,6 +1,6 @@
 /** Deterministic site size rules over bounded fixtures; no browser, build, or layout matrix. */
 import { expect, test } from '@playwright/test';
-import { PAGES_CAP_BYTES, siteCost, siteRunway } from '../src/lib/charts/glance';
+import { PAGES_CAP_BYTES, siteCost, publishingHorizon, type SiteCost } from '../src/lib/charts/glance';
 import type { RunSummary } from '../src/lib/server/payload';
 function manifest(date: string, siteBytes: number): RunSummary {
     return { date, runs: 1, planned: 0, failed: 0, siteBytes, siteFiles: 1, models: [], records: [] };
@@ -78,11 +78,13 @@ test('one day is not a spread, and a window with no published day has no cost', 
 test('the runway is headroom over one article, and absent where there is no rate', () => {
     const used = 100000000;
     const alarm = 800 * 1024 * 1024;
-    const runway = siteRunway(used, 3000, alarm, PAGES_CAP_BYTES);
+    const cost = siteCost(MANIFESTS, ITEMS);
+    const runway = publishingHorizon(used, cost, ITEMS, PAGES_CAP_BYTES);
     expect(runway).not.toBeNull();
-    expect(Math.round(runway?.toCap ?? 0)).toBe(Math.round((PAGES_CAP_BYTES - used) / 3000));
-    expect(Math.round(runway?.toAlarm ?? 0)).toBe(Math.round((alarm - used) / 3000));
-    expect(siteRunway(used, null, alarm)).toBeNull();
-    expect(siteRunway(used, 0, alarm)).toBeNull();
-    expect(siteRunway(used, -2000, alarm)).toBeNull();
+    expect(Math.round(runway?.articles ?? 0)).toBe(Math.round((PAGES_CAP_BYTES - used) / 3000));
+    expect(Math.round(publishingHorizon(used, cost, ITEMS, alarm)?.articles ?? 0)).toBe(Math.round((alarm - used) / 3000));
+    for (const median of [null, 0, -2000]) {
+        const absent: SiteCost = { ...cost, median };
+        expect(publishingHorizon(used, absent, ITEMS)).toBeNull();
+    }
 });

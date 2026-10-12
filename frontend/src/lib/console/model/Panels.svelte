@@ -61,7 +61,7 @@
 	<p data-comparison="the rule that refused most against every other rule">The rule that refused most against every other rule.</p>
 	<div data-model-rule="no" data-model-rule-name="refusing-rule" data-model-rule-none="A ranking pools the window and has no dated change position.">
 		<FailureList ranking={refusals.ranking} stages={{ options: [...MODEL_STAGES], chosen: 'summarize' }}
-			{window} selectedCode={null} max={knobs.failure_list_max} sourceMax={knobs.source_rows} readoutMaxShare={chart.readout_max_share} />
+			{window} max={knobs.failure_list_max} readoutMaxShare={chart.readout_max_share} />
 	</div>
 	{#if refusals.failed === 0}<p>No rule refused a model reply in these {range.days} days.</p>{/if}
 {:else if scores !== null}

@@ -1,19 +1,25 @@
 # Which console panel answers what
 
-**Last Updated**: 2026-10-11
-
-**Known noncompliance:** Existing console prerendering does not meet [Telemetry Intent](../../concepts/telemetry-intent.md) and will be migrated to browser rendering. All new designs, charts and visuals must render in the browser; none may be prerendered.
+**Last Updated**: 2026-10-12
 
 The console tells an operator what happened to the pipeline; the digest tells a
 reader what happened in the world. This page owns the routes and panel placement.
-It states the forward rendering rules without claiming the migration is complete.
 
 ## Rendering direction
 
-- Fetch the current view's data in the browser through the shared reader. Request only the required columns and dates; do not embed telemetry in HTML or depend on a route's server loader.
-- Use d3.js for new charts and the shared sizing, readout and loading rules. Existing prerendered charts and older chart engines are migration work, not templates for new panels.
+- Panels over published Parquet ledgers fetch their declared columns and dates in the browser through `sliceOnce`. Their ledger values are not embedded in HTML.
+- All console charts use native components and d3 helpers. ECharts, its option builders and its server-side SVG renderer are absent. Keep the shared sizing, readout and loading rules.
 - Keep query and presentation logic shared across routes. A new panel must not add its own parser, data URL builder or independent interpretation of a recorded measurement.
 - Design loading, empty, missing and failed states per panel. A failed request must not blank the route or hide usable content.
+
+Private inputs remain build-time exceptions: Pipelines reads manifests, published
+item facts and day metrics; Summaries keeps its approved cards, daily disclosure
+and item decisions; Voices keeps the source census, source decisions and feed
+inputs; Judgement keeps its recorded judging and holdout evidence. Those inputs
+are not newly published by removing the chart engine. Hardware's page carries
+configuration and words, then asks its three native ledgers in the browser.
+Route shells remain prerendered; Data explorer retains its existing fallback
+document. New data panels follow browser-owned delivery, not these exceptions.
 
 The detailed requirements are in [Telemetry Intent](../../concepts/telemetry-intent.md),
 [how a console chart gets its data](../../concepts/console-design/how-a-console-chart-gets-its-data.md)
@@ -194,6 +200,23 @@ These panels do not promise classification evidence they cannot show.
 
 ## Design rationale
 
+One chart library is enough once each route draws through native components.
+Retain shared arithmetic and types where a real component imports them; remove
+engine options and file readers whose last production caller has gone. A
+column's ownership must move to its live query or native reader, never to a
+deleted facade. Unread persisted cells stay explicitly named rather than being
+silently dropped. Shared knobs follow the same production-reader audit, as
+[appearance configuration](../../concepts/config/appearance.md#console-surface)
+defines. This changes neither native ledger shapes nor private publication.
+
+The host registry assigns `measured_at` and `runner_name` to the live native
+evidence comparison in `backend/idhazh/telemetry/host_evidence_comparison.py`,
+not a server facade. Item `n_threads`, `n_batch`, `shard_item_count`,
+`cpu_busy_max`, `cpu_busy_min` and `load_1m` remain recorded in `UNREAD_CELLS`.
+No current item query selects the last four. A column list, normalization or
+unused counter field is not an answer that reads a cell. Schema versions,
+writers and historical normalizers do not change for an ownership-only edit.
+
 Judgement keeps its existing questions and drawings. The agreement chart has
 no human verdict input, so calling it agreement with a person would mislabel
 evidence. Its leading disagreement share and comparison describe the two real
@@ -213,7 +236,7 @@ These limits preserve the drawings without presenting absent evidence as fact.
 ## See also
 
 - [../../concepts/telemetry-intent.md](../../concepts/telemetry-intent.md) - the intended data and rendering model.
-- [../../concepts/ui-shell.md](../../concepts/ui-shell.md) - the shared frame, page states and no-prerender policy.
+- [../../concepts/ui-shell.md](../../concepts/ui-shell.md) - the shared frame, page states and rendering policy.
 - [../../concepts/console-design.md](../../concepts/console-design.md) - presentation requirements for operators.
 - [console-charts.md](console-charts.md) - the shared chart rules.
 - [frontend.md](frontend.md) - the reader-facing site alongside the console.

@@ -1,6 +1,6 @@
 # What the Pipelines route draws
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-10-12
 
 Moved plots use the shared width observer and redraw in the CSS-pixel frame
 their panel actually occupies. Private date axes retain missing days as null,
@@ -59,6 +59,9 @@ published-chart counts and day metrics. They are not newly published datasets
 and are not reconstructed from native queries. Extraction's private share is
 prepared for each permitted window and recorded endpoint, so a native endpoint
 earlier than the built day does not reuse the wrong day's share.
+`ChartDrawing.svelte` retains its private `chartFlow` diagram or stepped list,
+target cards and sparklines. Those use published-day records, not inferred
+item failure populations.
 
 Before native answers arrive their frames reserve space, without bars, dates or
 numbers posing as readings. Failure-rule and evaluator states are independent
@@ -147,7 +150,7 @@ up.
 
 **Detailed sub-steps belong to an item inspection.** The page does not print
 robots, tag, prompt-render or reply-parse totals below the timeline. The reader
-keeps the eight stage fields and the timeline, but loses those four aggregate
+keeps the recorded stage clocks and the timeline, but loses those four aggregate
 figures. The [item command](../../concepts/telemetry.md#the-committed-traces-briefly)
 prints recent trace trees with their run and attempt instead of adding item
 passes together. Expired detail remains unavailable.
@@ -160,10 +163,9 @@ The reader is
 [../../../frontend/src/lib/console/pipelines/run-timeline.ts](../../../frontend/src/lib/console/pipelines/run-timeline.ts);
 its native clock shape is [run-timeline.md](run-timeline.md) and every drawing rule is
 [../../concepts/console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md](../../concepts/console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md).
-[../../../frontend/tests/console-pipeline-timeline.spec.ts](../../../frontend/tests/console-pipeline-timeline.spec.ts)
-holds the shard grain against the item grain per shard and per step, and fails on
-a declared column that is empty across every canary row.
-It also checks that no separate sub-step readout remains.
+[../../../frontend/tests/console-pipelines-native.spec.ts](../../../frontend/tests/console-pipelines-native.spec.ts)
+checks the native offsets, signed residuals, missing clocks and capped totals.
+The retained panel draws both grains from that same result.
 
 **It is a snapshot, so the window control does not reach it.** A bar's position
 is measured from its own run's start and a span cannot narrow one run, so the
@@ -175,7 +177,9 @@ empty and the route still renders.
 
 ## Run health is one panel: the day's articles, and every run under them
 
-`Run health` is the route's first panel and its verdict: did the runs work. It
+`At a glance` is the route's first panel and its verdict. Its private count cards
+compare articles published with visuals published over the same days. `Run health`
+follows it and compares the day's delivery with the runs that tried it. It
 draws two figures on one day axis, and they answer one question between them -
 did each day's runs deliver.
 
@@ -231,7 +235,7 @@ The panel has no note under its title.
   run says so where the squares would be, in a different sentence from the one an
   empty record gets. Picking a day on the figure that has data still works.
 - **The panel states its span in its own accessible label**, `Run health, over N
-  days`, the way `Failure rate against volume` does. A sighted reader has the
+  days`. A sighted reader has the
   window control at the top of the route and the chart's date row.
 - **The squares read left to right in time**, like every other time series on
   the console. Right to left makes the newest day's position depend on how much
@@ -263,36 +267,33 @@ the panel that joins them and prints the readout is
 and what one run's square says is
 [../../../frontend/src/lib/console/run-square.ts](../../../frontend/src/lib/console/run-square.ts).
 [../../../frontend/tests/console-run-health.spec.ts](../../../frontend/tests/console-run-health.spec.ts)
-holds every square to its day's bars at 1440, 1024 and 768 px over 30 and 90
-days, and drives the one picked day from both figures.
+checks manifest facts, square labels and the shared day-slot geometry.
 
 ## What is failing, by stage
 
-Two charts answer it. `What is failing, by stage` draws the failures alone,
-stacked by the stage each item stopped at. `Failure rate against volume`,
-further down, draws the same failures inside each day's whole volume, with each
-stage's rate as a line. Both read one series over the same days.
+One native panel draws failed-row counts as a daily stack and prints their share
+of all recorded rows. It is not a failure-rate-against-volume chart.
+[FailureMix.svelte](../../../frontend/src/lib/console/pipelines/FailureMix.svelte)
+uses [nativeFailureMix](../../../frontend/src/lib/console/pipelines/failure-mix.ts)
+over the declared item-health cells.
 
-- **The failure mix is one column a day of the window, pan included.** A window
-  of one day is one column. A day nothing was planned on draws no column, and
-  its strip says `No item was planned on this day`; a day that ran and failed
-  nothing is a real zero. A window with no failure draws no chart: one sentence
-  in the chart's room says that nothing was planned, or that nothing failed out
-  of how many items planned, because none of 4 and none of 4,000 are different
-  news. Until the page has read the window, the panel holds its waiting box
-  instead: before a script runs, a sentence about the window's days would be
-  about rows nobody has read.
-- **The volume chart is one column a day, with the volume in the column.** A
-  window holding one day is one column and still says how much work there was;
-  only a window holding nothing at all draws no chart.
-- **One chart, not three panels with sparklines.** Three panels leave the split,
-  and the split is the defect rather than the content. A single headline failure
-  rate is the other end of the same mistake: it hides which stage failed, and
-  which stage failed is the actionable half.
-- **The failed rows are on demand.** Rendering every failed row in the window
-  measured 7,824 px over 800 rows and pushed the compression chart to document
-  y=9,105. A cap and a button solve it; a virtual-scrolling table buys a
-  dependency and a scroll-position bug for the same result.
+- **The divisor is all recorded rows in the returned window.** The numerator is
+  rows whose outcome is `failed`. The query carries no article identity, so
+  neither figure counts distinct articles. It infers no reached-stage population
+  and applies no attempt floor to this share.
+- **The stack keeps the returned calendar.** A recorded day with no failed row is
+  a real zero. A day with no recorded row is unknown and stays null, not zero.
+  The native rows do not establish whether anything was planned on that day.
+  A clean recorded window says that no recorded row failed; an empty one supplies
+  no failure divisor. Waiting and failed reads retain their reserved states.
+- **Every failed stage is conserved.** Fetch, extract and summarize have named
+  bands. Failed rows at any other stage form `Other stages`; they are not dropped
+  to make the three named bands add up.
+- **Rule rankings are separate, identity-free readings.** Stage radios rank the
+  chosen stage's failed rows from `failedRuleQuery`. Each printed rule count is
+  out of that stage's failed rows; unnamed rules are counted separately.
+  The configured rule cap has a tail count, not article or source details. The mix and
+  rule ranking keep independent loading, failure and returned-window states.
 - **No stage glyph beside the stage name.** The icon set is one generated module
   that reaches every route, so three stage marks would move six reader routes
   that cannot show this section at all. An icon that needs a caption is a label
@@ -303,19 +304,25 @@ stage's rate as a line. Both read one series over the same days.
 
 ## Where an item's time went
 
-One column a day of the window, pan included: the mean item's whole clock, split
-by the steps that claimed it, with the time no named step claimed on top. A day
-that timed no item from start to finish keeps its column, empty, and neither end
-is trimmed off, because a window that shrank to the timed days would draw a span
-the control never named. Its strip says `No item was timed from start to finish
-on this day` - such a day can still have timed every item's fetch, which
-`Time per item, by stage` draws. A window with no such item draws no chart, and
-its one sentence names the cause, because an operator checks a different thing
-for each: `No item was planned in these 7 days, so there is no time to split.`
-or `No item was timed from start to finish in these 7 days, so there is no time
-to split.` Until the page has read the window it holds its waiting box, as the
-failure mix does. The unclaimed time can fall below zero when two clocks
-disagree, and a band below zero on every day drawn is still drawn.
+[ItemTimeSplit.svelte](../../../frontend/src/lib/console/pipelines/ItemTimeSplit.svelte)
+draws one mean per returned UTC day from
+[nativeTimeSplit](../../../frontend/src/lib/console/pipelines/item-time-split.ts).
+Only complete, reconciling clocks enter the cohort: fetch, extract, summarize,
+faithfulness, elapsed time and the signed stage gap must all be recorded.
+The four stage durations plus that gap must equal elapsed time.
+
+Summarize is counted once. Label, summary and visual-plan clocks are
+non-additive details; each keeps its recorded count and remains unknown unless
+every clock in the cohort records that detail. Missing, invalid and inconsistent
+rows have separate exclusion counts.
+
+Positive gaps supply unattributed duration; negative gaps supply an adjacent
+overlap deduction. Their means are taken separately so cancellation cannot hide
+overlap. The positive stack minus the deduction equals the elapsed-time marker.
+There is no negative stage band. A day with no qualifying clock keeps its place
+as null, even if some individual stages were timed. With no complete cohort the
+panel says so; it makes no claim about planned work. Before the query settles it
+holds its reserved state.
 
 ## Time per item, by stage
 
@@ -335,8 +342,8 @@ finished inside the clock's own resolution, so it counts as timed and draws as
 an open dot on the baseline.
 
 The axis, the three marks a missing number can take and the model-change rule
-are [console-charts.md](console-charts.md)'s, because the throughput chart beside
-this one has to draw them the same way.
+are [console-charts.md](console-charts.md)'s, so timing and throughput callers
+draw them the same way.
 
 **The Pipelines panels read native records through declared queries.** The
 ledger door selects raw or compact files for the requested window. There is no
@@ -346,150 +353,77 @@ public telemetry or run-timeline mirror and no build-time timeline reader
 
 ## What one item cost the model is two clocks, drawn apart
 
-`What one item cost the model` is a section of the Pipelines route with two
-distributions and seven printed figures. It answers what a run total cannot: how
-long the model spent on **one** article, split into the part it spent reading and
-the part it spent writing.
+`What one item cost the model` is a native Pipelines panel with two
+distributions and their paired per-token costs. It answers what a run total
+cannot: how long the model spent on **one** article, split into the part it
+spent reading and the part it spent writing.
 
-The Hardware route already pools both quantities per run and per shard, out of
-the model server's own counters. That is a different measurement of a different
-thing, and it cannot say that one item in nine got nothing from the prompt
-cache. This section reads the published projection, per item, and follows the
-window control.
+Hardware compares independent server and item clocks at run or shard grain.
+This panel instead reads the declared `itemCostQuery` cells from item-health for
+the selected record window. Its owner is
+[nativeItemCost](../../../frontend/src/lib/console/pipelines/item-cost.ts), drawn
+by [ItemCost.svelte](../../../frontend/src/lib/console/pipelines/ItemCost.svelte).
 
 ### Reading and writing are two charts, and pooling them is refused
 
-Measured 2026-09-05 over the 6,104 items of the committed projection that carry
-both clocks: a prompt token costs about **101 milliseconds** to read and a
-written token about **183** to write, so a written token costs **1.8 times** a
-read one. The two also move for different reasons - the article's length moves
-the first and the summary's length moves the second - so an operator acts on
-them separately. One `model seconds` chart would hide which of the two moved.
+Reading and writing have independent clocks. Article length and reply length
+can move them separately, so one pooled `model seconds` distribution would hide
+which one moved. The lead names the writing median. The per-token comparison
+uses each side's own complete clock/token pairs, not a fixed cost ratio or a
+claim about a token saving on a particular article.
 
-The panel prints both rates and the ratio, and then says the thing the ratio is
-for: cutting a hundred tokens from the summary saves more time than cutting a
-hundred from the article. The sentence is derived from the measured ratio rather
-than written down, so it flips if the ratio ever does.
+Both use **doubling bins** from
+[series.ts](../../../frontend/src/lib/charts/series.ts), with a shared time domain
+so the same duration has the same position. Reading uses finite, non-negative
+`prefill_ms`; writing independently uses finite, non-negative `decode_ms`.
+A measured zero belongs in the first bin. An absent clock is not a zero.
+Each histogram applies `console.min_attempts_for_rate` to its own clock count
+and states the count when it has too few readings.
 
-Both are drawn as **doubling bins**, by the same `distribution` the Summaries
-route's two clocks use, which lives in
-[frontend/src/lib/charts/series.ts](../../../frontend/src/lib/charts/series.ts)
-so a route outside `$lib/server/` can reach it - four panels share one binning
-and one pair of rules, rather than four that can drift apart.
+### Prompt reuse belongs to Hardware, not a comparison note on ItemCost
 
-The axis is a doubling and not a linear one, and the ledger says why. Measured
-2026-09-05, reading one prompt runs from **1.4 seconds to 692**, which is nine
-doublings; on a linear axis every bar but one is a hairline against the left
-edge. Writing is the opposite shape and is drawn the same way on purpose:
-**4,456 of 6,104** items land in one bin, 32 to 64 seconds, and drawing it
-linearly would suggest a spread the measurement does not have. `fetch_ms`, whose
-worst is 43,627 ms against a middle of 567, is not in this section at all - it is
-a stage clock and `Time per item, by stage` above already draws it per day.
+The native Hardware panel draws the day's middle label-call held tokens and
+summary-call fresh tokens. Its
+[records.ts](../../../frontend/src/lib/console/machine/records.ts) helpers also
+print each call's pooled held share over complete input/cache pairs, the
+server's middle recorded share and that call's pair count. Label and summary
+remain separate; absent cache counts do not become zero reuse.
 
-### The prompt cache is a share, and the share is printed rather than drawn
+A share alone cannot say that the cache got worse: it can fall because the
+prompt got longer or because less text was held. The dated native readings and
+their settings rule carry the comparison. ItemCost links to Hardware; it has no
+middle-versus-maximum held-token note, first-call reuse verdict or cache-change
+classifier. Per-call charging remains
+[the model's contract](../summarize/throughput.md#each-call-is-charged-on-its-own-and-the-item-is-their-sum).
 
-The panel prints **absolute prompt tokens** - the ones the model read against the
-ones it did not - and the share beside them as whole percent. Four more figures
-sit under those three: the middle prompt, the middle summary, the middle item's
-own share, and how many items were read whole with nothing held over.
+### Every denominator is its own
 
-**A two-segment track is refused.** One flat bar on no time axis, under a note
-telling the reader not to read its direction: a figure a panel disowns is a
-figure to remove. **What the reader loses, named:** the picture of the split,
-which is three printed counts instead. What the split was ever worth was the
-counts it was built from, and the track carried no fact they do not.
-
-**The level and the direction are one subject at the two questions.** This panel
-would carry the level - how much of the window's prompt the model already held -
-and `How much text the model reads again, and how fast it reads` on Hardware
-carries the direction, as spans over the window's items with no day axis. With
-no level drawn, the Hardware panel is the whole answer rather than half of one,
-so the gap a later reader sees here is a subject already covered and not a
-figure to rebuild.
-
-**A falling share here does not mean the cache got worse, and the panel says
-so.** Measured 2026-09-05 over the same 6,104 items, `cached_tokens` is nearly a
-constant: the middle item kept **922** tokens and the widest kept **941**, while
-`input_tokens` runs from a middle of 1,688 to a worst of 7,093. So the share
-moves almost entirely because the denominator moves. Drawn as a line over time it
-would fall on a week of long articles and read as a cache regression, which is
-the one wrong thing an operator could act on. That sentence is the reason a
-figure is missing, which is the kind of sentence this console keeps.
-
-**The note checks that reason on its own two figures, for the window on screen.**
-It prints the middle item's count of tokens already in memory and the most any
-item had, and picks its words from them. Where the most is twice the middle or
-more, it says the amount changed a lot, and that a lower percentage can then
-mean less in memory as well as a longer article. Where the most is under twice
-the middle, it states the two figures and what a longer article does, and claims
-nothing about change. Where no item had anything in memory, the share is 0
-percent at any article length, so it prints no note. The rule and the words are
-in [held-part-note.ts](../../../frontend/src/lib/console/held-part-note.ts).
-
-**The passing words claim nothing about change, because a window can pass while
-it spans a step.** The held part stepped once, on 2026-09-13. Read on 2026-10-07
-by this section's own rule, over the 16,449 items of the 90 days ending
-2026-10-06: the middle item held **922** tokens on every day up to 2026-09-12,
-the day after was mixed, and from 2026-09-14 the middle item held about **1,800
-to 1,940** tokens, with the largest at **2,219**. The 90-day window, at 922 and
-2,219, says the amount changed a lot. The 30-day window ending 2026-10-06 starts
-on 2026-09-07, so its first six days held 922, yet its two figures are **1,849**
-and **2,219** - the most is under twice the middle, and it passes. Of the windows
-ending 2026-10-06, only the 1-, 7- and 14-day ones miss the step.
-
-Measured over the committed projection the per-item share has a middle of
-**0.518**, a 5th percentile of **0.000** and a 95th of **0.820** - and **667 of
-6,104** items reused nothing at all. The share is printed, and it is named in
-words beside it.
-
-**These four figures are about the FIRST model call, not about the item.** An
-item read by two calls always reuses something, because the second call replays
-the first call's prompt and is answered for it - so "read whole with nothing held
-over" taken off the item total would count nothing for ever, a live figure
-becoming a constant with no code change. Where the projection publishes a split,
-the four read `label_*`; where it does not, they read the totals as they always
-did, and `perCall` says how many rows of the window were which. Every rate on
-this section still pools the totals, which is correct: a sum over both calls is
-what the item cost
-([the split](../summarize/throughput.md#each-call-is-charged-on-its-own-and-the-item-is-their-sum)).
-
-### Every denominator is its own, because three of them differ
-
-An item that failed before the model saw it has no clock and no token count; one
-that failed before the fetch has no stage clock either. Measured 2026-09-05 over
-the committed projection: **8,300** rows in all, **6,873** with a stage clock and
-**6,104** with the model's own two. One "items" figure would be wrong for at
-least one column of this section whichever row set it counted, so each figure
-carries the count it answers for and the lead states the widest one.
+The two histogram cohorts and two per-token cohorts need not match. Reading's
+per-token cost pairs a non-negative prefill clock with recorded input and cache
+counts, where `input_tokens > cached_tokens >= 0`. It sums those clocks and
+divides by their fresh tokens, `input_tokens - cached_tokens`. Writing independently
+pairs a non-negative decode clock with positive output tokens and divides the
+clock sum by the output-token sum. Each side prints its own pair count.
 
 An empty cell stays empty. A mean that treats an absent instrument as a zero
-turns every fetch failure into a fetch that was infinitely fast, and zero reuse
-is a real answer that has to stay counted - which is why `readWhole` is a count
-and not an exclusion.
+turns an unmeasured call into an infinitely fast one. A recorded cache count of
+zero can qualify for reading; an unknown cache count cannot. The panel counts
+prompts with an input count but no cache count and says they are not treated as
+read whole. The writing-to-reading cost ratio is unknown unless both rates exist
+and the reading cost is positive.
 
-### It follows the window's length, not a pan
+### It follows the selected native record window
 
-The reduction is taken on the server, once per entry in
-`console.window_presets`, and the browser picks the open one - the same
-arrangement `Sources cut short most often` and the Summaries route's
-distributions use.
+The browser requests `itemCostQuery` for the selected configured preset and
+computes these answers from the returned rows. The common recorded endpoint,
+query's returned range and request epoch govern this panel just as they govern
+the other native windowed answers. There is no server-reduced ItemCost seed or
+telemetry-month fallback.
 
-**That is a measured choice, not a preference.** The prerendered seed carries the
-eight columns as nulls, because seeded with their real values they cost
-`/console/` **176,753 gzipped bytes** - 198,624 to 375,377, and 98,182 over the
-recorded ceiling (measured 2026-09-05, recorded in
-[telemetry-series.md](telemetry-series.md)). The two alternatives were to seed
-the columns this section draws, or to drop the seeded months from `loadedMonths`
-and let a runtime fetch fill them. Both were refused: the first buys the ceiling
-problem the seed was written to avoid, and the second puts a 244 KB fetch behind
-the first click of a control and leaves the section blank until it lands.
-Reducing on the server costs the page about a hundred numbers a preset and draws
-complete before any script runs.
-
-What it costs is stated on the page: panning does not move these days, and they
-always end on the newest published day. The section says so in the same
-words `Sources cut short most often` does, because one rule stated two ways reads
-as two rules.
+Private published-count cards, run health, site cost, chart drawing and
+extraction's published-day facts remain build-time inputs. Their own window and
+snapshot rules do not become ItemCost's rules; the prerendered private marks
+remain available without scripts.
 
 ## Extraction answers both questions, and labels which half is which
 
@@ -555,7 +489,7 @@ on one geometry.
 Three smaller rulings came with it. The panel's span moved into its own
 accessible label because it has no note to carry it (Jony, Susan, Reader). A
 sparse window's coverage sentence closes the chart's caption, above the tint it
-explains, as `Failure rate against volume` places its own (Jony, Reader). And
+explains (Jony, Reader). And
 the 8 px under the chart is measured from the chart's own edge - the date row is
 the bottom of the drawing - so about 15 px of air sits between the date text and
 the tallest stack (Jony, Susan).
