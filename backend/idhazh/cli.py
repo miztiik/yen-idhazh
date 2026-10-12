@@ -107,6 +107,7 @@ from idhazh.telemetry import (
     job_machine,
     silicon,
 )
+from idhazh.telemetry.host_event_client import HostEventClient
 
 
 def _today() -> str:
@@ -127,6 +128,32 @@ def _positive_int(text: str) -> int:
     if value < 1:
         raise argparse.ArgumentTypeError(f"{value} is below 1")
     return value
+
+
+def _host_event_client(
+    parser: argparse.ArgumentParser,
+    args: argparse.Namespace,
+    settings: config.Settings,
+) -> HostEventClient | None:
+    """Open the isolated event session only when its temporary switch is on."""
+    if not settings.app.observability.host_event_shadow:
+        return None
+    values = {
+        "--host-event-workspace": args.host_event_workspace,
+        "--host-event-manifest": args.host_event_manifest,
+        "--host-event-config": args.host_event_config,
+    }
+    missing = [name for name, value in values.items() if value is None]
+    if missing:
+        parser.error("observability.host_event_shadow needs " + ", ".join(missing))
+    assert args.host_event_workspace is not None
+    assert args.host_event_manifest is not None
+    assert args.host_event_config is not None
+    return HostEventClient(
+        args.host_event_workspace,
+        args.host_event_manifest,
+        args.host_event_config,
+    )
 
 
 def _council_run(parser: argparse.ArgumentParser, stage: str, given: str | None) -> str:
@@ -309,9 +336,7 @@ def _scorer(enabled: bool) -> object | None:
     return scorer
 
 
-def _scores_this_run(
-    observability: ObservabilityConfig, *, run_id: str, flag_allows: bool
-) -> bool:
+def _scores_this_run(observability: ObservabilityConfig, *, run_id: str, flag_allows: bool) -> bool:
     """Whether the work stage should load a scorer for this run at all.
 
     Three things have to agree. `observability.evaluation_enabled` is the
@@ -522,6 +547,24 @@ def _main(argv: Sequence[str] | None = None) -> int:
             "records the difference against its own scrape time. Empty means no "
             "stamp, and the cell then stays empty rather than reading zero."
         ),
+    )
+    parser.add_argument(
+        "--host-event-workspace",
+        type=Path,
+        default=None,
+        help="The isolated workspace that owns the optional native event session.",
+    )
+    parser.add_argument(
+        "--host-event-manifest",
+        type=Path,
+        default=None,
+        help="The named host session manifest, relative to its isolated workspace.",
+    )
+    parser.add_argument(
+        "--host-event-config",
+        type=Path,
+        default=None,
+        help="The named effective native config, relative to its isolated workspace.",
     )
     parser.add_argument(
         "--server-log",
@@ -774,6 +817,7 @@ def _dispatch(
                 started_at=datetime.fromtimestamp(int(args.job_started_at), UTC)
                 if args.job_started_at
                 else None,
+                host_events=_host_event_client(parser, args, settings),
             )
             if (
                 settings.council.running()
@@ -917,6 +961,7 @@ def _dispatch(
             shard=args.shard,
             shards=args.shards,
             fetcher=read_url,
+            host_events=_host_event_client(parser, args, settings),
         )
 
     if args.stage == "record":
@@ -935,9 +980,7 @@ def _dispatch(
     if args.stage == "fingerprint":
         silicon.stage_fingerprint(
             date=date,
-            run_id=_machine_run(
-                parser, date=date, given=args.run_id, execution=args.execution
-            ),
+            run_id=_machine_run(parser, date=date, given=args.run_id, execution=args.execution),
             settings=settings,
             state_root=common.STATE_ROOT,
             commit_sha=args.commit,
@@ -949,9 +992,7 @@ def _dispatch(
     if args.stage == "job-clock":
         silicon.stage_job_clock(
             date=date,
-            run_id=_machine_run(
-                parser, date=date, given=args.run_id, execution=args.execution
-            ),
+            run_id=_machine_run(parser, date=date, given=args.run_id, execution=args.execution),
             settings=settings,
             state_root=common.STATE_ROOT,
             commit_sha=args.commit,

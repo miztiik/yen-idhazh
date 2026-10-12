@@ -1,6 +1,6 @@
 # Corrected Rust host telemetry through structured events
 
-**Last Updated**: 2026-10-10
+**Last Updated**: 2026-10-12
 
 **Level**: 5 for corrected CPU semantics, versioned fingerprints, exchanges, reader migration and historical rewriting ([CLAUDE.md section 6](../CLAUDE.md#6-correction-levels)). Fowler resolves architectural ambiguity; the user's unattended delivery authorization includes implementation, adoption and historical migration after their evidence gates pass.
 
@@ -71,7 +71,7 @@ Table D - authoritative execution queue
 | D5 | 5 | Verify corrected Rust in an artifact-only YAML workflow | 15 | E | DONE | rust-d5-linux-evidence | #1561 | Genuine stock Linux evidence passed run 38183181142 at `93df6b4d9`; exact native files and receipts are the D13/D14 reader oracle. |
 | D13 | 13 | Migrate shared schemas and readers before writers | 5 | F | DONE | rust-d13-d14-schema-consumers | - | owner; shipped atomically with D14 |
 | D14 | 14 | Migrate contracted backend and frontend consumers | 5 | F | DONE | rust-d13-d14-schema-consumers | - | owner; shipped atomically with D13 |
-| D6 | 6 | Add inactive event emitters at real production boundaries | 13, 14 | F | PENDING | - | - | - |
+| D6 | 6 | Add inactive event emitters at real production boundaries | 13, 14 | F | DONE | rust-d6-inactive-emitters | - | Copilot |
 | D8 | 8 | Expose and test the independent memory off control | 6 | G | PENDING | - | - | - |
 | D16 | 16 | Verify evidence and record unattended adoption authority | 8, 5, 14, 15 | H | PENDING | - | - | - |
 | D7 | 7 | Switch instrumented producers through events | 16 | I | PENDING | - | - | - |
