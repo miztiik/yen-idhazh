@@ -53,12 +53,12 @@ Table D - rows
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Judges carry a status and a model need | 10, 11 | B | DONE | council-judge-status | - | Council judge status |
 | 2 | Each council job holds only the permissions its steps use | - | A | DONE | council-job-permissions | - | Council job permissions |
-| 3 | Council programs log one JSON event a line and exit with one vocabulary | 1 | C | PENDING | - | - | - |
-| 4 | The council refuses a bad judge set before any unit runs | 1, 3 | D | PENDING | - | - | - |
-| 5 | The collecting job writes the night's summary on its job page | 3 | D | PENDING | - | - | - |
-| 6 | The collecting job checks out code and config and fetches only named inputs | 1 | C | PENDING | - | - | - |
-| 7 | Each judge runs over its own outstanding dates | 1 | C | PENDING | - | - | - |
-| 8 | A unit that raises files a failed council record | 3 | D | PENDING | - | - | - |
+| 3 | Council programs log one JSON event a line and exit with one vocabulary | 1 | C | DONE | council-events-and-exits | - | Council events and exits |
+| 4 | The council refuses a bad judge set before any unit runs | 1, 3 | D | DONE | council-early-refusals | - | Council early refusals |
+| 5 | The collecting job writes the night's summary on its job page | 3 | D | DONE | council-night-summary | - | Council night summary |
+| 6 | The collecting job checks out code and config and fetches only named inputs | 1 | C | DONE | council-named-collecting-inputs | - | Council named collecting inputs |
+| 7 | Each judge runs over its own outstanding dates | 1 | C | DONE | council-judge-dates-and-trials | - | Council judge dates and trials |
+| 8 | A unit that raises files a failed council record | 3 | D | DONE | council-failed-unit-records | - | Council failed unit records |
 | 9 | The council's record is published for the console | 8 | E | PENDING | - | - | - |
 | 10 | The council reads its own config file | - | A | DONE | symmetrical-broccoli | - | Council config file |
 | 11 | The council finds each judge by its slug | - | A | DONE | council-judge-lookup | - | Council judge lookup |

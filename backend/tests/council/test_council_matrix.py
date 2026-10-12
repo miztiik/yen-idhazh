@@ -61,9 +61,7 @@ def _emitted(
     for date in dates:
         argv += ["--date", date]
     assert council_matrix.main(argv) == 0
-    return dict(
-        line.split("=", 1) for line in capsys.readouterr().out.splitlines() if line
-    )
+    return dict(line.split("=", 1) for line in capsys.readouterr().out.splitlines() if line)
 
 
 def test_a_night_with_no_tenant_fans_out_to_nothing(
@@ -79,9 +77,7 @@ def test_a_night_with_no_tenant_fans_out_to_nothing(
     registered a judge since 2026-09-21. Reading that would ask what the judge
     fans out to instead of what an empty room does.
     """
-    emitted = _emitted(
-        capsys, config_root=_config_registering(tmp_path, slugs=()), dates=(A_DATE,)
-    )
+    emitted = _emitted(capsys, config_root=_config_registering(tmp_path, slugs=()), dates=(A_DATE,))
 
     assert json.loads(emitted["matrix"]) == []
     assert json.loads(emitted["dates"]) == [A_DATE]
@@ -114,8 +110,8 @@ def test_a_tenant_cannot_declare_a_blanket_state_root(
 ) -> None:
     a_venue(venue, package=A_VENUE, slugs={"a-paper-tenant": (1, (root,))})
     config_root = _config_registering(venue, slugs=("a-paper-tenant",))
-    with pytest.raises(ValueError, match="blanket state"):
-        _emitted(capsys, config_root=config_root, dates=(A_DATE,))
+    assert council_matrix.main(["--config-root", str(config_root), "--date", A_DATE]) == 2
+    assert capsys.readouterr().out == ""
 
 
 def test_a_tenant_narrows_the_venues_width_and_cannot_widen_it(
@@ -133,13 +129,9 @@ def test_a_tenant_narrows_the_venues_width_and_cannot_widen_it(
         package=A_VENUE,
         slugs={"a-narrow-tenant": (1, ()), "a-greedy-tenant": (8, ())},
     )
-    config_root = _config_registering(
-        venue, slugs=("a-narrow-tenant", "a-greedy-tenant"), shards=2
-    )
+    config_root = _config_registering(venue, slugs=("a-narrow-tenant", "a-greedy-tenant"), shards=2)
 
-    cells = json.loads(
-        _emitted(capsys, config_root=config_root, dates=(A_DATE,))["matrix"]
-    )
+    cells = json.loads(_emitted(capsys, config_root=config_root, dates=(A_DATE,))["matrix"])
 
     widths = {cell["tenant"]: cell["shards"] for cell in cells}
     assert widths == {"a-narrow-tenant": 1, "a-greedy-tenant": 2}

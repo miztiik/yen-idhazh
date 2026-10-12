@@ -228,6 +228,34 @@ def test_daily_and_reopened_month_keep_numeric_corrections(tmp_path: Path) -> No
     )] == [4]
 
 
+def test_canary_custom_digest_root_files_and_packs_exact_manifest_counts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from utilities import build_canary_day
+
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    monkeypatch.chdir(checkout)
+    digest = tmp_path / "digest"
+    staged = tmp_path / "fixture-rows"
+    staged.mkdir()
+    state = tmp_path / "state"
+    state.mkdir()
+    sample = manifest(build_canary_day.DATE, [1, 3, None])
+    target = digest.joinpath(*sample.date.split("-"), "run.json")
+    target.parent.mkdir(parents=True)
+    target.write_text(sample.to_json(), encoding="utf-8", newline="\n")
+    original = target.read_bytes()
+    monkeypatch.setattr("sys.argv", [
+        "build_canary_day", "--file-fixture-rows", str(staged),
+        "--out", str(digest), "--state", str(state),
+    ])
+    assert build_canary_day.main() == 0
+    held = ledger.load_days(state, LedgerName.RUN_SHARDS, [sample.date], model=RunShards)
+    assert [(row.run_id, row.shards) for row in held] == [(f"{sample.date}-1", 3)]
+    assert target.read_bytes() == original
+
+
 @pytest.mark.parametrize(("on", "today"), [
     ("2026-10-01", date(2026, 10, 2)),
     ("2026-08-01", date(2026, 10, 11)),

@@ -1,6 +1,6 @@
 # CLAUDE.md - Yen Idhazh: Engineering Contract
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-11
 
 Non-negotiable contract for any human or AI agent working in this repo.
 
@@ -224,7 +224,7 @@ The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how
 - [ ] Applicable local lint, type checks and selected tests pass before the push, per [docs/how-to/run-the-gates.md](docs/how-to/run-the-gates.md). Use the shared test selector. Keep full-suite checks in CI unless local full coverage is explicitly needed. Verify a worker's unchanged test record instead of repeating its check; documentation-only closure needs no local application suite.
 - [ ] The frontend field-set and vocabulary tests are green for any contract the frontend copies.
 - [ ] For published-site changes: smoke-tested via integrated browser tools per section 12.
-- [ ] For reader-facing and operator-facing surfaces: the sufficiency checks in [`docs/concepts/design-system.md`](docs/concepts/design-system.md) pass, or a `## Design rationale` entry says why not. A surface can fail by being too little.
+- [ ] Review the changed reader-facing or operator-facing surface against the design requirements in [`docs/concepts/design-system.md`](docs/concepts/design-system.md). Use a representative view and only check another view or state when the change alters its behaviour. This is a design review, not a per-panel test matrix.
 - [ ] Canonical docs updated in `docs/` (right tier). A page you added a section to paid the split test first, or the PR says in one line why it stays whole ([`docs/reference/documentation-structure.md`](docs/reference/documentation-structure.md)).
 - [ ] Schemas version-stamped + changelogged (and migrated if breaking) when any persisted contract changed (section 11).
 - [ ] Module `AGENTS.md` updated if structure or invariants changed.
@@ -295,6 +295,10 @@ Four tiers - **Unit / Contract / Integration / End-to-end**. Change without an a
 2. **Test behavior, not current production data.** Before writing a test, name the repository edit that would make it fail. If a pipeline run alone could make it fail, move the check into the producer or an operator utility outside pytest. Delete it only when fixture tests already cover the rule.
 
 3. **Load fixtures inside tests.** Read fixture files inside the test or a helper it calls, never at module import. A bad fixture must fail the test using it, not prevent unrelated tests from running. Report what was expected and how to produce the fixture.
+
+4. **Browser coverage is a very narrow representative set.** One real journey proves shared layout and integration; one representative interaction proves a shared control. Do not multiply browser cases by page, panel, width, theme, state or chart, and do not enumerate chart-to-chart transitions. A new browser case must name a distinct failure mechanism that the representative journey and lower-tier tests cannot detect. A different caller or presentation is not such a mechanism. Keep data semantics, boundary values and deterministic failure rules at the unit, contract or integration tier. Preserve real browser coverage of independent safety, worker, transport and offline boundaries, without repeating their presentation combinations.
+
+5. **Delete redundant coverage before optimising execution.** Remove duplicate cases, assertions about incidental words, markup, imports or exact geometry, and helpers made dead by their removal. Do not move the same minutiae wholesale into unit tests, park them behind skips, or retain an exhaustive suite as a scheduled job. A representative layout check protects usable content and controls, not every box through every action. Judgement has no special browser treatment: its evidence semantics use real reader/render integration tests, and its packaging uses the ordinary site build. Additional private builds need a distinct build-time failure, not another evidence presentation. This deliberately gives up exhaustive cosmetic and interaction-permutation coverage, not meaningful software rules. Owner approval: 2026-10-11.
 
 Per tier:
 

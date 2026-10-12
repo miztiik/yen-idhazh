@@ -79,6 +79,29 @@ function asRange(value: Range | LedgerReach): Range {
 	return value;
 }
 
+test('the count capability reads numeric and unknown rows and keeps unavailable states distinct', async ({}, info) => {
+	const root = info.outputPath('manifest-counts');
+	const options = { columns: ['date', 'run_id', 'shards'], from: '2026-10-11', to: '2026-10-11' };
+	expect(await sliceFromDisk(root, 'run-shards', options)).toEqual({
+		state: 'missing', rows: [], fault: 'not-packed'
+	});
+	await buildRows(root, 'run-shards', []);
+	expect((await sliceFromDisk(root, 'run-shards', options)).state).toBe('quiet');
+	const rows = [
+		{ date: '2026-10-11', run_id: '2026-10-11-1', shards: 3 },
+		{ date: '2026-10-11', run_id: '2026-10-11-2', shards: null }
+	];
+	await buildRows(root, 'run-shards', [{ covers: '2026-10-11', rows }]);
+	const answer = await sliceFromDisk(root, 'run-shards', options);
+	expect(answer.state).toBe('ok');
+	expect(answer.rows).toEqual(rows);
+	const file = path.join(root, 'compact', 'run-shards', 'daily', '2026', '10', '11.parquet');
+	rmSync(file);
+	expect(await sliceFromDisk(root, 'run-shards', options)).toEqual({
+		state: 'unreachable', rows: [], at: '2026-10-11', fault: 'file-missing'
+	});
+});
+
 test('UTC windows are inclusive across leap days and clamp at the ledger first day', () => {
 	expect(windowRange(3, '2024-03-01', '2024-02-01')).toEqual({
 		from: '2024-02-28', to: '2024-03-01', days: 3, asked: 3

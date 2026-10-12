@@ -71,14 +71,13 @@ settlement independent of file order and packing schedule. It is ledger-specific
 `run-plan` keeps its existing first-wins policy even though its business key is
 also `(date, run_id)`. Daily packing and reopened months preserve the answer.
 
-The bounded migration covered **2026-07-14 through 2026-10-11**: 51 existing
-named manifests yielded 237 mappings, 121 numeric and 116 unknown. Exact parity
-was checked after packing: August and September are monthly; October 1-10 are
-daily. The October 11 manifest's two rows stay raw while that UTC day is open;
-the newest completed, packed day is October 10. This describes candidate data,
-not evidence that the family is already served by the live site. Before merge,
-the owner must verify live daily/monthly coverage and newest data within three
-days.
+The shipped count foundation owns the native files and publication inventory.
+Its daily and monthly live indexes were verified on UTC October 12 with no
+holes from August 21 through October 9 and newest packed daily October 10.
+The first date comes from the actual August Parquet date column, not the
+monthly file's name. The reader does not backfill or replace those files.
+Before reader merge, the owner rechecks live coverage and newest data within
+three days. Count foundation delivery alone does not deliver this reader.
 
 Observed host count, maximum shard index, current settings and workflow matrix
 size are never substitutes for `shards`. The CLI currently recomputes the count
@@ -196,14 +195,18 @@ a quiet machine. The original recording and threshold detail remains beside it.
 
 ## Validation and rejected substitutions
 
-`console-machine-page.spec.ts` constructs independent public records and checks
-the count refusal, unknowns, repaired-index retry, all fifteen states and the
-scriptless boundary. Pure oracles in `console-machine.spec.ts` check the redraw
-arithmetic. Existing card, fleet, cost, refusal, mobile, resize and window tests
-remain, with genuinely retired board/unit-switch expectations replaced by
-their new comparisons. `panel-sufficiency.spec.ts` visits all fifteen panels
-in both themes at desktop, tablet and phone widths and drives their four
-nothings through real index requests.
+`console-machine-journey.spec.ts` follows one production-built Hardware journey:
+native index and Parquet arrival, a dated readout, and a carried window across
+the Pipelines tab. Independent cases check failed-host-only retry, unpublished
+indexes, and the actual scriptless prerendered document. Pure native oracles in
+`console-machine.spec.ts` retain count refusal, unknowns, identity, signed
+timings, paired measurements and null semantics. Backend count tests retain
+the twelve compact-plus-pending-raw correction cases.
+
+The shipped representative-browser policy replaces repetitive panel, width,
+theme, layout, readout and mode matrices. Deleted charts-ready and panel-driver
+frameworks stay deleted. Retained production components and ECharts remain
+until Row 11's approved retirement; test integration does not remove them.
 
 Rejected: whole manifest or plan publication; fetching whole GitHub manifests
 from the browser; substituting observed counts for unknown planned counts;

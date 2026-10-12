@@ -2,10 +2,11 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
 import { CHART_VOCABULARY_PAGE, CONSOLE_MODEL_LABELS_PAGE } from '../doc-test-inputs.ts';
 import { FRONTEND_GROUPS, groupedSpecs, groupForSpec } from '../test-groups.ts';
+import { options, selection } from '../run-checks.ts';
 import { changedPaths, ciAnswer, selectPaths, selectionForChange } from '../test-scope.ts';
 
 const FRONTEND = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -14,6 +15,54 @@ function tmpdir() {
 	mkdirSync(path, { recursive: true });
 	return path;
 }
+
+function configuredBrowserProjects(skipConsole, args = []) {
+	const configUrl = pathToFileURL(join(FRONTEND, 'playwright.config.ts')).href;
+	const source = `import config from ${JSON.stringify(configUrl)};
+		console.log(JSON.stringify(config.projects.map(({ name, testMatch, dependencies = [] }) =>
+			({ name, testMatch, dependencies }))));`;
+	return JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e', source, '--', ...args], {
+		cwd: FRONTEND, encoding: 'utf8',
+		env: { ...process.env, CI: 'false', PREVIEW_PORT: '4173', PLAYWRIGHT_WORKERS: '1',
+			SKIP_CONSOLE_SUITE: skipConsole }
+	}));
+}
+
+test('the actual browser config defers only console and preserves its offline safety dependency', () => {
+	const inventory = groupedSpecs(join(FRONTEND, 'tests'));
+	const expected = FRONTEND_GROUPS.filter((group) => group !== 'logic').map((name) => ({
+		name,
+		testMatch: inventory[name].map((filename) => `**/${filename}`),
+		dependencies: ['reader', 'console'].includes(name) ? ['offline'] : []
+	}));
+	for (const value of ['', 'false', '0']) {
+		assert.deepEqual(configuredBrowserProjects(value), expected, value);
+	}
+	assert.deepEqual(configuredBrowserProjects('true'), expected.filter(({ name }) => name !== 'console'));
+	for (const [path, isPr] of [
+		['frontend/src/styles/tokens.css', true],
+		['frontend/src/routes/console/+page.svelte', true],
+		['full-ci-run', false]
+	]) {
+		const answer = ciAnswer([path], isPr);
+		assert.equal(answer.browser, true);
+		assert.deepEqual(configuredBrowserProjects(String(!answer.console)),
+			expected.filter(({ name }) => name !== 'console' || answer.console), path);
+	}
+});
+
+test('test:changed explicit groups stay authoritative even with a CI console deferral in the environment', () => {
+	const selected = selection(FRONTEND, options(['--group', 'console']));
+	assert.deepEqual(selected.groups, ['console']);
+	for (const args of [
+		selected.groups.map((group) => `--project=${group}`),
+		['--project', 'console']
+	]) {
+		const projects = configuredBrowserProjects('true', args);
+		assert.ok(projects.some(({ name }) => name === 'console'));
+		assert.deepEqual(projects.find(({ name }) => name === 'console').dependencies, ['offline']);
+	}
+});
 
 test('historical host dry-run paths select bounded Python fixtures without native preparation', () => {
 	for (const path of [
@@ -103,77 +152,30 @@ test('isolated host contracts and verification have finite consumers; unknowns s
 	}
 });
 
-test('every extracted window spec is explicitly registered and selected', () => {
-	const inventory = groupedSpecs(join(FRONTEND, 'tests')).console;
-	for (const name of [
-		'console-judgement-window-spans', 'console-judgement-agreement-readout',
-		'console-judgement-agreement-marks', 'console-judgement-day-labels',
-		'console-judgement-record-window', 'console-machine-window', 'console-machine-day-labels',
-		'console-pipelines-window', 'console-pipelines-day-labels', 'console-model-window',
-		'console-voices-window', 'console-window-readout'
-	]) {
-		assert.ok(inventory.includes(`${name}.spec.ts`), name);
-		for (const separator of ['/', '\\']) {
-			const path = ['frontend', 'tests', `${name}.spec.ts`].join(separator);
-			assert.deepEqual(selectPaths([path]).groups, ['console'], path);
-			assert.equal(ciAnswer([path], true).console, true, path);
-		}
-	}
-});
-
-test('real Judgement evidence checks keep their appropriate explicit tiers', () => {
+test('Judgement evidence stays in the real integration tier', () => {
 	const inventory = groupedSpecs(join(FRONTEND, 'tests'));
 	assert.ok(inventory.logic.includes('judgement-evidence.spec.ts'));
-	assert.ok(inventory.console.includes('console-judgement-evidence.spec.ts'));
 	assert.deepEqual(selectPaths(['frontend/tests/judgement-evidence.spec.ts']).groups, ['logic']);
-	assert.deepEqual(selectPaths([String.raw`frontend\tests\console-judgement-evidence.spec.ts`]).groups, ['console']);
 });
 
 test('a window helper edit selects all its console consumers under either path convention', () => {
-	for (const name of ['controls', 'readout', 'judgement-fixtures', 'machine-spans', 'client-render', 'server-panels']) {
+	for (const name of ['controls', 'readout', 'judgement-fixtures', 'server-panels']) {
 		for (const separator of ['/', '\\']) {
 			const path = ['frontend', 'tests', 'support', 'console-window', `${name}.ts`].join(separator);
 			const selection = selectPaths([path]);
-			assert.deepEqual(selection.groups, ['logic', 'console', 'panels', 'publishing'], path);
+			assert.deepEqual(selection.groups, ['logic', 'console', 'publishing'], path);
 			assert.equal(selection.reasons[0].reason, 'shared window controls and focused route window consumers', path);
 			assert.equal(ciAnswer([path], true).console, true, path);
-			assert.equal(ciAnswer([path], true).panels, true, path);
 		}
 	}
-});
-
-test('every extracted window spec is explicitly registered and selected', () => {
-	const inventory = groupedSpecs(join(FRONTEND, 'tests')).console;
-	for (const name of [
-		'console-judgement-window-spans', 'console-judgement-agreement-readout',
-		'console-judgement-agreement-marks', 'console-judgement-day-labels',
-		'console-judgement-record-window', 'console-machine-window', 'console-machine-day-labels',
-		'console-pipelines-window', 'console-pipelines-day-labels', 'console-model-window',
-		'console-voices-window', 'console-window-readout'
-	]) {
-		assert.ok(inventory.includes(`${name}.spec.ts`), name);
-		for (const separator of ['/', '\\']) {
-			const path = ['frontend', 'tests', `${name}.spec.ts`].join(separator);
-			assert.deepEqual(selectPaths([path]).groups, ['console'], path);
-			assert.equal(ciAnswer([path], true).console, true, path);
-		}
-	}
-});
-
-test('real Judgement evidence checks keep their appropriate explicit tiers', () => {
-	const inventory = groupedSpecs(join(FRONTEND, 'tests'));
-	assert.ok(inventory.logic.includes('judgement-evidence.spec.ts'));
-	assert.ok(inventory.console.includes('console-judgement-evidence.spec.ts'));
-	assert.deepEqual(selectPaths(['frontend/tests/judgement-evidence.spec.ts']).groups, ['logic']);
-	assert.deepEqual(selectPaths([String.raw`frontend\tests\console-judgement-evidence.spec.ts`]).groups, ['console']);
 });
 
 test('query foundation checks are registered in their real execution tiers', () => {
 	const inventory = groupedSpecs(join(FRONTEND, 'tests'));
-	for (const [group, names] of [
-		['logic', ['console-canary-host-halves', 'console-drawn-cells', 'console-panel-queries', 'console-waiting', 'recorded-slices']],
-		['console', ['console-built-page', 'console-route-waiting']]
-	]) {
+	for (const [group, names] of [['logic', [
+		'console-canary-host-halves', 'console-drawn-cells', 'console-panel-queries',
+		'console-waiting', 'recorded-slices'
+	]]]) {
 		for (const name of names) {
 			assert.ok(inventory[group].includes(`${name}.spec.ts`), name);
 			for (const separator of ['/', '\\']) {
@@ -184,21 +186,8 @@ test('query foundation checks are registered in their real execution tiers', () 
 	}
 });
 
-test('a window helper edit selects all its console consumers under either path convention', () => {
-	for (const name of ['controls', 'readout', 'judgement-fixtures', 'machine-spans', 'client-render', 'server-panels']) {
-		for (const separator of ['/', '\\']) {
-			const path = ['frontend', 'tests', 'support', 'console-window', `${name}.ts`].join(separator);
-			const selection = selectPaths([path]);
-			assert.deepEqual(selection.groups, ['logic', 'console', 'panels', 'publishing'], path);
-			assert.equal(selection.reasons[0].reason, 'shared window controls and focused route window consumers', path);
-			assert.equal(ciAnswer([path], true).console, true, path);
-			assert.equal(ciAnswer([path], true).panels, true, path);
-		}
-	}
-});
-
 test('named frontend specs map to their declared groups', () => {
-	assert.equal(groupForSpec('console-machine-data.spec.ts'), 'console');
+	assert.equal(groupForSpec('console-machine-data.spec.ts'), 'logic');
 	for (const name of [
 		'console-host-spans', 'console-machine-cards', 'console-machine-split', 'console-machine', 'tokens',
 		'console-date-axis', 'console-compression-rows', 'console-model-work', 'console-readout-data'
@@ -208,11 +197,8 @@ test('named frontend specs map to their declared groups', () => {
 		assert.equal(ciAnswer([`frontend/tests/${name}.spec.ts`], true).browser, false, name);
 	}
 	assert.equal(groupForSpec('frame.spec.ts'), 'logic');
-	assert.equal(groupForSpec('console-route-scope.spec.ts'), 'logic');
-	assert.deepEqual(selectPaths(['frontend/tests/console-route-scope.spec.ts']).groups, ['logic']);
-	assert.equal(ciAnswer(['frontend/tests/console-route-scope.spec.ts'], true).browser, false);
-	assert.equal(groupForSpec('panel-captures.spec.ts'), 'panels');
-	assert.equal(groupForSpec('panel-sufficiency.spec.ts'), 'panels');
+	assert.equal(groupForSpec('panel-captures.spec.ts'), undefined);
+	assert.equal(groupForSpec('panel-sufficiency.spec.ts'), undefined);
 	assert.equal(groupForSpec('new-feature.spec.ts'), undefined);
 });
 
@@ -225,9 +211,38 @@ test('extracted console logic keeps source changes covered with browser consumer
 		assert.deepEqual(selectPaths([path]).groups, [...FRONTEND_GROUPS], path);
 		assert.equal(ciAnswer([path], true).browser, true, path);
 	}
-	assert.equal(groupForSpec('console.spec.ts'), 'console');
-	assert.equal(groupForSpec('console-readout.spec.ts'), 'console');
-	assert.equal(groupForSpec('console-new-question.spec.ts'), 'console');
+	assert.equal(groupForSpec('console.spec.ts'), 'logic');
+	assert.equal(groupForSpec('console-data-explorer-still.spec.ts'), 'console');
+	assert.equal(groupForSpec('console-new-question.spec.ts'), undefined);
+	assert.equal(groupForSpec('console-built-page.spec.ts'), undefined);
+});
+
+test('Voices panel inputs keep narrow route consumers and unknown-path broad coverage', () => {
+	for (const name of ['feeds-failed.ts', 'FeedTiles.svelte', 'why-chosen.ts', 'WatchlistPanel.svelte']) {
+		for (const separator of ['/', '\\']) {
+			const path = ['frontend', 'src', 'lib', 'console', 'voices', name].join(separator);
+			assert.deepEqual(selectPaths([path]).groups, ['logic', 'console', 'publishing'], path);
+			assert.equal(ciAnswer([path], true).console, true, path);
+		}
+	}
+	assert.deepEqual(selectPaths(['frontend/src/lib/console/voices/feeds-failed.ts', 'unknown-area/module.ts']).groups,
+		['backend', ...FRONTEND_GROUPS]);
+	assert.deepEqual(selectPaths(['frontend/src/lib/console/unmapped/panel.ts']).groups, [...FRONTEND_GROUPS]);
+	assert.deepEqual(groupedSpecs(join(FRONTEND, 'tests')).console,
+		['console-data-explorer-still.spec.ts', 'console-machine-journey.spec.ts', 'console-telemetry-heal.spec.ts', 'console-voices-journey.spec.ts']);
+});
+
+test('Hardware native readers and representative boundaries remain in the closed inventory', () => {
+	assert.equal(groupForSpec('console-machine-journey.spec.ts'), 'console');
+	assert.deepEqual(selectPaths(['frontend/tests/console-machine-journey.spec.ts']).groups, ['console']);
+	assert.equal(ciAnswer(['frontend/tests/console-machine-journey.spec.ts'], true).console, true);
+	for (const name of ['records.ts', 'MachineCharts.svelte', 'RecordFrame.svelte']) {
+		for (const separator of ['/', '\\']) {
+			const path = ['frontend', 'src', 'lib', 'console', 'machine', name].join(separator);
+			assert.deepEqual(selectPaths([path]).groups, ['logic', 'console', 'publishing'], path);
+			assert.equal(ciAnswer([path], true).console, true, path);
+		}
+	}
 });
 
 test('grouped specs follow only the explicit inventory', () => {
@@ -271,50 +286,45 @@ test('data helpers select ledger logic and console consumers without unrelated f
 		'frontend/src/lib/data/nested/query.ts', String.raw`frontend\src\lib\data\page-keeper.ts`
 	]) {
 		const selection = selectPaths([path]);
-		assert.deepEqual(selection.groups, ['logic', 'console', 'panels', 'publishing'], path);
+		assert.deepEqual(selection.groups, ['logic', 'console', 'publishing'], path);
 		assert.deepEqual(selection.backendFiles, []);
 		assert.equal(selection.contracts, false);
 		assert.equal(selection.tooling, false);
 		assert.equal(selection.reasons[0].reason, 'ledger queries and console consumers');
 		assert.deepEqual(ciAnswer([path], true), {
-			browser: true, code: true, modelAbsent: false, console: false, panels: false, robots: false, validateAll: false
+			browser: true, code: true, modelAbsent: false, console: false, robots: false, validateAll: false
 		});
 	}
 });
 
-test('each route-owned config buys console and panel checks on a pull request', () => {
+test('each route-owned config buys console checks on a pull request', () => {
 	for (const route of ['pipelines', 'model', 'machine', 'voices', 'judgement', 'data-explorer']) {
 		for (const path of [
 			`config/console/${route}.json`, `config\\console\\${route}.json`
 		]) {
 			const selection = selectPaths([path]);
-			assert.deepEqual(selection.groups, ['logic', 'console', 'panels', 'publishing'], path);
+			assert.deepEqual(selection.groups, ['logic', 'console', 'publishing'], path);
 			assert.equal(selection.contracts, true, path);
 			assert.equal(selection.tooling, false, path);
 			assert.equal(selection.reasons[0].reason, 'route-owned console config and panel checks', path);
 			const answer = ciAnswer([path], true);
 			assert.equal(answer.browser, true, path);
 			assert.equal(answer.console, true, path);
-			assert.equal(answer.panels, true, path);
 			assert.equal(answer.validateAll, true, path);
 		}
 	}
-	assert.deepEqual(selectPaths(['docs/a.md', 'config/console/machine.json']).groups, ['logic', 'console', 'panels', 'publishing']);
+	assert.deepEqual(selectPaths(['docs/a.md', 'config/console/machine.json']).groups, ['logic', 'console', 'publishing']);
 	assert.deepEqual(selectPaths(['config/console/machine.json', 'frontend/src/routes/+layout.svelte']).groups, [...FRONTEND_GROUPS]);
 	assert.deepEqual(selectPaths(['config/console/machine.json', 'unknown-area/module.ts']).groups, ['backend', ...FRONTEND_GROUPS]);
 	assert.deepEqual(selectPaths(['config/console-other/machine.json']).groups, ['backend', ...FRONTEND_GROUPS]);
 });
 
-test('route-owned expectations and drivers remain console inputs after extraction', () => {
+test('route-owned expectations remain console inputs after extraction', () => {
 	for (const route of ['pipelines', 'model', 'machine', 'voices', 'judgement', 'data-explorer', 'index']) {
-		for (const file of [
-			`frontend/tests/support/console-expect/console-band/${route}.ts`,
-			`frontend/tests/support/panel-drivers/${route}.ts`
-		]) {
+		for (const file of [`frontend/tests/support/console-expect/console-band/${route}.ts`]) {
 			for (const path of [file, file.replaceAll('/', '\\')]) {
-				assert.deepEqual(selectPaths([path]).groups, ['logic', 'console', 'panels', 'publishing'], path);
+				assert.deepEqual(selectPaths([path]).groups, ['logic', 'console', 'publishing'], path);
 				assert.equal(ciAnswer([path], true).console, true, path);
-				assert.equal(ciAnswer([path], true).panels, true, path);
 			}
 		}
 	}
@@ -322,19 +332,17 @@ test('route-owned expectations and drivers remain console inputs after extractio
 	assert.equal(ciAnswer(['frontend/tests/support/panel-gates.ts'], true).console, false);
 });
 
-test('the shared panel frame buys console consumers without widening the exception', () => {
+test('the shared panel frame uses the representative browser selection', () => {
 	for (const path of [
 		'frontend/src/lib/components/Panel.svelte', String.raw`frontend\src\lib\components\Panel.svelte`
 	]) {
 		assert.deepEqual(selectPaths([path]).groups, [...FRONTEND_GROUPS], path);
 		assert.equal(ciAnswer([path], true).console, true, path);
-		assert.equal(ciAnswer([path], true).panels, true, path);
 	}
 	for (const path of [
 		'frontend/src/lib/components/PanelGroup.svelte', 'frontend/src/lib/components/ChartReadout.svelte'
 	]) {
 		assert.equal(ciAnswer([path], true).console, false, path);
-		assert.equal(ciAnswer([path], true).panels, true, path);
 	}
 });
 
@@ -379,7 +387,7 @@ test('the second-interpreter robots job runs only when its tests can have moved'
 
 test('the data mapping preserves broader mixed edits and the unknown-path fallback', () => {
 	const data = 'frontend/src/lib/data/slice-reader.ts';
-	assert.deepEqual(selectPaths([data, 'docs/a.md']).groups, ['logic', 'console', 'panels', 'publishing']);
+	assert.deepEqual(selectPaths([data, 'docs/a.md']).groups, ['logic', 'console', 'publishing']);
 	assert.deepEqual(selectPaths([data, 'frontend/src/routes/+layout.svelte']).groups, [...FRONTEND_GROUPS]);
 	assert.deepEqual(selectPaths([data, 'new-area/module.ts']).groups, ['backend', ...FRONTEND_GROUPS]);
 	assert.deepEqual(selectPaths(['frontend/src/lib/database/query.ts']).groups, [...FRONTEND_GROUPS]);
@@ -403,7 +411,7 @@ test('an unmapped backend module buys the whole backend suite and no browser', (
 test('documentation alone starts no code suite and cannot hide a mixed edit', () => {
 	assert.deepEqual(selectPaths(['docs/reference/pipeline-cost.md', 'TODO/a-plan.md']).groups, []);
 	const mixed = selectPaths(['docs/a.md', 'frontend/src/routes/console/+page.svelte']);
-	assert.deepEqual(mixed.groups, ['logic', 'console', 'panels', 'publishing']);
+	assert.deepEqual(mixed.groups, ['logic', 'console', 'publishing']);
 	assert.equal(mixed.reasons.length, 2);
 });
 
@@ -427,17 +435,15 @@ test('a change carrying no code buys no code job, on a merge as well as a branch
 	assert.equal(ciAnswer(['docs/a.md'], false).browser, false);
 });
 
-test('a document a test reads is that test input, not documentation', () => {
+test('the retired model-label document input no longer selects console browser journeys', () => {
 	const page = CONSOLE_MODEL_LABELS_PAGE;
-	assert.ok(existsSync(join(FRONTEND, '..', page)), `${page} is gone, so the console spec that reads it cannot pass`);
-	assert.deepEqual(selectPaths([page]).groups, ['console']);
-	assert.equal(selectPaths([page]).reasons[0].reason, 'documentation a test reads');
+	assert.ok(existsSync(join(FRONTEND, '..', page)));
+	assert.deepEqual(selectPaths([page]).groups, []);
+	assert.equal(selectPaths([page]).reasons[0].reason, 'documentation only');
 	const answer = ciAnswer([page], true);
-	assert.equal(answer.code, true);
-	assert.equal(answer.browser, true);
-	// On the branch, not after the merge: the spec that reads the page is the one
-	// an edit to it can break.
-	assert.equal(answer.console, true);
+	assert.equal(answer.code, false);
+	assert.equal(answer.browser, false);
+	assert.equal(answer.console, false);
 });
 
 test('the chart vocabulary page buys the logic spec that reads it, and no browser', () => {
@@ -465,7 +471,7 @@ test('a utility nothing else runs selects only its own test module', () => {
 	assert.deepEqual(selection.groups, ['backend']);
 	assert.deepEqual(selection.backendFiles, ['backend/tests/test_doc_load.py']);
 	assert.deepEqual(ciAnswer([path], true), {
-		browser: false, code: true, modelAbsent: false, console: false, panels: false, robots: false, validateAll: false
+		browser: false, code: true, modelAbsent: false, console: false, robots: false, validateAll: false
 	});
 	// A closed list, not a directory rule: the canary build runs this one.
 	assert.equal(selectPaths(['backend/utilities/build_canary_day.py']).backendFiles, null);
@@ -490,56 +496,55 @@ test('contract and config changes include both languages and revalidate the arch
 });
 
 //: A change, and what the `scope` job has to buy for it on a pull request: the
-//: browser half at all, the operator console's own specs inside it, and the
-//: panel captures and gates. The backend rows are the trap the allow-list exists
+//: browser half at all and the representative operator-console journey. The
+//: backend rows are the trap the allow-list exists
 //: to avoid - a module the canary day is built through, and a fixture the attack
 //: text is read from, can move a published page without touching `frontend/`.
 const PULL_REQUEST_SCOPE = [
 	// The console's own files, the only thing that buys its specs before merge.
-	['frontend/src/routes/console/+page.svelte', true, true, true],
-	['frontend/src/lib/console/window.ts', true, true, true],
-	['frontend/src/lib/components/ConsoleNav.svelte', true, true, true],
-	['frontend/src/lib/server/console-shell.ts', true, true, true],
-	// A console spec moves no panel's picture.
-	['frontend/tests/console-voices-feeds.spec.ts', true, true, false],
+	['frontend/src/routes/console/+page.svelte', true, true],
+	['frontend/src/lib/console/window.ts', true, true],
+	['frontend/src/lib/components/ConsoleNav.svelte', true, true],
+	['frontend/src/lib/server/console-shell.ts', true, true],
+	// A deterministic console rule needs no browser.
+	['frontend/tests/console-voices-feeds.spec.ts', false, false],
 	// The harness itself, which has to prove itself on every group it selects.
-	['frontend/package.json', true, true, true],
-	['frontend/package-lock.json', true, true, true],
-	['frontend/scripts/test-groups.ts', true, true, true],
-	['.github/workflows/ci.yml', true, true, true],
+	['frontend/package.json', true, true],
+	['frontend/package-lock.json', true, true],
+	['frontend/scripts/test-groups.ts', true, true],
+	['.github/workflows/ci.yml', true, true],
 	// The shared panel frame reaches every console route (known defect 45).
-	['frontend/src/lib/components/Panel.svelte', true, true, true],
-	['config/console/machine.json', true, true, true],
-	// Other shared drawing inputs buy panel checks but defer the console.
-	['frontend/tests/panel-captures.spec.ts', true, false, true],
-	['frontend/tests/fixtures/panels/WitnessPanel.svelte', true, false, true],
-	['frontend/tests/support/panel-gates.ts', true, false, true],
-	['frontend/src/lib/components/ChartReadout.svelte', true, false, true],
-	['frontend/src/lib/charts/d3/DateSeries.svelte', true, false, true],
-	['frontend/src/lib/charts/engine.ts', true, false, true],
-	['frontend/src/styles/tokens.css', true, false, true],
-	['config/appearance.json', true, false, true],
-	// Reaches a published page, but neither the console nor its pictures before merge.
-	['frontend/src/lib/components/KpiCard.svelte', true, false, false],
-	['frontend/src/lib/server/payload.ts', true, false, false],
-	['frontend/src/app.html', true, false, false],
-	['frontend/src/routes/+layout.svelte', true, false, false],
-	['frontend/src/routes/[date]/+page.svelte', true, false, false],
-	['frontend/src/lib/assist/loader.ts', true, false, false],
-	['config/idhazh.json', true, false, false],
-	['backend/idhazh/contracts/item_health.py', true, false, false],
-	['backend/utilities/build_canary_day.py', true, false, false],
-	['backend/idhazh/sanitize.py', true, false, false],
-	['tests/fixtures/canaries/fake-system-delimiter.json', true, false, false],
-	['unknown-area/module.ts', true, false, false],
+	['frontend/src/lib/components/Panel.svelte', true, true],
+	['config/console/machine.json', true, true],
+	// Deterministic panel rules and fixtures stay below the browser.
+	['frontend/tests/fixtures/panels/WitnessPanel.svelte', false, false],
+	['frontend/tests/support/panel-gates.ts', true, false],
+	['frontend/src/lib/components/ChartReadout.svelte', true, false],
+	['frontend/src/lib/charts/d3/DateSeries.svelte', true, false],
+	['frontend/src/lib/charts/engine.ts', true, false],
+	['frontend/src/styles/tokens.css', true, false],
+	['config/appearance.json', true, false],
+	// Reaches a published page, but not the console before merge.
+	['frontend/src/lib/components/KpiCard.svelte', true, false],
+	['frontend/src/lib/server/payload.ts', true, false],
+	['frontend/src/app.html', true, false],
+	['frontend/src/routes/+layout.svelte', true, false],
+	['frontend/src/routes/[date]/+page.svelte', true, false],
+	['frontend/src/lib/assist/loader.ts', true, false],
+	['config/idhazh.json', true, false],
+	['backend/idhazh/contracts/item_health.py', true, false],
+	['backend/utilities/build_canary_day.py', true, false],
+	['backend/idhazh/sanitize.py', true, false],
+	['tests/fixtures/canaries/fake-system-delimiter.json', true, false],
+	['unknown-area/module.ts', true, false],
 	// Cannot reach a page at all.
-	['frontend/tests/frame.spec.ts', false, false, false],
-	['docs/reference/pipeline-cost.md', false, false, false],
-	['backend/tests/test_discover.py', false, false, false],
-	['backend/idhazh/discover.py', false, false, false],
+	['frontend/tests/frame.spec.ts', false, false],
+	['docs/reference/pipeline-cost.md', false, false],
+	['backend/tests/test_discover.py', false, false],
+	['backend/idhazh/discover.py', false, false],
 	// Reaches a page only through the canary build; the merge push settles it.
-	['backend/idhazh/render/write.py', false, false, false],
-	['TODO/some-plan.md', false, false, false]
+	['backend/idhazh/render/write.py', false, false],
+	['TODO/some-plan.md', false, false]
 ];
 
 test('a pull request buys the console specs only for the console or the harness', () => {
@@ -547,12 +552,6 @@ test('a pull request buys the console specs only for the console or the harness'
 		const answer = ciAnswer([path], true);
 		assert.equal(answer.browser, browser, path);
 		assert.equal(answer.console, console_, path);
-	}
-});
-
-test('a pull request buys the panel pictures for the console, the harness, and what every panel is drawn from', () => {
-	for (const [path, , , panels] of PULL_REQUEST_SCOPE) {
-		assert.equal(ciAnswer([path], true).panels, panels, path);
 	}
 });
 
@@ -595,9 +594,8 @@ test('only a change that can invalidate a committed day re-reads every day', () 
 });
 
 test('the console half is never bought without the browser half', () => {
-	for (const [path, browser, console_, panels] of PULL_REQUEST_SCOPE) {
+	for (const [path, browser, console_] of PULL_REQUEST_SCOPE) {
 		assert.ok(!console_ || browser, `${path} asks for the console with no job`);
-		assert.ok(!panels || browser, `${path} asks for the panel pictures with no job`);
 	}
 });
 
@@ -608,11 +606,9 @@ test('a merge to main runs every group, which is what the deferral leans on', ()
 	const merged = ciAnswer(['full-ci-run'], false);
 	assert.equal(merged.browser, true);
 	assert.equal(merged.console, true);
-	assert.equal(merged.panels, true);
 	const unresolved = ciAnswer(['unresolved-change-base'], true);
 	assert.equal(unresolved.browser, true);
 	assert.equal(unresolved.console, true);
-	assert.equal(unresolved.panels, true);
 });
 
 test('one reaching path in a mixed change still buys the browser suite', () => {
@@ -622,11 +618,9 @@ test('one reaching path in a mixed change still buys the browser suite', () => {
 	);
 	assert.equal(mixed.browser, true);
 	assert.equal(mixed.console, false);
-	assert.equal(mixed.panels, false);
 	const withConsole = ciAnswer(['docs/a.md', 'frontend/src/routes/console/+page.svelte'], true);
 	assert.equal(withConsole.browser, true);
 	assert.equal(withConsole.console, true);
-	assert.equal(withConsole.panels, true);
 });
 
 test('changed paths include commits, staged, unstaged, untracked and both rename sides', () => {

@@ -5,8 +5,7 @@ import { groupColumns } from '../src/lib/console/explorer/column-groups';
 /**
  * How the column rail groups names under their ledger. The page names a
  * ledger's column `{ledger}.{column}` and an answer's column by its own name;
- * the browser case in `console-explorer-rails.spec.ts` draws the real rail from
- * columns it writes itself.
+ * these rules keep that grouping deterministic.
  */
 
 test('a ledger\'s columns group under it in the order they came, shown without the prefix', () => {

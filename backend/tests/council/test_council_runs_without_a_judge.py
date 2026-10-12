@@ -277,7 +277,7 @@ def test_a_whole_night_runs_with_nobody_registered(venue: Path) -> None:
 
     assert run_id == f"{TONIGHT}-{A_PLATFORM_RUN}"
     assert hosted == ()
-    assert planned == (TONIGHT,), "a night with nobody registered plans tonight and no more"
+    assert planned.judges == (), "a night with nobody registered selects no judge"
     assert prepared == ()
     assert settled == ()
     assert not ledger.raw_root(state_root, LedgerName.COUNCIL_RUN_RECORDS).exists()
@@ -306,7 +306,10 @@ def test_two_tenants_union_their_nights_and_keep_their_own_width(venue: Path) ->
     planned = night_plan.plan_the_night(council, tonight=TONIGHT, hosted=hosted)
 
     assert [host.judge_id for host in hosted] == [A_SLUG, ANOTHER_SLUG]
-    assert planned == (TONIGHT, "2026-09-23", "2026-09-22", "2026-09-21")
+    assert {judge.tenant: judge.dates for judge in planned.judges} == {
+        A_SLUG: (TONIGHT, "2026-09-23", "2026-09-22"),
+        ANOTHER_SLUG: (TONIGHT, "2026-09-23", "2026-09-21"),
+    }
     assert [session.shard_width(council, host) for host in hosted] == [2, 3]
 
 
@@ -330,7 +333,10 @@ def test_the_venue_runs_a_shard_under_its_own_clock_and_files_the_row(venue: Pat
     opened = time.monotonic()
 
     hosted = registry.tenants(council.running())
-    assert night_plan.plan_the_night(council, tonight=TONIGHT, hosted=hosted)[0] == TONIGHT
+    assert (
+        night_plan.plan_the_night(council, tonight=TONIGHT, hosted=hosted).judges[0].dates[0]
+        == TONIGHT
+    )
     session.prepare(council, date=TONIGHT, run_id=run_id)
     for shard in range(2):
         result = session.run_shard(
@@ -343,9 +349,7 @@ def test_the_venue_runs_a_shard_under_its_own_clock_and_files_the_row(venue: Pat
             started=opened,
         )
         assert result.outcome is ShardOutcome.COMPLETED
-    session.settle(
-        council, date=TONIGHT, run_id=run_id, state_dir=state_root, commit_sha=A_SHA
-    )
+    session.settle(council, date=TONIGHT, run_id=run_id, state_dir=state_root, commit_sha=A_SHA)
 
     handed = written(A_VENUE, A_SLUG).TENANT.handed
     filed = _the_nights_record(state_root, TONIGHT)
@@ -353,9 +357,7 @@ def test_the_venue_runs_a_shard_under_its_own_clock_and_files_the_row(venue: Pat
     assert len(handed) == 2, "each shard is handed a deadline of its own"
     assert all(instant > opened for instant in handed), "the clock is the council's"
     assert {row.judge_id for row in filed} == {A_SLUG}
-    assert sorted(
-        (row.evaluation_step, row.work_part_index) for row in filed
-    ) == sorted(
+    assert sorted((row.evaluation_step, row.work_part_index) for row in filed) == sorted(
         [
             (EvaluationStep.COMBINE_JUDGE_RESULTS, None),
             (EvaluationStep.SELECT_JUDGE_WORK, None),

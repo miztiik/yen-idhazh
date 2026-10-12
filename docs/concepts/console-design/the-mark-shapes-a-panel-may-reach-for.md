@@ -564,21 +564,10 @@ Five rules hold under that table.
 
 - **The box is exactly `console.chart_height` tall, in both the states it
  appears in.**
- [../../../frontend/tests/console-reserved.spec.ts](../../../frontend/tests/console-reserved.spec.ts)
- measures every panel's real bounding box twice in one page session - while the
- months are in the air and once they have landed - and fails on any panel that
- changed size except the one named as fetched. It reads boxes and never a CSS
- property, because a CSS property is not what moves under a cursor. Measured
- 2026-09-09 at 1280 CSS px: seven panels, none changed width, one changed height
- by 172 px. **A second case watches the chrome above the panels** - the title,
- the strip, the band, the window control, the carry line and the glance grid,
- each against its own former box. **The set is cut at the first panel's own top
- and never at the fold**: the first panel begins at 894 px, so a 900 px fold cut
- was really asking how tall the runner's fonts were, and on `ubuntu-latest` it
- came back empty and took `main` red. Each block is compared on its own rather
- than the panel's top being compared to itself, because a top says only that the
- total height above it held - a block that grew by the amount its neighbour
- shrank would pass, and the failure would name no block.
+ The panel's real box must hold its size while data arrives, except a panel
+ named as fetched. The title, strip, band, window control, carry line and glance
+ grid above it must also stay in place. A CSS height alone does not prove that
+ nothing moved under the cursor.
 - **An empty plot draws its axis frame and its tick marks and no numbers.** A
  tick label needs a value and there is no value, so a number printed there would
  be invented. Both come out of the same `frame` and the same margins the real

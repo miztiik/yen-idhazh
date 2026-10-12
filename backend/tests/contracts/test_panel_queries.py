@@ -173,6 +173,18 @@ def row_columns() -> dict[str, tuple[str, ...]]:
     }
 
 
+def test_count_capability_binds_only_the_approved_business_columns() -> None:
+    settings = LedgerConfig.model_validate(
+        json.loads(read_text(REPO_ROOT / "config/idhazh.json"))["ledger"]
+    )
+    count = QueryDeclaration(
+        module="machine", name="runShardsQuery", ledger="run-shards",
+        columns=("date", "run_id", "shards"), span="widest",
+    )
+    assert query_faults(count, settings.published, row_columns(), {}) == ()
+    assert set(RunShards.model_fields) == {"version", *count.columns}
+
+
 def test_every_declared_query_uses_a_published_ledger_and_its_actual_row() -> None:
     config = LedgerConfig.model_validate(json.loads(read_text(REPO_ROOT / "config/idhazh.json"))["ledger"])
     unread = {"item-health": tuple(name for names in UNREAD_CELLS.values() for name in names)}

@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-11
 
-**Status**: Rows 1, 2, 3a, 3 and 4 are merged in #1529, #1537, #1538 and #1542. Shared-support row 2b is merged in #1546. Row 5 is implemented and awaiting final delivery. Rows 6 to 11 still require delivery. Row 12 and its related public-projection and reader deletions are complete in merged #1189 and stay COLLAPSED.
+**Status**: Rows 1, 2, 3a, 3 and 4 are merged in #1529, #1537, #1538 and #1542. Shared-support row 2b is merged in #1546. Row 5 is merged in #1547. This change delivers Voices, row 8, with its native queries, private inputs and missing-data states. Rows 6, 7, 9, 10 and 11 still require delivery. Row 12 and its related public-projection and reader deletions are complete in merged #1189 and stay COLLAPSED.
 
 **Level**: 5 (CLAUDE.md section 6). Rows 5 and 10 change a persisted payload every console document carries. The route rows are Level 3: each crosses code and published data on one route. **Authorizing this plan is the design consultation section 6 asks of rows 5 and 10.** Row 12's approved deletion is carried by #1189.
 
@@ -22,7 +22,13 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 **Remaining delivery authorized, 2026-10-10.** The owner authorized the remaining pull requests and merges without another implementation approval round. Row 4 builds the real query, fixture and loading capability only. Its former measurement worker, volume harness, benchmark page, CI timing comparison and measured engine-download figure are suspended. The loading standing says `Fetching the record.`; no missing measurement delays implementation and no guessed size is printed.
 
+**Voices integration delegated by Naveen, 2026-10-11.** Row 8 owns the eight feed-case extraction from `console.spec.ts`, truthful native settlement in the shared ownership/readout scans, Voices scope mapping and its tests, inherited route inventories/knob fixtures, and actual packed-fixture staging in the bounded private builder. Keep all cases and independent assertions. This is test integration, not a shared chart or query API change. The owner retains public merge and CI.
+
 **Shared support approved, 2026-10-11.** The owner selected A1: an identity-free failed-rule ranking, structured timing rules, explicit histogram bar colours, and an item-duration stack with a separately labelled overlap deduction and elapsed-time marker. Count summarization once and keep calls as non-additive details. Use one stated article cohort; retain unknowns separately from recorded zero and positive gaps separately from overlap. Row 2b owns the shared APIs, their dependent compiler inputs, test registration and inventory. Route rows wire those APIs without broadening a query or publishing private build-time inputs.
+
+**Hardware foundation approved, 2026-10-11 12:30 UTC.** After the actual Fowler consultation the owner selected A1: a narrow native `run-shards` ledger with only business `date`, `run_id`, nullable positive `shards`, inherited version and existing writer provenance, plus the necessary Hardware query fields. The exact historical and future source is `RunManifest.RunRecord.shards`, never observed hosts, maximum index, configuration or workflow dispatch count. Last numeric per run wins; later unknown never erases numeric. Preserve corrected-repeat settlement through packing without changing `run-plan`. Whole manifests, plans, article data and prompts remain unpublished. Future workflow dispatch versus CLI recomputation semantics are unchanged.
+
+**Row 9 delivery order.** Publish and merge the count foundation first, then verify its live daily/monthly coverage before the existing Hardware reader can merge. These are two stages of the same approved row, not a new counted row. This foundation registers the count vocabulary and bounded fixtures only; existing Hardware queries, panels and build-time manifest refusal stay unchanged until the reader stage.
 
 | Field | Value |
 | --- | --- |
@@ -67,11 +73,11 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 3a | Each route owns its detailed window tests; the shared spec checks shared promises only | 1 | B | DONE | p52-judgement (`feat/console-judgement-panels`) | #1538 | Fowler and owner |
 | 3 | Judgement carries its ids and gates, and preserves what the evidence can establish | 1, 3a | B | DONE | p52-judgement (`feat/console-judgement-panels`) | #1538 | Susan, Fowler and owner |
 | 4 | Every panel's question and shared loading state are declared before it is drawn | 2 | C | DONE | p52-panel-queries (`feat/console-panel-queries`) | #1542 | Owner and disjoint contract, canary and guard workers |
-| 5 | The band reads the ledgers and carries the settings changes, and the three remaining projections nothing draws go | 3, 4 | D | LOCAL READY: publication pending | p52-band-ledgers (`feat/console-band-ledgers`) | Read from merge | p52-row5-local-completion |
+| 5 | The band reads the ledgers and carries the settings changes, and the three remaining projections nothing draws go | 3, 4 | D | DONE | p52-band-ledgers (`feat/console-band-ledgers`) | #1547 | p52-row5-local-completion |
 | 6 | Pipelines asks the ledger | 5, 2b | E | PENDING | - | - | - |
 | 7 | Summaries asks the ledger | 5, 2b | E | PENDING | - | - | - |
-| 8 | Voices asks the ledger, and the ranking panels join it | 4 | D | PENDING | - | - | - |
-| 9 | Hardware asks the ledger, and its page carries no data | 5 | E | PENDING | - | - | - |
+| 8 | Voices asks the ledger, and the ranking panels join it | 4 | D | DONE | p52-voices-ledgers (`feat/console-voices-ledgers`) | Read from merge | Row8 finishing worker; actual Susan/Fowler consultations |
+| 9 | Hardware asks the ledger, and its page carries no data | 5 | E | IN-FLIGHT: count foundation ready/reader pending | p52-hardware-counts (`feat/console-hardware-counts`); reader retained in p52-machine-ledgers | Read from merge | Count foundation owner; parent owns reader integration |
 | 10 | The `telemetry` and `run-timeline` projections go | 6 | F | PENDING | - | - | - |
 | 11 | ECharts leaves | 7, 8, 9, 10 | G | PENDING | - | - | - |
 | 12 | Moved to #1189: the aggregate is deleted and one item's trace is a command | - | H | COLLAPSED | - | - | - |
@@ -1037,7 +1043,9 @@ Row 4 owns known defect 40: write one canary job through the real probe and comp
 
 **Separate priced follow-up; not implemented here.** Workflow dispatch matrix and assemble CLI's recomputed manifest count may differ. Correcting this requires one authoritative count passed through dispatch and assembly, corrected/regeneration semantics, historical compatibility and real-matrix fixtures. It must have its own owner decision and issue; this row preserves the exact recorded manifest value rather than silently replacing it with actual workflow count.
 
-**Bounded candidate evidence.** 51 existing named manifests yielded 237 run mappings (121 numeric, 116 unknown), exactly matched after native packing and normal origin integration. August/September are monthly and October 1-10 daily; the October 11 manifest's two rows stay raw while that UTC day is open. Repeating the migration files no rows. The newest completed, packed day is October 10. This is not live-publication evidence. Before merge verify served daily/monthly `run-shards` coverage and newest data within three days. Row 9 remains pending until the final required correctness/browser gates and PR report exist.
+**Ordered foundation and reader.** The approved count-only foundation is now merged and published. On UTC October 12 its actual live daily/monthly indexes and August Parquet showed uninterrupted August 21 through October 9 coverage and newest packed daily October 10. Reader integration adopts those exact newer native files and publication inventory; it does not reinstate the older 237-mapping candidate. The parent rechecks live coverage at reader merge. Row 9 remains a reader candidate until current-source correctness, the representative native browser journey and exact-head cloud CI finish.
+
+**Current validation.** The shipped representative-browser policy replaces the deleted width/theme/layout/readout/mode matrices. `console-machine-journey.spec.ts` owns one production-built native journey and independent retry, missing-index and scriptless publication boundaries. Native reduction, identity, count refusal, null and scale rules stay at their existing logic/backend tiers. Deleted charts-ready and panel-driver test frameworks stay deleted; Row 11 still owns production retirement.
 
 - **Scope:** every Hardware panel in section 2.7 except `platform-mix`, and the route sentences under that table. Owner ruling R2's default A: the built page follows section 2.4, "The built page", with no exception; `/console/machine/+page.server.ts` returns config and words only, and the page moves onto `__CONSOLE__`. It rewrites the scripts-off case in `console-machine-page.spec.ts`. `CLOCKS_AGREE_WITHIN_PCT` becomes `machine.knobs.clocks_agree_within_pct`; the constant stays in `frontend/src/lib/charts/machine.ts` and `frontend/src/lib/server/machine-counters.ts` for row 11 to delete. Its own specs import `test` from `door-page`.
 - **Files touched:**

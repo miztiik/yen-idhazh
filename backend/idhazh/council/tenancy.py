@@ -58,7 +58,7 @@ class ShardResult:
     reads no field of it by name.
     """
 
-    #: How the unit ended. The council files this and never infers it.
+    #: How returned work ended. FAILED is reserved for the council's raised-unit record.
     outcome: ShardOutcome
 
     #: How many model calls the unit made. Null, not zero, for a tenant that runs

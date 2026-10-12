@@ -1949,7 +1949,8 @@ def main() -> int:
             through=DATE,
             identity=_fixture_writer(SCORE_RUN_ID),
         )
-        pack_fixture_ledgers(args.state.resolve(), Path.cwd().resolve())
+        state = args.state.resolve()
+        pack_fixture_ledgers(state, state.parent)
         unpacked = file_unpacked_fixture_day(args.state)
         filed[LedgerName.ITEM_HEALTH] = filed.get(LedgerName.ITEM_HEALTH, 0) + unpacked
         for which, count in filed.items():

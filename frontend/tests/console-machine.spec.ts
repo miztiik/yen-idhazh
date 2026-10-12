@@ -1630,6 +1630,38 @@ test.describe('the Hardware browser redraws, from stated readings', () => {
 		expect(actual.rows[0]).not.toHaveProperty('segments');
 	});
 
+	test('numeric run suffixes beyond safe integers retain their actual order', () => {
+		const older = '2026-09-01-9007199254740992';
+		const newer = '2026-09-01-9007199254740993';
+		expect(slowestArticles([
+			{ run_id: newer, item_id: 'new', item_total_ms: 1000 },
+			{ run_id: older, item_id: 'old', item_total_ms: 9000 }
+		]).run).toBe(newer);
+	});
+
+	test('positive gaps close the elapsed stack; queue wait stays outside it and missing stages stay absent', () => {
+		const row = { run_id: '2026-09-01-1', item_id: 'one', item_total_ms: 5000,
+			fetch_ms: 1000, extract_ms: 1000, summarize_ms: 1000, faithfulness_ms: 1000,
+			stage_gap_ms: 1000, queue_wait_ms: 2000 };
+		const measured = slowestArticles([row]).rows[0];
+		expect(measured.value).toBe(5);
+		expect(measured.segments?.map((segment) => segment.value)).toEqual([1, 1, 1, 1, 1]);
+		expect(measured.context).toBe('waited 2.0 s first');
+		expect(slowestArticles([{ ...row, extract_ms: null }]).rows[0]).not.toHaveProperty('segments');
+	});
+
+	test('native host cores and model load conflicts preserve the original whole-run refusal', () => {
+		const host = { date: '2026-09-01', run_id: '2026-09-01-1', job: 'work', shard: 0,
+			cpu_model: 'A', cores: 4, model_load_ms: 1000 };
+		const limits = { contextWindow: 8192, jobTimeoutSeconds: 9000 };
+		for (const conflicting of [{ ...host, cores: 8 }, { ...host, model_load_ms: 2000 }]) {
+			const result = countersFrom([host, conflicting], [], [{ run_id: host.run_id, shards: 1 }], limits);
+			expect(result.runs).toEqual([]);
+			expect(result.refused).toHaveLength(1);
+			expect(result.refused[0].why).toContain('two machine records that disagree');
+		}
+	});
+
 	test('a card never fabricates a job, shard or private unasked field', () => {
 		const row = { date: '2026-09-01', run_id: '2026-09-01-1', job: 'work', shard: 2, fingerprint: '0123456789abcdef' };
 		expect(fingerprints([{ ...row, shard: null }, { ...row, job: null }])).toEqual([]);

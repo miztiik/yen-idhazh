@@ -11,6 +11,7 @@ once could go red without saying which of the four moved.
 
 from __future__ import annotations
 
+import json
 from collections import Counter
 from collections.abc import Mapping
 from datetime import date as date_type
@@ -38,6 +39,7 @@ from idhazh.contracts.knobs.placement import SimilarityThresholdConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
+from idhazh.council.event_log import OneJsonLine
 from idhazh.council.run_identity import council_run_id
 from idhazh.similarity import applied, counting, fit
 from idhazh.similarity.stamps import JudgeStamp, ScorerStamp
@@ -794,17 +796,21 @@ def test_a_second_run_of_a_night_keeps_its_own_row_and_a_retry_replaces_its_firs
     assert len(ledger.list_raw_files(state, FITTED, days=[DATE])) == 3, "each try filed a file"
 
 
-def test_a_council_verb_refuses_to_invent_a_run_it_was_not_given() -> None:
+def test_a_council_verb_refuses_to_invent_a_run_it_was_not_given(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     """A verb with no name to file under stops at the command line, not two hours in.
 
     Every value it could reach for belongs to somebody else, so the refusal is
     the whole of the design: a digest run's id claims a machine and a clock this
     night never drew.
     """
-    with pytest.raises(SystemExit) as refused:
-        cli.main(["council-settle", "--date", DATE])
-
-    assert refused.value.code == 2, "argparse refuses a bad command line with 2"
+    assert cli.main(["council-settle", "--date", DATE]) == 2
+    events = [json.loads(OneJsonLine().format(record)) for record in caplog.records]
+    assert events[-1]["event"] == "program-finished"
+    assert events[-1]["code"] == 2 and events[-1]["label"] == "refused"
+    assert events[-1]["sentence"] == "stopped before any unit ran"
+    assert not any(event["event"] == "unit-finished" for event in events)
 
 
 def test_a_story_naming_itself_is_not_a_group(tmp_path: Path) -> None:

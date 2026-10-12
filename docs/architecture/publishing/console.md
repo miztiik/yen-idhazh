@@ -1,6 +1,6 @@
 # Which console panel answers what
 
-**Last Updated**: 2026-10-09
+**Last Updated**: 2026-10-11
 
 **Known noncompliance:** Existing console prerendering does not meet [Telemetry Intent](../../concepts/telemetry-intent.md) and will be migrated to browser rendering. All new designs, charts and visuals must render in the browser; none may be prerendered.
 
@@ -91,48 +91,16 @@ Only route files and the server config loader import its reader; shared panels
 take config as props. The layout reads the active route's groups for jump links,
 even when the route has no server load.
 
-A cross-route spec keeps its typed-out expectations under
-`frontend/tests/support/console-expect/<spec>/<route>.ts`. Each file exports
-`EXPECT`, or `null` when that route has nothing to check. The spec skips null
-entries. Its `index.ts` declares `BY_ROUTE` as a record keyed by `RouteId`, so a
-new route requires an entry at type check. An expectation file reads no values
-from config or the band: it records what the page must show, not what the page
-already uses. A chart-lifetime or chart-pending expectation is null when the
-route draws no legacy `Chart.svelte`.
+The browser suite checks one representative console journey and shared
+layout, plus an independent telemetry-month failure/retry boundary.
+Route-specific evidence and deterministic reader behavior belong in
+their integration and contract tests. Do not create a browser case for every
+panel, route, viewport, theme or evidence state. Keep design review on the
+changed surface rather than turning the route inventory into a gate matrix.
 
-The shared window spec owns arithmetic, controls, declared surface coverage,
-daily disclosure rules and actual cross-route navigation. It generates route
-coverage from the exhaustive `BY_ROUTE` literals. An absent expected surface
-fails; an explicit null remains inapplicable. Detailed telemetry, judge,
-Hardware and Voices fixtures and execution belong to focused route window
-specs. Agreement readouts, marks, day labels and cumulative record bars answer
-separate questions. Expectation files contain typed data, not callbacks.
-The shared navigation check may use Hardware's small content-span observer;
-it does not own Hardware fixtures or component compilation.
-The ownership guard checks this execution boundary as well as quoted addresses.
-
-Each `frontend/tests/support/panel-drivers/<route>.ts` exports `DRIVERS` and
-`BUILD_TIME`. Drivers put fetched panels into the states declared by
-`Nothing` in `panel-gates.ts`. `BUILD_TIME` names judged panels that make no
-fetch; their route's component specs check empty and absent inputs through
-`judgeNothings` for `quiet` and `missing`. The sufficiency spec refuses an id
-in both lists, in neither list, or driven by two routes. The driver index joins
-the route records without owning an address.
-
-The capture and sufficiency route lists come from `RouteId`, with addresses
-from `BAND_UNREAD.routes`. Empty panel groups have nothing to capture. The
-sufficiency tests cover the declared widths and both themes, with one page
-load for static gates and separate state-driving tests. They read inputs
-inside tests, not at module load.
-
-`frontend/tests/console-route-scope.spec.ts` checks explicit named files, not a
-repository walk. A quoted literal equal to one of the six band hrefs names that
-route. A route expectation or driver may name only its own route. Their indexes
-and the seventeen cross-route spec bodies name no addresses. Other named specs
-may name at most one route, except `console-machine-page.spec.ts`, whose built
-page checks belong to Hardware. The same guard refuses define use outside its
-three owners and direct reader imports outside the loader or route files.
-New consumers must join its named input inventory.
+Tests use named fixtures and the explicit retained-spec inventory, not a
+repository walk. Adding a route does not require another browser driver,
+expectation matrix or suite of presentation assertions.
 
 ### A label is not an address
 
@@ -147,10 +115,8 @@ or opening auxiliary verb. `What`, `Which` and `How` are valid when they name
 the content rather than ask a question. A grammatical title must still explain
 what the operator learns; mechanism names alone are not enough.
 
-Preserve protected copy such as `What the model did` on Summaries. The
-[title checks](../../../frontend/tests/console-title.spec.ts) and
-[summary-page checks](../../../frontend/tests/console-model.spec.ts) hold labels
-and stable addresses together. An approved copy change updates both.
+Preserve protected copy such as `What the model did` on Summaries. An approved
+copy change must keep stable addresses.
 
 ## Judgement distinguishes published merges from judging evidence
 

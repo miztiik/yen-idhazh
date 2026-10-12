@@ -111,9 +111,7 @@ function queryFor(ledgers: readonly LedgerName[], days: number, from: string | n
 		params.set('days', String(days));
 	}
 	if (encodedQuestion !== null) params.set('q', encodedQuestion);
-	// Commas delimit ledger names and are legal query characters; escaping each
-	// delimiter needlessly spends the fixed request-target budget as ledgers join.
-	return params.toString().replaceAll('%2C', ',');
+	return params.toString();
 }
 
 export async function explorerAddress(input: ExplorerAddressInput): Promise<ExplorerAddress> {

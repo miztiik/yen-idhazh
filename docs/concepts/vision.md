@@ -89,12 +89,16 @@ Note what is *not* what bounds a day: a reader's clock. The two-minute budget is
 
 ## Design rationale
 
-**"It earns no design budget" was struck from the operator paragraph on 2026-08-29.** The split between the two audiences is real and stays; what was wrong was turning a priority order into a permanent licence to under-build. The reader coming first does not make the operator's instrument exempt from being readable, and the sentence was doing that work: measured 2026-08-28, the console rendered a 10-column table at 627px, drew three charts at 164px each, carried seven horizontal scrollbars and ran to 6562px of page height, all inside a 672px column on a 1209px screen. Each of those passed review because the doctrine said the surface did not have to be good. The rejected alternative was leaving it and fixing the console anyway; the sentence would have been cited against the next such fix, exactly as it had been cited against this one. Authority: owner, 2026-08-29. The replacement wording, and the sufficiency checks that now bind every surface, are in [design-system.md](design-system.md).
+The reading experience has priority, but that does not excuse an unreadable
+operator surface. Design review asks whether a changed surface communicates its
+purpose and remains usable; its details are in [design-system.md](design-system.md).
+This review uses a representative view. It does not require automated gates for
+every panel or presentation.
 
 ## See also
 
 - [principles.md](principles.md) - the beliefs these constraints turn into daily practice.
-- [design-system.md](design-system.md) - the visual language, and the sufficiency checks every surface passes.
+- [design-system.md](design-system.md) - the visual language and representative design review.
 - [pipeline-loop.md](pipeline-loop.md) - the stages a single article passes through.
 - [evaluation.md](evaluation.md) - how a summary is scored, and what each metric cannot see.
 - [digest.md](digest.md) - what a reader actually gets.

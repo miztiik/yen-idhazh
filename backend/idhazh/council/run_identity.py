@@ -12,13 +12,14 @@ this one is only a name, so it needs no state at all.
 
 from __future__ import annotations
 
-import argparse
 from datetime import UTC, datetime
 from typing import Final
 
 from pydantic import TypeAdapter, ValidationError
 
 from idhazh.contracts.base import RunId
+from idhazh.contracts.council_events import CouncilProgram, RunIdentified
+from idhazh.council import event_log, outcome
 
 #: The one check that the minted name is a run id every contract will accept.
 #: Held against the annotated type rather than against a second copy of its
@@ -73,13 +74,16 @@ def council_run_id(*, opened_on: str, platform_run_id: str) -> str:
         return str(_A_RUN_ID.validate_python(minted))
     except ValidationError as error:
         raise SystemExit(
-            f"'{minted}' is not a run id, so every row this night wrote would be "
-            f"refused by its own contract: {error}"
+            "the minted name is not a run id, so the council cannot file rows"
         ) from error
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    return outcome.run(CouncilProgram.IDENTITY, lambda: _main(argv))
+
+
+def _main(argv: list[str] | None = None) -> int:
+    parser = outcome.Parser(description=__doc__)
     parser.add_argument(
         "--platform-run-id",
         required=True,
@@ -90,9 +94,8 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     args = parser.parse_args(argv)
-    minted = council_run_id(
-        opened_on=opened_today(), platform_run_id=str(args.platform_run_id)
-    )
+    minted = council_run_id(opened_on=opened_today(), platform_run_id=str(args.platform_run_id))
+    event_log.emit(RunIdentified(run_id=minted))
     print(f"run_id={minted}")
     return 0
 

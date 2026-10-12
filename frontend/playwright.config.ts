@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { FRONTEND_GROUPS, groupedSpecs, type FrontendGroup } from './scripts/test-groups';
+import { FRONTEND_GROUPS, groupedSpecs } from './scripts/test-groups.ts';
 
 /**
  * The browser suite runs against a real build, not a dev server.
@@ -77,59 +77,11 @@ export function previewPort(worktree: string, env: Record<string, string | undef
 // root.
 const PORT = previewPort(dirname(fileURLToPath(import.meta.url)), process.env);
 
-/**
- * The operator console's own specs, skipped when nothing it renders has moved,
- * and the panel captures and gates, skipped when nothing a panel is drawn from
- * has moved.
- *
- * The shared selector decides both from all changed paths. Shared and unknown
- * inputs include console coverage; main always runs every group. Test counts
- * are discovered rather than copied here.
- *
- * Skipping is opt-in through the environment and never the default: a bare
- * `npm run test:browser` runs all browser groups. CI separately declines bulk
- * review pictures through `SKIP_PANEL_CAPTURES`; panel assertions still run.
- * The build-independent group runs through `npm run test:logic` without a server.
- */
-const SKIP_CONSOLE = (process.env.SKIP_CONSOLE_SUITE ?? '').trim() === 'true';
-const SKIP_PANELS = (process.env.SKIP_PANELS_SUITE ?? '').trim() === 'true';
-const SKIP_CAPTURES = (process.env.SKIP_PANEL_CAPTURES ?? '').trim() === 'true';
 const GROUPS = groupedSpecs(fileURLToPath(new URL('./tests/', import.meta.url)));
-
-/** A group's own spec files, as the patterns `testIgnore` skips them by.
- *
- * The group's list rather than a pattern over names, so a spec is skipped
- * exactly when the group that owns it is - a name pattern and a group inventory
- * are two answers to one question, and only the inventory is checked.
- */
-function specsOf(group: FrontendGroup): string[] {
-	return GROUPS[group].map((filename) => `**/${filename}`);
-}
-
-/**
- * The one spec this config may never run, whatever is asked for on the command
- * line.
- *
- * The browser gate serves the canary day out of `frontend/build`, and
- * `whole-day.spec.ts` is a question about a real published day at day scale -
- * six hundred stories and forty-three drawings against the canary's eight and
- * two. Handed the canary it refuses to load rather than reporting a pass, so
- * leaving it in this file set would turn the gate red. `testIgnore` filters
- * before a command-line argument does, so naming the file cannot reach it
- * either; `playwright.whole-day.config.ts` is the only way in.
- */
-const WHOLE_DAY = /whole-day\.spec\.ts$/;
-
-export function ignoredBrowserSpecs(
-	skipConsole: boolean, skipPanels: boolean, skipCaptures: boolean
-): (string | RegExp)[] {
-	return [
-		WHOLE_DAY,
-		...(skipConsole ? specsOf('console') : []),
-		...(skipPanels ? specsOf('panels') : []),
-		...(skipCaptures ? ['**/panel-captures.spec.ts'] : [])
-	];
-}
+// CI defers only the default console selection. An explicit --project mapping
+// (including test:changed's groups) remains authoritative.
+const EXPLICIT_PROJECTS = process.argv.some((arg) => arg === '--project' || arg.startsWith('--project='));
+const SKIP_CONSOLE = process.env.SKIP_CONSOLE_SUITE === 'true' && !EXPLICIT_PROJECTS;
 
 /** How many spec files run at once.
  *
@@ -155,7 +107,6 @@ export default defineConfig({
 	testDir: 'tests',
 	globalSetup: './tests/support/check-addons.ts',
 	outputDir: 'test-results/browser',
-	testIgnore: ignoredBrowserSpecs(SKIP_CONSOLE, SKIP_PANELS, SKIP_CAPTURES),
 	fullyParallel: false,
 	forbidOnly: Boolean(process.env.CI),
 	retries: 0,
@@ -174,17 +125,12 @@ export default defineConfig({
 		serviceWorkers: 'block',
 		trace: 'retain-on-failure'
 	},
-	projects: FRONTEND_GROUPS.filter((name) => name !== 'logic').map((name) => ({
+	projects: FRONTEND_GROUPS.filter((name) => name !== 'logic' && (name !== 'console' || !SKIP_CONSOLE)).map((name) => ({
 		name,
 		testMatch: GROUPS[name].map((filename) => `**/${filename}`),
 		// The reader and query-worker specs install the worker that obeys the
 		// shared kill switch, so neither runs beside the offline retirement test.
 		...(['reader', 'console'].includes(name) ? { dependencies: ['offline'] } : {}),
-		// Twelve page loads of captures sit in one file, and one file runs in one
-		// worker unless its tests may spread. Each capture test writes only its own
-		// images, so they may, and the last one to finish costs one page load
-		// rather than all twelve queued behind each other.
-		...(name === 'panels' ? { fullyParallel: true } : {}),
 		use: { ...devices['Desktop Chrome'] }
 	})),
 	webServer: {
