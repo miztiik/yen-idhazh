@@ -5,6 +5,7 @@
     {
       "identity": {
         "colour_stop": 1,
+        "fingerprint_version": null,
         "folded": [],
         "key": "3a7f0b1c2d4e5f60",
         "name": "AMD EPYC 7763"
@@ -14,6 +15,7 @@
     {
       "identity": {
         "colour_stop": 2,
+        "fingerprint_version": null,
         "folded": [],
         "key": "c81d9e0a1b2c3d4e",
         "name": "Intel Xeon Platinum 8573C"
@@ -25,6 +27,14 @@
   "fleet_rows": 214,
   "machines": [
     {
+      "cpu_allowed_processors": null,
+      "cpu_logical_processors": null,
+      "cpu_observed_mhz": null,
+      "cpu_physical_cores": null,
+      "cpu_quota_cores": null,
+      "cpu_quota_state": null,
+      "cpu_reported_max_mhz": null,
+      "cpu_target_measured_at": null,
       "flags": [
         {
           "name": "amx_bf16",
@@ -78,6 +88,7 @@
       "flags_recorded": true,
       "identity": {
         "colour_stop": 1,
+        "fingerprint_version": null,
         "folded": [],
         "key": "3a7f0b1c2d4e5f60",
         "name": "AMD EPYC 7763"
@@ -99,6 +110,14 @@
       "source": "fingerprint"
     },
     {
+      "cpu_allowed_processors": null,
+      "cpu_logical_processors": null,
+      "cpu_observed_mhz": null,
+      "cpu_physical_cores": null,
+      "cpu_quota_cores": null,
+      "cpu_quota_state": null,
+      "cpu_reported_max_mhz": null,
+      "cpu_target_measured_at": null,
       "flags": [
         {
           "name": "amx_bf16",
@@ -152,6 +171,7 @@
       "flags_recorded": true,
       "identity": {
         "colour_stop": 2,
+        "fingerprint_version": null,
         "folded": [],
         "key": "c81d9e0a1b2c3d4e",
         "name": "Intel Xeon Platinum 8573C"
@@ -171,6 +191,7 @@
     {
       "identity": {
         "colour_stop": 1,
+        "fingerprint_version": null,
         "folded": [],
         "key": "3a7f0b1c2d4e5f60",
         "name": "AMD EPYC 7763"
@@ -187,6 +208,7 @@
     {
       "identity": {
         "colour_stop": 2,
+        "fingerprint_version": null,
         "folded": [],
         "key": "c81d9e0a1b2c3d4e",
         "name": "Intel Xeon Platinum 8573C"
@@ -203,6 +225,7 @@
     {
       "identity": {
         "colour_stop": 8,
+        "fingerprint_version": null,
         "folded": [],
         "key": "unrecorded",
         "name": "Machine not recorded"
@@ -217,5 +240,5 @@
       "write_tokens_per_second": 30.0
     }
   ],
-  "version": "2026-09-17"
+  "version": "2026-10-10"
 }

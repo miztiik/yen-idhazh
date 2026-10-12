@@ -53,6 +53,7 @@ def a_host(job: ServerJob, shard: int) -> HostFingerprintRow:
         job=job,
         shard=shard,
         fingerprint=f"{shard:016x}",
+        fingerprint_version=1,
         cpu_model="AMD EPYC 7763 64-Core Processor",
         measured_at="2026-09-17T06:00:00Z",
     )

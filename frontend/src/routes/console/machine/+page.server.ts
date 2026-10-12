@@ -265,19 +265,35 @@ export async function load() {
 	const jobs = fleetJobs(machine.rows);
 	const shards = counters.runs.flatMap((run) => run.reported);
 	const seen = [
-		...jobs.map((job) => ({ fingerprint: job.fingerprint, cpuModel: job.cpuModel })),
-		...shards.map((shard) => ({ fingerprint: shard.fingerprint, cpuModel: shard.cpuModel }))
+		...jobs.map((job) => ({
+			fingerprint: job.fingerprint,
+			fingerprintVersion: job.fingerprintVersion,
+			cpuModel: job.cpuModel
+		})),
+		...shards.map((shard) => ({
+			fingerprint: shard.fingerprint,
+			fingerprintVersion: shard.fingerprintVersion,
+			cpuModel: shard.cpuModel
+		}))
 	];
 	const keys = machineKeys(seen);
 	const placements: Placement[] = [
 		...jobs.map((job) => ({
-			machine: keys({ fingerprint: job.fingerprint, cpuModel: job.cpuModel }),
+			machine: keys({
+				fingerprint: job.fingerprint,
+				fingerprintVersion: job.fingerprintVersion,
+				cpuModel: job.cpuModel
+			}),
 			rate: job.rate
 		})),
 		// The counters add the shards the record never reached; their speed is the
 		// jobs' own, already counted once above.
 		...shards.map((shard) => ({
-			machine: keys({ fingerprint: shard.fingerprint, cpuModel: shard.cpuModel }),
+			machine: keys({
+				fingerprint: shard.fingerprint,
+				fingerprintVersion: shard.fingerprintVersion,
+				cpuModel: shard.cpuModel
+			}),
 			rate: null
 		}))
 	];
@@ -488,7 +504,10 @@ export async function load() {
 		fingerprints: new Map(
 			newestFingerprints
 				.filter((row) => row.job === 'work')
-				.map((row) => [row.shard, row.fingerprint])
+				.map((row) => [
+					row.shard,
+					{ fingerprint: row.fingerprint, fingerprintVersion: row.fingerprint_version }
+				])
 		),
 		ramp,
 		keys

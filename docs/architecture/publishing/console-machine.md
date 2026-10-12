@@ -142,8 +142,8 @@ memory and processor range marks, and the job clock with the weights load under
 it. They were five until 2026-09-20, and the board's own claim - a long clock at
 a quarter of its neighbour's read rate is the host - could not be checked on the
 board, because every host fact behind it was on one of four other panels. The
-row now carries the item count, the write rate, the load against the cores the
-host reported, the free swap against the swap it has, and the two range marks.
+row now carries the item count, the write rate, the load against validated online
+logical processors, the free swap against the swap it has, and the two range marks.
 Authority: Susan, 2026-09-17, decisions 1 to 3 of Row #19.
 
 **The card is an edge, not a fill.** Every quiet line in a row is
@@ -249,13 +249,11 @@ that pays for it. Rejected alternative: Fowler, Row #12.
 
 **Three costs, three instruments, and they are not interchangeable.**
 
-- **Processor time** is `cpu_busy_pct` times the processors the machine record
+- **Host busy processor time** is `cpu_busy_pct` times the processors the machine record
   names, times the item's own clock. The kernel counts every logical processor
   on one `/proc/stat` line, so the share is a share of all of them and the
-  multiplier is `threads`, never `cores`. On a machine running two threads a
-  core - which is what every committed record describes - using `cores` halves
-  every figure. `frontend/tests/console-article-cost.spec.ts` runs the same
-  arithmetic both ways and refuses the answer that used the wrong one.
+  multiplier is `cpu_logical_processors`, never target affinity, quota or
+  physical topology. Unknown counts withhold the figure rather than guessing.
 - **Model time** is `prefill_ms + decode_ms`, which the summarize stage sums
   over whatever calls the article made before the row is written. It is a total
   over the work the article needed, so nothing on this panel is keyed to how

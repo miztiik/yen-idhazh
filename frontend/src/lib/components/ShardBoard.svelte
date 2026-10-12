@@ -13,7 +13,7 @@
 	 * is what is broken, and the answer it exists to give is work or the host: a
 	 * long clock at a normal read rate and a high item count is a lot of
 	 * articles, and a long clock at a quarter of its neighbour's read rate, with
-	 * load past the cores and swap falling, is the machine. Every host fact that
+	 * load past online logical processors and swap falling, is the machine. Every host fact that
 	 * answer needs is on the row. They used to be spread over four other panels,
 	 * so the board's own claim could not be checked without leaving it.
 	 *
@@ -182,7 +182,7 @@
 				data-shard-job-seconds={row.jobSeconds ?? ''}
 				data-shard-model-load-ms={row.modelLoadMs ?? ''}
 				data-shard-cpu={row.cpuModel ?? ''}
-				data-shard-cores={row.cores ?? ''}
+				data-shard-logical-processors={row.logicalProcessors ?? ''}
 				data-shard-load={row.loadMax ?? ''}
 				data-shard-mem-median={row.memory.median ?? ''}
 				data-shard-mem-max={row.memory.max ?? ''}
@@ -309,7 +309,7 @@
 					</p>
 
 					<!-- No cell label on the load: the bar prints its own at every
-					     width, and the sentence that replaces it when the cores are
+					     width, and the sentence that replaces it when the processor count is
 					     unknown names itself too. -->
 					{#if row.load.empty}
 						<span class="unit absent" data-shard-cell="load">
@@ -323,9 +323,10 @@
 								marks={row.load}
 								label="Shard {row.shard} load"
 								valueText={rate(row.loadMax)}
-								targetText="one-minute load, against {row.cores} {row.cores === 1
-									? 'core'
-									: 'cores'} - past that the work is queueing"
+								targetText="one-minute load, against {row.logicalProcessors} online logical {row
+									.logicalProcessors === 1
+									? 'processor'
+									: 'processors'} - past that suggests host pressure, including runnable or uninterruptible work"
 								emptyNote="This shard recorded no load."
 							/>
 						</span>
@@ -491,7 +492,8 @@
 						row.cpu,
 						percent,
 						' busy'
-					)}, load {rate(row.loadMax)} on {row.cores ?? 'an unrecorded number of'} cores,
+					)}, load {rate(row.loadMax)} on {row.logicalProcessors ??
+						'an unrecorded number of'} online logical processors,
 					{row.swapState === 'measured'
 						? `${gib(row.swapFreeBytes)} swap free of ${gib(row.swapTotalBytes)}`
 						: row.swapState === 'none'

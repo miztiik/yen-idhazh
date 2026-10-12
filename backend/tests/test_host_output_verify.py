@@ -14,7 +14,6 @@ from typing import Any
 import pyarrow
 import pyarrow.parquet
 import pytest
-from pydantic import ValidationError
 
 from idhazh.contracts.file_envelope import FileEnvelope, Format
 from idhazh.contracts.host_output import (
@@ -263,13 +262,15 @@ def test_original_legacy_digest_precedes_normalization(
     assert path.read_bytes() == broken
 
 
-def test_generated_jsonl_exercises_only_the_native_candidate_envelope(tmp_path: Path) -> None:
+def test_generated_jsonl_is_admitted_by_the_shared_truthful_envelope(tmp_path: Path) -> None:
     plan, completion, path, data = evidence(tmp_path, native_candidate=True)
     result = verify(tmp_path, plan, completion)
     assert result.files[0].envelope.writer == "idhazh_rust.ledger.json_lines"
     assert result.files[0].created_by is None
-    with pytest.raises(ValidationError):
-        FileEnvelope.from_metadata(plan.files[0].envelope.as_metadata())
+    assert (
+        FileEnvelope.from_metadata(plan.files[0].envelope.as_metadata()).writer
+        == "idhazh_rust.ledger.json_lines"
+    )
     assert path.read_bytes() == data
 
 

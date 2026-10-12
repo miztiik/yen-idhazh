@@ -22,6 +22,7 @@ from pydantic import BaseModel, ValidationError
 from idhazh.contracts import host_events
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.host_events import HostEvent, HostSessionManifest, HostWindowCells
+from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.host_output import (
     HOST_OUTPUT_VERSION,
     CandidateFileEnvelope,
@@ -36,6 +37,7 @@ from idhazh.contracts.host_output import (
 )
 from idhazh.ledger import json_lines, parquet
 from idhazh.ledger.arrow_schema import ColumnType
+from idhazh.ledger.persist import load, load_stored
 from idhazh.telemetry.host_output_verify import (
     VerificationLimits,
     host_output_columns,
@@ -108,6 +110,9 @@ def test_exact_native_bytes_pass_candidate_actual_page_admission(
     expected = CorrectedHostFingerprintRow.model_validate(
         expected.model_dump() | {"fingerprint": fingerprint_v2(expected), "fingerprint_version": 2}
     )
+    assert load([path], model=HostFingerprintRow) == [expected]
+    assert load_stored([path], model=HostFingerprintRow)[0].row == expected
+    assert path.read_bytes() == original
     assert verified.rows[0].model_dump(exclude={"ledger", "covers", "attempt", "unit_id"}) == expected.model_dump()
     assert verified.envelope.unit_id == host_unit_id(covers=expected.date, identity=plan.publication_identity)
     assert verified.envelope.file_id == host_file_id(

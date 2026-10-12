@@ -19,7 +19,7 @@ it wants, a filter:
 
 ```ts
 const result = await slice('host-fingerprint', {
-	columns: ['date', 'job', 'shard', 'cores'],
+	columns: ['version', 'date', 'job', 'shard', 'fingerprint_version', 'cpu_logical_processors', 'cores', 'threads', 'mhz_max', 'mhz_at_probe'],
 	from: '2026-09-01',
 	to: '2026-09-30',
 	where: [{ column: 'job', op: '=', value: 'work' }]

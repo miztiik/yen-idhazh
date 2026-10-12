@@ -196,8 +196,8 @@ def test_the_row_reads_family_model_stepping_off_the_text_it_is_given() -> None:
     assert row.microcode == "0x21000283"
 
 
-def test_the_clock_is_the_mean_across_processors_and_threads_is_their_count() -> None:
-    """One processor's clock is not the machine's, and the count comes from the same lines."""
+def test_legacy_collector_keeps_the_average_but_does_not_invent_corrected_counts() -> None:
+    """The adapter preserves the legitimate average and withholds ambiguous counts."""
     row = silicon.read_row(
         date="2026-09-16",
         run_id="2026-09-16-1",
@@ -209,8 +209,8 @@ def test_the_clock_is_the_mean_across_processors_and_threads_is_their_count() ->
         cpuinfo=CPUINFO_XEON,
     )
 
-    assert row.threads == 2
-    assert row.mhz_at_probe == 2200.0
+    assert row.cpu_logical_processors is None
+    assert row.cpu_observed_mhz == row.mhz_at_probe == 2200.0
 
 
 def test_a_probe_size_of_zero_switches_the_bandwidth_reading_off() -> None:

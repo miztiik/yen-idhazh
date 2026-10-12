@@ -182,14 +182,14 @@ Neither table repeats the other's cells.
 | `job` | **enum**: `plan`, `work`, `assemble`, `visuals`, `runtime`, `decide`, `migrate`, `run-tasks`, `history`, `save_council_results`, `operator` | Which workflow job drew this machine. The enum is the one job vocabulary every ledger shares, so it also names writers that record no machine, such as `decide` and `operator` |
 | `shard` | int, 0+ | The shard inside that job. A single-shard job writes 0 |
 | `fingerprint` | 16 hex characters? | A digest over the cells that cannot change inside a job |
+| `fingerprint_version` | 1 or 2? | The digest algorithm; null exactly when the digest is null |
 
-**`fingerprint` is the column that makes the collection countable.** It digests
-vendor, family, model, stepping, model name, cores, threads, L3 and flags - and
-nothing else. Bandwidth, clock and uptime move between two jobs on identical
-machines, so including them would give every job its own value and the column
-would count nothing. Two draws of one kind of machine carry one id, which is what
-lets a query ask "how often do we get this machine" without matching model-name
-strings by hand.
+**`fingerprint` is countable only with `fingerprint_version`.** Historical
+algorithm 1 included the old core/thread estimates. Algorithm 2 digests vendor,
+family, model, stepping, model name, L3 and watched flags only. Counts, target
+constraints, frequency, placement and clocks are excluded. Consumers group by
+the pair `(fingerprint_version, fingerprint)`; equal digest text under versions
+1 and 2 does not establish continuity.
 
 **Every value of `job` is that job's own id in its workflow file, lowercase,
 except `operator`.** A reader goes from a row to the steps that wrote it with
@@ -223,8 +223,12 @@ that moves without anything else moving.
 | Column | Type | What it is | What it is for |
 | --- | --- | --- | --- |
 | `flags` | string | The watched instruction-set flags, sorted, space joined | **The cell that tracks prefill.** llama.cpp dispatches to a different kernel when the wider instructions are there |
-| `cores` | int? | Physical cores | Constant at 2 on every machine drawn so far |
-| `threads` | int? | Logical processors | Constant at 4 so far |
+| `cpu_physical_cores` | int? | Unique validated package/core pairs across online CPUs | Visible topology; unknown when topology is partial or contradictory |
+| `cpu_logical_processors` | int? | Validated online CPU cardinality | Denominator for whole-machine load and busy processor-seconds |
+| `cpu_allowed_processors` | int? | Online processors allowed to the measured target by affinity and effective cpuset | Target constraint, never the monitor's own mask |
+| `cpu_quota_cores` | float? | Minimum finite target cgroup quota/period across visible ancestry | Fractional and separate from affinity |
+| `cpu_quota_state` | `finite`, `unlimited`, `unavailable`? | Meaning of the target quota read | Distinguishes verified unlimited from unreadable and unmeasured |
+| `cpu_target_measured_at` | UTC timestamp? | Frozen target-constraint capture | Null when no target was measured |
 | `l3_cache_bytes` | int? | L3 as the kernel reports it | Ranges 32 MiB to 480 MiB across the fleet, and **it is what sizes the bandwidth probe.** Read it beside `memcpy_probe_mib` |
 
 **`flags` holds only the flags in `WATCHED_FLAGS`**, which is a fixed tuple in
@@ -355,8 +359,8 @@ is not a peak that only rises.
 
 | Column | Type | What it is | What it is for |
 | --- | --- | --- | --- |
-| `mhz_max` | float? | `CPU max MHz` | The ceiling the host publishes, where it publishes one. **Empty on all 65 committed rows, measured 2026-09-21**, so nothing may be drawn as a share of it |
-| `mhz_at_probe` | float? | Mean `cpu MHz` across processors at probe time | **Not a reading under load.** The probe runs before the job's heaviest step, so this says what the machine idles at. 2,500 to 3,420 MHz across the committed rows, median 2,665 |
+| `cpu_observed_mhz` | float? | Mean valid `cpu MHz` sample across online processors | A point sample, never a sustained rate; legitimate legacy averages migrate here |
+| `cpu_reported_max_mhz` | float? | Maximum validated `cpuinfo_max_freq` policy value with full online coverage | Reported hardware maximum, never inferred from the observed sample |
 | `boot_seconds` | float? | Uptime when the probe ran | A small number is a freshly started machine with a cold page cache; a large one was pooled and handed to us. **Every machine drawn so far is the first case**: 156 s to 2,277 s, median 227 s, over 65 rows |
 | `memcpy_gib_s` | float? | Large-block copy rate, bytes read plus written | **Decode is bandwidth bound and this is the only bandwidth reading anywhere** |
 | `memcpy_probe_mib` | int? | The buffer each side of the copy used, as used rather than as configured | Says whether `memcpy_gib_s` measured memory or cache |

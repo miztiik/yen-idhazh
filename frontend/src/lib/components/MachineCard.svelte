@@ -54,6 +54,13 @@
 	const where = $derived(card.where);
 	/** The speed the edge colour stands for, so the colour is never its only carrier. */
 	const speed = $derived(speedWords(card.identity));
+	const algorithm = $derived(
+		card.identity.fingerprintVersion === 1
+			? 'Historical fingerprint v1'
+			: card.identity.fingerprintVersion === 2
+				? 'Corrected fingerprint v2'
+				: 'Fingerprint algorithm unknown'
+	);
 	const placed = $derived(
 		where === null
 			? []
@@ -79,6 +86,9 @@
 	style="--machine-edge: {card.identity.colour}"
 >
 	<h3 class="name">{card.identity.name}</h3>
+	<p class="part" data-machine-fingerprint-version={card.identity.fingerprintVersion ?? 'unknown'}>
+		{algorithm}
+	</p>
 
 	{#if speed !== null}
 		<p class="part" data-machine-speed-words>
@@ -119,6 +129,54 @@
 	{/if}
 
 	{#if card.source === 'fingerprint'}
+		<dl class="cpu-readings" data-machine-cpu-readings>
+			<div>
+				<dt>Visible physical cores</dt>
+				<dd data-machine-physical-cores={card.physicalCores ?? ''}>{card.physicalCores ?? 'Unknown'}</dd>
+			</div>
+			<div>
+				<dt>Online logical processors</dt>
+				<dd data-machine-logical-processors={card.logicalProcessors ?? ''}>
+					{card.logicalProcessors ?? 'Unknown'}
+				</dd>
+			</div>
+			<div>
+				<dt>Target-allowed processors</dt>
+				<dd data-machine-allowed-processors={card.allowedProcessors ?? ''}>
+					{card.allowedProcessors ?? 'Unknown'}
+				</dd>
+			</div>
+			<div>
+				<dt>Target CPU quota</dt>
+				<dd data-machine-quota-state={card.quotaState ?? 'not-measured'}>
+					{card.quotaState === 'finite' && card.quotaCores !== null
+						? `${card.quotaCores} cores`
+						: card.quotaState === 'unlimited'
+							? 'Unlimited'
+							: card.quotaState === 'unavailable'
+								? 'Unavailable'
+								: 'Not measured'}
+				</dd>
+			</div>
+			<div>
+				<dt>Observed frequency</dt>
+				<dd data-machine-observed-mhz={card.observedMhz ?? ''}>
+					{card.observedMhz === null ? 'Unknown' : `${Math.round(card.observedMhz)} MHz average`}
+				</dd>
+			</div>
+			<div>
+				<dt>Reported maximum</dt>
+				<dd data-machine-reported-max-mhz={card.reportedMaxMhz ?? ''}>
+					{card.reportedMaxMhz === null ? 'Unknown' : `${Math.round(card.reportedMaxMhz)} MHz`}
+				</dd>
+			</div>
+		</dl>
+		<p class="reading" data-machine-target-measured-at={card.targetMeasuredAt ?? ''}>
+			{card.targetMeasuredAt === null
+				? 'Target CPU constraints were not measured.'
+				: `Target CPU constraints captured ${card.targetMeasuredAt}.`}
+		</p>
+
 		<div class="bar" data-machine-bar="l3" data-machine-bar-state={card.l3Bar.state}>
 			{#if card.l3Bar.state === 'drawn'}
 				<div
@@ -177,7 +235,7 @@
 			{/if}
 		</div>
 
-		<p class="reading" data-machine-clock={card.mhzAtProbe ?? ''}>{clockSentence(card)}</p>
+		<p class="reading" data-machine-clock={card.observedMhz ?? ''}>{clockSentence(card)}</p>
 		<p class="reading" data-machine-uptime={card.bootSeconds ?? ''}>{uptimeSentence(card)}</p>
 	{/if}
 
@@ -229,6 +287,24 @@
 		margin: var(--space-3) 0 0;
 		padding: 0;
 		list-style: none;
+	}
+
+	.cpu-readings {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(min(9rem, 100%), 1fr));
+		gap: var(--space-1) var(--space-3);
+		margin: var(--space-3) 0 0;
+	}
+
+	.cpu-readings dt {
+		font-size: var(--text-xs);
+		color: var(--color-text-tertiary);
+	}
+
+	.cpu-readings dd {
+		margin: 0;
+		font-size: var(--text-xs);
+		color: var(--color-text-secondary);
 	}
 
 	/* Same width present or absent, so the row reads as a set with gaps in it

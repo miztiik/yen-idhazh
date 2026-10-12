@@ -306,15 +306,9 @@ def verify_result(
         raise ValueError("native event and the same stored bytes disagree")
     path = resolve(workspace, f"{session.roots.native}/{stored.relative_path}")
     before = file_evidence(workspace, path, native.verification_limits.max_file_bytes)
-    try:
-        load_stored([path], model=HostFingerprintRow)
-    except ValueError as error:
-        if not any(word in str(error).lower() for word in ("writer", "schema", "version")):
-            raise ValueError("shared reader rejected for an unexpected reason") from error
-    else:
-        raise ValueError(
-            "shared reader unexpectedly accepts corrected native bytes before migration"
-        )
+    shared = load_stored([path], model=HostFingerprintRow)
+    if len(shared) != 1 or shared[0].row != event.body.row:
+        raise ValueError("shared reader changed the corrected native host row")
     if before != file_evidence(workspace, path, native.verification_limits.max_file_bytes):
         raise ValueError("comparison modified native bytes")
     return event.body

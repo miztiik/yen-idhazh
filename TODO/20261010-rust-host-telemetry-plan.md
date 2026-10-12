@@ -68,9 +68,9 @@ Table D - authoritative execution queue
 | D3 | 3 | Produce machine probe and clock events in Rust | 12 | F | DONE | rust-d3-producers | - | owner; producer recovery and correctness workers |
 | D4 | 4 | Produce window and job resource events in Rust | 3 | D | DONE | rust-d4-resources | - | owner; bounded resource monitor, shutdown/fault corrections and real Linux lifecycle complete; candidate gates pass; production collectors unchanged; live-cost evidence belongs to D5 |
 | D15 | 15 | Build bounded historical inventory and dry-run migration | 4 | E | DONE | rust-d15-history | - | owner; disjoint path-portability and current-contract leaves integrated; 139 bounded D15 cases plus 5 current-band binding cases pass, Linux-platform typing passes 752 files; merge requires exact green Linux candidate; actual migrated-consumer historical evidence remains after D13/D14 |
-| D5 | 5 | Verify corrected Rust in an artifact-only YAML workflow | 15 | E | IN-FLIGHT | rust-d5-linux-evidence | rust-d5-linux-evidence | Local readiness: contract 2540339d0; 37 focused, 414 selected backend and 78 tooling cases pass; Windows/Linux mypy, Rust fmt/clippy/tests, Ruff and Svelte checks pass. Stock-ubuntu evidence and exact-head CI remain pending. |
-| D13 | 13 | Migrate shared schemas and readers before writers | 5 | F | PENDING | - | - | - |
-| D14 | 14 | Migrate contracted backend and frontend consumers | 5 | F | PENDING | - | - | - |
+| D5 | 5 | Verify corrected Rust in an artifact-only YAML workflow | 15 | E | DONE | rust-d5-linux-evidence | #1561 | Genuine stock Linux evidence passed run 38183181142 at `93df6b4d9`; exact native files and receipts are the D13/D14 reader oracle. |
+| D13 | 13 | Migrate shared schemas and readers before writers | 5 | F | DONE | rust-d13-d14-schema-consumers | - | owner; shipped atomically with D14 |
+| D14 | 14 | Migrate contracted backend and frontend consumers | 5 | F | DONE | rust-d13-d14-schema-consumers | - | owner; shipped atomically with D13 |
 | D6 | 6 | Add inactive event emitters at real production boundaries | 13, 14 | F | PENDING | - | - | - |
 | D8 | 8 | Expose and test the independent memory off control | 6 | G | PENDING | - | - | - |
 | D16 | 16 | Verify evidence and record unattended adoption authority | 8, 5, 14, 15 | H | PENDING | - | - | - |
@@ -656,6 +656,7 @@ Table AB - Row 9 rejected alternatives
   - `backend/rust/host-telemetry/tests/parquet.rs`
   - `backend/rust/host-telemetry/tests/jsonl.rs`
   - `backend/tests/contracts/test_rust_host_file_parity.py`
+  - `backend/tests/test_host_output_verify.py`
   - `tests/fixtures/host-events/file-parity.json`
   - `.github/workflows/ci.yml`
   - `frontend/scripts/test-scope.ts`
@@ -829,23 +830,23 @@ Table AK - Row 12 rejected alternatives
   - `backend/idhazh/contracts/file_envelope.py`
   - `backend/idhazh/contracts/host_fingerprint.py`
   - `backend/idhazh/contracts/host_output.py`
-  - `backend/idhazh/contracts/__init__.py`
+  - `backend/idhazh/contracts/host_migration.py`
   - `backend/idhazh/ledger/persist.py`
-  - `backend/idhazh/ledger/raw_files.py`
-  - `backend/idhazh/ledger/ledger_files.py`
-  - `backend/utilities/migrate_host_fingerprints.py`
-  - `backend/tests/ledger/test_persist.py`
-  - `backend/tests/ledger/test_arrow_schema.py`
-  - `backend/tests/contracts/test_schema_drift.py`
-  - `backend/tests/contracts/test_host_fingerprint_migration.py`
-  - `backend/tests/test_host_fingerprint_migration.py`
+  - `backend/idhazh/telemetry/host_evidence_comparison.py`
+  - `backend/idhazh/telemetry/host_history_files.py`
+  - `backend/idhazh/telemetry/host_history_migration.py`
+  - `backend/idhazh/telemetry/host_history_paths.py`
+  - `backend/idhazh/telemetry/host_output_verify.py`
   - `backend/tests/contracts/test_host_output.py`
   - `backend/tests/contracts/test_rust_host_file_parity.py`
-  - `backend/tests/test_rust_host_reader_compatibility.py`
+  - `backend/tests/ledger/test_persist.py`
   - `docs/architecture/contracts/persistence.md`
   - `docs/architecture/contracts/schemas.md`
   - `docs/reference/host-metrics.md`
   - `docs/architecture/publishing/host-events.md`
+  - `tests/fixtures/contracts/host-fingerprint-row/a-machine-that-reported-nothing.json`
+  - `tests/fixtures/contracts/host-fingerprint-row/every-reading-taken.json`
+  - `tests/fixtures/contracts/host-fingerprint-row/the-clock-a-job-kept.json`
   - `TODO/20261010-rust-host-telemetry-plan.md`
 - **Acceptance gates - local:** A11's separate implementation instruction is required; D1 settles design only, without another design-confirmation gate. Selected schema/Arrow/CSV/reader tests read exact Row 5 native files through `load`/`load_stored`, footer/raw settlement and generated compaction. Legacy files/unchanged Python constructors normalize through AN without invented counts. Verify original digests before normalization; mixed/unknown schemas and writer/container mismatches fail.
 - **Acceptance gates - CI:** Full contract/ledger suites, native/Python cross-read fixtures, metadata/footer and projected CSV/frontend comparisons. Test `render_renamed`: a file re-rendered by Python must record Python's actual writer/version, preserving original row identity but not false codec provenance.
@@ -905,34 +906,16 @@ Table AO - fingerprint and ledger identity declaration
 
 - **Scope:** Deliver the contracted backend/Arrow/CSV/index/publish and frontend reader, fleet, machine/page/card/canary migrations together with Row 13, without correcting legacy Python collectors.
 - **Files touched:**
-  - `backend/idhazh/contracts/host_fingerprint.py`
   - `backend/idhazh/contracts/machine_panels.py`
-  - `backend/idhazh/ledger/persist.py`
-  - `backend/idhazh/telemetry/publish/machine.py`
-  - `backend/idhazh/telemetry/publish/console_band.py`
-  - `backend/utilities/build_canary_day.py`
-  - `backend/tests/ledger/_fixtures.py`
-  - `backend/tests/ledger/test_arrow_schema.py`
-  - `backend/tests/ledger/test_persist.py`
-  - `backend/tests/ledger/test_raw_files.py`
-  - `backend/tests/ledger/test_ledger_files.py`
-  - `backend/tests/ledger/test_published_columns.py`
-  - `backend/tests/contracts/test_column_readers.py`
-  - `backend/tests/contracts/test_frontend_field_set.py`
-  - `backend/tests/contracts/test_frontend_vocabularies.py`
   - `backend/tests/contracts/test_machine_join.py`
-  - `backend/tests/contracts/test_machine_panels.py`
-  - `backend/tests/contracts/test_ledger_index.py`
-  - `backend/tests/contracts/test_ledger_door_fixture.py`
-  - `backend/tests/test_console_payloads_producer.py`
-  - `backend/tests/pipeline/test_publish_window.py`
-  - `backend/tests/gardener/tasks/test_compaction_periods.py`
-  - `backend/tests/gardener/tasks/test_compaction_years.py`
+  - `backend/tests/contracts/test_panel_queries.py`
+  - `backend/tests/ledger/test_published_columns.py`
   - `backend/tests/test_silicon.py`
-  - `backend/tests/test_job_machine.py`
-  - `tests/fixtures/contracts/host-fingerprint-row/a-machine-that-reported-nothing.json`
-  - `tests/fixtures/contracts/host-fingerprint-row/every-reading-taken.json`
-  - `tests/fixtures/contracts/host-fingerprint-row/the-clock-a-job-kept.json`
+  - `docs/architecture/publishing/console-machine.md`
+  - `docs/architecture/publishing/telemetry-series.md`
+  - `docs/architecture/publishing/how-the-query-door-answers-a-panel.md`
+  - `frontend/scripts/build-canary.mjs`
+  - `frontend/src/lib/data/host-fingerprint.ts`
   - `frontend/src/lib/server/host-fingerprint.ts`
   - `frontend/src/lib/server/machine-counters.ts`
   - `frontend/src/lib/charts/fleet.ts`
@@ -941,35 +924,27 @@ Table AO - fingerprint and ledger identity declaration
   - `frontend/src/lib/charts/machine.ts`
   - `frontend/src/lib/charts/machine-split.ts`
   - `frontend/src/lib/console/machine/article-cost.ts`
-  - `frontend/src/lib/console/machine/processor-lost.ts`
   - `frontend/src/lib/components/MachineCard.svelte`
   - `frontend/src/lib/components/ShardBoard.svelte`
   - `frontend/src/lib/components/MemoryBoard.svelte`
-  - `frontend/src/lib/console/machine/MachineCardsPanel.svelte`
-  - `frontend/src/lib/console/machine/FleetDots.svelte`
-  - `frontend/src/lib/console/machine/PlatformMixPanel.svelte`
+  - `frontend/src/lib/console/machine/ArticleCostPanel.svelte`
+  - `frontend/src/lib/console/queries/machine.ts`
   - `frontend/src/routes/console/machine/+page.server.ts`
-  - `frontend/src/routes/console/machine/+page.svelte`
-  - `frontend/scripts/build-canary.mjs`
   - `frontend/tests/support/machine-rows.ts`
+  - `frontend/tests/support/ledger-lifecycle.ts`
+  - `frontend/tests/console-article-cost.spec.ts`
+  - `frontend/tests/console-canary-host-halves.spec.ts`
   - `frontend/tests/console-machine.spec.ts`
-  - `frontend/tests/console-machine-data.spec.ts`
-  - `frontend/tests/console-machine-page.spec.ts`
   - `frontend/tests/console-machine-cards.spec.ts`
   - `frontend/tests/console-machine-panels.spec.ts`
   - `frontend/tests/console-machine-split.spec.ts`
   - `frontend/tests/console-shard-board.spec.ts`
   - `frontend/tests/console-memory-board.spec.ts`
   - `frontend/tests/platform-mix.spec.ts`
-  - `frontend/tests/console-article-cost.spec.ts`
-  - `frontend/tests/ledger-door.spec.ts`
   - `frontend/tests/ledger-rows.spec.ts`
-  - `frontend/tests/ledger-ranges.spec.ts`
-  - `docs/reference/host-metrics.md`
-  - `docs/architecture/publishing/console-machine.md`
-  - `docs/architecture/publishing/telemetry-series.md`
-  - `docs/architecture/publishing/how-the-query-door-answers-a-panel.md`
+  - `tests/fixtures/contracts/machine-panels/three-machines-one-run.json`
   - `TODO/20261010-rust-host-telemetry-plan.md`
+- **Proved unchanged:** `raw_files.py`, `ledger_files.py`, Arrow/index/compaction, `publish/machine.py`, `publish/console_band.py`, `build_canary_day.py`, `slice-query.ts`, page shell/card-panel/fleet-panel components and public/state data derive the migrated contract or already project absent columns as null; focused raw/compact/index/publish/canary tests cover them without no-op edits.
 - **Acceptance gates - local:** Combined Rows 13/14 selector and focused backend contract/Arrow/CSV/compaction/publish tests, then selected frontend pure/browser tests and machine-route smoke against generated mixed-version/native fixtures. Every AN/AO column gets a real `COLUMN_READERS` beneficiary and hand-copy type/order test. Null history, missing/partial files, both algorithms, off memory and old Python constructor tests must pass without weakening them.
 - **Acceptance gates - CI:** Full existing suites plus generated raw -> compact -> indexes -> disk/browser projection and canary pipelines. Read actual native Rust output; do not modify committed `state/` or `frontend/public/` to make tests pass. All shared-copy and consumer checks pass in the same merge as schema removal.
 - **Oracle:** Every named consumer reads contracted corrected/legacy-normalized records, keeps algorithms distinct and surfaces unknown values instead of silently deriving wrong counts; this does not recover missing historical facts or authorize a historical write.

@@ -63,6 +63,8 @@ export const MACHINE_HUE: ChartToken = '--chart-1';
 /** One machine as the page draws it: a key, a name and the colour of its speed. */
 export interface MachineIdentity {
 	key: string;
+	/** Fingerprint algorithm, or null for a coarse name-only/unknown group. */
+	fingerprintVersion: 1 | 2 | null;
 	/** The machine in words. On the row, always. */
 	name: string;
 	/** The 1-based step of the speed ramp, slowest first. Null for a machine
@@ -80,11 +82,16 @@ export interface MachineIdentity {
 export interface MachineKey {
 	key: string;
 	name: string;
+	fingerprintVersion: 1 | 2 | null;
 }
 
 /** What a placement recorded about its machine. Either cell may be absent. */
-export interface MachineSeen {
+export interface VersionedFingerprint {
 	fingerprint: string | null;
+	fingerprintVersion: number | null;
+}
+
+export interface MachineSeen extends VersionedFingerprint {
 	cpuModel: string | null;
 }
 
@@ -114,26 +121,26 @@ export interface MachineSeen {
  * that cannot ship, because colour would then be the only carrier.
  */
 export function machineKeys(
-	population: readonly MachineSeen[]
+	_population: readonly MachineSeen[]
 ): (seen: MachineSeen) => MachineKey {
-	const digestsByName = new Map<string, Set<string>>();
-	for (const seen of population) {
-		if (seen.fingerprint === null || seen.fingerprint === '') continue;
-		const name = machineName(seen.cpuModel);
-		if (name === '') continue;
-		const held = digestsByName.get(name);
-		if (held === undefined) digestsByName.set(name, new Set([seen.fingerprint]));
-		else held.add(seen.fingerprint);
-	}
 	return (seen: MachineSeen): MachineKey => {
 		const name = machineName(seen.cpuModel);
 		const digest = seen.fingerprint === '' ? null : seen.fingerprint;
-		if (name === '') {
-			return digest === null ? { key: UNRECORDED_KEY, name: '' } : { key: digest, name: digest };
+		const version =
+			seen.fingerprintVersion === 1 || seen.fingerprintVersion === 2
+				? seen.fingerprintVersion
+				: null;
+		if (digest !== null && version !== null) {
+			return {
+				key: `v${version}:${digest}`,
+				name: name === '' ? digest : name,
+				fingerprintVersion: version
+			};
 		}
-		const known = digestsByName.get(name);
-		if (known !== undefined && known.size === 1) return { key: [...known][0], name };
-		return { key: digest ?? name, name };
+		if (name === '') {
+			return { key: UNRECORDED_KEY, name: '', fingerprintVersion: null };
+		}
+		return { key: `name:${name}`, name, fingerprintVersion: null };
 	};
 }
 
@@ -142,8 +149,13 @@ export function machineKeys(
  * The single-placement form of `machineKeys`, for a caller that has one row and
  * no population - a test, or a lookup that only needs the name.
  */
-export function machineKey(fingerprint: string | null, cpuModel: string | null): MachineKey {
-	return machineKeys([{ fingerprint, cpuModel }])({ fingerprint, cpuModel });
+export function machineKey(
+	fingerprintVersion: number | null,
+	fingerprint: string | null,
+	cpuModel: string | null
+): MachineKey {
+	const seen = { fingerprintVersion, fingerprint, cpuModel };
+	return machineKeys([seen])(seen);
 }
 
 /** Whether this identity is the one the ramp reserves for an absence. */
@@ -215,7 +227,10 @@ export function machineRamp(
 	placements: readonly Placement[],
 	options: { stops: number; floor: number }
 ): MachineRamp {
-	const byKey = new Map<string, { name: string; rates: number[] }>();
+	const byKey = new Map<
+		string,
+		{ name: string; fingerprintVersion: 1 | 2 | null; rates: number[] }
+	>();
 	let unrecorded = false;
 	for (const placement of placements) {
 		const { key, name } = placement.machine;
@@ -223,7 +238,11 @@ export function machineRamp(
 			unrecorded = true;
 			continue;
 		}
-		const held = byKey.get(key) ?? { name, rates: [] };
+		const held = byKey.get(key) ?? {
+			name,
+			fingerprintVersion: placement.machine.fingerprintVersion,
+			rates: []
+		};
 		if (placement.rate !== null && Number.isFinite(placement.rate)) held.rates.push(placement.rate);
 		byKey.set(key, held);
 	}
@@ -231,6 +250,7 @@ export function machineRamp(
 	const kinds = [...byKey.entries()].map(([key, held]) => ({
 		key,
 		name: held.name,
+		fingerprintVersion: held.fingerprintVersion,
 		rate: held.rates.length === 0 ? null : (median(held.rates) ?? null)
 	}));
 	const ramp = orderedRamp(
@@ -245,6 +265,7 @@ export function machineRamp(
 		return {
 			key: kind.key,
 			name: kind.name,
+			fingerprintVersion: kind.fingerprintVersion,
 			step,
 			rate: kind.rate,
 			colour: ramp === null || step === null ? RESERVED_GREY_INK : ramp.colours[step - 1]
@@ -262,6 +283,7 @@ export function machineRamp(
 		identities.push({
 			key: UNRECORDED_KEY,
 			name: UNRECORDED_NAME,
+			fingerprintVersion: null,
 			step: null,
 			rate: null,
 			colour: RESERVED_GREY_INK
