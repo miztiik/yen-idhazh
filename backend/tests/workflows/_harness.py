@@ -142,6 +142,9 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("digest.yml", "article_limit"): "^[1-9][0-9]*$",
     ("digest.yml", "faithfulness"): DISPATCH_BOOLEAN,
     ("digest.yml", "memory_profiling"): DISPATCH_CHOICE,
+    ("encoder-comparison.yml", "memory_profiling"): DISPATCH_CHOICE,
+    ("idhazh-gardener.yml", "memory_profiling"): DISPATCH_CHOICE,
+    ("llm-council.yml", "memory_profiling"): DISPATCH_CHOICE,
     ("digest.yml", "shards"): DISPATCH_CHOICE,
     ("drift.yml", "baseline_days"): "^[0-9]{1,4}$",
     ("drift.yml", "recent_days"): "^[0-9]{1,4}$",
@@ -763,7 +766,7 @@ JOB_CLOCK_STEP: Final = "What this job cost"
 
 JOB_CLOCK_COMMAND: Final = "python backend/utilities/digest_publish.py run job-clock"
 
-# Neither of the work job's two steps may fail the shard. See the comment above
+# Neither of the work job's data-preservation steps may fail the shard. See the comment above
 # them in the workflow for which loss is the cheaper one. `BaseLoader` keeps
 # every scalar a string, so the value to compare is the word, not the boolean.
 WORK_LEDGER_STEPS: Final = (RECORD_STEP, SCRAPE_STEP, JOB_CLOCK_STEP, COMMIT_STEPS["work"])
@@ -835,6 +838,7 @@ EXPRESSION_VALUES: Final = {
     "needs.plan.outputs.shards": SUBSTITUTED_SHARDS,
     "needs.draw.outputs.date": SUBSTITUTED_DATE,
     "needs.draw.outputs.run_id": SUBSTITUTED_COUNCIL_RUN,
+    "inputs.memory_profiling || 'inherit'": "inherit",
     "steps.decide.outputs.date": SUBSTITUTED_DATE,
     "steps.decide.outputs.plan_dir": SUBSTITUTED_PLAN_DIR,
     # What the `derived` step prints into `$GITHUB_OUTPUT`, computed rather than

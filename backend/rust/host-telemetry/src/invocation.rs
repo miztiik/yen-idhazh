@@ -33,6 +33,53 @@ struct IntendedResult {
     plan: crate::contracts::write_plan::HostWritePlan,
 }
 
+const DEFAULT_HOST_LEDGER_PREFIX: &str = "host-fingerprint";
+const MAX_HOST_LEDGER_PREFIX_BYTES: usize = 255;
+const MAX_HOST_LEDGER_PREFIX_SEGMENTS: usize = 8;
+const MAX_HOST_LEDGER_PREFIX_SEGMENT_BYTES: usize = 64;
+
+fn validate_output_root(output_roots: &[String], target_root: &str) -> Result<()> {
+    require(
+        output_roots.iter().any(|root| root == target_root)
+            && (target_root == "state"
+                || (target_root != "raw"
+                    && !target_root.starts_with("raw/")
+                    && !target_root.starts_with("state/"))),
+        "output root not an isolated manifest root",
+    )
+}
+
+fn host_ledger_prefix(value: Option<&str>) -> Result<Vec<String>> {
+    let value = value.unwrap_or(DEFAULT_HOST_LEDGER_PREFIX);
+    require(
+        value.len() <= MAX_HOST_LEDGER_PREFIX_BYTES,
+        "host ledger prefix exceeds byte cap",
+    )?;
+    let segments = value.split('/').collect::<Vec<_>>();
+    require(
+        !segments.is_empty() && segments.len() <= MAX_HOST_LEDGER_PREFIX_SEGMENTS,
+        "host ledger prefix has invalid depth",
+    )?;
+    for segment in &segments {
+        require(
+            !segment.is_empty() && segment.len() <= MAX_HOST_LEDGER_PREFIX_SEGMENT_BYTES,
+            "host ledger prefix has invalid segment length",
+        )?;
+        crate::contracts::host::pattern(
+            segment,
+            r"^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "invalid host ledger prefix segment",
+        )?;
+    }
+    require(
+        (segments.len() == 1 && segments[0] == DEFAULT_HOST_LEDGER_PREFIX)
+            || (segments.first() == Some(&"pipeline-tests")
+                && segments.last() == Some(&DEFAULT_HOST_LEDGER_PREFIX)),
+        "host ledger prefix is not an approved namespace",
+    )?;
+    Ok(segments.into_iter().map(str::to_owned).collect())
+}
+
 pub fn execute(verb: &str, args: BTreeMap<String, String>) -> Result<()> {
     let required = |name: &str| {
         args.get(name)
@@ -79,14 +126,8 @@ pub fn execute(verb: &str, args: BTreeMap<String, String>) -> Result<()> {
         .get("--output-root")
         .map(String::as_str)
         .unwrap_or(&manifest.output_roots[0]);
-    require(
-        manifest.output_roots.iter().any(|v| v == target_root)
-            && !target_root.starts_with("state/")
-            && target_root != "state"
-            && target_root != "raw"
-            && !target_root.starts_with("raw/"),
-        "output root not an isolated manifest root",
-    )?;
+    validate_output_root(&manifest.output_roots, target_root)?;
+    let prefix = host_ledger_prefix(args.get("--ledger-prefix").map(String::as_str))?;
     let receipt_limits = receipts::ReceiptLimits {
         max_files: config.verification_limits.max_files as usize,
         max_file_bytes: config.verification_limits.max_file_bytes as usize,
@@ -381,7 +422,6 @@ pub fn execute(verb: &str, args: BTreeMap<String, String>) -> Result<()> {
             Duration::from_millis(manifest.limits.ack_timeout_ms as u64),
         )?,
     };
-    let prefix = vec!["host-fingerprint".to_owned()];
     let publication = Publication {
         workspace: &workspace,
         target_root,
@@ -491,4 +531,208 @@ fn utc_now() -> Result<String> {
         .ok_or("UTC clock out of range")?
         .format("%Y-%m-%dT%H:%M:%SZ")
         .to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn workspace(name: &str) -> PathBuf {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("var")
+            .join(format!("d7-invocation-{name}"));
+        if root.exists() {
+            std::fs::remove_dir_all(&root).unwrap();
+        }
+        std::fs::create_dir_all(&root).unwrap();
+        root.canonicalize().unwrap()
+    }
+
+    fn run_with_prefix(name: &str, prefix: Option<&str>) -> (PathBuf, IntendedResult) {
+        let workspace = workspace(name);
+        let mut manifest: HostSessionManifest = serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../tests/fixtures/host-events/manifest.json"
+        )))
+        .unwrap();
+        manifest.output_roots = vec!["state".to_owned()];
+        manifest.named_inputs = vec![NamedHostInput {
+            name: "snapshot".to_owned(),
+            source: CaptureSource::Cpuinfo,
+            relative_path: "capture.json".to_owned(),
+        }];
+        let command = HostEvent {
+            version: manifest.version.clone(),
+            kind: EventKind::HostProbe,
+            event_id: Uuid::from_u128(501),
+            reply_to: None,
+            date: manifest.date.clone(),
+            run_id: manifest.run_id.clone(),
+            attempt: manifest.attempt,
+            job: manifest.job,
+            shard: manifest.shard,
+            session_id: manifest.session_id,
+            emitter_id: manifest.operator_emitter_id.clone(),
+            sequence: 1,
+            emitted_at: "2026-10-10T12:00:00Z".to_owned(),
+            body: EventBody::HostCommand(HostCommandBody {
+                controls: manifest.controls.clone(),
+                input_names: vec!["snapshot".to_owned()],
+                target: Some(ProcessTarget {
+                    pid: 100,
+                    start_ticks: 800,
+                }),
+                previous_result_id: None,
+            }),
+        };
+        command.validate().unwrap();
+        let replay: ProbeReplay = serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../tests/fixtures/host-events/probe-clock.json"
+        )))
+        .unwrap();
+        for (name, bytes) in [
+            ("manifest.json", serde_json::to_vec(&manifest).unwrap()),
+            ("command.json", serde_json::to_vec(&command).unwrap()),
+            ("capture.json", serde_json::to_vec(&replay).unwrap()),
+        ] {
+            std::fs::write(workspace.join(name), bytes).unwrap();
+        }
+        std::fs::write(
+            workspace.join("config.json"),
+            include_bytes!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../../config/host-telemetry-experiment.json"
+            )),
+        )
+        .unwrap();
+        let mut args = BTreeMap::from([
+            (
+                "--workspace".to_owned(),
+                workspace.to_string_lossy().into_owned(),
+            ),
+            ("--manifest".to_owned(), "manifest.json".to_owned()),
+            ("--config".to_owned(), "config.json".to_owned()),
+            ("--command".to_owned(), "command.json".to_owned()),
+            ("--snapshot".to_owned(), "snapshot".to_owned()),
+            ("--output-root".to_owned(), "state".to_owned()),
+            ("--cache-multiple".to_owned(), "2".to_owned()),
+            ("--format".to_owned(), "json".to_owned()),
+            ("--compression".to_owned(), "none".to_owned()),
+            (
+                "--result-id".to_owned(),
+                "00000000-0000-0000-0000-000000002001".to_owned(),
+            ),
+        ]);
+        if let Some(prefix) = prefix {
+            args.insert("--ledger-prefix".to_owned(), prefix.to_owned());
+        }
+        execute("probe", args).unwrap();
+        let intent_path = workspace.join(format!(
+            "{}/writes/{}.intent.json",
+            manifest.event_root, command.event_id
+        ));
+        let intended = serde_json::from_slice(&std::fs::read(intent_path).unwrap()).unwrap();
+        (workspace, intended)
+    }
+
+    #[test]
+    fn state_root_emits_host_files_under_default_and_trial_prefixes() {
+        for (name, supplied_prefix, expected_prefix) in [
+            ("default", None, vec!["host-fingerprint".to_owned()]),
+            (
+                "trial",
+                Some("pipeline-tests/host-fingerprint"),
+                vec!["pipeline-tests".to_owned(), "host-fingerprint".to_owned()],
+            ),
+        ] {
+            let (workspace, intended) = run_with_prefix(name, supplied_prefix);
+            assert_eq!(intended.plan.target_root, "state");
+            assert_eq!(intended.plan.prefix, expected_prefix);
+            assert!(
+                intended.plan.files[0]
+                    .relative_path
+                    .starts_with(&format!("raw/{}/", expected_prefix.join("/")))
+            );
+            let raw = workspace
+                .join(&intended.plan.target_root)
+                .join(&intended.plan.files[0].relative_path);
+            assert!(raw.is_file());
+            std::fs::remove_dir_all(workspace).unwrap();
+        }
+    }
+
+    #[test]
+    fn output_roots_keep_scratch_isolation_and_refuse_other_state_paths() {
+        assert!(validate_output_root(&["state".to_owned()], "state").is_ok());
+        assert!(
+            validate_output_root(
+                &["experiment-output/state".to_owned()],
+                "experiment-output/state"
+            )
+            .is_ok()
+        );
+        assert!(
+            validate_output_root(
+                &["state/raw/item-health".to_owned()],
+                "state/raw/item-health"
+            )
+            .is_err()
+        );
+        assert!(validate_output_root(&["state".to_owned()], "other-root").is_err());
+        assert!(validate_output_root(&["raw".to_owned()], "raw").is_err());
+    }
+
+    #[test]
+    fn host_ledger_prefix_accepts_only_default_or_bounded_trial_namespaces() {
+        assert_eq!(
+            host_ledger_prefix(None).unwrap(),
+            vec!["host-fingerprint".to_owned()]
+        );
+        assert_eq!(
+            host_ledger_prefix(Some("pipeline-tests/host-fingerprint")).unwrap(),
+            vec!["pipeline-tests".to_owned(), "host-fingerprint".to_owned()]
+        );
+        assert_eq!(
+            host_ledger_prefix(Some("pipeline-tests/bench-01/host-fingerprint")).unwrap(),
+            vec![
+                "pipeline-tests".to_owned(),
+                "bench-01".to_owned(),
+                "host-fingerprint".to_owned()
+            ]
+        );
+        for value in [
+            "",
+            "item-health",
+            "other/host-fingerprint",
+            "pipeline-tests/item-health",
+            "pipeline-tests/../host-fingerprint",
+            "pipeline-tests//host-fingerprint",
+            "/pipeline-tests/host-fingerprint",
+            "pipeline-tests/host-fingerprint/",
+            "pipeline-tests\\host-fingerprint",
+            "pipeline-tests/-bad/host-fingerprint",
+            "pipeline-tests/bad--segment/host-fingerprint",
+            "pipeline-tests/Upper/host-fingerprint",
+            "pipeline-tests/a/a/a/a/a/a/a/host-fingerprint",
+        ] {
+            assert!(
+                host_ledger_prefix(Some(value)).is_err(),
+                "accepted malformed or untrusted prefix: {value:?}"
+            );
+        }
+        let long_segment = format!(
+            "pipeline-tests/{}/host-fingerprint",
+            "a".repeat(MAX_HOST_LEDGER_PREFIX_SEGMENT_BYTES + 1)
+        );
+        assert!(host_ledger_prefix(Some(&long_segment)).is_err());
+        let full_segment = "a".repeat(MAX_HOST_LEDGER_PREFIX_SEGMENT_BYTES);
+        let long_prefix = format!(
+            "pipeline-tests/{full_segment}/{full_segment}/{full_segment}/{full_segment}/host-fingerprint"
+        );
+        assert!(long_prefix.len() > MAX_HOST_LEDGER_PREFIX_BYTES);
+        assert!(host_ledger_prefix(Some(&long_prefix)).is_err());
+    }
 }

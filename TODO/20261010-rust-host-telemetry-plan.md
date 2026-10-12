@@ -74,7 +74,7 @@ Table D - authoritative execution queue
 | D6 | 6 | Add inactive event emitters at real production boundaries | 13, 14 | F | DONE | rust-d6-inactive-emitters | - | Copilot |
 | D8 | 8 | Expose and test the independent memory off control | 6 | G | DONE | rust-d8-memory-off | #1576, #1577 | Copilot; the follow-up closes dispatch-shape coverage, keeps route assertions in the console browser group, and is merged as `c8867c438`. |
 | D16 | 16 | Verify evidence and record unattended adoption authority | 8, 5, 14, 15 | H | IN REVIEW | rust-d16-readiness-record | #1582 | Supplied-root replay now runs the actual migrated ledger reader and console publisher in isolation; 29 gardener rows are admitted only under exact Git-anchored legacy evidence. CI and exact-head review remain before marking D16 DONE. |
-| D7 | 7 | Switch instrumented producers through events | 16 | I | PENDING | - | - | - |
+| D7 | 7 | Switch instrumented producers through events | 16 | I | IN-FLIGHT | rust-d7-integration | - | owner; native lifecycle, publication and remaining producer-family workers; production remains legacy until exact Ubuntu candidate evidence passes |
 | D17 | 17 | Rewrite the approved historical manifest once | 7, 15, 16 | J | PENDING | - | - | - |
 | D9 | 9 | Remove superseded collectors and temporary duplication | 7, 8, 17 | K | PENDING | - | - | - |
 
@@ -222,6 +222,12 @@ Table L - Row 1 rejected alternatives
   - `backend/idhazh/telemetry/host_output_verify.py`
   - `backend/idhazh/telemetry/host_parquet_admission.py`
   - `backend/utilities/verify_host_output.py`
+  - `backend/utilities/d7_host_telemetry.py`
+  - `backend/tests/test_cli_host_event_environment.py`
+  - `backend/tests/test_host_output_verify.py`
+  - `backend/tests/workflows/test_d7_workflow_wiring.py`
+  - `backend/tests/workflows/_harness.py`
+  - `backend/tests/workflows/test_llm_council_workflow.py`
   - `backend/tests/contracts/test_host_events.py`
   - `backend/tests/contracts/test_host_output.py`
   - `backend/tests/test_host_output_verify.py`
@@ -620,7 +626,7 @@ Table AA - Row 9 decisions
 
 | ID | Decision | Authority |
 | --- | --- | --- |
-| AA1 | Observation covers at least seven UTC days and every Table W family plus enabled/disabled controls; elapsed time alone does not satisfy coverage. D16 accepts this starting policy or records evidence-based changes. No obsolete collector is removed before its real caller coverage. | Fowler; bounded transition. |
+| AA1 | The user removed the fixed seven-day observation wait on 2026-10-12 at 17:07 UTC and requested immediate delivery on Ubuntu CI. Completion requires actual native execution and verified publication for every Table W family plus enabled/disabled controls, without a calendar-duration gate. No obsolete collector is removed before its real caller coverage; historical backups, quiet-window and reconciliation gates remain. | User, 2026-10-12; replaces Fowler's starting observation duration. |
 | AA2 | Keep shared Python codecs/persistence, compact/history readers, AN legacy read migrations and other producers. Remove only superseded host collection/write paths and temporary shadow duplication. Keep Rust/module/cross-language fixture tests; keep the bounded maintenance utility if needed for resumability, not a recurring archive rewriter. | User; H12; caller search. |
 | AA3 | Rollback restores cleanup before cutover while retaining migrated readers. If not adopted, do not start D17; retain unchanged Python measurement behaviour and record the user's disposition of candidates/adapters and additive experiment files. | Fowler; reversible changes. |
 | AA4 | Delete this plan after distillation and closure; do not keep completed migration history in TODO or create a second tracking page. | [distill-a-plan.md](../docs/how-to/distill-a-plan.md). |

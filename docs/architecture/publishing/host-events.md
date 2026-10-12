@@ -73,6 +73,13 @@ workspace and are never returned as production files to stage or publish.
 YAML still owns native process lifetime. This boundary does not authorize the
 single-writer cutover or establish enabled-path latency.
 
+The D7 workflow selector defaults to `legacy`; native mode is not selected by a
+repository variable. The launcher currently accepts only digest `work` for an
+isolated native run. It verifies each typed write plan, completion and physical
+file hash, then refuses publication because the existing publishers do not yet
+consume the native file list. Other D7 families fail before their Python writer
+or publisher starts. This is a safe integration slice, not production cutover.
+
 ## Probe, target and clock collection
 
 The thin native CLI routes `probe`, `target` and `clock` commands. `invocation.rs`

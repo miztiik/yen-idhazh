@@ -32,12 +32,20 @@ on:
         type: boolean
         default: false
       host_telemetry:
-        description: 'D7 host telemetry producer (legacy is the rollback path)'
+        description: 'Host collector for encoder probes; legacy remains the review default'
         type: choice
-        default: rust
+        default: legacy
         options:
           - rust
           - legacy
+      memory_profiling:
+        description: 'OS memory and fault collection; inherit reads shared config'
+        type: choice
+        default: inherit
+        options:
+          - inherit
+          - 'on'
+          - 'off'
 
 permissions:
   contents: write
@@ -54,10 +62,12 @@ concurrency:
 env:
   SET_DIRECTORY: corpus/encoder-comparison-1
   PYTHONPATH: ${{ github.workspace }}/backend
-  IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry || vars.IDHAZH_HOST_TELEMETRY_MODE || 'rust' }}
+  IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry || 'legacy' }}
 
 jobs:
   pairs:
+    env:
+      IDHAZH_HOST_TELEMETRY_MODE: legacy
     name: Build the pair set
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -144,6 +154,15 @@ jobs:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: pyproject.toml
+      - name: Select the pinned host toolchain
+        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
+        working-directory: backend/rust/host-telemetry
+        run: echo "RUSTUP_TOOLCHAIN=$(rustup show active-toolchain | cut -d' ' -f1)" >> "$GITHUB_ENV"
+      - uses: actions/cache@v6
+        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
+        with:
+          path: ~/.cargo/registry
+          key: host-crates-${{ runner.os }}-${{ hashFiles('backend/rust/host-telemetry/Cargo.lock', 'backend/rust/host-telemetry/rust-toolchain.toml') }}
       - uses: ./.github/actions/d7-host-telemetry
         with:
           enabled: ${{ env.IDHAZH_HOST_TELEMETRY_MODE == 'rust' }}
@@ -158,19 +177,28 @@ jobs:
       # model and its cache size say whether that was the silicon or the model,
       # and nothing else in the reading could tell them apart.
       - name: What machine this shard drew
+        env:
+          MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
+          ENCODER_SHARD: ${{ strategy.job-index }}
         run: |
           set -euo pipefail
-          if [ "$IDHAZH_HOST_TELEMETRY_MODE" = legacy ]; then
-            python -m idhazh fingerprint \
-            --date "$(date -u +%F)" \
+          pip install --quiet -e .
+          DATE="$(date -u +%F)"
+          MEMORY_ARGS=()
+          if [ "$MEMORY_PROFILING" != "inherit" ]; then
+            MEMORY_ARGS=(--memory-profiling "$MEMORY_PROFILING")
+          fi
+          python3 backend/utilities/d7_host_telemetry.py run \
+            --mode "$IDHAZH_HOST_TELEMETRY_MODE" --job collect \
+            --run-id "${DATE}-${GITHUB_RUN_ID}" --git-sha "$GITHUB_SHA" \
+            --shard "$ENCODER_SHARD" --memory-profiling "$MEMORY_PROFILING" -- \
+            python backend/utilities/record_publish.py run measure fingerprint \
+            --date "$DATE" \
             --execution "${{ github.run_id }}" \
             --commit "${{ github.sha }}" \
-            --shard 0 \
-            --job work 2>&1 | tee -a "host.log" || \
-            echo "no fingerprint written; the comparison does not depend on it"
-          else
-            echo "D7 Rust score lifecycle owns host telemetry; legacy fingerprint disabled"
-          fi
+            --shard "$ENCODER_SHARD" \
+            "${MEMORY_ARGS[@]}" \
+            --job collect 2>&1 | tee -a "host.log"
           {
             echo "processors: $(nproc)"
             grep -m1 'model name' /proc/cpuinfo || true
@@ -216,10 +244,7 @@ jobs:
             exit 1
           fi
           mkdir -p readings logs vectors
-          python3 backend/utilities/d7_host_telemetry.py run \
-            --mode "$IDHAZH_HOST_TELEMETRY_MODE" --job encoder-comparison \
-            --shard 0 --memory-profiling inherit -- \
-            python3 backend/utilities/compare_summary_encoders.py score \
+          IDHAZH_HOST_TELEMETRY_MODE=legacy python3 backend/utilities/compare_summary_encoders.py score \
             --slug "$ENCODER" \
             --pairs "$SET_DIRECTORY/pairs.json" \
             --out "readings/$ENCODER.json" \
@@ -241,9 +266,9 @@ jobs:
         if: always()
         run: |
           if [ "$IDHAZH_HOST_TELEMETRY_MODE" = rust ] \
-             && [ -n "${IDHAZH_HOST_TELEMETRY_WORKSPACE:-}" ]; then
+             && [ -n "${IDHAZH_HOST_TELEMETRY_SESSION:-}" ]; then
             python3 backend/utilities/d7_host_telemetry.py cleanup \
-              --workspace "$IDHAZH_HOST_TELEMETRY_WORKSPACE"
+               --workspace "$IDHAZH_HOST_TELEMETRY_SESSION"
           fi
 
       # `always()`, so a shard stopped at the deadline still hands over the
@@ -257,6 +282,8 @@ jobs:
             logs/${{ matrix.encoder }}.log
             host.log
             runtime.txt
+            state/raw/host-fingerprint
+            backend/var/d7-host-telemetry
           retention-days: 7
           if-no-files-found: warn
 
@@ -273,6 +300,8 @@ jobs:
           if-no-files-found: warn
 
   collect:
+    env:
+      IDHAZH_HOST_TELEMETRY_MODE: legacy
     name: Merge the readings
     needs: [pairs, score]
     if: always()

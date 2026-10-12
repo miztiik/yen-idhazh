@@ -40,9 +40,12 @@ import urllib.error
 import urllib.request
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import IO, Final
+from typing import IO, TYPE_CHECKING, Final
 
 from utilities import model_refs
+
+if TYPE_CHECKING:
+    from idhazh.contracts.host_events import ProcessTarget
 
 #: The pin: which llama.cpp build, which asset of that release, and the digest
 #: of the archive that asset is. One home, because it used to be written in six
@@ -583,6 +586,24 @@ def start_server(config_root: Path, name: str) -> None:
     _say(f"{name} is up as pid {server.pid}")
 
 
+def server_identity(pid: int, *, proc_root: Path = Path("/proc")) -> ProcessTarget:
+    """Read the selected process's start ticks without any process-table search."""
+    from idhazh.telemetry.host_evidence_inputs import settings
+    from utilities.host_telemetry_reference import identity
+
+    return identity(pid, settings()[0], proc_root)
+
+
+def export_server_identity(name: str) -> None:
+    """Export one live PID/start-tick pair after the caller's readiness check."""
+    from idhazh.telemetry.host_evidence_inputs import read_bytes, settings
+
+    pid = int(read_bytes(Path(f"{name}.pid"), settings()[0].capture_limits.max_proc_text_bytes))
+    target = server_identity(pid)
+    _say(f"server_pid={target.pid}")
+    _say(f"server_start_ticks={target.start_ticks}")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     verbs = parser.add_subparsers(dest="verb", required=True)
@@ -607,6 +628,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         default="llama-server",
         help="The stem for <name>.log and <name>.pid, which later steps read back.",
     )
+    selected = verbs.add_parser(
+        "export-server-identity", help="Read the selected live server's PID and start ticks."
+    )
+    selected.add_argument("--name", default="llama-server")
     args = parser.parse_args(argv)
 
     ran: dict[str, Callable[[], None]] = {
@@ -615,6 +640,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "download-model-files": lambda: download_model_files(args.config_root),
         "verify-model-files": lambda: verify_model_files(args.config_root),
         "start-server": lambda: start_server(args.config_root, args.name),
+        "export-server-identity": lambda: export_server_identity(args.name),
     }
     ran[args.verb]()
     return 0

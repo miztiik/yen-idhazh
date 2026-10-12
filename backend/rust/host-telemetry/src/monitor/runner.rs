@@ -333,6 +333,9 @@ fn native_host_output(
             .cloned()
             .unwrap_or_else(|| session.manifest.output_roots[0].clone()),
     );
+    if let Some(prefix) = monitor_args.get("--ledger-prefix") {
+        args.insert("--ledger-prefix".to_owned(), prefix.clone());
+    }
     args.insert(
         "--format".to_owned(),
         monitor_args

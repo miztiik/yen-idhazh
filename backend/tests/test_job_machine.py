@@ -168,18 +168,87 @@ def test_native_failure_after_publication_does_not_fall_back(
             raise AssertionError("native setup should fail before work starts")
 
 
-def test_native_unavailable_before_publication_keeps_legacy_writer(
+def test_native_unavailable_before_publication_never_uses_legacy_writer(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     settings = config.load()
     events = _NativeEvents(started=False, active=False)
-    with job_machine.record(
-        date=DAY,
-        run_id=RUN,
-        settings=settings,
-        state_root=tmp_path,
-        commit_sha=SEED_COMMIT,
-        job=ServerJob.RUN_TASKS,
-        host_events=events,  # type: ignore[arg-type]
-    ) as written:
-        assert written
+    with pytest.raises(RuntimeError, match="Python collection is disabled"):
+        with job_machine.record(
+            date=DAY,
+            run_id=RUN,
+            settings=settings,
+            state_root=tmp_path,
+            commit_sha=SEED_COMMIT,
+            job=ServerJob.RUN_TASKS,
+            host_events=events,  # type: ignore[arg-type]
+        ):
+            pytest.fail("work started without its selected native instrument")
+    assert not ledger.raw_root(tmp_path, LedgerName.HOST_FINGERPRINT).exists()
+
+
+def test_native_environment_requires_the_prepared_session_before_work(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MODE", "rust")
+    for name in ("WORKSPACE", "MANIFEST", "CONFIG"):
+        monkeypatch.delenv(f"IDHAZH_HOST_TELEMETRY_{name}", raising=False)
+    with pytest.raises(ValueError, match="host event session needs"):
+        with job_machine.record(
+            date=DAY,
+            run_id=RUN,
+            settings=config.load(),
+            state_root=tmp_path,
+            commit_sha=SEED_COMMIT,
+            job=ServerJob.RUN_TASKS,
+        ):
+            pytest.fail("an unprepared native producer started its work")
+    assert not ledger.raw_root(tmp_path, LedgerName.HOST_FINGERPRINT).exists()
+
+
+def test_native_environment_io_failure_does_not_fall_back(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MODE", "rust")
+    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_WORKSPACE", str(tmp_path))
+    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MANIFEST", "absent-manifest.json")
+    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_CONFIG", "absent-config.json")
+    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_INVOCATION", "absent-invocation.json")
+    with pytest.raises(OSError):
+        with job_machine.record(
+            date=DAY, run_id=RUN, settings=config.load(), state_root=tmp_path,
+            commit_sha=SEED_COMMIT, job=ServerJob.RUN_TASKS,
+        ):
+            pytest.fail("native input I/O failure started work with legacy collection")
+    assert not ledger.raw_root(tmp_path, LedgerName.HOST_FINGERPRINT).exists()
+
+
+def test_native_config_cannot_select_a_python_fallback_without_a_launcher(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("IDHAZH_HOST_TELEMETRY_MODE", raising=False)
+    settings = config.load()
+    settings.app.observability.host_event_mode = "native"
+    with pytest.raises(ValueError, match="host event session needs"):
+        with job_machine.record(
+            date=DAY, run_id=RUN, settings=settings, state_root=tmp_path,
+            commit_sha=SEED_COMMIT, job=ServerJob.RUNTIME,
+        ):
+            pytest.fail("configured native mode fell back to Python")
+    assert not ledger.raw_root(tmp_path, LedgerName.HOST_FINGERPRINT).exists()
+
+
+def test_rust_selection_cannot_accept_a_supplied_shadow_collector(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MODE", "rust")
+    events = _NativeEvents(started=False)
+    monkeypatch.setattr(events, "native", False)
+    with pytest.raises(ValueError, match="cannot use a Python or shadow"):
+        with job_machine.record(
+            date=DAY, run_id=RUN, settings=config.load(), state_root=tmp_path,
+            commit_sha=SEED_COMMIT, job=ServerJob.RUNTIME,
+            host_events=events,  # type: ignore[arg-type]
+        ):
+            pytest.fail("Rust selection accepted a legacy collector")
+    assert not ledger.raw_root(tmp_path, LedgerName.HOST_FINGERPRINT).exists()

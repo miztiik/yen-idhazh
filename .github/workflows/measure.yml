@@ -26,9 +26,9 @@ on:
           - 'on'
           - 'off'
       host_telemetry:
-        description: 'D7 host telemetry producer (legacy is the rollback path)'
+        description: 'Host collector for bench jobs; legacy remains the review default'
         type: choice
-        default: rust
+        default: legacy
         options:
           - rust
           - legacy
@@ -146,7 +146,7 @@ env:
   # root's `model_server.base_url`, so no part of this repository spells the
   # number twice (Guardrail #6).
   MODEL_SERVER_PROBE: 'http://127.0.0.1:8080'
-  IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry || vars.IDHAZH_HOST_TELEMETRY_MODE || 'rust' }}
+  IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry || 'legacy' }}
 
 jobs:
   # The model refs, read once from config and published to every target that
@@ -166,6 +166,8 @@ jobs:
   # job's own `if:` cannot read a step of its own job, so the answer has to
   # arrive as a `needs` output.
   models:
+    env:
+      IDHAZH_HOST_TELEMETRY_MODE: legacy
     name: Read the candidate out of config
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -266,6 +268,15 @@ jobs:
 
       - name: Install
         run: pip install -e .
+      - name: Select the pinned host toolchain
+        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
+        working-directory: backend/rust/host-telemetry
+        run: echo "RUSTUP_TOOLCHAIN=$(rustup show active-toolchain | cut -d' ' -f1)" >> "$GITHUB_ENV"
+      - uses: actions/cache@v6
+        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
+        with:
+          path: ~/.cargo/registry
+          key: host-crates-${{ runner.os }}-${{ hashFiles('backend/rust/host-telemetry/Cargo.lock', 'backend/rust/host-telemetry/rust-toolchain.toml') }}
       - uses: ./.github/actions/d7-host-telemetry
         with:
           enabled: ${{ env.IDHAZH_HOST_TELEMETRY_MODE == 'rust' }}
@@ -428,10 +439,18 @@ jobs:
               exit 2
             fi
           done
+          BENCH_DATE="$(date -u +%F)"
+          MEMORY_ARGS=()
+          if [ "$MEMORY_PROFILING" != "inherit" ]; then
+            MEMORY_ARGS=(--memory-profiling "$MEMORY_PROFILING")
+          fi
           python3 backend/utilities/d7_host_telemetry.py run \
             --mode "$IDHAZH_HOST_TELEMETRY_MODE" --job runtime \
+            --run-id "${BENCH_DATE}-${GITHUB_RUN_ID}" --git-sha "$GITHUB_SHA" \
             --memory-profiling "$MEMORY_PROFILING" -- \
             python3 backend/utilities/measure_llm.py bench \
+            --date "$BENCH_DATE" --execution "$GITHUB_RUN_ID" --commit "$GITHUB_SHA" \
+            "${MEMORY_ARGS[@]}" \
             --models "$CANDIDATE_REF" \
             --expect-sha256 "$CANDIDATE_SHA256" \
             --candidate-id "$CANDIDATE_ID" \
@@ -452,9 +471,9 @@ jobs:
         if: always()
         run: |
           if [ "$IDHAZH_HOST_TELEMETRY_MODE" = rust ] \
-             && [ -n "${IDHAZH_HOST_TELEMETRY_WORKSPACE:-}" ]; then
+             && [ -n "${IDHAZH_HOST_TELEMETRY_SESSION:-}" ]; then
             python3 backend/utilities/d7_host_telemetry.py cleanup \
-              --workspace "$IDHAZH_HOST_TELEMETRY_WORKSPACE"
+               --workspace "$IDHAZH_HOST_TELEMETRY_SESSION"
           fi
 
       # The rates, on the run page. They used to reach a reader only through a
@@ -487,10 +506,15 @@ jobs:
         if: always()
         with:
           name: bench-raw
-          path: backend/var/
+          path: |
+            backend/var/
+            !backend/var/rust-host-telemetry/**
+            state/raw/host-fingerprint/
           retention-days: 90
 
   corpus:
+    env:
+      IDHAZH_HOST_TELEMETRY_MODE: legacy
     name: How long real articles are
     if: ${{ inputs.target == 'corpus' }}
     # The length buckets every per-article cost figure multiplies by are invented
@@ -610,6 +634,15 @@ jobs:
 
       - name: Install
         run: pip install -e .
+      - name: Select the pinned host toolchain
+        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
+        working-directory: backend/rust/host-telemetry
+        run: echo "RUSTUP_TOOLCHAIN=$(rustup show active-toolchain | cut -d' ' -f1)" >> "$GITHUB_ENV"
+      - uses: actions/cache@v6
+        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
+        with:
+          path: ~/.cargo/registry
+          key: host-crates-${{ runner.os }}-${{ hashFiles('backend/rust/host-telemetry/Cargo.lock', 'backend/rust/host-telemetry/rust-toolchain.toml') }}
       - uses: ./.github/actions/d7-host-telemetry
         with:
           enabled: ${{ env.IDHAZH_HOST_TELEMETRY_MODE == 'rust' }}
@@ -753,7 +786,7 @@ jobs:
           CORPUS_CAP=$(python3 backend/utilities/runtime_sweep.py corpus-cap \
             --config backend/var/candidate-config \
             --offset "$RUNTIME_CORPUS_OFFSET")
-          python -m idhazh plan \
+          IDHAZH_HOST_TELEMETRY_MODE=legacy python -m idhazh plan \
             --config backend/var/candidate-config \
             --date "$DATE" \
             --cap "$CORPUS_CAP" \
@@ -782,12 +815,10 @@ jobs:
       # and before the sweep because the bandwidth reading wants a gigabyte and
       # an idle machine - the same order the `work` job uses around its server.
       - name: What machine this bench drew
+        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'legacy'
         run: |
           set -euo pipefail
-          python3 backend/utilities/d7_host_telemetry.py run \
-            --mode "$IDHAZH_HOST_TELEMETRY_MODE" --job runtime \
-            --memory-profiling "${{ inputs.memory_profiling || 'inherit' }}" -- \
-            python backend/utilities/record_publish.py run measure fingerprint \
+          python backend/utilities/record_publish.py run measure fingerprint \
             --config backend/var/candidate-config \
             --date "$RUNTIME_DATE" \
             --execution "${{ github.run_id }}" \
@@ -805,14 +836,23 @@ jobs:
           # first server start of this job measures, so the summary records it
           # rather than asserting it.
           GGUF_CACHE_HIT: ${{ steps.weights.outputs.cache-hit == 'true' }}
+          MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
         run: |
           set -euo pipefail
+          MEMORY_ARGS=()
+          if [ "$MEMORY_PROFILING" != "inherit" ]; then
+            MEMORY_ARGS=(--memory-profiling "$MEMORY_PROFILING")
+          fi
           python3 backend/utilities/d7_host_telemetry.py run \
             --mode "$IDHAZH_HOST_TELEMETRY_MODE" --job runtime \
-            --memory-profiling "${{ inputs.memory_profiling || 'inherit' }}" -- \
+            --run-id "${RUNTIME_DATE}-${GITHUB_RUN_ID}" --git-sha "$GITHUB_SHA" \
+            --memory-profiling "$MEMORY_PROFILING" -- \
             python3 backend/utilities/runtime_sweep.py sweep \
+            --config backend/var/candidate-config \
             --date "$RUNTIME_DATE" \
             --execution "${{ github.run_id }}" \
+            --commit "$GITHUB_SHA" \
+            "${MEMORY_ARGS[@]}" \
             --candidate "$RUNTIME_CANDIDATE" \
             --candidate-file "$CANDIDATE_FILE" \
             --candidate-id "$CANDIDATE_ID" \
@@ -833,9 +873,9 @@ jobs:
         if: always()
         run: |
           if [ "$IDHAZH_HOST_TELEMETRY_MODE" = rust ] \
-             && [ -n "${IDHAZH_HOST_TELEMETRY_WORKSPACE:-}" ]; then
+             && [ -n "${IDHAZH_HOST_TELEMETRY_SESSION:-}" ]; then
             python3 backend/utilities/d7_host_telemetry.py cleanup \
-              --workspace "$IDHAZH_HOST_TELEMETRY_WORKSPACE"
+               --workspace "$IDHAZH_HOST_TELEMETRY_SESSION"
           fi
 
       # Only when there is one to read. A bypassed speed case writes no
@@ -910,7 +950,7 @@ jobs:
       # `continue-on-error` because a lost push must not turn a five-hour
       # measurement into a red run.
       - name: Commit the machine this bench drew
-        if: always()
+        if: always() && (env.IDHAZH_HOST_TELEMETRY_MODE == 'legacy' || env.IDHAZH_HOST_TELEMETRY_VERIFIED == '1')
         continue-on-error: true
         env:
           COMMIT_MESSAGE: "bench: the machine ${{ inputs.runtime_candidate }} drew"
@@ -918,7 +958,9 @@ jobs:
           PUSH_FAILED_MESSAGE: "could not push the bench host record"
         run: |
           if [ -d state/raw/pipeline-tests/host-fingerprint ]; then
-            python backend/utilities/record_publish.py land measure
+            python backend/utilities/record_publish.py land measure \
+              --date "$RUNTIME_DATE" --execution "$GITHUB_RUN_ID" \
+              --commit "$GITHUB_SHA" --job runtime
           else
             echo "$NOTHING_STAGED_MESSAGE"
           fi
@@ -928,7 +970,10 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: bench-server-${{ inputs.runtime_candidate }}
-          path: backend/var/runtime-sweep/
+          path: |
+            backend/var/runtime-sweep/
+            backend/var/d7-host-telemetry/
+            state/raw/pipeline-tests/host-fingerprint/
           retention-days: 90
 
   # Three constants in this repository were sized by asking a tokenizer a
@@ -953,6 +998,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
+      IDHAZH_HOST_TELEMETRY_MODE: legacy
       CANDIDATE_REPO: ${{ needs.models.outputs.candidate_repo }}
       CANDIDATE_REVISION: ${{ needs.models.outputs.candidate_revision }}
       CANDIDATE_FILE: ${{ needs.models.outputs.candidate_file }}
@@ -1128,6 +1174,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     env:
+      IDHAZH_HOST_TELEMETRY_MODE: legacy
       MODEL_REPO: ${{ needs.models.outputs.summarizer_repo }}
       MODEL_REVISION: ${{ needs.models.outputs.summarizer_revision }}
       MODEL_FILE: ${{ needs.models.outputs.summarizer_file }}

@@ -26,6 +26,7 @@ from idhazh.contracts.host_output import (
     CorrectedHostFingerprintRow,
     HostWriteCompletion,
     HostWritePlan,
+    HostWriterIdentity,
 )
 
 HOST_EVENT_VERSION: Final = "2026-10-10"
@@ -167,6 +168,35 @@ class ExpectedWindow(ExchangeModel):
     window_id: UUID
     item_id: ItemId
     emitter_id: Token
+
+
+class HostProducerInvocation(ExchangeModel):
+    """The independently resolved command, retained before its worker is released."""
+
+    version: Literal["2026-10-10"] = HOST_EVENT_VERSION
+    date: DateStamp
+    identity: HostWriterIdentity
+    command: tuple[str, ...] = Field(min_length=1)
+    stage: Token
+    execution: Count | None = None
+    shards: PositiveCount | None = None
+    plan_path: RelPath | None = None
+    plan_sha256: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")] | None = None
+    host_enabled: Annotated[bool, Field(strict=True)]
+
+    @model_validator(mode="after")
+    def _invocation(self) -> Self:
+        if self.identity.run_id[:10] != self.date:
+            raise ValueError("producer date differs from its run address")
+        if self.stage == "work" and self.shards is None:
+            raise ValueError("work producer must declare its selected fanout")
+        if self.shards is not None and self.identity.shard >= self.shards:
+            raise ValueError("producer shard is outside the selected fanout")
+        if self.execution is not None and self.identity.run_id != f"{self.date}-{self.execution}":
+            raise ValueError("producer execution differs from its run address")
+        if (self.plan_path is None) != (self.plan_sha256 is None):
+            raise ValueError("a selected run plan needs both its path and hash")
+        return self
 
 
 class HostSessionManifest(ExchangeModel, Contract):

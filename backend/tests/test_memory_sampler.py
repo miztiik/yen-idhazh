@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -70,6 +71,49 @@ def _a_proc_tree(tmp_path: Path) -> Path:
         encoding="utf-8",
     )
     return root
+
+
+def test_summarize_accepts_the_native_session_artifact_paths(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO, logger="memory_sampler")
+    samples = tmp_path / "native-artifacts" / "rss-samples.jsonl"
+    processes = tmp_path / "native-artifacts" / "python-procs.jsonl"
+    samples.parent.mkdir()
+    samples.write_text(
+        json.dumps(
+            {
+                "llama_vmhwm_kb": 200,
+                "python_vmhwm_kb": 100,
+                "llama_vmrss_kb": 180,
+                "python_vmrss_kb": 90,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    processes.write_text(
+        json.dumps(
+            {
+                "pid": 7,
+                "comm": "python3",
+                "exe": "/usr/bin/python3",
+                "args": "-m idhazh",
+                "vmrss_kb": 90,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    assert (
+        memory_sampler.main(
+            ["summarize", "--sample-file", str(samples), "--process-file", str(processes)]
+        )
+        == 0
+    )
+    assert "peak llama VmHWM 200 kB" in caplog.text
+    assert "python 7  python3  /usr/bin/python3  -m idhazh" in caplog.text
 
 
 def test_the_count_and_the_roll_call_come_off_one_walk(tmp_path: Path) -> None:
@@ -243,9 +287,30 @@ def test_the_summary_prints_the_five_figures_off_the_records(tmp_path: Path) -> 
         tmp_path,
         "python-procs.jsonl",
         [
-            {"ts": "a", "pid": 200, "comm": "python3", "vmrss_kb": 1, "exe": "/bin/py", "args": "-m idhazh"},
-            {"ts": "b", "pid": 200, "comm": "python3", "vmrss_kb": 5, "exe": "/bin/py", "args": "-m idhazh"},
-            {"ts": "a", "pid": 300, "comm": "python3", "vmrss_kb": 2, "exe": "/bin/py", "args": "-u"},
+            {
+                "ts": "a",
+                "pid": 200,
+                "comm": "python3",
+                "vmrss_kb": 1,
+                "exe": "/bin/py",
+                "args": "-m idhazh",
+            },
+            {
+                "ts": "b",
+                "pid": 200,
+                "comm": "python3",
+                "vmrss_kb": 5,
+                "exe": "/bin/py",
+                "args": "-m idhazh",
+            },
+            {
+                "ts": "a",
+                "pid": 300,
+                "comm": "python3",
+                "vmrss_kb": 2,
+                "exe": "/bin/py",
+                "args": "-u",
+            },
         ],
     )
 
