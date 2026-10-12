@@ -2,21 +2,33 @@
 
 from __future__ import annotations
 
+import csv
 import hashlib
+import io
 import struct
 import zlib
+from collections.abc import Mapping
 from dataclasses import dataclass, fields, replace
 from pathlib import Path
 from typing import Any
 
 from idhazh.contracts.console_band import ConsoleBand
 from idhazh.contracts.file_envelope import FileEnvelope, Format, Period, RowIdentity, Tier
-from idhazh.contracts.host_migration import HistoryManifest, HistoryRoot, HistorySource
+from idhazh.contracts.host_migration import (
+    HistoryManifest,
+    HistoryRoot,
+    HistorySource,
+    LegacyRawEvidence,
+)
 from idhazh.contracts.host_output import (
     HOST_OUTPUT_VERSION,
+    HOST_PRODUCER,
     LEGACY_HOST_VERSIONS,
     HostStoredRow,
+    HostWriterIdentity,
+    LegacyHostFingerprintRow,
     host_file_id,
+    host_unit_id,
     normalize_stored_host_rows,
 )
 from idhazh.contracts.ledger_name import LedgerName
@@ -93,6 +105,8 @@ class HistoryLimits:
     def check_manifest(self, manifest: HistoryManifest) -> None:
         if len(manifest.sources) > self.max_sources:
             raise ValueError("manifest exceeds max_sources")
+        if len(manifest.legacy_raw_evidence) > self.max_sources:
+            raise ValueError("manifest exceeds max legacy raw evidence")
         if len(manifest.roots) > self.max_roots or len(manifest.closed_periods) > self.max_periods:
             raise ValueError("manifest exceeds root or period bounds")
         if any(s.bytes > self.verification.max_file_bytes for s in manifest.sources):
@@ -124,6 +138,123 @@ def read_source(source: HistorySource, *, workspace: Path, limits: VerificationL
     if len(data) != source.bytes or hashlib.sha256(data).hexdigest() != source.sha256:
         raise ValueError(f"{source.path}: source physical hash or size drift")
     return data
+
+
+def _read_evidence(
+    evidence: LegacyRawEvidence, *, workspace: Path, limits: VerificationLimits
+) -> bytes:
+    try:
+        data = _read_bytes(
+            workspace / evidence.path,
+            root=workspace,
+            cap=limits.max_file_bytes,
+        )
+    except OSError as error:
+        raise ValueError(
+            f"{evidence.path}: missing or unreadable legacy evidence ({type(error).__name__})"
+        ) from error
+    if len(data) != evidence.bytes or hashlib.sha256(data).hexdigest() != evidence.sha256:
+        raise ValueError(f"{evidence.path}: legacy evidence physical hash or size drift")
+    git_blob = hashlib.sha1(
+        b"blob " + str(len(data)).encode("ascii") + b"\0" + data
+    ).hexdigest()
+    if git_blob != evidence.git_blob:
+        raise ValueError(f"{evidence.path}: Git blob evidence does not match its bytes")
+    return data
+
+
+_LEGACY_INT_FIELDS = frozenset(
+    {
+        "shard",
+        "cpu_family",
+        "cpu_model_number",
+        "cpu_stepping",
+        "cores",
+        "threads",
+        "l3_cache_bytes",
+        "memcpy_probe_mib",
+        "job_seconds",
+        "server_prompt_tokens",
+    }
+)
+_LEGACY_FLOAT_FIELDS = frozenset(
+    {
+        "mhz_max",
+        "mhz_at_probe",
+        "boot_seconds",
+        "memcpy_gib_s",
+        "model_load_ms",
+        "server_prompt_seconds",
+    }
+)
+
+
+def _legacy_csv_value(name: str, value: str) -> object:
+    if value == "":
+        return None
+    if name in _LEGACY_INT_FIELDS:
+        return int(value)
+    if name in _LEGACY_FLOAT_FIELDS:
+        return float(value)
+    return value
+
+
+def _legacy_raw_row(
+    data: bytes, evidence: LegacyRawEvidence
+) -> dict[tuple[str, str, int], dict[str, Any]]:
+    if not data.isascii() or b"\r" in data or not data.endswith(b"\n"):
+        raise ValueError(f"{evidence.path}: legacy raw evidence must be ASCII LF CSV")
+    reader = csv.DictReader(io.StringIO(data.decode("ascii"), newline=""))
+    expected_fields = set(LegacyHostFingerprintRow.model_fields)
+    if (
+        reader.fieldnames is None
+        or len(reader.fieldnames) != len(set(reader.fieldnames))
+        or set(reader.fieldnames) != expected_fields
+    ):
+        raise ValueError(f"{evidence.path}: legacy raw evidence has an unknown header")
+    merged: dict[str, object] = {}
+    for record in reader:
+        if None in record or any(value is None for value in record.values()):
+            raise ValueError(f"{evidence.path}: legacy raw evidence has a malformed row")
+        for name, value in record.items():
+            parsed = _legacy_csv_value(name, value)
+            if parsed is None:
+                continue
+            previous = merged.get(name)
+            if previous is not None and previous != parsed:
+                raise ValueError(f"{evidence.path}: legacy raw evidence rows disagree")
+            merged[name] = parsed
+    try:
+        old = LegacyHostFingerprintRow.model_validate(merged)
+    except ValueError as error:
+        raise ValueError(f"{evidence.path}: legacy raw evidence row is invalid") from error
+    identity = HostWriterIdentity(
+        run_id=old.run_id,
+        attempt=evidence.attempt,
+        job=old.job,
+        shard=old.shard,
+        producer=HOST_PRODUCER,
+        git_sha=evidence.git_commit,
+    )
+    unit = host_unit_id(covers=old.date, identity=identity)
+    payload = old.model_dump(mode="json")
+    payload.update(
+        ledger=LedgerName.HOST_FINGERPRINT.value,
+        covers=old.date,
+        attempt=evidence.attempt,
+        unit_id=str(unit),
+    )
+    key = (old.run_id, old.job.value, old.shard)
+    return {key: payload}
+
+
+def read_legacy_raw_evidence(
+    evidence: LegacyRawEvidence, *, workspace: Path, limits: VerificationLimits
+) -> dict[tuple[str, str, int], dict[str, Any]]:
+    return _legacy_raw_row(
+        _read_evidence(evidence, workspace=workspace, limits=limits),
+        evidence,
+    )
 
 
 def _hybrid(data: memoryview, width: int, count: int) -> tuple[int, ...]:
@@ -419,7 +550,12 @@ def _compact(
 
 
 def decode_history(
-    source: HistorySource, root: HistoryRoot, *, data: bytes, limits: VerificationLimits
+    source: HistorySource,
+    root: HistoryRoot,
+    *,
+    data: bytes,
+    limits: VerificationLimits,
+    legacy_raw_evidence: Mapping[tuple[str, str, int], Mapping[str, object]] | None = None,
 ) -> HistoryFile:
     if len(data) > limits.max_file_bytes:
         raise ValueError("historical source or candidate exceeds max_file_bytes")
@@ -460,6 +596,7 @@ def decode_history(
             originals,
             content_sha256=env.content_sha256,
             historical_envelope=env,
+            legacy_raw_evidence=legacy_raw_evidence,
         )
     if env.version not in ENVELOPE_VERSIONS or env.row_schema_version not in (
         *LEGACY_HOST_VERSIONS,
@@ -542,8 +679,17 @@ def decode_history(
 
 
 def read_history(
-    source: HistorySource, root: HistoryRoot, *, workspace: Path, limits: VerificationLimits
+    source: HistorySource,
+    root: HistoryRoot,
+    *,
+    workspace: Path,
+    limits: VerificationLimits,
+    legacy_raw_evidence: Mapping[tuple[str, str, int], Mapping[str, object]] | None = None,
 ) -> HistoryFile:
     return decode_history(
-        source, root, data=read_source(source, workspace=workspace, limits=limits), limits=limits
+        source,
+        root,
+        data=read_source(source, workspace=workspace, limits=limits),
+        limits=limits,
+        legacy_raw_evidence=legacy_raw_evidence,
     )

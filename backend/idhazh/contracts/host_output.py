@@ -463,6 +463,7 @@ def normalize_stored_host_rows(
     *,
     content_sha256: str,
     historical_envelope: FileEnvelope | None = None,
+    legacy_raw_evidence: Mapping[tuple[str, str, int], Mapping[str, object]] | None = None,
 ) -> tuple[HostStoredRow, ...]:
     """Check the original canonical digest and RowIdentity BEFORE legacy migration."""
     original = b"".join(
@@ -500,22 +501,44 @@ def normalize_stored_host_rows(
             and original_identity.covers == historical_envelope.covers
             and original_identity.attempt == historical_envelope.identity.attempt
         )
+        gardener_identity = (
+            historical_envelope is not None
+            and historical_envelope.tier is Tier.COMPACT
+            and historical_envelope.ledger is LedgerName.HOST_FINGERPRINT
+            and historical_envelope.writer == "idhazh.ledger.parquet"
+            and historical_envelope.identity.producer == "gardener.tasks.compaction"
+            and historical_envelope.row_schema_version in SHARED_LEGACY_HOST_VERSIONS
+        )
         if (
             original_identity.ledger is not LedgerName.HOST_FINGERPRINT
             or original_identity.covers != source.get("date")
         ):
             raise ValueError("original stored host identity contradicts its date or ledger")
-        if (
-            original_identity.unit_id != str(uuid.uuid5(HOST_NAMESPACE, seed))
-            and not converter_identity
-        ):
-            raise ValueError("original stored host unit_id does not name its logical producer")
+        expected_unit_id = str(uuid.uuid5(HOST_NAMESPACE, seed))
+        if original_identity.unit_id != expected_unit_id:
+            if converter_identity:
+                pass
+            elif gardener_identity:
+                evidence = (legacy_raw_evidence or {}).get(
+                    (original_identity.run_id, original_identity.job.value, original_identity.shard)
+                )
+                if evidence is None or any(
+                    source.get(key) != value
+                    for key, value in source.items()
+                    if key != "unit_id"
+                    for value in (evidence.get(key),)
+                ):
+                    raise ValueError(
+                        "gardener compact row lacks exact legacy raw provenance"
+                    )
+            else:
+                raise ValueError("original stored host unit_id does not name its logical producer")
         payload = {key: value for key, value in source.items() if key not in identity_keys}
         payload.update({key: source[key] for key in own_identity})
         row = normalize_host_row(strip_null_legacy_placeholders(payload))
         normalized_identity = dict(identity)
-        if converter_identity:
-            normalized_identity["unit_id"] = str(uuid.uuid5(HOST_NAMESPACE, seed))
+        if converter_identity or gardener_identity:
+            normalized_identity["unit_id"] = expected_unit_id
         normalized.append(HostStoredRow.model_validate(row.model_dump() | normalized_identity))
     return tuple(normalized)
 

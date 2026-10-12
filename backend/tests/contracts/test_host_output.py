@@ -682,6 +682,75 @@ def test_converter_provenance_allows_rows_from_distinct_original_runs() -> None:
     assert rows[0].unit_id != converted["unit_id"]
 
 
+def gardener_envelope(*, digest: str) -> FileEnvelope:
+    gardener_identity = {
+        "run_id": "2026-10-02-36972027650",
+        "attempt": 1,
+        "job": "run-tasks",
+        "shard": 4,
+        "producer": "gardener.tasks.compaction",
+        "git_sha": "c" * 40,
+    }
+    unit = uuid.uuid5(uuid.NAMESPACE_URL, "gardener-host-history-test")
+    written_at_ms = 1790921266012
+    return FileEnvelope.model_validate(
+        {
+            "version": "2026-09-28",
+            "row_schema_version": "2026-09-20",
+            "tier": "compact",
+            "period": "daily",
+            "ledger": "host-fingerprint",
+            "covers": "2026-10-10",
+            "written_at_ms": written_at_ms,
+            "identity": gardener_identity,
+            "unit_id": unit,
+            "file_id": host_file_id(
+                unit=unit,
+                attempt=gardener_identity["attempt"],
+                written_at_ms=written_at_ms,
+            ),
+            "content_sha256": digest,
+            "writer": "idhazh.ledger.parquet",
+            "writer_version": parquet.engine_version(),
+            "compression": "none",
+            "built_from": 3,
+        }
+    )
+
+
+@pytest.mark.parametrize("evidence", ["valid", None, "mismatch"])
+def test_gardener_provenance_requires_exact_legacy_payload(evidence: str | None) -> None:
+    original = original_stored(fixture("cpu-snapshots.json")["legacy_row"]) | {
+        "unit_id": str(uuid.uuid5(uuid.NAMESPACE_URL, "gardener-stamped-row"))
+    }
+    digest = hashlib.sha256(json_lines.rows_bytes([original])).hexdigest()
+    evidence_row = original | ({"cpu_model": "different"} if evidence == "mismatch" else {})
+    evidence_map = (
+        {(original["run_id"], original["job"], original["shard"]): evidence_row}
+        if evidence is not None
+        else None
+    )
+    envelope = gardener_envelope(digest=digest)
+
+    if evidence == "mismatch" or evidence is None:
+        with pytest.raises(ValueError, match="gardener compact row lacks exact legacy raw provenance"):
+            normalize_stored_host_rows(
+                [original],
+                content_sha256=digest,
+                historical_envelope=envelope,
+                legacy_raw_evidence=evidence_map,
+            )
+        return
+
+    rows = normalize_stored_host_rows(
+        [original],
+        content_sha256=digest,
+        historical_envelope=envelope,
+        legacy_raw_evidence=evidence_map,
+    )
+    assert rows[0].unit_id == str(host_unit_id(covers=original["date"], identity=identity()))
+
+
 @pytest.mark.parametrize(
     ("version", "placeholder"),
     [

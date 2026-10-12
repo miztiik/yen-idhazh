@@ -463,17 +463,18 @@ def test_duplicates_attempts_views_receipts(workspace: Path) -> None:
     report = run(workspace, document)
     assert report.original_settled_keys == report.normalized_settled_keys == 1
     assert report.settlement[0].source_path == third
-    assert report.derived_views_status == report.receipt_status_derived_views == "deferred"
+    assert report.derived_views_status == "candidate_complete"
+    assert report.receipt_status_derived_views == "deferred"
     assert report.historical_readiness == "blocked"
     assert report.affected_view_paths == (view,)
-    assert report.files[3].candidate_path is None
+    assert report.files[3].candidate_path == "candidates/" + view
     assert report.deferred_receipt_paths == ("evidence/old-receipt.json",)
     maintenance = report.maintenance_receipt_candidate
     assert (
         maintenance.identity.model_dump()
         == HistoryManifest.model_validate(document).invocation.model_dump()
     )
-    assert view not in maintenance.writes
+    assert view in maintenance.writes
     assert maintenance.writes[first] != receipt["writes"][first]
     assert all((workspace / path).read_bytes() == data for path, data in before.items())
 
@@ -1181,7 +1182,9 @@ def test_compact_actual_compression(workspace: Path, compression: str) -> None:
 
 
 @pytest.mark.parametrize("version", ["2026-10-02", None])
-def test_console_view_is_validated_but_not_fabricated(workspace: Path, version: str | None) -> None:
+def test_console_view_is_regenerated_by_migrated_consumer(
+    workspace: Path, version: str | None
+) -> None:
     document = manifest_document()
     raw, _ = generated_raw(workspace, document)
     view_bytes = console_view()
@@ -1199,9 +1202,13 @@ def test_console_view_is_validated_but_not_fabricated(workspace: Path, version: 
     )
     original = (workspace / view).read_bytes()
     report = run(workspace, document)
-    assert report.files[-1].status == "deferred"
-    assert report.files[-1].new_physical_sha256 is None
-    assert view not in report.maintenance_receipt_candidate.writes
+    assert report.consumer_mode == "migrated_consumers"
+    assert report.consumer_replay is not None
+    assert report.historical_readiness == "ready"
+    assert report.files[-1].status == "candidate_complete"
+    assert report.files[-1].candidate_path == "candidates/" + view
+    assert report.files[-1].new_physical_sha256 is not None
+    assert view in report.maintenance_receipt_candidate.writes
     assert (workspace / view).read_bytes() == original
 
 
