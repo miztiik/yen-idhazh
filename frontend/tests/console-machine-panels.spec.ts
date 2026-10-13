@@ -1,16 +1,8 @@
-/** Do the three machine panels draw what the ruling requires?
- *
- * Each panel is worked out first on shard rows and host records this file
- * writes, with every figure written out: one group a machine, rates that pool
- * only that machine's shards, and cards that draw the flags a machine does not
- * have rather than omitting them. The route assertions that need a built page
- * live in `console-machine-panels-page.spec.ts`.
- */
+/** Native machine cards preserve measured flags, clocks and independent host ratios. */
 import { expect, test } from './support/door-page';
-import { WATCHED_FLAG, type HostFingerprint } from '../src/lib/server/host-fingerprint';
-import { machineCounters, type MachineLimits, type MachineRun } from '../src/lib/server/machine-counters';
+import { WATCHED_FLAG, type HostFingerprint } from '../src/lib/console/machine/host-types';
+import { machineCounters, type MachineLimits, type MachineRun } from '../src/lib/console/machine/counters';
 import { copySpeedSentence, clockSentence, machineCards, uptimeSentence } from '../src/lib/charts/machine-cards';
-import { splitByMachine } from '../src/lib/charts/machine-split';
 import { ledgers, plan, type ShardReading } from './support/machine-rows';
 /** The flags a card has to draw a chip for.
  *
@@ -83,91 +75,6 @@ function host(over: Partial<HostFingerprint>): HostFingerprint {
 		...over
 	};
 }
-test.describe('reading against writing, machine by machine', () => {
-    test('one group a machine, and no element carries a rate pooled over all shards', () => {
-        const run = foldedRun([
-            machineShard({
-                shard: 0,
-                cpuModel: 'AMD EPYC 7763 64-Core Processor',
-                fingerprint: 'epyc-a',
-                serverPromptTokens: 100,
-                serverPromptSeconds: 10,
-                writtenTokens: 40,
-                writeSeconds: 20
-            }),
-            machineShard({
-                shard: 1,
-                cpuModel: 'Intel Xeon Platinum 8370C CPU @ 2.80GHz',
-                fingerprint: 'xeon-b',
-                serverPromptTokens: 120,
-                serverPromptSeconds: 20,
-                writtenTokens: 80,
-                writeSeconds: 10
-            })
-        ]);
-        const split = splitByMachine(run, { colour: { stops: 4, floor: 0.35 } });
-        expect(split.empty).toBe(false);
-        expect(split.groups.map((group) => group.identity.name).sort()).toEqual([
-            'AMD EPYC 7763',
-            'Intel Xeon Platinum 8370C'
-        ]);
-        expect(split.groups.map((group) => group.readTokensPerSecond).sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual([
-            6,
-            10
-        ]);
-        expect(split.groups.some((group) => group.readTokensPerSecond === 220 / 30), 'the split kept a pooled run rate').toBe(false);
-    });
-    test('every rate in a group recomputes from that machine shards alone', () => {
-        const run = foldedRun([
-            machineShard({
-                shard: 0,
-                cpuModel: 'AMD EPYC 7763 64-Core Processor',
-                fingerprint: 'epyc-a',
-                serverPromptTokens: 120,
-                serverPromptSeconds: 6,
-                writtenTokens: 90,
-                writeSeconds: 9
-            }),
-            machineShard({
-                shard: 1,
-                cpuModel: 'AMD EPYC 7763 64-Core Processor',
-                fingerprint: 'epyc-a',
-                serverPromptTokens: 180,
-                serverPromptSeconds: 9,
-                writtenTokens: 60,
-                writeSeconds: 6
-            }),
-            machineShard({
-                shard: 2,
-                cpuModel: 'Intel Xeon Platinum 8370C CPU @ 2.80GHz',
-                fingerprint: 'xeon-b',
-                serverPromptTokens: 50,
-                serverPromptSeconds: 10,
-                writtenTokens: 100,
-                writeSeconds: 25
-            })
-        ]);
-        const split = splitByMachine(run, { colour: { stops: 4, floor: 0.35 } });
-        const byName = new Map(split.groups.map((group) => [group.identity.name, group]));
-        expect(byName.get('AMD EPYC 7763')?.shards).toBe(2);
-        expect(byName.get('AMD EPYC 7763')?.readTokensPerSecond).toBe(20);
-        expect(byName.get('AMD EPYC 7763')?.writeTokensPerSecond).toBe(10);
-        expect(byName.get('AMD EPYC 7763')?.rows[0]).toMatchObject({
-            label: 'Seconds',
-            readValue: 15,
-            writeValue: 15,
-            readPct: 50
-        });
-        expect(byName.get('AMD EPYC 7763')?.rows[1]).toMatchObject({
-            label: 'Tokens',
-            readValue: 300,
-            writeValue: 150,
-            readPct: 67
-        });
-        expect(byName.get('Intel Xeon Platinum 8370C')?.readTokensPerSecond).toBe(5);
-        expect(byName.get('Intel Xeon Platinum 8370C')?.writeTokensPerSecond).toBe(4);
-    });
-});
 test.describe('the machines this run drew', () => {
 	test('machine cards preserve flags, copy speed, clocks and L3 ratios on written rows', () => {
 		const run = foldedRun([

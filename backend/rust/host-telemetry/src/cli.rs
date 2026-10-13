@@ -33,7 +33,10 @@ pub fn run(mut arguments: impl Iterator<Item = String>) -> Result<()> {
         ];
         let mut args = BTreeMap::new();
         while let Some(key) = arguments.next() {
-            require(known.contains(&key.as_str()), "unknown resource argument")?;
+            require(
+                known.contains(&key.as_str()),
+                &format!("unknown resource argument: {key}"),
+            )?;
             let value = arguments.next().ok_or("argument lacks value")?;
             if key == "--memory-profiling" {
                 crate::config::memory_profiling_override(Some(&value))?;

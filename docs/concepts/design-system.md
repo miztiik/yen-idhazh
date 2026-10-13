@@ -1,10 +1,10 @@
 # Design System
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-10-12
 
 Shared rules for typography, layout, colour, motion and controls. [Console design](console-design.md) owns panel-specific presentation; [appearance configuration](config/appearance.md) owns tunable values.
 
-New designs, charts and visuals render in the browser. Do not add prerendered data surfaces. Existing prerendered routes and chart engines that conflict with [telemetry intent](telemetry-intent.md) are migration work, not precedents.
+New designs, charts and visuals render in the browser. Do not add prerendered data surfaces. The console uses d3, with no ECharts engine or server-side chart renderer. Its remaining private build-time inputs are not precedents for new panels; [console delivery](../architecture/publishing/console.md#rendering-direction) names that boundary.
 
 ## Typography is the interface
 
@@ -148,7 +148,7 @@ Icons belong in controls, chrome and declared classifications. Do not invent a s
 
 Use d3 for chart arithmetic and browser rendering. Theme values come from shared tokens. The browser measures the occupied width; floor fractional pixel widths when needed to prevent a resize loop. Reserve stable height where the chart's row count allows it.
 
-Do not introduce an engine that prerenders charts or requires a runtime server. Existing incompatible implementations follow [telemetry intent](telemetry-intent.md). Data preparation may happen in the producer; drawing and interaction happen on the reader's device.
+Do not introduce an engine that prerenders charts or requires a runtime server. Removing a chart engine does not remove route-shell prerendering or authorize publishing private inputs. Data preparation may happen in the producer; native console drawing and interaction happen on the reader's device.
 
 ## A figure on a chart is the article's or it is ours, and it never has to be guessed
 

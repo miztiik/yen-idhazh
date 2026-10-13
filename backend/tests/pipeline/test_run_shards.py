@@ -26,8 +26,10 @@ def test_assemble_and_regeneration_record_only_the_final_manifest_count(
     exact: dict[str, int | None] = {}
     for count, regenerate in ((3, False), (4, True), (None, True)):
         stage_assemble(
-            source, settings=settings, commit_sha=SEED_COMMIT,
-            shards=count, regenerate_only=regenerate,
+            source.model_copy(update={"shards": count}),
+            settings=settings,
+            commit_sha=SEED_COMMIT,
+            regenerate_only=regenerate,
         )
         written = RunManifest.read(
             assemble.day_dir(tmp_path / "public" / "digest", source.date) / "run.json"

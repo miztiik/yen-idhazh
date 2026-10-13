@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-10-10
+**Last Updated**: 2026-10-12
 
 The persisted-shape subsystem: where the models live, how a schema is obtained from one, the small hand copy the frontend carries, and the tests that stop the two drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -13,7 +13,7 @@ backend/idhazh/contracts/*.py <- Pydantic models. HAND-WRITTEN. The source of tr
  |
  +--> Contract.json_schema() <- computed on demand. Nothing writes it to disk.
  |
- +--> a few names copied by hand into three frontend modules, each bound by a test.
+ +--> a few names copied by hand into frontend modules, each bound by a test.
 ```
 
 To change a persisted shape you edit the Pydantic model. Where the frontend copies something, you edit the copy in the same change, and the two tests below fail if you do not.
@@ -26,11 +26,17 @@ The ledger layer reads a field annotation as a recursive tree: scalar (`string`,
 
 ## What the frontend carries
 
-**Three modules type a contract shape by hand.** `frontend/src/lib/server/config.ts` declares `ConsolePanelGroup`; `frontend/src/lib/server/host-fingerprint.ts` declares `HostFingerprintRow` and the two closed sets `SERVER_JOB` and `WATCHED_FLAG`. What each field means stays on the Pydantic model, which is the one place it is written.
+**The machine record has one hand-written frontend type.**
+`frontend/src/lib/console/machine/host-types.ts` declares `HostFingerprintRow`
+and the two closed sets `SERVER_JOB` and `WATCHED_FLAG`. It owns types and
+vocabularies, not a record loader. What each field means stays on the Pydantic
+model.
 
-The host row is stamped `2026-10-10`. Its explicit read boundary requests the
-finite legacy CPU columns beside the corrected columns, validates the source
-version, then removes the legacy names before any consumer sees the row.
+The host row is stamped `2026-10-10`. Native questions in
+`frontend/src/lib/console/queries/machine.ts` request the finite legacy CPU
+columns beside the corrected columns. `frontend/src/lib/data/host-fingerprint.ts`
+validates the source version and removes the legacy names before a panel uses
+the row.
 Historical fingerprints retain algorithm 1 and legitimate observed averages;
 corrected counts, target constraints and reported maximum frequency remain null
 when history never measured them.
@@ -47,19 +53,24 @@ export const SERVER_JOB = [
 	'decide',
 	'migrate',
 	'run-tasks',
-	'history'
+	'history',
+	'save_council_results',
+	'collect',
+	'operator'
 ] as const;
 
 export type ServerJob = (typeof SERVER_JOB)[number];
 ```
 
-The union alone cannot be tested against at run time, and a reader that has to narrow a cell read as text would otherwise retype the members. `host-fingerprint.ts` narrows the `job` column against that array and `watchedFlags()` hands back `WATCHED_FLAG`, so no second list of jobs and no second list of instruction-set flags is typed anywhere in the frontend.
+The arrays and their union types live in `host-types.ts`. `watchedFlags()`
+returns a copy of `WATCHED_FLAG` for the machine cards. The binding tests below
+hold both vocabularies to the Python enums, including their order.
 
 **An optional field is copied optional.** Pydantic marks a field with a default as not required, so `cpu_model?: string | null` is what the contract says: the key may be absent, and present-but-null is the reading nobody took. A reader that fills every key says so by deriving from the copied type - `Required<HostFingerprintRow>` - rather than by declaring a second interface.
 
 **The query door carries a copy of the compact index, and the stamp it reads.** `frontend/src/lib/data/compact-index.ts` declares `CompactEntry` and `CompactIndex` by hand, because the door runs in a browser that fetches `state/compact/<ledger>/index/<period>.json` and cannot import the Pydantic model. Beside them sit `COMPACT_INDEX_STAMP`, the `CompactIndex` stamp this build reads, `COMPACT_PERIODS`, and `ENTRY_STATES`, the closed set an entry's `state` is drawn from. **The stamp rule is the backend's own**: an index stamped at that stamp or older is read when the fields the door acts on pass its guard, and a newer one is refused with both stamps in the console, because only a build at least that new knows what the shape means. The door's rules are [../publishing/how-the-query-door-answers-a-panel.md](../publishing/how-the-query-door-answers-a-panel.md).
 
-**The census row's column names are spelled once, in `frontend/src/lib/server/ledger-rows.ts`.** The door answers only the columns a read asks for, so `ITEM_HEALTH_COLUMNS` names every column `ItemHealthRow` declares, in its order, and `backend/tests/contracts/test_frontend_console_lists.py` fails when the contract gains, loses or renames one. `FEED_HEALTH_COLUMNS` beside it names only the `FeedHealthRow` columns the Voices page reads, in the contract's order, and the same test fails when the contract renames or drops one of them. The two other records a console route reads keep no second list. `SCORE_COLUMNS` is built from the keys of `frontend/src/lib/console/eval-instruments.ts`, which the same test already holds to `EvalRow`, and `HOST_FINGERPRINT_COLUMNS` is keyed by the `HostFingerprintRow` copy above, so the compiler refuses a column that copy does not name.
+**The census row's column names are spelled once, in `frontend/src/lib/server/ledger-rows.ts`.** The door answers only the columns a read asks for, so `ITEM_HEALTH_COLUMNS` names every column `ItemHealthRow` declares, in its order, and `backend/tests/contracts/test_frontend_console_lists.py` fails when the contract gains, loses or renames one. `FEED_HEALTH_COLUMNS` beside it names only the `FeedHealthRow` columns the Voices page reads, in the contract's order, and the same test fails when the contract renames or drops one of them. `SCORE_COLUMNS` is built from the keys of `frontend/src/lib/console/eval-instruments.ts`, which the same test already holds to `EvalRow`. The host questions in `console/queries/machine.ts` name only the cells each panel needs, plus its finite legacy migration inputs.
 
 ## What holds the copy in step
 
@@ -101,9 +112,8 @@ A JSON Schema is a good interchange format and a poor authoring format: it canno
 | `backend/idhazh/contracts/base.py` | The shared string types, the canonical serializer, and the two base models: `Model` for a nested shape and `Contract` for a top-level persisted document. `Contract` owns the `version` date-stamp, the `changelog` tuple, the invariant that `version` equals the newest changelog entry, the stable stem, and `json_schema()`. |
 | `backend/idhazh/contracts/__init__.py` | `CONTRACTS`, the registry of every top-level persisted document. What a check over all of them iterates. |
 | `backend/idhazh/contracts/<name>.py` | One module per persisted shape. |
-| `frontend/src/lib/server/host-fingerprint.ts` | The hand copy of `HostFingerprintRow`, `ServerJob` and `WatchedFlag`. |
+| `frontend/src/lib/console/machine/host-types.ts` | The hand copy of `HostFingerprintRow`, `ServerJob` and `WatchedFlag`, and the arrays the vocabulary tests bind. |
 | `frontend/src/lib/server/ledger-rows.ts` | `ITEM_HEALTH_COLUMNS` and `FEED_HEALTH_COLUMNS`, the column names of `ItemHealthRow` and `FeedHealthRow` a console route asks the door for. |
-| `frontend/src/lib/server/config.ts` | The hand copy of `ConsolePanelGroup`. |
 | `frontend/src/lib/data/compact-index.ts` | The hand copy of `CompactEntry` and `CompactIndex`, the entry states, and the stamp the query door reads. |
 | `frontend/src/lib/console/band.ts` | The hand copy of `RouteId` and `ROUTE_IDS`, the routes the console strip draws, in the order the band producer writes them. |
 | `frontend/src/lib/payload/types.ts` | The published payload's TypeScript shapes, mirroring `DigestDay`. Hand-written, and bound by nothing. |

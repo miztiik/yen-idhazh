@@ -1,6 +1,6 @@
 # Console Payloads
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-10-12
 The operator console reads native records as well as the remaining public
 projections. Each crossing into the site needs a contract (Guardrail #11).
 This page lists the public projections. The machine-readable copy is
@@ -370,17 +370,13 @@ allowed in front of it is that one named file. Anything else of ours in front
 turns the test red, and so does one more request of any kind. When the server
 loads go the band becomes index 0 and both lines still hold.
 
-**Five charts on `/console/` are drawn in the browser** - the per-article cost,
-the failure mix, the item time split, the flow diagram and the extraction yield.
-There were four when this was measured: the run donut was the fourth, and it has
-since been replaced by the run-yield panel, which is server-drawn inline SVG
-rather than a browser chart. The four were 143 KB of finished SVG, which is what
-stood between the document and the bar after the rows left; the figure has not
-been re-measured because nothing turns on it. Each keeps its numbers in words
-beside it: a readout strip under the four with a column per day, and for the
-flow a stepped list below the page's stacking breakpoint and the day-by-day
-table above it. What an empty box says until a chart draws, and after a download
-that failed, is
+**Published-ledger charts on `/console/` derive and draw native answers in the
+browser.** Failure mix counts recorded rows; the item time split uses one
+complete clock cohort; reading and writing cost keep independent rate pairs.
+Their declared questions, native helpers and readouts own those meanings, not
+an engine option builder. Private build-time inputs keep the boundary named in
+[console.md](console.md#rendering-direction). What an empty box says until a
+chart draws, and after a download that failed, is
 [console-charts.md](console-charts.md#an-empty-chart-box-says-which-nothing-it-holds).
 
 **The band's months list names telemetry only.** The native ledgers have their
@@ -421,11 +417,9 @@ on a change that moved no data, and it would have had to be maintained by
 whoever moved a panel rather than by whoever moved a payload.
 
 **A console reader takes one row per key from the packing, and settles nothing
-itself.** Two jobs write a census row for every item - a work shard as the item
-settles, and assemble over the whole day afterwards - and a panel that read both
-would count every item of that day twice. A list keyed by item id draws one
-story twice, which is how this surfaced: `MemoryBoard.svelte` threw on a repeated
-key. The packing settles each day under the ledger's own key and preference in
+itself.** A work shard and assemble can both file a census row for the same item.
+Counting both would count the item twice. The packing settles each day under
+the ledger's own key and preference in
 `backend/idhazh/ledger/keys.py` before it writes the day's file, so
 `itemHealthRows`, `evalRows` and `feedHealthRows` in `frontend/src/lib/server/ledger-rows.ts` read
 days that already hold one row per item per run, one per scored measurement, or
@@ -484,15 +478,17 @@ for cell. Only `ITEM_HEALTH_KEY` carries a rule, because its two writers
 genuinely differ - assemble cannot name the job that ran the item.
 
 **A job's two halves in the machine record are one row once packed.** A job
-writes its machine before its heaviest step and its clock after its last item,
-and neither half repeats a cell of the other, so keeping one of two rows would
-lose the other half. The clock step reads its own probe row back and files the
-whole row again as a later write of the same work unit, and the union keeps the
-later file ([../contracts/persistence.md](../contracts/persistence.md#the-two-identifiers)).
-`machineRecord` in `frontend/src/lib/server/host-fingerprint.ts` reads the packed
-days once, and the Hardware route hands the same rows to the fingerprints and to
-`machine-counters.ts`, so a job's own clock sits beside its machine with no merge
-in the frontend.
+writes its machine before its heaviest step and its clock after its last item.
+The clock step reads its own probe row back and files the whole row again as a
+later write of the same work unit. Packing keeps that later file
+([../contracts/persistence.md](../contracts/persistence.md#the-two-identifiers)).
+The Hardware route asks the native questions in
+`frontend/src/lib/console/queries/machine.ts`. Helpers in
+`frontend/src/lib/console/machine/records.ts` pass the selected host and item
+cells, with the exact `run-shards` counts, to
+`frontend/src/lib/console/machine/counters.ts`.
+The four-cell join keeps a job's own clock beside its machine. These Hardware
+helpers do not merge the two writes or read private manifests.
 
 **Row 10 measured before it moved anything, and the measurement changed the
 order of the work.** The plan read the 32 inline SVGs as "139 KB of 3,726 KB, so

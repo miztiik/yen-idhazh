@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-10-12
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -869,38 +869,18 @@ test, run Playwright on the specs directly against that build. Setting `DATE`
 back needs no clean-up by hand: the canary day build deletes every folder it
 writes before it writes, so the next build holds nothing from the moved day.
 
-## A chart has no plot until somebody scrolls to it
+## Wait for the native query and drawing
 
-`engine.ts` starts a chart from an `IntersectionObserver` that reaches one
-viewport past the fold, so a panel further down than that holds no `svg` at all
-until the page scrolls to it. A check that waits on the `svg` before scrolling
-waits for the one thing only that scroll produces, and it waits until the test
-budget runs out.
+The console uses native components and d3, not a deferred ECharts engine.
+A reserved axis frame can exist before any query answer arrives, so finding an
+`svg` alone does not prove that measurements were drawn. Wait for the retained
+representative journey's actual answer and readout, not a fixed delay or an old
+engine-ready attribute.
 
-**Scroll the panel, then wait for the plot.** The panel is on the page from the
-first paint, so scrolling it is a move that can finish:
-
-```ts
-await owner.evaluate((node) => node.scrollIntoView({ behavior: 'instant', block: 'center' }));
-await expect(owner.locator('svg').first(), 'nothing drew').toBeVisible({ timeout: 15000 });
-```
-
-`scrollIntoViewIfNeeded` on the plot itself is the shape to avoid, and instant
-beats smooth either way: a box read mid-scroll is a box the mouse misses.
-
-Nothing about the page order is safe to assume here. Two checks were written
-before a route's panels were regrouped, and both passed until the regrouping put
-the first chart they reach more than a viewport down with nothing scrolling to
-it first.
-
-**After a load, wait for the charts, never for a fixed time.** Each chart host
-carries `data-chart`: `waiting` until the engine draws it, then `live` or
-`failed`. Wait on the representative chart's visible result, as
-[`frontend/tests/console-data-explorer-still.spec.ts`](../../frontend/tests/console-data-explorer-still.spec.ts)
-does. A sleep after
-`goto` was too short on a slow runner and wasted time on a fast one. After a key
-press or a pointer move, assert the new text with `expect(...).toHaveText` -
-it retries, so it needs no sleep either.
+Scroll the panel before interacting when it is outside the view. After a key
+press or pointer move, assert the resulting readout with Playwright's retrying
+expectations. Do not add an interaction, width, theme or panel matrix to replace
+retired engine checks. Follow `CLAUDE.md` section 13's representative coverage.
 
 ## Smoke-test a published-site change by hand
 
@@ -1038,15 +1018,13 @@ including every console route, and rejects dated documents as well.
 and nothing fails when it does - which is the failure mode to look for rather
 than the one to assume cannot happen.
 
-**Two limits stand and neither is ours to choose.** Guardrail #2's 1 GB Pages cap
+**The published-site limit is not ours to choose.** Guardrail #2's 1 GB Pages cap
 is GitHub's, and `retention.pages_hard_cap_mb` is bounded `le=1024` in the schema
-so a config edit can only ever make it stricter. The 200,000-byte lazy chart
-chunk stands too, because a new echarts registration is a decision about the
-chart vocabulary rather than about size.
+so a config edit can only ever make it stricter. The former lazy-engine chunk
+check has no beneficiary after engine retirement and is removed with it.
 
-**Turning `console.default_window_days` down is the right first move when a page
-is inlining something the first paint does not need.** A saving is not a cut, and
-neither is a reason to leave a panel unbuilt. **Thinning a plot is wrong**:
+**Native console panels request the columns and days their selected span needs.**
+Private build-time panels retain their named bounded inputs. **Thinning a plot is wrong**:
 sampling points, or dropping the oldest days, is not a byte decision at all - it
 changes what the chart is a measurement of, and a scatter that quietly stopped
 drawing some of its rows is worse than one that got heavy.

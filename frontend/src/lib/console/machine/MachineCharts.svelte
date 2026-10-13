@@ -9,7 +9,7 @@
 	import { distribution } from '$lib/charts/d3/distribution';
 	import { emptyState } from '$lib/charts/d3/empty';
 	import { AXIS_LABEL_GAP_PX, chartWidth, frame, labelWidth, MARGIN, observeWidth } from '$lib/charts/frame';
-	import { clockAgreement, readAgainstWritten, money, type CostRate } from '$lib/charts/machine';
+	import { clockAgreement, clocksChart, readAgainstWritten, workSeries, money, type CostRate } from '$lib/charts/machine';
 	import { costOverDays } from '$lib/charts/cost';
 	import { settingsRules } from '$lib/console/settings-moved';
 	import { nameSpan } from '$lib/console/span-words';
@@ -53,11 +53,7 @@
 		: id === 'context-headroom' ? 'Each prompt against the reading limit'
 		: id === 'prompt-reuse' ? 'Text held for the label call against text the summary call reads fresh'
 		: 'Tokens read against tokens written');
-	const clockRows = $derived(rankedList(clocks.pairs.flatMap((pair) => pair.gapPct === null ? [] : [{
-		label: pair.label, value: pair.gapPct,
-		context: `item ledger ${pair.ledger?.toFixed(2)}; server ${pair.server?.toFixed(2)} tokens a second`,
-		...(pair.agrees === false ? { status: 'disagrees' } : {})
-	}]), { rules: [{ at: knobs.clocks_agree_within_pct, label: 'Allowed disagreement' }] }));
+	const clockRows = $derived(clocksChart(clocks.pairs, knobs.clocks_agree_within_pct));
 	const context = $derived(contextReadings(rows));
 	const contextDomain = $derived([
 		Math.min(1, ...context.label, ...context.summary, ...context.rules.map((one) => one.at)),
@@ -70,7 +66,7 @@
 	let outputPrice = $state(rate.outputPerMillion);
 	let rateSource = $state<'configured' | 'yours'>('configured');
 	const prices = $derived({ ...rate, inputPerMillion: inputPrice, outputPerMillion: outputPrice });
-	const cost = $derived(costOverDays(work.runs, prices, { heightPx: chart.height_px }));
+	const cost = $derived(costOverDays(work.runs, prices));
 	const priced = $derived({
 		input: cost.days.reduce((sum, day) => sum + day.read, 0),
 		output: cost.days.reduce((sum, day) => sum + day.written, 0),
@@ -80,13 +76,7 @@
 		if (id === 'prompt-reuse') return reuseSeries(rows);
 		if (id === 'counterfactual-cost') return [{ label: `Running counterfactual total, ${rate.currency}`, token: '--chart-1',
 			points: cost.days.map((day) => ({ date: day.date, value: day.running })) }];
-		const days = [...new Set(work.runs.map((run) => run.date))].sort();
-		return [
-			{ label: 'Read tokens', token: '--chart-6', points: days.map((date) =>
-				({ date, value: work.runs.filter((run) => run.date === date).reduce((n, run) => n + run.input, 0) })) },
-			{ label: 'Written tokens', token: '--chart-7', points: days.map((date) =>
-				({ date, value: work.runs.filter((run) => run.date === date).reduce((n, run) => n + run.output, 0) })) }
-		];
+		return workSeries(work.runs, 'tokens');
 	});
 	const drawing = $derived(dateSeries(series, { frame: box, density: chart.tick_density, valueTicks: 4, padding: 0.2, rule }));
 	const ruleNote = $derived.by(() => {

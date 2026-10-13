@@ -1,6 +1,6 @@
 # Published Frontend
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-10-12
 
 What a build writes, what a reader's browser fetches, and where each part of the
 reader's surface is written up. This page holds the shell: the documents a build
@@ -29,7 +29,7 @@ The operator's surface is a different reader with a different budget, and it is
 
 ## Seven documents, and an eighth that answers every dated address
 
-Seven routes are generated at build time - `/`, `/archive/`, `/console/` and its four tabs - and `adapter-static`'s fallback, `404.html`, answers everything else. SvelteKit with `adapter-static` and no `entries` reading the digest tree anywhere. **Eight files declare `prerender = true` and seven routes get a document.** The counts differ because `console/+layout.ts` declares it for every route under `/console/` and each console tab that has a server load declares it again - so how many documents a build writes is counted in the build and never in the grep: the build writes seven `index.html` files plus `404.html`. `/archive/`, `/404` and the console inline everything they draw; `/` inlines a seed of the newest day and fetches the rest; a dated URL is the fallback document, and the page fetches the served day for the whole of it.
+Seven routes are generated at build time - `/`, `/archive/`, `/console/` and its four tabs - and `adapter-static`'s fallback, `404.html`, answers everything else, including Data explorer. SvelteKit uses `adapter-static` with no `entries` reading the digest tree. Console route shells remain prerendered. Their published-ledger panels fetch native Parquet at view time; private build-time exceptions are named in [console.md](console.md#rendering-direction). `/archive/` and `/404` inline their content; `/` inlines a seed of the newest day and fetches the rest; a dated URL is the fallback document, and the page fetches the served day for the whole of it.
 
 **Until 2026-09-09 every route was prerendered, and that cost six documents a published day.** 20 dated pages and 96 topic pages, each with a `__data.json` twin, all rebuilt on every run because a document holding a seed of a day changes when the day does. Measured on a real build, a developer machine, 2026-09-09, `BUILD_VERSION` pinned across both cases: 796 files and 116,050,183 bytes before, **572 files and 101,880,352 after** - 224 files and 14,169,831 bytes, 12.2 percent of the built site. On that build 123 documents became 7 and 121 `__data.json` files became 5; the documents are 8 today and the twins are 7, because each of the two console tabs added on 2026-09-12 has since grown a server load of its own - `/console/voices/` on 2026-09-14 and `/console/judgement/` on 2026-09-17. **The document count no longer moves when a day is added**, which is the whole of it - it moves when somebody adds a route, which is a line in a commit rather than a run of the pipeline.
 
@@ -44,7 +44,7 @@ Three consequences, and the third one changed shape again when the dated routes 
 **A dated URL with no script is blank, and that is answered rather than accepted.** The fallback's body is a boot script and nothing else, so [../../../frontend/src/app.html](../../../frontend/src/app.html) carries one `<noscript>` line at the foot of the body: a page for one day opens with JavaScript, the newest digest is on the front page, and every published day is listed in the archive. Both of those render complete with no script at all. It is last in the body and it claims nothing, so on the pages that do render it sits under what the reader came for and is true there too. **What a script-free reader loses is real**: a topic pill used to be one click to a prerendered desk, and it is now one click to that line. Reader's own rule decided it - a blank page is a site that looks broken to the one reader who will never report it.
 
 **Four files are fetched, and one of them is the whole of a dated page.** The
-console reads older telemetry shards when an operator pans back. The archive
+console queries native ledger files when an operator changes the span. The archive
 reads the month index behind its story list, that month's sibling vector file
 when a reader asks to search, and the day payload behind a result it is showing.
 Both reading routes read that same day payload - since 2026-09-01 for the
@@ -70,19 +70,12 @@ The build-time loader lives under `frontend/src/lib/server/`, which is the frame
 
 **The seed keeps the day's leads.** A lead is chosen across the whole day rather than off its head - measured 2026-09-01 on the 601-story day of 2026-08-31, the five sat at positions 249, 285, 337, 344 and 493 - so a seed built as a plain prefix ships a leading block whose links land on nothing. The aside only exists once a lead resolves, so it would also mean a first paint in one column that re-lays itself into two when the fetch arrives, re-wrapping every card on screen. `dayShell` has taken a `keep` option for exactly this since the seam was built, and had no caller in `frontend/src` until now.
 
-**The same rule bites a chart, and it is the reason a `load` never returns an
-echarts option.** A chart is drawn to SVG on the server and the sentinel
-colours in it are swapped for custom-property references on the way out
-([../../concepts/design-system.md](../../concepts/design-system.md)), so the
-finished SVG is safe. The `option` the live chart hydrates from is not: it still
-holds the magenta sentinels, and anything a load returns is serialised into the
-document. Hand one across and the page ships a colour no reader may ever see.
-[frontend/tests/charts.spec.ts](../../../frontend/tests/charts.spec.ts) scans
-every built page for the sentinel pattern and fails the build, which is how the
-Machine route's first draft was caught on 2026-08-31 - 981 gzipped bytes of
-option JSON in the document, and a colour leak underneath them. Every console
-route rebuilds its options in the component from the arrays the load returned;
-the server sends the drawing and the numbers, never a drawing instruction.
+**Published-ledger charts carry no drawing options or ledger values in their
+route documents.** Native components derive and draw their answers in the
+browser, using d3 and theme tokens. The legacy engine, its sentinel-colour
+translation and its server-side SVG renderer are gone. Private build-time
+panels keep their existing bounded inputs; no manifest, plan or private census
+becomes public because a chart dependency was removed.
 
 | State | When | What ships |
 | --- | --- | --- |
@@ -164,7 +157,10 @@ Prerendering everything was the decision the rest hangs off. It was chosen over 
 
 **What it costs was measured rather than assumed, and the bytes turned out not to be the question.** One tree built both ways - as it stands, and with the seven declarations deleted and nothing else changed - three interleaved passes a case at one pinned `BUILD_VERSION`, and zero spread on every quantity. With prerendering the built site is 106,316,899 B and without it 104,681,197 B, so prerendering costs **1,635,702 B: 1.54 percent of the published site, which is 1.6 MB of a 1,024 MB cap, or 18 published days of the 1,047 the runway has left.** The case without the declarations writes no `frontend/build/index.html` at all and leaves `404.html` as the only HTML file in the tree, and `npm run build` exits 1 on it, because `frontend/scripts/build-state.ts` refuses to certify a build whose root document is missing - so every browser spec would stop collecting as well. The hardware, the method, the pin and every figure are in [../../reference/benchmarks/prerender-on-and-off.md](../../reference/benchmarks/prerender-on-and-off.md), which is the page to cite and the page a better number replaces.
 
-Removing `uplot` restores the refusal one row below rather than overturning it. Guardrail #8 requires a dependency to name a beneficiary feature; its recorded beneficiary was pan and zoom, and `Viewport.svelte` implements those itself with a keydown handler and four buttons. What it actually drew was a second, smaller copy of the compression scatter with less information than the SVG above it. It would come back for pan and zoom *inside* a single chart, which is a different requirement, and the gzipped route chunk would be re-measured on that day rather than reusing the 2026-08-23 figure. Authority: Jony, Guardrail #8.
+The console's shared preset control does not need a second chart library.
+Native components use d3 helpers for scales and drawing. A library must still
+name a live beneficiary under Guardrail #8; a removed viewport or unused option
+builder cannot supply one.
 
 Taking `d3-scale` and `d3-array` a day later is not that decision reversed. A
 chart library owns the element, the redraw and the theme, which is how the last

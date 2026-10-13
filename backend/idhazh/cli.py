@@ -361,25 +361,6 @@ STAGES: Final[tuple[str, ...]] = (
 )
 
 
-def shard_count(items: int, *, run: RunConfig) -> int:
-    """How many worker jobs a day of `items` earns.
-
-    `run.shard_size` is what one worker is sized to carry, so a day that needs
-    fewer workers gets fewer. Every extra job restores the weights again, and
-    that restore is the largest fixed cost in the pipeline (Guardrail #2). The count
-    never passes `run.max_parallel` and never falls below one, so an empty day
-    still runs a worker that exits cleanly rather than an empty matrix.
-
-    This is what a run derives for itself. An operator dispatching `digest.yml`
-    names a count instead, and may name a larger one than this will ever return.
-
-    The bound this has to clear is the worst case, not the day in hand: at
-    `run.safety_ceiling_per_run` items the shard each worker draws must still
-    finish inside the `work` job's timeout.
-    """
-    return max(1, min(-(-items // run.shard_size), run.max_parallel))
-
-
 def qualification_repeats(override: int | None, *, run: RunConfig) -> int:
     """How many times this invocation replays each frozen item.
 
@@ -538,7 +519,7 @@ def _main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--config", type=Path, default=config.DEFAULT_CONFIG_DIR)
     parser.add_argument("--commit", default=_STAND_IN_COMMIT)
     parser.add_argument("--shard", type=int, default=0)
-    parser.add_argument("--shards", type=int, default=1)
+    parser.add_argument("--shards", type=int, default=None)
     parser.add_argument(
         "--execution",
         type=int,
@@ -786,6 +767,10 @@ def _main(argv: Sequence[str] | None = None) -> int:
         help="Harvest even when finetune.harvest_every_days says it is not due yet.",
     )
     args = parser.parse_args(argv)
+    if args.stage in {"plan", "run"} and args.shards is not None and args.shards < 1:
+        parser.error("--shards must be at least 1")
+    if args.stage != "plan" and args.shards is None:
+        args.shards = 1
 
     memory_override = args.memory_profiling
     if memory_override is None:
@@ -1118,9 +1103,12 @@ def _dispatch(
         )
 
     if args.stage == "shards":
+        plan = _planned(date, args.execution)
+        if plan.shards is None:
+            parser.error(f"run {plan.run_id} has no recorded shard count")
         # stdout carries the answer and stderr carries the logs, so a caller
         # reads one number without parsing a log line.
-        print(shard_count(len(_planned(date, args.execution).items), run=settings.app.run))
+        print(plan.shards)
         return 0
 
     if args.stage in ("plan", "run"):
@@ -1132,6 +1120,7 @@ def _dispatch(
             cap=args.cap,
             article_limit=args.article_limit,
             execution=args.execution,
+            shards=args.shards,
         )
         common.LOG.info("planned date=%s items=%s feeds=%s", date, len(plan.items), plan.feeds_read)
 
@@ -1205,10 +1194,6 @@ def _dispatch(
             settings=settings,
             commit_sha=args.commit,
             runner=args.runner,
-            # The same arithmetic the `shards` verb prints for the workflow's
-            # fanout, read off the same plan file. The manifest records what was
-            # planned; the machine rows record who answered. Two instruments.
-            shards=shard_count(len(assemble_plan.items), run=settings.app.run),
         )
 
     if args.stage == "harvest":

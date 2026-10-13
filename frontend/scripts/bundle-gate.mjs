@@ -65,6 +65,16 @@ const BUILD = 'build';
 const ROOT = 'build/_app/immutable';
 const REGISTRY = 'config/ledgers.json';
 
+const retiredEngine = 'echarts';
+const manifest = JSON.parse(readFileSync('package.json', 'utf8'));
+const lock = JSON.parse(readFileSync('package-lock.json', 'utf8'));
+if ([manifest.dependencies, manifest.devDependencies].some((dependencies) =>
+	Object.hasOwn(dependencies ?? {}, retiredEngine)) ||
+	Object.hasOwn(lock.packages, `node_modules/${retiredEngine}`)) {
+	console.error('bundle gate FAILED - the retired chart engine is installed.');
+	process.exit(1);
+}
+
 // Directories whose modules a browser loads before any reader gesture: the
 // entry point and the route modules. A chunk one of them imports statically is
 // fetched with it, so the check follows every static import from these; a

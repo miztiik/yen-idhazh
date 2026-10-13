@@ -8,8 +8,7 @@
 	 * series that halved while its neighbour doubled; lines hide the total.
 	 *
 	 * **It ships only where no re-shaping is needed.** The values handed to the
-	 * engine are the same list in every state - see `StackShape` in
-	 * `$lib/charts/stacked` - and a panel that would need its data massaged to
+	 * native drawing are the same list in every state, and a panel that would need its data massaged to
 	 * fit a second state gets no switch at all. A grain switch qualifies on the
 	 * same terms: one builder call returns every grain it offers.
 	 *

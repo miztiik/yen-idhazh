@@ -1,5 +1,5 @@
 import { expect, test } from './support/door-page';
-import { PAGES_CAP_BYTES, siteCost, siteRunway } from '../src/lib/charts/glance';
+import { PAGES_CAP_BYTES, siteCost, publishingHorizon } from '../src/lib/charts/glance';
 import type { RunSummary } from '../src/lib/server/payload';
 import { BAND_UNREAD } from '../src/lib/console/band';
 import { BY_ROUTE } from './support/console-expect/console-band';
@@ -25,8 +25,6 @@ import { BY_ROUTE } from './support/console-expect/console-band';
  *
  * `console-site-size.spec.ts` owns the per-article cost the runway divides by.
  */
-/** What the alarm is set to matters to `site-weight`, never to this figure. */
-const ALARM = 800 * 1024 * 1024;
 function summary(date: string, siteBytes: number, runs: number): RunSummary {
     return { date, runs, planned: 0, failed: 0, siteBytes, siteFiles: 1, models: [], records: [] };
 }
@@ -42,13 +40,13 @@ test('no rate of runs a day can move the answer', () => {
     const items = new Map(dates.map((date) => [date, 100]));
     const once = dates.map((date, i) => summary(date, bytes[i], 1));
     const thrice = dates.map((date, i) => summary(date, bytes[i], 3));
-    const a = siteRunway(used, siteCost(once, items).median, ALARM);
-    const b = siteRunway(used, siteCost(thrice, items).median, ALARM);
+    const a = publishingHorizon(used, siteCost(once, items), items);
+    const b = publishingHorizon(used, siteCost(thrice, items), items);
     expect(a).not.toBeNull();
-    expect(a?.toCap, 'the runway moved when only the run count did').toBe(b?.toCap);
+    expect(a?.articles, 'the horizon moved when only the run count did').toBe(b?.articles);
     // 3,000 bytes an article, by construction, so the expected answer is a
     // division a reader can check.
-    expect(Math.round(a?.toCap ?? 0)).toBe(Math.round((PAGES_CAP_BYTES - used) / 3000));
+    expect(Math.round(a?.articles ?? 0)).toBe(Math.round((PAGES_CAP_BYTES - used) / 3000));
     // And what a per-day answer would have done with the same two fixtures,
     // written out so the difference is on the page rather than asserted in the
     // abstract.

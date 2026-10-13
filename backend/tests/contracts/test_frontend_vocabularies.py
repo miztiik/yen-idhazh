@@ -3,7 +3,7 @@
 The other half of the control that replaced the generator. `SERVER_JOB` decides
 which machine rows a console route can place, and `WATCHED_FLAG` decides how
 many instruction-set chips a machine card draws. Both are copied by hand into
-`frontend/src/lib/server/host-fingerprint.ts`, and a member that reached one
+`frontend/src/lib/console/machine/host-types.ts`, and a member that reached one
 side and not the other is silent on the page: an unplaced job drops its row,
 and a missing flag draws eleven chips where the probe recorded twelve.
 
@@ -27,7 +27,9 @@ from idhazh.ledger import paths
 
 pytestmark = pytest.mark.contract
 
-READER: Final[Path] = REPO_ROOT / "frontend" / "src" / "lib" / "server" / "host-fingerprint.ts"
+READER: Final[Path] = (
+    REPO_ROOT / "frontend" / "src" / "lib" / "console" / "machine" / "host-types.ts"
+)
 SLICE_SHAPES: Final[Path] = REPO_ROOT / "frontend" / "src" / "lib" / "data" / "slice-shapes.ts"
 
 #: The two enums, by the name the frontend gives each one.

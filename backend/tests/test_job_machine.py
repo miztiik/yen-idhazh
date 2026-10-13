@@ -12,7 +12,7 @@ from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.telemetry import job_machine
+from idhazh.telemetry import job_machine, silicon
 
 DAY = "2026-09-27"
 RUN = f"{DAY}-18012345678"
@@ -123,12 +123,12 @@ def test_native_boundary_is_the_sole_raw_host_writer(
     settings = config.load()
     events = _NativeEvents(started=False)
     monkeypatch.setattr(
-        job_machine.silicon,
+        silicon,
         "file_machine_row",
         lambda **_: pytest.fail("Python machine writer competed with native output"),
     )
     monkeypatch.setattr(
-        job_machine.silicon,
+        silicon,
         "file_job_clock",
         lambda **_: pytest.fail("Python clock writer competed with native output"),
     )
@@ -151,7 +151,7 @@ def test_native_failure_after_publication_does_not_fall_back(
     settings = config.load()
     events = _NativeEvents(started=True)
     monkeypatch.setattr(
-        job_machine.silicon,
+        silicon,
         "file_machine_row",
         lambda **_: pytest.fail("partial native session must not write a Python row"),
     )

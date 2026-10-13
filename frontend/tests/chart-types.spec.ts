@@ -201,29 +201,24 @@ test('quantity colours are explicit, keyed by name, while omitted part colours a
 	expect(await draw('Flow', { ...common, geometry: flowed })).toContain('data-chart-type="flow"');
 });
 
-test('kept cards and failure lists keep omitted-prop behaviour, while the card can lead and declare its rule', async () => {
-	const ordinary = await draw('KpiCard', { label: 'Count', value: '12' });
+test('cards require their semantic rule and explicit failure stages keep the native ranking identity-free', async () => {
+	const ordinary = await draw('KpiCard', { label: 'Count', value: '12', rule: declined });
 	expect(ordinary).not.toContain('data-lede');
-	expect(ordinary).not.toContain('data-model-rule');
+	expect(ordinary).toContain('data-model-rule="no"');
 	const lede = await draw('KpiCard', { label: 'Count', value: '12', lede: true, rule: declined });
 	expect(lede).toContain('data-lede');
 	expect(lede).toContain('data-model-rule="no"');
-	const failure = { rows: [], window: { start: '2026-09-01', end: '2026-09-03' }, selectedCode: null, max: 20, sourceMax: 20, readoutMaxShare: 1 };
-	expect(await draw('FailureList', failure)).not.toContain('data-failure-stages');
-	expect(await draw('FailureList', { ...failure, stages: { options: ['fetch', 'extract'], chosen: 'extract' } })).toContain('data-failure-stages');
-	const rows = [
-		{ ...telemetryRow({ date: '2026-09-01', stage: 'fetch', outcome: 'failed', code: 'old-fetch' }), failed_rule: 'Fetch rule' },
-		{ ...telemetryRow({ date: '2026-09-01', stage: 'extract', outcome: 'failed', code: 'old-extract' }), failed_rule: 'Extract rule' }
-	];
-	const picked = await draw('FailureList', { ...failure, rows, stages: { options: ['fetch', 'extract'], chosen: 'extract' } });
+	const failure = { window: { start: '2026-09-01', end: '2026-09-03' }, max: 20, readoutMaxShare: 1 };
+	const ranking = failureRuleRows([
+		{ date: '2026-09-01', stage: 'fetch', outcome: 'failed', code: 'old-fetch', failed_rule: 'Fetch rule' },
+		{ date: '2026-09-01', stage: 'extract', outcome: 'failed', code: 'old-extract', failed_rule: 'Extract rule' }
+	]);
+	const picked = await draw('FailureList', { ...failure, ranking, stages: { options: ['fetch', 'extract'], chosen: 'extract' } });
 	expect(picked).toContain('Extract rule');
 	expect(picked).not.toContain('Fetch rule');
 	expect(picked).not.toContain('old-extract');
 	expect(picked.match(/type="radio"/g)?.length).toBe(2);
-	const kept = await draw('FailureList', { ...failure, rows });
-	expect(kept).toContain('old-fetch');
-	expect(kept).toContain('old-extract');
-	expect(kept).not.toContain('Extract rule');
+	expect(picked).not.toMatch(/data-failure-(item|source|rows)=|data-source-losses/);
 	const geometry = rankedGeometry(rank([{ key: 'stable', value: 2, row: { label: 'Stable name', value: '2 articles' } }], 20));
 	expect(geometry.rows[0].row.value).toBe('2 articles');
 });
@@ -278,7 +273,7 @@ test('identity-free rule rankings count rows and unknown rules, never sources or
 		]
 	});
 	const props = { ranking: rows, window, stages: { options: ['fetch', 'extract'], chosen: 'fetch' },
-		selectedCode: null, max: 20, sourceMax: 20, readoutMaxShare: 1 };
+		max: 20, readoutMaxShare: 1 };
 	const html = await draw('FailureList', props);
 	expect(html).toContain('2 of 4 failures');
 	expect(html).toMatch(/1 of 4 failures at fetch\s+has no recorded failed rule\./);

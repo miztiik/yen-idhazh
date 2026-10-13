@@ -30,7 +30,7 @@
 import { BANDS } from '../bands';
 import { readoutOf, type Readout } from '../charts/readout';
 import { bandFor, grouped, type SummaryBand } from '../charts/series';
-import type { StackRule, StackSeries } from '../charts/stacked';
+import type { StackRule, StackSeries } from '../charts/stack-types';
 import { dayMonth, shortDate } from '../format';
 import { countDays, nameSpan, openWithSpan } from './span-words';
 

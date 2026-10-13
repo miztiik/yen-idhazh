@@ -1,18 +1,6 @@
-/** Does the shard board put every work-or-host fact on the row?
- *
- * The board is worked out here on shard rows this file writes, folded the way the
- * Hardware page folds a run, with every figure a row carries written out. That
- * covers the three clocks as well - the time no named step claimed, the time an
- * item waited, and the time the shard paid opening the weights. The first is the
- * one to watch: it is the stored column added up and nothing else, so an
- * implementation that worked it out from the step clocks would give a different
- * number here.
- *
- * Route assertions live in `console-shard-board-page.spec.ts`.
- */
-import { expect, test } from './support/door-page';
-import { shardBoard } from '../src/lib/charts/machine';
-import { machineCounters, type MachineLimits, type MachineRun } from '../src/lib/server/machine-counters';
+/** Native shard counters retain independent host, signed-gap and queue readings. */
+import { expect, test } from '@playwright/test';
+import { machineCounters, type MachineLimits, type MachineRun } from '../src/lib/console/machine/counters';
 import { ledgers, plan, type ShardReading } from './support/machine-rows';
 const DATE = '2026-09-18';
 const RUN = '2026-09-18-1';
@@ -41,7 +29,7 @@ function shard(over: ShardReading): ShardReading {
 		...over
 	};
 }
-test.describe('the shard board carries the work-or-host answer on the row', () => {
+test.describe('native shard readings', () => {
 	test('every host figure on a row comes from written shard rows', () => {
 		const run = foldedRun([
 			shard({
@@ -73,20 +61,18 @@ test.describe('the shard board carries the work-or-host answer on the row', () =
 				queueWaitMs: 3_400
 			})
 		]);
-		const board = shardBoard(run, TEST_LIMITS.jobTimeoutSeconds, 640);
-		const byShard = new Map(board.rows.map((row) => [row.shard, row]));
+		const byShard = new Map(run.reported.map((row) => [row.shard, row]));
 
-		expect(board.runId).toBe(RUN);
-		expect(board.rows).toHaveLength(2);
+		expect(run.runId).toBe(RUN);
+		expect(run.reported).toHaveLength(2);
 		expect(byShard.get(0)).toMatchObject({
 			items: 1,
 			writeTokensPerSecond: 10,
 			cpuBusyPct: 40,
 			loadMax: 3.5,
 			logicalProcessors: 4,
-			swapFreeBytes: 512 * MIB,
+			swapFreeMinBytes: 512 * MIB,
 			swapTotalBytes: 1_024 * MIB,
-			swapState: 'measured',
 			modelLoadMs: 500,
 			unclaimedSeconds: 2.5,
 			clocksDisagreed: 0,
@@ -94,15 +80,11 @@ test.describe('the shard board carries the work-or-host answer on the row', () =
 			queueMedianSeconds: 1.2,
 			queueMaxSeconds: 1.2
 		});
-		expect(byShard.get(0)?.memory).toMatchObject({
-			median: 2_000 * MIB,
-			max: 2_000 * MIB,
-			empty: false
-		});
-		expect(byShard.get(0)?.cpu).toMatchObject({
-			median: 40,
-			max: 70,
-			empty: false
+		expect(byShard.get(0)).toMatchObject({
+			rssMedianBytes: 2_000 * MIB,
+			peakRssBytes: 2_000 * MIB,
+			cpuBusyMedianPct: 40,
+			cpuBusyMaxPct: 70
 		});
 		expect(byShard.get(1)).toMatchObject({
 			items: 1,
@@ -110,9 +92,8 @@ test.describe('the shard board carries the work-or-host answer on the row', () =
 			cpuBusyPct: 60,
 			loadMax: 5.25,
 			logicalProcessors: 4,
-			swapFreeBytes: 0,
+			swapFreeMinBytes: 0,
 			swapTotalBytes: 0,
-			swapState: 'none',
 			modelLoadMs: 750,
 			unclaimedSeconds: -0.25,
 			clocksDisagreed: 1,
@@ -120,7 +101,6 @@ test.describe('the shard board carries the work-or-host answer on the row', () =
 			queueMedianSeconds: 3.4,
 			queueMaxSeconds: 3.4
 		});
-		expect(board.memoryScaleBytes).toBe(16 * 1024 * MIB);
 	});
 
 	test('THE ORACLE: a shard whose clocks disagree says so, and never draws a zero', () => {
@@ -140,8 +120,7 @@ test.describe('the shard board carries the work-or-host answer on the row', () =
 				queueWaitMs: 400
 			})
 		]);
-		const board = shardBoard(run, TEST_LIMITS.jobTimeoutSeconds, 640);
-		const byShard = new Map(board.rows.map((row) => [row.shard, row]));
+		const byShard = new Map(run.reported.map((row) => [row.shard, row]));
 
 		expect(byShard.get(0)?.unclaimedSeconds).toBe(-0.125);
 		expect(byShard.get(0)?.unclaimedSeconds).not.toBe(0);
@@ -151,4 +130,25 @@ test.describe('the shard board carries the work-or-host answer on the row', () =
 		expect(byShard.get(1)?.clocksDisagreed).toBe(0);
 	});
 
+	test('a cancelled signed sum still counts the disagreeing item and queue waits never add', () => {
+		const run = foldedRun([
+			shard({ shard: 0, itemId: 'a', writtenTokens: 50, writeSeconds: 5, unclaimedMs: -2000, queueWaitMs: 1000 }),
+			{ shard: 0, itemId: 'b', writtenTokens: 50, writeSeconds: 5, unclaimedMs: 2000, queueWaitMs: 5000 }
+		], 1);
+		expect(run.reported[0]).toMatchObject({
+			unclaimedSeconds: 0, clocksDisagreed: 1, clockedItems: 2,
+			queueMedianSeconds: 3, queueMaxSeconds: 5
+		});
+	});
+
+	test('absent host instruments stay unknown, not measured zeroes', () => {
+		const run = foldedRun([shard({ shard: 0, writtenTokens: 50, writeSeconds: 5 })], 4);
+		expect(run.shards).toBe(4);
+		expect(run.reported).toHaveLength(1);
+		expect(run.reported[0]).toMatchObject({
+			swapFreeMinBytes: null, swapTotalBytes: null, unclaimedSeconds: null,
+			queueMedianSeconds: null, queueMaxSeconds: null, modelLoadMs: null,
+			clocksDisagreed: 0, clockedItems: 0
+		});
+	});
 });

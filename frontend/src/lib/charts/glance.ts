@@ -1,55 +1,21 @@
-/** The console's headline answers, and the arithmetic behind each one.
- *
- * Six questions, six different shapes, because one shape repeated six times is
- * what made this page read as a single grey instrument. Each function here is
- * pure and is tested without a browser. Most hand the engine an option; the
- * skyline hands back geometry, because a strip of bars inside a card needs no
- * engine and a shape drawn as markup is finished before any script runs.
- *
- * Nothing is invented for the sake of a complete vocabulary. Every question
- * below is one the page already answered in prose or in a table, and each one
- * names the threshold it is measured against where the page states one.
- */
-
-import type { EChartsOption } from 'echarts';
-import { KEPT_TIME_TOKENS, SERIES_TOKENS } from '../console/series-tokens';
+/** The arithmetic behind the console's drawing rule, site cost and headline counts. */
 import type { RunSummary } from '$lib/server/payload';
 import { countDays, nameSpan, openWithSpan } from '../console/span-words';
-import { dayMonth, shortDate } from '../format';
-import { readoutOf, type Readout } from './readout';
 import { sparklineMarks, type SparklineMarks } from './sparkline';
-import { stacked, type StackShape } from './stacked';
 import { targetMarks, type TargetMarks } from './targetbar';
 import { daysInWindow, type TimeWindow } from './viewport';
-import { paint, type ChartToken } from './theme';
-import { grouped, TIME_BANDS, type StageFailureSeries, type TimeSplitDay } from './series';
+import { grouped } from './series';
 
 export interface GlanceDay {
 	date: string;
-	/** Charts a reader can see on the day's page. */
 	published: number;
-	/** Items the day published, chart or no chart. The denominator of coverage. */
 	items: number;
 	minutesPerChart: number | null;
 }
 
-/** How many days of history a card's trend line is allowed to carry. Long
- * enough to have a shape, short enough that a card is still a card. */
-const TREND_DAYS = 14;
-
-/** GitHub Pages refuses a site larger than this (Guardrail #2).
- *
- * A constant and not a config knob, for the reason
- * `backend/idhazh/retention.py` gives for its own copy: it is a property of the
- * host, and a knob would invite raising it instead of shrinking the site.
- */
+/** GitHub Pages refuses a site larger than this; it is a host limit, not a knob. */
 export const PAGES_CAP_BYTES = 1024 * 1024 * 1024;
 
-/** The middle value, or null where there is nothing to take a middle of.
- *
- * The median and not the mean everywhere on this page: one pathological day
- * would otherwise decide a figure the operator reads as typical.
- */
 function middleOf(values: readonly number[]): number | null {
 	if (values.length === 0) return null;
 	const sorted = [...values].sort((a, b) => a - b);
@@ -57,74 +23,43 @@ function middleOf(values: readonly number[]): number | null {
 	return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
 }
 
-/** What share of a day's published items carried a chart, in percent.
- *
- * Null where the day published nothing. A share of no articles is not zero
- * percent, it is no measurement at all, and a zero would read as chart drawing
- * that ran and reached nobody.
- */
+/** A day that published nothing has no coverage measurement, not zero coverage. */
 export function coverageOf(day: GlanceDay): number | null {
 	if (day.items <= 0) return null;
 	return (day.published / day.items) * 100;
 }
 
-/** The three numbers the chart retirement rule is written from. */
 export interface ChartThresholds {
-	/** The span the rule is stated over. */
 	ruleDays: number;
-	/** Minutes per published visual that retires chart drawing. */
 	minutesTarget: number;
-	/** The share of published items that must carry a chart, in whole percent. */
 	coveragePct: number;
 }
 
-/** Both halves of the rule, each as a bar, a trend and a clause of one sentence. */
 export interface ChartRule {
-	/** The window is narrower than the rule's own span, so no median is offered. */
 	narrow: boolean;
-	/** Window median minutes per published visual, or null. */
 	minutes: number | null;
-	/** Window median coverage in percent, or null. */
 	coverage: number | null;
 	minutesMarks: TargetMarks;
 	coverageMarks: TargetMarks;
 	minutesTrend: SparklineMarks;
 	coverageTrend: SparklineMarks;
-	/** How many days each median was actually taken from. A median of one day is
-	 * a day, and the page says which it is looking at. */
 	minutesDays: number;
 	coverageDays: number;
-	/** One sentence stating both figures and whether each is inside its threshold. */
 	verdict: string;
 }
 
-/** A threshold as words - `6`, not `6.0`, and `4.5` where it really is. */
 function trim(value: number): string {
 	return String(Number(value.toFixed(1)));
 }
 
-/** Minutes per published visual as the page prints them, to a tenth. One
- * formatter for the verdict, the target bar's figure and the line's strip, so
- * the three cannot spell one figure two ways. */
 export function minutesText(minutes: number): string {
 	return minutes.toFixed(1);
 }
 
-/** Coverage as the page prints it, a whole percent - the same one formatter for
- * the verdict, the bar and the line. */
 export function coverageText(coverage: number): string {
 	return `${Math.round(coverage)}%`;
 }
 
-/** The two clauses of the verdict, joined.
- *
- * Each clause names its figure, its threshold and which side of it the figure
- * fell. A clause that only printed the figure would leave the reader to do the
- * comparison the rule already made. Both cost clauses open with the day they
- * measure - `The median day`, or `This one day` where one day has no median -
- * because the reach clause has no subject of its own and takes one across the
- * join.
- */
 function verdictOf(
 	minutes: number | null,
 	coverage: number | null,
@@ -149,14 +84,7 @@ function verdictOf(
 	return `${cost}, and ${reach}.`;
 }
 
-/**
- * The chart drawing judged against its own written rule, over the open window.
- *
- * `windowDays` is the span the page is holding, not the number of days the
- * ledger answered for. Under the rule's own span nothing is measured at all: a
- * median of the wrong span is the same figure with a different meaning, and
- * nothing on the page would say which one is being read.
- */
+/** The rule's span is the open window, not the count of days that answered it. */
 export function chartRule(
 	days: readonly GlanceDay[],
 	thresholds: ChartThresholds,
@@ -189,43 +117,21 @@ export function chartRule(
 	};
 }
 
-/** One published day's marginal cost, in bytes of payload tree per article. */
 export interface SiteCostDay {
 	date: string;
-	/** What the tree gained that day, over the articles that day published. */
 	bytesPerItem: number;
-	/** Further from the window's median than one standard deviation. */
 	flagged: boolean;
 }
 
 export interface SiteCost {
-	option: EChartsOption;
 	days: SiteCostDay[];
-	/** The window's median cost, or null where no day in it has a rate. */
 	median: number | null;
-	/** Root-mean-square distance from that median, in the same unit. */
+	/** Root-mean-square distance from the median, not from the mean. */
 	spread: number | null;
 	empty: boolean;
 }
 
-/** What one more published article costs, day by day.
- *
- * The chart this replaced drew megabytes added per day, and that number is the
- * item ceiling wearing a size label: measured over the ten committed manifests
- * on 2026-08-30, a day's gain ran 0.04 MB to 2.82 MB purely because the day
- * published 4 articles or 731. Divided by the articles, the same ten days sit
- * between 2,478 and 4,541 bytes - which is a quantity a change to the payload
- * can actually move.
- *
- * The band is one standard deviation about the MEDIAN rather than about the
- * mean: the line drawn on the chart is the median, and a band whose centre and
- * whose width came from two different statistics is asymmetric about its own
- * centre for no reason a reader can see.
- *
- * `window` bounds what is drawn and never what is differenced. A day's cost is
- * its own bytes minus the previous manifest's, so the oldest day on screen
- * still reads against the day before it rather than against zero.
- */
+/** The window bounds the rates shown, never the predecessor used to price a day. */
 export function siteCost(
 	manifests: readonly RunSummary[],
 	items: ReadonlyMap<string, number>,
@@ -245,166 +151,35 @@ export function siteCost(
 			bytesPerItem: (day.siteBytes - ordered[i - 1].siteBytes) / published
 		});
 	}
-
 	const middle = middleOf(measured.map((d) => d.bytesPerItem));
-	if (middle === null) {
-		return { option: {}, days: [], median: null, spread: null, empty: true };
-	}
-
-	// A spread of one observation is not a spread. Reported as absent rather
-	// than as zero, because a zero band would call the one day on the chart
-	// perfectly typical of itself.
+	if (middle === null) return { days: [], median: null, spread: null, empty: true };
+	// One observation has no spread; it is not perfectly typical of itself.
 	const spread =
 		measured.length < 2
 			? null
 			: Math.sqrt(
 					measured.reduce((sum, d) => sum + (d.bytesPerItem - middle) ** 2, 0) / measured.length
 				);
-	const days: SiteCostDay[] = measured.map((d) => ({
-		...d,
-		flagged: spread !== null && Math.abs(d.bytesPerItem - middle) > spread
-	}));
-
-	const rule = (dash: boolean) => ({
-		lineStyle: {
-			color: paint('--chart-marker'),
-			width: dash ? 1 : 1.5,
-			type: dash ? ('dashed' as const) : ('solid' as const)
-		},
-		label: { show: false }
-	});
-
-	const band =
-		spread === null
-			? []
-			: [
-					{ yAxis: Math.round(middle + spread), ...rule(true) },
-					{ yAxis: Math.round(middle - spread), ...rule(true) }
-				];
-
 	return {
-		days,
+		days: measured.map((d) => ({
+			...d,
+			flagged: spread !== null && Math.abs(d.bytesPerItem - middle) > spread
+		})),
 		median: middle,
 		spread,
-		empty: false,
-		option: {
-			animation: false,
-			grid: { left: 56, right: 14, top: 34, bottom: 26, containLabel: false },
-			tooltip: { trigger: 'axis' },
-			xAxis: {
-				type: 'category',
-				// The same date grammar the hand-written axes print. `08-20` is how the
-				// ledger spells a day, and a ledger spelling is not a label.
-				data: days.map((d) => dayMonth(d.date)),
-				axisLine: { lineStyle: { color: paint('--chart-axis') } },
-				axisTick: { show: false },
-				axisLabel: { color: paint('--color-text-tertiary'), fontSize: 11, hideOverlap: true }
-			},
-			yAxis: {
-				type: 'value',
-				// The quantity, then the unit, in the one form every axis title on
-				// this site takes (design-system.md). A bare four-digit number on an
-				// axis is not readable as bytes.
-				name: 'Payload bytes per article',
-				nameLocation: 'end',
-				nameGap: 12,
-				nameTextStyle: { color: paint('--color-text-tertiary'), fontSize: 11, align: 'left' },
-				axisLabel: { color: paint('--color-text-tertiary'), fontSize: 11 },
-				splitLine: { lineStyle: { color: paint('--chart-grid') } }
-			},
-			series: [
-				{
-					name: 'Payload bytes per article',
-					type: 'line',
-					showSymbol: true,
-					// The mark that says "look here" is the marker token, never the
-					// confidence ramp: a day outside the band is unusual, and nobody
-					// has agreed that unusual is bad.
-					data: days.map((d) => ({
-						value: Math.round(d.bytesPerItem),
-						symbolSize: d.flagged ? 10 : 5,
-						itemStyle: { color: paint(d.flagged ? '--chart-marker' : '--chart-3') }
-					})),
-					lineStyle: { width: 1.75, color: paint('--chart-3') },
-					markLine: {
-						silent: true,
-						symbol: 'none',
-						data: [{ yAxis: Math.round(middle), ...rule(false) }, ...band]
-					}
-				}
-			]
-		}
+		empty: false
 	};
 }
 
-/** Articles of room left, at the cost the record measured.
- *
- * Articles and not published days, because nothing here has ever measured a
- * daily rate. The figure this divided by was `run.safety_ceiling_per_run`,
- * which bounds one RUN and not one day, and the schedule fires up to five runs
- * a day. So a day was priced at 160 articles while the ten committed published
- * days ran 4 to 731, median 334 - and the printed runway was 1,950 days where
- * the measured median rate gives 934, too long by 2.09 times (measured
- * 2026-08-31, `docs/reference/pipeline-cost.md`).
- *
- * Headroom over the per-article cost needs no daily rate at all, and articles
- * are the unit the pipeline actually spends. A reader who wants a date can
- * multiply by a rate somebody measured; `What one more article costs` does
- * exactly that, over the same published days this median came from.
- *
- * Null where there is no rate to divide by. A tree that never grew over an
- * article it published has no runway, and printing one anyway is the other half
- * of the defect this replaced.
- */
-export interface SiteRunway {
-	/** Published articles to the alarm point. Negative once it is behind us. */
-	toAlarm: number;
-	/** Published articles to the Pages cap. */
-	toCap: number;
-}
-
-export function siteRunway(
-	bytesUsed: number,
-	bytesPerItem: number | null,
-	alarmBytes: number,
-	capBytes: number = PAGES_CAP_BYTES
-): SiteRunway | null {
-	if (bytesPerItem === null || bytesPerItem <= 0) return null;
-	return {
-		toAlarm: (alarmBytes - bytesUsed) / bytesPerItem,
-		toCap: (capBytes - bytesUsed) / bytesPerItem
-	};
-}
-
-/** A year, for turning articles into a date. Averaged over the leap cycle. */
 const DAYS_A_YEAR = 365.25;
 
-/** How long the project can keep publishing, at two measured rates.
- *
- * The band prints articles of room, because articles need no daily rate and the
- * one number that was standing in for a rate bounded a run rather than a day.
- * A reader still wants a date, and the only honest way to one is to measure the
- * articles a published day really carries - which the same days the cost was
- * measured over already say.
- *
- * Both rates are medians over the SAME published days, so the horizon and the
- * chart above it cannot be read off two different windows. The cost is a median
- * because one pathological day would otherwise set a figure the operator reads
- * as typical, and the daily rate is a median for the same reason: the eleven
- * committed published days run 4 articles to 731.
- *
- * Null wherever a rate is missing. A tree that never grew over an article it
- * published has no horizon, and printing one anyway is the defect this replaced.
- */
 export interface PublishingHorizon {
-	/** Articles of room left in the payload tree, at the measured cost. */
 	articles: number;
-	/** Median articles a published day, over the days the cost came from. */
 	articlesPerDay: number;
-	/** Years of publishing, at both measured rates. */
 	years: number;
 }
 
+/** Both measured rates use the same published days; neither assumes runs per day. */
 export function publishingHorizon(
 	bytesUsed: number | null,
 	cost: SiteCost,
@@ -420,405 +195,36 @@ export function publishingHorizon(
 	return { articles, articlesPerDay: perDay, years: articles / perDay / DAYS_A_YEAR };
 }
 
-/** What the per-article cost chart is, for a reader who cannot see it. One day
- * is no spread, so a window of one day draws no band and names no median. */
-export function siteCostLabel(windowDays: number): string {
-	return windowDays === 1
-		? `Payload bytes per article in ${nameSpan(windowDays)}`
-		: `Payload bytes per article on each published day, over ${countDays(windowDays)}, against the median and one standard deviation either side of it`;
-}
-
-/** What the per-article cost measures, the sentences in the panel's note that
- * name its days. Each published day needs a second day, so a window of one day
- * names that day once. */
 export function siteCostMeasure(windowDays: number): string {
 	return windowDays === 1
 		? `Bytes the committed payload tree gained in ${nameSpan(windowDays)}, over the articles the day published.`
 		: `Bytes the committed payload tree gained on each published day, over the articles that day published. Over ${countDays(windowDays)}.`;
 }
 
-/** The daily rate a horizon is projected at, in words. A median of one day is
- * that day's own count, so a window of one day says whose count it is. */
 export function horizonRate(articlesPerDay: number, windowDays: number): string {
 	const rate = `${grouped(Math.round(articlesPerDay))} articles a published day`;
 	return windowDays === 1 ? `${rate}, ${nameSpan(windowDays)}'s count` : `a median of ${rate}`;
 }
 
-/** What is failing, and is the mix changing?
- *
- * Stacked rather than grouped: the total per day is half the question, and
- * grouped bars answer "how big is each" while losing it. The same array also
- * draws as lines - see `ShapeSwitch` - which answers the other half, what one
- * stage did on its own.
- *
- * A day nothing was planned on carries no value, so it draws no column and
- * breaks a line. A zero there would say the day ran and nothing failed, which
- * is a different fact; a day that ran clean is the real zero.
- */
-export function failureMix(series: readonly StageFailureSeries[], shape: StackShape = 'bars') {
-	// The same date grammar the hand-written axes print. `08-25` is how the
-	// ledger spells a day, and a ledger spelling is not a label for a reader.
-	const columns = series[0]?.days.map((d) => dayMonth(d.date)) ?? [];
-	return stacked(
-		columns,
-		series.map((s) => ({
-			label: s.label,
-			token: SERIES_TOKENS[s.stage],
-			values: s.days.map((d) => (d.planned > 0 ? d.failures : null))
-		})),
-		shape
-	);
-}
-
-/** What the failure mix's window holds: the items it planned and how many of
- * them failed at any of the three stages.
- *
- * The panel decides whether it has a chart to draw from these, never from the
- * series' length. A series built over a window has a column for every day of it
- * whether or not anything ran, so a length check would hand the engine a chart
- * with nothing on it - a blank box over a strip of zeroes.
- */
-export function failureTotals(series: readonly StageFailureSeries[]): {
-	planned: number;
-	failures: number;
-} {
-	return {
-		planned: (series[0]?.days ?? []).reduce((sum, day) => sum + day.planned, 0),
-		failures: series.reduce(
-			(sum, stage) => sum + stage.days.reduce((count, day) => count + day.failures, 0),
-			0
-		)
-	};
-}
-
-/** The failure mix, for a reader who cannot see it, over the window it draws.
- *
- * Its bars draw no column for a day nothing was planned on and none for a day
- * nothing failed on, and only the strip tells the two apart, so the label says
- * so. A window of one day has no second day to tell apart from it. */
-export function failureMixLabel(windowDays: number): string {
-	return windowDays === 1
-		? `Failures by stage in ${nameSpan(windowDays)}. The column's height is the day's failures, and the bands are the stages they stopped at. Drawn as lines instead, each stage is its own count and the total is not shown.`
-		: `Failures per day by stage, over ${countDays(windowDays)}. One column is one day, its height is that day's failures, and the bands are the stages they stopped at. A day with no column is a day on which nothing was planned or nothing failed, and the numbers below the chart say which. Drawn as lines instead, each stage is its own count a day and the total is not shown.`;
-}
-
-/** What the failure mix says in its chart's place when its window holds no
- * failure. Nothing planned and nothing failed are different news, and so are
- * none of 4 and none of 4,000, so the sentence says which, and out of how many. */
-export function failureMixAbsent(windowDays: number, planned: number): string {
-	return planned === 0
-		? `No item was planned in ${nameSpan(windowDays)}, so nothing could fail.`
-		: `Nothing failed in ${nameSpan(windowDays)}, out of ${grouped(planned)} ${planned === 1 ? 'item' : 'items'} planned.`;
-}
-
-/** One token per band of the item-time stack, in `TIME_BANDS` order.
- *
- * Eight bands and eight palette tokens, so the ramp is taken in order and no
- * band shares a colour with another. Bound to the band and never to its size:
- * a colour that followed the largest band would repaint the chart every day.
- */
-/** Where did an item's time go, and is the split changing?
- *
- * Stacked and absolute, like the failure mix: the column height is the mean
- * item's whole clock and the bands are what claimed it, so a day that got
- * slower and a day that changed shape do not draw alike. The top band is the
- * time no named step claimed, which is what makes a regression in an untimed
- * step visible rather than merely absent.
- *
- * The same array draws as lines, which answers the other half - what one step
- * did on its own, which a stack hides when one band halves while its neighbour
- * doubles. Nothing is reshaped between the two shapes.
- *
- * A day that timed no item carries no value in any band, so it draws no column
- * and breaks a line. Eight zeroes there would say the item took no time, where
- * the truth is that nothing timed it.
- */
-export function timeSplitChart(days: readonly TimeSplitDay[], shape: StackShape = 'bars') {
-	const columns = days.map((day) => dayMonth(day.date));
-	return stacked(
-		columns,
-		TIME_BANDS.map((band, index) => ({
-			label: band.label,
-			token: KEPT_TIME_TOKENS[band.key],
-			values: days.map((day) => (day.items > 0 ? Math.round(day.ms[index] ?? 0) : null))
-		})),
-		shape
-	);
-}
-
-/** Every band at one day, for the strip under the chart.
- *
- * A stack is the hardest shape to read one band off, so the strip prints all
- * eight at the hovered column. Each carries its share of the day's total in the
- * same line as its milliseconds, because a band's size is the question and a
- * reader should not have to divide two numbers off a chart to answer it. A day
- * that timed no item from start to finish prints the strip's not-measured words
- * once, in place of the bands. They name only what this chart lacks: such a day
- * can still have timed every item's fetch, which another chart draws.
- */
-export function timeSplitColumns(days: readonly TimeSplitDay[]): Readout {
-	return readoutOf({
-		type: 'dateSeries',
-		columns: days.map((day) => shortDate(day.date)),
-		series: TIME_BANDS.map((band, index) => ({
-			label: band.label,
-			swatch: `var(${KEPT_TIME_TOKENS[band.key]})`,
-			values: days.map((day) => (day.items > 0 ? Math.round(day.ms[index] ?? 0) : null)),
-			format: (ms: number, column: number) => {
-				const total = days[column]?.total ?? 0;
-				return total > 0 ? `${ms} ms, ${Math.round((100 * ms) / total)}%` : `${ms} ms`;
-			}
-		})),
-		notMeasured: 'No item was timed from start to finish on this day',
-		resting: 'last'
-	});
-}
-
-/** The bands of the item time split, bottom first, as its label names them. */
-const TIME_SPLIT_BANDS =
-	'The bands from the bottom are fetch, extract, the label call, the summary, the visual plan, the model time neither call claimed, the faithfulness scorers, and at the top the time no named step claimed.';
-
-/** The item time split, for a reader who cannot see it, over the window it
- * draws. A day that timed no item from start to finish draws no column, and the
- * label says so; a window of one day draws its one column or no chart at all. */
-export function timeSplitLabel(windowDays: number): string {
-	return windowDays === 1
-		? `Mean milliseconds an item spent in each step, in ${nameSpan(windowDays)}. The column's height is the mean item's whole clock. ${TIME_SPLIT_BANDS} Drawn as lines instead, each step is its own milliseconds and the whole clock is not shown.`
-		: `Mean milliseconds an item spent in each step, per day, over ${countDays(windowDays)}. One column is one day and its height is the mean item's whole clock. A day with no column is a day on which no item was timed from start to finish. ${TIME_SPLIT_BANDS} Drawn as lines instead, each step is its own milliseconds a day and the whole clock is not shown.`;
-}
-
-/** What the item time split says in its chart's place when no item in its
- * window was timed from start to finish. The cause decides what an operator
- * checks - a pipeline that planned nothing, or an instrument that did not
- * reach the items - so the sentence names which one it is. */
-export function timeSplitAbsent(windowDays: number, planned: number): string {
-	return planned === 0
-		? `No item was planned in ${nameSpan(windowDays)}, so there is no time to split.`
-		: `No item was timed from start to finish in ${nameSpan(windowDays)}, so there is no time to split.`;
-}
-
-/** Every stage's failure count on one day, for the strip under the chart.
- *
- * A stack is the hardest shape to read one band off, so the band a reader
- * wants is the one the eye cannot measure. The strip prints all four at the
- * hovered column, which is what turns four hovers into one. A day nothing was
- * planned on prints the strip's not-measured words, because a column of zeroes
- * would say the day ran clean.
- */
-export function failureMixColumns(series: readonly StageFailureSeries[]): Readout {
-	const dates = series[0]?.days.map((d) => d.date) ?? [];
-	return readoutOf({
-		type: 'dateSeries',
-		columns: dates.map((date) => shortDate(date)),
-		series: series.map((stage) => ({
-			label: stage.label,
-			swatch: `var(${SERIES_TOKENS[stage.stage]})`,
-			values: dates.map((_, index) => {
-				const day = stage.days[index];
-				return day === undefined || day.planned === 0 ? null : day.failures;
-			}),
-			format: (value: number) => String(value)
-		})),
-		notMeasured: 'No item was planned on this day',
-		resting: 'last'
-	});
-}
-
-/** The three stages in the categorical ramp, in pipeline order. */
-/** The band under the failures: items that got through all three stages.
- *
- * A neutral rather than a fourth ramp colour, because colour is spent on a
- * failure and this is the ground the failures sit on. Neutral, not faint:
- * `--chart-grid` reaches the light theme at #e6eaf3 on a #f4f6fb page, which is
- * 1.07 to 1, and this band is most of the column on most days. The column
- * height IS the volume, so a band nobody can see loses the one fact this chart
- * was rebuilt to carry.
- */
-const FINISHED_TOKEN: ChartToken = SERIES_TOKENS['ended-on-own'];
-
-/** Items the run listed and never fetched. Zero on every day measured so far,
- * so it draws only when it is not. The last stop of the ramp is the slate one,
- * which reads as another neutral beside the ground rather than a fourth kind of
- * failure. */
-const SKIPPED_TOKEN: ChartToken = SERIES_TOKENS['never-fetched'];
-
-export interface FailureBand {
-	key: string;
-	label: string;
-	token: ChartToken;
-	value: number;
-}
-
-/** One day of the volume column, bottom of the stack first. */
-export interface FailureColumn {
-	date: string;
-	planned: number;
-	bands: FailureBand[];
-}
-
-/** One day of one stage's line: the share, and what it was taken over. */
-export interface FailurePoint {
-	date: string;
-	rate: number | null;
-	reached: number;
-}
-
-/** One stage over the whole window: the rate, and the volume behind it. */
-export interface FailureStage {
-	stage: string;
-	label: string;
-	token: ChartToken;
-	/** The denominator. Items that got as far as this stage. */
-	reached: number;
-	failures: number;
-	/** Nought to one, or null where too few items reached the stage to divide
-	 * by. Null is not zero and never prints as one. */
-	rate: number | null;
-	/** Something reached the stage, but under `min_attempts_for_rate` of it. */
-	lowSample: boolean;
-	/** One entry per day. `rate` is null where the day is empty or too thin to
-	 * divide, so the line breaks rather than drawing a share nobody measured,
-	 * and `reached` travels with it so a mark can name its own denominator. */
-	points: FailurePoint[];
-}
-
-export interface FailureLoad {
-	dates: string[];
-	columns: FailureColumn[];
-	stages: FailureStage[];
-	/** The tallest column. The volume axis is drawn to this. */
-	peak: number;
-	/** Nothing was planned in this window at all. */
-	empty: boolean;
-}
-
-/** Failure rate against the volume it was measured on.
- *
- * Three panels became one chart. Three of anything at 492px on a 1600px frame
- * is the layout that produced two text nodes each, and the split was the
- * problem rather than the content: a rate and the volume behind it are one
- * picture, and reading them off two charts is arithmetic the operator should
- * not have to do. A 100 percent failure on two items and an outage look the
- * same until the column height is beside the line.
- *
- * The denominator is the stage's own, never the day's. `series.ts` carries why.
- *
- * Nothing is drawn for a stage the window is too thin to measure. A share over
- * four items is not a measurement (`min_attempts_for_rate`), and the same knob
- * decides it here and in the source-cut table, so two shares on one page cannot
- * disagree about when a denominator is too small.
- */
-export function failureLoad(
-	series: readonly StageFailureSeries[],
-	minAttempts: number
-): FailureLoad {
-	const dates = series[0]?.days.map((day) => day.date) ?? [];
-	const stages = series.map((entry) => {
-		const token = SERIES_TOKENS[entry.stage];
-		const reached = entry.days.reduce((sum, day) => sum + day.reached, 0);
-		const failures = entry.days.reduce((sum, day) => sum + day.failures, 0);
-		const thin = reached > 0 && reached < minAttempts;
-		return {
-			stage: entry.stage,
-			label: entry.label,
-			token,
-			reached,
-			failures,
-			rate: reached < minAttempts ? null : failures / reached,
-			lowSample: thin,
-			points: entry.days.map((day) => ({
-				date: day.date,
-				rate: day.reached < minAttempts ? null : day.rate,
-				reached: day.reached
-			}))
-		};
-	});
-
-	const columns = dates.map((date, index) => {
-		const planned = series[0]?.days[index]?.planned ?? 0;
-		const lastStage = series.at(-1)?.days[index];
-		const finished =
-			lastStage === undefined ? 0 : Math.max(0, lastStage.reached - lastStage.failures);
-		// The day splits exactly: never fetched, plus what died at each stage, plus
-		// what got through. So the column height is the day and no band is a
-		// residue nobody can name.
-		const skipped = Math.max(0, planned - (series[0]?.days[index]?.reached ?? 0));
-		const bands: FailureBand[] = [
-			{ key: 'finished', label: 'Finished', token: FINISHED_TOKEN, value: finished },
-			...series.map((entry) => ({
-				key: entry.stage,
-				label: entry.label,
-				token: SERIES_TOKENS[entry.stage],
-				value: entry.days[index]?.failures ?? 0
-			})),
-			{ key: 'skipped', label: 'Never fetched', token: SKIPPED_TOKEN, value: skipped }
-		];
-		return { date, planned, bands: bands.filter((band) => band.value > 0) };
-	});
-
-	return {
-		dates,
-		columns,
-		stages,
-		peak: columns.reduce((most, column) => Math.max(most, column.planned), 0),
-		empty: columns.every((column) => column.planned === 0)
-	};
-}
-
-/** One bar a day: how much was published, and on which days.
- *
- * Bars, never a line. A count per day is a discrete quantity, and a line drawn
- * between two days claims a value for the hours in between that nobody
- * counted. The busiest day in the window sets the height of every other bar,
- * so the shape answers "which days were heavy" while the count beside it
- * answers "how many".
- *
- * The columns are the window the control set, not the days that happen to
- * carry a run. A chart that sizes itself to its own data while the control
- * above it reads thirty days puts two spans on one page, and two spans cannot
- * be compared - which is the question the operator came here to ask.
- *
- * Geometry only. Every value is a share of the drawing box, so the same bars
- * fit whatever width a card gives them and the markup does no arithmetic.
- */
 export interface SkylineBar {
 	date: string;
-	/** What the day published, in whichever measure the strip was asked for. */
 	published: number;
-	/** Left edge and width, as a share of the box. */
 	x: number;
 	width: number;
-	/** Height as a share of the box, measured up from the baseline. A day that
-	 * published nothing is zero high and still has a bar, so the column count is
-	 * the day count whatever the ledger holds. */
 	height: number;
 }
 
 export interface Skyline {
 	bars: SkylineBar[];
-	/** Everything the window published. The count beside the bars is this. */
 	total: number;
-	/** The busiest day, which every other bar is drawn against. */
 	busiest: number;
-	/** True where the window published nothing at all. A strip of thirty zeros
-	 * is an empty plot area, which is worse than no plot. */
 	empty: boolean;
 }
 
-/** How much of a column a bar fills, leaving the rest as the gap beside it. A
- * share rather than a pixel, so ninety columns separate as cleanly as seven. */
 const BAR_SHARE = 0.8;
-
-/** Which count a skyline draws.
- *
- * Both are things the day published: `items` is every article, `published` is
- * the visuals drawn for some of them. So one function draws both, and the two
- * strips cannot drift in the one property that makes the pair readable - that
- * both are one bar a day, over the same window, at the same pitch. Two copies
- * would agree on the day they were written and on no day after it.
- */
 export type PublishedMeasure = 'items' | 'published';
 
+/** One discrete bar per calendar day, including the days with no published count. */
 export function publishedSkyline(
 	days: readonly GlanceDay[],
 	span: TimeWindow,
@@ -844,33 +250,7 @@ export function publishedSkyline(
 	};
 }
 
-/** A skyline in words, for a reader who cannot see its bars. `noun` names the
- * count, such as `Articles published`. One day has no busiest day and nothing
- * to add up, so a window of one day says that day's count alone. */
-export function skylineLabel(noun: string, strip: Skyline, days: number): string {
-	return days === 1
-		? `${noun} in ${nameSpan(days)}, ${grouped(strip.total)}`
-		: `${noun} each day over ${countDays(days)}, ${grouped(strip.total)} over the window, ` +
-				`${grouped(strip.busiest)} on the busiest day`;
-}
-
-/** One of the rule's trend lines in words. `measured` counts the days that had
- * a reading, not the window, and a line of one such day is not day by day. */
-export function ruleTrendLabel(measure: string, measured: number): string {
-	return `${measure}${measured === 1 ? '' : ', day by day'}, over ${countDays(measured, 'measured')}`;
-}
-
-/** How many bytes the tree gained across the window.
- *
- * The card's own number is the latest absolute measurement and never moves with
- * the window. This is the other half of it, and it is bytes rather than a share
- * for a measured reason: the oldest committed manifest recorded 13,595 bytes,
- * so a share taken from there read `+73,933%` on 2026-08-30 - true, useless, and
- * painted green by the card's own up-is-good rule, which for a site size is the
- * wrong verdict as well as an unasked-for one.
- *
- * Null under two measurements. One measurement has nothing to move from.
- */
+/** Absolute bytes gained need two measurements, not a percentage of the oldest tree. */
 export function sizeGain(manifests: readonly RunSummary[]): number | null {
 	if (manifests.length < 2) return null;
 	// The earliest-dated and latest-dated manifest, in one pass. A full sort only

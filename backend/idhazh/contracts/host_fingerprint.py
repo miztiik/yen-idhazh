@@ -140,14 +140,14 @@ _UNSET: Final = _Unset()
 #: the first one to break is not.
 #: A declared panel query counts as a reader. Shared, pipelines, model, machine,
 #: then voices owns a column when more than one query declares it.
-#: 2026-10-10: registry ownership changed; the persisted schema remains 2026-09-20.
+#: Registry ownership does not change the persisted row or its version.
 #:
 #: What this cannot settle is whether the named surface still DRAWS the value -
 #: only that it still names the column. A panel that reads a cell and then throws
 #: it away passes here and fails the browser check instead.
 COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
     {
-        "frontend/src/lib/server/host-fingerprint.ts": (
+        "backend/idhazh/telemetry/host_evidence_comparison.py": (
             "measured_at",
             "runner_name",
         ),

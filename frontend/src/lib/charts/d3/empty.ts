@@ -13,12 +13,9 @@
 import { STATE_WORDS, type ChartState } from '../../console/waiting';
 
 export {
-	missingSentence,
 	refusedSentence,
 	quietSentence,
-	retryLabel,
 	tooFewSentence,
-	unreachableSentence,
 	type ChartState,
 	type PanelState
 } from '../../console/waiting';

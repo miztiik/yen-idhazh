@@ -176,15 +176,13 @@ def stage_assemble(
     settings: config.Settings,
     commit_sha: str,
     runner: str = "local",
-    shards: int | None = None,
     regenerate_only: bool = False,
 ) -> DigestDay:
     """Collect whatever finished, publish it, and append the ledger.
 
-    `shards` is the count the plan derived, handed down by the router that
-    derived it. This stage never counts the work jobs that filed a row: a
-    denominator taken from those rows could not disagree with them, and
-    disagreeing is the only thing the cell is for.
+    The plan records the count its matrix dispatched. This stage never counts
+    the work jobs that filed a row: a denominator taken from those rows could
+    not disagree with them, and disagreeing is the only thing the cell is for.
     """
     publication.read_inventory(common.PUBLIC_ROOT.parent)
     items_dir = _run_dir(plan.date) / "items"
@@ -383,7 +381,7 @@ def stage_assemble(
         config_digests=settings.digests,
         site_bytes=site_bytes,
         site_files=site_files,
-        shards=shards,
+        shards=plan.shards,
         inputs=recorded_inputs,
         item_health_rows=item_health_rows,
         decisions=decisions,

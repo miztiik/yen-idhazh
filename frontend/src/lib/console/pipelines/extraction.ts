@@ -2,7 +2,13 @@
 import type { Row } from '../../data/ledger';
 import { finiteCell } from '../rates';
 import { daysInWindow, type TimeWindow } from '../../charts/viewport';
-import type { ExtractionDay } from '../../charts/extraction-trend';
+
+/** The two private daily counts the extraction yield compares. */
+export interface ExtractionDay {
+	date: string;
+	chartable: number;
+	charted: number;
+}
 
 export function nativeExtraction(items: readonly Row[], evaluations: readonly Row[] | null) {
 	const byUrl = new Map<string, Row>();

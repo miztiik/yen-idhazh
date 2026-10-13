@@ -80,11 +80,12 @@ Before reader merge, the owner rechecks live coverage and newest data within
 three days. Count foundation delivery alone does not deliver this reader.
 
 Observed host count, maximum shard index, current settings and workflow matrix
-size are never substitutes for `shards`. The CLI currently recomputes the count
-recorded in the final manifest; it can differ from the workflow dispatch matrix.
-Preserving that exact historical and future manifest value is this change's
-contract. Correcting dispatch-versus-assembly semantics requires a separate
-priced issue, fixture and owner decision, not a correction hidden here.
+size are never substitutes for `shards`. Since 2026-10-12, the value is the
+count decided by the plan and dispatched by its matrix, including an operator's
+choice. A partial re-run reuses that plan and count. A full re-run that plans
+again records its newer plan's count, and settlement keeps the newer numeric
+count. A manifest written before 2026-10-12 keeps the count assembly recomputed
+from its plan. This is the owner's ruling of 2026-10-12.
 
 ## Four groups, fifteen comparisons
 
@@ -230,8 +231,12 @@ the twelve compact-plus-pending-raw correction cases.
 
 The shipped representative-browser policy replaces repetitive panel, width,
 theme, layout, readout and mode matrices. Deleted charts-ready and panel-driver
-frameworks stay deleted. Retained production components and ECharts remain
-until Row 11's approved retirement; test integration does not remove them.
+frameworks stay deleted. `MachineCharts.svelte`, `MemoryHeldPanel.svelte` and
+`ArticleCostPanel.svelte` remain live native owners. Their declared queries,
+`records.ts`, `counters.ts` and `article-cost.ts` supply the actual answers.
+Shared chart helpers retain only arithmetic and types used by live callers, not
+board constructors or orphan panel wrappers. The finite host normalizer,
+recorded counts and native provenance keep their existing semantics.
 
 Rejected: whole manifest or plan publication; fetching whole GitHub manifests
 from the browser; substituting observed counts for unknown planned counts;

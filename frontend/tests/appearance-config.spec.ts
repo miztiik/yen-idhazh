@@ -303,11 +303,11 @@ for (const key of pipelineOwned) expect(handed).not.toContain(key);
 });
 });
 
-/** Route-owned lists leave the shared block; the gate-only floor stays on disk. */
+/** Route-owned lists and retired presentation knobs do not reach a console page. */
 test.describe('the console block a page is handed', () => {
-	const NOT_HANDED = ['panel_groups', 'judged_panel_ids', 'plot_min_fill_share'];
+	const NOT_HANDED = ['panel_groups', 'judged_panel_ids', 'pan_days', 'zoom_factor', 'band_outlier_rows', 'plot_min_fill_share'];
 
-	test('carries none of the keys only a route or the gate specs read', () => {
+	test('carries none of the route-only lists or retired knobs', () => {
 		const onDisk = (
 			JSON.parse(readFileSync(join(REPO, 'config', 'appearance.json'), 'utf8')) as {
 				console: Record<string, unknown>;
@@ -315,9 +315,12 @@ test.describe('the console block a page is handed', () => {
 		).console;
 		const handed = Object.keys(consoleConfig());
 		for (const key of NOT_HANDED) {
-			if (key === 'plot_min_fill_share') expect(onDisk).toHaveProperty(key);
-			else expect(onDisk).not.toHaveProperty(key);
+			expect(onDisk).not.toHaveProperty(key);
 			expect(handed, `consoleConfig() hands every console page console.${key}`).not.toContain(key);
+		}
+		const legacy = JSON.parse(readFileSync(join(REPO, 'config', 'idhazh.json'), 'utf8')).console;
+		for (const key of ['pan_days', 'zoom_factor', 'band_outlier_rows', 'plot_min_fill_share']) {
+			expect(legacy).not.toHaveProperty(key);
 		}
 	});
 });

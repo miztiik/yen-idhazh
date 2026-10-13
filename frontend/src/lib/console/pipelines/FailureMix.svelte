@@ -42,8 +42,8 @@
 <Reserved record panelState={rulesState} height={knobs.chart_height} width={knobs.chart_width} name="failed-rule" label="Native failed-rule readings">
 {#if failed.stages.length > 0}
 	<FailureList {ranking} stages={{ options: failed.stages, chosen: failed.chosenStage! }}
-		window={rulesWindow} selectedCode={null} max={knobs.failure_list_max}
-		sourceMax={knobs.source_rows} readoutMaxShare={chart.readout_max_share} />
+		window={rulesWindow} max={knobs.failure_list_max}
+		readoutMaxShare={chart.readout_max_share} />
 {:else}
 	<p>No recorded row failed at any stage in this window.</p>
 {/if}
