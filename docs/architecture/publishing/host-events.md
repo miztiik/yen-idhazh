@@ -2,19 +2,52 @@
 
 **Last Updated**: 2026-10-13
 
+How the Rust host-fingerprint instrument collects, stores and hands measurements
+to the Python pipeline, and what that boundary costs. Field meanings and the
+operator's controls are defined in [Host measurements](../../reference/host-metrics.md).
+
 ## What is implemented
 
-The native Rust producers/storage and read-only verifier do not change
-production collectors. Shared ledger readers now admit their finite truthful
-host provenance and normalize declared legacy rows before consumers. Rust collects,
-renders and atomically files real probe, target and clock host records.
-The isolated resource monitor now returns item-window cells and exports legacy
-job-memory and runtime server-status artifacts. Production invocation remains
-unchanged; this is not the single-writer cutover.
-The corrected host row removes the legacy CPU count and frequency columns.
-The shared contract reads finite historical schemas without inventing measurements:
-old hashes retain algorithm 1, legitimate observed averages survive, and
-unmeasured corrected counts stay null.
+Rust is the default host collector and sole raw host writer on the selected native
+paths in content refresh, measurements, encoder scoring, gardener task shards and
+council result saving. It collects probe/target/clock facts and item-window
+CPU/load/memory results. Python still writes the complete item-health census,
+verifies native files/receipts, and owns shared ledger readers, compaction and
+publication. This is not a port of the complete application to Rust.
+
+The explicit `legacy` choice retains Python collection; `off` disables both
+collectors. Cleanup and removal of rollback have not happened. The optional
+shadow comparison boundary also remains, but is not the production default.
+Native failure never automatically selects legacy collection.
+
+Shared readers admit the native writer's real container provenance and normalize
+declared legacy rows without Python re-encoding. The corrected schema separates
+hardware topology, target allowance and observed/reported frequency. Historical
+hashes retain algorithm 1, legitimate averages survive, and unmeasured corrected
+facts remain null. The approved historical rewrite is complete for its bounded
+scope; its backup/recovery tooling remains separate from live collection.
+
+## Capabilities and trade-offs
+
+Table A - engineering boundaries
+
+| ID | Choice or capability | Benefit | Cost or limit |
+| --- | --- | --- | --- |
+| A1 | Separate Rust processes and structured file events | No Python/Rust in-process bindings; explicit versioned inputs and results | Process startup, event serialization, bounded waits and cleanup still cost time. Rust does not imply a measured speedup. |
+| A2 | Validated Linux sources and declared process targets | Distinguish machine topology from the model/worker's allowed CPU capacity; reject reused process IDs | Live collection requires Linux `/proc` and `/sys`. Restricted, raced or incomplete source reads remain unavailable. |
+| A3 | Versioned hardware fingerprint | Stable grouping without treating changing quota, affinity or frequency as new hardware | The hash is not a unique machine ID. Algorithm-1 and algorithm-2 values must not be grouped as one generation. |
+| A4 | Whole-window host counters and periodic extrema | Preserve CPU/load observations beside item work, including with memory off | Host-wide busy/load is not CPU attribution to one model. Sampling can miss events between reads. |
+| A5 | OS memory and major page-fault counters | Observe RSS, available memory, swap and storage-backed page misses | No allocator/stack/per-region profiling; high-water marks are process-lifetime observations, and samples are not exact item-local peaks. |
+| A6 | Optional cache-sized copy benchmark | Record the actual buffer and a memory-copy rate under explicit job selection | Two allocated buffers and timed copies consume RAM/bandwidth. The memory-observation switch does not disable this separate benchmark. |
+| A7 | Immutable native raw files and independently verified receipts | One writer per invocation; retry/recovery keep the original native bytes | Atomic visibility is per file, not a batch or power-loss guarantee. Corruption, foreign identity or exceeded budgets refuse publication. |
+| A8 | Build once in the digest plan job | Work shards and assemble reuse one checked executable instead of compiling it again | Artifact upload/download and checksum verification remain. A source/platform mismatch fails, not a rebuild. Other measured workflows still build in their instrumented jobs. |
+| A9 | Independent whole-instrument and memory controls | Disable all host collection without losing real work, health records or progress logs; or keep CPU/load while disabling memory | Disabled readings are unavailable, not zero. Memory-dependent decisions lose evidence; existing history is not erased. |
+| A10 | Explicit retained Python rollback | A run can select legacy without reverting the new readers or historical conversion | It retains two implementations and their maintenance cost. Legacy CPU semantics are not corrected Rust semantics; no silent fallback is permitted. |
+
+The system does not promise sustained CPU frequency, instruction/cache-hit
+profiling, historical recovery of facts never measured, or an overall pipeline
+speedup. Functionality and byte/identity evidence establish correctness within
+these boundaries; fresh cost measurements are needed for a performance claim.
 
 ## Process boundary
 
@@ -31,76 +64,55 @@ Completed messages retire only after consumption and their configured retry
 window. Active windows, pending events, total events, bytes and reads are bounded.
 Abort and shutdown resolve opening commands without silently dropping evidence.
 
-Memory collection defaults on. The manifest carries one strict Boolean; disabled
-memory cells are null and diagnosed separately from CPU and load readings.
-`observability.memory_profiling_enabled` is the shared pipeline setting.
-`--memory-profiling on|off` is the per-process override; other strings and a
-missing value are refused. The isolated workflow dispatch accepts `inherit`,
-`on` or `off`. `inherit` writes no override and uses shared config. The resolved
-Boolean is written into the scratch native config and manifest before collection.
-The content and measurement workflows use the same three-value dispatch shape.
-
-The separate whole-instrument control is `observability.host_telemetry_enabled`
-in the selected `config/idhazh.json`, default true. Workflow `host_telemetry: off`
-also disables the entire instrument. The master false value cannot be overridden
-by a Rust/legacy or memory-on request. Resolve it before any native build, binary
-download or monitor startup. Off passes a collecting-free environment to the real
-producer and uses only a joined waiting-log timer around item work; host cells
-remain unavailable. Publishers still require their ordinary completed-write
-evidence but consume no native host receipt. An explicit native receipt supplied
+Resolve the [whole-instrument and memory controls](../../reference/host-metrics.md#controls-and-precedence)
+before any build, download or collector startup. The effective native memory
+Boolean is frozen into the named scratch config and session manifest. Memory-off
+results carry null memory cells and disabled reasons while CPU/load remains active.
+Whole-instrument off starts no Rust or Python host collector; only the joined
+waiting-log timer remains around item work. Ordinary work/publication evidence is
+still required, but no native host receipt is consumed. An explicit native receipt
 in off mode is refused rather than published.
 
-The Python collectors and legacy selection remain present. These additive controls
-do not perform cleanup or switch production back to Python.
+## Production lifecycle and binary reuse
 
-For content refresh, the `plan` job builds the release monitor once and uploads
-the executable plus its SHA-256 checksum. Every work shard and assemble downloads
-that same run artifact, verifies the checksum and restores executable permission.
-Those consumer jobs do not run Cargo or prepare a Rust toolchain. The artifact
-name binds native crate sources, Cargo manifest/lock, pinned toolchain, runner OS
-and architecture, not the changing repository HEAD. Changed native inputs refuse
-reuse; they never silently select an old binary or rebuild in a worker.
-The complete instrument off choice skips both build/upload and download.
+The workflow owns the Python producer and Rust monitor lifetime. The wrapper
+creates the producer behind a gate, records its PID/start-tick identity, prepares
+the session, waits for monitor readiness, then releases work. `HostEventClient`
+registers only the worker and model server declared in that session. A job with
+no declared server stays server-less even if another model server exists.
 
-The native off path takes no process-status, machine-memory, memory-cgroup or
-Python-population readings and creates no memory artifact directory. CPU, load,
-process identity, event boundaries, heartbeat and lifecycle remain active.
-The separate memory-bandwidth copy keeps its own controls. Production Python
-work collection has not cut over yet, so a Python work invocation resolved to
-off refuses before opening its legacy watch instead of claiming the legacy
-memory reads were disabled.
+Python sends probe, optional target enrichment, window and clock commands.
+Native window results supply item-health host cells before the record is sealed.
+Success, scoring, failed work and cancellation use the same close/abort boundary;
+duplicate closes reuse the first result. Native setup, protocol or receipt errors
+remain explicit and cannot trigger Python collection.
 
-## Inactive production boundaries
+Publishers consume the verified native file list alongside their ordinary writes.
+They independently check the expected invocation, target registry, hashes and
+publication permission. A raw host writer receipt is not permission to stage an
+unrelated file. Gardener/council collecting jobs do not claim to measure their
+separate planner or judging jobs.
 
-`observability.host_event_shadow` defaults to false. In that mode the command
-router does not open a manifest and performs no event file read, write or wait.
-Python collection, item-health sealing and raw host writes remain unchanged.
+For content refresh, `plan` builds the release executable once through
+[`d7-host-telemetry`](../../../.github/actions/d7-host-telemetry/action.yml).
+The immutable run artifact includes that binary and its SHA-256 checksum.
+Work shards and assemble use
+[`download-host-telemetry`](../../../.github/actions/download-host-telemetry/action.yml)
+to check native-input/platform identity, verify the bytes and restore executable
+permission. They neither run Cargo nor prepare a toolchain.
 
-When an artifact-only comparison enables the switch, the command must name an
-isolated workspace, its session manifest and its effective native config.
-The Python client verifies those files against the existing finite limits. It
-registers the actual Python worker and selected server, opens a declared event
-window immediately after the existing Python `Watch` opens, and consumes the
-native result before the Python watch closes and before item health is sealed.
-Success without scoring, scored success, failed work and cancellation all use
-that same close boundary. Duplicate closes reuse the first close and emit no
-second event. An exited target stays explicit in the native result and never
-replaces the Python cells while shadow mode is active.
+The identity covers crate sources, Cargo manifest/lock, pinned toolchain, runner
+OS and architecture; it does not require repository HEAD to remain fixed.
+A retried consumer can use its plan's artifact from an earlier attempt of the
+same run. Changed native inputs, another run/platform or corrupt bytes refuse
+reuse. This is per-run reuse, not a release distribution or a guarantee that
+other measured workflows share one build. Whole-instrument off skips the upload
+and download as well as compilation.
 
-The same client can bracket the existing job recorder with probe, optional
-target enrichment and clock commands. Only event I/O failures degrade under
-the recorder's existing warning policy. Invalid identities, ordering and
-protocol results still fail. Shadow roots remain below the named isolated
-workspace and are never returned as production files to stage or publish.
-YAML still owns native process lifetime. This boundary does not authorize the
-single-writer cutover or establish enabled-path latency.
-
-The D7 workflow selector defaults to `legacy`; native mode is not selected by a
-repository variable. The launcher currently accepts only digest `work` for an
-isolated native run. It verifies each typed write plan, completion and physical
-file hash, then refuses publication because the existing publishers do not yet
-consume the native file list. Other D7 families fail before their Python writer
-or publisher starts. This is a safe integration slice, not production cutover.
+Legacy runs use the retained Python collector. `host_event_shadow`, default false,
+is an isolated comparison path, not production ownership: it keeps Python cells
+authoritative and does not publish native shadow roots. Neither selecting legacy
+nor disabling instrumentation changes the migrated readers or old data.
 
 ## Probe, target and clock collection
 
@@ -342,10 +354,10 @@ or a named refusal. It neither collects nor publishes.
 
 Run this migration experiment only by explicit `workflow_dispatch`. It does not
 run automatically on pull requests, pushes or schedules. Normal CI retains the
-fixture-backed Rust module and cross-language functionality tests. The explicit
-experiment remains available for the outstanding production cutover evidence;
-remove its workflow and comparison-only machinery after migration and recovery
-are complete.
+fixture-backed Rust module and cross-language functionality tests. Production
+uses Rust by default; this optional comparison workflow is not a recurring
+production or archive-quality gate. Its tools remain alongside the retained
+Python rollback path until that cleanup is explicitly resumed.
 
 The latest consumed host reply group remains available while a job runs, even
 after its ordinary retry window expires. A valid successor or session stop

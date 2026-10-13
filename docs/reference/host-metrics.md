@@ -4,6 +4,9 @@
 
 Every column of the host fingerprint, what it means, and what it is for.
 The producer records one row per instrumented job, or per shard of that job.
+Rust is the default instrument in the measured workflows. Python still owns
+item-health recording, verification, shared readers, compaction and publication.
+The explicit Python rollback path remains available; it has not been removed.
 
 Read this when a number surprises you and you want to know which machine
 produced it. Why the record exists at all, and what the fleet does to a reading,
@@ -26,7 +29,7 @@ operator console, not on the news-reading pages.
 | | |
 | --- | --- |
 | Contract | [`backend/idhazh/contracts/host_fingerprint.py`](../../backend/idhazh/contracts/host_fingerprint.py) |
-| Generated schema | [`HostFingerprintRow`](../../`HostFingerprintRow`) |
+| Schema | `HostFingerprintRow.json_schema()` from the contract above |
 | Ledger | `state/raw/host-fingerprint/<YYYY>/<MM>/<DD>/` for the daily run, packed under `state/compact/host-fingerprint/` by its production compaction; `state/raw/pipeline-tests/host-fingerprint/<YYYY>/<MM>/<DD>/` for a bench dispatch, packed under `state/compact/pipeline-tests/host-fingerprint/` by `compact-trial-host-fingerprint` |
 | Files | one immutable `<file_id>.parquet` per completed write in the day directory. The reader settles the later whole row of the same work unit; neither file is edited. |
 | Producer | [`backend/rust/host-telemetry/src/invocation.rs`](../../backend/rust/host-telemetry/src/invocation.rs), through the workflow-owned lifecycle and [`job_machine.record`](../../backend/idhazh/telemetry/job_machine.py). Rust writes raw host files; Python verifies, reads, compacts and publishes them. |
@@ -43,28 +46,90 @@ through language bindings or write a competing host row. Digest plan/work/assemb
 bench and encoder probes, gardener task shards, and council result saving use this
 path. Unmeasured jobs remain uninstrumented. An explicit `host_telemetry: legacy`
 choice is a temporary rollback until migration cleanup, not an automatic fallback.
-Historical conversion remains a separate Python maintenance operation.
+Historical conversion is complete for its approved bounded scope. Its Python
+maintenance tools and verified original-byte backups remain available for recovery;
+normal production collection does not rerun the historical migration.
 
 In content refresh, `plan` builds the Rust monitor once. All work shards and
 assemble reuse that run's verified binary; ordinary Python/document changes do
 not change its native source identity.
 
-**Whole telemetry off is separate from memory off.** Measured workflow dispatches
-accept `host_telemetry: off`, or shared `config/idhazh.json` can set
-`observability.host_telemetry_enabled` to `false`. The master switch takes precedence
-over Rust/legacy selection and memory on: no native build/download/monitor, no
-Python host readings, and no raw host or host-memory artifacts. Actual work,
-item-health recording and waiting logs continue; unavailable host cells are null.
-The existing Python `legacy` option remains unchanged.
+Whole-instrument off and memory-only off are different controls. Their exact
+configuration, overrides and effects are in [Controls and precedence](#controls-and-precedence).
 
-The `memory_profiling` dropdown alone accepts `inherit`, `on` and `off`. Inherit
-reads `observability.memory_profiling_enabled` from the job's selected `idhazh.json`
-(normally `config/idhazh.json`, currently true). On/off override only RAM/swap and
-major page-fault measurements for that invocation, not CPU/load collection.
+## Rust capabilities
+
+The fingerprint groups hardware characteristics; it is not a unique machine
+serial number. Its job/run/shard identity says which execution produced the row.
+Per-item resource readings live on the item-health row, not in a second copy of
+the job fingerprint.
+
+Table A - supported native capabilities
+
+| ID | Capability | Recorded result | Scope and limit |
+| --- | --- | --- | --- |
+| A1 | Hardware identity | CPU model/vendor/family/stepping, microcode, watched flags, L3 and versioned fingerprint | Algorithm 2 groups hardware facts, not a physical machine or changing execution limits. See [Identity](#identity). |
+| A2 | CPU topology and target limits | Physical/logical processors, target affinity/effective cpuset, quota and capture time | Visible topology and allowed capacity are different. Partial, denied or unproved inputs stay null. See [CPU capability fields](#what-the-processor-can-do). |
+| A3 | Job timing and model counters | Elapsed job time, model-load time, server prompt tokens and prompt seconds | Log/counter inputs must exist and be readable; non-server jobs do not invent server measurements. |
+| A4 | Item-window CPU and load | Whole-window busy/steal share, busy extrema and closing one-minute load | Host counters describe machine activity, not CPU instructions attributable to one model call. |
+| A5 | Memory and page faults | Selected server/worker RAM, machine RAM/swap, available-memory minimum and major page-fault delta | These are OS observations, not allocator, stack or per-region profiling. A high-water mark is not an item-local peak. |
+| A6 | Job and runtime memory artifacts | Bounded sample and Python-process records, server RSS samples and available cgroup peak | Job rollcall includes readable Python processes; it is not the sum of one worker's descendants. |
+| A7 | Optional memory-copy rate | Cache-sized buffer, selected-job copy rate and actual buffer size | It allocates two buffers and competes for memory bandwidth. Memory-collection off alone does not disable it. |
+| A8 | Native raw files and recovery evidence | Immutable Parquet or JSONL files, write plans, physical hashes and receipts | Rust writes raw host files only; Python retains shared compaction and publishing ownership. |
+
+The live runtime is Linux with `/proc` and `/sys`, as on the Ubuntu runner.
+Windows development or recorded-fixture success does not certify live Linux
+collection. Unsupported or missing observations are unavailable, never zero.
+Architecture, failure handling and engineering costs are in
+[Capabilities and trade-offs](../architecture/publishing/host-events.md#capabilities-and-trade-offs).
+
+## Controls and precedence
+
+The normally selected shared file is `config/idhazh.json`. A workflow that
+prepares a candidate configuration uses that selected configuration instead.
+"Shared" means these jobs read the same setting, not that data is sent elsewhere.
 A major page fault is a memory page retrieved from storage, not an application
-error or crash. Historical records are neither erased nor rewritten by either switch.
+error or crash. Enabling collection attempts these readings; it does not make an
+unavailable source measurable.
 
-**Every job of `digest.yml` writes a row, from 2026-09-17.** `plan`, `work` and
+Table B - whole-instrument selection
+
+| ID | Setting | Meaning |
+| --- | --- | --- |
+| B1 | `observability.host_telemetry_enabled: true` | Allow the selected collector. This is the committed default, not a command to prefer Rust over Python. |
+| B2 | `observability.host_telemetry_enabled: false` | Stop the whole instrument, even if the workflow requests Rust or legacy and memory is on. |
+| B3 | Workflow `host_telemetry: rust` | Use the bound Rust lifecycle. This is the measured workflows' default; failed native setup does not select Python. |
+| B4 | Workflow `host_telemetry: legacy` | Explicitly use the retained Python collection path, with its legacy measurement semantics. It does not undo migrated history or readers. |
+| B5 | Workflow `host_telemetry: off` | Stop host instrumentation for this run without changing the shared file. Real work, item-health records and progress logs continue. |
+
+Table C - controls inside an enabled instrument
+
+| ID | Setting | Enables or stops | Does not control |
+| --- | --- | --- | --- |
+| C1 | `memory_profiling: inherit` | Read `observability.memory_profiling_enabled` from the selected `idhazh.json`; the committed value is true | Collector choice and the master switch |
+| C2 | `memory_profiling: on` | Enable OS memory, major page-fault and memory-artifact collection for the invocation | CPU/load collection or the separately selected copy benchmark |
+| C3 | `memory_profiling: off` | Stop those memory/fault observations; leave their cells unavailable | CPU/load, timing, identity, heartbeat, item health or memory copying |
+| C4 | `observability.host_fingerprint: false` | Stop raw job fingerprint writes/probes | The complete resource monitor or per-item memory/CPU observations |
+| C5 | Empty `host_fingerprint_bandwidth_jobs`, or zero `host_fingerprint_bandwidth_floor_mib` | Stop the copy benchmark | Other host observations |
+
+The master false value or workflow off choice wins first. Memory on cannot
+restart a disabled instrument. Whole off skips native build/download/monitor,
+Python host readings, raw host writes and host-memory artifacts. It keeps work,
+item health and progress logging. The legacy work collector cannot honour the
+memory-only off choice and refuses it; use Rust with memory off, or disable the
+whole instrument. No setting deletes existing readings.
+
+For a single manual run, choose `host_telemetry=off` in the workflow dispatch.
+For scheduled runs too, change only the master field in the existing configuration:
+
+```json
+"host_telemetry_enabled": false
+```
+
+Changing `memory_profiling_enabled` to false is not equivalent: with Rust
+enabled, CPU/load telemetry and its monitor still run.
+
+**The measured jobs of `digest.yml` write rows when enabled.** `plan`, `work` and
 `assemble` each draw their own runner, so a run that measured one of them could
 not say what the other two cost. The `work` shards had the record from the start
 because they hold the model server; the two jobs either side of them spent time
@@ -134,9 +199,10 @@ tenant writes neither a council record nor a machine record.
 
 This does not measure the gardener's planning or history-rewrite job, nor the
 council's planning and judging jobs. The collecting job's processor is not the
-processor that ran a council judging shard. Instrument I/O failures log a
-missing reading; they do not hide work failures. Paused or retired families
-still reject new host rows.
+processor that ran a council judging shard. In legacy mode, instrument I/O failures can log a missing reading. In Rust mode,
+a selected session or invalid receipt fails explicitly rather than running Python
+as a fallback. Missing individual observations remain typed unavailable values.
+Neither mode hides work failures. Paused or retired families reject new host rows.
 
 **Memory-copy measurements are opt-in per job.** Set
 `observability.host_fingerprint_bandwidth_jobs` in `config/idhazh.json`.
@@ -207,9 +273,9 @@ The command-line override is `--memory-profiling on|off`; workflow dispatches us
 `inherit|on|off`. False leaves memory and fault cells empty with a disabled
 reason. It does not stop CPU/load collection, process start-tick identity,
 heartbeat, lifecycle events, the item census or the separately controlled
-memory-bandwidth copy. Until the native writer cutover, the production Python
-work path refuses false before collection because its legacy watch cannot honor
-the switch.
+memory-bandwidth copy. The retained legacy Python work path refuses this
+memory-only off choice because its watch cannot honour it. The whole-instrument
+off control bypasses both collectors and keeps only the waiting heartbeat.
 
 ## Identity
 
@@ -498,10 +564,11 @@ to pass.
 
 **These cells sit here and nowhere else, and that is on purpose.**
 `state/runtime-counters.csv` carried a second copy of them until 2026-09-20. The
-arithmetic and the wire-name table behind them now live once, in
-[`backend/idhazh/telemetry/silicon.py`](../../backend/idhazh/telemetry/silicon.py),
-beside the stage that writes the row - two subtractions of one pair of instants,
-or two readings of one counter, are two things that can disagree.
+native clock parser lives in
+[`job_clock.rs`](../../backend/rust/host-telemetry/src/producers/job_clock.rs),
+beside the writer. The retained Python rollback parser remains in
+[`silicon.py`](../../backend/idhazh/telemetry/silicon.py). One selected collector
+owns each invocation; both never write its host row.
 
 ## Why almost nothing here is an enum
 
@@ -534,13 +601,11 @@ closed set and has to open the contract.
 
 ## Design rationale
 
-**Record every job, not a subset.** A run is only as fast as its slowest job, so
-a run whose slowest job is unmeasured is a run whose cost nobody can attribute.
-Until 2026-09-17 only the `work` shards wrote a row, because the probe was built
-for the model server - and the two jobs either side of them, one of which builds
-the whole site, spent time no processor could be named for. Every job that does
-real work now runs the probe, and each job's own commit step stages the row it
-wrote. Owner ruling, 2026-09-16.
+**Each instrumented job needs its own machine row.** A collecting job's runner
+cannot describe a different planning, judging or worker job. The implemented
+workflow coverage above is explicit; uninstrumented jobs and disabled runs make
+no machine-reading claim. Each publisher names only the completed files owned
+by its invocation.
 
 The placement rule travels with it. The probe wants about a gigabyte and an idle
 machine, so it runs before the job's heaviest step - ahead of the model server in
@@ -590,10 +655,11 @@ nothing paired this ledger with what makes two of its rows one record, which
 cost nothing while nothing was committed and would have cost a double-counted
 machine the moment something was. A job runs on one machine, so two rows under
 one `(date, run_id, job, shard)` are one machine written down twice, and the
-fleet distribution is the one question this record exists to answer. The first
-row wins; there is nothing to choose between two attempts that read the same
-host. The door settles them by that key, `HOST_FINGERPRINT_KEY` in
-`backend/idhazh/ledger/keys.py`, whenever a reader asks. Authority: Fowler, 2026-09-16.
+fleet distribution is the one question this record exists to answer. Within one work unit, the later write of the highest attempt supplies the whole
+row, so the closing clock supersedes its probe. Business-key settlement then
+keeps one row under `HOST_FINGERPRINT_KEY`, not a sum of probe and clock records.
+The exact rules are in
+[Persistence](../architecture/contracts/persistence.md#the-two-identifiers).
 
 **Staging a shared path was not enough, and 2026-09-16 proved it.** The day was
 staged, committed and pushed by ten jobs of one run, and its shared day file held
