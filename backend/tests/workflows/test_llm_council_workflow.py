@@ -400,7 +400,7 @@ def test_manual_dispatch_requires_one_date_and_a_list_of_judges() -> None:
     telemetry = inputs["host_telemetry"]
     assert isinstance(telemetry, dict)
     assert telemetry["type"] == "choice"
-    assert telemetry["default"] == "legacy"
+    assert telemetry["default"] == "rust"
     assert telemetry["options"] == ["rust", "legacy"]
     date = inputs["date"]
     judges = inputs["judges"]
