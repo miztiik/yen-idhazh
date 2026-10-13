@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import shutil
+import subprocess
 import sys
 import threading
 import time
@@ -87,7 +88,9 @@ def invocation_args(command: list[str], **changes: object) -> argparse.Namespace
 def test_launcher_recognizes_only_named_table_w_commands(script: str, tail: list[str]) -> None:
     command = [sys.executable, str(ROOT / "backend" / "utilities" / script), *tail]
     assert lifecycle._native_command_supported(command)
-    stage = lifecycle._producer(command)[0]
+    producer = lifecycle._producer(command)
+    assert producer is not None
+    stage = producer[0]
     job = {
         "plan": ServerJob.PLAN,
         "work": ServerJob.WORK,
@@ -134,7 +137,7 @@ def test_council_without_publishable_work_skips_the_native_monitor(
         assert check is False
         return SimpleNamespace(returncode=0)
 
-    monkeypatch.setattr(lifecycle.subprocess, "run", run_child)
+    monkeypatch.setattr(subprocess, "run", run_child)
     monkeypatch.setattr(
         lifecycle, "_write_env", lambda values: observed.update({"handoff": values})
     )
@@ -284,9 +287,11 @@ class DrainPeer(SessionPeer):
                 handled.add(command.event_id)
                 self.seen.append(command)
                 self._sequence += 1
+                body: WorkerBody | StoppedBody
                 if command.kind == "worker.register":
                     assert isinstance(command.body, WorkerBody)
-                    body, kind = command.body, "worker.registered"
+                    body = command.body
+                    kind = "worker.registered"
                 else:
                     assert command.kind == "monitor.stop"
                     body, kind = StoppedBody(drained=True, aborted_window_ids=()), "monitor.stopped"
@@ -469,7 +474,9 @@ def test_bound_lifecycle_consumes_actual_native_periodic_events_while_producer_i
     peer = DrainPeer(peer_root, manifest)
     client = HostEventClient(peer_root, Path("manifest.json"), Path("config.json"), native=True)
     try:
-        assert client.register_worker(server_pid=manifest.workers[0].server.pid)
+        server = manifest.workers[0].server
+        assert server is not None
+        assert client.register_worker(server_pid=server.pid)
         assert client.begin_job()
         for event, raw in raw_events:
             peer.files.bookkeeping.accept(event, now_ms=peer._tick(), raw=raw)
@@ -488,7 +495,9 @@ def test_bound_lifecycle_consumes_actual_native_periodic_events_while_producer_i
         for event, raw in raw_events:
             assert (consumed / f"{event.event_id}.json").read_bytes() == raw
         assert client.end_job()
-        assert not client._resource_consumer.is_alive()
+        resource_consumer = client._resource_consumer
+        assert resource_consumer is not None
+        assert not resource_consumer.is_alive()
         assert not client.publication_receipt().writes
     finally:
         client._stop_resource_consumer()
@@ -516,7 +525,9 @@ def test_native_heartbeat_passes_elapsed_time_without_sampling_python_host(
             cells = watch.close()
         assert ticks and all(value >= 0 for value in ticks)
         assert cells.cpu_busy_pct is not None
-        assert not watch._heartbeat.is_alive()
+        heartbeat_thread = watch._heartbeat
+        assert heartbeat_thread is not None
+        assert not heartbeat_thread.is_alive()
     finally:
         peer.close()
 
@@ -544,7 +555,9 @@ def test_resource_consumer_preserves_window_acknowledgments_for_the_waiting_prod
     try:
         assert client.register_worker(server_pid=None) and client.begin_job()
         watch = client.native_watch(item_id="item-01")
-        command = client._event("window.begin", client._worker_id, watch._body)
+        worker_id = client._worker_id
+        assert worker_id is not None
+        command = client._event("window.begin", worker_id, watch._body)
         client._publish(command)
         deadline = time.monotonic() + manifest.limits.ack_timeout_ms / 1000
         while not client._pending_results:
@@ -597,30 +610,34 @@ def test_manifest_keeps_declared_windows_and_uses_managed_state_root(tmp_path: P
         ExpectedWindow(window_id=uuid4(), item_id=f"item-{index:02d}", emitter_id="worker")
         for index in range(native_settings.limits.max_windows)
     )
-    values = {
-        "workspace": tmp_path,
-        "native": native_settings,
-        "controls": native_settings.controls,
-        "run_id": "2026-08-21-37",
-        "attempt": 2,
-        "job": ServerJob.WORK,
-        "shard": 0,
-        "git_sha": "a" * 40,
-        "worker": ProcessTarget(pid=os.getpid(), start_ticks=1),
-        "server": None,
-        "boot_id": uuid4(),
-    }
-    manifest = lifecycle._manifest(**values, windows=windows)
+    boot_id = uuid4()
+
+    def manifest_for(selected_windows: tuple[ExpectedWindow, ...]) -> HostSessionManifest:
+        return lifecycle._manifest(
+            workspace=tmp_path,
+            native=native_settings,
+            controls=native_settings.controls,
+            run_id="2026-08-21-37",
+            attempt=2,
+            job=ServerJob.WORK,
+            shard=0,
+            git_sha="a" * 40,
+            worker=ProcessTarget(pid=os.getpid(), start_ticks=1),
+            server=None,
+            windows=selected_windows,
+            boot_id=boot_id,
+        )
+
+    manifest = manifest_for(windows)
     assert manifest.windows == windows
     assert manifest.output_roots == ("state",)
     (tmp_path / "manifest.json").unlink()
     with pytest.raises(ValueError, match="max_windows"):
-        lifecycle._manifest(
-            **values,
-            windows=(
+        manifest_for(
+            (
                 *windows,
                 ExpectedWindow(window_id=uuid4(), item_id="item-extra-01", emitter_id="worker"),
-            ),
+            )
         )
 
 

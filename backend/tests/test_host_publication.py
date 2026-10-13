@@ -19,6 +19,7 @@ from gardener._garden import an_origin, git, quiet_git, write
 from retention._trees import health_row
 
 from idhazh import completed_writes, ledger
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.host_output import (
     HOST_PRODUCER,
@@ -37,7 +38,6 @@ from idhazh.contracts.item_health import ItemStage
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.gardener.outcome import Shard
 from idhazh.ledger import paths
-from idhazh.telemetry import host_publication as host_publication_module
 from idhazh.telemetry.host_output_verify import VerificationLimits
 from idhazh.telemetry.host_publication import (
     MODE_ENV,
@@ -174,7 +174,7 @@ def case(monkeypatch: pytest.MonkeyPatch) -> Iterator[tuple[Path, Path, WriterId
         identity = WriterIdentity(
             run_id=f"{DAY}-42",
             attempt=1,
-            job="work",
+            job=ServerJob.WORK,
             shard=0,
             git_sha=source,
             producer="utilities.digest_publish",
@@ -228,15 +228,15 @@ def test_publisher_stages_same_rust_bytes_and_keeps_foreign_index(
         assert actual == data == (repo / path).read_bytes()
         assert (repo / path).stat().st_mtime_ns == modified
     assert git(origin, "ls-tree", "main", "--", "foreign-index") == ""
-    for path in python_completed:
-        relative = path.relative_to(repo).as_posix()
+    for completed_path in python_completed:
+        relative = completed_path.relative_to(repo).as_posix()
         assert (
             subprocess.run(
                 ["git", f"--git-dir={origin}", "show", f"main:{relative}"],
                 capture_output=True,
                 check=True,
             ).stdout
-            == path.read_bytes()
+            == completed_path.read_bytes()
         )
 
 
@@ -385,7 +385,7 @@ def test_publisher_uses_the_same_closed_ledger_control_as_the_producer(
     _, repo, identity = case
     receipt, limits = native_receipt(repo, identity)
     empty = HostPublicationReceipt.model_validate(receipt.model_dump(mode="json") | {"writes": {}})
-    monkeypatch.setattr(host_publication_module.ledger, "accepts_new_rows", lambda *args: False)
+    monkeypatch.setattr(ledger, "accepts_new_rows", lambda *args: False)
     assert (
         consume_host_publication(
             repo=repo,
