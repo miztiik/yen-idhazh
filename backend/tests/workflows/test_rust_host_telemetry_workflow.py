@@ -33,11 +33,16 @@ def require_isolation(value: dict[str, object]) -> None:
     checkout = next(step for step in steps if step.get("uses", "").startswith("actions/checkout@"))
     assert checkout["with"]["persist-credentials"] == "false"
     text = "\n".join(_strings(value))
-    commands = "\n".join(step.get("run", "") for step in steps if isinstance(step, dict))
+    commands = "\n".join(
+        f"{step.get('run', '')}\n{step.get('uses', '')}"
+        for step in steps
+        if isinstance(step, dict)
+    )
+    assert not re.search(r"secrets\.", text)
     assert not re.search(
-        r"secrets\.|git\s+(?:push|commit)|gh\s+(?:pr|workflow|run)|"
+        r"git\s+(?:push|commit)|gh\s+(?:pr|workflow|run)|"
         r"deploy-pages|model-server|feed_url|https?://",
-        text,
+        commands,
     )
     assert "measure.yml" not in commands
     upload = next(

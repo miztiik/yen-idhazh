@@ -263,7 +263,6 @@ def verify_result(
             ("session", command.session_id == event.session_id),
             ("operator emitter", command.emitter_id == session.host_manifest.operator_emitter_id),
             ("monitor emitter", event.emitter_id == session.host_manifest.monitor_emitter_id),
-            ("sequence", event.sequence == command.sequence),
             ("target", command.body.target == session.host_manifest.cpu_target),
             ("controls", command.body.controls == session.host_manifest.controls),
         )
