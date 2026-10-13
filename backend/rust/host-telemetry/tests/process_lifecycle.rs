@@ -759,12 +759,21 @@ fn actual_live_memory_on_monitor_exports_legacy_files_and_endpoint_window() {
     let mut files = FileTransport::new(&root, m).unwrap();
     let mut child = start_monitor(&root, &proc, &cgroup);
     wait_kind(&mut files, EventKind::MonitorReady);
-    let sample = wait_kind(&mut files, EventKind::JobSample);
-    let EventBody::Sample(body) = sample.body else {
-        panic!()
+    let sample_path = root.join("artifacts").join(LEGACY_JOB_SAMPLE_FILENAME);
+    let started = Instant::now();
+    let sample: LegacyJobSample = loop {
+        let raw = std::fs::read(&sample_path).unwrap();
+        if raw.ends_with(b"\n") {
+            break serde_json::from_slice(&raw).unwrap();
+        }
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "missing flushed job sample"
+        );
+        std::thread::sleep(Duration::from_millis(5));
     };
-    assert_eq!(body.record.python_procs, 2);
-    assert_eq!(body.record.python_vmrss_kb, 250);
+    assert_eq!(sample.python_procs, 2);
+    assert_eq!(sample.python_vmrss_kb, 250);
     files
         .publish(
             &resources::command(EventKind::WorkerRegister, 0, 1),
@@ -800,4 +809,10 @@ fn actual_live_memory_on_monitor_exports_legacy_files_and_endpoint_window() {
         std::fs::read_to_string(root.join("artifacts").join("cgroup-memory-peak.txt")).unwrap(),
         "234567\n"
     );
+    for id in files.ids("results").unwrap() {
+        assert!(!matches!(
+            files.read(id, "results").unwrap().kind,
+            EventKind::JobSample | EventKind::ProcessRollcall
+        ));
+    }
 }
