@@ -17,6 +17,7 @@ import pytest
 
 from idhazh.contracts.host_migration import HistoryManifest
 from idhazh.telemetry.host_history_bundle import dry_run
+from idhazh.telemetry.host_history_files import legacy_raw_git_path
 
 REPO = Path(__file__).resolve().parents[2]
 SOURCE_TREE_COMMIT = "e328c5f885c67a516f88214e87a54e014c3ef665"
@@ -91,17 +92,20 @@ def _git_blob(revision: str, path: str) -> bytes:
 
 
 def _materialize_inputs(manifest: HistoryManifest, workspace: Path) -> None:
+    sources = {source.path: source for source in manifest.sources}
+    roots = {root.name: root for root in manifest.roots}
     inputs = [
-        (SOURCE_TREE_COMMIT, source.path)
+        (SOURCE_TREE_COMMIT, source.path, source.path)
         for source in manifest.sources
-    ] + [
-        (evidence.git_commit, evidence.path)
-        for evidence in manifest.legacy_raw_evidence
     ]
-    for revision, relative_path in inputs:
+    for evidence in manifest.legacy_raw_evidence:
+        compact = sources[evidence.compact_path]
+        git_path = legacy_raw_git_path(evidence, roots[compact.root])
+        inputs.append((evidence.git_commit, git_path, evidence.path))
+    for revision, git_path, relative_path in inputs:
         target = workspace / Path(relative_path)
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(_git_blob(revision, relative_path))
+        target.write_bytes(_git_blob(revision, git_path))
 
 
 def _input_hashes(manifest: HistoryManifest, workspace: Path) -> dict[str, tuple[int, str]]:

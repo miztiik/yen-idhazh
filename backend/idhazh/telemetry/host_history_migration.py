@@ -36,6 +36,7 @@ from idhazh.telemetry.host_history_files import (
     HistoryFile,
     HistoryLimits,
     decode_history,
+    legacy_raw_git_path,
     read_history,
     read_legacy_raw_evidence,
 )
@@ -377,12 +378,15 @@ def prepare_history(
     limits.check_manifest(manifest)
     preflight_history(manifest, workspace=workspace)
     roots = {root.name: root for root in manifest.roots}
+    sources = {source.path: source for source in manifest.sources}
     legacy_evidence: dict[str, dict[tuple[str, str, int], dict[str, Any]]] = {}
     for evidence in manifest.legacy_raw_evidence:
+        compact = sources[evidence.compact_path]
         rows = read_legacy_raw_evidence(
             evidence,
             workspace=workspace,
             limits=limits.history_verification,
+            git_path=legacy_raw_git_path(evidence, roots[compact.root]),
         )
         target = legacy_evidence.setdefault(evidence.compact_path, {})
         duplicate_keys = target.keys() & rows.keys()
