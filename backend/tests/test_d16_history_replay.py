@@ -21,6 +21,7 @@ from idhazh.telemetry.host_history_files import legacy_raw_git_path
 
 REPO = Path(__file__).resolve().parents[2]
 SOURCE_TREE_COMMIT = "e328c5f885c67a516f88214e87a54e014c3ef665"
+VIEW_TREE_COMMIT = "65b6e08d3dfbb973b7271f1d9a47db3016df75e8"
 MANIFEST_SHA256 = "8b577d763b968d9fc43478d758d2afc61adb9130a177966054580fb780bca1e3"
 SCOPE_SHA256 = "02b4069ca27531dad642cc06b3fa8c8ef0492c4f2c4a0662c51aa7e8ae008074"
 EVIDENCE_SHA256 = "af6069b05dac4183c84b0313a9138a359f531b3c70959c691548c2d339308607"
@@ -95,7 +96,11 @@ def _materialize_inputs(manifest: HistoryManifest, workspace: Path) -> None:
     sources = {source.path: source for source in manifest.sources}
     roots = {root.name: root for root in manifest.roots}
     inputs = [
-        (SOURCE_TREE_COMMIT, source.path, source.path)
+        (
+            VIEW_TREE_COMMIT if source.kind == "view" else SOURCE_TREE_COMMIT,
+            source.path,
+            source.path,
+        )
         for source in manifest.sources
     ]
     for evidence in manifest.legacy_raw_evidence:
