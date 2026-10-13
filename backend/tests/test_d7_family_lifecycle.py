@@ -102,6 +102,9 @@ PUBLISH_AND_NETWORK_BOUNDARY = dedent(
 )
 
 TORCH_FIXTURE = """
+class Tensor:
+    pass
+
 _threads = 1
 def set_num_threads(value):
     global _threads
@@ -541,7 +544,8 @@ def test_real_native_family_lifecycle_keeps_single_writer_paths(
         (repo / "config/host-telemetry-experiment.json").read_bytes()
     ).verification_limits
     native = verify_host_publication(receipt, repo=repo, identity=identity, date=DAY, limits=limits)
-    assert len(native) == 1
+    # Probe, target, and job-end clock each publish one whole-row receipt.
+    assert len(native) == 3
     assert dict(receipt.writes) == native
     for name, digest in native.items():
         assert name.startswith(f"state/raw/host-fingerprint/{DAY.replace('-', '/')}/")
