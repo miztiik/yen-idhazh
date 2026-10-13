@@ -401,7 +401,7 @@ def publish(
     return PushOutcome(
         code,
         landing,
-        max(1, result.push_count),
+        max(1, result.push_count) if landing is not None else None,
         result.refusal_paths if result.status is Status.STALE else (),
     )
 
