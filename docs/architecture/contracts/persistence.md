@@ -195,11 +195,11 @@ A date stays a string: it is a stamp a person reads in a diff and in a path, and
 
 ## Swapping the engine
 
-**pyarrow is imported in exactly one statement, in `ledger/parquet.py`**, and `backend/tests/ledger/test_single_engine_import.py` fails the build if a second module imports it. So a swap - duckdb is the named candidate - is a change to that one file:
+**pyarrow is imported in exactly one statement, in `ledger/parquet.py`**. The `pyarrow` and `idhazh.ledger.parquet.pyarrow` banned-api entries in `pyproject.toml` block engine imports and direct access outside that module. So a swap - duckdb is the named candidate - is a change to that one file, apart from updating the host verifiers' footer checks.
 
-1. Rewrite `render`, `read`, `read_envelope` and `engine_version` in `ledger/parquet.py` against the new engine. Keep their signatures.
+1. Rewrite every function in `ledger/parquet.py` against the new engine. Keep their signatures.
 2. Keep the envelope as the file's key-value metadata, and keep the column types `arrow_schema.py` names.
-3. Update the one-module rule in the single-engine test to the new engine's import name, and the engine's line in `pyproject.toml`'s base dependencies.
+3. Update the two banned-api entries in `pyproject.toml` for the new engine's import and access names, and its line in the base dependencies.
 4. Run `backend/tests/ledger`. The round-trip test reads back every model in both formats, and the committed files under `tests/fixtures/parquet/` are what an earlier engine wrote, so a swap that cannot read them fails there.
 
 **A footer records its engine's version, so two engines never write identical bytes.** That breaks nothing: nothing compares a data file's bytes, only whether a path exists.
@@ -248,7 +248,7 @@ pyarrow is the largest thing the project installs, and it is a base dependency: 
 
 **What that costs is an estimate from GitHub's own step timings on ubuntu-latest (2026-09-29), not a paired measurement.** A plain install took 10 to 16 seconds (mean 12.9, over 13 runs) and an install with the engine 13 to 22 seconds (mean 15.2, over 10 runs). So the engine adds about 2 seconds to an average install - inside the spread between runs - and about 12 seconds at the widest, on each of about 12 installs that never open a parquet file. pyarrow 25.0.1 declares no dependencies of its own, so it moves no version the project already installs. A reading taken on Windows is not quoted, because that wheel bundles different shared objects.
 
-**Installed everywhere is not imported everywhere.** pyarrow is imported in `ledger/parquet.py` and nowhere else, and `ledger/persist.py` loads that module only inside the calls that write or read a parquet file, so importing the door loads no engine. `backend/tests/ledger/test_single_engine_import.py` holds the first half, and `test_the_facade_does_not_load_pyarrow` in `backend/tests/contracts/test_ledger_package.py` holds the second.
+**Installed everywhere is not imported everywhere.** pyarrow is imported in `ledger/parquet.py` and nowhere else, and `ledger/persist.py` loads that module only inside the calls that write or read a parquet file, so importing the door loads no engine. The two banned-api entries in `pyproject.toml` hold the import and access rules, and `test_the_facade_does_not_load_pyarrow` in `backend/tests/contracts/test_ledger_package.py` holds the second half.
 
 Every job installs the same set, so whichever job saves `setup-python`'s pip cache saves pyarrow in it.
 

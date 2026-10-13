@@ -262,17 +262,11 @@ def _read_parquet(
         max_thrift_items=limits.max_thrift_items,
         max_depth=limits.max_json_depth,
     )
-    # Reach the existing engine through its container adapter. Its ordinary
-    # whole-file read has no Thrift limits, so inspect a bounded footer first.
-    engine = parquet.pyarrow  # type: ignore[attr-defined]  # Existing adapter's engine import.
-    with (
-        engine.BufferReader(data) as source,
-        engine.parquet.ParquetFile(
-            source,
-            thrift_string_size_limit=limits.max_footer_bytes,
-            thrift_container_size_limit=limits.max_thrift_items,
-        ) as opened,
-    ):
+    with parquet.open_bytes(
+        data,
+        max_footer_bytes=limits.max_footer_bytes,
+        max_footer_items=limits.max_thrift_items,
+    ) as opened:
         footer = opened.metadata
         if footer.num_rows != 1 or footer.num_row_groups != 1:
             raise ValueError("a raw host Parquet file must contain exactly one row and row group")
@@ -303,7 +297,6 @@ def _read_parquet(
             max_header_bytes=limits.max_footer_bytes,
             max_thrift_items=limits.max_thrift_items,
             max_depth=limits.max_json_depth,
-            engine=engine,
         )
         rows: list[dict[str, Any]] = []
         batch_bytes = 0

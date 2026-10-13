@@ -581,8 +581,8 @@ def test_codec_rejects_understatement_and_overstatement_without_allocating_outpu
         else pyarrow.Codec("zstd").compress(value, asbytes=True)
     )
     with pytest.raises(ValueError):
-        _decompress(memoryview(body), len(value) + delta, codec, pyarrow)
-    assert bytes(_decompress(memoryview(body), len(value), codec, pyarrow)) == value
+        _decompress(memoryview(body), len(value) + delta, codec)
+    assert bytes(_decompress(memoryview(body), len(value), codec)) == value
 
 
 def test_page_and_arrow_buffers_share_one_cumulative_budget(tmp_path: Path) -> None:
@@ -601,7 +601,6 @@ def test_page_and_arrow_buffers_share_one_cumulative_budget(tmp_path: Path) -> N
         max_header_bytes=LIMITS.max_footer_bytes,
         max_thrift_items=LIMITS.max_thrift_items,
         max_depth=LIMITS.max_json_depth,
-        engine=pyarrow,
     )
     assert charged > page_total + 8 * len(host_output_columns(HOST_OUTPUT_VERSION))
     assert (

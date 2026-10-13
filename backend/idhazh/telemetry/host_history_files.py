@@ -332,7 +332,6 @@ def _admit_compact_pages(
     env: FileEnvelope,
     limits: VerificationLimits,
 ) -> None:
-    engine = parquet.pyarrow  # type: ignore[attr-defined]  # Existing adapter's engine import.
     footer = opened.metadata
     if (
         not 0 <= footer.num_rows <= limits.max_rows
@@ -438,7 +437,7 @@ def _admit_compact_pages(
                         raise ValueError("compact Parquet dictionary exceeds row cardinality")
                     dictionary_count = dictionary.num_values
                     dictionary_payload = _plain_values(
-                        _decompress(body, size, env.compression.value, engine),
+                        _decompress(body, size, env.compression.value),
                         column,
                         dictionary_count,
                     )
@@ -456,7 +455,7 @@ def _admit_compact_pages(
                 ):
                     raise ValueError("compact Parquet requires bounded flat V1 data pages")
                 count += page.num_values
-                decoded = _decompress(body, size, env.compression.value, engine)
+                decoded = _decompress(body, size, env.compression.value)
                 present = page.num_values
                 if column.nullable:
                     if len(decoded) < 4:
@@ -504,15 +503,11 @@ def _compact(
             max_thrift_items=limits.max_thrift_items,
             max_depth=limits.max_json_depth,
         )
-        engine = parquet.pyarrow  # type: ignore[attr-defined]  # Existing adapter's engine import.
-        with (
-            engine.BufferReader(data) as source,
-            engine.parquet.ParquetFile(
-                source,
-                thrift_string_size_limit=limits.max_footer_bytes,
-                thrift_container_size_limit=limits.max_thrift_items,
-            ) as opened,
-        ):
+        with parquet.open_bytes(
+            data,
+            max_footer_bytes=limits.max_footer_bytes,
+            max_footer_items=limits.max_thrift_items,
+        ) as opened:
             env = FileEnvelope.from_metadata(
                 parquet._envelope_of(opened.metadata.metadata)
             ).validate_container(Format.PARQUET)

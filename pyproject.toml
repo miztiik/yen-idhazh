@@ -204,6 +204,7 @@ select = [
 # rule fails the build in place of a hand-written AST walk over backend/idhazh
 # and frontend/src (Guardrail #12 - that walk's cost grew with the repository).
 "pyarrow".msg = "Only idhazh.ledger.parquet imports the parquet engine directly."
+"idhazh.ledger.parquet.pyarrow".msg = "Only idhazh.ledger.parquet may access the parquet engine directly."
 
 [tool.ruff.lint.per-file-ignores]
 # Test names read better long, and a fixture literal is not a magic value.

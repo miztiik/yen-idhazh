@@ -905,6 +905,55 @@ answer and then aborted the same way, on 2026-10-08; attempt 2 passed. The two
 occurrences now meet the bar this entry set: a second abort opens a row to
 reproduce and fix it.
 
+**Row 1 reproduced and captured the abort.** The final complete instrument run
+was [38364493687](https://github.com/miztiik/yen-idhazh/actions/runs/38364493687),
+on ubuntu-latest with base `c71d17a265ef11565db35d555bbb32d2cdcb1eb1`,
+Python 3.12.15, pyarrow 26.0.0, kernel `6.17.0-1022-azure` and 4 CPUs. The
+workflow's `base_sha` field held its immediate parent, not the starting
+revision; the branch's merge-base with `origin/main` was `c71d17a`, and its
+only changed path was the throwaway workflow. Four complete loop runs were
+[38362983830](https://github.com/miztiik/yen-idhazh/actions/runs/38362983830),
+[38363522297](https://github.com/miztiik/yen-idhazh/actions/runs/38363522297),
+[38364025824](https://github.com/miztiik/yen-idhazh/actions/runs/38364025824)
+and [38364493687](https://github.com/miztiik/yen-idhazh/actions/runs/38364493687).
+Across 400 pinned runs there were 5 aborts (1.25%); across 400 control runs
+there were 13 (3.25%). Both loops had 0 wrong answers and 0 other exits. Each
+aborting run printed the complete eight-key answer and matched the reference.
+The first three runs had errors in later fixture probes; the final run passed
+all five probes and supplied the thread counts below.
+
+The final run's thread counts, after importing `idhazh.ledger.parquet` and
+before and after the call, were: scored-key read 5 to 9; host-output read 5 to
+5; host-history read 5 to 5; `ledger.persist` write 5 to 5; and
+`render_grouped_period` build 5 to 5.
+
+GDB identified the aborting worker as thread 1 (LWP 3762), not the main thread.
+Its top 15 frames were:
+
+```text
+#0  __pthread_kill_implementation
+#1  __pthread_kill_internal
+#2  __GI___pthread_kill
+#3  __GI_raise
+#4  __GI_abort
+#5  ??
+#6  ??
+#7  std::terminate
+#8  ??
+#9  ??
+#10 _Unwind_ForcedUnwind
+#11 __GI___pthread_unwind
+#12 __do_cancel
+#13 __GI___pthread_exit
+#14 PyThread_exit_thread
+```
+
+The next frames were `take_gil`, `PyEval_RestoreThread`,
+`PyGILState_Ensure`, and `arrow::py::PyBuffer::~PyBuffer`; the trace then
+continued through Parquet's row-group decode worker. This confirms the chain
+in C3 and supports D1. The abort occurred after the complete answer, as the
+earlier failures did.
+
 **Execution row 51.** Scope: reproduce the interpreter-exit abort on the real
 `--scored-keys` path and fix the producer or native reader's lifetime, not retry
 the caller. Files: `backend/utilities/build_canary_day.py`, the Parquet reader

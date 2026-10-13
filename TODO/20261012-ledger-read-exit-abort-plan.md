@@ -2,11 +2,13 @@
 
 **Last Updated**: 2026-10-13
 
+**Status**: Row 1 is complete. Row 2 is implemented and ready for its separate pull request. Row 3 waits for Row 2.
+
 **Level**: 3 ([CLAUDE.md](../CLAUDE.md) section 6) - Row 2 moves engine calls across two subsystems, the ledger's parquet module and the host verifiers.
 
 ## 0. Operating contract
 
-Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 1 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes. Parallel N = 1 because each row needs the row before it, and Row 1 measures, so it runs alone.
+Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 1 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. Parallel N = 1 because each row needs the row before it, and Row 1 measures, so it runs alone.
 
 Table A - operating contract
 
@@ -46,12 +48,12 @@ Table C - ESCALATE triggers
 | C10 | A write through the door starts an engine thread on today's engine (Gate 1 step 8, or a write case in Gate 2) | The counts. The rule's write half needs a code change this plan does not have |
 | C11 | A thread-test case cannot be driven from a real fixture ([CLAUDE.md](../CLAUDE.md) Guardrail #7: a mock makes a thing look finished without being built) | Which case, and which fixture is missing |
 
-Table D - the fault ruling: causes and claims considered (code read at main 72569d6; nothing run)
+Table D - the fault ruling: causes and claims considered (code read at main 72569d6; reproduced on base c71d17a by Row 1)
 
 | Id | Cause or claim | Ruling | Why |
 | --- | --- | --- | --- |
-| D1 | An engine worker thread drops the last hold on the caller's bytes during interpreter shutdown. In plain words: the ledger reader hands the engine a block of bytes that Python owns and lets the engine decode it on its own worker threads. If a worker lets go of the last hold on those bytes after the caller has moved on, the release needs Python's lock. During shutdown, Python 3.12 on Linux ends that thread by unwinding its stack; the unwind reaches C++ code that may not be unwound, and the C++ runtime aborts the process with "terminate called without an active exception", after the answer was printed | IN - most likely. About 4 in 5: an estimate, not a measurement. One backtrace (E1) can overturn it; the fix also removes D2, so the fix does not wait on the number | Same message and signal. The abort came after a complete answer: the answer goes to a pipe, which Python writes out at shutdown. The first abort was on the merge that moved the scores to parquet (#1166). On the `--scored-keys` path the read is the last real work, then one print and exit. A thread waiting for Python's lock asks for a turn after about 5 ms (Python's switch interval), so a program that exits sooner than that after its last read leaves a late worker no turn - the likely reason this is the exposed caller. The upstream core dump (apache/arrow issue 34314) shows this chain. Decode on the engine's threads over Python-owned bytes is the default the code takes (pyarrow 25.0.1 `ParquetFile.read`, `use_threads=True`) |
-| D2 | A C++ thread object destroyed while still joinable during exit-time cleanup, the other usual source of this message | OPEN - not favoured | It would not depend on what runs last, yet only the step whose last act is a read has aborted. The backtrace separates the two: the main thread inside exit handlers, not a worker inside `pthread_exit`. The fix starts no engine thread, so it removes this too |
+| D1 | An engine worker thread drops the last hold on the caller's bytes during interpreter shutdown. In plain words: the ledger reader hands the engine a block of bytes that Python owns and lets the engine decode it on its own worker threads. If a worker lets go of the last hold on those bytes after the caller has moved on, the release needs Python's lock. During shutdown, Python 3.12 on Linux ends that thread by unwinding its stack; the unwind reaches C++ code that may not be unwound, and the C++ runtime aborts the process with "terminate called without an active exception", after the answer was printed | IN - Row 1's backtrace confirms this chain on a non-main thread: the Python buffer destructor requests the GIL during forced thread unwind. The fix also removes D2 | Same message and signal. The abort came after a complete answer: the answer goes to a pipe, which Python writes out at shutdown. The first abort was on the merge that moved the scores to parquet (#1166). On the `--scored-keys` path the read is the last real work, then one print and exit. A thread waiting for Python's lock asks for a turn after about 5 ms (Python's switch interval), so a program that exits sooner than that after its last read leaves a late worker no turn - the likely reason this is the exposed caller. The upstream core dump (apache/arrow issue 34314) shows this chain. Decode on the engine's threads over Python-owned bytes is the default the code takes (pyarrow 25.0.1 `ParquetFile.read`, `use_threads=True`) |
+| D2 | A C++ thread object destroyed while still joinable during exit-time cleanup, the other usual source of this message | OUT - Row 1 shows the aborting worker inside `pthread_exit`'s forced unwind, not the main thread in exit handlers | It would not depend on what runs last, yet only the step whose last act is a read has aborted. The fix starts no engine thread, so it removes this too |
 | D3 | The engine's read-ahead I/O pool holds the bytes | LIKELY OUT for this path | For an in-memory source the engine's in-memory reader answers read-ahead itself (its `ReadAsync` override in Arrow's `cpp/src/arrow/io/memory.cc`; signature read, body not read). The read-ahead default also differs between pyarrow 25.0.1's docs (on) and the engine's current source (off). The fix turns read-ahead off anyway |
 | D4 | A Python daemon thread alive at exit | OUT | The only one, "host-watch" (`backend/idhazh/telemetry/host.py:604`), starts inside the work stage's `Watch`, never on this path |
 | D5 | Another native library's threads | OUT | onnxruntime and tokenizers load only inside `Embedder` (`backend/idhazh/embed.py:108` and `:133`); no backend module imports duckdb |
@@ -60,14 +62,12 @@ Table D - the fault ruling: causes and claims considered (code read at main 7256
 | D8 | A fault in the decode itself | OUT | The printed answer was complete and correct |
 | D9 | The `with` block in `parquet.read` as the cure (`docs/architecture/contracts/persistence.md:169-172` says it closes the reader and byte source) | OUT as a fix | The engine's file object closes only a source it opened itself, and the in-memory reader keeps its buffer until the object is freed; neither touches a hold a worker thread still has |
 
-Table E - evidence still missing
+Table E - evidence still missing after Row 1
 
 | Id | Missing fact | Why it matters | Where it comes from | If it cannot be had |
 | --- | --- | --- | --- | --- |
-| E1 | A native backtrace of one abort of this repository's code on ubuntu-latest with Python 3.12: which thread, which destructor | Separates D1 from D2, and shows whether the fix's property covers the mechanism | Row 1, Gate 1 step 7 | C3 |
-| E2 | An on-demand reproduction: the abort count on the base under a named amplifier, and the same count on the fix | Without a base rate, a clean run on the fix proves nothing | Row 1 Gate 1 (base); Row 3 Gate 4 (fix) | C2 |
 | E3 | The pyarrow version on the three failing runs | `pyarrow>=21` is unpinned, so a cause that only one engine version has is not ruled out | The runs' own install logs, if GitHub still serves them; Row 1 records the version it installs | B5 says what a version-only failure would bring in |
-| E4 | The logs of the 2026-10-08 run and the 2026-10-12 run (the second was not located) | Confirms the same step and the same message | Row 1 reads them | The two runs' check records stand; no row waits on it |
+| E4 | The specific 2026-10-12 abort log | Confirms the reported step and message | Row 1 checked candidate run 38243267274; it was green and its logs showed no abort | The exact recurrence remains unlocated; its check record stands and no row waits on it |
 | E5 | Whether the process-exit regression that `persistence.md:171` names exists, and whether it ran on the 2026-10-12 candidate | If it exists and ran, it passed while the fault was live, so it cannot see this fault | Row 3, by search | Row 3 says so in its pull request |
 
 ## 1. Status reckoner
@@ -76,8 +76,8 @@ Table F
 
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| F1 | 1 | Reproduce the exit abort on ubuntu-latest with Python 3.12 and capture its native backtrace | - | A | PENDING | - | - | - |
-| F2 | 2 | Route every parquet engine call through the ledger's parquet module | 1 | B | PENDING | - | - | - |
+| F1 | 1 | Reproduce the exit abort on ubuntu-latest with Python 3.12 and capture its native backtrace | - | A | DONE | ledger-read-exit-ab | - | direct |
+| F2 | 2 | Route every parquet engine call through the ledger's parquet module | 1 | B | DONE | ledger-read-exit-ab | - | direct |
 | F3 | 3 | Run every engine call on the calling thread, so a short program exits cleanly | 2 | C | PENDING | - | - | - |
 
 ### Row #1 - Reproduce the exit abort on ubuntu-latest with Python 3.12 and capture its native backtrace
