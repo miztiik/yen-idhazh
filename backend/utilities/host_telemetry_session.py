@@ -69,16 +69,6 @@ def binary() -> Path:
 
 def invoke(workspace: Path, verb: str, *args: str, manifest: str = "manifest.json") -> bytes:
     native, compare, _ = settings()
-    host_manifest = read_model(
-        resolve(workspace, manifest), HostSessionManifest, native.limits.max_manifest_bytes
-    )
-    result_directory = resolve(workspace, f"{host_manifest.event_root}/results")
-    latest_monitor_sequence = 1
-    if result_directory.is_dir():
-        for path in result_directory.glob("*.json"):
-            event = read_model(path, HostEvent, native.limits.max_result_bytes)
-            if event.emitter_id == host_manifest.monitor_emitter_id:
-                latest_monitor_sequence = max(latest_monitor_sequence, event.sequence)
     output = workspace / f"command-{uuid4()}.log"
     with output.open("wb") as stream:
         child = subprocess.Popen(
@@ -91,8 +81,6 @@ def invoke(workspace: Path, verb: str, *args: str, manifest: str = "manifest.jso
                 manifest,
                 "--config",
                 "native-config.json",
-                "--result-sequence",
-                str(latest_monitor_sequence + 3),
                 *(LIVE_PROBE_ROOTS if verb in {"probe", "target"} else ()),
                 *args,
             ],
