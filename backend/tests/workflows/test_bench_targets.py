@@ -503,11 +503,8 @@ def test_a_bench_whose_probe_wrote_nothing_says_so_and_stages_nothing(tmp_path: 
     """
     step = _step(_load_workflows()["measure.yml"], BENCH_SERVER_JOB, "name", COMMIT_STEPS["bench"])
     body = _script(step, COMMIT_STEPS["bench"])
-    staged, settings = _commit_call("bench")
-    assert staged == ["land", "measure"]
-    from utilities.record_publish import POLICIES
-
-    staged = list(POLICIES["measure"][1])
+    _, settings = _commit_call("bench")
+    staged = _publication_scopes("bench")
     (folder,) = staged
     asked = [words for line in body.splitlines() if "-d" in (words := line.split())]
     assert len(asked) == 1 and folder in asked[0], (

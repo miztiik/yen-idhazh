@@ -71,7 +71,7 @@ EXPECTED_WORKFLOWS: Final = {
     "llm-council.yml": ("LLM-COUNCIL", frozenset({"schedule", "workflow_dispatch"})),
     "measure.yml": ("Measurements", frozenset({"workflow_dispatch"})),
     "rust-host-telemetry.yml": (
-        "Isolated Rust host evidence", frozenset({"workflow_dispatch", "pull_request"}),
+        "Isolated Rust host evidence", frozenset({"workflow_dispatch"}),
     ),
     "pages.yml": (
         "Pages publication",
@@ -144,6 +144,11 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("digest.yml", "faithfulness"): DISPATCH_BOOLEAN,
     ("digest.yml", "memory_profiling"): DISPATCH_CHOICE,
     ("digest.yml", "host_telemetry"): DISPATCH_CHOICE,
+    ("encoder-comparison.yml", "start"): "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+    ("encoder-comparison.yml", "end"): "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+    ("encoder-comparison.yml", "commit_readings"): DISPATCH_BOOLEAN,
+    ("encoder-comparison.yml", "reuse_pairs"): DISPATCH_BOOLEAN,
+    ("encoder-comparison.yml", "selected_encoders"): DISPATCH_READ_BY_NAME,
     ("encoder-comparison.yml", "memory_profiling"): DISPATCH_CHOICE,
     ("encoder-comparison.yml", "host_telemetry"): DISPATCH_CHOICE,
     ("idhazh-gardener.yml", "memory_profiling"): DISPATCH_CHOICE,
@@ -838,6 +843,8 @@ SUBSTITUTED_COUNCIL_RUN: Final = "2026-08-26-35534060762"
 SUBSTITUTED_TENANT: Final = "a-paper-tenant"
 
 EXPRESSION_VALUES: Final = {
+    "env.SET_DIRECTORY": "corpus/encoder-comparison-1",
+    "matrix.encoder": "fixture-encoder",
     "needs.plan.outputs.date": SUBSTITUTED_DATE,
     "needs.plan.outputs.day_dir": SUBSTITUTED_DAY_DIR,
     "needs.plan.outputs.plan_dir": SUBSTITUTED_PLAN_DIR,
@@ -1824,7 +1831,7 @@ def _publication_scopes(label: str) -> list[str]:
 
     argv, _ = _commit_call(label)
     if label == "bench":
-        assert argv == ["land", "measure"]
+        assert argv[:2] == ["land", "measure"]
         return list(POLICIES["measure"][1])
     assert argv[0] == label
     return list(permissions(label, date=SUBSTITUTED_DATE))

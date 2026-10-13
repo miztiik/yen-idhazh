@@ -23,6 +23,8 @@ def workflow() -> dict[str, object]:
 
 
 def require_isolation(value: dict[str, object]) -> None:
+    triggers = value["on"]
+    assert isinstance(triggers, dict) and set(triggers) == {"workflow_dispatch"}
     assert value["permissions"] == {"contents": "read"}
     jobs = value["jobs"]
     assert isinstance(jobs, dict) and set(jobs) == {"work"}
@@ -61,14 +63,18 @@ def test_workflow_has_read_only_permissions_local_inputs_and_expiring_artifacts(
 
 
 @pytest.mark.parametrize(
-    "fault", ["permissions", "credentials", "publishing", "retention", "cleanup"]
+    "fault", ["automatic_trigger", "permissions", "credentials", "publishing", "retention", "cleanup"]
 )
 def test_generated_unsafe_workflow_is_rejected(fault: str) -> None:
     value = copy.deepcopy(workflow())
     jobs = value["jobs"]
     assert isinstance(jobs, dict)
     steps = jobs["work"]["steps"]
-    if fault == "permissions":
+    if fault == "automatic_trigger":
+        triggers = value["on"]
+        assert isinstance(triggers, dict)
+        triggers["pull_request"] = {}
+    elif fault == "permissions":
         value["permissions"] = {"contents": "write"}
     elif fault == "credentials":
         steps[0]["with"]["persist-credentials"] = True

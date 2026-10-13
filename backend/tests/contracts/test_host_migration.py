@@ -32,7 +32,10 @@ def test_scope_hash_and_schema_are_stable() -> None:
     assert HistoryManifest.from_json(manifest.to_json()) == manifest
     assert manifest.scope_hash() == HistoryManifest.model_validate(manifest_document()).scope_hash()
     assert HistoryManifest.json_schema()["version"] == "2026-10-11"
-    assert HistoryReport.json_schema()["version"] == "2026-10-11"
+    assert HistoryReport.json_schema()["version"] == "2026-10-12"
+    assert HistoryReport.json_schema()["properties"]["production_cutover_readiness"][
+        "const"
+    ] == "blocked"
 
 
 @pytest.mark.parametrize(

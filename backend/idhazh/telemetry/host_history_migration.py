@@ -12,7 +12,7 @@ from idhazh.contracts.base import Contract, compact_json
 from idhazh.contracts.file_envelope import FileEnvelope, Format, Period, RowIdentity, Tier
 from idhazh.contracts.host_fingerprint import strip_null_legacy_placeholders
 from idhazh.contracts.host_migration import (
-    MIGRATION_VERSION,
+    HISTORY_REPORT_VERSION,
     FileStatus,
     HistoryFileReport,
     HistoryManifest,
@@ -36,6 +36,7 @@ from idhazh.telemetry.host_history_files import (
     HistoryFile,
     HistoryLimits,
     decode_history,
+    legacy_raw_git_path,
     read_history,
     read_legacy_raw_evidence,
 )
@@ -377,12 +378,15 @@ def prepare_history(
     limits.check_manifest(manifest)
     preflight_history(manifest, workspace=workspace)
     roots = {root.name: root for root in manifest.roots}
+    sources = {source.path: source for source in manifest.sources}
     legacy_evidence: dict[str, dict[tuple[str, str, int], dict[str, Any]]] = {}
     for evidence in manifest.legacy_raw_evidence:
+        compact = sources[evidence.compact_path]
         rows = read_legacy_raw_evidence(
             evidence,
             workspace=workspace,
             limits=limits.history_verification,
+            git_path=legacy_raw_git_path(evidence, roots[compact.root]),
         )
         target = legacy_evidence.setdefault(evidence.compact_path, {})
         duplicate_keys = target.keys() & rows.keys()
@@ -503,7 +507,7 @@ def prepare_history(
     artifacts["candidate-maintenance-receipt.json"] = maintenance.to_json().encode("ascii")
     artifacts["manifest.json"] = manifest.to_json().encode("ascii")
     payload: dict[str, Any] = {
-        "version": MIGRATION_VERSION,
+        "version": HISTORY_REPORT_VERSION,
         "scope_hash": manifest.scope_hash(),
         "evidence_hash": "0" * 64,
         "bundle_root": manifest.isolated_root + "/" + manifest.scope_hash(),
@@ -528,6 +532,10 @@ def prepare_history(
             "actual_migrated_consumers_rerun_required",
             *(("derived_views_deferred",) if views else ()),
             *(("set_aside_sources_unresolved",) if unresolved else ()),
+        ),
+        "production_cutover_readiness": "blocked",
+        "production_cutover_blocked_by": (
+            "d7_all_family_single_writer_ubuntu_evidence_not_verified",
         ),
         "affected_view_paths": views,
         "deferred_receipt_paths": tuple(deferred_receipts),

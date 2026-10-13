@@ -27,6 +27,7 @@ from idhazh.contracts.host_output import HostWriterIdentity
 from idhazh.contracts.publication_receipt import PublicationReceipt
 
 MIGRATION_VERSION = "2026-10-11"
+HISTORY_REPORT_VERSION = "2026-10-12"
 Nonnegative = Annotated[int, Field(strict=True, ge=0)]
 Positive = Annotated[int, Field(strict=True, ge=1)]
 FileStatus = Literal[
@@ -42,6 +43,14 @@ _CHANGELOG = (
         change="Declare closed historical scopes and read-only replacement evidence.",
         why="Maintenance cannot silently expand its sources or invent missing readings.",
     ),
+)
+_REPORT_CHANGELOG = (
+    ChangelogEntry(
+        version=HISTORY_REPORT_VERSION,
+        change="Separate production cutover readiness from historical rewrite readiness.",
+        why="History replay cannot establish the all-family, single-writer Ubuntu cutover gate.",
+    ),
+    *_CHANGELOG,
 )
 
 
@@ -338,8 +347,8 @@ class ConsumerReplayEvidence(HistoryModel):
 
 class HistoryReport(HistoryModel, Contract):
     __schema_stem__: ClassVar[str] = "host-history-report"
-    __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = _CHANGELOG
-    version: Literal["2026-10-11"]
+    __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = _REPORT_CHANGELOG
+    version: Literal["2026-10-12"]
     scope_hash: Sha256
     evidence_hash: Sha256
     bundle_root: RelPath
@@ -355,6 +364,10 @@ class HistoryReport(HistoryModel, Contract):
     receipt_status_derived_views: ViewStatus
     historical_readiness: Literal["blocked", "ready"]
     blocked_by: tuple[str, ...]
+    production_cutover_readiness: Literal["blocked"]
+    production_cutover_blocked_by: tuple[
+        Literal["d7_all_family_single_writer_ubuntu_evidence_not_verified"], ...
+    ]
     affected_view_paths: tuple[RelPath, ...]
     deferred_receipt_paths: tuple[RelPath, ...]
     files: tuple[HistoryFileReport, ...]
@@ -403,6 +416,12 @@ class HistoryReport(HistoryModel, Contract):
             raise ValueError("candidate reader cannot claim consumer replay evidence")
         if self.consumer_mode == "migrated_consumers" and self.consumer_replay is None:
             raise ValueError("migrated consumers require exact replay evidence")
+        if self.production_cutover_blocked_by != (
+            "d7_all_family_single_writer_ubuntu_evidence_not_verified",
+        ):
+            raise ValueError(
+                "production cutover requires verified all-family, single-writer Ubuntu evidence"
+            )
         if self.historical_readiness == "ready" and (
             not self.inventory_complete
             or self.blocked_by

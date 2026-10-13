@@ -318,6 +318,13 @@ or a named refusal. It neither collects nor publishes.
 
 ## Artifact-only Linux comparison
 
+Run this migration experiment only by explicit `workflow_dispatch`. It does not
+run automatically on pull requests, pushes or schedules. Normal CI retains the
+fixture-backed Rust module and cross-language functionality tests. The explicit
+experiment remains available for the outstanding production cutover evidence;
+remove its workflow and comparison-only machinery after migration and recovery
+are complete.
+
 `.github/workflows/rust-host-telemetry.yml` uses one stock `ubuntu-latest`
 job with read-only repository permissions, credential-free checkout and seven-day
 artifacts. It does not call `measure.yml`, publish, migrate history or write
@@ -428,6 +435,10 @@ available through `HistoryManifest.json_schema()`. The manifest requires:
   SHA-256 and byte count. Raw, compact, raw-index and set-aside sources name
   their closed period. Compact files, indexes, views and receipts declare their
   exact source-path `dependencies`; raw files have no dependencies.
+- `legacy_raw_evidence`, when a compact repair needs an original CSV row, pins
+  its bytes and Git commit/path. The verifier resolves that exact path in the
+  commit tree and requires its blob ID to match the evidence, not only the
+  evidence bytes' computed blob hash.
 - An `isolated_root` under `backend/var/`, outside all historical state roots.
 
 Source kinds are `raw`, `compact`, `raw_index`, `compact_index`, `view`, `receipt`
@@ -549,6 +560,13 @@ After shared schemas and consumers migrate, the same closed manifest must run
 against those actual consumers, freeze view/receipt bytes in a new evidence
 generation, and satisfy the historical evidence gate before application.
 
+`HistoryReport` version `2026-10-12` records production cutover separately from
+historical readiness. A successful migrated-consumer replay can make only the
+historical decision ready. Production remains `blocked` until D7's all-family,
+single-writer Ubuntu evidence is verified; replay and elapsed time cannot satisfy
+that gate. The existing Python default remains the production writer meanwhile.
+The report names this unmet evidence explicitly.
+
 The artifact-only workflow can run these bounded, generated-file tests before
 its verdict; no test scans committed archives or installs tools:
 
@@ -556,6 +574,18 @@ its verdict; no test scans committed archives or installs tools:
 python -m pytest -n 0 tests/contracts/test_host_migration.py `
   tests/test_host_fingerprint_migration.py
 ```
+
+The exact historical-data replay is a one-time operator activity outside pytest,
+not an application, production or recurring CI step. Offline Python conversion
+and reader replay may run on the development machine; Ubuntu remains the target
+for live Rust process evidence. Preserve the exact manifest, report and candidates
+in the task-owned maintenance directory without changing the original history.
+Report hashes bind one evidence generation, not the latest repository commit;
+compare changed report fields and candidate data before accepting a new generation.
+Normal tests use generated fixtures to cover functionality, not archive quality.
+After the rewrite, remove one-time checks and any migration-only utility or tests
+with no remaining recovery caller. Retain fixture tests for shared codecs,
+versioned readers and any recovery code still in use.
 
 ## Design rationale
 

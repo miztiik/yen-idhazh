@@ -582,7 +582,7 @@ def test_resource_consumer_preserves_window_acknowledgments_for_the_waiting_prod
 
 
 def test_native_client_retires_consumed_local_groups_without_weakening_native_caps(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     manifest = fixture_manifest(tmp_path, item_id=tuple(f"item-{index:02d}" for index in range(5)))
     native_settings, _, _ = settings()
@@ -604,6 +604,15 @@ def test_native_client_retires_consumed_local_groups_without_weakening_native_ca
             with client.native_watch(item_id=window.item_id):
                 pass
         book = client.files.bookkeeping
+        digests = book._digests.copy()
+        retire_at = book._now_ms + client.manifest.limits.retry_window_ms
+        with monkeypatch.context() as clock:
+            clock.setattr(
+                "idhazh.telemetry.host_event_client._monotonic_ms",
+                lambda: retire_at,
+            )
+            assert client._new_results() == ()
+        assert book._digests == digests
         assert len(book._digests) > len(book._events)
         assert book.total_events == 3 + 4 * len(manifest.windows)
         assert client.manifest.limits == native_settings.limits

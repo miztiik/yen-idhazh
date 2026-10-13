@@ -2,7 +2,9 @@
 
 **The only module in the repository that imports pyarrow**, and it does so in
 one statement. Every other module reaches the engine through this one, so
-replacing it - duckdb is the named candidate - is a change to one file.
+replacing it - duckdb is the named candidate - changes one file for engine
+calls. The two host verifiers still inspect the engine's footer metadata and
+schema through its file object, so a swap also changes those checks.
 `ledger/persist.py` imports this module inside the functions that write and read
 parquet, never at its top, so importing the ledger never loads pyarrow: a stage
 that never opens a parquet file does not pay to load the engine.
@@ -23,7 +25,8 @@ daily or monthly file stays readable by every build.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Final
 
@@ -149,13 +152,36 @@ def _envelope_of(metadata: Mapping[bytes, bytes] | None) -> dict[bytes, bytes]:
     }
 
 
+@contextmanager
+def open_bytes(
+    data: bytes,
+    *,
+    max_footer_bytes: int | None = None,
+    max_footer_items: int | None = None,
+) -> Iterator[Any]:
+    """Open one in-memory file, with optional bounded footer parsing."""
+    options: dict[str, int] = {}
+    if max_footer_bytes is not None:
+        options["thrift_string_size_limit"] = max_footer_bytes
+    if max_footer_items is not None:
+        options["thrift_container_size_limit"] = max_footer_items
+    with pyarrow.BufferReader(data) as source, pyarrow.parquet.ParquetFile(
+        source, **options
+    ) as opened:
+        yield opened
+
+
 def read(data: bytes) -> tuple[dict[bytes, bytes], list[dict[str, Any]]]:
     """A whole parquet file back as its envelope and its rows, in file order."""
-    with (
-        pyarrow.BufferReader(data) as source,
-        pyarrow.parquet.ParquetFile(source) as opened,
-    ):
+    with open_bytes(data) as opened:
         return _envelope_of(opened.metadata.metadata), list(opened.read().to_pylist())
+
+
+def decompress_zstd_page(body: memoryview, size: int) -> memoryview:
+    """Decode one bounded Zstandard page into its admitted size."""
+    return memoryview(
+        pyarrow.Codec("zstd").decompress(body, decompressed_size=size, asbytes=False)
+    )
 
 
 def read_footer(path: Path) -> tuple[dict[bytes, bytes], int]:
