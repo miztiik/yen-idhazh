@@ -276,7 +276,13 @@ fn latest_target_survives_long_job_and_clock_releases_only_expired_older_groups(
     for event in &initial {
         assert!(retired.contains(&event.event_id));
         for direction in ["inbox", "results", "consumed"] {
-            assert!(!fixture.files.path(event.event_id, direction).unwrap().exists());
+            assert!(
+                !fixture
+                    .files
+                    .path(event.event_id, direction)
+                    .unwrap()
+                    .exists()
+            );
         }
     }
     assert_eq!(
@@ -295,13 +301,23 @@ fn latest_target_survives_long_job_and_clock_releases_only_expired_older_groups(
     fixture.assert_present(&window);
     assert_eq!(fixture.session.active_count(), 1);
     assert_eq!(
-        fixture.session.book.check(&probe, long_ms).unwrap_err().code,
+        fixture
+            .session
+            .book
+            .check(&probe, long_ms)
+            .unwrap_err()
+            .code,
         ProtocolFaultCode::Retired
     );
     let mut conflict = probe.clone();
     conflict.emitted_at = "2026-10-10T12:00:02Z".to_owned();
     assert_eq!(
-        fixture.session.book.check(&conflict, long_ms).unwrap_err().code,
+        fixture
+            .session
+            .book
+            .check(&conflict, long_ms)
+            .unwrap_err()
+            .code,
         ProtocolFaultCode::Duplicate
     );
     let clock = fixture.command(
@@ -327,7 +343,11 @@ fn latest_target_survives_long_job_and_clock_releases_only_expired_older_groups(
     assert_eq!(result.completion_event_ids, vec![closed[2].event_id]);
     let retired = fixture.retire(long_ms);
     assert_eq!(retired.len(), selected.len());
-    assert!(selected.iter().all(|event| retired.contains(&event.event_id)));
+    assert!(
+        selected
+            .iter()
+            .all(|event| retired.contains(&event.event_id))
+    );
     assert!(fixture.retire(long_ms + retry).is_empty());
     fixture.assert_present(&closed);
     fixture.assert_present(&window);
@@ -405,13 +425,19 @@ fn invalid_producer_validation_and_publication_failures_preserve_the_predecessor
     conflict.emitted_at = "2026-10-10T14:00:01Z".to_owned();
     let conflict_path = fixture.files.path(conflict.event_id, "results").unwrap();
     fs::write(&conflict_path, canonical_json::row_line(&conflict).unwrap()).unwrap();
-    assert!(fixture.admit_output(&clock, output.clone(), now_ms).is_err());
+    assert!(
+        fixture
+            .admit_output(&clock, output.clone(), now_ms)
+            .is_err()
+    );
     assert_eq!(fixture.session.last_host_command_id(), Some(probe.event_id));
     assert_eq!(fixture.session.host_reply_ids(clock.event_id), reservation);
     assert!(fixture.retire(now_ms + retry).is_empty());
     fixture.assert_present(&initial);
     fs::remove_file(conflict_path).unwrap();
-    let closed = fixture.admit_output(&clock, output, now_ms + retry).unwrap();
+    let closed = fixture
+        .admit_output(&clock, output, now_ms + retry)
+        .unwrap();
     fixture.consume(&closed);
     assert_eq!(fixture.retire(now_ms + retry).len(), initial.len());
     fixture.assert_present(&closed);
@@ -437,13 +463,20 @@ fn successor_and_stop_do_not_bypass_consumption_or_the_retry_window() {
         fixture.consume(&initial[3..]);
         let retired = fixture.retire(retry + 1);
         assert_eq!(retired.len(), initial.len());
-        assert!(initial.iter().all(|event| retired.contains(&event.event_id)));
+        assert!(
+            initial
+                .iter()
+                .all(|event| retired.contains(&event.event_id))
+        );
 
         let stop_ms = 2 * retry;
         assert!(fixture.retire(stop_ms).is_empty());
         fixture.consume(&closed[..3]);
         let events = if cancel {
-            fixture.session.cancelled(&clock.emitted_at, stop_ms).unwrap()
+            fixture
+                .session
+                .cancelled(&clock.emitted_at, stop_ms)
+                .unwrap()
         } else {
             let stop = resources::command(EventKind::MonitorStop, 0, 3);
             fixture.files.publish(&stop, "inbox").unwrap();
