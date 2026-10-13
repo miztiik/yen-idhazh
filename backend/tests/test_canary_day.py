@@ -14,10 +14,14 @@ state the chart can draw is the defect this file guards against.
 
 from __future__ import annotations
 
+import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
-from conftest import FIXTURES_DIR
+from conftest import FIXTURES_DIR, REPO_ROOT
 
 from idhazh import config, ledger
 from idhazh.contracts.digest_day import DigestItem
@@ -202,9 +206,7 @@ def test_one_published_item_is_both_an_abstract_and_cut() -> None:
     assertion there depend on which one Playwright found first.
     """
     both = [
-        item
-        for item in published()
-        if item.source_form is SourceForm.ABSTRACT and item.truncated
+        item for item in published() if item.source_form is SourceForm.ABSTRACT and item.truncated
     ]
 
     assert len(both) == 1, "no published item is both an abstract and cut"
@@ -218,7 +220,9 @@ def test_one_published_item_is_both_an_abstract_and_cut() -> None:
 
 def filed_rows(state: Path) -> list[EvalRow]:
     """The day's score rows as the ledger door reads them back."""
-    return ledger.load_days(state, LedgerName.SUMMARY_QUALITY_EVALS, [build_canary_day.DATE], model=EvalRow)
+    return ledger.load_days(
+        state, LedgerName.SUMMARY_QUALITY_EVALS, [build_canary_day.DATE], model=EvalRow
+    )
 
 
 def test_the_scores_are_filed_by_the_pipelines_writer(tmp_path: Path) -> None:
@@ -231,6 +235,30 @@ def test_the_scores_are_filed_by_the_pipelines_writer(tmp_path: Path) -> None:
     assert build_canary_day.file_scores(tmp_path, published(), evaluation()) == len(rows)
 
     assert filed_rows(tmp_path) == rows
+
+
+def test_scored_keys_command_exits_with_the_filed_rows(tmp_path: Path) -> None:
+    items, settings = published(), evaluation()
+    assert build_canary_day.file_scores(tmp_path, items, settings) == len(items)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(REPO_ROOT / "backend" / "utilities" / "build_canary_day.py"),
+            "--scored-keys",
+            "--state",
+            str(tmp_path),
+        ],
+        cwd=REPO_ROOT,
+        env={**os.environ, "PYTHONPATH": str(REPO_ROOT / "backend")},
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads(result.stdout) == {row.item_id: row.url_key for row in scored()}
 
 
 def test_a_fresh_run_writes_the_same_ledger_every_time(tmp_path: Path) -> None:
