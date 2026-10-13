@@ -11,28 +11,6 @@ on:
           - inherit
           - 'on'
           - 'off'
-  pull_request:
-    paths:
-      - '.github/workflows/rust-host-telemetry.yml'
-      - 'backend/rust/host-telemetry/**'
-      - 'backend/idhazh/contracts/host_evidence.py'
-      - 'backend/idhazh/contracts/host_events.py'
-      - 'backend/idhazh/contracts/host_output.py'
-      - 'backend/idhazh/contracts/host_fingerprint.py'
-      - 'backend/idhazh/contracts/file_envelope.py'
-      - 'backend/idhazh/telemetry/host_evidence_*.py'
-      - 'backend/idhazh/telemetry/host_output_verify.py'
-      - 'backend/idhazh/telemetry/host_parquet_admission.py'
-      - 'backend/idhazh/telemetry/host.py'
-      - 'backend/idhazh/telemetry/silicon.py'
-      - 'backend/utilities/host_telemetry_*.py'
-      - 'backend/utilities/compare_host_telemetry.py'
-      - 'backend/utilities/memory_sampler.py'
-      - 'backend/tests/test_compare_host_telemetry.py'
-      - 'backend/tests/workflows/test_rust_host_telemetry_workflow.py'
-      - 'config/host-telemetry-*.json'
-      - 'config/idhazh.json'
-
 permissions:
   contents: read
 
