@@ -240,12 +240,12 @@
     "evaluation_enabled": true,
     "host_event_shadow": false,
     "host_fingerprint": true,
-    "host_telemetry_enabled": true,
     "host_fingerprint_bandwidth_cache_multiple": 2,
     "host_fingerprint_bandwidth_floor_mib": 512,
     "host_fingerprint_bandwidth_jobs": [
       "runtime"
     ],
+    "host_telemetry_enabled": true,
     "memory_profiling_enabled": true,
     "sample_rate": 1.0,
     "tracing_enabled": true,

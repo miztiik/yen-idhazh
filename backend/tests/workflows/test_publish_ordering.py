@@ -62,7 +62,13 @@ def test_the_plan_a_day_is_built_from_cannot_go_missing_quietly() -> None:
     job away from whatever actually went wrong.
     """
     workflow = _load_workflows()["digest.yml"]
-    upload = _step(workflow, "plan", "uses", "actions/upload-artifact@v7")
+    uploads = [
+        step for step in _steps(workflow, "plan")
+        if step.get("uses") == "actions/upload-artifact@v7"
+        and _mapping(step.get("with"), "upload settings").get("name") == "plan"
+    ]
+    assert len(uploads) == 1, "one required plan upload must be separate from the monitor binary"
+    upload = uploads[0]
 
     settings = _mapping(upload.get("with"), "the plan upload's settings")
     assert settings["name"] == "plan"

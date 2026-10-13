@@ -337,12 +337,12 @@
     "evaluation_enabled": false,
     "host_event_shadow": true,
     "host_fingerprint": false,
-    "host_telemetry_enabled": false,
     "host_fingerprint_bandwidth_cache_multiple": 3,
     "host_fingerprint_bandwidth_floor_mib": 256,
     "host_fingerprint_bandwidth_jobs": [
       "work"
     ],
+    "host_telemetry_enabled": false,
     "memory_profiling_enabled": false,
     "sample_rate": 0.25,
     "tracing_enabled": true,
