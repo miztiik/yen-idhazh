@@ -100,13 +100,12 @@ jobs:
     env:
       CARGO_TARGET_DIR: ${{ github.workspace }}/backend/var/rust-host-telemetry
     steps:
-      # Two commits rather than one, for the plan-queue check below. A pull
-      # request is checked out as a merge commit whose first parent is the base
-      # branch, so `HEAD^1..HEAD` is what this branch changes - and reading it
-      # costs one more commit rather than a fetch over the network.
+      # Full history serves the plan-queue check and the D16 replay, which reads
+      # the exact pinned source and legacy-evidence Git trees without fetching
+      # from inside the test.
       - uses: actions/checkout@v6
         with:
-          fetch-depth: 2
+          fetch-depth: 0
 
       # The one check a change carrying no code can still fail. Everything
       # below it is about code, and a documentation change skips all of it.
