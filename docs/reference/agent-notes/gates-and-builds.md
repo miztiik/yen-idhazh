@@ -1,6 +1,6 @@
 # Agent Notes - Gates and Builds
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-10-13
 
 Checks before trusting a test or build result. Commands belong in [run-the-gates.md](../../how-to/run-the-gates.md).
 
@@ -44,6 +44,11 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
 
 ## Running the gates
 
+- **Windows prints the correct rows, but that does not prove a clean exit on Linux.**
+  Windows does not run an engine thread's shutdown cleanup in the same way; Linux
+  with Python 3.12 can abort, and Python 3.14 can hang. Run
+  `backend/tests/ledger/test_engine_threads.py` on `ubuntu-latest` with Python
+  3.12 to compare thread counts around each engine call.
 - Confirm the interpreter and imported package belong to the intended environment and checkout. Use the documented `IDHAZH_PYTHON` setting for frontend commands that invoke Python.
 - Keep inputs unchanged during a check. If a test dirties tracked files, fix its output location rather than bypassing the input check.
 - Drive migrations and failure states with bounded fixtures. Confirm the fixture reaches the behavior under test; do not skip an assertion because its required control or data is absent.

@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-13
 
-**Status**: Row 1 is complete. Row 2 is implemented and ready for its separate pull request. Row 3 waits for Row 2.
+**Status**: Rows 1 and 2 are complete. Row 3's tests-only commit failed Gate 2 on the ledger-read case as expected (CI run 38379113158: 5 threads before, 9 after). The fix and Gate 4 remain.
 
 **Level**: 3 ([CLAUDE.md](../CLAUDE.md) section 6) - Row 2 moves engine calls across two subsystems, the ledger's parquet module and the host verifiers.
 
@@ -68,7 +68,6 @@ Table E - evidence still missing after Row 1
 | --- | --- | --- | --- | --- |
 | E3 | The pyarrow version on the three failing runs | `pyarrow>=21` is unpinned, so a cause that only one engine version has is not ruled out | The runs' own install logs, if GitHub still serves them; Row 1 records the version it installs | B5 says what a version-only failure would bring in |
 | E4 | The specific 2026-10-12 abort log | Confirms the reported step and message | Row 1 checked candidate run 38243267274; it was green and its logs showed no abort | The exact recurrence remains unlocated; its check record stands and no row waits on it |
-| E5 | Whether the process-exit regression that `persistence.md:171` names exists, and whether it ran on the 2026-10-12 candidate | If it exists and ran, it passed while the fault was live, so it cannot see this fault | Row 3, by search | Row 3 says so in its pull request |
 
 ## 1. Status reckoner
 
@@ -78,7 +77,7 @@ Table F
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | F1 | 1 | Reproduce the exit abort on ubuntu-latest with Python 3.12 and capture its native backtrace | - | A | DONE | ledger-read-exit-ab | - | direct |
 | F2 | 2 | Route every parquet engine call through the ledger's parquet module | 1 | B | DONE | ledger-read-exit-ab | - | direct |
-| F3 | 3 | Run every engine call on the calling thread, so a short program exits cleanly | 2 | C | PENDING | - | - | - |
+| F3 | 3 | Run every engine call on the calling thread, so a short program exits cleanly | 2 | C | IN PROGRESS | ledger-read-exit-ab | #1592 | direct |
 
 ### Row #1 - Reproduce the exit abort on ubuntu-latest with Python 3.12 and capture its native backtrace
 
@@ -176,16 +175,17 @@ Table J
   - `backend/idhazh/ledger/parquet.py` - `open_bytes`: `pre_buffer=False`; `read`: `use_threads=False`; module docstring: the rule - every engine call runs on the thread that made it - with its reason in plain words: an engine thread that released the caller's bytes would need Python's lock, and during interpreter shutdown that aborts the process (Linux, Python 3.12) or hangs the thread (Python 3.14).
   - `backend/tests/ledger/test_engine_threads.py` - new, marked `contract` per `backend/tests/test_marks.py`: the thread test (K6, K7).
   - `backend/tests/test_canary_day.py` - the score-key exit test (K8).
-  - The fresh-interpreter process-exit test that `persistence.md:171` names: find it by searching `backend/tests` for a test that starts a fresh interpreter to read a file under `tests/fixtures/parquet/`. Remove its exit assertion; keep anything else it guards. If none exists, say so in the pull request (E5).
+  - `backend/tests/ledger/test_persist.py::test_a_short_lived_parquet_reader_prints_the_expected_row_count` - remove only its process-exit assertion and retain its stdout row-count check.
   - `backend/tests/test_marks.py` - only if the new module carries no mark.
   - `docs/architecture/contracts/persistence.md` - replace lines 169-172 (at 72569d6) with the rule, its reason in plain words and the test that holds it; "Swapping the engine" step 2 gains: keep every engine call on the calling thread - for duckdb, a one-thread connection, because its `threads` setting defaults to the core count.
-  - `docs/reference/agent-notes.md` - one entry: this abort cannot show on Windows (a thread ended at shutdown is not unwound there) and turns into a hang on Python 3.14; reproduce it on ubuntu-latest with Python 3.12.
+  - `docs/reference/agent-notes/gates-and-builds.md` - one entry: this abort cannot show on Windows (an engine thread is not unwound there) and turns into a hang on Python 3.14; reproduce it on ubuntu-latest with Python 3.12.
   - `TODO/20260823-known-defects-plan.md` - known defect 51: the Gate 2 and Gate 4 numbers, the run ids, the pull request; status CLOSED in this change.
   - `backend/idhazh/ledger/AGENTS.md` - only if it exists: the new invariant.
   - `TODO/20261012-ledger-read-exit-abort-plan.md` - this row's Reckoner line.
   - Not touched: `backend/utilities/build_canary_day.py` (known defect 51 listed it; the program is where the fault showed, not where it lives), `frontend/scripts/build-canary.mjs`, `.github/workflows/ci.yml`.
 - **Acceptance gates:**
   - **Gate 2 - the new test fails on today's behaviour (CI).** Push the tests-only commit alone, and let its run finish before pushing again: a newer push cancels a pull request's running checks. The `gates` job must fail on the thread test's ledger-read case. The verifier cases fail or pass as Gate 1 step 8 counted; the write cases pass (C10 otherwise). Report any other failure; an abort in the score-key exit test counts as one more reproduction. Record the run id.
+    - Gate 2 result: CI run `38379113158` failed only on ledger read, from 5 threads to 9. PR: #1592.
   - **Gate 3 - the fix (local, then CI).** Local: `npm --prefix frontend run test:changed -- --list`, then run the selection; `python -m ruff check .`; `python -m mypy`; `python -m pytest -n 0 backend/tests/test_canary_day.py backend/tests/ledger/test_engine_threads.py`; `python backend/utilities/doc_load.py` on every changed Markdown file, before and after. On Windows the thread test reports SKIPPED, and a skip is not a pass. CI on the fix: `gates`, `site` and `browser` green; dependants by name: `backend/tests/ledger`, `backend/tests/test_canary_day.py`, the host verifier and page-check tests Row 2's search named, and the compaction and console-payload tests the selector names.
   - **Gate 4 - the fix holds under the same instrument (CI-side, throwaway).** Rerun Gate 1 steps 1-8 on a throwaway branch cut from this pull request's head. Pass: 0 aborts, 0 wrong answers, thread counts unchanged. With a pinned base abort rate p from Row 1, 100 clean runs happen by luck with chance (1-p) to the power 100; that chance is under 1 percent only when p is at least about 4.5 percent. If Row 1's p is lower, raise both loops to about 4.6/p runs, split across jobs of at most 30 minutes; more than 4 jobs -> C2.
 - **Oracle:** the thread test's ledger-read case, deterministic both ways: red on today's behaviour on every run, green on the fix on every run; dropping either flag from the door turns it red again. It cannot settle whether another library starts a thread after the call, or what the engine does on a path no case drives; Gate 4's zero count bounds the first and does not prove it.

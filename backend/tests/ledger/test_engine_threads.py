@@ -34,9 +34,16 @@ def thread_count():
 before = thread_count()
 operation = sys.argv[1]
 if operation == "ledger-read":
+    from contextlib import redirect_stdout
+    from io import StringIO
     from utilities import build_canary_day
 
-    result = build_canary_day.scored_keys(Path(sys.argv[2]))
+    state = sys.argv[2]
+    sys.argv = ["build_canary_day.py", "--scored-keys", "--state", state]
+    output = StringIO()
+    with redirect_stdout(output):
+        exit_code = build_canary_day.main()
+    result = {"exit_code": exit_code, "keys": json.loads(output.getvalue())}
 elif operation == "host-output-read":
     from idhazh.telemetry.host_output_verify import (
         VerificationLimits,
@@ -200,7 +207,7 @@ def test_each_engine_call_keeps_its_threads_on_the_caller(tmp_path: Path, operat
             scored.item_id: scored.url_key
             for scored in build_canary_day.score_rows(items, settings)
         }
-        assert _probe(operation, str(state)) == expected
+        assert _probe(operation, str(state)) == {"exit_code": 0, "keys": expected}
     elif operation == "host-output-read":
         root = tmp_path / "host-output"
         path, _, _ = render_file(root, Format.PARQUET)

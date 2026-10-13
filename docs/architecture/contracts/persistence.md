@@ -1,6 +1,6 @@
 # The Ledger Door: Parquet and JSON Lines Under state/raw and state/compact
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-10-13
 
 How a contract payload reaches disk under `state/raw/` and `state/compact/`, how it comes back, and how the parquet engine is swapped. The door is `backend/idhazh/ledger/persist.py`; everything a producer needs is two calls, `ledger.persist` and `ledger.load`. The registry and the lifecycle statuses are [ledger-registry.md](ledger-registry.md), what each ledger answers is [state-ledgers.md](state-ledgers.md), and the shape of a contract is [schemas.md](schemas.md).
 
@@ -166,10 +166,13 @@ rule does not change `run-plan` settlement, despite their shared business key
 | Compression | `ledger.compression_raw` (snappy) or `ledger.compression_compact` (zstd) | `none` - it is plain text |
 | For | every ledger by default | a payload a person reads in a pull request |
 
-`parquet.read` closes its file reader and in-memory byte source before returning
-the materialized rows. A short-lived process must not leave native reader
-resources for interpreter shutdown to collect; the process-exit regression reads
-a committed fixture in a fresh interpreter.
+Every engine call stays on the thread that made it. `open_bytes` disables
+read-ahead, and `read` disables threaded decoding. An engine worker that releases
+Python-owned bytes needs Python's lock; during interpreter shutdown, the process
+can abort or hang while that worker waits. The contract test in
+`backend/tests/ledger/test_engine_threads.py` counts threads before and after
+each tested engine call in a fresh interpreter. The short-lived reader test
+keeps its row-count check and does not claim a clean process exit.
 
 The `ledger` block of `config/idhazh.json` holds five knobs: `format` (default `parquet`), `compression_raw` (default `snappy`, which every reader opens without a plugin), `compression_compact` (default `zstd`, about 2.2 times smaller than snappy at a thousand rows, in [what a parquet file costs](../../reference/benchmarks/what-a-parquet-file-costs.md)), `published`, the ledgers a browser may fetch, and `engine_extension_repository`, where the query engine that reads them downloads its add-ons (default DuckDB's own host, [../publishing/how-the-query-door-answers-a-panel.md](../publishing/how-the-query-door-answers-a-panel.md)). **`published` names the three console ledgers**, `host-fingerprint`, `item-health` and `summary-quality-evals`: the site build copies each one's indexes and compact files into the site for the browser's query door ([../publishing/how-the-query-door-answers-a-panel.md](../publishing/how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)). The four console routes still read the same packed files while the site is built, from `state/` on disk, until a panel moves onto the door.
 
@@ -198,7 +201,10 @@ A date stays a string: it is a stamp a person reads in a diff and in a path, and
 **pyarrow is imported in exactly one statement, in `ledger/parquet.py`**. The `pyarrow` and `idhazh.ledger.parquet.pyarrow` banned-api entries in `pyproject.toml` block engine imports and direct access outside that module. So a swap - duckdb is the named candidate - is a change to that one file, apart from updating the host verifiers' footer checks.
 
 1. Rewrite every function in `ledger/parquet.py` against the new engine. Keep their signatures.
-2. Keep the envelope as the file's key-value metadata, and keep the column types `arrow_schema.py` names.
+2. Keep the envelope as the file's key-value metadata, and keep the column types
+   `arrow_schema.py` names. Keep every engine call on its caller's thread; for
+   DuckDB, use a one-thread connection because its `threads` setting defaults
+   to the core count.
 3. Update the two banned-api entries in `pyproject.toml` for the new engine's import and access names, and its line in the base dependencies.
 4. Run `backend/tests/ledger`. The round-trip test reads back every model in both formats, and the committed files under `tests/fixtures/parquet/` are what an earlier engine wrote, so a swap that cannot read them fails there.
 
