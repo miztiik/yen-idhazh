@@ -9,6 +9,12 @@ schema through its file object, so a swap also changes those checks.
 parquet, never at its top, so importing the ledger never loads pyarrow: a stage
 that never opens a parquet file does not pay to load the engine.
 
+**Every engine call here runs on its caller's thread.** An engine worker that
+releases Python-owned bytes needs Python's lock; during interpreter shutdown,
+the process can abort or hang while that worker waits. `open_bytes` turns
+read-ahead off, and `read` turns parallel decode off, so no reader worker keeps
+those bytes.
+
 The envelope is written as the schema's metadata, which pyarrow writes into the
 file's key-value metadata. Row-group statistics are left on: a constant column
 carries a minimum equal to its maximum, and that is what lets a reader skip a
@@ -159,29 +165,30 @@ def open_bytes(
     max_footer_bytes: int | None = None,
     max_footer_items: int | None = None,
 ) -> Iterator[Any]:
-    """Open one in-memory file, with optional bounded footer parsing."""
-    options: dict[str, int] = {}
+    """Open an in-memory file with read-ahead off and optional footer bounds."""
+    options: dict[str, int | bool] = {"pre_buffer": False}
     if max_footer_bytes is not None:
         options["thrift_string_size_limit"] = max_footer_bytes
     if max_footer_items is not None:
         options["thrift_container_size_limit"] = max_footer_items
-    with pyarrow.BufferReader(data) as source, pyarrow.parquet.ParquetFile(
-        source, **options
-    ) as opened:
+    with (
+        pyarrow.BufferReader(data) as source,
+        pyarrow.parquet.ParquetFile(source, **options) as opened,
+    ):
         yield opened
 
 
 def read(data: bytes) -> tuple[dict[bytes, bytes], list[dict[str, Any]]]:
-    """A whole parquet file back as its envelope and its rows, in file order."""
+    """Decode rows on this thread so no worker holds the caller's bytes at shutdown."""
     with open_bytes(data) as opened:
-        return _envelope_of(opened.metadata.metadata), list(opened.read().to_pylist())
+        return _envelope_of(opened.metadata.metadata), list(
+            opened.read(use_threads=False).to_pylist()
+        )
 
 
 def decompress_zstd_page(body: memoryview, size: int) -> memoryview:
     """Decode one bounded Zstandard page into its admitted size."""
-    return memoryview(
-        pyarrow.Codec("zstd").decompress(body, decompressed_size=size, asbytes=False)
-    )
+    return memoryview(pyarrow.Codec("zstd").decompress(body, decompressed_size=size, asbytes=False))
 
 
 def read_footer(path: Path) -> tuple[dict[bytes, bytes], int]:
