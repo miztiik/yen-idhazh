@@ -66,6 +66,7 @@ EXPECTED_WORKFLOWS: Final = {
     "ci.yml": ("CI", frozenset({"pull_request", "push", "workflow_dispatch"})),
     "digest.yml": ("Content refresh", frozenset({"schedule", "workflow_dispatch"})),
     "drift.yml": ("Drift review", frozenset({"schedule", "workflow_dispatch"})),
+    "encoder-comparison.yml": ("Encoder comparison", frozenset({"workflow_dispatch"})),
     "idhazh-pipeline-tests.yaml": ("Pipeline tests", frozenset({"workflow_dispatch"})),
     "llm-council.yml": ("LLM-COUNCIL", frozenset({"schedule", "workflow_dispatch"})),
     "measure.yml": ("Measurements", frozenset({"workflow_dispatch"})),
@@ -142,9 +143,13 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("digest.yml", "article_limit"): "^[1-9][0-9]*$",
     ("digest.yml", "faithfulness"): DISPATCH_BOOLEAN,
     ("digest.yml", "memory_profiling"): DISPATCH_CHOICE,
+    ("digest.yml", "host_telemetry"): DISPATCH_CHOICE,
     ("encoder-comparison.yml", "memory_profiling"): DISPATCH_CHOICE,
+    ("encoder-comparison.yml", "host_telemetry"): DISPATCH_CHOICE,
     ("idhazh-gardener.yml", "memory_profiling"): DISPATCH_CHOICE,
+    ("idhazh-gardener.yml", "host_telemetry"): DISPATCH_CHOICE,
     ("llm-council.yml", "memory_profiling"): DISPATCH_CHOICE,
+    ("llm-council.yml", "host_telemetry"): DISPATCH_CHOICE,
     ("digest.yml", "shards"): DISPATCH_CHOICE,
     ("drift.yml", "baseline_days"): "^[0-9]{1,4}$",
     ("drift.yml", "recent_days"): "^[0-9]{1,4}$",
@@ -172,6 +177,7 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("measure.yml", "budget_samples"): "^[1-9][0-9]{0,4}$",
     ("measure.yml", "model_speed_case"): DISPATCH_CHOICE,
     ("measure.yml", "memory_profiling"): DISPATCH_CHOICE,
+    ("measure.yml", "host_telemetry"): DISPATCH_CHOICE,
     ("measure.yml", "target"): DISPATCH_CHOICE,
     ("measure.yml", "threads"): "^[1-9][0-9]*$",
     ("rust-host-telemetry.yml", "memory_profiling"): DISPATCH_CHOICE,
@@ -1333,7 +1339,7 @@ def _stage_invocations(
             blanked = blanked.replace(
                 "python backend/utilities/council_publish.py", "python -m idhazh council-settle"
             )
-            for line in blanked.replace("\\\n", " ").splitlines():
+            for line in _logical_shell_lines(blanked):
                 if not re.search(r"\bpython3?\s+-m\s+idhazh(?=\s)", line):
                     continue
                 words = shlex.split(line)
@@ -1352,6 +1358,15 @@ def _strings(node: object) -> Iterator[str]:
     elif isinstance(node, list):
         for item in cast(list[object], node):
             yield from _strings(item)
+
+
+def _logical_shell_lines(script: str) -> list[str]:
+    """Join POSIX backslash-newline continuations before inspecting shell commands."""
+    return re.sub(r"\\\r?\n[ \t]*", " ", script).splitlines()
+
+
+def _shell_words(script: str, *, comments: bool = False) -> list[str]:
+    return shlex.split("\n".join(_logical_shell_lines(script)), comments=comments)
 
 
 def _needs(workflow: dict[str, object], job_name: str) -> list[str]:
@@ -1780,8 +1795,8 @@ def _substitute(text: str) -> str:
 def _commit_call(label: str) -> tuple[list[str], dict[str, str]]:
     """The paths and the strings one commit step hands the shared program.
 
-    The call is read from the one line of the step that makes it, because a step
-    may guard it: the bench stages its folder only when its probe wrote one.
+    The call is read from the one logical line of the step that makes it, because
+    a step may guard it: the bench stages its folder only when its probe wrote one.
     """
     workflow = _load_workflows()[COMMIT_WORKFLOWS[label]]
     job_name = COMMIT_JOBS[label]
@@ -1793,7 +1808,9 @@ def _commit_call(label: str) -> tuple[list[str], dict[str, str]]:
         else COMMIT_PROGRAM_CALL
     )
     calls = [
-        words for line in script.splitlines() if tuple((words := shlex.split(line))[:2]) == program
+        words
+        for line in _logical_shell_lines(script)
+        if tuple((words := shlex.split(line))[:2]) == program
     ]
     assert len(calls) == 1, f"{label} must commit through {COMMIT_PROGRAM_CALL[1]}, once"
     declared = _mapping(step.get("env"), f"job {job_name} commit env {label}")

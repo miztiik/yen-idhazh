@@ -27,7 +27,7 @@ BACKEND = ROOT / "backend"
 if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
-from idhazh import config, ledger  # noqa: E402
+from idhazh import config, crash_trace, ledger  # noqa: E402
 from idhazh.contracts.base import ServerJob  # noqa: E402
 from idhazh.contracts.host_events import (  # noqa: E402
     CaptureSource,
@@ -1016,6 +1016,7 @@ def run(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
+    crash_trace.install()
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="verb", required=True)
     run_parser = sub.add_parser("run")

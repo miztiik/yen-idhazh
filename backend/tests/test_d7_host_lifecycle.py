@@ -302,10 +302,12 @@ class DrainPeer(SessionPeer):
 
 
 class RetiringPeer(SessionPeer):
-    """Use real consumption and retention time rather than the fixture's logical clock."""
+    """Use real consumption and advance the isolated peer clock to retry deadlines."""
+
+    _retirement_floor_ms = 0
 
     def _tick(self) -> int:
-        now = int(time.monotonic() * 1000)
+        now = max(int(time.monotonic() * 1000), self._retirement_floor_ms)
         book = self.files.bookkeeping
         consumed = self.files.event_path(uuid4(), "results").parent.parent / "consumed"
         if consumed.exists():
@@ -313,6 +315,11 @@ class RetiringPeer(SessionPeer):
                 event_id = UUID(path.stem)
                 if event_id in book._events:
                     book.mark_consumed(event_id)
+                    now = max(
+                        now,
+                        book._received_at[event_id] + self.manifest.limits.retry_window_ms,
+                    )
+        self._retirement_floor_ms = now
         for event_id, event in tuple(book._events.items()):
             if event.reply_to is not None or event_id not in book._events:
                 continue

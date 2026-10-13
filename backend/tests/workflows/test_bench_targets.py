@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import re
-import shlex
 import subprocess
 import sys
 import time
@@ -76,6 +75,7 @@ from ._harness import (
     _normalize_condition,
     _publication_scopes,
     _script,
+    _shell_words,
     _stage_invocations,
     _step,
     _steps,
@@ -549,7 +549,7 @@ def test_the_bench_reads_its_own_config_when_it_records_the_machine() -> None:
     step = _step(workflow, BENCH_SERVER_JOB, "name", BENCH_FINGERPRINT_STEP)
     script = _script(step, f"measure.yml/{BENCH_SERVER_JOB}/{BENCH_FINGERPRINT_STEP}")
     assert "python backend/utilities/record_publish.py run measure fingerprint" in script
-    words = shlex.split(script)
+    words = _shell_words(script)
     assert words[words.index("--config") + 1] == BENCH_CANDIDATE_CONFIG
     assert words[words.index(FINGERPRINT_JOB_FLAG) + 1] == FINGERPRINT_BENCH_JOB
     assert FINGERPRINT_BENCH_JOB == ServerJob.RUNTIME.value, (
