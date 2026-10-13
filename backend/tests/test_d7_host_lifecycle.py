@@ -510,10 +510,9 @@ def test_bound_lifecycle_consumes_actual_native_periodic_events_while_producer_i
     (root / "invocation.json").write_text(
         invocation.model_dump_json() + "\n", encoding="ascii", newline="\n"
     )
-    native_events = replay_native_resources(
-        root, "resource-replay", "--snapshot", "resources", "--artifact-root", "artifacts"
-    )
+    native_events = replay_native_resources(root, "resource-replay", "--snapshot", "resources")
     assert native_events.returncode == 0, native_events.stderr.decode()
+    assert not (root / "artifacts").exists()
     raw_events: list[tuple[HostEvent, bytes]] = []
     for count, path in enumerate((root / manifest.event_root / "results").iterdir(), start=1):
         assert count <= manifest.limits.max_files
@@ -521,7 +520,7 @@ def test_bound_lifecycle_consumes_actual_native_periodic_events_while_producer_i
         event = HostEvent.model_validate_json(raw)
         if event.kind in {"job.sample", "process.rollcall"}:
             raw_events.append((event, raw))
-    assert raw_events
+    assert {event.kind for event, _ in raw_events} == {"job.sample", "process.rollcall"}
     raw_events.sort(key=lambda value: value[0].sequence)
     peer_root = tmp_path / "consumer"
     peer_root.mkdir()

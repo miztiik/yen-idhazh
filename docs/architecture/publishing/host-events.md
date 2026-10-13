@@ -201,7 +201,9 @@ are read only when a job sample is due. Plain memory files share the existing
 `max_session_bytes` storage cap. Their rows are not exchange events and do not
 spend `max_session_events`. When plain files deliver the typed samples, the
 monitor does not also publish and immediately consume duplicate sample events.
-An event-only consumer still receives typed sample and rollcall events.
+The live monitor delivers plain files. Bounded `resource-replay` delivers typed
+sample and rollcall events when no `--artifact-root` is requested; requesting
+plain files avoids duplicate sample events.
 The event, read and byte limits are unchanged. A file append that would exceed
 the byte cap fails before either the sample or its process rows are written;
 the monitor does not drop observations or silently truncate files.

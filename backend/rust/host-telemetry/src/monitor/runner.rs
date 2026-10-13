@@ -496,13 +496,17 @@ fn replay(
         &manifest,
     )?;
     require(!recorded.frames.is_empty(), "empty resource replay")?;
-    let root = artifact_root(&manifest, args)?;
-    let mut artifacts = Artifacts::create(
-        workspace,
-        &root,
-        &manifest.limits,
-        manifest.controls.memory_profiling_enabled,
-    )?;
+    let mut artifacts = if args.contains_key("--artifact-root") {
+        let root = artifact_root(&manifest, args)?;
+        Artifacts::create(
+            workspace,
+            &root,
+            &manifest.limits,
+            manifest.controls.memory_profiling_enabled,
+        )?
+    } else {
+        None
+    };
     let mut session = Session::new(manifest)?;
     let ready = session.ready(&recorded.frames[0].captured_at, 0)?;
     files.publish(&ready, "results")?;
