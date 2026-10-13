@@ -185,7 +185,7 @@ def isolate(
             ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
         )
     initialize_inventory(
-        root / "frontend" / "public" / "digest",
+        root / "frontend" / "public",
         seed=PublicationInventory(version=PublicationInventory.schema_version(), dates=[]),
     )
     support = root / "test-support"
