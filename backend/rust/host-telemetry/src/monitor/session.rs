@@ -728,7 +728,11 @@ impl Session {
         self.registered.len()
     }
     pub fn retire(&mut self, now_ms: u64) -> Vec<Uuid> {
-        let protected = self.active.values().map(|v| v.begin.event_id).collect();
+        let mut protected: HashSet<_> = self.active.values().map(|v| v.begin.event_id).collect();
+        if !self.stopped {
+            // Protect the whole reply group: the next host command reads its result file.
+            protected.extend(self.last_host_command_id());
+        }
         self.book.retire(now_ms, &protected)
     }
     pub fn observation(
