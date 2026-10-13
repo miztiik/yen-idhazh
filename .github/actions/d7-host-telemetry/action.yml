@@ -1,0 +1,35 @@
+name: Build pinned D7 Rust host monitor
+description: Build the Rust monitor used by a producer's isolated D7 lifecycle
+inputs:
+  enabled:
+    description: Build only when the Rust producer path is selected
+    required: false
+    default: 'true'
+outputs:
+  binary:
+    description: Absolute path to the pinned monitor binary
+    value: ${{ steps.build.outputs.binary }}
+runs:
+  using: composite
+  steps:
+    - name: Refuse an unselected monitor build
+      if: inputs.enabled != 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "D7 Rust monitor build skipped because the legacy path was selected"
+
+    - name: Build the pinned Rust monitor
+      id: build
+      if: inputs.enabled == 'true'
+      shell: bash
+      working-directory: backend/rust/host-telemetry
+      env:
+        CARGO_TARGET_DIR: ${{ github.workspace }}/backend/var/rust-host-telemetry
+      run: |
+        set -euo pipefail
+        cargo build --locked --release
+        binary="$CARGO_TARGET_DIR/release/idhazh-host-telemetry"
+        test -x "$binary" || { echo "missing pinned D7 monitor: $binary" >&2; exit 1; }
+        echo "IDHAZH_HOST_TELEMETRY_BINARY=$binary" >> "$GITHUB_ENV"
+        echo "binary=$binary" >> "$GITHUB_OUTPUT"

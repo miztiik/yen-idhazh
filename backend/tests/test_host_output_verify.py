@@ -16,6 +16,7 @@ import pyarrow.parquet
 import pytest
 
 from idhazh.contracts.file_envelope import FileEnvelope, Format
+from idhazh.contracts.host_events import HostSessionManifest
 from idhazh.contracts.host_output import (
     HOST_OUTPUT_VERSION,
     HOST_PRODUCER,
@@ -41,6 +42,7 @@ from idhazh.telemetry.host_output_verify import (
     read_host_output,
     verify_host_output,
 )
+from utilities.d7_host_telemetry import _verified_receipt
 
 pytestmark = pytest.mark.contract
 LIMITS = VerificationLimits(
@@ -212,6 +214,67 @@ def verify(
         limits=LIMITS,
         **options,
     )
+
+
+def test_d7_receipt_is_built_only_after_generated_plan_and_bytes_verify(tmp_path: Path) -> None:
+    plan, completion, source, data = evidence(tmp_path)
+    session_id = uuid.UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+    target_root = f"backend/var/d7-output/{session_id}"
+    manifest_data = json.loads(
+        (Path(__file__).resolve().parents[2] / "tests/fixtures/host-events/manifest.json").read_bytes()
+    )
+    manifest_data.update(
+        {
+            "session_id": str(session_id),
+            "event_root": (
+                f"backend/var/host-events/{manifest_data['run_id']}/"
+                f"{manifest_data['attempt']}/{manifest_data['job']}/"
+                f"{manifest_data['shard']}/{session_id}"
+            ),
+            "git_sha": identity().git_sha,
+            "output_roots": [target_root],
+        }
+    )
+    manifest = HostSessionManifest.model_validate(manifest_data)
+
+    destination = tmp_path / target_root / Path(*source.relative_to(tmp_path / "state").parts)
+    destination.parent.mkdir(parents=True)
+    destination.write_bytes(data)
+    publication_identity = identity(producer=HOST_PRODUCER)
+    native_plan = HostWritePlan.model_validate(
+        plan.model_dump(mode="json")
+        | {"target_root": target_root, "publication_identity": publication_identity.model_dump()}
+    )
+    native_completion = HostWriteCompletion.model_validate(
+        {
+            "version": completion.version,
+            "event_id": str(native_plan.event_id),
+            "receipt": {
+                "version": completion.receipt.version,
+                "identity": publication_identity.model_dump(),
+                "writes": {
+                    f"{target_root}/{native_plan.files[0].relative_path}": hashlib.sha256(
+                        data
+                    ).hexdigest()
+                },
+            },
+        }
+    )
+    evidence_dir = tmp_path / Path(*manifest.event_root.split("/")) / "writes"
+    evidence_dir.mkdir(parents=True)
+    (evidence_dir / f"{native_plan.event_id}.plan.json").write_text(
+        native_plan.model_dump_json(), encoding="utf-8", newline="\n"
+    )
+    (evidence_dir / f"{native_plan.event_id}.completed-1.json").write_text(
+        native_completion.model_dump_json(), encoding="utf-8", newline="\n"
+    )
+
+    receipt = _verified_receipt(tmp_path, manifest, LIMITS)
+
+    assert receipt.identity == publication_identity
+    assert receipt.writes == {
+        f"{target_root}/{native_plan.files[0].relative_path}": hashlib.sha256(data).hexdigest()
+    }
 
 
 @pytest.mark.parametrize("fmt", list(Format))

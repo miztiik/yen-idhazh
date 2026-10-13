@@ -73,6 +73,13 @@ workspace and are never returned as production files to stage or publish.
 YAML still owns native process lifetime. This boundary does not authorize the
 single-writer cutover or establish enabled-path latency.
 
+The D7 workflow selector defaults to `legacy`; native mode is not selected by a
+repository variable. The launcher currently accepts only digest `work` for an
+isolated native run. It verifies each typed write plan, completion and physical
+file hash, then refuses publication because the existing publishers do not yet
+consume the native file list. Other D7 families fail before their Python writer
+or publisher starts. This is a safe integration slice, not production cutover.
+
 ## Probe, target and clock collection
 
 The thin native CLI routes `probe`, `target` and `clock` commands. `invocation.rs`
@@ -318,6 +325,14 @@ experiment remains available for the outstanding production cutover evidence;
 remove its workflow and comparison-only machinery after migration and recovery
 are complete.
 
+The latest consumed host reply group remains available while a job runs, even
+after its ordinary retry window expires. A valid successor or session stop
+releases that protection; failed admission does not discard the predecessor.
+The limit and consumed-only retirement rules do not change. Producer cancellation
+unwinds owned-process cleanup, and a producer termination failure cannot bypass
+native monitor cleanup. Council controls use its selected `--config-root`.
+Shadow sessions still keep the authoritative Python probe and clock writes.
+
 `.github/workflows/rust-host-telemetry.yml` uses one stock `ubuntu-latest`
 job with read-only repository permissions, credential-free checkout and seven-day
 artifacts. It does not call `measure.yml`, publish, migrate history or write
@@ -555,10 +570,11 @@ generation, and satisfy the historical evidence gate before application.
 
 `HistoryReport` version `2026-10-12` records production cutover separately from
 historical readiness. A successful migrated-consumer replay can make only the
-historical decision ready. Production remains `blocked` until D7's all-family,
-single-writer Ubuntu evidence is verified; replay and elapsed time cannot satisfy
-that gate. The existing Python default remains the production writer meanwhile.
-The report names this unmet evidence explicitly.
+historical decision ready. This report cannot certify production cutover and
+keeps its production decision `blocked`; replay and elapsed time cannot satisfy
+that gate. D7 separately verifies all-family, single-writer Ubuntu evidence before
+the workflow defaults select Rust. Python remains an explicit temporary rollback
+until cleanup, never a silent native-failure fallback.
 
 The artifact-only workflow can run these bounded, generated-file tests before
 its verdict; no test scans committed archives or installs tools:

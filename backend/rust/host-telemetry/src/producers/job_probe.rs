@@ -113,7 +113,7 @@ pub fn probe(
         capture.cache_bytes.value,
     )?;
     let mut diagnostics = cpu::measure(&mut row, capture, &manifest.capture_limits);
-    if let Some(target) = body.target.as_ref().or(manifest.cpu_target.as_ref()) {
+    if let Some(target) = body.target.as_ref() {
         cpu::target(
             &mut row,
             &mut diagnostics,

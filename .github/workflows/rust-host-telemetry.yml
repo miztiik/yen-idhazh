@@ -11,6 +11,7 @@ on:
           - inherit
           - 'on'
           - 'off'
+
 permissions:
   contents: read
 
@@ -33,12 +34,17 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
+      - name: Cache native dependencies
+        uses: actions/cache@v6
+        with:
+          path: ~/.cargo/registry
+          key: host-crates-${{ runner.os }}-${{ hashFiles('backend/rust/host-telemetry/Cargo.lock', 'backend/rust/host-telemetry/rust-toolchain.toml') }}
       - name: Prepare dependencies outside tests
         run: |
           pip install -e ".[dev]"
           echo "IDHAZH_PYTHON=$(command -v python)" >> "$GITHUB_ENV"
           cd backend/rust/host-telemetry
-          rustup show active-toolchain
+          echo "RUSTUP_TOOLCHAIN=$(rustup show active-toolchain | cut -d' ' -f1)" >> "$GITHUB_ENV"
           cargo fetch --locked
           cargo build --locked --all-targets
       - name: Independent native module gates
@@ -64,6 +70,22 @@ jobs:
         run: |
           python -m utilities.host_telemetry_measurement \
             --output backend/var/d5-compile.json --git-sha "$D5_REVISION"
+      - uses: ./.github/actions/d7-host-telemetry
+        with:
+          enabled: 'true'
+      - name: Generated D7 families and single-writer publication evidence
+        env:
+          IDHAZH_D7_LIVE_TEST: '1'
+        run: |
+          python -m pytest -n 0 \
+            backend/tests/test_d7_family_lifecycle.py \
+            backend/tests/test_job_machine.py \
+            backend/tests/test_runtime_sweep.py \
+            backend/tests/test_model_runtime.py \
+            backend/tests/test_measure_llm.py \
+            backend/tests/workflows/test_d7_workflow_wiring.py \
+            --basetemp backend/var/d7-family-tests \
+            --junitxml=backend/var/d7-family-tests.xml
       - name: Real Linux lifetime and generated refusal tests
         env:
           IDHAZH_D5_LIVE_TEST: '1'
@@ -138,5 +160,10 @@ jobs:
             backend/var/d5-workflow-tests.xml
             backend/var/d5-workflow-tests
             backend/var/d5-compile.*
+            backend/var/d7-family-tests.xml
+            backend/var/d7-family-tests/**/repo/backend/var
+            backend/var/d7-family-tests/**/repo/state/raw/host-fingerprint
+            backend/var/d7-family-tests/**/repo/launcher.*
+            backend/var/d7-family-tests/**/repo/verified-paths.json
           retention-days: 7
           if-no-files-found: error

@@ -102,6 +102,7 @@ from idhazh.contracts.gardener_events import (
     TaskFinished,
     TaskOutcome,
 )
+from idhazh.contracts.host_output import HostPublicationReceipt
 from idhazh.contracts.knobs.gardener import GardenerConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.shard_landing import ShardLanding
@@ -128,6 +129,12 @@ from idhazh.gardener.outcome import (
 from idhazh.gardener.period_inputs import paths_for_task, scheduled_range
 from idhazh.ledger import staging
 from idhazh.site_weight import BYTES_PER_MB
+from idhazh.telemetry.host_output_verify import VerificationLimits
+from idhazh.telemetry.host_publication import (
+    MODE_ENV,
+    consume_host_publication,
+    reconcile_host_writes,
+)
 from utilities.publication_git import Repository
 from utilities.publication_request import Delete, IntegrityError, PublicationRequest, Write
 from utilities.publish_to_repo import Status
@@ -308,6 +315,9 @@ def publish(
     write_permissions: tuple[str, ...],
     delete_permissions: tuple[str, ...],
     say: Callable[[str], None] = print,
+    host_receipt: HostPublicationReceipt | Path | None = None,
+    host_limits: VerificationLimits | None = None,
+    host_enabled: bool = True,
 ) -> PushOutcome:
     """Apply independently declared ownership through the shared publisher."""
     outside = sorted(
@@ -333,6 +343,18 @@ def publish(
             )
             for path in shard.written_paths
         }
+        native = consume_host_publication(
+            repo=repo,
+            identity=identity,
+            date=identity.run_id[:10],
+            receipt=host_receipt,
+            limits=host_limits,
+            host_enabled=host_enabled,
+        )
+        if host_receipt is not None or os.environ.get(MODE_ENV, "legacy") == "rust":
+            reconcile_host_writes({path: write.sha256 for path, write in writes.items()}, native)
+            for path, digest in native.items():
+                writes[path] = Write(digest, git.entry(source, path), immutable=True)
         deletions: dict[str, Delete] = {}
         for path in shard.deleted_paths:
             baseline = git.entry(source, path)
@@ -379,7 +401,7 @@ def publish(
     return PushOutcome(
         code,
         landing,
-        max(1, result.push_count),
+        max(1, result.push_count) if landing is not None else None,
         result.refusal_paths if result.status is Status.STALE else (),
     )
 
@@ -551,6 +573,7 @@ def run_and_land(
     shard's summary is added to it. An exception that escapes is said the same
     way, by its type and place, and then goes on, so Python exits 1 with it.
     """
+    repo_root = repo_root.resolve()
     run = _ShardRun(
         names=tuple(names), shard=shard, run_id=run_id, attempt=attempt, config=settings.config
     )
@@ -697,6 +720,7 @@ def _run_and_land(
             )
         ),
         delete_permissions=tuple(owned),
+        host_enabled=settings.app.observability.host_fingerprint,
     )
     code = worst(ran.exit_code, pushed.exit_code)
     stopped = None if pushed.landing is not None else ShardStop.CHECK_REFUSED

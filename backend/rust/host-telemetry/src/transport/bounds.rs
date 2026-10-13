@@ -181,6 +181,9 @@ impl EventBook {
         }
         let emitter_valid = match event.kind {
             EventKind::MonitorStop => event.emitter_id == m.operator_emitter_id,
+            EventKind::HostProbe | EventKind::HostTarget | EventKind::HostClock => {
+                event.emitter_id == m.operator_emitter_id
+            }
             EventKind::WorkerRegister
             | EventKind::WindowBegin
             | EventKind::WindowEnd
@@ -274,7 +277,10 @@ impl EventBook {
                 .map_err(|e| refuse(ProtocolFaultCode::State, &e))?;
             let command = matches!(
                 value.kind,
-                EventKind::WorkerRegister
+                EventKind::HostProbe
+                    | EventKind::HostTarget
+                    | EventKind::HostClock
+                    | EventKind::WorkerRegister
                     | EventKind::WindowBegin
                     | EventKind::WindowEnd
                     | EventKind::WindowAbort

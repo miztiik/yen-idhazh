@@ -74,7 +74,7 @@ Table D - authoritative execution queue
 | D6 | 6 | Add inactive event emitters at real production boundaries | 13, 14 | F | DONE | rust-d6-inactive-emitters | - | Copilot |
 | D8 | 8 | Expose and test the independent memory off control | 6 | G | DONE | rust-d8-memory-off | #1576, #1577 | Copilot; the follow-up closes dispatch-shape coverage, keeps route assertions in the console browser group, and is merged as `c8867c438`. |
 | D16 | 16 | Verify evidence and record unattended adoption authority | 8, 5, 14, 15 | H | DONE | d16-evidence-gate-repair-20261012 | - | owner; one-time local Python replay verified 308 sources, 815 settled host records and the unchanged console view with exact Git provenance; historical readiness is ready, production cutover remains D7's gate. |
-| D7 | 7 | Switch instrumented producers through events | 16 | I | PENDING | - | - | - |
+| D7 | 7 | Switch instrumented producers through events | 16 | I | DONE | rust-d7-family-e2e | - | owner; accepted corrected Ubuntu native/family/single-writer evidence; measured pipeline defaults now select Rust, with explicit temporary rollback and no original history rewrite. |
 | D17 | 17 | Rewrite the approved historical manifest once | 7, 15, 16 | J | PENDING | - | - | - |
 | D9 | 9 | Remove superseded collectors and temporary duplication | 7, 8, 17 | K | BLOCKED | rust-d9-cleanup | - | owner; automatic migration-experiment PR runs removed; final collector and maintenance-code deletion waits for D7 cutover and D17 history/recovery completion. |
 
@@ -222,6 +222,12 @@ Table L - Row 1 rejected alternatives
   - `backend/idhazh/telemetry/host_output_verify.py`
   - `backend/idhazh/telemetry/host_parquet_admission.py`
   - `backend/utilities/verify_host_output.py`
+  - `backend/utilities/d7_host_telemetry.py`
+  - `backend/tests/test_cli_host_event_environment.py`
+  - `backend/tests/test_host_output_verify.py`
+  - `backend/tests/workflows/test_d7_workflow_wiring.py`
+  - `backend/tests/workflows/_harness.py`
+  - `backend/tests/workflows/test_llm_council_workflow.py`
   - `backend/tests/contracts/test_host_events.py`
   - `backend/tests/contracts/test_host_output.py`
   - `backend/tests/test_host_output_verify.py`
@@ -457,6 +463,8 @@ Table V - Row 6 rejected alternatives
 ## 8. Row #7 - Switch instrumented producers through events
 
 - **Scope:** After D16 verifies cutover evidence under A4's authorization, adopt the corrected Rust implementation through events with one raw host writer and exact publishing receipts in a dedicated reversible behavioural change.
+- **Consolidated candidate (2026-10-13):** The completed D16 record and manual-only evidence experiment are integrated into one D7 branch. General Ubuntu CI `38382483801` and explicit isolated evidence `38382540686` passed at `e9d6c3f6138a07fec302f7c25f8a6047e1431681`; all 107 bounded family/control/publication cases passed without skips. The six earlier CI failures were fixture timing and workflow-harness declarations/arguments, not evidence of completed production cutover. A production review then identified long-job predecessor retirement, sweep cancellation, council configuration and shadow-writer defects. Those corrections retain the latest host group, unwind and finish owned cleanup, resolve the selected council config, and preserve Python writes for shadow mode; they require fresh Ubuntu candidate evidence before changing production defaults.
+- **Cutover (2026-10-13):** Corrected native code passed full Ubuntu CI `38387432879` and explicit isolated evidence `38387425191` at `b1d4ba9b9147747d3d49f226d849749d2d76804f`, including native long-job/failure retirement, real owned-process cancellation and all family/control/publication cases. This behavioural switch changes the dispatch defaults and scheduled fallbacks to Rust for the five measured workflows, preserves explicit legacy rollback and unmeasured-job exclusions, and builds from the crate directory so its declared toolchain is actually selected. Runtime code and historical files are unchanged by this switch; its own merge-candidate CI holds the workflow routing/default tests. No fixed seven-day wait or dispatch of production publishing workflows is required. D17 historical conversion and final D9 deletion remain separate.
 - **Files touched:**
   - `.github/workflows/digest.yml`
   - `.github/workflows/measure.yml`
@@ -621,7 +629,7 @@ Table AA - Row 9 decisions
 
 | ID | Decision | Authority |
 | --- | --- | --- |
-| AA1 | Observe every Table W family plus enabled/disabled controls, without a fixed seven-day wait. No obsolete collector is removed before its real caller coverage. | User, 2026-10-12; Fowler; bounded transition. |
+| AA1 | The user removed the fixed seven-day observation wait on 2026-10-12 at 17:07 UTC and requested immediate delivery on Ubuntu CI. Completion requires actual native execution and verified publication for every Table W family plus enabled/disabled controls, without a calendar-duration gate. No obsolete collector is removed before its real caller coverage; historical backups, quiet-window and reconciliation gates remain. | User, 2026-10-12; replaces Fowler's starting observation duration. |
 | AA2 | Keep shared Python codecs/persistence, compact/history readers, AN legacy read migrations and other producers. Remove only superseded host collection/write paths and temporary shadow duplication. Keep Rust/module/cross-language fixture tests; keep the bounded maintenance utility if needed for resumability, not a recurring archive rewriter. | User; H12; caller search. |
 | AA3 | Rollback restores cleanup before cutover while retaining migrated readers. If not adopted, do not start D17; retain unchanged Python measurement behaviour and record the user's disposition of candidates/adapters and additive experiment files. | Fowler; reversible changes. |
 | AA4 | Delete this plan after distillation and closure; do not keep completed migration history in TODO or create a second tracking page. | [distill-a-plan.md](../docs/how-to/distill-a-plan.md). |

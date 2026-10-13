@@ -19,8 +19,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from idhazh import completed_writes, config, run_context, telemetry
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.file_envelope import WriterIdentity
+from idhazh.contracts.host_output import HostPublicationReceipt
 from idhazh.contracts.publication_inventory import PublicationInventory
 from idhazh.ledger import staging
+from idhazh.telemetry.host_output_verify import VerificationLimits
+from idhazh.telemetry.host_publication import (
+    MODE_ENV,
+    consume_host_publication,
+    reconcile_host_writes,
+)
 from utilities import publication_evidence
 from utilities.publication_conflict import capture_publication_delta, replay_publication_delta
 from utilities.publication_git import Repository
@@ -109,6 +116,8 @@ def run(args: list[str]) -> int:
 def inventory_preparation(
     repo: Path,
     original: PublicationRequest,
+    *,
+    native_paths: frozenset[str] = frozenset(),
 ) -> Callable[[str, PublicationRequest], PublicationRequest]:
     """Replay named inventory deltas through the existing inventory writer."""
     git = Repository(repo)
@@ -121,11 +130,13 @@ def inventory_preparation(
         else PublicationInventory(version=PublicationInventory.schema_version(), dates=[]).to_json()
     )
     delta = capture_publication_delta(before, (repo / INVENTORY).read_text(encoding="utf-8"))
+    if native_paths & {f"state/{path}" for path in delta.state_paths}:
+        raise IntegrityError("raw native host files are not publication inventory projections")
 
     def replay(base: str, active: PublicationRequest, scratch: Path) -> PublicationRequest:
         materialize(git, base, (INVENTORY,), scratch)
         for path in active.writes:
-            if path == INVENTORY:
+            if path == INVENTORY or path in native_paths:
                 continue
             target = scratch / path
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -163,12 +174,29 @@ def inventory_preparation(
     return prepare
 
 
-def land(*, repo: Path, identity: WriterIdentity, date: str) -> PublicationResult:
+def land(
+    *,
+    repo: Path,
+    identity: WriterIdentity,
+    date: str,
+    host_receipt: HostPublicationReceipt | Path | None = None,
+    host_limits: VerificationLimits | None = None,
+    host_enabled: bool | None = None,
+) -> PublicationResult:
     git = Repository(repo)
     head = git.git("rev-parse", "HEAD").strip()
     imported = git.run("rev-parse", "--verify", "--quiet", "refs/worktree/publication-input-state")
     source = imported.stdout.decode().strip() if imported.returncode == 0 else head
     hashes = publication_evidence.read(repo, identity, VERBS[identity.job])
+    native_mode = host_receipt is not None or os.environ.get(MODE_ENV, "legacy") == "rust"
+    if native_mode and host_enabled is None:
+        host_enabled = config.load().app.observability.host_fingerprint
+    native = consume_host_publication(
+        repo=repo, identity=identity, date=date, receipt=host_receipt, limits=host_limits,
+        host_enabled=True if host_enabled is None else host_enabled,
+    )
+    if native_mode:
+        hashes = reconcile_host_writes(hashes, native)
     authority = permissions(identity.job, date=date)
     mutable: tuple[str, ...] = (INVENTORY,)
     if identity.job == ServerJob.ASSEMBLE:
@@ -199,21 +227,43 @@ def land(*, repo: Path, identity: WriterIdentity, date: str) -> PublicationResul
         preparation_scopes=(INVENTORY,) if INVENTORY in writes else (),
     )
     if INVENTORY in writes:
-        request = dataclasses.replace(request, prepare=inventory_preparation(repo, request))
+        request = dataclasses.replace(
+            request, prepare=inventory_preparation(repo, request, native_paths=frozenset(native))
+        )
     if identity.job == ServerJob.ASSEMBLE and writes:
         from utilities import digest_assemble
 
         request = dataclasses.replace(
             request, preparation_scopes=(*mutable, digest_assemble.count_scope(date))
         )
+        rebuild_request = dataclasses.replace(
+            request,
+            writes={path: write for path, write in request.writes.items() if path not in native},
+        )
+        rebuild = digest_assemble.preparation(
+            repo,
+            rebuild_request,
+            date=date,
+            settings=config.load(),
+        )
+
+        def prepare(base: str, active: PublicationRequest) -> PublicationRequest:
+            # Rebuild Python-owned projections without copying new native raw rows.
+            retained = {path: active.writes[path] for path in native}
+            prepared = rebuild(
+                base, dataclasses.replace(
+                    active,
+                    writes={path: write for path, write in active.writes.items()
+                            if path not in native},
+                )
+            )
+            if retained.keys() & prepared.writes.keys():
+                raise IntegrityError("rebuild replaced native host evidence")
+            return dataclasses.replace(prepared, writes=dict(prepared.writes) | retained)
+
         request = dataclasses.replace(
             request,
-            prepare=digest_assemble.preparation(
-                repo,
-                request,
-                date=date,
-                settings=config.load(),
-            ),
+            prepare=prepare if native else rebuild,
         )
     result = publish(request, repo=repo, retry=load_retry(repo / DEFAULT_CONFIG))
     print(json.dumps(dataclasses.asdict(result), default=str))
@@ -329,10 +379,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--execution", required=True)
     parser.add_argument("--commit", required=True)
     parser.add_argument("--shard", default="0")
+    parser.add_argument("--host-fingerprint", action=argparse.BooleanOptionalAction, default=None)
     parsed = parser.parse_args(args)
     try:
         return land(
-            repo=Path.cwd(), identity=identify(args, job=parsed.job), date=parsed.date
+            repo=Path.cwd(), identity=identify(args, job=parsed.job), date=parsed.date,
+            host_enabled=parsed.host_fingerprint,
         ).exit_code
     except (OSError, ValueError, RuntimeError) as error:
         print(f"publication integrity refused: {error}", file=sys.stderr)

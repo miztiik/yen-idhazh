@@ -52,6 +52,41 @@ pub fn completion_path(evidence_root: &str, plan: &HostWritePlan, count: usize) 
     format!("{evidence_root}/{}.completed-{count}.json", plan.event_id)
 }
 
+/// Read the most recent immutable completion evidence for a plan.
+///
+/// A producer may leave more than one completion document after recovering a
+/// partial publication.  The highest numbered document is the authoritative
+/// bounded receipt because each later receipt contains all earlier writes.
+pub fn load_latest_completion(
+    workspace: &Path,
+    evidence_root: &str,
+    event_id: uuid::Uuid,
+    maximum: usize,
+) -> Result<HostWriteCompletion> {
+    let root = paths::resolve_directory(workspace, evidence_root)?;
+    let prefix = format!("{event_id}.completed-");
+    let mut latest: Option<(usize, PathBuf)> = None;
+    for entry in std::fs::read_dir(&root).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let Some(count) = name
+            .strip_prefix(&prefix)
+            .and_then(|v| v.strip_suffix(".json"))
+            .and_then(|v| v.parse::<usize>().ok())
+        else {
+            continue;
+        };
+        if latest.as_ref().is_none_or(|(old, _)| count > *old) {
+            latest = Some((count, entry.path()));
+        }
+    }
+    let (_, path) = latest.ok_or("missing native completion evidence")?;
+    let value: HostWriteCompletion =
+        serde_json::from_slice(&store::read_bounded(&path, maximum)?).map_err(|e| e.to_string())?;
+    value.validate()?;
+    Ok(value)
+}
+
 fn empty_completion(plan: &HostWritePlan) -> HostWriteCompletion {
     HostWriteCompletion {
         version: VERSION.to_owned(),

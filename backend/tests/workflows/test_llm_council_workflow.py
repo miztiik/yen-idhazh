@@ -94,9 +94,11 @@ def test_event_transport_uses_existing_always_uploaded_bundles_and_planned_cells
     planner = _job(workflow, "draw")
     judge = _job(workflow, "judge")
     assert planner["env"] == {
+        "IDHAZH_HOST_TELEMETRY_MODE": "legacy",
         "COUNCIL_EVENT_FILE": "backend/var/council/events/planner.jsonl",
     }
     assert judge["env"] == {
+        "IDHAZH_HOST_TELEMETRY_MODE": "legacy",
         "COUNCIL_SELECTION": "${{ needs.draw.outputs.selection }}",
         "COUNCIL_EVENT_FILE":
         "backend/var/council/events/${{ matrix.tenant }}/${{ matrix.date }}/${{ matrix.shard }}.jsonl",
@@ -388,13 +390,18 @@ def test_the_planning_job_asks_the_night_plan_which_dates_tonight_judges() -> No
 
 def test_manual_dispatch_requires_one_date_and_a_list_of_judges() -> None:
     inputs = _dispatch_inputs(_judges())
-    assert set(inputs) == {"date", "judges"}
+    assert set(inputs) == {"date", "host_telemetry", "judges", "memory_profiling"}
     for name in ("date", "judges"):
         field = inputs[name]
         assert isinstance(field, dict)
         assert field["required"] == "true"
         assert field["type"] == "string"
         assert "default" not in field, "an omitted manual input must not select work"
+    telemetry = inputs["host_telemetry"]
+    assert isinstance(telemetry, dict)
+    assert telemetry["type"] == "choice"
+    assert telemetry["default"] == "rust"
+    assert telemetry["options"] == ["rust", "legacy"]
     date = inputs["date"]
     judges = inputs["judges"]
     assert isinstance(date, dict)

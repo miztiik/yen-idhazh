@@ -20,13 +20,23 @@ pub fn run(mut arguments: impl Iterator<Item = String>) -> Result<()> {
             "--cgroup-root",
             "--artifact-root",
             "--command",
+            "--cpu-root",
+            "--namespace-root",
+            "--output-root",
+            "--ledger-prefix",
+            "--format",
+            "--compression",
+            "--cache-multiple",
             "--pid",
             "--start-ticks",
             "--memory-profiling",
         ];
         let mut args = BTreeMap::new();
         while let Some(key) = arguments.next() {
-            require(known.contains(&key.as_str()), "unknown resource argument")?;
+            require(
+                known.contains(&key.as_str()),
+                &format!("unknown resource argument: {key}"),
+            )?;
             let value = arguments.next().ok_or("argument lacks value")?;
             if key == "--memory-profiling" {
                 crate::config::memory_profiling_override(Some(&value))?;
@@ -58,7 +68,11 @@ pub fn run(mut arguments: impl Iterator<Item = String>) -> Result<()> {
         "--format",
         "--compression",
         "--output-root",
+        "--ledger-prefix",
         "--result-id",
+        "--result-sequence",
+        "--completion-id",
+        "--result-output",
         "--captured-at",
         "--affinity-input",
         "--hierarchy-input",

@@ -180,7 +180,7 @@ def test_exact_host_cells_keys_types_and_item_health_binding() -> None:
 def test_manifest_roundtrip_and_memory_default() -> None:
     session = manifest()
     assert HostSessionManifest.model_validate_json(session.model_dump_json()) == session
-    assert session.pending_event_limit == 4 * len(session.workers) + 2 + 8
+    assert session.pending_event_limit == 4 * len(session.workers) + 6 * 2 + 15
     controls = session.controls.model_dump()
     controls.pop("memory_profiling_enabled")
     assert CollectionControls.model_validate(controls).memory_profiling_enabled is True

@@ -293,9 +293,7 @@ def sample(pid: int, *, every: float = SAMPLE_EVERY_SECONDS) -> int:
     return taken
 
 
-def _refuse_a_sampler_that_died_at_startup(
-    child: subprocess.Popen[bytes], log_path: Path
-) -> None:
+def _refuse_a_sampler_that_died_at_startup(child: subprocess.Popen[bytes], log_path: Path) -> None:
     """Say the loop is already gone, rather than leaving a pid file that lies."""
     try:
         child.wait(timeout=START_GRACE_SECONDS)
@@ -363,14 +361,17 @@ def _records(path: Path) -> list[dict[str, Any]] | None:
     return records
 
 
-def summarize() -> None:
+def summarize(
+    sample_file: Path = RSS_SAMPLE_FILE,
+    process_file: Path = PYTHON_PROCS_FILE,
+) -> None:
     """The five figures, and who the python kilobytes belonged to.
 
     It reads and never writes, and it fails on nothing: an absent file says so.
     """
-    samples = _records(RSS_SAMPLE_FILE)
+    samples = _records(sample_file)
     if samples is None:
-        LOG.info("%s not found", RSS_SAMPLE_FILE.name)
+        LOG.info("%s not found", sample_file.name)
     else:
         llama = max((row.get("llama_vmhwm_kb") or 0 for row in samples), default=0)
         python_peak = max((row.get("python_vmhwm_kb") or 0 for row in samples), default=0)
@@ -391,9 +392,9 @@ def summarize() -> None:
         )
 
     # A sum over three processes says nothing about which one to look at.
-    roll_call = _records(PYTHON_PROCS_FILE)
+    roll_call = _records(process_file)
     if roll_call is None:
-        LOG.info("%s not found", PYTHON_PROCS_FILE.name)
+        LOG.info("%s not found", process_file.name)
         return
     peak: dict[str, int] = {}
     seen: Counter[str] = Counter()
@@ -427,7 +428,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--name", default=DEFAULT_NAME, help="The stem for <name>.log and <name>.pid."
     )
     watching("sample", "The loop itself, which start-sampler launches.")
-    verbs.add_parser("summarize", help="Print what the two files the loop wrote hold.")
+    summary = verbs.add_parser("summarize", help="Print what the two files the loop wrote hold.")
+    summary.add_argument("--sample-file", type=Path, default=RSS_SAMPLE_FILE)
+    summary.add_argument("--process-file", type=Path, default=PYTHON_PROCS_FILE)
     args = parser.parse_args(argv)
 
     # CLAUDE.md section 1b takes the level from `config/`. This program reads no
@@ -443,7 +446,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ran: dict[str, Callable[[], object]] = {
         "start-sampler": lambda: start_sampler(args.pid, args.name, args.every),
         "sample": lambda: sample(args.pid, every=args.every),
-        "summarize": summarize,
+        "summarize": lambda: summarize(args.sample_file, args.process_file),
     }
     ran[args.verb]()
     return 0

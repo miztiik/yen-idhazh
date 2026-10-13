@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from enum import StrEnum
 from types import MappingProxyType
-from typing import Any, Final, Self
+from typing import Any, Final, Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -214,6 +214,16 @@ class ObservabilityConfig(Model):
             "collector and writer. False performs no event file reads, writes or "
             "waits. This temporary comparison path is removed when the native "
             "single-writer cutover is complete."
+        ),
+    )
+    host_event_mode: Literal["legacy", "shadow", "native"] = Field(
+        default="legacy",
+        exclude=True,
+        description=(
+            "Which host-row boundary a runtime invocation uses. Legacy keeps Python "
+            "silicon and Watch authoritative; shadow brackets those writers with "
+            "comparison events; native makes the Rust session the sole raw host-row "
+            "writer. Native is opt-in until its launcher supplies a validated session."
         ),
     )
     memory_profiling_enabled: bool = Field(

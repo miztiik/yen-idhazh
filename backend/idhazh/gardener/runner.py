@@ -120,6 +120,7 @@ from idhazh.gardener.period_inputs import paths_for_task, scheduled_range
 from idhazh.ledger import staging
 from idhazh.site_weight import BYTES_PER_MB
 from idhazh.telemetry import job_machine
+from idhazh.telemetry.host_event_client import HostEventClient
 
 #: The name the record's writer carries in its envelope. This module writes it.
 PRODUCER: Final = "gardener.runner"
@@ -599,6 +600,7 @@ def run(
     package: ModuleType = shipped_tasks,
     clock: Callable[[], datetime] = utc_now,
     say: Callable[[str], None] = print,
+    host_events: HostEventClient | None = None,
 ) -> Outcome:
     """Run these tasks as one shard, write its record, and hand back what is left to land.
 
@@ -652,7 +654,7 @@ def run(
     downloaded_bytes: int | None = None
     try:
         with job_machine.record(
-            date=today.isoformat(),
+            date=run_id[:10],
             run_id=run_id,
             settings=settings,
             state_root=state_dir,
@@ -662,6 +664,7 @@ def run(
             attempt=attempt,
             started_at=started,
             clock=clock,
+            host_events=host_events,
         ) as machine:
             # Resolve ownership before the first task runs.
             resolved = {

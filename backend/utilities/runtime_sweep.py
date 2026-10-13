@@ -12,19 +12,24 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import threading
 import time
 import urllib.request
 from collections import Counter
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, NamedTuple
 
 from pydantic import ValidationError
 
-from idhazh import config, ledger
+from idhazh import config, ledger, run_context
 from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.base import ServerJob
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.knobs.model_server import port_of_base_url
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.ledger_name import LedgerName
@@ -33,10 +38,13 @@ from idhazh.llm.server import loopback_url, server_argv
 from idhazh.stages import common
 from idhazh.stages import plan as plan_stage
 from idhazh.stages.common import CAPTURES_DIRNAME
-from idhazh.telemetry import silicon
-from utilities import sweep_verdict
+from idhazh.telemetry import job_machine, silicon
+from idhazh.telemetry.host_event_client import HostEventClient
+from idhazh.telemetry.host_evidence_inputs import read_bytes
+from idhazh.telemetry.host_evidence_inputs import settings as native_settings
+from utilities import publication_evidence, sweep_verdict
 from utilities.memory_sampler import read_status
-from utilities.model_runtime import refuse_a_server_that_died_at_startup
+from utilities.model_runtime import refuse_a_server_that_died_at_startup, server_identity
 
 ROOT = Path("backend/var/runtime-sweep")
 CONFIG_ROOT = ROOT / "configs"
@@ -258,7 +266,9 @@ def case_plan(name: str, *, threads: int, threads_batch: int) -> CasePlan:
     )
 
 
-def write_config(label: str, update: dict[str, Any]) -> Path:
+def write_config(
+    label: str, update: dict[str, Any], *, config_root: Path = CANDIDATE_CONFIG
+) -> Path:
     """A scratch config for one case, from the candidate copy and never from `config/`.
 
     The committed config still names the incumbent, so a sweep that copied it
@@ -267,7 +277,7 @@ def write_config(label: str, update: dict[str, Any]) -> Path:
     dst = CONFIG_ROOT / label
     if dst.exists():
         shutil.rmtree(dst)
-    shutil.copytree(CANDIDATE_CONFIG, dst)
+    shutil.copytree(config_root, dst)
     pointer = json.loads((dst / "idhazh.json").read_text(encoding="utf-8"))["models_file"]
     path = dst / pointer
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -431,6 +441,82 @@ def keep_the_captures(date: str, label: str, repeat: int) -> str | None:
     return kept.as_posix()
 
 
+@contextmanager
+def _termination_signals(*, defer: bool = False) -> Iterator[None]:
+    """Unwind on cancellation, but finish acquiring or reaping owned processes first."""
+    received: int | None = None
+
+    def cancelled(signum: int, frame: object) -> None:
+        nonlocal received
+        del frame
+        if received is None:
+            received = signum
+            if not defer:
+                raise SystemExit(128 + signum)
+
+    previous = {}
+    try:
+        for signum in (signal.SIGTERM, signal.SIGINT):
+            previous[signum] = signal.signal(signum, cancelled)
+        yield
+    finally:
+        active = sys.exception()
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
+        if defer and received is not None:
+            if active is None:
+                raise SystemExit(128 + received)
+            active.add_note(f"runtime sweep also received signal {received}")
+
+
+def _reap_owned_process(process: subprocess.Popen[bytes]) -> None:
+    try:
+        if process.poll() is None:
+            process.terminate()
+        process.wait(timeout=20)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        try:
+            process.kill()
+        finally:
+            process.wait(timeout=20)
+        if isinstance(error, OSError):
+            raise
+
+
+def _cleanup_owned_processes(
+    server: subprocess.Popen[bytes] | None,
+    workers: Sequence[subprocess.Popen[bytes]],
+    stop: threading.Event,
+    sampler: threading.Thread | None,
+) -> None:
+    errors: list[Exception] = []
+    try:
+        with _termination_signals(defer=True):
+            stop.set()
+            # A failed reap must not skip another worker, the server, or the sampler.
+            processes = [*workers, *([server] if server is not None else [])]
+            for process in processes:
+                try:
+                    _reap_owned_process(process)
+                except (OSError, subprocess.TimeoutExpired) as error:
+                    errors.append(error)
+            if sampler is not None:
+                try:
+                    sampler.join(timeout=5)
+                except RuntimeError as error:
+                    errors.append(error)
+    finally:
+        active = sys.exception()
+        if errors:
+            if active is not None:
+                for cleanup_error in errors:
+                    active.add_note(f"runtime sweep cleanup also failed: {cleanup_error}")
+            else:
+                for cleanup_error in errors[1:]:
+                    errors[0].add_note(f"runtime sweep cleanup also failed: {cleanup_error}")
+                raise errors[0]
+
+
 def run_once(
     label: str,
     update: dict[str, Any],
@@ -443,9 +529,11 @@ def run_once(
     candidate_file: str,
     candidate_id: str,
     port: int,
+    commit_sha: str | None = None,
+    config_root: Path = CANDIDATE_CONFIG,
 ) -> dict[str, Any]:
     """One server start, one pass over the fixed corpus, one set of readings."""
-    cfg = write_config(f"{label}-{repeat}", update)
+    cfg = write_config(f"{label}-{repeat}", update, config_root=config_root)
     settings = config.load(cfg)
     require_memory_for_sweep(settings.app.observability.memory_profiling_enabled)
     log_path = ROOT / f"{label}-{repeat}.llama-server.log"
@@ -467,60 +555,74 @@ def run_once(
     env["LD_LIBRARY_PATH"] = "backend/bin"
     started = time.perf_counter()
     rss_samples: list[dict[str, str]] = []
+    mode = os.environ.get("IDHAZH_HOST_TELEMETRY_MODE")
+    native = mode == "rust" or (
+        mode is None and settings.app.observability.host_event_mode == "native"
+    )
+    env_paths = [ROOT / f"{label}-{repeat}-{shard}.env" for shard in range(worker_count)]
     with log_path.open("w", encoding="utf-8") as log:
-        server = subprocess.Popen(argv, stdout=log, stderr=subprocess.STDOUT, env=env)
-        refuse_a_server_that_died_at_startup(server, log_path)
+        server = None
+        workers: list[subprocess.Popen[bytes]] = []
         stop = threading.Event()
-
-        def sample_rss() -> None:
-            while not stop.is_set():
-                rss_samples.append(read_status(server.pid))
-                time.sleep(1)
-
-        sampler = threading.Thread(target=sample_rss, daemon=True)
-        sampler.start()
+        sampler = None
         try:
+            with _termination_signals(defer=True):
+                server = subprocess.Popen(argv, stdout=log, stderr=subprocess.STDOUT, env=env)
+            refuse_a_server_that_died_at_startup(server, log_path)
+
+            def sample_rss() -> None:
+                assert server is not None
+                while not stop.is_set():
+                    rss_samples.append(read_status(server.pid))
+                    time.sleep(1)
+
+            if not native:
+                sampler = threading.Thread(target=sample_rss, daemon=True)
+                sampler.start()
             wait_for_health(port)
             assert_the_candidate_is_serving(port, candidate_id)
             startup_ms = int((time.perf_counter() - started) * 1000)
             work_started = time.perf_counter()
-            workers = [
-                subprocess.Popen(
-                    [
-                        sys.executable,
-                        "-m",
-                        "idhazh",
-                        "work",
-                        "--config",
-                        str(cfg),
-                        "--date",
-                        date,
-                        "--execution",
-                        str(execution),
-                        "--shard",
-                        str(shard),
-                        "--shards",
-                        str(worker_count),
-                        "--no-faithfulness",
-                    ]
-                )
-                for shard in range(worker_count)
-            ]
+            if native:
+                target = server_identity(server.pid)
+                env["IDHAZH_MODEL_SERVER_PID"] = str(target.pid)
+                env["IDHAZH_MODEL_SERVER_START_TICKS"] = str(target.start_ticks)
+            for shard in range(worker_count):
+                if native:
+                    env_paths[shard].unlink(missing_ok=True)
+                with _termination_signals(defer=True):
+                    workers.append(
+                        subprocess.Popen(
+                            work_command(
+                                config_root=cfg,
+                                date=date,
+                                execution=execution,
+                                shard=shard,
+                                shards=worker_count,
+                                commit_sha=commit_sha or os.environ.get("GITHUB_SHA", "0" * 40),
+                                native=native,
+                            ),
+                            env={
+                                **env,
+                                # Each invocation returns its own receipt. It must not
+                                # race another shard appending to the runner's env file.
+                                "GITHUB_ENV": str(env_paths[shard]),
+                            } if native else env,
+                        )
+                    )
             failures = [proc.wait() for proc in workers]
             if any(failures):
                 raise RuntimeError(f"{label} repeat {repeat} worker failures: {failures}")
             work_ms = int((time.perf_counter() - work_started) * 1000)
             total_ms = int((time.perf_counter() - started) * 1000)
         finally:
-            stop.set()
-            server.terminate()
-            try:
-                server.wait(timeout=20)
-            except subprocess.TimeoutExpired:
-                server.kill()
-                server.wait(timeout=20)
-            sampler.join(timeout=5)
+            _cleanup_owned_processes(server, workers, stop, sampler)
 
+    peak = None
+    workspaces: list[Path] = []
+    if native:
+        workspaces = [launcher_workspace(path) for path in env_paths]
+        rss_samples, peak = native_memory(workspaces[0])
     found = collect(date, label, repeat, items=settings.app.bench.corpus_items)
     return {
         "label": label,
@@ -533,13 +635,91 @@ def run_once(
         "total_ms": total_ms,
         "model_path_ms": startup_ms + sum(item["summarize_ms"] for item in found.per_item),
         "server_rss_samples": rss_samples,
-        "cgroup_memory_peak_bytes": cgroup_peak(),
+        "cgroup_memory_peak_bytes": peak if native else cgroup_peak(),
+        "host_receipts": [
+            (workspace / "receipt.json").as_posix() for workspace in workspaces
+        ] if native else [],
         "server_facts": parse_server_facts(log_path),
         "sources": found.sources,
         "digests": found.digests,
         "per_item": found.per_item,
         "captures": keep_the_captures(date, label, repeat),
     }
+
+
+def work_command(
+    *,
+    config_root: Path,
+    date: str,
+    execution: int,
+    shard: int,
+    shards: int,
+    commit_sha: str,
+    native: bool,
+) -> list[str]:
+    """Use one gated native worker per actual work process and selected server."""
+    command = [
+        sys.executable, "-m", "idhazh", "work",
+        "--config", str(config_root), "--date", date, "--execution", str(execution),
+        "--commit", commit_sha, "--shard", str(shard), "--shards", str(shards),
+        "--no-faithfulness",
+    ]
+    if not native:
+        return command
+    command = [
+        sys.executable, "backend/utilities/digest_publish.py", "run", "work", *command[4:]
+    ]
+    return [
+        sys.executable, "backend/utilities/d7_host_telemetry.py", "run",
+        "--mode", "rust", "--job", "work",
+        "--run-id", f"{date}-{execution}", "--git-sha", commit_sha,
+        "--shard", str(shard), "--memory-profiling", "inherit",
+        "--", *command,
+    ]
+
+
+def launcher_workspace(path: Path) -> Path:
+    """Read one completed child launch's bounded environment handoff."""
+    raw = read_bytes(path, native_settings()[0].limits.max_result_bytes)
+    lines = raw.decode("utf-8").splitlines()
+    name = "IDHAZH_HOST_TELEMETRY_SESSION"
+    selected: list[str] = []
+    for index, line in enumerate(lines):
+        if line.startswith(name + "="):
+            selected.append(line.partition("=")[2])
+        elif line.startswith(name + "<<"):
+            marker = line.partition("<<")[2]
+            if index + 2 >= len(lines) or lines[index + 2] != marker:
+                raise ValueError("native launcher workspace handoff is malformed")
+            selected.append(lines[index + 1])
+    if len(selected) != 1:
+        raise ValueError("native launcher must export exactly one workspace")
+    workspace = Path(selected[0]).resolve(strict=True)
+    if not workspace.is_relative_to(Path("backend/var").resolve(strict=True)):
+        raise ValueError("native launcher workspace escapes the run's bounded artifact root")
+    return workspace
+
+
+def native_memory(workspace: Path) -> tuple[list[dict[str, str]], str | None]:
+    """Consume the monitor's named legacy artifacts, never sample the host again."""
+    limit = native_settings()[0].limits.max_session_bytes
+    root = workspace / "native-artifacts"
+    samples = []
+    path = root / "server-rss-samples.jsonl"
+    if path.exists():
+        for line in read_bytes(path, limit).splitlines():
+            value = json.loads(line)
+            if not isinstance(value, dict) or any(
+                key not in ("VmRSS", "VmHWM") or not isinstance(cell, str)
+                for key, cell in value.items()
+            ):
+                raise ValueError("native runtime memory artifact has an invalid status sample")
+            samples.append(value)
+    peak_path = root / "cgroup-memory-peak.txt"
+    peak = read_bytes(peak_path, limit).decode("ascii").strip() if peak_path.exists() else None
+    if peak is not None and not peak.isdecimal():
+        raise ValueError("native runtime memory peak is not a byte count")
+    return samples, peak
 
 
 def require_memory_for_sweep(enabled: bool) -> None:
@@ -648,8 +828,49 @@ def server_port(config_root: Path) -> int:
 
 
 def sweep(args: argparse.Namespace) -> int:
+    settings = config.load(args.config)
+    events = job_machine.from_environment(settings)
+    if events is None:
+        return _sweep(args, events=None)
+    try:
+        with job_machine.record(
+            date=args.date,
+            run_id=f"{args.date}-{args.execution}",
+            settings=settings,
+            state_root=common.state_root_of(settings, base=common.STATE_ROOT),
+            commit_sha=args.commit,
+            job=ServerJob.RUNTIME,
+            host_events=events,
+        ):
+            return _sweep(args, events=events)
+    finally:
+        # Native bytes have separate verified evidence, never a Python write claim.
+        publication_evidence.save(
+            config.REPO_ROOT,
+            WriterIdentity(
+                run_id=f"{args.date}-{args.execution}",
+                attempt=run_context.run_attempt(),
+                job=ServerJob.RUNTIME,
+                shard=0,
+                producer="utilities.record_publish",
+                git_sha=args.commit,
+            ),
+            "measure",
+            {},
+        )
+
+
+def _sweep(args: argparse.Namespace, *, events: HostEventClient | None) -> int:
     candidate = args.candidate
-    repeat_count = repeats(CANDIDATE_CONFIG, dispatch=args.repeats)
+    if args.memory_profiling != "inherit":
+        path = args.config / "idhazh.json"
+        app = AppConfig.from_json(path.read_text(encoding="utf-8"))
+        app.observability.memory_profiling_enabled = args.memory_profiling == "on"
+        path.write_text(app.to_json(), encoding="utf-8", newline="\n")
+    require_memory_for_sweep(
+        config.load(args.config).app.observability.memory_profiling_enabled
+    )
+    repeat_count = repeats(args.config, dispatch=args.repeats)
     # Two, because a spread needs two readings and this stops a dispatch that
     # cannot produce one. It is the sweep's own statement about what it can
     # read, kept beside the contract's floor rather than deferred to it: the
@@ -659,7 +880,7 @@ def sweep(args: argparse.Namespace) -> int:
     # is the knob sized against that same bound (Guardrail #2).
     if repeat_count < sweep_verdict.MIN_AGREEING_REPEATS:
         raise SystemExit("runtime_repeats must be at least 2 - one reading has no spread")
-    port = server_port(CANDIDATE_CONFIG)
+    port = server_port(args.config)
     threads = _bounded("threads", args.threads)
     threads_batch = _bounded("threads_batch", args.threads_batch)
 
@@ -681,6 +902,8 @@ def sweep(args: argparse.Namespace) -> int:
                 candidate_file=args.candidate_file,
                 candidate_id=args.candidate_id,
                 port=port,
+                commit_sha=args.commit,
+                config_root=args.config,
             )
             results.append(result)
             print(
@@ -705,7 +928,11 @@ def sweep(args: argparse.Namespace) -> int:
         # The machine THIS job drew. `llama-bench` runs in a different job and the
         # platform places each separately, so the processor beside a prefill rate
         # is not the processor beside these wall-clock figures.
-        "cpu": silicon.host_cpu_model() or "unrecorded",
+        "cpu": (
+            events.host_facts().cpu_model
+            if events is not None and events.native
+            else silicon.host_cpu_model()
+        ) or "unrecorded",
         "repeats": repeat_count,
         # What the timing was actually taken over. It is not `repeats` whenever
         # a page moved mid-job, and a reader who assumed it was would be reading
@@ -761,6 +988,9 @@ def main(argv: list[str] | None = None) -> int:
 
     run = sub.add_parser("sweep", help="Time the candidate against the baseline.")
     run.add_argument("--date", required=True)
+    run.add_argument("--config", type=Path, default=CANDIDATE_CONFIG)
+    run.add_argument("--commit", default=os.environ.get("GITHUB_SHA", "0" * 40))
+    run.add_argument("--memory-profiling", choices=("inherit", "on", "off"), default="inherit")
     run.add_argument(
         "--execution", type=int, required=True, help="The run whose plan every repeat works."
     )
@@ -787,16 +1017,23 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "freeze-corpus":
         settings = config.load(args.config) if args.config is not None else config.load()
-        freeze_corpus(
-            args.date,
-            items=corpus_items(args.config),
-            offset=corpus_offset(args.offset),
-            execution=args.execution,
-            commit_sha=args.commit,
-            state_dir=common.state_root_of(settings, base=common.STATE_ROOT),
+        segments = tuple(
+            value
+            for value in (settings.app.run.trial_state_dirname, settings.app.run.trial_case_dirname)
+            if value is not None
         )
+        with ledger.use_registry(ledger.overlay_registry(segments) if segments else None):
+            freeze_corpus(
+                args.date,
+                items=corpus_items(args.config),
+                offset=corpus_offset(args.offset),
+                execution=args.execution,
+                commit_sha=args.commit,
+                state_dir=common.STATE_ROOT,
+            )
         return 0
-    return sweep(args)
+    with _termination_signals():
+        return sweep(args)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 # What the pipeline records about the machine it ran on
 
-**Last Updated**: 2026-10-12
+**Last Updated**: 2026-10-13
 
 Every column of the host fingerprint, what it means, and what it is for.
 The producer records one row per instrumented job, or per shard of that job.
@@ -28,13 +28,22 @@ operator console, not on the news-reading pages.
 | Contract | [`backend/idhazh/contracts/host_fingerprint.py`](../../backend/idhazh/contracts/host_fingerprint.py) |
 | Generated schema | [`HostFingerprintRow`](../../`HostFingerprintRow`) |
 | Ledger | `state/raw/host-fingerprint/<YYYY>/<MM>/<DD>/` for the daily run, packed under `state/compact/host-fingerprint/` by its production compaction; `state/raw/pipeline-tests/host-fingerprint/<YYYY>/<MM>/<DD>/` for a bench dispatch, packed under `state/compact/pipeline-tests/host-fingerprint/` by `compact-trial-host-fingerprint` |
-| Files | one raw file per write, `<file_id>.parquet` in the day directory, a name the ledger door mints so no second writer takes it. The probe and the clock of one job are one writer, so the clock's file replaces the probe's |
-| Producer | [`backend/idhazh/telemetry/silicon.py`](../../backend/idhazh/telemetry/silicon.py), through the two CLI verbs or [`job_machine.record`](../../backend/idhazh/telemetry/job_machine.py). All writes use `ledger.persist` |
+| Files | one immutable `<file_id>.parquet` per completed write in the day directory. The reader settles the later whole row of the same work unit; neither file is edited. |
+| Producer | [`backend/rust/host-telemetry/src/invocation.rs`](../../backend/rust/host-telemetry/src/invocation.rs), through the workflow-owned lifecycle and [`job_machine.record`](../../backend/idhazh/telemetry/job_machine.py). Rust writes raw host files; Python verifies, reads, compacts and publishes them. |
 | Read by | `/console/machine/`, through the browser questions in `frontend/src/lib/console/queries/machine.ts` and native helpers in `frontend/src/lib/console/machine/records.ts` |
 | Key | `date`, `run_id`, `job`, `shard` - one row a job |
 | Switch | `observability.host_fingerprint` for the host row; `observability.memory_profiling_enabled` independently controls OS memory/fault collection |
 | Committed | **from 2026-09-16.** Each job's own commit step stages its ledger; every row taken before that date was deleted with its runner |
 | Shown on news-reading pages | **no.** Operator surface only |
+
+**Rust is the default collector for measured pipeline jobs.** YAML builds the
+pinned crate and starts `d7_host_telemetry.py`, which owns the separate Rust
+processes. Python stages send structured lifecycle events; they do not call Rust
+through language bindings or write a competing host row. Digest plan/work/assemble,
+bench and encoder probes, gardener task shards, and council result saving use this
+path. Unmeasured jobs remain uninstrumented. An explicit `host_telemetry: legacy`
+choice is a temporary rollback until migration cleanup, not an automatic fallback.
+Historical conversion remains a separate Python maintenance operation.
 
 **Every job of `digest.yml` writes a row, from 2026-09-17.** `plan`, `work` and
 `assemble` each draw their own runner, so a run that measured one of them could
@@ -51,8 +60,8 @@ merge driver was never going to settle it.
 The probe runs before the job's heaviest step, because the bandwidth reading
 wants a gigabyte and an idle machine. What the job cost - its wall clock, and
 what opening the weights cost before the first item - is only knowable once the
-job is over. So `idhazh job-clock` reads the probe's row back from its own raw
-file and files the whole row again, with the job-end cells filled, under the same
+job is over. The native clock reads its preceding result and files the whole row
+again, with the job-end cells filled, under the same
 writer. The ledger door keeps the later file of one writer, so a job is one row
 wherever it is read
 ([../architecture/contracts/persistence.md](../architecture/contracts/persistence.md#the-two-identifiers)).
@@ -119,10 +128,10 @@ An unselected job has `memcpy_probe_mib=0` and an empty `memcpy_gib_s`. The
 existing buffer floor also disables copying when it is zero. The default
 change leaves older measurements intact and adds no persisted column.
 
-To instrument another job, use
+To instrument another job, prepare its workflow-owned native lifecycle and use
 [`job_machine.record`](../../backend/idhazh/telemetry/job_machine.py) around its
 real work, with already loaded settings, its run identity, attempt and UTC
-start clock. It returns both exact written paths, including the closing clock
+start clock. It returns exact completed paths, including the closing clock
 on work failure. Observe those writes and declare the host ledger separately
 when adopting [the publisher](../architecture/publishing/committing.md).
 Leave the job out of `host_fingerprint_bandwidth_jobs` unless it must measure
