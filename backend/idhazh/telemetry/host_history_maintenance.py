@@ -122,7 +122,8 @@ def _refuse_writers(workspace: Path, cap: int, timeout: float, max_processes: in
         names = (*KNOWN_PROCESS_NAMES, "idhazh-host-tel", "python3",
                  "python3.12", "python3.13", "python3.14")
         raw = _command(
-            workspace, ["ps", "-C", ",".join(names), "-o", "pid=,comm=,args="], cap, timeout,
+            workspace, ["ps", "-ww", "-C", ",".join(names), "-o", "pid=,comm=,args="],
+            cap, timeout,
         )
         processes = [
             (int(parts[0]), parts[1], parts[2])

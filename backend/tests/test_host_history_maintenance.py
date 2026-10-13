@@ -299,6 +299,36 @@ def test_real_local_known_writer_process_is_refused(workspace: Path) -> None:
         process.wait(timeout=10)
 
 
+def test_known_writer_in_explicitly_different_checkout_is_not_a_conflict(workspace: Path) -> None:
+    with tempfile.TemporaryDirectory(prefix=".d17-other-", dir=Path.cwd()) as directory:
+        other = Path(directory)
+        script_root = other / ("generated-long-command-" * 4)
+        script_root.mkdir()
+        script = script_root / "host_telemetry_session.py"
+        ready = other / "generated-process-ready"
+        script.write_text(
+            "import pathlib, time\n"
+            "pathlib.Path('generated-process-ready').write_bytes(b'ready')\n"
+            "time.sleep(30)\n",
+            encoding="utf-8", newline="\n",
+        )
+        process = subprocess.Popen(
+            [sys.executable, "-B", str(script), "--workspace", str(other)],
+            cwd=other, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        try:
+            deadline = time.monotonic() + 10
+            while not ready.exists() and time.monotonic() < deadline:
+                time.sleep(0.02)
+            assert ready.read_bytes() == b"ready"
+            with offline_maintenance(workspace, _approval(workspace)) as lease:
+                _check(lease, workspace, _approval(workspace))
+        finally:
+            process.terminate()
+            process.wait(timeout=10)
+
+
 def test_subprocess_output_and_time_are_bounded(workspace: Path) -> None:
     with pytest.raises(MaintenanceError, match="output bound"):
         _command(workspace, [sys.executable, "-B", "-c", "print('x' * 1024)"], 32, 5)
