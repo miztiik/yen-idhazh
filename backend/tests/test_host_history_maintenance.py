@@ -329,6 +329,29 @@ def test_known_writer_in_explicitly_different_checkout_is_not_a_conflict(workspa
             process.wait(timeout=10)
 
 
+def test_inline_python_text_is_not_a_launched_writer_module(workspace: Path) -> None:
+    ready = workspace / "generated-inline-ready"
+    code = (
+        "import pathlib, time; label = 'utilities.not_a_writer'; "
+        "pathlib.Path(__import__('sys').argv[1]).write_bytes(b'ready'); time.sleep(30)"
+    )
+    process = subprocess.Popen(
+        [sys.executable, "-B", "-c", code, str(ready)],
+        cwd=workspace, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        deadline = time.monotonic() + 10
+        while not ready.exists() and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert ready.read_bytes() == b"ready"
+        with offline_maintenance(workspace, _approval(workspace)) as lease:
+            _check(lease, workspace, _approval(workspace))
+    finally:
+        process.terminate()
+        process.wait(timeout=10)
+
+
 def test_subprocess_output_and_time_are_bounded(workspace: Path) -> None:
     with pytest.raises(MaintenanceError, match="output bound"):
         _command(workspace, [sys.executable, "-B", "-c", "print('x' * 1024)"], 32, 5)

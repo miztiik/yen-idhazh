@@ -122,12 +122,12 @@ def _refuse_writers(workspace: Path, cap: int, timeout: float, max_processes: in
         names = (*KNOWN_PROCESS_NAMES, "idhazh-host-tel", "python3",
                  "python3.12", "python3.13", "python3.14")
         raw = _command(
-            workspace, ["ps", "-ww", "-C", ",".join(names), "-o", "pid=,comm=,args="],
+            workspace, ["ps", "-C", ",".join(names), "-o", "pid=,comm="],
             cap, timeout,
         )
         processes = [
-            (int(parts[0]), parts[1], parts[2])
-            for line in raw.decode("utf-8").splitlines() if (parts := line.split(None, 2))
+            (int(parts[0]), parts[1], "")
+            for line in raw.decode("utf-8").splitlines() if (parts := line.split(None, 1))
         ]
     if len(processes) > max_processes:
         raise MaintenanceError("local writer inspection exceeds its process bound")
@@ -136,14 +136,30 @@ def _refuse_writers(workspace: Path, cap: int, timeout: float, max_processes: in
         if pid == os.getpid():
             continue
         name = name.casefold()
-        if not command:
-            raise MaintenanceError(f"cannot resolve a potential local writer: PID {pid}")
-        tokens = [token.strip('"') for token in shlex.split(command, posix=sys.platform != "win32")]
+        if sys.platform == "win32":
+            if not command:
+                raise MaintenanceError(f"cannot resolve a potential local writer: PID {pid}")
+            tokens = [token.strip('"') for token in shlex.split(command, posix=False)]
+        else:
+            # ps flattens argv: inline Python code must not become module arguments.
+            try:
+                arguments = _read_small(Path("/proc") / str(pid) / "cmdline", cap)
+            except FileNotFoundError:
+                continue
+            tokens = [os.fsdecode(token) for token in arguments.split(b"\0") if token]
+            if not tokens:
+                raise MaintenanceError(f"cannot resolve a potential local writer: PID {pid}")
+            command = "\0".join(tokens)
         scripts = [
             token for token in tokens if Path(token).name.casefold() in KNOWN_WRITER_ENTRYPOINTS
         ]
-        module = any(token == "idhazh" or token.startswith(("idhazh.", "utilities."))
-                     for token in tokens)
+        module = any(
+            token == "-m" and (
+                tokens[index + 1] == "idhazh"
+                or tokens[index + 1].startswith(("idhazh.", "utilities."))
+            )
+            for index, token in enumerate(tokens[:-1])
+        )
         native = name.removesuffix(".exe") in ("idhazh-host-telemetry", "idhazh-host-tel",
                                                "llama-server")
         node = name.removesuffix(".exe") == "node" and any(
@@ -165,7 +181,11 @@ def _refuse_writers(workspace: Path, cap: int, timeout: float, max_processes: in
             Path(token).resolve().is_relative_to(workspace)
             or workspace.is_relative_to(Path(token).resolve()) for token in (*scripts, *scopes)
         ):
-            raise MaintenanceError(f"known or unresolved local writer is active: PID {pid}")
+            raise MaintenanceError(
+                f"known or unresolved local writer is active: PID {pid} "
+                f"({name}; scripts={[Path(path).name for path in scripts]}; "
+                f"scopes={scopes}; unresolved={unresolved})"
+            )
 
 
 class MaintenanceLease:
