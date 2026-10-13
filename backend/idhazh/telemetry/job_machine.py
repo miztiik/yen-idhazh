@@ -109,9 +109,11 @@ def record(
     started = started_at if started_at is not None else clock()
     written: list[Path] = []
     native_active = False
+    events_started = False
     if host_events is not None:
         try:
-            native_active = host_events.begin_job()
+            events_started = host_events.begin_job()
+            native_active = events_started and host_events.native
         except OSError as error:
             if host_events.native:
                 raise
@@ -145,7 +147,7 @@ def record(
     try:
         yield written
     finally:
-        if native_active and host_events is not None:
+        if events_started and host_events is not None:
             try:
                 if not host_events.end_job() and host_events.native:
                     raise RuntimeError("native machine session did not close")

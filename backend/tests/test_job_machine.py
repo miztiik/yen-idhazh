@@ -7,12 +7,14 @@ from pathlib import Path
 
 import pytest
 from conftest import SEED_COMMIT
+from test_host_event_client import SessionPeer, _manifest
 
 from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.telemetry import job_machine, silicon
+from idhazh.telemetry.host_event_client import HostEventClient
 
 DAY = "2026-09-27"
 RUN = f"{DAY}-18012345678"
@@ -143,6 +145,44 @@ def test_native_boundary_is_the_sole_raw_host_writer(
         host_events=events,  # type: ignore[arg-type]
     ) as written:
         assert written == []
+
+
+def test_shadow_boundary_keeps_both_authoritative_python_writes(tmp_path: Path) -> None:
+    manifest = _manifest(tmp_path)
+    peer = SessionPeer(tmp_path, manifest)
+    settings = config.load()
+    settings.app.observability.host_fingerprint_bandwidth_floor_mib = 0
+    try:
+        events = HostEventClient(tmp_path, Path("manifest.json"), Path("config.json"))
+        assert events.register_worker(server_pid=None)
+        with job_machine.record(
+            date=manifest.date,
+            run_id=manifest.run_id,
+            settings=settings,
+            state_root=tmp_path / "state",
+            commit_sha=manifest.git_sha,
+            job=manifest.job,
+            shard=manifest.shard,
+            attempt=manifest.attempt,
+            started_at=START,
+            clock=lambda: START + timedelta(seconds=60),
+            host_events=events,
+        ) as written:
+            pass
+        files = ledger.list_raw_files(
+            tmp_path / "state", LedgerName.HOST_FINGERPRINT, days={manifest.date}
+        )
+        assert len(files) == 2
+        assert set(written) == {file.path for file in files}
+        (row,) = ledger.load_days(
+            tmp_path / "state",
+            LedgerName.HOST_FINGERPRINT,
+            [manifest.date],
+            model=HostFingerprintRow,
+        )
+        assert row.job_seconds == 60
+    finally:
+        peer.close()
 
 
 def test_native_failure_after_publication_does_not_fall_back(

@@ -117,8 +117,13 @@ def _flag(command: list[str], name: str) -> str | None:
     return values[0] if values else None
 
 
+def _source_settings(stage: str, flags: list[str]) -> config.Settings:
+    option = "--config-root" if stage == "save_council_results" else "--config"
+    return config.load(Path(_flag(flags, option) or config.DEFAULT_CONFIG_DIR))
+
+
 def _council_has_publishable_work(flags: list[str]) -> bool:
-    settings = config.load(Path(_flag(flags, "--config-root") or config.DEFAULT_CONFIG_DIR))
+    settings = _source_settings("save_council_results", flags)
     from idhazh.council.registry import tenants
     from idhazh.council.selection import for_dates, from_environment
 
@@ -747,6 +752,18 @@ def _cleanup(workspace: Path, binary: str | None) -> None:
             raise
 
 
+def _terminate_worker(child: subprocess.Popen[bytes], *, timeout: float = 10) -> None:
+    if child.poll() is not None:
+        return
+    child.terminate()
+    try:
+        child.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        child.kill()
+        child.wait(timeout=timeout)
+        raise
+
+
 def run(args: argparse.Namespace) -> int:
     if args.mode == "legacy":
         return subprocess.run(
@@ -776,7 +793,7 @@ def run(args: argparse.Namespace) -> int:
         raise SystemExit("D7 Rust host telemetry requires a Linux /proc runner")
     binary = _binary(args.binary)
     native, _, _ = settings()
-    source = config.load(Path(_flag(flags, "--config") or config.DEFAULT_CONFIG_DIR))
+    source = _source_settings(stage, flags)
     registry = _ledger_registry(source)
     memory = {"on": True, "off": False}.get(args.memory_profiling)
     child_memory = _flag(flags, "--memory-profiling")
@@ -988,31 +1005,38 @@ def run(args: argparse.Namespace) -> int:
         return child_rc
     finally:
         active = sys.exception()
-        if child and child.poll() is None:
-            child.terminate()
-            child.wait(timeout=10)
-        if monitor and monitor.poll() is None and manifest is not None and not drained:
+        try:
+            if child:
+                _terminate_worker(child)
+        finally:
             try:
-                _stop(workspace, manifest, status, root=ROOT, binary=binary)
-            except (ValueError, OSError, RuntimeError, TimeoutError) as error:
-                monitor.terminate()
-                monitor.wait(timeout=native.limits.drain_timeout_ms / 1000)
-                if active is None and (child_rc is None or child_rc == 0):
-                    raise
-                if active is not None:
-                    active.add_note(f"D7 native drain also failed: {type(error).__name__}")
-                else:
-                    print(f"D7 failed producer drain also failed: {error}", file=sys.stderr)
-        if monitor:
-            try:
-                _cleanup(workspace, str(binary))
-            except (ValueError, OSError, RuntimeError, TimeoutError) as error:
-                if active is None and (child_rc is None or child_rc == 0):
-                    raise
-                if active is not None:
-                    active.add_note(f"D7 native cleanup also failed: {type(error).__name__}")
-                else:
-                    print(f"D7 failed producer cleanup also failed: {error}", file=sys.stderr)
+                if monitor and monitor.poll() is None and manifest is not None and not drained:
+                    try:
+                        _stop(workspace, manifest, status, root=ROOT, binary=binary)
+                    except (ValueError, OSError, RuntimeError, TimeoutError) as error:
+                        monitor.terminate()
+                        monitor.wait(timeout=native.limits.drain_timeout_ms / 1000)
+                        if active is None and (child_rc is None or child_rc == 0):
+                            raise
+                        if active is not None:
+                            active.add_note(f"D7 native drain also failed: {type(error).__name__}")
+                        else:
+                            print(f"D7 failed producer drain also failed: {error}", file=sys.stderr)
+            finally:
+                if monitor:
+                    try:
+                        _cleanup(workspace, str(binary))
+                    except (ValueError, OSError, RuntimeError, TimeoutError) as error:
+                        if active is None and (child_rc is None or child_rc == 0):
+                            raise
+                        if active is not None:
+                            active.add_note(
+                                f"D7 native cleanup also failed: {type(error).__name__}"
+                            )
+                        else:
+                            print(
+                                f"D7 failed producer cleanup also failed: {error}", file=sys.stderr
+                            )
 
 
 def main() -> int:

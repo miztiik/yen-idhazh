@@ -325,6 +325,14 @@ experiment remains available for the outstanding production cutover evidence;
 remove its workflow and comparison-only machinery after migration and recovery
 are complete.
 
+The latest consumed host reply group remains available while a job runs, even
+after its ordinary retry window expires. A valid successor or session stop
+releases that protection; failed admission does not discard the predecessor.
+The limit and consumed-only retirement rules do not change. Producer cancellation
+unwinds owned-process cleanup, and a producer termination failure cannot bypass
+native monitor cleanup. Council controls use its selected `--config-root`.
+Shadow sessions still keep the authoritative Python probe and clock writes.
+
 `.github/workflows/rust-host-telemetry.yml` uses one stock `ubuntu-latest`
 job with read-only repository permissions, credential-free checkout and seven-day
 artifacts. It does not call `measure.yml`, publish, migrate history or write

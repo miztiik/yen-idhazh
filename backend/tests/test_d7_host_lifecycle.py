@@ -228,6 +228,62 @@ def test_memory_off_does_not_turn_off_the_independent_copy_probe() -> None:
     assert controls.resource_interval_seconds == source.app.logging.waiting_heartbeat_seconds
 
 
+def test_council_configuration_controls_native_memory_and_ledger_prefix(tmp_path: Path) -> None:
+    from workflows._harness import _copy_config
+
+    config_root = tmp_path / "council-config"
+    _copy_config(config_root)
+    app_path = config_root / "idhazh.json"
+    app = json.loads(app_path.read_bytes())
+    app["observability"]["memory_profiling_enabled"] = False
+    app["run"]["trial_state_dirname"] = "council-controls"
+    app_path.write_text(json.dumps(app), encoding="ascii", newline="\n")
+    source = lifecycle._source_settings(
+        "save_council_results", ["--config-root", str(config_root)]
+    )
+    native_settings, _, _ = settings()
+    controls = lifecycle._controls(native_settings, source, None, ServerJob.SAVE_COUNCIL_RESULTS)
+    assert controls.memory_profiling_enabled is False
+    assert lifecycle._host_ledger_prefix(source) == "council-controls/host-fingerprint"
+
+
+def test_worker_termination_reaps_only_its_owned_process() -> None:
+    child = subprocess.Popen([sys.executable, "-B", "-c", "import time; time.sleep(60)"])
+    other = subprocess.Popen([sys.executable, "-B", "-c", "import time; time.sleep(60)"])
+    try:
+        lifecycle._terminate_worker(child)
+        assert child.poll() is not None
+        assert other.poll() is None
+    finally:
+        for process in (child, other):
+            if process.poll() is None:
+                process.kill()
+            process.wait(timeout=5)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="SIGTERM refusal is a Linux process boundary")
+def test_worker_termination_timeout_reaps_before_reporting_failure(tmp_path: Path) -> None:
+    ready = tmp_path / "worker-ready"
+    code = (
+        "import pathlib,signal,sys,time; "
+        "signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+        "pathlib.Path(sys.argv[1]).touch(); time.sleep(60)"
+    )
+    child = subprocess.Popen([sys.executable, "-B", "-c", code, str(ready)])
+    try:
+        deadline = time.monotonic() + 5
+        while not ready.exists() and child.poll() is None and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert ready.exists(), "generated worker did not install its signal handler"
+        with pytest.raises(subprocess.TimeoutExpired):
+            lifecycle._terminate_worker(child, timeout=0.1)
+        assert child.poll() is not None
+    finally:
+        if child.poll() is None:
+            child.kill()
+        child.wait(timeout=5)
+
+
 def test_producer_cannot_replace_the_actual_runner_execution_sha(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -463,6 +463,7 @@ Table V - Row 6 rejected alternatives
 ## 8. Row #7 - Switch instrumented producers through events
 
 - **Scope:** After D16 verifies cutover evidence under A4's authorization, adopt the corrected Rust implementation through events with one raw host writer and exact publishing receipts in a dedicated reversible behavioural change.
+- **Consolidated candidate (2026-10-13):** The completed D16 record and manual-only evidence experiment are integrated into one D7 branch. General Ubuntu CI `38382483801` and explicit isolated evidence `38382540686` passed at `e9d6c3f6138a07fec302f7c25f8a6047e1431681`; all 107 bounded family/control/publication cases passed without skips. The six earlier CI failures were fixture timing and workflow-harness declarations/arguments, not evidence of completed production cutover. A production review then identified long-job predecessor retirement, sweep cancellation, council configuration and shadow-writer defects. Those corrections retain the latest host group, unwind and finish owned cleanup, resolve the selected council config, and preserve Python writes for shadow mode; they require fresh Ubuntu candidate evidence before changing production defaults.
 - **Files touched:**
   - `.github/workflows/digest.yml`
   - `.github/workflows/measure.yml`

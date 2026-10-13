@@ -498,12 +498,12 @@ def _cleanup_owned_processes(
             for process in processes:
                 try:
                     _reap_owned_process(process)
-                except Exception as error:
+                except (OSError, subprocess.TimeoutExpired) as error:
                     errors.append(error)
             if sampler is not None:
                 try:
                     sampler.join(timeout=5)
-                except Exception as error:
+                except RuntimeError as error:
                     errors.append(error)
     finally:
         active = sys.exception()
