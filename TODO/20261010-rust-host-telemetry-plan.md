@@ -1043,14 +1043,16 @@ Table AU - Row 16 rejected alternatives
 - **Scope:** After D16 verifies historical readiness under A4's authorization, apply D15's exact validated manifest once with source-byte backups, fail-safe resumability and complete raw/compact/index/receipt/view reconciliation.
 - **Files touched:**
   - `backend/utilities/migrate_host_fingerprints.py`
-  - `backend/idhazh/contracts/host_migration.py`
+  - `backend/idhazh/telemetry/host_history_apply.py`
   - `backend/tests/test_host_fingerprint_migration.py`
+  - `backend/tests/test_host_history_apply.py`
   - `docs/architecture/publishing/host-events.md`
-  - `docs/reference/host-metrics.md`
   - `TODO/20261010-rust-host-telemetry-plan.md`
 - **Acceptance gates - local:** Separate approved maintenance execution, NOT an implementation test over production history. Re-run dry-run on exact manifest hashes before apply; stage all targets before any replacement; preflight dependencies/identities and publication exclusions. Generated fault/restart fixtures verify rollback and idempotence. Explicit maintenance output targets come from the approved manifest, never a glob in `Files touched`.
 - **Acceptance gates - CI:** Utility/contract tests use only generated bounded files. Actual maintenance validation reads only manifested paths and dependent indexes/views, verifies new schemas/native-reader compatibility, v1 labels/retained averages/nulls, logical settlement, footer/physical hashes and current receipts. No workflow dispatch, push or git-history rewrite is implied.
 - **Oracle:** Every approved source is either untouched or fully replaced/reconciled with verified completion evidence and recoverable original bytes; this cannot establish missing historical hardware facts or a multi-file filesystem transaction.
+- **Implementation status (2026-10-13): PENDING.** The journaled per-file transaction core and generated temporary-root tests are implementation work only. No historical source was read, staged, copied, dry-run, or written for D17. `--apply` remains fail-closed; this work is not D17 application evidence and does not complete this row.
+- **Infrastructure blockers:** The current D16 report contract carries scope/evidence hashes but no machine-verifiable approval record binding A4 authority to the exact manifest, scope and report. The plan's recorded hashes are not an enforceable runtime authorization. No operator-controlled quiet-window coordinator/lease was found for jointly excluding every writer, compactor and publisher. No attestation was fabricated. D16's evidence-gate PR #1585 is still open, and D7's all-family single-writer Ubuntu gate remains pending; do not merge D17 or claim row completion until those gates and both runtime prerequisites are resolved.
 
 Table AV - Row 17 decisions
 

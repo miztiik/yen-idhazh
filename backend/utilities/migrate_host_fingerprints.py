@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 from idhazh.contracts.host_migration import HistoryManifest
+from idhazh.telemetry.host_history_apply import APPLY_BLOCKERS
 from idhazh.telemetry.host_history_bundle import dry_run
 from idhazh.telemetry.host_history_files import HistoryLimits
 from idhazh.telemetry.host_output_verify import _json, _read_bytes
@@ -15,14 +16,19 @@ from idhazh.telemetry.host_output_verify import _json, _read_bytes
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--apply", action="store_true", help="Refused: historical application is not implemented."
+        "--apply",
+        action="store_true",
+        help="Refused until every D16/D17 application gate is verifiable.",
     )
     parser.add_argument("--workspace-root", type=Path)
     parser.add_argument("--manifest", type=Path)
     args = parser.parse_args(argv)
     if args.apply:
         parser.exit(
-            2, "apply is not implemented; this command only prepares isolated dry-run evidence\n"
+            2,
+            "apply is not implemented; live writes are fail-closed: "
+            + ", ".join(APPLY_BLOCKERS)
+            + "\n",
         )
     if args.workspace_root is None or args.manifest is None:
         parser.error("--workspace-root and --manifest are required for a dry-run")

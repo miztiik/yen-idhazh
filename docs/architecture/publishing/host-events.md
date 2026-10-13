@@ -1,6 +1,6 @@
 # Host telemetry through serialized events
 
-**Last Updated**: 2026-10-12
+**Last Updated**: 2026-10-13
 
 ## What is implemented
 
@@ -441,9 +441,27 @@ python -m utilities.migrate_host_fingerprints `
   --manifest backend/var/history-manifest.json
 ```
 
-The command defaults to dry-run. `--apply` fails explicitly: application is not
-implemented here. The manifest and all source paths resolve under the supplied
-workspace; persisted paths remain relative and POSIX-separated.
+The command defaults to dry-run. `--apply` remains explicitly fail-closed. D17's
+private transaction core stages destination-local outputs, verifies source-byte
+backups, records immutable planned/replaced/verified journal events, rechecks
+each source immediately before its per-file atomic replacement, and supports
+exact-byte restart or rollback. It never accepts a third source state.
+
+The live command is still blocked because the current D16 report has no
+machine-verifiable approval record bound to the manifest, scope and report
+evidence, and no operator-controlled quiet-window provider coordinates every
+writer, compactor and publisher. The plan records the exact scope and A4
+authorization, but those facts are not an enforceable runtime gate. No approval
+or quiet-window attestation is inferred here. Until both mechanisms exist,
+`--apply` performs no history reads or writes. The manifest and all source paths
+resolve under the supplied workspace; persisted paths remain relative and
+POSIX-separated.
+
+The transaction core is exercised only by generated fixtures under pytest
+temporary roots. Its per-file atomicity is not a multi-file or power-loss
+durability claim. D16's complete raw/compact/index/receipt/view reconciliation
+and its exact approved manifest remain prerequisites; implementation tests are
+not application evidence.
 
 The command reads exactly two repository-owned configuration files, resolved
 from the utility's location, not the operator's workspace or environment.

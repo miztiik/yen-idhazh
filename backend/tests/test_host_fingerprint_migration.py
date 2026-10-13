@@ -618,7 +618,7 @@ def test_bad_final_source_has_no_bundle(workspace: Path, fault: str) -> None:
     assert (workspace / first).read_bytes() == original
 
 
-def test_apply_is_not_a_capability(workspace: Path) -> None:
+def test_apply_is_not_a_capability() -> None:
     completed = subprocess.run(
         [PYTHON, "-m", "utilities.migrate_host_fingerprints", "--apply"],
         cwd=REPO / "backend",
@@ -628,6 +628,8 @@ def test_apply_is_not_a_capability(workspace: Path) -> None:
     )
     assert completed.returncode != 0
     assert "apply is not implemented" in completed.stderr.lower()
+    assert "verified_d16_approval_record_not_machine_representable" in completed.stderr
+    assert "quiet_window_provider_missing" in completed.stderr
 
 
 def generated_compact(
