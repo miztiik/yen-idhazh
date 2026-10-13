@@ -448,6 +448,14 @@ def _boot_id(native: object) -> UUID:
     return UUID(Path("/proc/sys/kernel/random/boot_id").read_text(encoding="ascii").strip())
 
 
+def _native_job_started_at(value: str) -> str:
+    try:
+        seconds = int(value)
+    except ValueError:
+        return value
+    return datetime.fromtimestamp(seconds, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def _server_target(path: str | None, native: NativeSettings) -> ProcessTarget | None:
     pid_value = (
         Path(path).read_text(encoding="ascii").strip()
@@ -800,6 +808,7 @@ def run(args: argparse.Namespace) -> int:
     write_document(workspace / "invocation.json", invocation)
     started = _flag(flags, "--job-started-at") or os.environ.get("JOB_STARTED_AT")
     started = started or str(int(datetime.now(UTC).timestamp()))
+    started = _native_job_started_at(started)
     (workspace / "job-start.txt").write_text(started + "\n", encoding="ascii", newline="\n")
     inputs = [
         NamedHostInput(

@@ -27,6 +27,7 @@ from idhazh.contracts.run_plan import RunPlan
 from idhazh.publication import initialize_inventory
 from idhazh.telemetry.host_evidence_inputs import NativeSettings
 from idhazh.telemetry.host_publication import verify_host_publication
+from utilities.d7_host_telemetry import _native_job_started_at
 from utilities.model_runtime import server_identity
 from utilities.runtime_sweep import native_memory
 
@@ -210,6 +211,11 @@ def test_generated_family_inputs_have_no_network_or_bandwidth_work(tmp_path: Pat
     assert not selected.sources.feeds
     assert not selected.sources.salience
     assert selected.app.observability.host_fingerprint_bandwidth_floor_mib == 0
+
+
+def test_native_job_clock_normalizes_workflow_epoch_seconds() -> None:
+    assert _native_job_started_at("1791849953") == "2026-10-13T00:05:53Z"
+    assert _native_job_started_at("2026-10-12T23:59:59Z") == "2026-10-12T23:59:59Z"
 
 
 def exported(path: Path) -> dict[str, str]:
