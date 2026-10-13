@@ -118,9 +118,12 @@ pub fn execute(verb: &str, args: BTreeMap<String, String>) -> Result<()> {
     let result_id: Uuid = required("--result-id")?
         .parse()
         .map_err(|e: uuid::Error| e.to_string())?;
-    let result_sequence = required("--result-sequence")?
-        .parse::<i64>()
-        .map_err(|e| e.to_string())?;
+    let result_sequence = args
+        .get("--result-sequence")
+        .map(|value| value.parse::<i64>().map_err(|e| e.to_string()))
+        .transpose()?
+        .unwrap_or(command.sequence);
+    require(result_sequence > 0, "invalid result sequence")?;
     let completion_id = args
         .get("--completion-id")
         .map(|value| value.parse().map_err(|e: uuid::Error| e.to_string()))
@@ -573,7 +576,11 @@ mod tests {
         root.canonicalize().unwrap()
     }
 
-    fn run_with_prefix(name: &str, prefix: Option<&str>) -> (PathBuf, IntendedResult) {
+    fn run_with_prefix(
+        name: &str,
+        prefix: Option<&str>,
+        result_sequence: Option<i64>,
+    ) -> (PathBuf, IntendedResult) {
         let workspace = workspace(name);
         let mut manifest: HostSessionManifest = serde_json::from_str(include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -648,8 +655,10 @@ mod tests {
                 "--result-id".to_owned(),
                 "00000000-0000-0000-0000-000000002001".to_owned(),
             ),
-            ("--result-sequence".to_owned(), "3".to_owned()),
         ]);
+        if let Some(sequence) = result_sequence {
+            args.insert("--result-sequence".to_owned(), sequence.to_string());
+        }
         if let Some(prefix) = prefix {
             args.insert("--ledger-prefix".to_owned(), prefix.to_owned());
         }
@@ -672,7 +681,8 @@ mod tests {
                 vec!["pipeline-tests".to_owned(), "host-fingerprint".to_owned()],
             ),
         ] {
-            let (workspace, intended) = run_with_prefix(name, supplied_prefix);
+            let (workspace, intended) = run_with_prefix(name, supplied_prefix, None);
+            assert_eq!(intended.event.sequence, 1);
             assert_eq!(intended.plan.target_root, "state");
             assert_eq!(intended.plan.prefix, expected_prefix);
             assert!(
@@ -686,6 +696,13 @@ mod tests {
             assert!(raw.is_file());
             std::fs::remove_dir_all(workspace).unwrap();
         }
+    }
+
+    #[test]
+    fn explicit_host_result_sequence_is_preserved() {
+        let (workspace, intended) = run_with_prefix("sequence", None, Some(7));
+        assert_eq!(intended.event.sequence, 7);
+        std::fs::remove_dir_all(workspace).unwrap();
     }
 
     #[test]
