@@ -2,11 +2,13 @@
 
 **Last Updated**: 2026-10-13
 
+**Status**: Row 1 is complete. Row 2 is implemented and ready for its separate pull request. Row 3 waits for Row 2.
+
 **Level**: 3 ([CLAUDE.md](../CLAUDE.md) section 6) - Row 2 moves engine calls across two subsystems, the ledger's parquet module and the host verifiers.
 
 ## 0. Operating contract
 
-Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 1 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes. Parallel N = 1 because each row needs the row before it, and Row 1 measures, so it runs alone.
+Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 1 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. Parallel N = 1 because each row needs the row before it, and Row 1 measures, so it runs alone.
 
 Table A - operating contract
 
@@ -75,7 +77,7 @@ Table F
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | F1 | 1 | Reproduce the exit abort on ubuntu-latest with Python 3.12 and capture its native backtrace | - | A | DONE | ledger-read-exit-ab | - | direct |
-| F2 | 2 | Route every parquet engine call through the ledger's parquet module | 1 | B | PENDING | - | - | - |
+| F2 | 2 | Route every parquet engine call through the ledger's parquet module | 1 | B | DONE | ledger-read-exit-ab | - | direct |
 | F3 | 3 | Run every engine call on the calling thread, so a short program exits cleanly | 2 | C | PENDING | - | - | - |
 
 ### Row #1 - Reproduce the exit abort on ubuntu-latest with Python 3.12 and capture its native backtrace
