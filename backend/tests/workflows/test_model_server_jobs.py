@@ -16,14 +16,12 @@ from pytest import MonkeyPatch
 
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.base import canonical_json
-from idhazh.telemetry import silicon
 from utilities import candidate_pointer, model_refs, model_runtime, pipeline_test_case_config
 
 from ._harness import (
     ACTIONS_DIR,
     ARGV_MODULE_CALL,
-    COUNTERS_FLAG,
-    JOB_CLOCK_STEP,
+    MEMORY_SUMMARY_CALL,
     MEMORY_SUMMARY_STEP,
     METRICS_ENDPOINT,
     METRICS_FILE,
@@ -36,9 +34,6 @@ from ._harness import (
     RSS_SAMPLE_FILE,
     RUNTIME_IDENTITY_JOBS,
     RUNTIME_IDENTITY_STEP,
-    SAMPLE_MEMORY_STEP,
-    SAMPLER_START_CALL,
-    SAMPLER_SUMMARY_CALL,
     SCRAPE_STEP,
     SERVER_LOG_FILE,
     SERVER_STARTER_MODULES,
@@ -340,54 +335,11 @@ def test_the_log_summary_says_how_much_of_the_log_it_matched(tmp_path: Path) -> 
         assert line in printed, f"the step would not print {line!r}"
 
 
-def test_the_work_job_launches_the_sampler_detached_and_names_the_loop() -> None:
-    """One step writes a pid and the next samples it, and nothing backgrounds anything.
-
-    The sampler was a heredoc until 2026-09-12, a shell script until 2026-09-23,
-    and is a module now. What this has protected across all three is the same
-    agreement: the job hands the sampler the pid file its own start step wrote,
-    so a copy-paste that left another job's name here would sample a process
-    that never existed and record nothing, silently.
-
-    It used to assert the literal `nohup`, and neither half of that survives.
-    The program launches the loop into its own session itself, which is strictly
-    more detached than `nohup`. What must not come back is the `&` that went
-    with it: the shell recorded `$!`, the pid of the backgrounded *shell* rather
-    than of the sampler, so a loop that died at once left a pid file naming a
-    live shell and a step that passed.
-    """
-    script = _work_step(SAMPLE_MEMORY_STEP)
-
-    assert SAMPLER_START_CALL in script, "the work job must launch the shared sampler"
-    assert "cat llama-server.pid" in script, (
-        "the work job must sample the server its own start step wrote"
-    )
-    assert not script.rstrip().endswith("&"), (
-        "the sampler detaches itself, so a step that backgrounds it again records "
-        "the shell's pid rather than the loop's"
-    )
-    assert "nohup" not in script, "nohup is what the launch shape replaced"
-
-
-def test_the_memory_summary_reads_what_the_sampler_wrote() -> None:
-    """One writer, one reader, and both files reach the artifact.
-
-    The operator print was an `awk` program inside the step, reading a
-    tab-separated file whose columns it named. It and the sampler agreed through
-    a third copy of the column order written down in this file rather than with
-    each other, which is how the step once reported `python_procs` - a count of
-    three - as a peak in kilobytes, out by six orders of magnitude with nothing
-    failing anywhere.
-
-    The summary is a verb on the module that wrote the records now, so there is
-    no second reader to disagree with and no column position left to get wrong.
-    What a workflow test still owes is that the step calls it, and that the
-    roll-call behind the sum can be downloaded: a roll-call nobody can fetch
-    answers nothing.
-    """
+def test_the_memory_summary_reads_and_uploads_only_native_session_artifacts() -> None:
+    """The existing reader summarizes the native writer's bounded session."""
     operator = _work_step(MEMORY_SUMMARY_STEP)
-    assert SAMPLER_SUMMARY_CALL in operator, (
-        f"{MEMORY_SUMMARY_STEP} must read the records through the module that wrote them"
+    assert MEMORY_SUMMARY_CALL in operator, (
+        f"{MEMORY_SUMMARY_STEP} must use the shared memory summary reader"
     )
 
     upload = _artifact_upload(
@@ -395,7 +347,9 @@ def test_the_memory_summary_reads_what_the_sampler_wrote() -> None:
     )
     uploaded = str(_mapping(upload.get("with"), "runtime log upload").get("path"))
     for name in (RSS_SAMPLE_FILE, PYTHON_PROCS_FILE):
-        assert name in uploaded, f"{name} is written every sample and never uploaded"
+        assert f"/native-artifacts/{name}" in operator
+        assert name not in uploaded.splitlines()
+    assert "backend/var/d7-host-telemetry/**/native-artifacts/**" in uploaded
 
 
 def test_the_loopback_port_is_one_number_wherever_it_is_written() -> None:
@@ -592,26 +546,16 @@ def test_every_reader_of_a_server_log_reads_the_one_the_start_call_wrote() -> No
         )
 
 
-def test_the_scrape_step_and_the_row_agree_on_what_it_reads() -> None:
-    """Two readings of one file, taken in two steps, and a third in another language.
-
-    The metrics body is written by one line of the scrape step and read by two
-    more - the step's own grep and the job-clock step after it - so a rename in
-    any one of them leaves the host row's counter cells empty and prints nothing
-    that says why. The two series are named again in the module that parses
-    them, in Python, and llama.cpp has renamed a counter before.
-    """
+def test_the_scrape_step_preserves_the_servers_own_counter_evidence() -> None:
+    """The diagnostic artifact keeps the server's counters, without another host writer."""
     scrape = _work_step(SCRAPE_STEP)
     assert f"-o {METRICS_FILE}" in scrape, f"{SCRAPE_STEP} must write {METRICS_FILE}"
     assert f'"{METRICS_ENDPOINT}"' in scrape, f"{SCRAPE_STEP} must scrape {METRICS_ENDPOINT}"
     for series in METRICS_SERIES:
         assert series in scrape, f"{SCRAPE_STEP} stopped naming {series}"
 
-    clock = _work_step(JOB_CLOCK_STEP)
-    assert f"{COUNTERS_FLAG} {METRICS_FILE}" in clock, "the stage must read the file curl wrote"
-    assert f"--server-log {SERVER_LOG_FILE}" in clock, "and the log the server wrote beside it"
-    for wire in silicon._SERIES:
-        assert wire in scrape, f"{SCRAPE_STEP} no longer names {wire}, which the host row parses"
+    assert "memory.peak" not in scrape
+    assert "job-clock" not in scrape
 
 
 def _uncommented(text: str) -> str:

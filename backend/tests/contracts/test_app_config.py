@@ -1151,10 +1151,8 @@ def test_the_item_health_census_is_not_switchable() -> None:
     another run's, because the machine moved 3.7x between draws and nothing says
     which one produced the number.
 
-    `host_event_shadow` is the fifth. It copies lifecycle boundaries into an
-    isolated native comparison session. It does not switch off the census or
-    select a production writer, and its declaring field names the cutover that
-    removes it.
+    Memory collection has its own switch. The temporary shadow implementation
+    selector is gone after native adoption.
     """
     switches = {
         name for name, field in ObservabilityConfig.model_fields.items() if field.annotation is bool
@@ -1163,17 +1161,9 @@ def test_the_item_health_census_is_not_switchable() -> None:
         "evaluation_enabled",
         "tracing_enabled",
         "host_fingerprint",
-        "host_event_shadow",
         "memory_profiling_enabled",
     }
-    assert ObservabilityConfig().host_event_shadow is False
     assert ObservabilityConfig().memory_profiling_enabled is True
-    assert (
-        AppConfig.from_json(
-            read_text(APP_CONFIG_EVERY_KNOB_DIFFERS)
-        ).observability.host_event_shadow
-        is True
-    )
     assert (
         AppConfig.from_json(
             read_text(APP_CONFIG_EVERY_KNOB_DIFFERS)
@@ -1189,6 +1179,12 @@ def test_a_sample_rate_of_zero_is_refused_because_the_toggle_already_says_off() 
         with pytest.raises(ValidationError):
             ObservabilityConfig(sample_rate=refused)
     assert ObservabilityConfig(sample_rate=1.0).sample_rate == 1.0
+
+
+@pytest.mark.parametrize("removed", ["host_event_shadow", "host_event_mode"])
+def test_retired_host_implementation_selectors_are_refused(removed: str) -> None:
+    with pytest.raises(ValidationError, match=removed):
+        ObservabilityConfig.model_validate({removed: False if removed.endswith("shadow") else "legacy"})
 
 
 def test_every_published_window_outlives_the_shards_a_console_read_selects() -> None:

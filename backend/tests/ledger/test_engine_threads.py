@@ -11,7 +11,6 @@ from pathlib import Path
 
 import pytest
 from conftest import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
-from test_host_fingerprint_migration import generated_compact, manifest_document
 from test_host_output_verify import LIMITS, render_file
 
 from idhazh import config
@@ -56,15 +55,6 @@ elif operation == "host-output-read":
         limits=VerificationLimits(**json.loads(sys.argv[4])),
     )
     result = [row.model_dump(mode="json") for row in verified.rows]
-elif operation == "host-history-read":
-    from idhazh.telemetry.host_history_files import _compact
-    from idhazh.telemetry.host_output_verify import VerificationLimits
-
-    _, rows, _ = _compact(
-        Path(sys.argv[2]).read_bytes(),
-        VerificationLimits(**json.loads(sys.argv[3])),
-    )
-    result = rows
 elif operation == "persist-write":
     from idhazh import ledger
     from idhazh.contracts.base import ServerJob
@@ -185,7 +175,6 @@ def _probe(operation: str, *arguments: str) -> object:
     (
         "ledger-read",
         "host-output-read",
-        "host-history-read",
         "persist-write",
         "grouped-build",
     ),
@@ -217,21 +206,6 @@ def test_each_engine_call_keeps_its_threads_on_the_caller(tmp_path: Path, operat
         assert isinstance(rows[0], dict)
         assert rows[0].get("date") == "2026-10-10"
         assert rows[0].get("cpu_model") == "Recorded CPU \u03b1"
-    elif operation == "host-history-read":
-        workspace = tmp_path / "host-history"
-        workspace.mkdir()
-        relative = generated_compact(
-            workspace, manifest_document(), Format.PARQUET, compact_only=True
-        )
-        rows = _probe(
-            operation,
-            str(workspace / relative),
-            json.dumps(asdict(LIMITS)),
-        )
-        assert isinstance(rows, list)
-        assert len(rows) == 2
-        assert {row.get("date") for row in rows if isinstance(row, dict)} == {"2026-09-20"}
-        assert {row.get("shard") for row in rows if isinstance(row, dict)} == {0, 1}
     elif operation == "persist-write":
         result = _probe(operation, row.model_dump_json(), str(tmp_path / "persist"))
         assert result == {"files": 1, "parquet": True}

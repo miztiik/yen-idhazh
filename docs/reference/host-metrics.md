@@ -41,9 +41,10 @@ pinned crate and starts `d7_host_telemetry.py`, which owns the separate Rust
 processes. Python stages send structured lifecycle events; they do not call Rust
 through language bindings or write a competing host row. Digest plan/work/assemble,
 bench and encoder probes, gardener task shards, and council result saving use this
-path. Unmeasured jobs remain uninstrumented. An explicit `host_telemetry: legacy`
-choice is a temporary rollback until migration cleanup, not an automatic fallback.
-Historical conversion remains a separate Python maintenance operation.
+path. Unmeasured jobs remain uninstrumented. Python collectors, shadow collection
+and exposed legacy/Rust selectors are removed; native errors never select another
+collector. Historical conversion is complete, with original bytes and frozen
+recovery tooling retained outside the active application code.
 
 **Every job of `digest.yml` writes a row, from 2026-09-17.** `plan`, `work` and
 `assemble` each draw their own runner, so a run that measured one of them could
@@ -479,9 +480,9 @@ to pass.
 
 **These cells sit here and nowhere else, and that is on purpose.**
 `state/runtime-counters.csv` carried a second copy of them until 2026-09-20. The
-arithmetic and the wire-name table behind them now live once, in
-[`backend/idhazh/telemetry/silicon.py`](../../backend/idhazh/telemetry/silicon.py),
-beside the stage that writes the row - two subtractions of one pair of instants,
+arithmetic and the wire-name table behind them live in the native clock producer,
+[`backend/rust/host-telemetry/src/producers/job_clock.rs`](../../backend/rust/host-telemetry/src/producers/job_clock.rs),
+beside the writer - two subtractions of one pair of instants,
 or two readings of one counter, are two things that can disagree.
 
 ## Why almost nothing here is an enum

@@ -43,6 +43,8 @@ from idhazh.ledger import paths
 from idhazh.telemetry.host_event_client import HostEventClient
 from idhazh.telemetry.host_event_files import HostProtocolError
 from idhazh.telemetry.host_evidence_inputs import read_bytes, retain_native, settings
+from idhazh.telemetry.host_memory_summary import summarize
+from idhazh.telemetry.host_process_identity import identity
 from utilities import d7_host_telemetry as lifecycle
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -74,13 +76,9 @@ def invocation_args(command: list[str], **changes: object) -> argparse.Namespace
         ("digest_publish.py", ["run", "plan"]),
         ("digest_publish.py", ["run", "work"]),
         ("digest_publish.py", ["run", "assemble"]),
-        ("digest_publish.py", ["run", "fingerprint"]),
-        ("digest_publish.py", ["run", "job-clock"]),
-        ("record_publish.py", ["run", "measure", "fingerprint"]),
         ("measure_llm.py", ["bench"]),
         ("runtime_sweep.py", ["sweep"]),
         ("compare_summary_encoders.py", ["score"]),
-        ("compare_summary_encoders.py", ["collect"]),
         ("gardener_publish.py", []),
         ("council_publish.py", []),
     ],
@@ -144,7 +142,6 @@ def test_council_without_publishable_work_skips_the_native_monitor(
     assert (
         lifecycle.run(
             argparse.Namespace(
-                mode="rust",
                 command=command,
                 job=ServerJob.SAVE_COUNCIL_RESULTS.value,
             )
@@ -590,7 +587,7 @@ def test_native_heartbeat_passes_elapsed_time_without_sampling_python_host(
         assert cells.cpu_busy_pct is not None
         heartbeat_thread = watch._heartbeat
         assert heartbeat_thread is not None
-        assert not heartbeat_thread.is_alive()
+        assert heartbeat_thread._thread is None
     finally:
         peer.close()
 
@@ -787,23 +784,105 @@ def test_host_ledger_prefix_follows_the_selected_trial_registry() -> None:
     assert lifecycle._host_ledger_prefix(source) == ("pipeline-tests/bench-01/host-fingerprint")
 
 
-def test_legacy_launcher_preserves_exit_status_and_cannot_inherit_native_mode(
+@pytest.mark.parametrize("mode", ["legacy", "rust"])
+def test_launcher_refuses_the_removed_implementation_selector(
+    monkeypatch: pytest.MonkeyPatch, mode: str
+) -> None:
+    monkeypatch.setattr(
+        sys, "argv",
+        ["d7_host_telemetry.py", "run", "--mode", mode, "--job", "work", "--", "python"],
+    )
+    with pytest.raises(SystemExit) as refused:
+        lifecycle.main()
+    assert refused.value.code == 2
+
+
+def test_inherited_legacy_marker_cannot_start_an_undeclared_python_command(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    result = tmp_path / "mode.txt"
-    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MODE", "rust")
-    code = (
-        "import os,pathlib,sys; "
-        "pathlib.Path(sys.argv[1]).write_text(os.environ['IDHAZH_HOST_TELEMETRY_MODE']); "
-        "sys.exit(7)"
+    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MODE", "legacy")
+    result = tmp_path / "unexpected.txt"
+    code = "import pathlib,sys; pathlib.Path(sys.argv[1]).write_text('unexpected')"
+    with pytest.raises(SystemExit, match="refusing to start"):
+        lifecycle.run(argparse.Namespace(command=[sys.executable, "-c", code, str(result)]))
+    assert not result.exists()
+
+
+def test_missing_native_binary_is_fatal_without_a_reference_fallback(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit, match="Rust monitor is absent"):
+        lifecycle._binary(str(tmp_path / "absent-native-monitor"))
+
+
+def test_process_identity_reads_start_ticks_after_the_final_comm_bracket(tmp_path: Path) -> None:
+    native_settings, _, _ = settings()
+    proc = tmp_path / "proc"
+    process = proc / "123"
+    process.mkdir(parents=True)
+    fields = ["S", *(str(value) for value in range(1, 20))]
+    fields[19] = "771"
+    (process / "stat").write_text("123 (worker ) name) " + " ".join(fields), encoding="ascii")
+    assert identity(123, native_settings, proc) == ProcessTarget(pid=123, start_ticks=771)
+
+
+@pytest.mark.parametrize("text", ["124 (worker) S 1", "123 (worker) S 1", "123 worker S 1"])
+def test_process_identity_refuses_a_foreign_or_truncated_stat(tmp_path: Path, text: str) -> None:
+    native_settings, _, _ = settings()
+    process = tmp_path / "123"
+    process.mkdir()
+    (process / "stat").write_text(text, encoding="ascii")
+    with pytest.raises(ValueError, match="malformed process identity"):
+        identity(123, native_settings, tmp_path)
+
+
+def test_native_memory_summary_reads_existing_samples_and_rollcall(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    samples = tmp_path / "rss-samples.jsonl"
+    processes = tmp_path / "python-procs.jsonl"
+    samples.write_text(
+        "\n".join(
+            json.dumps(row) for row in (
+                {"llama_vmhwm_kb": 50, "python_vmhwm_kb": 30,
+                 "llama_vmrss_kb": 40, "python_vmrss_kb": 25},
+                {"llama_vmhwm_kb": 60, "python_vmhwm_kb": 20,
+                 "llama_vmrss_kb": 50, "python_vmrss_kb": 20},
+            )
+        ) + '\n{"incomplete":',
+        encoding="ascii",
     )
+    processes.write_text(
+        "\n".join(
+            json.dumps({"pid": 123, "comm": "python", "exe": "python",
+                        "args": "worker", "vmrss_kb": rss})
+            for rss in (25, 20)
+        ),
+        encoding="ascii",
+    )
+    monkeypatch.setattr(
+        sys, "argv",
+        ["d7_host_telemetry.py", "summarize-memory", "--sample-file", str(samples),
+         "--process-file", str(processes)],
+    )
+    assert lifecycle.main() == 0
+    output = capsys.readouterr().out
     assert (
-        lifecycle.run(
-            argparse.Namespace(mode="legacy", command=[sys.executable, "-c", code, str(result)])
-        )
-        == 7
-    )
-    assert result.read_text() == "legacy"
+        "peak llama VmHWM 60 kB, peak python VmHWM 30 kB, "
+        "most the two held at once 70 kB, n=2 samples"
+    ) in output
+    assert "python 123  python  python  worker peak VmRSS 25 kB in 2 samples" in output
+
+
+def test_native_memory_summary_handles_missing_inputs_and_refuses_unbounded_reads(
+    tmp_path: Path,
+) -> None:
+    samples = tmp_path / "rss-samples.jsonl"
+    processes = tmp_path / "python-procs.jsonl"
+    assert summarize(samples, processes, maximum=20) == [
+        "rss-samples.jsonl not found", "python-procs.jsonl not found"
+    ]
+    samples.write_bytes(b" " * 21)
+    with pytest.raises(ValueError, match="exceeds its byte cap"):
+        summarize(samples, processes, maximum=20)
 
 
 def test_receipt_is_built_from_actual_native_files_without_python_target_writes(

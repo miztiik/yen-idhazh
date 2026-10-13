@@ -108,7 +108,6 @@ from idhazh.telemetry import (
 )
 from idhazh.telemetry import (
     job_machine,
-    silicon,
 )
 from idhazh.telemetry.host_event_client import HostEventClient
 
@@ -162,11 +161,9 @@ def _workflow_host_event_mode(environ: Mapping[str, str]) -> str | None:
     value = environ.get("IDHAZH_HOST_TELEMETRY_MODE")
     if value in (None, ""):
         return None
-    if value == "legacy":
-        return "legacy"
     if value == "rust":
         return "rust"
-    raise ValueError("IDHAZH_HOST_TELEMETRY_MODE must be 'legacy' or 'rust'")
+    raise ValueError("IDHAZH_HOST_TELEMETRY_MODE must be 'rust'; Python collection was removed")
 
 
 def _host_event_client(
@@ -174,23 +171,12 @@ def _host_event_client(
     args: argparse.Namespace,
     settings: config.Settings,
 ) -> HostEventClient | None:
-    """Open the bound event session for the selected legacy/shadow/native mode."""
+    """Open an explicitly bound Rust session; uninstrumented runs have no collector."""
     observability = settings.app.observability
-    mode = observability.host_event_mode
     try:
         workflow_mode = _workflow_host_event_mode(dict(os.environ))
     except ValueError as error:
         parser.error(str(error))
-    if args.host_event_mode is None and workflow_mode == "rust":
-        mode = "native"
-    elif args.host_event_mode is None and mode == "legacy" and observability.host_event_shadow:
-        mode = "shadow"
-    if mode == "legacy":
-        if workflow_mode == "rust":
-            parser.error("a Rust launcher cannot select the Python host writer")
-        return None
-    if mode == "native" and observability.host_event_shadow:
-        parser.error("host_event_shadow cannot be combined with host_event_mode=native")
     workspace = _event_path(
         args.host_event_workspace, os.environ, "IDHAZH_HOST_TELEMETRY_WORKSPACE"
     )
@@ -201,33 +187,26 @@ def _host_event_client(
         "--host-event-manifest": manifest,
         "--host-event-config": native_config,
     }
+    if workflow_mode is None and all(value is None for value in values.values()):
+        return None
     missing = [name for name, value in values.items() if value is None]
     if missing:
-        parser.error("observability.host_event_shadow needs " + ", ".join(missing))
+        parser.error("native host session needs " + ", ".join(missing))
     assert workspace is not None
     assert manifest is not None
     assert native_config is not None
-    if mode == "native":
-        client = HostEventClient.from_environment(
-            memory_profiling_enabled=settings.app.observability.memory_profiling_enabled,
-            host_enabled=observability.host_fingerprint
-            and ledger.accepts_new_rows(LedgerName.HOST_FINGERPRINT, 0),
-            environ={
-                **os.environ,
-                "IDHAZH_HOST_TELEMETRY_MODE": "rust",
-                "IDHAZH_HOST_TELEMETRY_WORKSPACE": str(workspace),
-                "IDHAZH_HOST_TELEMETRY_MANIFEST": str(manifest),
-                "IDHAZH_HOST_TELEMETRY_CONFIG": str(native_config),
-            },
-        )
-    else:
-        client = HostEventClient(
-            workspace,
-            manifest,
-            native_config,
-            memory_profiling_enabled=settings.app.observability.memory_profiling_enabled,
-            native=False,
-        )
+    client = HostEventClient.from_environment(
+        memory_profiling_enabled=settings.app.observability.memory_profiling_enabled,
+        host_enabled=observability.host_fingerprint
+        and ledger.accepts_new_rows(LedgerName.HOST_FINGERPRINT, 0),
+        environ={
+            **os.environ,
+            "IDHAZH_HOST_TELEMETRY_MODE": "rust",
+            "IDHAZH_HOST_TELEMETRY_WORKSPACE": str(workspace),
+            "IDHAZH_HOST_TELEMETRY_MANIFEST": str(manifest),
+            "IDHAZH_HOST_TELEMETRY_CONFIG": str(native_config),
+        },
+    )
     if client is not None and client.native and hasattr(args, "stage"):
         from idhazh import run_context
 
@@ -676,15 +655,6 @@ def _main(argv: Sequence[str] | None = None) -> int:
         help="The named effective native config, relative to its workspace root.",
     )
     parser.add_argument(
-        "--host-event-mode",
-        choices=("legacy", "shadow", "native"),
-        default=None,
-        help=(
-            "Override the host-row boundary for this invocation. Native requires the "
-            "workflow's validated Rust session; the default remains legacy."
-        ),
-    )
-    parser.add_argument(
         "--server-log",
         type=Path,
         default=Path("llama-server.log"),
@@ -779,23 +749,6 @@ def _main(argv: Sequence[str] | None = None) -> int:
         except ValueError as error:
             parser.error(str(error))
     settings = config.with_memory_profiling_override(config.load(args.config), memory_override)
-    try:
-        workflow_mode = _workflow_host_event_mode(dict(os.environ))
-    except ValueError as error:
-        parser.error(str(error))
-    if args.host_event_mode is not None:
-        settings.app.observability.host_event_mode = args.host_event_mode
-    elif workflow_mode == "rust":
-        settings.app.observability.host_event_mode = "native"
-    if (
-        args.stage in {"work", "run"}
-        and not settings.app.observability.memory_profiling_enabled
-        and settings.app.observability.host_event_mode != "native"
-    ):
-        parser.error(
-            "memory profiling off is unavailable while Python remains the "
-            "authoritative work-stage collector; native cutover has not occurred"
-        )
     if council_command:
         from idhazh.council import event_log
 
@@ -1153,38 +1106,9 @@ def _dispatch(
         )
         return 0
 
-    # The two telemetry verbs take the run address rather than the run's plan:
-    # a machine reading is about the job and not about the work, so a job that
-    # plans nothing can still take one (`idhazh.telemetry.silicon`).
-    if args.stage == "fingerprint":
-        if args.lifecycle_host_events is not None and args.lifecycle_host_events.native:
-            return 0
-        silicon.stage_fingerprint(
-            date=date,
-            run_id=_machine_run(parser, date=date, given=args.run_id, execution=args.execution),
-            settings=settings,
-            state_root=common.STATE_ROOT,
-            commit_sha=args.commit,
-            shard=args.shard,
-            job=args.job,
-        )
-        return 0
-
-    if args.stage == "job-clock":
-        if args.lifecycle_host_events is not None and args.lifecycle_host_events.native:
-            return 0
-        silicon.stage_job_clock(
-            date=date,
-            run_id=_machine_run(parser, date=date, given=args.run_id, execution=args.execution),
-            settings=settings,
-            state_root=common.STATE_ROOT,
-            commit_sha=args.commit,
-            shard=args.shard,
-            job=args.job,
-            job_started_at=int(args.job_started_at) if args.job_started_at else None,
-            server_log_path=args.server_log,
-            metrics_path=args.counters_file,
-        )
+    if args.stage in {"fingerprint", "job-clock"}:
+        if args.lifecycle_host_events is None:
+            parser.error("host measurements require the bound Rust telemetry launcher")
         return 0
 
     if args.stage in ("assemble", "run"):

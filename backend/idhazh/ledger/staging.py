@@ -92,10 +92,10 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
     ),
     LedgerName.HOST_FINGERPRINT: LedgerStaging(
         writer=(
-            "idhazh.telemetry.silicon.stage_fingerprint and .stage_job_clock, run once "
-            "per job by every `python -m idhazh <verb>` that carries the probe"
+            "Rust probe/clock through the workflow-owned lifecycle; "
+            "idhazh.telemetry.job_machine.record returns verified native paths"
         ),
-        symbol="idhazh.telemetry.silicon.stage_fingerprint",
+        symbol="idhazh.telemetry.job_machine.record",
         job_labels=frozenset({"plan", "work", "assemble"}),
     ),
     LedgerName.SUMMARY_QUALITY_EVALS: LedgerStaging(

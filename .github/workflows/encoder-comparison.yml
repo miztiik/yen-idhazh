@@ -31,13 +31,6 @@ on:
         description: 'Reuse the committed pair set and retain saved readings'
         type: boolean
         default: false
-      host_telemetry:
-        description: 'Rust is the default host collector; legacy is temporary rollback until migration cleanup'
-        type: choice
-        default: rust
-        options:
-          - rust
-          - legacy
       memory_profiling:
         description: 'OS memory and fault collection; inherit reads shared config'
         type: choice
@@ -62,12 +55,9 @@ concurrency:
 env:
   SET_DIRECTORY: corpus/encoder-comparison-1
   PYTHONPATH: ${{ github.workspace }}/backend
-  IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry || 'rust' }}
 
 jobs:
   pairs:
-    env:
-      IDHAZH_HOST_TELEMETRY_MODE: legacy
     name: Build the pair set
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -155,17 +145,13 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
       - name: Select the pinned host toolchain
-        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
         working-directory: backend/rust/host-telemetry
         run: echo "RUSTUP_TOOLCHAIN=$(rustup show active-toolchain | cut -d' ' -f1)" >> "$GITHUB_ENV"
       - uses: actions/cache@v6
-        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
         with:
           path: ~/.cargo/registry
           key: host-crates-${{ runner.os }}-${{ hashFiles('backend/rust/host-telemetry/Cargo.lock', 'backend/rust/host-telemetry/rust-toolchain.toml') }}
       - uses: ./.github/actions/d7-host-telemetry
-        with:
-          enabled: ${{ env.IDHAZH_HOST_TELEMETRY_MODE == 'rust' }}
 
       - uses: actions/download-artifact@v4
         with:
@@ -229,7 +215,7 @@ jobs:
           fi
           mkdir -p readings logs vectors
           python3 backend/utilities/d7_host_telemetry.py run \
-            --mode "$IDHAZH_HOST_TELEMETRY_MODE" --job collect \
+            --job collect \
             --run-id "${DATE}-${GITHUB_RUN_ID}" --git-sha "$GITHUB_SHA" \
             --shard "$ENCODER_SHARD" --memory-profiling "$MEMORY_PROFILING" -- \
             python3 backend/utilities/compare_summary_encoders.py score \
@@ -249,16 +235,14 @@ jobs:
       - name: Refuse to publish an unverified encoder reading
         if: always()
         run: |
-          if [ "$IDHAZH_HOST_TELEMETRY_MODE" = rust ] \
-             && [ "${IDHAZH_HOST_TELEMETRY_VERIFIED:-0}" != 1 ]; then
+          if [ "${IDHAZH_HOST_TELEMETRY_VERIFIED:-0}" != 1 ]; then
             echo "D7 receipt verification failed; refusing to publish encoder evidence" >&2
             exit 1
           fi
       - name: Clean up the owned D7 monitor
         if: always()
         run: |
-          if [ "$IDHAZH_HOST_TELEMETRY_MODE" = rust ] \
-             && [ -n "${IDHAZH_HOST_TELEMETRY_SESSION:-}" ]; then
+          if [ -n "${IDHAZH_HOST_TELEMETRY_SESSION:-}" ]; then
             python3 backend/utilities/d7_host_telemetry.py cleanup \
                --workspace "$IDHAZH_HOST_TELEMETRY_SESSION"
           fi
@@ -292,8 +276,6 @@ jobs:
           if-no-files-found: warn
 
   collect:
-    env:
-      IDHAZH_HOST_TELEMETRY_MODE: legacy
     name: Merge the readings
     needs: [pairs, score]
     if: always()

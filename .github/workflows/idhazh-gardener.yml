@@ -78,13 +78,6 @@ on:
         description: 'Squash now, even if every_days in config/gardener/corpus-squash.json says it is not due. Every other task runs at every wake anyway'
         type: boolean
         default: false
-      host_telemetry:
-        description: 'Rust is the default host collector; legacy is temporary rollback until migration cleanup'
-        type: choice
-        default: rust
-        options:
-          - rust
-          - legacy
       memory_profiling:
         description: 'OS memory and fault collection; inherit reads shared config'
         type: choice
@@ -99,9 +92,6 @@ on:
 permissions:
   contents: read
 
-env:
-  IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry || 'rust' }}
-
 # Never two of these at once, and never cancelled half way: the history job
 # rewrites a branch, and a second copy racing the first would push two different
 # histories. Not keyed on the ref, or a dispatch and a schedule would run together.
@@ -111,8 +101,6 @@ concurrency:
 
 jobs:
   plan:
-    env:
-      IDHAZH_HOST_TELEMETRY_MODE: legacy
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -205,17 +193,13 @@ jobs:
       - name: Install
         run: pip install -e .
       - name: Select the pinned host toolchain
-        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
         working-directory: backend/rust/host-telemetry
         run: echo "RUSTUP_TOOLCHAIN=$(rustup show active-toolchain | cut -d' ' -f1)" >> "$GITHUB_ENV"
       - uses: actions/cache@v6
-        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
         with:
           path: ~/.cargo/registry
           key: host-crates-${{ runner.os }}-${{ hashFiles('backend/rust/host-telemetry/Cargo.lock', 'backend/rust/host-telemetry/rust-toolchain.toml') }}
       - uses: ./.github/actions/d7-host-telemetry
-        with:
-          enabled: ${{ env.IDHAZH_HOST_TELEMETRY_MODE == 'rust' }}
 
       # Runs the shard's tasks, writes its one record and pushes it, trying again
       # on a newer tip when another shard pushed first. It exits with the worst
@@ -234,7 +218,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python backend/utilities/d7_host_telemetry.py run \
-            --mode "$IDHAZH_HOST_TELEMETRY_MODE" --job run-tasks \
+            --job run-tasks \
             --run-id "$RUN_ID" --attempt "$ATTEMPT" --git-sha "$GITHUB_SHA" \
             --shard "$SHARD" --memory-profiling "${{ inputs.memory_profiling || 'inherit' }}" -- \
             python backend/utilities/gardener_publish.py \
@@ -242,23 +226,19 @@ jobs:
       - name: Refuse to publish without a verified D7 receipt
         if: always()
         run: |
-          if [ "$IDHAZH_HOST_TELEMETRY_MODE" = rust ] \
-             && [ "${IDHAZH_HOST_TELEMETRY_VERIFIED:-0}" != 1 ]; then
+          if [ "${IDHAZH_HOST_TELEMETRY_VERIFIED:-0}" != 1 ]; then
             echo "D7 receipt verification failed; refusing to land gardener output" >&2
             exit 1
           fi
       - name: Clean up the owned D7 monitor
         if: always()
         run: |
-          if [ "$IDHAZH_HOST_TELEMETRY_MODE" = rust ] \
-             && [ -n "${IDHAZH_HOST_TELEMETRY_SESSION:-}" ]; then
+          if [ -n "${IDHAZH_HOST_TELEMETRY_SESSION:-}" ]; then
             python backend/utilities/d7_host_telemetry.py cleanup \
                --workspace "$IDHAZH_HOST_TELEMETRY_SESSION"
           fi
 
   history:
-    env:
-      IDHAZH_HOST_TELEMETRY_MODE: legacy
     # After every shard has ended, so history is rewritten last, and whatever
     # the shards did: a red shard's push has already ended, and its work is
     # tried again at the next wake either way. A skipped `needs` would skip this

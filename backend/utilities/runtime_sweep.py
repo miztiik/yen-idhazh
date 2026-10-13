@@ -15,7 +15,6 @@ import shutil
 import signal
 import subprocess
 import sys
-import threading
 import time
 import urllib.request
 from collections import Counter
@@ -34,16 +33,16 @@ from idhazh.contracts.knobs.model_server import port_of_base_url
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import RunPlan
+from idhazh.fingerprint import host_cpu_model
 from idhazh.llm.server import loopback_url, server_argv
 from idhazh.stages import common
 from idhazh.stages import plan as plan_stage
 from idhazh.stages.common import CAPTURES_DIRNAME
-from idhazh.telemetry import job_machine, silicon
+from idhazh.telemetry import job_machine
 from idhazh.telemetry.host_event_client import HostEventClient
 from idhazh.telemetry.host_evidence_inputs import read_bytes
 from idhazh.telemetry.host_evidence_inputs import settings as native_settings
 from utilities import publication_evidence, sweep_verdict
-from utilities.memory_sampler import read_status
 from utilities.model_runtime import refuse_a_server_that_died_at_startup, server_identity
 
 ROOT = Path("backend/var/runtime-sweep")
@@ -301,11 +300,6 @@ def write_config(
     return dst
 
 
-def cgroup_peak() -> str | None:
-    path = Path("/sys/fs/cgroup/memory.peak")
-    return path.read_text(encoding="utf-8").strip() if path.exists() else None
-
-
 def parse_server_facts(log_path: Path) -> dict[str, str]:
     """What the server said it was doing, read back out of its own log."""
     text = log_path.read_text(encoding="utf-8", errors="replace")
@@ -486,24 +480,16 @@ def _reap_owned_process(process: subprocess.Popen[bytes]) -> None:
 def _cleanup_owned_processes(
     server: subprocess.Popen[bytes] | None,
     workers: Sequence[subprocess.Popen[bytes]],
-    stop: threading.Event,
-    sampler: threading.Thread | None,
 ) -> None:
     errors: list[Exception] = []
     try:
         with _termination_signals(defer=True):
-            stop.set()
-            # A failed reap must not skip another worker, the server, or the sampler.
+            # A failed reap must not skip another worker or the server.
             processes = [*workers, *([server] if server is not None else [])]
             for process in processes:
                 try:
                     _reap_owned_process(process)
                 except (OSError, subprocess.TimeoutExpired) as error:
-                    errors.append(error)
-            if sampler is not None:
-                try:
-                    sampler.join(timeout=5)
-                except RuntimeError as error:
                     errors.append(error)
     finally:
         active = sys.exception()
@@ -554,31 +540,16 @@ def run_once(
     env = os.environ.copy()
     env["LD_LIBRARY_PATH"] = "backend/bin"
     started = time.perf_counter()
-    rss_samples: list[dict[str, str]] = []
-    mode = os.environ.get("IDHAZH_HOST_TELEMETRY_MODE")
-    native = mode == "rust" or (
-        mode is None and settings.app.observability.host_event_mode == "native"
-    )
+    native = os.environ.get("IDHAZH_HOST_TELEMETRY_MODE") == "rust"
     env_paths = [ROOT / f"{label}-{repeat}-{shard}.env" for shard in range(worker_count)]
     with log_path.open("w", encoding="utf-8") as log:
         server = None
         workers: list[subprocess.Popen[bytes]] = []
-        stop = threading.Event()
-        sampler = None
         try:
             with _termination_signals(defer=True):
                 server = subprocess.Popen(argv, stdout=log, stderr=subprocess.STDOUT, env=env)
             refuse_a_server_that_died_at_startup(server, log_path)
 
-            def sample_rss() -> None:
-                assert server is not None
-                while not stop.is_set():
-                    rss_samples.append(read_status(server.pid))
-                    time.sleep(1)
-
-            if not native:
-                sampler = threading.Thread(target=sample_rss, daemon=True)
-                sampler.start()
             wait_for_health(port)
             assert_the_candidate_is_serving(port, candidate_id)
             startup_ms = int((time.perf_counter() - started) * 1000)
@@ -616,13 +587,12 @@ def run_once(
             work_ms = int((time.perf_counter() - work_started) * 1000)
             total_ms = int((time.perf_counter() - started) * 1000)
         finally:
-            _cleanup_owned_processes(server, workers, stop, sampler)
+            _cleanup_owned_processes(server, workers)
 
-    peak = None
     workspaces: list[Path] = []
     if native:
         workspaces = [launcher_workspace(path) for path in env_paths]
-        rss_samples, peak = native_memory(workspaces[0])
+    rss_samples, peak = native_memory(workspaces[0] if workspaces else None)
     found = collect(date, label, repeat, items=settings.app.bench.corpus_items)
     return {
         "label": label,
@@ -635,7 +605,7 @@ def run_once(
         "total_ms": total_ms,
         "model_path_ms": startup_ms + sum(item["summarize_ms"] for item in found.per_item),
         "server_rss_samples": rss_samples,
-        "cgroup_memory_peak_bytes": peak if native else cgroup_peak(),
+        "cgroup_memory_peak_bytes": peak,
         "host_receipts": [
             (workspace / "receipt.json").as_posix() for workspace in workspaces
         ] if native else [],
@@ -700,13 +670,16 @@ def launcher_workspace(path: Path) -> Path:
     return workspace
 
 
-def native_memory(workspace: Path) -> tuple[list[dict[str, str]], str | None]:
+def native_memory(workspace: Path | None) -> tuple[list[dict[str, str]] | None, str | None]:
     """Consume the monitor's named legacy artifacts, never sample the host again."""
+    if workspace is None:
+        return None, None
     limit = native_settings()[0].limits.max_session_bytes
     root = workspace / "native-artifacts"
-    samples = []
+    samples: list[dict[str, str]] | None = None
     path = root / "server-rss-samples.jsonl"
     if path.exists():
+        samples = []
         for line in read_bytes(path, limit).splitlines():
             value = json.loads(line)
             if not isinstance(value, dict) or any(
@@ -723,7 +696,7 @@ def native_memory(workspace: Path) -> tuple[list[dict[str, str]], str | None]:
 
 
 def require_memory_for_sweep(enabled: bool) -> None:
-    """Refuse a memory-dependent benchmark before it starts a server or sampler."""
+    """Refuse a memory-dependent benchmark before it starts a server."""
     if not enabled:
         raise RuntimeError(
             "runtime sweep requires memory profiling; no memory-dependent "
@@ -931,7 +904,7 @@ def _sweep(args: argparse.Namespace, *, events: HostEventClient | None) -> int:
         "cpu": (
             events.host_facts().cpu_model
             if events is not None and events.native
-            else silicon.host_cpu_model()
+            else host_cpu_model()
         ) or "unrecorded",
         "repeats": repeat_count,
         # What the timing was actually taken over. It is not `repeats` whenever

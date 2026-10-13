@@ -1,4 +1,4 @@
-"""Do compiled Rust resource files match unchanged Python readers on the exact same population?"""
+"""Do native resources match independently captured expectations and unchanged readers?"""
 
 from __future__ import annotations
 
@@ -7,10 +7,6 @@ import hashlib
 import json
 import os
 import subprocess
-import sys
-import time
-from collections.abc import Iterator
-from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -18,8 +14,6 @@ from uuid import uuid4
 import pytest
 
 from idhazh.contracts.host_events import HostEvent, HostSessionManifest, WindowResultBody
-from idhazh.telemetry import host
-from utilities import memory_sampler
 
 ROOT = Path(__file__).resolve().parents[2]
 pytestmark = pytest.mark.contract
@@ -91,7 +85,7 @@ def prepare(root: Path, *, memory: bool, periodic: bool) -> tuple[dict[str, Any]
         {"name": "resources", "source": "proc.stat", "relative_path": "captures/resources.json"}
     ]
     recorded = fixture()["replay"]
-    # This is the actual Python reference worker, not a dummy sampler or extra process.
+    # Bind the captured worker to this test's process without running a reference collector.
     pid = os.getpid()
     m["workers"][0]["target"]["pid"] = pid
     for frame in recorded["frames"]:
@@ -155,110 +149,15 @@ def run(root: Path, *args: str) -> subprocess.CompletedProcess[bytes]:
     )
 
 
-def write_frame(root: Path, frame: dict[str, Any]) -> None:
-    root.mkdir(parents=True, exist_ok=True)
-
-    def write(path: Path, value: str) -> None:
-        staged = path.with_name(path.name + ".new")
-        staged.write_text(value, encoding="utf-8", newline="\n")
-        staged.replace(path)
-
-    for leaf, key in (("loadavg", "loadavg"), ("meminfo", "meminfo")):
-        write(root / leaf, frame[key]["value"])
-    processes = {
-        process["target"]["pid"]: process
-        for process in [
-            *frame["processes"],
-            *frame["population"]["value"],
-        ]
-    }
-    for pid, process in processes.items():
-        entry = root / str(pid)
-        entry.mkdir(exist_ok=True)
-        for leaf, key in (
-            ("stat", "stat_after"),
-            ("status", "status"),
-            ("comm", "comm"),
-            ("cmdline", "cmdline"),
-        ):
-            value = process[key]["value"]
-            if value is not None:
-                write(entry / leaf, value)
-    write(root / "stat", frame["proc_stat"]["value"])
-
-
-@contextmanager
-def reference_paths(root: Path) -> Iterator[None]:
-    names = ("PROC", "PROC_STAT", "LOADAVG", "MEMINFO")
-    paths = {name: vars(host)[name] for name in names}
-    vars(host).update(
-        dict(zip(names, (root, root / "stat", root / "loadavg", root / "meminfo"), strict=True))
-    )
-    try:
-        yield
-    finally:
-        vars(host).update(paths)
-
-
-def reference_cells(root: Path, frames: list[dict[str, Any]], periodic: bool) -> dict[str, Any]:
-    # Immutable frame directories avoid replacing a file while Windows has it open.
-    sources = [root / str(index) for index in range(4)]
-    for source, frame in zip(sources, frames, strict=True):
-        write_frame(source, frame)
-    with reference_paths(sources[0]):
-        watch = host.Watch(interval_s=0.01 if periodic else 0.0, server_pid=100)
-        watch.__enter__()
-        try:
-            if periodic:
-                for index in (1, 2):
-                    # Real Python sampling thread reads the generated kernel files.
-                    before = len(watch._busy)
-                    source = sources[index]
-                    vars(host).update(
-                        PROC=source,
-                        PROC_STAT=source / "stat",
-                        LOADAVG=source / "loadavg",
-                        MEMINFO=source / "meminfo",
-                    )
-                    available = host._kb_keys(frames[index]["meminfo"]["value"], ("MemAvailable",))[
-                        "MemAvailable"
-                    ]
-                    deadline = time.monotonic() + 5
-                    while (
-                        len(watch._busy) == before
-                        or watch._last.cpu_stat != frames[index]["proc_stat"]["value"]
-                        or watch._last.mem_available_bytes != available
-                    ) and time.monotonic() < deadline:
-                        time.sleep(0.005)
-                    assert len(watch._busy) > before, "unchanged Python reference did not sample"
-                    assert watch._last.mem_available_bytes == available
-                watch._stop.set()
-                assert watch._thread is not None
-                watch._thread.join(timeout=5)
-                assert not watch._thread.is_alive()
-            source = sources[3]
-            vars(host).update(
-                PROC=source,
-                PROC_STAT=source / "stat",
-                LOADAVG=source / "loadavg",
-                MEMINFO=source / "meminfo",
-            )
-            return watch.close().cells()
-        finally:
-            watch._stop.set()
-            if watch._thread is not None:
-                watch._thread.join(timeout=5)
-
-
 @pytest.mark.parametrize(
     ("memory", "periodic"), [(True, True), (True, False), (False, True), (False, False)]
 )
-def test_native_windows_and_plain_artifacts_match_unchanged_real_python_reads(
+def test_native_windows_and_plain_artifacts_match_fixed_captured_expectations(
     memory: bool,
     periodic: bool,
 ) -> None:
     root = ROOT / "backend/var/d4-python" / str(uuid4())
-    m, recorded = prepare(root, memory=memory, periodic=periodic)
+    m, _ = prepare(root, memory=memory, periodic=periodic)
     result = run(root, "resource-replay", "--snapshot", "resources", "--artifact-root", "artifacts")
     assert result.returncode == 0, result.stderr.decode()
     events = [HostEvent.model_validate(value) for value in json.loads(result.stdout)]
@@ -266,20 +165,19 @@ def test_native_windows_and_plain_artifacts_match_unchanged_real_python_reads(
     assert len(windows) == 2
     first = next(value for value in windows if str(value.window_id) == m["windows"][0]["window_id"])
     native_cells = first.cells.model_dump()
-    reference = reference_cells(root / "reference-proc", recorded["frames"], periodic)
-    write_frame(root / "reference-workers", recorded["frames"][3])
+    expected_cells = fixture()["expected_periodic"]
+    if not periodic:
+        expected_cells.update(cpu_busy_min=50.0, os_mem_available_min_bytes=768000)
     for window in windows:
         worker = next(
             m["workers"][index]
             for index, declared in enumerate(m["windows"])
             if declared["window_id"] == str(window.window_id)
         )
-        expected = dict(reference)
+        expected = dict(expected_cells)
         if memory:
-            with reference_paths(root / "reference-workers"):
-                status = host.status_bytes(worker["target"]["pid"])
-            expected["python_rss_bytes"] = status["VmRSS"]
-            expected["python_rss_anon_bytes"] = status["RssAnon"]
+            if worker["target"]["pid"] == 300:
+                expected.update(python_rss_bytes=81920, python_rss_anon_bytes=71680)
         else:
             expected = {
                 key: value
@@ -290,56 +188,58 @@ def test_native_windows_and_plain_artifacts_match_unchanged_real_python_reads(
             }
         assert window.cells.model_dump() == expected
     if memory:
-        assert native_cells == reference
-        if periodic:
-            assert native_cells == fixture()["expected_periodic"]
-        proc = root / "reference-job-proc"
-        write_frame(proc, recorded["frames"][0])
-        cgroup = root / "reference-cgroup-current"
-        cgroup.write_text(recorded["frames"][0]["cgroup_current"]["value"], encoding="utf-8")
-        sample, rollcall = memory_sampler.sample_once(
-            100,
-            proc_root=proc,
-            cgroup_paths=(cgroup,),
-            now="2026-10-10T12:00:00Z",
-        )
+        assert native_cells == expected_cells
         native_sample = json.loads((root / "artifacts/rss-samples.jsonl").read_bytes())
         native_rollcall = [
             json.loads(line)
             for line in (root / "artifacts/python-procs.jsonl").read_text().splitlines()
         ]
-        assert native_sample == sample
-        assert native_rollcall == rollcall
-        assert native_sample["python_procs"] == 3
-        assert "-u -m idhazh" in {row["args"] for row in native_rollcall}
+        assert native_sample == {
+            "ts": "2026-10-10T12:00:00Z",
+            "llama_vmrss_kb": 400,
+            "llama_vmhwm_kb": 500,
+            "python_vmrss_kb": 350,
+            "python_vmhwm_kb": 420,
+            "python_procs": 3,
+            "mem_total_kb": 1000,
+            "mem_available_kb": 800,
+            "committed_as_kb": 900,
+            "cgroup_current_bytes": 123456,
+        }
+        expected_rollcall = [
+            {
+                "ts": "2026-10-10T12:00:00Z",
+                "pid": pid,
+                "comm": comm,
+                "vmrss_kb": rss,
+                "vmhwm_kb": hwm,
+                "exe": None,
+                "args": args,
+            }
+            for pid, comm, rss, hwm, args in [
+                (os.getpid(), "python3", 200, 250, "-u -m idhazh"),
+                (300, "python3.12", 50, 0, None),
+                (400, "python3.12", 100, 120, None),
+            ]
+        ]
+        assert native_rollcall == sorted(expected_rollcall, key=lambda row: str(row["pid"]))
         assert "secret-not-exported" not in json.dumps(native_rollcall)
         statuses = [
             json.loads(line)
             for line in (root / "artifacts/server-rss-samples.jsonl").read_text().splitlines()
         ]
-        expected_statuses = []
-        for index in (0, 1, 2, 3):
-            write_frame(proc, recorded["frames"][index])
-            expected_statuses.append(memory_sampler.read_status(100, proc_root=proc))
-        assert statuses == expected_statuses
-        assert (root / "artifacts/cgroup-memory-peak.txt").read_text().strip() == recorded[
-            "frames"
-        ][3]["cgroup_peak"]["value"].strip()
-        summary = subprocess.run(
-            [sys.executable, str(ROOT / "backend/utilities/memory_sampler.py"), "summarize"],
-            cwd=root / "artifacts",
-            capture_output=True,
-            timeout=30,
-            check=False,
-        )
-        assert summary.returncode == 0, summary.stderr.decode()
-        assert b"peak llama VmHWM 500 kB, peak python VmHWM 420 kB" in summary.stderr
-        assert b"most the two held at once 750 kB, n=1 samples" in summary.stderr
+        assert statuses == [
+            {"VmRSS": "400 kB", "VmHWM": "500 kB"},
+            {"VmRSS": "800 kB", "VmHWM": "900 kB"},
+            {"VmRSS": "250 kB", "VmHWM": "300 kB"},
+            {"VmRSS": "350 kB", "VmHWM": "450 kB"},
+        ]
+        assert (root / "artifacts/cgroup-memory-peak.txt").read_text().strip() == "234567"
     else:
         assert not (root / "artifacts").exists()
         assert not any(value.kind in ("job.sample", "process.rollcall") for value in events)
         for key in ("cpu_busy_pct", "cpu_busy_max", "cpu_busy_min", "cpu_steal_pct", "load_1m"):
-            assert native_cells[key] == reference[key]
+            assert native_cells[key] == expected_cells[key]
         assert all(
             value is None
             for key, value in native_cells.items()
@@ -412,8 +312,12 @@ def test_resource_replay_refuses_oversized_or_foreign_source_evidence() -> None:
     assert not (root / "artifacts").exists()
 
 
-@pytest.mark.parametrize(("busy", "idle"), [(107, 3893), (45, 3955), (115, 3885)])
-def test_native_decimal_half_cpu_results_match_unchanged_python(busy: int, idle: int) -> None:
+@pytest.mark.parametrize(
+    ("busy", "idle", "expected"), [(107, 3893, 2.67), (45, 3955, 1.12), (115, 3885, 2.88)]
+)
+def test_native_decimal_half_cpu_results_match_fixed_expectations(
+    busy: int, idle: int, expected: float
+) -> None:
     root = ROOT / "backend/var/d4-python" / str(uuid4())
     m, recorded = prepare(root, memory=False, periodic=False)
     first = "cpu 0 0 0 0 0 0 0 0\n"
@@ -423,11 +327,9 @@ def test_native_decimal_half_cpu_results_match_unchanged_python(busy: int, idle:
     (root / m["event_root"] / "captures/resources.json").write_bytes(json.dumps(recorded).encode())
     result = run(root, "resource-replay", "--snapshot", "resources")
     assert result.returncode == 0, result.stderr.decode()
-    expected = host.cpu_shares_between(first, last)
-    assert expected is not None
     windows = [
         value["body"] for value in json.loads(result.stdout) if value["kind"] == "window.result"
     ]
     assert len(windows) == 2
     for window in windows:
-        assert window["cells"]["cpu_busy_pct"] == expected.busy_pct
+        assert window["cells"]["cpu_busy_pct"] == expected

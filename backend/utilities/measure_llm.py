@@ -193,33 +193,6 @@ def download(ref: ModelRef, remote: RemoteFile, models_dir: Path) -> tuple[Path,
     return destination, time.monotonic() - started
 
 
-def _key_values(path: Path) -> dict[str, int | str]:
-    if not path.is_file():
-        return {}
-    values: dict[str, int | str] = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
-        key, _, raw = line.partition(" ")
-        values[key] = int(raw) if raw.isdigit() else raw
-    return values
-
-
-def resource_snapshot(*, memory_profiling_enabled: bool = True) -> dict[str, object]:
-    root = Path("/sys/fs/cgroup")
-    result: dict[str, object] = {
-        "cpu_stat": _key_values(root / "cpu.stat"),
-        "cpu_pressure": _key_values(root / "cpu.pressure"),
-    }
-    if not memory_profiling_enabled:
-        return result
-    return {
-        **result,
-        "memory_events": _key_values(root / "memory.events"),
-        "memory_peak": (root / "memory.peak").read_text(encoding="utf-8").strip()
-        if (root / "memory.peak").is_file()
-        else None,
-    }
-
-
 def bench_command(
     *,
     binary: Path,
@@ -264,7 +237,10 @@ def run_benchmarks(
     The rows are returned as well as written. The emitter needs the numbers in
     the same process that produced them: re-reading the file would mean a second
     parser for a format this function already holds parsed.
+
+    Host diagnostics belong to the bound native session, not a Python snapshot.
     """
+    del memory_profiling_enabled, native
     output.parent.mkdir(parents=True, exist_ok=True)
     resources_report.parent.mkdir(parents=True, exist_ok=True)
     resources: list[dict[str, object]] = []
@@ -276,9 +252,6 @@ def run_benchmarks(
                     f"benchmark model={model.name} threads={thread_count}",
                     file=sys.stderr,
                     flush=True,
-                )
-                before = {} if native else resource_snapshot(
-                    memory_profiling_enabled=memory_profiling_enabled
                 )
                 started = time.monotonic()
                 result = subprocess.run(
@@ -301,10 +274,8 @@ def run_benchmarks(
                         "threads": thread_count,
                         "wall_seconds": time.monotonic() - started,
                         "returncode": result.returncode,
-                        "before": before,
-                        "after": {} if native else resource_snapshot(
-                            memory_profiling_enabled=memory_profiling_enabled
-                        ),
+                        "before": None,
+                        "after": None,
                     }
                 )
                 resources_report.write_text(

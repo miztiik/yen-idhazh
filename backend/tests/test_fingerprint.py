@@ -554,8 +554,14 @@ def test_the_host_cpu_names_the_part_and_not_the_architecture(tmp_path: Path) ->
         encoding="utf-8",
     )
     assert host_cpu(cpuinfo) == "Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz"
+    from idhazh.fingerprint import host_cpu_model
+
+    assert host_cpu_model(cpuinfo) == "Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz"
 
 
 def test_a_host_that_names_no_processor_still_answers(tmp_path: Path) -> None:
     """The field is required, and an empty one would fail the row it explains."""
     assert host_cpu(tmp_path / "absent").strip()
+    from idhazh.fingerprint import host_cpu_model
+
+    assert host_cpu_model(tmp_path / "absent") is None

@@ -33,8 +33,8 @@ import re
 import shutil
 from array import array
 from collections.abc import Sequence
-from datetime import UTC, datetime, timedelta
 from datetime import date as calendar_date
+from datetime import timedelta
 from itertools import combinations
 from pathlib import Path
 from typing import Final, NamedTuple
@@ -68,6 +68,7 @@ from idhazh.contracts.feed_health import (
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
+from idhazh.contracts.host_output import HOST_PRODUCER
 from idhazh.contracts.item_health import FailureCode as ItemFailureCode
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage, TimeSource
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
@@ -101,7 +102,6 @@ from idhazh.gardener.file_listing import FileListing
 from idhazh.gardener.tasks import compaction
 from idhazh.render import asset_relpath, render_planned_visual
 from idhazh.render.write import write_bytes_atomic
-from idhazh.telemetry import silicon
 from idhazh.telemetry.publish import (
     console_band,
     day_metrics,
@@ -124,15 +124,13 @@ SCORE_SHARD: Final = 0
 #: The producer for the canary's item and score writers. Hosts use silicon's.
 PRODUCER: Final = "utilities.build_canary_day"
 
-#: Modeled native inputs for the newest work shard's existing fixture readings,
-#: not a live server capture. The production clock parses these, not a JSON row.
-HOST_CLOCK_LOG: Final = (
-    "0.00.011.682 I srv load_model: loading model 'canary.gguf'\n"
-    "0.02.482.510 I srv llama_server: model loaded\n"
-)
-HOST_CLOCK_METRICS: Final = (
-    "llamacpp:prompt_tokens_total 1700\nllamacpp:prompt_seconds_total 73.72\n"
-)
+#: Recorded fixture clock cells; native parser behavior belongs to Rust fixtures.
+HOST_CLOCK_CELLS: Final = {
+    "model_load_ms": 2470.828,
+    "job_seconds": 900,
+    "server_prompt_tokens": 1700,
+    "server_prompt_seconds": 73.72,
+}
 
 type FixtureRow = ItemHealthRow | HostFingerprintRow
 
@@ -1595,14 +1593,14 @@ def _host_fixture_writer(row: HostFingerprintRow) -> WriterIdentity:
         attempt=SCORE_ATTEMPT,
         job=row.job,
         shard=row.shard,
-        producer=silicon.PRODUCER,
+        producer=HOST_PRODUCER,
         git_sha=FIXTURE_SHA,
     )
 
 
 def _file_host_halves(state: Path, row: HostFingerprintRow) -> None:
-    """Replay a validated probe, then let the production clock file its whole row."""
-    probe = HostFingerprintRow.model_validate(row.model_dump() | dict.fromkeys(silicon.CLOCK_CELLS))
+    """File both fixture states without invoking a retired production collector."""
+    probe = HostFingerprintRow.model_validate(row.model_dump() | dict.fromkeys(HOST_CLOCK_CELLS))
     ledger.persist(
         state,
         [probe],
@@ -1610,33 +1608,11 @@ def _file_host_halves(state: Path, row: HostFingerprintRow) -> None:
         covers=row.date,
         identity=_host_fixture_writer(row),
     )
-    inputs = state.parent / "fixture-clock" / f"{row.run_id}-{row.job}-{row.shard}"
-    server_log = inputs / "server.log"
-    metrics = inputs / "metrics.prom"
-    write_atomic(server_log, HOST_CLOCK_LOG)
-    write_atomic(metrics, HOST_CLOCK_METRICS)
-    try:
-        silicon.file_job_clock(
-            date=row.date,
-            run_id=row.run_id,
-            settings=config.load(),
-            state_root=state,
-            commit_sha=FIXTURE_SHA,
-            shard=row.shard,
-            job=row.job,
-            attempt=SCORE_ATTEMPT,
-            job_started_at=int(
-                datetime.fromisoformat(f"{row.date}T22:00:00").replace(tzinfo=UTC).timestamp()
-            ),
-            finished_at=f"{row.date}T22:15:00Z",
-            server_log_path=server_log,
-            metrics_path=metrics,
-        )
-    finally:
-        server_log.unlink()
-        metrics.unlink()
-        inputs.rmdir()
-        inputs.parent.rmdir()
+    whole = HostFingerprintRow.model_validate(row.model_dump() | HOST_CLOCK_CELLS)
+    ledger.persist(
+        state, [whole], ledger=LedgerName.HOST_FINGERPRINT,
+        covers=row.date, identity=_host_fixture_writer(row),
+    )
 
 
 def _staged_days(root: Path) -> dict[str, list[Path]]:

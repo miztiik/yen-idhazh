@@ -1,9 +1,10 @@
-"""Do inactive production boundaries exchange real bounded event files in order?"""
+"""Do native production boundaries exchange real bounded event files in order?"""
 
 from __future__ import annotations
 
 import json
 import os
+import sys
 import threading
 from pathlib import Path
 from typing import Literal
@@ -12,8 +13,11 @@ from uuid import uuid4
 import pytest
 
 from idhazh.contracts.host_events import (
+    MEMORY_SOURCES,
+    WINDOW_CELL_SOURCES,
     CaptureSource,
     HostEvent,
+    HostProducerInvocation,
     HostSessionManifest,
     HostWindowCells,
     InstrumentSkippedBody,
@@ -25,14 +29,22 @@ from idhazh.contracts.host_events import (
     WindowResultBody,
     WorkerBody,
 )
+from idhazh.contracts.host_output import HostWriterIdentity
 from idhazh.telemetry import host
 from idhazh.telemetry.host_event_client import HostEventClient
 from idhazh.telemetry.host_event_files import HostEventFiles
+from idhazh.telemetry.host_evidence_inputs import NativeSettings
+from idhazh.telemetry.host_output_verify import VerificationLimits
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def _manifest(root: Path, *, item_id: str | tuple[str, ...] = "item-01") -> HostSessionManifest:
+def _manifest(
+    root: Path,
+    *,
+    item_id: str | tuple[str, ...] = "item-01",
+    memory_profiling_enabled: bool = True,
+) -> HostSessionManifest:
     source = json.loads((ROOT / "tests/fixtures/host-events/manifest.json").read_bytes())
     session_id = uuid4()
     source.update(
@@ -59,6 +71,7 @@ def _manifest(root: Path, *, item_id: str | tuple[str, ...] = "item-01") -> Host
             "cpu_target_role": "python_worker",
         }
     )
+    source["controls"]["memory_profiling_enabled"] = memory_profiling_enabled
     source["limits"].update(
         {
             "poll_ms": 5,
@@ -73,11 +86,24 @@ def _manifest(root: Path, *, item_id: str | tuple[str, ...] = "item-01") -> Host
     )
     manifest = HostSessionManifest.model_validate(source)
     (root / "manifest.json").write_text(manifest.to_json(), encoding="ascii", newline="\n")
-    native = json.loads((ROOT / "config/host-telemetry-experiment.json").read_bytes())
-    for name in ("controls", "limits", "capture_limits"):
-        native[name] = manifest.model_dump(mode="json")[name]
+    native = NativeSettings(
+        version=manifest.version,
+        controls=manifest.controls,
+        limits=manifest.limits,
+        capture_limits=manifest.capture_limits,
+        verification_limits=VerificationLimits(
+            max_files=64,
+            max_file_bytes=1048576,
+            max_total_bytes=16777216,
+            max_rows=64,
+            max_footer_bytes=262144,
+            max_decode_bytes=1048576,
+            max_thrift_items=4096,
+            max_json_depth=32,
+        ),
+    )
     (root / "config.json").write_text(
-        json.dumps(native, sort_keys=True) + "\n", encoding="ascii", newline="\n"
+        native.model_dump_json() + "\n", encoding="ascii", newline="\n"
     )
     return manifest
 
@@ -134,10 +160,12 @@ class SessionPeer:
         manifest: HostSessionManifest,
         *,
         incomplete_end: bool = False,
+        window_cells: HostWindowCells | None = None,
     ) -> None:
         self.files = HostEventFiles(root, manifest)
         self.manifest = manifest
         self.incomplete_end = incomplete_end
+        self.window_cells = window_cells
         self.seen: list[HostEvent] = []
         self._stop = threading.Event()
         self._sequence = 1
@@ -213,7 +241,7 @@ class SessionPeer:
                     kind = "window.begun"
                 elif command.kind in {"window.end", "window.abort"}:
                     unavailable: tuple[UnavailableDiagnostic, ...] = ()
-                    cells = HostWindowCells(
+                    cells = self.window_cells or HostWindowCells(
                         cpu_busy_pct=0.0,
                         cpu_busy_max=0.0,
                         cpu_busy_min=0.0,
@@ -232,6 +260,26 @@ class SessionPeer:
                             }
                         },
                     )
+                    if not self.manifest.controls.memory_profiling_enabled:
+                        cells = HostWindowCells(
+                            **{
+                                name: getattr(cells, name)
+                                for name in (
+                                    "cpu_busy_pct",
+                                    "cpu_busy_max",
+                                    "cpu_busy_min",
+                                    "cpu_steal_pct",
+                                    "load_1m",
+                                )
+                            }
+                        )
+                        unavailable = tuple(
+                            UnavailableDiagnostic(source=source, reason=UnavailableReason.DISABLED)
+                            for source in sorted(
+                                MEMORY_SOURCES & set(WINDOW_CELL_SOURCES.values()),
+                                key=lambda source: source.value,
+                            )
+                        )
                     status: Literal["complete", "incomplete"] = "complete"
                     opened_at: str | None = "2026-10-10T12:00:01Z"
                     closed_at: str | None = "2026-10-10T12:00:02Z"
@@ -244,7 +292,12 @@ class SessionPeer:
                         unavailable = tuple(
                             UnavailableDiagnostic(
                                 source=source,
-                                reason=UnavailableReason.PID_EXITED,
+                                reason=(
+                                    UnavailableReason.DISABLED
+                                    if not self.manifest.controls.memory_profiling_enabled
+                                    and source in MEMORY_SOURCES
+                                    else UnavailableReason.PID_EXITED
+                                ),
                             )
                             for source in (
                                 CaptureSource.CPU_STAT,
@@ -260,7 +313,7 @@ class SessionPeer:
                         status=status,
                         opened_at=opened_at,
                         closed_at=closed_at,
-                        memory_profiling_enabled=True,
+                        memory_profiling_enabled=self.manifest.controls.memory_profiling_enabled,
                         cells=cells,
                         unavailable=unavailable,
                     )
@@ -278,7 +331,7 @@ class SessionPeer:
 
     def close(self) -> None:
         self._stop.set()
-        self.thread.join(timeout=1)
+        self.thread.join()
 
 
 def _client(
@@ -289,13 +342,11 @@ def _client(
     return HostEventClient(root, Path("manifest.json"), Path("config.json"), native=native), peer
 
 
-def test_window_events_bracket_the_authoritative_watch_once(tmp_path: Path) -> None:
+def test_resource_only_session_brackets_native_window_results_once(tmp_path: Path) -> None:
     client, peer = _client(tmp_path)
     try:
         assert client.register_worker(server_pid=None)
-        with client.shadow_watch(
-            host.Watch(interval_s=0, server_pid=None), item_id="item-01"
-        ) as watch:
+        with client.native_watch(item_id="item-01") as watch:
             cells = watch.close()
         assert isinstance(cells, host.HostCells)
         assert [event.kind for event in peer.seen] == [
@@ -316,12 +367,21 @@ def test_window_events_bracket_the_authoritative_watch_once(tmp_path: Path) -> N
 def test_failed_and_cancelled_work_abort_before_watch_exit(
     tmp_path: Path, raised: type[BaseException], reason: str
 ) -> None:
-    client, peer = _client(tmp_path)
+    client, peer = _client(tmp_path, native=True)
+    ticked = threading.Event()
+    threads: list[threading.Thread] = []
+
+    def tick(_: float) -> None:
+        threads.append(threading.current_thread())
+        ticked.set()
+
     try:
         assert client.register_worker(server_pid=None)
         with pytest.raises(raised):
-            with client.shadow_watch(host.Watch(interval_s=0, server_pid=None), item_id="item-01"):
+            with client.native_watch(item_id="item-01", interval_s=0.005, on_tick=tick):
+                assert ticked.wait(1)
                 raise raised()
+        assert threads and all(not thread.is_alive() for thread in threads)
         abort = peer.seen[-1]
         assert abort.kind == "window.abort"
         assert isinstance(abort.body, WindowAbortBody)
@@ -330,18 +390,94 @@ def test_failed_and_cancelled_work_abort_before_watch_exit(
         peer.close()
 
 
-def test_exited_target_result_does_not_replace_python_cells(tmp_path: Path) -> None:
-    client, peer = _client(tmp_path, incomplete_end=True)
+def test_exited_target_result_keeps_unavailable_native_cells_null(tmp_path: Path) -> None:
+    client, peer = _client(tmp_path, incomplete_end=True, native=True)
     try:
         assert client.register_worker(server_pid=None)
-        with client.shadow_watch(
-            host.Watch(interval_s=0, server_pid=None), item_id="item-01"
-        ) as watch:
+        with client.native_watch(item_id="item-01") as watch:
             cells = watch.close()
         assert isinstance(cells, host.HostCells)
+        assert all(value is None for value in cells.cells().values())
+        assert watch._result is not None
+        assert {entry.reason for entry in watch._result.unavailable} == {
+            UnavailableReason.PID_EXITED
+        }
         assert peer.seen[-1].kind == "window.end"
     finally:
         peer.close()
+
+
+@pytest.mark.parametrize("memory_profiling_enabled", [False, True])
+def test_no_environment_binding_is_uninstrumented(memory_profiling_enabled: bool) -> None:
+    assert (
+        HostEventClient.from_environment(
+            environ={}, memory_profiling_enabled=memory_profiling_enabled
+        )
+        is None
+    )
+
+
+@pytest.mark.parametrize(
+    "environ",
+    [
+        {"IDHAZH_HOST_TELEMETRY_MODE": "legacy"},
+        {"IDHAZH_HOST_TELEMETRY_MODE": "shadow"},
+        {"IDHAZH_HOST_TELEMETRY_MODE": ""},
+        {"IDHAZH_HOST_TELEMETRY_WORKSPACE": "named-workspace"},
+        {"IDHAZH_HOST_TELEMETRY_MANIFEST": ""},
+    ],
+)
+def test_explicit_legacy_or_partial_environment_binding_is_refused(
+    environ: dict[str, str],
+) -> None:
+    with pytest.raises(ValueError, match=r"requires.*MODE='rust'"):
+        HostEventClient.from_environment(environ=environ)
+
+
+def test_rust_environment_marker_requires_all_independent_session_paths() -> None:
+    with pytest.raises(ValueError, match="WORKSPACE, MANIFEST, CONFIG, INVOCATION"):
+        HostEventClient.from_environment(environ={"IDHAZH_HOST_TELEMETRY_MODE": "rust"})
+
+
+def test_environment_binding_keeps_independent_invocation_checks(tmp_path: Path) -> None:
+    manifest = _manifest(tmp_path)
+    invocation = HostProducerInvocation(
+        date=manifest.date,
+        identity=HostWriterIdentity(
+            **manifest.model_dump(include={"run_id", "attempt", "job", "shard", "git_sha"}),
+            producer="telemetry.silicon",
+        ),
+        command=(sys.executable, *sys.argv),
+        stage="work",
+        shards=1,
+        host_enabled=True,
+    )
+    (tmp_path / "invocation.json").write_text(
+        invocation.model_dump_json() + "\n", encoding="ascii", newline="\n"
+    )
+    environ = {
+        "IDHAZH_HOST_TELEMETRY_MODE": "rust",
+        "IDHAZH_HOST_TELEMETRY_WORKSPACE": str(tmp_path),
+        "IDHAZH_HOST_TELEMETRY_MANIFEST": str(tmp_path / "manifest.json"),
+        "IDHAZH_HOST_TELEMETRY_CONFIG": str(tmp_path / "config.json"),
+        "IDHAZH_HOST_TELEMETRY_INVOCATION": str(tmp_path / "invocation.json"),
+    }
+    client = HostEventClient.from_environment(
+        environ=environ, identity=invocation.identity, date=manifest.date, host_enabled=True
+    )
+    assert client is not None and client.native
+    assert client.invocation == invocation
+    with pytest.raises(ValueError, match="native host control"):
+        HostEventClient.from_environment(environ=environ, host_enabled=False)
+    wrong_identity = invocation.identity.model_copy(update={"attempt": manifest.attempt + 1})
+    with pytest.raises(ValueError, match="executed worker invocation"):
+        HostEventClient.from_environment(environ=environ, identity=wrong_identity)
+    altered = invocation.model_copy(update={"command": (*invocation.command, "--wrong-command")})
+    (tmp_path / "invocation.json").write_text(
+        altered.model_dump_json() + "\n", encoding="ascii", newline="\n"
+    )
+    with pytest.raises(ValueError, match="producer command differs"):
+        HostEventClient.from_environment(environ=environ)
 
 
 def test_native_window_result_becomes_item_health_cells(tmp_path: Path) -> None:
@@ -357,6 +493,53 @@ def test_native_window_result_becomes_item_health_cells(tmp_path: Path) -> None:
             "window.begin",
             "window.end",
         ]
+    finally:
+        peer.close()
+
+
+def test_memory_off_native_window_keeps_cpu_load_and_heartbeat_without_memory(
+    tmp_path: Path,
+) -> None:
+    manifest = _manifest(tmp_path, memory_profiling_enabled=False)
+    peer = SessionPeer(
+        tmp_path,
+        manifest,
+        window_cells=HostWindowCells(
+            cpu_busy_pct=25.0,
+            cpu_busy_max=50.0,
+            cpu_busy_min=10.0,
+            cpu_steal_pct=2.0,
+            load_1m=1.5,
+        ),
+    )
+    client = HostEventClient(tmp_path, Path("manifest.json"), Path("config.json"), native=True)
+    ticked = threading.Event()
+    threads: list[threading.Thread] = []
+
+    def tick(_: float) -> None:
+        threads.append(threading.current_thread())
+        ticked.set()
+
+    try:
+        assert client.register_worker(server_pid=None)
+        with client.native_watch(item_id="item-01", interval_s=0.005, on_tick=tick) as watch:
+            assert ticked.wait(1)
+            cells = watch.close()
+        assert threads and all(not thread.is_alive() for thread in threads)
+        expected = {
+            "cpu_busy_pct": 25.0,
+            "cpu_busy_max": 50.0,
+            "cpu_busy_min": 10.0,
+            "cpu_steal_pct": 2.0,
+            "load_1m": 1.5,
+        }
+        assert {name: cells.cells()[name] for name in expected} == expected
+        assert all(value is None for name, value in cells.cells().items() if name not in expected)
+        assert watch._result is not None
+        assert {entry.source for entry in watch._result.unavailable} == MEMORY_SOURCES & set(
+            WINDOW_CELL_SOURCES.values()
+        )
+        assert {entry.reason for entry in watch._result.unavailable} == {UnavailableReason.DISABLED}
     finally:
         peer.close()
 

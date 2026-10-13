@@ -66,7 +66,8 @@ from idhazh.stages.common import (
 )
 from idhazh.stages.two_calls import two_calls_one_item
 from idhazh.telemetry import census, host
-from idhazh.telemetry.host_event_client import HostEventClient
+from idhazh.telemetry.host_event_client import HostEventClient, NativeWatch
+from idhazh.telemetry.item_heartbeat import ItemHeartbeat
 from idhazh.telemetry.record import Flags, ItemRecorder, persist, shard_done
 
 
@@ -148,8 +149,8 @@ def _shard_cells(
     **Every one of them is config except the three `facts` carries**, so none of
     them is a measurement. They are the settings the run was given, which is
     exactly what a person comparing two runs needs - the readings are the machine
-    cells beside them. The processor and the runner label come from the one
-    `host_facts` call this shard's counters row reads as well, so the two rows
+    cells beside them. The processor and the runner label come from the native
+    session's probe result, so the two rows
     cannot name two different machines. `machine_job` rides with them for the same
     reason: with `machine_shard` it is the key that reaches this job's host record,
     and a key filled from two places is a key that can disagree with itself.
@@ -310,17 +311,13 @@ def stage_work(
         raise ValueError("work shard must be inside the selected fanout")
     mine = shard_of(plan, shard=shard, shards=shards)
     if host_events is not None:
-        if host_events.native and (
+        if (
             host_events.manifest.controls.memory_profiling_enabled
             != settings.app.observability.memory_profiling_enabled
         ):
             raise ValueError("native work memory control differs from the resolved invocation")
         host_events.validate_plan(plan, shard=shard, shards=shards)
         host_events.register_worker(server_pid=host.llama_server_pid())
-    if not settings.app.observability.memory_profiling_enabled and (
-        host_events is None or not host_events.native
-    ):
-        raise ValueError("memory profiling off requires the native work collector")
     if not mine:
         LOG.info("working shard=%s/%s items=0", shard, shards)
         return
@@ -378,15 +375,13 @@ def stage_work(
         model.id,
     )
     flags = Flags.of(settings.app.logging)
-    # Read once per shard and noted on every item. The process table scan and
-    # the CPU model read are each a few file opens; doing them per item would be
-    # 80 scans for an answer that cannot change inside a shard.
-    server_pid = host.llama_server_pid()
     shard_facts = (
         host_events.host_facts()
-        if host_events is not None and host_events.native
-        else host.host_facts(job=ServerJob.WORK)
+        if host_events is not None
+        else host.HostFacts(cpu_model=None, runner_name=None, job=ServerJob.WORK)
     )
+    if host_events is None:
+        LOG.info("host item measurement unavailable reason=no_bound_session")
     shard_cells = _shard_cells(settings, shard=shard, shard_item_count=len(mine), facts=shard_facts)
     failures: dict[str, int] = {}
     finished: list[ItemHealthRow] = []
@@ -501,23 +496,17 @@ def stage_work(
         )
         recorder.note(queue_wait_ms=queue_wait_ms)
         recorder.parked(queue_wait_ms)
-        watch_context: Any
-        if host_events is not None and host_events.native:
+        watch_context: NativeWatch | ItemHeartbeat
+        if host_events is not None:
             watch_context = host_events.native_watch(
                 item_id=item.item_id,
                 interval_s=flags.waiting_heartbeat_seconds,
                 on_tick=_heartbeat(recorder),
             )
         else:
-            python_watch = host.Watch(
+            watch_context = ItemHeartbeat(
                 interval_s=flags.waiting_heartbeat_seconds,
-                server_pid=server_pid,
                 on_tick=_heartbeat(recorder),
-            )
-            watch_context = (
-                host_events.shadow_watch(python_watch, item_id=item.item_id)
-                if host_events is not None
-                else python_watch
             )
         with (
             tracer.trace(_trace_id(plan.run_id, item)),

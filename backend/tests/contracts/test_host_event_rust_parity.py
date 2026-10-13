@@ -1,4 +1,4 @@
-"""Do real native producer files match independent CPU expectations and unchanged Python instruments?"""
+"""Do native producer files match captured expectations and shared read-only codecs?"""
 
 from __future__ import annotations
 
@@ -16,7 +16,6 @@ import pytest
 
 from idhazh.contracts.host_events import HostResultBody
 from idhazh.contracts.host_output import HostWriteCompletion, HostWritePlan, fingerprint_v2
-from idhazh.telemetry import silicon
 from idhazh.telemetry.host_output_verify import VerificationLimits, verify_host_output
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -37,7 +36,7 @@ def native() -> Path:
 
 
 @pytest.mark.parametrize("codec", ["json", "none", "snappy", "zstd"])
-def test_same_cargo_harness_files_pass_read_only_verifier_and_python_instruments(codec: str) -> None:
+def test_same_cargo_harness_files_pass_read_only_verifier_and_captured_expectations(codec: str) -> None:
     workspace = ROOT / "backend" / "var" / f"d3-job-{codec}"
     assert (workspace / "final-result.json").is_file(), "Run native producer tests before parity."
     body = HostResultBody.model_validate_json((workspace / "final-result.json").read_bytes())
@@ -54,24 +53,19 @@ def test_same_cargo_harness_files_pass_read_only_verifier_and_python_instruments
     assert verified.files[0].physical_sha256 == hashlib.sha256(next(iter(before.values()))).hexdigest()
     assert {path: (workspace / path).read_bytes() for path in before} == before
     row = body.row
-    capture = json.loads(FIXTURE.read_bytes())["attempts"][0]
-    cpuinfo = capture["cpuinfo"]["value"]
-    fields, _ = silicon._cpuinfo_fields(cpuinfo)
-    assert row.cpu_model == fields["model name"]
-    assert row.cpu_vendor == fields["vendor_id"]
+    assert row.cpu_model == "INTEL(R) XEON(R) PLATINUM 8573C"
+    assert row.cpu_vendor == "GenuineIntel"
     assert row.cpu_family == 6 and row.cpu_model_number == 207 and row.cpu_stepping == 2
-    assert row.microcode == fields["microcode"]
-    assert row.flags == silicon.watched_flags(cpuinfo)
-    assert row.boot_seconds == silicon.boot_seconds(capture["uptime"]["value"])
+    assert row.microcode == "0x21000283"
+    assert row.flags == "amx_bf16 amx_int8 amx_tile avx2 avx512_bf16 avx512f f16c fma sse4_2"
+    assert row.boot_seconds == 12345.75
     assert (row.cpu_physical_cores, row.cpu_logical_processors, row.cpu_allowed_processors) == (3, 4, 2)
     assert (row.cpu_quota_cores, row.cpu_quota_state) == (0.5, "finite")
     assert (row.cpu_observed_mhz, row.cpu_reported_max_mhz) == (2400.0, 3600.0)
     assert row.fingerprint_version == 2 and row.fingerprint == fingerprint_v2(row)
     assert body.cpu.online_cpu_ids == (0, 2, 3, 7)
-    log = (ROOT / "tests/fixtures/runtime/2026-08-29-3-shard-0.server-head.txt").read_text()
-    metrics = (ROOT / "tests/fixtures/runtime/2026-08-26-5-shard-0.prom").read_text()
-    assert row.model_load_ms == silicon.model_load_ms(log) == 3797.64
-    assert (row.server_prompt_tokens, row.server_prompt_seconds) == silicon.server_prompt_totals(metrics)
+    assert row.model_load_ms == 3797.64
+    assert (row.server_prompt_tokens, row.server_prompt_seconds) == (30538, 2795.15)
     assert row.job_seconds == 42
     assert row.measured_at == "2026-10-10T12:00:00Z"
     assert row.cpu_target_measured_at == "2026-10-10T12:00:01Z"

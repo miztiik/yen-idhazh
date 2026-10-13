@@ -37,7 +37,7 @@ def test_native_work_command_keeps_the_exact_plan_and_process_identity(tmp_path:
     assert worker[worker.index("--shards") + 1] == "2"
 
 
-def test_legacy_work_command_opens_no_event_session(tmp_path: Path) -> None:
+def test_unmeasured_work_command_opens_no_event_session(tmp_path: Path) -> None:
     command = work_command(
         config_root=tmp_path,
         date="2026-09-27",
@@ -63,7 +63,12 @@ def test_native_memory_consumes_only_named_monitor_artifacts(tmp_path: Path) -> 
 
 
 def test_absent_native_memory_stays_unmeasured(tmp_path: Path) -> None:
-    assert native_memory(tmp_path) == ([], None)
+    from utilities.measure_llm import _peak_server_rss_gib
+
+    assert native_memory(None) == (None, None)
+    assert native_memory(tmp_path) == (None, None)
+    with pytest.raises(ValueError, match="sampled no resident set"):
+        _peak_server_rss_gib({"repeat": 1, "server_rss_samples": None})
     with pytest.raises(RuntimeError, match="requires memory profiling"):
         require_memory_for_sweep(False)
 

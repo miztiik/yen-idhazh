@@ -49,12 +49,12 @@ PLAN_HANDOFFS: Final = {
 }
 
 #: Every workflow with a step that reads a plan through an `idhazh` verb.
-PLAN_READING_WORKFLOWS: Final = ("digest.yml", "measure.yml", "validate.yml")
+PLAN_READING_WORKFLOWS: Final = ("digest.yml", "validate.yml")
 
 #: Every verb that reads the plan its run made. Declared by hand, mirroring the
 #: verbs `idhazh.cli` routes through `_planned`.
 PLAN_READING_VERBS: Final = frozenset(
-    {"shards", "work", "record", "fingerprint", "job-clock", "assemble", "qualify", "validate"}
+    {"shards", "work", "record", "assemble", "qualify", "validate"}
 )
 
 #: The artifact the plan travels in, and the flag a step names its run with.

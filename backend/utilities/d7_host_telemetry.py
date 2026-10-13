@@ -57,12 +57,13 @@ from idhazh.telemetry.host_evidence_inputs import (  # noqa: E402
     write_document,
     write_json,
 )
+from idhazh.telemetry.host_memory_summary import summarize  # noqa: E402
 from idhazh.telemetry.host_output_verify import (  # noqa: E402
     VerificationLimits,
     load_verification_document,
     verify_host_output,
 )
-from utilities.host_telemetry_reference import identity  # noqa: E402
+from idhazh.telemetry.host_process_identity import identity  # noqa: E402
 
 GATE_CODE = (
     "import json,os,sys\n"
@@ -88,16 +89,14 @@ def _producer(command: list[str]) -> tuple[str, list[str]] | None:
         return None
     tail = command[2:]
     if script == "digest_publish.py" and len(tail) >= 2 and tail[0] == "run":
-        if tail[1] in {"plan", "work", "assemble", "fingerprint", "job-clock"}:
+        if tail[1] in {"plan", "work", "assemble"}:
             return tail[1], tail[2:]
-    if script == "record_publish.py" and tail[:3] == ["run", "measure", "fingerprint"]:
-        return "fingerprint", tail[3:]
     if script == "measure_llm.py" and tail[:1] == ["bench"]:
         return "bench", tail[1:]
     if script == "runtime_sweep.py" and tail[:1] == ["sweep"]:
         return "sweep", tail[1:]
-    if script == "compare_summary_encoders.py" and tail[:1] in (["score"], ["collect"]):
-        return tail[0], tail[1:]
+    if script == "compare_summary_encoders.py" and tail[:1] == ["score"]:
+        return "score", tail[1:]
     if script in {"gardener_publish.py", "council_publish.py"}:
         return ("run-tasks" if script == "gardener_publish.py" else "save_council_results"), tail
     return None
@@ -175,15 +174,10 @@ def _invocation(
         "bench": ServerJob.RUNTIME,
         "sweep": ServerJob.RUNTIME,
         "score": ServerJob.COLLECT,
-        "collect": ServerJob.COLLECT,
         "run-tasks": ServerJob.RUN_TASKS,
         "save_council_results": ServerJob.SAVE_COUNCIL_RESULTS,
     }.get(stage)
     child_job = _flag(flags, "--job")
-    if Path(args.command[1]).name == "record_publish.py":
-        expected_job = ServerJob(child_job or ServerJob.RUNTIME.value)
-        if expected_job not in {ServerJob.RUNTIME, ServerJob.COLLECT}:
-            raise ValueError("measurement producer requires its runtime or collect job")
     if (expected_job is not None and expected_job != job) or (child_job and child_job != job.value):
         raise ValueError("D7 job differs from the selected producer")
     child_run = _flag(flags, "--run-id")
@@ -765,12 +759,6 @@ def _terminate_worker(child: subprocess.Popen[bytes], *, timeout: float = 10) ->
 
 
 def run(args: argparse.Namespace) -> int:
-    if args.mode == "legacy":
-        return subprocess.run(
-            args.command, env={**os.environ, "IDHAZH_HOST_TELEMETRY_MODE": "legacy"}, check=False
-        ).returncode
-    if args.mode != "rust":
-        raise SystemExit(f"unsupported IDHAZH_HOST_TELEMETRY_MODE={args.mode!r}")
     producer = _producer(args.command)
     if producer is None:
         raise SystemExit(
@@ -1044,9 +1032,6 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="verb", required=True)
     run_parser = sub.add_parser("run")
-    run_parser.add_argument(
-        "--mode", default=os.environ.get("IDHAZH_HOST_TELEMETRY_MODE", "legacy")
-    )
     run_parser.add_argument("--job", required=True)
     run_parser.add_argument("--run-id")
     run_parser.add_argument(
@@ -1065,6 +1050,9 @@ def main() -> int:
     clean_parser = sub.add_parser("cleanup")
     clean_parser.add_argument("--workspace", required=True)
     clean_parser.add_argument("--binary")
+    summary_parser = sub.add_parser("summarize-memory")
+    summary_parser.add_argument("--sample-file", required=True, type=Path)
+    summary_parser.add_argument("--process-file", required=True, type=Path)
     args = parser.parse_args()
     if args.verb == "run":
         if args.command and args.command[0] == "--":
@@ -1072,6 +1060,13 @@ def main() -> int:
         if not args.command:
             raise SystemExit("D7 run requires a command after --")
         return run(args)
+    if args.verb == "summarize-memory":
+        native, _, _ = settings()
+        for line in summarize(
+            args.sample_file, args.process_file, maximum=native.verification_limits.max_total_bytes
+        ):
+            print(line)
+        return 0
     _cleanup(Path(args.workspace), args.binary)
     return 0
 

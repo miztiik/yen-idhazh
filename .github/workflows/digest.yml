@@ -45,13 +45,6 @@ on:
           - inherit
           - 'on'
           - 'off'
-      host_telemetry:
-        description: 'Rust is the default host collector; legacy is temporary rollback until migration cleanup'
-        type: choice
-        default: rust
-        options:
-          - rust
-          - legacy
 
 permissions:
   contents: write
@@ -62,7 +55,6 @@ permissions:
 env:
   # Runner-local health probe; inference uses model_server.base_url from config.
   MODEL_SERVER_PROBE: 'http://127.0.0.1:8080'
-  IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry || 'rust' }}
 
 jobs:
   plan:
@@ -95,17 +87,13 @@ jobs:
       - name: Install
         run: pip install -e .
       - name: Select the pinned host toolchain
-        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
         working-directory: backend/rust/host-telemetry
         run: echo "RUSTUP_TOOLCHAIN=$(rustup show active-toolchain | cut -d' ' -f1)" >> "$GITHUB_ENV"
       - uses: actions/cache@v6
-        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
         with:
           path: ~/.cargo/registry
           key: host-crates-${{ runner.os }}-${{ hashFiles('backend/rust/host-telemetry/Cargo.lock', 'backend/rust/host-telemetry/rust-toolchain.toml') }}
       - uses: ./.github/actions/d7-host-telemetry
-        with:
-          enabled: ${{ env.IDHAZH_HOST_TELEMETRY_MODE == 'rust' }}
 
       - id: decide
         env:
@@ -193,7 +181,7 @@ jobs:
             MEMORY_ARGS=(--memory-profiling "$MEMORY_PROFILING")
           fi
           python backend/utilities/d7_host_telemetry.py run \
-            --mode "$IDHAZH_HOST_TELEMETRY_MODE" --job plan --shard 0 \
+            --job plan --shard 0 \
             --run-id "${{ steps.decide.outputs.date }}-${{ github.run_id }}" \
             --git-sha "${{ github.sha }}" \
             --memory-profiling "$MEMORY_PROFILING" -- \
@@ -204,18 +192,6 @@ jobs:
             "${MEMORY_ARGS[@]}" \
             "${LIMIT[@]}" \
             "${SHARD_ARGS[@]}"
-
-      # The probe needs the plan's execution ID and an otherwise idle runner.
-      - name: What machine this job drew
-        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'legacy'
-        run: |
-          set -euo pipefail
-          python backend/utilities/digest_publish.py run fingerprint \
-            --date "${{ steps.decide.outputs.date }}" \
-            --execution "${{ github.run_id }}" \
-            --commit "${{ github.sha }}" \
-            --shard 0 \
-            --job plan
 
           # Size workers after planning; a dispatch count overrides the configured size.
           # Use the same count for the matrix and its concurrency cap.
@@ -231,19 +207,6 @@ jobs:
           echo "shards=$SHARDS" >> "$GITHUB_OUTPUT"
           echo "matrix=$(seq 0 $((SHARDS - 1)) | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"
 
-      # Record elapsed time before committing; commit and upload time are excluded.
-      - name: What this job cost
-        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'legacy'
-        run: |
-          set -euo pipefail
-          python backend/utilities/digest_publish.py run job-clock \
-            --date "${{ steps.decide.outputs.date }}" \
-            --execution "${{ github.run_id }}" \
-            --commit "${{ github.sha }}" \
-            --job plan \
-            --shard 0 \
-            --job-started-at "${JOB_STARTED_AT:-}"
-
           # Persist seen and health records even if workers fail later.
           # A failed push must not prevent the plan artifact from reaching workers.
       - name: Commit what the plan saw
@@ -258,8 +221,7 @@ jobs:
       - name: Clean up the owned D7 monitor
         if: always()
         run: |
-          if [ "$IDHAZH_HOST_TELEMETRY_MODE" = rust ] \
-             && [ -n "${IDHAZH_HOST_TELEMETRY_SESSION:-}" ]; then
+          if [ -n "${IDHAZH_HOST_TELEMETRY_SESSION:-}" ]; then
             python backend/utilities/d7_host_telemetry.py cleanup \
                --workspace "$IDHAZH_HOST_TELEMETRY_SESSION"
           fi
@@ -311,34 +273,18 @@ jobs:
             pip install -e ".[faithfulness]"
           fi
       - name: Select the pinned host toolchain
-        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
         working-directory: backend/rust/host-telemetry
         run: echo "RUSTUP_TOOLCHAIN=$(rustup show active-toolchain | cut -d' ' -f1)" >> "$GITHUB_ENV"
       - uses: actions/cache@v6
-        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
         with:
           path: ~/.cargo/registry
           key: host-crates-${{ runner.os }}-${{ hashFiles('backend/rust/host-telemetry/Cargo.lock', 'backend/rust/host-telemetry/rust-toolchain.toml') }}
       - uses: ./.github/actions/d7-host-telemetry
-        with:
-          enabled: ${{ env.IDHAZH_HOST_TELEMETRY_MODE == 'rust' }}
 
       - uses: actions/download-artifact@v8
         with:
           name: plan
           path: ${{ needs.plan.outputs.plan_dir }}/
-
-      # Probe before the model server consumes memory and bandwidth.
-      - name: What machine this job drew
-        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'legacy'
-        run: |
-          set -euo pipefail
-          python backend/utilities/digest_publish.py run fingerprint \
-            --date "${{ needs.plan.outputs.date }}" \
-            --execution "${{ github.run_id }}" \
-            --commit "${{ github.sha }}" \
-            --shard ${{ matrix.shard }} \
-            --job work
 
           # Share runtime setup and caches with the other model workflows.
       - uses: ./.github/actions/model-server
@@ -371,22 +317,6 @@ jobs:
           sha256sum backend/bin/llama-server || true
           sha256sum "${MODEL_PATH}" || true
 
-      # Detach the sampler so it survives this step; track the sampler's own PID.
-      - name: Sample memory
-        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'legacy'
-        env:
-          MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
-        run: |
-          set -euo pipefail
-          RESOLVED=$(python3 backend/utilities/memory_profiling_control.py \
-            "$MEMORY_PROFILING")
-          if [ "$RESOLVED" = "off" ]; then
-            echo "memory profiling is off; no sampler started"
-            exit 0
-          fi
-          python3 backend/utilities/memory_sampler.py start-sampler \
-            --pid "$(cat llama-server.pid)"
-
       # Stamp the same runtime build that the model-server action installed.
       - name: Work the shard
         env:
@@ -398,7 +328,7 @@ jobs:
             MEMORY_ARGS=(--memory-profiling "$MEMORY_PROFILING")
           fi
           python backend/utilities/d7_host_telemetry.py run \
-            --mode "$IDHAZH_HOST_TELEMETRY_MODE" --job work \
+            --job work \
             --run-id "${{ needs.plan.outputs.date }}-${{ github.run_id }}" \
             --git-sha "${{ github.sha }}" \
             --shard "${{ matrix.shard }}" --server-pid-file llama-server.pid \
@@ -415,16 +345,14 @@ jobs:
       - name: Refuse to record without a verified D7 receipt
         if: always()
         run: |
-          if [ "$IDHAZH_HOST_TELEMETRY_MODE" = rust ] \
-             && [ "${IDHAZH_HOST_TELEMETRY_VERIFIED:-0}" != 1 ]; then
+          if [ "${IDHAZH_HOST_TELEMETRY_VERIFIED:-0}" != 1 ]; then
             echo "D7 receipt verification failed; refusing to record this shard" >&2
             exit 1
           fi
       - name: Clean up the owned D7 monitor
         if: always()
         run: |
-          if [ "$IDHAZH_HOST_TELEMETRY_MODE" = rust ] \
-             && [ -n "${IDHAZH_HOST_TELEMETRY_SESSION:-}" ]; then
+          if [ -n "${IDHAZH_HOST_TELEMETRY_SESSION:-}" ]; then
             python backend/utilities/d7_host_telemetry.py cleanup \
                --workspace "$IDHAZH_HOST_TELEMETRY_SESSION"
           fi
@@ -436,7 +364,7 @@ jobs:
       # Record partial results first in the cancellation grace period.
       # Reporting failures must not block the items artifact.
       - name: Record what this shard measured
-        if: always() && (env.IDHAZH_HOST_TELEMETRY_MODE == 'legacy' || env.IDHAZH_HOST_TELEMETRY_VERIFIED == '1')
+        if: always() && env.IDHAZH_HOST_TELEMETRY_VERIFIED == '1'
         continue-on-error: true
         run: |
           python backend/utilities/digest_publish.py run record \
@@ -446,12 +374,10 @@ jobs:
             --shard ${{ matrix.shard }} \
             --shards ${{ needs.plan.outputs.shards }}
 
-      # Read cumulative counters once, before job-clock consumes them.
+      # Keep the server counters in the runtime log artifact.
       - name: What the server counted
         if: always()
         continue-on-error: true
-        env:
-          MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
         run: |
           curl -sf --max-time 30 "${MODEL_SERVER_PROBE}/metrics" -o llama-metrics.prom || true
           if [ -s llama-metrics.prom ]; then
@@ -465,39 +391,10 @@ jobs:
           else
             echo "no metrics: llama-server was already gone, or the role's inference.metrics is off"
           fi
-          # Capture the runner's cgroup peak here; the portable stage reads this file.
-          RESOLVED=$(python3 backend/utilities/memory_profiling_control.py \
-            "$MEMORY_PROFILING")
-          if [ "$IDHAZH_HOST_TELEMETRY_MODE" = rust ]; then
-            echo "native monitor owns memory peak collection"
-          elif [ "$RESOLVED" = "off" ]; then
-            rm -f memory-peak.txt
-          elif [ -f /sys/fs/cgroup/memory.peak ]; then
-            echo "cgroup_memory_peak_bytes=$(cat /sys/fs/cgroup/memory.peak)" > memory-peak.txt
-          else
-            echo "cgroup_memory_peak_bytes=unavailable" > memory-peak.txt
-          fi
-
-      # Combine startup timing, the server log and counters in the host record.
-      # An absent start stamp leaves a missing reading, not a failed shard.
-      - name: What this job cost
-        if: always() && env.IDHAZH_HOST_TELEMETRY_MODE == 'legacy'
-        continue-on-error: true
-        run: |
-          set -euo pipefail
-          python backend/utilities/digest_publish.py run job-clock \
-            --date "${{ needs.plan.outputs.date }}" \
-            --execution "${{ github.run_id }}" \
-            --commit "${{ github.sha }}" \
-            --job work \
-            --shard ${{ matrix.shard }} \
-            --job-started-at "${JOB_STARTED_AT:-}" \
-            --server-log llama-server.log \
-            --counters-file llama-metrics.prom
 
           # The shard's deadline in config/push-retry.json leaves time to upload items.
       - name: Commit what this shard measured
-        if: always() && (env.IDHAZH_HOST_TELEMETRY_MODE == 'legacy' || env.IDHAZH_HOST_TELEMETRY_VERIFIED == '1')
+        if: always() && env.IDHAZH_HOST_TELEMETRY_VERIFIED == '1'
         continue-on-error: true
         env:
           COMMIT_MESSAGE: "work: ${{ needs.plan.outputs.date }} shard ${{ matrix.shard }}"
@@ -539,19 +436,14 @@ jobs:
       - name: What memory this shard used
         if: always() && inputs.memory_profiling != 'off'
         run: |
-          if [ "$IDHAZH_HOST_TELEMETRY_MODE" = rust ]; then
-            if [ -n "${IDHAZH_HOST_TELEMETRY_SESSION:-}" ]; then
-              cat "${IDHAZH_HOST_TELEMETRY_SESSION}/native-artifacts/cgroup-memory-peak.txt" \
-                2>/dev/null || echo "native cgroup memory peak not found"
-              python3 backend/utilities/memory_sampler.py summarize \
-                --sample-file "${IDHAZH_HOST_TELEMETRY_SESSION}/native-artifacts/rss-samples.jsonl" \
-                --process-file "${IDHAZH_HOST_TELEMETRY_SESSION}/native-artifacts/python-procs.jsonl"
-            else
-              echo "native host telemetry did not create a session"
-            fi
+          if [ -n "${IDHAZH_HOST_TELEMETRY_SESSION:-}" ]; then
+            cat "${IDHAZH_HOST_TELEMETRY_SESSION}/native-artifacts/cgroup-memory-peak.txt" \
+              2>/dev/null || echo "native cgroup memory peak not found"
+            python3 backend/utilities/d7_host_telemetry.py summarize-memory \
+              --sample-file "${IDHAZH_HOST_TELEMETRY_SESSION}/native-artifacts/rss-samples.jsonl" \
+              --process-file "${IDHAZH_HOST_TELEMETRY_SESSION}/native-artifacts/python-procs.jsonl"
           else
-            cat memory-peak.txt 2>/dev/null || echo "memory-peak.txt not found"
-            python3 backend/utilities/memory_sampler.py summarize
+            echo "native host telemetry did not create a session"
           fi
 
       - name: Upload runtime log
@@ -561,9 +453,6 @@ jobs:
           name: runtime-log-${{ matrix.shard }}
           path: |
             llama-server.log
-            rss-samples.jsonl
-            python-procs.jsonl
-            memory-peak.txt
             llama-metrics.prom
             backend/var/d7-host-telemetry/**/native-artifacts/**
           retention-days: 2
@@ -624,36 +513,18 @@ jobs:
       - name: Install
         run: pip install -e .
       - name: Select the pinned host toolchain
-        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
         working-directory: backend/rust/host-telemetry
         run: echo "RUSTUP_TOOLCHAIN=$(rustup show active-toolchain | cut -d' ' -f1)" >> "$GITHUB_ENV"
       - uses: actions/cache@v6
-        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
         with:
           path: ~/.cargo/registry
           key: host-crates-${{ runner.os }}-${{ hashFiles('backend/rust/host-telemetry/Cargo.lock', 'backend/rust/host-telemetry/rust-toolchain.toml') }}
       - uses: ./.github/actions/d7-host-telemetry
-        with:
-          enabled: ${{ env.IDHAZH_HOST_TELEMETRY_MODE == 'rust' }}
 
       - uses: actions/download-artifact@v8
         with:
           name: plan
           path: ${{ needs.plan.outputs.plan_dir }}/
-
-      # Before the embeddings and the site build, which want the runner the
-      # bandwidth reading wants.
-      - name: What machine this job drew
-        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'legacy'
-        continue-on-error: true
-        run: |
-          set -euo pipefail
-          python backend/utilities/digest_publish.py run fingerprint \
-            --date "${{ needs.plan.outputs.date }}" \
-            --execution "${{ github.run_id }}" \
-            --commit "${{ github.sha }}" \
-            --shard 0 \
-            --job assemble
 
       - uses: actions/download-artifact@v8
         with:
@@ -671,7 +542,7 @@ jobs:
             MEMORY_ARGS=(--memory-profiling "$MEMORY_PROFILING")
           fi
           python backend/utilities/d7_host_telemetry.py run \
-            --mode "$IDHAZH_HOST_TELEMETRY_MODE" --job assemble \
+            --job assemble \
             --run-id "${{ needs.plan.outputs.date }}-${{ github.run_id }}" \
             --git-sha "${{ github.sha }}" \
             --memory-profiling "$MEMORY_PROFILING" -- \
@@ -685,8 +556,7 @@ jobs:
       - name: Clean up the owned D7 monitor
         if: always()
         run: |
-          if [ "$IDHAZH_HOST_TELEMETRY_MODE" = rust ] \
-             && [ -n "${IDHAZH_HOST_TELEMETRY_SESSION:-}" ]; then
+          if [ -n "${IDHAZH_HOST_TELEMETRY_SESSION:-}" ]; then
             python backend/utilities/d7_host_telemetry.py cleanup \
                --workspace "$IDHAZH_HOST_TELEMETRY_SESSION"
           fi
@@ -725,23 +595,6 @@ jobs:
       - name: Check published ledger columns
         working-directory: frontend
         run: python -m idhazh published-columns --site-tree build
-
-      # Read rebuild-owned paths from their shared declaration.
-      # Record elapsed time before committing; commit and push time are excluded,
-      # as they are for plan and work. No server log or counters: assemble stands
-      # no model server up, so those two readings are not its to take.
-      - name: What this job cost
-        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'legacy'
-        continue-on-error: true
-        run: |
-          set -euo pipefail
-          python backend/utilities/digest_publish.py run job-clock \
-            --date "${{ needs.plan.outputs.date }}" \
-            --execution "${{ github.run_id }}" \
-            --commit "${{ github.sha }}" \
-            --job assemble \
-            --shard 0 \
-            --job-started-at "${JOB_STARTED_AT:-}"
 
       # Preserve completed raw/artifacts; rebuild derived outputs on fresh main.
       # Corpus replay rolls the actual incoming rows into the newest window.

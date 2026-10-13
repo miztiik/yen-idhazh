@@ -11,7 +11,7 @@ from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from types import TracebackType
-from typing import Any, Literal
+from typing import Literal
 from uuid import UUID, uuid4
 
 from idhazh.contracts.host_events import (
@@ -47,6 +47,7 @@ from idhazh.telemetry.host_evidence_inputs import (
     write_document,
 )
 from idhazh.telemetry.host_output_verify import verify_host_output
+from idhazh.telemetry.item_heartbeat import ItemHeartbeat
 
 _LOG = logging.getLogger("idhazh")
 
@@ -60,7 +61,7 @@ def _monotonic_ms() -> int:
 
 
 class HostEventClient:
-    """One bounded file-event session for shadow observation or native ownership."""
+    """One bounded native file-event session, optionally limited to resource results."""
 
     def __init__(
         self,
@@ -135,12 +136,12 @@ class HostEventClient:
     ) -> HostEventClient | None:
         """Open the launcher's serialized session; never substitute a Python collector."""
         env = os.environ if environ is None else environ
-        mode = env.get("IDHAZH_HOST_TELEMETRY_MODE", "legacy")
-        if mode == "legacy":
+        names = ("WORKSPACE", "MANIFEST", "CONFIG", "INVOCATION")
+        mode = env.get("IDHAZH_HOST_TELEMETRY_MODE")
+        if mode is None and not any(f"IDHAZH_HOST_TELEMETRY_{name}" in env for name in names):
             return None
         if mode != "rust":
-            raise ValueError("IDHAZH_HOST_TELEMETRY_MODE must be 'legacy' or 'rust'")
-        names = ("WORKSPACE", "MANIFEST", "CONFIG", "INVOCATION")
+            raise ValueError("a bound host session requires IDHAZH_HOST_TELEMETRY_MODE='rust'")
         missing = [name for name in names if not env.get(f"IDHAZH_HOST_TELEMETRY_{name}")]
         if missing:
             raise ValueError("native host session needs " + ", ".join(missing))
@@ -584,35 +585,6 @@ class HostEventClient:
         self._registered = True
         return True
 
-    def shadow_watch(
-        self,
-        watch: Any,
-        *,
-        item_id: str,
-    ) -> ShadowWatch:
-        if self._worker_id is None:
-            raise ValueError("host event worker must register before opening a window")
-        declared = next(
-            (
-                entry
-                for entry in self.manifest.windows
-                if entry.item_id == item_id and entry.emitter_id == self._worker_id
-            ),
-            None,
-        )
-        if declared is None:
-            raise ValueError("host event manifest does not declare this item window")
-        worker = next(
-            entry for entry in self.manifest.workers if entry.emitter_id == self._worker_id
-        )
-        body = WindowBody(
-            window_id=declared.window_id,
-            item_id=declared.item_id,
-            target=worker.target,
-            server=worker.server,
-        )
-        return ShadowWatch(self, watch, body)
-
     def native_watch(
         self,
         *,
@@ -670,11 +642,7 @@ class HostEventClient:
             return self._healthy
         if self._native and not self._registered:
             worker = next(
-                (
-                    entry
-                    for entry in self.manifest.workers
-                    if entry.target.pid == os.getpid()
-                ),
+                (entry for entry in self.manifest.workers if entry.target.pid == os.getpid()),
                 None,
             )
             selected_server_pid = (
@@ -765,7 +733,7 @@ class HostEventClient:
     def publication_receipt(self) -> HostPublicationReceipt:
         """Close and drain before handing unchanged native bytes to any publisher."""
         if not self.native:
-            raise ValueError("shadow evidence cannot enter production publication")
+            raise ValueError("resource-only evidence cannot enter production publication")
         self.end_job()
         self.stop()
         return self._save_receipt()
@@ -972,56 +940,6 @@ class HostEventClient:
             time.sleep(self.manifest.limits.poll_ms / 1000)
 
 
-class ShadowWatch:
-    """Keep the existing Python Watch authoritative while bracketing it with events."""
-
-    def __init__(
-        self,
-        client: HostEventClient,
-        watch: Any,
-        body: WindowBody,
-    ) -> None:
-        self._client = client
-        self._watch = watch
-        self._body = body
-        self._entered: Any = None
-        self._closed = False
-
-    def __enter__(self) -> ShadowWatch:
-        self._entered = self._watch.__enter__()
-        self._client._window_command("window.begin", self._body)
-        return self
-
-    def close(self) -> Any:
-        if not self._closed:
-            self._client._window_command("window.end", self._body)
-            self._closed = True
-        return self._entered.close()
-
-    def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> bool | None:
-        if not self._closed:
-            if exc_type is None:
-                self._client._window_command("window.end", self._body)
-            else:
-                if not issubclass(exc_type, Exception):
-                    abort = WindowAbortBody(**self._body.model_dump(), reason="cancelled")
-                else:
-                    abort = WindowAbortBody(**self._body.model_dump(), reason="work_failed")
-                try:
-                    self._client._window_command("window.abort", abort)
-                except (OSError, ValueError, TimeoutError) as event_error:
-                    assert exc is not None
-                    exc.add_note(f"host event abort also failed: {type(event_error).__name__}")
-            self._closed = True
-        suppressed = self._watch.__exit__(exc_type, exc, traceback)
-        return suppressed if isinstance(suppressed, bool) else None
-
-
 class NativeWatch:
     """Use the Rust window result as the item-health host-cell source."""
 
@@ -1037,35 +955,18 @@ class NativeWatch:
         self._body = body
         self._closed = False
         self._result: WindowResultBody | None = None
-        self._interval_s = interval_s
-        self._on_tick = on_tick
-        self._started = 0.0
-        self._stop_heartbeat = threading.Event()
-        self._heartbeat: threading.Thread | None = None
-
-    def _tick(self) -> None:
-        while not self._stop_heartbeat.wait(self._interval_s):
-            if self._on_tick is not None:
-                self._on_tick(time.monotonic() - self._started)
-
-    def _close_heartbeat(self) -> None:
-        self._stop_heartbeat.set()
-        if self._heartbeat is not None:
-            self._heartbeat.join()
+        self._heartbeat = ItemHeartbeat(interval_s=interval_s, on_tick=on_tick)
 
     def __enter__(self) -> NativeWatch:
-        self._started = time.monotonic()
         begun = self._client._window_command("window.begin", self._body)
         if begun is None:
             raise HostProtocolError(ProtocolFaultCode.STORE, "native window begin timed out")
-        if self._interval_s > 0 and self._on_tick is not None:
-            self._heartbeat = threading.Thread(target=self._tick, daemon=True)
-            self._heartbeat.start()
+        self._heartbeat.__enter__()
         return self
 
     def close(self) -> host.HostCells:
         if not self._closed:
-            self._close_heartbeat()
+            self._heartbeat.close()
             result = self._client._window_command("window.end", self._body)
             if result is None or not isinstance(result.body, WindowResultBody):
                 raise HostProtocolError(
@@ -1084,7 +985,7 @@ class NativeWatch:
         traceback: TracebackType | None,
     ) -> bool | None:
         if not self._closed:
-            self._close_heartbeat()
+            self._heartbeat.close()
             if exc_type is None:
                 self.close()
             else:

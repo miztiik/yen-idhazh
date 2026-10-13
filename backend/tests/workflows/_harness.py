@@ -70,9 +70,6 @@ EXPECTED_WORKFLOWS: Final = {
     "idhazh-pipeline-tests.yaml": ("Pipeline tests", frozenset({"workflow_dispatch"})),
     "llm-council.yml": ("LLM-COUNCIL", frozenset({"schedule", "workflow_dispatch"})),
     "measure.yml": ("Measurements", frozenset({"workflow_dispatch"})),
-    "rust-host-telemetry.yml": (
-        "Isolated Rust host evidence", frozenset({"workflow_dispatch"}),
-    ),
     "pages.yml": (
         "Pages publication",
         frozenset({"workflow_run", "workflow_dispatch"}),
@@ -143,18 +140,14 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("digest.yml", "article_limit"): "^[1-9][0-9]*$",
     ("digest.yml", "faithfulness"): DISPATCH_BOOLEAN,
     ("digest.yml", "memory_profiling"): DISPATCH_CHOICE,
-    ("digest.yml", "host_telemetry"): DISPATCH_CHOICE,
     ("encoder-comparison.yml", "start"): "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
     ("encoder-comparison.yml", "end"): "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
     ("encoder-comparison.yml", "commit_readings"): DISPATCH_BOOLEAN,
     ("encoder-comparison.yml", "reuse_pairs"): DISPATCH_BOOLEAN,
     ("encoder-comparison.yml", "selected_encoders"): DISPATCH_READ_BY_NAME,
     ("encoder-comparison.yml", "memory_profiling"): DISPATCH_CHOICE,
-    ("encoder-comparison.yml", "host_telemetry"): DISPATCH_CHOICE,
     ("idhazh-gardener.yml", "memory_profiling"): DISPATCH_CHOICE,
-    ("idhazh-gardener.yml", "host_telemetry"): DISPATCH_CHOICE,
     ("llm-council.yml", "memory_profiling"): DISPATCH_CHOICE,
-    ("llm-council.yml", "host_telemetry"): DISPATCH_CHOICE,
     ("digest.yml", "shards"): DISPATCH_CHOICE,
     ("drift.yml", "baseline_days"): "^[0-9]{1,4}$",
     ("drift.yml", "recent_days"): "^[0-9]{1,4}$",
@@ -182,10 +175,8 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("measure.yml", "budget_samples"): "^[1-9][0-9]{0,4}$",
     ("measure.yml", "model_speed_case"): DISPATCH_CHOICE,
     ("measure.yml", "memory_profiling"): DISPATCH_CHOICE,
-    ("measure.yml", "host_telemetry"): DISPATCH_CHOICE,
     ("measure.yml", "target"): DISPATCH_CHOICE,
     ("measure.yml", "threads"): "^[1-9][0-9]*$",
-    ("rust-host-telemetry.yml", "memory_profiling"): DISPATCH_CHOICE,
     ("idhazh-gardener.yml", "force"): DISPATCH_BOOLEAN,
     ("validate.yml", "candidate_models_file"): DISPATCH_READ_BY_NAME,
     ("validate.yml", "corpus_per_shard"): "^[1-9][0-9]{0,3}$",
@@ -505,8 +496,6 @@ BENCH_CONFIG_FLAG: Final = "--config"
 
 BENCH_CORPUS_STEP: Final = "Build the fixed bench corpus"
 
-BENCH_FINGERPRINT_STEP: Final = "What machine this bench drew"
-
 #: The one composite action in this repository. The step above was byte-identical
 #: in two workflows apart from the job it read the models file from, and a step
 #: duplicated across two files is a step that drifts the day one of them is
@@ -560,27 +549,9 @@ RSS_SAMPLE_FILE: Final = "rss-samples.jsonl"
 
 SERVER_LOG_FILE: Final = "llama-server.log"
 
-MEMORY_PEAK_FILE: Final = "memory-peak.txt"
-
-CGROUP_PEAK_PATH: Final = "/sys/fs/cgroup/memory.peak"
-
-# The two steps of the work job that write and read those files. The third,
-# which writes `memory-peak.txt`, is `SCRAPE_STEP` below.
-SAMPLE_MEMORY_STEP: Final = "Sample memory"
-
 MEMORY_SUMMARY_STEP: Final = "What memory this shard used"
 
-#: The sampler itself, which stopped being a shell script on 2026-09-23. It
-#: shares its `/proc` read with `runtime_sweep.py`, which is why it is a module
-#: rather than a second reader of the same two kernel rows.
-MEMORY_SAMPLER_MODULE: Final = "backend/utilities/memory_sampler.py"
-
-#: The two calls the work job makes. The launch is a foreground parent that
-#: detaches the loop, so a step body that backgrounds it again is the `$!` bug
-#: the port removed coming back.
-SAMPLER_START_CALL: Final = f"{MEMORY_SAMPLER_MODULE} start-sampler"
-
-SAMPLER_SUMMARY_CALL: Final = f"{MEMORY_SAMPLER_MODULE} summarize"
+MEMORY_SUMMARY_CALL: Final = "backend/utilities/d7_host_telemetry.py summarize-memory"
 
 #: The roll-call beside the samples: one row per python process per sample, so
 #: the count in `python_procs` can be attributed to processes by name.
@@ -727,29 +698,8 @@ REVIEW_ARTIFACT: Final = "review"
 # exist yet fails that call and costs the ledgers staged beside it.
 CORPUS_SEED: Final = ("corpus/corpus.jsonl", "corpus/corpus.meta.json", "corpus/holdout.txt")
 
-# The step that scrapes llama-server's own counters and copies the kernel's
-# memory peak out for the operator. It has to run before `JOB_CLOCK_STEP`,
-# which reads the file it writes.
+# The step that retains llama-server's own counters in the runtime artifact.
 SCRAPE_STEP: Final = "What the server counted"
-
-# Every job that records the machine it drew, and the `--job` value it files
-# under. All three of them since 2026-09-17: a run is only as fast as its
-# slowest job, and until that day only the middle one said what processor it was
-# on, so the two jobs either side cost time nobody could attribute.
-#
-# One step name across all three, because it answers one question in each.
-FINGERPRINT_STEP: Final = "What machine this job drew"
-
-FINGERPRINT_COMMAND: Final = "python backend/utilities/digest_publish.py run fingerprint"
-
-FINGERPRINT_JOB_FLAG: Final = "--job"
-
-FINGERPRINT_JOBS: Final = {"plan": "plan", "work": "work", "assemble": "assemble"}
-
-# The bench draws a machine too, and it says so in its own words because its row
-# goes somewhere else. `measure.yml` is dispatched by hand against unmerged
-# branches, so its rows live under the trial root.
-FINGERPRINT_BENCH_JOB: Final = "runtime"
 
 # The two-row fixture the reader is driven over: one `work` row and one
 # `visuals` row, sharing a date, a run and a shard index. Fixed in size, and it
@@ -761,26 +711,15 @@ FINGERPRINT_BENCH_JOB: Final = "runtime"
 # workflow step from spelling one.
 COUNTERS_FLAG: Final = "--counters-file"
 
-# The step that stamps the shard job's own clock. First in the job, so the clock
-# covers the cache restore and the weight load as well as the model time, and
-# read at `JOB_CLOCK_STEP`, which files the difference onto the host row.
+# The stamp precedes setup; the native lifecycle reads it for the host clock.
 CLOCK_STEP: Final = "Stamp the shard clock"
 
 CLOCK_VARIABLES: Final = ("JOB_STARTED_AT",)
 
-# The other end of `FINGERPRINT_STEP`. The probe runs before the model server so
-# the bandwidth reading gets an idle machine; the job's own clock and what the
-# weights cost to open are only knowable once the job is over. Both halves are
-# filed through the ledger door as one work unit of this job, so the clock's
-# whole row replaces the probe's half-row when the ledger is read.
-JOB_CLOCK_STEP: Final = "What this job cost"
-
-JOB_CLOCK_COMMAND: Final = "python backend/utilities/digest_publish.py run job-clock"
-
 # Neither of the work job's data-preservation steps may fail the shard. See the comment above
 # them in the workflow for which loss is the cheaper one. `BaseLoader` keeps
 # every scalar a string, so the value to compare is the word, not the boolean.
-WORK_LEDGER_STEPS: Final = (RECORD_STEP, SCRAPE_STEP, JOB_CLOCK_STEP, COMMIT_STEPS["work"])
+WORK_LEDGER_STEPS: Final = (RECORD_STEP, SCRAPE_STEP, COMMIT_STEPS["work"])
 
 TOLERATED: Final = "true"
 

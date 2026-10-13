@@ -2,84 +2,59 @@
 
 **Last Updated**: 2026-10-13
 
-## What is implemented
+## Current ownership
 
-The native Rust producers/storage and read-only verifier do not change
-production collectors. Shared ledger readers now admit their finite truthful
-host provenance and normalize declared legacy rows before consumers. Rust collects,
-renders and atomically files real probe, target and clock host records.
-The isolated resource monitor now returns item-window cells and exports legacy
-job-memory and runtime server-status artifacts. Production invocation remains
-unchanged; this is not the single-writer cutover.
-The corrected host row removes the legacy CPU count and frequency columns.
-The shared contract reads finite historical schemas without inventing measurements:
-old hashes retain algorithm 1, legitimate observed averages survive, and
-unmeasured corrected counts stay null.
+Rust is the sole host CPU/memory collector and raw host-file writer for measured
+pipeline jobs. Python sends structured events, writes the complete item-health
+census, verifies native receipts, and owns shared readers, compaction and publishing.
+Digest plan/work/assemble, bench and encoder probes, gardener task shards and
+council result saving use the workflow-owned Rust lifecycle.
+
+The Python collectors, shadow comparison path, exposed implementation selector
+and automatic fallback are removed. An invocation without a bound native session
+is uninstrumented: host cells are unavailable, never fabricated zeroes or Python
+readings. Item work, its health record and the waiting heartbeat continue. A
+selected native session with missing inputs or failed output fails explicitly;
+it cannot degrade into a different collector.
+
+The logical producer name `telemetry.silicon` is a stable persisted identity, not
+a module to execute. Removing the old Python module does not rename historical
+work units. Finite legacy readers remain: old fingerprints keep algorithm 1,
+legitimate observed averages survive, and unmeasured corrected counts stay null.
 
 ## Process boundary
 
-`host_events.py` declares session manifests, process identities, source coverage,
-window cells, legacy memory artifact records and lifecycle messages. Every event
-has a schema date, session, emitter sequence and operator-owned identity.
-`host_output.py` declares immutable host write plans and completions. A completion
-carries the existing publication receipt shape; it is evidence, not permission.
+`host_events.py` declares dated session manifests, process identities, source
+coverage, window cells and lifecycle messages. `host_output.py` declares immutable
+write plans and completions. A completion carries a publication receipt; it is
+evidence, not permission.
 
-`host_event_files.py` reads and publishes only named files under one bounded
-session root. Commands and responses are immutable. Identical retries reuse
-their evidence. Conflicting IDs, out-of-order commands and foreign targets fail.
-Completed messages retire only after consumption and their configured retry
-window. Active windows, pending events, total events, bytes and reads are bounded.
-Abort and shutdown resolve opening commands without silently dropping evidence.
+`host_event_files.py` reads and publishes named files under one bounded session
+root. Commands and responses are immutable. Identical retries reuse evidence;
+conflicting IDs, out-of-order commands and foreign targets fail. Consumed messages
+retire only after their configured retry window. Active windows, pending events,
+total events, bytes and reads remain bounded. Abort/shutdown preserve evidence.
 
-Memory collection defaults on. The manifest carries one strict Boolean; disabled
-memory cells are null and diagnosed separately from CPU and load readings.
-`observability.memory_profiling_enabled` is the shared pipeline setting.
-`--memory-profiling on|off` is the per-process override; other strings and a
-missing value are refused. The isolated workflow dispatch accepts `inherit`,
-`on` or `off`. `inherit` writes no override and uses shared config. The resolved
-Boolean is written into the scratch native config and manifest before collection.
-The content and measurement workflows use the same three-value dispatch shape.
+Memory defaults on. `observability.memory_profiling_enabled` is the shared setting;
+`--memory-profiling on|off` is the process override. Measured workflow dispatches
+accept `inherit`, `on` or `off`. The effective Boolean is written into the named
+native config and manifest before collection. Off performs no process-status,
+machine-memory, memory-cgroup or Python-population reads and creates no memory
+artifacts. CPU, load, identity, timing, lifecycle and heartbeat stay active.
+The memory-bandwidth copy retains its separate controls.
 
-The native off path takes no process-status, machine-memory, memory-cgroup or
-Python-population readings and creates no memory artifact directory. CPU, load,
-process identity, event boundaries, heartbeat and lifecycle remain active.
-The separate memory-bandwidth copy keeps its own controls. Production Python
-work collection has not cut over yet, so a Python work invocation resolved to
-off refuses before opening its legacy watch instead of claiming the legacy
-memory reads were disabled.
+## Native production boundaries
 
-## Inactive production boundaries
+The workflow builds the pinned crate and starts `d7_host_telemetry.py`. The wrapper
+owns the producer, monitor and cancellation boundary; readiness precedes events.
+The command router and `job_machine.record` consume only the bound native session.
+Returned host paths come from physically verified write plans/completions and are
+added to each producer's existing exact publication receipt, never a state-tree
+scan. A failed native producer cannot select a Python writer.
 
-`observability.host_event_shadow` defaults to false. In that mode the command
-router does not open a manifest and performs no event file read, write or wait.
-Python collection, item-health sealing and raw host writes remain unchanged.
-
-When an artifact-only comparison enables the switch, the command must name an
-isolated workspace, its session manifest and its effective native config.
-The Python client verifies those files against the existing finite limits. It
-registers the actual Python worker and selected server, opens a declared event
-window immediately after the existing Python `Watch` opens, and consumes the
-native result before the Python watch closes and before item health is sealed.
-Success without scoring, scored success, failed work and cancellation all use
-that same close boundary. Duplicate closes reuse the first close and emit no
-second event. An exited target stays explicit in the native result and never
-replaces the Python cells while shadow mode is active.
-
-The same client can bracket the existing job recorder with probe, optional
-target enrichment and clock commands. Only event I/O failures degrade under
-the recorder's existing warning policy. Invalid identities, ordering and
-protocol results still fail. Shadow roots remain below the named isolated
-workspace and are never returned as production files to stage or publish.
-YAML still owns native process lifetime. This boundary does not authorize the
-single-writer cutover or establish enabled-path latency.
-
-The D7 workflow selector defaults to `legacy`; native mode is not selected by a
-repository variable. The launcher currently accepts only digest `work` for an
-isolated native run. It verifies each typed write plan, completion and physical
-file hash, then refuses publication because the existing publishers do not yet
-consume the native file list. Other D7 families fail before their Python writer
-or publisher starts. This is a safe integration slice, not production cutover.
-
+Rust window results supply item-health host cells. Success, scoring, work failure
+and cancellation use the same close boundary. Duplicate closes reuse the first
+result. YAML owns process lifetime; the complete item-health writer stays Python.
 ## Probe, target and clock collection
 
 The thin native CLI routes `probe`, `target` and `clock` commands. `invocation.rs`
@@ -308,6 +283,8 @@ and verification limits. It declares no production state root. Callers validate
 its sections with `CollectionControls`, `HostEventLimits`, `HostCaptureLimits`
 and `VerificationLimits`. Session manifests supply finite named inputs/outputs,
 workers and windows. Tunable intervals and byte limits are not source constants.
+`config/host-telemetry-lifecycle.json` retains only the live command deadline and
+output-byte cap. These are unchanged runtime bounds, not comparison calibration.
 The shared default is `observability.memory_profiling_enabled` in
 `config/idhazh.json`; native scratch config carries its already resolved value.
 
@@ -316,14 +293,7 @@ expected target root/invocation, named plan/completion files and explicit
 verification limits. It returns verified physical hashes and completeness,
 or a named refusal. It neither collects nor publishes.
 
-## Artifact-only Linux comparison
-
-Run this migration experiment only by explicit `workflow_dispatch`. It does not
-run automatically on pull requests, pushes or schedules. Normal CI retains the
-fixture-backed Rust module and cross-language functionality tests. The explicit
-experiment remains available for the outstanding production cutover evidence;
-remove its workflow and comparison-only machinery after migration and recovery
-are complete.
+## Reply retention and cancellation
 
 The latest consumed host reply group remains available while a job runs, even
 after its ordinary retry window expires. A valid successor or session stop
@@ -331,329 +301,57 @@ releases that protection; failed admission does not discard the predecessor.
 The limit and consumed-only retirement rules do not change. Producer cancellation
 unwinds owned-process cleanup, and a producer termination failure cannot bypass
 native monitor cleanup. Council controls use its selected `--config-root`.
-Shadow sessions still keep the authoritative Python probe and clock writes.
+No shadow session or competing Python probe/clock writer remains.
 
-`.github/workflows/rust-host-telemetry.yml` uses one stock `ubuntu-latest`
-job with read-only repository permissions, credential-free checkout and seven-day
-artifacts. It does not call `measure.yml`, publish, migrate history or write
-production state. Its separate steps build/test the pinned crate, run independent
-CPU/hash and unchanged-input replay plus historical dry-run fixtures, measure the
-release build, prepare references, store the Rust probe, start the monitor, run
-paired workloads, drain, store the clock, compare the same files, and always
-clean up/upload. Dependency preparation happens before tests. The same native
-crate supplies fixture and live results; no collector delegates to Python.
+## Functionality evidence
 
-`utilities.compare_host_telemetry` routes the finite session operations. A new,
-explicit `backend/var/` workspace holds distinct reference, native raw-state,
-native-artifact, event, generated-state, corpus and frontend roots. Links,
-junctions, escapes, overlapping roots and production-root spellings fail.
-Reference rows use the existing Python decoders and raw-file writer only under
-`reference/state/`; native output preserves `state/raw/host-fingerprint/`
-grammar. Neither shared Python collectors nor readers change.
+The one-time artifact-only comparison workflow and its Python reference collectors
+are retired after accepted Ubuntu all-family/control/publication evidence.
+Normal CI still builds the pinned Rust crate and runs its module tests,
+cross-language codec/read fixtures and real process-lifecycle regressions.
+Those tests exercise functionality over bounded generated or recorded inputs;
+they do not validate the changing production archive on every pull request.
 
-The driver records the actual workflow attempt in both writers. Its resource
-`manifest.json` and standalone `host-manifest.json` have distinct session IDs,
-event roots and host/resource result emitters, while sharing the declared job,
-revision, boot identity, effective controls and real worker/CPU target. Both
-probe and clock use the same host session and native raw root; retained commands,
-sequences, predecessor IDs and completion references are checked. Resource
-readiness/window counters cannot collide with a standalone result counter.
+CPU/hash corrections use independently known fixture results, not equality to
+retired Python CPU semantics. Python and Rust encoded files are verified under
+their truthful engine/container provenance, never relabelled to claim native bytes.
 
-`config/host-telemetry-comparison.json` owns comparison-only counts, pacing,
-intervals, deadlines, inventories and numeric bounds. The strict native experiment
-configuration remains unchanged. Format, compression and cache sizing come from
-the existing application config. Four reference runs precede every live Rust result;
-their measured spread freezes each varying field's numeric allowance under a
-predeclared ceiling. Excess noise refuses the run, never widens the ceiling.
-Deterministic unchanged cells compare exactly. Corrected CPU facts rely on named
-independent declared-input fixtures and validated live source diagnostics, not
-equality to obsolete Python CPU columns. Canonical and identity tests use the
-same declared row bytes, not physical native/PyArrow equality.
+## Completed historical maintenance and recovery
 
-One real Python worker keeps a touched 32-MiB allocation and hashes it 128 times
-per run. Each run has a declared seven-second minimum wall duration so legacy
-second-resolution sample clocks have unambiguous interior coverage. This pacing
-is part of the bounded fixture, not a speed measurement adjustment. Five-second
-sampling respects native immutable retry retention; an unsafe faster cadence
-is refused before capture instead of changing native budgets. Two pairs
-alternate reference instrumentation and native-only instrumentation; native-only
-runs create no substitute Python sampler. Captures retain actual Python PID/start
-identities, sample/rollcall totals and per-window coverage. Population differences
-are reported separately: the Rust monitor is not a Python process.
+The approved one-time Python conversion completed on 2026-10-13: 308 manifested
+files, 815 settled host records, 587 work records and an unchanged dashboard.
+The conversion preserved original allocation clocks, settlement winner/key/attempt,
+v1 fingerprint labels, legitimate frequency averages and truthful container
+provenance. Installed readers and the dashboard publisher reconciled the exact
+approved bounded inputs. This was Parquet-to-Parquet maintenance, not Python
+host collection or a Git-history rewrite.
 
-The bounded release measurement checks the actual checkout revision, pinned
-toolchain and declared target root. Its retained executable size/hash must match
-the binary used by the comparison; build output and elapsed time have committed
-caps. No compilation result is accepted merely because its supplied SHA agrees.
+The one-time inventory/dry-run/apply machinery, migration-only configuration and
+its tests are removed from active main. Shared codecs, finite versioned readers,
+physical/page/footer validation and normal generated functionality tests remain.
+Archive manifests, row counts and report hashes stay out of recurring pytest.
 
-The versioned `HostEvidenceReport` retains build wall time/executable bytes/hash,
-startup, monitor CPU/RSS, ACK latency, workload and reference-instrument costs,
-frozen bounds, every field classification/comparison, sample coverage, populations,
-fixture case names and physical artifact hashes. Missing build, reference,
-receipt, window, population, drain or coverage evidence fails. The bounded
-verifier and shared `load`/`load_stored` readers verify the same original native
-bytes. Verification compares inventory hashes
-before/after and never re-encodes a native file. Received resource events preserve
-native JSON bytes and must keep session identity, increasing emitter order,
-triggering worker/window commands and a drain with no aborted windows. Sample
-totals preserve the unchanged legacy HWM-or-RSS rule, including zero-HWM fallback;
-that is independent of corrected window memory precedence.
-Unreadable optional executable or argument metadata does not remove readable
-Python memory from this population. Reference argument captures retain only the
-program and the existing three argument fields, never the full command line.
+Verified original bytes, the immutable dated plan/events, exact approval/report
+and maintenance receipt remain in the task-owned ignored transaction directory.
+An independently verified copy is retained outside the target checkout.
+The completed transaction is
+`be1c177b5cac6b28f6b6f09fb57b8dac593acb188552c9353768d7ac227caf98`.
+Do not delete these recovery artifacts as source-code cleanup.
 
-Always-run cleanup names only recorded owned worker, sampler and monitor targets,
-checks PID/start identity, and verifies termination within the existing drain
-bound. Partial preparation can stop its recorded worker without a completed
-manifest. `cleanup.json` is separate termination evidence. An actual Linux stage
-integration and partial-failure cleanup test run in this workflow; Windows tests
-exercise explicit refusals, not live Linux certification.
-Response waits check the recorded worker identity and surface bounded worker and
-sampler logs when it stops. The dedicated Linux tests retain their task-owned
-workspace under the uploaded test directory, including failed-stage diagnostics.
-Incomplete native timeout replies are retained as received and fail the required
-acknowledgement; they are never accepted as healthy windows. The live monitor
-retires validated, consumed events after their retry window before admitting the
-next sample, keeping active windows protected and shutdown capacity reserved.
+If recovery is needed, use the preserved maintenance worktree or frozen revision
+`d156864a5bce5df2a44eff972bce8f740023f48a`, not the current application code.
+Its `utilities.migrate_host_fingerprints` command takes the original manifest,
+validated D16 bundle, original dated approval and explicit target checkout.
+Use the same inputs with `--apply --rollback` to restore verified originals.
+Keep the local checkout offline for the entire recovery window. The old/new
+byte checks refuse a third state; never replace a foreign Git lock or reclaim
+ownership merely because a lock is old. Physical target identity and unchanged
+Git state remain part of that frozen recovery procedure.
 
-The merged D5 evidence report never authorizes adoption or
-history replacement, asserts a general speedup, or substitutes for the exact
-consumer and production gates.
-
-## Bounded historical inventory and dry-run
-
-`utilities.migrate_host_fingerprints` now prepares real replacement candidates
-without writing historical files. It is a maintenance codec, not a CPU collector.
-The unchanged Python collectors remain unchanged; migrated readers consume the
-candidate output without Python re-encoding.
-
-Supply a `HistoryManifest` from `idhazh.contracts.host_migration`. Its schema is
-available through `HistoryManifest.json_schema()`. The manifest requires:
-
-- `version: "2026-10-11"`, a UTC `converted_at`, and the maintenance `invocation`
-  with producer `utilities.migrate_host_fingerprints` and the converting git SHA.
-- Inclusive `range_start` and `range_end`, both before the conversion day.
-- A finite `roots` list. Each root names its `state_root`, production or trial
-  `kind`, and tier-first host `prefix`. Production uses `["host-fingerprint"]`;
-  a trial adds its explicitly named segments before that final segment.
-- `closed_periods`, naming each root, exact `covers` and `daily`, `monthly` or
-  `yearly` grain. Every indexed entry, including empty and lost periods, must be
-  included. A complete month or year must fit inside the operator's range.
-- `sources`, naming every selected physical `path`, root, kind, exact original
-  SHA-256 and byte count. Raw, compact, raw-index and set-aside sources name
-  their closed period. Compact files, indexes, views and receipts declare their
-  exact source-path `dependencies`; raw files have no dependencies.
-- `legacy_raw_evidence`, when a compact repair needs an original CSV row, pins
-  its bytes and Git commit/path. The verifier resolves that exact path in the
-  commit tree and requires its blob ID to match the evidence, not only the
-  evidence bytes' computed blob hash.
-- An `isolated_root` under `backend/var/`, outside all historical state roots.
-
-Source kinds are `raw`, `compact`, `raw_index`, `compact_index`, `view`, `receipt`
-and `set_aside`. The tool never discovers files recursively. An operator pins a
-named source list, including every selected probe, clock and superseded attempt,
-before running it. Unlisted later files require a fresh manifest. Completeness
-means this exact manifest was reconciled, not that all history was discovered.
-
-From `backend/`, with the repository's Python development environment:
-
-```powershell
-python -m utilities.migrate_host_fingerprints `
-  --workspace-root (Resolve-Path ..).Path `
-  --manifest backend/var/history-manifest.json
-```
-
-The command defaults to dry-run. `--apply` requires the exact manifest, validated
-D16 bundle, a dated `HistoryApplyApproval`, and an offline local checkout. The
-transaction core stages destination-local outputs, verifies source-byte
-backups, records immutable planned/replaced/verified journal events, rechecks
-each source immediately before its per-file atomic replacement, and supports
-exact-byte restart or rollback. It never accepts a third source state.
-
-The approval records existing unattended user authority, D16/D7 revisions, the
-three exact evidence hashes and the physical target directory identity. It is
-not a signature service or another permission request. The maintenance context
-refuses known or unresolved local writers, holds the existing OS publication-lock
-primitive, and exclusively owns the actual Git index lock, including in linked
-worktrees. It rechecks target identity, HEAD, index bytes and exact lock ownership
-before staging or replacing files. Release removes only its own exact index lock;
-the OS-lock inode remains. Neither an index lock nor a process snapshot prevents
-arbitrary file writes: the operator must keep this checkout offline for the whole
-apply/recovery window. Ubuntu CI has a separate filesystem and needs no shared lease.
-
-```powershell
-python -m utilities.migrate_host_fingerprints --apply `
-  --workspace-root (Resolve-Path ..).Path `
-  --manifest backend/var/history-manifest.json `
-  --bundle-root backend/var/approved-d16-bundle `
-  --approval backend/var/d17-approval.json
-```
-
-Repeat the same command and approval to resume exact old/new states. Add
-`--rollback` to restore verified original bytes; a third state is never overwritten.
-Manifest, bundle and approval may be explicitly named outside the target checkout;
-historical writes still come only from validated relative manifested paths.
-After an abrupt process kill, a surviving index lock requires operator recovery.
-Hold the same OS maintenance lock, validate the owner contract and physical
-checkout/evidence/Git bindings, and prove the recorded PID/start time no longer
-identifies a live process before removing that exact lock. Never reclaim by age
-or remove a foreign, changed or ambiguous lock.
-
-The public journal and rollback entry points require a live validated maintenance
-context. Internal generated fixtures without a context admit only a temporary
-child outside any Git checkout; Windows short-name aliases resolve to the same
-physical temporary root. Per-file atomicity is not a multi-file or
-power-loss durability claim. D16's complete raw/compact/index/receipt/view
-reconciliation and its exact approved manifest remain prerequisites;
-implementation tests are not application evidence.
-Installed reconciliation verifies every physical hash and backup, settlement
-rank and keys, replacement schemas and index rows/bytes. It projects only the
-approved installed inputs and reruns the real ledger reader and dashboard
-publisher against D16's recorded result. Unrelated data from later runs is not
-part of that historical replay.
-Settlement winners retain their source, key and attempt. D16's original ranked
-identity is mapped through that winner's exact recorded normalized identity,
-including approved legacy compact unit-ID repairs; demanding the erroneous
-legacy ID after conversion would reject the intended migration.
-
-The approved offline rewrite completed on 2026-10-13: 308 manifested files,
-815 settled host records, 587 work records and an unchanged dashboard. Original
-bytes, approval, report, maintenance receipt and completion events remain under
-the task-owned ignored transaction root. This is a completed bounded maintenance
-operation, not a recurring archive-quality gate or a rewrite of Git history.
-
-The command reads exactly two repository-owned configuration files, resolved
-from the utility's location, not the operator's workspace or environment.
-`history_migration_limits` in `config/host-history-migration.json` caps roots,
-closed periods, manifested sources, per-file and aggregate history rows,
-manifest bytes and the complete bundle. Its 512-source, 128-row/file and
-4096-row aggregate ceilings are independent of `verification_limits.max_files`
-and `max_rows`, which continue to cap an individual host output plan and file.
-This lets one explicitly bounded history manifest cover its complete input
-set without widening the D5 write-plan contract. It contains no copied
-verification defaults. `verification_limits` in
-`config/host-telemetry-experiment.json` caps individual and aggregate source
-bytes, footer/decode bytes, JSON depth and Thrift items. Every source read is
-bounded and hash-checked.
-`HistoryLimits` validates the combined effective inputs before reading history.
-`offline_maintenance.command_timeout_seconds` in the migration-only configuration
-bounds local Git/process-inspection commands independently of native readiness;
-Windows CIM startup is not a Rust readiness measurement.
-Missing files or invalid bounds refuse the dry-run without source or config
-writes. The shared experiment file retains only native settings; Rust still
-rejects unknown sections and does not read the migration-only file.
-The full batch and existing retry targets validate before any bundle is created.
-Physical root and file identities reject case aliases and repeated hard-linked
-sources or destinations. Existing ancestors also establish separation when the
-isolated directory does not yet exist. Original path labels are not rewritten;
-distinct case-sensitive roots stay distinct. Symlinks and junctions are refused.
-Missing destination names follow the existing parent's case rules. On Windows,
-those rules come from read-only directory attributes, not universal lowercasing.
-The Windows API branch uses an explicit platform check; Linux does not load
-Windows-only APIs.
-Missing or unreadable sources, hash drift, unknown/mixed schemas, unsafe paths,
-receipt disagreement and incomplete compact/index dependencies fail by name.
-Present set-aside files receive `unresolved`, never a successful skipped-file
-diagnosis. Lost periods remain lost; empty periods remain empty.
-An index loss day that also has compact rows is a contradiction, not a marker
-to repair. Loss, expiry and set-aside markers remain exact, including periods
-with only unread files set aside and no surviving rows.
-
-JSONL and bounded flat historical Parquet use the existing maintenance codecs.
-Parquet admits actual V1 page bodies and finite dictionaries before Arrow decodes
-rows; none, Snappy and Zstd retain their actual compression. Unsupported page
-profiles fail, rather than weakening decode bounds. No new Rust output is
-re-encoded: already corrected files are explicitly excluded from replacement.
-Footer row counts must equal the bounded row-group sum before page decoding,
-and the actual decoded row count afterward. Contradictions refuse the entire
-source batch without a bundle or historical writes.
-A physical compact Parquet file may represent a packed zero-row period when its
-envelope and index agree. Its empty chunks and page totals remain bounded and
-validated; `empty` and `lost` index markers are not converted to packed files.
-Zero-row raw inputs remain refused, and producer verification retains its
-existing one-row requirement.
-
-Each legacy candidate preserves its path, UUID5 work unit, UUID8 file identity,
-allocation clock, attempts and original producer/git lineage. The canonical row
-digest is checked before the shared legacy normalizer runs. Historical hashes
-retain algorithm 1 only when present; legitimate positive observed averages
-survive. The exact discarded old counts/frequencies and every null field are
-reported. Old counts and maximum frequencies never become corrected readings.
-Both original and normalized unions pass the existing whole-row settlement
-function; keys, winners, attempts and cardinality must agree.
-When compact input dependencies are declared, they must cover the complete
-original `built_from` count and settle to the same rows, including discarded
-legacy CPU values. Partial or contradictory input claims fail. Compact-only
-history instead records no surviving inputs and retains its original count;
-that does not claim recovery or independent proof of retired source bytes.
-
-The immutable bundle lives at `<isolated_root>/<scope_hash>/<evidence_hash>/`.
-It contains the manifest, report, verified raw/compact/index candidate bytes and
-retained original receipts. The report records original/replacement envelopes,
-physical and canonical hashes, identities/keys, nulls, averages, index changes,
-source dependencies and estimated read/candidate bytes. `scope_hash` binds the
-entire operator manifest. `evidence_hash` binds the validated report and limits;
-the derived bundle path and the hash itself are excluded from that preimage.
-Exact partial retries reuse bytes. Different bytes at a candidate path fail.
-
-Console view inputs use the retained `ConsoleBand` contract, including its known
-historical schema dates. The retired `frontend/public/machine/*.csv` projection
-has no current reader contract and is refused before any bundle write. This
-refusal does not retire source bytes or make a manifested file reconciled.
-An affected historical batch remains blocked until its exact dependencies are
-resolved; unrelated validated batches can proceed.
-The report is published last. New evidence generations do not overwrite old ones.
-This is per-file atomic visibility, not a multi-file or power-loss guarantee.
-The read estimate counts the two source passes; manifest/retry-target reads and
-bundle verification are additional I/O. The candidate estimate includes the
-manifest and candidate receipt but excludes the final report; the enforced
-bundle byte cap includes every artifact, including that report.
-
-`candidate-maintenance-receipt.json` gives the replacement target paths and
-candidate physical hashes under the maintenance invocation. It is a planned
-receipt shape, not proof that historical paths already hold those bytes.
-Old invocation receipts remain historical evidence. No source is retired;
-future application must verify original-byte backups and a writer/compactor/
-publisher quiet window before replacing any source.
-
-The initial reader mode is `candidate_reader`. Raw, compact and index candidates
-can be `candidate_complete`. Actual published `machine/<YYYY-MM>.csv` and
-`console/band.json` sources are validated through their existing contracts, but
-their replacements and associated receipts are explicitly `deferred`. There are
-no fabricated future-consumer calls or copied views described as rebuilt.
-`historical_readiness` remains `blocked`, even for a complete fixture inventory.
-After shared schemas and consumers migrate, the same closed manifest must run
-against those actual consumers, freeze view/receipt bytes in a new evidence
-generation, and satisfy the historical evidence gate before application.
-
-`HistoryReport` version `2026-10-12` records production cutover separately from
-historical readiness. A successful migrated-consumer replay can make only the
-historical decision ready. This report cannot certify production cutover and
-keeps its production decision `blocked`; replay and elapsed time cannot satisfy
-that gate. D7 separately verifies all-family, single-writer Ubuntu evidence before
-the workflow defaults select Rust. Python remains an explicit temporary rollback
-until cleanup, never a silent native-failure fallback.
-
-The artifact-only workflow can run these bounded, generated-file tests before
-its verdict; no test scans committed archives or installs tools:
-
-```powershell
-python -m pytest -n 0 tests/contracts/test_host_migration.py `
-  tests/test_host_fingerprint_migration.py
-```
-
-The exact historical-data replay is a one-time operator activity outside pytest,
-not an application, production or recurring CI step. Offline Python conversion
-and reader replay may run on the development machine; Ubuntu remains the target
-for live Rust process evidence. Preserve the exact manifest, report and candidates
-in the task-owned maintenance directory. The approved apply replaces history
-only after verified backups and destination-local staging are complete.
-Report hashes bind one evidence generation, not the latest repository commit;
-compare changed report fields and candidate data before accepting a new generation.
-Normal tests use generated fixtures to cover functionality, not archive quality.
-After the rewrite, remove one-time checks and any migration-only utility or tests
-with no remaining recovery caller. Retain fixture tests for shared codecs,
-versioned readers and any recovery code still in use.
+Each replacement is atomic; the batch is not a multi-file filesystem transaction
+or a power-loss durability claim. Moving repository commits do not invalidate
+the historical report: its hashes bind approved file/evidence bytes, not a demand
+that main stop changing.
 
 ## Design rationale
 

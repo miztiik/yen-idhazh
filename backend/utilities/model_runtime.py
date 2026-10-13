@@ -589,7 +589,7 @@ def start_server(config_root: Path, name: str) -> None:
 def server_identity(pid: int, *, proc_root: Path = Path("/proc")) -> ProcessTarget:
     """Read the selected process's start ticks without any process-table search."""
     from idhazh.telemetry.host_evidence_inputs import settings
-    from utilities.host_telemetry_reference import identity
+    from idhazh.telemetry.host_process_identity import identity
 
     return identity(pid, settings()[0], proc_root)
 

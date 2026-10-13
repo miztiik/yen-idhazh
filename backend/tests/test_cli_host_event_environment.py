@@ -22,12 +22,12 @@ from idhazh.contracts.ledger_name import LedgerName
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_workflow_mode_is_legacy_by_default_and_native_only_when_selected() -> None:
+def test_session_marker_is_optional_but_never_selects_a_python_collector() -> None:
     assert _workflow_host_event_mode({}) is None
-    assert _workflow_host_event_mode({"IDHAZH_HOST_TELEMETRY_MODE": "legacy"}) == "legacy"
     assert _workflow_host_event_mode({"IDHAZH_HOST_TELEMETRY_MODE": "rust"}) == "rust"
-    with pytest.raises(ValueError, match="must be 'legacy' or 'rust'"):
-        _workflow_host_event_mode({"IDHAZH_HOST_TELEMETRY_MODE": "shadow"})
+    for removed in ("legacy", "shadow"):
+        with pytest.raises(ValueError, match="Python collection was removed"):
+            _workflow_host_event_mode({"IDHAZH_HOST_TELEMETRY_MODE": removed})
 
 
 def test_named_session_paths_use_explicit_arguments_before_launcher_environment(
@@ -148,28 +148,11 @@ def test_cli_opens_native_client_from_launcher_paths_and_resolved_control(
     assert client.manifest.session_id == session_id
 
     monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MODE", "legacy")
-    settings.app.observability.host_event_shadow = False
-    legacy_client = _host_event_client(
-        argparse.ArgumentParser(),
-        argparse.Namespace(
-            host_event_workspace=None,
-            host_event_manifest=None,
-            host_event_config=None,
-            host_event_mode=None,
-        ),
-        settings,
-    )
-    assert legacy_client is None
-
-    settings.app.observability.host_event_shadow = True
-    shadow_client = _host_event_client(
-        argparse.ArgumentParser(),
-        argparse.Namespace(
-            host_event_workspace=None,
-            host_event_manifest=None,
-            host_event_config=None,
-            host_event_mode=None,
-        ),
-        settings,
-    )
-    assert shadow_client is not None and not shadow_client.native
+    with pytest.raises(SystemExit):
+        _host_event_client(
+            argparse.ArgumentParser(),
+            argparse.Namespace(
+                host_event_workspace=None, host_event_manifest=None, host_event_config=None,
+            ),
+            settings,
+        )

@@ -20,14 +20,7 @@ from idhazh.telemetry.publish import day_metrics
 
 from ._harness import (
     COMMIT_STEPS,
-    FINGERPRINT_COMMAND,
-    FINGERPRINT_JOB_FLAG,
-    FINGERPRINT_JOBS,
-    FINGERPRINT_STEP,
     HARVEST_STEP,
-    JOB_CLOCK_COMMAND,
-    JOB_CLOCK_STEP,
-    METRICS_FILE,
     RECORD_COMMAND,
     RECORD_STEP,
     REVIEW_STEP,
@@ -51,6 +44,7 @@ from ._harness import (
     _run_commit_script,
     _script,
     _scripted_origin,
+    _shell_words,
     _step,
     _steps,
     _substitute,
@@ -80,17 +74,7 @@ def test_a_worker_commits_its_rows_before_the_run_can_throw_them_away() -> None:
         step = _step(workflow, "work", "name", name)
         condition = _normalize_condition(step.get("if"), f"work step {name}")
         if name in {RECORD_STEP, COMMIT_STEPS["work"]}:
-            assert condition in {
-                "always()",
-                "always() && env.IDHAZH_HOST_TELEMETRY_MODE == 'legacy'",
-                "always() && (env.IDHAZH_HOST_TELEMETRY_MODE == 'legacy' || "
-                "env.IDHAZH_HOST_TELEMETRY_VERIFIED == '1')",
-            }
-        elif name == "What this job cost":
-            assert condition in {
-                "always()",
-                "always() && env.IDHAZH_HOST_TELEMETRY_MODE == 'legacy'",
-            }
+            assert condition == "always() && env.IDHAZH_HOST_TELEMETRY_VERIFIED == '1'"
         else:
             assert condition == "always()"
 
@@ -116,36 +100,6 @@ def test_a_worker_commits_its_rows_before_the_run_can_throw_them_away() -> None:
         names.index(RECORD_STEP) + offset for offset in range(len(WORK_LEDGER_STEPS))
     ]
     assert names.index(COMMIT_STEPS["work"]) < names.index("Prompt cache log summary")
-
-
-def test_the_job_clock_step_is_handed_every_reading_the_probe_cannot_take() -> None:
-    """The other half of the host row, and every one of its inputs lives on this runner.
-
-    The machine probe runs before the model server, because the bandwidth
-    reading wants an idle host. What the job cost is only knowable at its end,
-    and none of these numbers can be read from the checkout: the stamp comes from
-    a step that ran before it existed, the log belongs to the server this job
-    started, and the scrape is what a step above wrote out of that server before
-    it went. So the step has to hand all three over, and a step that named none
-    would write a row with four empty cells and no failure.
-    """
-    workflow = _load_workflows()["digest.yml"]
-    step = _step(workflow, "work", "name", JOB_CLOCK_STEP)
-    script = _substitute(_script(step, f"work step {JOB_CLOCK_STEP}"))
-
-    assert JOB_CLOCK_COMMAND in script
-    assert f'--date "{SUBSTITUTED_DATE}"' in script
-    assert f"--shard {SUBSTITUTED_SHARD}" in script
-    # `:-` rather than a bare expansion, so a stamp that never arrived is an
-    # empty cell instead of the word `unbound` reaching a contract.
-    assert '--job-started-at "${JOB_STARTED_AT:-}"' in script
-    assert "--server-log llama-server.log" in script
-    # The second instrument's two cells. Named rather than left to the flag's own
-    # default, so a reader of the step can see every file the row is built from.
-    assert f"--counters-file {METRICS_FILE}" in script
-    # The job the row files under, which is the key column that joins it to the
-    # probe's half. A clock filed under another job is a second row, not a half.
-    assert f"{FINGERPRINT_JOB_FLAG} work" in script
 
 
 def test_a_killed_shard_still_hands_assemble_the_items_it_finished() -> None:
@@ -282,78 +236,30 @@ def test_a_ledger_that_will_not_push_cannot_cost_the_day_a_worker() -> None:
     assert tolerant == {
         *(("work", name) for name in WORK_LEDGER_STEPS),
         ("plan", COMMIT_STEPS["plan"]),
-        ("assemble", FINGERPRINT_STEP),
-        ("assemble", JOB_CLOCK_STEP),
         ("assemble", HARVEST_STEP),
         ("assemble", REVIEW_STEP),
     }
 
 
-def test_every_job_that_records_a_machine_also_closes_its_row() -> None:
-    """A probe with no clock is a half-row for ever, and nothing said so.
-
-    The probe opens the row at job start and the clock fills the four cells only
-    the end of a job can know. A job that runs one and not the other leaves a row
-    that reads as a job which cost nothing to run - and `assemble` did exactly
-    that from 2026-09-17, because it took the probe and nobody noticed the other
-    half was missing.
-
-    Asked of every probing job rather than of a list written again here, so a new
-    job that takes the probe owes the clock without an edit to this test.
-    """
-    workflow = _load_workflows()["digest.yml"]
-    for job_name in sorted(FINGERPRINT_JOBS):
-        names = [step.get("name") for step in _steps(workflow, job_name)]
-        assert JOB_CLOCK_STEP in names, (
-            f"the {job_name} job records a machine and never closes the row: it has "
-            f"{FINGERPRINT_STEP!r} and no {JOB_CLOCK_STEP!r}, so job_seconds stays empty"
-        )
-        assert names.index(FINGERPRINT_STEP) < names.index(JOB_CLOCK_STEP), (
-            f"the {job_name} job clocks itself before it has measured the machine"
-        )
-        script = _substitute(
-            _script(_step(workflow, job_name, "name", JOB_CLOCK_STEP), f"job {job_name} clock")
-        )
-        assert JOB_CLOCK_COMMAND in script, f"{job_name} must run {JOB_CLOCK_COMMAND}"
-        assert f"{FINGERPRINT_JOB_FLAG} {FINGERPRINT_JOBS[job_name]}" in script, (
-            f"the {job_name} job does not clock itself as {FINGERPRINT_JOBS[job_name]}, so the "
-            "clock's half would land on another job's row"
-        )
-
-
 def test_every_job_that_records_a_machine_says_which_job_it_is() -> None:
-    """A row that cannot name its job is a row nobody can group by.
-
-    The column is an enum and the value is the job's own id in this file, so a
-    step that drifts from its job id writes a row that reads as another job's.
-
-    Closed-world, because a fourth job that draws a runner and records it would
-    otherwise file a `--job` value nothing here ever reads. Where its row LANDS is
-    somebody else's question: `test_ledger_staging.py` charges every job with the
-    ledgers the verbs in its own `run:` bodies write, so a new probing job is held
-    to staging `state/raw/host-fingerprint` without an edit anywhere.
-    """
+    """The native wrapper and its producer share the job's own identity."""
     workflow = _load_workflows()["digest.yml"]
     probing = {
         job_name
         for job_name in _mapping(workflow.get("jobs"), "jobs")
         for step in _steps(workflow, job_name)
-        if step.get("name") == FINGERPRINT_STEP
+        if "d7_host_telemetry.py run" in str(step.get("run", ""))
     }
-    assert probing == set(FINGERPRINT_JOBS), (
-        f"{sorted(probing)} record a machine but {sorted(FINGERPRINT_JOBS)} were expected - "
-        "every job that draws a runner records it, so add the new one here"
-    )
-
-    for job_name, expected in sorted(FINGERPRINT_JOBS.items()):
-        step = _step(workflow, job_name, "name", FINGERPRINT_STEP)
-        script = _script(step, f"job {job_name} fingerprint step")
-        assert FINGERPRINT_COMMAND in script, f"{job_name} must run {FINGERPRINT_COMMAND}"
-        words = shlex.split(_substitute(script))
-        flag = words.index(FINGERPRINT_JOB_FLAG)
-        assert words[flag + 1] == expected, (
-            f"the {job_name} job files its machine as {words[flag + 1]}, not {expected}"
+    assert probing == {"plan", "work", "assemble"}
+    for job_name in sorted(probing):
+        step = next(
+            step for step in _steps(workflow, job_name)
+            if "d7_host_telemetry.py run" in str(step.get("run", ""))
         )
+        script = _script(step, f"job {job_name} native producer")
+        words = _shell_words(script)
+        assert words[words.index("--job") + 1] == job_name
+        assert f"digest_publish.py run {job_name}" in script
 
 
 def test_every_path_the_work_job_stages_is_in_a_fresh_checkout() -> None:

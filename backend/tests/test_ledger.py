@@ -44,7 +44,6 @@ from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.validation_row import ValidationRow
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.ledger import ledger_files
-from idhazh.telemetry import silicon
 from idhazh.telemetry.source_health import feed_reliability, reliability
 from utilities.reconcile_prefill import TOLERANCE, reconcile
 
@@ -1166,19 +1165,19 @@ def test_the_ledgers_prefill_rate_agrees_with_the_servers_own_counters(tmp_path:
     """
     state = tmp_path / "state"
     machines = []
-    for path in (
-        FIXTURES_DIR / "runtime" / "2026-08-26-5-shard-0.prom",
-        FIXTURES_DIR / "runtime" / "2026-08-26-5-shard-1.prom",
-        FIXTURES_DIR / "runtime" / "2026-08-26-5-shard-2.prom",
-        FIXTURES_DIR / "runtime" / "2026-08-26-5-shard-3.prom",
+    # Captured counter results; the ledger reconciliation does not test a parser.
+    for shard, tokens, seconds in (
+        (0, 30538, 2795.15),
+        (1, 23411, 2128.08),
+        (2, 26851, 2355.07),
+        (3, 27056, 2369.28),
     ):
-        tokens, seconds = silicon.server_prompt_totals(path.read_text(encoding="utf-8"))
         machines.append(
             HostFingerprintRow(
                 version=HostFingerprintRow.schema_version(),
                 date=RECONCILED_DATE,
                 run_id=RECONCILED_RUN,
-                shard=int(path.stem[-1]),
+                shard=shard,
                 server_prompt_tokens=tokens,
                 server_prompt_seconds=seconds,
             )

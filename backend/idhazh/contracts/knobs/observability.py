@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from enum import StrEnum
 from types import MappingProxyType
-from typing import Any, Final, Literal, Self
+from typing import Any, Final, Self
 
 from pydantic import Field, model_validator
 
@@ -30,6 +30,8 @@ SUPERSEDED_RETENTION_NAMES: Final[Mapping[str, str]] = MappingProxyType(
         "public_scores_keep_months": "",
         "public_feed_health_keep_months": "",
         "runtime_counters_scrape": "",
+        "host_event_shadow": "",
+        "host_event_mode": "",
         "trace_window_days": "window.value in config/gardener/traces.json",
         "item_health_full_grain_months": (
             "series.full-grain.value in config/gardener/telemetry-aggregate.json"
@@ -204,26 +206,6 @@ class ObservabilityConfig(Model):
             "generations in one runner pool: a quarter of runs in which every job "
             "reports the same family, model and flags, which would make the row a "
             "constant and a constant is not a reading."
-        ),
-    )
-    host_event_shadow: bool = Field(
-        default=False,
-        description=(
-            "Whether Python emits host lifecycle events into an already prepared "
-            "isolated native session while remaining the authoritative production "
-            "collector and writer. False performs no event file reads, writes or "
-            "waits. This temporary comparison path is removed when the native "
-            "single-writer cutover is complete."
-        ),
-    )
-    host_event_mode: Literal["legacy", "shadow", "native"] = Field(
-        default="legacy",
-        exclude=True,
-        description=(
-            "Which host-row boundary a runtime invocation uses. Legacy keeps Python "
-            "silicon and Watch authoritative; shadow brackets those writers with "
-            "comparison events; native makes the Rust session the sole raw host-row "
-            "writer. Native is opt-in until its launcher supplies a validated session."
         ),
     )
     memory_profiling_enabled: bool = Field(

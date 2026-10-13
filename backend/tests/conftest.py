@@ -25,6 +25,7 @@ from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
+from idhazh.contracts.host_output import HOST_PRODUCER
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.extract import ElementsConfig
 from idhazh.contracts.knobs.models import ModelsConfig
@@ -41,7 +42,6 @@ from idhazh.fetch import FetchResult
 from idhazh.llm.server import TurnMarkers, server_argv
 from idhazh.stages import common
 from idhazh.stages import plan as plan_stage
-from idhazh.telemetry import silicon
 from utilities.capture_request_bodies import RENDERINGS, markers_for
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
@@ -165,7 +165,7 @@ def seed_item_health(state_dir: Path, date: str, rows: Iterable[ItemHealthRow]) 
 
 #: The producer the jobs themselves file their machine rows under, read off the
 #: module rather than spelled here, so a seeded row lands in the job's own unit.
-_HOST_PRODUCER: Final = silicon.PRODUCER
+_HOST_PRODUCER: Final = HOST_PRODUCER
 
 
 def seed_host_fingerprint(

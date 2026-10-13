@@ -5,8 +5,6 @@ from __future__ import annotations
 import ast
 import inspect
 import json
-import subprocess
-import sys
 from pathlib import Path
 from typing import Annotated, Any, Literal, get_args, get_origin
 from uuid import uuid4
@@ -38,7 +36,6 @@ from idhazh.contracts.host_events import (
 from idhazh.contracts.host_output import INT64_MAX, CorrectedHostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.telemetry.host import HostCells
-from utilities import memory_sampler
 
 pytestmark = pytest.mark.contract
 
@@ -367,34 +364,36 @@ def test_manifest_duplicate_and_identity_conflicts(change: str) -> None:
         HostSessionManifest.model_validate(data)
 
 
-def test_legacy_bodies_come_from_the_current_real_sampler(tmp_path: Path) -> None:
-    proc = tmp_path / "proc"
-    for pid, comm, status in [
-        (100, "llama-server", "VmRSS: 2048 kB\nVmHWM: 4096 kB\n"),
-        (200, "python3", "VmRSS: 512 kB\nVmHWM: 768 kB\n"),
-        (300, "python3.12", "VmRSS: 256 kB\n"),
-    ]:
-        entry = proc / str(pid)
-        entry.mkdir(parents=True)
-        (entry / "comm").write_bytes((comm + "\n").encode())
-        (entry / "status").write_bytes(status.encode())
-        (entry / "cmdline").write_bytes(b"python3\0-m\0idhazh\0work\0secret-is-not-exported\0")
-    (proc / "meminfo").write_bytes(
-        b"MemTotal: 8192 kB\nMemAvailable: 6144 kB\nCommitted_AS: 4096 kB\n"
-    )
-    charge = tmp_path / "memory.current"
-    charge.write_bytes(b"1024\n")
-    sample, rollcall = memory_sampler.sample_once(
-        100, proc_root=proc, cgroup_paths=(charge,), now="2026-10-10T12:00:00Z"
-    )
+def test_captured_legacy_bodies_round_trip_without_a_reference_collector(tmp_path: Path) -> None:
+    sample = {
+        "ts": "2026-10-10T12:00:00Z",
+        "llama_vmrss_kb": 2048,
+        "llama_vmhwm_kb": 4096,
+        "python_vmrss_kb": 768,
+        "python_procs": 2,
+        "python_vmhwm_kb": 1024,
+        "mem_total_kb": 8192,
+        "mem_available_kb": 6144,
+        "committed_as_kb": 4096,
+        "cgroup_current_bytes": 1024,
+    }
+    rollcall = [
+        {
+            "ts": sample["ts"], "pid": 200, "comm": "python3", "vmrss_kb": 512,
+            "vmhwm_kb": 768, "exe": None, "args": "-m idhazh work",
+        },
+        {
+            "ts": sample["ts"], "pid": 300, "comm": "python3.12", "vmrss_kb": 256,
+            "vmhwm_kb": None, "exe": None, "args": "-m idhazh work",
+        },
+    ]
     assert LegacyJobSample.model_validate(sample).model_dump() == sample
     assert LegacyJobSample.model_validate(sample).python_vmhwm_kb == 1024
     assert [LegacyProcessRollcall.model_validate(row).model_dump() for row in rollcall] == rollcall
     assert set(LegacyJobSample.model_fields) == set(sample)
     assert set(LegacyProcessRollcall.model_fields) == set(rollcall[0])
-    assert host_events.LEGACY_JOB_SAMPLE_FILENAME == memory_sampler.RSS_SAMPLE_FILE.name
-    assert host_events.LEGACY_PROCESS_ROLLCALL_FILENAME == memory_sampler.PYTHON_PROCS_FILE.name
-    assert all("secret" not in (row["args"] or "") for row in rollcall)
+    assert host_events.LEGACY_JOB_SAMPLE_FILENAME == "rss-samples.jsonl"
+    assert host_events.LEGACY_PROCESS_ROLLCALL_FILENAME == "python-procs.jsonl"
     samples = tmp_path / host_events.LEGACY_JOB_SAMPLE_FILENAME
     rows = tmp_path / host_events.LEGACY_PROCESS_ROLLCALL_FILENAME
     samples.write_bytes(LegacyJobSample.model_validate(sample).model_dump_json().encode() + b"\n")
@@ -404,15 +403,11 @@ def test_legacy_bodies_come_from_the_current_real_sampler(tmp_path: Path) -> Non
             for row in rollcall
         )
     )
-    result = subprocess.run(
-        [sys.executable, "-m", "utilities.memory_sampler", "summarize"],
-        cwd=tmp_path,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    assert "peak python VmHWM 1024 kB" in result.stderr + result.stdout
-    assert "n=1 samples" in result.stderr + result.stdout
+    assert LegacyJobSample.model_validate_json(samples.read_bytes()).model_dump() == sample
+    assert [
+        LegacyProcessRollcall.model_validate_json(line).model_dump()
+        for line in rows.read_bytes().splitlines()
+    ] == rollcall
 
 
 def test_contract_has_no_reverse_transport_collector_or_verifier_imports() -> None:

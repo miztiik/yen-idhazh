@@ -52,7 +52,6 @@ from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.publication_receipt import PublicationReceipt
 from idhazh.ledger import arrow_schema, filenames, json_lines, parquet, paths
 from idhazh.ledger.persist import file_columns
-from idhazh.telemetry.silicon import fingerprint_of
 
 pytestmark = pytest.mark.contract
 
@@ -424,7 +423,7 @@ def test_fingerprint_golden_preimages_match_both_algorithms_and_unchanged_refere
                 **vector["facts"],
             }
         )
-        assert fingerprint_v1(legacy) == fingerprint_of(vector["facts"]) == vector["v1"]
+        assert fingerprint_v1(legacy) == vector["v1"]
         preimage = vector["v1_preimage"].encode("ascii")
         assert not preimage.endswith(b"\n")
         assert hashlib.sha256(preimage).hexdigest()[:16] == vector["v1"]

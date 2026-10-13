@@ -10,10 +10,10 @@ import pytest
 from conftest import (
     CONFIG_DIR,
     CONTRACT_FIXTURES_DIR,
-    FIXTURES_DIR,
     REPO_ROOT,
     SEED_COMMIT,
     read_text,
+    seed_host_fingerprint,
 )
 from pydantic import ValidationError
 from pytest import MonkeyPatch
@@ -39,7 +39,6 @@ from idhazh.stages.common import _item_payloads, _load_manifest, shard_of
 from idhazh.stages.plan import _next_run_n, stage_plan
 from idhazh.stages.record import stage_record
 from idhazh.stages.work import stage_work
-from idhazh.telemetry.silicon import stage_job_clock
 
 from ._builders import (
     FULL_TEXT,
@@ -721,7 +720,6 @@ def test_the_two_ledgers_agree_about_which_shards_ran(
     settings = config.load(CONFIG_DIR)
     isolate_ledgers(tmp_path, monkeypatch)
     state = tmp_path / "state"
-    capture = FIXTURES_DIR / "runtime" / "2026-08-26-5-shard-3.prom"
 
     for shard in (0, 1):
         with a_server_that_refuses_every_completion() as server:
@@ -735,14 +733,13 @@ def test_the_two_ledgers_agree_about_which_shards_ran(
                 model_endpoint=server.endpoint,
             )
         stage_record(run_plan, settings=settings, commit_sha=SEED_COMMIT, shard=shard, shards=2)
-        stage_job_clock(
-            date=run_plan.date,
-            run_id=run_plan.run_id,
-            settings=settings,
-            state_root=common.STATE_ROOT,
-            commit_sha=SEED_COMMIT,
-            shard=shard,
-            metrics_path=capture,
+        seed_host_fingerprint(
+            state,
+            [HostFingerprintRow(
+                version=HostFingerprintRow.schema_version(),
+                date=run_plan.date, run_id=run_plan.run_id, shard=shard,
+                server_prompt_tokens=23411, server_prompt_seconds=2128.08,
+            )],
         )
 
     rows = health_rows(state, run_plan.date)

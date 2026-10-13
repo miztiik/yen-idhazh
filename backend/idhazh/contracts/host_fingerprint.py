@@ -147,7 +147,7 @@ _UNSET: Final = _Unset()
 #: it away passes here and fails the browser check instead.
 COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
     {
-        "backend/idhazh/telemetry/host_evidence_comparison.py": (
+        "backend/idhazh/telemetry/host_output_verify.py": (
             "measured_at",
             "runner_name",
         ),

@@ -51,6 +51,7 @@ from idhazh import config
 from idhazh.contracts.base import derive_text_digest, derive_url_key
 from idhazh.contracts.digest_day import DigestDay, DigestItem
 from idhazh.contracts.knobs.placement import SECONDS_A_CALL
+from idhazh.fingerprint import host_cpu_model
 from idhazh.llm.server import (
     Completion,
     TurnMarkers,
@@ -62,7 +63,6 @@ from idhazh.llm.server import (
     token_pieces,
 )
 from idhazh.similarity import judge, prompt
-from idhazh.telemetry import silicon
 
 #: How many calls one run takes: 50 pairs, each read twice. Twenty would give a
 #: median and nothing about the tail, and a shard bound has to be sized off the
@@ -721,7 +721,7 @@ def conditions_of(
     """
     entry = settings.models.summarizer
     return {
-        "Processor": silicon.host_cpu_model() or "not reported by this host",
+        "Processor": host_cpu_model() or "not reported by this host",
         "Runner": args.runner,
         "Weights": f"`{entry.file}`, id `{entry.id}`",
         "Declared for": entry.declared_for or "unset",

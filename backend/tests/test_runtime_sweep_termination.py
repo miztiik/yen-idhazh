@@ -8,7 +8,6 @@ import shutil
 import signal
 import subprocess
 import sys
-import threading
 import time
 from collections.abc import Iterator
 from pathlib import Path
@@ -38,22 +37,14 @@ def _handlers() -> tuple[object, object]:
     return signal.getsignal(signal.SIGTERM), signal.getsignal(signal.SIGINT)
 
 
-def test_normal_cleanup_reaps_children_joins_sampler_and_restores_handlers(
+def test_normal_cleanup_reaps_children_and_restores_handlers(
     owned_processes: list[subprocess.Popen[bytes]],
 ) -> None:
     before = _handlers()
-    stop = threading.Event()
-    sampler = threading.Thread(target=stop.wait)
-    sampler.start()
-    try:
-        with _termination_signals():
-            _cleanup_owned_processes(owned_processes[0], owned_processes[1:], stop, sampler)
-        assert all(process.returncode is not None for process in owned_processes)
-        assert not sampler.is_alive()
-        assert _handlers() == before
-    finally:
-        stop.set()
-        sampler.join(timeout=5)
+    with _termination_signals():
+        _cleanup_owned_processes(owned_processes[0], owned_processes[1:])
+    assert all(process.returncode is not None for process in owned_processes)
+    assert _handlers() == before
 
 
 @pytest.mark.parametrize("signum", [signal.SIGTERM, signal.SIGINT])
@@ -61,16 +52,14 @@ def test_cancellation_reaps_owned_processes_and_restores_handlers(
     owned_processes: list[subprocess.Popen[bytes]], signum: int
 ) -> None:
     before = _handlers()
-    stop = threading.Event()
     with pytest.raises(SystemExit) as caught:
         with _termination_signals():
             try:
                 signal.raise_signal(signum)
             finally:
                 signal.raise_signal(signum)  # A repeated request cannot interrupt cleanup.
-                _cleanup_owned_processes(owned_processes[0], owned_processes[1:], stop, None)
+                _cleanup_owned_processes(owned_processes[0], owned_processes[1:])
     assert caught.value.code == 128 + signum
-    assert stop.is_set()
     assert all(process.returncode is not None for process in owned_processes)
     assert _handlers() == before
 
@@ -88,7 +77,7 @@ def test_cancellation_during_acquisition_registers_the_child_before_unwinding() 
                     signal.raise_signal(signal.SIGTERM)
                     workers.append(process)
             finally:
-                _cleanup_owned_processes(None, workers, threading.Event(), None)
+                _cleanup_owned_processes(None, workers)
     assert caught.value.code == 128 + signal.SIGTERM
     assert len(workers) == 1
     assert workers[0].returncode is not None
@@ -96,7 +85,7 @@ def test_cancellation_during_acquisition_registers_the_child_before_unwinding() 
 
 
 @pytest.mark.parametrize("failure", [RuntimeError("work failed"), SystemExit(143)])
-def test_cleanup_error_keeps_the_active_failure_and_reaps_every_child(
+def test_cleanup_keeps_the_active_failure_and_reaps_every_child(
     owned_processes: list[subprocess.Popen[bytes]], failure: BaseException
 ) -> None:
     before = _handlers()
@@ -105,24 +94,8 @@ def test_cleanup_error_keeps_the_active_failure_and_reaps_every_child(
             try:
                 raise failure
             finally:
-                # Joining a real, unstarted thread raises after the process reaps.
-                _cleanup_owned_processes(
-                    owned_processes[0], owned_processes[1:], threading.Event(), threading.Thread()
-                )
+                _cleanup_owned_processes(owned_processes[0], owned_processes[1:])
     assert caught.value is failure
-    assert any("cleanup also failed" in note for note in failure.__notes__)
-    assert all(process.returncode is not None for process in owned_processes)
-    assert _handlers() == before
-
-
-def test_cleanup_error_without_a_work_failure_is_not_success(
-    owned_processes: list[subprocess.Popen[bytes]],
-) -> None:
-    before = _handlers()
-    with pytest.raises(RuntimeError, match="cannot join thread before it is started"):
-        _cleanup_owned_processes(
-            owned_processes[0], owned_processes[1:], threading.Event(), threading.Thread()
-        )
     assert all(process.returncode is not None for process in owned_processes)
     assert _handlers() == before
 
@@ -135,9 +108,7 @@ def test_cancellation_during_protected_cleanup_is_not_lost(
         with _termination_signals():
             with _termination_signals(defer=True):
                 signal.raise_signal(signal.SIGTERM)
-                _cleanup_owned_processes(
-                    owned_processes[0], owned_processes[1:], threading.Event(), None
-                )
+                _cleanup_owned_processes(owned_processes[0], owned_processes[1:])
                 assert all(process.returncode is not None for process in owned_processes)
     assert caught.value.code == 128 + signal.SIGTERM
     assert _handlers() == before
@@ -283,9 +254,7 @@ def _fixture_sweep(root: Path, scenario: str, *, native: bool) -> subprocess.Pop
         listener.bind(("127.0.0.1", 0))
         port = listener.getsockname()[1]
     app = json.loads((root / "candidate/idhazh.json").read_text(encoding="utf-8"))
-    app["observability"].update(
-        host_event_mode="legacy", host_event_shadow=False, memory_profiling_enabled=True
-    )
+    app["observability"]["memory_profiling_enabled"] = True
     app["model_server"]["base_url"] = f"http://127.0.0.1:{port}"
     _write(root / "candidate/idhazh.json", json.dumps(app))
     _write(root / "backend/bin/llama-server", f"#!{sys.executable}\n{_SERVER}")

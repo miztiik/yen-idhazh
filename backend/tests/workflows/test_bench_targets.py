@@ -11,17 +11,20 @@ from pathlib import Path
 
 import pytest
 from conftest import REPO_ROOT, SEED_COMMIT, read_text
+from test_host_publication import DAY as NATIVE_DAY
+from test_host_publication import case as case
+from test_host_publication import native_receipt
 
-from idhazh import cli, config, ledger
+from idhazh import config, ledger
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.base import ServerJob
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.stages import common
 from idhazh.stages import plan as plan_stage
 from idhazh.stages.common import CAPTURES_DIRNAME
-from idhazh.telemetry import silicon
 from utilities import (
     candidate_pointer,
     model_runtime,
@@ -38,7 +41,6 @@ from ._harness import (
     BENCH_CONFIG_STEP,
     BENCH_CORPUS_STEP,
     BENCH_EMIT_STEP,
-    BENCH_FINGERPRINT_STEP,
     BENCH_LEDGER_ROOT,
     BENCH_RAW_JOB,
     BENCH_RAW_JOB_EXPRESSION,
@@ -56,8 +58,6 @@ from ._harness import (
     BUDGETS_JOB,
     COMMIT_PROGRAM,
     COMMIT_STEPS,
-    FINGERPRINT_BENCH_JOB,
-    FINGERPRINT_JOB_FLAG,
     MEASUREMENT_TARGETS,
     MODELS_POINTER_KEY,
     PINNED_LLAMA_BUILD,
@@ -374,7 +374,9 @@ def test_every_job_in_the_measurement_workflow_says_what_it_does() -> None:
         assert len(name) > len(str(key)), f"job {key} is named after itself"
 
 
-def test_a_bench_machine_row_cannot_land_where_the_console_reads(tmp_path: Path) -> None:
+def test_a_bench_machine_row_cannot_land_where_the_console_reads(
+    case: tuple[Path, Path, WriterIdentity],
+) -> None:
     """Two destinations, and neither one can reach the other's tree.
 
     Owner decision, 2026-09-16. A bench is dispatched ad hoc, many times a day,
@@ -391,7 +393,8 @@ def test_a_bench_machine_row_cannot_land_where_the_console_reads(tmp_path: Path)
     The reverse half is the one with no other guard: production passes nothing,
     and nothing is what leaves the state root where the console reads it.
     """
-    scratch = tmp_path / "candidate-config"
+    _, repo, identity = case
+    scratch = repo / "backend/var/candidate-config"
     _copy_config(scratch)
     committed = json.loads((scratch / "idhazh.json").read_text(encoding="utf-8"))
     candidate_pointer.point_at(
@@ -404,35 +407,14 @@ def test_a_bench_machine_row_cannot_land_where_the_console_reads(tmp_path: Path)
         "the committed config is production, so a scheduled run redirects nothing"
     )
 
-    production_root = tmp_path / ledger.STATE_DIRNAME
-    settings = config.load()
-    settings.app.observability.host_fingerprint = True
-    settings.app.observability.host_fingerprint_bandwidth_floor_mib = 0
-    probe_day, probe_run = "2026-09-17", "2026-09-17-1"
-
-    # The CLI applies this same overlay once, from `trial_state_dirname`, before
-    # any stage opens a ledger (`cli.main`) - so a bench probe is driven the same
-    # way here, over the production state root, rather than against a literal
-    # nested folder a bench no longer writes.
-    with ledger.use_registry(ledger.overlay_registry((BENCH_TRIAL_STATE,))):
-        silicon.stage_fingerprint(
-            date=probe_day,
-            run_id=probe_run,
-            settings=settings,
-            state_root=production_root,
-            commit_sha=SEED_COMMIT,
-            shard=0,
-            job=ServerJob.RUNTIME,
-        )
-    silicon.stage_fingerprint(
-        date=probe_day,
-        run_id=probe_run,
-        settings=settings,
-        state_root=production_root,
-        commit_sha=SEED_COMMIT,
-        shard=0,
-        job=ServerJob.WORK,
+    production_root = repo / ledger.STATE_DIRNAME
+    probe_day = NATIVE_DAY
+    native_receipt(
+        repo,
+        identity.model_copy(update={"job": ServerJob.RUNTIME}),
+        prefix=(bench.app.run.trial_state_dirname or "", "host-fingerprint"),
     )
+    native_receipt(repo, identity.model_copy(update={"job": ServerJob.WORK}))
     # Each probe files a raw file under `state/raw/`, tier-first: the bench's
     # own folder sits beside `host-fingerprint`, under its own
     # `pipeline-tests/` segment, rather than production's row ever landing
@@ -454,8 +436,8 @@ def test_a_bench_machine_row_cannot_land_where_the_console_reads(tmp_path: Path)
     )
 
     written = {
-        path.relative_to(tmp_path).as_posix()
-        for path in tmp_path.rglob("*")
+        path.relative_to(repo).as_posix()
+        for path in production_root.rglob("*")
         if path.is_file() and LedgerName.HOST_FINGERPRINT in path.parts
     }
     day = probe_day.replace("-", "/")
@@ -534,24 +516,20 @@ def test_the_bench_reads_its_own_config_when_it_records_the_machine() -> None:
     production's ledger from a dispatch nobody merged.
     """
     workflow = _load_workflows()["measure.yml"]
-    names = [step.get("name") for step in _steps(workflow, BENCH_SERVER_JOB)]
-    assert names.index(BENCH_CONFIG_STEP) < names.index(BENCH_FINGERPRINT_STEP)
-    assert names.index(BENCH_CORPUS_STEP) < names.index(BENCH_FINGERPRINT_STEP), (
-        "the probe reads the plan that step writes"
-    )
-    assert names.index(BENCH_FINGERPRINT_STEP) < names.index("Measure runtime candidate"), (
-        "the bandwidth reading wants an idle machine, and the sweep is what takes it away"
-    )
+    steps = _steps(workflow, BENCH_SERVER_JOB)
+    names = [step.get("name") for step in steps]
+    assert names.index(BENCH_CONFIG_STEP) < names.index("Measure runtime candidate")
+    assert names.index(BENCH_CORPUS_STEP) < names.index("Measure runtime candidate")
 
-    step = _step(workflow, BENCH_SERVER_JOB, "name", BENCH_FINGERPRINT_STEP)
-    script = _script(step, f"measure.yml/{BENCH_SERVER_JOB}/{BENCH_FINGERPRINT_STEP}")
-    assert "python backend/utilities/record_publish.py run measure fingerprint" in script
+    step = _step(workflow, BENCH_SERVER_JOB, "name", "Measure runtime candidate")
+    script = _script(step, f"measure.yml/{BENCH_SERVER_JOB}/Measure runtime candidate")
+    assert "d7_host_telemetry.py run" in script
+    assert "runtime_sweep.py sweep" in script
+    assert "--mode" not in script
     words = _shell_words(script)
     assert words[words.index("--config") + 1] == BENCH_CANDIDATE_CONFIG
-    assert words[words.index(FINGERPRINT_JOB_FLAG) + 1] == FINGERPRINT_BENCH_JOB
-    assert FINGERPRINT_BENCH_JOB == ServerJob.RUNTIME.value, (
-        "the value is the job's own id in this workflow, so a reader needs no lookup table"
-    )
+    assert words[words.index("--job") + 1] == ServerJob.RUNTIME.value
+    assert not any("run measure fingerprint" in str(step.get("run", "")) for step in steps)
 
     config_step = _step(workflow, BENCH_SERVER_JOB, "name", BENCH_CONFIG_STEP)
     with_block = _mapping(config_step.get("with"), f"{BENCH_CONFIG_STEP} with")
@@ -593,7 +571,6 @@ def test_no_bench_stage_can_reach_the_production_state_root() -> None:
         invocations.append((job_name, stage))
 
     assert sorted(invocations) == [
-        (BENCH_SERVER_JOB, "fingerprint"),
         (BENCH_SERVER_JOB, "plan"),
     ], "a job started running a pipeline stage, or one stopped"
 
@@ -881,26 +858,6 @@ def test_the_plan_is_capped_to_hold_the_slice_and_what_it_skips() -> None:
         runtime_sweep.corpus_offset("-1")
     with pytest.raises(SystemExit, match="whole number"):
         runtime_sweep.corpus_offset("two")
-
-
-def test_the_fingerprint_job_reaches_the_stage_as_the_enum_it_is_declared_for() -> None:
-    """The break that killed three dispatches after the segment landed.
-
-    `stage_fingerprint` is declared `job: ServerJob`, and the bench passes
-    `--job runtime` on the command line. Nothing converted it, so the stage got
-    a bare string - harmless until a segment name asked it for `.value`, which
-    is what the CSV segment writer began doing. Every test of this stage called it with
-    the enum directly, so all of them passed while the one caller that matters
-    was broken.
-
-    Driven through the parser rather than the function: a bad value fails at
-    parse time, which is proof the conversion is wired in front of the stage.
-    """
-    with pytest.raises(SystemExit) as refused:
-        cli.main(["fingerprint", "--job", "not-a-job", "--date", "2026-09-19"])
-    assert refused.value.code == 2, "argparse refuses the value before any stage runs"
-
-    assert ServerJob("runtime") is ServerJob.RUNTIME, "the bench's own value is in the set"
 
 
 def _a_process_that_exits_at_once(log: Path) -> subprocess.Popen[bytes]:

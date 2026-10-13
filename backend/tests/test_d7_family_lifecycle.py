@@ -36,7 +36,15 @@ DAY = datetime.now(UTC).date().isoformat()
 EXECUTION = "771"
 RUN = f"{DAY}-{EXECUTION}"
 ATTEMPT = 2
-LIVE = os.environ.get("IDHAZH_D7_LIVE_TEST") == "1"
+
+
+def native_binary() -> Path:
+    target = Path(os.environ.get("CARGO_TARGET_DIR", REPO_ROOT / "backend/var/rust-host-telemetry"))
+    binary = Path(
+        os.environ.get("IDHAZH_HOST_TELEMETRY_BINARY", target / "debug/idhazh-host-telemetry")
+    )
+    assert binary.is_file(), "Build the locked native monitor before these Linux family tests."
+    return binary.resolve(strict=True)
 
 PUBLISH_AND_NETWORK_BOUNDARY = dedent(
     """
@@ -265,7 +273,7 @@ def run_digest_landing(
     return [json.loads(line) for line in capture.read_text(encoding="utf-8").splitlines()]
 
 
-@pytest.mark.skipif(not LIVE or sys.platform != "linux", reason="isolated Ubuntu D7 gate only")
+@pytest.mark.skipif(sys.platform != "linux", reason="native family lifecycle requires Linux /proc")
 @pytest.mark.parametrize(
     ("job", "memory", "failed"),
     [
@@ -290,7 +298,7 @@ def test_real_native_family_lifecycle_keeps_single_writer_paths(
     selected_server: tuple[int, int] | None = None,
 ) -> None:
     """Every measured family runs its real producer through the native event window."""
-    binary = Path(os.environ["IDHAZH_HOST_TELEMETRY_BINARY"]).resolve(strict=True)
+    binary = native_binary()
     repo, commit = isolate(tmp_path / "repo")
     address = [
         "--config",
@@ -500,8 +508,6 @@ def test_real_native_family_lifecycle_keeps_single_writer_paths(
             sys.executable,
             str(repo / "backend/utilities/d7_host_telemetry.py"),
             "run",
-            "--mode",
-            "rust",
             "--job",
             job.value,
             "--run-id",
@@ -614,13 +620,14 @@ def test_real_native_family_lifecycle_keeps_single_writer_paths(
         server = manifest["workers"][0]["server"]
         assert (server["pid"], server["start_ticks"]) == selected_server
         samples, _ = native_memory(session)
+        assert samples is not None
         assert any("VmRSS" in sample for sample in samples)
     (repo / "verified-paths.json").write_text(json.dumps(native), encoding="utf-8")
 
 
-@pytest.mark.skipif(not LIVE or sys.platform != "linux", reason="isolated Ubuntu D7 gate only")
+@pytest.mark.skipif(sys.platform != "linux", reason="native family lifecycle requires Linux /proc")
 def test_real_digest_producer_and_publisher_keep_host_collection_disabled(tmp_path: Path) -> None:
-    binary = Path(os.environ["IDHAZH_HOST_TELEMETRY_BINARY"]).resolve(strict=True)
+    binary = native_binary()
     repo, commit = isolate(tmp_path / "repo", host_enabled=False)
     capture = repo / "publisher-capture.jsonl"
     env_path = repo / "launcher.env"
@@ -660,8 +667,6 @@ def test_real_digest_producer_and_publisher_keep_host_collection_disabled(tmp_pa
             sys.executable,
             "backend/utilities/d7_host_telemetry.py",
             "run",
-            "--mode",
-            "rust",
             "--job",
             ServerJob.PLAN.value,
             "--run-id",
@@ -720,9 +725,9 @@ def test_real_digest_producer_and_publisher_keep_host_collection_disabled(tmp_pa
     assert not any(path.startswith("state/raw/host-fingerprint/") for path in published_writes)
 
 
-@pytest.mark.skipif(not LIVE or sys.platform != "linux", reason="isolated Ubuntu D7 gate only")
+@pytest.mark.skipif(sys.platform != "linux", reason="native family lifecycle requires Linux /proc")
 def test_real_council_no_work_skips_native_monitor_and_publisher(tmp_path: Path) -> None:
-    binary = Path(os.environ["IDHAZH_HOST_TELEMETRY_BINARY"]).resolve(strict=True)
+    binary = native_binary()
     repo, commit = isolate(tmp_path / "repo", council_paused=True)
     capture = repo / "publisher-capture.jsonl"
     env_path = repo / "launcher.env"
@@ -760,8 +765,6 @@ def test_real_council_no_work_skips_native_monitor_and_publisher(tmp_path: Path)
             sys.executable,
             "backend/utilities/d7_host_telemetry.py",
             "run",
-            "--mode",
-            "rust",
             "--job",
             ServerJob.SAVE_COUNCIL_RESULTS.value,
             "--run-id",
@@ -790,7 +793,7 @@ def test_real_council_no_work_skips_native_monitor_and_publisher(tmp_path: Path)
     assert not capture.exists()
 
 
-@pytest.mark.skipif(not LIVE or sys.platform != "linux", reason="isolated Ubuntu D7 gate only")
+@pytest.mark.skipif(sys.platform != "linux", reason="native family lifecycle requires Linux /proc")
 def test_native_runtime_measures_the_explicit_bounded_subject_not_a_process_name(
     tmp_path: Path,
 ) -> None:

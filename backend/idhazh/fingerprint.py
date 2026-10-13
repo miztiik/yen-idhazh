@@ -134,18 +134,23 @@ def runner_class(environ: Mapping[str, str] | None = None) -> str:
     return f"{where}/{system}/{arch}".lower()
 
 
+def host_cpu_model(cpuinfo: Path = CPUINFO) -> str | None:
+    """The processor model when the named local metadata reports one."""
+    if cpuinfo.exists():
+        for line in cpuinfo.read_text(encoding="utf-8", errors="replace").splitlines():
+            name, _, value = line.partition(":")
+            if name.strip() == _CPU_MODEL_KEY and value.strip():
+                return value.strip()
+    return None
+
+
 def host_cpu(cpuinfo: Path = CPUINFO) -> str:
     """The processor this run drew. A diagnostic, and not part of the manifest.
 
     It is the only field that explains a determinism violation, which is why it
     has to name the part rather than the architecture.
     """
-    if cpuinfo.exists():
-        for line in cpuinfo.read_text(encoding="utf-8", errors="replace").splitlines():
-            name, _, value = line.partition(":")
-            if name.strip() == _CPU_MODEL_KEY and value.strip():
-                return value.strip()
-    return platform.processor() or platform.machine() or "unknown"
+    return host_cpu_model(cpuinfo) or platform.processor() or platform.machine() or "unknown"
 
 
 def sampling_spelling(sampling: Mapping[str, Any]) -> dict[str, str]:

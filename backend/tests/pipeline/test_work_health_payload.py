@@ -19,12 +19,16 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
+import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import replace
-from itertools import count
 from pathlib import Path
 from typing import Any, Final
 
-from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
+import pytest
+from conftest import CONFIG_DIR, FIXTURES_DIR, RecordedEndpoint, read_text
 from pytest import LogCaptureFixture, MonkeyPatch
 
 from idhazh import config
@@ -33,13 +37,13 @@ from idhazh.contracts.item_health import FailureCode, ItemHealthRow
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.stages import common
 from idhazh.stages.work import stage_work
-from idhazh.telemetry import host
 from idhazh.telemetry.record import HEALTH_SUFFIX
 
 from ._builders import (
     _work_stage,
     a_server_that_refuses_every_completion,
     captured_article_fetch,
+    isolate_ledgers,
     plan,
 )
 from .test_degrade import headless_page_fetch, headless_plan
@@ -55,15 +59,35 @@ SUMMARIZE_AND_PLAN_REPLY: Final = (
 
 
 def worked(
-    tmp_path: Path, monkeypatch: MonkeyPatch, *, degraded: bool = False
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    *,
+    degraded: bool = False,
+    settings: config.Settings | None = None,
+    hold_s: float = 0.0,
 ) -> tuple[RunPlan, Path]:
     """One real work stage, and the items directory it wrote."""
+    if settings is not None:
+        run_plan = headless_plan() if degraded else plan()
+        isolate_ledgers(tmp_path, monkeypatch)
+        with RecordedEndpoint(
+            200, LABEL_REPLY.read_bytes(), SUMMARIZE_AND_PLAN_REPLY.read_bytes(), hold_s=hold_s
+        ) as server:
+            stage_work(
+                run_plan,
+                settings=settings,
+                scorer=None,
+                fetcher=headless_page_fetch if degraded else captured_article_fetch,
+                model_endpoint=server.endpoint,
+            )
+        return run_plan, tmp_path / "run" / run_plan.date / "items"
     run_plan, items_dir, _ = _work_stage(
         tmp_path,
         monkeypatch,
         replies=(LABEL_REPLY.read_bytes(), SUMMARIZE_AND_PLAN_REPLY.read_bytes()),
         fetcher=headless_page_fetch if degraded else captured_article_fetch,
         run_plan=headless_plan() if degraded else None,
+        hold_s=hold_s,
     )
     return run_plan, items_dir
 
@@ -136,8 +160,7 @@ def test_the_file_is_the_row_the_shard_reported_cell_for_cell(
         assert json.loads(written[said.item_id].to_json()) == json.loads(said.to_json())
 
 
-#: Every host cell the sampler names, in the order the item-health doc lists
-#: them. Named once so a column added to the sampler moves one line here.
+#: Every native host cell the item-health record names.
 HOST_COLUMNS: Final = (
     "cpu_model",
     "cpu_busy_pct",
@@ -160,97 +183,85 @@ HOST_COLUMNS: Final = (
 )
 
 
-def a_machine_that_answers(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
-    """A `/proc` this test writes, so every host cell fills.
+@contextmanager
+def without_host_reads() -> Iterator[list[str]]:
+    """Observe actual host file/table reads without replacing any production function."""
+    reads: list[str] = []
+    active = True
 
-    Nothing here reads the box the suite runs on. None of these paths exists on a
-    developer machine, so a test that asked the real host would record every host
-    cell empty locally and every one full in CI - which is a test that passes or
-    fails on the weather (CLAUDE.md section 13).
+    def observe(event: str, arguments: tuple[object, ...]) -> None:
+        if not active or event not in {"open", "os.listdir", "os.scandir"} or not arguments:
+            return
+        name = str(arguments[0]).replace("\\", "/")
+        if name in {"/proc", "/sys"} or name.startswith(("/proc/", "/sys/")):
+            reads.append(name)
 
-    The processor counters climb between reads, because a busy share is the
-    difference of two of them and two identical reads are no window at all.
-    """
-    table = tmp_path / "proc"
-    for pid, comm in (("1", "systemd"), ("742", "llama-server")):
-        (table / pid).mkdir(parents=True)
-        (table / pid / "comm").write_text(f"{comm}\n", encoding="utf-8")
-    ticks = count(start=100, step=200)
-    spent = count(start=0, step=1000)
-    faulted = count(start=7, step=3)
-
-    def built(path: Path) -> str | None:
-        if path == host.PROC_STAT:
-            moment = next(ticks)
-            # A stolen share that climbs with the rest, so the steal cell proves
-            # a reading travelled rather than proving a zero appeared.
-            return f"cpu  {moment} 0 {moment} {moment * 4} 0 0 0 {moment // 10} 0 0\n"
-        if path == host.LOADAVG:
-            return "1.53 1.20 0.91 2/312 9931\n"
-        if path == host.MEMINFO:
-            # Falling headroom, so the floor cell has something below its last
-            # reading to find. A runner reports these in kilobytes.
-            return (
-                "MemTotal:       16373964 kB\n"
-                f"MemAvailable:    {9_000_000 - next(spent)} kB\n"
-                "Cached:          6100000 kB\n"
-                "SwapTotal:       4194300 kB\n"
-                "SwapFree:        4194300 kB\n"
-            )
-        if path.name == "status":
-            return "VmRSS:\t 4194304 kB\nVmHWM:\t 5242880 kB\nRssAnon:\t 1048576 kB\n"
-        if path.name == "stat":
-            # A counter that climbs, so the item's total is a real difference
-            # rather than two reads of one number. `majflt` is the tenth cell
-            # after the bracketed command.
-            return f"742 (llama-server) S 1 742 742 0 -1 0 900 0 {next(faulted)} 0\n"
-        if path.name == "comm":
-            return path.read_text(encoding="utf-8")
-        return None
-
-    monkeypatch.setattr(host, "PROC", table)
-    monkeypatch.setattr(host, "_text", built)
-    monkeypatch.setenv("RUNNER_NAME", "ubuntu-4core-3")
+    sys.addaudithook(observe)
+    try:
+        yield reads
+    finally:
+        active = False
 
 
-def test_every_host_column_reaches_the_row_the_shard_left_behind(
-    tmp_path: Path, monkeypatch: MonkeyPatch
+@pytest.mark.parametrize("memory_profiling_enabled", [False, True])
+def test_unbound_work_keeps_host_cells_unknown_without_any_python_host_read(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    caplog: LogCaptureFixture,
+    memory_profiling_enabled: bool,
 ) -> None:
-    """Eighteen columns that were computed and discarded now outlive the process.
-
-    A throughput number with no machine beside it is not a measurement
-    (Guardrail #10), and until the work stage recorded these, whether a slow item
-    met a noisy neighbour was unanswerable. The assertion is per item rather than
-    per shard, because the shard's average says nothing about the item that was
-    slow - which is the entire question these columns exist to answer.
-    """
-    a_machine_that_answers(monkeypatch, tmp_path / "host")
-    _, items_dir = worked(tmp_path, monkeypatch)
+    """A local, unmeasured invocation still writes its complete item-health record."""
+    settings = config.load(CONFIG_DIR)
+    unbound = replace(
+        settings,
+        app=settings.app.model_copy(
+            update={
+                "observability": settings.app.observability.model_copy(
+                    update={"memory_profiling_enabled": memory_profiling_enabled}
+                ),
+                "logging": settings.app.logging.model_copy(update={"waiting_heartbeat_seconds": 1}),
+            }
+        ),
+    )
+    caplog.set_level(logging.INFO, logger="idhazh")
+    threads_before = set(threading.enumerate())
+    with without_host_reads() as reads:
+        run_plan, items_dir = worked(tmp_path, monkeypatch, settings=unbound, hold_s=0.6)
+    assert reads == []
+    assert not [
+        thread
+        for thread in threading.enumerate()
+        if thread not in threads_before and thread.name == "item-heartbeat"
+    ]
+    assert "host item measurement unavailable reason=no_bound_session" in caplog.messages
+    waiting = [
+        record
+        for message in caplog.messages
+        if message.startswith("{")
+        and (record := json.loads(message)).get("name") == "model.waiting"
+    ]
+    assert {record["item_id"] for record in waiting} == {item.item_id for item in run_plan.items}
+    assert all(record["waited_s"] > 0 for record in waiting)
 
     written = rows(items_dir)
 
-    assert written, "no rows means the loop below asserts nothing"
+    assert len(written) == PLANNED_ITEMS
     for item_id, row in written.items():
         filled = {column for column in HOST_COLUMNS if getattr(row, column) is not None}
-        assert filled == set(HOST_COLUMNS), f"{item_id} lost {set(HOST_COLUMNS) - filled}"
+        assert filled == set(), f"{item_id} fabricated {filled}"
+        assert row.label_ms is not None and row.summary_ms is not None
+        assert row.machine_job is ServerJob.WORK
 
 
 def test_the_shard_names_one_machine_on_every_row_it_records(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
-    """One `host_facts` call a shard, so two items cannot name two processors.
-
-    The processor cannot change inside a shard, so every row a shard records has
-    to name the same one. A second reading per item would open `/proc/cpuinfo`
-    again for an answer already taken, and two readings are two answers nobody
-    can reconcile.
-    """
-    a_machine_that_answers(monkeypatch, tmp_path / "host")
+    """An unmeasured shard never invents a processor label for any item."""
     _, items_dir = worked(tmp_path, monkeypatch)
 
     written = rows(items_dir)
 
-    assert len({row.cpu_model for row in written.values()}) == 1
+    assert {row.cpu_model for row in written.values()} == {None}
 
 
 def test_every_row_a_shard_seals_names_the_job_and_the_worker_that_read_it(
@@ -264,7 +275,6 @@ def test_every_row_a_shard_seals_names_the_job_and_the_worker_that_read_it(
     knows both, which is why this asserts on the rows it sealed rather than on
     the census that reads them later.
     """
-    a_machine_that_answers(monkeypatch, tmp_path / "host")
     _, items_dir = worked(tmp_path, monkeypatch)
 
     written = rows(items_dir)
