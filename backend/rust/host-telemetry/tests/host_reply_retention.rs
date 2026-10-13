@@ -320,12 +320,19 @@ fn latest_target_survives_long_job_and_clock_releases_only_expired_older_groups(
             .code,
         ProtocolFaultCode::Duplicate
     );
-    let clock = fixture.command(
+    let mut clock = fixture.command(
         EventKind::HostClock,
         3,
         Some(selected[3].event_id),
         "2026-10-10T14:00:00Z",
     );
+    let EventBody::HostCommand(target_body) = &target.body else {
+        unreachable!();
+    };
+    let EventBody::HostCommand(clock_body) = &mut clock.body else {
+        unreachable!();
+    };
+    clock_body.target.clone_from(&target_body.target);
     let closed = fixture.admit(&clock, long_ms);
     fixture.consume(&closed);
     let EventBody::HostResult(result) = &closed[3].body else {
