@@ -73,8 +73,8 @@ Table D - authoritative execution queue
 | D14 | 14 | Migrate contracted backend and frontend consumers | 5 | F | DONE | rust-d13-d14-schema-consumers | - | owner; shipped atomically with D13 |
 | D6 | 6 | Add inactive event emitters at real production boundaries | 13, 14 | F | DONE | rust-d6-inactive-emitters | - | Copilot |
 | D8 | 8 | Expose and test the independent memory off control | 6 | G | DONE | rust-d8-memory-off | #1576, #1577 | Copilot; the follow-up closes dispatch-shape coverage, keeps route assertions in the console browser group, and is merged as `c8867c438`. |
-| D16 | 16 | Verify evidence and record unattended adoption authority | 8, 5, 14, 15 | H | IN REVIEW | rust-d16-readiness-record | #1582 | Supplied-root replay now runs the actual migrated ledger reader and console publisher in isolation; 29 gardener rows are admitted only under exact Git-anchored legacy evidence. CI and exact-head review remain before marking D16 DONE. |
-| D7 | 7 | Switch instrumented producers through events | 16 | I | IN-FLIGHT | rust-d7-integration | - | owner; native lifecycle, publication and remaining producer-family workers; production remains legacy until exact Ubuntu candidate evidence passes |
+| D16 | 16 | Verify evidence and record unattended adoption authority | 8, 5, 14, 15 | H | IN REVIEW | rust-d16-readiness-record | #1585 | Exact Git-tree/blob provenance and separate historical/production readiness are repaired; Ubuntu CI passed. Re-run the verifier against the exact approved manifest before marking D16 DONE; production stays blocked pending D7. |
+| D7 | 7 | Switch instrumented producers through events | 16 | I | IN-FLIGHT | rust-d7-integration | #1586, #1587 | Native lifecycle, publication and real producer-family coverage are under Ubuntu validation; production remains legacy until all-family, control and single-writer evidence passes. |
 | D17 | 17 | Rewrite the approved historical manifest once | 7, 15, 16 | J | PENDING | - | - | - |
 | D9 | 9 | Remove superseded collectors and temporary duplication | 7, 8, 17 | K | PENDING | - | - | - |
 
