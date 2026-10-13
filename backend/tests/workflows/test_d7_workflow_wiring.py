@@ -10,7 +10,15 @@ import yaml  # type: ignore[import-untyped]
 from idhazh.cli import _workflow_host_event_mode
 from utilities.d7_host_telemetry import _native_command_supported
 
-from ._harness import _job, _normalize_condition, _step, _steps
+from ._harness import (
+    _dispatch_inputs,
+    _job,
+    _load_workflows,
+    _mapping,
+    _normalize_condition,
+    _step,
+    _steps,
+)
 
 ROOT = Path(__file__).resolve().parents[3]
 WORKFLOWS = (
@@ -20,6 +28,13 @@ WORKFLOWS = (
     "idhazh-gardener.yml",
     "llm-council.yml",
 )
+MEASURED_JOBS = {
+    "digest.yml": ("plan", "work", "assemble"),
+    "measure.yml": ("llama-bench", "runtime"),
+    "encoder-comparison.yml": ("score",),
+    "idhazh-gardener.yml": ("run-tasks",),
+    "llm-council.yml": ("save_council_results",),
+}
 
 
 def _workflow(name: str) -> dict[str, object]:
@@ -116,10 +131,11 @@ def test_workflow_wrappers_name_only_the_measured_families() -> None:
     )
 
 
-def test_workflow_selection_maps_to_native_or_legacy_without_config_flags() -> None:
+def test_workflow_selection_keeps_legacy_and_allows_whole_host_off() -> None:
     assert _workflow_host_event_mode({}) is None
     assert _workflow_host_event_mode({"IDHAZH_HOST_TELEMETRY_MODE": "legacy"}) == "legacy"
     assert _workflow_host_event_mode({"IDHAZH_HOST_TELEMETRY_MODE": "rust"}) == "rust"
+    assert _workflow_host_event_mode({"IDHAZH_HOST_TELEMETRY_MODE": "off"}) == "off"
     digest = (ROOT / ".github/workflows/digest.yml").read_text(encoding="utf-8")
     assert "IDHAZH_HOST_TELEMETRY_MODE" in digest
     for name in ("plan", "work", "assemble"):
@@ -167,20 +183,14 @@ def test_council_workflow_allows_only_the_explicit_no_work_skip() -> None:
     assert "council-no-active-publishers" in text
 
 
-def test_each_measured_job_builds_the_pinned_native_binary_before_its_producer() -> None:
+def test_only_the_plan_builds_for_digest_and_other_measured_jobs_build_once() -> None:
     action = yaml.safe_load(
         (ROOT / ".github/actions/d7-host-telemetry/action.yml").read_text(encoding="utf-8")
     )
     build_step = next(step for step in action["runs"]["steps"] if step.get("id") == "build")
     assert build_step["working-directory"] == "backend/rust/host-telemetry"
     assert "cargo build --locked --release" in build_step["run"]
-    expected = {
-        "digest.yml": ("plan", "work", "assemble"),
-        "measure.yml": ("llama-bench", "runtime"),
-        "encoder-comparison.yml": ("score",),
-        "idhazh-gardener.yml": ("run-tasks",),
-        "llm-council.yml": ("save_council_results",),
-    }
+    expected = {**MEASURED_JOBS, "digest.yml": ("plan",)}
     for name, jobs in expected.items():
         for job in jobs:
             steps = _steps(_workflow(name), job)
@@ -200,6 +210,31 @@ def test_each_measured_job_builds_the_pinned_native_binary_before_its_producer()
                 steps.index(pin) < steps.index(cache) < steps.index(build) < steps.index(producer)
             )
             assert pin["working-directory"] == "backend/rust/host-telemetry"
+            assert sum(
+                step.get("uses") == "./.github/actions/d7-host-telemetry" for step in steps
+            ) == 1
+    digest = _workflow("digest.yml")
+    plan = _job(digest, "plan")
+    assert _mapping(plan["outputs"], "plan outputs")["host_monitor_artifact"] == (
+        "${{ steps.host_monitor.outputs.artifact_name }}"
+    )
+    builder = _step(digest, "plan", "id", "host_monitor")
+    assert _mapping(builder["with"], "plan monitor")["publish"] == "true"
+    for job in ("work", "assemble"):
+        steps = _steps(digest, job)
+        assert not any(step.get("uses") == "./.github/actions/d7-host-telemetry" for step in steps)
+        assert not any(_is_host_crate_cache(step) for step in steps)
+        assert not any("rustup" in str(step.get("run", "")) for step in steps)
+        download = _step(digest, job, "uses", "./.github/actions/download-host-telemetry")
+        assert _mapping(download["with"], "shared monitor")["artifact_name"] == (
+            "${{ needs.plan.outputs.host_monitor_artifact }}"
+        )
+        needs = _job(digest, job)["needs"]
+        assert needs == "plan" or (isinstance(needs, list) and "plan" in needs)
+        producer = next(
+            step for step in steps if "d7_host_telemetry.py run" in str(step.get("run", ""))
+        )
+        assert steps.index(download) < steps.index(producer)
 
 
 def test_unmeasured_jobs_do_not_inherit_native_sessions() -> None:
@@ -213,7 +248,73 @@ def test_unmeasured_jobs_do_not_inherit_native_sessions() -> None:
         for job in jobs:
             environment = _job(_workflow(filename), job)["env"]
             assert isinstance(environment, dict)
-            assert environment.get("IDHAZH_HOST_TELEMETRY_MODE") == "legacy"
+            assert environment.get("IDHAZH_HOST_TELEMETRY_MODE") == (
+                "${{ inputs.host_telemetry == 'off' && 'off' || 'legacy' }}"
+            )
+            assert not any(
+                "d7_host_telemetry.py run" in str(step.get("run", ""))
+                for step in _steps(_workflow(filename), job)
+            )
+
+
+def test_every_dispatch_keeps_memory_distinct_and_resolves_off_before_native_setup() -> None:
+    for filename, jobs in MEASURED_JOBS.items():
+        inputs = _dispatch_inputs(_load_workflows()[filename])
+        host = _mapping(inputs["host_telemetry"], "host choice")
+        memory = _mapping(inputs["memory_profiling"], "memory choice")
+        assert host["default"] == "rust" and host["options"] == ["rust", "legacy", "off"]
+        assert memory["default"] == "inherit" and memory["options"] == ["inherit", "on", "off"]
+        workflow = _workflow(filename)
+        for job in jobs:
+            steps = _steps(workflow, job)
+            resolver = _step(workflow, job, "id", "host_telemetry")
+            script = str(resolver["run"])
+            assert 'host_telemetry_control.py "$REQUESTED" --config-root config' in script
+            assert 'IDHAZH_HOST_TELEMETRY_MODE=$MODE" >> "$GITHUB_ENV"' in script
+            assert 'mode=$MODE" >> "$GITHUB_OUTPUT"' in script
+            native = [
+                step for step in steps
+                if _is_host_crate_cache(step)
+                or step.get("name") == "Select the pinned host toolchain"
+                or step.get("uses") in (
+                    "./.github/actions/d7-host-telemetry",
+                    "./.github/actions/download-host-telemetry",
+                )
+            ]
+            assert native
+            for step in native:
+                assert steps.index(resolver) < steps.index(step)
+                assert _normalize_condition(step["if"], "native setup") == (
+                    "env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'"
+                )
+            producer = next(
+                step for step in steps if "d7_host_telemetry.py run" in str(step.get("run", ""))
+            )
+            assert '--mode "$IDHAZH_HOST_TELEMETRY_MODE"' in str(producer["run"])
+            for step in steps:
+                script = str(step.get("run", ""))
+                if "run fingerprint" in script or "run job-clock" in script:
+                    assert "IDHAZH_HOST_TELEMETRY_MODE == 'legacy'" in str(step.get("if", ""))
+                if "memory_sampler.py" in script:
+                    assert (
+                        "IDHAZH_HOST_TELEMETRY_MODE == 'legacy'" in str(step.get("if", ""))
+                        or "IDHAZH_HOST_TELEMETRY_MODE != 'off'" in str(step.get("if", ""))
+                    )
+
+
+def test_off_shards_keep_ordinary_publication_without_a_native_receipt() -> None:
+    digest = _workflow("digest.yml")
+    for name in ("Record what this shard measured", "Commit what this shard measured"):
+        condition = _normalize_condition(
+            _step(digest, "work", "name", name)["if"], "ordinary publication"
+        )
+        assert "IDHAZH_HOST_TELEMETRY_MODE == 'off'" in condition
+        assert "IDHAZH_HOST_TELEMETRY_VERIFIED == '1'" in condition
+    bench = _step(_workflow("measure.yml"), "llama-bench", "name", "Benchmark the candidate")
+    script = str(bench["run"])
+    assert script.index('if [ "$IDHAZH_HOST_TELEMETRY_MODE" != off ]') < script.index(
+        "memory_profiling_control.py"
+    )
 
 
 def test_cleanup_uses_the_session_not_the_repository_file_workspace() -> None:

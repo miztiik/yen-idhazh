@@ -37,6 +37,7 @@ from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.host_fingerprint import WATCHED_FLAGS, HostFingerprintRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.telemetry.host import runner_name
+from idhazh.telemetry.host_control import enabled as host_telemetry_enabled
 
 if TYPE_CHECKING:  # pragma: no cover - a type, not a runtime dependency
     from idhazh import config
@@ -399,7 +400,7 @@ def file_machine_row(
     a row the shard filed but never named is a row that dies with the runner.
     """
     knobs = settings.app.observability
-    if not knobs.host_fingerprint:
+    if not host_telemetry_enabled(knobs) or not knobs.host_fingerprint:
         LOG.info("fingerprint off job=%s shard=%s run=%s", job, shard, run_id)
         return None, []
     reads_bandwidth = job in knobs.host_fingerprint_bandwidth_jobs
@@ -581,7 +582,7 @@ def file_job_clock(
     read no tokens.
     """
     knobs = settings.app.observability
-    if not knobs.host_fingerprint:
+    if not host_telemetry_enabled(knobs) or not knobs.host_fingerprint:
         LOG.info("job clock off job=%s shard=%s run=%s", job, shard, run_id)
         return None, []
     scraped_at = finished_at or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())

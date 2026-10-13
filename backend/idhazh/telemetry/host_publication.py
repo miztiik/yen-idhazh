@@ -115,9 +115,11 @@ def consume_host_publication(
     """Consume an explicit receipt or the native workflow handoff; legacy performs no I/O."""
     environment = os.environ if environment is None else environment
     mode = environment.get(MODE_ENV, "legacy")
-    if mode not in {"legacy", "rust"}:
+    if mode not in {"legacy", "rust", "off"}:
         raise ValueError("unknown host telemetry publication mode")
-    if receipt is None and mode == "legacy":
+    if mode == "off" and receipt is not None:
+        raise ValueError("host telemetry off cannot publish an explicit native receipt")
+    if receipt is None and mode in {"legacy", "off"}:
         return {}
     if receipt is None:
         named = environment.get(RECEIPT_ENV)

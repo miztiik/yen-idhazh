@@ -138,6 +138,8 @@ export interface ObservabilityConfig {
 	/** Whether a job records what machine it drew. False is why three panels have
 	 * nothing, and each says so in words that never name the setting. */
 	host_fingerprint: boolean;
+	/** Master host-instrument switch; false also disables CPU/load collection. */
+	host_telemetry_enabled: boolean;
 	/** Whether operating-system memory and fault collection is enabled. CPU and
 	 * lifecycle telemetry remain available when this is false. */
 	memory_profiling_enabled: boolean;
@@ -538,6 +540,7 @@ const OBSERVABILITY_DEFAULTS: ObservabilityConfig = {
 	cost_output_per_million: 0.6,
 	evaluation_enabled: true,
 	host_fingerprint: true,
+	host_telemetry_enabled: true,
 	host_fingerprint_bandwidth_cache_multiple: 2,
 	memory_profiling_enabled: true,
 	sample_rate: 1

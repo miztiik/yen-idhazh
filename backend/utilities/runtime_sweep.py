@@ -39,6 +39,7 @@ from idhazh.stages import common
 from idhazh.stages import plan as plan_stage
 from idhazh.stages.common import CAPTURES_DIRNAME
 from idhazh.telemetry import job_machine, silicon
+from idhazh.telemetry.host_control import enabled as host_telemetry_enabled
 from idhazh.telemetry.host_event_client import HostEventClient
 from idhazh.telemetry.host_evidence_inputs import read_bytes
 from idhazh.telemetry.host_evidence_inputs import settings as native_settings
@@ -535,7 +536,9 @@ def run_once(
     """One server start, one pass over the fixed corpus, one set of readings."""
     cfg = write_config(f"{label}-{repeat}", update, config_root=config_root)
     settings = config.load(cfg)
-    require_memory_for_sweep(settings.app.observability.memory_profiling_enabled)
+    collect_host = host_telemetry_enabled(settings.app.observability)
+    if collect_host:
+        require_memory_for_sweep(settings.app.observability.memory_profiling_enabled)
     log_path = ROOT / f"{label}-{repeat}.llama-server.log"
     items_dir = RUN_ROOT / date / "items"
     # Both, and for the same reason: a repeat starts from an empty run directory
@@ -556,9 +559,9 @@ def run_once(
     started = time.perf_counter()
     rss_samples: list[dict[str, str]] = []
     mode = os.environ.get("IDHAZH_HOST_TELEMETRY_MODE")
-    native = mode == "rust" or (
+    native = collect_host and (mode == "rust" or (
         mode is None and settings.app.observability.host_event_mode == "native"
-    )
+    ))
     env_paths = [ROOT / f"{label}-{repeat}-{shard}.env" for shard in range(worker_count)]
     with log_path.open("w", encoding="utf-8") as log:
         server = None
@@ -576,7 +579,7 @@ def run_once(
                     rss_samples.append(read_status(server.pid))
                     time.sleep(1)
 
-            if not native:
+            if collect_host and not native:
                 sampler = threading.Thread(target=sample_rss, daemon=True)
                 sampler.start()
             wait_for_health(port)
@@ -635,7 +638,7 @@ def run_once(
         "total_ms": total_ms,
         "model_path_ms": startup_ms + sum(item["summarize_ms"] for item in found.per_item),
         "server_rss_samples": rss_samples,
-        "cgroup_memory_peak_bytes": peak if native else cgroup_peak(),
+        "cgroup_memory_peak_bytes": peak if native else cgroup_peak() if collect_host else None,
         "host_receipts": [
             (workspace / "receipt.json").as_posix() for workspace in workspaces
         ] if native else [],
@@ -867,9 +870,9 @@ def _sweep(args: argparse.Namespace, *, events: HostEventClient | None) -> int:
         app = AppConfig.from_json(path.read_text(encoding="utf-8"))
         app.observability.memory_profiling_enabled = args.memory_profiling == "on"
         path.write_text(app.to_json(), encoding="utf-8", newline="\n")
-    require_memory_for_sweep(
-        config.load(args.config).app.observability.memory_profiling_enabled
-    )
+    settings = config.load(args.config)
+    if host_telemetry_enabled(settings.app.observability):
+        require_memory_for_sweep(settings.app.observability.memory_profiling_enabled)
     repeat_count = repeats(args.config, dispatch=args.repeats)
     # Two, because a spread needs two readings and this stops a dispatch that
     # cannot produce one. It is the sweep's own statement about what it can
@@ -931,7 +934,8 @@ def _sweep(args: argparse.Namespace, *, events: HostEventClient | None) -> int:
         "cpu": (
             events.host_facts().cpu_model
             if events is not None and events.native
-            else silicon.host_cpu_model()
+            else silicon.host_cpu_model() if host_telemetry_enabled(settings.app.observability)
+            else None
         ) or "unrecorded",
         "repeats": repeat_count,
         # What the timing was actually taken over. It is not `repeats` whenever

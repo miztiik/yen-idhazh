@@ -40,6 +40,28 @@ missing value are refused. The isolated workflow dispatch accepts `inherit`,
 Boolean is written into the scratch native config and manifest before collection.
 The content and measurement workflows use the same three-value dispatch shape.
 
+The separate whole-instrument control is `observability.host_telemetry_enabled`
+in the selected `config/idhazh.json`, default true. Workflow `host_telemetry: off`
+also disables the entire instrument. The master false value cannot be overridden
+by a Rust/legacy or memory-on request. Resolve it before any native build, binary
+download or monitor startup. Off passes a collecting-free environment to the real
+producer and uses only a joined waiting-log timer around item work; host cells
+remain unavailable. Publishers still require their ordinary completed-write
+evidence but consume no native host receipt. An explicit native receipt supplied
+in off mode is refused rather than published.
+
+The Python collectors and legacy selection remain present. These additive controls
+do not perform cleanup or switch production back to Python.
+
+For content refresh, the `plan` job builds the release monitor once and uploads
+the executable plus its SHA-256 checksum. Every work shard and assemble downloads
+that same run artifact, verifies the checksum and restores executable permission.
+Those consumer jobs do not run Cargo or prepare a Rust toolchain. The artifact
+name binds native crate sources, Cargo manifest/lock, pinned toolchain, runner OS
+and architecture, not the changing repository HEAD. Changed native inputs refuse
+reuse; they never silently select an old binary or rebuild in a worker.
+The complete instrument off choice skips both build/upload and download.
+
 The native off path takes no process-status, machine-memory, memory-cgroup or
 Python-population readings and creates no memory artifact directory. CPU, load,
 process identity, event boundaries, heartbeat and lifecycle remain active.

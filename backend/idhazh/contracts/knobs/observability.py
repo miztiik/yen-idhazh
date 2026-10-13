@@ -191,6 +191,17 @@ class ObservabilityConfig(Model):
             "Every run records the state of this switch on its run manifest."
         ),
     )
+    host_telemetry_enabled: bool = Field(
+        default=True,
+        strict=True,
+        description=(
+            "Master host-instrument switch. False disables Rust and Python CPU/load, "
+            "memory/page-fault, machine probes, host-row writes and host-memory artifacts. "
+            "Actual work, complete item-health records and waiting heartbeats continue. "
+            "The memory_profiling_enabled sub-control cannot override this switch. "
+            "Retire only if host instrumentation is removed."
+        ),
+    )
     host_fingerprint: bool = Field(
         default=True,
         description=(

@@ -1163,6 +1163,7 @@ def test_the_item_health_census_is_not_switchable() -> None:
         "evaluation_enabled",
         "tracing_enabled",
         "host_fingerprint",
+        "host_telemetry_enabled",
         "host_event_shadow",
         "memory_profiling_enabled",
     }

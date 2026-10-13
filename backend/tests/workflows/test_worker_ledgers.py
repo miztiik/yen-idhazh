@@ -32,6 +32,7 @@ from ._harness import (
     RECORD_STEP,
     REVIEW_STEP,
     RUN_ARTIFACTS,
+    SCRAPE_STEP,
     SUBSTITUTED_DATE,
     SUBSTITUTED_DAY_DIR,
     SUBSTITUTED_SHARD,
@@ -85,12 +86,17 @@ def test_a_worker_commits_its_rows_before_the_run_can_throw_them_away() -> None:
                 "always() && env.IDHAZH_HOST_TELEMETRY_MODE == 'legacy'",
                 "always() && (env.IDHAZH_HOST_TELEMETRY_MODE == 'legacy' || "
                 "env.IDHAZH_HOST_TELEMETRY_VERIFIED == '1')",
+                "always() && (env.IDHAZH_HOST_TELEMETRY_MODE == 'legacy' || "
+                "env.IDHAZH_HOST_TELEMETRY_MODE == 'off' || "
+                "env.IDHAZH_HOST_TELEMETRY_VERIFIED == '1')",
             }
         elif name == "What this job cost":
             assert condition in {
                 "always()",
                 "always() && env.IDHAZH_HOST_TELEMETRY_MODE == 'legacy'",
             }
+        elif name == SCRAPE_STEP:
+            assert condition == "always() && env.IDHAZH_HOST_TELEMETRY_MODE != 'off'"
         else:
             assert condition == "always()"
 
