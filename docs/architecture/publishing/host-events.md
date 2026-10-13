@@ -463,30 +463,64 @@ python -m utilities.migrate_host_fingerprints `
   --manifest backend/var/history-manifest.json
 ```
 
-The command defaults to dry-run. `--apply` remains explicitly fail-closed. D17's
-private transaction core stages destination-local outputs, verifies source-byte
+The command defaults to dry-run. `--apply` requires the exact manifest, validated
+D16 bundle, a dated `HistoryApplyApproval`, and an offline local checkout. The
+transaction core stages destination-local outputs, verifies source-byte
 backups, records immutable planned/replaced/verified journal events, rechecks
 each source immediately before its per-file atomic replacement, and supports
 exact-byte restart or rollback. It never accepts a third source state.
 
-The live command is still blocked because the current D16 report has no
-machine-verifiable approval record bound to the manifest, scope and report
-evidence, and no operator-controlled quiet-window provider coordinates every
-writer, compactor and publisher. The plan records the exact scope and A4
-authorization, but those facts are not an enforceable runtime gate. No approval
-or quiet-window attestation is inferred here. Until both mechanisms exist,
-`--apply` performs no history reads or writes. The manifest and all source paths
-resolve under the supplied workspace; persisted paths remain relative and
-POSIX-separated.
+The approval records existing unattended user authority, D16/D7 revisions, the
+three exact evidence hashes and the physical target directory identity. It is
+not a signature service or another permission request. The maintenance context
+refuses known or unresolved local writers, holds the existing OS publication-lock
+primitive, and exclusively owns the actual Git index lock, including in linked
+worktrees. It rechecks target identity, HEAD, index bytes and exact lock ownership
+before staging or replacing files. Release removes only its own exact index lock;
+the OS-lock inode remains. Neither an index lock nor a process snapshot prevents
+arbitrary file writes: the operator must keep this checkout offline for the whole
+apply/recovery window. Ubuntu CI has a separate filesystem and needs no shared lease.
 
-The journal and rollback entry points enforce the fixture boundary themselves:
-they accept only an existing child of the process temporary directory outside
-the repository. Tests use generated fixtures under pytest temporary roots.
-This restriction is not approval or quiet-window evidence and grants no
-permission to apply history. Per-file atomicity is not a multi-file or
+```powershell
+python -m utilities.migrate_host_fingerprints --apply `
+  --workspace-root (Resolve-Path ..).Path `
+  --manifest backend/var/history-manifest.json `
+  --bundle-root backend/var/approved-d16-bundle `
+  --approval backend/var/d17-approval.json
+```
+
+Repeat the same command and approval to resume exact old/new states. Add
+`--rollback` to restore verified original bytes; a third state is never overwritten.
+Manifest, bundle and approval may be explicitly named outside the target checkout;
+historical writes still come only from validated relative manifested paths.
+After an abrupt process kill, a surviving index lock requires operator recovery.
+Hold the same OS maintenance lock, validate the owner contract and physical
+checkout/evidence/Git bindings, and prove the recorded PID/start time no longer
+identifies a live process before removing that exact lock. Never reclaim by age
+or remove a foreign, changed or ambiguous lock.
+
+The public journal and rollback entry points require a live validated maintenance
+context. Internal generated fixtures without a context admit only a temporary
+child outside any Git checkout; Windows short-name aliases resolve to the same
+physical temporary root. Per-file atomicity is not a multi-file or
 power-loss durability claim. D16's complete raw/compact/index/receipt/view
 reconciliation and its exact approved manifest remain prerequisites;
 implementation tests are not application evidence.
+Installed reconciliation verifies every physical hash and backup, settlement
+rank and keys, replacement schemas and index rows/bytes. It projects only the
+approved installed inputs and reruns the real ledger reader and dashboard
+publisher against D16's recorded result. Unrelated data from later runs is not
+part of that historical replay.
+Settlement winners retain their source, key and attempt. D16's original ranked
+identity is mapped through that winner's exact recorded normalized identity,
+including approved legacy compact unit-ID repairs; demanding the erroneous
+legacy ID after conversion would reject the intended migration.
+
+The approved offline rewrite completed on 2026-10-13: 308 manifested files,
+815 settled host records, 587 work records and an unchanged dashboard. Original
+bytes, approval, report, maintenance receipt and completion events remain under
+the task-owned ignored transaction root. This is a completed bounded maintenance
+operation, not a recurring archive-quality gate or a rewrite of Git history.
 
 The command reads exactly two repository-owned configuration files, resolved
 from the utility's location, not the operator's workspace or environment.
@@ -502,6 +536,9 @@ verification defaults. `verification_limits` in
 bytes, footer/decode bytes, JSON depth and Thrift items. Every source read is
 bounded and hash-checked.
 `HistoryLimits` validates the combined effective inputs before reading history.
+`offline_maintenance.command_timeout_seconds` in the migration-only configuration
+bounds local Git/process-inspection commands independently of native readiness;
+Windows CIM startup is not a Rust readiness measurement.
 Missing files or invalid bounds refuse the dry-run without source or config
 writes. The shared experiment file retains only native settings; Rust still
 rejects unknown sections and does not read the migration-only file.
@@ -609,7 +646,8 @@ The exact historical-data replay is a one-time operator activity outside pytest,
 not an application, production or recurring CI step. Offline Python conversion
 and reader replay may run on the development machine; Ubuntu remains the target
 for live Rust process evidence. Preserve the exact manifest, report and candidates
-in the task-owned maintenance directory without changing the original history.
+in the task-owned maintenance directory. The approved apply replaces history
+only after verified backups and destination-local staging are complete.
 Report hashes bind one evidence generation, not the latest repository commit;
 compare changed report fields and candidate data before accepting a new generation.
 Normal tests use generated fixtures to cover functionality, not archive quality.

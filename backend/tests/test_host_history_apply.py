@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import subprocess
+import sys
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
@@ -13,7 +16,8 @@ import pytest
 
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.console_band import ConsoleBand
-from idhazh.contracts.file_envelope import Period
+from idhazh.contracts.file_envelope import Compression, Period
+from idhazh.contracts.host_history_transaction import JOURNAL_VERSION, HistoryApplyApproval
 from idhazh.contracts.host_migration import (
     ClosedHistoryPeriod,
     HistoryManifest,
@@ -31,7 +35,7 @@ from idhazh.contracts.host_output import (
 from idhazh.contracts.ledger_index import CompactIndex, RawDayIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.publication_receipt import PublicationReceipt
-from idhazh.ledger import json_lines
+from idhazh.ledger import json_lines, parquet
 from idhazh.ledger.filenames import unit_id
 from idhazh.telemetry.host_history_apply import (
     HistoryApplyBlockedError,
@@ -307,10 +311,21 @@ def test_path_escape_and_symlinked_history_ancestor_are_refused(tmp_path: Path) 
     outside_target.parent.mkdir(parents=True)
     outside_target.write_bytes(b"symlink target")
     (workspace / "state").rename(workspace / "state-backup")
-    (workspace / "state").symlink_to(other, target_is_directory=True)
-    safe_batch = _batch_for_symlink(b"symlink target")
-    with pytest.raises(ValueError, match=r"symlink|outside"):
-        _run(safe_batch, workspace)
+    link = workspace / "state"
+    if sys.platform == "win32":
+        command = f'New-Item -ItemType Junction -Path "{link}" -Target "{other}" | Out-Null'
+        subprocess.run(["powershell", "-NoProfile", "-Command", command], check=True)
+    else:
+        link.symlink_to(other, target_is_directory=True)
+    try:
+        safe_batch = _batch_for_symlink(b"symlink target")
+        with pytest.raises(ValueError, match=r"symlink|reparse|outside"):
+            _run(safe_batch, workspace)
+    finally:
+        if sys.platform == "win32":
+            link.rmdir()
+        else:
+            link.unlink()
 
 
 def _interrupt_once(expected: str) -> Callable[[str], None]:
@@ -401,8 +416,8 @@ def test_approval_mismatch_rejects_exact_manifest_and_scope_before_report_use() 
         )
 
 
-def test_live_apply_entrypoint_stays_closed_without_real_gate_infrastructure() -> None:
-    with pytest.raises(HistoryApplyBlockedError, match="verified_d16_approval_record"):
+def test_live_apply_entrypoint_refuses_missing_approval_and_maintenance() -> None:
+    with pytest.raises(HistoryApplyBlockedError, match="exact_d16_approval_required"):
         apply_history()
 
 
@@ -449,7 +464,9 @@ def _add_source(
     )
 
 
-def _full_generated_history(workspace: Path) -> tuple[HistoryManifest, bytes]:
+def _full_generated_history(
+    workspace: Path, *, legacy_compact_only: bool = False
+) -> tuple[HistoryManifest, bytes]:
     day = "2026-09-20"
     manifest_document: dict[str, Any] = {
         "version": "2026-10-11",
@@ -537,7 +554,7 @@ def _full_generated_history(workspace: Path) -> tuple[HistoryManifest, bytes]:
         attempt=1,
         job=ServerJob.OPERATOR,
         shard=0,
-        producer="gardener.compact",
+        producer="utilities.migrate_to_parquet" if legacy_compact_only else "gardener.compact",
         git_sha="c" * 40,
     )
     compact_unit = unit_id(
@@ -549,6 +566,9 @@ def _full_generated_history(workspace: Path) -> tuple[HistoryManifest, bytes]:
         producer=compact_identity.producer,
     )
     compact_clock = raw_clock + 20 * 86400000
+    compact_row = dict(row)
+    if legacy_compact_only:
+        compact_row["unit_id"] = str(compact_unit)
     compact_envelope = CandidateFileEnvelope.model_validate(
         {
             "version": "2026-10-06",
@@ -563,15 +583,23 @@ def _full_generated_history(workspace: Path) -> tuple[HistoryManifest, bytes]:
             "file_id": host_file_id(
                 unit=compact_unit, attempt=1, written_at_ms=compact_clock
             ),
-            "content_sha256": hashlib.sha256(json_lines.rows_bytes([row])).hexdigest(),
-            "writer": "idhazh.ledger.json_lines",
-            "writer_version": json_lines.engine_version(),
+            "content_sha256": hashlib.sha256(json_lines.rows_bytes([compact_row])).hexdigest(),
+            "writer": "idhazh.ledger.parquet" if legacy_compact_only else "idhazh.ledger.json_lines",
+            "writer_version": parquet.engine_version() if legacy_compact_only else json_lines.engine_version(),
             "compression": "none",
             "built_from": 1,
         }
     )
-    compact_bytes = json_lines.render([row], envelope=compact_envelope.as_metadata())
-    compact_path = "state/compact/host-fingerprint/daily/2026/09/20.json"
+    compact_bytes = (
+        parquet.render(
+            host_output_columns("2026-09-20"), [compact_row],
+            envelope=compact_envelope.as_metadata(), compression=Compression.NONE,
+        )
+        if legacy_compact_only
+        else json_lines.render([compact_row], envelope=compact_envelope.as_metadata())
+    )
+    compact_suffix = "parquet" if legacy_compact_only else "json"
+    compact_path = f"state/compact/host-fingerprint/daily/2026/09/20.{compact_suffix}"
     _add_source(
         workspace,
         manifest_document,
@@ -666,13 +694,27 @@ def _full_generated_history(workspace: Path) -> tuple[HistoryManifest, bytes]:
         "receipt",
         dependencies=list(receipt_writes),
     )
+    if legacy_compact_only:
+        for removed in (raw_path, raw_index_path, receipt_path):
+            workspace.joinpath(*removed.split("/")).unlink()
+        manifest_document["sources"] = [
+            source for source in source_documents
+            if source["path"] not in (raw_path, raw_index_path, receipt_path)
+        ]
+        for source in manifest_document["sources"]:
+            if source["kind"] == "compact":
+                source["dependencies"] = []
+            elif source["kind"] == "view":
+                source["dependencies"] = [compact_path, compact_index_path]
     return HistoryManifest.model_validate(manifest_document), receipt.to_json().encode("ascii")
 
 
 def _prepared_generated_batch(
-    workspace: Path, repo: Path
+    workspace: Path, repo: Path, *, legacy_compact_only: bool = False
 ) -> tuple[_ApplyBatch, HistoryLimits, bytes, HistoryReport]:
-    manifest, old_receipt_bytes = _full_generated_history(workspace)
+    manifest, old_receipt_bytes = _full_generated_history(
+        workspace, legacy_compact_only=legacy_compact_only
+    )
     config = _config_document(repo)
     limits = HistoryLimits.from_config(config)
     report = dry_run(manifest, workspace_root=workspace, config_document=config)
@@ -764,3 +806,94 @@ def test_full_generated_raw_compact_index_receipt_view_batch_reconciles(
     assert (workspace / receipt_path).read_bytes() == old_receipt_bytes
     assert (workspace / batch.transaction_root / "events" / "complete.json").is_file()
     assert report.normalized_settled_keys == 1
+
+
+def test_installed_consumer_replay_refuses_wrong_reader_counts(tmp_path: Path) -> None:
+    from idhazh.telemetry.host_history_consumers import reconcile_consumers
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    repo = Path(__file__).resolve().parents[2]
+    batch, limits, _, report = _prepared_generated_batch(workspace, repo)
+    _apply_prepared_batch(batch, workspace=workspace, limits=limits)
+    assert report.consumer_replay is not None
+    altered = report.model_copy(update={
+        "consumer_replay": report.consumer_replay.model_copy(update={"host_rows_read": 2})
+    })
+    with pytest.raises(ValueError, match="installed readers"):
+        reconcile_consumers(altered, workspace=workspace, limits=limits)
+
+
+def test_installed_settlement_accepts_only_exact_approved_identity_repair(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    repo = Path(__file__).resolve().parents[2]
+    batch, limits, _, report = _prepared_generated_batch(
+        workspace, repo, legacy_compact_only=True
+    )
+    compact = next(file for file in report.files if file.source.kind == "compact")
+    assert compact.rows[0].identity_repaired
+    assert compact.rows[0].original_identity != compact.rows[0].normalized_identity
+    assert report.settlement[0].identity == compact.rows[0].original_identity
+    _apply_prepared_batch(batch, workspace=workspace, limits=limits)
+    assert (workspace / batch.transaction_root / "events" / "complete.json").is_file()
+
+
+def test_public_cli_applies_resumes_and_rolls_back_generated_checkout(tmp_path: Path) -> None:
+    from utilities.migrate_host_fingerprints import main
+
+    workspace = tmp_path / "checkout"
+    workspace.mkdir()
+    repo = Path(__file__).resolve().parents[2]
+    batch, _, _, report = _prepared_generated_batch(workspace, repo)
+    assert batch.manifest is not None
+    environment = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+
+    def git(*args: str) -> bytes:
+        return subprocess.run(
+            ["git", *args], cwd=workspace, env=environment,
+            check=True, capture_output=True, timeout=10,
+        ).stdout
+
+    git("init", "--quiet")
+    git("config", "user.name", "Generated fixture")
+    git("config", "user.email", "fixture@example.invalid")
+    git("config", "commit.gpgsign", "false")
+    (workspace / "tracked.txt").write_bytes(b"generated Git fixture\n")
+    git("add", "tracked.txt")
+    git("commit", "--quiet", "-m", "generated fixture")
+    revision = git("rev-parse", "HEAD").decode("ascii").strip()
+    index = Path(git("rev-parse", "--path-format=absolute", "--git-path", "index").decode().strip())
+    index_bytes = index.read_bytes()
+    original = {
+        item.path: workspace.joinpath(*item.path.split("/")).read_bytes()
+        for item in batch.replacements
+    }
+    info = workspace.stat()
+    approval = HistoryApplyApproval(
+        version=JOURNAL_VERSION, authority="unattended_user",
+        authorized_at="2026-10-13T00:00:00Z",
+        manifest_sha256=batch.manifest_sha256, scope_hash=batch.scope_hash,
+        report_evidence_hash=batch.report_evidence_hash,
+        d16_revision=revision, d7_revision=revision,
+        target_device=info.st_dev, target_inode=info.st_ino,
+    )
+    approval_path = workspace / "generated-approval.json"
+    approval_path.write_bytes(approval.to_json().encode("ascii"))
+    manifest_path = workspace / "generated-manifest.json"
+    manifest_path.write_bytes(batch.manifest.to_json().encode("ascii"))
+    args = [
+        "--apply", "--workspace-root", str(workspace), "--manifest", str(manifest_path),
+        "--bundle-root", str(workspace / report.bundle_root), "--approval", str(approval_path),
+    ]
+    assert main(args) == 0
+    assert main(args) == 0
+    for item in batch.replacements:
+        assert workspace.joinpath(*item.path.split("/")).read_bytes() == item.new_bytes
+    assert main([*args, "--rollback"]) == 0
+    assert main([*args, "--rollback"]) == 0
+    for path, data in original.items():
+        assert workspace.joinpath(*path.split("/")).read_bytes() == data
+    assert index.read_bytes() == index_bytes
+    assert git("rev-parse", "HEAD").decode("ascii").strip() == revision
+    assert not index.with_name(index.name + ".lock").exists()

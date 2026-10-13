@@ -258,7 +258,10 @@ def test_named_history_config_uses_shared_verification_and_computed_bounds() -> 
     experiment = json.loads(original_experiment)
     migration = json.loads(original_migration)
     assert "history_migration_limits" not in experiment
-    assert set(migration) == {"history_migration_limits"}
+    assert set(migration) == {"history_migration_limits", "offline_maintenance"}
+    assert set(migration["offline_maintenance"]) == {"command_timeout_seconds"}
+    assert type(migration["offline_maintenance"]["command_timeout_seconds"]) is int
+    assert migration["offline_maintenance"]["command_timeout_seconds"] > 0
     assert set(migration["history_migration_limits"]) == {
         field.name for field in fields(HistoryLimits) if field.name != "verification"
     }
@@ -634,7 +637,7 @@ def test_bad_final_source_has_no_bundle(workspace: Path, fault: str) -> None:
     assert (workspace / first).read_bytes() == original
 
 
-def test_apply_is_not_a_capability() -> None:
+def test_apply_requires_explicit_target_evidence_and_approval() -> None:
     completed = subprocess.run(
         [PYTHON, "-m", "utilities.migrate_host_fingerprints", "--apply"],
         cwd=REPO / "backend",
@@ -643,9 +646,9 @@ def test_apply_is_not_a_capability() -> None:
         check=False,
     )
     assert completed.returncode != 0
-    assert "apply is not implemented" in completed.stderr.lower()
-    assert "verified_d16_approval_record_not_machine_representable" in completed.stderr
-    assert "quiet_window_provider_missing" in completed.stderr
+    assert "apply requires" in completed.stderr.lower()
+    for required in ("--workspace-root", "--manifest", "--bundle-root", "--approval"):
+        assert required in completed.stderr
 
 
 def generated_compact(

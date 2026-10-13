@@ -11,23 +11,28 @@ import tempfile
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Any
 from uuid import uuid4
 
 from idhazh.atomic_write import write_atomic_bytes
 from idhazh.contracts.base import compact_json
+from idhazh.contracts.host_history_transaction import (
+    JOURNAL_VERSION,
+    HistoryApplyApproval,
+    HistoryTransactionEvent,
+    HistoryTransactionPlan,
+)
 from idhazh.contracts.host_migration import HistoryManifest, HistoryReport
 from idhazh.contracts.publication_receipt import PublicationReceipt
 from idhazh.telemetry.host_history_files import HistoryLimits
+from idhazh.telemetry.host_history_maintenance import MaintenanceLease
 from idhazh.telemetry.host_history_paths import preflight_history, preflight_path
 from idhazh.telemetry.host_output_verify import _read_bytes, _safe_path
 
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 APPLY_BLOCKERS = (
-    "verified_d16_approval_record_not_machine_representable",
-    "operator_controlled_writer_compactor_publisher_quiet_window_provider_missing",
+    "exact_d16_approval_required",
+    "active_offline_maintenance_context_required",
 )
-_JOURNAL_VERSION = 1
 
 
 class HistoryApplyBlockedError(RuntimeError):
@@ -60,11 +65,53 @@ class _ApplyBatch:
     evidence: Mapping[str, bytes]
 
 
-def apply_history(*_args: Any, **_kwargs: Any) -> None:
-    """Fail closed until D16 supplies a verifiable approval and a quiet-window lease."""
-    raise HistoryApplyBlockedError(
-        "historical apply is disabled: " + ", ".join(APPLY_BLOCKERS)
+def apply_history(
+    manifest: HistoryManifest | None = None,
+    report: HistoryReport | None = None,
+    artifacts: Mapping[str, bytes] | None = None,
+    *,
+    workspace: Path | None = None,
+    limits: HistoryLimits | None = None,
+    approval: HistoryApplyApproval | None = None,
+    maintenance: MaintenanceLease | None = None,
+    rollback: bool = False,
+) -> str:
+    """Replace only an approved batch while its offline checkout is exclusively held."""
+    if any(value is None for value in (
+        manifest, report, artifacts, workspace, limits, approval, maintenance
+    )):
+        raise HistoryApplyBlockedError("historical apply requires: " + ", ".join(APPLY_BLOCKERS))
+    assert manifest is not None and report is not None and artifacts is not None
+    assert workspace is not None and limits is not None and approval is not None
+    assert maintenance is not None
+    approval = HistoryApplyApproval.model_validate(approval.model_dump())
+    maintenance.require_active(
+        workspace, manifest_sha256=approval.manifest_sha256, scope_hash=approval.scope_hash,
+        report_evidence_hash=approval.report_evidence_hash,
     )
+    batch = _prepare_batch(
+        manifest, report, artifacts, workspace=workspace, limits=limits,
+        approved_manifest_sha256=approval.manifest_sha256,
+        approved_scope_hash=approval.scope_hash,
+        approved_report_evidence_hash=approval.report_evidence_hash,
+    )
+    evidence = dict(batch.evidence)
+    evidence["approval.json"] = approval.to_json().encode("ascii")
+    batch = _ApplyBatch(
+        manifest=batch.manifest, report=batch.report,
+        manifest_sha256=batch.manifest_sha256, scope_hash=batch.scope_hash,
+        report_evidence_hash=batch.report_evidence_hash, transaction_id=batch.transaction_id,
+        transaction_root=batch.transaction_root, replacements=batch.replacements, evidence=evidence,
+    )
+    if rollback:
+        _rollback_prepared_batch(batch, workspace=workspace, limits=limits, maintenance=maintenance)
+    else:
+        _apply_prepared_batch(batch, workspace=workspace, limits=limits, maintenance=maintenance)
+    maintenance.require_active(
+        workspace, manifest_sha256=batch.manifest_sha256, scope_hash=batch.scope_hash,
+        report_evidence_hash=batch.report_evidence_hash,
+    )
+    return batch.transaction_root
 
 
 def _require_temporary_fixture_workspace(workspace: Path) -> None:
@@ -73,9 +120,9 @@ def _require_temporary_fixture_workspace(workspace: Path) -> None:
         "transaction writes are disabled outside a generated temporary fixture root: "
         + ", ".join(APPLY_BLOCKERS)
     )
-    temporary_path = Path(tempfile.gettempdir()).absolute()
+    temporary_path = Path(tempfile.gettempdir()).resolve(strict=True)
     repository_root = Path(__file__).resolve().parents[3]
-    workspace_path = workspace.absolute()
+    workspace_path = _safe_path(workspace.absolute(), workspace.absolute()).resolve(strict=True)
     if (
         workspace_path == temporary_path
         or not workspace_path.is_relative_to(temporary_path)
@@ -108,9 +155,16 @@ def _require_temporary_fixture_workspace(workspace: Path) -> None:
         raise blocked
 
 
-def _json_bytes(document: object) -> bytes:
-    text = json.dumps(document, ensure_ascii=True, separators=(",", ":"), sort_keys=True) + "\n"
-    return text.encode("ascii")
+def _require_execution_boundary(
+    batch: _ApplyBatch, workspace: Path, maintenance: MaintenanceLease | None
+) -> None:
+    if maintenance is None:
+        _require_temporary_fixture_workspace(workspace)
+    else:
+        maintenance.require_active(
+            workspace, manifest_sha256=batch.manifest_sha256, scope_hash=batch.scope_hash,
+            report_evidence_hash=batch.report_evidence_hash,
+        )
 
 
 def _relative_parts(value: str) -> tuple[str, ...]:
@@ -350,7 +404,8 @@ def _prepare_batch(
         f"{manifest.isolated_root}/d17-transactions/{transaction_id}"
     )
     _relative_parts(transaction_root)
-    preflight_history(manifest, workspace=workspace)
+    # Git-backed legacy evidence belongs to the approved dry-run bundle, not the target checkout.
+    preflight_history(manifest.model_copy(update={"legacy_raw_evidence": ()}), workspace=workspace)
     candidate_names = {
         file.candidate_path for file in report.files if file.candidate_path is not None
     }
@@ -377,9 +432,9 @@ def _transaction_plan(
         len(data) for data in batch.evidence.values()
     ) > max_bytes:
         raise ValueError("transaction exceeds the staged-byte bound")
-    return _json_bytes(
+    plan = HistoryTransactionPlan.model_validate(
         {
-            "version": _JOURNAL_VERSION,
+            "version": JOURNAL_VERSION,
             "transaction_id": batch.transaction_id,
             "manifest_sha256": batch.manifest_sha256,
             "scope_hash": batch.scope_hash,
@@ -408,13 +463,14 @@ def _transaction_plan(
             ],
         }
     )
+    return compact_json(plan.model_dump(mode="json")).encode("ascii")
 
 
 def _event_bytes(batch: _ApplyBatch, phase: str, index: int | None = None) -> bytes:
     item = batch.replacements[index] if index is not None else None
-    return _json_bytes(
+    event = HistoryTransactionEvent.model_validate(
         {
-            "version": _JOURNAL_VERSION,
+            "version": JOURNAL_VERSION,
             "transaction_id": batch.transaction_id,
             "manifest_sha256": batch.manifest_sha256,
             "scope_hash": batch.scope_hash,
@@ -426,6 +482,7 @@ def _event_bytes(batch: _ApplyBatch, phase: str, index: int | None = None) -> by
             "new_sha256": item.new_sha256 if item else None,
         }
     )
+    return compact_json(event.model_dump(mode="json")).encode("ascii")
 
 
 def _record_event(
@@ -579,8 +636,10 @@ def _ensure_backups_and_stages(
     workspace: Path,
     file_cap: int,
     interrupt: Callable[[str], None] | None,
+    maintenance: MaintenanceLease | None = None,
 ) -> None:
     for index, item in enumerate(batch.replacements):
+        _require_execution_boundary(batch, workspace, maintenance)
         target = _path(workspace, item.path)
         current = _read_bytes(target, root=workspace, cap=file_cap)
         old_matches = (
@@ -661,9 +720,10 @@ def _run_transaction(
     max_bytes: int,
     reconcile: Callable[[], None],
     interrupt: Callable[[str], None] | None = None,
+    maintenance: MaintenanceLease | None = None,
 ) -> None:
-    """Run the journal only for generated temporary fixtures; live writes stay blocked."""
-    _require_temporary_fixture_workspace(workspace)
+    """Apply generated fixtures or an explicitly approved, held offline checkout."""
+    _require_execution_boundary(batch, workspace, maintenance)
     workspace = workspace.absolute()
     _validate_batch_paths(batch, workspace=workspace)
     plan = _transaction_plan(batch, max_files=max_files, max_bytes=max_bytes)
@@ -717,6 +777,7 @@ def _run_transaction(
         workspace=workspace,
         file_cap=file_cap,
         interrupt=interrupt,
+        maintenance=maintenance,
     )
     _record_event(batch, "backups-verified", workspace=workspace, cap=file_cap, interrupt=interrupt)
     _record_event(batch, "staged-verified", workspace=workspace, cap=file_cap, interrupt=interrupt)
@@ -732,6 +793,7 @@ def _run_transaction(
         )
 
     for index, item in enumerate(batch.replacements):
+        _require_execution_boundary(batch, workspace, maintenance)
         target = _path(workspace, item.path)
         stage = _stage_path(batch, index, workspace)
         current = _read_bytes(target, root=workspace, cap=file_cap)
@@ -771,6 +833,7 @@ def _run_transaction(
             interrupt=interrupt,
         )
     _preflight_current_states(batch, workspace=workspace, file_cap=file_cap)
+    _require_execution_boundary(batch, workspace, maintenance)
     reconcile()
     _record_event(batch, "reconciled", workspace=workspace, cap=file_cap, interrupt=interrupt)
     _record_event(batch, "complete", workspace=workspace, cap=file_cap, interrupt=interrupt)
@@ -784,9 +847,10 @@ def _rollback_transaction(
     file_cap: int,
     max_bytes: int,
     interrupt: Callable[[str], None] | None = None,
+    maintenance: MaintenanceLease | None = None,
 ) -> None:
     """Restore only exact new bytes from verified backups; never overwrite a third state."""
-    _require_temporary_fixture_workspace(workspace)
+    _require_execution_boundary(batch, workspace, maintenance)
     workspace = workspace.absolute()
     _validate_batch_paths(batch, workspace=workspace)
     plan = _transaction_plan(batch, max_files=max_files, max_bytes=max_bytes)
@@ -816,6 +880,7 @@ def _rollback_transaction(
         interrupt=interrupt,
     )
     for index in reversed(range(len(batch.replacements))):
+        _require_execution_boundary(batch, workspace, maintenance)
         item = batch.replacements[index]
         target = _path(workspace, item.path)
         backup = backups[index]
@@ -946,9 +1011,21 @@ def _reconcile_installed(batch: _ApplyBatch, *, workspace: Path, limits: History
         workspace=workspace,
         limits=limits,
     )
+    expected_settlement = []
+    for settled in report.settlement:
+        # D16 ranks by original identity but records each approved identity repair.
+        migrations = [
+            row for row in report_files[settled.source_path].rows
+            if row.original_identity == settled.identity and row.normalized_key == settled.key
+        ]
+        if len(migrations) != 1:
+            raise ValueError("D16 settlement has no unique approved row identity")
+        expected_settlement.append(
+            settled.model_copy(update={"identity": migrations[0].normalized_identity})
+        )
     if (
         reconciled.report.normalized_settled_keys != report.normalized_settled_keys
-        or reconciled.report.settlement != report.settlement
+        or reconciled.report.settlement != tuple(expected_settlement)
     ):
         raise ValueError("installed history changed settled identities, rank or cardinality")
     reconciled_files = {item.source.path: item for item in reconciled.report.files}
@@ -968,6 +1045,9 @@ def _reconcile_installed(batch: _ApplyBatch, *, workspace: Path, limits: History
                 raise ValueError(
                     f"{source.path}: installed index rows/bytes/markers do not reconcile"
                 )
+    from idhazh.telemetry.host_history_consumers import reconcile_consumers
+
+    reconcile_consumers(report, workspace=workspace, limits=limits)
 
 
 def _apply_prepared_batch(
@@ -976,6 +1056,7 @@ def _apply_prepared_batch(
     workspace: Path,
     limits: HistoryLimits,
     interrupt: Callable[[str], None] | None = None,
+    maintenance: MaintenanceLease | None = None,
 ) -> None:
     """Internal orchestration, reachable only after an external verified D16 gate."""
     if batch.manifest is None or batch.report is None:
@@ -988,6 +1069,7 @@ def _apply_prepared_batch(
         max_bytes=limits.max_bundle_bytes,
         reconcile=lambda: _reconcile_installed(batch, workspace=workspace, limits=limits),
         interrupt=interrupt,
+        maintenance=maintenance,
     )
 
 
@@ -997,6 +1079,7 @@ def _rollback_prepared_batch(
     workspace: Path,
     limits: HistoryLimits,
     interrupt: Callable[[str], None] | None = None,
+    maintenance: MaintenanceLease | None = None,
 ) -> None:
     _rollback_transaction(
         batch,
@@ -1005,4 +1088,5 @@ def _rollback_prepared_batch(
         file_cap=limits.verification.max_file_bytes,
         max_bytes=limits.max_bundle_bytes,
         interrupt=interrupt,
+        maintenance=maintenance,
     )

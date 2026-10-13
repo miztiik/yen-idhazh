@@ -1,4 +1,7 @@
 {
+  "offline_maintenance": {
+    "command_timeout_seconds": 30
+  },
   "history_migration_limits": {
     "max_roots": 4,
     "max_periods": 64,

@@ -75,7 +75,7 @@ Table D - authoritative execution queue
 | D8 | 8 | Expose and test the independent memory off control | 6 | G | DONE | rust-d8-memory-off | #1576, #1577 | Copilot; the follow-up closes dispatch-shape coverage, keeps route assertions in the console browser group, and is merged as `c8867c438`. |
 | D16 | 16 | Verify evidence and record unattended adoption authority | 8, 5, 14, 15 | H | DONE | d16-evidence-gate-repair-20261012 | - | owner; one-time local Python replay verified 308 sources, 815 settled host records and the unchanged console view with exact Git provenance; historical readiness is ready, production cutover remains D7's gate. |
 | D7 | 7 | Switch instrumented producers through events | 16 | I | DONE | rust-d7-family-e2e | - | owner; accepted corrected Ubuntu native/family/single-writer evidence; measured pipeline defaults now select Rust, with explicit temporary rollback and no original history rewrite. |
-| D17 | 17 | Rewrite the approved historical manifest once | 7, 15, 16 | J | PENDING | - | - | - |
+| D17 | 17 | Rewrite the approved historical manifest once | 7, 15, 16 | J | DONE | rust-d17-journalled-history-apply | #1590 | owner; approved 308-file offline transaction is complete, originals retained, 815 settled records and installed dashboard reconciled; implementation lands with this row update. |
 | D9 | 9 | Remove superseded collectors and temporary duplication | 7, 8, 17 | K | BLOCKED | rust-d9-cleanup | - | owner; automatic migration-experiment PR runs removed; final collector and maintenance-code deletion waits for D7 cutover and D17 history/recovery completion. |
 
 ## 2. Row #1 - Approve corrected design and documentation only
@@ -1056,6 +1056,12 @@ Table AU - Row 16 rejected alternatives
 - **Files touched:**
   - `backend/utilities/migrate_host_fingerprints.py`
   - `backend/idhazh/telemetry/host_history_apply.py`
+  - `backend/idhazh/telemetry/host_history_maintenance.py`
+  - `backend/idhazh/telemetry/host_history_consumers.py`
+  - `backend/idhazh/contracts/host_history_transaction.py`
+  - `backend/tests/contracts/test_host_history_transaction.py`
+  - `backend/tests/test_host_history_maintenance.py`
+  - `config/host-history-migration.json`
   - `backend/tests/test_host_fingerprint_migration.py`
   - `backend/tests/test_host_history_apply.py`
   - `docs/architecture/publishing/host-events.md`
@@ -1063,8 +1069,10 @@ Table AU - Row 16 rejected alternatives
 - **Acceptance gates - local:** Separate approved maintenance execution, NOT an implementation test over production history. Re-run dry-run on exact manifest hashes before apply; stage all targets before any replacement; preflight dependencies/identities and publication exclusions. Generated fault/restart fixtures verify rollback and idempotence. Explicit maintenance output targets come from the approved manifest, never a glob in `Files touched`.
 - **Acceptance gates - CI:** Utility/contract tests use only generated bounded files. Actual maintenance validation reads only manifested paths and dependent indexes/views, verifies new schemas/native-reader compatibility, v1 labels/retained averages/nulls, logical settlement, footer/physical hashes and current receipts. No workflow dispatch, push or git-history rewrite is implied.
 - **Oracle:** Every approved source is either untouched or fully replaced/reconciled with verified completion evidence and recoverable original bytes; this cannot establish missing historical hardware facts or a multi-file filesystem transaction.
-- **Implementation status (2026-10-13): PENDING.** The journaled per-file transaction core and generated temporary-root tests are implementation work only. No historical source was read, staged, copied, dry-run, or written for D17. `--apply` remains fail-closed; this work is not D17 application evidence and does not complete this row.
-- **Infrastructure blockers:** The current D16 report contract carries scope/evidence hashes but no machine-verifiable approval record binding A4 authority to the exact manifest, scope and report. The plan's recorded hashes are not an enforceable runtime authorization. No operator-controlled quiet-window coordinator/lease was found for jointly excluding every writer, compactor and publisher. No attestation was fabricated. D16's evidence-gate PR #1585 is still open, and D7's all-family single-writer Ubuntu gate remains pending; do not merge D17 or claim row completion until those gates and both runtime prerequisites are resolved.
+- **Application status (2026-10-13): COMPLETE.** The approved 308-file offline transaction replaced 266 raw and 38 compact Parquet files, three compact indexes and one console view. The transaction retains all 3,761,375 original bytes and installs 4,136,285 candidate bytes. Installed replay reconciles 815 settled host records, 587 work records and the unchanged dashboard. All 948 source rows preserve allocation clocks, v1 fingerprint labels and truthful provenance. The target checkout's HEAD and index remain unchanged; neither the shared checkout nor Git history was force-updated.
+- **Completion evidence:** Transaction `be1c177b5cac6b28f6b6f09fb57b8dac593acb188552c9353768d7ac227caf98` under `backend/var/d16-bundle/d17-transactions/` contains dated immutable plan/events, exact approval/report/receipt evidence and verified source-byte backups. Its `complete` event binds manifest `8b577d763b968d9fc43478d758d2afc61adb9130a177966054580fb780bca1e3`, scope `02b4069ca27531dad642cc06b3fa8c8ef0492c4f2c4a0662c51aa7e8ae008074` and D16 report `4b4ad20107a6363f047ec0819203b79d90632878aef8c0beabbb15262444714e`. Retain this ignored recovery directory and the D16 bundle until D9 resolves their remaining callers.
+- **Reconciliation correction:** D16 records settlement rank with original row identity and separately records each normalized identity. Installed reconciliation uses the exact approved row migration for each winner; it does not incorrectly demand the legacy compact unit ID after that ID has been repaired. Source winner, key, attempt and cardinality remain exact. Generated Parquet converter-identity fixtures cover this distinction; no production archive enters recurring pytest.
+- **Offline scope:** The approved Downloads checkout is distinct from Ubuntu CI filesystems. The operator-controlled local window excludes local writers; OS maintenance and exact Git index locks serialize local maintenance and normal Git index changes. Neither a process snapshot nor an index lock claims to exclude arbitrary file writes. Keep this checkout offline throughout application or recovery. Repository HEAD can otherwise move without changing the approved historical report.
 
 Table AV - Row 17 decisions
 
