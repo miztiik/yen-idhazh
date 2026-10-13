@@ -29,7 +29,7 @@ from idhazh.publication_lock import acquire_lock, release_lock
 from idhazh.telemetry.host_output_verify import VerificationLimits, _read_bytes, _safe_path
 
 # Fixed known launchers, not a repository scan or a configurable process supervisor.
-KNOWN_PROCESS_NAMES = ("python", "pythonw", "node", "idhazh-host-telemetry", "llama-server")
+KNOWN_PROCESS_NAMES = ("python", "pythonw", "node", "idhazh-host-telemetry")
 KNOWN_WRITER_ENTRYPOINTS = (
     "idhazh", "idhazh.exe",
     "d7_host_telemetry.py", "host_telemetry_session.py", "host_telemetry_workload.py",
@@ -160,8 +160,8 @@ def _refuse_writers(workspace: Path, cap: int, timeout: float, max_processes: in
             )
             for index, token in enumerate(tokens[:-1])
         )
-        native = name.removesuffix(".exe") in ("idhazh-host-telemetry", "idhazh-host-tel",
-                                               "llama-server")
+        # Model servers do not write host history; their pipeline/monitor owners do.
+        native = name.removesuffix(".exe") in ("idhazh-host-telemetry", "idhazh-host-tel")
         node = name.removesuffix(".exe") == "node" and any(
             part in command.replace("\\", "/").casefold()
             for part in (target, "backend/", "frontend/", "yen-idhazh")
