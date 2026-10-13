@@ -618,7 +618,6 @@ def run(
     compaction has no scheduled window, so a named range only limits the
     periods its steps choose.
     """
-    repo_root = repo_root.resolve()
     refused = history_tasks_among(names, settings.tasks)
     if refused:
         say(

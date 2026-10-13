@@ -573,6 +573,7 @@ def run_and_land(
     shard's summary is added to it. An exception that escapes is said the same
     way, by its type and place, and then goes on, so Python exits 1 with it.
     """
+    repo_root = repo_root.resolve()
     run = _ShardRun(
         names=tuple(names), shard=shard, run_id=run_id, attempt=attempt, config=settings.config
     )
