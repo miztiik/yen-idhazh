@@ -289,6 +289,15 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
+      - name: Retain the plan monitor diagnostics
+        if: always() && env.IDHAZH_HOST_TELEMETRY_MODE == 'rust' && env.IDHAZH_HOST_TELEMETRY_SESSION != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: host-telemetry-plan
+          path: ${{ env.IDHAZH_HOST_TELEMETRY_SESSION }}/
+          retention-days: 1
+          if-no-files-found: error
+
   # The worker timeout comes from run.shard_timeout_minutes in config.
   work:
     needs: plan
