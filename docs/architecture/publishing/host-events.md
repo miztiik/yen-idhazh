@@ -193,7 +193,11 @@ resource interval selects endpoints only. Overlapping windows keep independent
 snapshots and monotonic deadlines; missed wakes do not invent samples.
 
 Job samples retain the configured legacy cadence. Runtime status retains its
-separate one-second cadence. Job sampling ends when its selected process exits;
+separate one-second cadence only when a model server is declared. Server-less
+jobs emit no empty server-status records and capture on the job cadence, not once
+per second for an absent server. This preserves the existing bounded artifact
+capacity for actual observations; it does not increase its event/byte limits.
+Job sampling ends when its selected process exits;
 window CPU/load results and explicit unavailable memory evidence continue.
 Rust streams plain `rss-samples.jsonl` and
 `python-procs.jsonl`, with the unchanged kilobyte keys and at most three argv

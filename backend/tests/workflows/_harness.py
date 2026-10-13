@@ -844,6 +844,7 @@ SUBSTITUTED_TENANT: Final = "a-paper-tenant"
 
 EXPRESSION_VALUES: Final = {
     "env.SET_DIRECTORY": "corpus/encoder-comparison-1",
+    "env.IDHAZH_HOST_TELEMETRY_SESSION": "backend/var/d7-host-telemetry/fixture-plan-session",
     "matrix.encoder": "fixture-encoder",
     "needs.plan.outputs.date": SUBSTITUTED_DATE,
     "needs.plan.outputs.day_dir": SUBSTITUTED_DAY_DIR,

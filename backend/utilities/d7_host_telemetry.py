@@ -752,6 +752,19 @@ def _cleanup(workspace: Path, binary: str | None) -> None:
             raise
 
 
+def _report_monitor_failure(workspace: Path, cap: int) -> None:
+    try:
+        raw = read_bytes(_safe_session_path(workspace, Path("monitor.log")), cap)
+    except (OSError, ValueError) as error:
+        print(f"D7 monitor diagnostics unavailable: {type(error).__name__}", file=sys.stderr)
+        return
+    text = raw.decode("utf-8", errors="replace").strip()
+    if text:
+        print(f"D7 monitor diagnostics:\n{text}", file=sys.stderr)
+    else:
+        print("D7 monitor log contains no diagnostic output", file=sys.stderr)
+
+
 def _terminate_worker(child: subprocess.Popen[bytes], *, timeout: float = 10) -> None:
     if child.poll() is not None:
         return
@@ -986,6 +999,8 @@ def run(args: argparse.Namespace) -> int:
         gate.touch()
         child_rc = child.wait()
         status = "completed" if child_rc == 0 else "failed"
+        if child_rc != 0:
+            _report_monitor_failure(workspace, native.limits.max_result_bytes)
         try:
             _stop(workspace, manifest, status, root=ROOT, binary=binary)
             drained = True

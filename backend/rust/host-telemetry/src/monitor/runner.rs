@@ -140,7 +140,7 @@ impl SampleSchedule {
             .workers
             .iter()
             .find_map(|v| v.server.clone());
-        if now_ms >= self.runtime_at {
+        if server.is_some() && now_ms >= self.runtime_at {
             if let (Some(artifacts), Some(status)) = (
                 artifacts.as_mut(),
                 job_samples::runtime_status(frame, server.as_ref(), true),
@@ -241,7 +241,9 @@ impl SampleSchedule {
     }
     fn needs_capture(&self, session: &Session, now_ms: u64) -> bool {
         session.manifest.controls.memory_profiling_enabled
-            && (now_ms >= self.runtime_at || (!self.job_stopped && now_ms >= self.job_at))
+            && ((session.manifest.workers.iter().any(|v| v.server.is_some())
+                && now_ms >= self.runtime_at)
+                || (!self.job_stopped && now_ms >= self.job_at))
     }
 }
 fn artifact_root(
@@ -974,6 +976,14 @@ mod tests {
             Self::with_max_files(name, artifacts_enabled, None)
         }
         fn with_max_files(name: &str, artifacts_enabled: bool, max_files: Option<i64>) -> Self {
+            Self::configured(name, artifacts_enabled, max_files, true)
+        }
+        fn configured(
+            name: &str,
+            artifacts_enabled: bool,
+            max_files: Option<i64>,
+            server_enabled: bool,
+        ) -> Self {
             let mut manifest_json: serde_json::Value = serde_json::from_str(include_str!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
                 "/../../../tests/fixtures/host-events/manifest.json"
@@ -985,6 +995,11 @@ mod tests {
             let mut manifest: HostSessionManifest = serde_json::from_value(manifest_json).unwrap();
             manifest.workers.truncate(1);
             manifest.windows.truncate(1);
+            if !server_enabled {
+                manifest.workers[0].server = None;
+                manifest.cpu_target = Some(manifest.workers[0].target.clone());
+                manifest.cpu_target_role = TargetRole::PythonWorker;
+            }
             manifest.controls.job_sample_interval_seconds =
                 manifest.limits.retry_window_ms as f64 / 1000.0;
             assert_eq!(manifest.pending_event_limit().unwrap(), 31);
@@ -1084,6 +1099,43 @@ mod tests {
             self.artifacts.take();
             std::fs::remove_dir_all(&self.root).unwrap();
         }
+    }
+
+    #[test]
+    fn serverless_job_keeps_memory_samples_and_drains_without_empty_runtime_records() {
+        let mut fixture = Fixture::configured("serverless-job", true, None, false);
+        assert!(job_samples::runtime_status(&fixture.frame, None, true).is_none());
+        assert!(!fixture.schedule.needs_capture(&fixture.session, 1000));
+        let runtime = fixture
+            .root
+            .join("artifacts")
+            .join(job_samples::RUNTIME_STATUS_FILENAME);
+        let limit = fixture.session.manifest.limits.max_session_events as u64;
+        for second in 1..=limit + 2 {
+            fixture.collect(second * 1000).unwrap();
+        }
+        assert!(std::fs::read(runtime).unwrap().is_empty());
+        assert!(
+            std::fs::metadata(fixture.root.join("artifacts/rss-samples.jsonl"))
+                .unwrap()
+                .len()
+                > 0
+        );
+        let mut stop = fixture.ready.clone();
+        stop.kind = EventKind::MonitorStop;
+        stop.event_id = uuid::Uuid::from_u128(2001);
+        stop.emitter_id = fixture.session.manifest.operator_emitter_id.clone();
+        stop.sequence = 1;
+        stop.body = EventBody::Stop(StopBody {
+            reason: StopReason::Completed,
+        });
+        let replies = fixture
+            .session
+            .handle(&stop, &fixture.frame, (limit + 3) * 1000)
+            .unwrap();
+        assert_eq!(replies.last().unwrap().kind, EventKind::MonitorStopped);
+        assert_eq!(replies.last().unwrap().reply_to, Some(stop.event_id));
+        assert!(fixture.session.stopped);
     }
 
     #[test]

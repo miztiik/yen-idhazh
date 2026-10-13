@@ -124,8 +124,11 @@ pub fn runtime_status(
     if !memory {
         return None;
     }
-    let reading = server
-        .and_then(|target| frame.processes.iter().find(|v| &v.target == target))
+    let target = server?;
+    let reading = frame
+        .processes
+        .iter()
+        .find(|v| &v.target == target)
         .map(|v| reduce(v, true, false));
     Some(
         reading
