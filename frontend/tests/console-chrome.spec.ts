@@ -1,95 +1,44 @@
 import { expect, test } from './support/door-page';
-import { bandShares } from '../src/lib/charts/frame';
+import { frame } from '../src/lib/charts/frame';
+import { dateSeries, type SeriesInput } from '../src/lib/charts/d3/dateSeries';
 import { readoutCapStyle } from '../src/lib/charts/readout';
-import { stacked } from '../src/lib/charts/stacked';
 import { describeMissingMarkers, measurementOff, recordDestroyed, recordingNotes, recordingStarted, sampledAt, type OfferedWindow, type RecordingNotes, type RecordRead } from '../src/lib/console/recording';
 import { daysBetween, type HeldPeriod } from '../src/lib/data/slice';
-import type { ObservabilityConfig } from '../src/lib/server/config';
-import { machineCounters } from '../src/lib/server/machine-counters';
+import { carriesServerCounters, machineCounters } from '../src/lib/console/machine/counters';
 import { listManifestDays } from '../src/lib/server/model-work';
-import { describeServerCounters } from '../src/lib/server/server-counter-notes';
-import { BAND_UNREAD } from '../src/lib/console/band';
-import { BY_ROUTE } from './support/console-expect/console-chrome';
-/** Chart chrome, and the states a panel is in when the ledger has no answer.
- *
- * Two rules are under test and they are the whole of both rows.
- *
- * **Every chart resolves to non-empty accessible text.** Prose the page cut
- * still lives in the description, so a reader who cannot see the shape loses
- * nothing - and that is an oracle rather than a promise, because it is checked
- * on every chart of every route that draws one with a readout strip.
- *
- * **A chart that plots more than one series prints them together.** A fixed
- * strip below the plot, as wide as the plot at most, its entries side by side,
- * reachable by an arrow key. A tooltip is never the only place a value
- * appears: a tooltip needs a hover, and a hover is not a thing a thumb can do.
- */
-// Voices is NOT here, and that is a decision rather than an
-// oversight. Every block below needs a strip to read, and the two day matrices
-// on that route declare they have none: each square already names its own day
-// and what that day did, so a strip would reprint the list the pointer is
-// already on. An `if` inside this loop to walk past them is how a route list
-// stops meaning one thing.
+/** Native shape choices preserve measured values; recording words preserve absence and loss. */
 test.describe('the shape switch draws one array two ways', () => {
-    const COLUMNS = ['Mon', 'Tue', 'Wed'];
-    const SERIES = [
-        { label: 'fetch', token: '--chart-1' as const, values: [3, 1, 4] },
-        { label: 'extract', token: '--chart-2' as const, values: [1, 5, 9] }
+    const dates = ['2026-09-01', '2026-09-02', '2026-09-03'];
+    const series: SeriesInput[] = [
+        { label: 'Fetch', token: '--chart-1', points: dates.map((date, index) => ({ date, value: [3, 1, 4][index] })) },
+        { label: 'Extract', token: '--chart-2', points: dates.map((date, index) => ({ date, value: [1, 5, 9][index] })) }
     ];
-    /** Every series' `data`, in drawing order. */
-    function drawn(option: Record<string, unknown>): unknown[][] {
-        const series = option.series as {
-            data: unknown[];
-        }[];
-        return series.map((one) => one.data);
-    }
-    test('both shapes hand the engine byte-for-byte the same values', () => {
-        const bars = stacked(COLUMNS, SERIES, 'bars');
-        const lines = stacked(COLUMNS, SERIES, 'lines');
-        // The row's own test for whether a chart may carry the switch at all: the
-        // presence of a transform is the definition of "not cheap". If these two
-        // ever disagree, the switch is re-shaping data and has to be withdrawn.
-        expect(drawn(lines.option as Record<string, unknown>)).toEqual(drawn(bars.option as Record<string, unknown>));
-        expect(drawn(bars.option as Record<string, unknown>)).toEqual([
-            [3, 1, 4],
-            [1, 5, 9]
-        ]);
-    });
-    test('only the type and the stack differ between them', () => {
-        const bars = (stacked(COLUMNS, SERIES, 'bars').option as {
-            series: Record<string, unknown>[];
-        })
-            .series;
-        const lines = (stacked(COLUMNS, SERIES, 'lines').option as {
-            series: Record<string, unknown>[];
-        })
-            .series;
-        expect(bars.map((one) => one.type)).toEqual(['bar', 'bar']);
-        expect(lines.map((one) => one.type)).toEqual(['line', 'line']);
-        // Stacked is the only one that stacks. A line drawn from a stack baseline
-        // would be a cumulative reading wearing a line's clothes.
-        expect(bars.every((one) => one.stack === 'total')).toBe(true);
-        expect(lines.every((one) => one.stack === undefined)).toBe(true);
-    });
-    test('bars is the default, so the server and the first paint agree', () => {
-        const drawnBars = (stacked(COLUMNS, SERIES).option as {
-            series: {
-                type: string;
-            }[];
-        }).series;
-        expect(drawnBars.map((one) => one.type)).toEqual(['bar', 'bar']);
+    test('native lines and stacked bars keep the same dates, values and readout', () => {
+        const options = { frame: frame(600, 240), density: 6, valueTicks: 4, padding: 0.2, rule: { changes: [], note: null } };
+        const bars = dateSeries(series, { ...options, stacked: true });
+        const lines = dateSeries(series, options);
+        expect(bars).not.toBeNull();
+        expect(lines?.dates).toEqual(dates);
+        expect(bars?.dates).toEqual(dates);
+        expect(lines?.columns).toEqual(bars?.columns);
+        expect(lines?.readout.series).toEqual(bars?.readout.series);
+        expect(lines?.lines.map((line) => line.points.map((point) => point.value))).toEqual([[3, 1, 4], [1, 5, 9]]);
+        expect(series.map((one) => bars?.bars.filter((bar) => bar.label === one.label).map((bar) => bar.value)))
+            .toEqual([[3, 1, 4], [1, 5, 9]]);
+        expect(dates.map((date) => bars?.bars.filter((bar) => bar.date === date).reduce((sum, bar) => sum + bar.value, 0)))
+            .toEqual([4, 6, 13]);
     });
 });
-test.describe('a readout column sits where the engine drew it', () => {
-    test('the shares account for the grid insets', () => {
+test.describe('a readout column sits where the native plot drew it', () => {
+    test('the native column centers account for the frame insets', () => {
         // Four columns in a 600px element with 48 left and 12 right: the plot is
         // 540 wide, a column is 135, and the first centre sits at 48 + 67.5.
-        const shares = bandShares(4, 600, { left: 48, right: 12 });
-        expect(shares.map((share) => Math.round(share * 600))).toEqual([116, 251, 386, 521]);
-    });
-    test('an element with no width and a chart with no columns give nothing', () => {
-        expect(bandShares(4, 0, { left: 48, right: 12 })).toEqual([]);
-        expect(bandShares(0, 600, { left: 48, right: 12 })).toEqual([]);
+        const geometry = dateSeries([{
+            label: 'Read', token: '--chart-1',
+            points: [1, 2, 3, 4].map((value) => ({ date: `2026-09-0${value}`, value }))
+        }], { frame: frame(600, 240, { left: 48, right: 12, top: 8, bottom: 22 }),
+            density: 6, valueTicks: 4, padding: 0, rule: { changes: [], note: null } });
+        expect(geometry?.columns.map(Math.round)).toEqual([116, 251, 386, 521]);
     });
     test('the cap is a share of the plot and never more than all of it', () => {
         expect(readoutCapStyle(0.33)).toBe('max-width: 33.00%');
@@ -560,17 +509,6 @@ test.describe('what the recording was doing, in fixed words', () => {
         });
     });
     test.describe("THE ORACLE: Hardware's lines say only what its records hold", () => {
-        /** The observability block as the route holds it: everything on, every run scored. */
-        const OBSERVABILITY: ObservabilityConfig = {
-            cost_currency: 'USD',
-            cost_input_per_million: 0.2,
-            cost_output_per_million: 0.6,
-            evaluation_enabled: true,
-            host_fingerprint: true,
-            host_fingerprint_bandwidth_cache_multiple: 2,
-            memory_profiling_enabled: true,
-            sample_rate: 1
-        };
         /** Shard 0 of run `run` on `date`, as the machine record files it from the work job: the probe
          *  and the clocks, and the two cells the server itself wrote where `server` is true. */
         const machineRow = (date: string, server: boolean, run = 1): Record<string, string> => ({
@@ -611,47 +549,22 @@ test.describe('what the recording was doing, in fixed words', () => {
                 .filter((day) => day !== '2030-06-12')
                 .map((day) => machineRow(day, true))
         ], daysBetween('2030-05-25', '2030-06-14').map((day) => articleRow(day)));
-        /** What Hardware says about the server's counters over `open`, handed what the route hands. */
-        const hardware = (open: OfferedWindow, runs = HISTORY, observability = OBSERVABILITY, machineRead: RecordRead = begun('2030-06-01', '2030-06-14')) => describeServerCounters({
-            runs,
-            refused: [],
-            ran: ARTICLE_DAYS,
-            articleDays: ARTICLE_DAYS,
-            machineRead,
-            from: offered(90).start,
-            open,
-            offered: OFFERED,
-            observability
-        });
-        test("the intro counts every run in the window, and how many of them carry the server's own figures", () => {
-            expect(OFFERED.map((open) => [open.days, hardware(open).intro])).toEqual([
-                [1, 'This one day has no run on record. 2030-06-15.'],
-                [7, '6 runs in these 7 days, 5 of them with figures from the model server itself. 2030-06-09 to 2030-06-15.'],
-                [14, '13 runs in these 14 days, 8 of them with figures from the model server itself. 2030-06-02 to 2030-06-15.'],
-                [30, '21 runs in these 30 days, 8 of them with figures from the model server itself. 2030-05-17 to 2030-06-15.'],
-                [90, '21 runs in these 90 days, 8 of them with figures from the model server itself. 2030-03-18 to 2030-06-15.']
+        test("the native counter population counts only the server's own evidence", () => {
+            expect(OFFERED.map((open) => {
+                const runs = HISTORY.filter((run) => run.date >= open.start && run.date <= open.end);
+                return [open.days, runs.length, runs.filter(carriesServerCounters).length];
+            })).toEqual([
+                [1, 0, 0], [7, 6, 5], [14, 13, 8], [30, 21, 8], [90, 21, 8]
             ]);
         });
-        test("the intro's share reads right at every count, in Reader's words", () => {
-            /** The intro over the `days`-day window for runs on 15 Jun 2030, one a flag: true where the
-             *  run carried the server's figures. */
-            const intro = (servers: boolean[], days: number) => hardware(offered(days), runsOf(servers.map((server, index) => machineRow('2030-06-15', server, index + 1)), servers.map((_, index) => articleRow('2030-06-15', index + 1)))).intro;
-            const week = '2030-06-09 to 2030-06-15.';
-            expect(intro([true, true], 7)).toBe(`2 runs in these 7 days, each with figures from the model server itself. ${week}`);
-            expect(intro([true, false, false], 7)).toBe(`3 runs in these 7 days, 1 of them with figures from the model server itself. ${week}`);
-            expect(intro([false, false], 7)).toBe(`2 runs in these 7 days, none with figures from the model server itself. ${week}`);
-            expect(intro([true], 7)).toBe(`1 run in these 7 days, with figures from the model server itself. ${week}`);
-            expect(intro([false], 7)).toBe(`1 run in these 7 days, with no figures from the model server itself. ${week}`);
-            expect(intro([], 7)).toBe(`No run in these 7 days is on record. ${week}`);
-            expect(intro([true, true], 1)).toBe('This one day had 2 runs, each with figures from the model server itself. 2030-06-15.');
-            expect(intro([true, false, false], 1)).toBe('This one day had 3 runs, 1 of them with figures from the model server itself. 2030-06-15.');
-            expect(intro([false, false], 1)).toBe('This one day had 2 runs, none with figures from the model server itself. 2030-06-15.');
-            expect(intro([true], 1)).toBe('This one day had 1 run, with figures from the model server itself. 2030-06-15.');
-            expect(intro([false], 1)).toBe('This one day had 1 run, with no figures from the model server itself. 2030-06-15.');
-            expect(intro([], 1)).toBe('This one day has no run on record. 2030-06-15.');
-        });
         test("the server's figures are dated from the first run that carried them, never from article rows alone", () => {
-            expect(OFFERED.map((open) => [open.days, hardware(open).recording.startedMidWindow])).toEqual([
+            const recorded = HISTORY.filter(carriesServerCounters).map((run) => run.date);
+            expect([...recorded].sort()[0]).toBe('2030-06-06');
+            expect(OFFERED.map((open) => [open.days, recordingNotes({
+                enabled: true, recorded, window: ARTICLE_DAYS,
+                reads: [begun('2030-06-01', '2030-06-14')],
+                from: offered(90).start, open
+            }).startedMidWindow])).toEqual([
                 [1, null],
                 [7, null],
                 [14, 'Server figures started on 6 Jun 2030. Earlier in this window, 4 days had a run but no server figures.'],
@@ -661,8 +574,14 @@ test.describe('what the recording was doing, in fixed words', () => {
         });
         test('a day of article rows alone, after the server figures started, is named as a day without them', () => {
             const line = 'No server figures were written down for 12 Jun 2030. The speed figures for that day come from the summariser, not the server.';
-            expect(printed(hardware(offered(7)).recording)).toEqual([line]);
-            expect(printed(hardware(offered(14)).recording)).toEqual([
+            const facts = {
+                enabled: true, recorded: HISTORY.filter(carriesServerCounters).map((run) => run.date),
+                window: ARTICLE_DAYS, reads: [begun('2030-06-01', '2030-06-14')],
+                from: offered(90).start, coveredElsewhere: ARTICLE_DAYS,
+                missing: 'server-counters' as const
+            };
+            expect(printed(recordingNotes({ ...facts, open: offered(7) }))).toEqual([line]);
+            expect(printed(recordingNotes({ ...facts, open: offered(14) }))).toEqual([
                 'Server figures started on 6 Jun 2030. Earlier in this window, 4 days had a run but no server figures.',
                 line
             ]);
@@ -679,15 +598,14 @@ test.describe('what the recording was doing, in fixed words', () => {
                 lostDays: [],
                 setAside: {}
             };
-            const notes = hardware(offered(7), runs, { ...OBSERVABILITY, host_fingerprint: false }, stopped);
-            expect(notes.measurementOff).toBe('Measurement is off. Nothing has been recorded since 11 Jun 2030. Turn it on in config/idhazh.json.');
+            const recorded = runs.filter(carriesServerCounters).map((run) => run.date);
+            expect(measurementOff({ enabled: false, recorded, read: stopped, open: offered(7), offered: OFFERED }))
+                .toBe('Measurement is off. Nothing has been recorded since 11 Jun 2030. Turn it on in config/idhazh.json.');
             // The off line speaks for the days after it, so no other line names them.
-            expect(printed(notes.recording)).toEqual([]);
-        });
-        test("the scorer's sampling rate is never the server's: at 0.25 Hardware prints no sampled line", () => {
-            expect(printed(hardware(offered(7), HISTORY, { ...OBSERVABILITY, sample_rate: 0.25 }).recording)).toEqual([
-                'No server figures were written down for 12 Jun 2030. The speed figures for that day come from the summariser, not the server.'
-            ]);
+            expect(printed(recordingNotes({
+                enabled: false, recorded, window: ARTICLE_DAYS, reads: [stopped],
+                from: offered(90).start, open: offered(7)
+            }))).toEqual([]);
         });
         test('while the sampled line prints, Summaries names no day as one only the article record answered for', () => {
             // The scorer missed 12 Jun 2030; the article record timed a run on every day of the window.
@@ -755,11 +673,6 @@ test.describe('what the recording was doing, in fixed words', () => {
         });
     });
 });
-for (const { id, href: route, label } of BAND_UNREAD.routes) {
-    const expected = BY_ROUTE[id];
-    if (expected === null)
-        continue;
-}
 // The route-wide sweep for a nought standing in for an absent reading lived
 // here, and its only instrument was the host panel's own `data-host-value`
 // cells. With that panel gone the sweep had nothing to walk. What is left is

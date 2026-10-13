@@ -1,6 +1,6 @@
 # Which console surfaces follow the window, and which say why not
 
-**Last Updated**: 2026-10-10
+**Last Updated**: 2026-10-12
 
 One control at the top of the console sets the span for the whole page. This page
 is the control, and the list of every surface that does not simply follow it -
@@ -13,38 +13,35 @@ the shell it stands in is
 
 ## One window governs the page
 
-The window belongs to the page, not to the viewport. The control is a set of
+The window belongs to the page, not to a chart engine. The control is a set of
 radio buttons carrying `console.window_presets` - five spans, all five on the
 page at once, so the cost of the wide one is readable without opening a menu. A
 slider was rejected for the same reason: every span is a different number of
 month files to fetch, and the spans between these five cannot be told apart once
 drawn. The narrowest is one day, the cheapest read the console can do.
 
-The viewport default is `console.default_window_days`, and `console.today_anchor`
-says where the day every window ends on sits in it. Arrow keys pan, and `+` / `-` step the window to the next
-preset, from a labelled focusable control with a visible focus ring; the buttons
-beside it pan with a pointer.
+The initial span is `console.default_window_days`. The labelled radio group
+supports pointer and keyboard selection with visible focus. There is no shared
+pan or multiplicative zoom control. Its former knobs have no live reader and
+are removed; [appearance configuration](../../concepts/config/appearance.md#console-surface)
+owns the retained span bounds.
 
-**Every window ends on the site's newest published day**, the newest day the
+**Build-time evidence uses the site's newest published day**, the newest day the
 site published a digest, which is the day the console treats as today. Every
-route places every span the control offers on that one day, read at build time
+build-time span is placed on that day using `console.today_anchor`, read at build time
 by `windowDay()` in `frontend/src/lib/server/window-day.ts`. Neither the build
 clock nor any record's own newest day places a window, so two builds of the same
 data draw the same windows, and a record whose rows stop leaves its panels empty
 for the window rather than moving the window back to its last rows. A route
-reads exactly the widest window and no day before it
+reads the widest configured window and no day before it
 ([how-the-query-door-answers-a-panel.md](how-the-query-door-answers-a-panel.md#how-far-a-ledger-reaches)).
 When the site has published no day, the window is placed on the build's own UTC
 day: there is nothing to draw either way, and the page still renders.
 
-**The route says when a window is empty because of its record.** A day is
-packed only after it ends, so in normal running the packed records reach the day
-before the newest published day, and every panel built on one draws that day
-with nothing in it. The last line of the route's record notes says so, a step
-quieter than the others, every day. A record whose packed rows stop before the
-window says from when, and names the narrowest window that reaches back to them
-([console-payloads.md](console-payloads.md)). Each route writes its notes once
-for each preset, so the page picks the open window's and fetches nothing.
+**The route distinguishes a quiet answer from an absent record.** Published
+ledger panels share the pending, quiet, missing and failed states. A reach that
+did not arrive supplies no data date. Private build-time panels retain their
+record notes and do not acquire a public reader just because the engine leaves.
 
 Three rules keep the control honest and all three are in the contract, so a bad
 config fails the build rather than the page:
@@ -56,7 +53,7 @@ config fails the build rather than the page:
 
 ### Published-ledger panels anchor the window on the returned record
 
-As an eligible route moves to its declared queries, its common endpoint is the
+Pipelines, Summaries, Voices and Hardware use declared native queries. Their common endpoint is the
 oldest available `through` among its ledgers. Each query clamps its first day
 to its own ledger's first day. Neither the browser clock nor the build clock
 supplies a data day. A reach that did not arrive supplies no day at all.
@@ -65,8 +62,8 @@ The typed record reach passes through the existing route-to-layout window
 slot. `WindowStatus` says `Showing N days, to DATE.` If the record is shorter
 than the requested preset, it also names its first day and the UTC day on
 which that preset fills. A first frame with no record yet prints no data date.
-The remaining build-time routes keep the published-day behavior above until
-their own migrations; this does not reinterpret the evidence on Judgement.
+Build-time evidence keeps the published-day behavior above. This does not
+reinterpret the recorded judging and holdout evidence on Judgement.
 
 ### Build-time window space and control behavior
 
@@ -76,40 +73,31 @@ page names the span and a lie the moment a control does - a page reading 90 days
 while the charts draw 2 cannot be trusted about anything else. Empty calendar
 space is the honest answer to "there is nothing there".
 
-**Widening fetches, and the page prices it first.** The sentence under the band
-names each wider preset that reaches into months not already in hand -
-`30D would fetch 1 more month, 90D 3 more.` - and picking one re-uses the same
-month-fetch path a pan uses rather than reloading the page, so rows already paid
-for stay. The price is in that sentence rather than on the tiles because the
-sentence is always drawn and keeps room for its longest form, so a price that
-lands or clears moves nothing below it. The control shows a busy state while the
-files are in the air. Narrowing costs nothing.
+**Changing the preset asks only for its declared native window.** The shared
+query reader owns indexes, files and reuse; no panel rebuilds a public-month URL
+or downloads the retired telemetry mirror. The control shows a busy state while
+its answer is pending. Private build-time values already in the page are selected
+without a fetch.
 
 **The choice is kept in `localStorage` and read on mount, never during
-prerender.** First paint is therefore always the window the server drew, so the
-prerendered document and the control cannot disagree while the page hydrates.
+prerender.** The first frame uses the configured choice. Native panels do not
+claim a data date before their record arrives.
 
-**Every route hands the layout the same window choice.** Existing month-based
-surfaces price their month files; published-ledger routes add their typed record
-reach. All read the same `idhazh:console-window` key, so a span picked on
-Pipelines is the span Hardware opens on and the other way round -
-[../../../frontend/tests/console-window.spec.ts](../../../frontend/tests/console-window.spec.ts)
-drives it both ways in one browser session, because a route that writes the key
-and never reads it passes a one-way check.
+**Every route hands the layout the same window choice.** Published-ledger
+routes also hand over typed record reach. All read the same
+`idhazh:console-window` key, so a span picked on Pipelines is the span Hardware
+opens on and the other way round. The representative console journey checks
+shared navigation; deterministic window and query rules use lower-tier tests.
 
 **A tab click carries the span too, with no page load.** The router mounts the
 next route under the same layout and tears the last one down in the same
-update, and the control then holds the span the next route draws. The same spec
-clicks from Pipelines at 1 day to Judgement, and back at 7 days, and compares
-the control with what the panels draw, never with a number of days. The control
-used to fall back to the configured window there, disabled, while the panels
-drew the stored span, because the last route's teardown read the layout's state
-as it was before the move and emptied the slot the next route had just filled.
+update, and the control then holds the span the next route draws.
 [window-slot.ts](../../../frontend/src/lib/console/window-slot.ts) now keeps which
 route holds the control in a plain variable, which a teardown reads as it is.
 
-**If a telemetry month is absent or cannot be parsed, that month is a gap in the
-charts.** It is not interpolated, and it never white-screens the console.
+**If a native read fails, it is not an empty measurement.** Retrying re-asks only
+unsuccessful questions and preserves successful sibling answers. No failure
+white-screens the console or becomes an interpolated measurement.
 
 ## Every route has the control, including Hardware
 
@@ -121,30 +109,22 @@ span the moment he asks what the machine had been doing, and two charts on two
 spans cannot be compared. Hardware is also the route whose numbers move most
 between runs, so it is the one where "over how long" matters most.
 
-**Every span the control offers is answered on the server, one small object per
-preset.** The browser holds no ledger - a token total, a cache share and a
-recording note all read rows the page never receives - so it cannot re-aggregate
-a window the way the Pipelines viewport can. Four small objects is the price, and
-it is bounded: the widest preset is the widest anything on the route can reach,
-so a run older than 90 days is carried at no span at all and the page does not
-grow with the ledger. That is the same rule the Summaries route's per-preset
-distributions follow, and the alternative was inlining every counter row so the
-browser could re-bin it.
+**Hardware asks its ledgers in the browser, not a server counter facade.**
+Its declarations distinguish selected-window, newest-day and widest-span
+questions. The page carries configuration and words only. Native item, host and
+recorded shard-count answers supply the arithmetic; unknown counts remain
+unknown instead of being derived from the hosts that happened to answer.
 
-**A panel about one run does not follow the window.** The shard board, the
-reading-against-writing split, the clock check and the latency curves read the
-newest run or the newest day the ledger holds, at every preset. A window is a
-span and a snapshot is not something a span can narrow - a board that emptied at
-7 days would say the run had stopped existing. The page states this once, above
-the snapshots, and names the run they are about.
+**A newest-day question is a snapshot, not a selected-window aggregate.**
+The clock check, machine cards, slowest-article list and memory-held panel name
+the newest day or its newest recorded run. They do not fall back to an older
+successful run when the newest one was refused. The widest host population
+supplies the machine colour ramp, so changing the selected span cannot recolour
+a machine.
 
-**Eight surfaces on Hardware declare `data-windowed`**, and each one prints the
-day count in its own words: the run count at the top, the prompt cache, context
-headroom, what the platform has been giving us, the server panel's three spans,
-the latency plots, what a run reads against what it writes and the cost panel.
-The refused-run list follows the window without declaring it, because a clean
-span renders nothing at all and a surface that comes and goes cannot report a day
-count.
+Panel-specific rules live in [console-machine.md](console-machine.md), beside
+the questions and missing-data meanings they protect. They do not require
+another browser case per panel or preset.
 
 ## The surfaces that do not simply follow the span
 
@@ -160,95 +140,48 @@ Judgement, and one stands on every route.
 | `Site size` | every route | Absolute number always; the delta and the runway are windowed | The size is a level and the operator wants today's, whatever span he is reading. The delta and the runway are rates, and a rate has to say what it is over. |
 | `Minutes per visual` | Pipelines | Prints `The rule reads 14 days. Widen the window to see it.` under 14 days | The retirement rule is stated over 14 days. A median of the wrong span is the same figure with a different meaning and nothing on the page to say which one is being read. |
 
-Two more follow the window's **length** rather than where a pan leaves it, and
-each says so in the same words, because one rule stated two ways reads as two
-rules: `Sources cut short most often`
-([console-truncation.md](console-truncation.md)) and `What one item cost the
-model`
-([what-the-pipelines-route-draws.md](what-the-pipelines-route-draws.md#it-follows-the-windows-length-not-a-pan)).
-The days they read always end on the newest published day. Their rows are
-aggregated once per preset at build time - four sets of numbers cost less than
-one fetch, and it keeps the section working with no script at all.
+Source truncation and item-cost panels now derive their answers from declared
+native queries over the selected window. Their old per-preset telemetry copies
+are not a reason to retain an unused file reader or pan control.
 
-**A panel that honours the control need not declare `data-windowed`.** The exact
-list of surfaces that do is an oracle in
-[../../../frontend/tests/console-window.spec.ts](../../../frontend/tests/console-window.spec.ts),
-and that oracle is stronger for being exact. A panel outside the list proves it
-honours the control in its own spec, by driving the control to each preset and
-reading the control's own attribute back against the panel's.
+**A panel that honours the control need not declare `data-windowed`.**
+Lower-tier query and render tests prove dates, denominators, gaps and snapshots
+from real fixtures. Do not turn the route's surface inventory into a browser
+matrix.
 
-**Ten surfaces on Pipelines declare it**, among them `What is failing, by stage`
-and `Where an item's time went`. Both draw exactly the window's days and move
-with a pan, as `Run health` and `Failure rate against volume` do, and each names
-its span in its own accessible label. A day with nothing to draw keeps its
+`What is failing, by stage` and `Where an item's time went` on Pipelines draw
+exactly the window's days from their native queries. Each names its span in its
+own accessible label. A day with nothing to draw keeps its
 column, empty, and a window with nothing to draw prints one sentence in the
 chart's room ([what-the-pipelines-route-draws.md](what-the-pipelines-route-draws.md#what-is-failing-by-stage)).
 
 ## The model-change markers read the window as well
 
-`pipelineChanges`, which draws the model-change markers on `/console/` and
-`/console/machine/`, and `scoredDays` with `modelByDate` on `/console/model/`,
-read the score record's packed days in the widest window preset, which ends on
-the newest published day - the cover every other panel on those routes reads -
-and never the whole ledger. The
-`compact-summary-quality-evals` compaction never drops a month: its `monthly_window`
-is `forever`, and a year it packs keeps every row, so turning it live moves
-none of their dates.
+Published-ledger panels receive settings-change markers from the shared band
+and use their declared date window. The old build-time counter-note reader and
+TypeScript settings comparison are absent. Keep the producer's settings
+comparison and the recorded input meanings; deleting a dead frontend helper is
+not permission to infer setup changes from a run id or discard historical rows.
 
-## The prerendered seed carries the window, and no more
+## Native answers are not a prerendered telemetry seed
 
-The server used to concatenate every committed month and inline all of it, so the
-console document grew for as long as the pipeline ran - a reader downloaded four
-months to look at thirty days, and would have downloaded a year by next summer.
-It reads only the window it is handed now: the widest preset, which ends on the
-newest published day as every other console window does, so the read and the
-windows cannot disagree.
+Pipelines, Summaries, Voices and Hardware ask the native query door for their
+declared cells and dates. Their route documents contain no copy of those query
+answers. Unused server readers and retired public-month mirrors do not survive
+as fallback paths. Their removal deletes no native records.
 
-Measured 2026-08-26 on one Windows dev machine, against four months of real row
-volume - the committed August shard (2,000 rows, 171 KB) plus three copies of it
-shifted back a month each, 8,000 rows in all:
-
-| | Raw HTML | Gzipped | Rows from the three older months |
-| --- | --- | --- | --- |
-| Before | 3,461,576 | 600,925 | 6,000 |
-| After | 2,252,783 | 490,912 | 0 |
-
-That is 18% off the gzipped document and 35% off the raw one, and the saving
-grows with every month committed. One build per case; a prerender is
-deterministic, and a control pair that the window could not affect differed by 7
-gzipped bytes, which is the noise floor here.
-
-**On a corpus shorter than the window it changes nothing.** The defect is one of
-growth, and it was measured before it arrived rather than after.
-
-Two consequences worth stating, because both are the reason this is safe:
-
-- **Native history remains reachable.** Pipelines now asks its ledger query
- door for the selected window. Retiring the unused public month mirrors
- deletes no native records.
-- **The read ends on the newest published day, never on the build clock.**
- Anchored on the build clock, a pipeline that stopped last month would draw an
- empty console - the page would go blank precisely when the pipeline broke,
- which is when an operator needs it. Run back from the projection's own newest
- row instead, a projection holding a day after the newest published day cuts
- the oldest day off the widest window.
-
-The read is bounded too. A window is a count of days, so it straddles month
-boundaries and opens one shard for each month it touches - four at most for a
-90-day window. Every other shard is skipped unopened, however many the
-repository has accumulated (`CLAUDE.md` Guardrail #12).
+The shared band, private build-time panels and route-shell prerendering remain.
+[console.md](console.md#rendering-direction) names the private boundary. Removing
+ECharts does not authorize a no-prerender architecture or public copies of those
+inputs. Each query and build-time read still names a fixed-size input under
+`CLAUDE.md` Guardrail #12.
 
 ## Design rationale
 
-**Every window ends on the newest published day, not on a record's own rows.**
-The owner ruled this on 2026-10-05. Each route used to end its windows on the
-newest day in whatever rows it held, so a record that stopped writing kept its
-last rows on screen and moved its window into the past, and two records on one
-route could end on different days. Three other days were weighed and refused:
-the build's UTC day (a build that runs before the day's digest ends every window
-on a day with nothing published), each record's newest rows (the past-moving
-window above), and the newest day packing can have reached (it is not the
-current day, and the packing delay differs by ledger).
+**One selected span has one declared endpoint.** Native routes use their shared
+record reach; build-time evidence uses the site's published day. Neither the
+browser clock nor the build clock invents a data date. A missing native reach
+stays missing rather than silently moving the panel to another record.
 
 **The day packing has not reached gets one quiet line on the route, not a mark
 on every panel.** Ruled on 2026-10-06 by Susan and Jony, with Reader on the
@@ -277,27 +210,19 @@ record holds nothing, because it never held a row or because it emptied. The
 note says the record `was started again` only where that row's own hold reason
 says so; a row of zeros alone does not prove it.
 
-**The failure mix and the item time split follow the window rather than saying
-why not.** Both used to draw every day of every telemetry month the browser had
-fetched, so the days they drew depended on what the operator had opened earlier
-in the session. They could even draw a day after the window's last day. And the
-page counted one window's failures over two spans. A sentence saying why they
-drew more would have described this browser's fetches, not the data. So both
-draw the window's days, pan included, and neither trims an end: a window that
-shrank to the days that timed something would draw a span the control never
-named. A day with no row, or on the time split no item timed from start to
-finish, draws no column and a break in a line, never a zero, and the strip says
-what that day lacks. What the reader gives up: the extra fetched days, which a
-wider preset gives back; and on the failure mix's bars, a day nothing was
-planned on and a day nothing failed on look alike until he points at one. No
-tint tells them apart, because `Run health` and `Failure rate against volume`
-already shade the days nothing was planned on.
+**The failure mix and the item time split use the same declared calendar as their
+readouts.** Neither trims the window to days that happen to hold readings.
+Failure mix uses failed rows over recorded rows; a recorded clean day is zero,
+while a day with no rows is unknown. Time split uses only complete, consistent
+clock cohorts and names the missing or refused readings. Keeping those gaps
+prevents a line from inventing a measurement on an unread day. These charts
+do not infer planned or reached-stage populations from the rows that answered.
 
 ## See also
 
 - [console.md](console.md) - which panel is on which route, and which question it answers.
 - [what-sits-above-every-console-route.md](what-sits-above-every-console-route.md) - the strip and the band this control sits under.
-- [what-the-pipelines-route-draws.md](what-the-pipelines-route-draws.md) - the panels that follow the window's length rather than a pan.
+- [what-the-pipelines-route-draws.md](what-the-pipelines-route-draws.md) - Pipelines questions and their native windows.
 - [who-supplied-the-day-and-which-feeds-failed.md](who-supplied-the-day-and-which-feeds-failed.md) - the three Voices surfaces in the table above.
 - [telemetry-series.md](telemetry-series.md) - the monthly shards a widened window fetches.
 - [retention.md](retention.md) - the prune that shortens the marker list.

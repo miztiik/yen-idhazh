@@ -28,6 +28,7 @@ from idhazh.contracts.seen import SeenRow
 from idhazh.contracts.sources import FeedDef
 from idhazh.contracts.taxonomy import LifecycleStatus
 from idhazh.embed import Embedder
+from idhazh.fan_out import shard_count
 from idhazh.stages import common
 from idhazh.stages.common import LOG, Fetcher, _load_day, _load_manifest
 from idhazh.telemetry import source_health
@@ -76,6 +77,7 @@ def stage_plan(
     state_dir: Path | None = None,
     cap: int | None = None,
     article_limit: int | None = None,
+    shards: int | None = None,
 ) -> RunPlan:
     """Read every live feed, rank the pool, and write down what it saw. No model.
 
@@ -111,6 +113,10 @@ def stage_plan(
     same way the crash guard does, and it can only lower that guard, never
     raise it. The number of work shards is chosen separately.
 
+    `shards` is an operator's dispatch count when given. Otherwise, this stage
+    derives the count from the final plan and records it, so later jobs do not
+    recount the work.
+
     `commit_sha` is the commit this run checked out. Every file this run writes
     through the ledger door - a retirement, the first sights, the feed verdicts,
     the counterfactual scores - names it, so the file can be traced to the code
@@ -118,6 +124,8 @@ def stage_plan(
     """
     if article_limit is not None and article_limit < 1:
         raise ValueError(f"article_limit must be at least 1, got {article_limit}")
+    if shards is not None and shards < 1:
+        raise ValueError(f"shards must be at least 1, got {shards}")
     read_url = fetcher or common.live_fetcher(settings)
     clock = now or assemble.utc_now
     state = state_dir if state_dir is not None else common.STATE_ROOT
@@ -442,6 +450,9 @@ def stage_plan(
         dropped_published_ages=PublishedAgeBand.histogram(refused_ages),
         verticals=verticals,
         items=items,
+        shards=(
+            shards if shards is not None else shard_count(len(items), run=settings.app.run)
+        ),
     )
     plan_files = ledger.persist(
         state,

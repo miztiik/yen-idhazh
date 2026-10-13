@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { chartFlow, type FlowDay } from '../src/lib/charts/chart-flow';
+import { chartFlow, type FlowDay } from '../src/lib/console/pipelines/drawing-flow';
 /** A flow whose four stages fall and whose three losses are all non-zero. */
 const DAYS: FlowDay[] = [
     { reached: 1000, asked: 700, drafted: 100, published: 80 },

@@ -433,9 +433,8 @@ export function silentTail(squares: readonly FoldSquare[]): number {
  *
  * Null under `min_attempts_for_rate`: a share over four pairs is not a
  * measurement, and printing one invites a decision the evidence cannot carry.
- * The counts still print - that is the rule `FailurePanels` already runs on. A
- * real share that rounds away prints `<1`: a `0` would say no pair disagreed,
- * and one did.
+ * The counts still print. A real share that rounds away prints `<1`: a `0`
+ * would say no pair disagreed, and one did.
  */
 export function rateWithDenominator(
 	numerator: number | null,

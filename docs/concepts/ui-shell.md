@@ -1,6 +1,6 @@
 # UI Shell
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-10-12
 
 **Known noncompliance:** Existing prerendering does not meet [Telemetry Intent](telemetry-intent.md) and will be removed as existing pages migrate. All new designs, charts and visuals must render in the browser; none may be prerendered.
 
@@ -22,6 +22,13 @@ files; the browser fetches what the current view needs and draws it there.
 The console's data and chart rules are owned by
 [Telemetry Intent](telemetry-intent.md) and
 [how a console chart gets its data](console-design/how-a-console-chart-gets-its-data.md).
+The current console still prerenders its route shells. Published-ledger panels
+fetch and draw native answers in the browser; approved private build-time inputs
+remain on Pipelines, Summaries, Voices and Judgement. Hardware carries only
+configuration and words before its native reads. Data explorer uses the fallback
+document. [The console boundary](../architecture/publishing/console.md#rendering-direction)
+names those exceptions. Retiring a chart engine does not change that architecture
+or publish private inputs.
 Current implementation details belong to the
 [frontend architecture](../architecture/publishing/frontend.md).
 

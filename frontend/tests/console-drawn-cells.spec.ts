@@ -17,10 +17,8 @@ interface ReviewedSink {
 	readonly count?: number;
 }
 
-// Exact expressions, not file exemptions. These existing surfaces retire in rows 6/11.
+// Exact expressions, not file exemptions.
 const GRANDFATHERED: readonly ReviewedSink[] = [
-	{ file: 'src/lib/charts/Chart.svelte', attribute: '@html', value: '{@html svg}', count: 2,
-		origin: 'Legacy server/chart-render.ts produces this SVG through renderToSvg; not a ledger text cell.' },
 	{ file: 'src/routes/console/+layout.ts', attribute: 'fetch', value: '`${base}/console/band.json`',
 		origin: 'Fixed published console band under the SvelteKit base.' },
 	{ file: 'src/lib/components/ItemVisual.svelte', attribute: 'fetch', value: '`${__ASSET_BASE_URL__ || base}/${file}`',

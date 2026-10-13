@@ -1,29 +1,36 @@
 /** How a chart builds its readout without a second key or invented readings. */
 import { expect, test } from '@playwright/test';
 import { readoutOf } from '../src/lib/charts/readout';
+import { frame } from '../src/lib/charts/frame';
+import { dateSeries } from '../src/lib/charts/d3/dateSeries';
 import { clocksChart } from '../src/lib/charts/machine';
-import { stacked } from '../src/lib/charts/stacked';
 
 test.describe('the strip is the key', () => {
-	test('no chart option carries a legend', () => {
-		// The engine drew a key above three of its charts. The strip below the
-		// plot prints the same swatch and the same label at the column the reader
-		// is on, so the key was the same pair a second time - and a second copy is
-		// how two of them drift.
-		const stack = stacked(
-			['Mon', 'Tue'],
-			[
-				{ label: 'fetch', token: '--chart-1', values: [2, 1] },
-				{ label: 'extract', token: '--chart-2', values: [1, 5] }
-			]
-		);
-		expect(stack.option.legend, 'the stacked chart draws a legend').toBeUndefined();
+	test('native dated marks build their key from the measured series', () => {
+		const dates = ['2026-09-01', '2026-09-02'];
+		const geometry = dateSeries([
+			{ label: 'Fetch', token: '--chart-1', points: dates.map((date, index) => ({ date, value: [2, 1][index] })) },
+			{ label: 'Extract', token: '--chart-2', points: dates.map((date, index) => ({ date, value: [1, 5][index] })) }
+		], { frame: frame(600, 240), stacked: true, density: 6, valueTicks: 4, padding: 0.2, rule: { changes: [], note: null } });
+		expect(geometry?.readout.columns).toEqual(dates);
+		expect(geometry?.readout.series.map((one) => [one.label, one.swatch, one.values])).toEqual([
+			['Fetch', 'var(--chart-1)', ['2', '1']],
+			['Extract', 'var(--chart-2)', ['1', '5']]
+		]);
+	});
 
-		const clocks = clocksChart([
+	test('the native clock ranking retains both independently read instruments beside the gap', () => {
+		const pairs = [
 			{ label: 'shard 0', ledger: 12.5, server: 12.4, gapPct: 0.8, agrees: true },
 			{ label: 'shard 1', ledger: 9.5, server: 9.9, gapPct: 4.0, agrees: true }
+		];
+		const geometry = clocksChart(pairs, 5);
+		expect(geometry?.rows.map((row) => [row.label, row.value])).toEqual([['shard 1', 4], ['shard 0', 0.8]]);
+		expect(geometry?.rules.map((rule) => rule.at)).toEqual([5]);
+		expect(geometry?.rows.map((row) => row.row.context)).toEqual([
+			'item ledger 9.50; server 9.90 tokens a second',
+			'item ledger 12.50; server 12.40 tokens a second'
 		]);
-		expect(clocks.option.legend, 'the clock chart draws a legend').toBeUndefined();
 	});
 
 	test('a strip is built from the labels, so it cannot be a different length', () => {

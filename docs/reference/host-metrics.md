@@ -1,6 +1,6 @@
 # What the pipeline records about the machine it ran on
 
-**Last Updated**: 2026-10-10
+**Last Updated**: 2026-10-12
 
 Every column of the host fingerprint, what it means, and what it is for.
 The producer records one row per instrumented job, or per shard of that job.
@@ -16,9 +16,10 @@ load cost. Which panels draw it today is
 [../architecture/publishing/console-machine.md](../architecture/publishing/console-machine.md),
 because the panel list is a config file and a count repeated here would go stale
 on a config edit. What each may draw and what it may never draw is
-[../concepts/console-design.md](../concepts/console-design.md). The whole column
-set is still operator-only: the console reads it at build time under
-`$lib/server/` and no cell of it crosses to a reader.
+[../concepts/console-design.md](../concepts/console-design.md). The browser asks
+for declared panel cells through `frontend/src/lib/console/queries/machine.ts`
+over the published native host ledger. These measurements appear on the
+operator console, not on the news-reading pages.
 
 ## Where it lives
 
@@ -29,11 +30,11 @@ set is still operator-only: the console reads it at build time under
 | Ledger | `state/raw/host-fingerprint/<YYYY>/<MM>/<DD>/` for the daily run, packed under `state/compact/host-fingerprint/` by its production compaction; `state/raw/pipeline-tests/host-fingerprint/<YYYY>/<MM>/<DD>/` for a bench dispatch, packed under `state/compact/pipeline-tests/host-fingerprint/` by `compact-trial-host-fingerprint` |
 | Files | one raw file per write, `<file_id>.parquet` in the day directory, a name the ledger door mints so no second writer takes it. The probe and the clock of one job are one writer, so the clock's file replaces the probe's |
 | Producer | [`backend/idhazh/telemetry/silicon.py`](../../backend/idhazh/telemetry/silicon.py), through the two CLI verbs or [`job_machine.record`](../../backend/idhazh/telemetry/job_machine.py). All writes use `ledger.persist` |
-| Read by | `/console/machine/`, at build time through `frontend/src/lib/server/host-fingerprint.ts` |
+| Read by | `/console/machine/`, through the browser questions in `frontend/src/lib/console/queries/machine.ts` and native helpers in `frontend/src/lib/console/machine/records.ts` |
 | Key | `date`, `run_id`, `job`, `shard` - one row a job |
 | Switch | `observability.host_fingerprint` for the host row; `observability.memory_profiling_enabled` independently controls OS memory/fault collection |
 | Committed | **from 2026-09-16.** Each job's own commit step stages its ledger; every row taken before that date was deleted with its runner |
-| Published to a reader | **no.** Operator surface only |
+| Shown on news-reading pages | **no.** Operator surface only |
 
 **Every job of `digest.yml` writes a row, from 2026-09-17.** `plan`, `work` and
 `assemble` each draw their own runner, so a run that measured one of them could

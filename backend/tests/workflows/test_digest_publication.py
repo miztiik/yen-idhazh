@@ -28,6 +28,7 @@ from idhazh.contracts.run_shards import RunShards
 from idhazh.contracts.summary import Summary
 from idhazh.contracts.visual_data import VisualData
 from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX, VisualDecision
+from idhazh.fan_out import shard_count
 from idhazh.ledger import paths
 from idhazh.publication import record_files
 from idhazh.render import asset_relpath
@@ -56,7 +57,12 @@ def test_fresh_base_regeneration_preserves_completed_raw_and_newer_inventory(
             digest_publish.INVENTORY: seed.to_json(),
         },
     )
-    run_plan = plan()
+    base_plan = plan()
+    settings = config.load(CONFIG_DIR)
+    derived_shards = shard_count(len(base_plan.items), run=settings.app.run)
+    dispatched_shards = 8 if derived_shards != 8 else 7
+    run_plan = base_plan.model_copy(update={"shards": dispatched_shards})
+    assert run_plan.shards != derived_shards
     monkeypatch.setattr(common, "VAR_ROOT", repo / "backend" / "var" / "run")
     monkeypatch.setattr(common, "STATE_ROOT", repo / "state")
     monkeypatch.setattr(common, "PUBLIC_ROOT", repo / "frontend" / "public" / "digest")
@@ -107,7 +113,6 @@ def test_fresh_base_regeneration_preserves_completed_raw_and_newer_inventory(
         }
     )
     write(items / f"{first.item_id}{PAYLOAD_SUFFIX}", decision.to_json())
-    settings = config.load(CONFIG_DIR)
     summary_path = items / f"{first.item_id}.summary.json"
     summary = Summary.read(summary_path).model_copy(
         update={
@@ -242,12 +247,21 @@ def test_fresh_base_regeneration_preserves_completed_raw_and_newer_inventory(
     assert result.status is Status.LANDED, result
     assert result.prepared
     prepared = prepared_requests[-1]
-    corrections = {
+    count_writes = {
         path: write
         for path, write in prepared.writes.items()
-        if path.startswith("state/raw/run-shards/") and path not in raw
+        if path.startswith("state/raw/run-shards/")
     }
-    assert corrections and all(write.immutable for write in corrections.values())
+    assert count_writes and all(
+        write.immutable and path in raw for path, write in count_writes.items()
+    )
+    assert {
+        path: write.sha256 for path, write in count_writes.items()
+    } == {
+        path: hashlib.sha256(data).hexdigest()
+        for path, data in raw.items()
+        if path.startswith("state/raw/run-shards/")
+    }
     git(mover, "fetch", "--quiet", "origin", "main")
     remote = Repository(mover)
     for path in projections:
@@ -257,11 +271,7 @@ def test_fresh_base_regeneration_preserves_completed_raw_and_newer_inventory(
     assert result.observed_tip is not None
     digest_publish.published_inputs(repo, result.observed_tip, date=run_plan.date, settings=settings)
     manifest_text = git(mover, "show", f"origin/main:{day}/run.json")
-    from idhazh.cli import shard_count
-
-    assert json.loads(manifest_text)["runs"][-1]["shards"] == shard_count(
-        len(run_plan.items), run=settings.app.run
-    )
+    assert json.loads(manifest_text)["runs"][-1]["shards"] == dispatched_shards
     counts = ledger.load_days(repo / "state", LedgerName.RUN_SHARDS, [run_plan.date], model=RunShards)
     assert {row.run_id: row.shards for row in counts} == {
         row.run_id: row.shards for row in rows_of(RunManifest.from_json(manifest_text))
@@ -271,13 +281,8 @@ def test_fresh_base_regeneration_preserves_completed_raw_and_newer_inventory(
         entry = remote.entry("origin/main", path)
         assert entry is not None
         assert remote.blob(entry.oid) == data
-    for path, completed in corrections.items():
-        entry = remote.entry("origin/main", path)
-        assert entry is not None
-        assert remote.blob(entry.oid) == (repo / path).read_bytes()
-        assert completed.sha256 == hashlib.sha256((repo / path).read_bytes()).hexdigest()
     if not empty_harvest:
-        # Another fresh-base preparation keeps the already completed correction.
+        # Another fresh-base preparation keeps the already completed count.
         repeated = prepare(result.observed_tip, prepared)
         _verify_preparation(prepared, repeated, result.observed_tip)
         assert {

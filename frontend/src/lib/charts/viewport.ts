@@ -4,8 +4,6 @@ export interface ViewportConfig {
 	default_window_days: number;
 	window_presets: number[];
 	today_anchor: TodayAnchor;
-	pan_days: number;
-	zoom_factor: number;
 	min_window_days: number;
 	max_window_days: number;
 }
@@ -112,4 +110,3 @@ export function monthsToFetch(
 export function panWindow(window: TimeWindow, days: number): TimeWindow {
 	return { start: shift(window.start, days), end: shift(window.end, days) };
 }
-

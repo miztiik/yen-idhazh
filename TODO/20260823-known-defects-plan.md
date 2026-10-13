@@ -1,6 +1,6 @@
 # Known defects
 
-**Last Updated**: 2026-10-10
+**Last Updated**: 2026-10-12
 
 **The open defects have named owners below.** Five of them need evidence or a ruling before any code
 is worth writing; the rest are known fixes
@@ -110,14 +110,14 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 37 | Two colours of the dark chart ramp look the same, so two machines read as one | 2 | **OPEN - one colour to pick, then every pair measured again** |
 | 38 | The machine colours go to the first machines by an arbitrary key, not to the most-placed ones | 2 | CLOSED 2026-09-30 |
 | 39 | The run-counter records name no machine, so the Hardware route counts 10 machines where there are 8 | 3 | CLOSED 2026-09-30 |
-| 40 | The canary never writes a job in two halves, so no built page tests the merge | 2 | **OPEN - the canary builder writes one job in two halves** |
+| 40 | The canary never writes a job in two halves, so no built page tests the merge | 2 | CLOSED 2026-10-12 - production probe and clock replay in the native canary |
 | 41 | Span sentences print "in these 1 days" at the one-day window | 1 | **OPEN - one rule for a count and its noun** |
 | 42 | The processor-share tiles print "under 1%" past their own bottom edge | 1 | **OPEN - one panel's tiles** |
 | 43 | A section that follows the days control changes height and moves the page under the reader | 2 | **OPEN - one layout rule, not a fix per panel** |
-| 44 | One hatch means two things on the console: no reading, and time counted twice | 2 | **OPEN - the no-reading half is done; a plan 52 row takes the run timeline's** |
-| 45 | A change to `Panel.svelte` does not buy the console tests on a pull request | 2 | **OPEN - one pattern in the selector and a truth-table case** |
-| 46 | `DateSeries` cannot draw the settings-change rule that gate 6 asks of every trend | 2 | **OPEN - plan 52's row 26, before a date series is judged** |
-| 47 | The Pipelines route draws no panel ids, so the pictures and gates reach 15 panels, not 26 | 2 | **OPEN - a plan 52 route row gives each section an id** |
+| 44 | One hatch means two things on the console: no reading, and time counted twice | 2 | CLOSED 2026-10-12 - the run timeline uses a solid two-pixel overrun rule |
+| 45 | A change to `Panel.svelte` does not buy the console tests on a pull request | 2 | CLOSED 2026-10-12 - shared-frame selector and independent truth-table cases |
+| 46 | `DateSeries` cannot draw the settings-change rule that gate 6 asks of every trend | 2 | CLOSED 2026-10-12 - dated rules and explicit unavailable provenance |
+| 47 | The Pipelines route draws no panel ids, so the pictures and gates reach 15 panels, not 26 | 2 | CLOSED 2026-10-12 - all twelve configured Pipelines panels carry ids |
 | 48 | GitHub stamps its squash merges in local time, `+02:00`, not UTC | 1 | **OPEN - one account setting to try, then one merge to read** |
 | 49 | The local test selector sends a backend test helper to every frontend group | 2 | **OPEN - two patterns in the selector and their truth-table cases** |
 | 50 | A publisher link on the home page named a story the page did not draw, so a news run's site build failed | 2 | CLOSED 2026-09-30 (PR #1168) |
@@ -143,6 +143,91 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 70 | The raw-listing test does not check the value included in the built site | 2 | **OPEN - check the real build on generated data against written-out days** |
 | 71 | The canary uses one model, so the model-swap plots have no browser parity case | 2 | **OPEN - record a model swap in the canary and check the drawn points** |
 | 72 | A chart test excludes all reader pages when the worktree name contains console | 1 | **OPEN - filter the build-relative console route segment, not the absolute path** |
+| 73 | The manifest shard count can differ from the dispatched worker matrix | 5 | CLOSED 2026-10-12 (PR #1588) |
+| 74 | A stale-payload test assumes its scratch folder is outside the repository | 2 | **OPEN - check both repository-owned and external scratch paths** |
+| 75 | A full re-run that plans again leaves the earlier plan's rows under the same run id | 5 | **OPEN - reasoned, not measured; first count the run ids with run-plan rows from attempt 2 or later** |
+
+## 75 - A full re-run that plans again leaves the earlier plan's rows under the same run id (OPEN)
+
+**"Re-run all jobs" keeps the GitHub run id, so a re-run on the same UTC day
+plans again under the same run id.** The new attempt's plan job files a second
+plan for that run, and the ledger door keeps the highest attempt of each
+writer, so every later job of the attempt reads the new plan. The new plan can
+be smaller, because the published ledger now refuses what the first attempt
+published, so its fan-out can start fewer workers. The machine and article rows
+that the first attempt's other workers filed stay under the run id, because the
+new attempt filed nothing for those shards. Reasoned from the code at `72569d67`
+(`backend/idhazh/run_context.py`, and `settle_rows` in
+`backend/idhazh/ledger/raw_files.py`), not measured.
+
+**One consequence is visible and one is silent.** When the new attempt
+assembles, the run records the new plan's shard count, so Hardware, and on the
+newest day the band above every console route, see more shards reporting than
+the run recorded and refuse it. When the new attempt stops before assembly, its
+workers' rows replace the first attempt's for the shards it reached, the record
+keeps the first count, and the run reads as one run made of two plans.
+
+**The first step is one count, not code.** Count the run ids whose run-plan
+rows carry an attempt of 2 or later, over a named window of days: one ledger,
+named days, and the door's own `attempt` cell. That count prices this defect
+before anyone designs a fix.
+
+**A run id of its own for each re-run that plans again is the candidate
+structural fix. It is an option for a later owner ruling, not a decision.** It
+would change the run identity that every ledger and `run.json` carry, which is
+why this defect is level 5. Recording the plan's attempt beside the shard count
+and reading only later rows was set aside on 2026-10-12, because it still
+misreads an attempt that stops before assembly.
+
+Found by Fowler's review of defect 73 and filed on 2026-10-12 with the owner's
+ruling on that defect.
+
+## 74 - A stale-payload test assumes its scratch folder is outside the repository (OPEN)
+
+The named stale-error test in `backend/tests/contracts/test_stamped_boundary.py`
+changes into its scratch folder and expects the payload name to be only
+`world-01.visual.json`. A scratch folder inside the repository still has the
+repository as the payload boundary. That run reports a longer relative path
+and fails the filename assertion. Plan 52's native-band worker reported this
+under repository-owned scratch; passing CI outside it does not close the defect.
+
+**Execution row 74.** Scope: test the documented payload boundary with generated
+files inside and outside the repository; do not weaken the relative-path
+assertion. Files: `backend/tests/contracts/test_stamped_boundary.py`, the
+stale-payload path helper it reads if that helper violates the contract, and
+[committing](../docs/architecture/publishing/committing.md) only if its boundary
+needs clarification. Oracle: both cases name their independently expected
+POSIX relative path, with no drive, backslash or absolute-path disclosure.
+Status: OPEN; the known-defects execution owner takes this row.
+
+## 73 - The manifest shard count can differ from the dispatched worker matrix (CLOSED 2026-10-12, PR #1588)
+
+The fan-out step in `.github/workflows/digest.yml` gives the workers a manual
+dispatch's `shards` input as it is, and derives a count from the plan only when
+that input is empty, which is every scheduled run. The assembly command in
+`backend/idhazh/cli.py`, and the fresh-base rebuild in
+`backend/utilities/digest_assemble.py`, recompute the derived count from the
+same plan. So a manual dispatch whose count differs from the derived one
+records a count different from the jobs actually dispatched: the default of 8
+with an article limit of 10 starts 8 workers and records 2, and Hardware
+refuses that run, while a dispatch below the derived count shows shards as
+missing that never ran. The plan does not change within one attempt: every job
+reads its own run's plan, and config comes from the trigger commit. A config
+with `run.max_parallel` above 8 would also diverge, because the workflow clamps
+the derived count and assembly does not. The native `run-shards` ledger
+deliberately records the manifest value; observed host rows are not a
+substitute.
+
+**The owner ruled on 2026-10-12.** The run records the count it dispatched, and
+the operator keeps the one-to-eight choice. `RunRecord.shards` keeps its key,
+type and readers and holds that count from the change on. The plan step
+decides the count once and stores it on the run's plan; the fan-out, assembly
+and the fresh-base rebuild read it there. A full re-run that plans again
+records its newer plan's count, and the rows it leaves under the same run id
+are defect 75. The
+change landed in PR #1588 and amended the shipped
+[Hardware count contract](../docs/architecture/publishing/console-machine.md#a-narrow-recorded-shard-count).
+Status: CLOSED 2026-10-12 (PR #1588).
 
 ## 72 - A chart test excludes all reader pages when the worktree name contains console (OPEN)
 
@@ -820,6 +905,16 @@ answer and then aborted the same way, on 2026-10-08; attempt 2 passed. The two
 occurrences now meet the bar this entry set: a second abort opens a row to
 reproduce and fix it.
 
+**Execution row 51.** Scope: reproduce the interpreter-exit abort on the real
+`--scored-keys` path and fix the producer or native reader's lifetime, not retry
+the caller. Files: `backend/utilities/build_canary_day.py`, the Parquet reader
+identified by the reproduction, and a generated-fixture subprocess regression.
+Oracle: the complete expected JSON and a successful process exit are both
+required; an abort after valid output still fails. Keep the browser build's
+failure propagation. Status: OPEN; the known-defects execution owner takes
+this row. It recurred during the Hardware compatibility candidate's CI on
+2026-10-12; the later green delivery did not prove a structural fix.
+
 Found on 2026-09-30 by plan 50's row 9, on the merge of #1166. Reproduced on
 2026-10-08 in PR #1428's first browser job.
 
@@ -906,7 +1001,7 @@ Execution owner: the repository owner for row 48; check both `%aI` and `%cI` on 
 
 Found on 2026-09-28 by plan 51's owner, while merging that plan's row 5.
 
-## 47 - The Pipelines route draws no panel ids, so the pictures and gates reach 15 panels, not 26 (OPEN)
+## 47 - The Pipelines route draws no panel ids, so the pictures and gates reach 15 panels, not 26 (CLOSED 2026-10-12)
 
 **The panel pictures and the sufficiency gates reach only a panel that carries
 an id, and the Pipelines route (`/console/`) gives none.** Of its eleven sections
@@ -917,16 +1012,16 @@ routes; the row that built the pictures corrected it to 15 on one route on
 2026-09-28. Its capture spec names the Pipelines route and fails the day that
 route starts drawing ids, so the count cannot go stale without a red.
 
-**The home is a plan 52 route row that gives each Pipelines section a panel
-id.** Plan 52 already plans the same for the three routes that draw no id
-(`/console/model/`, `/console/voices/`, `/console/judgement/`), and it still says
-the gates reach 26 panels on two routes; that row, or one beside it, takes the
-Pipelines route too. Level 2 - each section's id, its `console.panel_groups`
-entry and its pictures move together.
+**Closed by the route ownership and Pipelines delivery.** All twelve entries
+in `config/console/pipelines.json` now have a `data-console-panel-id` on the
+shipped route (#1529, #1559). Each console route owns its panel configuration
+and the representative journey checks that inventory. The old aggregate
+picture count is not a current coverage claim; exhaustive browser matrices
+remain retired under `CLAUDE.md` section 13.
 
 Found on 2026-09-28 by plan 51's row 6, which built the pictures.
 
-## 46 - `DateSeries` cannot draw the settings-change rule that gate 6 asks of every trend (OPEN)
+## 46 - `DateSeries` cannot draw the settings-change rule that gate 6 asks of every trend (CLOSED 2026-10-12)
 
 **Gate 6 asks every trend over days to carry its confounders**: the trend
 declares `data-model-rule`, and `yes` either draws the settings-change rule or
@@ -939,14 +1034,15 @@ printing the no-change sentence beside the chart. So a real date series can pass
 gate 6 only on that sentence, and it cannot pass at all over a span in which a
 setting did change.
 
-**The home is plan 52's row 2, the settings-change rule on every
-`dateSeries`**, and it has to land before plan 52's first date-series panel
-joins `console.judged_panel_ids`. Level 2 - one component, and every panel that
-draws it.
+**Closed by shared chart support and its route integrations** (#1537, #1546).
+`DateSeries.svelte` now draws dated settings and checker boundaries from its
+geometry and states unavailable or unchanged provenance in words. The
+[chart vocabulary](../docs/concepts/console-design/the-mark-shapes-a-panel-may-reach-for.md)
+owns that current contract; no missing record becomes a fabricated boundary.
 
 Filed on 2026-09-28 from plan 51's rows.
 
-## 45 - A change to `Panel.svelte` does not buy the console tests on a pull request (OPEN)
+## 45 - A change to `Panel.svelte` does not buy the console tests on a pull request (CLOSED 2026-10-12)
 
 **On a pull request, CI runs the console's own specs only when the change is
 the console's own**, and `CONSOLE_OWNED` in `frontend/scripts/test-scope.ts`
@@ -964,11 +1060,14 @@ buy the console specs.
 the case to the truth table in `frontend/scripts/tests/test-scope.test.mjs`.
 Level 2 - the truth table is the dependant to check.
 
-Execution owner: [plan 52](20260926-52-fifty-panels-move-and-six-projections-go-plan.md) row 1; its selector truth-table case is the acceptance check for defect 45.
+Closed by route ownership (#1529). The selector now buys the representative
+console selection for `Panel.svelte`; `frontend/scripts/tests/test-scope.test.mjs`
+checks both POSIX and Windows spellings independently. The neighbouring
+`PanelGroup.svelte` and `ChartReadout.svelte` controls remain distinct.
 
 Filed on 2026-09-28 from plan 51's rows.
 
-## 44 - One hatch means two things on the console: no reading, and time counted twice (OPEN)
+## 44 - One hatch means two things on the console: no reading, and time counted twice (CLOSED 2026-10-12)
 
 **A hatch means "no reading" on one console panel and "time counted twice" on
 another.** `MemoryBoard.svelte` hatches the bar of an item that carries no kernel
@@ -981,19 +1080,18 @@ names the clash, and plan 51's row 4 made the absent hatch one builder,
 `absentHatch` in `frontend/src/lib/charts/d3/ordered-colour.ts`, for a known
 thing with no reading.
 
-**The remaining execution owner is plan 52 row 6**, which redraws
-`RunTimelinePanel.svelte` and resolves what its overrun is drawn with. The
-memory-board half is complete (#1171). Level 2 - two panels, each checked by name
-in both themes.
+**Closed by Pipelines delivery** (#1559). `RunTimelinePanel.svelte` now draws
+an overrun as a solid two-pixel rule. The no-reading texture remains the
+reserved hatch. `frontend/tests/console-pipelines-timeline-page.spec.ts` holds
+the native quantities and solid overrun drawing; no new picture matrix is due.
 
 **The first half is done**, 2026-09-30: the memory board draws an item with no
 reading in the reserved grey's stripes from `absentHatch`, at
 `console.absent_hatch_degrees`, the same hatch the machine-kinds panel draws a
-machine with no speed reading in. What is left is the run timeline's overrun.
+machine with no speed reading in.
 
 Plan 51 row 8's final real and canary captures verify the no-reading texture in
-both themes. PR #1171 closes that half; the timeline half remains with its
-existing plan 52 row and is not part of the row 8 completion.
+both themes. PR #1171 closed that half; #1559 closed the timeline half.
 
 Found on 2026-09-27 by plan 51's row 4, which built the hatch builder.
 
@@ -1040,7 +1138,7 @@ version is obvious on the page.
 
 Execution owner: this plan's row 41 worker; browser checks of one-day and multi-day windows must show the correct singular and plural wording on every console route.
 
-## 40 - The canary never writes a job in two halves, so no built page tests the merge (OPEN)
+## 40 - The canary never writes a job in two halves, so no built page tests the merge (CLOSED 2026-10-12)
 
 **Every job now writes its machine record in two halves** - the first names the
 machine, the second what the job cost - and both build-time readers of
@@ -1054,7 +1152,11 @@ pass every browser spec.
 Level 2 - every browser spec shares the canary, so the specs that count machine
 rows are checked by name.
 
-Execution owner: [plan 52](20260926-52-fifty-panels-move-and-six-projections-go-plan.md) row 4; its built-page check of one merged canary job is the acceptance check for defect 40.
+Closed by the native canary foundation (#1542) and Hardware integration
+(#1558). `backend/utilities/build_canary_day.py` files the newest work shard's
+validated probe and then invokes the production clock writer at the same
+four-cell key. Packing and the representative Hardware journey read the
+combined machine and clock; neither half is replaced by a test-only reader.
 
 Found on 2026-09-27 by plan 51's row 1, which built the merge.
 

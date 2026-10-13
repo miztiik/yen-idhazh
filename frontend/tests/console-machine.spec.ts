@@ -21,6 +21,7 @@ import { fleetJobs } from '../src/lib/charts/fleet';
 import { machineKeys } from '../src/lib/charts/machine-colour';
 import {
 	clockAgreement,
+	clocksChart,
 	costOf,
 	itemRead,
 	money,
@@ -28,41 +29,26 @@ import {
 	pooledReadRate,
 	quantile,
 	readAgainstWritten,
-	shardBoard,
-	workChart,
+	workSeries,
 	workValues,
-	DEFAULT_WORK_UNIT,
 	PERCENTILES,
-	RUNNER_MEMORY_BYTES,
-	SHARED_AXIS_LIMIT,
 	type RunWork
 } from '../src/lib/charts/machine';
-import {
-	costChart,
-	costColumns,
-	costLabel,
-	costOverDays,
-	COST_SHAPES,
-	DEFAULT_COST_SHAPE
-} from '../src/lib/charts/cost';
+import { costOverDays } from '../src/lib/charts/cost';
 import {
 	carriesServerCounters,
 	machineCounters,
-	machineLimits,
 	type MachineLimits,
 	type MachineRun
-} from '../src/lib/server/machine-counters';
-import { contextCost } from '../src/lib/console/machine/context-cost';
+} from '../src/lib/console/machine/counters';
+import { dateSeries } from '../src/lib/charts/d3/dateSeries';
+import { frame } from '../src/lib/charts/frame';
 import { articleCost, runnerHourSeconds } from '../src/lib/console/machine/article-cost';
 import { processorLostOverDays } from '../src/lib/console/machine/processor-lost';
 import { diskReads } from '../src/lib/console/machine/disk-reads';
-import { promptReuse } from '../src/lib/console/machine/prompt-reuse';
 import { describeRefusedRuns } from '../src/lib/console/machine/refused-runs';
-import { describeServerCounters, type ServerCounterNotes } from '../src/lib/server/server-counter-notes';
-import { listRunDays } from '../src/lib/server/run-days';
-import { describeMissingMarkers } from '../src/lib/console/recording';
 import { hostRow, ledgers, plan, type ShardReading } from './support/machine-rows';
-import { observabilityConfig, runConfig, type ObservabilityConfig } from '../src/lib/server/config';
+import { observabilityConfig } from '../src/lib/server/config';
 
 /** `config/idhazh.json` read straight off disk, so a test's expectation comes
  * from the committed file rather than from the reader it is checking. */
@@ -78,14 +64,12 @@ const CONFIG = JSON.parse(
 	};
 };
 
-/** `console.chart_width`, off the committed file for the same reason. It
- * decides one thing on the board: whether the smaller half of a shard's split
- * is wide enough to be a band. */
+/** The native chart's width and height, from the same configuration it reads. */
 const CHART_WIDTH = (
 	JSON.parse(
 		readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
-	) as { console: { chart_width: number } }
-).console.chart_width;
+	) as { chart: { width_px: number } }
+).chart.width_px;
 
 /** `chart.height_px`, which is what a stacked band's height is a share of. */
 const CHART_HEIGHT = (
@@ -103,6 +87,14 @@ const LIMITS: MachineLimits = {
 	contextWindow: MODELS.summarizer.server['--ctx-size'],
 	jobTimeoutSeconds: CONFIG.run.shard_timeout_minutes * 60
 };
+
+function drawingOptions(stacked = false) {
+	return {
+		frame: frame(CHART_WIDTH, CHART_HEIGHT), stacked,
+		density: 5, valueTicks: 4, padding: 0.2,
+		rule: { declined: 'This compares recorded work, not a settings change.' }
+	};
+}
 
 /** One shard of the fixture run, with the day and run every figure sits under. */
 function shardOf(reading: ShardReading): ShardReading {
@@ -172,71 +164,33 @@ function onlyRun(readings: ShardReading[]): MachineRun {
 	return runs[0];
 }
 
-test.describe('the shard board', () => {
+test.describe('native shard counter arithmetic', () => {
 	const run = onlyRun(TWO_SHARDS);
-	const board = shardBoard(run, LIMITS.jobTimeoutSeconds, CHART_WIDTH);
-
-	test('rows are ranked by the clock the platform kills a shard on', () => {
-		// Shard 1 took 1,200 seconds against shard 0's 600, so it is the one that
-		// would be killed first and it goes on top.
-		expect(board.rows.map((row) => row.shard)).toEqual([1, 0]);
-		expect(board.rows.map((row) => row.jobSeconds)).toEqual([1200, 600]);
-	});
-
-	test('every bar sums to that shard, and the scale is the heaviest of them', () => {
-		// Hand-computed: shard 0 spent 200 + 200 = 400 seconds in the model and
-		// shard 1 spent 200 + 400 = 600, so 600 is the scale both bars share.
-		expect(board.scaleSeconds).toBe(600);
-		for (const row of board.rows) {
-			expect(row.modelSeconds).toBe((row.readSeconds ?? 0) + (row.writeSeconds ?? 0));
-			// The two segments are fractions of the shared scale, not of the row, so
-			// a short row means a short shard.
-			const read = Number((row.readWidth ?? '0%').replace('%', ''));
-			const write = Number((row.writeWidth ?? '0%').replace('%', ''));
-			expect(read).toBeCloseTo(((row.readSeconds ?? 0) / 600) * 100, 3);
-			expect(write).toBeCloseTo(((row.writeSeconds ?? 0) / 600) * 100, 3);
-		}
-	});
 
 	test('the read rate is the shard rate, and the spread is the two of them', () => {
 		// 8,000 tokens over 200 seconds is 40; 2,000 over 200 is 10; 40/10 is 4.
-		expect(board.rows.find((row) => row.shard === 0)?.readTokensPerSecond).toBeCloseTo(40, 6);
-		expect(board.rows.find((row) => row.shard === 1)?.readTokensPerSecond).toBeCloseTo(10, 6);
-		expect(board.readSpread).toBeCloseTo(4, 6);
+		expect(run.reported.find((row) => row.shard === 0)?.readTokensPerSecond).toBeCloseTo(40, 6);
+		expect(run.reported.find((row) => row.shard === 1)?.readTokensPerSecond).toBeCloseTo(10, 6);
+		expect(run.readSpread.value).toBeCloseTo(4, 6);
 	});
 
 	test('the job clock is measured against the configured timeout, not a literal', () => {
-		// The value is what the geometry is a fraction of, so driving the same run
-		// with a different ceiling has to move the fill. A test that only asserted
-		// the marker would pass against a constant, because the marker sits at the
-		// same place for every value under its target.
-		expect(board.timeoutSeconds).toBe(CONFIG.run.shard_timeout_minutes * 60);
-		expect(machineLimits().jobTimeoutSeconds).toBe(CONFIG.run.shard_timeout_minutes * 60);
-		const tighter = shardBoard(run, 1500, CHART_WIDTH);
-		expect(tighter.rows[0].job.valueFraction).not.toBeCloseTo(
-			board.rows[0].job.valueFraction,
-			4
-		);
+		expect(run.reported[1].jobUsedPct).toBe(Math.round(1200 / (CONFIG.run.shard_timeout_minutes * 60) * 100));
+		const { hosts, health } = ledgers(TWO_SHARDS.map(shardOf));
+		const tighter = machineCounters(hosts, health, plan(['2026-09-04-1', 2]),
+			{ ...LIMITS, jobTimeoutSeconds: 1500 }).runs[0];
+		expect(tighter.reported[1].jobUsedPct).toBe(80);
 	});
 
-	test('a shard that reported no clock is last and is not read as zero', () => {
+	test('a shard that reported no clock is unknown, not zero', () => {
 		const mixed = onlyRun([TWO_SHARDS[0], { shard: 1, serverPromptTokens: 10 }]);
-		const view = shardBoard(mixed, LIMITS.jobTimeoutSeconds, CHART_WIDTH);
-		expect(view.rows.map((row) => row.shard)).toEqual([0, 1]);
-		expect(view.rows[1].jobSeconds).toBeNull();
-		expect(view.rows[1].job.empty).toBe(true);
-		expect(view.rows[1].cpuModel).toBeNull();
-	});
-
-	test('a run nothing reported draws nothing and says so', () => {
-		const view = shardBoard(null, LIMITS.jobTimeoutSeconds, CHART_WIDTH);
-		expect(view.empty).toBe(true);
-		expect(view.rows).toEqual([]);
-		expect(view.readSpread).toBeNull();
+		expect(mixed.reported[1].jobSeconds).toBeNull();
+		expect(mixed.reported[1].jobUsedPct).toBeNull();
+		expect(mixed.reported[1].cpuModel).toBeNull();
 	});
 });
 
-/** The three clocks the board draws that nothing on the site read before.
+/** The native counters read stored gaps separately from queue waits.
  *
  * The unclaimed figure is the one that matters. It is `stage_gap_ms` added over
  * the shard's items and nothing else - a page that worked it out from the stage
@@ -283,8 +237,8 @@ test.describe('where a shard\u2019s clock went', () => {
 		}
 	];
 
-	const board = shardBoard(onlyRun(CLOCKED), LIMITS.jobTimeoutSeconds, CHART_WIDTH);
-	const rowFor = (shard: number) => board.rows.find((row) => row.shard === shard)!;
+	const run = onlyRun(CLOCKED);
+	const rowFor = (shard: number) => run.reported.find((row) => row.shard === shard)!;
 
 	test('the unclaimed figure is the stored column added up, and never a difference', () => {
 		// 4,321 ms and -2,500 ms are the two cells the fixture wrote. Their sum is
@@ -314,15 +268,11 @@ test.describe('where a shard\u2019s clock went', () => {
 	});
 
 	test('a shard that recorded no unclaimed time draws an absence, not a zero', () => {
-		const view = shardBoard(
-			onlyRun([{ shard: 0, jobSeconds: 600 }, { shard: 1, jobSeconds: 300 }]),
-			LIMITS.jobTimeoutSeconds,
-			CHART_WIDTH
-		);
-		expect(view.rows[0].unclaimedSeconds).toBeNull();
-		expect(view.rows[0].clockedItems).toBe(0);
-		expect(view.rows[0].queue.empty).toBe(true);
-		expect(view.rows[0].queueMaxSeconds).toBeNull();
+		const view = onlyRun([{ shard: 0, jobSeconds: 600 }, { shard: 1, jobSeconds: 300 }]);
+		expect(view.reported[0].unclaimedSeconds).toBeNull();
+		expect(view.reported[0].clockedItems).toBe(0);
+		expect(view.reported[0].queueMedianSeconds).toBeNull();
+		expect(view.reported[0].queueMaxSeconds).toBeNull();
 	});
 
 	test('the queue is a typical item and the worst one, never the two added up', () => {
@@ -331,293 +281,6 @@ test.describe('where a shard\u2019s clock went', () => {
 		const row = rowFor(0);
 		expect(row.queueMedianSeconds).toBeCloseTo(3, 6);
 		expect(row.queueMaxSeconds).toBeCloseTo(5, 6);
-		expect(row.queue.median).toBeCloseTo(3, 6);
-		expect(row.queue.max).toBeCloseTo(5, 6);
-	});
-
-	test('the queue bars are on the clock scale, so their lengths compare with it', () => {
-		// Shard 0 spent 400 seconds in the model and shard 1 spent 300, so the
-		// model clocks alone would scale to 400. Shard 1 waited 60 seconds at
-		// worst, which is inside that - the scale stays the heaviest clock.
-		expect(board.scaleSeconds).toBe(400);
-		expect(Number(rowFor(1).queue.notchWidth.replace('%', ''))).toBeCloseTo((60 / 400) * 100, 3);
-
-		// A shard that queued longer than anything computed widens the scale rather
-		// than being clipped at the end of the track.
-		const queued = shardBoard(
-			onlyRun([
-				{ ...CLOCKED[0], queueWaitMs: 900_000 },
-				CLOCKED[1],
-				CLOCKED[2]
-			]),
-			LIMITS.jobTimeoutSeconds,
-			CHART_WIDTH
-		);
-		expect(queued.scaleSeconds).toBe(900);
-		expect(queued.rows.find((row) => row.shard === 0)?.queue.notchWidth).toBe('100.0000%');
-	});
-});
-
-/** The one question this panel exists to answer: was the slow shard slow
- * because of the WORK it was handed, or because of the HOST it landed on?
- *
- * Two runs below have the same shape - a shard on 600 seconds beside one on
- * 1,200 - and differ only in why. An operator has to part them without leaving
- * the panel, so every fact that parts them is on the row.
- */
-const GIB = 1024 * 1024 * 1024;
-
-/** One shard as however many item rows it ran, with the machine record's cells
- * on the first of them.
- *
- * The record is one row a shard and a second copy would have to agree cell for
- * cell, so it is stated once. The item cells repeat, because a median over one
- * reading is that reading and the fold has to be given something to sort.
- */
-function shardOfItems(
-	items: number,
-	host: Partial<ShardReading>,
-	machine: Partial<ShardReading>
-): ShardReading[] {
-	return Array.from({ length: items }, (_, index) => ({
-		shard: host.shard ?? 0,
-		...(index === 0 ? host : { shard: host.shard ?? 0 }),
-		cachedTokens: 0,
-		writtenTokens: 100,
-		writeSeconds: 20,
-		longestSequence: 500,
-		peakRssBytes: 8 * GIB,
-		cpuBusyPct: 94,
-		cpuBusyMax: 97,
-		...machine
-	}));
-}
-
-/** A machine with room to spare: load inside its cores, swap barely touched. */
-const CALM: Partial<ShardReading> = { load: 3, swapFree: 4 * GIB, swapTotal: 4 * GIB };
-
-/** A machine in trouble: load past its four cores, and a sixteenth of its swap
- * left. Read rate collapses here, and the shard walks towards its timeout. */
-const STRAINED: Partial<ShardReading> = {
-	load: 6.5,
-	swapFree: GIB / 4,
-	swapTotal: 4 * GIB,
-	cpuBusyPct: 62,
-	cpuBusyMax: 71
-};
-
-const HOST_JOB = {
-	logicalProcessors: 4,
-	cpuModel: 'AMD EPYC 7763 64-Core Processor',
-	modelLoadMs: 2400
-};
-
-/** Shard 1 took twice shard 0's clock on the same two items, reading at a
- * quarter of its rate on a host that is queueing and swapping. */
-const HOST_SLOW: ShardReading[] = [
-	...shardOfItems(
-		2,
-		{ shard: 0, ...HOST_JOB, serverPromptTokens: 8000, serverPromptSeconds: 200, jobSeconds: 600 },
-		CALM
-	),
-	...shardOfItems(
-		2,
-		{ shard: 1, ...HOST_JOB, serverPromptTokens: 2000, serverPromptSeconds: 200, jobSeconds: 1200 },
-		STRAINED
-	)
-];
-
-/** Shard 1 took twice shard 0's clock reading at exactly its rate, because it
- * was handed three times the items on a host with room to spare. */
-const WORK_SLOW: ShardReading[] = [
-	...shardOfItems(
-		2,
-		{ shard: 0, ...HOST_JOB, serverPromptTokens: 8000, serverPromptSeconds: 200, jobSeconds: 600 },
-		CALM
-	),
-	...shardOfItems(
-		6,
-		{
-			shard: 1,
-			...HOST_JOB,
-			serverPromptTokens: 24000,
-			serverPromptSeconds: 600,
-			jobSeconds: 1200
-		},
-		CALM
-	)
-];
-
-function boardOf(readings: ShardReading[]) {
-	return shardBoard(onlyRun(readings), LIMITS.jobTimeoutSeconds, CHART_WIDTH);
-}
-
-test.describe('work or the host, decided on the row', () => {
-	const host = boardOf(HOST_SLOW);
-	const work = boardOf(WORK_SLOW);
-
-	test('the two runs look the same on the clock alone', () => {
-		// The state the panel has to break out of: the ranking cannot part them,
-		// because the clock is identical on both boards.
-		expect(host.rows.map((row) => row.shard)).toEqual([1, 0]);
-		expect(work.rows.map((row) => row.shard)).toEqual([1, 0]);
-		expect(host.rows.map((row) => row.jobSeconds)).toEqual(
-			work.rows.map((row) => row.jobSeconds)
-		);
-	});
-
-	test('the host-slow shard names the host on its own row', () => {
-		const [slow, fast] = host.rows;
-		// Hand-computed: 8,000 over 200 is 40 and 2,000 over 200 is 10.
-		expect(fast.readTokensPerSecond).toBeCloseTo(40, 6);
-		expect(slow.readTokensPerSecond).toBeCloseTo(10, 6);
-		// Same work, a quarter of the rate. That is the machine, not the queue.
-		expect(slow.items).toBe(fast.items);
-		expect(slow.readTokensPerSecond).toBeCloseTo((fast.readTokensPerSecond ?? 0) / 4, 6);
-		// Load past the online logical processor count indicates host pressure.
-		expect(slow.logicalProcessors).toBe(4);
-		expect(slow.loadMax).toBeCloseTo(6.5, 6);
-		expect(slow.load.band).toBe('past');
-		expect(fast.load.band).not.toBe('past');
-		// A sixteenth of the swap left, with the total beside it so the reading
-		// is not confused with a box that has no swap at all.
-		expect(slow.swapState).toBe('measured');
-		expect(slow.swapFreeBytes).toBe(GIB / 4);
-		expect(slow.swapTotalBytes).toBe(4 * GIB);
-		expect(fast.swapFreeBytes).toBe(4 * GIB);
-	});
-
-	test('the work-slow shard names the work on its own row', () => {
-		const [slow, fast] = work.rows;
-		// 24,000 over 600 is 40, the same rate its neighbour read at.
-		expect(slow.readTokensPerSecond).toBeCloseTo(fast.readTokensPerSecond ?? 0, 6);
-		expect(slow.items).toBe(fast.items * 3);
-		expect(slow.loadMax).toBeLessThan(slow.logicalProcessors ?? 0);
-		expect(slow.load.band).not.toBe('past');
-		expect(slow.swapFreeBytes).toBe(4 * GIB);
-	});
-
-	test('the value domain adapts to the 4x rather than clipping it', () => {
-		// Every rate bar is drawn against the largest rate on the board, so the
-		// shard reading at a quarter draws at a quarter. A fixed domain would put
-		// both bars against a round number somebody picked, and a domain that
-		// clipped would draw the two at the same length.
-		expect(host.rateScale).toBeCloseTo(40, 6);
-		expect(host.rows[0].readRateWidth).toBe('25.0000%');
-		expect(host.rows[1].readRateWidth).toBe('100.0000%');
-		// The same run against a wider board draws the same fractions: the domain
-		// is the data, never the pixels.
-		expect(boardOf(HOST_SLOW).rateScale).toBe(host.rateScale);
-	});
-
-	test('reading and writing share one scale while they are inside 20x', () => {
-		// Hand-computed: 200 written tokens over 40 seconds is 5 a second on both
-		// shards, against a fastest read of 40. That is 8x, inside the 20 at
-		// which the smaller draws under a twentieth of the track.
-		expect(host.rateRatio).toBeCloseTo(8, 6);
-		expect(host.ratesShareAxis).toBe(true);
-		expect(host.writeRateScale).toBe(host.rateScale);
-
-		// Past 20x the write series takes its own domain, so a rate nothing can
-		// see is not drawn as a rate of zero. 8,000 over 200 against 100 written
-		// tokens over 400 seconds is 0.25 a second, which is 160x.
-		const wide = boardOf([
-			...shardOfItems(
-				1,
-				{
-					shard: 0,
-					...HOST_JOB,
-					serverPromptTokens: 8000,
-					serverPromptSeconds: 200,
-					jobSeconds: 600
-				},
-				{ ...CALM, writtenTokens: 100, writeSeconds: 400 }
-			)
-		]);
-		expect(wide.rateRatio).toBeCloseTo(160, 6);
-		expect(wide.ratesShareAxis).toBe(false);
-		expect(wide.writeRateScale).toBeCloseTo(0.25, 6);
-		expect(wide.rows[0].writeRateWidth).toBe('100.0000%');
-	});
-
-	test('a range mark is the middle item filled and the worst one notched', () => {
-		// Three items on one shard, so the median is a real middle rather than the
-		// only reading: 8, 9 and 14 GiB has a median of 9 and a maximum of 14.
-		const view = boardOf([
-			{ shard: 0, ...HOST_JOB, serverPromptTokens: 8000, serverPromptSeconds: 200, jobSeconds: 600, cachedTokens: 0, writtenTokens: 100, writeSeconds: 20, longestSequence: 500, peakRssBytes: 8 * GIB, cpuBusyPct: 50, cpuBusyMax: 55, ...CALM },
-			{ shard: 0, cachedTokens: 0, writtenTokens: 100, writeSeconds: 20, longestSequence: 500, peakRssBytes: 9 * GIB, cpuBusyPct: 60, cpuBusyMax: 91, ...CALM },
-			{ shard: 0, cachedTokens: 0, writtenTokens: 100, writeSeconds: 20, longestSequence: 500, peakRssBytes: 14 * GIB, cpuBusyPct: 70, cpuBusyMax: 75, ...CALM }
-		]);
-		const memory = view.rows[0].memory;
-		expect(memory.median).toBe(9 * GIB);
-		expect(memory.max).toBe(14 * GIB);
-		// The runner's own ceiling joins the figures rather than capping them, so
-		// the scale is 16 GiB and the notch sits at fourteen sixteenths of it.
-		expect(view.memoryScaleBytes).toBe(RUNNER_MEMORY_BYTES);
-		expect(memory.medianWidth).toBe('56.2500%');
-		expect(memory.notchWidth).toBe('87.5000%');
-		// A share runs nought to a hundred, so the CPU mark needs no scale of its
-		// own: 60 percent typical, 91 percent at its worst.
-		expect(view.rows[0].cpu.median).toBe(60);
-		expect(view.rows[0].cpu.max).toBe(91);
-		expect(view.rows[0].cpu.medianWidth).toBe('60.0000%');
-		expect(view.rows[0].cpu.notchWidth).toBe('91.0000%');
-	});
-
-	test('a band under one pixel is printed rather than drawn', () => {
-		// The write side is a thousandth of the read side, so at 760px the smaller
-		// band is 0.76px and a browser paints nothing. The bar draws whole and
-		// both seconds stay on the row.
-		const thin = boardOf([
-			{
-				shard: 0,
-				...HOST_JOB,
-				serverPromptTokens: 8000,
-				serverPromptSeconds: 600,
-				jobSeconds: 900,
-				cachedTokens: 0,
-				writtenTokens: 100,
-				writeSeconds: 0.6,
-				longestSequence: 500,
-				...CALM
-			}
-		]);
-		expect(1 / CHART_WIDTH).toBeGreaterThan(0.6 / 600.6);
-		expect(thin.rows[0].splitDrawn).toBe(false);
-		// The seconds themselves are untouched. The rule takes the band away, not
-		// the fact.
-		expect(thin.rows[0].writeSeconds).toBeCloseTo(0.6, 6);
-		expect(host.rows[0].splitDrawn).toBe(true);
-	});
-
-	test('a run that recorded no swap says so rather than reading as zero', () => {
-		const silent = boardOf(TWO_SHARDS);
-		expect(silent.swapKnown).toBe(0);
-		for (const row of silent.rows) {
-			expect(row.swapState).toBe('unrecorded');
-			expect(row.swapFreeBytes).toBeNull();
-		}
-		// A host that really has no swap is a third state, and not an emergency.
-		const none = boardOf(
-			shardOfItems(
-				1,
-				{
-					shard: 0,
-					...HOST_JOB,
-					serverPromptTokens: 8000,
-					serverPromptSeconds: 200,
-					jobSeconds: 600
-				},
-				{ load: 3, swapFree: 0, swapTotal: 0 }
-			)
-		);
-		expect(none.rows[0].swapState).toBe('none');
-		expect(none.swapKnown).toBe(1);
-	});
-
-	test('the weights load lands as a cell on the shard that paid it', () => {
-		expect(host.rows[0].modelLoadMs).toBe(2400);
-		expect(boardOf(TWO_SHARDS).rows.map((row) => row.modelLoadMs)).toEqual([4000, 3000]);
 	});
 });
 
@@ -663,6 +326,18 @@ test.describe('do the two clocks agree', () => {
 		expect(view.pairs[0].agrees).toBe(false);
 		expect(view.pairs[1].agrees).toBe(true);
 		expect(view.disagreeing).toBe(1);
+	});
+
+	test('native ranked gaps keep the independent readings, rule and unknown state', () => {
+		const view = clockAgreement(onlyRun(TWO_SHARDS),
+			[...items(0, 1000, 50_000), ...items(1, 500, 50_000)], 5);
+		const geometry = clocksChart(view.pairs, 5);
+		expect(geometry?.rows.map((row) => row.value)).toEqual([50, 0]);
+		expect(geometry?.rules.map((rule) => [rule.at, rule.label])).toEqual([[5, 'Allowed disagreement']]);
+		expect(geometry?.rows[0].row).toMatchObject({
+			status: 'disagrees', context: 'item ledger 20.00; server 40.00 tokens a second'
+		});
+		expect(clocksChart([{ label: 'shard 0', ledger: null, server: 40, gapPct: null, agrees: null }], 5)).toBeNull();
 	});
 
 	test('a ledger with no shard falls back to the run and says which grain it used', () => {
@@ -713,11 +388,9 @@ test.describe('the percentile curve', () => {
 		expect(view.runs).toHaveLength(1);
 		expect(view.runs[0].items).toBe(6);
 		expect(view.runs[0].ms).toHaveLength(PERCENTILES.length);
-		PERCENTILES.forEach((percentile, at) => {
-			// Whole milliseconds, and the interpolation rule is still the stated
-			// one: the rounding happens after it, not instead of it.
-			expect(view.runs[0].ms[at]).toBe(Math.round(quantile(ms, percentile / 100)));
-		});
+		// Positions 2.5, 3.75, 4.5, 4.75 and 4.95 interpolate to 35, 47.5,
+		// 55, 57.5 and 59.5 ms; rounding follows interpolation.
+		expect(view.runs[0].ms).toEqual([35, 48, 55, 58, 60]);
 	});
 
 	test('a run under the floor prints its count and draws no mark', () => {
@@ -812,10 +485,8 @@ test.describe('what a run reads against what it writes', () => {
 	test('the taller bar inverts between the two units, and that is the finding', () => {
 		// Reads outnumber writes 5 to 1; decode outlasts prefill 3 to 1.
 		const view = readAgainstWritten(health);
-		expect(view.taller.tokens).toBe('read');
-		expect(view.taller.seconds).toBe('written');
-		expect(view.ratio.tokens).toBeCloseTo(5.0, 12);
-		expect(view.ratio.seconds).toBeCloseTo(3.0, 12);
+		expect(workValues(view.runs[0], 'tokens')).toEqual({ read: 1_500_000, written: 300_000 });
+		expect(workValues(view.runs[0], 'seconds')).toEqual({ read: 60, written: 180 });
 	});
 
 	test('a run nobody timed draws no seconds and still draws its tokens', () => {
@@ -825,13 +496,9 @@ test.describe('what a run reads against what it writes', () => {
 		expect(view.runs[0].input).toBe(1000);
 		expect(view.runs[0].prefillMs).toBeNull();
 		expect(view.runs[0].decodeMs).toBeNull();
-		// Zero timed runs is the seconds grain's absent state, and it is the
-		// figure the page branches on.
-		expect(view.timedRuns).toBe(0);
-		expect(view.ratio.seconds).toBeNull();
-		expect(view.taller.seconds).toBeNull();
-		expect(workChart(view.runs, view, 'seconds').empty).toBe(true);
-		expect(workChart(view.runs, view, 'tokens').empty).toBe(false);
+		expect(view.runs[0].timed).toBe(0);
+		expect(dateSeries(workSeries(view.runs, 'seconds'), drawingOptions())).toBeNull();
+		expect(dateSeries(workSeries(view.runs, 'tokens'), drawingOptions())).not.toBeNull();
 	});
 
 	test('milliseconds reach the drawing as seconds, and absence stays absence', () => {
@@ -844,46 +511,19 @@ test.describe('what a run reads against what it writes', () => {
 		expect(workValues(untimed.runs[0], 'seconds')).toEqual({ read: null, written: null });
 	});
 
-	test('one axis under the measured limit, and the smaller series takes a row past it', () => {
-		const view = readAgainstWritten(health);
-		expect(view.split.tokens).toBe(false);
-		expect(view.split.seconds).toBe(false);
-		const shared = workChart(view.runs, view, 'tokens').option;
-		expect(Array.isArray(shared.grid)).toBe(false);
-		expect(shared.series).toHaveLength(2);
-
-		// Past the limit the smaller side draws under 5 percent of a shared axis
-		// and reads as zero, so it gets its own row on the same categories.
-		const lopsided = readAgainstWritten([
-			healthRow({
-				item_id: 'x',
-				input_tokens: 1_000_000,
-				output_tokens: 1000,
-				prefill_ms: 10,
-				decode_ms: 20
-			})
+	test('native dated totals combine runs without making unmeasured seconds zero', () => {
+		const runs: RunWork[] = [
+			{ runId: 'one', date: '2026-09-01', input: 100, output: 20, prefillMs: 1000, decodeMs: 2000, items: 1, timed: 1 },
+			{ runId: 'two', date: '2026-09-01', input: 200, output: 40, prefillMs: 3000, decodeMs: 4000, items: 1, timed: 1 },
+			{ runId: 'unknown', date: '2026-09-02', input: 10, output: 2, prefillMs: null, decodeMs: null, items: 1, timed: 0 },
+			{ runId: 'zero', date: '2026-09-03', input: 0, output: 0, prefillMs: 0, decodeMs: 0, items: 1, timed: 1 }
+		];
+		expect(workSeries(runs, 'tokens').map((series) => series.points.map((point) => point.value))).toEqual([
+			[300, 10, 0], [60, 2, 0]
 		]);
-		expect(lopsided.ratio.tokens).toBeGreaterThan(SHARED_AXIS_LIMIT);
-		expect(lopsided.split.tokens).toBe(true);
-		expect(lopsided.split.seconds).toBe(false);
-		const rows = workChart(lopsided.runs, lopsided, 'tokens').option;
-		expect(Array.isArray(rows.grid)).toBe(true);
-		expect((rows.grid as unknown[]).length).toBe(2);
-		// Larger on top, smaller below, on one set of categories.
-		expect((rows.series as { name: string }[]).map((series) => series.name)).toEqual([
-			'Read',
-			'Written'
+		expect(workSeries(runs, 'seconds').map((series) => series.points.map((point) => point.value))).toEqual([
+			[4, null, 0], [6, null, 0]
 		]);
-		expect((rows.xAxis as { data: string[] }[])[0].data).toEqual(
-			(rows.xAxis as { data: string[] }[])[1].data
-		);
-	});
-
-	test('the unit the panel opens on is named once, and both readers take it from there', () => {
-		// The server draws this unit and the page checks its radio at it. Two
-		// literals would eventually be two units.
-		expect(['tokens', 'seconds']).toContain(DEFAULT_WORK_UNIT);
-		expect(DEFAULT_WORK_UNIT).toBe('seconds');
 	});
 
 	test('input and output are priced apart, at the rate per million', () => {
@@ -941,6 +581,7 @@ test.describe('a run the counters refuse, handed to every figure built from arti
 			machine_shard: 0,
 			item_index: index,
 			n_ctx_configured: 8192,
+			n_parallel: 1,
 			...cells
 		});
 	const refusedRows = [
@@ -950,6 +591,7 @@ test.describe('a run the counters refuse, handed to every figure built from arti
 			prefill_ms: 8000,
 			decode_ms: 30_000,
 			summary_input_tokens: 4000,
+			summary_cached_tokens: 200,
 			summary_output_tokens: 300,
 			summary_finish_reason: 'length',
 			cpu_busy_pct: 50,
@@ -968,6 +610,7 @@ test.describe('a run the counters refuse, handed to every figure built from arti
 			prefill_ms: 12_000,
 			decode_ms: 30_000,
 			summary_input_tokens: 6000,
+			summary_cached_tokens: 0,
 			summary_output_tokens: 300,
 			summary_finish_reason: 'length',
 			cpu_busy_pct: 75,
@@ -988,6 +631,7 @@ test.describe('a run the counters refuse, handed to every figure built from arti
 			prefill_ms: 2000,
 			decode_ms: 20_000,
 			summary_input_tokens: 1000,
+			summary_cached_tokens: 800,
 			summary_output_tokens: 200,
 			summary_finish_reason: 'stop',
 			cpu_busy_pct: 25,
@@ -1006,6 +650,7 @@ test.describe('a run the counters refuse, handed to every figure built from arti
 			prefill_ms: 3000,
 			decode_ms: 20_000,
 			summary_input_tokens: 2000,
+			summary_cached_tokens: 1800,
 			summary_output_tokens: 200,
 			summary_finish_reason: 'stop',
 			cpu_busy_pct: 25,
@@ -1074,15 +719,12 @@ test.describe('a run the counters refuse, handed to every figure built from arti
 	});
 
 	test('the reading limit counts it', () => {
-		const options = { percentile: 99, cutOffReason: 'length' };
-		const accepted = contextCost(acceptedRows, options).span;
-		expect([accepted.rowsRead, accepted.items, accepted.largest]).toEqual([2, 2, 2200]);
-		expect([accepted.unusedPct, accepted.cutOff, accepted.calls]).toEqual([73, 0, 2]);
-		const both = contextCost(bothRuns, options).span;
-		expect([both.rowsRead, both.items, both.largest]).toEqual([4, 4, 6300]);
-		// The headline moves: the refused run's article is the one that used most
-		// of the limit, and both of its calls ran out of room.
-		expect([both.unusedPct, both.cutOff, both.calls]).toEqual([23, 2, 4]);
+		const accepted = contextReadings(acceptedRows);
+		expect(accepted.summary).toEqual([1000, 2000]);
+		expect(accepted.limits).toEqual([8192]);
+		const both = contextReadings(bothRuns);
+		expect(both.summary).toEqual([4000, 6000, 1000, 2000]);
+		expect(both.limits).toEqual([8192]);
 	});
 
 	test('the cost of one article counts it', () => {
@@ -1158,12 +800,13 @@ test.describe('a run the counters refuse, handed to every figure built from arti
 	});
 
 	test('the prompt reuse counts it', () => {
-		const columns = Object.keys(bothRuns[0]);
-		const accepted = promptReuse(acceptedRows, columns);
-		expect([accepted.rowsRead, accepted.items, accepted.floor?.pct]).toEqual([2, 2, 80]);
-		const both = promptReuse(bothRuns, columns);
-		expect([both.rowsRead, both.items, both.floor?.pct]).toEqual([4, 4, 0]);
-		expect(both.requests[0].read).toEqual({ low: 10, median: 26, high: 45, from: 4 });
+		const accepted = reuseChecks(acceptedRows).find((one) => one.call === 'summary')!;
+		// Native independent percentages use the upper middle of [80, 90].
+		expect([accepted.count, accepted.server]).toEqual([2, 90]);
+		expect(accepted.ours).toBeCloseTo(100 * 2600 / 3000, 12);
+		const both = reuseChecks(bothRuns).find((one) => one.call === 'summary')!;
+		expect([both.count, both.server]).toEqual([4, 80]);
+		expect(both.ours).toBeCloseTo(100 * 2800 / 13000, 12);
 	});
 
 	test("the box says what leaves the run out and what still counts it, in Reader's words", () => {
@@ -1173,40 +816,8 @@ test.describe('a run the counters refuse, handed to every figure built from arti
 			plan([REFUSED, 2], [ACCEPTED, 1]),
 			LIMITS
 		);
-		// "The run count above" is the route's first line, over the runs the
-		// counters keep: one run, though two filed rows. "Figures that pick
-		// articles by date" are the six cases above, and each one counts it.
-		const open = { days: 7, start: '2026-08-29', end: '2026-09-04' };
-		const firstLine = describeServerCounters({
-			runs,
-			refused,
-			ran: ['2026-09-04'],
-			articleDays: ['2026-09-04'],
-			machineRead: {
-				state: 'read',
-				through: '2026-09-04',
-				first: '2026-09-04',
-				lastRows: { period: 'daily', covers: '2026-09-04' },
-				lostDays: [],
-				setAside: {}
-			},
-			from: open.start,
-			open,
-			offered: [open],
-			observability: {
-				cost_currency: 'USD',
-				cost_input_per_million: 0.2,
-				cost_output_per_million: 0.6,
-				evaluation_enabled: true,
-				host_fingerprint: true,
-				host_fingerprint_bandwidth_cache_multiple: 2,
-				memory_profiling_enabled: true,
-				sample_rate: 1
-			}
-		}).intro;
-		expect(firstLine).toBe(
-			'1 run in these 7 days, with figures from the model server itself. 2026-08-29 to 2026-09-04.'
-		);
+		expect(runs).toHaveLength(1);
+		expect(runs.filter(carriesServerCounters)).toHaveLength(1);
 		expect(describeRefusedRuns(refused)).toEqual({
 			head:
 				'1 run has records that do not fit together. The run count above does not include it. ' +
@@ -1251,169 +862,8 @@ test.describe('a run the counters refuse, handed to every figure built from arti
 	});
 });
 
-test.describe("a refused run is a run the server's figures were written down for, where its records hold them", () => {
-	// One run a day, on shard 0, in the 7 days that end on 15 Jun 2030. A run is kept where its
-	// records fit together, and refused where shard 0 filed two machine records that disagree: about
-	// the server's two cells, or only about the machine. Each case hands the lines what the route
-	// hands them: the kept and refused runs of one `machineCounters` call, every day with a run as
-	// `listRunDays` lists them for the route, and the article record's days.
-	const OPEN = { days: 7, start: '2030-06-09', end: '2030-06-15' };
-	const OBSERVABILITY: ObservabilityConfig = {
-		cost_currency: 'USD',
-		cost_input_per_million: 0.2,
-		cost_output_per_million: 0.6,
-		evaluation_enabled: true,
-		host_fingerprint: true,
-		host_fingerprint_bandwidth_cache_multiple: 2,
-		memory_profiling_enabled: true,
-		sample_rate: 1
-	};
-	/** Shard 0's machine record for the run on `date`: the probe and the clock, and the server's two
-	 *  cells where `prompt` is a number. */
-	const machine = (date: string, prompt: number | '' = 900, fingerprint = 'f00d') =>
-		hostRow({
-			date,
-			runId: `${date}-1`,
-			shard: 0,
-			fingerprint,
-			jobSeconds: 600,
-			serverPromptTokens: prompt,
-			serverPromptSeconds: prompt === '' ? '' : prompt / 100
-		});
-	/** Two machine records shard 0 of the run on `date` filed that disagree: about the server's
-	 *  figures, both holding them, or with `server` false only about the machine, neither holding them. */
-	const disagreeing = (date: string, server: boolean) =>
-		server ? [machine(date, 900), machine(date, 901)] : [machine(date, ''), machine(date, '', 'beef')];
-	/** An article that shard 0 of the run on `date` summarised. */
-	const article = (date: string) =>
-		healthRow({ date, run_id: `${date}-1`, item_id: `${date}-item`, machine_shard: 0 });
-	/** What Hardware says about the server's figures over `open`, from the rows built. The read is
-	 *  the 7 days, whichever window is open. */
-	const hardware = (
-		hosts: Record<string, string>[],
-		articleDays: string[],
-		{ recording = true, open = OPEN }: { recording?: boolean; open?: typeof OPEN } = {}
-	) => {
-		const { runs, refused } = machineCounters(hosts, articleDays.map(article), plan(), LIMITS);
-		return describeServerCounters({
-			runs,
-			refused,
-			ran: listRunDays({ runs, refused }, articleDays),
-			articleDays,
-			machineRead: {
-				state: 'read',
-				through: OPEN.end,
-				first: OPEN.start,
-				lastRows: { period: 'daily', covers: hosts.map((row) => row.date).sort().at(-1) ?? OPEN.start },
-				lostDays: [],
-				setAside: {}
-			},
-			from: OPEN.start,
-			open,
-			offered: [...new Set([open, OPEN])],
-			observability: { ...OBSERVABILITY, host_fingerprint: recording }
-		});
-	};
-	/** Every line printed about the server's figures, apart from the first line. */
-	const printed = (notes: ServerCounterNotes): string[] =>
-		[notes.measurementOff, ...Object.values(notes.recording)].filter((line): line is string => line !== null);
-
-	test("a day whose only run was refused, while its records hold the server's figures, is not named; a day of article rows alone still is", () => {
-		// 10 Jun's run carried the server's figures. 12 Jun's only run was refused: shard 0 filed two
-		// machine records that disagree, both holding them. 13 Jun's run is article rows alone.
-		const notes = hardware(
-			[machine('2030-06-10'), ...disagreeing('2030-06-12', true)],
-			['2030-06-10', '2030-06-12', '2030-06-13']
-		);
-		// The first line counts only the runs the counters keep; the box names the refused one.
-		expect(notes.intro).toBe(
-			'2 runs in these 7 days, 1 of them with figures from the model server itself. 2030-06-09 to 2030-06-15.'
-		);
-		expect(printed(notes)).toEqual([
-			'No server figures were written down for 13 Jun 2030. The speed figures for that day come from the summariser, not the server.'
-		]);
-	});
-
-	test('a day whose only run was refused, with no server figure in its records, is still named', () => {
-		// 12 Jun's only run was refused because shard 0's two records name two machines. Neither
-		// holds a cell the server wrote, so no server figures were written down that day.
-		const notes = hardware(
-			[machine('2030-06-10'), ...disagreeing('2030-06-12', false)],
-			['2030-06-10', '2030-06-12']
-		);
-		expect(printed(notes)).toEqual([
-			'No server figures were written down for 12 Jun 2030. The speed figures for that day come from the summariser, not the server.'
-		]);
-	});
-
-	test("the server's figures start on a refused day whose records hold them, which is not counted as a day without them", () => {
-		// Runs of article rows alone on 9, 10, 11 and 13 Jun. 12 Jun's only run was refused with the
-		// server's figures in both records, and 14 Jun's run carried them.
-		const notes = hardware(
-			[...disagreeing('2030-06-12', true), machine('2030-06-14')],
-			['2030-06-09', '2030-06-10', '2030-06-11', '2030-06-12', '2030-06-13', '2030-06-14']
-		);
-		expect(notes.intro).toBe(
-			'5 runs in these 7 days, 1 of them with figures from the model server itself. 2030-06-09 to 2030-06-15.'
-		);
-		expect(printed(notes)).toEqual([
-			'Server figures started on 12 Jun 2030. Earlier in this window, 3 days had a run but no server figures.',
-			'No server figures were written down for 13 Jun 2030. The speed figures for that day come from the summariser, not the server.'
-		]);
-	});
-
-	test("with measurement off, the newest day recorded is a refused day whose records hold the server's figures", () => {
-		// Switched off after 12 Jun, whose only run was refused with the server's figures in both
-		// records. Article rows kept forming runs on 13 and 14 Jun.
-		const notes = hardware(
-			[machine('2030-06-10'), ...disagreeing('2030-06-12', true)],
-			['2030-06-10', '2030-06-12', '2030-06-13', '2030-06-14'],
-			{ recording: false }
-		);
-		expect(printed(notes)).toEqual([
-			'Measurement is off. Nothing has been recorded since 12 Jun 2030. Turn it on in config/idhazh.json.'
-		]);
-	});
-
-	test("a window whose only run was refused counts 0 runs, in Reader's words, and has no run on record only where the box names none", () => {
-		// 12 Jun's only run was refused, with the server's figures in both records. The box under the
-		// first line names it, and calls that line "the run count above".
-		const refusedOnly = disagreeing('2030-06-12', true);
-		expect(hardware(refusedOnly, ['2030-06-12']).intro).toBe('0 runs in these 7 days. 2030-06-09 to 2030-06-15.');
-		expect(
-			hardware(refusedOnly, ['2030-06-12'], { open: { days: 1, start: '2030-06-12', end: '2030-06-12' } }).intro
-		).toBe('This one day had 0 runs. 2030-06-12.');
-		// A run refused on 5 Jun is outside the window, so the box names no run in it.
-		expect(hardware(disagreeing('2030-06-05', true), ['2030-06-05']).intro).toBe(
-			'No run in these 7 days is on record. 2030-06-09 to 2030-06-15.'
-		);
-	});
-
-	test('a day whose only run was refused and is machine records alone had a run: the started line counts it and the marker line names it', () => {
-		// Runs of article rows alone on 9 and 11 Jun. 10 Jun's only run was refused because shard 0's
-		// two machine records name two machines, and the article record holds no row that day. 13 Jun's
-		// run carried the server's figures. So 3 days before 13 Jun had a run but no server figures.
-		const hosts = [...disagreeing('2030-06-10', false), machine('2030-06-13')];
-		const articleDays = ['2030-06-09', '2030-06-11', '2030-06-13'];
-		const notes = hardware(hosts, articleDays);
-		expect(notes.intro).toBe(
-			'3 runs in these 7 days, 1 of them with figures from the model server itself. 2030-06-09 to 2030-06-15.'
-		);
-		expect(printed(notes)).toEqual([
-			'Server figures started on 13 Jun 2030. Earlier in this window, 3 days had a run but no server figures.'
-		]);
-		// The two charts that mark a setup change read the same days. With the score record not packed,
-		// and no run record naming what ran, they cannot show a change on any day with a run, 10 Jun too.
-		const ran = listRunDays(machineCounters(hosts, articleDays.map(article), plan(), LIMITS), articleDays);
-		expect(describeMissingMarkers({ read: { state: 'not-packed' }, ran, identified: [], open: OPEN })).toBe(
-			'This chart cannot show whether the setup changed on 9 Jun to 11 Jun and 13 Jun 2030, because the score record has not been packed yet. That is a step not yet run. This chart shows every change on the other days.'
-		);
-	});
-});
-
-test.describe('the counterfactual cost, once it has a shape', () => {
+test.describe('the native daily counterfactual cost', () => {
 	const RATE = { currency: 'USD', inputPerMillion: 0.2, outputPerMillion: 0.6 };
-	const SIZE = { heightPx: CHART_HEIGHT };
 
 	function work(date: string, input: number, output: number, items = 1): RunWork {
 		return {
@@ -1439,17 +889,9 @@ test.describe('the counterfactual cost, once it has a shape', () => {
 		// The oracle of this panel. Two builder calls could hand a reader a line
 		// and a stack that disagree, with nothing on screen saying which to
 		// believe - which is the whole reason the no-re-shaping rule exists.
-		const shapes = costOverDays(RUNS, RATE, SIZE);
+		const shapes = costOverDays(RUNS, RATE);
 		const bars = shapes.days.reduce((carry, day) => carry + day.read + day.written, 0);
 		expect(shapes.runningTotal).toBeCloseTo(bars, 12);
-
-		// And the same figure the four numbers above the chart print, which is the
-		// second way the two could have drifted.
-		const totals = RUNS.reduce(
-			(carry, run) => ({ input: carry.input + run.input, output: carry.output + run.output }),
-			{ input: 0, output: 0 }
-		);
-		expect(shapes.runningTotal).toBeCloseTo(costOf(totals, RATE), 12);
 
 		// Recomputed by hand rather than from the module: 3.5 million prompt tokens
 		// at 0.20 is 0.70, and 0.7 million written at 0.60 is 0.42.
@@ -1457,13 +899,17 @@ test.describe('the counterfactual cost, once it has a shape', () => {
 	});
 
 	test('the line is the bars added up in order, point by point', () => {
-		const shapes = costOverDays(RUNS, RATE, SIZE);
-		let carry = 0;
-		for (const day of shapes.days) {
-			carry += day.read + day.written;
-			expect(day.running).toBeCloseTo(carry, 12);
-			expect(day.total).toBeCloseTo(day.read + day.written, 12);
-		}
+		const shapes = costOverDays(RUNS, RATE);
+		const expected = [
+			[0.2, 0.12, 0.32, 0.32],
+			[0.4, 0.24, 0.64, 0.96],
+			[0.1, 0.06, 0.16, 1.12]
+		];
+		shapes.days.forEach((day, at) => {
+			for (const [column, value] of [day.read, day.written, day.total, day.running].entries()) {
+				expect(value).toBeCloseTo(expected[at][column], 12);
+			}
+		});
 		// A running total never falls, because a day cannot cost less than nothing.
 		const climbs = shapes.days.map((day) => day.running);
 		expect(climbs).toEqual([...climbs].sort((left, right) => left - right));
@@ -1475,8 +921,7 @@ test.describe('the counterfactual cost, once it has a shape', () => {
 				work('2026-09-01', 1_000_000, 200_000, 4),
 				{ ...work('2026-09-01', 500_000, 100_000, 2), runId: '2026-09-01-2' }
 			],
-			RATE,
-			SIZE
+			RATE
 		);
 		expect(shapes.days).toHaveLength(1);
 		expect(shapes.days[0].items).toBe(6);
@@ -1484,113 +929,26 @@ test.describe('the counterfactual cost, once it has a shape', () => {
 		expect(shapes.days[0].written).toBeCloseTo(0.18, 12);
 	});
 
-	test('reading is the bottom band and writing the top, in the drawing and in the key', () => {
-		const shapes = costOverDays(RUNS, RATE, SIZE);
-		const drawn = costChart(shapes, 'daily', RATE.currency).option;
-		// A stack draws its first series at the bottom. Read below, write above,
-		// on every stacked chart on this console.
-		expect((drawn.series as { name: string; stack?: string }[]).map((one) => one.name)).toEqual([
-			'Reading the prompts',
-			'Writing the answers'
-		]);
-		expect((drawn.series as { stack?: string }[]).every((one) => one.stack === 'cost')).toBe(true);
-		// The strip is the key, so it carries the same two in the same order.
-		expect(costColumns(shapes, 'daily', RATE.currency).series.map((one) => one.label)).toEqual([
-			'Reading the prompts',
-			'Writing the answers'
-		]);
-	});
-
-	test('the axis names the counterfactual, never the currency on its own', () => {
-		// A currency code alone on an axis is the shape a bill takes. The word is
-		// on the label a reader meets before any of the numbers, so it travels
-		// with the drawing rather than sitting in a sentence near it.
-		const shapes = costOverDays(RUNS, RATE, SIZE);
-		for (const shape of ['daily', 'running'] as const) {
-			const name = (costChart(shapes, shape, RATE.currency).option.yAxis as { name: string })
-				.name;
-			expect(name).toContain('Counterfactual cost');
-			expect(name).toContain(RATE.currency);
-			expect(name).not.toMatch(/[$\u00a3\u20ac]/);
-			// And again for a reader who gets the description rather than the axis.
-			const spoken = costLabel(shape, 30);
-			expect(spoken).toContain('counterfactual cost');
-			expect(spoken).toContain('never an amount owed');
-		}
-		expect(costChart(shapes, 'running', RATE.currency).option.yAxis).toHaveProperty(
-			'name',
-			`Counterfactual cost so far, ${RATE.currency}`
-		);
-		// Two named states a reader can see both of, and the default is one of them.
-		expect(COST_SHAPES.map((one) => one.value)).toContain(DEFAULT_COST_SHAPE);
-	});
-
-	test('the running shape is one line over the same days the bars drew', () => {
-		const shapes = costOverDays(RUNS, RATE, SIZE);
-		const line = costChart(shapes, 'running', RATE.currency).option;
-		const series = line.series as { type: string; data: number[] }[];
-		expect(series).toHaveLength(1);
-		expect(series[0].type).toBe('line');
-		expect(series[0].data.at(-1)).toBeCloseTo(shapes.runningTotal, 12);
-		// Same categories in both shapes, so the switch moves the reading and not
-		// the days it is taken over.
-		const bars = costChart(shapes, 'daily', RATE.currency).option;
-		expect((line.xAxis as { data: string[] }).data).toEqual(
-			(bars.xAxis as { data: string[] }).data
-		);
-	});
-
-	test('a band under a pixel is printed rather than drawn as a band', () => {
-		// Measured against the tallest column, because that is what sets the axis.
-		// The committed rate leaves the writing half above a quarter of every day,
-		// so this branch is reached by an operator who prices writing at almost
-		// nothing - which the rate control allows.
-		const thin = costOverDays(RUNS, { ...RATE, outputPerMillion: 0.000_01 }, SIZE);
-		expect(thin.splitTooThin).toBe(true);
-		const whole = costChart(thin, 'daily', RATE.currency).option;
-		expect((whole.series as unknown[]).length).toBe(1);
-		expect((whole.series as { name: string }[])[0].name).toBe('Counterfactual, that day');
-		// The split does not vanish with the band: it is a measured figure the
-		// panel prints, and the number is on the view for the page to print it.
-		const plot = CHART_HEIGHT - 30 - 26;
-		expect(thin.thinnestShare ?? 0).toBeGreaterThan(0);
-		expect((thin.thinnestShare ?? 0) * plot).toBeLessThan(1);
-
-		// At the committed rate both halves are bands, and the measurement says so.
-		const drawn = costOverDays(RUNS, RATE, SIZE);
-		expect(drawn.splitTooThin).toBe(false);
-		expect((drawn.thinnestShare ?? 0) * plot).toBeGreaterThan(1);
-	});
-
 	test('no day is an absence, not an empty plot', () => {
-		const nothing = costOverDays([], RATE, SIZE);
+		const nothing = costOverDays([], RATE);
 		expect(nothing.days).toEqual([]);
 		expect(nothing.runningTotal).toBe(0);
-		expect(nothing.thinnestShare).toBeNull();
-		expect(costChart(nothing, 'daily', RATE.currency).empty).toBe(true);
-		expect(costChart(nothing, 'running', RATE.currency).empty).toBe(true);
 		// A run with no date cannot be laid on a time axis and is not a day.
-		const undated = costOverDays([work('', 1_000, 200)], RATE, SIZE);
+		const undated = costOverDays([work('', 1_000, 200)], RATE);
 		expect(undated.days).toEqual([]);
 	});
 
-	test('the shape the panel opens on is named once, and both readers take it from there', () => {
-		// The server draws this shape and the page checks its radio at it. Two
-		// literals would eventually be two shapes.
-		expect(['daily', 'running']).toContain(DEFAULT_COST_SHAPE);
-		expect(DEFAULT_COST_SHAPE).toBe('daily');
+	test('changing either operator-owned price recomputes the same dated cohort', () => {
+		const shapes = costOverDays(RUNS, { ...RATE, inputPerMillion: 0.4, outputPerMillion: 0.3 });
+		expect(shapes.days.map((day) => [day.date, day.items])).toEqual([
+			['2026-09-01', 4], ['2026-09-02', 8], ['2026-09-03', 2]
+		]);
+		expect(shapes.runningTotal).toBeCloseTo(1.61, 12);
 	});
 });
 
-test.describe('the committed ledger, read as the page reads it', () => {
-	const limits = machineLimits();
-
-	test('the ceilings come from config, and the runner memory from the platform', () => {
-		expect(limits.contextWindow).toBe(MODELS.summarizer.server['--ctx-size']);
-		expect(limits.jobTimeoutSeconds).toBe(runConfig().shard_timeout_minutes * 60);
-		// CLAUDE.md Guardrail #2: a stock ubuntu-latest runner has 16 GB.
-		expect(RUNNER_MEMORY_BYTES).toBe(16 * 1024 * 1024 * 1024);
-	});
+test.describe('the native counters, read as the page reads them', () => {
+	const limits = LIMITS;
 
 	test('a run the reader refuses is named, never quietly dropped', () => {
 		// Two machine records for one shard, each naming a different server, is a
@@ -1678,6 +1036,10 @@ test.describe('the Hardware browser redraws, from stated readings', () => {
 		const row = { version: '2026-10-10', date: '2026-09-01', run_id: '2026-09-01-1', job: 'work',
 			shard: 2, fingerprint: '0123456789abcdef', fingerprint_version: 2 };
 		expect(fingerprints([{ ...row, shard: null }, { ...row, job: null }])).toEqual([]);
+		for (const shard of ['', 'not-a-shard', -1, 0.5]) {
+			expect(fingerprints([{ ...row, shard }])).toEqual([]);
+		}
+		expect(fingerprints([{ ...row, shard: 0 }])[0].shard).toBe(0);
 		const held = fingerprints([row]);
 		expect(held[0]).toMatchObject({ job: 'work', shard: 2, fingerprint: row.fingerprint });
 		expect(held[0]).toMatchObject({ version: row.version, fingerprint_version: 2 });

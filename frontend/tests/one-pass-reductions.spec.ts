@@ -36,7 +36,7 @@ import { distribution, quantile, type Distribution } from '../src/lib/charts/ser
 import { frameConfig, summarizeConfig } from '../src/lib/server/config';
 import { failureSeries } from '../src/lib/charts/series';
 import { modelByDate, modelWork, runLengths, sourceCuts } from '../src/lib/server/model-work';
-import { machineCounters, type MachineLimits } from '../src/lib/server/machine-counters';
+import { machineCounters, type MachineLimits } from '../src/lib/console/machine/counters';
 import type { SummaryBand, TelemetryRow } from '../src/lib/charts/series';
 import {
 	BANDS,

@@ -1,140 +1,76 @@
-import { expect, test } from './support/door-page';
-import { RUNNER_MEMORY_BYTES } from '../src/lib/charts/machine';
+/** The live native memory readers, not the retired board's page attributes. */
+import { expect, test } from '@playwright/test';
+import { memoryHeld, memoryHeldWithin } from '../src/lib/console/machine/memory-held';
+import { textRows } from '../src/lib/console/machine/records';
+import { memoryHeldQuery } from '../src/lib/console/queries/machine';
+import { rangeFor, type RouteReach } from '../src/lib/console/queries/window';
+import type { Row } from '../src/lib/data/ledger';
 
-function measuredAttribute(cell: string | null | undefined): number | null {
-	const text = (cell ?? '').trim();
-	if (text === '') return null;
-	const value = Number(text);
-	return Number.isFinite(value) ? value : null;
+const GIB = 2 ** 30;
+
+function row(cells: Row = {}): Row {
+	return {
+		date: '2030-06-15', item_id: 'tightest', os_mem_total_bytes: 16 * GIB,
+		os_mem_available_bytes: 2 * GIB, llama_rss_bytes: 4 * GIB, python_rss_bytes: GIB,
+		...cells
+	};
 }
 
-test.describe('the memory panel puts the item grain on the page', () => {
-	test('the page names one tightest item, and the lead matches that item', async ({
-		page
-	}) => {
-		await page.goto('/console/machine/');
-		const board = page.locator('[data-memory-board]');
-		await expect(board).toBeVisible();
-
-		await expect(board).toHaveAttribute('data-panel-question', 'what is broken');
-		const runId = await board.getAttribute('data-memory-board');
-		expect(runId, 'the panel drew no run').not.toBe('empty');
-		const floor = measuredAttribute(await board.getAttribute('data-memory-floor-low'));
-		const ceiling = measuredAttribute(await board.getAttribute('data-memory-ceiling'));
-		expect(floor, 'the panel names no lead floor').not.toBeNull();
-		expect(ceiling, 'the panel names no memory ceiling').not.toBeNull();
-		expect(floor, 'the floor is outside the ceiling it is drawn against').toBeLessThanOrEqual(
-			ceiling ?? 0
-		);
-		const owner = await board.getAttribute('data-memory-floor-item');
-		expect(owner, 'the minimum reached the page with no item owning it').not.toBe('');
-
-		const tightest = board.locator('[data-memory-item-tightest="true"]');
-		await expect(tightest).toHaveCount(1);
-		expect(await tightest.getAttribute('data-memory-item')).toBe(owner);
-		expect(measuredAttribute(await tightest.getAttribute('data-memory-item-floor'))).toBe(floor);
-
-		const floors = (
-			await board
-				.locator('[data-memory-item]')
-				.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-memory-item-floor') ?? ''))
-		)
-			.filter((cell) => cell !== '')
-			.map(Number);
-		expect(floors.length, 'no item mark carries a kernel floor').toBeGreaterThan(0);
-		expect(floor, 'the lead floor is not the lowest floor the marks carry').toBe(Math.min(...floors));
+test.describe('the memory-held native snapshot', () => {
+	test('the newest-day query and its closed view use the common record end, not a later ledger day', () => {
+		const reach: RouteReach = { through: '2030-06-15', ledgers: {
+			'item-health': { state: 'ok', first: '2030-06-01', through: '2030-06-16', lastRows: null, fault: null }
+		} };
+		const range = rangeFor(memoryHeldQuery, 90, reach, [1, 7, 30, 90]);
+		expect(range).toEqual({ from: '2030-06-15', to: '2030-06-15', days: 1, asked: 1 });
+		const record = memoryHeld(textRows([
+			row({ date: '2030-06-14', item_id: 'older' }),
+			row(),
+			row({ date: '2030-06-16', item_id: 'later', os_mem_available_bytes: 0 })
+		]));
+		const view = memoryHeldWithin(record, '2030-06-15', '2030-06-15');
+		expect(view.days.map((day) => [day.date, day.itemId])).toEqual([['2030-06-15', 'tightest']]);
+		expect(view).toMatchObject({ twoShape: 1, fourShape: 0, empty: false, daysRead: 3, firstDate: '2030-06-14' });
 	});
 
-	test('the kernel gap sentence follows the skipped count and bounded dates', async ({
-		page
-	}) => {
-		await page.goto('/console/machine/');
-		const board = page.locator('[data-memory-board]');
-		const skipped = Number(await board.getAttribute('data-memory-kernel-skipped'));
-		const from = Number(await board.getAttribute('data-memory-kernel-from'));
-		const total = Number(await board.getAttribute('data-memory-items'));
-		expect(skipped + from, 'kernel coverage does not add to the items drawn').toBe(total);
-		const gap = board.locator('[data-memory-kernel-gap]');
-		if (skipped === 0) {
-			await expect(gap).toHaveCount(0);
-			return;
-		}
-		await expect(gap).toBeVisible();
-		await expect(gap).toContainText('no kernel reading');
-		for (const attribute of ['data-memory-kernel-begins', 'data-memory-read-from'] as const) {
-			const date = await board.getAttribute(attribute);
-			expect(date, `${attribute} is missing`).not.toBe('');
-			await expect(gap).toContainText(date ?? '');
-		}
+	test('every bound comes from one tightest moment, not maxima from other articles', () => {
+		const record = memoryHeld(textRows([
+			row({ item_id: 'loose', os_mem_available_bytes: 8 * GIB, llama_rss_bytes: 12 * GIB, python_rss_bytes: 3 * GIB }),
+			row({ item_id: 'z-tie', llama_rss_bytes: 9 * GIB }),
+			row({ item_id: 'a-tie' }),
+			row({ item_id: 'unknown', os_mem_total_bytes: null, os_mem_available_bytes: 0 })
+		]));
+		expect(record.days).toHaveLength(1);
+		const day = record.days[0];
+		expect(day.itemId).toBe('a-tie');
+		expect(day.totalBytes).toBe(16 * GIB);
+		expect(day.scaleBytes).toBe(16 * GIB);
+		expect(day.segments.map((segment) => [segment.key, segment.bytes]))
+			.toEqual([['free', 2 * GIB], ['held', 14 * GIB]]);
+		expect(day.brackets.map((bracket) => [bracket.key, bracket.bytes, bracket.pastHeld]))
+			.toEqual([['server', 4 * GIB, false], ['worker', GIB, false]]);
+		expect(day.overlapBytes).toBe(GIB);
+		expect(day.restBytes).toBeNull();
 	});
 
-	test('the page says the disputed high-water mark is not drawn', async ({ page }) => {
-		await page.goto('/console/machine/');
-		const board = page.locator('[data-memory-board]');
-		const drawnValues = await board.evaluate((node) =>
-			[...node.attributes]
-				.filter((one) => one.name.startsWith('data-memory-'))
-				.map((one) => one.name)
-		);
-		expect(drawnValues, 'the disputed maximum has a drawing attribute').not.toContain(
-			'data-memory-peak'
-		);
-		await expect(board.locator('[data-memory-not-drawn]')).toBeVisible();
-		await expect(board.locator('[data-memory-not-drawn]')).toContainText('not drawn here');
-	});
-
-	test('every item mark carries parseable figures, and absent cells stay empty', async ({ page }) => {
-		await page.goto('/console/machine/');
-		const board = page.locator('[data-memory-board]');
-
-		const marks = board.locator('[data-memory-item]');
-		const count = await marks.count();
-		expect(count, 'the panel drew no item marks').toBeGreaterThan(0);
-		for (let index = 0; index < count; index += 1) {
-			const mark = marks.nth(index);
-			const id = (await mark.getAttribute('data-memory-item')) ?? '';
-			expect(id, 'a memory mark has no item id').not.toBe('');
-			for (const attribute of [
-				'data-memory-item-server-end',
-				'data-memory-item-worker',
-				'data-memory-item-floor',
-				'data-memory-item-end',
-				'data-memory-item-load'
-			] as const) {
-				const drawn = await mark.getAttribute(attribute);
-				if ((drawn ?? '') === '') continue;
-				expect(Number.isFinite(Number(drawn)), `${id} ${attribute} is not a number`).toBe(true);
-			}
-		}
-	});
-
-	test('the brackets are labelled at most and drawn against the larger of themselves', async ({
-		page
-	}) => {
-		await page.goto('/console/machine/');
-		const board = page.locator('[data-memory-board]');
-
-		const server = measuredAttribute(await board.getAttribute('data-memory-server-end-high-water'));
-		const worker = measuredAttribute(await board.getAttribute('data-memory-worker-high-water'));
-		const scale = Number(await board.getAttribute('data-memory-bracket-scale'));
-		expect(server, 'the model server bracket has no figure').not.toBeNull();
-		expect(worker, 'the worker bracket has no figure').not.toBeNull();
-		expect(scale).toBe(Math.max(server!, worker!));
-		expect(scale).not.toBe(Number(await board.getAttribute('data-memory-ceiling')));
-		await expect(board.locator('[data-memory-figure="server-end"]')).toContainText('at most');
-		await expect(board.locator('[data-memory-figure="worker-end"]')).toContainText('at most');
-	});
-
-	test('the panel names its denominator and says what it cannot separate', async ({ page }) => {
-		await page.goto('/console/machine/');
-		const board = page.locator('[data-memory-board]');
-
-		const ceiling = Number(await board.getAttribute('data-memory-ceiling'));
-		expect(ceiling, 'the panel drew against no ceiling').toBeGreaterThan(0);
-		const measuredTotal = measuredAttribute(await board.getAttribute('data-memory-total-measured'));
-		expect(ceiling).toBe(measuredTotal ?? RUNNER_MEMORY_BYTES);
-
-		await expect(board.locator('[data-memory-cannot-separate]')).toBeAttached();
-		await expect(board.locator('[data-memory-denominator]')).toBeAttached();
+	test('anonymous readings close with their signed remainder, and missing totals never use runner memory', () => {
+		const day = memoryHeld(textRows([row({
+			os_mem_available_bytes: 8 * GIB, llama_rss_anon_bytes: 9 * GIB, python_rss_anon_bytes: GIB,
+			os_swap_total_bytes: 4 * GIB, os_swap_free_bytes: 4 * GIB
+		})])).days[0];
+		expect(day.shape).toBe('four');
+		expect(day.segments.map((segment) => [segment.key, segment.bytes]))
+			.toEqual([['free', 8 * GIB], ['server', 9 * GIB], ['worker', GIB], ['rest', -2 * GIB]]);
+		expect(day.restBytes).toBe(-2 * GIB);
+		expect(day.overBytes).toBe(2 * GIB);
+		expect(day.scaleBytes).toBe(18 * GIB);
+		expect(day.segments.reduce((sum, segment) => sum + segment.bytes, 0)).toBe(16 * GIB);
+		expect(day.swap).toMatchObject({ usedBytes: 0, totalBytes: 4 * GIB, none: true });
+		const absent = memoryHeld(textRows([
+			row({ os_mem_total_bytes: null }),
+			row({ date: '2030-06-16', os_mem_total_bytes: Infinity })
+		]));
+		expect(absent).toEqual({ days: [], firstDate: null, daysRead: 2 });
+		expect(memoryHeldWithin(absent, '2030-06-15', '2030-06-16').empty).toBe(true);
 	});
 });

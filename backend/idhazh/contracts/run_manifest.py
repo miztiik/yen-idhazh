@@ -135,11 +135,13 @@ class RunRecord(Model):
         default=None,
         ge=1,
         description=(
-            "Work shards this run planned, as the plan derived them before the matrix "
-            "fanned out. It is the denominator for `N shards reported nothing`, and it "
-            "has to come from the plan: a denominator counted off the same rows as the "
-            "numerator can never disagree with them, so the check would have no red "
-            "state at all. Null on a manifest written before it was recorded."
+            "Work shards this run dispatched: the count its plan decided and its matrix "
+            "fanned out on, an operator's dispatch count included. It is the denominator "
+            "for `N shards reported nothing`, and it has to come from the plan: a "
+            "denominator counted off the same rows as the numerator can never disagree "
+            "with them. Null when the plan recorded none, or on a manifest written before "
+            "the cell existed. A record written before 2026-10-12 holds the count assembly "
+            "recomputed from its plan, which a manual dispatch could exceed or undercut."
         ),
     )
 
@@ -323,6 +325,11 @@ class RunManifest(Contract):
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-12",
+            change="shards holds the count the plan decided and the matrix dispatched.",
+            why="A recount at assembly missed an operator's dispatch count.",
+        ),
+        ChangelogEntry(
             version="2026-10-10",
             change="Added chart_evidence totals for published numeric figures.",
             why="Weighted rates need exact totals and must preserve historical unknown evidence.",
@@ -336,11 +343,6 @@ class RunManifest(Contract):
             version="2026-09-22T12:00",
             change="Runs may be numbered with gaps, and two runs may not share an ordinal.",
             why="Runs land in parallel, so no writer can know what the next number is.",
-        ),
-        ChangelogEntry(
-            version="2026-09-22",
-            change="Recorded sampling and runtime flags become mappings; an old run reads.",
-            why="Joined, a rename moved the whole record and the console called it a change.",
         ),
         ChangelogEntry(
             version="2026-09-20",

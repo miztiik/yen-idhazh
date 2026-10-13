@@ -112,10 +112,8 @@
     "max_window_days": 366,
     "min_attempts_for_rate": 5,
     "min_window_days": 1,
-    "pan_days": 7,
     "source_rows": 10,
-    "today_anchor": "right",
-    "zoom_factor": 1.5
+    "today_anchor": "right"
   },
   "drift": {
     "extractiveness_rise": 0.15,

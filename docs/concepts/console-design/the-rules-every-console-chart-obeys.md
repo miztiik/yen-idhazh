@@ -1,6 +1,6 @@
 # The rules every console chart obeys
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-10-12
 
 Thirteen rules settled once so that no panel argues them again. Twelve are chart
 craft - what the drawing may do. The thirteenth is the question the panel
@@ -35,10 +35,8 @@ which shape a panel reaches for is
     than from the limit it is measured against.
   - **A share or a cumulative percentage runs 0 to 100**, because a curve that
     stops short of its own top reads as a curve that has not finished. Shipped in
-    `TimeHistogram.svelte`. `FailurePanels.svelte` fixes the same axis for a
-    second reason worth keeping: a rate over a known range is compared across
-    stages and across days, and scaling it to the window's own maximum drew a 12
-    percent rate and a 90 percent one at the same height.
+    `TimeHistogram.svelte`. Native failure mix draws stage counts, not rate
+    lines. Its failed-row share stays in words with its recorded-row divisor.
   - **A ratio against a baseline is symmetric about that baseline and carries a
     minimum width**, or a two percent change fills the plot and reads as a rout.
     Shipped as `swapScale` in `series.ts`: no change is 100 percent and that
@@ -71,13 +69,8 @@ which shape a panel reaches for is
 - **No piecewise or non-uniform value axis.** Where a spread genuinely defeats a
   linear domain, use a log scale and label it as one. Equal pixel steps standing
   for unequal value steps is a chart that misreports by construction; a log axis
-  misreports nothing, it just has to say so. **What the reader loses by not
-  having a 0/10/50/100 axis on the shard board:** at a 6x spread across machines
-  the low bars compress, and the detail at the low end compresses with them.
-  That compression is the true picture of a 6x spread and is the thing worth
-  seeing. Measured 2026-09-17: on a linear domain of 0 to 75 tokens a second, a
-  12 tok/s bar still draws at 16 percent of the track, which is readable - so
-  the refusal costs nothing the panel needed.
+  misreports nothing, it just has to say so. A wide spread on a linear domain
+  compresses the low bars honestly; a piecewise axis would hide that comparison.
 - **Two series share one axis when the larger is under 20x the smaller; past that
   the smaller takes its own row on a shared x.** Measure before choosing. At 20:1
   the smaller draws under 5 percent of the plot and reads as zero. The threshold
@@ -188,8 +181,8 @@ plot actually has and dropped in whole steps until no two touch. So the knob is 
 force one on. Measured 2026-08-31 on the built console at 390px, before this
 rule, four axes drew their dates 13.6, 7.4, 26.1 and 1.9px on top of each other.
 
-The width comes from the string rather than from the element, because the axis is
-decided on the server where there is no text engine to ask. `LABEL_ADVANCE_EM`
+The width comes from the string rather than from the element, so the axis can be
+decided before browser text measurement is available. `LABEL_ADVANCE_EM`
 is 0.58, ten percent over the widest character measured at `font-size="10"` in
 Chromium on 2026-08-31 - `20 Aug 2026` is 55.83px over 11 characters. It is
 deliberately over: an estimate under the truth lets two labels touch, and an
@@ -207,10 +200,8 @@ outside. Two dates near the middle must not lose one label merely because both
 were pointed into the gap between them. A lone date stays centred. `tickAnchor`
 still supplies the inward rule for value axes whose endpoints are the edges.
 
-Two console axes are drawn by the engine, and the engine owns where its labels go
-- `hideOverlap` is its own measured rule. What they take from here is the date
-grammar: `2026-08-25` is how the ledger spells a day and it is not how a page says
-one.
+Native date charts use the same date grammar: `2026-08-25` is how the ledger
+spells a day and it is not how a page says one.
 
 At wide, tablet and phone widths, no two labels on one day axis may overlap, and
 none may be drawn outside the `svg` that would clip it.
@@ -260,9 +251,10 @@ column - four series or one - and the rules are not negotiable per chart:
 - **Reachable by keyboard.** Left and Right step, Home and End jump, Escape
  returns to rest. **A tooltip is never the only place a value appears**: a
  tooltip needs a hover, and a hover is not a thing a thumb can do.
-- **It opens on a resting column and is never blank.** The prerendered document
- carries that column's numbers in words, so a reader with no script still gets
- one column read out to him, and the panel never changes size as it fills.
+- **It opens on a resting column and is never blank.** When records are supplied
+ at build time, the prerendered document carries that column's numbers in words.
+ Browser-query panels use the same resting-column rule when records arrive.
+ The panel keeps the strip's room as it fills.
 - **A strip of one column names no resting column and no keys.** At the 1-day
  window, and wherever one column is all a chart drew, the heading is the column
  alone, `15 Jun 2030` and never `15 Jun 2030, the newest day`, and the hint line
@@ -272,55 +264,37 @@ column - four series or one - and the rules are not negotiable per chart:
  from screen readers, so no panel changes height with the window. Reader chose
  the words and Jony the room, on 2026-10-07.
 
-An engine-drawn chart takes the same strip through
-[../../../frontend/src/lib/charts/Chart.svelte](../../../frontend/src/lib/charts/Chart.svelte). The action goes on
-the wrapping element and never on the SVG, because the engine swaps that SVG out
-on hydration; the column centres come from `bandShares`, which recomputes them
-from the measured width because the engine keeps its grid insets in pixels.
+Native components use the geometry they draw for selection too.
+[../../../frontend/src/lib/charts/d3/DateSeries.svelte](../../../frontend/src/lib/charts/d3/DateSeries.svelte)
+binds `pointerReadout` and `columnPick` to its SVG. `readoutMarks` in
+`readout.ts` takes the geometry's column centres. Container measurement stays in
+`observeWidth` in
+[../../../frontend/src/lib/charts/frame.ts](../../../frontend/src/lib/charts/frame.ts),
+so marks and hit positions use the same width.
 
 ## A chart with no column to hover says so, and no chart draws a key twice
 
 The strip **is** the legend. It prints each series in the colour that series is
 drawn in, at the column the reader is on, so a standing key beside it would draw
 the same pair a second time - and one fact drawn twice is how two of them drift.
-No chart on the console draws a key: the engine's `legend` component is not even
-registered in
-[../../../frontend/src/lib/charts/core.ts](../../../frontend/src/lib/charts/core.ts).
+The native components use
+[../../../frontend/src/lib/components/ChartReadout.svelte](../../../frontend/src/lib/components/ChartReadout.svelte)
+for that key and draw no second legend.
 
-**Asked on 2026-09-25 for a horizontal legend, the answer was the strip and
-shorter labels in it.** A series name is written short - "Half scored above", not
-"Half of them scored above this article's own faithfulness score" - because a
-label long enough to wrap turns one strip row into two. Registering the engine's
-key component instead would cost a lazy-chunk re-measurement against a page
-weight the console is already close to, and the strip already prints every series
-in its own colour and rests on the newest column without a hover, so a reader
-with no pointer still sees the key.
+**Write short series names in the strip.** Use "Half scored above", not
+"Half of them scored above this article's own faithfulness score". The strip
+already prints each series in its own colour and rests on a column without a
+hover, so a reader with no pointer still sees the key.
 
-**Short labels were not the whole of it.** Measured 2026-09-25: at a 1152 px
-window all three faithfulness rows fit on one line each, and at 394 px none of
-them did - the strip was capped at a third of the plot, which is 119 px there,
-so a reader on a narrow window got a 174 px block of wrapped words beside an
-empty half of the plot.
-
-**The fix was the strip's, not any one chart's, and it landed on 2026-09-28.**
-The entries lie along one line across the whole plot and wrap only when the next
-one does not fit, and `chart.readout_max_share` went from 0.33 to 1. The layout
-and the cap were one change: entries set not to wrap inside a 119 px strip
-overflow it instead. Measured the same day on the real build, on all five
-console routes in both themes, 32 strips a width: at 360 px 25 of them take more
-than one line, at 390 px 22 do, at 768 px 10 do, and at 1440 px 3 do - the run
-health, the run timeline and the time split, whose eight or nine entries need
-1,350 to 2,354 px on one line. No entry anywhere started a new line where it
-would have fit on the line before, and no page scrolled sideways. **What a
-narrow window still costs**: those long strips read as a short column of pairs
-on a phone rather than one line, and every number in them is still present,
-prerendered and keyboard-reachable. The two guards that pinned the cap
-moved with it on purpose, not as a side effect:
+**The strip uses the configured width and wraps only when the next entry does
+not fit.** A narrow window can turn a long strip into several lines, but it must
+not lose a figure or push the page sideways. Private build-time panels carry
+their supplied values in the document; native-query panels fill the same strip
+when their records arrive. The shared deterministic readout checks are in
 [../../../frontend/tests/console-chrome.spec.ts](../../../frontend/tests/console-chrome.spec.ts)
-now holds each strip inside the configured share and refuses an entry that
-breaks early, and
+and
 [../../../frontend/tests/console-timings.spec.ts](../../../frontend/tests/console-timings.spec.ts)
-holds that entries share a line at desktop width. Susan, 2026-09-28.
+without requiring a panel, width or theme browser matrix.
 
 **A row with no swatch is a row with nothing on the plot.** "Summaries checked"
 is the sample size, not a series, so it passes no colour, exactly as the

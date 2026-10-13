@@ -1,5 +1,4 @@
-/** Shared opt-in chart arguments work with the real client components and keyboard readouts. */
-/** Opted-in contracts and unchanged defaults are checked on their actual components. */
+/** Explicit chart contracts are checked on the real client components and keyboard readouts. */
 import { test, expect } from './support/browser';
 import { clientCode, drawClient } from './support/console-window/client-render';
 import { failureRuleRows } from '../src/lib/console/failure-rules';
@@ -16,17 +15,21 @@ test.beforeAll(async () => {
 	]);
 });
 
-test('an opted-in card names its rule while an unchanged card makes no declaration', async ({ page }) => {
+test('every card names its rule and a caller may name its range', async ({ page }) => {
+	const rule = { changes: [], note: 'No settings changed in this window.' };
 	await drawClient(page, code, 'KpiCard', {
-		label: 'Recorded articles', value: '8', rule: { declined: 'This count is not a dated settings comparison.' }
+		label: 'Recorded articles', value: '8', rule
 	});
 	await expect(page.locator('[data-model-rule]')).toHaveCount(1);
 	await expect(page.locator('[data-model-rule]')).toHaveAttribute('data-model-rule-name', 'kpi-Recorded articles');
-	await drawClient(page, code, 'KpiCard', { label: 'Unchanged card', value: '8' });
-	await expect(page.locator('[data-model-rule]')).toHaveCount(0);
+	await drawClient(page, code, 'KpiCard', {
+		label: 'Unchanged card', value: '8', rule
+	});
+	await expect(page.locator('[data-model-rule]')).toHaveAttribute('data-model-rule', 'yes');
+	await expect(page.locator('[data-model-rule-empty]')).toHaveText('No settings changed in this window.');
 	await drawClient(page, code, 'KpiCard', {
 		label: 'Recorded articles', value: '8',
-		rule: { declined: 'This count is not a dated settings comparison.' },
+		rule,
 		ruleName: 'owner-count', ruleRange: { from: '2030-06-01', to: '2030-06-02' }
 	});
 	await expect(page.locator('[data-model-rule]')).toHaveAttribute('data-model-rule-name', 'owner-count');
@@ -44,7 +47,7 @@ test('the stage choices change only the identity-free rule ranking', async ({ pa
 			{ date: '2026-09-02', stage: 'extract', outcome: 'failed', code: 'blank', failed_rule: 'Empty body' }
 		]),
 		window: { start: '2026-09-01', end: '2026-09-02' }, stages: { options: ['fetch', 'extract'], chosen: 'fetch' },
-		selectedCode: null, max: 20, sourceMax: 20, readoutMaxShare: 1
+		max: 20, readoutMaxShare: 1
 	});
 	await expect(page.locator('[data-failed-rule-divisor]')).toContainText('2 recorded failures at fetch');
 	await expect(page.locator('[data-failed-rule-unknown]')).toContainText('1 of 2');
