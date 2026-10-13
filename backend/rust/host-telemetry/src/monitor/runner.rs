@@ -189,31 +189,23 @@ impl SampleSchedule {
             match job_samples::sample(frame, server.as_ref(), true) {
                 Ok(Some((record, rows))) => {
                     if let Some(artifacts) = artifacts {
+                        // Plain files deliver these records without duplicate exchange history.
                         artifacts.write_sample(&record, &rows)?;
-                    }
-                    let sample = session.observation(
-                        EventKind::JobSample,
-                        EventBody::Sample(JobSampleBody { record }),
-                        &frame.captured_at,
-                        now_ms,
-                    )?;
-                    files.publish(&sample, "results")?;
-                    let rollcall = session.observation(
-                        EventKind::ProcessRollcall,
-                        EventBody::Rollcall(ProcessRollcallBody { records: rows }),
-                        &frame.captured_at,
-                        now_ms,
-                    )?;
-                    files.publish(&rollcall, "results")?;
-                    if artifacts.is_some() {
-                        // The flushed legacy files consumed these observation records.
-                        for event in [&sample, &rollcall] {
-                            files.consume(event)?;
-                            session
-                                .book
-                                .consume(event.event_id)
-                                .map_err(|e| e.to_string())?;
-                        }
+                    } else {
+                        let sample = session.observation(
+                            EventKind::JobSample,
+                            EventBody::Sample(JobSampleBody { record }),
+                            &frame.captured_at,
+                            now_ms,
+                        )?;
+                        files.publish(&sample, "results")?;
+                        let rollcall = session.observation(
+                            EventKind::ProcessRollcall,
+                            EventBody::Rollcall(ProcessRollcallBody { records: rows }),
+                            &frame.captured_at,
+                            now_ms,
+                        )?;
+                        files.publish(&rollcall, "results")?;
                     }
                 }
                 Err(error) => {
@@ -1060,6 +1052,15 @@ mod tests {
                 },
             )
         }
+        fn consume_samples(&mut self) {
+            for id in self.files.ids("results").unwrap() {
+                let event = self.files.read(id, "results").unwrap();
+                if matches!(event.kind, EventKind::JobSample | EventKind::ProcessRollcall) {
+                    self.files.consume(&event).unwrap();
+                    self.session.book.consume(id).unwrap();
+                }
+            }
+        }
         fn open_window(&mut self) -> Vec<HostEvent> {
             let worker = &self.session.manifest.workers[0];
             let mut register = self.ready.clone();
@@ -1139,8 +1140,127 @@ mod tests {
     }
 
     #[test]
+    fn artifact_samples_cover_six_hours_without_spending_exchange_capacity() {
+        for server_enabled in [false, true] {
+            let name = if server_enabled {
+                "six-hour-server"
+            } else {
+                "six-hour-serverless"
+            };
+            let mut fixture = Fixture::configured(name, true, None, server_enabled);
+            fixture.session.manifest.controls.job_sample_interval_seconds = 15.0;
+            fixture.schedule.job_at = 15_000;
+            let commands = fixture.open_window();
+            for command in &commands {
+                fixture.files.consume(command).unwrap();
+                fixture.session.book.consume(command.event_id).unwrap();
+            }
+            let events = fixture.session.book.total_events;
+            let published = fixture.files.total_events;
+            let start = chrono::DateTime::parse_from_rfc3339(&fixture.frame.captured_at).unwrap();
+            for second in 1..=21_600 {
+                fixture.frame.captured_at = (start + chrono::Duration::seconds(second))
+                    .to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+                fixture.collect(second as u64 * 1000).unwrap();
+            }
+            assert_eq!(fixture.session.book.total_events, events);
+            assert_eq!(fixture.files.total_events, published);
+            let mut bytes = 0;
+            for (name, expected) in [
+                (LEGACY_JOB_SAMPLE_FILENAME, 1441),
+                (LEGACY_PROCESS_ROLLCALL_FILENAME, 2882),
+                (
+                    job_samples::RUNTIME_STATUS_FILENAME,
+                    if server_enabled { 21_601 } else { 0 },
+                ),
+            ] {
+                let raw = std::fs::read(fixture.root.join("artifacts").join(name)).unwrap();
+                bytes += raw.len();
+                assert_eq!(raw.iter().filter(|byte| **byte == b'\n').count(), expected);
+            }
+            assert!(bytes <= fixture.session.manifest.limits.max_session_bytes as usize);
+            let mut end = commands[2].clone();
+            end.kind = EventKind::WindowEnd;
+            end.event_id = uuid::Uuid::from_u128(2002);
+            end.sequence = 3;
+            end.emitted_at = fixture.frame.captured_at.clone();
+            let replies = fixture
+                .session
+                .handle(&end, &fixture.frame, 21_600_000)
+                .unwrap();
+            assert_eq!(replies.last().unwrap().kind, EventKind::WindowResult);
+            let mut stop = fixture.ready.clone();
+            stop.kind = EventKind::MonitorStop;
+            stop.event_id = uuid::Uuid::from_u128(2003);
+            stop.emitter_id = fixture.session.manifest.operator_emitter_id.clone();
+            stop.sequence = 1;
+            stop.emitted_at = fixture.frame.captured_at.clone();
+            stop.body = EventBody::Stop(StopBody {
+                reason: StopReason::Completed,
+            });
+            let replies = fixture
+                .session
+                .handle(&stop, &fixture.frame, 21_600_000)
+                .unwrap();
+            assert_eq!(replies.last().unwrap().reply_to, Some(stop.event_id));
+            assert_eq!(replies.last().unwrap().kind, EventKind::MonitorStopped);
+            assert!(fixture.session.stopped);
+        }
+    }
+
+    #[test]
+    fn artifact_byte_limit_refuses_appends_before_changing_any_file() {
+        let fixture = Fixture::new("artifact-byte-limit", true);
+        let mut limits = fixture.session.manifest.limits.clone();
+        limits.max_session_bytes = limits.max_result_bytes;
+        limits.validate().unwrap();
+        let mut artifacts = Artifacts::create(&fixture.root, "bounded-artifacts", &limits, true)
+            .unwrap()
+            .unwrap();
+        let mut status = BTreeMap::from([("VmRSS".to_owned(), String::new())]);
+        let overhead = crate::canonical_json::row_line(&serde_json::to_value(&status).unwrap())
+            .unwrap()
+            .len();
+        status.insert(
+            "VmRSS".to_owned(),
+            "x".repeat(limits.max_session_bytes as usize - overhead),
+        );
+        artifacts.write_runtime(&status).unwrap();
+        let (record, rows) = job_samples::sample(
+            &fixture.frame,
+            fixture.session.manifest.workers[0].server.as_ref(),
+            true,
+        )
+        .unwrap()
+        .unwrap();
+        assert!(
+            artifacts
+                .write_sample(&record, &rows)
+                .unwrap_err()
+                .contains("legacy artifact byte capacity exhausted")
+        );
+        assert!(artifacts.write_runtime(&status).is_err());
+        assert!(artifacts.write_peak(&fixture.frame.cgroup_peak).is_err());
+        let root = fixture.root.join("bounded-artifacts");
+        assert_eq!(
+            std::fs::metadata(root.join(job_samples::RUNTIME_STATUS_FILENAME))
+                .unwrap()
+                .len(),
+            limits.max_session_bytes as u64
+        );
+        for name in [
+            LEGACY_JOB_SAMPLE_FILENAME,
+            LEGACY_PROCESS_ROLLCALL_FILENAME,
+        ] {
+            assert_eq!(std::fs::metadata(root.join(name)).unwrap().len(), 0);
+        }
+        assert!(!root.join(job_samples::RUNTIME_PEAK_FILENAME).exists());
+    }
+
+    #[test]
     fn retry_boundary_retires_consumed_samples_before_next_pair() {
-        let mut fixture = Fixture::new("boundary", true);
+        let mut fixture = Fixture::new("boundary", false);
+        fixture.consume_samples();
         let samples = fixture.files.ids("consumed").unwrap();
         assert_eq!(samples.len(), 2);
         let events = fixture.open_window();
@@ -1214,7 +1334,8 @@ mod tests {
 
     #[test]
     fn invalid_consumed_bytes_block_retirement_and_admission() {
-        let mut fixture = Fixture::new("invalid", true);
+        let mut fixture = Fixture::new("invalid", false);
+        fixture.consume_samples();
         let id = fixture.files.ids("consumed").unwrap()[0];
         let mut altered = fixture.files.read(id, "results").unwrap();
         altered.emitted_at = "2026-10-10T12:00:01Z".to_owned();
