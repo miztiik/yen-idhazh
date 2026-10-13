@@ -32,7 +32,7 @@ operator console, not on the news-reading pages.
 | Producer | [`backend/rust/host-telemetry/src/invocation.rs`](../../backend/rust/host-telemetry/src/invocation.rs), through the workflow-owned lifecycle and [`job_machine.record`](../../backend/idhazh/telemetry/job_machine.py). Rust writes raw host files; Python verifies, reads, compacts and publishes them. |
 | Read by | `/console/machine/`, through the browser questions in `frontend/src/lib/console/queries/machine.ts` and native helpers in `frontend/src/lib/console/machine/records.ts` |
 | Key | `date`, `run_id`, `job`, `shard` - one row a job |
-| Switch | `observability.host_fingerprint` for the host row; `observability.memory_profiling_enabled` independently controls OS memory/fault collection |
+| Switch | `observability.host_telemetry_enabled` for the whole instrument; `host_fingerprint` for host-row writes; `memory_profiling_enabled` for memory/page-fault observations only |
 | Committed | **from 2026-09-16.** Each job's own commit step stages its ledger; every row taken before that date was deleted with its runner |
 | Shown on news-reading pages | **no.** Operator surface only |
 
@@ -44,6 +44,25 @@ bench and encoder probes, gardener task shards, and council result saving use th
 path. Unmeasured jobs remain uninstrumented. An explicit `host_telemetry: legacy`
 choice is a temporary rollback until migration cleanup, not an automatic fallback.
 Historical conversion remains a separate Python maintenance operation.
+
+In content refresh, `plan` builds the Rust monitor once. All work shards and
+assemble reuse that run's verified binary; ordinary Python/document changes do
+not change its native source identity.
+
+**Whole telemetry off is separate from memory off.** Measured workflow dispatches
+accept `host_telemetry: off`, or shared `config/idhazh.json` can set
+`observability.host_telemetry_enabled` to `false`. The master switch takes precedence
+over Rust/legacy selection and memory on: no native build/download/monitor, no
+Python host readings, and no raw host or host-memory artifacts. Actual work,
+item-health recording and waiting logs continue; unavailable host cells are null.
+The existing Python `legacy` option remains unchanged.
+
+The `memory_profiling` dropdown alone accepts `inherit`, `on` and `off`. Inherit
+reads `observability.memory_profiling_enabled` from the job's selected `idhazh.json`
+(normally `config/idhazh.json`, currently true). On/off override only RAM/swap and
+major page-fault measurements for that invocation, not CPU/load collection.
+A major page fault is a memory page retrieved from storage, not an application
+error or crash. Historical records are neither erased nor rewritten by either switch.
 
 **Every job of `digest.yml` writes a row, from 2026-09-17.** `plan`, `work` and
 `assemble` each draw their own runner, so a run that measured one of them could

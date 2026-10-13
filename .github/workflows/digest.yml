@@ -46,12 +46,13 @@ on:
           - 'on'
           - 'off'
       host_telemetry:
-        description: 'Rust is the default host collector; legacy is temporary rollback until migration cleanup'
+        description: 'Rust host collector, legacy rollback, or off for all host telemetry'
         type: choice
         default: rust
         options:
           - rust
           - legacy
+          - 'off'
 
 permissions:
   contents: write
@@ -77,6 +78,8 @@ jobs:
       shard_timeout_minutes: ${{ steps.bounds.outputs.shard_timeout_minutes }}
       faithfulness: ${{ steps.decide.outputs.faithfulness }}
       llama_cpp_build: ${{ steps.runtime.outputs.llama_cpp_build }}
+      host_telemetry: ${{ steps.host_telemetry.outputs.mode }}
+      host_monitor_artifact: ${{ steps.host_monitor.outputs.artifact_name }}
     steps:
       # Start before checkout so elapsed time includes setup.
       - name: Stamp the plan clock
@@ -94,6 +97,15 @@ jobs:
 
       - name: Install
         run: pip install -e .
+      - name: Resolve host telemetry before native setup
+        id: host_telemetry
+        env:
+          REQUESTED: ${{ inputs.host_telemetry || 'rust' }}
+        run: |
+          set -euo pipefail
+          MODE=$(python backend/utilities/host_telemetry_control.py "$REQUESTED" --config-root config)
+          echo "IDHAZH_HOST_TELEMETRY_MODE=$MODE" >> "$GITHUB_ENV"
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
       - name: Select the pinned host toolchain
         if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
         working-directory: backend/rust/host-telemetry
@@ -104,8 +116,11 @@ jobs:
           path: ~/.cargo/registry
           key: host-crates-${{ runner.os }}-${{ hashFiles('backend/rust/host-telemetry/Cargo.lock', 'backend/rust/host-telemetry/rust-toolchain.toml') }}
       - uses: ./.github/actions/d7-host-telemetry
+        id: host_monitor
+        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
         with:
           enabled: ${{ env.IDHAZH_HOST_TELEMETRY_MODE == 'rust' }}
+          publish: 'true'
 
       - id: decide
         env:
@@ -310,18 +325,19 @@ jobs:
             pip install --index-url https://download.pytorch.org/whl/cpu torch
             pip install -e ".[faithfulness]"
           fi
-      - name: Select the pinned host toolchain
-        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
-        working-directory: backend/rust/host-telemetry
-        run: echo "RUSTUP_TOOLCHAIN=$(rustup show active-toolchain | cut -d' ' -f1)" >> "$GITHUB_ENV"
-      - uses: actions/cache@v6
+      - name: Resolve host telemetry before native setup
+        id: host_telemetry
+        env:
+          REQUESTED: ${{ needs.plan.outputs.host_telemetry }}
+        run: |
+          set -euo pipefail
+          MODE=$(python backend/utilities/host_telemetry_control.py "$REQUESTED" --config-root config)
+          echo "IDHAZH_HOST_TELEMETRY_MODE=$MODE" >> "$GITHUB_ENV"
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+      - uses: ./.github/actions/download-host-telemetry
         if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
         with:
-          path: ~/.cargo/registry
-          key: host-crates-${{ runner.os }}-${{ hashFiles('backend/rust/host-telemetry/Cargo.lock', 'backend/rust/host-telemetry/rust-toolchain.toml') }}
-      - uses: ./.github/actions/d7-host-telemetry
-        with:
-          enabled: ${{ env.IDHAZH_HOST_TELEMETRY_MODE == 'rust' }}
+          artifact_name: ${{ needs.plan.outputs.host_monitor_artifact }}
 
       - uses: actions/download-artifact@v8
         with:
@@ -358,7 +374,7 @@ jobs:
 
       # Record host, runtime and weights even if the shard fails.
       - name: What this runner is
-        if: always()
+        if: always() && env.IDHAZH_HOST_TELEMETRY_MODE != 'off'
         env:
           LLAMA_CPP_BUILD: ${{ needs.plan.outputs.llama_cpp_build }}
           MODEL_PATH: ${{ steps.model_server.outputs.weights_path }}
@@ -436,7 +452,7 @@ jobs:
       # Record partial results first in the cancellation grace period.
       # Reporting failures must not block the items artifact.
       - name: Record what this shard measured
-        if: always() && (env.IDHAZH_HOST_TELEMETRY_MODE == 'legacy' || env.IDHAZH_HOST_TELEMETRY_VERIFIED == '1')
+        if: always() && (env.IDHAZH_HOST_TELEMETRY_MODE == 'legacy' || env.IDHAZH_HOST_TELEMETRY_MODE == 'off' || env.IDHAZH_HOST_TELEMETRY_VERIFIED == '1')
         continue-on-error: true
         run: |
           python backend/utilities/digest_publish.py run record \
@@ -448,7 +464,7 @@ jobs:
 
       # Read cumulative counters once, before job-clock consumes them.
       - name: What the server counted
-        if: always()
+        if: always() && env.IDHAZH_HOST_TELEMETRY_MODE != 'off'
         continue-on-error: true
         env:
           MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
@@ -497,7 +513,7 @@ jobs:
 
           # The shard's deadline in config/push-retry.json leaves time to upload items.
       - name: Commit what this shard measured
-        if: always() && (env.IDHAZH_HOST_TELEMETRY_MODE == 'legacy' || env.IDHAZH_HOST_TELEMETRY_VERIFIED == '1')
+        if: always() && (env.IDHAZH_HOST_TELEMETRY_MODE == 'legacy' || env.IDHAZH_HOST_TELEMETRY_MODE == 'off' || env.IDHAZH_HOST_TELEMETRY_VERIFIED == '1')
         continue-on-error: true
         env:
           COMMIT_MESSAGE: "work: ${{ needs.plan.outputs.date }} shard ${{ matrix.shard }}"
@@ -537,7 +553,7 @@ jobs:
           done
 
       - name: What memory this shard used
-        if: always() && inputs.memory_profiling != 'off'
+        if: always() && env.IDHAZH_HOST_TELEMETRY_MODE != 'off' && inputs.memory_profiling != 'off'
         run: |
           if [ "$IDHAZH_HOST_TELEMETRY_MODE" = rust ]; then
             if [ -n "${IDHAZH_HOST_TELEMETRY_SESSION:-}" ]; then
@@ -623,18 +639,19 @@ jobs:
 
       - name: Install
         run: pip install -e .
-      - name: Select the pinned host toolchain
-        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
-        working-directory: backend/rust/host-telemetry
-        run: echo "RUSTUP_TOOLCHAIN=$(rustup show active-toolchain | cut -d' ' -f1)" >> "$GITHUB_ENV"
-      - uses: actions/cache@v6
+      - name: Resolve host telemetry before native setup
+        id: host_telemetry
+        env:
+          REQUESTED: ${{ needs.plan.outputs.host_telemetry }}
+        run: |
+          set -euo pipefail
+          MODE=$(python backend/utilities/host_telemetry_control.py "$REQUESTED" --config-root config)
+          echo "IDHAZH_HOST_TELEMETRY_MODE=$MODE" >> "$GITHUB_ENV"
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+      - uses: ./.github/actions/download-host-telemetry
         if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
         with:
-          path: ~/.cargo/registry
-          key: host-crates-${{ runner.os }}-${{ hashFiles('backend/rust/host-telemetry/Cargo.lock', 'backend/rust/host-telemetry/rust-toolchain.toml') }}
-      - uses: ./.github/actions/d7-host-telemetry
-        with:
-          enabled: ${{ env.IDHAZH_HOST_TELEMETRY_MODE == 'rust' }}
+          artifact_name: ${{ needs.plan.outputs.host_monitor_artifact }}
 
       - uses: actions/download-artifact@v8
         with:

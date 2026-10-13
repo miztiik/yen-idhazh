@@ -110,6 +110,7 @@ from idhazh.telemetry import (
     job_machine,
     silicon,
 )
+from idhazh.telemetry.host_control import enabled as host_telemetry_enabled
 from idhazh.telemetry.host_event_client import HostEventClient
 
 
@@ -162,11 +163,11 @@ def _workflow_host_event_mode(environ: Mapping[str, str]) -> str | None:
     value = environ.get("IDHAZH_HOST_TELEMETRY_MODE")
     if value in (None, ""):
         return None
-    if value == "legacy":
-        return "legacy"
+    if value in ("legacy", "off"):
+        return value
     if value == "rust":
         return "rust"
-    raise ValueError("IDHAZH_HOST_TELEMETRY_MODE must be 'legacy' or 'rust'")
+    raise ValueError("IDHAZH_HOST_TELEMETRY_MODE must be 'legacy', 'rust' or 'off'")
 
 
 def _host_event_client(
@@ -176,6 +177,9 @@ def _host_event_client(
 ) -> HostEventClient | None:
     """Open the bound event session for the selected legacy/shadow/native mode."""
     observability = settings.app.observability
+    if not host_telemetry_enabled(observability):
+        logging.getLogger(__name__).info("host telemetry off; no event session opened")
+        return None
     mode = observability.host_event_mode
     try:
         workflow_mode = _workflow_host_event_mode(dict(os.environ))
@@ -789,6 +793,7 @@ def _main(argv: Sequence[str] | None = None) -> int:
         settings.app.observability.host_event_mode = "native"
     if (
         args.stage in {"work", "run"}
+        and host_telemetry_enabled(settings.app.observability)
         and not settings.app.observability.memory_profiling_enabled
         and settings.app.observability.host_event_mode != "native"
     ):

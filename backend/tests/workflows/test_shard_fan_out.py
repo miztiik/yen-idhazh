@@ -16,11 +16,13 @@ from ._harness import (
     CONTENT_REFRESH_SHARD_DEFAULT,
     CONTENT_REFRESH_SHARDS,
     WORK_BOUND_KEYS,
+    _declared_steps,
     _dispatch_inputs,
     _evaluate_shard_matrix,
     _expression,
     _job,
     _load_workflows,
+    _local_action,
     _mapping,
     _needs,
     _script,
@@ -196,6 +198,30 @@ def test_every_output_a_job_reads_is_one_its_producer_declares() -> None:
                 )
 
 
+def _artifact_name(workflow: dict[str, object], job: str, name: str) -> str:
+    """Follow an artifact name through composite inputs, outputs and job outputs."""
+    bindings: dict[str, str] = {}
+    for call in _declared_steps(workflow, job):
+        uses = call.get("uses")
+        if not isinstance(uses, str) or not uses.startswith("./"):
+            continue
+        for key, value in _mapping(call.get("with") or {}, "action arguments").items():
+            bindings[f"${{{{ inputs.{key} }}}}"] = str(value)
+        if isinstance(identifier := call.get("id"), str):
+            action = _local_action(uses)
+            for key, body in _mapping(action.get("outputs") or {}, "action outputs").items():
+                value = str(_mapping(body, "action output")["value"])
+                bindings[value] = f"${{{{ steps.{identifier}.outputs.{key} }}}}"
+    name = bindings.get(name, name)
+    referenced = re.fullmatch(
+        r"\$\{\{\s*needs\.([a-z0-9_-]+)\.outputs\.([a-z0-9_]+)\s*\}\}", name
+    )
+    if referenced:
+        producer, output = referenced.groups()
+        name = str(_mapping(_job(workflow, producer)["outputs"], "job outputs")[output])
+    return name
+
+
 def test_every_artifact_a_job_downloads_is_uploaded_by_a_job_it_waits_on() -> None:
     """An artifact name is a string agreed between two jobs and checked by nobody.
 
@@ -209,7 +235,9 @@ def test_every_artifact_a_job_downloads_is_uploaded_by_a_job_it_waits_on() -> No
     """
     for filename, workflow in sorted(_load_workflows().items()):
         uploads = {
-            str(_mapping(step.get("with"), "upload").get("name")): job_name
+            _artifact_name(
+                workflow, job_name, str(_mapping(step.get("with"), "upload").get("name"))
+            ): job_name
             for job_name in _mapping(workflow.get("jobs"), "jobs")
             for step in _steps(workflow, job_name)
             if str(step.get("uses", "")).startswith("actions/upload-artifact")
@@ -236,7 +264,7 @@ def test_every_artifact_a_job_downloads_is_uploaded_by_a_job_it_waits_on() -> No
                         "which it does not wait on"
                     )
                     continue
-                name = str(asked.get("name"))
+                name = _artifact_name(workflow, job_name, str(asked.get("name")))
                 assert name in uploads, f"{where} downloads {name}, which no job uploads"
                 assert uploads[name] in reachable, (
                     f"{where} downloads {name} from {uploads[name]}, which it does not wait on"

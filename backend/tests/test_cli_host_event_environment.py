@@ -26,7 +26,8 @@ def test_workflow_mode_is_legacy_by_default_and_native_only_when_selected() -> N
     assert _workflow_host_event_mode({}) is None
     assert _workflow_host_event_mode({"IDHAZH_HOST_TELEMETRY_MODE": "legacy"}) == "legacy"
     assert _workflow_host_event_mode({"IDHAZH_HOST_TELEMETRY_MODE": "rust"}) == "rust"
-    with pytest.raises(ValueError, match="must be 'legacy' or 'rust'"):
+    assert _workflow_host_event_mode({"IDHAZH_HOST_TELEMETRY_MODE": "off"}) == "off"
+    with pytest.raises(ValueError, match="'legacy', 'rust' or 'off'"):
         _workflow_host_event_mode({"IDHAZH_HOST_TELEMETRY_MODE": "shadow"})
 
 

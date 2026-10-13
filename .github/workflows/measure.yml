@@ -26,12 +26,13 @@ on:
           - 'on'
           - 'off'
       host_telemetry:
-        description: 'Rust is the default host collector; legacy is temporary rollback until migration cleanup'
+        description: 'Rust host collector, legacy rollback, or off for all host telemetry'
         type: choice
         default: rust
         options:
           - rust
           - legacy
+          - 'off'
       # ONE argument names the candidate, and it is the same line a swap moves:
       # the models file. Every fact about a candidate is already written there,
       # and a form that asked for them again could bench one set of bytes while
@@ -167,7 +168,7 @@ jobs:
   # arrive as a `needs` output.
   models:
     env:
-      IDHAZH_HOST_TELEMETRY_MODE: legacy
+      IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry == 'off' && 'off' || 'legacy' }}
     name: Read the candidate out of config
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -268,6 +269,15 @@ jobs:
 
       - name: Install
         run: pip install -e .
+      - name: Resolve host telemetry before native setup
+        id: host_telemetry
+        env:
+          REQUESTED: ${{ inputs.host_telemetry || 'rust' }}
+        run: |
+          set -euo pipefail
+          MODE=$(python backend/utilities/host_telemetry_control.py "$REQUESTED" --config-root config)
+          echo "IDHAZH_HOST_TELEMETRY_MODE=$MODE" >> "$GITHUB_ENV"
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
       - name: Select the pinned host toolchain
         if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
         working-directory: backend/rust/host-telemetry
@@ -278,10 +288,12 @@ jobs:
           path: ~/.cargo/registry
           key: host-crates-${{ runner.os }}-${{ hashFiles('backend/rust/host-telemetry/Cargo.lock', 'backend/rust/host-telemetry/rust-toolchain.toml') }}
       - uses: ./.github/actions/d7-host-telemetry
+        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
         with:
           enabled: ${{ env.IDHAZH_HOST_TELEMETRY_MODE == 'rust' }}
 
       - name: Record runner hardware
+        if: env.IDHAZH_HOST_TELEMETRY_MODE != 'off'
         run: |
           set -euo pipefail
           mkdir -p backend/var
@@ -421,11 +433,13 @@ jobs:
           MEMORY_PROFILING: ${{ inputs.memory_profiling }}
         run: |
           set -euo pipefail
-          RESOLVED=$(python3 backend/utilities/memory_profiling_control.py \
-            "${MEMORY_PROFILING:-inherit}")
-          if [ "$RESOLVED" = "off" ]; then
-            echo "llama-bench memory qualification requires memory profiling" >&2
-            exit 2
+          if [ "$IDHAZH_HOST_TELEMETRY_MODE" != off ]; then
+            RESOLVED=$(python3 backend/utilities/memory_profiling_control.py \
+              "${MEMORY_PROFILING:-inherit}")
+            if [ "$RESOLVED" = "off" ]; then
+              echo "llama-bench memory qualification requires memory profiling" >&2
+              exit 2
+            fi
           fi
           max_threads=$(( $(nproc) * 2 ))
           IFS=',' read -ra THREADS <<< "$THREAD_COUNTS"
@@ -514,7 +528,7 @@ jobs:
 
   corpus:
     env:
-      IDHAZH_HOST_TELEMETRY_MODE: legacy
+      IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry == 'off' && 'off' || 'legacy' }}
     name: How long real articles are
     if: ${{ inputs.target == 'corpus' }}
     # The length buckets every per-article cost figure multiplies by are invented
@@ -612,7 +626,19 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
 
+      - name: Install
+        run: pip install -e .
+      - name: Resolve host telemetry before native setup
+        id: host_telemetry
+        env:
+          REQUESTED: ${{ inputs.host_telemetry || 'rust' }}
+        run: |
+          set -euo pipefail
+          MODE=$(python backend/utilities/host_telemetry_control.py "$REQUESTED" --config-root config)
+          echo "IDHAZH_HOST_TELEMETRY_MODE=$MODE" >> "$GITHUB_ENV"
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
       - name: Record runner hardware
+        if: env.IDHAZH_HOST_TELEMETRY_MODE != 'off'
         run: |
           set -euo pipefail
           mkdir -p backend/var/runtime-sweep
@@ -631,9 +657,6 @@ jobs:
             echo "cpu_core_map:"
             lscpu -p=CPU,CORE,SOCKET,NODE
           } | tee backend/var/runtime-sweep/hardware.txt
-
-      - name: Install
-        run: pip install -e .
       - name: Select the pinned host toolchain
         if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
         working-directory: backend/rust/host-telemetry
@@ -644,6 +667,7 @@ jobs:
           path: ~/.cargo/registry
           key: host-crates-${{ runner.os }}-${{ hashFiles('backend/rust/host-telemetry/Cargo.lock', 'backend/rust/host-telemetry/rust-toolchain.toml') }}
       - uses: ./.github/actions/d7-host-telemetry
+        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
         with:
           enabled: ${{ env.IDHAZH_HOST_TELEMETRY_MODE == 'rust' }}
 
@@ -744,6 +768,7 @@ jobs:
           trial_state: pipeline-tests
 
       - name: Resolve runtime memory collection
+        if: env.IDHAZH_HOST_TELEMETRY_MODE != 'off'
         env:
           MEMORY_PROFILING: ${{ inputs.memory_profiling }}
         run: >-
@@ -950,7 +975,7 @@ jobs:
       # `continue-on-error` because a lost push must not turn a five-hour
       # measurement into a red run.
       - name: Commit the machine this bench drew
-        if: always() && (env.IDHAZH_HOST_TELEMETRY_MODE == 'legacy' || env.IDHAZH_HOST_TELEMETRY_VERIFIED == '1')
+        if: always() && (env.IDHAZH_HOST_TELEMETRY_MODE == 'legacy' || env.IDHAZH_HOST_TELEMETRY_MODE == 'off' || env.IDHAZH_HOST_TELEMETRY_VERIFIED == '1')
         continue-on-error: true
         env:
           COMMIT_MESSAGE: "bench: the machine ${{ inputs.runtime_candidate }} drew"
@@ -998,7 +1023,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
-      IDHAZH_HOST_TELEMETRY_MODE: legacy
+      IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry == 'off' && 'off' || 'legacy' }}
       CANDIDATE_REPO: ${{ needs.models.outputs.candidate_repo }}
       CANDIDATE_REVISION: ${{ needs.models.outputs.candidate_revision }}
       CANDIDATE_FILE: ${{ needs.models.outputs.candidate_file }}
@@ -1174,7 +1199,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     env:
-      IDHAZH_HOST_TELEMETRY_MODE: legacy
+      IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry == 'off' && 'off' || 'legacy' }}
       MODEL_REPO: ${{ needs.models.outputs.summarizer_repo }}
       MODEL_REVISION: ${{ needs.models.outputs.summarizer_revision }}
       MODEL_FILE: ${{ needs.models.outputs.summarizer_file }}

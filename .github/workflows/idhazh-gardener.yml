@@ -79,12 +79,13 @@ on:
         type: boolean
         default: false
       host_telemetry:
-        description: 'Rust is the default host collector; legacy is temporary rollback until migration cleanup'
+        description: 'Rust host collector, legacy rollback, or off for all host telemetry'
         type: choice
         default: rust
         options:
           - rust
           - legacy
+          - 'off'
       memory_profiling:
         description: 'OS memory and fault collection; inherit reads shared config'
         type: choice
@@ -112,7 +113,7 @@ concurrency:
 jobs:
   plan:
     env:
-      IDHAZH_HOST_TELEMETRY_MODE: legacy
+      IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry == 'off' && 'off' || 'legacy' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -204,6 +205,15 @@ jobs:
 
       - name: Install
         run: pip install -e .
+      - name: Resolve host telemetry before native setup
+        id: host_telemetry
+        env:
+          REQUESTED: ${{ inputs.host_telemetry || 'rust' }}
+        run: |
+          set -euo pipefail
+          MODE=$(python backend/utilities/host_telemetry_control.py "$REQUESTED" --config-root config)
+          echo "IDHAZH_HOST_TELEMETRY_MODE=$MODE" >> "$GITHUB_ENV"
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
       - name: Select the pinned host toolchain
         if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
         working-directory: backend/rust/host-telemetry
@@ -214,6 +224,7 @@ jobs:
           path: ~/.cargo/registry
           key: host-crates-${{ runner.os }}-${{ hashFiles('backend/rust/host-telemetry/Cargo.lock', 'backend/rust/host-telemetry/rust-toolchain.toml') }}
       - uses: ./.github/actions/d7-host-telemetry
+        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
         with:
           enabled: ${{ env.IDHAZH_HOST_TELEMETRY_MODE == 'rust' }}
 
@@ -258,7 +269,7 @@ jobs:
 
   history:
     env:
-      IDHAZH_HOST_TELEMETRY_MODE: legacy
+      IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry == 'off' && 'off' || 'legacy' }}
     # After every shard has ended, so history is rewritten last, and whatever
     # the shards did: a red shard's push has already ended, and its work is
     # tried again at the next wake either way. A skipped `needs` would skip this

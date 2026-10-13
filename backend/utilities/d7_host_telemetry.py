@@ -765,13 +765,38 @@ def _terminate_worker(child: subprocess.Popen[bytes], *, timeout: float = 10) ->
 
 
 def run(args: argparse.Namespace) -> int:
+    if args.mode not in {"rust", "legacy", "off"}:
+        raise SystemExit(f"unsupported IDHAZH_HOST_TELEMETRY_MODE={args.mode!r}")
+    producer = _producer(args.command)
+    source = (
+        _source_settings(*producer) if producer is not None and args.mode != "off" else None
+    )
+    if args.mode == "off" or (
+        source is not None and not source.app.observability.host_telemetry_enabled
+    ):
+        env = {
+            key: value
+            for key, value in os.environ.items()
+            if not key.startswith("IDHAZH_HOST_TELEMETRY_")
+        }
+        env["IDHAZH_HOST_TELEMETRY_MODE"] = "off"
+        _write_env(
+            {
+                **{
+                    key: ""
+                    for key in os.environ
+                    if key.startswith("IDHAZH_HOST_TELEMETRY_")
+                },
+                "IDHAZH_HOST_TELEMETRY_MODE": "off",
+                "IDHAZH_HOST_TELEMETRY_SKIPPED": "host-telemetry-off",
+                "IDHAZH_HOST_TELEMETRY_VERIFIED": "0",
+            }
+        )
+        return subprocess.run(args.command, env=env, check=False).returncode
     if args.mode == "legacy":
         return subprocess.run(
             args.command, env={**os.environ, "IDHAZH_HOST_TELEMETRY_MODE": "legacy"}, check=False
         ).returncode
-    if args.mode != "rust":
-        raise SystemExit(f"unsupported IDHAZH_HOST_TELEMETRY_MODE={args.mode!r}")
-    producer = _producer(args.command)
     if producer is None:
         raise SystemExit(
             "D7 Rust publication is not wired for this producer; refusing to start "
@@ -793,7 +818,7 @@ def run(args: argparse.Namespace) -> int:
         raise SystemExit("D7 Rust host telemetry requires a Linux /proc runner")
     binary = _binary(args.binary)
     native, _, _ = settings()
-    source = _source_settings(stage, flags)
+    assert source is not None
     registry = _ledger_registry(source)
     memory = {"on": True, "off": False}.get(args.memory_profiling)
     child_memory = _flag(flags, "--memory-profiling")

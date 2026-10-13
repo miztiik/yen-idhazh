@@ -66,7 +66,9 @@ from idhazh.stages.common import (
 )
 from idhazh.stages.two_calls import two_calls_one_item
 from idhazh.telemetry import census, host
+from idhazh.telemetry.host_control import enabled as host_telemetry_enabled
 from idhazh.telemetry.host_event_client import HostEventClient
+from idhazh.telemetry.item_heartbeat import ItemHeartbeat
 from idhazh.telemetry.record import Flags, ItemRecorder, persist, shard_done
 
 
@@ -309,6 +311,9 @@ def stage_work(
     if shards < 1 or not 0 <= shard < shards:
         raise ValueError("work shard must be inside the selected fanout")
     mine = shard_of(plan, shard=shard, shards=shards)
+    collect_host = host_telemetry_enabled(settings.app.observability)
+    if not collect_host and host_events is not None:
+        raise ValueError("host telemetry off cannot accept a bound collecting session")
     if host_events is not None:
         if host_events.native and (
             host_events.manifest.controls.memory_profiling_enabled
@@ -317,7 +322,7 @@ def stage_work(
             raise ValueError("native work memory control differs from the resolved invocation")
         host_events.validate_plan(plan, shard=shard, shards=shards)
         host_events.register_worker(server_pid=host.llama_server_pid())
-    if not settings.app.observability.memory_profiling_enabled and (
+    if collect_host and not settings.app.observability.memory_profiling_enabled and (
         host_events is None or not host_events.native
     ):
         raise ValueError("memory profiling off requires the native work collector")
@@ -381,11 +386,12 @@ def stage_work(
     # Read once per shard and noted on every item. The process table scan and
     # the CPU model read are each a few file opens; doing them per item would be
     # 80 scans for an answer that cannot change inside a shard.
-    server_pid = host.llama_server_pid()
+    server_pid = host.llama_server_pid() if collect_host else None
     shard_facts = (
         host_events.host_facts()
         if host_events is not None and host_events.native
-        else host.host_facts(job=ServerJob.WORK)
+        else host.host_facts(job=ServerJob.WORK) if collect_host
+        else host.HostFacts(cpu_model=None, runner_name=None, job=ServerJob.WORK)
     )
     shard_cells = _shard_cells(settings, shard=shard, shard_item_count=len(mine), facts=shard_facts)
     failures: dict[str, int] = {}
@@ -502,7 +508,11 @@ def stage_work(
         recorder.note(queue_wait_ms=queue_wait_ms)
         recorder.parked(queue_wait_ms)
         watch_context: Any
-        if host_events is not None and host_events.native:
+        if not collect_host:
+            watch_context = ItemHeartbeat(
+                interval_s=flags.waiting_heartbeat_seconds, on_tick=_heartbeat(recorder)
+            )
+        elif host_events is not None and host_events.native:
             watch_context = host_events.native_watch(
                 item_id=item.item_id,
                 interval_s=flags.waiting_heartbeat_seconds,

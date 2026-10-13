@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 from idhazh import run_context
 from idhazh.contracts.base import ServerJob
 from idhazh.telemetry import silicon
+from idhazh.telemetry.host_control import enabled as host_telemetry_enabled
 from idhazh.telemetry.host_event_client import HostEventClient
 
 if TYPE_CHECKING:
@@ -29,6 +30,8 @@ def from_environment(
     settings: config.Settings | config.GardenerSettings,
 ) -> HostEventClient | None:
     """Open the session supplied by the workflow, never infer a native fallback."""
+    if not host_telemetry_enabled(settings.app.observability):
+        return None
     mode = os.environ.get("IDHAZH_HOST_TELEMETRY_MODE")
     if mode not in (None, "", "legacy", "rust"):
         raise ValueError("IDHAZH_HOST_TELEMETRY_MODE must be 'legacy' or 'rust'")
@@ -90,6 +93,10 @@ def record(
     Only instrument I/O failures degrade to a logged missing reading. Work
     failures and invalid configuration still propagate to the caller.
     """
+    if not host_telemetry_enabled(settings.app.observability):
+        _LOG.info("host telemetry off run=%s job=%s", run_id, job)
+        yield []
+        return
     if host_events is None:
         host_events = from_environment(settings)
     mode = os.environ.get("IDHAZH_HOST_TELEMETRY_MODE")

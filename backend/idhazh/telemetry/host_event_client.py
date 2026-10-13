@@ -136,10 +136,10 @@ class HostEventClient:
         """Open the launcher's serialized session; never substitute a Python collector."""
         env = os.environ if environ is None else environ
         mode = env.get("IDHAZH_HOST_TELEMETRY_MODE", "legacy")
-        if mode == "legacy":
+        if mode in ("legacy", "off"):
             return None
         if mode != "rust":
-            raise ValueError("IDHAZH_HOST_TELEMETRY_MODE must be 'legacy' or 'rust'")
+            raise ValueError("IDHAZH_HOST_TELEMETRY_MODE must be 'legacy', 'rust' or 'off'")
         names = ("WORKSPACE", "MANIFEST", "CONFIG", "INVOCATION")
         missing = [name for name in names if not env.get(f"IDHAZH_HOST_TELEMETRY_{name}")]
         if missing:
