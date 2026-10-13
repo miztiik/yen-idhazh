@@ -66,11 +66,12 @@ EXPECTED_WORKFLOWS: Final = {
     "ci.yml": ("CI", frozenset({"pull_request", "push", "workflow_dispatch"})),
     "digest.yml": ("Content refresh", frozenset({"schedule", "workflow_dispatch"})),
     "drift.yml": ("Drift review", frozenset({"schedule", "workflow_dispatch"})),
+    "encoder-comparison.yml": ("Encoder comparison", frozenset({"workflow_dispatch"})),
     "idhazh-pipeline-tests.yaml": ("Pipeline tests", frozenset({"workflow_dispatch"})),
     "llm-council.yml": ("LLM-COUNCIL", frozenset({"schedule", "workflow_dispatch"})),
     "measure.yml": ("Measurements", frozenset({"workflow_dispatch"})),
     "rust-host-telemetry.yml": (
-        "Isolated Rust host evidence", frozenset({"workflow_dispatch", "pull_request"}),
+        "Isolated Rust host evidence", frozenset({"workflow_dispatch"}),
     ),
     "pages.yml": (
         "Pages publication",
@@ -142,6 +143,18 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("digest.yml", "article_limit"): "^[1-9][0-9]*$",
     ("digest.yml", "faithfulness"): DISPATCH_BOOLEAN,
     ("digest.yml", "memory_profiling"): DISPATCH_CHOICE,
+    ("digest.yml", "host_telemetry"): DISPATCH_CHOICE,
+    ("encoder-comparison.yml", "start"): "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+    ("encoder-comparison.yml", "end"): "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+    ("encoder-comparison.yml", "commit_readings"): DISPATCH_BOOLEAN,
+    ("encoder-comparison.yml", "reuse_pairs"): DISPATCH_BOOLEAN,
+    ("encoder-comparison.yml", "selected_encoders"): DISPATCH_READ_BY_NAME,
+    ("encoder-comparison.yml", "memory_profiling"): DISPATCH_CHOICE,
+    ("encoder-comparison.yml", "host_telemetry"): DISPATCH_CHOICE,
+    ("idhazh-gardener.yml", "memory_profiling"): DISPATCH_CHOICE,
+    ("idhazh-gardener.yml", "host_telemetry"): DISPATCH_CHOICE,
+    ("llm-council.yml", "memory_profiling"): DISPATCH_CHOICE,
+    ("llm-council.yml", "host_telemetry"): DISPATCH_CHOICE,
     ("digest.yml", "shards"): DISPATCH_CHOICE,
     ("drift.yml", "baseline_days"): "^[0-9]{1,4}$",
     ("drift.yml", "recent_days"): "^[0-9]{1,4}$",
@@ -169,6 +182,7 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("measure.yml", "budget_samples"): "^[1-9][0-9]{0,4}$",
     ("measure.yml", "model_speed_case"): DISPATCH_CHOICE,
     ("measure.yml", "memory_profiling"): DISPATCH_CHOICE,
+    ("measure.yml", "host_telemetry"): DISPATCH_CHOICE,
     ("measure.yml", "target"): DISPATCH_CHOICE,
     ("measure.yml", "threads"): "^[1-9][0-9]*$",
     ("rust-host-telemetry.yml", "memory_profiling"): DISPATCH_CHOICE,
@@ -763,7 +777,7 @@ JOB_CLOCK_STEP: Final = "What this job cost"
 
 JOB_CLOCK_COMMAND: Final = "python backend/utilities/digest_publish.py run job-clock"
 
-# Neither of the work job's two steps may fail the shard. See the comment above
+# Neither of the work job's data-preservation steps may fail the shard. See the comment above
 # them in the workflow for which loss is the cheaper one. `BaseLoader` keeps
 # every scalar a string, so the value to compare is the word, not the boolean.
 WORK_LEDGER_STEPS: Final = (RECORD_STEP, SCRAPE_STEP, JOB_CLOCK_STEP, COMMIT_STEPS["work"])
@@ -829,12 +843,15 @@ SUBSTITUTED_COUNCIL_RUN: Final = "2026-08-26-35534060762"
 SUBSTITUTED_TENANT: Final = "a-paper-tenant"
 
 EXPRESSION_VALUES: Final = {
+    "env.SET_DIRECTORY": "corpus/encoder-comparison-1",
+    "matrix.encoder": "fixture-encoder",
     "needs.plan.outputs.date": SUBSTITUTED_DATE,
     "needs.plan.outputs.day_dir": SUBSTITUTED_DAY_DIR,
     "needs.plan.outputs.plan_dir": SUBSTITUTED_PLAN_DIR,
     "needs.plan.outputs.shards": SUBSTITUTED_SHARDS,
     "needs.draw.outputs.date": SUBSTITUTED_DATE,
     "needs.draw.outputs.run_id": SUBSTITUTED_COUNCIL_RUN,
+    "inputs.memory_profiling || 'inherit'": "inherit",
     "steps.decide.outputs.date": SUBSTITUTED_DATE,
     "steps.decide.outputs.plan_dir": SUBSTITUTED_PLAN_DIR,
     # What the `derived` step prints into `$GITHUB_OUTPUT`, computed rather than
@@ -1329,7 +1346,7 @@ def _stage_invocations(
             blanked = blanked.replace(
                 "python backend/utilities/council_publish.py", "python -m idhazh council-settle"
             )
-            for line in blanked.replace("\\\n", " ").splitlines():
+            for line in _logical_shell_lines(blanked):
                 if not re.search(r"\bpython3?\s+-m\s+idhazh(?=\s)", line):
                     continue
                 words = shlex.split(line)
@@ -1348,6 +1365,15 @@ def _strings(node: object) -> Iterator[str]:
     elif isinstance(node, list):
         for item in cast(list[object], node):
             yield from _strings(item)
+
+
+def _logical_shell_lines(script: str) -> list[str]:
+    """Join POSIX backslash-newline continuations before inspecting shell commands."""
+    return re.sub(r"\\\r?\n[ \t]*", " ", script).splitlines()
+
+
+def _shell_words(script: str, *, comments: bool = False) -> list[str]:
+    return shlex.split("\n".join(_logical_shell_lines(script)), comments=comments)
 
 
 def _needs(workflow: dict[str, object], job_name: str) -> list[str]:
@@ -1424,58 +1450,49 @@ def _composite_action_script(name: str) -> str:
     return "\n".join(scripts)
 
 
-def _evaluate_shard_matrix(script: str, requested_shards: str, derived: int) -> list[int] | None:
-    """Read the fan-out step's shell and answer what matrix it writes.
-
-    The step takes two inputs, so the harness does too: what an operator typed,
-    and what the derivation printed when nobody typed anything.
-    """
+def _evaluate_shard_matrix(script: str, printed: str) -> list[int] | None:
+    """Read the fan-out step's shell and answer what matrix a printed count writes."""
     lines = [line.strip() for line in script.splitlines()]
     pattern_line = "SHARD_PATTERN='^[1-8]$'"
-    input_line = 'SHARDS="${{ inputs.shards }}"'
     derive_line = (
         'SHARDS=$(python -m idhazh shards --date "${{ steps.decide.outputs.date }}"'
         ' --execution "${{ github.run_id }}")'
     )
-    clamp_line = 'while [ "$SHARDS" -gt 1 ] && ! [[ "$SHARDS" =~ $SHARD_PATTERN ]]; do'
     guard_block = [
         'if ! [[ "$SHARDS" =~ $SHARD_PATTERN ]]; then',
         'echo "shards must be an integer from 1 through 8" >&2',
         "exit 1",
         "fi",
     ]
+    shards_line = 'echo "shards=$SHARDS" >> "$GITHUB_OUTPUT"'
     matrix_line = 'echo "matrix=$(seq 0 $((SHARDS - 1)) | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"'
 
     assert [line for line in lines if line.startswith("SHARD_PATTERN=")] == [pattern_line]
-    assert lines.count(input_line) == 1
     assert lines.count(derive_line) == 1, "the count comes from the plan, not from a literal"
-    assert lines.count(clamp_line) == 1, "a derived count is clamped, never fatal"
-    assert not [line for line in lines if line.startswith('[ -n "$SHARDS" ]')], (
-        "the fixed default is what the derivation replaces"
+    assert not [line for line in lines if "inputs.shards" in line], (
+        "the operator count was already recorded in the plan"
     )
+    assert not [line for line in lines if line.startswith("while ")], (
+        "a count that cannot be dispatched is refused, never clamped"
+    )
+    assert [line for line in lines if line.startswith('echo "shards=')] == [shards_line]
     assert [line for line in lines if line.startswith('echo "matrix=')] == [matrix_line]
     guard_index = lines.index(guard_block[0])
     assert lines[guard_index : guard_index + len(guard_block)] == guard_block
     assert (
         lines.index(pattern_line)
-        < lines.index(input_line)
         < lines.index(derive_line)
-        < lines.index(clamp_line)
         < guard_index
+        < lines.index(shards_line)
         < lines.index(matrix_line)
     )
 
     pattern_match = re.fullmatch(r"SHARD_PATTERN='([^']+)'", pattern_line)
     assert pattern_match is not None
     pattern = pattern_match.group(1)
-    shards = requested_shards
-    if not shards:
-        shards = str(derived)
-        while int(shards) > 1 and re.fullmatch(pattern, shards) is None:
-            shards = str(int(shards) - 1)
-    if re.fullmatch(pattern, shards) is None:
+    if re.fullmatch(pattern, printed) is None:
         return None
-    return list(range(int(shards)))
+    return list(range(int(printed)))
 
 
 def _normalize_condition(value: object, description: str) -> str:
@@ -1785,8 +1802,8 @@ def _substitute(text: str) -> str:
 def _commit_call(label: str) -> tuple[list[str], dict[str, str]]:
     """The paths and the strings one commit step hands the shared program.
 
-    The call is read from the one line of the step that makes it, because a step
-    may guard it: the bench stages its folder only when its probe wrote one.
+    The call is read from the one logical line of the step that makes it, because
+    a step may guard it: the bench stages its folder only when its probe wrote one.
     """
     workflow = _load_workflows()[COMMIT_WORKFLOWS[label]]
     job_name = COMMIT_JOBS[label]
@@ -1798,7 +1815,9 @@ def _commit_call(label: str) -> tuple[list[str], dict[str, str]]:
         else COMMIT_PROGRAM_CALL
     )
     calls = [
-        words for line in script.splitlines() if tuple((words := shlex.split(line))[:2]) == program
+        words
+        for line in _logical_shell_lines(script)
+        if tuple((words := shlex.split(line))[:2]) == program
     ]
     assert len(calls) == 1, f"{label} must commit through {COMMIT_PROGRAM_CALL[1]}, once"
     declared = _mapping(step.get("env"), f"job {job_name} commit env {label}")
@@ -1812,7 +1831,7 @@ def _publication_scopes(label: str) -> list[str]:
 
     argv, _ = _commit_call(label)
     if label == "bench":
-        assert argv == ["land", "measure"]
+        assert argv[:2] == ["land", "measure"]
         return list(POLICIES["measure"][1])
     assert argv[0] == label
     return list(permissions(label, date=SUBSTITUTED_DATE))

@@ -1,6 +1,6 @@
 # Known defects
 
-**Last Updated**: 2026-10-12
+**Last Updated**: 2026-10-13
 
 **The open defects have named owners below.** Five of them need evidence or a ruling before any code
 is worth writing; the rest are known fixes
@@ -121,7 +121,7 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 48 | GitHub stamps its squash merges in local time, `+02:00`, not UTC | 1 | **OPEN - one account setting to try, then one merge to read** |
 | 49 | The local test selector sends a backend test helper to every frontend group | 2 | **OPEN - two patterns in the selector and their truth-table cases** |
 | 50 | A publisher link on the home page named a story the page did not draw, so a news run's site build failed | 2 | CLOSED 2026-09-30 (PR #1168) |
-| 51 | The canary builder's score-key step aborted once at exit, after printing its whole answer | 2 | **OPEN - reproduced twice; a row to fix it is now due** |
+| 51 | The canary builder's score-key step aborted at exit, after printing its whole answer | 2 | CLOSED 2026-10-13 (PR #1592) - 836 Gate 4 runs had no aborts, wrong answers or other exits; all five engine calls kept the thread count at 5 |
 | 52 | Reading one month of a packed ledger downloads every month file of its year | 3 | **OPEN - costs nothing until a compaction runs live** |
 | 53 | The `traces` upkeep task cannot date eight old trace files, so it never deletes them | 2 | **OPEN - matters from the day the task deletes live** |
 | 54 | The first squash that rewrites history may not fit in its 30-minute job | 2 | **OPEN - due 2026-10-29: raise the limit, or time one replay first** |
@@ -143,7 +143,7 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 70 | The raw-listing test does not check the value included in the built site | 2 | **OPEN - check the real build on generated data against written-out days** |
 | 71 | The canary uses one model, so the model-swap plots have no browser parity case | 2 | **OPEN - record a model swap in the canary and check the drawn points** |
 | 72 | A chart test excludes all reader pages when the worktree name contains console | 1 | **OPEN - filter the build-relative console route segment, not the absolute path** |
-| 73 | The manifest shard count can differ from the dispatched worker matrix | 5 | **OPEN - owner ruled 2026-10-12; [the dispatched shard count plan](20261012-dispatched-shard-count-plan.md) carries the fix** |
+| 73 | The manifest shard count can differ from the dispatched worker matrix | 5 | CLOSED 2026-10-12 (PR #1588) |
 | 74 | A stale-payload test assumes its scratch folder is outside the repository | 2 | **OPEN - check both repository-owned and external scratch paths** |
 | 75 | A full re-run that plans again leaves the earlier plan's rows under the same run id | 5 | **OPEN - reasoned, not measured; first count the run ids with run-plan rows from attempt 2 or later** |
 
@@ -200,7 +200,7 @@ needs clarification. Oracle: both cases name their independently expected
 POSIX relative path, with no drive, backslash or absolute-path disclosure.
 Status: OPEN; the known-defects execution owner takes this row.
 
-## 73 - The manifest shard count can differ from the dispatched worker matrix (OPEN)
+## 73 - The manifest shard count can differ from the dispatched worker matrix (CLOSED 2026-10-12, PR #1588)
 
 The fan-out step in `.github/workflows/digest.yml` gives the workers a manual
 dispatch's `shards` input as it is, and derives a count from the plan only when
@@ -225,10 +225,9 @@ decides the count once and stores it on the run's plan; the fan-out, assembly
 and the fresh-base rebuild read it there. A full re-run that plans again
 records its newer plan's count, and the rows it leaves under the same run id
 are defect 75. The
-[dispatched shard count plan](20261012-dispatched-shard-count-plan.md) carries
-the fix and amends the shipped
-[Hardware count contract](../docs/architecture/publishing/console-machine.md#a-narrow-recorded-shard-count)
-when it lands. Status: OPEN until that fix lands.
+change landed in PR #1588 and amended the shipped
+[Hardware count contract](../docs/architecture/publishing/console-machine.md#a-narrow-recorded-shard-count).
+Status: CLOSED 2026-10-12 (PR #1588).
 
 ## 72 - A chart test excludes all reader pages when the worktree name contains console (OPEN)
 
@@ -906,15 +905,65 @@ answer and then aborted the same way, on 2026-10-08; attempt 2 passed. The two
 occurrences now meet the bar this entry set: a second abort opens a row to
 reproduce and fix it.
 
-**Execution row 51.** Scope: reproduce the interpreter-exit abort on the real
-`--scored-keys` path and fix the producer or native reader's lifetime, not retry
-the caller. Files: `backend/utilities/build_canary_day.py`, the Parquet reader
-identified by the reproduction, and a generated-fixture subprocess regression.
-Oracle: the complete expected JSON and a successful process exit are both
-required; an abort after valid output still fails. Keep the browser build's
-failure propagation. Status: OPEN; the known-defects execution owner takes
-this row. It recurred during the Hardware compatibility candidate's CI on
-2026-10-12; the later green delivery did not prove a structural fix.
+**Row 1 reproduced and captured the abort.** The final complete instrument run
+was [38364493687](https://github.com/miztiik/yen-idhazh/actions/runs/38364493687),
+on ubuntu-latest with base `c71d17a265ef11565db35d555bbb32d2cdcb1eb1`,
+Python 3.12.15, pyarrow 26.0.0, kernel `6.17.0-1022-azure` and 4 CPUs. The
+workflow's `base_sha` field held its immediate parent, not the starting
+revision; the branch's merge-base with `origin/main` was `c71d17a`, and its
+only changed path was the throwaway workflow. Four complete loop runs were
+[38362983830](https://github.com/miztiik/yen-idhazh/actions/runs/38362983830),
+[38363522297](https://github.com/miztiik/yen-idhazh/actions/runs/38363522297),
+[38364025824](https://github.com/miztiik/yen-idhazh/actions/runs/38364025824)
+and [38364493687](https://github.com/miztiik/yen-idhazh/actions/runs/38364493687).
+Across 400 pinned runs there were 5 aborts (1.25%); across 400 control runs
+there were 13 (3.25%). Both loops had 0 wrong answers and 0 other exits. Each
+aborting run printed the complete eight-key answer and matched the reference.
+The first three runs had errors in later fixture probes; the final run passed
+all five probes and supplied the thread counts below.
+
+The final run's thread counts, after importing `idhazh.ledger.parquet` and
+before and after the call, were: scored-key read 5 to 9; host-output read 5 to
+5; host-history read 5 to 5; `ledger.persist` write 5 to 5; and
+`render_grouped_period` build 5 to 5.
+
+GDB identified the aborting worker as thread 1 (LWP 3762), not the main thread.
+Its top 15 frames were:
+
+```text
+#0  __pthread_kill_implementation
+#1  __pthread_kill_internal
+#2  __GI___pthread_kill
+#3  __GI_raise
+#4  __GI_abort
+#5  ??
+#6  ??
+#7  std::terminate
+#8  ??
+#9  ??
+#10 _Unwind_ForcedUnwind
+#11 __GI___pthread_unwind
+#12 __do_cancel
+#13 __GI___pthread_exit
+#14 PyThread_exit_thread
+```
+
+The next frames were `take_gil`, `PyEval_RestoreThread`,
+`PyGILState_Ensure`, and `arrow::py::PyBuffer::~PyBuffer`; the trace then
+continued through Parquet's row-group decode worker. This confirms the chain
+in C3 and supports D1. The abort occurred after the complete answer, as the
+earlier failures did.
+
+**Execution row 51 - CLOSED 2026-10-13 (PR #1592).** The tests-only commit
+failed Gate 2 as intended: CI run `38379113158` added four threads to the
+ledger read (5 to 9). The fix keeps every Parquet engine call on its caller's
+thread by disabling read-ahead and threaded decoding in
+`backend/idhazh/ledger/parquet.py`. Gate 4 run
+`38384781511` completed 368 pinned, 368 control and 100 pinned-under-load
+score-key reads with no aborts, wrong answers or other exits. Its five
+fresh-process probes returned 0 and kept the thread count at 5 (5 to 5),
+including the ledger read and both host readers. The contract and reason now
+live in [`persistence.md`](../docs/architecture/contracts/persistence.md).
 
 Found on 2026-09-30 by plan 50's row 9, on the merge of #1166. Reproduced on
 2026-10-08 in PR #1428's first browser job.

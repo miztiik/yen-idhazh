@@ -10,6 +10,30 @@ use std::{
 };
 use uuid::Uuid;
 
+fn is_command_event(kind: EventKind) -> bool {
+    matches!(
+        kind,
+        EventKind::HostProbe
+            | EventKind::HostTarget
+            | EventKind::HostClock
+            | EventKind::WorkerRegister
+            | EventKind::WindowBegin
+            | EventKind::WindowEnd
+            | EventKind::WindowAbort
+            | EventKind::MonitorStop
+    )
+}
+
+fn is_operator_command(kind: EventKind) -> bool {
+    matches!(
+        kind,
+        EventKind::HostProbe
+            | EventKind::HostTarget
+            | EventKind::HostClock
+            | EventKind::MonitorStop
+    )
+}
+
 pub fn read_bounded(path: &Path, maximum: usize) -> Result<Vec<u8>> {
     match read_bounded_classified(path, maximum)? {
         ReadOutcome::Present(raw) => Ok(raw),
@@ -331,19 +355,44 @@ impl FileTransport {
             ReadOutcome::Missing(_) => Ok(None),
         }
     }
+    pub fn read_staged_result(&mut self, event_id: Uuid) -> Result<HostEvent> {
+        let path = crate::ledger::paths::resolve_document(
+            &self.workspace,
+            &format!(
+                "{}/results/.pending-{event_id}.json",
+                self.manifest.event_root
+            ),
+        )?;
+        require(
+            path.parent() == Some(self.root.join("results").as_path()),
+            "staged result aliases another session directory",
+        )?;
+        match self.read_classified_path(event_id, "results", &path)? {
+            ReadOutcome::Present(event) => Ok(event),
+            ReadOutcome::Missing(error) => Err(error.to_string()),
+        }
+    }
     fn read_classified(
         &mut self,
         event_id: Uuid,
         direction: &str,
     ) -> Result<ReadOutcome<HostEvent>> {
         let path = self.path(event_id, direction)?;
+        self.read_classified_path(event_id, direction, &path)
+    }
+    fn read_classified_path(
+        &mut self,
+        event_id: Uuid,
+        direction: &str,
+        path: &Path,
+    ) -> Result<ReadOutcome<HostEvent>> {
         let cap = if direction == "inbox" {
             self.manifest.limits.max_command_bytes
         } else {
             self.manifest.limits.max_result_bytes
         };
         self.budget.reserve(cap as usize)?;
-        let raw = match read_bounded_classified(&path, cap as usize)? {
+        let raw = match read_bounded_classified(path, cap as usize)? {
             ReadOutcome::Present(raw) => raw,
             ReadOutcome::Missing(error) => return Ok(ReadOutcome::Missing(error)),
         };
@@ -448,14 +497,7 @@ impl FileTransport {
         self.identity(event, "consumed")?;
         let raw = crate::canonical_json::row_line(event)?;
         let path = self.path(event.event_id, "consumed")?;
-        let direction = if matches!(
-            event.kind,
-            EventKind::WorkerRegister
-                | EventKind::WindowBegin
-                | EventKind::WindowEnd
-                | EventKind::WindowAbort
-                | EventKind::MonitorStop
-        ) {
+        let direction = if is_command_event(event.kind) {
             "inbox"
         } else {
             "results"
@@ -511,20 +553,13 @@ impl FileTransport {
                 && event.shard == m.shard,
             "foreign event invocation/session",
         )?;
-        let command = matches!(
-            event.kind,
-            EventKind::WorkerRegister
-                | EventKind::WindowBegin
-                | EventKind::WindowEnd
-                | EventKind::WindowAbort
-                | EventKind::MonitorStop
-        );
+        let command = is_command_event(event.kind);
         require(
             direction == "consumed" || command == (direction == "inbox"),
             "event kind contradicts file direction",
         )?;
         let valid = if command {
-            if event.kind == EventKind::MonitorStop {
+            if is_operator_command(event.kind) {
                 event.emitter_id == m.operator_emitter_id
             } else {
                 m.workers.iter().any(|v| v.emitter_id == event.emitter_id)
@@ -585,6 +620,40 @@ impl FileTransport {
 #[cfg(test)]
 mod lifecycle_lock_tests {
     use super::*;
+
+    #[test]
+    fn operator_host_commands_are_inbox_commands() {
+        for kind in [
+            EventKind::HostProbe,
+            EventKind::HostTarget,
+            EventKind::HostClock,
+            EventKind::WorkerRegister,
+            EventKind::WindowBegin,
+            EventKind::WindowEnd,
+            EventKind::WindowAbort,
+            EventKind::MonitorStop,
+        ] {
+            assert!(is_command_event(kind));
+        }
+        for kind in [
+            EventKind::HostProbe,
+            EventKind::HostTarget,
+            EventKind::HostClock,
+            EventKind::MonitorStop,
+        ] {
+            assert!(is_operator_command(kind));
+        }
+        for kind in [
+            EventKind::WorkerRegister,
+            EventKind::WindowBegin,
+            EventKind::WindowEnd,
+            EventKind::WindowAbort,
+        ] {
+            assert!(!is_operator_command(kind));
+        }
+        assert!(!is_command_event(EventKind::HostResult));
+        assert!(!is_command_event(EventKind::MonitorStopped));
+    }
 
     #[test]
     fn capacity_snapshot_and_retirement_share_the_lifecycle_lock() {

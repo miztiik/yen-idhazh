@@ -254,17 +254,25 @@ def verify_result(
         HostEvent,
         native.limits.max_command_bytes,
     )
-    if (
-        not isinstance(command.body, HostCommandBody)
-        or command.kind not in {"host.probe", "host.clock"}
-        or command.session_id != event.session_id
-        or command.emitter_id != session.host_manifest.operator_emitter_id
-        or event.emitter_id != session.host_manifest.monitor_emitter_id
-        or event.sequence != command.sequence
-        or command.body.target != session.host_manifest.cpu_target
-        or command.body.controls != session.host_manifest.controls
-    ):
-        raise ValueError("native host result contradicts its retained triggering command")
+    if not isinstance(command.body, HostCommandBody):
+        raise ValueError("native host result has no retained host-command body")
+    contradictions = [
+        name
+        for name, matches in (
+            ("kind", command.kind in {"host.probe", "host.clock"}),
+            ("session", command.session_id == event.session_id),
+            ("operator emitter", command.emitter_id == session.host_manifest.operator_emitter_id),
+            ("monitor emitter", event.emitter_id == session.host_manifest.monitor_emitter_id),
+            ("target", command.body.target == session.host_manifest.cpu_target),
+            ("controls", command.body.controls == session.host_manifest.controls),
+        )
+        if not matches
+    ]
+    if contradictions:
+        raise ValueError(
+            "native host result contradicts its retained triggering command: "
+            + ", ".join(contradictions)
+        )
     plan = read_model(
         resolve(workspace, f"{root}/writes/{event.reply_to}.plan.json"),
         HostWritePlan,

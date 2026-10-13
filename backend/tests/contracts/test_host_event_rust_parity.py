@@ -141,7 +141,7 @@ def test_actual_generated_proc_sysfs_cli_sources_are_not_a_second_implementation
         "--cpu-root", str(workspace / "cpu"), "--namespace-root", str(workspace / "namespace"),
         "--affinity-input", "affinity", "--metadata-input", "metadata", "--hierarchy-input", "hierarchy",
         "--cache-multiple", "2",
-        "--format", "json", "--result-id", str(uuid4()),
+        "--format", "json", "--result-id", str(uuid4()), "--result-sequence", "4",
     ]
     output = subprocess.run(args, cwd=ROOT, capture_output=True, check=False, timeout=60)
     assert output.returncode == 0, output.stderr.decode()
@@ -194,6 +194,7 @@ def test_selected_python_worker_uses_live_linux_affinity_or_diagnoses_windows_so
         "--command", "command.json", "--config", "config.json", "--proc-root", roots[0],
         "--cpu-root", roots[1], "--namespace-root", roots[2], "--metadata-input", "metadata",
         "--cache-multiple", "2", "--format", "json", "--result-id", str(uuid4()),
+        "--result-sequence", "4",
     ]
     try:
         output = subprocess.run(args, cwd=ROOT, capture_output=True, check=False, timeout=60)
@@ -244,6 +245,7 @@ def _run_recorded_capture(capture: dict[str, Any]) -> HostResultBody:
         str(native()), "probe", "--workspace", str(workspace), "--manifest", "manifest.json",
         "--command", "command.json", "--config", "config.json", "--snapshot", "snapshot",
         "--cache-multiple", "2", "--format", "json", "--result-id", result_id,
+        "--result-sequence", "4",
     ]
     output = subprocess.run(args, cwd=ROOT, capture_output=True, check=False, timeout=60)
     assert output.returncode == 0, output.stderr.decode()

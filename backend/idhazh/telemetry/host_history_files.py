@@ -11,7 +11,8 @@ import subprocess
 import zlib
 from collections.abc import Mapping
 from dataclasses import dataclass, fields, replace
-from pathlib import Path
+from datetime import date
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from idhazh.contracts.console_band import ConsoleBand
@@ -144,7 +145,11 @@ def read_source(source: HistorySource, *, workspace: Path, limits: VerificationL
 
 
 def _read_evidence(
-    evidence: LegacyRawEvidence, *, workspace: Path, limits: VerificationLimits
+    evidence: LegacyRawEvidence,
+    *,
+    workspace: Path,
+    limits: VerificationLimits,
+    git_path: str | None = None,
 ) -> bytes:
     try:
         data = _read_bytes(
@@ -163,11 +168,33 @@ def _read_evidence(
     ).hexdigest()
     if git_blob != evidence.git_blob:
         raise ValueError(f"{evidence.path}: Git blob evidence does not match its bytes")
-    _verify_git_tree_entry(evidence, workspace=workspace)
+    _verify_git_tree_entry(evidence, workspace=workspace, git_path=git_path)
     return data
 
 
-def _verify_git_tree_entry(evidence: LegacyRawEvidence, *, workspace: Path) -> None:
+def legacy_raw_git_path(evidence: LegacyRawEvidence, root: HistoryRoot) -> str:
+    """Resolve a staged legacy CSV path to its exact path in the declared history root."""
+    staged = PurePosixPath(evidence.path)
+    try:
+        relative = staged.relative_to(PurePosixPath("evidence/legacy"))
+    except ValueError:
+        return evidence.path
+    if len(relative.parts) != 4:
+        raise ValueError(f"{evidence.path}: legacy evidence path must name one closed day")
+    year, month, day, _ = relative.parts
+    try:
+        closed_day = date.fromisoformat(f"{year}-{month}-{day}")
+    except ValueError as error:
+        raise ValueError(f"{evidence.path}: legacy evidence path has an invalid UTC day") from error
+    if closed_day.isoformat() != f"{year}-{month}-{day}":
+        raise ValueError(f"{evidence.path}: legacy evidence path has a noncanonical UTC day")
+    return PurePosixPath(root.state_root, *root.prefix, *relative.parts).as_posix()
+
+
+def _verify_git_tree_entry(
+    evidence: LegacyRawEvidence, *, workspace: Path, git_path: str | None = None
+) -> None:
+    expected_path = evidence.path if git_path is None else git_path
     environment = {
         key: value for key, value in os.environ.items() if not key.startswith("GIT_")
     }
@@ -196,7 +223,7 @@ def _verify_git_tree_entry(evidence: LegacyRawEvidence, *, workspace: Path) -> N
                 "--full-tree",
                 evidence.git_commit,
                 "--",
-                evidence.path,
+                expected_path,
             ],
             cwd=workspace,
             env=environment,
@@ -219,7 +246,7 @@ def _verify_git_tree_entry(evidence: LegacyRawEvidence, *, workspace: Path) -> N
         or len(metadata) != 3
         or metadata[1] != b"blob"
         or metadata[2] != evidence.git_blob.encode("ascii")
-        or tree_path != evidence.path.encode("utf-8")
+        or tree_path != expected_path.encode("utf-8")
     ):
         raise ValueError(f"{evidence.path}: Git commit path does not name the claimed blob")
 
@@ -310,10 +337,19 @@ def _legacy_raw_row(
 
 
 def read_legacy_raw_evidence(
-    evidence: LegacyRawEvidence, *, workspace: Path, limits: VerificationLimits
+    evidence: LegacyRawEvidence,
+    *,
+    workspace: Path,
+    limits: VerificationLimits,
+    git_path: str | None = None,
 ) -> dict[tuple[str, str, int], dict[str, Any]]:
     return _legacy_raw_row(
-        _read_evidence(evidence, workspace=workspace, limits=limits),
+        _read_evidence(
+            evidence,
+            workspace=workspace,
+            limits=limits,
+            git_path=git_path,
+        ),
         evidence,
     )
 
@@ -393,7 +429,6 @@ def _admit_compact_pages(
     env: FileEnvelope,
     limits: VerificationLimits,
 ) -> None:
-    engine = parquet.pyarrow  # type: ignore[attr-defined]  # Existing adapter's engine import.
     footer = opened.metadata
     if (
         not 0 <= footer.num_rows <= limits.max_rows
@@ -499,7 +534,7 @@ def _admit_compact_pages(
                         raise ValueError("compact Parquet dictionary exceeds row cardinality")
                     dictionary_count = dictionary.num_values
                     dictionary_payload = _plain_values(
-                        _decompress(body, size, env.compression.value, engine),
+                        _decompress(body, size, env.compression.value),
                         column,
                         dictionary_count,
                     )
@@ -517,7 +552,7 @@ def _admit_compact_pages(
                 ):
                     raise ValueError("compact Parquet requires bounded flat V1 data pages")
                 count += page.num_values
-                decoded = _decompress(body, size, env.compression.value, engine)
+                decoded = _decompress(body, size, env.compression.value)
                 present = page.num_values
                 if column.nullable:
                     if len(decoded) < 4:
@@ -565,15 +600,11 @@ def _compact(
             max_thrift_items=limits.max_thrift_items,
             max_depth=limits.max_json_depth,
         )
-        engine = parquet.pyarrow  # type: ignore[attr-defined]  # Existing adapter's engine import.
-        with (
-            engine.BufferReader(data) as source,
-            engine.parquet.ParquetFile(
-                source,
-                thrift_string_size_limit=limits.max_footer_bytes,
-                thrift_container_size_limit=limits.max_thrift_items,
-            ) as opened,
-        ):
+        with parquet.open_bytes(
+            data,
+            max_footer_bytes=limits.max_footer_bytes,
+            max_footer_items=limits.max_thrift_items,
+        ) as opened:
             env = FileEnvelope.from_metadata(
                 parquet._envelope_of(opened.metadata.metadata)
             ).validate_container(Format.PARQUET)

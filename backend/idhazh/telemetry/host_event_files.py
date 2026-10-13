@@ -181,7 +181,7 @@ class HostSessionBookkeeping:
             or len(self._events)
             >= min(
                 limits.max_files,
-                4 * len(self._registered) + limits.max_concurrent_windows + 8,
+                self.manifest.pending_event_limit,
             )
         ):
             _refuse(ProtocolFaultCode.BOUNDS, "session event/byte/pending capacity exhausted")

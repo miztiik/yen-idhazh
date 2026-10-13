@@ -1,7 +1,10 @@
 //! Does the real native CLI replay named sources into retained atomic results and files?
 
 mod support;
-use idhazh_host_telemetry::{contracts::events::*, probe_inputs::snapshots::ProbeReplay};
+use idhazh_host_telemetry::{
+    contracts::{events::*, write_plan::HostWritePlan},
+    probe_inputs::snapshots::ProbeReplay,
+};
 use std::io::{BufRead, BufReader, Read};
 use std::process::Command;
 use uuid::Uuid;
@@ -37,9 +40,97 @@ fn memory_override_accepts_only_explicit_on_or_off() {
 }
 
 #[test]
+fn native_cli_accepts_the_ledger_prefix_for_producer_and_monitor_commands() {
+    let prefix = "pipeline-tests/bench-01/host-fingerprint";
+    for verb in ["probe", "monitor"] {
+        let error = idhazh_host_telemetry::cli::run(
+            [verb, "--ledger-prefix", prefix]
+                .into_iter()
+                .map(str::to_owned),
+        )
+        .unwrap_err();
+        assert_eq!(error, "missing --workspace");
+    }
+}
+
+#[test]
 fn native_replay_uses_the_real_producer_and_refuses_conflicting_retries() {
     native_replay_check();
 }
+
+#[test]
+fn native_replay_writes_to_the_declared_state_root_with_default_host_prefix() {
+    let workspace = support::workspace("cli-state-root");
+    let mut manifest = support::manifest();
+    manifest.output_roots = vec!["state".to_owned()];
+    manifest.named_inputs = vec![NamedHostInput {
+        name: "snapshot".to_owned(),
+        source: CaptureSource::Cpuinfo,
+        relative_path: "capture.json".to_owned(),
+    }];
+    let mut command = support::command(&manifest, EventKind::HostProbe, 1, None, true);
+    if let EventBody::HostCommand(body) = &mut command.body {
+        body.input_names = vec!["snapshot".to_owned()];
+    }
+    native_replay_finish(workspace.clone(), manifest.clone(), command.clone(), None);
+    let intent_path = workspace.join(format!(
+        "{}/writes/{}.intent.json",
+        manifest.event_root, command.event_id
+    ));
+    let intent: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(intent_path).unwrap()).unwrap();
+    let plan: HostWritePlan = serde_json::from_value(intent["plan"].clone()).unwrap();
+    assert_eq!(plan.target_root, "state");
+    assert_eq!(plan.prefix, ["host-fingerprint"]);
+    assert!(
+        workspace
+            .join(&plan.target_root)
+            .join(&plan.files[0].relative_path)
+            .is_file()
+    );
+    std::fs::remove_dir_all(workspace).unwrap();
+}
+
+#[test]
+fn native_replay_writes_to_the_declared_trial_ledger_prefix() {
+    let workspace = support::workspace("cli-trial-ledger-prefix");
+    let mut manifest = support::manifest();
+    manifest.output_roots = vec!["state".to_owned()];
+    manifest.named_inputs = vec![NamedHostInput {
+        name: "snapshot".to_owned(),
+        source: CaptureSource::Cpuinfo,
+        relative_path: "capture.json".to_owned(),
+    }];
+    let mut command = support::command(&manifest, EventKind::HostProbe, 1, None, true);
+    if let EventBody::HostCommand(body) = &mut command.body {
+        body.input_names = vec!["snapshot".to_owned()];
+    }
+    native_replay_finish(
+        workspace.clone(),
+        manifest.clone(),
+        command.clone(),
+        Some("pipeline-tests/bench-01/host-fingerprint"),
+    );
+    let intent_path = workspace.join(format!(
+        "{}/writes/{}.intent.json",
+        manifest.event_root, command.event_id
+    ));
+    let intent: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(intent_path).unwrap()).unwrap();
+    let plan: HostWritePlan = serde_json::from_value(intent["plan"].clone()).unwrap();
+    assert_eq!(
+        plan.prefix,
+        ["pipeline-tests", "bench-01", "host-fingerprint"]
+    );
+    assert!(
+        workspace
+            .join(&plan.target_root)
+            .join(&plan.files[0].relative_path)
+            .is_file()
+    );
+    std::fs::remove_dir_all(workspace).unwrap();
+}
+
 fn native_replay_check() {
     let workspace = support::workspace("cli");
     let mut manifest = support::manifest();
@@ -52,7 +143,7 @@ fn native_replay_check() {
     if let EventBody::HostCommand(body) = &mut command.body {
         body.input_names = vec!["snapshot".to_owned()];
     }
-    native_replay_finish(workspace, manifest, command);
+    native_replay_finish(workspace, manifest, command, None);
 }
 #[test]
 fn killed_cli_resumes_intent_plan_publication_receipt_and_result_without_recapture() {
@@ -115,6 +206,8 @@ fn killed_cli_resumes_intent_plan_publication_receipt_and_result_without_recaptu
                     if codec == "json" { "none" } else { codec },
                     "--result-id",
                     "00000000-0000-0000-0000-000000002001",
+                    "--result-sequence",
+                    "3",
                 ]);
                 process
             };
@@ -255,6 +348,7 @@ fn native_replay_finish(
     workspace: std::path::PathBuf,
     manifest: HostSessionManifest,
     mut command: HostEvent,
+    ledger_prefix: Option<&str>,
 ) {
     std::fs::write(
         workspace.join("manifest.json"),
@@ -281,28 +375,32 @@ fn native_replay_finish(
     )
     .unwrap();
     let call = || {
-        Command::new(env!("CARGO_BIN_EXE_idhazh-host-telemetry"))
-            .args([
-                "probe",
-                "--workspace",
-                workspace.to_str().unwrap(),
-                "--manifest",
-                "manifest.json",
-                "--command",
-                "command.json",
-                "--config",
-                "config.json",
-                "--snapshot",
-                "snapshot",
-                "--cache-multiple",
-                "2",
-                "--format",
-                "json",
-                "--result-id",
-                "00000000-0000-0000-0000-000000002001",
-            ])
-            .output()
-            .unwrap()
+        let mut process = Command::new(env!("CARGO_BIN_EXE_idhazh-host-telemetry"));
+        process.args([
+            "probe",
+            "--workspace",
+            workspace.to_str().unwrap(),
+            "--manifest",
+            "manifest.json",
+            "--command",
+            "command.json",
+            "--config",
+            "config.json",
+            "--snapshot",
+            "snapshot",
+            "--cache-multiple",
+            "2",
+            "--format",
+            "json",
+            "--result-id",
+            "00000000-0000-0000-0000-000000002001",
+            "--result-sequence",
+            "3",
+        ]);
+        if let Some(prefix) = ledger_prefix {
+            process.args(["--ledger-prefix", prefix]);
+        }
+        process.output().unwrap()
     };
     let output = call();
     assert!(

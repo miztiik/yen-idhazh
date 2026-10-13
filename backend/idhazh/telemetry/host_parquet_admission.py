@@ -289,7 +289,7 @@ class _Budget:
         self.used += size
 
 
-def _decompress(body: memoryview, size: int, codec: str, engine: Any) -> memoryview:
+def _decompress(body: memoryview, size: int, codec: str) -> memoryview:
     """Allocate only the admitted target, never the compressed stream's request."""
     try:
         if codec == "none":
@@ -304,9 +304,9 @@ def _decompress(body: memoryview, size: int, codec: str, engine: Any) -> memoryv
                 raise ValueError("Snappy Parquet page has an inexact decoded size")
             return memoryview(target)
         if codec == "zstd":
-            return memoryview(
-                engine.Codec("zstd").decompress(body, decompressed_size=size, asbytes=False)
-            )
+            from idhazh.ledger import parquet
+
+            return parquet.decompress_zstd_page(body, size)
         raise ValueError("unsupported host Parquet compression")
     except ValueError:
         raise
@@ -354,7 +354,6 @@ def _data_value(
     body: memoryview,
     column: Column,
     codec: str,
-    engine: Any,
     dictionary_count: int | None,
     dictionary_bytes: int,
 ) -> int:
@@ -368,7 +367,7 @@ def _data_value(
         ):
             raise ValueError("Parquet data page count/levels contradict the one-row profile")
         encoding = v1.encoding
-        decoded = _decompress(body, _size(header.uncompressed_page_size), codec, engine)
+        decoded = _decompress(body, _size(header.uncompressed_page_size), codec)
         if column.nullable:
             if len(decoded) < 4:
                 raise ValueError("truncated Parquet definition-level prefix")
@@ -393,7 +392,7 @@ def _data_value(
         if v2.num_nulls != 1 - present:
             raise ValueError("Parquet V2 null count contradicts actual definition levels")
         decoded = _decompress(
-            body[definition:], size - definition, codec if v2.is_compressed else "none", engine
+            body[definition:], size - definition, codec if v2.is_compressed else "none"
         )
     else:
         raise ValueError("Parquet data page lacks its declared header")
@@ -431,7 +430,6 @@ def admit_host_parquet(
     max_header_bytes: int,
     max_thrift_items: int,
     max_depth: int,
-    engine: Any,
 ) -> int:
     """Validate every page; return charged bytes before any native row decoding.
 
@@ -562,7 +560,7 @@ def admit_host_parquet(
                     )
                 dictionary_count = dictionary.num_values
                 dictionary_bytes = _plain(
-                    _decompress(body, uncompressed, compression, engine), column, dictionary_count
+                    _decompress(body, uncompressed, compression), column, dictionary_count
                 )
             elif (header.type == 0 and header.data_page_header is not None) or (
                 header.type == 3 and header.data_page_header_v2 is not None
@@ -573,7 +571,7 @@ def admit_host_parquet(
                     )
                 data_count += 1
                 payload = _data_value(
-                    header, body, column, compression, engine, dictionary_count, dictionary_bytes
+                    header, body, column, compression, dictionary_count, dictionary_bytes
                 )
                 budget.charge(payload)
             else:

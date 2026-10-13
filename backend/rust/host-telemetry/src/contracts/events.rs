@@ -317,8 +317,8 @@ impl HostSessionManifest {
     pub fn pending_event_limit(&self) -> Result<i64> {
         (self.workers.len() as i64)
             .checked_mul(4)
-            .and_then(|v| v.checked_add(self.limits.max_concurrent_windows))
-            .and_then(|v| v.checked_add(8))
+            .and_then(|v| v.checked_add(self.limits.max_concurrent_windows.checked_mul(6)?))
+            .and_then(|v| v.checked_add(15))
             .ok_or("pending event limit overflow".to_owned())
     }
 }

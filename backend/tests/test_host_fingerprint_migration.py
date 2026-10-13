@@ -6,10 +6,11 @@ import hashlib
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import fields
 from pathlib import Path
 from typing import Any
@@ -40,6 +41,21 @@ REPO = Path(__file__).resolve().parents[2]
 PYTHON = sys.executable
 
 
+def _remove_readonly_git_object(
+    function: Callable[..., object], path: str, error: BaseException
+) -> None:
+    target = Path(path)
+    if (
+        not isinstance(error, PermissionError)
+        or function is not os.unlink
+        or target.stat().st_mode & stat.S_IWRITE
+        or ".git" not in target.parts
+    ):
+        raise error
+    target.chmod(stat.S_IREAD | stat.S_IWRITE)
+    function(path)
+
+
 @pytest.fixture
 def workspace() -> Iterator[Path]:
     root = REPO / "backend" / "var" / "d15-tests" / str(uuid.uuid4())
@@ -47,7 +63,7 @@ def workspace() -> Iterator[Path]:
     try:
         yield root
     finally:
-        shutil.rmtree(root)
+        shutil.rmtree(root, onexc=_remove_readonly_git_object)
 
 
 def specification() -> dict[str, Any]:

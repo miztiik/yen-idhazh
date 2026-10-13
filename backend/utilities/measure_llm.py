@@ -21,6 +21,7 @@ import sys
 import time
 import urllib.request
 from collections.abc import Iterable, Mapping, Sequence
+from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final, cast
@@ -202,11 +203,16 @@ def _key_values(path: Path) -> dict[str, int | str]:
     return values
 
 
-def resource_snapshot() -> dict[str, object]:
+def resource_snapshot(*, memory_profiling_enabled: bool = True) -> dict[str, object]:
     root = Path("/sys/fs/cgroup")
-    return {
+    result: dict[str, object] = {
         "cpu_stat": _key_values(root / "cpu.stat"),
         "cpu_pressure": _key_values(root / "cpu.pressure"),
+    }
+    if not memory_profiling_enabled:
+        return result
+    return {
+        **result,
         "memory_events": _key_values(root / "memory.events"),
         "memory_peak": (root / "memory.peak").read_text(encoding="utf-8").strip()
         if (root / "memory.peak").is_file()
@@ -250,6 +256,8 @@ def run_benchmarks(
     repeats: int,
     output: Path,
     resources_report: Path,
+    memory_profiling_enabled: bool = True,
+    native: bool = False,
 ) -> list[dict[str, Any]]:
     """Run the bench and hand back the rows it printed.
 
@@ -269,7 +277,9 @@ def run_benchmarks(
                     file=sys.stderr,
                     flush=True,
                 )
-                before = resource_snapshot()
+                before = {} if native else resource_snapshot(
+                    memory_profiling_enabled=memory_profiling_enabled
+                )
                 started = time.monotonic()
                 result = subprocess.run(
                     bench_command(
@@ -292,7 +302,9 @@ def run_benchmarks(
                         "wall_seconds": time.monotonic() - started,
                         "returncode": result.returncode,
                         "before": before,
-                        "after": resource_snapshot(),
+                        "after": {} if native else resource_snapshot(
+                            memory_profiling_enabled=memory_profiling_enabled
+                        ),
                     }
                 )
                 resources_report.write_text(
@@ -858,6 +870,11 @@ def parse_args() -> argparse.Namespace:
     )
     bench.add_argument("--threads", default="4", help="Comma-separated worker counts")
     bench.add_argument("--binary", type=Path)
+    bench.add_argument("--config", type=Path, default=Path("config"))
+    bench.add_argument("--date")
+    bench.add_argument("--execution")
+    bench.add_argument("--commit")
+    bench.add_argument("--memory-profiling", choices=("on", "off"))
     bench.add_argument("--models-dir", type=Path, default=Path("backend/models"))
     bench.add_argument("--output", type=Path, default=Path("backend/var/llm.json"))
     bench.add_argument("--weights-report", type=Path, default=Path("backend/var/weights.txt"))
@@ -922,6 +939,25 @@ def run_bench(args: argparse.Namespace) -> int:
         print(error, file=sys.stderr)
         return 2
 
+    from idhazh import config
+    from idhazh.contracts.base import ServerJob
+    from idhazh.stages import common
+    from idhazh.telemetry import job_machine
+
+    settings = config.load(getattr(args, "config", Path("config")))
+    events = job_machine.from_environment(settings)
+    if events is not None and not all(
+        getattr(args, name, None) for name in ("date", "execution", "commit")
+    ):
+        raise ValueError("native benchmark requires --date, --execution and --commit")
+    memory = (
+        events.manifest.controls.memory_profiling_enabled
+        if events is not None
+        else {"on": True, "off": False}.get(
+            getattr(args, "memory_profiling", None) or "",
+            settings.app.observability.memory_profiling_enabled,
+        )
+    )
     models: list[Path] = []
     fetch_seconds: float | None = None
     args.weights_report.parent.mkdir(parents=True, exist_ok=True)
@@ -943,16 +979,32 @@ def run_bench(args: argparse.Namespace) -> int:
         with args.weights_report.open("a", encoding="utf-8", newline="\n") as report:
             report.write(f"{ref} {source} bytes={remote.bytes} sha256={remote.sha256}\n")
 
-    rows = run_benchmarks(
-        binary=binary,
-        models=models,
-        threads=threads,
-        prompt_tokens=prompt_tokens,
-        generation_tokens=args.generation_tokens,
-        repeats=args.repeats,
-        output=args.output,
-        resources_report=args.resources_report,
+    machine = (
+        job_machine.record(
+            date=args.date,
+            run_id=f"{args.date}-{args.execution}",
+            settings=settings,
+            state_root=common.state_root_of(settings, base=common.STATE_ROOT),
+            commit_sha=args.commit,
+            job=ServerJob.RUNTIME,
+            host_events=events,
+        )
+        if events is not None
+        else nullcontext()
     )
+    with machine:
+        rows = run_benchmarks(
+            binary=binary,
+            models=models,
+            threads=threads,
+            prompt_tokens=prompt_tokens,
+            generation_tokens=args.generation_tokens,
+            repeats=args.repeats,
+            output=args.output,
+            resources_report=args.resources_report,
+            memory_profiling_enabled=memory,
+            native=events is not None and events.native,
+        )
     subprocess.run(
         [sys.executable, str(Path(__file__).with_name("summarise_bench.py")), str(args.output)],
         check=True,

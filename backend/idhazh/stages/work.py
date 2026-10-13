@@ -306,6 +306,24 @@ def stage_work(
     host_events: HostEventClient | None = None,
 ) -> None:
     """Fetch, extract, summarize and score one item at a time, writing as it goes."""
+    if shards < 1 or not 0 <= shard < shards:
+        raise ValueError("work shard must be inside the selected fanout")
+    mine = shard_of(plan, shard=shard, shards=shards)
+    if host_events is not None:
+        if host_events.native and (
+            host_events.manifest.controls.memory_profiling_enabled
+            != settings.app.observability.memory_profiling_enabled
+        ):
+            raise ValueError("native work memory control differs from the resolved invocation")
+        host_events.validate_plan(plan, shard=shard, shards=shards)
+        host_events.register_worker(server_pid=host.llama_server_pid())
+    if not settings.app.observability.memory_profiling_enabled and (
+        host_events is None or not host_events.native
+    ):
+        raise ValueError("memory profiling off requires the native work collector")
+    if not mine:
+        LOG.info("working shard=%s/%s items=0", shard, shards)
+        return
     model_endpoint = model_endpoint or resolve_endpoint(settings.app.model_server.base_url)
     shard_started = time.monotonic()
     tracer = telemetry.Tracer(
@@ -352,7 +370,6 @@ def stage_work(
 
     items_dir = _run_dir(plan.date) / "items"
     _write_inputs(items_dir, inputs=inputs)
-    mine = shard_of(plan, shard=shard, shards=shards)
     LOG.info(
         "working shard=%s/%s items=%s model=%s",
         shard,
@@ -365,9 +382,11 @@ def stage_work(
     # the CPU model read are each a few file opens; doing them per item would be
     # 80 scans for an answer that cannot change inside a shard.
     server_pid = host.llama_server_pid()
-    if host_events is not None:
-        host_events.register_worker(server_pid=server_pid)
-    shard_facts = host.host_facts(job=ServerJob.WORK)
+    shard_facts = (
+        host_events.host_facts()
+        if host_events is not None and host_events.native
+        else host.host_facts(job=ServerJob.WORK)
+    )
     shard_cells = _shard_cells(settings, shard=shard, shard_item_count=len(mine), facts=shard_facts)
     failures: dict[str, int] = {}
     finished: list[ItemHealthRow] = []
@@ -482,16 +501,24 @@ def stage_work(
         )
         recorder.note(queue_wait_ms=queue_wait_ms)
         recorder.parked(queue_wait_ms)
-        python_watch = host.Watch(
-            interval_s=flags.waiting_heartbeat_seconds,
-            server_pid=server_pid,
-            on_tick=_heartbeat(recorder),
-        )
-        watch_context = (
-            host_events.shadow_watch(python_watch, item_id=item.item_id)
-            if host_events is not None
-            else python_watch
-        )
+        watch_context: Any
+        if host_events is not None and host_events.native:
+            watch_context = host_events.native_watch(
+                item_id=item.item_id,
+                interval_s=flags.waiting_heartbeat_seconds,
+                on_tick=_heartbeat(recorder),
+            )
+        else:
+            python_watch = host.Watch(
+                interval_s=flags.waiting_heartbeat_seconds,
+                server_pid=server_pid,
+                on_tick=_heartbeat(recorder),
+            )
+            watch_context = (
+                host_events.shadow_watch(python_watch, item_id=item.item_id)
+                if host_events is not None
+                else python_watch
+            )
         with (
             tracer.trace(_trace_id(plan.run_id, item)),
             tracer.span(telemetry.SpanName.ITEM) as item_span,

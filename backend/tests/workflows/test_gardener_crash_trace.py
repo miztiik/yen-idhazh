@@ -22,8 +22,8 @@ The package cases run `idhazh work --config <missing planted path>` through the
 installed console script and through `python -m idhazh`. The missing config ends
 the command before it can start network work.
 
-The last test holds the four workflow programs to every command in the workflow
-that starts Python, so a fifth program cannot land without a case here. What
+The last test holds the five workflow programs to every command in the workflow
+that starts Python, so a sixth program cannot land without a case here. What
 the trace holds for any chain is `test_crash_trace.py`.
 """
 
@@ -33,7 +33,6 @@ import ast
 import json
 import os
 import re
-import shlex
 import subprocess
 import sys
 from collections.abc import Callable
@@ -50,6 +49,7 @@ from ._harness import (
     SQUASH_DUE_MODULE,
     _load_workflows,
     _mapping,
+    _shell_words,
     _steps,
 )
 
@@ -63,6 +63,9 @@ IDHAZH_ENTRY: Final = REPO_ROOT / "backend" / "idhazh" / "__main__.py"
 
 #: The router both package entry forms call.
 IDHAZH_ROUTER: Final = REPO_ROOT / "backend" / "idhazh" / "cli.py"
+
+#: The Rust host-telemetry wrapper is another standalone workflow program.
+D7_HOST_TELEMETRY: Final = REPO_ROOT / "backend" / "utilities" / "d7_host_telemetry.py"
 
 #: Both installed forms of the package command. They must install the same
 #: process-wide crash boundary before routing a verb.
@@ -173,6 +176,16 @@ def the_squash_crashes(root: Path) -> tuple[list[str], str]:
     ], "FileNotFoundError"
 
 
+def a_d7_host_telemetry_crashes(root: Path) -> tuple[list[str], str]:
+    """Read a directory as the monitor record, under an isolated planted path."""
+    workspace = root / PLANTED
+    workspace.mkdir()
+    (workspace / "manifest.json").write_text("{}", encoding="ascii")
+    monitor = workspace / "monitor.json"
+    monitor.mkdir()
+    return ["cleanup", "--workspace", str(workspace)], what_reading_refuses(monitor)
+
+
 def what_reading_refuses(folder: Path) -> str:
     """What reading a folder as a file raises here: IsADirectoryError, or on Windows PermissionError."""
     try:
@@ -208,12 +221,13 @@ def a_prune_crashes(root: Path) -> tuple[list[str], str]:
     ], "FileNotFoundError"
 
 
-#: The four programs the workflow runs, each with the input that ends it.
+#: The five programs the workflow runs, each with the input that ends it.
 CRASHES: Final = (
     Crash(GARDENER_PLAN_MODULE, True, the_planner_crashes),
     Crash(GARDENER_SHARD_MODULE, False, a_shard_crashes),
     Crash(SQUASH_DUE_MODULE, True, the_due_check_crashes),
     Crash(PRUNE_PUSH_MODULE, False, the_squash_crashes),
+    Crash(D7_HOST_TELEMETRY, False, a_d7_host_telemetry_crashes),
 )
 
 #: The two commands a person runs on gardener code, which no workflow runs.
@@ -275,7 +289,7 @@ def test_the_top_router_installs_the_crash_trace_before_any_other_action() -> No
 
 def programs_started(script: str) -> set[str]:
     """What each command of a step's script that starts Python runs: the word after it."""
-    words = shlex.split(script, comments=True)
+    words = _shell_words(script, comments=True)
     return {
         words[at + 1] if at + 1 < len(words) else word
         for at, word in enumerate(words)
