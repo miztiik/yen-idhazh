@@ -26,13 +26,13 @@
   },
   "compaction_lag_days": 0,
   "covers_through": "2026-10-13",
-  "generated_at": "2026-10-13T14:41:50Z",
+  "generated_at": "2026-10-13T17:43:23Z",
   "routes": [
-    {"carries": "The model spent 19 h 14 m of this.","description": "Did the runs work, and what each stage cost.","href": "/console/","id": "pipelines","label": "Pipelines","severity": 3,"worst": "1 run failed"},
-    {"carries": "This day ran in 3 runs, 1.34x apart on read speed.","description": "What the model wrote, how long it took, and what it got wrong.","href": "/console/model/","id": "model","label": "Summaries","severity": 3,"worst": "86 items failed"},
-    {"carries": "154 articles on this day.","description": "The hardware the model ran on, and how much it varied between runs.","href": "/console/machine/","id": "machine","label": "Hardware","severity": 2,"worst": "free swap fell to 3071.9 MB"},
+    {"carries": "The model spent 20 h 19 m of this.","description": "Did the runs work, and what each stage cost.","href": "/console/","id": "pipelines","label": "Pipelines","severity": 3,"worst": "2 runs failed"},
+    {"carries": "This day ran in 4 runs, 1.34x apart on read speed.","description": "What the model wrote, how long it took, and what it got wrong.","href": "/console/model/","id": "model","label": "Summaries","severity": 3,"worst": "116 items failed"},
+    {"carries": "162 articles on this day.","description": "The hardware the model ran on, and how much it varied between runs.","href": "/console/machine/","id": "machine","label": "Hardware","severity": 2,"worst": "free swap fell to 3071.9 MB"},
     {"carries": "16 summaries were marked \"not sure\" on this day.","description": "Which stories the day merged, and where the judge and a person disagreed.","href": "/console/judgement/","id": "judgement","label": "Judgement","severity": 0,"worst": null},
-    {"carries": "27 feeds rested over these 259 runs.","description": "Who supplied the day, and how far each feed is discounted.","href": "/console/voices/","id": "voices","label": "Voices","severity": 2,"worst": "12 feeds discounted to the floor"},
+    {"carries": "20 feeds rested over these 260 runs.","description": "Who supplied the day, and how far each feed is discounted.","href": "/console/voices/","id": "voices","label": "Voices","severity": 2,"worst": "12 feeds discounted to the floor"},
     {"carries": "Every published ledger the other routes draw from, open to a question of your own.","description": "What the ledgers hold, and whatever you ask of them.","href": "/console/data-explorer/","id": "data-explorer","label": "Data explorer","severity": 0,"worst": null}
   ],
   "rows_uncompacted": 0,
@@ -103,12 +103,12 @@
     "compared_from": "2026-09-14"
   },
   "size": {
-    "articles_to_cap": 384069,
-    "bytes": 43767877,
-    "cap_fraction": 0.040762011893093586,
-    "left_mb": 982.2596998214722,
+    "articles_to_cap": 384061,
+    "bytes": 43788555,
+    "cap_fraction": 0.040781269781291485,
+    "left_mb": 982.2399797439575,
     "measured_days": 52,
-    "sentence": "41.7 MB of the 1 GB limit - room for about 384,000 more articles."
+    "sentence": "41.8 MB of the 1 GB limit - room for about 384,000 more articles."
   },
   "verdict": {
     "date": "2026-10-13",
@@ -117,15 +117,16 @@
     "runs": [
       {"health": "amber","label": "Run 1 is worth a look"},
       {"health": "amber","label": "Run 2 is worth a look"},
-      {"health": "red","label": "Run 3 failed"}
+      {"health": "red","label": "Run 3 failed"},
+      {"health": "red","label": "Run 4 failed"}
     ],
-    "sentence": "2026-10-13 ran 3 runs and published 154 of 240 planned items. 86 items failed."
+    "sentence": "2026-10-13 ran 4 runs and published 164 of 280 planned items. 116 items failed."
   },
   "version": "2026-10-11T21:00",
   "worst": {
     "href": "/console/",
     "id": "pipelines",
     "label": "Pipelines",
-    "sentence": "1 run failed, so the items it planned are not in the day."
+    "sentence": "2 runs failed, so the items they planned are not in the day."
   }
 }
