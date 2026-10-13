@@ -12,12 +12,15 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import threading
 import time
 import urllib.request
 from collections import Counter
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -438,6 +441,82 @@ def keep_the_captures(date: str, label: str, repeat: int) -> str | None:
     return kept.as_posix()
 
 
+@contextmanager
+def _termination_signals(*, defer: bool = False) -> Iterator[None]:
+    """Unwind on cancellation, but finish acquiring or reaping owned processes first."""
+    received: int | None = None
+
+    def cancelled(signum: int, frame: object) -> None:
+        nonlocal received
+        del frame
+        if received is None:
+            received = signum
+            if not defer:
+                raise SystemExit(128 + signum)
+
+    previous = {}
+    try:
+        for signum in (signal.SIGTERM, signal.SIGINT):
+            previous[signum] = signal.signal(signum, cancelled)
+        yield
+    finally:
+        active = sys.exception()
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
+        if defer and received is not None:
+            if active is None:
+                raise SystemExit(128 + received)
+            active.add_note(f"runtime sweep also received signal {received}")
+
+
+def _reap_owned_process(process: subprocess.Popen[bytes]) -> None:
+    try:
+        if process.poll() is None:
+            process.terminate()
+        process.wait(timeout=20)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        try:
+            process.kill()
+        finally:
+            process.wait(timeout=20)
+        if isinstance(error, OSError):
+            raise
+
+
+def _cleanup_owned_processes(
+    server: subprocess.Popen[bytes] | None,
+    workers: Sequence[subprocess.Popen[bytes]],
+    stop: threading.Event,
+    sampler: threading.Thread | None,
+) -> None:
+    errors: list[Exception] = []
+    try:
+        with _termination_signals(defer=True):
+            stop.set()
+            # A failed reap must not skip another worker, the server, or the sampler.
+            processes = [*workers, *([server] if server is not None else [])]
+            for process in processes:
+                try:
+                    _reap_owned_process(process)
+                except Exception as error:
+                    errors.append(error)
+            if sampler is not None:
+                try:
+                    sampler.join(timeout=5)
+                except Exception as error:
+                    errors.append(error)
+    finally:
+        active = sys.exception()
+        if errors:
+            if active is not None:
+                for cleanup_error in errors:
+                    active.add_note(f"runtime sweep cleanup also failed: {cleanup_error}")
+            else:
+                for cleanup_error in errors[1:]:
+                    errors[0].add_note(f"runtime sweep cleanup also failed: {cleanup_error}")
+                raise errors[0]
+
+
 def run_once(
     label: str,
     update: dict[str, Any],
@@ -482,21 +561,24 @@ def run_once(
     )
     env_paths = [ROOT / f"{label}-{repeat}-{shard}.env" for shard in range(worker_count)]
     with log_path.open("w", encoding="utf-8") as log:
-        server = subprocess.Popen(argv, stdout=log, stderr=subprocess.STDOUT, env=env)
-        refuse_a_server_that_died_at_startup(server, log_path)
-        stop = threading.Event()
-
-        def sample_rss() -> None:
-            while not stop.is_set():
-                rss_samples.append(read_status(server.pid))
-                time.sleep(1)
-
-        sampler = None
-        if not native:
-            sampler = threading.Thread(target=sample_rss, daemon=True)
-            sampler.start()
+        server = None
         workers: list[subprocess.Popen[bytes]] = []
+        stop = threading.Event()
+        sampler = None
         try:
+            with _termination_signals(defer=True):
+                server = subprocess.Popen(argv, stdout=log, stderr=subprocess.STDOUT, env=env)
+            refuse_a_server_that_died_at_startup(server, log_path)
+
+            def sample_rss() -> None:
+                assert server is not None
+                while not stop.is_set():
+                    rss_samples.append(read_status(server.pid))
+                    time.sleep(1)
+
+            if not native:
+                sampler = threading.Thread(target=sample_rss, daemon=True)
+                sampler.start()
             wait_for_health(port)
             assert_the_candidate_is_serving(port, candidate_id)
             startup_ms = int((time.perf_counter() - started) * 1000)
@@ -508,48 +590,33 @@ def run_once(
             for shard in range(worker_count):
                 if native:
                     env_paths[shard].unlink(missing_ok=True)
-                workers.append(
-                    subprocess.Popen(
-                        work_command(
-                            config_root=cfg,
-                            date=date,
-                            execution=execution,
-                            shard=shard,
-                            shards=worker_count,
-                            commit_sha=commit_sha or os.environ.get("GITHUB_SHA", "0" * 40),
-                            native=native,
-                        ),
-                        env={
-                            **env,
-                            # Each invocation returns its own receipt. It must not
-                            # race another shard appending to the runner's env file.
-                            "GITHUB_ENV": str(env_paths[shard]),
-                        } if native else env,
+                with _termination_signals(defer=True):
+                    workers.append(
+                        subprocess.Popen(
+                            work_command(
+                                config_root=cfg,
+                                date=date,
+                                execution=execution,
+                                shard=shard,
+                                shards=worker_count,
+                                commit_sha=commit_sha or os.environ.get("GITHUB_SHA", "0" * 40),
+                                native=native,
+                            ),
+                            env={
+                                **env,
+                                # Each invocation returns its own receipt. It must not
+                                # race another shard appending to the runner's env file.
+                                "GITHUB_ENV": str(env_paths[shard]),
+                            } if native else env,
+                        )
                     )
-                )
             failures = [proc.wait() for proc in workers]
             if any(failures):
                 raise RuntimeError(f"{label} repeat {repeat} worker failures: {failures}")
             work_ms = int((time.perf_counter() - work_started) * 1000)
             total_ms = int((time.perf_counter() - started) * 1000)
         finally:
-            stop.set()
-            for worker in workers:
-                if worker.poll() is None:
-                    worker.terminate()
-                    try:
-                        worker.wait(timeout=20)
-                    except subprocess.TimeoutExpired:
-                        worker.kill()
-                        worker.wait(timeout=20)
-            server.terminate()
-            try:
-                server.wait(timeout=20)
-            except subprocess.TimeoutExpired:
-                server.kill()
-                server.wait(timeout=20)
-            if sampler is not None:
-                sampler.join(timeout=5)
+            _cleanup_owned_processes(server, workers, stop, sampler)
 
     peak = None
     workspaces: list[Path] = []
@@ -965,7 +1032,8 @@ def main(argv: list[str] | None = None) -> int:
                 state_dir=common.STATE_ROOT,
             )
         return 0
-    return sweep(args)
+    with _termination_signals():
+        return sweep(args)
 
 
 if __name__ == "__main__":
