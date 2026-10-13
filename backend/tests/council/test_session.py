@@ -9,6 +9,7 @@ computes one at all.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -187,10 +188,14 @@ def test_a_council_verb_runs_a_night_that_hosts_nobody(verb: str, tmp_path: Path
     )
 
 
-def test_settle_records_one_machine_for_the_night_not_for_each_judged_date(venue: Path) -> None:
+def test_unbound_settle_keeps_each_judged_date_without_host_measurements(
+    venue: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A direct council invocation settles its tenants without inventing host evidence."""
     a_venue(venue, package=A_VENUE, slugs={A_SLUG: (1, ())})
     config_root = _config_registering(venue, A_SLUG)
     state = venue / "state"
+    caplog.set_level(logging.INFO, logger="idhazh")
     address = [
         "--config",
         str(config_root),
@@ -202,19 +207,28 @@ def test_settle_records_one_machine_for_the_night_not_for_each_judged_date(venue
         A_SHA,
     ]
 
-    for judged in (A_DATE, "2026-09-19"):
+    judged_dates = (A_DATE, "2026-09-19")
+    for judged in judged_dates:
         assert cli.main(["council-settle", "--date", judged, *address]) == 0
 
+    settled = ledger.load_days(
+        state, LedgerName.COUNCIL_RUN_RECORDS, judged_dates, model=CouncilRunRecord
+    )
+    assert len(settled) == len(judged_dates)
+    assert {(row.date, row.run_id, row.judge_id, row.evaluation_step) for row in settled} == {
+        (judged, A_RUN, A_SLUG, EvaluationStep.COMBINE_JUDGE_RESULTS) for judged in judged_dates
+    }
+    assert written(A_VENUE, A_SLUG).TENANT.settled == list(judged_dates)
     rows = ledger.load_days(
         state, LedgerName.HOST_FINGERPRINT, [A_RUN[:10]], model=HostFingerprintRow
     )
-    assert len(rows) == 1
-    (row,) = rows
-    assert row.job is ServerJob.SAVE_COUNCIL_RESULTS
-    assert row.run_id == A_RUN
-    assert row.fingerprint is not None
-    assert row.job_seconds is not None
-    assert row.memcpy_probe_mib == 0 and row.memcpy_gib_s is None
+    assert rows == [], "an unbound council invocation invented a machine record"
+    assert not ledger.raw_root(state, LedgerName.HOST_FINGERPRINT).exists()
+    assert any(
+        "host measurements unavailable: no bound Rust session" in message
+        and f"run={A_RUN} job={ServerJob.SAVE_COUNCIL_RESULTS}" in message
+        for message in caplog.messages
+    )
 
 
 @pytest.mark.parametrize("verb", [*COUNCIL_VERBS, "council-shard"])

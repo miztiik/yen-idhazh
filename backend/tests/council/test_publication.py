@@ -152,29 +152,30 @@ def test_many_tenants_and_later_dates_survive_a_failure(
             PublicationReceipt.read(path)
             for path in (repo / "backend" / "var" / "council" / "publication").iterdir()
         ]
+        assert receipts, "completed tenant work has no publication evidence"
         evidence = {path: digest for receipt in receipts for path, digest in receipt.writes.items()}
-        machine = {
-            path: digest
-            for path, digest in evidence.items()
-            if path.startswith("state/raw/host-fingerprint/")
-        }
-        assert len(machine) == 2, "both probe and closing clock must have receipts"
-        remote = Repository(origin)
-        for path in machine:
-            entry = remote.entry("main", path)
-            assert entry is not None, "a receipted machine write was never pushed"
+        assert {
+            f"state/experiments/{slug}/{date}.json"
+            for slug in slugs
+            for date in ("2026-10-08", "2026-10-09")
+        } <= evidence.keys(), "completed tenant writes lost their publication receipts"
+        assert not any(path.startswith("state/raw/host-fingerprint/") for path in evidence), (
+            "an unbound publisher receipted machine writes"
+        )
+        remote = Repository(repo)
+        remote.git("fetch", "origin", "main")
+        for path in evidence:
+            entry = remote.entry("FETCH_HEAD", path)
+            assert entry is not None, "a receipted completed write was never pushed"
             assert remote.blob(entry.oid) == (repo / path).read_bytes()
-            assert "/2026/10/09/" in path, "machine belongs to opened night, not settled date"
         host_rows = ledger.load_days(
             repo / "state",
             LedgerName.HOST_FINGERPRINT,
             ["2026-10-08", "2026-10-09", "2026-10-10"],
             model=HostFingerprintRow,
         )
-        assert len(host_rows) == 1, "many dates and tenants still draw one collecting machine"
-        assert host_rows[0].job_seconds == 180
-        assert host_rows[0].memcpy_probe_mib == 0
-        assert host_rows[0].memcpy_gib_s is None
+        assert host_rows == [], "an unbound publisher invented a machine record"
+        assert not ledger.raw_root(repo / "state", LedgerName.HOST_FINGERPRINT).exists()
     finally:
         forget(package)
 

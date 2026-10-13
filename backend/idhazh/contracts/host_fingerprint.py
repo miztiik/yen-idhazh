@@ -138,6 +138,8 @@ _UNSET: Final = _Unset()
 #: the surface that would notice first if the column stopped arriving, which is
 #: the fact a person deleting a column needs. A second reader is found by search;
 #: the first one to break is not.
+#: Retained historical context with no current consumer is named in UNREAD_CELLS,
+#: not assigned to a deleted comparison tool or silently removed from old payloads.
 #: A declared panel query counts as a reader. Shared, pipelines, model, machine,
 #: then voices owns a column when more than one query declares it.
 #: Registry ownership does not change the persisted row or its version.
@@ -149,7 +151,6 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
     {
         "backend/idhazh/telemetry/host_output_verify.py": (
             "measured_at",
-            "runner_name",
         ),
         "frontend/src/lib/console/queries/machine.ts": (
             "version",
@@ -188,6 +189,10 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "model_load_ms",
         ),
     }
+)
+
+UNREAD_CELLS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
+    {"What runner label did this historical job report?": ("runner_name",)}
 )
 
 

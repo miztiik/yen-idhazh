@@ -21,8 +21,28 @@ def test_each_daily_job_uses_its_policy_and_observes_every_producer(job: str) ->
     assert f"backend/utilities/digest_publish.py {job}" in call
     assert "--execution" in call and "--commit" in call and "--date" in call
     scripts = "\n".join(str(step.get("run", "")) for step in _steps(workflow, job))
-    for verb in digest_publish.VERBS[job]:
+    for verb in {
+        "plan": ("plan",),
+        "work": ("work", "record"),
+        "assemble": ("assemble", "harvest"),
+    }[job]:
         assert f"digest_publish.py run {verb}" in scripts
+    for retired in ("fingerprint", "job-clock"):
+        assert f"digest_publish.py run {retired}" not in scripts
+    measured = next(
+        _script(step, job)
+        for step in _steps(workflow, job)
+        if f"digest_publish.py run {job}" in str(step.get("run", ""))
+    )
+    launcher = "backend/utilities/d7_host_telemetry.py run"
+    assert scripts.count(launcher) == 1
+    assert measured.index(launcher) < measured.index(f"digest_publish.py run {job}")
+    wrapper, _ = measured.split(f"digest_publish.py run {job}", maxsplit=1)
+    for argument in (f"--job {job}", "--run-id", "--git-sha", "--memory-profiling"):
+        assert argument in wrapper
+    if job == "work":
+        assert "IDHAZH_HOST_TELEMETRY_VERIFIED" in scripts
+    assert "d7_host_telemetry.py cleanup" in scripts
     assert "commit_and_push.py" not in scripts
     assert "REGENERATE_COMMAND" not in scripts
     assert "git add" not in scripts

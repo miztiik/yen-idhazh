@@ -40,6 +40,7 @@ import pytest
 from conftest import REPO_ROOT, read_text
 
 from idhazh.contracts.host_fingerprint import COLUMN_READERS as HOST_READERS
+from idhazh.contracts.host_fingerprint import UNREAD_CELLS as HOST_UNREAD
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import COLUMN_READERS as ITEM_READERS
 from idhazh.contracts.item_health import UNREAD_CELLS, ItemHealthRow
@@ -107,8 +108,8 @@ def test_every_item_health_column_names_a_reader_or_the_question_it_would_answer
     assert not faults, "\n".join(faults)
 
 
-def test_every_host_fingerprint_column_names_a_reader() -> None:
-    faults = reader_faults(HOST_READERS, {}, tuple(HostFingerprintRow.csv_columns()))
+def test_every_host_fingerprint_column_names_a_reader_or_its_retained_context() -> None:
+    faults = reader_faults(HOST_READERS, HOST_UNREAD, tuple(HostFingerprintRow.csv_columns()))
     assert not faults, "\n".join(faults)
 
 

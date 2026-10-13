@@ -44,8 +44,8 @@ test('an explicit Rust selection keeps Python to the concrete native parity test
 	assert.deepEqual(selected.backendFiles, [
 		'backend/tests/contracts/test_rust_host_file_parity.py', 'backend/tests/test_rust_host_store_parity.py',
 		'backend/tests/test_rust_host_receipts.py', 'backend/tests/contracts/test_host_event_rust_parity.py',
-		'backend/tests/test_host_event_resource_parity.py', 'backend/tests/test_compare_host_telemetry.py',
-		'backend/tests/workflows/test_rust_host_telemetry_workflow.py'
+		'backend/tests/test_host_event_resource_parity.py', 'backend/tests/test_d7_host_lifecycle.py',
+		'backend/tests/test_d7_family_lifecycle.py'
 	]);
 	assert.equal(selected.rust, true);
 	assert.equal(selected.tooling, false);

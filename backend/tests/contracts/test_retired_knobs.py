@@ -112,6 +112,8 @@ def test_every_removed_name_is_sent_somewhere_or_said_to_be_gone() -> None:
         "public_telemetry_keep_months",
         "public_run_timeline_keep_months",
         "telemetry_publish",
+        "host_event_shadow",
+        "host_event_mode",
     }
     assert {name for name, successor in SUPERSEDED_RETENTION_NAMES.items() if not successor} == gone
     for name, successor in SUPERSEDED_RETENTION_NAMES.items():

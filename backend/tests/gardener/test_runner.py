@@ -182,60 +182,45 @@ def test_the_runner_writes_the_record_and_hands_back_what_to_land_without_pushin
 
 
 @pytest.mark.parametrize("land", [False, True], ids=["local", "pushed"])
-def test_a_shard_records_the_machine_it_drew_and_names_it_among_its_writes(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, land: bool
+def test_an_unbound_shard_keeps_its_task_record_without_machine_writes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    land: bool,
 ) -> None:
-    """A wake that cannot say which machine it drew cannot explain its own cost.
-
-    The gardener was one of the two workflows that never recorded one, because
-    the probe used to read a run plan back and the gardener writes none. It can
-    now, and the row is filed inside the shard rather than beside it: the shard
-    declares every file it wrote and its publisher refuses one it did not, so a
-    row written by a step alongside would be a row nobody staged.
-
-    The bandwidth cell is the one it leaves empty. `host_fingerprint_bandwidth_jobs`
-    names the bench, and a copy timed between two tasks would measure the wake
-    rather than the machine - so `memcpy_probe_mib` of zero is the reading, and
-    every other cell is still taken.
-    """
+    """Direct calls keep real task work but do not start a host collector."""
     origin, checkout, settings = a_garden(tmp_path, monkeypatch, "runner", RUNNER_FILES)
     monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "9")
+    caplog.set_level(logging.INFO, logger="idhazh")
 
     outcome, _ = ran(("old-days",), settings, checkout, "garden_tasks_ok", monkeypatch, land=land)
 
     assert outcome.exit_code == EXIT_OK
     assert outcome.landing is not None
+    row = rows_of(outcome.record)["old-days"]
+    assert (row.run_id, row.attempt, row.shard, row.job) == (RUN_ID, 1, 0, ServerJob.RUN_TASKS)
+    assert (row.deleted, row.stopped_because) == (1, StopReason.EXHAUSTED)
+    assert outcome.record is not None and outcome.record.is_file()
+    recorded = outcome.record.relative_to(checkout).as_posix()
+    assert outcome.landing.written_paths == frozenset({recorded})
+    if land:
+        assert on_origin(origin, recorded) is not None
+        assert on_origin(origin, f"state/old-days/{AGED}") is None
+        assert on_origin(origin, f"state/old-days/{FRESH}") == "fresh\n"
+
     rows = ledger.load_days(
         checkout / ledger.STATE_DIRNAME,
         LedgerName.HOST_FINGERPRINT,
         [WAKE.date().isoformat()],
         model=HostFingerprintRow,
     )
-    assert len(rows) == 1, "a wake draws one machine a shard"
-    (machine,) = rows
-    assert machine.job is ServerJob.RUN_TASKS
-    assert machine.run_id == RUN_ID, "the row is filed under the run the wake was given"
-    assert machine.fingerprint is not None, "the machine went unnamed"
-    assert machine.memcpy_probe_mib == 0, "the wake timed a copy the knob did not ask for"
-    assert machine.memcpy_gib_s is None, "an untaken reading is absent, never a rate"
-    assert machine.job_seconds == 0, "the fixture's clock never advanced"
-
-    named = {
-        path
-        for path in outcome.landing.written_paths
-        if LedgerName.HOST_FINGERPRINT.value in path
-    }
-    assert len(named) == 2, (
-        f"the shard filed a machine row and did not name it among its writes: "
-        f"{sorted(outcome.landing.written_paths)}"
+    assert rows == [], "an unbound shard invented a machine record"
+    assert not ledger.raw_root(checkout / ledger.STATE_DIRNAME, LedgerName.HOST_FINGERPRINT).exists()
+    assert any(
+        "host measurements unavailable: no bound Rust session" in message
+        and f"run={RUN_ID} job={ServerJob.RUN_TASKS}" in message
+        for message in caplog.messages
     )
-    assert all((checkout / path).is_file() for path in named)
-    if land:
-        assert all(on_origin(origin, path) is not None for path in named)
-    files = ledger.list_raw_files(
-        checkout / ledger.STATE_DIRNAME, LedgerName.HOST_FINGERPRINT, days={WAKE.date().isoformat()}
-    )
-    assert {held.envelope.identity.attempt for held in files} == {1}
 
 
 def test_a_shard_uses_its_loaded_fingerprint_switch(

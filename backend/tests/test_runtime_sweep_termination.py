@@ -239,6 +239,12 @@ def _wait_for_file(path: Path, producer: subprocess.Popen[bytes]) -> None:
     deadline = time.monotonic() + 15
     while not path.exists() and producer.poll() is None and time.monotonic() < deadline:
         time.sleep(0.01)
+    if not path.exists() and producer.poll() is not None:
+        stdout, stderr = producer.communicate(timeout=5)
+        pytest.fail(
+            f"fixture never reached {path.name}; exit={producer.returncode}\n"
+            f"{stdout.decode()}\n{stderr.decode()}"
+        )
     assert path.exists(), f"fixture never reached {path.name}; exit={producer.poll()}"
 
 
@@ -269,8 +275,10 @@ def _fixture_sweep(root: Path, scenario: str, *, native: bool) -> subprocess.Pop
         for key, value in os.environ.items()
         if not key.startswith("IDHAZH_HOST_TELEMETRY_")
     }
+    if native:
+        # run_once exercises nested process ownership, not admission of a host session.
+        env["IDHAZH_HOST_TELEMETRY_MODE"] = "rust"
     env.update(
-        IDHAZH_HOST_TELEMETRY_MODE="rust" if native else "legacy",
         FIXTURE_NATIVE="1" if native else "0",
         SCENARIO=scenario,
         PYTHONPATH=str(root),

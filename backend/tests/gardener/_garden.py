@@ -207,8 +207,10 @@ def quiet_git(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
 def git(repo: Path, *args: str) -> str:
     """One git command in `repo`, as the seed's author, raising on failure."""
+    bare = (repo / "HEAD").is_file() and (repo / "objects").is_dir()
+    location = ["--git-dir", str(repo)] if bare else []
     done = subprocess.run(
-        ["git", *SEED_IDENTITY, *args],
+        ["git", *location, *SEED_IDENTITY, *args],
         cwd=repo,
         env=os.environ.copy(),
         capture_output=True,
@@ -278,7 +280,7 @@ def on_origin(origin: Path, relative: str) -> str | None:
     in the reader thread and look like a file that never landed.
     """
     done = subprocess.run(
-        ["git", "show", f"main:{relative}"],
+        ["git", "--git-dir", str(origin), "show", f"main:{relative}"],
         cwd=origin,
         env=os.environ.copy(),
         capture_output=True,

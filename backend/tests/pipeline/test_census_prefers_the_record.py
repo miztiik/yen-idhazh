@@ -224,10 +224,17 @@ def test_an_item_whose_shard_sealed_nothing_still_gets_a_census_line(
     assert filled(kept[orphan.item_id]) - set(EXTRACTION_CELLS) == filled(rebuild) - set(
         EXTRACTION_CELLS
     ), "the fallback row says something the payloads cannot"
-    assert kept[orphan.item_id].cpu_model is None
-    assert all(kept[item.item_id].cpu_model is not None for item in run_plan.items[1:])
-    assert kept[orphan.item_id].machine_job is ServerJob.WORK, (
-        "the stage that rebuilt the row knows which job it is, even where the shard sealed nothing"
+    assert kept[orphan.item_id].item_total_ms is None
+    assert all(kept[item.item_id].item_total_ms is not None for item in run_plan.items[1:]), (
+        "items whose shard sealed a row lost their measured work duration"
+    )
+    assert all(row.cpu_model is None for row in kept.values()), (
+        "an unbound work stage invented a processor label"
+    )
+    assert {
+        (row.run_id, row.date, row.machine_job, row.machine_shard) for row in kept.values()
+    } == {(run_plan.run_id, run_plan.date, ServerJob.WORK, 0)}, (
+        "the work identity survives both a sealed row and a fallback with no host measurements"
     )
 
 

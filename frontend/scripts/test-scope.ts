@@ -142,49 +142,31 @@ export const RUST_STORE_TEST = 'backend/tests/test_rust_host_store_parity.py';
 export const RUST_RECEIPTS_TEST = 'backend/tests/test_rust_host_receipts.py';
 export const RUST_PRODUCERS_TEST = 'backend/tests/contracts/test_host_event_rust_parity.py';
 export const RUST_RESOURCES_TEST = 'backend/tests/test_host_event_resource_parity.py';
-const HOST_EVIDENCE_TESTS = [
-	'backend/tests/test_compare_host_telemetry.py',
-	'backend/tests/workflows/test_rust_host_telemetry_workflow.py'
+const HOST_LIFECYCLE_TESTS = [
+	'backend/tests/test_d7_host_lifecycle.py',
+	'backend/tests/test_d7_family_lifecycle.py'
 ];
-export const RUST_TESTS = [RUST_PARITY_TEST, RUST_STORE_TEST, RUST_RECEIPTS_TEST, RUST_PRODUCERS_TEST, RUST_RESOURCES_TEST, ...HOST_EVIDENCE_TESTS];
-export const HOST_MIGRATION_TESTS = [
-	'backend/tests/contracts/test_host_migration.py',
-	'backend/tests/test_host_fingerprint_migration.py'
-];
+export const RUST_TESTS = [RUST_PARITY_TEST, RUST_STORE_TEST, RUST_RECEIPTS_TEST, RUST_PRODUCERS_TEST, RUST_RESOURCES_TEST, ...HOST_LIFECYCLE_TESTS];
 const HOST_TESTS: Record<string, string[]> = {
-	'.github/workflows/rust-host-telemetry.yml': [...HOST_EVIDENCE_TESTS, ...RUST_TESTS, ...HOST_MIGRATION_TESTS],
-	'config/host-telemetry-comparison.json': [...HOST_EVIDENCE_TESTS, ...RUST_TESTS, ...HOST_MIGRATION_TESTS],
-	'backend/idhazh/contracts/host_evidence.py': [...HOST_EVIDENCE_TESTS, ...RUST_TESTS],
-	'backend/idhazh/telemetry/host_evidence_inputs.py': [...HOST_EVIDENCE_TESTS, ...RUST_TESTS, ...HOST_MIGRATION_TESTS],
-	'backend/idhazh/telemetry/host_evidence_comparison.py': [...HOST_EVIDENCE_TESTS, ...RUST_TESTS, ...HOST_MIGRATION_TESTS],
-	'backend/idhazh/telemetry/host_evidence_artifacts.py': [...HOST_EVIDENCE_TESTS, ...RUST_TESTS, ...HOST_MIGRATION_TESTS],
-	'backend/idhazh/telemetry/host_evidence_samples.py': [...HOST_EVIDENCE_TESTS, RUST_RESOURCES_TEST],
-	'backend/utilities/compare_host_telemetry.py': [...HOST_EVIDENCE_TESTS, ...RUST_TESTS],
-	'backend/utilities/host_telemetry_session.py': [...HOST_EVIDENCE_TESTS, ...RUST_TESTS],
-	'backend/utilities/host_telemetry_reference.py': [...HOST_EVIDENCE_TESTS, ...RUST_TESTS],
-	'backend/utilities/host_telemetry_workload.py': [...HOST_EVIDENCE_TESTS, ...RUST_TESTS],
-	'backend/utilities/host_telemetry_measurement.py': HOST_EVIDENCE_TESTS,
-	'backend/tests/workflows/_harness.py': ['backend/tests/workflows/test_triggers.py', 'backend/tests/workflows/test_workflow_inputs.py', ...HOST_EVIDENCE_TESTS],
-	'config/host-history-migration.json': HOST_MIGRATION_TESTS,
-	'backend/idhazh/contracts/host_migration.py': HOST_MIGRATION_TESTS,
-	'backend/idhazh/telemetry/host_history_files.py': HOST_MIGRATION_TESTS,
-	'backend/idhazh/telemetry/host_history_migration.py': HOST_MIGRATION_TESTS,
-	'backend/idhazh/telemetry/host_history_bundle.py': HOST_MIGRATION_TESTS,
-	'backend/idhazh/telemetry/host_history_paths.py': HOST_MIGRATION_TESTS,
-	'backend/utilities/migrate_host_fingerprints.py': HOST_MIGRATION_TESTS,
-	'tests/fixtures/host-events/history-migration.json': HOST_MIGRATION_TESTS,
+	'config/host-telemetry-lifecycle.json': HOST_LIFECYCLE_TESTS,
+	'backend/idhazh/telemetry/host_evidence_inputs.py': RUST_TESTS,
+	'backend/idhazh/telemetry/host_process_identity.py': HOST_LIFECYCLE_TESTS,
+	'backend/idhazh/telemetry/host_memory_summary.py': ['backend/tests/test_host_memory_summary.py', ...HOST_LIFECYCLE_TESTS],
+	'backend/idhazh/telemetry/item_heartbeat.py': ['backend/tests/test_host_readings.py', 'backend/tests/pipeline/test_work_health_payload.py'],
+	'backend/utilities/d7_host_telemetry.py': HOST_LIFECYCLE_TESTS,
+	'backend/tests/workflows/_harness.py': ['backend/tests/workflows/test_triggers.py', 'backend/tests/workflows/test_workflow_inputs.py', 'backend/tests/workflows/test_d7_workflow_wiring.py'],
 	'backend/idhazh/contracts/host_events.py': ['backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_event_files.py', ...RUST_TESTS],
 	'backend/idhazh/contracts/host_output.py': ['backend/tests/contracts/test_host_output.py', 'backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_output_verify.py', ...RUST_TESTS],
 	'backend/idhazh/telemetry/host_event_files.py': ['backend/tests/test_host_event_files.py'],
 	'backend/idhazh/telemetry/host_output_verify.py': ['backend/tests/test_host_output_verify.py', ...RUST_TESTS],
 	'backend/idhazh/telemetry/host_parquet_admission.py': ['backend/tests/test_host_parquet_admission.py', 'backend/tests/test_host_output_verify.py', ...RUST_TESTS],
 	'backend/utilities/verify_host_output.py': ['backend/tests/test_host_output_verify.py'],
-	'config/host-telemetry-experiment.json': ['backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_event_files.py', ...RUST_TESTS, ...HOST_MIGRATION_TESTS],
+	'config/host-telemetry-experiment.json': ['backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_event_files.py', ...RUST_TESTS],
 	'tests/fixtures/host-events/file-parity.json': [RUST_PARITY_TEST],
 	'tests/fixtures/host-events/storage-parity.json': [RUST_STORE_TEST],
 	'tests/fixtures/host-events/publication-parity.json': [RUST_RECEIPTS_TEST],
 	'tests/fixtures/host-events/probe-clock.json': [RUST_PRODUCERS_TEST],
-	'tests/fixtures/host-events/resource-windows.json': [RUST_RESOURCES_TEST, 'backend/tests/test_host_readings.py', 'backend/tests/test_memory_sampler.py'],
+	'tests/fixtures/host-events/resource-windows.json': [RUST_RESOURCES_TEST, 'backend/tests/test_host_readings.py'],
 	'tests/fixtures/host-events/manifest.json': ['backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_event_files.py', ...RUST_TESTS],
 	'tests/fixtures/host-events/cpu-snapshots.json': ['backend/tests/contracts/test_host_output.py', RUST_PRODUCERS_TEST],
 	'tests/fixtures/host-events/fingerprint-versions.json': ['backend/tests/contracts/test_host_output.py', RUST_PRODUCERS_TEST],
