@@ -6,10 +6,11 @@ import hashlib
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import fields
 from pathlib import Path
 from typing import Any
@@ -40,6 +41,21 @@ REPO = Path(__file__).resolve().parents[2]
 PYTHON = sys.executable
 
 
+def _remove_readonly_git_object(
+    function: Callable[..., object], path: str, error: BaseException
+) -> None:
+    target = Path(path)
+    if (
+        not isinstance(error, PermissionError)
+        or function is not os.unlink
+        or target.stat().st_mode & stat.S_IWRITE
+        or ".git" not in target.parts
+    ):
+        raise error
+    target.chmod(stat.S_IREAD | stat.S_IWRITE)
+    function(path)
+
+
 @pytest.fixture
 def workspace() -> Iterator[Path]:
     root = REPO / "backend" / "var" / "d15-tests" / str(uuid.uuid4())
@@ -47,7 +63,7 @@ def workspace() -> Iterator[Path]:
     try:
         yield root
     finally:
-        shutil.rmtree(root)
+        shutil.rmtree(root, onexc=_remove_readonly_git_object)
 
 
 def specification() -> dict[str, Any]:
@@ -188,6 +204,51 @@ def limits_document() -> dict[str, Any]:
     }
 
 
+def create_git_anchored_evidence(
+    root: Path,
+    *,
+    tree_path: str,
+    tree_bytes: bytes,
+    evidence_path: str,
+    evidence_bytes: bytes,
+) -> Any:
+    from idhazh.contracts.host_migration import LegacyRawEvidence
+
+    def git(*args: str) -> str:
+        completed = subprocess.run(
+            ["git", "-C", str(root), *args],
+            capture_output=True,
+            check=True,
+            text=True,
+        )
+        return completed.stdout.strip()
+
+    git("init", "--quiet")
+    git("config", "user.name", "D16 evidence test")
+    git("config", "user.email", "d16-evidence@example.invalid")
+    tracked = root / Path(tree_path)
+    tracked.parent.mkdir(parents=True, exist_ok=True)
+    tracked.write_bytes(tree_bytes)
+    git("add", tree_path)
+    git("commit", "--quiet", "--no-gpg-sign", "-m", "anchor legacy evidence")
+    if evidence_path != tree_path or evidence_bytes != tree_bytes:
+        current = root / Path(evidence_path)
+        current.parent.mkdir(parents=True, exist_ok=True)
+        current.write_bytes(evidence_bytes)
+    git_blob = hashlib.sha1(
+        b"blob " + str(len(evidence_bytes)).encode("ascii") + b"\0" + evidence_bytes
+    ).hexdigest()
+    return LegacyRawEvidence(
+        compact_path="state/compact/host-fingerprint/2026-09-20.parquet",
+        path=evidence_path,
+        sha256=hashlib.sha256(evidence_bytes).hexdigest(),
+        bytes=len(evidence_bytes),
+        git_commit=git("rev-parse", "HEAD"),
+        git_blob=git_blob,
+        attempt=1,
+    )
+
+
 def test_named_history_config_uses_shared_verification_and_computed_bounds() -> None:
     config_root = REPO / "config"
     experiment_path = config_root / "host-telemetry-experiment.json"
@@ -208,6 +269,65 @@ def test_named_history_config_uses_shared_verification_and_computed_bounds() -> 
     )
     assert experiment_path.read_bytes() == original_experiment
     assert migration_path.read_bytes() == original_migration
+
+
+def test_legacy_evidence_requires_the_claimed_blob_at_the_exact_git_path(
+    workspace: Path,
+) -> None:
+    from idhazh.telemetry.host_history_files import _read_evidence
+
+    source = b"legacy evidence bytes\n"
+    evidence = create_git_anchored_evidence(
+        workspace,
+        tree_path="state/legacy.csv",
+        tree_bytes=source,
+        evidence_path="state/legacy.csv",
+        evidence_bytes=source,
+    )
+
+    assert (
+        _read_evidence(
+            evidence,
+            workspace=workspace,
+            limits=HistoryLimits.from_config(limits_document()).verification,
+        )
+        == source
+    )
+
+
+@pytest.mark.parametrize(
+    ("tree_path", "tree_bytes"),
+    [
+        ("state/legacy.csv", b"older committed bytes\n"),
+        ("state/other.csv", b"legacy evidence bytes\n"),
+    ],
+    ids=["different-blob-at-path", "same-blob-at-other-path"],
+)
+def test_legacy_evidence_rejects_a_computed_blob_not_in_the_claimed_tree_entry(
+    workspace: Path,
+    tree_path: str,
+    tree_bytes: bytes,
+) -> None:
+    from idhazh.telemetry.host_history_files import _read_evidence
+
+    evidence_bytes = b"legacy evidence bytes\n"
+    evidence = create_git_anchored_evidence(
+        workspace,
+        tree_path=tree_path,
+        tree_bytes=tree_bytes,
+        evidence_path="state/legacy.csv",
+        evidence_bytes=evidence_bytes,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=r"Git commit path does not name the claimed blob|no exact file entry",
+    ):
+        _read_evidence(
+            evidence,
+            workspace=workspace,
+            limits=HistoryLimits.from_config(limits_document()).verification,
+        )
 
 
 @pytest.mark.parametrize(
@@ -1058,6 +1178,10 @@ def test_cli_reads_only_explicit_manifest(workspace: Path) -> None:
     assert completed.returncode == 0, completed.stdout + completed.stderr
     summary = json.loads(completed.stdout)
     assert summary["inventory_complete"] and summary["historical_readiness"] == "blocked"
+    assert summary["production_cutover_readiness"] == "blocked"
+    assert summary["production_cutover_blocked_by"] == [
+        "d7_all_family_single_writer_ubuntu_evidence_not_verified"
+    ]
     assert (workspace / summary["bundle_root"] / "report.json").exists()
 
 
@@ -1119,6 +1243,11 @@ def test_source_read_only_and_report_tamper_detection(workspace: Path) -> None:
         falsely_ready = report.model_dump(mode="json") | {"historical_readiness": "ready"}
         with pytest.raises(ValueError, match="candidate reader"):
             HistoryReport.model_validate(falsely_ready)
+        falsely_cutover_ready = report.model_dump(mode="json") | {
+            "production_cutover_readiness": "ready"
+        }
+        with pytest.raises(ValueError):
+            HistoryReport.model_validate(falsely_cutover_ready)
     finally:
         source.chmod(stat.S_IREAD | stat.S_IWRITE)
 
@@ -1205,6 +1334,10 @@ def test_console_view_is_regenerated_by_migrated_consumer(
     assert report.consumer_mode == "migrated_consumers"
     assert report.consumer_replay is not None
     assert report.historical_readiness == "ready"
+    assert report.production_cutover_readiness == "blocked"
+    assert report.production_cutover_blocked_by == (
+        "d7_all_family_single_writer_ubuntu_evidence_not_verified",
+    )
     assert report.files[-1].status == "candidate_complete"
     assert report.files[-1].candidate_path == "candidates/" + view
     assert report.files[-1].new_physical_sha256 is not None
@@ -1259,6 +1392,10 @@ def test_empty_scope_has_complete_inventory_but_no_historical_readiness(workspac
     assert report.original_settled_keys == 0
     assert report.derived_views_status == "not_applicable"
     assert report.historical_readiness == "blocked"
+    assert report.production_cutover_readiness == "blocked"
+    assert report.production_cutover_blocked_by == (
+        "d7_all_family_single_writer_ubuntu_evidence_not_verified",
+    )
 
 
 def test_distinct_evidence_generations_keep_the_same_scope(workspace: Path) -> None:

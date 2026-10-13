@@ -5,11 +5,14 @@ from __future__ import annotations
 import csv
 import hashlib
 import io
+import os
 import struct
+import subprocess
 import zlib
 from collections.abc import Mapping
 from dataclasses import dataclass, fields, replace
-from pathlib import Path
+from datetime import date
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from idhazh.contracts.console_band import ConsoleBand
@@ -66,6 +69,7 @@ ENVELOPE_VERSIONS = frozenset(
         HOST_OUTPUT_VERSION,
     }
 )
+_GIT_TREE_LOOKUP_TIMEOUT_SECONDS = 10
 
 
 @dataclass(frozen=True)
@@ -141,7 +145,11 @@ def read_source(source: HistorySource, *, workspace: Path, limits: VerificationL
 
 
 def _read_evidence(
-    evidence: LegacyRawEvidence, *, workspace: Path, limits: VerificationLimits
+    evidence: LegacyRawEvidence,
+    *,
+    workspace: Path,
+    limits: VerificationLimits,
+    git_path: str | None = None,
 ) -> bytes:
     try:
         data = _read_bytes(
@@ -160,7 +168,87 @@ def _read_evidence(
     ).hexdigest()
     if git_blob != evidence.git_blob:
         raise ValueError(f"{evidence.path}: Git blob evidence does not match its bytes")
+    _verify_git_tree_entry(evidence, workspace=workspace, git_path=git_path)
     return data
+
+
+def legacy_raw_git_path(evidence: LegacyRawEvidence, root: HistoryRoot) -> str:
+    """Resolve a staged legacy CSV path to its exact path in the declared history root."""
+    staged = PurePosixPath(evidence.path)
+    try:
+        relative = staged.relative_to(PurePosixPath("evidence/legacy"))
+    except ValueError:
+        return evidence.path
+    if len(relative.parts) != 4:
+        raise ValueError(f"{evidence.path}: legacy evidence path must name one closed day")
+    year, month, day, _ = relative.parts
+    try:
+        closed_day = date.fromisoformat(f"{year}-{month}-{day}")
+    except ValueError as error:
+        raise ValueError(f"{evidence.path}: legacy evidence path has an invalid UTC day") from error
+    if closed_day.isoformat() != f"{year}-{month}-{day}":
+        raise ValueError(f"{evidence.path}: legacy evidence path has a noncanonical UTC day")
+    return PurePosixPath(root.state_root, *root.prefix, *relative.parts).as_posix()
+
+
+def _verify_git_tree_entry(
+    evidence: LegacyRawEvidence, *, workspace: Path, git_path: str | None = None
+) -> None:
+    expected_path = evidence.path if git_path is None else git_path
+    environment = {
+        key: value for key, value in os.environ.items() if not key.startswith("GIT_")
+    }
+    environment["GIT_NO_LAZY_FETCH"] = "1"
+    environment["GIT_TERMINAL_PROMPT"] = "0"
+    common = ["git", "--no-replace-objects", "cat-file", "-t", evidence.git_commit]
+    try:
+        commit = subprocess.run(
+            common,
+            cwd=workspace,
+            env=environment,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            check=False,
+            timeout=_GIT_TREE_LOOKUP_TIMEOUT_SECONDS,
+        )
+        if commit.returncode != 0 or commit.stdout.strip() != b"commit":
+            raise ValueError(f"{evidence.path}: Git commit evidence is unavailable")
+        entry = subprocess.run(
+            [
+                "git",
+                "--no-replace-objects",
+                "--literal-pathspecs",
+                "ls-tree",
+                "-z",
+                "--full-tree",
+                evidence.git_commit,
+                "--",
+                expected_path,
+            ],
+            cwd=workspace,
+            env=environment,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            check=False,
+            timeout=_GIT_TREE_LOOKUP_TIMEOUT_SECONDS,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise ValueError(f"{evidence.path}: Git tree evidence could not be read") from error
+    if entry.returncode != 0:
+        raise ValueError(f"{evidence.path}: Git commit tree is unavailable")
+    records = entry.stdout.split(b"\0")
+    if len(records) != 2 or not records[0] or records[1]:
+        raise ValueError(f"{evidence.path}: Git commit tree has no exact file entry")
+    header, separator, tree_path = records[0].partition(b"\t")
+    metadata = header.split(b" ")
+    if (
+        not separator
+        or len(metadata) != 3
+        or metadata[1] != b"blob"
+        or metadata[2] != evidence.git_blob.encode("ascii")
+        or tree_path != expected_path.encode("utf-8")
+    ):
+        raise ValueError(f"{evidence.path}: Git commit path does not name the claimed blob")
 
 
 _LEGACY_INT_FIELDS = frozenset(
@@ -249,10 +337,19 @@ def _legacy_raw_row(
 
 
 def read_legacy_raw_evidence(
-    evidence: LegacyRawEvidence, *, workspace: Path, limits: VerificationLimits
+    evidence: LegacyRawEvidence,
+    *,
+    workspace: Path,
+    limits: VerificationLimits,
+    git_path: str | None = None,
 ) -> dict[tuple[str, str, int], dict[str, Any]]:
     return _legacy_raw_row(
-        _read_evidence(evidence, workspace=workspace, limits=limits),
+        _read_evidence(
+            evidence,
+            workspace=workspace,
+            limits=limits,
+            git_path=git_path,
+        ),
         evidence,
     )
 

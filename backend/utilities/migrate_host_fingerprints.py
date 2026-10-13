@@ -55,6 +55,8 @@ def main(argv: list[str] | None = None) -> int:
                 {
                     "inventory_complete": result.inventory_complete,
                     "historical_readiness": result.historical_readiness,
+                    "production_cutover_readiness": result.production_cutover_readiness,
+                    "production_cutover_blocked_by": result.production_cutover_blocked_by,
                     "scope_hash": result.scope_hash,
                     "evidence_hash": result.evidence_hash,
                     "bundle_root": result.bundle_root,
@@ -70,6 +72,10 @@ def main(argv: list[str] | None = None) -> int:
                 {
                     "inventory_complete": False,
                     "historical_readiness": "blocked",
+                    "production_cutover_readiness": "blocked",
+                    "production_cutover_blocked_by": [
+                        "d7_all_family_single_writer_ubuntu_evidence_not_verified"
+                    ],
                     "reason": str(error).splitlines()[0],
                 },
                 sort_keys=True,
