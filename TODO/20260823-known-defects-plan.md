@@ -1,6 +1,6 @@
 # Known defects
 
-**Last Updated**: 2026-10-12
+**Last Updated**: 2026-10-13
 
 **The open defects have named owners below.** Five of them need evidence or a ruling before any code
 is worth writing; the rest are known fixes
@@ -121,7 +121,7 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 48 | GitHub stamps its squash merges in local time, `+02:00`, not UTC | 1 | **OPEN - one account setting to try, then one merge to read** |
 | 49 | The local test selector sends a backend test helper to every frontend group | 2 | **OPEN - two patterns in the selector and their truth-table cases** |
 | 50 | A publisher link on the home page named a story the page did not draw, so a news run's site build failed | 2 | CLOSED 2026-09-30 (PR #1168) |
-| 51 | The canary builder's score-key step aborted once at exit, after printing its whole answer | 2 | **OPEN - reproduced twice; a row to fix it is now due** |
+| 51 | The canary builder's score-key step aborted once at exit, after printing its whole answer | 2 | **OPEN - aborted three times in CI; [its plan](20261012-ledger-read-exit-abort-plan.md) reproduces it on the runner, then fixes it in the ledger's parquet module** |
 | 52 | Reading one month of a packed ledger downloads every month file of its year | 3 | **OPEN - costs nothing until a compaction runs live** |
 | 53 | The `traces` upkeep task cannot date eight old trace files, so it never deletes them | 2 | **OPEN - matters from the day the task deletes live** |
 | 54 | The first squash that rewrites history may not fit in its 30-minute job | 2 | **OPEN - due 2026-10-29: raise the limit, or time one replay first** |
@@ -911,8 +911,13 @@ the caller. Files: `backend/utilities/build_canary_day.py`, the Parquet reader
 identified by the reproduction, and a generated-fixture subprocess regression.
 Oracle: the complete expected JSON and a successful process exit are both
 required; an abort after valid output still fails. Keep the browser build's
-failure propagation. Status: OPEN; the known-defects execution owner takes
-this row. It recurred during the Hardware compatibility candidate's CI on
+failure propagation. Status: OPEN;
+[the ledger-read exit-abort plan](20261012-ledger-read-exit-abort-plan.md) now
+carries this row, and its file lists replace the one above: the fault lives in
+the ledger's parquet module, which every ledger read and write goes through,
+not in `build_canary_day.py`. Its row "Reproduce the exit abort on ubuntu-latest
+with Python 3.12 and capture its native backtrace" runs before any code changes,
+and the oracle above stays. It recurred during the Hardware compatibility candidate's CI on
 2026-10-12; the later green delivery did not prove a structural fix.
 
 Found on 2026-09-30 by plan 50's row 9, on the merge of #1166. Reproduced on
