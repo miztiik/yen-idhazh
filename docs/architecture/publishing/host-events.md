@@ -457,11 +457,14 @@ or quiet-window attestation is inferred here. Until both mechanisms exist,
 resolve under the supplied workspace; persisted paths remain relative and
 POSIX-separated.
 
-The transaction core is exercised only by generated fixtures under pytest
-temporary roots. Its per-file atomicity is not a multi-file or power-loss
-durability claim. D16's complete raw/compact/index/receipt/view reconciliation
-and its exact approved manifest remain prerequisites; implementation tests are
-not application evidence.
+The journal and rollback entry points enforce the fixture boundary themselves:
+they accept only an existing child of the process temporary directory outside
+the repository. Tests use generated fixtures under pytest temporary roots.
+This restriction is not approval or quiet-window evidence and grants no
+permission to apply history. Per-file atomicity is not a multi-file or
+power-loss durability claim. D16's complete raw/compact/index/receipt/view
+reconciliation and its exact approved manifest remain prerequisites;
+implementation tests are not application evidence.
 
 The command reads exactly two repository-owned configuration files, resolved
 from the utility's location, not the operator's workspace or environment.

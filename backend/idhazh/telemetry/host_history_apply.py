@@ -7,6 +7,7 @@ import json
 import os
 import re
 import stat
+import tempfile
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -64,6 +65,47 @@ def apply_history(*_args: Any, **_kwargs: Any) -> None:
     raise HistoryApplyBlockedError(
         "historical apply is disabled: " + ", ".join(APPLY_BLOCKERS)
     )
+
+
+def _require_temporary_fixture_workspace(workspace: Path) -> None:
+    """Keep journal writes inside generated temporary fixtures until real gates exist."""
+    blocked = HistoryApplyBlockedError(
+        "transaction writes are disabled outside a generated temporary fixture root: "
+        + ", ".join(APPLY_BLOCKERS)
+    )
+    temporary_path = Path(tempfile.gettempdir()).absolute()
+    repository_root = Path(__file__).resolve().parents[3]
+    workspace_path = workspace.absolute()
+    if (
+        workspace_path == temporary_path
+        or not workspace_path.is_relative_to(temporary_path)
+        or workspace_path == repository_root
+        or workspace_path.is_relative_to(repository_root)
+    ):
+        raise blocked
+    try:
+        temporary_root = _safe_path(temporary_path, temporary_path)
+        workspace_root = _safe_path(workspace_path, workspace_path)
+    except (OSError, RuntimeError, ValueError) as error:
+        raise blocked from error
+    if (
+        workspace_root == temporary_root
+        or not workspace_root.is_relative_to(temporary_root)
+        or workspace_root == repository_root
+        or workspace_root.is_relative_to(repository_root)
+        or not workspace_root.is_dir()
+    ):
+        raise blocked
+    current = workspace_root
+    while current != temporary_root:
+        try:
+            (current / ".git").lstat()
+        except FileNotFoundError:
+            current = current.parent
+            continue
+        except OSError as error:
+            raise blocked from error
+        raise blocked
 
 
 def _json_bytes(document: object) -> bytes:
@@ -620,7 +662,8 @@ def _run_transaction(
     reconcile: Callable[[], None],
     interrupt: Callable[[str], None] | None = None,
 ) -> None:
-    """Private per-file atomic engine. Public apply remains disabled by D16 blockers."""
+    """Run the journal only for generated temporary fixtures; live writes stay blocked."""
+    _require_temporary_fixture_workspace(workspace)
     workspace = workspace.absolute()
     _validate_batch_paths(batch, workspace=workspace)
     plan = _transaction_plan(batch, max_files=max_files, max_bytes=max_bytes)
@@ -743,6 +786,7 @@ def _rollback_transaction(
     interrupt: Callable[[str], None] | None = None,
 ) -> None:
     """Restore only exact new bytes from verified backups; never overwrite a third state."""
+    _require_temporary_fixture_workspace(workspace)
     workspace = workspace.absolute()
     _validate_batch_paths(batch, workspace=workspace)
     plan = _transaction_plan(batch, max_files=max_files, max_bytes=max_bytes)

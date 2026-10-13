@@ -669,12 +669,9 @@ def _full_generated_history(workspace: Path) -> tuple[HistoryManifest, bytes]:
     return HistoryManifest.model_validate(manifest_document), receipt.to_json().encode("ascii")
 
 
-def test_full_generated_raw_compact_index_receipt_view_batch_reconciles(
-    tmp_path: Path,
-) -> None:
-    repo = Path(__file__).resolve().parents[2]
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
+def _prepared_generated_batch(
+    workspace: Path, repo: Path
+) -> tuple[_ApplyBatch, HistoryLimits, bytes, HistoryReport]:
     manifest, old_receipt_bytes = _full_generated_history(workspace)
     config = _config_document(repo)
     limits = HistoryLimits.from_config(config)
@@ -710,6 +707,57 @@ def test_full_generated_raw_compact_index_receipt_view_batch_reconciles(
         approved_scope_hash=report.scope_hash,
         approved_report_evidence_hash=report.evidence_hash,
     )
+    return batch, limits, old_receipt_bytes, report
+
+
+def test_prepared_executor_refuses_repository_history_without_machine_gates(
+    tmp_path: Path,
+) -> None:
+    repo = Path(__file__).resolve().parents[2]
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    batch, limits, _, _ = _prepared_generated_batch(workspace, repo)
+
+    with pytest.raises(HistoryApplyBlockedError, match="temporary fixture root"):
+        _apply_prepared_batch(batch, workspace=repo, limits=limits)
+
+
+@pytest.mark.parametrize("marker_kind", ("directory", "worktree_file"))
+def test_prepared_executor_refuses_synthetic_checkout_before_writes(
+    tmp_path: Path, marker_kind: str
+) -> None:
+    repo = Path(__file__).resolve().parents[2]
+    checkout_root = tmp_path / "checkout"
+    workspace = checkout_root / "nested" / "workspace"
+    workspace.mkdir(parents=True)
+    batch, limits, _, _ = _prepared_generated_batch(workspace, repo)
+    original_bytes = {
+        replacement.path: workspace.joinpath(*replacement.path.split("/")).read_bytes()
+        for replacement in batch.replacements
+    }
+    marker = checkout_root / ".git"
+    if marker_kind == "directory":
+        marker.mkdir()
+    else:
+        marker.write_text("gitdir: ../git/common", encoding="utf-8")
+
+    with pytest.raises(HistoryApplyBlockedError, match="temporary fixture root"):
+        _apply_prepared_batch(batch, workspace=workspace, limits=limits)
+
+    assert {
+        replacement.path: workspace.joinpath(*replacement.path.split("/")).read_bytes()
+        for replacement in batch.replacements
+    } == original_bytes
+    assert not workspace.joinpath(*batch.transaction_root.split("/")).exists()
+
+
+def test_full_generated_raw_compact_index_receipt_view_batch_reconciles(
+    tmp_path: Path,
+) -> None:
+    repo = Path(__file__).resolve().parents[2]
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    batch, limits, old_receipt_bytes, report = _prepared_generated_batch(workspace, repo)
     receipt_path = "state/receipts/old-invocation.json"
     _apply_prepared_batch(batch, workspace=workspace, limits=limits)
 
