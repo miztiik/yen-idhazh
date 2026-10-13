@@ -195,7 +195,9 @@ snapshots and monotonic deadlines; missed wakes do not invent samples.
 Job samples retain the configured legacy cadence. Runtime status retains its
 separate one-second cadence only when a model server is declared. Server-less
 jobs emit no empty server-status records and capture on the job cadence, not once
-per second for an absent server. Plain memory files share the existing
+per second for an absent server. Server-only wakes read declared process targets;
+they do not scan the Python population. Population and current cgroup memory
+are read only when a job sample is due. Plain memory files share the existing
 `max_session_bytes` storage cap. Their rows are not exchange events and do not
 spend `max_session_events`. When plain files deliver the typed samples, the
 monitor does not also publish and immediately consume duplicate sample events.
@@ -203,6 +205,10 @@ An event-only consumer still receives typed sample and rollcall events.
 The event, read and byte limits are unchanged. A file append that would exceed
 the byte cap fails before either the sample or its process rows are written;
 the monitor does not drop observations or silently truncate files.
+Live resource captures are bounded per source read by `capture_limits`, not by
+a lifetime count. `max_reads` still bounds exchange-file reads; a healthy
+scheduled capture does not spend that message limit. Window sampling and job
+sampling retain their separate deadlines, as in the Python collectors.
 Job sampling ends when its selected process exits;
 window CPU/load results and explicit unavailable memory evidence continue.
 Rust streams plain `rss-samples.jsonl` and

@@ -149,7 +149,7 @@ impl SampleSchedule {
             }
             self.runtime_at = now_ms.saturating_add(job_samples::RUNTIME_INTERVAL_MS);
         }
-        if !self.job_stopped && now_ms >= self.job_at {
+        if self.job_due(session, now_ms) {
             let target = server
                 .as_ref()
                 .or(session.manifest.cpu_target.as_ref())
@@ -231,11 +231,16 @@ impl SampleSchedule {
         }
         Ok(())
     }
+    fn job_due(&self, session: &Session, now_ms: u64) -> bool {
+        session.manifest.controls.memory_profiling_enabled
+            && !self.job_stopped
+            && now_ms >= self.job_at
+    }
     fn needs_capture(&self, session: &Session, now_ms: u64) -> bool {
         session.manifest.controls.memory_profiling_enabled
             && ((session.manifest.workers.iter().any(|v| v.server.is_some())
                 && now_ms >= self.runtime_at)
-                || (!self.job_stopped && now_ms >= self.job_at))
+                || self.job_due(session, now_ms))
     }
 }
 fn capture_due(
@@ -244,19 +249,11 @@ fn capture_due(
     session: &Session,
     schedule: &SampleSchedule,
     now_ms: u64,
-    captures: &mut u64,
-) -> Result<Option<ResourceFrame>> {
+) -> Option<ResourceFrame> {
     if session.stopped || !(session.needs_tick(now_ms) || schedule.needs_capture(session, now_ms)) {
-        return Ok(None);
+        return None;
     }
-    require(
-        *captures < session.manifest.limits.max_reads as u64,
-        "resource capture budget exhausted",
-    )?;
-    *captures += 1;
-    Ok(Some(
-        source.capture(targets, schedule.needs_capture(session, now_ms)),
-    ))
+    Some(source.capture(targets, schedule.job_due(session, now_ms)))
 }
 fn artifact_root(
     manifest: &HostSessionManifest,
@@ -794,7 +791,6 @@ fn live(
     let mut schedule = SampleSchedule::new();
     let mut seen = HashMap::new();
     let mut consumed = HashSet::new();
-    let mut captures = 0_u64;
     let run = (|| -> Result<()> {
         while !session.stopped {
             let now_ms = start.elapsed().as_millis() as u64;
@@ -892,11 +888,6 @@ fn live(
                             }
                             continue;
                         }
-                        require(
-                            captures < session.manifest.limits.max_reads as u64,
-                            "resource capture budget exhausted",
-                        )?;
-                        captures += 1;
                         let frame =
                             source.capture(&targets, command.kind == EventKind::MonitorStop);
                         let mut staged = session.clone();
@@ -925,8 +916,7 @@ fn live(
                             break;
                         }
                     }
-                    if let Some(frame) =
-                        capture_due(&source, &targets, session, &schedule, now_ms, &mut captures)?
+                    if let Some(frame) = capture_due(&source, &targets, session, &schedule, now_ms)
                     {
                         session.tick(&frame, now_ms)?;
                         schedule.collect(session, files, &mut artifacts, &frame, now_ms)?;
@@ -1077,6 +1067,46 @@ mod tests {
                 }
             }
         }
+        fn live_source(&self) -> LiveCapture {
+            let proc = self.root.join("proc");
+            std::fs::create_dir_all(&proc).unwrap();
+            for (name, text) in [
+                ("stat", &self.frame.proc_stat),
+                ("loadavg", &self.frame.loadavg),
+                ("meminfo", &self.frame.meminfo),
+            ] {
+                std::fs::write(proc.join(name), text.value.as_ref().unwrap()).unwrap();
+            }
+            for process in &self.frame.processes {
+                let entry = proc.join(process.target.pid.to_string());
+                std::fs::create_dir_all(&entry).unwrap();
+                for (name, text) in [
+                    ("stat", &process.stat_before),
+                    ("status", &process.status),
+                    ("comm", &process.comm),
+                    ("cmdline", &process.cmdline),
+                ] {
+                    if let Some(value) = &text.value {
+                        std::fs::write(entry.join(name), value).unwrap();
+                    }
+                }
+            }
+            let cgroup = self.root.join("cgroup");
+            std::fs::create_dir_all(&cgroup).unwrap();
+            for (name, text) in [
+                ("memory.current", &self.frame.cgroup_current),
+                ("memory.peak", &self.frame.cgroup_peak),
+            ] {
+                std::fs::write(cgroup.join(name), text.value.as_ref().unwrap()).unwrap();
+            }
+            LiveCapture::new(
+                &proc,
+                &cgroup,
+                &self.session.manifest.capture_limits,
+                self.session.manifest.controls.memory_profiling_enabled,
+            )
+            .unwrap()
+        }
         fn open_window(&mut self) -> Vec<HostEvent> {
             let worker = &self.session.manifest.workers[0];
             let mut register = self.ready.clone();
@@ -1087,7 +1117,7 @@ mod tests {
             register.body = EventBody::Worker(WorkerBody {
                 target: worker.target.clone(),
                 server: worker.server.clone(),
-                memory_profiling_enabled: true,
+                memory_profiling_enabled: self.session.manifest.controls.memory_profiling_enabled,
             });
             let mut begin = register.clone();
             begin.kind = EventKind::WindowBegin;
@@ -1156,20 +1186,30 @@ mod tests {
     }
 
     #[test]
-    fn artifact_samples_cover_six_hours_without_spending_exchange_capacity() {
-        for server_enabled in [false, true] {
-            let name = if server_enabled {
-                "six-hour-server"
-            } else {
-                "six-hour-serverless"
-            };
-            let mut fixture = Fixture::configured(name, true, None, server_enabled);
+    fn live_samples_cover_six_hours_without_spending_exchange_capacity() {
+        for (name, server_enabled, memory) in [
+            ("six-hour-serverless", false, true),
+            ("six-hour-server", true, true),
+            ("six-hour-memory-off", true, false),
+        ] {
+            let mut fixture = Fixture::configured(name, memory, None, server_enabled);
+            if !memory {
+                fixture.consume_samples();
+            }
+            fixture.session.manifest.controls.memory_profiling_enabled = memory;
             fixture
                 .session
                 .manifest
                 .controls
                 .job_sample_interval_seconds = 15.0;
             fixture.schedule.job_at = 15_000;
+            fixture.session.manifest.controls.resource_interval_seconds = 30.0;
+            let source = fixture.live_source();
+            let worker = &fixture.session.manifest.workers[0];
+            let targets = std::iter::once(&worker.target)
+                .chain(worker.server.iter())
+                .cloned()
+                .collect::<Vec<_>>();
             let commands = fixture.open_window();
             for command in &commands {
                 fixture.files.consume(command).unwrap();
@@ -1178,11 +1218,59 @@ mod tests {
             let events = fixture.session.book.total_events;
             let published = fixture.files.total_events;
             let start = chrono::DateTime::parse_from_rfc3339(&fixture.frame.captured_at).unwrap();
+            let mut captures = 0;
             for second in 1..=21_600 {
-                fixture.frame.captured_at = (start + chrono::Duration::seconds(second))
+                let now_ms = second as u64 * 1000;
+                let job_due = fixture.schedule.job_due(&fixture.session, now_ms);
+                let Some(mut frame) = capture_due(
+                    &source,
+                    &targets,
+                    &fixture.session,
+                    &fixture.schedule,
+                    now_ms,
+                ) else {
+                    continue;
+                };
+                captures += 1;
+                if job_due {
+                    assert_eq!(frame.population.value.as_ref().unwrap().len(), 2);
+                    assert!(frame.cgroup_current.value.is_some());
+                } else {
+                    assert!(frame.population.value.is_none());
+                    assert!(frame.cgroup_current.value.is_none());
+                }
+                if !memory {
+                    assert_eq!(frame.meminfo.reason, Some(UnavailableReason::Disabled));
+                    assert!(frame.processes.iter().all(|process| {
+                        process.status.reason == Some(UnavailableReason::Disabled)
+                    }));
+                }
+                frame.captured_at = (start + chrono::Duration::seconds(second))
                     .to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
-                fixture.collect(second as u64 * 1000).unwrap();
+                fixture.frame = frame;
+                fixture.collect(now_ms).unwrap();
             }
+            assert_eq!(
+                captures,
+                if !memory {
+                    720
+                } else if server_enabled {
+                    21_600
+                } else {
+                    1440
+                }
+            );
+            assert!(captures > fixture.session.manifest.limits.max_reads);
+            assert!(
+                capture_due(
+                    &source,
+                    &targets,
+                    &fixture.session,
+                    &fixture.schedule,
+                    21_600_001,
+                )
+                .is_none()
+            );
             assert_eq!(fixture.session.book.total_events, events);
             assert_eq!(fixture.files.total_events, published);
             let mut bytes = 0;
@@ -1194,6 +1282,10 @@ mod tests {
                     if server_enabled { 21_601 } else { 0 },
                 ),
             ] {
+                if !memory {
+                    assert!(!fixture.root.join("artifacts").exists());
+                    continue;
+                }
                 let raw = std::fs::read(fixture.root.join("artifacts").join(name)).unwrap();
                 bytes += raw.len();
                 assert_eq!(raw.iter().filter(|byte| **byte == b'\n').count(), expected);
@@ -1204,10 +1296,12 @@ mod tests {
             end.event_id = uuid::Uuid::from_u128(2002);
             end.sequence = 3;
             end.emitted_at = fixture.frame.captured_at.clone();
+            fixture.files.publish(&end, "inbox").unwrap();
             let replies = fixture
                 .session
                 .handle(&end, &fixture.frame, 21_600_000)
                 .unwrap();
+            fixture.files.publish_batch(&replies, "results").unwrap();
             assert_eq!(replies.last().unwrap().kind, EventKind::WindowResult);
             let mut stop = fixture.ready.clone();
             stop.kind = EventKind::MonitorStop;
@@ -1218,14 +1312,49 @@ mod tests {
             stop.body = EventBody::Stop(StopBody {
                 reason: StopReason::Completed,
             });
+            fixture.files.publish(&stop, "inbox").unwrap();
             let replies = fixture
                 .session
                 .handle(&stop, &fixture.frame, 21_600_000)
                 .unwrap();
+            fixture.files.publish_batch(&replies, "results").unwrap();
+            if let Some(artifacts) = &mut fixture.artifacts {
+                artifacts.write_peak(&source.peak()).unwrap();
+                assert!(
+                    fixture
+                        .root
+                        .join("artifacts")
+                        .join(job_samples::RUNTIME_PEAK_FILENAME)
+                        .is_file()
+                );
+            }
             assert_eq!(replies.last().unwrap().reply_to, Some(stop.event_id));
             assert_eq!(replies.last().unwrap().kind, EventKind::MonitorStopped);
             assert!(fixture.session.stopped);
+            assert!(
+                capture_due(
+                    &source,
+                    &targets,
+                    &fixture.session,
+                    &fixture.schedule,
+                    21_601_000,
+                )
+                .is_none()
+            );
         }
+    }
+
+    #[test]
+    fn endpoint_only_windows_do_not_request_periodic_captures_when_memory_is_off() {
+        let mut fixture = Fixture::new("endpoints-only-memory-off", false);
+        fixture.consume_samples();
+        fixture.session.manifest.controls.memory_profiling_enabled = false;
+        fixture.open_window();
+        let source = fixture.live_source();
+        let targets = vec![fixture.session.manifest.workers[0].target.clone()];
+        assert!(
+            capture_due(&source, &targets, &fixture.session, &fixture.schedule, 1000).is_none()
+        );
     }
 
     #[test]
