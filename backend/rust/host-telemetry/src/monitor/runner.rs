@@ -971,13 +971,14 @@ mod tests {
             Self::with_max_files(name, artifacts_enabled, None)
         }
         fn with_max_files(name: &str, artifacts_enabled: bool, max_files: Option<i64>) -> Self {
-            Self::configured(name, artifacts_enabled, max_files, true)
+            Self::configured(name, artifacts_enabled, max_files, true, true)
         }
         fn configured(
             name: &str,
             artifacts_enabled: bool,
             max_files: Option<i64>,
             server_enabled: bool,
+            memory: bool,
         ) -> Self {
             let mut manifest_json: serde_json::Value = serde_json::from_str(include_str!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
@@ -988,6 +989,7 @@ mod tests {
                 manifest_json["limits"]["max_files"] = serde_json::json!(max_files);
             }
             let mut manifest: HostSessionManifest = serde_json::from_value(manifest_json).unwrap();
+            manifest.controls.memory_profiling_enabled = memory;
             manifest.workers.truncate(1);
             manifest.windows.truncate(1);
             if !server_enabled {
@@ -1150,7 +1152,7 @@ mod tests {
 
     #[test]
     fn serverless_job_keeps_memory_samples_and_drains_without_empty_runtime_records() {
-        let mut fixture = Fixture::configured("serverless-job", true, None, false);
+        let mut fixture = Fixture::configured("serverless-job", true, None, false, true);
         assert!(job_samples::runtime_status(&fixture.frame, None, true).is_none());
         assert!(!fixture.schedule.needs_capture(&fixture.session, 1000));
         let runtime = fixture
@@ -1192,11 +1194,7 @@ mod tests {
             ("six-hour-server", true, true),
             ("six-hour-memory-off", true, false),
         ] {
-            let mut fixture = Fixture::configured(name, memory, None, server_enabled);
-            if !memory {
-                fixture.consume_samples();
-            }
-            fixture.session.manifest.controls.memory_profiling_enabled = memory;
+            let mut fixture = Fixture::configured(name, memory, None, server_enabled, memory);
             fixture
                 .session
                 .manifest
@@ -1346,9 +1344,8 @@ mod tests {
 
     #[test]
     fn endpoint_only_windows_do_not_request_periodic_captures_when_memory_is_off() {
-        let mut fixture = Fixture::new("endpoints-only-memory-off", false);
-        fixture.consume_samples();
-        fixture.session.manifest.controls.memory_profiling_enabled = false;
+        let mut fixture =
+            Fixture::configured("endpoints-only-memory-off", false, None, true, false);
         fixture.open_window();
         let source = fixture.live_source();
         let targets = vec![fixture.session.manifest.workers[0].target.clone()];
