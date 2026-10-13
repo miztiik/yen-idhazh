@@ -41,8 +41,8 @@ def test_named_producers_select_one_reversible_telemetry_writer() -> None:
     for name in WORKFLOWS:
         text = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
         assert "IDHAZH_HOST_TELEMETRY_MODE" in text
-        assert "inputs.host_telemetry || 'legacy'" in text
-        assert "default: legacy" in text
+        assert "inputs.host_telemetry || 'rust'" in text
+        assert "default: rust" in text
         assert ".github/actions/d7-host-telemetry" in text
         assert "d7_host_telemetry.py run" in text
         assert "d7_host_telemetry.py cleanup" in text
@@ -168,6 +168,12 @@ def test_council_workflow_allows_only_the_explicit_no_work_skip() -> None:
 
 
 def test_each_measured_job_builds_the_pinned_native_binary_before_its_producer() -> None:
+    action = yaml.safe_load(
+        (ROOT / ".github/actions/d7-host-telemetry/action.yml").read_text(encoding="utf-8")
+    )
+    build_step = next(step for step in action["runs"]["steps"] if step.get("id") == "build")
+    assert build_step["working-directory"] == "backend/rust/host-telemetry"
+    assert "cargo build --locked --release" in build_step["run"]
     expected = {
         "digest.yml": ("plan", "work", "assemble"),
         "measure.yml": ("llama-bench", "runtime"),

@@ -570,10 +570,11 @@ generation, and satisfy the historical evidence gate before application.
 
 `HistoryReport` version `2026-10-12` records production cutover separately from
 historical readiness. A successful migrated-consumer replay can make only the
-historical decision ready. Production remains `blocked` until D7's all-family,
-single-writer Ubuntu evidence is verified; replay and elapsed time cannot satisfy
-that gate. The existing Python default remains the production writer meanwhile.
-The report names this unmet evidence explicitly.
+historical decision ready. This report cannot certify production cutover and
+keeps its production decision `blocked`; replay and elapsed time cannot satisfy
+that gate. D7 separately verifies all-family, single-writer Ubuntu evidence before
+the workflow defaults select Rust. Python remains an explicit temporary rollback
+until cleanup, never a silent native-failure fallback.
 
 The artifact-only workflow can run these bounded, generated-file tests before
 its verdict; no test scans committed archives or installs tools:

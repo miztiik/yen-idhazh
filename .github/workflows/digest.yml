@@ -46,9 +46,9 @@ on:
           - 'on'
           - 'off'
       host_telemetry:
-        description: 'Host collector for all measured jobs; legacy remains the review default'
+        description: 'Rust is the default host collector; legacy is temporary rollback until migration cleanup'
         type: choice
-        default: legacy
+        default: rust
         options:
           - rust
           - legacy
@@ -62,7 +62,7 @@ permissions:
 env:
   # Runner-local health probe; inference uses model_server.base_url from config.
   MODEL_SERVER_PROBE: 'http://127.0.0.1:8080'
-  IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry || 'legacy' }}
+  IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry || 'rust' }}
 
 jobs:
   plan:

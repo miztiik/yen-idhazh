@@ -47,9 +47,9 @@ on:
         required: true
         type: string
       host_telemetry:
-        description: 'Host collector for saving results; legacy remains the review default'
+        description: 'Rust is the default host collector; legacy is temporary rollback until migration cleanup'
         type: choice
-        default: legacy
+        default: rust
         options:
           - rust
           - legacy
@@ -70,7 +70,7 @@ env:
   # Where this job's own probes ask, for the reason `digest.yml` gives: the
   # server is on this runner, and where a unit posts is `model_server.base_url`.
   MODEL_SERVER_PROBE: 'http://127.0.0.1:8080'
-  IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry || 'legacy' }}
+  IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry || 'rust' }}
 
 jobs:
   draw:
