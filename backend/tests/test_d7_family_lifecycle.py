@@ -9,6 +9,7 @@ import shutil
 import stat
 import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from textwrap import dedent
 
@@ -31,7 +32,7 @@ from utilities.d7_host_telemetry import _native_job_started_at
 from utilities.model_runtime import server_identity
 from utilities.runtime_sweep import native_memory
 
-DAY = "2026-10-12"
+DAY = datetime.now(UTC).date().isoformat()
 EXECUTION = "771"
 RUN = f"{DAY}-{EXECUTION}"
 ATTEMPT = 2
