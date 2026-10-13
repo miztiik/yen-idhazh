@@ -680,7 +680,7 @@ class HostEventClient:
             selected_server_pid = (
                 worker.server.pid
                 if worker is not None and worker.server is not None
-                else host.llama_server_pid()
+                else None
             )
             if not self.register_worker(server_pid=selected_server_pid):
                 return False

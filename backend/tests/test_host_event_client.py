@@ -32,7 +32,9 @@ from idhazh.telemetry.host_event_files import HostEventFiles
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def _manifest(root: Path, *, item_id: str | tuple[str, ...] = "item-01") -> HostSessionManifest:
+def _manifest(
+    root: Path, *, item_id: str | tuple[str, ...] = "item-01", server_pid: int | None = None
+) -> HostSessionManifest:
     source = json.loads((ROOT / "tests/fixtures/host-events/manifest.json").read_bytes())
     session_id = uuid4()
     source.update(
@@ -48,15 +50,15 @@ def _manifest(root: Path, *, item_id: str | tuple[str, ...] = "item-01") -> Host
                 {
                     "emitter_id": "worker",
                     "target": {"pid": os.getpid(), "start_ticks": 1},
-                    "server": None,
+                    "server": {"pid": server_pid, "start_ticks": 1} if server_pid else None,
                 }
             ],
             "windows": [
                 {"window_id": str(uuid4()), "item_id": value, "emitter_id": "worker"}
                 for value in ((item_id,) if isinstance(item_id, str) else item_id)
             ],
-            "cpu_target": {"pid": os.getpid(), "start_ticks": 1},
-            "cpu_target_role": "python_worker",
+            "cpu_target": {"pid": server_pid or os.getpid(), "start_ticks": 1},
+            "cpu_target_role": "model_server" if server_pid else "python_worker",
         }
     )
     source["limits"].update(
@@ -369,6 +371,30 @@ def test_native_unavailable_command_is_a_typed_refusal_without_python_fallback(
         assert client.register_worker(server_pid=None)
         assert client.begin_job()
         assert client.native_started
+        assert [event.kind for event in peer.seen] == ["worker.register", "host.probe"]
+    finally:
+        peer.close()
+
+
+@pytest.mark.parametrize("server_pid", [None, 4242], ids=["no-server", "declared-server"])
+def test_begin_job_uses_only_the_declared_server_with_an_unrelated_server_present(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, server_pid: int | None
+) -> None:
+    proc = tmp_path / "generated-proc"
+    unrelated = proc / "99991"
+    unrelated.mkdir(parents=True)
+    (unrelated / "comm").write_text("llama-server\n", encoding="ascii")
+    monkeypatch.setattr(host, "PROC", proc)
+    assert host.llama_server_pid() == 99991
+    manifest = _manifest(tmp_path, server_pid=server_pid)
+    peer = SessionPeer(tmp_path, manifest)
+    client = HostEventClient(tmp_path, Path("manifest.json"), Path("config.json"), native=True)
+    try:
+        assert client.begin_job()
+        registration = peer.seen[0]
+        assert registration.kind == "worker.register"
+        assert isinstance(registration.body, WorkerBody)
+        assert registration.body.server == manifest.workers[0].server
         assert [event.kind for event in peer.seen] == ["worker.register", "host.probe"]
     finally:
         peer.close()
