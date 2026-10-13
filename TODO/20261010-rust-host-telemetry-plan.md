@@ -76,7 +76,7 @@ Table D - authoritative execution queue
 | D16 | 16 | Verify evidence and record unattended adoption authority | 8, 5, 14, 15 | H | DONE | d16-evidence-gate-repair-20261012 | - | owner; one-time local Python replay verified 308 sources, 815 settled host records and the unchanged console view with exact Git provenance; historical readiness is ready, production cutover remains D7's gate. |
 | D7 | 7 | Switch instrumented producers through events | 16 | I | PENDING | - | - | - |
 | D17 | 17 | Rewrite the approved historical manifest once | 7, 15, 16 | J | PENDING | - | - | - |
-| D9 | 9 | Remove superseded collectors and temporary duplication | 7, 8, 17 | K | PENDING | - | - | - |
+| D9 | 9 | Remove superseded collectors and temporary duplication | 7, 8, 17 | K | BLOCKED | rust-d9-cleanup | - | owner; automatic migration-experiment PR runs removed; final collector and maintenance-code deletion waits for D7 cutover and D17 history/recovery completion. |
 
 ## 2. Row #1 - Approve corrected design and documentation only
 
@@ -574,6 +574,7 @@ Table Z - Row 8 rejected alternatives
 ## 10. Row #9 - Remove superseded collectors and temporary duplication
 
 - **Scope:** After the approved historical rewrite and successful observed migrated families, delete superseded collectors, temporary wiring and one-time migration checks; if adoption is rejected, close the experiment by its separately recorded disposition instead.
+- **Safe cleanup (2026-10-13):** Removed the automatic pull-request trigger from the one-time Rust evidence experiment. It remains an explicit manual workflow while D7 needs exact-head Ubuntu evidence. Normal CI retains fixture-backed Rust/module/reader functionality tests. The exact-history replay and manifest fixture are already removed by D16. Final deletion is blocked: main still uses the Python collectors, and D17 has not applied/reconciled history or completed recovery. Keep those active callers intact; remove the remaining experiment/maintenance machinery only when their final caller is gone.
 - **Files touched:**
   - `backend/idhazh/telemetry/silicon.py`
   - `backend/idhazh/telemetry/host.py`

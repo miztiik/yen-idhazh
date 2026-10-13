@@ -311,6 +311,13 @@ or a named refusal. It neither collects nor publishes.
 
 ## Artifact-only Linux comparison
 
+Run this migration experiment only by explicit `workflow_dispatch`. It does not
+run automatically on pull requests, pushes or schedules. Normal CI retains the
+fixture-backed Rust module and cross-language functionality tests. The explicit
+experiment remains available for the outstanding production cutover evidence;
+remove its workflow and comparison-only machinery after migration and recovery
+are complete.
+
 `.github/workflows/rust-host-telemetry.yml` uses one stock `ubuntu-latest`
 job with read-only repository permissions, credential-free checkout and seven-day
 artifacts. It does not call `measure.yml`, publish, migrate history or write

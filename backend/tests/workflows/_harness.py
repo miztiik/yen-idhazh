@@ -70,7 +70,7 @@ EXPECTED_WORKFLOWS: Final = {
     "llm-council.yml": ("LLM-COUNCIL", frozenset({"schedule", "workflow_dispatch"})),
     "measure.yml": ("Measurements", frozenset({"workflow_dispatch"})),
     "rust-host-telemetry.yml": (
-        "Isolated Rust host evidence", frozenset({"workflow_dispatch", "pull_request"}),
+        "Isolated Rust host evidence", frozenset({"workflow_dispatch"}),
     ),
     "pages.yml": (
         "Pages publication",
