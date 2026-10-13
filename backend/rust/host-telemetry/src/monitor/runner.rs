@@ -238,6 +238,26 @@ impl SampleSchedule {
                 || (!self.job_stopped && now_ms >= self.job_at))
     }
 }
+fn capture_due(
+    source: &LiveCapture,
+    targets: &[ProcessTarget],
+    session: &Session,
+    schedule: &SampleSchedule,
+    now_ms: u64,
+    captures: &mut u64,
+) -> Result<Option<ResourceFrame>> {
+    if session.stopped || !(session.needs_tick(now_ms) || schedule.needs_capture(session, now_ms)) {
+        return Ok(None);
+    }
+    require(
+        *captures < session.manifest.limits.max_reads as u64,
+        "resource capture budget exhausted",
+    )?;
+    *captures += 1;
+    Ok(Some(
+        source.capture(targets, schedule.needs_capture(session, now_ms)),
+    ))
+}
 fn artifact_root(
     manifest: &HostSessionManifest,
     args: &BTreeMap<String, String>,
@@ -905,16 +925,9 @@ fn live(
                             break;
                         }
                     }
-                    if !session.stopped
-                        && (session.needs_tick(now_ms) || schedule.needs_capture(session, now_ms))
+                    if let Some(frame) =
+                        capture_due(&source, &targets, session, &schedule, now_ms, &mut captures)?
                     {
-                        require(
-                            captures < session.manifest.limits.max_reads as u64,
-                            "resource capture budget exhausted",
-                        )?;
-                        captures += 1;
-                        let frame =
-                            source.capture(&targets, schedule.needs_capture(session, now_ms));
                         session.tick(&frame, now_ms)?;
                         schedule.collect(session, files, &mut artifacts, &frame, now_ms)?;
                         if session.active_count() > 0 {
@@ -1055,7 +1068,10 @@ mod tests {
         fn consume_samples(&mut self) {
             for id in self.files.ids("results").unwrap() {
                 let event = self.files.read(id, "results").unwrap();
-                if matches!(event.kind, EventKind::JobSample | EventKind::ProcessRollcall) {
+                if matches!(
+                    event.kind,
+                    EventKind::JobSample | EventKind::ProcessRollcall
+                ) {
                     self.files.consume(&event).unwrap();
                     self.session.book.consume(id).unwrap();
                 }
@@ -1148,7 +1164,11 @@ mod tests {
                 "six-hour-serverless"
             };
             let mut fixture = Fixture::configured(name, true, None, server_enabled);
-            fixture.session.manifest.controls.job_sample_interval_seconds = 15.0;
+            fixture
+                .session
+                .manifest
+                .controls
+                .job_sample_interval_seconds = 15.0;
             fixture.schedule.job_at = 15_000;
             let commands = fixture.open_window();
             for command in &commands {
@@ -1248,10 +1268,7 @@ mod tests {
                 .len(),
             limits.max_session_bytes as u64
         );
-        for name in [
-            LEGACY_JOB_SAMPLE_FILENAME,
-            LEGACY_PROCESS_ROLLCALL_FILENAME,
-        ] {
+        for name in [LEGACY_JOB_SAMPLE_FILENAME, LEGACY_PROCESS_ROLLCALL_FILENAME] {
             assert_eq!(std::fs::metadata(root.join(name)).unwrap().len(), 0);
         }
         assert!(!root.join(job_samples::RUNTIME_PEAK_FILENAME).exists());
