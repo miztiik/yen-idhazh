@@ -1123,7 +1123,7 @@ mod tests {
         );
         let mut stop = fixture.ready.clone();
         stop.kind = EventKind::MonitorStop;
-        stop.event_id = Uuid::from_u128(2001);
+        stop.event_id = uuid::Uuid::from_u128(2001);
         stop.emitter_id = fixture.session.manifest.operator_emitter_id.clone();
         stop.sequence = 1;
         stop.body = EventBody::Stop(StopBody {
