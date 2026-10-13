@@ -561,6 +561,18 @@ python -m pytest -n 0 tests/contracts/test_host_migration.py `
   tests/test_host_fingerprint_migration.py
 ```
 
+The exact historical-data replay is a one-time operator activity outside pytest,
+not an application, production or recurring CI step. Offline Python conversion
+and reader replay may run on the development machine; Ubuntu remains the target
+for live Rust process evidence. Preserve the exact manifest, report and candidates
+in the task-owned maintenance directory without changing the original history.
+Report hashes bind one evidence generation, not the latest repository commit;
+compare changed report fields and candidate data before accepting a new generation.
+Normal tests use generated fixtures to cover functionality, not archive quality.
+After the rewrite, remove one-time checks and any migration-only utility or tests
+with no remaining recovery caller. Retain fixture tests for shared codecs,
+versioned readers and any recovery code still in use.
+
 ## Design rationale
 
 Fowler ruled that disjoint modules can be written in parallel after their tested
