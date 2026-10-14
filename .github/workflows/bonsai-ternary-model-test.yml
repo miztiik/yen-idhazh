@@ -4,13 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       prompt:
-        description: 'Custom System Prompt'
+        description: 'System Prompt'
         required: false
         default: 'Summarize the input text into key analytical takeaways.'
       input_text:
         description: 'Input text to summarize'
         required: false
-        default: 'Local LLMs allow running transformer architectures directly on edge devices and continuous integration runners without transmitting data over third-party APIs. By quantizing models to ternary weights (1.58 bits), 27-billion parameter models can fit under 6 gigabytes of RAM.'
+        default: 'Ternary quantization maps neural network weights to -1, 0, and +1, shrinking model weights to 1.75 bits per parameter. This enables a 27B model to run on systems with standard memory constraints.'
 
 jobs:
   run-inference:
@@ -26,7 +26,7 @@ jobs:
         with:
           node-version: 'latest'
 
-      # CRITICAL: 5.95 GB model + OS will crash standard 7GB RAM runners without swap
+      # 1. CRITICAL: 8GB swap prevents 7GB runner OOM kill
       - name: Allocate 8GB Linux Swap Space
         run: |
           sudo swapoff -a
@@ -36,6 +36,17 @@ jobs:
           sudo swapon /swapfile
           free -h
 
+      # 2. Download PrismML's llama.cpp server binary (supports PTQ1_0 type 143)
+      - name: Download PrismML llama-server
+        run: |
+          mkdir -p ./bin
+          echo "Fetching PrismML llama-server binary..."
+          curl -L "https://github.com/PrismML-Eng/llama.cpp/releases/download/prism-b10685-7dffb15/llama-prism-b10685-7dffb15-bin-ubuntu-x64.tar.gz" -o llama-prism.tar.gz
+          tar -xzf llama-prism.tar.gz -C ./bin --strip-components=1 || tar -xzf llama-prism.tar.gz -C ./bin
+          chmod +x ./bin/llama-server
+          ./bin/llama-server --version || true
+
+      # 3. Cache and Download the GGUF Model
       - name: Cache GGUF Model
         id: cache-model
         uses: actions/cache@v4
@@ -48,21 +59,43 @@ jobs:
         run: |
           mkdir -p ./models
           echo "Downloading Ternary-Bonsai-2-27B (~5.95 GB)..."
-          # HuggingFace direct download URL uses /resolve/main/
           curl -L -o ./models/Ternary-Bonsai-2-27B-PTQ1_0.gguf \
             "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf/resolve/main/Ternary-Bonsai-2-27B-PTQ1_0.gguf"
 
-      # FIXED STEP: Sets "type": "module" and runs postinstall scripts cleanly
-      - name: Setup Project as ES Module & Install Dependencies
+      # 4. Start Prism llama-server as a background service
+      - name: Start Prism llama-server
         run: |
-          if [ ! -f package.json ]; then npm init -y; fi
-          npm pkg set type="module"
-          npm install node-llama-cpp --foreground-scripts
+          ./bin/llama-server \
+            -m ./models/Ternary-Bonsai-2-27B-PTQ1_0.gguf \
+            --host 127.0.0.1 \
+            --port 8080 \
+            -c 1024 \
+            -ngl 0 \
+            --threads 2 \
+            > llama-server.log 2>&1 &
 
+          echo "Waiting for llama-server to initialize model..."
+          for i in {1..90}; do
+            if curl -s http://127.0.0.1:8080/health | grep -q "ok"; then
+              echo "llama-server is ready!"
+              break
+            fi
+            echo "Waiting for server... ($i/90)"
+            sleep 2
+          done
+
+      # 5. Run the Event-Driven Pipeline
       - name: Execute AI Event Pipeline
         env:
-          MODEL_PATH: "./models/Ternary-Bonsai-2-27B-PTQ1_0.gguf"
           PROMPT: "${{ github.event.inputs.prompt }}"
           INPUT_TEXT: "${{ github.event.inputs.input_text }}"
         run: |
           npx --yes tsx .github/scripts/ai-pipeline.ts
+
+      # 6. Debug Artifact: dump server logs if anything fails
+      - name: Upload Server Logs on Failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: llama-server-log
+          path: llama-server.log
