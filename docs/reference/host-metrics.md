@@ -155,6 +155,12 @@ The host and item-health ledgers join generic rows on date, run, pipeline, task
 and shard; legacy rows join on date, run, job and shard. No historical row is
 rewritten or relabelled.
 
+The file envelope, which records who wrote a ledger file, has its own version.
+Its pipeline and task columns are declared from envelope version `2026-10-12`.
+The site check uses that version for added writer columns and the row's version
+for its own fields. An older file can lack the added writer columns without a
+rewrite; a current file cannot.
+
 The Hardware page keeps generic host identity separate from the legacy job
 field. Its fleet list combines pipeline and task only for display. A generic
 host row covers a reported shard only when an item row matches its date, run,

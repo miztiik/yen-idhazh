@@ -169,11 +169,19 @@ def _compression(fmt: Format, tier: Tier, knobs: LedgerConfig) -> Compression:
     return knobs.compression_raw if tier is Tier.RAW else knobs.compression_compact
 
 
-def file_columns(model: type[Contract]) -> tuple[Column, ...]:
-    """The contract's own columns, then every identity column it does not declare itself."""
+def file_columns(
+    model: type[Contract], *, envelope_version: str | None = None
+) -> tuple[Column, ...]:
+    """The row's columns plus writer cells declared by this envelope version."""
     own = arrow_schema.columns_of(model)
     return own + tuple(
-        column for column in _IDENTITY_COLUMNS if column.name not in model.model_fields
+        column
+        for column in _IDENTITY_COLUMNS
+        if column.name not in model.model_fields
+        and (
+            envelope_version is None
+            or RowIdentity.__column_versions__.get(column.name, "") <= envelope_version
+        )
     ) + (_COUNT_PROVENANCE_COLUMNS if model is RunShards else ())
 
 

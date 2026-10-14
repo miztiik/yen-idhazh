@@ -30,6 +30,7 @@ import re
 import uuid
 from collections.abc import Mapping
 from enum import StrEnum
+from types import MappingProxyType
 from typing import Annotated, ClassVar, Final, Literal, Self, assert_never, cast
 
 from pydantic import ConfigDict, Field, StringConstraints, model_validator
@@ -265,7 +266,7 @@ _UNIT_ID_PATTERN: Final = (
 
 
 class RowIdentity(Model):
-    """The seven cells the ledger door stamps on every row: which writer filed it, and which try.
+    """The cells the ledger door stamps on every row: which writer filed it, and which try.
 
     Columns rather than footer keys, because a query groups on them: a union
     keeps the highest `attempt` per `unit_id`, and a bad run is traced by
@@ -274,6 +275,11 @@ class RowIdentity(Model):
     raw file that first held it had them, never the compaction's, so a re-run
     that lands after a day was compacted can still replace its first attempt.
     """
+
+    __column_versions__: ClassVar[Mapping[str, str]] = MappingProxyType({
+        "pipeline_name": "2026-10-12",
+        "task_name": "2026-10-12",
+    })
 
     ledger: LedgerName = Field(description="The ledger the row was filed into.")
     covers: DateStamp = Field(
