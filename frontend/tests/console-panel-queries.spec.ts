@@ -4,7 +4,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { FLEET_COLUMNS } from '../src/lib/charts/fleet';
-import { platformMixQuery } from '../src/lib/console/queries/machine';
+import { machineCardsItemsQuery, platformMixQuery } from '../src/lib/console/queries/machine';
 import { modelChangeQuery, summaryLengthQuery } from '../src/lib/console/queries/model';
 import { slowerOnSameWorkQuery } from '../src/lib/console/queries/pipelines';
 import { compareRuns, failedRuleQuery, hostKey, joinItemHosts, newestRunRows } from '../src/lib/console/queries/shared';
@@ -92,7 +92,8 @@ function item(day: string, cpu = 'machine-a'): Row {
 
 function host(day: string): Row {
 	return {
-		version: '2026-10-10', date: day, run_id: `${day}-10`, job: 'work', shard: 0,
+		version: '2026-10-10', date: day, run_id: `${day}-10`, job: 'work',
+		pipeline_name: null, task_name: null, shard: 0,
 		fingerprint: '0123456789abcdef', fingerprint_version: 2,
 		cpu_model: 'machine-a', cpu_logical_processors: 8, model_load_ms: 2000,
 		job_seconds: 30, server_prompt_tokens: 200, server_prompt_seconds: 1,
@@ -227,12 +228,15 @@ test('the real three-ledger door anchors at the oldest end and asks each ledger 
 	}]);
 	expect(machines.rows).toEqual(['2026-09-24', '2026-09-25'].map(host));
 	expect(platformMixQuery.columns).toEqual([
-		'version', 'date', 'run_id', 'job', 'shard', 'fingerprint', 'fingerprint_version',
+		'version', 'date', 'run_id', 'job', 'pipeline_name', 'task_name', 'shard', 'fingerprint', 'fingerprint_version',
 		'cpu_model', 'cpu_logical_processors', 'model_load_ms',
 		'job_seconds', 'server_prompt_tokens', 'server_prompt_seconds',
 		'cores', 'threads', 'mhz_max', 'mhz_at_probe'
 	]);
 	expect(platformMixQuery.columns).toEqual(expect.arrayContaining([...FLEET_COLUMNS]));
+	expect(machineCardsItemsQuery.columns).toEqual([
+		'date', 'run_id', 'machine_job', 'machine_pipeline_name', 'machine_task_name', 'machine_shard', 'cpu_model'
+	]);
 });
 
 test('structured fetch predicates cross the real door rather than filtering the answer afterward', async ({}, info) => {

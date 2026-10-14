@@ -39,6 +39,7 @@
 import type { HostFingerprint } from '$lib/console/machine/host-types';
 import type { MachineRun } from '$lib/console/machine/counters';
 import { recordDestroyed, type LostDay } from '$lib/console/recording';
+import type { Row } from '$lib/data/ledger';
 import { linearAxis } from './frame';
 import { seconds } from './machine';
 import { percentOf } from './rank';
@@ -62,7 +63,7 @@ export type CardHost = Pick<HostFingerprint,
 	'cpu_quota_cores' | 'cpu_quota_state' | 'cpu_target_measured_at' |
 	'l3_cache_bytes' | 'boot_seconds' | 'cpu_observed_mhz' | 'cpu_reported_max_mhz' | 'memcpy_gib_s' |
 	'memcpy_probe_mib' | 'vm_size' | 'vm_location' | 'vm_zone' | 'vm_fault_domain'
-> & { readonly job?: string } & Partial<Pick<HostFingerprint, 'server_prompt_tokens' | 'server_prompt_seconds'>>;
+> & Partial<Pick<HostFingerprint, 'job' | 'pipeline_name' | 'task_name' | 'server_prompt_tokens' | 'server_prompt_seconds'>>;
 
 /** One chip: a watched flag, and whether this machine reported it. */
 export interface FlagChip {
@@ -303,6 +304,8 @@ export function machineCards(
 		ramp?: MachineRamp;
 		/** The page's own key resolver, built over the same population as the ramp. */
 		keys?: (seen: MachineSeen) => MachineKey;
+		/** Item rows that name the generic task which produced their machine readings. */
+		items?: readonly Row[];
 		/** This run's day where it published articles and the record kept no row of
 		 * it. The caller does the join, because only it reads both ledgers. */
 		lost?: LostDay | null;
@@ -313,8 +316,25 @@ export function machineCards(
 	const lost = options.lost ?? null;
 	const lostNote = recordDestroyed(lost === null ? [] : [lost]);
 	const forRun = run === null ? [] : fingerprints.filter((row) => row.run_id === run.runId);
+	const genericItemTasks = new Set(
+		(options.items ?? []).flatMap((item) => {
+			const pipeline = item.machine_pipeline_name;
+			const task = item.machine_task_name;
+			const shard = item.machine_shard;
+			if (item.date !== date || item.run_id !== runId ||
+				typeof pipeline !== 'string' || !pipeline ||
+				typeof task !== 'string' || !task ||
+				(shard !== null && shard !== undefined && typeof shard !== 'string' && typeof shard !== 'number') ||
+				shard === null || shard === undefined || !String(shard).trim()) return [];
+			return [`${pipeline}\0${task}\0${String(shard)}`];
+		})
+	);
 	const covered = new Set(
-		forRun.filter((row) => row.job === 'work').map((row) => String(row.shard))
+		forRun.filter((row) =>
+			row.job === 'work' ||
+			(typeof row.pipeline_name === 'string' && typeof row.task_name === 'string' &&
+				genericItemTasks.has(`${row.pipeline_name}\0${row.task_name}\0${String(row.shard)}`))
+		).map((row) => String(row.shard))
 	);
 
 	const seen: MachineSeen[] = [

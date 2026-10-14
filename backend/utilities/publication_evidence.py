@@ -14,7 +14,7 @@ ROOT = Path("backend") / "var" / "publication"
 
 
 def receipt_path(repo: Path, identity: WriterIdentity, verb: str) -> Path:
-    return repo / ROOT / identity.job / f"{verb}-{identity.shard}.json"
+    return repo / ROOT / identity.task_key / f"{verb}-{identity.shard}.json"
 
 
 def save(repo: Path, identity: WriterIdentity, verb: str, evidence: Mapping[Path, str]) -> None:

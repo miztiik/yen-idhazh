@@ -124,6 +124,8 @@ function job(over: Partial<Record<(typeof FLEET_COLUMNS)[number], string | numbe
 		date: '2026-09-12',
 		run_id: '2026-09-12-1',
 		job: 'work',
+		pipeline_name: null,
+		task_name: null,
 		shard: 0,
 		fingerprint: 'aaaa000000000000',
 		cpu_model: 'AMD EPYC 7763 64-Core Processor',
@@ -375,6 +377,21 @@ test.describe('the window, the states and the rows the door hands over', () => {
 		expect(one.shard).toBe(3);
 		// A row that names no day or no run cannot be drawn or listed.
 		expect(fleetJobs([job({ date: null }), job({ run_id: '' })])).toEqual([]);
+	});
+
+	test('pipeline and task identity stays separate in data and is named clearly in the list', () => {
+		const jobs = fleetJobs([
+			job({ job: null, pipeline_name: 'gardener', task_name: 'run-tasks' }),
+			job({ job: null, pipeline_name: 'llm-council', task_name: 'settle' })
+		]);
+		expect(jobs.map((one) => [one.job, one.pipelineName, one.taskName])).toEqual([
+			[null, 'gardener', 'run-tasks'],
+			[null, 'llm-council', 'settle']
+		]);
+		const view = fleetView(jobs, options(jobs, { start: '2026-09-12', end: '2026-09-12', windowDays: 1 }));
+		expect(view.lines[0].map(({ job, pipelineName, taskName }) =>
+			job ?? `${pipelineName}/${taskName}`
+		)).toEqual(['gardener/run-tasks', 'llm-council/settle']);
 	});
 
 	test('the list a pick opens is every job of that day, slowest machine first', () => {

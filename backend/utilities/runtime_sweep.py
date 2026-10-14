@@ -38,7 +38,7 @@ from idhazh.llm.server import loopback_url, server_argv
 from idhazh.stages import common
 from idhazh.stages import plan as plan_stage
 from idhazh.stages.common import CAPTURES_DIRNAME
-from idhazh.telemetry import job_machine, silicon
+from idhazh.telemetry import silicon, task_telemetry
 from idhazh.telemetry.host_control import enabled as host_telemetry_enabled
 from utilities import publication_evidence, sweep_verdict
 from utilities.memory_sampler import read_status
@@ -588,6 +588,7 @@ def run_once(
                                 shard=shard,
                                 shards=worker_count,
                                 commit_sha=commit_sha or os.environ.get("GITHUB_SHA", "0" * 40),
+                                server_pid=server.pid,
                             ),
                             env=env,
                         )
@@ -629,14 +630,18 @@ def work_command(
     shard: int,
     shards: int,
     commit_sha: str,
+    server_pid: int | None = None,
 ) -> list[str]:
     """Run the Python producer with this repeat's exact plan and shard."""
-    return [
+    command = [
         sys.executable, "-m", "idhazh", "work",
         "--config", str(config_root), "--date", date, "--execution", str(execution),
         "--commit", commit_sha, "--shard", str(shard), "--shards", str(shards),
         "--no-faithfulness",
     ]
+    if server_pid is not None:
+        command.extend(("--server-pid", str(server_pid)))
+    return command
 
 
 def corpus_offset(dispatch: str) -> int:
@@ -743,7 +748,7 @@ def sweep(args: argparse.Namespace) -> int:
         settings = config.load(args.config)
         with completed_writes.collect() as writes:
             try:
-                with job_machine.record(
+                with task_telemetry.record(
                     date=args.date,
                     run_id=f"{args.date}-{args.execution}",
                     settings=settings,

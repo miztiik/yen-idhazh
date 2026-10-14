@@ -63,11 +63,13 @@ function shardOf(reading: ShardReading): ShardReading {
 }
 
 function fingerprint(over: Partial<HostFingerprint>): HostFingerprint {
-	return {
+	const row = {
 		version: '2026-10-10',
 		date: '2026-09-12',
 		run_id: '2026-09-12-1',
 		job: 'work',
+		pipeline_name: null,
+		task_name: null,
 		shard: 0,
 		fingerprint: '3a7f0b1c2d4e5f60',
 		fingerprint_version: 2,
@@ -102,6 +104,12 @@ function fingerprint(over: Partial<HostFingerprint>): HostFingerprint {
 		server_prompt_seconds: null,
 		...over
 	};
+	return {
+		...row,
+		job: row.job === undefined ? 'work' : row.job,
+		pipeline_name: row.pipeline_name ?? null,
+		task_name: row.task_name ?? null
+	};
 }
 
 function onlyRun(readings: ShardReading[]): MachineRun {
@@ -122,12 +130,13 @@ const RUN = onlyRun([
 	{ shard: 1, cpuModel: 'INTEL(R) XEON(R) PLATINUM 8573C' }
 ]);
 
-function cardsFor(rows: HostFingerprint[], recording = true) {
+function cardsFor(rows: HostFingerprint[], recording = true, items: Record<string, string | number | null>[] = []) {
 	return machineCards(RUN, rows, {
 		watchedFlags: FLAGS,
 		colour: COLOUR,
 		cacheMargin: MARGIN,
-		recording
+		recording,
+		items
 	});
 }
 
@@ -467,6 +476,29 @@ test.describe('how many jobs drew a machine', () => {
 		const view = cardsFor([fingerprint({ job: 'work', shard: 0 })]);
 		expect(view.cards.reduce((total, card) => total + card.jobsDrawn, 0)).toBe(2);
 	});
+
+	test('a generic task row covers its item-ledger shard without flattening its identity', () => {
+		const host = fingerprint({
+			job: null,
+			pipeline_name: 'gardener',
+			task_name: 'run-tasks',
+			shard: 0
+		});
+		const item = {
+			date: host.date,
+			run_id: host.run_id,
+			machine_pipeline_name: host.pipeline_name,
+			machine_task_name: host.task_name,
+			machine_shard: host.shard
+		};
+		const view = cardsFor([host], true, [item]);
+		expect(fingerprints([host])[0]).toMatchObject({
+			job: null,
+			pipeline_name: 'gardener',
+			task_name: 'run-tasks'
+		});
+		expect(view.cards.reduce((total, card) => total + card.jobsDrawn, 0)).toBe(2);
+	});
 });
 
 test.describe('when there is nothing to draw', () => {
@@ -677,11 +709,29 @@ test.describe("one job's row", () => {
 				cpu_observed_mhz: '2800',
 				cpu_reported_max_mhz: '3200'
 			},
+			{
+				version: '2026-10-12',
+				date: '2026-10-12',
+				run_id: '2026-10-12-1',
+				job: 'work',
+				shard: '0',
+				fingerprint: 'bbbbbbbbbbbbbbbb',
+				fingerprint_version: '2'
+			},
+			{
+				version: '2026-10-14',
+				date: '2026-10-14',
+				run_id: '2026-10-14-1',
+				job: 'work',
+				shard: '0',
+				fingerprint: 'cccccccccccccccc',
+				fingerprint_version: '2'
+			},
 			{ version: '2099-01-01', date: '2099-01-01', run_id: 'bad', job: 'work', shard: '0' }
 		]);
-		expect(rows).toHaveLength(2);
+		expect(rows).toHaveLength(4);
 		expect(rows[0]).toMatchObject({
-			version: '2026-10-10',
+			version: '2026-09-20',
 			fingerprint_version: 1,
 			cpu_logical_processors: null,
 			cpu_observed_mhz: 2400,
@@ -693,5 +743,25 @@ test.describe("one job's row", () => {
 			cpu_observed_mhz: 2800,
 			cpu_reported_max_mhz: 3200
 		});
+		expect(rows.slice(1).map((row) => row.version)).toEqual([
+			'2026-10-10',
+			'2026-10-12',
+			'2026-10-14'
+		]);
+	});
+
+	test('generic pipeline/task identities reach cards and the fleet list distinctly', () => {
+		const row = fingerprint({
+			version: '2026-10-14',
+			job: null,
+			pipeline_name: 'gardener',
+			task_name: 'run-tasks'
+		});
+		expect(fingerprints([row]).map((host) => [host.job, host.pipeline_name, host.task_name])).toEqual([
+			[null, 'gardener', 'run-tasks']
+		]);
+		expect(fleetJobs([row]).map((job) => [job.job, job.pipelineName, job.taskName])).toEqual([
+			[null, 'gardener', 'run-tasks']
+		]);
 	});
 });

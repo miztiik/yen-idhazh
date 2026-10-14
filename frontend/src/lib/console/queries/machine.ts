@@ -34,7 +34,7 @@ export const diskReadsQuery = {
 export const machineCardsQuery = {
 	name: 'machineCardsQuery', ledger: 'host-fingerprint',
 	columns: [
-		'version', 'date', 'run_id', 'job', 'shard', 'fingerprint', 'fingerprint_version',
+		'version', 'date', 'run_id', 'job', 'pipeline_name', 'task_name', 'shard', 'fingerprint', 'fingerprint_version',
 		'cpu_model', 'cpu_vendor', 'cpu_family', 'cpu_model_number', 'cpu_stepping', 'microcode',
 		'cpu_physical_cores', 'cpu_logical_processors', 'cpu_allowed_processors',
 		'cpu_quota_cores', 'cpu_quota_state', 'cpu_target_measured_at', 'l3_cache_bytes',
@@ -47,7 +47,7 @@ export const machineCardsQuery = {
 
 export const machineCardsItemsQuery = {
 	name: 'machineCardsItemsQuery', ledger: 'item-health',
-	columns: ['date', 'run_id', 'machine_job', 'machine_shard', 'cpu_model'],
+	columns: ['date', 'run_id', 'machine_job', 'machine_pipeline_name', 'machine_task_name', 'machine_shard', 'cpu_model'],
 	span: 'newest-day'
 } as const satisfies PanelQuery;
 
@@ -60,7 +60,7 @@ export const slowerMachinesQuery = {
 export const platformMixQuery = {
 	name: 'platformMixQuery', ledger: 'host-fingerprint',
 	columns: [
-		'version', 'date', 'run_id', 'job', 'shard', 'fingerprint', 'fingerprint_version',
+		'version', 'date', 'run_id', 'job', 'pipeline_name', 'task_name', 'shard', 'fingerprint', 'fingerprint_version',
 		'cpu_model', 'cpu_logical_processors', 'model_load_ms', 'job_seconds',
 		'server_prompt_tokens', 'server_prompt_seconds',
 		'cores', 'threads', 'mhz_max', 'mhz_at_probe'
@@ -100,14 +100,14 @@ export const contextHeadroomQuery = {
 
 export const articleCostQuery = {
 	name: 'articleCostQuery', ledger: 'item-health',
-	columns: ['date', 'run_id', 'machine_job', 'machine_shard', 'item_index', 'item_total_ms', 'cpu_busy_pct', 'prefill_ms', 'decode_ms', 'llama_rss_bytes'],
+	columns: ['date', 'run_id', 'machine_job', 'machine_pipeline_name', 'machine_task_name', 'machine_shard', 'item_index', 'item_total_ms', 'cpu_busy_pct', 'prefill_ms', 'decode_ms', 'llama_rss_bytes'],
 	span: 'window'
 } as const satisfies PanelQuery;
 
 export const articleCostHostsQuery = {
 	name: 'articleCostHostsQuery', ledger: 'host-fingerprint',
 	columns: [
-		'version', 'date', 'run_id', 'job', 'shard', 'cpu_logical_processors',
+		'version', 'date', 'run_id', 'job', 'pipeline_name', 'task_name', 'shard', 'cpu_logical_processors',
 		'cores', 'threads', 'mhz_max', 'mhz_at_probe'
 	],
 	span: 'window'

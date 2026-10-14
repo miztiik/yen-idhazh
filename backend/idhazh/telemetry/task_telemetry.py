@@ -1,4 +1,4 @@
-"""Record a job's machine before its work and its elapsed time afterwards."""
+"""Record a task's machine before its work and its elapsed time afterwards."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from idhazh.contracts.base import ServerJob
+from idhazh.contracts.base import WORK_JOB, PipelineName, ServerJob, TaskName
 from idhazh.telemetry import silicon
 from idhazh.telemetry.host_control import enabled as host_telemetry_enabled
 
@@ -31,15 +31,21 @@ def record(
     settings: config.Settings | config.GardenerSettings,
     state_root: Path,
     commit_sha: str,
-    job: ServerJob,
+    job: ServerJob | TaskName | None = None,
+    pipeline_name: PipelineName | None = None,
+    task_name: TaskName | None = None,
     shard: int = 0,
     attempt: int | None = None,
     started_at: datetime | None = None,
     clock: Callable[[], datetime] = utc_now,
 ) -> Iterator[list[Path]]:
-    """Yield the exact files to stage, including the clock even if the work fails."""
+    """Yield exact files for a generic task, including its clock on work failure."""
+    if (pipeline_name is None) != (task_name is None):
+        raise ValueError("pipeline_name and task_name must be present together")
+    effective_task = task_name if task_name is not None else job or WORK_JOB
+    writer_job = None if pipeline_name is not None else effective_task
     if not host_telemetry_enabled(settings.app.observability):
-        _LOG.info("host telemetry off run=%s job=%s", run_id, job)
+        _LOG.info("host telemetry off run=%s task=%s", run_id, effective_task)
         yield []
         return
     started = started_at if started_at is not None else clock()
@@ -51,14 +57,19 @@ def record(
             settings=settings,
             state_root=state_root,
             commit_sha=commit_sha,
-            job=job,
+            job=writer_job,
+            pipeline_name=pipeline_name,
+            task_name=task_name,
             shard=shard,
             attempt=attempt,
         )
         written.extend(paths)
     except OSError as error:
         _LOG.warning(
-            "machine probe not written run=%s job=%s error=%s", run_id, job, type(error).__name__
+            "machine probe not written run=%s task=%s error=%s",
+            run_id,
+            effective_task,
+            type(error).__name__,
         )
     try:
         yield written
@@ -70,7 +81,9 @@ def record(
                 settings=settings,
                 state_root=state_root,
                 commit_sha=commit_sha,
-                job=job,
+                job=writer_job,
+                pipeline_name=pipeline_name,
+                task_name=task_name,
                 shard=shard,
                 attempt=attempt,
                 job_started_at=int(started.timestamp()),
@@ -79,8 +92,8 @@ def record(
             written.extend(paths)
         except OSError as error:
             _LOG.warning(
-                "machine clock not written run=%s job=%s error=%s",
+                "machine clock not written run=%s task=%s error=%s",
                 run_id,
-                job,
+                effective_task,
                 type(error).__name__,
             )

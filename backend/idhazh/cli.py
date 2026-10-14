@@ -104,8 +104,8 @@ from idhazh.telemetry import (
     cli as telemetry_cli,
 )
 from idhazh.telemetry import (
-    job_machine,
     silicon,
+    task_telemetry,
 )
 from idhazh.telemetry.host_control import enabled as host_telemetry_enabled
 
@@ -388,6 +388,12 @@ def _main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--shard", type=int, default=0)
     parser.add_argument("--shards", type=int, default=None)
     parser.add_argument(
+        "--server-pid",
+        type=_positive_int,
+        default=None,
+        help="PID written by the model-server owner, for process-scoped host readings.",
+    )
+    parser.add_argument(
         "--execution",
         type=int,
         default=None,
@@ -514,6 +520,16 @@ def _main(argv: Sequence[str] | None = None) -> int:
             "readers are typed for the enum, and a bare string reached one of them as "
             "soon as a segment name asked for `.value`."
         ),
+    )
+    parser.add_argument(
+        "--pipeline-name",
+        default=None,
+        help="Generic pipeline identity for reusable telemetry; pair with --task-name.",
+    )
+    parser.add_argument(
+        "--task-name",
+        default=None,
+        help="Generic task identity for reusable telemetry; pair with --pipeline-name.",
     )
     parser.add_argument(
         "--job-started-at",
@@ -775,13 +791,14 @@ def _dispatch(
         # Instrument the command without adding telemetry imports to the venue.
         # Every date uses the same night and job-start stamp.
         machine = (
-            job_machine.record(
+            task_telemetry.record(
                 date=council_identity.opened_on(night),
                 run_id=night,
                 settings=settings,
                 state_root=state_dir,
                 commit_sha=args.commit,
-                job=ServerJob.SAVE_COUNCIL_RESULTS,
+                pipeline_name="council",
+                task_name="save_council_results",
                 started_at=datetime.fromtimestamp(int(args.job_started_at), UTC)
                 if args.job_started_at
                 else None,
@@ -932,6 +949,7 @@ def _dispatch(
             shard=args.shard,
             shards=args.shards,
             fetcher=read_url,
+            server_pid=args.server_pid,
         )
 
     if args.stage == "record":
@@ -955,7 +973,9 @@ def _dispatch(
             state_root=common.STATE_ROOT,
             commit_sha=args.commit,
             shard=args.shard,
-            job=args.job,
+            job=None if args.pipeline_name is not None else args.job,
+            pipeline_name=args.pipeline_name,
+            task_name=args.task_name,
         )
         return 0
 
@@ -967,7 +987,9 @@ def _dispatch(
             state_root=common.STATE_ROOT,
             commit_sha=args.commit,
             shard=args.shard,
-            job=args.job,
+            job=None if args.pipeline_name is not None else args.job,
+            pipeline_name=args.pipeline_name,
+            task_name=args.task_name,
             job_started_at=int(args.job_started_at) if args.job_started_at else None,
             server_log_path=args.server_log,
             metrics_path=args.counters_file,

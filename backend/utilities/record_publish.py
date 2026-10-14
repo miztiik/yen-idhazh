@@ -80,15 +80,20 @@ def land(
 ) -> int:
     job, scopes, _ = POLICIES[client]
     if client == "measure" and identity is not None:
-        job = measure_job(identity.job.value)
+        if identity.job is None:
+            raise ValueError("measurement publication requires a legacy job identity")
+        job = measure_job(str(identity.job))
     receipt = PublicationReceipt.read(
-        repo / publication_evidence.ROOT / job / f"{client}-0.json"
+        repo / publication_evidence.ROOT / str(job) / f"{client}-0.json"
     )
     if identity is not None and receipt.identity != identity:
         raise ValueError("record receipt does not belong to the expected invocation")
     identity = receipt.identity
+    if identity.job is None:
+        raise ValueError("record publication requires a legacy workflow job identity")
+    recorded_job = ServerJob(identity.job)
     if (
-        identity.job != job
+        recorded_job != job
         or identity.attempt != run_context.run_attempt()
         or identity.run_id.split("-", 3)[-1] != os.environ.get("GITHUB_RUN_ID", "")
         or identity.git_sha != os.environ.get("GITHUB_SHA", "")

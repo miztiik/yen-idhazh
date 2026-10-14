@@ -89,6 +89,9 @@ def run(args: list[str]) -> int:
     if job not in VERBS:
         job = "work" if verb in {"work", "record"} else "assemble" if verb == "harvest" else verb
     identity = identify(args, job=job)
+    if identity.job is None:
+        raise ValueError("digest publication requires a legacy workflow job identity")
+    job = ServerJob(identity.job)
     with completed_writes.collect() as writes:
         try:
             return cli.main(args)
@@ -98,7 +101,7 @@ def run(args: list[str]) -> int:
                     common.STATE_ROOT,
                     run_id=identity.run_id,
                     attempt=identity.attempt,
-                    job=identity.job,
+                    job=job,
                     shard=identity.shard,
                 )
                 if trace.is_file():
@@ -173,10 +176,13 @@ def land(
     head = git.git("rev-parse", "HEAD").strip()
     imported = git.run("rev-parse", "--verify", "--quiet", "refs/worktree/publication-input-state")
     source = imported.stdout.decode().strip() if imported.returncode == 0 else head
-    hashes = publication_evidence.read(repo, identity, VERBS[identity.job])
-    authority = permissions(identity.job, date=date)
+    if identity.job is None:
+        raise ValueError("digest publication requires a legacy workflow job identity")
+    job = ServerJob(identity.job)
+    hashes = publication_evidence.read(repo, identity, VERBS[job])
+    authority = permissions(job, date=date)
     mutable: tuple[str, ...] = (INVENTORY,)
-    if identity.job == ServerJob.ASSEMBLE:
+    if job is ServerJob.ASSEMBLE:
         from idhazh.path_classes import DERIVED
 
         day = "frontend/public/digest/" + date.replace("-", "/")

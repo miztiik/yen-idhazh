@@ -35,11 +35,13 @@ function machineShard(over: ShardReading): ShardReading {
     };
 }
 function host(over: Partial<HostFingerprint>): HostFingerprint {
-	return {
+	const row = {
 		version: '2026-10-10',
 		date: DATE,
 		run_id: RUN,
 		job: 'work',
+		pipeline_name: null,
+		task_name: null,
 		shard: 0,
 		fingerprint: 'machine-a',
 		fingerprint_version: 2,
@@ -73,6 +75,12 @@ function host(over: Partial<HostFingerprint>): HostFingerprint {
 		server_prompt_tokens: 200,
 		server_prompt_seconds: 10,
 		...over
+	};
+	return {
+		...row,
+		job: row.job === undefined ? 'work' : row.job,
+		pipeline_name: row.pipeline_name ?? null,
+		task_name: row.task_name ?? null
 	};
 }
 test.describe('the machines this run drew', () => {

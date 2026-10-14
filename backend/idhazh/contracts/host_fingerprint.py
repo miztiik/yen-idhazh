@@ -37,8 +37,11 @@ from idhazh.contracts.base import (
     Contract,
     DateStamp,
     FingerprintId,
+    JobName,
+    PipelineName,
     RunId,
     ServerJob,
+    TaskName,
     Timestamp,
 )
 
@@ -62,7 +65,10 @@ WATCHED_FLAGS: tuple[str, ...] = (
     "sse4_2",
 )
 
-HOST_FINGERPRINT_VERSION: Final = "2026-10-10"
+HOST_FINGERPRINT_VERSION: Final = "2026-10-14"
+HOST_FINGERPRINT_READ_VERSIONS: Final = frozenset(
+    {"2026-10-10", "2026-10-12", HOST_FINGERPRINT_VERSION}
+)
 LEGACY_HOST_VERSIONS: Final = (
     "2026-09-16",
     "2026-09-17",
@@ -151,6 +157,8 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "date",
             "run_id",
             "job",
+            "pipeline_name",
+            "task_name",
             "shard",
             "server_prompt_tokens",
             "server_prompt_seconds",
@@ -502,21 +510,37 @@ class HostFingerprintRow(Contract):
     __schema_stem__: ClassVar[str] = "host-fingerprint-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-14",
+            change="Allow pipeline and task identity without a legacy job value.",
+            why="Shared host records group reusable readings by separate identity columns.",
+        ),
+        ChangelogEntry(
             version="2026-10-10",
             change="Replace ambiguous CPU cells and add versioned fingerprints.",
             why="Topology, target constraints and frequencies are different measurements.",
         ),
-        *LegacyHostFingerprintRow.__changelog__[:3],
         ChangelogEntry(
-            version="2026-09-17",
+            version="2026-09-20",
+            change="`memcpy_probe_mib` records the derived probe buffer.",
+            why="The configured floor is not the size actually measured.",
+        ),
+        ChangelogEntry(
+            version="2026-09-19",
             change="Earlier changes are in this contract's git history.",
-            why="The changelog stays newest-first and bounded.",
+            why="Git is the archive for older shape changes.",
+        ),
+        ChangelogEntry(
+            version="2026-09-18",
+            change="Earlier changes are in this contract's git history.",
+            why="Git is the archive for older shape changes.",
         ),
     )
 
     date: DateStamp
     run_id: RunId
-    job: ServerJob = Field(default=WORK_JOB)
+    job: ServerJob | JobName | None = Field(default=WORK_JOB)
+    pipeline_name: PipelineName | None = None
+    task_name: TaskName | None = None
     shard: int = Field(ge=0, le=INT64_MAX, strict=True)
 
     fingerprint: FingerprintId | None = None
@@ -584,6 +608,8 @@ class HostFingerprintRow(Contract):
             return normalize_host_row(payload).model_dump()
         if payload.get("version") in LEGACY_HOST_VERSIONS:
             return normalize_host_row(payload).model_dump()
+        if payload.get("version") in HOST_FINGERPRINT_READ_VERSIONS:
+            return _check_numbers(payload, cls)
         if LEGACY_CPU_FIELDS.intersection(payload):
             raise ValueError(
                 "legacy CPU fields require a declared legacy or exact constructor shape"
@@ -592,12 +618,18 @@ class HostFingerprintRow(Contract):
 
     @model_validator(mode="after")
     def _consistent_measurements(self) -> Self:
+        if (self.pipeline_name is None) != (self.task_name is None):
+            raise ValueError("host row requires both pipeline_name and task_name")
+        if self.task_name is None and self.job is None:
+            raise ValueError("host row requires a legacy job or pipeline and task")
+        if self.task_name is not None and self.job not in (None, self.task_name):
+            raise ValueError("generic host row job must be absent or match task_name")
         for name in ("measured_at", "cpu_target_measured_at"):
             value = getattr(self, name)
             if value is not None:
                 datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
-        if self.version != HOST_FINGERPRINT_VERSION:
-            raise ValueError("normalized host rows require the corrected schema version")
+        if self.version not in HOST_FINGERPRINT_READ_VERSIONS:
+            raise ValueError("normalized host row has an unsupported schema version")
         if (self.fingerprint is None) != (self.fingerprint_version is None):
             raise ValueError("fingerprint and fingerprint_version must be present together")
         if self.fingerprint_version == 2 and self.fingerprint != fingerprint_v2(self):
@@ -685,7 +717,7 @@ def normalize_host_row(data: Mapping[str, object]) -> HostFingerprintRow:
         if set(payload) != probe_keys:
             raise ValueError("unstamped input is not an unchanged silicon constructor shape")
         payload["version"] = LEGACY_HOST_VERSIONS[-1]
-    if payload["version"] == HOST_FINGERPRINT_VERSION:
+    if payload["version"] in HOST_FINGERPRINT_READ_VERSIONS:
         return HostFingerprintRow.model_validate(payload)
     if payload["version"] not in LEGACY_HOST_VERSIONS:
         raise ValueError("unrecognized host row schema version")

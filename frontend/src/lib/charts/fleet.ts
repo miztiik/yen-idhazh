@@ -59,6 +59,8 @@ export const FLEET_COLUMNS = [
 	'date',
 	'run_id',
 	'job',
+	'pipeline_name',
+	'task_name',
 	'shard',
 	'fingerprint',
 	'fingerprint_version',
@@ -77,8 +79,10 @@ export interface FleetJob {
 	/** The UTC day the job ran, `YYYY-MM-DD`. */
 	date: string;
 	runId: string;
-	/** Which workflow job it was: `work`, `plan`, `assemble` and the rest. */
-	job: string;
+	/** The legacy job name. Null for a generic pipeline/task identity. */
+	job: string | null;
+	pipelineName: string | null;
+	taskName: string | null;
 	shard: number | null;
 	fingerprint: string | null;
 	fingerprintVersion: number | null;
@@ -117,7 +121,9 @@ export interface FleetRow {
 /** One job of a day, as the list a pick opens names it. */
 export interface FleetLine {
 	runId: string;
-	job: string;
+	job: string | null;
+	pipelineName: string | null;
+	taskName: string | null;
 	shard: number | null;
 	/** The kind of machine in words, never a fold's name. */
 	machine: string;
@@ -203,10 +209,14 @@ export function fleetJobs(rows: readonly Row[]): FleetJob[] {
 		const date = text(row.date);
 		const runId = text(row.run_id);
 		if (date === null || !DAY.test(date) || runId === null) continue;
+		const pipeline = text(row.pipeline_name);
+		const task = text(row.task_name);
 		jobs.push({
 			date,
 			runId,
-			job: text(row.job) ?? 'work',
+			job: text(row.job) ?? (pipeline !== null && task !== null ? null : 'work'),
+			pipelineName: pipeline,
+			taskName: task,
 			shard: figure(row.shard),
 			fingerprint: text(row.fingerprint),
 			fingerprintVersion: figure(row.fingerprint_version),
@@ -419,6 +429,8 @@ export function fleetView(jobs: readonly FleetJob[], options: FleetOptions): Fle
 		lines[column.get(job.date) ?? 0].push({
 			runId: job.runId,
 			job: job.job,
+			pipelineName: job.pipelineName,
+			taskName: job.taskName,
 			shard: job.shard,
 			machine: row === identity.key ? (labelOf.get(row) ?? identity.name) : identity.name,
 			seconds: job.seconds,
@@ -431,7 +443,13 @@ export function fleetView(jobs: readonly FleetJob[], options: FleetOptions): Fle
 			(a, b) =>
 				(order.get(a.row) ?? 0) - (order.get(b.row) ?? 0) ||
 				a.runId.localeCompare(b.runId) ||
-				a.job.localeCompare(b.job) ||
+				(a.pipelineName !== null && a.taskName !== null
+					? `${a.pipelineName}/${a.taskName}`
+					: a.job ?? '').localeCompare(
+					b.pipelineName !== null && b.taskName !== null
+						? `${b.pipelineName}/${b.taskName}`
+						: b.job ?? ''
+				) ||
 				(a.shard ?? -1) - (b.shard ?? -1)
 		);
 	}

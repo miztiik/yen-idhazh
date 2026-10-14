@@ -237,7 +237,8 @@
 					{:else if id === 'machine-cards'}
 						<MachineCardsPanel newestRunId={latestRunId} machines={machineCards(cardCounters.runs.find((run) => run.runId === latestRunId) ?? null,
 							fingerprints(rows('machineCardsQuery')), { watchedFlags: cfg.flags, colour: { stops: shared.machine_colour_stops, floor: shared.machine_colour_floor_share },
-								recording: cfg.recording, cacheMargin: cfg.cacheMargin, ramp, keys, lost: lost.find((day) => day.date === newest?.date) ?? null })} />
+								recording: cfg.recording, cacheMargin: cfg.cacheMargin, ramp, keys, items: rows('machineCardsItemsQuery'),
+								lost: lost.find((day) => day.date === newest?.date) ?? null })} />
 					{:else if id === 'tail-trend'}
 						<TailTrendPanel rows={latency.runs} {start} {end} modelChanges={changes.map((move) => move.date)}
 							missingMarkers={changeNote} moved={changes.map((move) => ({ date: move.date, settings: [move.words] }))}

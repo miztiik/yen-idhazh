@@ -296,7 +296,7 @@ def test_corrected_host_history_retains_its_versioned_facts(
 
     assert ledger.load(written, model=HostFingerprintRow) == [row]
     envelope = ledger.read_envelope(written[0])
-    assert envelope.row_schema_version == "2026-10-10"
+    assert envelope.row_schema_version == "2026-10-14"
     assert envelope.writer == (parquet if fmt is Format.PARQUET else json_lines).__name__
 
 
@@ -690,6 +690,7 @@ def test_a_row_whose_own_identity_cell_would_not_read_back_is_refused_before_the
     row = _fixture_rows(HostFingerprintRow)[0]
     assert isinstance(row, HostFingerprintRow)
     unreadable = row.model_copy(update={"shard": -1})
+    assert unreadable.job is not None
 
     with pytest.raises(ValueError, match="identity cells would not read back"):
         ledger.persist(
@@ -697,7 +698,7 @@ def test_a_row_whose_own_identity_cell_would_not_read_back_is_refused_before_the
             [unreadable],
             ledger=LedgerName.HOST_FINGERPRINT,
             covers=unreadable.date,
-            identity=_identity(job=unreadable.job),
+            identity=_identity(job=ServerJob(unreadable.job)),
         )
     assert not tmp_path.exists() or not any(tmp_path.rglob("*.*"))
 

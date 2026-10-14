@@ -147,7 +147,7 @@ def publish(
     pushes = 0
     prepared = False
     active = request
-    deadline = time.monotonic() + retry.deadline_for(request.identity.job)
+    deadline = time.monotonic() + retry.deadline_for(request.identity.task_key)
     git.deadline = deadline
     deadline_token = INVOCATION_DEADLINE.set(deadline)
 

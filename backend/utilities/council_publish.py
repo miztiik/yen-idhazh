@@ -20,7 +20,7 @@ from idhazh.council.night_plan import a_date
 from idhazh.council.registry import tenants
 from idhazh.council.selection import Selection, for_dates, from_environment
 from idhazh.council.tenancy import Tenant
-from idhazh.telemetry import job_machine
+from idhazh.telemetry import task_telemetry
 from utilities.council_matrix import VENUE_LEDGERS
 from utilities.publication_evidence import identified
 from utilities.publication_git import Repository
@@ -38,7 +38,7 @@ def settle_and_publish(
     commit_sha: str,
     config_root: Path,
     started_at: datetime | None = None,
-    clock: Callable[[], datetime] = job_machine.utc_now,
+    clock: Callable[[], datetime] = task_telemetry.utc_now,
     units_failed: bool = False,
     selection: Selection | None = None,
 ) -> int:
@@ -155,7 +155,7 @@ def settle_and_publish(
     machine_paths: list[Path] = []
     with completed_writes.collect() as machine_evidence:
         machine = (
-            job_machine.record(
+            task_telemetry.record(
                 date=run_identity.opened_on(run_id),
                 run_id=run_id,
                 settings=settings,
