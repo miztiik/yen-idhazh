@@ -158,9 +158,8 @@ jobs:
       - name: Tests, including the five injection canaries
         if: needs.scope.outputs.code == 'true'
         run: >-
-          pytest
+          pytest --junitxml=test-results/backend/pytest-junit.xml
           --ignore=backend/tests/test_host_history_maintenance.py
-          --junitxml=test-results/backend/pytest-junit.xml
 
       # Offline writer inspection must not race the parallel suite's child processes.
       - name: Offline maintenance, without parallel producers

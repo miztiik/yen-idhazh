@@ -139,7 +139,7 @@ def test_offline_maintenance_runs_after_parallel_workers_exit_without_losing_cov
         "test-results/backend/pytest-offline-junit.xml",
     }
     assert parallel_args == [
-        "pytest", f"--ignore={module}", "--junitxml=test-results/backend/pytest-junit.xml",
+        "pytest", "--junitxml=test-results/backend/pytest-junit.xml", f"--ignore={module}",
     ]
     assert offline_args == [
         "pytest", "-n", "0", module, "--junitxml=test-results/backend/pytest-offline-junit.xml",
