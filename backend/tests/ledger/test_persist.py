@@ -40,7 +40,7 @@ from idhazh.contracts.file_envelope import (
     Tier,
     WriterIdentity,
 )
-from idhazh.contracts.host_fingerprint import HostFingerprintRow
+from idhazh.contracts.host_fingerprint import HostFingerprintRow, fingerprint_v2
 from idhazh.contracts.knobs.ledger import LedgerConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.visual_prune import VisualPruneRow
@@ -265,6 +265,39 @@ def test_every_contract_comes_back_equal_in_both_formats(
     )
 
     _same_rows(ledger.load(written, model=model), rows)
+
+
+@pytest.mark.parametrize("fmt", list(Format), ids=[fmt.value for fmt in Format])
+def test_corrected_host_history_retains_its_versioned_facts(
+    fmt: Format, tmp_path: Path
+) -> None:
+    payload = fixture_rows(HostFingerprintRow)[1].model_dump()
+    payload.update(
+        fingerprint=None,
+        fingerprint_version=None,
+        cpu_physical_cores=24,
+        cpu_logical_processors=48,
+        cpu_allowed_processors=4,
+        cpu_quota_cores=4.0,
+        cpu_quota_state="finite",
+        cpu_target_measured_at=payload["measured_at"],
+    )
+    corrected = HostFingerprintRow.model_validate(payload)
+    payload.update(fingerprint=fingerprint_v2(corrected), fingerprint_version=2)
+    row = HostFingerprintRow.model_validate(payload)
+    identity = WriterIdentity(
+        run_id=row.run_id, attempt=1, job=row.job, shard=row.shard,
+        producer="telemetry.silicon", git_sha=A_SHA,
+    )
+    written = ledger.persist(
+        tmp_path, [row], ledger=LedgerName.HOST_FINGERPRINT, covers=row.date,
+        identity=identity, fmt=fmt,
+    )
+
+    assert ledger.load(written, model=HostFingerprintRow) == [row]
+    envelope = ledger.read_envelope(written[0])
+    assert envelope.row_schema_version == "2026-10-10"
+    assert envelope.writer == (parquet if fmt is Format.PARQUET else json_lines).__name__
 
 
 @pytest.mark.parametrize("fmt", list(Format), ids=[fmt.value for fmt in Format])

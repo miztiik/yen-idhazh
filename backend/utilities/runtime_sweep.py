@@ -26,7 +26,7 @@ from typing import Any, NamedTuple
 
 from pydantic import ValidationError
 
-from idhazh import config, ledger, run_context
+from idhazh import completed_writes, config, ledger, run_context
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.file_envelope import WriterIdentity
@@ -40,12 +40,9 @@ from idhazh.stages import plan as plan_stage
 from idhazh.stages.common import CAPTURES_DIRNAME
 from idhazh.telemetry import job_machine, silicon
 from idhazh.telemetry.host_control import enabled as host_telemetry_enabled
-from idhazh.telemetry.host_event_client import HostEventClient
-from idhazh.telemetry.host_evidence_inputs import read_bytes
-from idhazh.telemetry.host_evidence_inputs import settings as native_settings
 from utilities import publication_evidence, sweep_verdict
 from utilities.memory_sampler import read_status
-from utilities.model_runtime import refuse_a_server_that_died_at_startup, server_identity
+from utilities.model_runtime import refuse_a_server_that_died_at_startup
 
 ROOT = Path("backend/var/runtime-sweep")
 CONFIG_ROOT = ROOT / "configs"
@@ -537,8 +534,7 @@ def run_once(
     cfg = write_config(f"{label}-{repeat}", update, config_root=config_root)
     settings = config.load(cfg)
     collect_host = host_telemetry_enabled(settings.app.observability)
-    if collect_host:
-        require_memory_for_sweep(settings.app.observability.memory_profiling_enabled)
+    collect_memory = collect_host and settings.app.observability.memory_profiling_enabled
     log_path = ROOT / f"{label}-{repeat}.llama-server.log"
     items_dir = RUN_ROOT / date / "items"
     # Both, and for the same reason: a repeat starts from an empty run directory
@@ -558,11 +554,6 @@ def run_once(
     env["LD_LIBRARY_PATH"] = "backend/bin"
     started = time.perf_counter()
     rss_samples: list[dict[str, str]] = []
-    mode = os.environ.get("IDHAZH_HOST_TELEMETRY_MODE")
-    native = collect_host and (mode == "rust" or (
-        mode is None and settings.app.observability.host_event_mode == "native"
-    ))
-    env_paths = [ROOT / f"{label}-{repeat}-{shard}.env" for shard in range(worker_count)]
     with log_path.open("w", encoding="utf-8") as log:
         server = None
         workers: list[subprocess.Popen[bytes]] = []
@@ -579,20 +570,14 @@ def run_once(
                     rss_samples.append(read_status(server.pid))
                     time.sleep(1)
 
-            if collect_host and not native:
+            if collect_memory:
                 sampler = threading.Thread(target=sample_rss, daemon=True)
                 sampler.start()
             wait_for_health(port)
             assert_the_candidate_is_serving(port, candidate_id)
             startup_ms = int((time.perf_counter() - started) * 1000)
             work_started = time.perf_counter()
-            if native:
-                target = server_identity(server.pid)
-                env["IDHAZH_MODEL_SERVER_PID"] = str(target.pid)
-                env["IDHAZH_MODEL_SERVER_START_TICKS"] = str(target.start_ticks)
             for shard in range(worker_count):
-                if native:
-                    env_paths[shard].unlink(missing_ok=True)
                 with _termination_signals(defer=True):
                     workers.append(
                         subprocess.Popen(
@@ -603,14 +588,8 @@ def run_once(
                                 shard=shard,
                                 shards=worker_count,
                                 commit_sha=commit_sha or os.environ.get("GITHUB_SHA", "0" * 40),
-                                native=native,
                             ),
-                            env={
-                                **env,
-                                # Each invocation returns its own receipt. It must not
-                                # race another shard appending to the runner's env file.
-                                "GITHUB_ENV": str(env_paths[shard]),
-                            } if native else env,
+                            env=env,
                         )
                     )
             failures = [proc.wait() for proc in workers]
@@ -621,11 +600,6 @@ def run_once(
         finally:
             _cleanup_owned_processes(server, workers, stop, sampler)
 
-    peak = None
-    workspaces: list[Path] = []
-    if native:
-        workspaces = [launcher_workspace(path) for path in env_paths]
-        rss_samples, peak = native_memory(workspaces[0])
     found = collect(date, label, repeat, items=settings.app.bench.corpus_items)
     return {
         "label": label,
@@ -638,10 +612,7 @@ def run_once(
         "total_ms": total_ms,
         "model_path_ms": startup_ms + sum(item["summarize_ms"] for item in found.per_item),
         "server_rss_samples": rss_samples,
-        "cgroup_memory_peak_bytes": peak if native else cgroup_peak() if collect_host else None,
-        "host_receipts": [
-            (workspace / "receipt.json").as_posix() for workspace in workspaces
-        ] if native else [],
+        "cgroup_memory_peak_bytes": cgroup_peak() if collect_memory else None,
         "server_facts": parse_server_facts(log_path),
         "sources": found.sources,
         "digests": found.digests,
@@ -658,80 +629,14 @@ def work_command(
     shard: int,
     shards: int,
     commit_sha: str,
-    native: bool,
 ) -> list[str]:
-    """Use one gated native worker per actual work process and selected server."""
-    command = [
+    """Run the Python producer with this repeat's exact plan and shard."""
+    return [
         sys.executable, "-m", "idhazh", "work",
         "--config", str(config_root), "--date", date, "--execution", str(execution),
         "--commit", commit_sha, "--shard", str(shard), "--shards", str(shards),
         "--no-faithfulness",
     ]
-    if not native:
-        return command
-    command = [
-        sys.executable, "backend/utilities/digest_publish.py", "run", "work", *command[4:]
-    ]
-    return [
-        sys.executable, "backend/utilities/d7_host_telemetry.py", "run",
-        "--mode", "rust", "--job", "work",
-        "--run-id", f"{date}-{execution}", "--git-sha", commit_sha,
-        "--shard", str(shard), "--memory-profiling", "inherit",
-        "--", *command,
-    ]
-
-
-def launcher_workspace(path: Path) -> Path:
-    """Read one completed child launch's bounded environment handoff."""
-    raw = read_bytes(path, native_settings()[0].limits.max_result_bytes)
-    lines = raw.decode("utf-8").splitlines()
-    name = "IDHAZH_HOST_TELEMETRY_SESSION"
-    selected: list[str] = []
-    for index, line in enumerate(lines):
-        if line.startswith(name + "="):
-            selected.append(line.partition("=")[2])
-        elif line.startswith(name + "<<"):
-            marker = line.partition("<<")[2]
-            if index + 2 >= len(lines) or lines[index + 2] != marker:
-                raise ValueError("native launcher workspace handoff is malformed")
-            selected.append(lines[index + 1])
-    if len(selected) != 1:
-        raise ValueError("native launcher must export exactly one workspace")
-    workspace = Path(selected[0]).resolve(strict=True)
-    if not workspace.is_relative_to(Path("backend/var").resolve(strict=True)):
-        raise ValueError("native launcher workspace escapes the run's bounded artifact root")
-    return workspace
-
-
-def native_memory(workspace: Path) -> tuple[list[dict[str, str]], str | None]:
-    """Consume the monitor's named legacy artifacts, never sample the host again."""
-    limit = native_settings()[0].limits.max_session_bytes
-    root = workspace / "native-artifacts"
-    samples = []
-    path = root / "server-rss-samples.jsonl"
-    if path.exists():
-        for line in read_bytes(path, limit).splitlines():
-            value = json.loads(line)
-            if not isinstance(value, dict) or any(
-                key not in ("VmRSS", "VmHWM") or not isinstance(cell, str)
-                for key, cell in value.items()
-            ):
-                raise ValueError("native runtime memory artifact has an invalid status sample")
-            samples.append(value)
-    peak_path = root / "cgroup-memory-peak.txt"
-    peak = read_bytes(peak_path, limit).decode("ascii").strip() if peak_path.exists() else None
-    if peak is not None and not peak.isdecimal():
-        raise ValueError("native runtime memory peak is not a byte count")
-    return samples, peak
-
-
-def require_memory_for_sweep(enabled: bool) -> None:
-    """Refuse a memory-dependent benchmark before it starts a server or sampler."""
-    if not enabled:
-        raise RuntimeError(
-            "runtime sweep requires memory profiling; no memory-dependent "
-            "qualification is produced while it is off"
-        )
 
 
 def corpus_offset(dispatch: str) -> int:
@@ -831,48 +736,46 @@ def server_port(config_root: Path) -> int:
 
 
 def sweep(args: argparse.Namespace) -> int:
-    settings = config.load(args.config)
-    events = job_machine.from_environment(settings)
-    if events is None:
-        return _sweep(args, events=None)
-    try:
-        with job_machine.record(
-            date=args.date,
-            run_id=f"{args.date}-{args.execution}",
-            settings=settings,
-            state_root=common.state_root_of(settings, base=common.STATE_ROOT),
-            commit_sha=args.commit,
-            job=ServerJob.RUNTIME,
-            host_events=events,
-        ):
-            return _sweep(args, events=events)
-    finally:
-        # Native bytes have separate verified evidence, never a Python write claim.
-        publication_evidence.save(
-            config.REPO_ROOT,
-            WriterIdentity(
-                run_id=f"{args.date}-{args.execution}",
-                attempt=run_context.run_attempt(),
-                job=ServerJob.RUNTIME,
-                shard=0,
-                producer="utilities.record_publish",
-                git_sha=args.commit,
-            ),
-            "measure",
-            {},
-        )
-
-
-def _sweep(args: argparse.Namespace, *, events: HostEventClient | None) -> int:
-    candidate = args.candidate
+    previous_memory = os.environ.get("MEMORY_PROFILING")
     if args.memory_profiling != "inherit":
-        path = args.config / "idhazh.json"
-        app = AppConfig.from_json(path.read_text(encoding="utf-8"))
-        app.observability.memory_profiling_enabled = args.memory_profiling == "on"
-        path.write_text(app.to_json(), encoding="utf-8", newline="\n")
+        os.environ["MEMORY_PROFILING"] = args.memory_profiling
+    try:
+        settings = config.load(args.config)
+        with completed_writes.collect() as writes:
+            try:
+                with job_machine.record(
+                    date=args.date,
+                    run_id=f"{args.date}-{args.execution}",
+                    settings=settings,
+                    state_root=common.state_root_of(settings, base=common.STATE_ROOT),
+                    commit_sha=args.commit,
+                    job=ServerJob.RUNTIME,
+                ):
+                    return _sweep(args)
+            finally:
+                publication_evidence.save(
+                    config.REPO_ROOT,
+                    WriterIdentity(
+                        run_id=f"{args.date}-{args.execution}",
+                        attempt=run_context.run_attempt(),
+                        job=ServerJob.RUNTIME,
+                        shard=0,
+                        producer="utilities.record_publish",
+                        git_sha=args.commit,
+                    ),
+                    "measure",
+                    writes,
+                )
+    finally:
+        if previous_memory is None:
+            os.environ.pop("MEMORY_PROFILING", None)
+        else:
+            os.environ["MEMORY_PROFILING"] = previous_memory
+
+
+def _sweep(args: argparse.Namespace) -> int:
+    candidate = args.candidate
     settings = config.load(args.config)
-    if host_telemetry_enabled(settings.app.observability):
-        require_memory_for_sweep(settings.app.observability.memory_profiling_enabled)
     repeat_count = repeats(args.config, dispatch=args.repeats)
     # Two, because a spread needs two readings and this stops a dispatch that
     # cannot produce one. It is the sweep's own statement about what it can
@@ -932,9 +835,7 @@ def _sweep(args: argparse.Namespace, *, events: HostEventClient | None) -> int:
         # platform places each separately, so the processor beside a prefill rate
         # is not the processor beside these wall-clock figures.
         "cpu": (
-            events.host_facts().cpu_model
-            if events is not None and events.native
-            else silicon.host_cpu_model() if host_telemetry_enabled(settings.app.observability)
+            silicon.host_cpu_model() if host_telemetry_enabled(settings.app.observability)
             else None
         ) or "unrecorded",
         "repeats": repeat_count,

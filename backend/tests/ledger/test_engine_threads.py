@@ -6,16 +6,12 @@ import json
 import os
 import subprocess
 import sys
-from dataclasses import asdict
 from pathlib import Path
 
 import pytest
 from conftest import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
-from test_host_fingerprint_migration import generated_compact, manifest_document
-from test_host_output_verify import LIMITS, render_file
 
 from idhazh import config
-from idhazh.contracts.file_envelope import Format
 from idhazh.contracts.visual_prune import VisualPruneRow
 from utilities import build_canary_day
 
@@ -44,27 +40,6 @@ if operation == "ledger-read":
     with redirect_stdout(output):
         exit_code = build_canary_day.main()
     result = {"exit_code": exit_code, "keys": json.loads(output.getvalue())}
-elif operation == "host-output-read":
-    from idhazh.telemetry.host_output_verify import (
-        VerificationLimits,
-        read_host_output,
-    )
-
-    verified = read_host_output(
-        Path(sys.argv[2]),
-        root=Path(sys.argv[3]),
-        limits=VerificationLimits(**json.loads(sys.argv[4])),
-    )
-    result = [row.model_dump(mode="json") for row in verified.rows]
-elif operation == "host-history-read":
-    from idhazh.telemetry.host_history_files import _compact
-    from idhazh.telemetry.host_output_verify import VerificationLimits
-
-    _, rows, _ = _compact(
-        Path(sys.argv[2]).read_bytes(),
-        VerificationLimits(**json.loads(sys.argv[3])),
-    )
-    result = rows
 elif operation == "persist-write":
     from idhazh import ledger
     from idhazh.contracts.base import ServerJob
@@ -184,8 +159,6 @@ def _probe(operation: str, *arguments: str) -> object:
     "operation",
     (
         "ledger-read",
-        "host-output-read",
-        "host-history-read",
         "persist-write",
         "grouped-build",
     ),
@@ -208,30 +181,6 @@ def test_each_engine_call_keeps_its_threads_on_the_caller(tmp_path: Path, operat
             for scored in build_canary_day.score_rows(items, settings)
         }
         assert _probe(operation, str(state)) == {"exit_code": 0, "keys": expected}
-    elif operation == "host-output-read":
-        root = tmp_path / "host-output"
-        path, _, _ = render_file(root, Format.PARQUET)
-        rows = _probe(operation, str(path), str(root), json.dumps(asdict(LIMITS)))
-        assert isinstance(rows, list)
-        assert len(rows) == 1
-        assert isinstance(rows[0], dict)
-        assert rows[0].get("date") == "2026-10-10"
-        assert rows[0].get("cpu_model") == "Recorded CPU \u03b1"
-    elif operation == "host-history-read":
-        workspace = tmp_path / "host-history"
-        workspace.mkdir()
-        relative = generated_compact(
-            workspace, manifest_document(), Format.PARQUET, compact_only=True
-        )
-        rows = _probe(
-            operation,
-            str(workspace / relative),
-            json.dumps(asdict(LIMITS)),
-        )
-        assert isinstance(rows, list)
-        assert len(rows) == 2
-        assert {row.get("date") for row in rows if isinstance(row, dict)} == {"2026-09-20"}
-        assert {row.get("shard") for row in rows if isinstance(row, dict)} == {0, 1}
     elif operation == "persist-write":
         result = _probe(operation, row.model_dump_json(), str(tmp_path / "persist"))
         assert result == {"files": 1, "parquet": True}

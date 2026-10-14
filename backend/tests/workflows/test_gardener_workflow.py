@@ -364,8 +364,6 @@ def test_a_shard_checks_out_only_its_code_and_runs_the_landing_program() -> None
 
     landing = _step(workflow, RUN_TASKS, "name", "Run the shard's tasks and land its record")
     landing_script = _script(landing, "shard step")
-    assert "python backend/utilities/d7_host_telemetry.py run" in landing_script
-    assert "--mode \"$IDHAZH_HOST_TELEMETRY_MODE\" --job run-tasks" in landing_script
     assert "python backend/utilities/gardener_publish.py" in landing_script
     assert '--shard "$SHARD"' in landing_script
     assert '--run-id "$RUN_ID"' in landing_script

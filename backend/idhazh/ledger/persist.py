@@ -808,11 +808,7 @@ def load_stored[C: Contract](paths: Sequence[Path], *, model: type[C]) -> list[S
                                 run_id=identity.run_id,
                                 job=identity.job,
                                 shard=identity.shard,
-                                producer=(
-                                    "telemetry.silicon"
-                                    if envelope.writer.startswith("idhazh_rust.")
-                                    else envelope.identity.producer
-                                ),
+                                producer="telemetry.silicon",
                             )
                             if envelope.tier is Tier.RAW
                             and envelope.writer.startswith("idhazh_rust.")

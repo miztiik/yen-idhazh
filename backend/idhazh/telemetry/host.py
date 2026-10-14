@@ -453,11 +453,13 @@ class HostReading:
     swap_total_bytes: int | None
 
 
-def read_now(*, server_pid: int | None = None) -> HostReading:
+def read_now(
+    *, server_pid: int | None = None, memory_profiling_enabled: bool = True
+) -> HostReading:
     """Every point-in-time reading, taken together so they describe one instant."""
-    machine = meminfo_bytes()
-    server = status_bytes(server_pid)
-    ours = status_bytes(os.getpid())
+    machine = meminfo_bytes() if memory_profiling_enabled else dict.fromkeys(MEMINFO_KEYS)
+    server = status_bytes(server_pid) if memory_profiling_enabled else dict.fromkeys(STATUS_KEYS)
+    ours = status_bytes(os.getpid()) if memory_profiling_enabled else dict.fromkeys(STATUS_KEYS)
     return HostReading(
         cpu_stat=_text(PROC_STAT),
         load_1m=load_1m(),
@@ -561,6 +563,7 @@ class Watch:
         "_headroom",
         "_interval",
         "_last",
+        "_memory",
         "_on_tick",
         "_pid",
         "_stop",
@@ -573,17 +576,21 @@ class Watch:
         interval_s: float,
         server_pid: int | None = None,
         on_tick: Callable[[float], None] | None = None,
+        memory_profiling_enabled: bool = True,
     ) -> None:
         self._interval = interval_s
         self._pid = server_pid
         self._on_tick = on_tick
+        self._memory = memory_profiling_enabled
         self._busy: list[float] = []
         self._headroom: list[int] = []
-        self._first = read_now(server_pid=server_pid)
+        self._first = read_now(
+            server_pid=server_pid, memory_profiling_enabled=self._memory
+        )
         # A counter, not a gauge, so the item's total is the difference across
         # its two ends and the sampler's interval cannot change it. It stays
         # right with the sampling thread switched off.
-        self._faults_at_open = major_faults(server_pid)
+        self._faults_at_open = major_faults(server_pid) if self._memory else None
         self._note_headroom(self._first)
         self._last = self._first
         self._stop = threading.Event()
@@ -612,7 +619,7 @@ class Watch:
         opened = time.monotonic()
         previous = self._first
         while not self._stop.wait(self._interval):
-            now = read_now(server_pid=self._pid)
+            now = read_now(server_pid=self._pid, memory_profiling_enabled=self._memory)
             shares = cpu_shares_between(previous.cpu_stat, now.cpu_stat)
             if shares is not None:
                 self._busy.append(shares.busy_pct)
@@ -634,7 +641,7 @@ class Watch:
         if self._thread is not None:
             self._thread.join(timeout=max(self._interval * 2, 1.0))
             self._thread = None
-        end = read_now(server_pid=self._pid)
+        end = read_now(server_pid=self._pid, memory_profiling_enabled=self._memory)
         self._last = end
         self._note_headroom(end)
         shares = cpu_shares_between(self._first.cpu_stat, end.cpu_stat)
@@ -653,7 +660,9 @@ class Watch:
             llama_rss_bytes=end.llama_rss_bytes,
             llama_rss_anon_bytes=end.llama_rss_anon_bytes,
             llama_rss_peak_bytes=max(peaks) if peaks else None,
-            llama_major_faults=_faults_between(self._faults_at_open, major_faults(self._pid)),
+            llama_major_faults=_faults_between(
+                self._faults_at_open, major_faults(self._pid) if self._memory else None
+            ),
             python_rss_bytes=end.python_rss_bytes,
             python_rss_anon_bytes=end.python_rss_anon_bytes,
             os_mem_available_bytes=end.mem_available_bytes,

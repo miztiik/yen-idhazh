@@ -43,10 +43,9 @@ from __future__ import annotations
 import argparse
 import contextlib
 import logging
-import os
 import sys
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
@@ -60,10 +59,8 @@ from idhazh import (
 )
 from idhazh.command_logging import configure_command_logging
 from idhazh.contracts.base import WORK_JOB, ServerJob
-from idhazh.contracts.host_output import HostWriterIdentity
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.knobs.run import RunConfig
-from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.qualification import (
     CandidateIdentity,
 )
@@ -111,7 +108,6 @@ from idhazh.telemetry import (
     silicon,
 )
 from idhazh.telemetry.host_control import enabled as host_telemetry_enabled
-from idhazh.telemetry.host_event_client import HostEventClient
 
 
 def _today() -> str:
@@ -141,139 +137,6 @@ def _memory_profiling(text: str) -> bool:
     if text == "off":
         return False
     raise argparse.ArgumentTypeError("memory profiling must be 'on' or 'off'")
-
-
-def _environment_memory_override(environ: Mapping[str, str]) -> bool | None:
-    value = environ.get("IDHAZH_HOST_TELEMETRY_MEMORY_PROFILING")
-    if value is None:
-        return None
-    if value == "true":
-        return True
-    if value == "false":
-        return False
-    raise ValueError("IDHAZH_HOST_TELEMETRY_MEMORY_PROFILING must be 'true' or 'false'")
-
-
-def _event_path(explicit: Path | None, environ: Mapping[str, str], name: str) -> Path | None:
-    value = explicit or environ.get(name)
-    return Path(value) if value is not None else None
-
-
-def _workflow_host_event_mode(environ: Mapping[str, str]) -> str | None:
-    value = environ.get("IDHAZH_HOST_TELEMETRY_MODE")
-    if value in (None, ""):
-        return None
-    if value in ("legacy", "off"):
-        return value
-    if value == "rust":
-        return "rust"
-    raise ValueError("IDHAZH_HOST_TELEMETRY_MODE must be 'legacy', 'rust' or 'off'")
-
-
-def _host_event_client(
-    parser: argparse.ArgumentParser,
-    args: argparse.Namespace,
-    settings: config.Settings,
-) -> HostEventClient | None:
-    """Open the bound event session for the selected legacy/shadow/native mode."""
-    observability = settings.app.observability
-    if not host_telemetry_enabled(observability):
-        logging.getLogger(__name__).info("host telemetry off; no event session opened")
-        return None
-    mode = observability.host_event_mode
-    try:
-        workflow_mode = _workflow_host_event_mode(dict(os.environ))
-    except ValueError as error:
-        parser.error(str(error))
-    if args.host_event_mode is None and workflow_mode == "rust":
-        mode = "native"
-    elif args.host_event_mode is None and mode == "legacy" and observability.host_event_shadow:
-        mode = "shadow"
-    if mode == "legacy":
-        if workflow_mode == "rust":
-            parser.error("a Rust launcher cannot select the Python host writer")
-        return None
-    if mode == "native" and observability.host_event_shadow:
-        parser.error("host_event_shadow cannot be combined with host_event_mode=native")
-    workspace = _event_path(
-        args.host_event_workspace, os.environ, "IDHAZH_HOST_TELEMETRY_WORKSPACE"
-    )
-    manifest = _event_path(args.host_event_manifest, os.environ, "IDHAZH_HOST_TELEMETRY_MANIFEST")
-    native_config = _event_path(args.host_event_config, os.environ, "IDHAZH_HOST_TELEMETRY_CONFIG")
-    values = {
-        "--host-event-workspace": workspace,
-        "--host-event-manifest": manifest,
-        "--host-event-config": native_config,
-    }
-    missing = [name for name, value in values.items() if value is None]
-    if missing:
-        parser.error("observability.host_event_shadow needs " + ", ".join(missing))
-    assert workspace is not None
-    assert manifest is not None
-    assert native_config is not None
-    if mode == "native":
-        client = HostEventClient.from_environment(
-            memory_profiling_enabled=settings.app.observability.memory_profiling_enabled,
-            host_enabled=observability.host_fingerprint
-            and ledger.accepts_new_rows(LedgerName.HOST_FINGERPRINT, 0),
-            environ={
-                **os.environ,
-                "IDHAZH_HOST_TELEMETRY_MODE": "rust",
-                "IDHAZH_HOST_TELEMETRY_WORKSPACE": str(workspace),
-                "IDHAZH_HOST_TELEMETRY_MANIFEST": str(manifest),
-                "IDHAZH_HOST_TELEMETRY_CONFIG": str(native_config),
-            },
-        )
-    else:
-        client = HostEventClient(
-            workspace,
-            manifest,
-            native_config,
-            memory_profiling_enabled=settings.app.observability.memory_profiling_enabled,
-            native=False,
-        )
-    if client is not None and client.native and hasattr(args, "stage"):
-        from idhazh import run_context
-
-        invocation = client.invocation
-        date = args.date or (
-            args.run_id[:10]
-            if args.run_id
-            else invocation.date
-            if invocation is not None
-            else _today()
-        )
-        given_run = args.run_id
-        if given_run is None and args.execution is None and invocation is not None:
-            given_run = invocation.identity.run_id
-        commit = args.commit
-        if (
-            invocation is not None
-            and commit == _STAND_IN_COMMIT
-            and not any(
-                word == "--commit" or word.startswith("--commit=") for word in invocation.command
-            )
-        ):
-            commit = invocation.identity.git_sha
-        job = (
-            ServerJob(args.stage)
-            if args.stage in {"plan", "work", "assemble"}
-            else ServerJob.SAVE_COUNCIL_RESULTS
-            if args.stage == "council-settle"
-            else args.job
-        )
-        client.validate_invocation(
-            date=date,
-            identity=HostWriterIdentity(
-                run_id=_machine_run(parser, date=date, given=given_run, execution=args.execution),
-                attempt=run_context.run_attempt(),
-                job=job,
-                shard=args.shard,
-                producer="telemetry.silicon",
-                git_sha=commit,
-            ),
-        )
-    return client
 
 
 def _council_run(parser: argparse.ArgumentParser, stage: str, given: str | None) -> str:
@@ -662,33 +525,6 @@ def _main(argv: Sequence[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
-        "--host-event-workspace",
-        type=Path,
-        default=None,
-        help="The workspace root that owns the bound native event session and managed outputs.",
-    )
-    parser.add_argument(
-        "--host-event-manifest",
-        type=Path,
-        default=None,
-        help="The named host session manifest, relative to its workspace root.",
-    )
-    parser.add_argument(
-        "--host-event-config",
-        type=Path,
-        default=None,
-        help="The named effective native config, relative to its workspace root.",
-    )
-    parser.add_argument(
-        "--host-event-mode",
-        choices=("legacy", "shadow", "native"),
-        default=None,
-        help=(
-            "Override the host-row boundary for this invocation. Native requires the "
-            "workflow's validated Rust session; the default remains legacy."
-        ),
-    )
-    parser.add_argument(
         "--server-log",
         type=Path,
         default=Path("llama-server.log"),
@@ -776,31 +612,13 @@ def _main(argv: Sequence[str] | None = None) -> int:
     if args.stage != "plan" and args.shards is None:
         args.shards = 1
 
-    memory_override = args.memory_profiling
-    if memory_override is None:
-        try:
-            memory_override = _environment_memory_override(dict(os.environ))
-        except ValueError as error:
-            parser.error(str(error))
-    settings = config.with_memory_profiling_override(config.load(args.config), memory_override)
     try:
-        workflow_mode = _workflow_host_event_mode(dict(os.environ))
+        settings = config.with_memory_profiling_override(
+            config.load(args.config), args.memory_profiling
+        )
+        host_telemetry_enabled(settings.app.observability)
     except ValueError as error:
         parser.error(str(error))
-    if args.host_event_mode is not None:
-        settings.app.observability.host_event_mode = args.host_event_mode
-    elif workflow_mode == "rust":
-        settings.app.observability.host_event_mode = "native"
-    if (
-        args.stage in {"work", "run"}
-        and host_telemetry_enabled(settings.app.observability)
-        and not settings.app.observability.memory_profiling_enabled
-        and settings.app.observability.host_event_mode != "native"
-    ):
-        parser.error(
-            "memory profiling off is unavailable while Python remains the "
-            "authoritative work-stage collector; native cutover has not occurred"
-        )
     if council_command:
         from idhazh.council import event_log
 
@@ -833,36 +651,7 @@ def _main(argv: Sequence[str] | None = None) -> int:
                 "trial run: every ledger goes to state/<tier>/%s and no published series reads it",
                 Path(*trial_segments).as_posix(),
             )
-        host_events = None
-        if args.stage in {"plan", "work", "assemble", "fingerprint", "job-clock"}:
-            host_events = _host_event_client(parser, args, settings)
-        if host_events is not None and host_events.native and host_events.invocation is not None:
-            invocation = host_events.invocation
-            if args.date is None:
-                args.date = invocation.date
-            if args.run_id is None:
-                args.run_id = invocation.identity.run_id
-            if args.execution is None and args.stage in {"plan", "work", "assemble"}:
-                args.execution = int(invocation.identity.run_id[11:])
-            if args.commit == _STAND_IN_COMMIT and not any(
-                word == "--commit" or word.startswith("--commit=") for word in invocation.command
-            ):
-                args.commit = invocation.identity.git_sha
-        args.lifecycle_host_events = host_events
-        if host_events is not None and host_events.native:
-            if args.stage == "work":
-                date = args.date or _today()
-                host_events.validate_plan(
-                    _planned(date, args.execution, run_id=args.run_id),
-                    shard=args.shard,
-                    shards=args.shards,
-                )
-            host_events.begin_job()
-        try:
-            return _dispatch(parser, args, settings)
-        finally:
-            if host_events is not None and host_events.native and args.stage != "fingerprint":
-                host_events.end_job()
+        return _dispatch(parser, args, settings)
 
 
 def _dispatch(
@@ -996,7 +785,6 @@ def _dispatch(
                 started_at=datetime.fromtimestamp(int(args.job_started_at), UTC)
                 if args.job_started_at
                 else None,
-                host_events=_host_event_client(parser, args, settings),
             )
             if (
                 settings.council.running()
@@ -1131,7 +919,6 @@ def _dispatch(
 
     if args.stage in ("work", "run"):
         work_plan = _planned(date, args.execution, run_id=args.run_id)
-        host_events = args.lifecycle_host_events
         work.stage_work(
             work_plan,
             settings=settings,
@@ -1145,7 +932,6 @@ def _dispatch(
             shard=args.shard,
             shards=args.shards,
             fetcher=read_url,
-            host_events=host_events,
         )
 
     if args.stage == "record":
@@ -1162,8 +948,6 @@ def _dispatch(
     # a machine reading is about the job and not about the work, so a job that
     # plans nothing can still take one (`idhazh.telemetry.silicon`).
     if args.stage == "fingerprint":
-        if args.lifecycle_host_events is not None and args.lifecycle_host_events.native:
-            return 0
         silicon.stage_fingerprint(
             date=date,
             run_id=_machine_run(parser, date=date, given=args.run_id, execution=args.execution),
@@ -1176,8 +960,6 @@ def _dispatch(
         return 0
 
     if args.stage == "job-clock":
-        if args.lifecycle_host_events is not None and args.lifecycle_host_events.native:
-            return 0
         silicon.stage_job_clock(
             date=date,
             run_id=_machine_run(parser, date=date, given=args.run_id, execution=args.execution),

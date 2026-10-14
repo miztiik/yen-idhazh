@@ -47,12 +47,11 @@ on:
         required: true
         type: string
       host_telemetry:
-        description: 'Rust host collector, legacy rollback, or off for all host telemetry'
+        description: 'Python host collector, or off for all host telemetry'
         type: choice
-        default: rust
+        default: python
         options:
-          - rust
-          - legacy
+          - python
           - 'off'
       memory_profiling:
         description: 'OS memory and fault collection; inherit reads shared config'
@@ -71,12 +70,12 @@ env:
   # Where this job's own probes ask, for the reason `digest.yml` gives: the
   # server is on this runner, and where a unit posts is `model_server.base_url`.
   MODEL_SERVER_PROBE: 'http://127.0.0.1:8080'
-  IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry || 'rust' }}
+  IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry || 'python' }}
+  MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
 
 jobs:
   draw:
     env:
-      IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry == 'off' && 'off' || 'legacy' }}
       COUNCIL_EVENT_FILE: backend/var/council/events/planner.jsonl
     permissions:
       contents: read
@@ -231,7 +230,6 @@ jobs:
 
   judge:
     env:
-      IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry == 'off' && 'off' || 'legacy' }}
       COUNCIL_SELECTION: ${{ needs.draw.outputs.selection }}
       COUNCIL_EVENT_FILE: backend/var/council/events/${{ matrix.tenant }}/${{ matrix.date }}/${{ matrix.shard }}.jsonl
     permissions:
@@ -378,28 +376,15 @@ jobs:
 
       - name: Install
         run: pip install -e .
-      - name: Resolve host telemetry before native setup
+      - name: Resolve host telemetry
         id: host_telemetry
         env:
-          REQUESTED: ${{ inputs.host_telemetry || 'rust' }}
+          REQUESTED: ${{ inputs.host_telemetry || 'python' }}
         run: |
           set -euo pipefail
           MODE=$(python backend/utilities/host_telemetry_control.py "$REQUESTED" --config-root config)
           echo "IDHAZH_HOST_TELEMETRY_MODE=$MODE" >> "$GITHUB_ENV"
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
-      - name: Select the pinned host toolchain
-        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
-        working-directory: backend/rust/host-telemetry
-        run: echo "RUSTUP_TOOLCHAIN=$(rustup show active-toolchain | cut -d' ' -f1)" >> "$GITHUB_ENV"
-      - uses: actions/cache@v6
-        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
-        with:
-          path: ~/.cargo/registry
-          key: host-crates-${{ runner.os }}-${{ hashFiles('backend/rust/host-telemetry/Cargo.lock', 'backend/rust/host-telemetry/rust-toolchain.toml') }}
-      - uses: ./.github/actions/d7-host-telemetry
-        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
-        with:
-          enabled: ${{ env.IDHAZH_HOST_TELEMETRY_MODE == 'rust' }}
 
       # Every unit's output, merged into one tree. Each upload carries the date
       # and the tenant as directory levels, so two tenants' first unit land
@@ -430,32 +415,11 @@ jobs:
           MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
         run: |
           set -euo pipefail
-          python backend/utilities/d7_host_telemetry.py run \
-            --mode "$IDHAZH_HOST_TELEMETRY_MODE" --job save_council_results \
-            --run-id "$COUNCIL_RUN_ID" --git-sha "$COUNCIL_COMMIT" \
-            --memory-profiling "$MEMORY_PROFILING" -- \
-            python backend/utilities/council_publish.py \
+          python backend/utilities/council_publish.py \
             --run-id "$COUNCIL_RUN_ID" --commit "$COUNCIL_COMMIT" \
             --job-started-at "$JOB_STARTED_AT" --units-result "$COUNCIL_UNITS_RESULT" \
             --matrix "$COUNCIL_MATRIX"
 
-      - name: Refuse to publish without a verified D7 receipt
-        if: always()
-        run: |
-          if [ "$IDHAZH_HOST_TELEMETRY_MODE" = rust ] \
-            && [ "${IDHAZH_HOST_TELEMETRY_VERIFIED:-0}" != 1 ] \
-            && [ "${IDHAZH_HOST_TELEMETRY_SKIPPED:-}" != council-no-active-publishers ]; then
-           echo "D7 receipt verification failed; refusing to settle council output" >&2
-           exit 1
-          fi
-      - name: Clean up the owned D7 monitor
-        if: always()
-        run: |
-          if [ "$IDHAZH_HOST_TELEMETRY_MODE" = rust ] \
-           && [ -n "${IDHAZH_HOST_TELEMETRY_SESSION:-}" ]; then
-           python backend/utilities/d7_host_telemetry.py cleanup \
-             --workspace "$IDHAZH_HOST_TELEMETRY_SESSION"
-          fi
 
       # Settlement writes paused judges' trial state after the unit downloads.
       # Keep it, and active publication receipts, even when collection fails.

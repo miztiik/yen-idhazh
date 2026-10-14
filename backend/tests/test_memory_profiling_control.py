@@ -8,8 +8,9 @@ import pytest
 from conftest import CONFIG_DIR
 
 from idhazh import cli, config
+from idhazh.contracts.knobs.observability import ObservabilityConfig
+from idhazh.telemetry.host_control import memory_override
 from utilities.memory_profiling_control import resolve, write_override
-from utilities.runtime_sweep import require_memory_for_sweep
 
 
 def test_config_default_and_cli_override_resolve_once() -> None:
@@ -25,6 +26,32 @@ def test_config_default_and_cli_override_resolve_once() -> None:
     assert config.with_memory_profiling_override(loaded, None) is loaded
 
 
+@pytest.mark.parametrize("choice", ["inherit", "on", "off"])
+def test_workflow_environment_resolves_memory_for_every_settings_loader(
+    monkeypatch: pytest.MonkeyPatch, choice: str
+) -> None:
+    monkeypatch.setenv("MEMORY_PROFILING", choice)
+    expected = choice != "off"
+    assert config.load(CONFIG_DIR).app.observability.memory_profiling_enabled is expected
+    assert config.load_gardener(CONFIG_DIR).app.observability.memory_profiling_enabled is expected
+    assert config.with_memory_profiling_override(
+        config.load(CONFIG_DIR), not expected
+    ).app.observability.memory_profiling_enabled is not expected
+
+
+@pytest.mark.parametrize("value", ["false", "true", "", "0", "yes", "OFF"])
+def test_memory_environment_refuses_non_choices(value: str) -> None:
+    with pytest.raises(ValueError, match="inherit, on or off"):
+        memory_override({"MEMORY_PROFILING": value})
+
+
+def test_memory_setting_refuses_truthy_strings() -> None:
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        ObservabilityConfig.model_validate({"memory_profiling_enabled": "false"})
+
+
 @pytest.mark.parametrize("value", ["false", "true", "0", "yes", "OFF"])
 def test_cli_refuses_non_protocol_memory_values(
     value: str, capsys: pytest.CaptureFixture[str]
@@ -35,31 +62,8 @@ def test_cli_refuses_non_protocol_memory_values(
     assert "memory profiling must be 'on' or 'off'" in capsys.readouterr().err
 
 
-def test_cli_refuses_off_before_legacy_work_collection(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    with pytest.raises(SystemExit) as raised:
-        cli.main(
-            [
-                "work",
-                "--config",
-                str(CONFIG_DIR),
-                "--state-root",
-                str(tmp_path),
-                "--memory-profiling",
-                "off",
-            ]
-        )
-    assert raised.value.code == 2
-    error = capsys.readouterr().err
-    assert "Python remains the authoritative work-stage collector" in error
-    assert not tuple(tmp_path.iterdir())
 
 
-def test_memory_dependent_runtime_sweep_refuses_off() -> None:
-    require_memory_for_sweep(True)
-    with pytest.raises(RuntimeError, match="requires memory profiling"):
-        require_memory_for_sweep(False)
 
 
 def test_yaml_control_inherits_validated_config_and_accepts_only_protocol_values(

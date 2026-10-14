@@ -306,7 +306,9 @@ def _refuse_a_sampler_that_died_at_startup(child: subprocess.Popen[bytes], log_p
     raise SystemExit(f"the sampler exited {child.returncode} before it took a sample\n{tail}")
 
 
-def start_sampler(pid: int, name: str, every: float) -> None:
+def start_sampler(
+    pid: int, name: str, every: float, *, config_root: Path = Path("config")
+) -> None:
     """Launch the loop in its own session, prove it is running, and return.
 
     The parent is a foreground step that exits 0. `start_new_session` calls
@@ -330,6 +332,8 @@ def start_sampler(pid: int, name: str, every: float) -> None:
                 str(pid),
                 "--every",
                 str(every),
+                "--config-root",
+                str(config_root),
             ],
             stdin=subprocess.DEVNULL,
             stdout=log,
@@ -407,11 +411,15 @@ def summarize(
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    from idhazh.contracts.app_config import AppConfig
+    from idhazh.telemetry.host_control import enabled, memory_override
+
     parser = argparse.ArgumentParser(description=__doc__)
     verbs = parser.add_subparsers(dest="verb", required=True)
 
     def watching(name: str, help_text: str) -> argparse.ArgumentParser:
         verb = verbs.add_parser(name, help=help_text)
+        verb.add_argument("--config-root", type=Path, default=Path("config"))
         verb.add_argument(
             "--pid", type=int, required=True, help="The process to sample until it goes away."
         )
@@ -429,22 +437,30 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     watching("sample", "The loop itself, which start-sampler launches.")
     summary = verbs.add_parser("summarize", help="Print what the two files the loop wrote hold.")
+    summary.add_argument("--config-root", type=Path, default=Path("config"))
     summary.add_argument("--sample-file", type=Path, default=RSS_SAMPLE_FILE)
     summary.add_argument("--process-file", type=Path, default=PYTHON_PROCS_FILE)
     args = parser.parse_args(argv)
 
     # CLAUDE.md section 1b takes the level from `config/`. This program reads no
-    # config on purpose - it runs beside a job rather than inside one, and it
-    # imports nothing from `idhazh` - so the level is fixed at INFO, which is
-    # what every line it writes needs.
+    # logger settings here - it runs beside a job rather than inside one - so
+    # the level is fixed at INFO, which is what every line it writes needs.
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
         stream=sys.stderr,
     )
+    app = AppConfig.from_json((args.config_root / "idhazh.json").read_text(encoding="utf-8"))
+    override = memory_override()
+    memory = app.observability.memory_profiling_enabled if override is None else override
+    if not enabled(app.observability) or not memory:
+        LOG.info("host memory profiling off; no sampler or memory artifact opened")
+        return 0
 
     ran: dict[str, Callable[[], object]] = {
-        "start-sampler": lambda: start_sampler(args.pid, args.name, args.every),
+        "start-sampler": lambda: start_sampler(
+            args.pid, args.name, args.every, config_root=args.config_root
+        ),
         "sample": lambda: sample(args.pid, every=args.every),
         "summarize": lambda: summarize(args.sample_file, args.process_file),
     }

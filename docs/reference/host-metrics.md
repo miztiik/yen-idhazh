@@ -1,12 +1,12 @@
 # What the pipeline records about the machine it ran on
 
-**Last Updated**: 2026-10-13
+**Last Updated**: 2026-10-14
 
 Every column of the host fingerprint, what it means, and what it is for.
 The producer records one row per instrumented job, or per shard of that job.
-Rust is the default instrument in the measured workflows. Python still owns
-item-health recording, verification, shared readers, compaction and publication.
-The explicit Python rollback path remains available; it has not been removed.
+Python is the only collector. It records job fingerprints, item resource
+measurements and diagnostic memory files without a separate monitor process
+or a message handoff. Shared readers, compaction and publication remain Python.
 
 Read this when a number surprises you and you want to know which machine
 produced it. Why the record exists at all, and what the fleet does to a reading,
@@ -21,7 +21,7 @@ because the panel list is a config file and a count repeated here would go stale
 on a config edit. What each may draw and what it may never draw is
 [../concepts/console-design.md](../concepts/console-design.md). The browser asks
 for declared panel cells through `frontend/src/lib/console/queries/machine.ts`
-over the published native host ledger. These measurements appear on the
+over the published host ledger. These measurements appear on the
 operator console, not on the news-reading pages.
 
 ## Where it lives
@@ -32,56 +32,48 @@ operator console, not on the news-reading pages.
 | Schema | `HostFingerprintRow.json_schema()` from the contract above |
 | Ledger | `state/raw/host-fingerprint/<YYYY>/<MM>/<DD>/` for the daily run, packed under `state/compact/host-fingerprint/` by its production compaction; `state/raw/pipeline-tests/host-fingerprint/<YYYY>/<MM>/<DD>/` for a bench dispatch, packed under `state/compact/pipeline-tests/host-fingerprint/` by `compact-trial-host-fingerprint` |
 | Files | one immutable `<file_id>.parquet` per completed write in the day directory. The reader settles the later whole row of the same work unit; neither file is edited. |
-| Producer | [`backend/rust/host-telemetry/src/invocation.rs`](../../backend/rust/host-telemetry/src/invocation.rs), through the workflow-owned lifecycle and [`job_machine.record`](../../backend/idhazh/telemetry/job_machine.py). Rust writes raw host files; Python verifies, reads, compacts and publishes them. |
-| Read by | `/console/machine/`, through the browser questions in `frontend/src/lib/console/queries/machine.ts` and native helpers in `frontend/src/lib/console/machine/records.ts` |
+| Producer | [`silicon.py`](../../backend/idhazh/telemetry/silicon.py), through job commands and [`job_machine.record`](../../backend/idhazh/telemetry/job_machine.py). Python writes, reads, compacts and publishes the host records. |
+| Read by | `/console/machine/`, through the browser questions in `frontend/src/lib/console/queries/machine.ts` and shared helpers in `frontend/src/lib/console/machine/records.ts` |
 | Key | `date`, `run_id`, `job`, `shard` - one row a job |
 | Switch | `observability.host_telemetry_enabled` for the whole instrument; `host_fingerprint` for host-row writes; `memory_profiling_enabled` for memory/page-fault observations only |
 | Committed | **from 2026-09-16.** Each job's own commit step stages its ledger; every row taken before that date was deleted with its runner |
 | Shown on news-reading pages | **no.** Operator surface only |
 
-**Rust is the default collector for measured pipeline jobs.** YAML builds the
-pinned crate and starts `d7_host_telemetry.py`, which owns the separate Rust
-processes. Python stages send structured lifecycle events; they do not call Rust
-through language bindings or write a competing host row. Digest plan/work/assemble,
-bench and encoder probes, gardener task shards, and council result saving use this
-path. Unmeasured jobs remain uninstrumented. An explicit `host_telemetry: legacy`
-choice is a temporary rollback until migration cleanup, not an automatic fallback.
-Historical conversion is complete for its approved bounded scope. Its Python
-maintenance tools and verified original-byte backups remain available for recovery;
-normal production collection does not rerun the historical migration.
-
-In content refresh, `plan` builds the Rust monitor once. All work shards and
-assemble reuse that run's verified binary; ordinary Python/document changes do
-not change its native source identity.
+**Python collects measurements in the job doing the work.** Digest
+plan/work/assemble, bench and encoder probes, gardener task shards and council
+result saving use the same Python instruments. Unmeasured jobs remain
+uninstrumented. There is no collector build, binary download, readiness message
+or telemetry receipt gate. Existing historical readings and recovery backups
+are not rewritten by this change.
 
 Whole-instrument off and memory-only off are different controls. Their exact
 configuration, overrides and effects are in [Controls and precedence](#controls-and-precedence).
 
-## Rust capabilities
+## Collection and limits
 
 The fingerprint groups hardware characteristics; it is not a unique machine
 serial number. Its job/run/shard identity says which execution produced the row.
 Per-item resource readings live on the item-health row, not in a second copy of
 the job fingerprint.
 
-Table A - supported native capabilities
+Table A - collected measurements
 
 | ID | Capability | Recorded result | Scope and limit |
 | --- | --- | --- | --- |
-| A1 | Hardware identity | CPU model/vendor/family/stepping, microcode, watched flags, L3 and versioned fingerprint | Algorithm 2 groups hardware facts, not a physical machine or changing execution limits. See [Identity](#identity). |
-| A2 | CPU topology and target limits | Physical/logical processors, target affinity/effective cpuset, quota and capture time | Visible topology and allowed capacity are different. Partial, denied or unproved inputs stay null. See [CPU capability fields](#what-the-processor-can-do). |
+| A1 | Hardware identity | CPU model/vendor/family/stepping, microcode, watched flags, L3 and versioned fingerprint | A fingerprint groups reported characteristics; it is not a machine serial number. See [Identity](#identity). |
+| A2 | CPU counts and historical target limits | Visible processor counts and any stored affinity/cpuset or quota observations | Visible topology and allowed capacity are different. A field the Python collector does not measure stays null. See [CPU capability fields](#what-the-processor-can-do). |
 | A3 | Job timing and model counters | Elapsed job time, model-load time, server prompt tokens and prompt seconds | Log/counter inputs must exist and be readable; non-server jobs do not invent server measurements. |
 | A4 | Item-window CPU and load | Whole-window busy/steal share, busy extrema and closing one-minute load | Host counters describe machine activity, not CPU instructions attributable to one model call. |
 | A5 | Memory and page faults | Selected server/worker RAM, machine RAM/swap, available-memory minimum and major page-fault delta | These are OS observations, not allocator, stack or per-region profiling. A high-water mark is not an item-local peak. |
-| A6 | Job and runtime memory artifacts | Bounded sample and Python-process records, server RSS samples and available cgroup peak | Job rollcall includes readable Python processes; it is not the sum of one worker's descendants. |
+| A6 | Job and runtime memory artifacts | Sample and Python-process records, server RSS samples and available cgroup peak | Job rollcall includes readable Python processes; it is not the sum of one worker's descendants. |
 | A7 | Optional memory-copy rate | Cache-sized buffer, selected-job copy rate and actual buffer size | It allocates two buffers and competes for memory bandwidth. Memory-collection off alone does not disable it. |
-| A8 | Native raw files and recovery evidence | Immutable Parquet or JSONL files, write plans, physical hashes and receipts | Rust writes raw host files only; Python retains shared compaction and publishing ownership. |
+| A8 | Job records | Immutable ledger files through the shared Python writer | Compaction and publishing use the same declared ledger rules as other Python producers. |
 
 The live runtime is Linux with `/proc` and `/sys`, as on the Ubuntu runner.
 Windows development or recorded-fixture success does not certify live Linux
 collection. Unsupported or missing observations are unavailable, never zero.
-Architecture, failure handling and engineering costs are in
-[Capabilities and trade-offs](../architecture/publishing/host-events.md#capabilities-and-trade-offs).
+Missing observations remain empty cells; collection does not invent a reading.
+Memory diagnostics are separate from the persisted job fingerprint.
 
 ## Controls and precedence
 
@@ -96,11 +88,10 @@ Table B - whole-instrument selection
 
 | ID | Setting | Meaning |
 | --- | --- | --- |
-| B1 | `observability.host_telemetry_enabled: true` | Allow the selected collector. This is the committed default, not a command to prefer Rust over Python. |
-| B2 | `observability.host_telemetry_enabled: false` | Stop the whole instrument, even if the workflow requests Rust or legacy and memory is on. |
-| B3 | Workflow `host_telemetry: rust` | Use the bound Rust lifecycle. This is the measured workflows' default; failed native setup does not select Python. |
-| B4 | Workflow `host_telemetry: legacy` | Explicitly use the retained Python collection path, with its legacy measurement semantics. It does not undo migrated history or readers. |
-| B5 | Workflow `host_telemetry: off` | Stop host instrumentation for this run without changing the shared file. Real work, item-health records and progress logs continue. |
+| B1 | `observability.host_telemetry_enabled: true` | Allow Python collection. This is the committed default. |
+| B2 | `observability.host_telemetry_enabled: false` | Stop host collection, even if the workflow requests Python and memory is on. |
+| B3 | Workflow `host_telemetry: python` | Collect through Python. This is the workflow default and the only collector. |
+| B4 | Workflow `host_telemetry: off` | Stop host instrumentation for this run without changing the shared file. Real work, item-health records and progress logs continue. |
 
 Table C - controls inside an enabled instrument
 
@@ -113,11 +104,9 @@ Table C - controls inside an enabled instrument
 | C5 | Empty `host_fingerprint_bandwidth_jobs`, or zero `host_fingerprint_bandwidth_floor_mib` | Stop the copy benchmark | Other host observations |
 
 The master false value or workflow off choice wins first. Memory on cannot
-restart a disabled instrument. Whole off skips native build/download/monitor,
-Python host readings, raw host writes and host-memory artifacts. It keeps work,
-item health and progress logging. The legacy work collector cannot honour the
-memory-only off choice and refuses it; use Rust with memory off, or disable the
-whole instrument. No setting deletes existing readings.
+restart a disabled instrument. Whole off skips Python host readings, raw host
+writes and host-memory artifacts. It keeps work, item health and progress
+logging. No setting deletes existing readings.
 
 For a single manual run, choose `host_telemetry=off` in the workflow dispatch.
 For scheduled runs too, change only the master field in the existing configuration:
@@ -126,8 +115,8 @@ For scheduled runs too, change only the master field in the existing configurati
 "host_telemetry_enabled": false
 ```
 
-Changing `memory_profiling_enabled` to false is not equivalent: with Rust
-enabled, CPU/load telemetry and its monitor still run.
+Changing `memory_profiling_enabled` to false is not equivalent: CPU/load
+telemetry remains enabled.
 
 **The measured jobs of `digest.yml` write rows when enabled.** `plan`, `work` and
 `assemble` each draw their own runner, so a run that measured one of them could
@@ -144,7 +133,7 @@ merge driver was never going to settle it.
 The probe runs before the job's heaviest step, because the bandwidth reading
 wants a gigabyte and an idle machine. What the job cost - its wall clock, and
 what opening the weights cost before the first item - is only knowable once the
-job is over. The native clock reads its preceding result and files the whole row
+job is over. The Python clock reads its preceding row and files the whole row
 again, with the job-end cells filled, under the same
 writer. The ledger door keeps the later file of one writer, so a job is one row
 wherever it is read
@@ -199,10 +188,9 @@ tenant writes neither a council record nor a machine record.
 
 This does not measure the gardener's planning or history-rewrite job, nor the
 council's planning and judging jobs. The collecting job's processor is not the
-processor that ran a council judging shard. In legacy mode, instrument I/O failures can log a missing reading. In Rust mode,
-a selected session or invalid receipt fails explicitly rather than running Python
-as a fallback. Missing individual observations remain typed unavailable values.
-Neither mode hides work failures. Paused or retired families reject new host rows.
+processor that ran a council judging shard. Instrument I/O failures can log a
+missing reading. Missing individual observations remain unavailable values.
+Work failures are not hidden. Paused or retired families reject new host rows.
 
 **Memory-copy measurements are opt-in per job.** Set
 `observability.host_fingerprint_bandwidth_jobs` in `config/idhazh.json`.
@@ -213,7 +201,7 @@ An unselected job has `memcpy_probe_mib=0` and an empty `memcpy_gib_s`. The
 existing buffer floor also disables copying when it is zero. The default
 change leaves older measurements intact and adds no persisted column.
 
-To instrument another job, prepare its workflow-owned native lifecycle and use
+To instrument another job, use
 [`job_machine.record`](../../backend/idhazh/telemetry/job_machine.py) around its
 real work, with already loaded settings, its run identity, attempt and UTC
 start clock. It returns exact completed paths, including the closing clock
@@ -272,10 +260,9 @@ machine memory, major-fault, job-rollcall and runtime-memory artifact collection
 The command-line override is `--memory-profiling on|off`; workflow dispatches use
 `inherit|on|off`. False leaves memory and fault cells empty with a disabled
 reason. It does not stop CPU/load collection, process start-tick identity,
-heartbeat, lifecycle events, the item census or the separately controlled
-memory-bandwidth copy. The retained legacy Python work path refuses this
-memory-only off choice because its watch cannot honour it. The whole-instrument
-off control bypasses both collectors and keeps only the waiting heartbeat.
+heartbeat, the item census or the separately controlled memory-bandwidth copy.
+The whole-instrument off control bypasses collection and keeps only the
+waiting heartbeat.
 
 ## Identity
 
@@ -289,8 +276,10 @@ off control bypasses both collectors and keeps only the waiting heartbeat.
 | `fingerprint` | 16 hex characters? | A digest over the cells that cannot change inside a job |
 | `fingerprint_version` | 1 or 2? | The digest algorithm; null exactly when the digest is null |
 
-**`fingerprint` is countable only with `fingerprint_version`.** Historical
-algorithm 1 included the old core/thread estimates. Algorithm 2 digests vendor,
+**`fingerprint` is countable only with `fingerprint_version`.** The Python
+collector uses algorithm 1, including the old core/thread estimates. The reader
+does not treat those estimates as proven physical topology. Stored algorithm 2
+digests vendor,
 family, model, stepping, model name, L3 and watched flags only. Counts, target
 constraints, frequency, placement and clocks are excluded. Consumers group by
 the pair `(fingerprint_version, fingerprint)`; equal digest text under versions
@@ -564,11 +553,9 @@ to pass.
 
 **These cells sit here and nowhere else, and that is on purpose.**
 `state/runtime-counters.csv` carried a second copy of them until 2026-09-20. The
-native clock parser lives in
-[`job_clock.rs`](../../backend/rust/host-telemetry/src/producers/job_clock.rs),
-beside the writer. The retained Python rollback parser remains in
-[`silicon.py`](../../backend/idhazh/telemetry/silicon.py). One selected collector
-owns each invocation; both never write its host row.
+clock parser lives in
+[`silicon.py`](../../backend/idhazh/telemetry/silicon.py), beside the writer.
+Python owns each invocation's host row.
 
 ## Why almost nothing here is an enum
 

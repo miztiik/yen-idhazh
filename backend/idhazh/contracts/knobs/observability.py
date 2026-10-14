@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from enum import StrEnum
 from types import MappingProxyType
-from typing import Any, Final, Literal, Self
+from typing import Any, Final, Self
 
 from pydantic import Field, model_validator
 
@@ -195,7 +195,7 @@ class ObservabilityConfig(Model):
         default=True,
         strict=True,
         description=(
-            "Master host-instrument switch. False disables Rust and Python CPU/load, "
+            "Master host-instrument switch. False disables Python CPU/load, "
             "memory/page-fault, machine probes, host-row writes and host-memory artifacts. "
             "Actual work, complete item-health records and waiting heartbeats continue. "
             "The memory_profiling_enabled sub-control cannot override this switch. "
@@ -217,32 +217,13 @@ class ObservabilityConfig(Model):
             "constant and a constant is not a reading."
         ),
     )
-    host_event_shadow: bool = Field(
-        default=False,
-        description=(
-            "Whether Python emits host lifecycle events into an already prepared "
-            "isolated native session while remaining the authoritative production "
-            "collector and writer. False performs no event file reads, writes or "
-            "waits. This temporary comparison path is removed when the native "
-            "single-writer cutover is complete."
-        ),
-    )
-    host_event_mode: Literal["legacy", "shadow", "native"] = Field(
-        default="legacy",
-        exclude=True,
-        description=(
-            "Which host-row boundary a runtime invocation uses. Legacy keeps Python "
-            "silicon and Watch authoritative; shadow brackets those writers with "
-            "comparison events; native makes the Rust session the sole raw host-row "
-            "writer. Native is opt-in until its launcher supplies a validated session."
-        ),
-    )
     memory_profiling_enabled: bool = Field(
         default=True,
+        strict=True,
         description=(
             "Whether host telemetry collects operating-system process and machine "
             "memory, faults, job samples and runtime memory artifacts. False keeps "
-            "CPU, load, process identity, timing, lifecycle events, heartbeats and "
+            "CPU, load, process identity, timing, heartbeats and "
             "the item-health census active while memory cells stay empty with a "
             "disabled reason. This does not control allocator profiling or the "
             "separately configured memory-bandwidth copy. Remove this capability "

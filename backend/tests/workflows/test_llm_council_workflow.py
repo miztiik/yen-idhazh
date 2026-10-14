@@ -94,11 +94,9 @@ def test_event_transport_uses_existing_always_uploaded_bundles_and_planned_cells
     planner = _job(workflow, "draw")
     judge = _job(workflow, "judge")
     assert planner["env"] == {
-        "IDHAZH_HOST_TELEMETRY_MODE": "${{ inputs.host_telemetry == 'off' && 'off' || 'legacy' }}",
         "COUNCIL_EVENT_FILE": "backend/var/council/events/planner.jsonl",
     }
     assert judge["env"] == {
-        "IDHAZH_HOST_TELEMETRY_MODE": "${{ inputs.host_telemetry == 'off' && 'off' || 'legacy' }}",
         "COUNCIL_SELECTION": "${{ needs.draw.outputs.selection }}",
         "COUNCIL_EVENT_FILE":
         "backend/var/council/events/${{ matrix.tenant }}/${{ matrix.date }}/${{ matrix.shard }}.jsonl",
@@ -400,8 +398,8 @@ def test_manual_dispatch_requires_one_date_and_a_list_of_judges() -> None:
     telemetry = inputs["host_telemetry"]
     assert isinstance(telemetry, dict)
     assert telemetry["type"] == "choice"
-    assert telemetry["default"] == "rust"
-    assert telemetry["options"] == ["rust", "legacy", "off"]
+    assert telemetry["default"] == "python"
+    assert telemetry["options"] == ["python", "off"]
     date = inputs["date"]
     judges = inputs["judges"]
     assert isinstance(date, dict)

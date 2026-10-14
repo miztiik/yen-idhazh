@@ -198,36 +198,6 @@ while True:
     time.sleep(0.01)
 """
 
-# These launchers own actual fixture workers. They run no Rust collector and
-# write no telemetry receipts; their final marker proves wait() reaped the child.
-_LAUNCHER = """\
-import os
-import signal
-import subprocess
-import sys
-import time
-from pathlib import Path
-
-shard = sys.argv[sys.argv.index("--shard") + 1]
-def stop(signum, frame):
-    signal.signal(signal.SIGTERM, signal.SIG_IGN)
-    raise SystemExit(128 + signum)
-
-signal.signal(signal.SIGTERM, stop)
-child = subprocess.Popen(sys.argv[sys.argv.index("--") + 1:])
-Path(f"launcher-{shard}.pid").write_text(str(os.getpid()))
-try:
-    raise SystemExit(child.wait())
-finally:
-    child.terminate()
-    child.wait(timeout=5)
-    Path(f"launcher-{shard}.draining").touch()
-    deadline = time.monotonic() + 5
-    while not Path("release-drain").exists() and time.monotonic() < deadline:
-        time.sleep(0.01)
-    Path(f"launcher-{shard}.reaped").touch()
-"""
-
 _SWEEP = """\
 import os
 import signal
@@ -236,23 +206,18 @@ from pathlib import Path
 
 sys.path.insert(0, sys.argv[1])
 from utilities import runtime_sweep
+from idhazh import config
+from idhazh.stages import common
+config.REPO_ROOT = Path.cwd()
+common.STATE_ROOT = Path.cwd() / "state"
 before = tuple(signal.getsignal(s) for s in (signal.SIGTERM, signal.SIGINT))
 try:
-    if os.environ["FIXTURE_NATIVE"] == "1":
-        with runtime_sweep._termination_signals():
-            runtime_sweep.run_once(
-                "baseline", {}, 1, 2, date="2026-10-13", execution=1,
-                candidate="baseline", candidate_file="fixture.gguf",
-                candidate_id=sys.argv[3], port=int(sys.argv[2]),
-                config_root=Path("candidate"),
-            )
-    else:
-        raise SystemExit(runtime_sweep.main([
-            "sweep", "--config", "candidate", "--date", "2026-10-13",
-            "--execution", "1", "--candidate", "baseline",
-            "--candidate-file", "fixture.gguf", "--candidate-id", sys.argv[3],
-            "--threads", "1", "--threads-batch", "1", "--repeats", "2",
-        ]))
+    raise SystemExit(runtime_sweep.main([
+        "sweep", "--config", "candidate", "--date", "2026-10-13",
+        "--execution", "1", "--candidate", "baseline",
+        "--candidate-file", "fixture.gguf", "--candidate-id", sys.argv[3],
+        "--threads", "1", "--threads-batch", "1", "--repeats", "2",
+    ]))
 finally:
     assert tuple(signal.getsignal(s) for s in (signal.SIGTERM, signal.SIGINT)) == before
     Path("sweep.restored").touch()
@@ -271,7 +236,7 @@ def _wait_for_file(path: Path, producer: subprocess.Popen[bytes]) -> None:
     assert path.exists(), f"fixture never reached {path.name}; exit={producer.poll()}"
 
 
-def _fixture_sweep(root: Path, scenario: str, *, native: bool) -> subprocess.Popen[bytes]:
+def _fixture_sweep(root: Path, scenario: str) -> subprocess.Popen[bytes]:
     import socket
 
     settings = config.load()
@@ -283,17 +248,14 @@ def _fixture_sweep(root: Path, scenario: str, *, native: bool) -> subprocess.Pop
         listener.bind(("127.0.0.1", 0))
         port = listener.getsockname()[1]
     app = json.loads((root / "candidate/idhazh.json").read_text(encoding="utf-8"))
-    app["observability"].update(
-        host_event_mode="legacy", host_event_shadow=False, memory_profiling_enabled=True
-    )
+    app["observability"]["memory_profiling_enabled"] = True
+    app["observability"]["host_fingerprint_bandwidth_floor_mib"] = 0
     app["model_server"]["base_url"] = f"http://127.0.0.1:{port}"
     _write(root / "candidate/idhazh.json", json.dumps(app))
     _write(root / "backend/bin/llama-server", f"#!{sys.executable}\n{_SERVER}")
     (root / "backend/bin/llama-server").chmod(0o755)
     _write(root / "idhazh/__init__.py", "")
     _write(root / "idhazh/__main__.py", _WORKER)
-    _write(root / "backend/utilities/digest_publish.py", _WORKER)
-    _write(root / "backend/utilities/d7_host_telemetry.py", _LAUNCHER)
     (root / "backend/var/runtime-sweep").mkdir(parents=True)
     env = {
         key: value
@@ -301,8 +263,7 @@ def _fixture_sweep(root: Path, scenario: str, *, native: bool) -> subprocess.Pop
         if not key.startswith("IDHAZH_HOST_TELEMETRY_")
     }
     env.update(
-        IDHAZH_HOST_TELEMETRY_MODE="rust" if native else "legacy",
-        FIXTURE_NATIVE="1" if native else "0",
+        IDHAZH_HOST_TELEMETRY_MODE="python",
         SCENARIO=scenario,
         PYTHONPATH=str(root),
         PYTHONDONTWRITEBYTECODE="1",
@@ -329,32 +290,25 @@ def _fixture_sweep(root: Path, scenario: str, *, native: bool) -> subprocess.Pop
     reason="Linux subprocess integration runs only in Ubuntu CI",
 )
 @pytest.mark.parametrize(
-    ("scenario", "native", "signum"),
+    ("scenario", "signum"),
     [
-        ("setup", False, signal.SIGTERM),
-        ("health", False, signal.SIGTERM),
-        ("work", False, signal.SIGINT),
-        ("work", True, signal.SIGTERM),
-        ("failure", False, None),
+        ("setup", signal.SIGTERM),
+        ("health", signal.SIGTERM),
+        ("work", signal.SIGINT),
+        ("failure", None),
     ],
 )
-def test_sweep_cli_and_nested_launchers_reap_generated_processes(
-    tmp_path: Path, scenario: str, native: bool, signum: int | None
+def test_sweep_cli_reaps_generated_processes(
+    tmp_path: Path, scenario: str, signum: int | None
 ) -> None:
-    producer = _fixture_sweep(tmp_path, scenario, native=native)
+    producer = _fixture_sweep(tmp_path, scenario)
     try:
         marker = {"setup": "server.pid", "health": "health.entered"}.get(
-            scenario, "worker-1.pid" if native else "worker-0.pid"
+            scenario, "worker-0.pid"
         )
         if signum is not None:
             _wait_for_file(tmp_path / marker, producer)
-            if native:
-                _wait_for_file(tmp_path / "worker-0.pid", producer)
             producer.send_signal(signum)
-            if native:
-                _wait_for_file(tmp_path / "launcher-0.draining", producer)
-                producer.send_signal(signum)
-                (tmp_path / "release-drain").touch()
         stdout, stderr = producer.communicate(timeout=15)
         assert producer.returncode == (128 + signum if signum is not None else 1), (
             stdout.decode(),
@@ -365,10 +319,6 @@ def test_sweep_cli_and_nested_launchers_reap_generated_processes(
         assert not (tmp_path / "backend/var/runtime-sweep/runtime-summary.json").exists()
         if signum is None:
             assert b"wrong-model" in stderr
-        if native:
-            for shard in range(2):
-                assert (tmp_path / f"launcher-{shard}.reaped").exists()
-                assert (tmp_path / f"worker-{shard}.stopped").exists()
         # The named PID files were generated by this fixture, not a process-table scan.
         for pid_file in tmp_path.glob("*.pid"):
             assert not Path(f"/proc/{pid_file.read_text(encoding='utf-8')}").exists()

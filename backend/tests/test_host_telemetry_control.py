@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
 import sys
 import threading
 from pathlib import Path
@@ -12,52 +11,59 @@ import pytest
 from conftest import CONFIG_DIR, SEED_COMMIT
 from pydantic import ValidationError
 
-from idhazh import cli, config, ledger
+from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.telemetry import job_machine, silicon
 from idhazh.telemetry.host_control import enabled
-from idhazh.telemetry.host_event_client import HostEventClient
-from idhazh.telemetry.host_publication import consume_host_publication
 from idhazh.telemetry.item_heartbeat import ItemHeartbeat
 from utilities.host_telemetry_control import resolve
 
 
-def test_master_switch_preserves_existing_defaults_and_overrides_both_collectors(tmp_path: Path) -> None:
+def test_master_switch_overrides_python_collection(tmp_path: Path) -> None:
     app = config.load(CONFIG_DIR).app
     root = tmp_path / "config"
     root.mkdir()
     path = root / "idhazh.json"
     path.write_text(app.to_json(), encoding="ascii")
     assert app.observability.host_telemetry_enabled
-    for mode in ("rust", "legacy", "off"):
+    for mode in ("python", "off"):
         assert resolve(mode, root) == mode
     app.observability.host_telemetry_enabled = False
     path.write_text(app.to_json(), encoding="ascii")
-    for mode in ("rust", "legacy", "off"):
+    for mode in ("python", "off"):
         assert resolve(mode, root) == "off"
         assert not enabled(app.observability, {"IDHAZH_HOST_TELEMETRY_MODE": mode})
-    with pytest.raises(ValueError, match="rust, legacy or off"):
+    with pytest.raises(ValueError, match="python or off"):
         resolve("false", root)
     with pytest.raises(ValidationError):
         ObservabilityConfig.model_validate({"host_telemetry_enabled": "false"})
 
 
+@pytest.mark.parametrize("choice", ["rust", "legacy", "native", "shadow", "false"])
+def test_only_python_and_off_are_valid_even_when_master_is_off(
+    tmp_path: Path, choice: str
+) -> None:
+    with pytest.raises(ValueError, match="python or off"):
+        resolve(choice, tmp_path)
+    with pytest.raises(ValueError, match="python or off"):
+        enabled(ObservabilityConfig(host_telemetry_enabled=False),
+                {"IDHAZH_HOST_TELEMETRY_MODE": choice})
+
+
+def test_missing_mode_defaults_to_python() -> None:
+    assert enabled(ObservabilityConfig(), {})
+    assert enabled(ObservabilityConfig(), {"IDHAZH_HOST_TELEMETRY_MODE": "python"})
+
+
 @pytest.mark.parametrize("via_config", [False, True], ids=["dispatch-off", "config-off"])
-def test_off_opens_no_session_and_writes_neither_python_host_half(
+def test_off_writes_neither_python_host_half(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, via_config: bool
 ) -> None:
     settings = config.load(CONFIG_DIR)
     settings.app.observability.host_telemetry_enabled = not via_config
-    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MODE", "rust" if via_config else "off")
-    for name in ("WORKSPACE", "MANIFEST", "CONFIG", "INVOCATION"):
-        monkeypatch.setenv(f"IDHAZH_HOST_TELEMETRY_{name}", str(tmp_path / f"absent-{name}.json"))
-    assert job_machine.from_environment(settings) is None
-    assert cli._host_event_client(argparse.ArgumentParser(), argparse.Namespace(), settings) is None
-    if not via_config:
-        assert HostEventClient.from_environment() is None
+    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MODE", "python" if via_config else "off")
     with job_machine.record(
         date="2026-10-10", run_id="2026-10-10-17", settings=settings,
         state_root=tmp_path / "state", commit_sha=SEED_COMMIT, job=ServerJob.RUNTIME,
@@ -89,25 +95,11 @@ def test_off_watch_preserves_heartbeat_and_returns_unknown_cells() -> None:
     assert heartbeat._thread is None
 
 
-def test_off_publisher_needs_no_native_inputs_and_refuses_explicit_host_writes(tmp_path: Path) -> None:
-    identity = WriterIdentity(
-        run_id="2026-10-10-17", attempt=1, job=ServerJob.RUNTIME, shard=0,
-        producer="utilities.record_publish", git_sha=SEED_COMMIT,
-    )
-    environment = {"IDHAZH_HOST_TELEMETRY_MODE": "off"}
-    assert consume_host_publication(
-        repo=tmp_path, identity=identity, date="2026-10-10", environment=environment,
-    ) == {}
-    with pytest.raises(ValueError, match="off cannot publish"):
-        consume_host_publication(
-            repo=tmp_path, identity=identity, date="2026-10-10",
-            receipt=Path("absent-receipt.json"), environment=environment,
-        )
 
 
-@pytest.mark.parametrize("via_config", [False, True], ids=["dispatch-off", "config-off"])
-def test_real_work_preserves_item_health_with_no_host_collector_calls(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, via_config: bool
+@pytest.mark.parametrize("control", ["dispatch-off", "config-off", "memory-off", "python-on"])
+def test_real_work_preserves_item_health_under_host_and_memory_controls(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, control: str
 ) -> None:
     from pipeline._builders import (
         a_server_that_refuses_every_completion,
@@ -121,10 +113,12 @@ def test_real_work_preserves_item_health_with_no_host_collector_calls(
     from idhazh.telemetry import host
     from idhazh.telemetry.record import HEALTH_SUFFIX
 
+    monkeypatch.setenv(
+        "IDHAZH_HOST_TELEMETRY_MODE", "off" if control == "dispatch-off" else "python"
+    )
+    monkeypatch.setenv("MEMORY_PROFILING", "off" if control == "memory-off" else "on")
     settings = config.load(CONFIG_DIR)
-    settings.app.observability.host_telemetry_enabled = not via_config
-    settings.app.observability.memory_profiling_enabled = False
-    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MODE", "legacy" if via_config else "off")
+    settings.app.observability.host_telemetry_enabled = control != "config-off"
     isolate_ledgers(tmp_path, monkeypatch)
     run_plan = plan()
     observed: list[str] = []
@@ -153,5 +147,14 @@ def test_real_work_preserves_item_health_with_no_host_collector_calls(
     ]
     assert len(health) == len(run_plan.items)
     assert all(row.machine_job == ServerJob.WORK and row.machine_shard == 0 for row in health)
-    assert all(row.cpu_busy_pct is None and row.llama_rss_bytes is None for row in health)
-    assert observed == [], "whole-host off called a Python host collector"
+    if control in ("dispatch-off", "config-off"):
+        assert all(row.cpu_busy_pct is None and row.llama_rss_bytes is None for row in health)
+        assert observed == [], "whole-host off called a Python host collector"
+    else:
+        assert "read_now" in observed
+        if control == "memory-off":
+            assert not {"status_bytes", "meminfo_bytes", "major_faults"} & set(observed)
+            assert all(row.llama_rss_bytes is None and row.os_mem_total_bytes is None
+                       for row in health)
+        else:
+            assert "status_bytes" in observed

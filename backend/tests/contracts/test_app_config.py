@@ -1151,10 +1151,6 @@ def test_the_item_health_census_is_not_switchable() -> None:
     another run's, because the machine moved 3.7x between draws and nothing says
     which one produced the number.
 
-    `host_event_shadow` is the fifth. It copies lifecycle boundaries into an
-    isolated native comparison session. It does not switch off the census or
-    select a production writer, and its declaring field names the cutover that
-    removes it.
     """
     switches = {
         name for name, field in ObservabilityConfig.model_fields.items() if field.annotation is bool
@@ -1164,17 +1160,9 @@ def test_the_item_health_census_is_not_switchable() -> None:
         "tracing_enabled",
         "host_fingerprint",
         "host_telemetry_enabled",
-        "host_event_shadow",
         "memory_profiling_enabled",
     }
-    assert ObservabilityConfig().host_event_shadow is False
     assert ObservabilityConfig().memory_profiling_enabled is True
-    assert (
-        AppConfig.from_json(
-            read_text(APP_CONFIG_EVERY_KNOB_DIFFERS)
-        ).observability.host_event_shadow
-        is True
-    )
     assert (
         AppConfig.from_json(
             read_text(APP_CONFIG_EVERY_KNOB_DIFFERS)

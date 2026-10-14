@@ -14,7 +14,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from idhazh import completed_writes, config, event_lines
 from idhazh.contracts.council_events import CouncilExit, CouncilProgram, NightPublished
-from idhazh.contracts.host_output import HostPublicationReceipt
 from idhazh.contracts.publication_receipt import PublicationReceipt
 from idhazh.council import event_log, outcome, run_identity, run_summary, session
 from idhazh.council.night_plan import a_date
@@ -22,12 +21,6 @@ from idhazh.council.registry import tenants
 from idhazh.council.selection import Selection, for_dates, from_environment
 from idhazh.council.tenancy import Tenant
 from idhazh.telemetry import job_machine
-from idhazh.telemetry.host_output_verify import VerificationLimits
-from idhazh.telemetry.host_publication import (
-    MODE_ENV,
-    consume_host_publication,
-    reconcile_host_writes,
-)
 from utilities.council_matrix import VENUE_LEDGERS
 from utilities.publication_evidence import identified
 from utilities.publication_git import Repository
@@ -48,9 +41,6 @@ def settle_and_publish(
     clock: Callable[[], datetime] = job_machine.utc_now,
     units_failed: bool = False,
     selection: Selection | None = None,
-    host_receipt: HostPublicationReceipt | Path | None = None,
-    host_limits: VerificationLimits | None = None,
-    host_enabled: bool | None = None,
 ) -> int:
     dates = tuple(a_date(date, what="--date") for date in dates)
     run_identity.opened_on(run_id)
@@ -207,36 +197,12 @@ def settle_and_publish(
                     event_log.failed(error)
     if active:
         try:
-            native = consume_host_publication(
-                repo=repo,
-                identity=identity,
-                date=run_identity.opened_on(run_id),
-                receipt=host_receipt,
-                limits=host_limits,
-                host_enabled=(
-                    settings.app.observability.host_fingerprint
-                    if host_enabled is None
-                    else host_enabled
-                ),
-            )
             machine_completed = dict(machine_evidence)
             for path in machine_paths:
                 if path not in machine_completed:
                     relative = path.relative_to(repo).as_posix()
-                    if relative not in native:
-                        raise IntegrityError(
-                            "machine output has no completed evidence", (relative,)
-                        )
-                    machine_completed[path] = native[relative]
+                    raise IntegrityError("machine output has no completed evidence", (relative,))
             completed(None, {path: machine_completed[path] for path in machine_paths})
-            if host_receipt is not None or os.environ.get(MODE_ENV, "legacy") == "rust":
-                reconcile_host_writes(
-                    {path: write.sha256 for path, write in writes.items()}, native
-                )
-                for native_path, digest in native.items():
-                    writes[native_path] = Write(
-                        digest, git.entry(source, native_path), immutable=True
-                    )
         except (ValueError, OSError) as error:
             integrity_failed = (
                 error if isinstance(error, IntegrityError) else IntegrityError(str(error))

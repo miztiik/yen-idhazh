@@ -1,6 +1,6 @@
 # The Ledger Door: Parquet and JSON Lines Under state/raw and state/compact
 
-**Last Updated**: 2026-10-13
+**Last Updated**: 2026-10-14
 
 How a contract payload reaches disk under `state/raw/` and `state/compact/`, how it comes back, and how the parquet engine is swapped. The door is `backend/idhazh/ledger/persist.py`; everything a producer needs is two calls, `ledger.persist` and `ledger.load`. The registry and the lifecycle statuses are [ledger-registry.md](ledger-registry.md), what each ledger answers is [state-ledgers.md](state-ledgers.md), and the shape of a contract is [schemas.md](schemas.md).
 
@@ -65,7 +65,7 @@ The paths come back ascending by the day each file covers, never by path string.
 
 **A raw write into a paused or retired family from a pipeline job writes nothing**, returns an empty list and logs one warning, through `ledger.accepts_new_rows` ([ledger-registry.md](ledger-registry.md)). A `persist_period` write, and a raw write from `migrate`, `run-tasks` or `history` - the members of `MAINTENANCE_JOBS` beside `ServerJob` - are never skipped, because each files rows again that were already recorded.
 
-**`load` is the inverse of `persist` and nothing else.** It reads each file's container from the file's own first bytes, never from its suffix, and validates the envelope against four finite provenance pairs: Python or Rust Parquet, and Python or Rust JSON lines. Rust provenance is admitted only for corrected raw `host-fingerprint` files from `telemetry.silicon`; no regex admits another native writer. It refuses a mismatched container/writer pair and a file written under a newer shape than this build declares. `load_stored` is the same read with identity cells retained. Host history has its original canonical digest and row identity checked before finite legacy normalization. Neither read removes duplicates.
+**`load` is the inverse of `persist` and nothing else.** It reads each file's container from the file's own first bytes, never from its suffix, and validates the envelope against finite provenance pairs. Current writes use the Python Parquet or JSON-lines producer. Historical corrected raw `host-fingerprint` files from `telemetry.silicon` retain their original provenance and remain readable; removing a collector does not rewrite stored bytes. It refuses a mismatched container/writer pair and a file written under a newer shape than this build declares. `load_stored` is the same read with identity cells retained. Host history has its original canonical digest and row identity checked before finite legacy normalization. Neither read removes duplicates.
 
 ## The two identifiers
 

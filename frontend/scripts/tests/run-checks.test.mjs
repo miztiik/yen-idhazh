@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { writeRecord } from '../build-state.ts';
-import { command, options, pythonModulesFor, readResult, recordRun, requireRustComponents, rustCommands, selection, waitForResult } from '../run-checks.ts';
+import { command, options, pythonModulesFor, readResult, recordRun, selection, waitForResult } from '../run-checks.ts';
 import { selectPaths } from '../test-scope.ts';
 function tmpdir() {
 	const path = fileURLToPath(new URL('../../../backend/var/checks/launcher-tests/', import.meta.url));
@@ -12,43 +13,27 @@ function tmpdir() {
 	return path;
 }
 
-test('native preparation precedes locked offline module checks; Windows setup shares the cargo process', () => {
-	const root = tmpdir();
-	const unix = rustCommands(root, 'linux');
-	assert.deepEqual(unix.map((item) => item.name), [
-		'Rust dependency preparation', 'Rust fixture build', 'Rust formatting', 'Rust clippy', 'Rust module tests'
-	]);
-	assert.deepEqual(unix[0].args, ['fetch', '--locked']);
-	assert.deepEqual(unix[1].args, ['build', '--locked', '--all-targets']);
-	for (const index of [3, 4]) {
-		assert.ok(unix[index].args.includes('--locked'));
-		assert.ok(unix[index].args.includes('--offline'));
-	}
-	for (const item of rustCommands(root, 'win32')) {
-		assert.ok(item.args.at(-1).includes('vcvars64.bat" >nul && cargo '));
-		assert.ok(item.cwd.endsWith(join('backend', 'rust', 'host-telemetry')));
-	}
-});
-
-test('missing Rust gate components fail before a proxy can download them during checks', () => {
-	assert.throws(() => requireRustComponents('1.95.0', 'cargo-x86_64-pc-windows-msvc\n'), /Install clippy/);
-	assert.throws(() => requireRustComponents('1.95.0', 'clippy-x86_64-pc-windows-msvc\n'), /Install rustfmt/);
-	assert.doesNotThrow(() => requireRustComponents('1.95.0',
-		'clippy-x86_64-pc-windows-msvc\nrustfmt-x86_64-pc-windows-msvc\n'));
-});
-
-test('an explicit Rust selection keeps Python to the concrete native parity test', () => {
+test('unknown check groups fail before preparation', () => {
 	const root = fileURLToPath(new URL('../../../', import.meta.url));
-	const selected = selection(root, options(['--group', 'rust']));
-	assert.deepEqual(selected.groups, ['backend']);
-	assert.deepEqual(selected.backendFiles, [
-		'backend/tests/contracts/test_rust_host_file_parity.py', 'backend/tests/test_rust_host_store_parity.py',
-		'backend/tests/test_rust_host_receipts.py', 'backend/tests/contracts/test_host_event_rust_parity.py',
-		'backend/tests/test_host_event_resource_parity.py', 'backend/tests/test_compare_host_telemetry.py',
-		'backend/tests/workflows/test_rust_host_telemetry_workflow.py'
-	]);
-	assert.equal(selected.rust, true);
-	assert.equal(selected.tooling, false);
+	assert.throws(() => selection(root, options(['--group', 'removed-collector'])), /Unknown group/);
+});
+
+test('a deleted backend test selects the normal full suite', () => {
+	const root = mkdtempSync(join(tmpdir(), 'idhazh-deleted-test-'));
+	try {
+		const module = join(root, 'backend/tests/test_removed_collector.py');
+		mkdirSync(join(root, 'backend/tests'), { recursive: true });
+		writeFileSync(module, 'def test_fixture(): pass\n');
+		const git = (...args) => execFileSync('git', ['-C', root, ...args], { stdio: 'ignore' });
+		git('init', '--quiet');
+		git('add', '.');
+		git('-c', 'user.name=fixture', '-c', 'user.email=fixture@example.invalid',
+			'-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'fixture');
+		rmSync(module);
+		const selected = selection(root, options(['--base', 'HEAD']));
+		assert.deepEqual(selected.groups, ['backend']);
+		assert.equal(selected.backendFiles, null);
+	} finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 test('a logic-only change neither probes backend packages nor selects pytest tooling', () => {

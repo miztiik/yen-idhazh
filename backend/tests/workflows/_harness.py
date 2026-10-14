@@ -70,9 +70,6 @@ EXPECTED_WORKFLOWS: Final = {
     "idhazh-pipeline-tests.yaml": ("Pipeline tests", frozenset({"workflow_dispatch"})),
     "llm-council.yml": ("LLM-COUNCIL", frozenset({"schedule", "workflow_dispatch"})),
     "measure.yml": ("Measurements", frozenset({"workflow_dispatch"})),
-    "rust-host-telemetry.yml": (
-        "Isolated Rust host evidence", frozenset({"workflow_dispatch"}),
-    ),
     "pages.yml": (
         "Pages publication",
         frozenset({"workflow_run", "workflow_dispatch"}),
@@ -185,7 +182,6 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("measure.yml", "host_telemetry"): DISPATCH_CHOICE,
     ("measure.yml", "target"): DISPATCH_CHOICE,
     ("measure.yml", "threads"): "^[1-9][0-9]*$",
-    ("rust-host-telemetry.yml", "memory_profiling"): DISPATCH_CHOICE,
     ("idhazh-gardener.yml", "force"): DISPATCH_BOOLEAN,
     ("validate.yml", "candidate_models_file"): DISPATCH_READ_BY_NAME,
     ("validate.yml", "corpus_per_shard"): "^[1-9][0-9]{0,3}$",
@@ -844,7 +840,6 @@ SUBSTITUTED_TENANT: Final = "a-paper-tenant"
 
 EXPRESSION_VALUES: Final = {
     "env.SET_DIRECTORY": "corpus/encoder-comparison-1",
-    "env.IDHAZH_HOST_TELEMETRY_SESSION": "backend/var/d7-host-telemetry/fixture-plan-session",
     "matrix.encoder": "fixture-encoder",
     "needs.plan.outputs.date": SUBSTITUTED_DATE,
     "needs.plan.outputs.day_dir": SUBSTITUTED_DAY_DIR,

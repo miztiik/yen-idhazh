@@ -391,7 +391,7 @@ def test_the_memory_summary_reads_what_the_sampler_wrote() -> None:
     )
 
     upload = _artifact_upload(
-        _load_workflows()["digest.yml"], "work", "runtime-log-${{ matrix.shard }}"
+        _load_workflows()["digest.yml"], "work", "host-measurements-${{ matrix.shard }}"
     )
     uploaded = str(_mapping(upload.get("with"), "runtime log upload").get("path"))
     for name in (RSS_SAMPLE_FILE, PYTHON_PROCS_FILE):

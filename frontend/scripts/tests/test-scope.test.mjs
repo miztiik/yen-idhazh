@@ -31,40 +31,11 @@ test('Pipelines retained and native evidence joins representative groups without
 	}
 	assert.equal(FRONTEND_GROUPS.includes('panels'), false);
 });
-test('isolated comparison inputs select their exact evidence consumers without browser builds', () => {
-	for (const path of [
-		'.github/workflows/rust-host-telemetry.yml',
-		'config/host-telemetry-comparison.json',
-		'backend/idhazh/contracts/host_evidence.py',
-		'backend/idhazh/telemetry/host_evidence_inputs.py',
-		'backend/idhazh/telemetry/host_evidence_comparison.py',
-		'backend/idhazh/telemetry/host_evidence_artifacts.py',
-		'backend/idhazh/telemetry/host_evidence_samples.py',
-		'backend/utilities/host_telemetry_workload.py',
-		'backend/utilities/host_telemetry_reference.py',
-		'backend/utilities/host_telemetry_session.py',
-		'backend/utilities/compare_host_telemetry.py'
-	]) {
-		const selected = selectPaths([path]);
-		assert.deepEqual(selected.groups, ['backend']);
-		assert.equal(selected.rust, true);
-		assert.ok(selected.backendFiles.includes('backend/tests/test_compare_host_telemetry.py'));
-		assert.ok(selected.backendFiles.includes('backend/tests/workflows/test_rust_host_telemetry_workflow.py'));
-		assert.equal(ciAnswer([path], true).browser, false);
-	}
-	const cost = selectPaths(['backend/utilities/host_telemetry_measurement.py']);
-	assert.equal(cost.rust, true);
-	assert.deepEqual(cost.groups, ['backend']);
-	const shared = selectPaths(['config/host-telemetry-experiment.json']);
-	assert.ok(shared.backendFiles.includes('backend/tests/test_host_fingerprint_migration.py'));
-});
-
 test('Summaries modules and native private fixtures select console consumers without narrowing shared inputs', () => {
 	for (const path of ['frontend/src/lib/console/model/Cards.svelte',
 		'frontend/src/lib/console/model/model-change.ts', 'frontend/tests/support/model-route.ts']) {
 		const selected = selectPaths([path]);
 		assert.deepEqual(selected.groups, ['logic', 'console', 'publishing']);
-		assert.equal(selected.rust, false);
 	}
 	assert.deepEqual(selectPaths(['frontend/src/lib/components/Sparkline.svelte']).groups, [...FRONTEND_GROUPS]);
 	assert.equal(groupForSpec('frontend/tests/console-model-nothings.spec.ts'), 'logic');
@@ -128,99 +99,19 @@ test('test:changed explicit groups stay authoritative even with a CI console def
 	}
 });
 
-test('historical host dry-run paths select bounded Python fixtures without native preparation', () => {
-	for (const path of [
-		'backend/idhazh/contracts/host_migration.py',
-		'backend/idhazh/telemetry/host_history_files.py',
-		'backend/idhazh/telemetry/host_history_migration.py',
-		'backend/idhazh/telemetry/host_history_bundle.py',
-		'backend/idhazh/telemetry/host_history_paths.py',
-		'backend/utilities/migrate_host_fingerprints.py',
-		'config/host-history-migration.json',
-		'tests/fixtures/host-events/history-migration.json'
-	]) {
-		const selected = selectPaths([path]);
-		assert.deepEqual(selected.groups, ['backend']);
-		assert.deepEqual(selected.backendFiles, [
-			'backend/tests/contracts/test_host_migration.py',
-			'backend/tests/test_host_fingerprint_migration.py'
-		]);
-		assert.equal(selected.rust, false);
-		assert.equal(selected.contracts, false);
-	}
-	const config = selectPaths(['config/host-telemetry-experiment.json']);
-	assert.ok(config.backendFiles.includes('backend/tests/test_host_fingerprint_migration.py'));
-});
-
-test('native Rust and its actual file fixture select focused checks without browser preparation', () => {
-	for (const path of ['backend/rust/host-telemetry/src/codec/parquet.rs',
-		'backend/rust/host-telemetry/rust-toolchain.toml', 'backend/rust/host-telemetry/Cargo.lock',
-		'tests/fixtures/host-events/file-parity.json', 'backend/tests/contracts/test_rust_host_file_parity.py',
-		'backend/rust/host-telemetry/src/ledger/store.rs', 'backend/tests/test_rust_host_store_parity.py',
-		'backend/rust/host-telemetry/src/probe_inputs/hierarchy.rs', 'backend/tests/contracts/test_host_event_rust_parity.py',
-		'backend/rust/host-telemetry/src/monitor/session.rs', 'backend/tests/test_host_event_resource_parity.py']) {
-		const selected = selectPaths([path]);
-		assert.deepEqual(selected.groups, ['backend']);
-		assert.equal(selected.rust, true);
-		assert.equal(selected.contracts, false);
-		assert.deepEqual(selected.backendFiles, path === 'tests/fixtures/host-events/file-parity.json'
-			? ['backend/tests/contracts/test_rust_host_file_parity.py']
-			: ['backend/tests/contracts/test_host_event_rust_parity.py', 'backend/tests/contracts/test_rust_host_file_parity.py', 'backend/tests/test_rust_host_receipts.py',
-				'backend/tests/test_rust_host_store_parity.py', 'backend/tests/test_host_event_resource_parity.py',
-				'backend/tests/test_compare_host_telemetry.py', 'backend/tests/workflows/test_rust_host_telemetry_workflow.py'].sort());
-		assert.equal(ciAnswer([path], true).browser, false);
-		assert.equal(ciAnswer([path], true).modelAbsent, false);
-		assert.equal(ciAnswer([path], true).robots, false);
-	}
-	const storage = selectPaths(['tests/fixtures/host-events/storage-parity.json']);
-	assert.equal(storage.rust, true);
-	assert.deepEqual(storage.groups, ['backend']);
-	assert.deepEqual(storage.backendFiles, ['backend/tests/test_rust_host_store_parity.py']);
-	const receipts = selectPaths(['tests/fixtures/host-events/publication-parity.json']);
-	assert.equal(receipts.rust, true);
-	assert.deepEqual(receipts.groups, ['backend']);
-	assert.deepEqual(receipts.backendFiles, ['backend/tests/test_rust_host_receipts.py']);
-	const resources = selectPaths(['tests/fixtures/host-events/resource-windows.json']);
-	assert.equal(resources.rust, true);
-	assert.deepEqual(resources.groups, ['backend']);
-	assert.deepEqual(resources.backendFiles, ['backend/tests/test_host_event_resource_parity.py',
-		'backend/tests/test_host_readings.py', 'backend/tests/test_memory_sampler.py']);
-	for (const path of ['tests/fixtures/host-events/probe-clock.json',
-		'tests/fixtures/runtime/2026-08-29-3-shard-0.server-head.txt',
-		'tests/fixtures/runtime/2026-08-26-5-shard-0.prom']) {
-		const producer = selectPaths([path]);
-		assert.equal(producer.rust, true);
-		assert.deepEqual(producer.groups, ['backend']);
-		assert.deepEqual(producer.backendFiles, ['backend/tests/contracts/test_host_event_rust_parity.py']);
-	}
-});
-
-test('isolated host contracts and verification have finite consumers; unknowns stay broad', () => {
-	for (const path of ['backend/idhazh/contracts/host_events.py',
-		'backend/idhazh/contracts/host_output.py', 'backend/idhazh/telemetry/host_output_verify.py',
-		'backend/idhazh/telemetry/host_parquet_admission.py', 'config/host-telemetry-experiment.json']) {
-		const selected = selectPaths([path]);
-		assert.deepEqual(selected.groups, ['backend']);
-		assert.equal(selected.rust, true);
-		assert.equal(selected.contracts, false);
-		assert.ok(selected.backendFiles.includes('backend/tests/contracts/test_rust_host_file_parity.py'));
-	}
-	const transport = selectPaths(['backend/idhazh/telemetry/host_event_files.py']);
-	assert.equal(transport.rust, false);
-	assert.deepEqual(transport.backendFiles, ['backend/tests/test_host_event_files.py']);
-	for (const path of ['backend/rust/new-crate/src/lib.rs', 'config/host-unknown.json',
-		'backend/idhazh/contracts/host-unknown.py', 'tests/fixtures/host-events/unknown.json']) {
-		const selected = selectPaths([path]);
-		assert.deepEqual(selected.groups, ['backend', ...FRONTEND_GROUPS]);
-		assert.equal(selected.backendFiles, null);
-		assert.equal(selected.rust, true);
-	}
-});
-
 test('Judgement evidence stays in the real integration tier', () => {
 	const inventory = groupedSpecs(join(FRONTEND, 'tests'));
 	assert.ok(inventory.logic.includes('judgement-evidence.spec.ts'));
 	assert.deepEqual(selectPaths(['frontend/tests/judgement-evidence.spec.ts']).groups, ['logic']);
+});
+
+test('removed collector source paths select normal coverage rather than a separate toolchain', () => {
+	for (const path of ['backend/removed-collector/src/lib.rs',
+		'.github/workflows/removed-collector.yml', 'tests/fixtures/removed-collector/input.json']) {
+		const selected = selectPaths([path]);
+		assert.deepEqual(selected.groups, ['backend', ...FRONTEND_GROUPS]);
+		assert.equal(selected.backendFiles, null);
+	}
 });
 
 test('a window helper edit selects all its console consumers under either path convention', () => {

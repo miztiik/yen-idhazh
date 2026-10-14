@@ -79,12 +79,11 @@ on:
         type: boolean
         default: false
       host_telemetry:
-        description: 'Rust host collector, legacy rollback, or off for all host telemetry'
+        description: 'Python host collector, or off for all host telemetry'
         type: choice
-        default: rust
+        default: python
         options:
-          - rust
-          - legacy
+          - python
           - 'off'
       memory_profiling:
         description: 'OS memory and fault collection; inherit reads shared config'
@@ -101,7 +100,8 @@ permissions:
   contents: read
 
 env:
-  IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry || 'rust' }}
+  IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry || 'python' }}
+  MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
 
 # Never two of these at once, and never cancelled half way: the history job
 # rewrites a branch, and a second copy racing the first would push two different
@@ -112,8 +112,6 @@ concurrency:
 
 jobs:
   plan:
-    env:
-      IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry == 'off' && 'off' || 'legacy' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -205,28 +203,15 @@ jobs:
 
       - name: Install
         run: pip install -e .
-      - name: Resolve host telemetry before native setup
+      - name: Resolve host telemetry
         id: host_telemetry
         env:
-          REQUESTED: ${{ inputs.host_telemetry || 'rust' }}
+          REQUESTED: ${{ inputs.host_telemetry || 'python' }}
         run: |
           set -euo pipefail
           MODE=$(python backend/utilities/host_telemetry_control.py "$REQUESTED" --config-root config)
           echo "IDHAZH_HOST_TELEMETRY_MODE=$MODE" >> "$GITHUB_ENV"
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
-      - name: Select the pinned host toolchain
-        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
-        working-directory: backend/rust/host-telemetry
-        run: echo "RUSTUP_TOOLCHAIN=$(rustup show active-toolchain | cut -d' ' -f1)" >> "$GITHUB_ENV"
-      - uses: actions/cache@v6
-        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
-        with:
-          path: ~/.cargo/registry
-          key: host-crates-${{ runner.os }}-${{ hashFiles('backend/rust/host-telemetry/Cargo.lock', 'backend/rust/host-telemetry/rust-toolchain.toml') }}
-      - uses: ./.github/actions/d7-host-telemetry
-        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
-        with:
-          enabled: ${{ env.IDHAZH_HOST_TELEMETRY_MODE == 'rust' }}
 
       # Runs the shard's tasks, writes its one record and pushes it, trying again
       # on a newer tip when another shard pushed first. It exits with the worst
@@ -244,32 +229,10 @@ jobs:
           ATTEMPT: ${{ github.run_attempt }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          python backend/utilities/d7_host_telemetry.py run \
-            --mode "$IDHAZH_HOST_TELEMETRY_MODE" --job run-tasks \
-            --run-id "$RUN_ID" --attempt "$ATTEMPT" --git-sha "$GITHUB_SHA" \
-            --shard "$SHARD" --memory-profiling "${{ inputs.memory_profiling || 'inherit' }}" -- \
-            python backend/utilities/gardener_publish.py \
+          python backend/utilities/gardener_publish.py \
             --shard "$SHARD" --run-id "$RUN_ID" --attempt "$ATTEMPT"
-      - name: Refuse to publish without a verified D7 receipt
-        if: always()
-        run: |
-          if [ "$IDHAZH_HOST_TELEMETRY_MODE" = rust ] \
-             && [ "${IDHAZH_HOST_TELEMETRY_VERIFIED:-0}" != 1 ]; then
-            echo "D7 receipt verification failed; refusing to land gardener output" >&2
-            exit 1
-          fi
-      - name: Clean up the owned D7 monitor
-        if: always()
-        run: |
-          if [ "$IDHAZH_HOST_TELEMETRY_MODE" = rust ] \
-             && [ -n "${IDHAZH_HOST_TELEMETRY_SESSION:-}" ]; then
-            python backend/utilities/d7_host_telemetry.py cleanup \
-               --workspace "$IDHAZH_HOST_TELEMETRY_SESSION"
-          fi
 
   history:
-    env:
-      IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry == 'off' && 'off' || 'legacy' }}
     # After every shard has ended, so history is rewritten last, and whatever
     # the shards did: a red shard's push has already ended, and its work is
     # tried again at the next wake either way. A skipped `needs` would skip this
