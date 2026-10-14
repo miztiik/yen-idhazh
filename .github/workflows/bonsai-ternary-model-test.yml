@@ -6,7 +6,7 @@ on:
       prompt:
         description: 'System Prompt'
         required: false
-        default: 'Summarize the key takeways in given text.'
+        default: 'Summarize the key takeways in given text'
       input_text:
         description: 'Input text to summarize'
         required: false
@@ -26,7 +26,7 @@ jobs:
         with:
           node-version: 'latest'
 
-      # Safety swap buffer (8GB) for unexpected memory bursts
+      # Safety swap buffer (8GB) for memory bursts
       - name: Setup 8GB Safety Swap Buffer
         run: |
           sudo swapoff -a || true
@@ -38,7 +38,7 @@ jobs:
           sudo swapon /swapfile
           free -h
 
-      # Configure ES Module environment for Node.js
+      # Configure ES Module workspace for Node.js
       - name: Setup Node ES Module Workspace
         run: |
           if [ ! -f package.json ]; then npm init -y; fi
@@ -70,7 +70,7 @@ jobs:
           curl -L -o ./models/Ternary-Bonsai-2-27B-PTQ1_0.gguf \
             "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf/resolve/main/Ternary-Bonsai-2-27B-PTQ1_0.gguf"
 
-      # Start Prism llama-server (Tuned for 16GB RAM + 64k Context)
+      # Start Prism llama-server (Fixed syntax and fail-fast monitoring)
       - name: Start Prism llama-server
         run: |
           CORES=$(nproc)
@@ -82,27 +82,46 @@ jobs:
             --port 8080 \
             -c 65536 \
             -np 1 \
-            -fa \
-            -ctk q8_0 \
-            -ctv q8_0 \
+            --flash-attn on \
+            --cache-type-k q8_0 \
+            --cache-type-v q8_0 \
             -b 4096 \
             -ub 1024 \
             -t $CORES \
             -tb $CORES \
-            --mlock \
-            --prompt-cache-all \
             --temp 0.2 \
             > llama-server.log 2>&1 &
 
-          echo "Waiting for llama-server to warm up and lock model in RAM..."
-          for i in {1..90}; do
+          SERVER_PID=$!
+          echo "llama-server started with PID $SERVER_PID. Monitoring health..."
+
+          READY=false
+          for i in {1..60}; do
+            if ! kill -0 $SERVER_PID 2>/dev/null; then
+              echo "::error::llama-server process died unexpectedly on launch!"
+              echo "=== START LLAMA-SERVER LOG ==="
+              cat llama-server.log
+              echo "=== END LLAMA-SERVER LOG ==="
+              exit 1
+            fi
+
             if curl -s http://127.0.0.1:8080/health | grep -q "ok"; then
-              echo "llama-server is healthy and ready!"
+              echo "llama-server is healthy and ready for inference!"
+              READY=true
               break
             fi
-            echo "Waiting for server warmup... ($i/90)"
+
+            echo "Waiting for server warmup... ($i/60)"
             sleep 2
           done
+
+          if [ "$READY" != "true" ]; then
+            echo "::error::llama-server timed out during startup."
+            echo "=== START LLAMA-SERVER LOG ==="
+            cat llama-server.log
+            echo "=== END LLAMA-SERVER LOG ==="
+            exit 1
+          fi
 
       # Execute the Event-Driven Pipeline
       - name: Execute AI Event Pipeline
@@ -112,7 +131,7 @@ jobs:
         run: |
           npx --yes tsx .github/scripts/ai-pipeline.ts
 
-      # Debug Artifact: Upload server logs if pipeline fails
+      # Debug Artifact: Upload server logs
       - name: Upload Server Logs on Failure
         if: always()
         uses: actions/upload-artifact@v4
