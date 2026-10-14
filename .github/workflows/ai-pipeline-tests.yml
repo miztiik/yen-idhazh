@@ -11,22 +11,22 @@ on:
         description: 'GGUF Filename'
         required: true
         default: 'Ornith-1.5-9B-Q5_K_M.gguf'
+      url:
+        description: 'URL to extract with Defuddle (leave empty to use input_text)'
+        required: false
+        default: 'https://en.wikipedia.org/wiki/Ternary_numeral_system'
+      input_text:
+        description: 'Input text (used directly if URL is empty, or as fallback if URL fails)'
+        required: false
+        default: 'Local LLMs allow running transformer architectures directly on edge devices and continuous integration runners without transmitting data over third-party APIs.'
       context_size:
         description: 'Context Window Size'
         required: false
         default: '16384'
-      url:
-        description: 'URL to extract with Defuddle (defaults to Wikipedia)'
-        required: false
-        default: 'https://en.wikipedia.org/wiki/Ternary_numeral_system'
       prompt:
         description: 'System Prompt'
         required: false
         default: 'You are an executive summarizer. Output ONLY the requested JSON. Do NOT output thinking tags or reasoning.'
-      input_text:
-        description: 'Fallback text if Defuddle URL fails'
-        required: false
-        default: 'Local LLMs allow running transformer architectures directly on edge devices and continuous integration runners without transmitting data over third-party APIs.'
 
 jobs:
   run-inference:
@@ -83,22 +83,20 @@ jobs:
           path: ./models/${{ github.event.inputs.model_file }}
           key: model-cache-${{ github.event.inputs.model_repo }}-${{ github.event.inputs.model_file }}
 
-      # 5. Generic Hugging Face Download (Provider Neutral)
+      # 5. Direct Hugging Face Download (No API discovery, zero extra lines)
       - name: Download Model from HuggingFace
         if: steps.cache-model.outputs.cache-hit != 'true'
         run: |
           mkdir -p ./models
           REPO="${{ github.event.inputs.model_repo }}"
           FILE="${{ github.event.inputs.model_file }}"
-          URL="https://huggingface.co/${REPO}/resolve/main/${FILE}"
 
-          echo "Downloading $FILE from $URL..."
-          # -f/--fail ensures curl fails immediately on HTTP 404
-          curl -fL -o "./models/$FILE" "$URL"
+          echo "Downloading $FILE from $REPO..."
+          curl -fL -o "./models/$FILE" "https://huggingface.co/${REPO}/resolve/main/${FILE}"
 
           # Verify GGUF magic bytes
           if [ "$(head -c 4 "./models/$FILE")" != "GGUF" ]; then
-            echo "::error::Downloaded file is corrupted or not a valid GGUF file!"
+            echo "::error::Downloaded file is corrupted or not a valid GGUF binary!"
             exit 1
           fi
           echo "Verified GGUF binary header successfully."
@@ -156,7 +154,7 @@ jobs:
             exit 1
           fi
 
-      # 7. Run Event Pipeline with Defuddle URL Ingestion & Diagnostics
+      # 7. Run Event Pipeline with Defuddle URL / Direct Text Precedence
       - name: Execute AI Event Pipeline
         env:
           URL: "${{ github.event.inputs.url }}"
