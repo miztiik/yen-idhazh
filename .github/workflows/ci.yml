@@ -157,7 +157,16 @@ jobs:
 
       - name: Tests, including the five injection canaries
         if: needs.scope.outputs.code == 'true'
-        run: pytest --junitxml=test-results/backend/pytest-junit.xml
+        run: >-
+          pytest --junitxml=test-results/backend/pytest-junit.xml
+          --ignore=backend/tests/test_host_history_maintenance.py
+
+      # Offline writer inspection must not race the parallel suite's child processes.
+      - name: Offline maintenance, without parallel producers
+        if: needs.scope.outputs.code == 'true'
+        run: >-
+          pytest -n 0 backend/tests/test_host_history_maintenance.py
+          --junitxml=test-results/backend/pytest-offline-junit.xml
 
       # Per-module timing for `docs/how-to/run-the-gates.md`'s "re-check the
       # slow marks" step. `pytest --durations` already names the 25 slowest
@@ -169,7 +178,9 @@ jobs:
         if: ${{ !cancelled() && needs.scope.outputs.code == 'true' }}
         with:
           name: pytest-junit
-          path: test-results/backend/pytest-junit.xml
+          path: |
+            test-results/backend/pytest-junit.xml
+            test-results/backend/pytest-offline-junit.xml
           retention-days: 7
           if-no-files-found: error
 

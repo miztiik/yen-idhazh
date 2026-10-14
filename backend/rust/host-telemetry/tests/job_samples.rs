@@ -176,24 +176,25 @@ fn cli_override_turns_memory_off_before_replay_collection() {
 }
 
 #[test]
-fn capacity_and_missing_population_never_publish_a_partial_sum() {
-    let root = resources::workspace("artifact-caps");
-    let mut m = resources::manifest();
-    m.limits.max_session_events = 1;
+fn missing_population_never_publishes_a_partial_sum() {
+    let root = resources::workspace("missing-population");
+    let m = resources::manifest();
     let mut frame = resources::frames().remove(0);
-    let (record, rows) = sample(&frame, None, true).unwrap().unwrap();
-    let mut artifacts = Artifacts::create(&root, "cap", &m.limits, true)
+    let artifacts = Artifacts::create(&root, "artifacts", &m.limits, true)
         .unwrap()
         .unwrap();
-    assert!(artifacts.write_sample(&record, &rows).is_err());
-    assert_eq!(
-        std::fs::metadata(root.join("cap").join(LEGACY_JOB_SAMPLE_FILENAME))
-            .unwrap()
-            .len(),
-        0
-    );
     frame.population = Reading::absent(UnavailableReason::IncompleteCoverage);
     assert!(sample(&frame, None, true).is_err());
+    for name in [LEGACY_JOB_SAMPLE_FILENAME, LEGACY_PROCESS_ROLLCALL_FILENAME] {
+        assert_eq!(
+            std::fs::metadata(root.join("artifacts").join(name))
+                .unwrap()
+                .len(),
+            0
+        );
+    }
+    drop(artifacts);
+    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]

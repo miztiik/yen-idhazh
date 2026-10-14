@@ -143,9 +143,7 @@ pub struct Artifacts {
     runtime: File,
     peak_path: std::path::PathBuf,
     bytes: u64,
-    records: u64,
     max_bytes: u64,
-    max_records: u64,
 }
 impl Artifacts {
     pub fn create(
@@ -180,9 +178,7 @@ impl Artifacts {
             runtime: open(RUNTIME_STATUS_FILENAME)?,
             peak_path: resolved.join(RUNTIME_PEAK_FILENAME),
             bytes: 0,
-            records: 0,
             max_bytes: limits.max_session_bytes as u64,
-            max_records: limits.max_session_events as u64,
         }))
     }
     pub fn write_sample(
@@ -199,7 +195,7 @@ impl Artifacts {
                 &serde_json::to_value(row).map_err(|e| e.to_string())?,
             )?);
         }
-        self.reserve(a.len() + b.len(), rows.len() + 1)?;
+        self.reserve(a.len() + b.len())?;
         self.sample
             .write_all(&a)
             .and_then(|_| self.sample.flush())
@@ -216,7 +212,7 @@ impl Artifacts {
         let raw = crate::canonical_json::row_line(
             &serde_json::to_value(status).map_err(|e| e.to_string())?,
         )?;
-        self.reserve(raw.len(), 1)?;
+        self.reserve(raw.len())?;
         self.runtime
             .write_all(&raw)
             .and_then(|_| self.runtime.flush())
@@ -225,20 +221,18 @@ impl Artifacts {
     pub fn write_peak(&mut self, peak: &Reading<String>) -> Result<()> {
         if let Some(value) = &peak.value {
             let raw = format!("{}\n", value.trim());
-            self.reserve(raw.len(), 1)?;
+            self.reserve(raw.len())?;
             crate::fs::atomic::publish_immutable(&self.peak_path, raw.as_bytes())
                 .map_err(|e| e.to_string())?;
         }
         Ok(())
     }
-    fn reserve(&mut self, bytes: usize, records: usize) -> Result<()> {
+    fn reserve(&mut self, bytes: usize) -> Result<()> {
         require(
-            self.bytes.saturating_add(bytes as u64) <= self.max_bytes
-                && self.records.saturating_add(records as u64) <= self.max_records,
-            "legacy artifact capacity exhausted",
+            self.bytes.saturating_add(bytes as u64) <= self.max_bytes,
+            "legacy artifact byte capacity exhausted",
         )?;
         self.bytes += bytes as u64;
-        self.records += records as u64;
         Ok(())
     }
 }

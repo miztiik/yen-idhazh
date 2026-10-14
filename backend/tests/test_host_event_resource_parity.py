@@ -262,6 +262,7 @@ def test_native_windows_and_plain_artifacts_match_unchanged_real_python_reads(
     result = run(root, "resource-replay", "--snapshot", "resources", "--artifact-root", "artifacts")
     assert result.returncode == 0, result.stderr.decode()
     events = [HostEvent.model_validate(value) for value in json.loads(result.stdout)]
+    assert not any(value.kind in ("job.sample", "process.rollcall") for value in events)
     windows = [value.body for value in events if isinstance(value.body, WindowResultBody)]
     assert len(windows) == 2
     first = next(value for value in windows if str(value.window_id) == m["windows"][0]["window_id"])
@@ -337,7 +338,6 @@ def test_native_windows_and_plain_artifacts_match_unchanged_real_python_reads(
         assert b"most the two held at once 750 kB, n=1 samples" in summary.stderr
     else:
         assert not (root / "artifacts").exists()
-        assert not any(value.kind in ("job.sample", "process.rollcall") for value in events)
         for key in ("cpu_busy_pct", "cpu_busy_max", "cpu_busy_min", "cpu_steal_pct", "load_1m"):
             assert native_cells[key] == reference[key]
         assert all(

@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-10-12
+**Last Updated**: 2026-10-14
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -406,10 +406,16 @@ configured arguments.
 python backend/utilities/gate_lock.py -- python -m pytest -n auto
 ```
 
-Nothing needs pinning to one worker. Every test that binds a port binds an
-ephemeral one, no test changes the working directory, and no test writes into a
-tracked root - so the parallel run passes the same node ids as the serial one
-and leaves `git status --porcelain` empty.
+Offline process-inspection tests are the exception. Their real machine-wide
+writer checks must not race the parallel suite's child processes as those
+processes start or exit. CI runs the ordinary suite first, excluding
+`backend/tests/test_host_history_maintenance.py`, then runs that module with
+`-n 0` after all parallel workers exit. Every case still runs; no writer-safety
+assertion, refusal or timeout is weakened. Use the same order for a local full
+run that includes this module.
+
+Tests that bind a port use an ephemeral one. Generated inputs stay outside
+tracked roots; a completed run leaves `git status --porcelain` empty.
 
 ### Run only the tests a change can break
 
@@ -440,6 +446,8 @@ and `-m slow` picks the slow modules on purpose.
 
 **Re-check `slow` from a real run rather than guessing.** The gates job
 uploads its JUnit report as the `pytest-junit` artifact (7-day retention).
+The artifact also contains `pytest-offline-junit.xml` for the isolated
+process-inspection module. Audit both reports when checking the whole suite.
 After a run, `gh run download <run-id> -n pytest-junit -D <dir>`, then run
 `python -m utilities.slow_mark_audit <dir>/pytest-junit.xml` from `backend/`.
 It reads the threshold from `config/test-marks.json`, averages each module's

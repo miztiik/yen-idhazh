@@ -12,10 +12,10 @@ def test_failure_log_surfaces_the_native_artifact_budget_reason(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     (tmp_path / "monitor.log").write_text(
-        "legacy artifact capacity exhausted\n", encoding="ascii"
+        "legacy artifact byte capacity exhausted\n", encoding="ascii"
     )
     _report_monitor_failure(tmp_path, 1024)
-    assert "legacy artifact capacity exhausted" in capsys.readouterr().err
+    assert "legacy artifact byte capacity exhausted" in capsys.readouterr().err
 
 
 def test_failure_log_remains_bounded_and_reports_missing_diagnostics(
