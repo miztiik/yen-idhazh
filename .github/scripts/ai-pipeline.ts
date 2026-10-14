@@ -1,22 +1,12 @@
 // .github/scripts/ai-pipeline.ts
 import fs from "node:fs";
 import os from "node:os";
-import path from "node:path";
 import { EventEmitter } from "node:events";
 import { performance } from "node:perf_hooks";
-import { getLlama, LlamaChatSession, defineChatSessionFunction } from "node-llama-cpp";
 
 // -------------------------------------------------------------
-// 1. TYPE DEFINITIONS & EVENT PAYLOADS
+// 1. TYPES & SCHEMAS
 // -------------------------------------------------------------
-export interface PipelineConfig {
-  modelPath: string;
-  systemPrompt: string;
-  inputText: string;
-  maxTokens: number;
-  temperature: number;
-}
-
 export interface SummaryStructuredOutput {
   headline: string;
   executive_summary: string;
@@ -34,7 +24,7 @@ export interface PipelineEvent<T = any> {
 }
 
 // -------------------------------------------------------------
-// 2. HOST FINGERPRINT COLLECTOR
+// 2. RUNNER FINGERPRINT
 // -------------------------------------------------------------
 function collectQuickFingerprint() {
   const cpus = os.cpus();
@@ -72,91 +62,98 @@ class AIEventPipeline extends EventEmitter {
     return this.auditLog;
   }
 
-  public async execute(config: PipelineConfig): Promise<SummaryStructuredOutput> {
-    // Stage 1: Input Received Event
+  public async execute(
+    inputText: string,
+    systemPrompt: string,
+    serverUrl = "http://127.0.0.1:8080"
+  ): Promise<SummaryStructuredOutput> {
+    // Event 1: Ingestion
     this.logEvent("INPUT_RECEIVED", {
-      inputTextPreview: config.inputText.substring(0, 100) + "...",
-      inputLengthChars: config.inputText.length,
-      systemPrompt: config.systemPrompt,
+      inputTextPreview: inputText.substring(0, 100) + "...",
+      inputLengthChars: inputText.length,
+      systemPrompt,
     });
 
-    // Stage 2: Inference Setup & Dispatch
+    // Event 2: Start Inference
     const startTime = performance.now();
     this.logEvent("INFERENCE_STARTED", {
-      model: path.basename(config.modelPath),
-      temperature: config.temperature,
-      maxTokens: config.maxTokens,
+      serverUrl,
+      targetModel: "Ternary-Bonsai-2-27B-PTQ1_0",
     });
 
-    // Initialize node-llama-cpp
-    const llama = await getLlama();
-    const model = await llama.loadModel({
-      modelPath: config.modelPath,
-    });
-
-    const context = await model.createContext({
-      contextSize: 2048, // Compact context size to fit in runner RAM + swap
-      batchSize: 256,
-    });
-
-    const session = new LlamaChatSession({
-      contextSequence: context.getSequence(),
-      systemPrompt: `${config.systemPrompt}
-You MUST reply ONLY with a valid, strictly parseable JSON object matching this schema:
+    // Call Prism llama-server via OpenAI-compatible endpoint
+    const response = await fetch(`${serverUrl}/v1/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages: [
+          {
+            role: "system",
+            content: `${systemPrompt}
+You MUST output ONLY a valid, parseable JSON object matching this schema:
 {
   "headline": "Short title",
   "executive_summary": "1-3 sentences",
   "key_points": ["bullet 1", "bullet 2"],
   "sentiment": "positive" | "neutral" | "negative" | "mixed"
 }`,
+          },
+          {
+            role: "user",
+            content: `Summarize this text:\n"""\n${inputText}\n"""`,
+          },
+        ],
+        temperature: 0.2,
+        max_tokens: 300,
+        // Disable extended reasoning mode for fast CI turnaround
+        chat_template_kwargs: { enable_thinking: false },
+      }),
     });
 
-    // Run inference
-    const rawResponse = await session.prompt(
-      `Text to summarize:\n"""\n${config.inputText}\n"""`,
-      {
-        maxTokens: config.maxTokens,
-        temperature: config.temperature,
-      }
-    );
+    if (!response.ok) {
+      throw new Error(`llama-server responded with HTTP ${response.status}: ${await response.text()}`);
+    }
 
+    const jsonResponse: any = await response.json();
+    const rawContent = jsonResponse.choices?.[0]?.message?.content || "";
     const inferenceDurationMs = Math.round(performance.now() - startTime);
 
+    // Event 3: Inference Completed
     this.logEvent("INFERENCE_COMPLETED", {
       inferenceDurationMs,
-      rawOutputLength: rawResponse.length,
+      usage: jsonResponse.usage,
+      rawOutputLength: rawContent.length,
     });
 
-    // Stage 3: Parse and Structure Output
+    // Event 4: Parse & Validate Structured Schema
     let parsed: any;
     try {
-      const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
-      parsed = JSON.parse(jsonMatch ? jsonMatch[0] : rawResponse);
+      const match = rawContent.match(/\{[\s\S]*\}/);
+      parsed = JSON.parse(match ? match[0] : rawContent);
     } catch {
       parsed = {
         headline: "Summary Output",
-        executive_summary: rawResponse.trim(),
-        key_points: ["Extracted from raw model response"],
+        executive_summary: rawContent.trim(),
+        key_points: ["Extracted from raw model text"],
         sentiment: "neutral",
       };
     }
 
     const structuredResult: SummaryStructuredOutput = {
-      headline: parsed.headline || "Document Summary",
-      executive_summary: parsed.executive_summary || rawResponse,
+      headline: parsed.headline || "Summary Report",
+      executive_summary: parsed.executive_summary || rawContent,
       key_points: Array.isArray(parsed.key_points) ? parsed.key_points : [],
       sentiment: parsed.sentiment || "neutral",
-      compression_ratio: `${((rawResponse.length / config.inputText.length) * 100).toFixed(1)}%`,
+      compression_ratio: `${((rawContent.length / inputText.length) * 100).toFixed(1)}%`,
     };
 
     this.logEvent("OUTPUT_STRUCTURED", structuredResult);
-
     return structuredResult;
   }
 }
 
 // -------------------------------------------------------------
-// 4. MARKDOWN SUMMARY WRITER (GITHUB ACTIONS STEP SUMMARY)
+// 4. MARKDOWN REPORTER
 // -------------------------------------------------------------
 function publishStepSummary(
   fingerprint: ReturnType<typeof collectQuickFingerprint>,
@@ -213,41 +210,26 @@ ${JSON.stringify(events, null, 2)}
 }
 
 // -------------------------------------------------------------
-// 5. MAIN ENTRY POINT
+// 5. MAIN
 // -------------------------------------------------------------
 async function main() {
   const fingerprint = collectQuickFingerprint();
-  console.log("Host Fingerprint:", fingerprint);
-
-  const modelPath = process.env.MODEL_PATH || "./models/Ternary-Bonsai-2-27B-PTQ1_0.gguf";
-
-  const config: PipelineConfig = {
-    modelPath,
-    systemPrompt:
-      process.env.PROMPT ||
-      "You are a high-speed summarization engine. Distill the text into concise, factual points.",
-    inputText:
-      process.env.INPUT_TEXT ||
-      `GitHub Actions is a continuous integration and continuous delivery (CI/CD) platform that allows you to automate your build, test, and deployment pipeline. You can create workflows that build and test every pull request to your repository, or deploy merged pull requests to production. GitHub Actions goes beyond just DevOps and lets you run workflows when other events happen in your repository. For example, you can run a workflow to automatically add the appropriate labels whenever someone creates a new issue in your repository.`,
-    maxTokens: 512,
-    temperature: 0.2,
-  };
-
   const pipeline = new AIEventPipeline();
 
-  // Attach event listeners for real-time observability
   pipeline.on("INPUT_RECEIVED", (e) => console.log(`[EVENT] Input Received: ${e.eventId}`));
-  pipeline.on("INFERENCE_STARTED", (e) => console.log(`[EVENT] Inference Started on ${e.payload.model}`));
-  pipeline.on("INFERENCE_COMPLETED", (e) => console.log(`[EVENT] Inference Finished in ${e.payload.inferenceDurationMs}ms`));
-  pipeline.on("OUTPUT_STRUCTURED", (e) => console.log(`[EVENT] Structured Payload Ready`));
+  pipeline.on("INFERENCE_STARTED", (e) => console.log(`[EVENT] Inference Started on ${e.payload.targetModel}`));
+  pipeline.on("INFERENCE_COMPLETED", (e) => console.log(`[EVENT] Inference Completed in ${e.payload.inferenceDurationMs}ms`));
+  pipeline.on("OUTPUT_STRUCTURED", () => console.log(`[EVENT] Structured Payload Ready`));
+
+  const prompt = process.env.PROMPT || "You are a concise analytical engine. Summarize the text accurately.";
+  const inputText =
+    process.env.INPUT_TEXT ||
+    "Ternary quantization maps neural network weights to {-1, 0, +1}, enabling high compression rates while preserving reasoning capabilities. This architecture allows 27B parameter models to run within 6 GB of memory.";
 
   try {
-    const result = await pipeline.execute(config);
-    const events = pipeline.getEventHistory();
-
-    // Write results to GitHub Actions markdown summary
-    publishStepSummary(fingerprint, result, events);
-    console.log("Execution successfully completed.");
+    const result = await pipeline.execute(inputText, prompt);
+    publishStepSummary(fingerprint, result, pipeline.getEventHistory());
+    console.log("Pipeline run complete.");
   } catch (err) {
     console.error("Pipeline failure:", err);
     process.exit(1);
