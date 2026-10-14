@@ -7,12 +7,11 @@ import { execSync } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { performance } from "node:perf_hooks";
 
-// Defuddle & Linkedom for clean DOM extraction
 import { parseHTML } from "linkedom";
 import { Defuddle } from "defuddle/node";
 
 // -------------------------------------------------------------
-// 1. UUID v5 GENERATOR (RFC 4122 compliant)
+// 1. UUID v5 GENERATOR (RFC 4122)
 // -------------------------------------------------------------
 const UUIDV5_NAMESPACE = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
 
@@ -104,7 +103,7 @@ async function extractWithDefuddle(url: string): Promise<IngestionResult> {
         "User-Agent": "Mozilla/5.0 (compatible; DefuddleScraper/1.0)",
         Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       },
-      signal: AbortSignal.timeout(15000), // 15s timeout
+      signal: AbortSignal.timeout(15000),
     });
 
     if (!res.ok) {
@@ -131,7 +130,7 @@ async function extractWithDefuddle(url: string): Promise<IngestionResult> {
     return {
       sourceUrl: url,
       success: false,
-      title: "Extraction Failed",
+      title: "Extraction Fallback",
       extractedText: "",
       wordCount: 0,
       error: err.message || String(err),
@@ -310,7 +309,7 @@ export class AIEventPipeline extends EventEmitter {
       fallbackText,
       systemPrompt,
       serverUrl = "http://127.0.0.1:9931",
-      modelName = "ornith-1.0-9b-Q4_K_M.gguf",
+      modelName = "model.gguf",
     } = options;
 
     let targetText = fallbackText;
@@ -346,10 +345,10 @@ export class AIEventPipeline extends EventEmitter {
       }
     }
 
-    // Safety: Trim to ~3500 words to ensure context fit
+    // Context safety: Trim to ~6,000 words (comfortably fits in 16k context window)
     const words = targetText.split(/\s+/);
-    if (words.length > 3500) {
-      targetText = words.slice(0, 3500).join(" ") + "\n\n[...Truncated to fit context window...]";
+    if (words.length > 6000) {
+      targetText = words.slice(0, 6000).join(" ") + "\n\n[...Truncated to fit context window...]";
     }
 
     // Stage 2: Ingested Input Confirmation
@@ -414,9 +413,8 @@ You MUST output ONLY a valid, parseable JSON object matching this schema:
     const promptTokens = usage?.prompt_tokens || 0;
     const completionTokens = usage?.completion_tokens || 0;
     const totalTokens = usage?.total_tokens || promptTokens + completionTokens;
-    const tokensPerSec = completionTokens > 0
-      ? Number(((completionTokens / (durationMs / 1000))).toFixed(2))
-      : 0;
+    const tokensPerSec =
+      completionTokens > 0 ? Number((completionTokens / (durationMs / 1000)).toFixed(2)) : 0;
 
     const tokenMetrics: TokenMetrics = {
       prompt_tokens: promptTokens,
@@ -486,8 +484,8 @@ function publishStepSummary(
 | Parameter | Value |
 | :--- | :--- |
 | **Source URL** | ${result.source_info.sourceUrl !== "raw-text-input" ? `[${result.source_info.sourceUrl}](${result.source_info.sourceUrl})` : "Raw Text Input"} |
-| **Ingestion Status** | ${result.source_info.success ? "✅ Successfully Cleaned & Parsed via `defuddle/node`" : `⚠️ Fallback Used (${result.source_info.error})`} |
-| **Extracted Document Title** | **${result.source_info.title}** |
+| **Ingestion Status** | ${result.source_info.success ? "✅ Cleaned & Parsed via `defuddle/node`" : `⚠️ Fallback Used (${result.source_info.error})`} |
+| **Document Title** | **${result.source_info.title}** |
 | **Word Count** | \`${result.source_info.wordCount} words\` |
 
 ---
@@ -589,18 +587,17 @@ async function main() {
 
   const pipeline = new AIEventPipeline(tele.runner_name, tele.shard_id);
 
-  // Real-time lifecycle event listeners
   pipeline.on("URL_INGESTION_STARTED", (e) =>
-    console.log(`[EVENT] 🌐 Scraping URL with Defuddle [UUIDv5: ${e.eventId}] -> ${e.payload.url}`)
+    console.log(`[EVENT] 🌐 Ingesting with Defuddle [UUIDv5: ${e.eventId}] -> ${e.payload.url}`)
   );
   pipeline.on("URL_INGESTION_COMPLETED", (e) =>
     console.log(`[EVENT] ✅ Defuddle Ingested: "${e.payload.title}" (${e.payload.wordCount} words) [UUIDv5: ${e.eventId}]`)
   );
   pipeline.on("URL_INGESTION_FAILED", (e) =>
-    console.log(`[EVENT] ⚠️ Defuddle Failed (${e.payload.error}). Falling back to text. [UUIDv5: ${e.eventId}]`)
+    console.log(`[EVENT] ⚠️ Defuddle Fallback (${e.payload.error}) [UUIDv5: ${e.eventId}]`)
   );
   pipeline.on("INPUT_RECEIVED", (e) =>
-    console.log(`[EVENT] 📥 Input Prepared [UUIDv5: ${e.eventId}] (Used Fallback: ${e.payload.usedFallback})`)
+    console.log(`[EVENT] 📥 Input Prepared [UUIDv5: ${e.eventId}] (Words: ${e.payload.wordCount})`)
   );
   pipeline.on("INFERENCE_STARTED", (e) =>
     console.log(`[EVENT] 🚀 Dispatched to ${e.payload.targetModel} [UUIDv5: ${e.eventId}]`)
@@ -617,12 +614,13 @@ async function main() {
 
   const url = process.env.URL || "https://en.wikipedia.org/wiki/Ternary_numeral_system";
   const prompt =
-    process.env.PROMPT || "You are an executive summarizer. Output ONLY the requested JSON. Do NOT output thinking tags.";
+    process.env.PROMPT ||
+    "You are an executive summarizer. Output ONLY the requested JSON. Do NOT output thinking tags.";
   const fallbackText =
     process.env.INPUT_TEXT ||
-    "Ternary numeral systems use base 3 with digits -1, 0, and +1. Balanced ternary is applied in specialized hardware architectures and modern quantization techniques.";
+    "Ternary numeral systems use base 3 with digits -1, 0, and +1. Balanced ternary is applied in modern neural network quantization techniques.";
   const serverUrl = process.env.SERVER_URL || "http://127.0.0.1:9931";
-  const modelName = process.env.MODEL_NAME || "ornith-1.0-9b-Q4_K_M.gguf";
+  const modelName = process.env.MODEL_NAME || "model.gguf";
 
   try {
     const result = await pipeline.execute({
@@ -636,7 +634,9 @@ async function main() {
     console.log("\n============================================================");
     console.log(`📌 Document Title: ${result.headline}`);
     console.log(`🌐 Source: ${result.source_info.sourceUrl}`);
-    console.log(`📊 Tokens: ${result.token_metrics.total_tokens} (Throughput: ${result.token_metrics.tokens_per_second} t/s)`);
+    console.log(
+      `📊 Tokens: ${result.token_metrics.total_tokens} (Throughput: ${result.token_metrics.tokens_per_second} t/s)`
+    );
     console.log(`📝 Executive Summary: ${result.executive_summary}`);
     result.key_points.forEach((p) => console.log(`   • ${p}`));
     console.log("============================================================\n");
