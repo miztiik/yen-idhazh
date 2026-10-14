@@ -10,7 +10,7 @@ on:
       model_file:
         description: 'GGUF Filename'
         required: false
-        default: ' ornith-1.0-9b-Q5_K_M.gguf'
+        default: 'Ornith-1.5-9B-Q4_K_M.gguf'
       context_size:
         description: 'Context Window Size'
         required: false
