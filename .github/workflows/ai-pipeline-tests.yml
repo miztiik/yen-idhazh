@@ -4,13 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       model_repo:
-        description: 'HuggingFace Repo (provider/model)'
+        description: 'HuggingFace Model (provider/model)'
         required: true
         default: 'ornith-ai/Ornith-1.5-9B-GGUF'
-      model_file:
-        description: 'GGUF Filename'
-        required: true
-        default: 'Ornith-1.5-9B-Q5_K_M.gguf'
       url:
         description: 'URL to extract with Defuddle (leave empty to use input_text)'
         required: false
@@ -75,43 +71,55 @@ jobs:
           chmod +x ./bin/llama-server
           ./bin/llama-server --version || true
 
-      # 4. Cache Model File
-      - name: Cache Model File
+      # 4. Cache Model Directory
+      - name: Cache Model Directory
         id: cache-model
         uses: actions/cache@v4
         with:
-          path: ./models/${{ github.event.inputs.model_file }}
-          key: model-cache-${{ github.event.inputs.model_repo }}-${{ github.event.inputs.model_file }}
+          path: ./models
+          key: model-cache-${{ github.event.inputs.model_repo }}
 
-      # 5. Direct Hugging Face Download (No API discovery, zero extra lines)
+      # 5. Resolve & Download GGUF (Lightweight 2-line auto-detection)
       - name: Download Model from HuggingFace
-        if: steps.cache-model.outputs.cache-hit != 'true'
         run: |
           mkdir -p ./models
           REPO="${{ github.event.inputs.model_repo }}"
-          FILE="${{ github.event.inputs.model_file }}"
 
-          echo "Downloading $FILE from $REPO..."
-          curl -fL -o "./models/$FILE" "https://huggingface.co/${REPO}/resolve/main/${FILE}"
+          # Resolve .gguf filename in 2 lines (prioritizes Q5_K_M or Q4_K_M, falls back to first .gguf)
+          FILE=$(curl -sL "https://huggingface.co/api/models/${REPO}/tree/main" | jq -r '.[].path' | grep -iE '\.gguf$' | grep -iE 'q5_k_m|q4_k_m' | head -n 1)
+          [ -z "$FILE" ] && FILE=$(curl -sL "https://huggingface.co/api/models/${REPO}/tree/main" | jq -r '.[].path' | grep -iE '\.gguf$' | head -n 1)
+
+          if [ -z "$FILE" ]; then
+            echo "::error::No .gguf files found in repository '$REPO'!"
+            exit 1
+          fi
+
+          echo "Selected GGUF: $FILE"
+          echo "MODEL_FILE=$FILE" >> $GITHUB_ENV
+
+          if [ ! -f "./models/$FILE" ]; then
+            echo "Downloading $FILE..."
+            curl -fL -o "./models/$FILE" "https://huggingface.co/${REPO}/resolve/main/${FILE}"
+          else
+            echo "Found $FILE in runner cache."
+          fi
 
           # Verify GGUF magic bytes
           if [ "$(head -c 4 "./models/$FILE")" != "GGUF" ]; then
             echo "::error::Downloaded file is corrupted or not a valid GGUF binary!"
             exit 1
           fi
-          echo "Verified GGUF binary header successfully."
 
       # 6. Start llama-server (16k Context on Port 9931)
       - name: Start llama-server (Port 9931)
         run: |
           CORES=$(nproc)
-          FILE="${{ github.event.inputs.model_file }}"
           CTX="${{ github.event.inputs.context_size }}"
 
-          echo "Starting llama-server for $FILE on $CORES cores with ${CTX} context..."
+          echo "Starting llama-server for $MODEL_FILE on $CORES cores with ${CTX} context..."
 
           ./bin/llama-server \
-            -m "./models/$FILE" \
+            -m "./models/$MODEL_FILE" \
             --host 127.0.0.1 \
             --port 9931 \
             -c $CTX \
@@ -161,7 +169,7 @@ jobs:
           PROMPT: "${{ github.event.inputs.prompt }}"
           INPUT_TEXT: "${{ github.event.inputs.input_text }}"
           SERVER_URL: "http://127.0.0.1:9931"
-          MODEL_NAME: "${{ github.event.inputs.model_file }}"
+          MODEL_NAME: "${{ env.MODEL_FILE }}"
           SHARD_ID: "shard-1/1"
         run: |
           npx --yes tsx .github/scripts/ai-pipeline.ts
