@@ -782,8 +782,8 @@ test.describe("THE ORACLE: native server evidence is independent of article rows
 			host.version, host.fingerprint_version, host.cpu_physical_cores,
 			host.cpu_logical_processors, host.cpu_observed_mhz
 		])).toEqual([
-			['2026-10-10', 1, null, null, 2445],
-			['2026-10-10', 1, null, null, 2445]
+			['2026-09-20', 1, null, null, 2445],
+			['2026-09-20', 1, null, null, 2445]
 		]);
 		const articles = daysBetween('2030-06-03', '2030-06-14').map((date) => ({
 			date,

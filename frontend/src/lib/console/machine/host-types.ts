@@ -38,7 +38,7 @@ export interface HostFingerprintRow {
 	version?: string;
 	date: string;
 	run_id: string;
-	job?: string | null;
+	job?: ServerJob | string | null;
 	pipeline_name?: string | null;
 	task_name?: string | null;
 	shard: number;

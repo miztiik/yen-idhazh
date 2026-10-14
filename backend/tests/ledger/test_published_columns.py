@@ -133,7 +133,8 @@ def test_f1_current_stamp_with_missing_column_fails_and_prints(
         "file=state/raw/host-fingerprint/2026/09/16/"
     ) in printed
     assert (
-        "file_schema=2026-10-10 contract_schema=2026-10-10 column=unit_id "
+        f"file_schema={HostFingerprintRow.schema_version()} "
+        f"contract_schema={HostFingerprintRow.schema_version()} column=unit_id "
         "file_type=<not declared> contract_type=string; fix: give the contract a new "
         "version, CLAUDE.md section 11, or re-pack the file"
     ) in printed
@@ -174,7 +175,7 @@ def test_f3_newer_file_fails_and_prints(
     printed = capsys.readouterr().out
     assert "published-columns FAIL F3 ledger=host-fingerprint" in printed
     assert (
-        "file_schema=9999-01-01 contract_schema=2026-10-10 column=<not declared> "
+        f"file_schema=9999-01-01 contract_schema={HostFingerprintRow.schema_version()} column=<not declared> "
         "file_type=<not declared> contract_type=<not declared>; fix: re-pack the file "
         "with this build or run a build at least as new"
     ) in printed

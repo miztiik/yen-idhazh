@@ -11,12 +11,10 @@ are only known when the job is over. So each half is a row of this shape carryin
 the cells it has, and the compaction is what unites them - one key, no cell filled
 twice, one row in the day file.
 
-**Only `job` is an enum, and that is deliberate.** It is the one column this
-project names; every other identifier here is a string the machine chose. A
-vendor renames a part, a cloud adds a machine size, a microcode revision ships -
-and a closed set would refuse the row rather than record the new thing, which is
-the opposite of what an instrument is for. The rule and its cost are written
-down in `docs/reference/host-metrics.md`.
+Pipeline and task names are validated strings. Legacy `job` values remain
+readable as enums or strings; readers compare their values, not enum identity.
+Hardware identifiers are open strings because a closed vocabulary would refuse
+a new part rather than record it. See `docs/reference/host-metrics.md`.
 """
 
 from __future__ import annotations

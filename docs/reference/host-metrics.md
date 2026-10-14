@@ -150,6 +150,7 @@ owns publication and may omit this optional instrument entirely.
 New generic rows store `pipeline_name` and `task_name` as separate columns and
 leave legacy `job` null. Aggregations combine the names when they need a unique
 task key. Existing job-only rows keep their `job` values and remain readable.
+Readers compare a legacy job's text value, not its Python enum identity.
 The host and item-health ledgers join generic rows on date, run, pipeline, task
 and shard; legacy rows join on date, run, job and shard. No historical row is
 rewritten or relabelled.

@@ -341,6 +341,7 @@
     "host_fingerprint_bandwidth_jobs": [
       "work"
     ],
+    "host_fingerprint_frequency_enabled": true,
     "host_telemetry_enabled": false,
     "memory_profiling_enabled": false,
     "sample_rate": 0.25,

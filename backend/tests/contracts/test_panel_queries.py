@@ -78,7 +78,7 @@ EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
     "processorLostQuery": ("date", "run_id", "machine_shard", "cpu_steal_pct"),
     "diskReadsQuery": ("date", "run_id", "item_index", "llama_major_faults", "os_mem_cached_bytes", "weights_pinned"),
     "machineCardsQuery": (
-        "version", "date", "run_id", "job", "shard", "fingerprint", "fingerprint_version",
+        "version", "date", "run_id", "job", "pipeline_name", "task_name", "shard", "fingerprint", "fingerprint_version",
         "cpu_model", "cpu_vendor", "cpu_family", "cpu_model_number", "cpu_stepping",
         "microcode", "cpu_physical_cores", "cpu_logical_processors",
         "cpu_allowed_processors", "cpu_quota_cores", "cpu_quota_state",
@@ -87,10 +87,10 @@ EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
         "memcpy_probe_mib", "vm_size", "vm_location", "vm_zone", "vm_fault_domain",
         *LEGACY_HOST_INPUT_COLUMNS,
     ),
-    "machineCardsItemsQuery": ("date", "run_id", "machine_job", "machine_shard", "cpu_model"),
+    "machineCardsItemsQuery": ("date", "run_id", "machine_job", "machine_pipeline_name", "machine_task_name", "machine_shard", "cpu_model"),
     "slowerMachinesQuery": ("run_id", "cpu_model", "prefill_ms", "input_tokens", "cached_tokens", "decode_ms", "output_tokens"),
     "platformMixQuery": (
-        "version", "date", "run_id", "job", "shard", "fingerprint", "fingerprint_version",
+        "version", "date", "run_id", "job", "pipeline_name", "task_name", "shard", "fingerprint", "fingerprint_version",
         "cpu_model", "cpu_logical_processors", "model_load_ms", "job_seconds",
         "server_prompt_tokens", "server_prompt_seconds",
         *LEGACY_HOST_INPUT_COLUMNS,
