@@ -13,7 +13,7 @@ import { Defuddle } from "defuddle/node";
 // -------------------------------------------------------------
 // 1. RFC 4122 UUID v5 GENERATOR (`evt-<uuidv5>`)
 // -------------------------------------------------------------
-const UUIDV5_NAMESPACE = "6ba7b810-9dad-11d1-80b4-00c04fd430c8"; // RFC 4122 DNS namespace
+const UUIDV5_NAMESPACE = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
 
 function uuidToBytes(uuid: string): Buffer {
   return Buffer.from(uuid.replace(/-/g, ""), "hex");
@@ -26,10 +26,8 @@ function generateUuidV5(name: string, namespace: string = UUIDV5_NAMESPACE): str
   hash.update(Buffer.from(name, "utf8"));
   const digest = hash.digest();
 
-  // Set version to 5 (0101xxxx)
-  digest[6] = (digest[6] & 0x0f) | 0x50;
-  // Set variant to RFC 4122 (10xxxxxx)
-  digest[8] = (digest[8] & 0x3f) | 0x80;
+  digest[6] = (digest[6] & 0x0f) | 0x50; // Version 5
+  digest[8] = (digest[8] & 0x3f) | 0x80; // Variant RFC 4122
 
   const hex = digest.subarray(0, 16).toString("hex");
   return [
@@ -64,8 +62,8 @@ export interface DetailedTokenMetrics {
   prompt_time_ms: number;
   completion_time_ms: number;
   total_duration_ms: number;
-  prompt_tokens_per_second: number; // Input evaluation speed
-  completion_tokens_per_second: number; // Generation speed
+  prompt_tokens_per_second: number;
+  completion_tokens_per_second: number;
 }
 
 export interface SwapActivityMetrics {
@@ -93,7 +91,7 @@ export interface SummaryStructuredOutput {
 }
 
 export interface PipelineEvent<T = any> {
-  eventId: string; // Strictly `evt-<uuidv5>`
+  eventId: string;
   eventType:
     | "URL_INGESTION_STARTED"
     | "URL_INGESTION_COMPLETED"
@@ -116,46 +114,73 @@ export interface ExecuteOptions {
 }
 
 // -------------------------------------------------------------
-// 3. DEFUDDLE URL INGESTION (With Graceful Fallback)
+// 3. BULLETPROOF URL INGESTION (Defuddle + HTML Fallback)
 // -------------------------------------------------------------
 async function extractWithDefuddle(url: string) {
+  // Standard desktop Chrome headers to avoid 403 Forbidden blocks on Wikipedia/Cloudflare
+  const headers = {
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Cache-Control": "no-cache",
+  };
+
+  console.log(`[SCRAPER] 🌐 Fetching URL: ${url}`);
+  const res = await fetch(url, { headers, signal: AbortSignal.timeout(20000) });
+
+  console.log(`[SCRAPER] 📡 HTTP Status: ${res.status} ${res.statusText}`);
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+  }
+
+  const html = await res.text();
+  console.log(`[SCRAPER] 📥 Downloaded HTML size: ${(html.length / 1024).toFixed(1)} KB`);
+
+  // Tier 1: Defuddle / Linkedom extraction
   try {
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; DefuddleScraper/1.0)",
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      },
-      signal: AbortSignal.timeout(15000),
-    });
-
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-    }
-
-    const html = await res.text();
     const { document } = parseHTML(html);
-    const result: any = await Defuddle(document, url, { markdown: true });
-
+    const result: any = await Defuddle(document, url, { markdown: true, useAsync: false });
     const content = result.content?.trim() || "";
-    if (!content) {
-      throw new Error("Defuddle returned empty content for the URL");
-    }
 
+    if (content.length > 50) {
+      return {
+        success: true,
+        title: result.title || document.title || "Web Document",
+        extractedText: content,
+        wordCount: content.split(/\s+/).filter(Boolean).length,
+      };
+    }
+  } catch (defuddleErr: any) {
+    console.warn(`[SCRAPER] ⚠️ Defuddle parse warning: ${defuddleErr.message}. Trying HTML text fallback...`);
+  }
+
+  // Tier 2: Resilient HTML fallback (Guarantees URL content is never lost)
+  const cleanText = html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<nav[\s\S]*?<\/nav>/gi, "")
+    .replace(/<footer[\s\S]*?<\/footer>/gi, "")
+    .replace(/<header[\s\S]*?<\/header>/gi, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (cleanText.length > 50) {
+    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+    const title = titleMatch ? titleMatch[1].trim() : "Extracted Web Article";
     return {
       success: true,
-      title: result.title || "Web Document",
-      extractedText: content,
-      wordCount: content.split(/\s+/).filter(Boolean).length,
-    };
-  } catch (err: any) {
-    return {
-      success: false,
-      title: "Extraction Fallback",
-      extractedText: "",
-      wordCount: 0,
-      error: err.message || String(err),
+      title,
+      extractedText: cleanText,
+      wordCount: cleanText.split(/\s+/).filter(Boolean).length,
     };
   }
+
+  throw new Error("Unable to extract readable content from URL");
 }
 
 // -------------------------------------------------------------
@@ -296,7 +321,7 @@ function postJsonNoTimeout(urlStr: string, payload: any): Promise<any> {
 }
 
 // -------------------------------------------------------------
-// 6. EVENT-DRIVEN ORCHESTRATOR CLASS (UUIDv5 & Precedence Engine)
+// 6. EVENT-DRIVEN ORCHESTRATOR CLASS
 // -------------------------------------------------------------
 export class AIEventPipeline extends EventEmitter {
   private auditLog: PipelineEvent[] = [];
@@ -311,7 +336,6 @@ export class AIEventPipeline extends EventEmitter {
     this.correlationId = `corr-${Date.now()}`;
   }
 
-  // Generates RFC 4122 UUIDv5 prefixed with `evt-`
   private createEventId(eventType: string, epochMs: number): string {
     const seed = `runner:${this.runnerName}:shard:${this.shardId}:epoch:${epochMs}:event:${eventType}`;
     return `evt-${generateUuidV5(seed)}`;
@@ -348,48 +372,50 @@ export class AIEventPipeline extends EventEmitter {
     let targetText = fallbackText;
     let sourceAudit: SourceAudit;
 
-    // PRECEDENCE & VERIFICATION LOGIC:
-    // 1. If URL is present -> URL takes precedence (Defuddle scrapes).
-    //    If Defuddle fails -> Gracefully falls back to input_text.
-    // 2. If URL is empty -> Direct input_text takes hold immediately (No Defuddle).
+    // PRECEDENCE & VERIFICATION LOGIC
     if (cleanUrl.length > 0) {
       this.logEvent("URL_INGESTION_STARTED", { url: cleanUrl });
-      const defuddleResult = await extractWithDefuddle(cleanUrl);
 
-      if (defuddleResult.success) {
+      try {
+        const defuddleResult = await extractWithDefuddle(cleanUrl);
+
         sourceAudit = {
           activeSource: "URL",
           sourceIdentifier: cleanUrl,
           sourceTitle: defuddleResult.title,
-          resolutionReason: "URL took precedence and was successfully extracted via Defuddle.",
+          resolutionReason: "URL took precedence and was successfully extracted.",
           extractedWordCount: defuddleResult.wordCount,
           extractedCharCount: defuddleResult.extractedText.length,
           extractedText: defuddleResult.extractedText,
         };
         targetText = defuddleResult.extractedText;
 
+        console.log(`[PIPELINE] ✅ URL TOOK HOLD: "${defuddleResult.title}" (${defuddleResult.wordCount} words)`);
+        console.log(`[PIPELINE] 📄 Extracted Content Preview:\n"""\n${targetText.substring(0, 200)}...\n"""\n`);
+
         this.logEvent("URL_INGESTION_COMPLETED", {
           url: cleanUrl,
           title: defuddleResult.title,
           wordCount: defuddleResult.wordCount,
-          preview: defuddleResult.extractedText.substring(0, 100) + "...",
         });
-      } else {
+      } catch (err: any) {
+        console.warn(`[PIPELINE] ⚠️ URL extraction failed (${err.message}). Falling back to input_text.`);
+
         sourceAudit = {
           activeSource: "FALLBACK_INPUT_TEXT",
-          sourceIdentifier: `Fallback (Scrape failed for: ${cleanUrl})`,
+          sourceIdentifier: `Fallback (URL failed: ${cleanUrl})`,
           sourceTitle: "Direct Input (Graceful Fallback)",
-          resolutionReason: `URL scraping failed (${defuddleResult.error}); gracefully fell back to direct input_text.`,
+          resolutionReason: `URL failed (${err.message}); gracefully fell back to direct input_text.`,
           extractedWordCount: fallbackText.split(/\s+/).filter(Boolean).length,
           extractedCharCount: fallbackText.length,
           extractedText: fallbackText,
-          scrapeError: defuddleResult.error,
+          scrapeError: err.message,
         };
         targetText = fallbackText;
 
         this.logEvent("URL_INGESTION_FAILED", {
           url: cleanUrl,
-          error: defuddleResult.error,
+          error: err.message,
           resolution: "Fell back to direct input_text",
         });
       }
@@ -397,409 +423,4 @@ export class AIEventPipeline extends EventEmitter {
       sourceAudit = {
         activeSource: "INPUT_TEXT",
         sourceIdentifier: "Direct Text Input (No URL provided)",
-        sourceTitle: "Direct Input Text",
-        resolutionReason: "URL was omitted; direct input_text took hold directly without web scraping.",
-        extractedWordCount: fallbackText.split(/\s+/).filter(Boolean).length,
-        extractedCharCount: fallbackText.length,
-        extractedText: fallbackText,
-      };
-      targetText = fallbackText;
-    }
-
-    // Context safety: Trim to ~6,000 words
-    const words = targetText.split(/\s+/).filter(Boolean);
-    if (words.length > 6000) {
-      targetText = words.slice(0, 6000).join(" ") + "\n\n[...Truncated to fit context window...]";
-    }
-
-    // Log explicit active source verification
-    this.logEvent("INPUT_RECEIVED", {
-      modelName,
-      activeSource: sourceAudit.activeSource,
-      resolutionReason: sourceAudit.resolutionReason,
-      sourceIdentifier: sourceAudit.sourceIdentifier,
-      sourceTitle: sourceAudit.sourceTitle,
-      wordCount: words.length,
-      charCount: targetText.length,
-    });
-
-    // Stage 2: Initialize Swap Baseline Tracking
-    const vmstatStart = getVmstatSwap();
-    let peakProcessSwapMb = 0;
-    const initialSnap = getMemorySnapshot();
-    peakProcessSwapMb = Math.max(peakProcessSwapMb, initialSnap.vmSwapMb);
-
-    // Stage 3: Inference Dispatch
-    const startTime = performance.now();
-    this.logEvent("INFERENCE_STARTED", {
-      serverUrl,
-      targetModel: modelName,
-      activeSource: sourceAudit.activeSource,
-      temperature: 0.2,
-    });
-
-    const progressTimer = setInterval(() => {
-      const elapsed = Math.round((performance.now() - startTime) / 1000);
-      const snap = getMemorySnapshot();
-      peakProcessSwapMb = Math.max(peakProcessSwapMb, snap.vmSwapMb);
-
-      console.log(
-        `[PIPELINE] ⏳ Elapsed: ${elapsed}s | RAM RSS: ${snap.vmRssMb} MB | Process Swap: ${snap.vmSwapMb} MB (Peak: ${peakProcessSwapMb} MB) | Swappiness: ${snap.swappiness}`
-      );
-    }, 10000);
-
-    let rawContent = "";
-    let usage: any = null;
-    let timings: any = null;
-
-    try {
-      const jsonResponse = await postJsonNoTimeout(`${serverUrl}/v1/chat/completions`, {
-        messages: [
-          {
-            role: "system",
-            content: `${systemPrompt}
-You MUST output ONLY a valid, parseable JSON object matching this schema:
-{
-  "headline": "Short title",
-  "executive_summary": "1-3 sentences",
-  "key_points": ["bullet 1", "bullet 2"],
-  "sentiment": "positive" | "neutral" | "negative" | "mixed"
-}`,
-          },
-          {
-            role: "user",
-            content: `Document Title: ${sourceAudit.sourceTitle}\n\nContent:\n"""\n${targetText}\n"""`,
-          },
-        ],
-        temperature: 0.2,
-        stream: false,
-        chat_template_kwargs: { enable_thinking: false },
-      });
-
-      rawContent = jsonResponse.choices?.[0]?.message?.content || "";
-      usage = jsonResponse.usage;
-      timings = jsonResponse.timings;
-    } finally {
-      clearInterval(progressTimer);
-    }
-
-    const totalDurationMs = Math.round(performance.now() - startTime);
-
-    // Stage 4: Finalize Swap Telemetry
-    const finalSnap = getMemorySnapshot();
-    peakProcessSwapMb = Math.max(peakProcessSwapMb, finalSnap.vmSwapMb);
-    const vmstatEnd = getVmstatSwap();
-
-    const swapOutPages = Math.max(0, vmstatEnd.pswpout - vmstatStart.pswpout);
-    const swapInPages = Math.max(0, vmstatEnd.pswpin - vmstatStart.pswpin);
-    const swapWrittenMb = Number(((swapOutPages * 4) / 1024).toFixed(2));
-    const swapReadMb = Number(((swapInPages * 4) / 1024).toFixed(2));
-
-    const swapMetrics: SwapActivityMetrics = {
-      swappiness: finalSnap.swappiness,
-      server_pid: finalSnap.pid,
-      server_vm_rss_mb: finalSnap.vmRssMb,
-      peak_server_swap_mb: peakProcessSwapMb,
-      final_server_swap_mb: finalSnap.vmSwapMb,
-      system_swap_used_mb: finalSnap.systemSwapUsedMb,
-      system_swap_total_mb: finalSnap.systemSwapTotalMb,
-      swap_bytes_written_mb: swapWrittenMb,
-      swap_bytes_read_mb: swapReadMb,
-    };
-
-    // Stage 5: Calculate Input vs Output Tokens Per Second
-    const promptTokens = usage?.prompt_tokens || timings?.prompt_n || 0;
-    const completionTokens = usage?.completion_tokens || timings?.predicted_n || 0;
-    const totalTokens = usage?.total_tokens || promptTokens + completionTokens;
-
-    let promptTimeMs = timings?.prompt_ms ? Math.round(timings.prompt_ms) : 0;
-    let completionTimeMs = timings?.predicted_ms ? Math.round(timings.predicted_ms) : 0;
-    if (promptTimeMs === 0 && completionTimeMs === 0) {
-      completionTimeMs = totalDurationMs;
-    }
-
-    const promptTokensPerSec = timings?.prompt_per_second
-      ? Number(timings.prompt_per_second.toFixed(2))
-      : promptTimeMs > 0
-      ? Number(((promptTokens / (promptTimeMs / 1000))).toFixed(2))
-      : 0;
-
-    const completionTokensPerSec = timings?.predicted_per_second
-      ? Number(timings.predicted_per_second.toFixed(2))
-      : completionTimeMs > 0
-      ? Number(((completionTokens / (completionTimeMs / 1000))).toFixed(2))
-      : 0;
-
-    const tokenMetrics: DetailedTokenMetrics = {
-      prompt_tokens: promptTokens,
-      completion_tokens: completionTokens,
-      total_tokens: totalTokens,
-      prompt_time_ms: promptTimeMs,
-      completion_time_ms: completionTimeMs,
-      total_duration_ms: totalDurationMs,
-      prompt_tokens_per_second: promptTokensPerSec,
-      completion_tokens_per_second: completionTokensPerSec,
-    };
-
-    // Stage 6: Emit Completion Event
-    this.logEvent("INFERENCE_COMPLETED", {
-      modelName,
-      activeSource: sourceAudit.activeSource,
-      tokenMetrics,
-      swapMetrics,
-    });
-
-    // Stage 7: Parse Structured Output
-    let parsed: any;
-    try {
-      const match = rawContent.match(/\{[\s\S]*\}/);
-      parsed = JSON.parse(match ? match[0] : rawContent);
-    } catch {
-      parsed = {
-        headline: sourceAudit.sourceTitle || "Document Summary",
-        executive_summary: rawContent.trim(),
-        key_points: ["Extracted from raw model text"],
-        sentiment: "neutral",
-      };
-    }
-
-    const structuredResult: SummaryStructuredOutput = {
-      headline: parsed.headline || sourceAudit.sourceTitle || "Summary Output",
-      executive_summary: parsed.executive_summary || rawContent,
-      key_points: Array.isArray(parsed.key_points) ? parsed.key_points : [],
-      sentiment: parsed.sentiment || "neutral",
-      compression_ratio: `${((rawContent.length / targetText.length) * 100).toFixed(1)}%`,
-      raw_output: rawContent,
-      source_audit: sourceAudit,
-      token_metrics: tokenMetrics,
-      swap_metrics: swapMetrics,
-    };
-
-    this.logEvent("OUTPUT_STRUCTURED", structuredResult);
-    return structuredResult;
-  }
-}
-
-// -------------------------------------------------------------
-// 7. GITHUB STEP SUMMARY & ANNOTATION (ZERO-INDENT COMMONMARK)
-// -------------------------------------------------------------
-function publishStepSummary(
-  modelName: string,
-  result: SummaryStructuredOutput,
-  events: PipelineEvent[]
-) {
-  const tm = result.token_metrics;
-  const sm = result.swap_metrics;
-  const sa = result.source_audit;
-
-  // 1. Surfaced directly in the GitHub Actions Workflow Run Header as an Annotation:
-  console.log(
-    `::notice title=AI Pipeline Succeeded (${modelName})::🎯 Source: ${sa.activeSource} | 📥 Ingest: ${tm.prompt_tokens_per_second} t/s (${tm.prompt_tokens}t) | ⚡ Gen: ${tm.completion_tokens_per_second} t/s (${tm.completion_tokens}t) | ⏱️ Time: ${(tm.total_duration_ms / 1000).toFixed(1)}s | 💾 Peak Swap: ${sm.peak_server_swap_mb} MB`
-  );
-
-  const summaryPath = process.env.GITHUB_STEP_SUMMARY;
-  if (!summaryPath) return;
-
-  // 2. Strict CommonMark formatting (NO LEADING INDENTATION on any line)
-  const lines: string[] = [
-    `# 🧠 AI Transformer Pipeline Execution Report`,
-    ``,
-    `> **🎯 Active Input Source:** \`${sa.activeSource}\`  `,
-    `> **Resolution:** ${sa.resolutionReason}`,
-    ``,
-    `---`,
-    ``,
-    `## ⏱️ Token Performance & Ingestion Rates`,
-    ``,
-    `| Metric | Token Count | Elapsed Time | Speed (Tokens / Sec) |`,
-    `| :--- | :--- | :--- | :--- |`,
-    `| **Prompt (Input Ingestion)** | **${tm.prompt_tokens} tokens** | ${tm.prompt_time_ms > 0 ? (tm.prompt_time_ms / 1000).toFixed(2) + "s" : "Batched"} | **⚡ ${tm.prompt_tokens_per_second} tokens/sec** |`,
-    `| **Completion (Output Gen)** | **${tm.completion_tokens} tokens** | ${(tm.completion_time_ms / 1000).toFixed(2)}s | **⚡ ${tm.completion_tokens_per_second} tokens/sec** |`,
-    `| **Total Evaluation** | **${tm.total_tokens} tokens** | **${(tm.total_duration_ms / 1000).toFixed(2)}s** | Overall Pipeline Throughput |`,
-    ``,
-    `---`,
-    ``,
-    `## 💾 Memory & Swap Diagnostics`,
-    ``,
-    `| Metric | Measured Value | Health & State |`,
-    `| :--- | :--- | :--- |`,
-    `| **Linux \`vm.swappiness\`** | **\`${sm.swappiness}\`** | ${sm.swappiness <= 10 ? "✅ Low Paging (Optimized)" : "⚠️ High Paging"} |`,
-    `| **Server Process PID** | \`${sm.server_pid || "unknown"}\` | Background Daemon |`,
-    `| **Server RAM (RSS)** | **${sm.server_vm_rss_mb} MB** | Active Physical Memory |`,
-    `| **Peak Process Swap** | **${sm.peak_server_swap_mb} MB** | ${sm.peak_server_swap_mb > 0 ? "⚠️ Process Swapped to Disk" : "✅ 0 MB (Zero Process Swap)"} |`,
-    `| **Final Process Swap** | **${sm.final_server_swap_mb} MB** | Current Swap Allocation |`,
-    `| **Swap Written to SSD** | **${sm.swap_bytes_written_mb} MB** | Disk I/O: Pages Written Out |`,
-    `| **Swap Read from SSD** | **${sm.swap_bytes_read_mb} MB** | Disk I/O: Pages Paged Back In |`,
-    `| **Total System Swap Used** | \`${sm.system_swap_used_mb} MB / ${sm.system_swap_total_mb} MB\` | Allocated Swapfile Space |`,
-    ``,
-    `---`,
-    ``,
-    `## 🌐 Ingestion Source Diagnostics`,
-    ``,
-    `| Parameter | Value |`,
-    `| :--- | :--- |`,
-    `| **Active Source Mode** | \`${sa.activeSource}\` |`,
-    `| **Source Identifier** | ${sa.sourceIdentifier.startsWith("http") ? `[${sa.sourceIdentifier}](${sa.sourceIdentifier})` : `\`${sa.sourceIdentifier}\``} |`,
-    `| **Document Title** | **${sa.sourceTitle}** |`,
-    `| **Word Count** | \`${sa.extractedWordCount} words\` (\`${sa.extractedCharCount} chars\`) |`,
-    `| **Status Details** | ${sa.activeSource === "URL" ? "✅ Successfully Scraped & Extracted via `defuddle/node`" : sa.activeSource === "FALLBACK_INPUT_TEXT" ? `⚠️ Defuddle Fallback Invoked (${sa.scrapeError})` : "ℹ️ Direct Text Mode (URL not provided)"} |`,
-    ``,
-    `---`,
-    ``,
-    `## 📝 Structured Summary: *"${result.headline}"*`,
-    ``,
-    `> **Executive Summary:**  `,
-    `> ${result.executive_summary}`,
-    ``,
-    `**Key Takeaways:**`,
-    ...result.key_points.map((p) => `- ${p}`),
-    ``,
-    `| Attribute | Value |`,
-    `| :--- | :--- |`,
-    `| **Detected Sentiment** | \`${result.sentiment.toUpperCase()}\` |`,
-    `| **Compression Ratio** | \`${result.compression_ratio}\` |`,
-    ``,
-    `---`,
-    ``,
-    `## 📄 Cleaned Source Content That Took Hold`,
-    `<details>`,
-    `<summary><b>Click to expand input content (${sa.extractedWordCount} words)</b></summary>`,
-    ``,
-    `\`\`\`markdown`,
-    sa.extractedText || "No source text available",
-    `\`\`\``,
-    ``,
-    `</details>`,
-    ``,
-    `## 🤖 Raw Model Output Text`,
-    `<details>`,
-    `<summary><b>Click to expand raw response</b></summary>`,
-    ``,
-    `\`\`\`text`,
-    result.raw_output,
-    `\`\`\``,
-    ``,
-    `</details>`,
-    ``,
-    `---`,
-    ``,
-    `## ⚡ Event-Driven Audit Trail (UUIDv5)`,
-    ``,
-    `| Event Type | RFC 4122 UUIDv5 | Timestamp |`,
-    `| :--- | :--- | :--- |`,
-    ...events.map((e) => `| \`${e.eventType}\` | \`${e.eventId}\` | \`${e.timestamp}\` |`),
-    ``,
-    `<details>`,
-    `<summary><b>Inspect Full Event Stream Payloads (JSON)</b></summary>`,
-    ``,
-    `\`\`\`json`,
-    JSON.stringify(events, null, 2),
-    `\`\`\``,
-    ``,
-    `</details>`,
-    ``,
-  ];
-
-  fs.appendFileSync(summaryPath, lines.join("\n"), "utf8");
-}
-
-// -------------------------------------------------------------
-// 8. CLI / WORKFLOW ENTRY POINT
-// -------------------------------------------------------------
-async function main() {
-  const l3Cache = detectL3Cache();
-  const runnerName = process.env.RUNNER_NAME || "local-runner";
-  const shardId = process.env.SHARD_ID || "shard-1/1";
-  const modelName = process.env.MODEL_NAME || "model.gguf";
-
-  console.log("=== Initial System Diagnostics ===");
-  console.log({
-    runner: runnerName,
-    shard: shardId,
-    model: modelName,
-    l3Cache: l3Cache,
-  });
-
-  const pipeline = new AIEventPipeline(runnerName, shardId);
-
-  // Real-time lifecycle event listeners (Printing `evt-<uuidv5>`)
-  pipeline.on("URL_INGESTION_STARTED", (e) =>
-    console.log(`[EVENT] 🌐 Ingesting URL with Defuddle [${e.eventId}] -> ${e.payload.url}`)
-  );
-  pipeline.on("URL_INGESTION_COMPLETED", (e) =>
-    console.log(`[EVENT] ✅ Defuddle Ingested: "${e.payload.title}" (${e.payload.wordCount} words) [${e.eventId}]`)
-  );
-  pipeline.on("URL_INGESTION_FAILED", (e) =>
-    console.log(`[EVENT] ⚠️ Defuddle Failed (${e.payload.error}) [${e.eventId}]`)
-  );
-  pipeline.on("INPUT_RECEIVED", (e) =>
-    console.log(
-      `[EVENT] 📥 Input Prepared [${e.eventId}] -> Active Source: [${e.payload.activeSource}] (${e.payload.wordCount} words)\n       Reason: ${e.payload.resolutionReason}`
-    )
-  );
-  pipeline.on("INFERENCE_STARTED", (e) =>
-    console.log(`[EVENT] 🚀 Dispatched to ${e.payload.targetModel} [${e.eventId}]`)
-  );
-  pipeline.on("INFERENCE_COMPLETED", (e) => {
-    const tm: DetailedTokenMetrics = e.payload.tokenMetrics;
-    const sm: SwapActivityMetrics = e.payload.swapMetrics;
-    console.log(
-      `[EVENT] ✅ Completed [${e.eventId}] in ${(tm.total_duration_ms / 1000).toFixed(1)}s (Prompt: ${tm.prompt_tokens}t @ ${tm.prompt_tokens_per_second} t/s | Output: ${tm.completion_tokens}t @ ${tm.completion_tokens_per_second} t/s | Peak Swap: ${sm.peak_server_swap_mb} MB)`
-    );
-  });
-  pipeline.on("OUTPUT_STRUCTURED", (e) =>
-    console.log(`[EVENT] 📦 Structured JSON Ready [${e.eventId}]`)
-  );
-
-  const rawUrl = process.env.URL || "";
-  const url = rawUrl.trim();
-
-  const prompt =
-    process.env.PROMPT ||
-    "You are an executive summarizer. Output ONLY the requested JSON. Do NOT output thinking tags.";
-
-  const rawInputText = process.env.INPUT_TEXT || "";
-  const fallbackText =
-    rawInputText.trim() ||
-    "Local LLMs allow running transformer architectures directly on edge devices and continuous integration runners without transmitting data over third-party APIs.";
-
-  const serverUrl = process.env.SERVER_URL || "http://127.0.0.1:9931";
-
-  console.log(`[CONFIG] Source Mode Requested: ${url ? `URL (${url})` : "Direct Text Input"}`);
-
-  try {
-    const result = await pipeline.execute({
-      url,
-      fallbackText,
-      systemPrompt: prompt,
-      serverUrl,
-      modelName,
-    });
-
-    console.log("\n============================================================");
-    console.log(`📌 Document Title:   ${result.headline}`);
-    console.log(`🎯 Active Source:    [${result.source_audit.activeSource}]`);
-    console.log(`ℹ️ Source Reason:    ${result.source_audit.resolutionReason}`);
-    console.log(
-      `📥 Prompt Speed:     ${result.token_metrics.prompt_tokens_per_second} tokens/sec (${result.token_metrics.prompt_tokens} tokens)`
-    );
-    console.log(
-      `⚡ Gen Speed:        ${result.token_metrics.completion_tokens_per_second} tokens/sec (${result.token_metrics.completion_tokens} tokens)`
-    );
-    console.log(
-      `💾 Swap Activity:    Peak Process Swap: ${result.swap_metrics.peak_server_swap_mb} MB | Written to Disk: ${result.swap_metrics.swap_bytes_written_mb} MB`
-    );
-    console.log(`📝 Executive Summary:\n${result.executive_summary}\n`);
-    console.log("🔑 Key Takeaways:");
-    result.key_points.forEach((p) => console.log(`   • ${p}`));
-    console.log("============================================================\n");
-
-    publishStepSummary(modelName, result, pipeline.getEventHistory());
-    console.log("Pipeline run complete.");
-  } catch (err) {
-    console.error("Pipeline failure:", err);
-    process.exit(1);
-  }
-}
-
-main();
+        sourceTitle: "Dir
