@@ -1,12 +1,11 @@
 name: bonsai-ternary-model-test
-
 on:
   workflow_dispatch:
     inputs:
       prompt:
         description: 'System Prompt'
         required: false
-        default: 'Summarize the key takeways in given text'
+        default: 'You are a high-speed analytical engine. Summarize the text accurately into key structured takeaways.'
       input_text:
         description: 'Input text to summarize'
         required: false
@@ -70,16 +69,16 @@ jobs:
           curl -L -o ./models/Ternary-Bonsai-2-27B-PTQ1_0.gguf \
             "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf/resolve/main/Ternary-Bonsai-2-27B-PTQ1_0.gguf"
 
-      # Start Prism llama-server (Fixed syntax and fail-fast monitoring)
-      - name: Start Prism llama-server
+      # Start Prism llama-server on PORT 9931
+      - name: Start Prism llama-server (Port 9931)
         run: |
           CORES=$(nproc)
-          echo "Detected $CORES CPU cores on 16GB runner. Starting llama-server..."
+          echo "Detected $CORES CPU cores on 16GB runner. Starting llama-server on port 9931..."
 
           ./bin/llama-server \
             -m ./models/Ternary-Bonsai-2-27B-PTQ1_0.gguf \
             --host 127.0.0.1 \
-            --port 8080 \
+            --port 9931 \
             -c 65536 \
             -np 1 \
             --flash-attn on \
@@ -93,20 +92,18 @@ jobs:
             > llama-server.log 2>&1 &
 
           SERVER_PID=$!
-          echo "llama-server started with PID $SERVER_PID. Monitoring health..."
+          echo "llama-server started with PID $SERVER_PID. Monitoring health on port 9931..."
 
           READY=false
           for i in {1..60}; do
             if ! kill -0 $SERVER_PID 2>/dev/null; then
               echo "::error::llama-server process died unexpectedly on launch!"
-              echo "=== START LLAMA-SERVER LOG ==="
               cat llama-server.log
-              echo "=== END LLAMA-SERVER LOG ==="
               exit 1
             fi
 
-            if curl -s http://127.0.0.1:8080/health | grep -q "ok"; then
-              echo "llama-server is healthy and ready for inference!"
+            if curl -s http://127.0.0.1:9931/health | grep -q "ok"; then
+              echo "llama-server is healthy and ready for inference on port 9931!"
               READY=true
               break
             fi
@@ -117,13 +114,11 @@ jobs:
 
           if [ "$READY" != "true" ]; then
             echo "::error::llama-server timed out during startup."
-            echo "=== START LLAMA-SERVER LOG ==="
             cat llama-server.log
-            echo "=== END LLAMA-SERVER LOG ==="
             exit 1
           fi
 
-      # Execute the Event-Driven Pipeline
+      # Execute AI Event Pipeline (Clean terminal output with periodic progress)
       - name: Execute AI Event Pipeline
         env:
           PROMPT: "${{ github.event.inputs.prompt }}"
@@ -131,7 +126,7 @@ jobs:
         run: |
           npx --yes tsx .github/scripts/ai-pipeline.ts
 
-      # Debug Artifact: Upload server logs
+      # Debug Artifact: Upload server logs on failure
       - name: Upload Server Logs on Failure
         if: always()
         uses: actions/upload-artifact@v4
