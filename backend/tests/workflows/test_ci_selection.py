@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shlex
 import shutil
 import subprocess
 from collections.abc import Sequence
@@ -120,6 +121,39 @@ def test_the_selector_tests_use_the_same_node_as_the_ci_selector() -> None:
             assert steps.index(node_steps[0]) < steps.index(test_step)
     assert versions["scope"] is not None
     assert versions["gates"] == versions["scope"]
+
+
+def test_offline_maintenance_runs_after_parallel_workers_exit_without_losing_coverage() -> None:
+    workflow = _load_workflows()["ci.yml"]
+    steps = _steps(workflow, "gates")
+    parallel = _step(workflow, "gates", "name", "Tests, including the five injection canaries")
+    offline = _step(workflow, "gates", "name", "Offline maintenance, without parallel producers")
+    module = "backend/tests/test_host_history_maintenance.py"
+    assert steps.index(parallel) < steps.index(offline)
+    assert parallel["if"] == offline["if"] == "needs.scope.outputs.code == 'true'"
+    assert not parallel.get("continue-on-error") and not offline.get("continue-on-error")
+    parallel_args = shlex.split(_script(parallel, "parallel tests"))
+    offline_args = shlex.split(_script(offline, "offline tests"))
+    reports = {
+        "test-results/backend/pytest-junit.xml",
+        "test-results/backend/pytest-offline-junit.xml",
+    }
+    assert parallel_args == [
+        "pytest", f"--ignore={module}", "--junitxml=test-results/backend/pytest-junit.xml",
+    ]
+    assert offline_args == [
+        "pytest", "-n", "0", module, "--junitxml=test-results/backend/pytest-offline-junit.xml",
+    ]
+    uploads = [
+        step for step in steps
+        if str(step.get("uses", "")).startswith("actions/upload-artifact@")
+        and _mapping(step.get("with"), "artifact settings").get("name") == "pytest-junit"
+    ]
+    assert len(uploads) == 1
+    assert steps.index(offline) < steps.index(uploads[0])
+    settings = _mapping(uploads[0]["with"], "JUnit artifact")
+    assert set(str(settings["path"]).splitlines()) == reports
+    assert settings["if-no-files-found"] == "error"
 
 
 def _two_commits(
