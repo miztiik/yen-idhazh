@@ -1,0 +1,65 @@
+name: bonsai-ternary-model-test
+
+on:
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: 'Custom System Prompt'
+        required: false
+        default: 'Summarize the input text into key analytical takeaways.'
+      input_text:
+        description: 'Input text to summarize'
+        required: false
+        default: 'Local LLMs allow running transformer architectures directly on edge devices and continuous integration runners without transmitting data over third-party APIs. By quantizing models to ternary weights (1.58 bits), 27-billion parameter models can fit under 6 gigabytes of RAM.'
+
+jobs:
+  run-inference:
+    runs-on: ubuntu-latest
+    name: Ternary Bonsai Inference
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Latest Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'latest'
+
+      # CRITICAL: 5.95 GB model + OS will crash standard 7GB RAM runners without swap
+      - name: Allocate 8GB Linux Swap Space
+        run: |
+          sudo swapoff -a
+          sudo fallocate -l 8G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          free -h
+
+      - name: Cache GGUF Model
+        id: cache-model
+        uses: actions/cache@v4
+        with:
+          path: ./models/Ternary-Bonsai-2-27B-PTQ1_0.gguf
+          key: bonsai-2-27b-ptq1_0-v1
+
+      - name: Download Ternary-Bonsai Model
+        if: steps.cache-model.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ./models
+          echo "Downloading Ternary-Bonsai-2-27B (~5.95 GB)..."
+          # HuggingFace direct download URL uses /resolve/main/
+          curl -L -o ./models/Ternary-Bonsai-2-27B-PTQ1_0.gguf \
+            "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf/resolve/main/Ternary-Bonsai-2-27B-PTQ1_0.gguf"
+
+      - name: Install Runtime Dependencies
+        run: |
+          npm install node-llama-cpp
+
+      - name: Execute AI Event Pipeline
+        env:
+          MODEL_PATH: "./models/Ternary-Bonsai-2-27B-PTQ1_0.gguf"
+          PROMPT: "${{ github.event.inputs.prompt }}"
+          INPUT_TEXT: "${{ github.event.inputs.input_text }}"
+        run: |
+          npx --yes tsx .github/scripts/ai-pipeline.ts
