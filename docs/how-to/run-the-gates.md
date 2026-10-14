@@ -400,7 +400,7 @@ anywhere has to be repointed.
 | --- | --- |
 | `-m contract` | The persisted shapes: the models and their fixtures, the two config contracts, the append-only ledgers, the committed digest tree, and the frontend binding tests listed in the [contract guide](../architecture/contracts/schemas.md#what-holds-the-copy-in-step) |
 | `-m visual` | The picture's gate and ladder, its validator, the compiler that turns a plan into published marks, and the planted attacks aimed at the picture |
-| `-m workflow` | The workflow YAML and the shell scripts under `.github/` |
+| `-m workflow` | Workflow YAML, inline shell, and programs called by workflows |
 | `-m slow` | Every module whose average test runs over a second |
 | `-m "not slow"` | Everything else, which is most of the tests |
 | nothing | The whole suite, which is what CI runs |
@@ -482,11 +482,12 @@ in step by the tests listed in the
 [contract guide](../architecture/contracts/schemas.md#what-holds-the-copy-in-step),
 which `pytest` above runs.
 
-**There is no shell linter either.** `shellcheck` went on 2026-09-23 with
-`.github/scripts/`, the last shell this repository shipped as a file, and
-`shellcheck-py` left the `dev` extra with it. No linter reads a workflow's
-inline shell, because a `run:` body is a string inside YAML rather than a file;
-the contract tests in `backend/tests/workflows/` execute the real steps instead
+**There is no shell linter for workflow commands.** `shellcheck` and the
+`shellcheck-py` dev dependency were removed with the last `.sh` file in
+`.github/scripts/` on 2026-09-23. That directory now holds a TypeScript helper,
+not a shell script. No linter reads a workflow's inline shell, because a
+`run:` body is a string inside YAML rather than a file; the contract tests in
+`backend/tests/workflows/` execute the real steps instead
 ([../reference/ci-dispatch-inputs.md](../reference/ci-dispatch-inputs.md#nothing-lints-a-run-body)).
 
 **`ruff format` is not a gate.** `ruff format --check .` reports dozens of files
