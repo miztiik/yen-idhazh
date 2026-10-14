@@ -1,0 +1,32 @@
+name: Runner Host Fingerprint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  fingerprint:
+    runs-on: ubuntu-latest
+    name: Inspect Runner Host
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Latest Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'latest' # Automatically pulls the newest Node.js release
+
+      - name: Collect Runner Fingerprint
+        run: |
+          # Change this path to wherever you put your script:
+          npx --yes tsx .github/scripts/runner-fingerprint.ts
+
+      - name: Upload Raw JSON Fingerprint
+        uses: actions/upload-artifact@v4
+        with:
+          name: runner-fingerprint
+          path: host-fingerprint.json
