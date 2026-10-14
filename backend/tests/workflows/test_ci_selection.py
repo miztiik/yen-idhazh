@@ -13,7 +13,6 @@ import pytest
 from conftest import REPO_ROOT
 
 from ._harness import (
-    GITHUB_DIR,
     _artifact_upload,
     _git,
     _isolated_env,
@@ -38,28 +37,6 @@ requires_node: Final = pytest.mark.skipif(
 #: What the `scope` job runs, as the workflow spells it. A copy of the path here
 #: would keep agreeing with itself after the workflow moved.
 SELECTOR: Final = REPO_ROOT / "frontend" / "scripts" / "test-scope.ts"
-
-#: The directory the gate set no longer has a check for.
-RETIRED_SCRIPTS_DIR: Final = GITHUB_DIR / "scripts"
-
-
-def test_the_platform_runs_no_shell_script_directory() -> None:
-    """Shell under `.github/` is a language the gate set stopped covering.
-
-    `ruff` and `mypy` stop at Python, so a file here needed a linter of its own,
-    a bash-on-the-host skip in every test that drove it, and a word-splitting
-    rule that forbade a space in any path it was handed. All three went with the
-    last script on 2026-09-23, so a file arriving here now is shipped, executed
-    by a runner and checked by nothing.
-    """
-    assert not RETIRED_SCRIPTS_DIR.exists(), (
-        f"{RETIRED_SCRIPTS_DIR.relative_to(REPO_ROOT).as_posix()} came back, and nothing "
-        "lints or drives what is in it. Write the program in Python under "
-        "backend/utilities/ and call it from the step, or reopen the directory as a "
-        "Level 3 design question and bring its linter back with it "
-        "(docs/reference/repository-layout.md)."
-    )
-
 
 def test_the_selection_step_runs_what_this_module_drives() -> None:
     """The step and the harness below have to name the same program, or the

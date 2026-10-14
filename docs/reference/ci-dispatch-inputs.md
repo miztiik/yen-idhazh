@@ -1,6 +1,6 @@
 # Dispatch inputs
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-10-14
 
 What shape a `workflow_dispatch` input has to have, which shapes exist, and what
 checks each one. One of them decides a published address, which is why the list
@@ -114,8 +114,9 @@ inline shell is held by the contract tests in `backend/tests/workflows/`
 instead, which execute the real steps rather than grep them.
 
 CI ran `shellcheck` over `.github/scripts/*.sh` in the gates job until
-2026-09-23. That directory is gone, and the linter, the `shellcheck-py` dev
-dependency and a glob with nothing left to read went with it
+2026-09-23. Removing the last shell file also removed `shellcheck`, its
+`shellcheck-py` dev dependency and the empty glob. The directory now holds a
+TypeScript helper, which is outside that shell check
 ([repository-layout.md](repository-layout.md)).
 
 ## See also

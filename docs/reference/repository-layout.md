@@ -1,6 +1,6 @@
 # Repository Layout
 
-**Last Updated**: 2026-10-09
+**Last Updated**: 2026-10-14
 
 Every top-level directory, what it holds, who writes it, and whether a reader
 ever sees it. Read this before adding a directory, or when deciding where a new
@@ -33,6 +33,7 @@ question, and the four answers do not mix.
 | `corpus/` | The rolling training window: source text as training samples, its census and its holdout. **`corpus/reference-dataset-1/` is a second collection in the same directory and a different thing entirely**: a frozen, hand-labelled set for measuring the article classifier, written once by hand and never by a run. The two must not share an article, and `build_reference_dataset.py verify` is what says so. **`corpus/reference-dataset-2/` is a third**: a collection built from a URL list supplied by hand, for a later balanced classification sample, with its own settings in `config.json` and its own `scratch/` subtree ignored by git | a run, in CI; `reference-dataset-1/` and `reference-dataset-2/` by a person | **never** |
 | `backend/` | The build-time producer. Not a service, ever. `backend/idhazh/` is the package, `backend/idhazh/contracts/` the Pydantic models, `backend/idhazh/contracts/knobs/` one module per block of `config/idhazh.json`, `backend/idhazh/stages/` one module per pipeline stage, `backend/utilities/` the operator tooling, `backend/tests/` its tests | a person | no |
 | `.github/workflows/` | CI, the measurement harness, the daily pipeline, and the Pages deploy | a person | no |
+| `.github/scripts/` | Small programs called by workflows, including the runner fingerprint collector | a person | no |
 | `.github/agents/` | The seven persona advisors (`CLAUDE.md` section 14) | a person | no |
 | `.claude/skills/` | Claude Code skill wrappers that point at `docs/`, so one procedure is not written twice | a person | no |
 | `state/` | The append-only ledgers one run leaves for the next. A ledger that goes through the ledger door - item-health, summary-quality-evals, host-fingerprint, counterfactual-scores, feed-health, seen and published among them - files under `state/raw/<folder>/` and `state/compact/<folder>/`, where `<folder>` is the ledger's own name or, for a ledger inside a family, the family's folder and then that name: the similarity judge's scored pairs, metrics, fitted merge line and hand marks file under `content-similarity-judge/scored-pairs`, `content-similarity-judge/metrics`, `content-similarity-judge/fitted-thresholds` and `content-similarity-judge/holdout-pairs` ([../architecture/contracts/persistence.md](../architecture/contracts/persistence.md)). A ledger more than one job writes gives each writer its own file inside the day directory, so two writers never share a path. `state/content-similarity-judge/` is a child that is a folder of ledgers rather than a ledger, holding that judge's score record and its archive; `state/raw/council-run-records/` holds the council's own step records, later packed under `state/compact/council-run-records/` | a run, in CI | only the compact files of the ledgers `ledger.published` names, which the site build copies unchanged ([../architecture/publishing/how-the-query-door-answers-a-panel.md](../architecture/publishing/how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)) |
@@ -140,10 +141,6 @@ interface between the two halves.
 ## What is deliberately not a directory
 
 - **`evals/`** - folded into `state/`.
-- **`.github/scripts/`** - removed 2026-09-23. A program is written in Python
- under `backend/utilities/` and a workflow step calls one. Shell there needed
- its own linter in CI, a bash-on-the-host skip in every test that drove it, and
- a word-splitting rule that forbade a space in any path it was handed.
 - **`docs/architecture/decisions/`** - there is no ADR directory. A decision is
  recorded in the living doc it impacts, as a `## Design rationale` or
  `## Rejected alternatives` section on that page (section 5).
