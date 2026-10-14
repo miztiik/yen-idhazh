@@ -1,4 +1,4 @@
-name: AI Event-Driven Pipeline
+name: Yen-Summarizers
 
 on:
   workflow_dispatch:
