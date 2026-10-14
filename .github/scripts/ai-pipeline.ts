@@ -1,41 +1,19 @@
 // .github/scripts/ai-pipeline.ts
+import http from "node:http";
 import fs from "node:fs";
 import os from "node:os";
 import { EventEmitter } from "node:events";
 import { performance } from "node:perf_hooks";
 
 // -------------------------------------------------------------
-// 1. TYPE DEFINITIONS
+// 1. TYPES & SCHEMAS
 // -------------------------------------------------------------
 export interface HostFingerprint {
-  run_id: string;
-  job: string;
-  shard: string;
-  cpu_model: string;
-  cpu_vendor: string;
-  cpu_family: string;
-  cpu_model_number: string;
-  cpu_stepping: string;
-  microcode: string;
-  cpu_physical_cores: number;
-  cpu_logical_processors: number;
-  cpu_allowed_processors: number;
-  cpu_quota_cores: number | string;
-  cpu_quota_state: "unmetered" | "quota_enforced" | "unknown";
-  cpu_target_measured_at: string;
-  l3_cache_bytes: number;
-  cpu_observed_mhz: number;
-  cpu_reported_max_mhz: number;
-  flags: string[];
-  boot_seconds: number;
-  memcpy_gib_s: number;
-  memcpy_probe_mib: number;
-  vm_size: string;
-  vm_location: string;
-  vm_zone: string;
-  vm_fault_domain: string;
   runner_name: string;
-  measured_at: string;
+  run_id: string;
+  cpu_model: string;
+  cores: number;
+  total_memory_gb: number;
 }
 
 export interface SummaryStructuredOutput {
@@ -55,174 +33,65 @@ export interface PipelineEvent<T = any> {
 }
 
 // -------------------------------------------------------------
-// 2. HARDWARE FINGERPRINTING LOGIC (28 METRICS)
+// 2. TIMEOUT-FREE HTTP CLIENT (Bypasses Undici 300s limit)
 // -------------------------------------------------------------
-function parseCpuInfo(): Record<string, string> {
-  const result: Record<string, string> = {};
-  try {
-    const data = fs.readFileSync("/proc/cpuinfo", "utf8");
-    for (const line of data.split("\n")) {
-      const [key, value] = line.split(":").map((s) => s.trim());
-      if (key && value && !result[key]) {
-        result[key] = value;
+function postJsonNoTimeout(urlStr: string, payload: any): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const url = new URL(urlStr);
+    const bodyData = JSON.stringify(payload);
+
+    const req = http.request(
+      {
+        hostname: url.hostname,
+        port: url.port || 9931,
+        path: url.pathname,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(bodyData),
+        },
+        timeout: 0, // No client-side timeout: allow 4 CPU cores to finish evaluation
+      },
+      (res) => {
+        let raw = "";
+        res.setEncoding("utf8");
+        res.on("data", (chunk) => (raw += chunk));
+        res.on("end", () => {
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+            try {
+              resolve(JSON.parse(raw));
+            } catch (err) {
+              reject(new Error(`Failed to parse response JSON: ${raw}`));
+            }
+          } else {
+            reject(new Error(`llama-server responded with HTTP ${res.statusCode}: ${raw}`));
+          }
+        });
       }
-    }
-  } catch {}
-  return result;
-}
-
-function getL3CacheBytes(): number {
-  try {
-    const cacheDir = "/sys/devices/system/cpu/cpu0/cache";
-    if (fs.existsSync(cacheDir)) {
-      const indexes = fs.readdirSync(cacheDir);
-      for (const idx of indexes) {
-        const levelPath = `${cacheDir}/${idx}/level`;
-        if (fs.existsSync(levelPath) && fs.readFileSync(levelPath, "utf8").trim() === "3") {
-          const rawSize = fs.readFileSync(`${cacheDir}/${idx}/size`, "utf8").trim();
-          if (rawSize.endsWith("K")) return parseInt(rawSize) * 1024;
-          if (rawSize.endsWith("M")) return parseInt(rawSize) * 1024 * 1024;
-          return parseInt(rawSize);
-        }
-      }
-    }
-  } catch {}
-  return 0;
-}
-
-function getCpuQuota(): { quotaCores: number | string; quotaState: "unmetered" | "quota_enforced" | "unknown" } {
-  try {
-    if (fs.existsSync("/sys/fs/cgroup/cpu.max")) {
-      const [quota, period] = fs.readFileSync("/sys/fs/cgroup/cpu.max", "utf8").trim().split(" ");
-      if (quota === "max") return { quotaCores: "unmetered", quotaState: "unmetered" };
-      return { quotaCores: Number((parseInt(quota) / parseInt(period)).toFixed(2)), quotaState: "quota_enforced" };
-    }
-    if (fs.existsSync("/sys/fs/cgroup/cpu/cpu.cfs_quota_us")) {
-      const quota = parseInt(fs.readFileSync("/sys/fs/cgroup/cpu/cpu.cfs_quota_us", "utf8").trim());
-      const period = parseInt(fs.readFileSync("/sys/fs/cgroup/cpu/cpu.cfs_period_us", "utf8").trim());
-      if (quota < 0) return { quotaCores: "unmetered", quotaState: "unmetered" };
-      return { quotaCores: Number((quota / period).toFixed(2)), quotaState: "quota_enforced" };
-    }
-  } catch {}
-  return { quotaCores: "unknown", quotaState: "unknown" };
-}
-
-function getAllowedProcessors(): number {
-  try {
-    const status = fs.readFileSync("/proc/self/status", "utf8");
-    const match = status.match(/^Cpus_allowed_list:\s*(.+)$/m);
-    if (match?.[1]) {
-      const ranges = match[1].split(",");
-      let count = 0;
-      for (const r of ranges) {
-        const [start, end] = r.split("-").map(Number);
-        count += end !== undefined ? end - start + 1 : 1;
-      }
-      return count;
-    }
-  } catch {}
-  return os.cpus().length;
-}
-
-function benchmarkMemcpy(probeMib = 64): number {
-  const sizeBytes = probeMib * 1024 * 1024;
-  const src = Buffer.alloc(sizeBytes, 0x5a);
-  const dst = Buffer.alloc(sizeBytes);
-  const iterations = 20;
-  const start = performance.now();
-  for (let i = 0; i < iterations; i++) {
-    src.copy(dst);
-  }
-  const elapsedSeconds = (performance.now() - start) / 1000;
-  const totalGiB = (iterations * sizeBytes) / 1024 ** 3;
-  return Number((totalGiB / elapsedSeconds).toFixed(2));
-}
-
-async function getVmMetadata() {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 600);
-  try {
-    const res = await fetch("http://169.254.169.254/metadata/instance?api-version=2021-02-01", {
-      headers: { Metadata: "true" },
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
-    if (res.ok) {
-      const data: any = await res.json();
-      return {
-        vm_size: data.compute?.vmSize || "Azure_VM_16GB",
-        vm_location: data.compute?.location || "unknown",
-        vm_zone: data.compute?.zone || "unknown",
-        vm_fault_domain: data.compute?.platformFaultDomain || "unknown",
-      };
-    }
-  } catch {}
-
-  let dmiProduct = "unknown";
-  try {
-    dmiProduct = fs.readFileSync("/sys/class/dmi/id/product_name", "utf8").trim();
-  } catch {}
-
-  return {
-    vm_size: dmiProduct !== "unknown" ? dmiProduct : "GitHub-Hosted-16GB-Runner",
-    vm_location: process.env.RUNNER_ENVIRONMENT || "github-hosted",
-    vm_zone: "n/a",
-    vm_fault_domain: "n/a",
-  };
-}
-
-async function collectRunnerFingerprint(): Promise<HostFingerprint> {
-  const cpuInfo = parseCpuInfo();
-  const cpus = os.cpus();
-  const quota = getCpuQuota();
-  const vm = await getVmMetadata();
-  const probeMib = 64;
-
-  let maxMhz = 0;
-  try {
-    maxMhz = Number(
-      (parseInt(fs.readFileSync("/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq", "utf8").trim()) / 1000).toFixed(2)
     );
-  } catch {
-    maxMhz = cpus[0]?.speed || 0;
-  }
 
-  const flags = cpuInfo["flags"] ? cpuInfo["flags"].split(" ") : [];
+    req.on("error", reject);
+    req.write(bodyData);
+    req.end();
+  });
+}
 
+// -------------------------------------------------------------
+// 3. RUNNER FINGERPRINT
+// -------------------------------------------------------------
+function collectQuickFingerprint(): HostFingerprint {
+  const cpus = os.cpus();
   return {
-    run_id: process.env.GITHUB_RUN_ID || "local-run",
-    job: process.env.GITHUB_JOB || "ai-eval",
-    shard: process.env.SHARD_ID || "1/1",
-    cpu_model: cpuInfo["model name"] || cpus[0]?.model || "unknown",
-    cpu_vendor: cpuInfo["vendor_id"] || "unknown",
-    cpu_family: cpuInfo["cpu family"] || "unknown",
-    cpu_model_number: cpuInfo["model"] || "unknown",
-    cpu_stepping: cpuInfo["stepping"] || "unknown",
-    microcode: cpuInfo["microcode"] || "unknown",
-    cpu_physical_cores: parseInt(cpuInfo["cpu cores"] || "1", 10),
-    cpu_logical_processors: cpus.length,
-    cpu_allowed_processors: getAllowedProcessors(),
-    cpu_quota_cores: quota.quotaCores,
-    cpu_quota_state: quota.quotaState,
-    cpu_target_measured_at: new Date().toISOString(),
-    l3_cache_bytes: getL3CacheBytes(),
-    cpu_observed_mhz: parseFloat(cpuInfo["cpu MHz"] || `${cpus[0]?.speed || 0}`),
-    cpu_reported_max_mhz: maxMhz,
-    flags: flags.filter((f) => ["avx", "avx2", "avx512f", "fma", "sse4_2"].includes(f)),
-    boot_seconds: Math.floor(os.uptime()),
-    memcpy_gib_s: benchmarkMemcpy(probeMib),
-    memcpy_probe_mib: probeMib,
-    vm_size: vm.vm_size,
-    vm_location: vm.vm_location,
-    vm_zone: vm.vm_zone,
-    vm_fault_domain: vm.vm_fault_domain,
     runner_name: process.env.RUNNER_NAME || "local-runner",
-    measured_at: new Date().toISOString(),
+    run_id: process.env.GITHUB_RUN_ID || "local-run",
+    cpu_model: cpus[0]?.model || "unknown",
+    cores: cpus.length,
+    total_memory_gb: Number((os.totalmem() / 1024 ** 3).toFixed(2)),
   };
 }
 
 // -------------------------------------------------------------
-// 3. EVENT-DRIVEN PIPELINE ORCHESTRATION
+// 4. EVENT-DRIVEN ORCHESTRATOR
 // -------------------------------------------------------------
 class AIEventPipeline extends EventEmitter {
   private auditLog: PipelineEvent[] = [];
@@ -248,33 +117,41 @@ class AIEventPipeline extends EventEmitter {
   public async execute(
     inputText: string,
     systemPrompt: string,
-    serverUrl = "http://127.0.0.1:8080"
+    serverUrl = "http://127.0.0.1:9931"
   ): Promise<SummaryStructuredOutput> {
-    // Stage 1: Ingestion
+    // Event 1: Ingestion
     this.logEvent("INPUT_RECEIVED", {
-      inputTextPreview: inputText.substring(0, 100) + "...",
+      inputTextPreview: inputText.substring(0, 80) + "...",
       inputLengthChars: inputText.length,
       systemPrompt,
     });
 
-    // Stage 2: Inference Dispatch
+    // Event 2: Start Inference
     const startTime = performance.now();
     this.logEvent("INFERENCE_STARTED", {
       serverUrl,
       targetModel: "Ternary-Bonsai-2-27B-PTQ1_0",
-      contextCapacity: 65536,
       temperature: 0.2,
+      streaming: false,
     });
 
-    const response = await fetch(`${serverUrl}/v1/chat/completions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    // Clean terminal progress indicator (heartbeat every 15 seconds)
+    const progressInterval = setInterval(() => {
+      const elapsed = Math.round((performance.now() - startTime) / 1000);
+      console.log(`[PIPELINE] ⏳ Model is evaluating prompt on CPU (elapsed: ${elapsed}s)...`);
+    }, 15000);
+
+    let rawContent = "";
+    let usage: any = null;
+
+    try {
+      // POST without max_tokens and without streaming
+      const jsonResponse = await postJsonNoTimeout(`${serverUrl}/v1/chat/completions`, {
         messages: [
           {
             role: "system",
             content: `${systemPrompt}
-You MUST output ONLY a valid, parseable JSON object matching this schema:
+You MUST output ONLY a valid JSON object matching this schema:
 {
   "headline": "Short title",
   "executive_summary": "1-3 sentences",
@@ -288,27 +165,26 @@ You MUST output ONLY a valid, parseable JSON object matching this schema:
           },
         ],
         temperature: 0.2,
-        max_tokens: 1024,
+        stream: false,
         chat_template_kwargs: { enable_thinking: false },
-      }),
-    });
+      });
 
-    if (!response.ok) {
-      throw new Error(`llama-server responded with HTTP ${response.status}: ${await response.text()}`);
+      rawContent = jsonResponse.choices?.[0]?.message?.content || "";
+      usage = jsonResponse.usage;
+    } finally {
+      clearInterval(progressInterval);
     }
 
-    const jsonResponse: any = await response.json();
-    const rawContent = jsonResponse.choices?.[0]?.message?.content || "";
     const inferenceDurationMs = Math.round(performance.now() - startTime);
 
-    // Stage 3: Inference Completed
+    // Event 3: Completed
     this.logEvent("INFERENCE_COMPLETED", {
-      inferenceDurationMs,
-      usage: jsonResponse.usage,
+      durationMs: inferenceDurationMs,
+      usage,
       rawOutputLength: rawContent.length,
     });
 
-    // Stage 4: Parse & Validate JSON
+    // Event 4: Parse Structured JSON
     let parsed: any;
     try {
       const match = rawContent.match(/\{[\s\S]*\}/);
@@ -336,8 +212,20 @@ You MUST output ONLY a valid, parseable JSON object matching this schema:
 }
 
 // -------------------------------------------------------------
-// 4. GITHUB ACTIONS MARKDOWN REPORTER
+// 5. OUTPUT REPORTERS
 // -------------------------------------------------------------
+function printTerminalSummary(result: SummaryStructuredOutput) {
+  console.log("\n============================================================");
+  console.log("🎯 FINAL STRUCTURED SUMMARY RESULT");
+  console.log("============================================================");
+  console.log(`📌 Headline: ${result.headline}`);
+  console.log(`\n📝 Executive Summary:\n${result.executive_summary}\n`);
+  console.log("🔑 Key Takeaways:");
+  result.key_points.forEach((point) => console.log(`   • ${point}`));
+  console.log(`\n📊 Sentiment: [${result.sentiment.toUpperCase()}] | Compression: ${result.compression_ratio}`);
+  console.log("============================================================\n");
+}
+
 function publishStepSummary(
   fp: HostFingerprint,
   result: SummaryStructuredOutput,
@@ -347,27 +235,15 @@ function publishStepSummary(
   if (!summaryPath) return;
 
   const markdown = `
-## 🧠 AI Transformer Pipeline Execution Report (16GB RAM Runner)
+## 🧠 AI Transformer Pipeline Execution Report
 
-### 🖥️ Runner Host Hardware Fingerprint
-| Metric | Measured Value |
-| :--- | :--- |
-| **Runner Name** | \`${fp.runner_name}\` |
-| **Run ID / Job** | \`${fp.run_id}\` / \`${fp.job}\` (Shard: \`${fp.shard}\`) |
-| **VM Profile** | \`${fp.vm_size}\` (Loc: \`${fp.vm_location}\`, Zone: \`${fp.vm_zone}\`) |
-| **CPU Model** | **${fp.cpu_model}** |
-| **Vendor / Family / Stepping** | \`${fp.cpu_vendor}\` / \`${fp.cpu_family}\` (Model: \`${fp.cpu_model_number}\`, Stepping: \`${fp.cpu_stepping}\`) |
-| **Cores (Physical / Logical)** | **${fp.cpu_physical_cores}** physical / **${fp.cpu_logical_processors}** logical |
-| **Allowed / Quota Cores** | Allowed: **${fp.cpu_allowed_processors}** \| Quota: **${fp.cpu_quota_cores}** (\`${fp.cpu_quota_state}\`) |
-| **Clock (Observed / Max)** | \`${fp.cpu_observed_mhz} MHz\` / \`${fp.cpu_reported_max_mhz} MHz\` |
-| **L3 Cache Size** | **${(fp.l3_cache_bytes / (1024 * 1024)).toFixed(2)} MB** |
-| **Memory Bandwidth (\`memcpy\`)** | **${fp.memcpy_gib_s} GiB/s** (Probe size: \`${fp.memcpy_probe_mib} MiB\`) |
-| **Instruction Flags** | \`${fp.flags.join(", ") || "none detected"}\` |
-| **Boot Uptime** | \`${fp.boot_seconds}s\` |
+### 🖥️ Runner Snapshot
+- **Runner:** \`${fp.runner_name}\` | **Run ID:** \`${fp.run_id}\`
+- **CPU:** \`${fp.cpu_model}\` (${fp.cores} cores) | **RAM:** \`${fp.total_memory_gb} GB\`
 
 ---
 
-### 📝 Structured Model Summary: *"${result.headline}"*
+### 📝 Structured Summary: *"${result.headline}"*
 
 > **Executive Summary:**  
 > ${result.executive_summary}
@@ -375,10 +251,10 @@ function publishStepSummary(
 **Key Takeaways:**
 ${result.key_points.map((p) => `- ${p}`).join("\n")}
 
-| Attribute | Value |
+| Metric | Value |
 | :--- | :--- |
-| **Detected Sentiment** | \`${result.sentiment.toUpperCase()}\` |
-| **Compression Ratio** | \`${result.compression_ratio}\` |
+| **Sentiment** | \`${result.sentiment.toUpperCase()}\` |
+| **Compression** | \`${result.compression_ratio}\` |
 
 ---
 
@@ -401,34 +277,38 @@ ${JSON.stringify(events, null, 2)}
 }
 
 // -------------------------------------------------------------
-// 5. MAIN ENTRY POINT
+// 6. MAIN
 // -------------------------------------------------------------
 async function main() {
-  const fingerprint = await collectRunnerFingerprint();
+  const fingerprint = collectQuickFingerprint();
   console.log("Runner Hardware Captured:", {
     cpu: fingerprint.cpu_model,
-    cores: fingerprint.cpu_logical_processors,
-    bandwidth: `${fingerprint.memcpy_gib_s} GiB/s`,
+    cores: fingerprint.cores,
+    totalRam: `${fingerprint.total_memory_gb} GB`,
   });
 
   const pipeline = new AIEventPipeline();
 
-  // Attach real-time event loggers
-  pipeline.on("INPUT_RECEIVED", (e) => console.log(`[EVENT] Input Received: ${e.eventId}`));
-  pipeline.on("INFERENCE_STARTED", (e) => console.log(`[EVENT] Inference Started on ${e.payload.targetModel}`));
-  pipeline.on("INFERENCE_COMPLETED", (e) => console.log(`[EVENT] Inference Completed in ${e.payload.inferenceDurationMs}ms`));
-  pipeline.on("OUTPUT_STRUCTURED", () => console.log(`[EVENT] Structured Output Emitted`));
+  pipeline.on("INPUT_RECEIVED", (e) => console.log(`[EVENT] 📥 Input Received (${e.payload.inputLengthChars} chars)`));
+  pipeline.on("INFERENCE_STARTED", (e) =>
+    console.log(`[EVENT] 🚀 Dispatched to llama-server on port 9931 (Non-streaming, no timeout)`)
+  );
+  pipeline.on("INFERENCE_COMPLETED", (e) =>
+    console.log(`[EVENT] ✅ Model execution finished in ${Math.round(e.payload.durationMs / 1000)}s`)
+  );
+  pipeline.on("OUTPUT_STRUCTURED", () => console.log(`[EVENT] 📦 Structured JSON Validated`));
 
   const prompt =
-    process.env.PROMPT || "You are a concise analytical engine. Summarize the text accurately into key takeaways.";
+    process.env.PROMPT || "You are a concise analytical engine. Summarize the text accurately into key structured takeaways.";
   const inputText =
     process.env.INPUT_TEXT ||
     "Ternary quantization maps neural network weights to {-1, 0, +1}, enabling high compression rates while preserving reasoning capabilities. This architecture allows 27B parameter models to run within 6 GB of memory.";
 
   try {
     const result = await pipeline.execute(inputText, prompt);
+    printTerminalSummary(result);
     publishStepSummary(fingerprint, result, pipeline.getEventHistory());
-    console.log("Pipeline execution finished successfully.");
+    console.log("All pipeline stages executed successfully.");
   } catch (err) {
     console.error("Pipeline failure:", err);
     process.exit(1);
