@@ -1,4 +1,5 @@
-name: ornith-test
+name: ornith test
+
 on:
   workflow_dispatch:
     inputs:
@@ -9,9 +10,9 @@ on:
       model_file:
         description: 'GGUF Filename'
         required: false
-        default: 'ornith-1.0-9b-Q4_K_M.gguf'
+        default: ' ornith-1.0-9b-Q5_K_M.gguf'
       context_size:
-        description: 'Context Window Size (e.g. 8192, 16384, 65536)'
+        description: 'Context Window Size'
         required: false
         default: '16384'
       prompt:
@@ -21,7 +22,7 @@ on:
       input_text:
         description: 'Input text to summarize'
         required: false
-        default: 'Ornith-1.0 is an open-source model family designed for agentic coding and reasoning tasks. Built on top of modern dense architectures, the 9B parameter model delivers high throughput on consumer and continuous integration compute hardware when quantized to 4-bit precision.'
+        default: '[T]he government … ought to be so constituted as to protect the minority of the opulent against the majority.”     —James Madison, June 26, 1787      “[A positive interest rate policy is] basic income for those who already have money.”     —Warren Mosler, here  This is Part 5 of a brief series on money. We started it here, with a look at what dollars are. There we uncovered the most basic fact about dollars, obvious yet never ever acknowledged:  • You can’t create dollars. Only the government does that.  Everything else in this series proceeds from that fact. If you memorize that, you’ll understand everything. Our story so far:  • Part 1 is about the dollar: “Why ‘Entitlement’ Cuts May Succeed” • Part 2 explains why taxes are levied: “Why Governments Tax: A List” • Part 3 discusses the ‘deficit’: “What Is This ‘Deficit’ We Hear So Much About?” • Part 4 uncovers the true nature of the Treasuries market: “What Is the Federal Bond Market Really?”  And this, Part 5, addresses the question, “If our government makes dollars from nothing, what’s the ‘national debt’?”  To answer we need to go back to Part 4, and its discussion of the voluntary requirement to sell Treasury bonds. You can read that discussion, but in short, our government has voluntarily tied its own hands. Though it can create dollars directly, and it can authorize (via Congress) to spend as much as it wants, the Treasury is forced to sell bonds to finance itself entirely by choice, by laws that can be repealed.  Please support this site by sharing our work. Thanks!  Share First Principles First  To begin, consider these points:  • The source of all U.S. dollars is ultimately the government.  There’s no other source. The Fed creates dollars because the government says it can. Banks create dollars by lending beyond their reserves — lending cash they don’t have — because the government says it can. The government’s always in charge of dollar creation.  • Therefore, the government has no inherent need to borrow. Do airlines need to borrow “airline miles” to give them away? Of course not; they make them. End of.  • Each dollar spent by the government is a dollar in somebody’s pocket. No spending, no dollars.  • The Treasury is financed with bonds only because that’s the law. If those laws were repealed, the Treasury could just create dollars and buy what it needs.  • Treasury bonds are therefore a gift, offered to people with money. If you don’t have money, or not enough of it, you can’t buy government bonds. If you have money to spare, you can. The ‘National Debt’  So what’s the “national debt”? It’s the sum of all Treasury bonds held outside the government. This includes bonds held by you, by mutual funds and the like, by banks and the Fed itself, and by foreign governments and their own central banks.  Thus:  • The “national debt” is the market for U.S. Treasuries. • Because having a Treasuries market is voluntary, the “national debt” is really just an investment vehicle, a way to give money to people who already have money via interest payments. • The “national debt” is therefore not a debt, but a gift. Subscribe Why Have a Treasuries Market?  So why do we have it, this market for U.S. Treasuries?  First, think of the wealthy. The world of the rich needs a 100% guaranteed place to stash money, especially when the world seems unstable. The Treasuries market is that place.  Now think of the money supply. Dollars exist because government spends and because banks are permitted to lend money they don’t have. So if there’s too much money around, the government takes some of it back, reducing the supply.  How? Here’s where it gets interesting. Government has two ways of taking money out of the economy. The first is through federal taxes. Everyone is taxed, but the system is so skewed that the rich avoid being taxed almost entirely.      Between 2014 and 2018, Elon Musk’s wealth grew by $13.9 billion, yet he paid only $455 million in federal income taxes, resulting in an actual tax rate of about 3.27% (ProPublica, 2021). In contrast, the average American family’s effective federal income tax rate was 13.3% in 2018 (Tax Foundation, 2021). This stark difference highlights how the current tax system enables wealth accumulation without proportionate tax contributions. [emphasis mine]  And from ProPublica:      Some years billionaires pay no federal income taxes: Jeff Bezos paid zero in 2007 and 2011, Elon Musk paid zero in 2018, Michael Bloomberg paid zero several times in “recent years”, and George Soros paid zero three years in a row.  So how does the government extract excess money from the rich? That’s the second way: It pays the rich to surrender its cash temporarily by offering the Treasuries market. Bonds bought means money retired, at least for a while.  Two ways to reduce the money supply, taxation and the Treasuries market. Thus another of the great imbalances in our system. When government wants to reduce the money supply it extracts unreimbursed and involuntary-given money from you via your taxes, and reimbursed and voluntary-given money from the wealthy via Treasury bonds.  Or, as Cory Doctorow puts it:      Taxes coercively reduce the purchasing power of the private sector (they’re a stick). T-bills do the same thing, but voluntarily (they’re the carrot).  So What If the Government Paid Off the ‘National Debt’?  The answer has to be clear from what you just read. If the “national debt” is the market for U.S. Treasuries, and the government…      Repealed every law requiring the issuance of bonds, and      Paid off all Treasury bonds, bills and notes outstanding, and      Never issued new ones — not ever, not once  …the U.S. Treasuries market would disappear. In whole, not in part.  Does anyone with money want that? You may not care, though if you have enough to invest in a Treasury fund, you’d be getting above 5%. But the super-rich definitely care. They need a place to stash cash when nothing seems safe, and our government is nothing if not a servant of wealth (see quotes above).  The national debt is the sum of all “deficit” spending expressed as the total of publicly-held Treasury bonds. If we paid off the “debt,” we’d be in a whole new world.'
 
 jobs:
   run-inference:
@@ -40,11 +41,7 @@ jobs:
       # 1. TUNE SWAPPINESS & CONFIGURE 8GB SAFETY SWAP
       - name: Configure Linux Memory & Swappiness
         run: |
-          echo "=== Initial Swappiness & Memory ==="
-          cat /proc/sys/vm/swappiness
-          free -h
-
-          # Set swappiness to 1 (prevents aggressive paging of active RAM)
+          echo "Setting swappiness to 1 (prevents unnecessary paging to SSD)..."
           sudo sysctl vm.swappiness=1
 
           sudo swapoff -a || true
@@ -54,8 +51,8 @@ jobs:
           sudo mkswap /swapfile
           sudo swapon /swapfile
 
-          echo "=== Configured Memory ==="
-          free -h
+          echo "Swappiness value:"
+          cat /proc/sys/vm/swappiness
 
       # 2. Configure ES Module workspace for Node.js
       - name: Setup Node ES Module Workspace
@@ -63,7 +60,7 @@ jobs:
           if [ ! -f package.json ]; then npm init -y; fi
           npm pkg set type="module"
 
-      # 3. Download llama-server binary
+      # 3. Download Official llama-server binary
       - name: Download llama-server
         run: |
           mkdir -p ./bin
@@ -73,7 +70,7 @@ jobs:
           chmod +x ./bin/llama-server
           ./bin/llama-server --version || true
 
-      # 4. Cache & Download Model Dynamically via Inputs
+      # 4. Cache & Download Model from HuggingFace
       - name: Cache Model File
         id: cache-model
         uses: actions/cache@v4
@@ -117,7 +114,7 @@ jobs:
 
           SERVER_PID=$!
           echo "$SERVER_PID" > .llama_server.pid
-          echo "llama-server started (PID: $SERVER_PID). Monitoring health..."
+          echo "llama-server started (PID: $SERVER_PID). Monitoring health on port 9931..."
 
           READY=false
           for i in {1..60}; do
@@ -143,13 +140,14 @@ jobs:
             exit 1
           fi
 
-      # 6. Run Event Pipeline with Process Swap & Memory Telemetry
+      # 6. Run Event Pipeline with Diagnostics, Token Metrics & UUIDv5
       - name: Execute AI Event Pipeline
         env:
           PROMPT: "${{ github.event.inputs.prompt }}"
           INPUT_TEXT: "${{ github.event.inputs.input_text }}"
           SERVER_URL: "http://127.0.0.1:9931"
           MODEL_NAME: "${{ github.event.inputs.model_file || 'ornith-1.0-9b-Q4_K_M.gguf' }}"
+          SHARD_ID: "shard-1/1"
         run: |
           npx --yes tsx .github/scripts/ai-pipeline.ts
 
