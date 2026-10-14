@@ -30,7 +30,7 @@ jobs:
       - name: Allocate 8GB Linux Swap Space
         run: |
           sudo swapoff -a
-          sudo fallocate -l 8G /swapfile
+          sudo fallocate -l 16G /swapfile
           sudo chmod 600 /swapfile
           sudo mkswap /swapfile
           sudo swapon /swapfile
@@ -52,9 +52,12 @@ jobs:
           curl -L -o ./models/Ternary-Bonsai-2-27B-PTQ1_0.gguf \
             "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf/resolve/main/Ternary-Bonsai-2-27B-PTQ1_0.gguf"
 
-      - name: Install Runtime Dependencies
+      # FIXED STEP: Sets "type": "module" and runs postinstall scripts cleanly
+      - name: Setup Project as ES Module & Install Dependencies
         run: |
-          npm install node-llama-cpp
+          if [ ! -f package.json ]; then npm init -y; fi
+          npm pkg set type="module"
+          npm install node-llama-cpp --foreground-scripts
 
       - name: Execute AI Event Pipeline
         env:
