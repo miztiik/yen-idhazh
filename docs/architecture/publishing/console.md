@@ -209,9 +209,8 @@ silently dropped. Shared knobs follow the same production-reader audit, as
 [appearance configuration](../../concepts/config/appearance.md#console-surface)
 defines. This changes neither native ledger shapes nor private publication.
 
-The host registry assigns `measured_at` and `runner_name` to the live native
-evidence comparison in `backend/idhazh/telemetry/host_evidence_comparison.py`,
-not a server facade. Item `n_threads`, `n_batch`, `shard_item_count`,
+The host registry distinguishes recorded metadata from cells selected by a live
+console query. Item `n_threads`, `n_batch`, `shard_item_count`,
 `cpu_busy_max`, `cpu_busy_min` and `load_1m` remain recorded in `UNREAD_CELLS`.
 No current item query selects the last four. A column list, normalization or
 unused counter field is not an answer that reads a cell. Schema versions,

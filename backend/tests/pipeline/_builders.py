@@ -35,7 +35,6 @@ from idhazh.fetch import FetchResult
 from idhazh.stages import common
 from idhazh.stages.assemble import stage_assemble
 from idhazh.stages.work import stage_work
-from idhazh.telemetry.host_event_client import HostEventClient
 
 FULL_TEXT = (
     "Example Lab released a smaller model on Friday, claiming a 34 percent lower cost per "
@@ -322,7 +321,6 @@ def _work_stage(
     fetcher: Callable[[str], FetchResult] = captured_article_fetch,
     run_plan: RunPlan | None = None,
     hold_s: float = 0.0,
-    host_events: HostEventClient | None = None,
 ) -> tuple[RunPlan, Path, RecordedEndpoint]:
     """One real work stage over captured pages and recorded replies.
 
@@ -348,7 +346,6 @@ def _work_stage(
             scorer=None,
             fetcher=fetcher,
             model_endpoint=server.endpoint,
-            host_events=host_events,
         )
     return run_plan, tmp_path / "run" / run_plan.date / "items", server
 

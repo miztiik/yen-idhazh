@@ -11,7 +11,6 @@ export type Selection = {
 	backendFiles: string[] | null;
 	contracts: boolean;
 	tooling: boolean;
-	rust: boolean;
 	reasons: { path: string; groups: TestGroup[]; reason: string }[];
 };
 
@@ -137,68 +136,12 @@ const MODULE_TESTS: Record<string, string[]> = {
 const UTILITY_TESTS: Record<string, string> = {
 	'backend/utilities/doc_load.py': 'backend/tests/test_doc_load.py'
 };
-export const RUST_PARITY_TEST = 'backend/tests/contracts/test_rust_host_file_parity.py';
-export const RUST_STORE_TEST = 'backend/tests/test_rust_host_store_parity.py';
-export const RUST_RECEIPTS_TEST = 'backend/tests/test_rust_host_receipts.py';
-export const RUST_PRODUCERS_TEST = 'backend/tests/contracts/test_host_event_rust_parity.py';
-export const RUST_RESOURCES_TEST = 'backend/tests/test_host_event_resource_parity.py';
-const HOST_EVIDENCE_TESTS = [
-	'backend/tests/test_compare_host_telemetry.py',
-	'backend/tests/workflows/test_rust_host_telemetry_workflow.py'
-];
-export const RUST_TESTS = [RUST_PARITY_TEST, RUST_STORE_TEST, RUST_RECEIPTS_TEST, RUST_PRODUCERS_TEST, RUST_RESOURCES_TEST, ...HOST_EVIDENCE_TESTS];
-export const HOST_MIGRATION_TESTS = [
-	'backend/tests/contracts/test_host_migration.py',
-	'backend/tests/test_host_fingerprint_migration.py'
-];
-const HOST_TESTS: Record<string, string[]> = {
-	'.github/workflows/rust-host-telemetry.yml': [...HOST_EVIDENCE_TESTS, ...RUST_TESTS, ...HOST_MIGRATION_TESTS],
-	'config/host-telemetry-comparison.json': [...HOST_EVIDENCE_TESTS, ...RUST_TESTS, ...HOST_MIGRATION_TESTS],
-	'backend/idhazh/contracts/host_evidence.py': [...HOST_EVIDENCE_TESTS, ...RUST_TESTS],
-	'backend/idhazh/telemetry/host_evidence_inputs.py': [...HOST_EVIDENCE_TESTS, ...RUST_TESTS, ...HOST_MIGRATION_TESTS],
-	'backend/idhazh/telemetry/host_evidence_comparison.py': [...HOST_EVIDENCE_TESTS, ...RUST_TESTS, ...HOST_MIGRATION_TESTS],
-	'backend/idhazh/telemetry/host_evidence_artifacts.py': [...HOST_EVIDENCE_TESTS, ...RUST_TESTS, ...HOST_MIGRATION_TESTS],
-	'backend/idhazh/telemetry/host_evidence_samples.py': [...HOST_EVIDENCE_TESTS, RUST_RESOURCES_TEST],
-	'backend/utilities/compare_host_telemetry.py': [...HOST_EVIDENCE_TESTS, ...RUST_TESTS],
-	'backend/utilities/host_telemetry_session.py': [...HOST_EVIDENCE_TESTS, ...RUST_TESTS],
-	'backend/utilities/host_telemetry_reference.py': [...HOST_EVIDENCE_TESTS, ...RUST_TESTS],
-	'backend/utilities/host_telemetry_workload.py': [...HOST_EVIDENCE_TESTS, ...RUST_TESTS],
-	'backend/utilities/host_telemetry_measurement.py': HOST_EVIDENCE_TESTS,
-	'backend/tests/workflows/_harness.py': ['backend/tests/workflows/test_triggers.py', 'backend/tests/workflows/test_workflow_inputs.py', ...HOST_EVIDENCE_TESTS],
-	'config/host-history-migration.json': HOST_MIGRATION_TESTS,
-	'backend/idhazh/contracts/host_migration.py': HOST_MIGRATION_TESTS,
-	'backend/idhazh/telemetry/host_history_files.py': HOST_MIGRATION_TESTS,
-	'backend/idhazh/telemetry/host_history_migration.py': HOST_MIGRATION_TESTS,
-	'backend/idhazh/telemetry/host_history_bundle.py': HOST_MIGRATION_TESTS,
-	'backend/idhazh/telemetry/host_history_paths.py': HOST_MIGRATION_TESTS,
-	'backend/utilities/migrate_host_fingerprints.py': HOST_MIGRATION_TESTS,
-	'tests/fixtures/host-events/history-migration.json': HOST_MIGRATION_TESTS,
-	'backend/idhazh/contracts/host_events.py': ['backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_event_files.py', ...RUST_TESTS],
-	'backend/idhazh/contracts/host_output.py': ['backend/tests/contracts/test_host_output.py', 'backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_output_verify.py', ...RUST_TESTS],
-	'backend/idhazh/telemetry/host_event_files.py': ['backend/tests/test_host_event_files.py'],
-	'backend/idhazh/telemetry/host_output_verify.py': ['backend/tests/test_host_output_verify.py', ...RUST_TESTS],
-	'backend/idhazh/telemetry/host_parquet_admission.py': ['backend/tests/test_host_parquet_admission.py', 'backend/tests/test_host_output_verify.py', ...RUST_TESTS],
-	'backend/utilities/verify_host_output.py': ['backend/tests/test_host_output_verify.py'],
-	'config/host-telemetry-experiment.json': ['backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_event_files.py', ...RUST_TESTS, ...HOST_MIGRATION_TESTS],
-	'tests/fixtures/host-events/file-parity.json': [RUST_PARITY_TEST],
-	'tests/fixtures/host-events/storage-parity.json': [RUST_STORE_TEST],
-	'tests/fixtures/host-events/publication-parity.json': [RUST_RECEIPTS_TEST],
-	'tests/fixtures/host-events/probe-clock.json': [RUST_PRODUCERS_TEST],
-	'tests/fixtures/host-events/resource-windows.json': [RUST_RESOURCES_TEST, 'backend/tests/test_host_readings.py', 'backend/tests/test_memory_sampler.py'],
-	'tests/fixtures/host-events/manifest.json': ['backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_event_files.py', ...RUST_TESTS],
-	'tests/fixtures/host-events/cpu-snapshots.json': ['backend/tests/contracts/test_host_output.py', RUST_PRODUCERS_TEST],
-	'tests/fixtures/host-events/fingerprint-versions.json': ['backend/tests/contracts/test_host_output.py', RUST_PRODUCERS_TEST],
-	'tests/fixtures/runtime/2026-08-29-3-shard-0.server-head.txt': [RUST_PRODUCERS_TEST],
-	'tests/fixtures/runtime/2026-08-26-5-shard-0.prom': [RUST_PRODUCERS_TEST]
-};
-
 export function selectPaths(paths: readonly string[]): Selection {
 	const groups = new Set<TestGroup>();
 	const backendFiles = new Set<string>();
 	let fullBackend = false;
 	let contracts = false;
 	let tooling = false;
-	let rust = false;
 	const reasons: Selection['reasons'] = [];
 	for (const original of [...new Set(paths)].sort()) {
 		const path = original.replaceAll('\\', '/');
@@ -209,16 +152,6 @@ export function selectPaths(paths: readonly string[]): Selection {
 			reason = 'documentation a test reads';
 		} else if (/^(docs\/|TODO\/|(?:README|AGENTS|CLAUDE)\.md$|\.claude\/|\.github\/(agents|instructions|prompts|skills)\/)/.test(path)) {
 			selected = [];
-		} else if (path.startsWith('backend/rust/host-telemetry/') || RUST_TESTS.includes(path)) {
-			selected = ['backend'];
-			for (const file of RUST_TESTS) backendFiles.add(file);
-			rust = true;
-			reason = 'native Rust module checks and actual cross-language codec fixtures';
-		} else if (Object.hasOwn(HOST_TESTS, path)) {
-			selected = ['backend'];
-			for (const file of HOST_TESTS[path]) backendFiles.add(file);
-			rust ||= HOST_TESTS[path].some((file) => RUST_TESTS.includes(file));
-			reason = 'isolated host exchange/verifier tests and declared native consumers';
 		} else if (/^backend\/tests\/(?:[^/]+\/)?test_[^/]+\.py$/.test(path)) {
 			selected = ['backend'];
 			backendFiles.add(path);
@@ -292,7 +225,7 @@ export function selectPaths(paths: readonly string[]): Selection {
 			fullBackend = true;
 			reason = 'shared or unknown input; full coverage';
 		}
-		if (!Object.hasOwn(HOST_TESTS, path) && /^(config\/|backend\/idhazh\/contracts\/|pyproject\.toml$)/.test(path)) {
+		if (/^(config\/|backend\/idhazh\/contracts\/|pyproject\.toml$)/.test(path)) {
 			contracts = true;
 		}
 		if (/^(frontend\/(scripts\/|playwright(?:\.logic)?\.config\.ts$|package(?:-lock)?\.json$)|\.github\/workflows\/ci\.yml$|backend\/utilities\/gate_lock\.py$|pyproject\.toml$|unresolved-change-base$|full-ci-run$)/.test(path)) {
@@ -306,7 +239,6 @@ export function selectPaths(paths: readonly string[]): Selection {
 		backendFiles: fullBackend ? null : [...backendFiles].sort(),
 		contracts,
 		tooling,
-		rust: rust || fullBackend,
 		reasons
 	};
 }

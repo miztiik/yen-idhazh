@@ -257,7 +257,6 @@ def run_benchmarks(
     output: Path,
     resources_report: Path,
     memory_profiling_enabled: bool = True,
-    native: bool = False,
     host_telemetry_enabled: bool = True,
 ) -> list[dict[str, Any]]:
     """Run the bench and hand back the rows it printed.
@@ -278,7 +277,7 @@ def run_benchmarks(
                     file=sys.stderr,
                     flush=True,
                 )
-                before = {} if native or not host_telemetry_enabled else resource_snapshot(
+                before = {} if not host_telemetry_enabled else resource_snapshot(
                     memory_profiling_enabled=memory_profiling_enabled
                 )
                 started = time.monotonic()
@@ -303,7 +302,7 @@ def run_benchmarks(
                         "wall_seconds": time.monotonic() - started,
                         "returncode": result.returncode,
                         "before": before,
-                        "after": {} if native or not host_telemetry_enabled else resource_snapshot(
+                        "after": {} if not host_telemetry_enabled else resource_snapshot(
                             memory_profiling_enabled=memory_profiling_enabled
                         ),
                     }
@@ -946,20 +945,11 @@ def run_bench(args: argparse.Namespace) -> int:
     from idhazh.telemetry import job_machine
     from idhazh.telemetry.host_control import enabled as host_telemetry_enabled
 
-    settings = config.load(getattr(args, "config", Path("config")))
-    events = job_machine.from_environment(settings)
-    if events is not None and not all(
-        getattr(args, name, None) for name in ("date", "execution", "commit")
-    ):
-        raise ValueError("native benchmark requires --date, --execution and --commit")
-    memory = (
-        events.manifest.controls.memory_profiling_enabled
-        if events is not None
-        else {"on": True, "off": False}.get(
-            getattr(args, "memory_profiling", None) or "",
-            settings.app.observability.memory_profiling_enabled,
-        )
+    settings = config.with_memory_profiling_override(
+        config.load(getattr(args, "config", Path("config"))),
+        {"on": True, "off": False}.get(getattr(args, "memory_profiling", None) or ""),
     )
+    memory = settings.app.observability.memory_profiling_enabled
     models: list[Path] = []
     fetch_seconds: float | None = None
     args.weights_report.parent.mkdir(parents=True, exist_ok=True)
@@ -989,9 +979,8 @@ def run_bench(args: argparse.Namespace) -> int:
             state_root=common.state_root_of(settings, base=common.STATE_ROOT),
             commit_sha=args.commit,
             job=ServerJob.RUNTIME,
-            host_events=events,
         )
-        if events is not None
+        if all(getattr(args, name, None) for name in ("date", "execution", "commit"))
         else nullcontext()
     )
     with machine:
@@ -1005,7 +994,6 @@ def run_bench(args: argparse.Namespace) -> int:
             output=args.output,
             resources_report=args.resources_report,
             memory_profiling_enabled=memory,
-            native=events is not None and events.native,
             host_telemetry_enabled=host_telemetry_enabled(settings.app.observability),
         )
     subprocess.run(

@@ -97,8 +97,6 @@ jobs:
     needs: scope
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      CARGO_TARGET_DIR: ${{ github.workspace }}/backend/var/rust-host-telemetry
     steps:
       # Two commits rather than one, for the plan-queue check below. A pull
       # request is checked out as a merge commit whose first parent is the base
@@ -112,24 +110,6 @@ jobs:
       # below it is about code, and a documentation change skips all of it.
       - name: Whitespace
         run: git diff --check HEAD^1 HEAD
-
-      - name: Pinned locked Rust preparation
-        if: needs.scope.outputs.code == 'true'
-        working-directory: backend/rust/host-telemetry
-        run: |
-          rustup show active-toolchain
-          cargo fetch --locked
-          cargo build --locked --all-targets
-
-      - name: Offline Rust module gates
-        if: needs.scope.outputs.code == 'true'
-        working-directory: backend/rust/host-telemetry
-        env:
-          CARGO_NET_OFFLINE: 'true'
-        run: |
-          cargo fmt --all -- --check
-          cargo clippy --locked --offline --all-targets -- -D warnings
-          cargo test --locked --offline
 
       - uses: actions/setup-node@v7
         if: needs.scope.outputs.code == 'true'
@@ -159,14 +139,6 @@ jobs:
         if: needs.scope.outputs.code == 'true'
         run: >-
           pytest --junitxml=test-results/backend/pytest-junit.xml
-          --ignore=backend/tests/test_host_history_maintenance.py
-
-      # Offline writer inspection must not race the parallel suite's child processes.
-      - name: Offline maintenance, without parallel producers
-        if: needs.scope.outputs.code == 'true'
-        run: >-
-          pytest -n 0 backend/tests/test_host_history_maintenance.py
-          --junitxml=test-results/backend/pytest-offline-junit.xml
 
       # Per-module timing for `docs/how-to/run-the-gates.md`'s "re-check the
       # slow marks" step. `pytest --durations` already names the 25 slowest
@@ -178,9 +150,7 @@ jobs:
         if: ${{ !cancelled() && needs.scope.outputs.code == 'true' }}
         with:
           name: pytest-junit
-          path: |
-            test-results/backend/pytest-junit.xml
-            test-results/backend/pytest-offline-junit.xml
+          path: test-results/backend/pytest-junit.xml
           retention-days: 7
           if-no-files-found: error
 

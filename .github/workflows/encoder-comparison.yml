@@ -32,12 +32,11 @@ on:
         type: boolean
         default: false
       host_telemetry:
-        description: 'Rust host collector, legacy rollback, or off for all host telemetry'
+        description: 'Python host collector, or off for all host telemetry'
         type: choice
-        default: rust
+        default: python
         options:
-          - rust
-          - legacy
+          - python
           - 'off'
       memory_profiling:
         description: 'OS memory and fault collection; inherit reads shared config'
@@ -63,12 +62,11 @@ concurrency:
 env:
   SET_DIRECTORY: corpus/encoder-comparison-1
   PYTHONPATH: ${{ github.workspace }}/backend
-  IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry || 'rust' }}
+  IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry || 'python' }}
+  MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
 
 jobs:
   pairs:
-    env:
-      IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry == 'off' && 'off' || 'legacy' }}
     name: Build the pair set
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -157,28 +155,15 @@ jobs:
           cache-dependency-path: pyproject.toml
       - name: Install
         run: pip install --quiet -e .
-      - name: Resolve host telemetry before native setup
+      - name: Resolve host telemetry
         id: host_telemetry
         env:
-          REQUESTED: ${{ inputs.host_telemetry || 'rust' }}
+          REQUESTED: ${{ inputs.host_telemetry || 'python' }}
         run: |
           set -euo pipefail
           MODE=$(python backend/utilities/host_telemetry_control.py "$REQUESTED" --config-root config)
           echo "IDHAZH_HOST_TELEMETRY_MODE=$MODE" >> "$GITHUB_ENV"
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
-      - name: Select the pinned host toolchain
-        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
-        working-directory: backend/rust/host-telemetry
-        run: echo "RUSTUP_TOOLCHAIN=$(rustup show active-toolchain | cut -d' ' -f1)" >> "$GITHUB_ENV"
-      - uses: actions/cache@v6
-        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
-        with:
-          path: ~/.cargo/registry
-          key: host-crates-${{ runner.os }}-${{ hashFiles('backend/rust/host-telemetry/Cargo.lock', 'backend/rust/host-telemetry/rust-toolchain.toml') }}
-      - uses: ./.github/actions/d7-host-telemetry
-        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'rust'
-        with:
-          enabled: ${{ env.IDHAZH_HOST_TELEMETRY_MODE == 'rust' }}
 
       - uses: actions/download-artifact@v4
         with:
@@ -224,7 +209,6 @@ jobs:
         run: |
           set -euo pipefail
           DATE="$(date -u +%F)"
-          MEMORY_PROFILING="${{ inputs.memory_profiling || 'inherit' }}"
           ENCODER_SHARD="${{ strategy.job-index }}"
           # The maths libraries under the encoder read these, and they do not
           # read the thread count the program asks for. Left unset, a library
@@ -241,11 +225,7 @@ jobs:
             exit 1
           fi
           mkdir -p readings logs vectors
-          python3 backend/utilities/d7_host_telemetry.py run \
-            --mode "$IDHAZH_HOST_TELEMETRY_MODE" --job collect \
-            --run-id "${DATE}-${GITHUB_RUN_ID}" --git-sha "$GITHUB_SHA" \
-            --shard "$ENCODER_SHARD" --memory-profiling "$MEMORY_PROFILING" -- \
-            python3 backend/utilities/compare_summary_encoders.py score \
+          python3 backend/utilities/compare_summary_encoders.py score \
             --slug "$ENCODER" \
             --pairs "$SET_DIRECTORY/pairs.json" \
             --out "readings/$ENCODER.json" \
@@ -259,22 +239,6 @@ jobs:
           if reading["state"] != "measured":
              sys.exit(reading.get("reason") or reading["state"])'
 
-      - name: Refuse to publish an unverified encoder reading
-        if: always()
-        run: |
-          if [ "$IDHAZH_HOST_TELEMETRY_MODE" = rust ] \
-             && [ "${IDHAZH_HOST_TELEMETRY_VERIFIED:-0}" != 1 ]; then
-            echo "D7 receipt verification failed; refusing to publish encoder evidence" >&2
-            exit 1
-          fi
-      - name: Clean up the owned D7 monitor
-        if: always()
-        run: |
-          if [ "$IDHAZH_HOST_TELEMETRY_MODE" = rust ] \
-             && [ -n "${IDHAZH_HOST_TELEMETRY_SESSION:-}" ]; then
-            python3 backend/utilities/d7_host_telemetry.py cleanup \
-               --workspace "$IDHAZH_HOST_TELEMETRY_SESSION"
-          fi
 
       # `always()`, so a shard stopped at the deadline still hands over the
       # part-finished reading and the log that says where it stopped.
@@ -285,12 +249,27 @@ jobs:
           path: |
             readings/${{ matrix.encoder }}.json
             logs/${{ matrix.encoder }}.log
-            host.log
             runtime.txt
-            state/raw/host-fingerprint
-            backend/var/d7-host-telemetry
           retention-days: 7
           if-no-files-found: warn
+
+      - name: Upload the encoder host record
+        if: always() && env.IDHAZH_HOST_TELEMETRY_MODE == 'python'
+        uses: actions/upload-artifact@v4
+        with:
+          name: host-record-${{ matrix.encoder }}
+          path: state/raw/host-fingerprint
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Upload the encoder host log
+        if: always() && env.IDHAZH_HOST_TELEMETRY_MODE == 'python'
+        uses: actions/upload-artifact@v4
+        with:
+          name: host-log-${{ matrix.encoder }}
+          path: host.log
+          retention-days: 7
+          if-no-files-found: ignore
 
       # Separate, because the vectors are large and only one later job wants
       # them. Which pairs deserve a person's judgement depends on where the
@@ -305,8 +284,6 @@ jobs:
           if-no-files-found: warn
 
   collect:
-    env:
-      IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry == 'off' && 'off' || 'legacy' }}
     name: Merge the readings
     needs: [pairs, score]
     if: always()

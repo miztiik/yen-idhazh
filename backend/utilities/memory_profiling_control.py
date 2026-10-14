@@ -7,16 +7,19 @@ import json
 from pathlib import Path
 
 from idhazh.contracts.app_config import AppConfig
+from idhazh.telemetry.host_control import enabled
 
 
 def resolve(request: str, config_root: Path) -> bool:
+    if request not in ("inherit", "on", "off"):
+        raise ValueError("memory profiling must be inherit, on or off")
+    app = AppConfig.from_json((config_root / "idhazh.json").read_text(encoding="utf-8"))
+    if not enabled(app.observability):
+        return False
     if request == "on":
         return True
     if request == "off":
         return False
-    if request != "inherit":
-        raise ValueError("memory profiling must be inherit, on or off")
-    app = AppConfig.from_json((config_root / "idhazh.json").read_text(encoding="utf-8"))
     return app.observability.memory_profiling_enabled
 
 

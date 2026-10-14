@@ -65,12 +65,6 @@ outputs:
   weights_file:
     description: 'The bare weights filename, for a loaded-path assertion.'
     value: ${{ steps.model.outputs.summarizer_file }}
-  server_pid:
-    description: 'The live llama-server PID after the readiness boundary.'
-    value: ${{ steps.identity.outputs.server_pid }}
-  server_start_ticks:
-    description: 'Linux /proc start ticks for PID-reuse-safe ownership.'
-    value: ${{ steps.identity.outputs.server_start_ticks }}
 
 runs:
   using: composite
@@ -224,14 +218,3 @@ runs:
           curl -s "${PROBE_URL}/props" >&2 || true
           exit 1
         }
-
-    - name: Export the server identity boundary
-      id: identity
-      shell: bash
-      run: |
-        set -euo pipefail
-        selected="$(python3 backend/utilities/model_runtime.py export-server-identity)"
-        echo "$selected" >> "$GITHUB_OUTPUT"
-        echo "$selected" | sed \
-          -e 's/^server_pid=/IDHAZH_MODEL_SERVER_PID=/' \
-          -e 's/^server_start_ticks=/IDHAZH_MODEL_SERVER_START_TICKS=/' >> "$GITHUB_ENV"

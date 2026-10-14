@@ -15,11 +15,13 @@ whether the readings are right, and whether two rows of one shard can disagree.
 from __future__ import annotations
 
 import os
+import sys
 import threading
 from collections import Counter
 from collections.abc import Callable, Iterator
 from dataclasses import fields
 from pathlib import Path
+from types import FrameType
 
 import pytest
 from conftest import FIXTURES_DIR, read_text
@@ -40,6 +42,56 @@ PROC_STAT_AT_END = FIXTURES_DIR / "runtime" / "2026-08-30-probe-proc-stat-at-end
 PROBE_SECONDS = 20
 PROBE_PROCESSORS = 4
 USER_HZ = 100
+
+
+@pytest.mark.parametrize("memory", [True, False], ids=["memory-on", "memory-off"])
+def test_memory_control_keeps_cpu_but_skips_memory_and_fault_reads(
+    tmp_path: Path, monkeypatch: MonkeyPatch, memory: bool
+) -> None:
+    proc = tmp_path / "proc"
+    proc.mkdir()
+    stat = proc / "stat"
+    stat.write_text(read_text(PROC_STAT_AT_START), encoding="ascii")
+    (proc / "loadavg").write_text("1.00 0.50 0.25 1/1 7\n", encoding="ascii")
+    (proc / "meminfo").write_text(
+        "MemTotal: 16000 kB\nMemAvailable: 12000 kB\nCached: 4000 kB\n"
+        "SwapFree: 0 kB\nSwapTotal: 0 kB\n", encoding="ascii"
+    )
+    for pid in (os.getpid(), 7):
+        process = proc / str(pid)
+        process.mkdir(exist_ok=True)
+        (process / "status").write_text(
+            "VmRSS: 100 kB\nVmHWM: 200 kB\nRssAnon: 80 kB\n", encoding="ascii"
+        )
+    for name, path in (
+        ("PROC", proc), ("PROC_STAT", stat),
+        ("LOADAVG", proc / "loadavg"), ("MEMINFO", proc / "meminfo")
+    ):
+        monkeypatch.setattr(host, name, path)
+    calls: list[str] = []
+
+    def profile(frame: FrameType, event: str, argument: object) -> None:
+        if event == "call" and frame.f_globals.get("__name__") == host.__name__:
+            calls.append(frame.f_code.co_name)
+
+    previous = sys.getprofile()
+    sys.setprofile(profile)
+    try:
+        watch = host.Watch(interval_s=0, server_pid=7, memory_profiling_enabled=memory)
+        stat.write_text(read_text(PROC_STAT_AT_END), encoding="ascii")
+        cells = watch.close()
+    finally:
+        sys.setprofile(previous)
+    assert cells.cpu_busy_pct is not None
+    assert cells.load_1m == 1.0
+    if memory:
+        assert cells.llama_rss_bytes == 100 * 1024
+        assert cells.os_mem_available_bytes == 12000 * 1024
+        assert "status_bytes" in calls and "major_faults" in calls
+    else:
+        assert all(value is None for name, value in cells.cells().items()
+                   if name.startswith(("llama_", "python_", "os_")))
+        assert not {"status_bytes", "meminfo_bytes", "major_faults"} & set(calls)
 
 
 def test_a_machine_with_no_proc_records_empty_and_never_raises() -> None:

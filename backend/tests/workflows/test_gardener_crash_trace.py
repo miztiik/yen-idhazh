@@ -64,9 +64,6 @@ IDHAZH_ENTRY: Final = REPO_ROOT / "backend" / "idhazh" / "__main__.py"
 #: The router both package entry forms call.
 IDHAZH_ROUTER: Final = REPO_ROOT / "backend" / "idhazh" / "cli.py"
 
-#: The Rust host-telemetry wrapper is another standalone workflow program.
-D7_HOST_TELEMETRY: Final = REPO_ROOT / "backend" / "utilities" / "d7_host_telemetry.py"
-
 #: Both installed forms of the package command. They must install the same
 #: process-wide crash boundary before routing a verb.
 IDHAZH_FORMS: Final = ("console-script", "python-module")
@@ -176,16 +173,6 @@ def the_squash_crashes(root: Path) -> tuple[list[str], str]:
     ], "FileNotFoundError"
 
 
-def a_d7_host_telemetry_crashes(root: Path) -> tuple[list[str], str]:
-    """Read a directory as the monitor record, under an isolated planted path."""
-    workspace = root / PLANTED
-    workspace.mkdir()
-    (workspace / "manifest.json").write_text("{}", encoding="ascii")
-    monitor = workspace / "monitor.json"
-    monitor.mkdir()
-    return ["cleanup", "--workspace", str(workspace)], what_reading_refuses(monitor)
-
-
 def what_reading_refuses(folder: Path) -> str:
     """What reading a folder as a file raises here: IsADirectoryError, or on Windows PermissionError."""
     try:
@@ -221,13 +208,12 @@ def a_prune_crashes(root: Path) -> tuple[list[str], str]:
     ], "FileNotFoundError"
 
 
-#: The five programs the workflow runs, each with the input that ends it.
+#: The four programs the workflow runs, each with the input that ends it.
 CRASHES: Final = (
     Crash(GARDENER_PLAN_MODULE, True, the_planner_crashes),
     Crash(GARDENER_SHARD_MODULE, False, a_shard_crashes),
     Crash(SQUASH_DUE_MODULE, True, the_due_check_crashes),
     Crash(PRUNE_PUSH_MODULE, False, the_squash_crashes),
-    Crash(D7_HOST_TELEMETRY, False, a_d7_host_telemetry_crashes),
 )
 
 #: The two commands a person runs on gardener code, which no workflow runs.

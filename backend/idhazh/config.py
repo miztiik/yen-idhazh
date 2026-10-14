@@ -233,7 +233,7 @@ def load(config_dir: Path = DEFAULT_CONFIG_DIR) -> Settings:
     appearance = AppearanceConfig.from_json(
         (config_dir / _APPEARANCE_FILE).read_text(encoding="utf-8")
     )
-    return Settings(
+    settings = Settings(
         app=app,
         council=council,
         models=models,
@@ -250,6 +250,9 @@ def load(config_dir: Path = DEFAULT_CONFIG_DIR) -> Settings:
         ),
         config_dir=config_dir,
     )
+    from idhazh.telemetry.host_control import memory_override
+
+    return with_memory_profiling_override(settings, memory_override())
 
 
 def with_memory_profiling_override(settings: Settings, override: bool | None) -> Settings:
@@ -358,6 +361,11 @@ def load_gardener(config_dir: Path = DEFAULT_CONFIG_DIR) -> GardenerSettings:
     gardener = _gardener_config(config_dir)
     tasks = _declarations(config_dir, gardener.task_names)
     app = AppConfig.from_json((config_dir / _FILES[0]).read_text(encoding="utf-8"))
+    from idhazh.telemetry.host_control import memory_override
+
+    override = memory_override()
+    if override is not None:
+        app.observability.memory_profiling_enabled = override
     appearance = AppearanceConfig.from_json(
         (config_dir / _APPEARANCE_FILE).read_text(encoding="utf-8")
     )

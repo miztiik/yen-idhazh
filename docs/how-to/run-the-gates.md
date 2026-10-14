@@ -92,25 +92,6 @@ fixture builder still compiles its fixed named source inventory.
 A removed item-health file returns HTTP 404 even when a held request resumes
 during a state transition. Other filesystem errors still fail the private preview.
 
-### Native host codec checks
-
-The `rust` group runs the pinned host crate and its named Python native-file
-parity tests. Prepare Rust 1.95.0 with `clippy` and `rustfmt` before running it.
-The launcher refuses missing toolchains/components rather than downloading them
-inside tests. Locked dependency preparation/build precedes offline
-fmt, clippy and Cargo tests. CI does the same before the full backend suite.
-
-```powershell
-npm --prefix frontend run test:changed -- --group rust --python <python-executable>
-```
-
-Native tests write under `backend/var/`, never the production ledger. The Python
-parity checks read both the Rust test harness's actual files and the native
-fixture command's actual files. Missing binaries or evidence fail. On Windows
-the launcher locates MSVC BuildTools and calls its environment setup and Cargo
-in the same `cmd.exe` process. Build/test scratch roots are project-owned;
-machine-wide gate seats retain their original shared location.
-
 Run records under `backend/var/checks/` hold the source fingerprint, selected
 groups and specs, exit status, step durations, test counts and queue/startup
 time separately. Logic and browser reports use separate output directories.
@@ -406,14 +387,6 @@ configured arguments.
 python backend/utilities/gate_lock.py -- python -m pytest -n auto
 ```
 
-Offline process-inspection tests are the exception. Their real machine-wide
-writer checks must not race the parallel suite's child processes as those
-processes start or exit. CI runs the ordinary suite first, excluding
-`backend/tests/test_host_history_maintenance.py`, then runs that module with
-`-n 0` after all parallel workers exit. Every case still runs; no writer-safety
-assertion, refusal or timeout is weakened. Use the same order for a local full
-run that includes this module.
-
 Tests that bind a port use an ephemeral one. Generated inputs stay outside
 tracked roots; a completed run leaves `git status --porcelain` empty.
 
@@ -446,8 +419,6 @@ and `-m slow` picks the slow modules on purpose.
 
 **Re-check `slow` from a real run rather than guessing.** The gates job
 uploads its JUnit report as the `pytest-junit` artifact (7-day retention).
-The artifact also contains `pytest-offline-junit.xml` for the isolated
-process-inspection module. Audit both reports when checking the whole suite.
 After a run, `gh run download <run-id> -n pytest-junit -D <dir>`, then run
 `python -m utilities.slow_mark_audit <dir>/pytest-junit.xml` from `backend/`.
 It reads the threshold from `config/test-marks.json`, averages each module's

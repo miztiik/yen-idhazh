@@ -12,7 +12,9 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
+from conftest import CONFIG_DIR
 
+from idhazh import config
 from utilities import memory_sampler
 
 #: The program, run the way a workflow step runs it.
@@ -22,6 +24,25 @@ MODULE: Final = Path(memory_sampler.__file__).resolve()
 #: that a failure. Generous, because it is bounding a scheduler and not a
 #: computation.
 PATIENCE_SECONDS: Final = 30.0
+
+
+@pytest.mark.parametrize("control", ["host-off", "memory-off", "master-off"])
+def test_off_controls_create_no_sampler_or_artifacts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, control: str
+) -> None:
+    app = config.load(CONFIG_DIR).app
+    if control == "master-off":
+        app.observability.host_telemetry_enabled = False
+    root = tmp_path / "config"
+    root.mkdir()
+    (root / "idhazh.json").write_text(app.to_json(), encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MODE", "off" if control == "host-off" else "python")
+    monkeypatch.setenv("MEMORY_PROFILING", "off" if control == "memory-off" else "on")
+    assert memory_sampler.main([
+        "start-sampler", "--pid", "7", "--config-root", str(root)
+    ]) == 0
+    assert {p.name for p in tmp_path.iterdir()} == {"config"}
 
 #: `os.getsid` is the one call that proves detachment rather than describing it,
 #: and neither it nor `setsid` exists off POSIX.
@@ -73,12 +94,12 @@ def _a_proc_tree(tmp_path: Path) -> Path:
     return root
 
 
-def test_summarize_accepts_the_native_session_artifact_paths(
+def test_summarize_accepts_named_python_artifact_paths(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     caplog.set_level(logging.INFO, logger="memory_sampler")
-    samples = tmp_path / "native-artifacts" / "rss-samples.jsonl"
-    processes = tmp_path / "native-artifacts" / "python-procs.jsonl"
+    samples = tmp_path / "samples" / "rss-samples.jsonl"
+    processes = tmp_path / "samples" / "python-procs.jsonl"
     samples.parent.mkdir()
     samples.write_text(
         json.dumps(
@@ -225,7 +246,7 @@ def _wrote(tmp_path: Path, name: str, records: list[dict[str, Any]]) -> None:
 
 def _ran(tmp_path: Path, *argv: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, str(MODULE), *argv],
+        [sys.executable, str(MODULE), *argv, "--config-root", str(CONFIG_DIR)],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -371,7 +392,8 @@ def test_the_pid_file_names_the_loop_and_not_the_process_that_launched_it(
     reaped.wait()
 
     launcher = subprocess.Popen(
-        [sys.executable, str(MODULE), "start-sampler", "--pid", str(reaped.pid)],
+        [sys.executable, str(MODULE), "start-sampler", "--pid", str(reaped.pid),
+         "--config-root", str(CONFIG_DIR)],
         cwd=tmp_path,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,

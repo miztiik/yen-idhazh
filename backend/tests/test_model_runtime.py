@@ -21,26 +21,6 @@ COMPANION = b"a draft head"
 MODELS_DIR = Path(model_refs.MODELS_DIR)
 
 
-def test_selected_server_identity_handles_spaces_and_parentheses(tmp_path: Path) -> None:
-    pid = 47
-    process = tmp_path / str(pid)
-    process.mkdir()
-    tail = ["S", *["0"] * 18, "9012", *["0"] * 5]
-    (process / "stat").write_text(
-        f"{pid} (selected (server)) {' '.join(tail)}\n", encoding="ascii"
-    )
-    target = model_runtime.server_identity(pid, proc_root=tmp_path)
-    assert (target.pid, target.start_ticks) == (pid, 9012)
-
-
-def test_selected_server_identity_refuses_a_foreign_pid(tmp_path: Path) -> None:
-    process = tmp_path / "47"
-    process.mkdir()
-    (process / "stat").write_text("48 (foreign) S " + "0 " * 25, encoding="ascii")
-    with pytest.raises(ValueError, match="malformed process identity"):
-        model_runtime.server_identity(47, proc_root=tmp_path)
-
-
 def _entry(**extra: object) -> dict[str, object]:
     """A summarize entry whose two files are the bytes below, not a real model."""
     return {

@@ -88,7 +88,6 @@ _FINGERPRINT_V2_KEYS: Final = (
     "l3_cache_bytes",
     "flags",
 )
-_FINGERPRINT_V1_KEYS: Final = (*_FINGERPRINT_V2_KEYS, "cores", "threads")
 _CORRECTED_INT_FIELDS: Final = frozenset(
     {
         "shard",
@@ -147,10 +146,6 @@ _UNSET: Final = _Unset()
 #: it away passes here and fails the browser check instead.
 COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
     {
-        "backend/idhazh/telemetry/host_evidence_comparison.py": (
-            "measured_at",
-            "runner_name",
-        ),
         "frontend/src/lib/console/queries/machine.ts": (
             "version",
             "date",
@@ -188,6 +183,10 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "model_load_ms",
         ),
     }
+)
+
+UNREAD_CELLS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
+    {"Historical machine label and sampling instant": ("measured_at", "runner_name")}
 )
 
 
@@ -494,13 +493,6 @@ def _fingerprint_bytes(cells: Mapping[str, object], keys: tuple[str, ...]) -> by
         separators=(",", ":"),
         allow_nan=False,
     ).encode("ascii")
-
-
-def fingerprint_v1(row: LegacyHostFingerprintRow) -> str:
-    """AO1's historical preimage, including explicit null core/thread facts."""
-    return hashlib.sha256(_fingerprint_bytes(row.model_dump(), _FINGERPRINT_V1_KEYS)).hexdigest()[
-        :16
-    ]
 
 
 class HostFingerprintRow(Contract):

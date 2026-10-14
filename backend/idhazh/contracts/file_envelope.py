@@ -245,8 +245,8 @@ class FileEnvelope(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-10-10",
-            change="Admit finite truthful native host writer/container pairs.",
-            why="Rust host bytes must not claim a Python codec identity.",
+            change="Read corrected host history with its recorded file envelope.",
+            why="Previously published host rows remain readable after collector retirement.",
         ),
         ChangelogEntry(
             version="2026-10-06",
@@ -320,8 +320,8 @@ class FileEnvelope(Contract):
     )
     writer: Literal[
         "idhazh.ledger.parquet",
-        "idhazh_rust.ledger.parquet",
         "idhazh.ledger.json_lines",
+        "idhazh_rust.ledger.parquet",
         "idhazh_rust.ledger.json_lines",
     ] = Field(
         description=(
@@ -401,7 +401,7 @@ class FileEnvelope(Contract):
             or self.tier is not Tier.RAW
             or self.identity.producer != "telemetry.silicon"
         ):
-            raise ValueError("native writer requires the corrected raw host contract")
+            raise ValueError("historical host writer requires its recorded raw host contract")
         if self.writer.endswith(".json_lines") and self.compression is not Compression.NONE:
             raise ValueError("JSON lines must record compression none")
         return self

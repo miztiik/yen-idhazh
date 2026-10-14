@@ -81,20 +81,9 @@ def test_a_worker_commits_its_rows_before_the_run_can_throw_them_away() -> None:
         step = _step(workflow, "work", "name", name)
         condition = _normalize_condition(step.get("if"), f"work step {name}")
         if name in {RECORD_STEP, COMMIT_STEPS["work"]}:
-            assert condition in {
-                "always()",
-                "always() && env.IDHAZH_HOST_TELEMETRY_MODE == 'legacy'",
-                "always() && (env.IDHAZH_HOST_TELEMETRY_MODE == 'legacy' || "
-                "env.IDHAZH_HOST_TELEMETRY_VERIFIED == '1')",
-                "always() && (env.IDHAZH_HOST_TELEMETRY_MODE == 'legacy' || "
-                "env.IDHAZH_HOST_TELEMETRY_MODE == 'off' || "
-                "env.IDHAZH_HOST_TELEMETRY_VERIFIED == '1')",
-            }
+            assert condition == "always()"
         elif name == "What this job cost":
-            assert condition in {
-                "always()",
-                "always() && env.IDHAZH_HOST_TELEMETRY_MODE == 'legacy'",
-            }
+            assert condition == "always() && env.IDHAZH_HOST_TELEMETRY_MODE == 'python'"
         elif name == SCRAPE_STEP:
             assert condition == "always() && env.IDHAZH_HOST_TELEMETRY_MODE != 'off'"
         else:

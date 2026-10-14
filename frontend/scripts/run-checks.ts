@@ -8,7 +8,7 @@ import { parseArgs } from 'node:util';
 import { assertBuild, buildEnvironment, changedInputNote, inputFingerprint, REPO, writeRecord } from './build-state.ts';
 import type { BuildMode, BuildRecord } from './build-state.ts';
 import { FRONTEND_GROUPS, groupedSpecs, groupForSpec } from './test-groups.ts';
-import { RUST_TESTS, selectionForChange } from './test-scope.ts';
+import { selectionForChange } from './test-scope.ts';
 import type { Selection, TestGroup } from './test-scope.ts';
 import { playwrightCounts, pytestCounts, requireExecuted } from './test-results.ts';
 import type { TestCounts } from './test-results.ts';
@@ -55,7 +55,7 @@ export function selection(root: string, opts: Options): Selection {
 	const selected = selectionForChange(root, opts.base);
 	if (opts.groups.length || opts.specs.length) {
 		const asked = opts.groups.flatMap((group) => group === 'all'
-			? ['backend', ...FRONTEND_GROUPS] : group === 'browser' ? [...FRONTEND_GROUPS] : group === 'rust' ? ['backend'] : [group]);
+			? ['backend', ...FRONTEND_GROUPS] : group === 'browser' ? [...FRONTEND_GROUPS] : [group]);
 		for (const name of opts.specs) {
 			const group = groupForSpec(name);
 			if (!group || !existsSync(join(root, 'frontend/tests', name))) throw new Error(`Unknown spec: ${name}`);
@@ -66,40 +66,11 @@ export function selection(root: string, opts: Options): Selection {
 		}
 		selected.groups = [...new Set(asked)] as TestGroup[];
 		selected.backendFiles = null;
-		selected.rust = asked.includes('backend');
-		if (opts.groups.length === 1 && opts.groups[0] === 'rust') selected.backendFiles = [...RUST_TESTS];
 		selected.tooling = opts.groups.includes('all');
 		selected.reasons = [{ path: 'explicit selection', groups: selected.groups, reason: 'requested groups or specs' }];
 	}
 	if (selected.backendFiles?.some((file) => !existsSync(join(root, file)))) selected.backendFiles = null;
-	selected.rust ||= selected.groups.includes('backend') &&
-		(selected.backendFiles === null || selected.backendFiles.some((file) => RUST_TESTS.includes(file)));
 	return selected;
-}
-
-export function rustCommands(root: string, platform = process.platform): { name: string; program: string; args: string[]; cwd: string }[] {
-	const cwd = join(root, 'backend/rust/host-telemetry');
-	const commands = [
-		['Rust dependency preparation', ['fetch', '--locked']],
-		['Rust fixture build', ['build', '--locked', '--all-targets']],
-		['Rust formatting', ['fmt', '--all', '--', '--check']],
-		['Rust clippy', ['clippy', '--locked', '--offline', '--all-targets', '--', '-D', 'warnings']],
-		['Rust module tests', ['test', '--locked', '--offline']]
-	] as const;
-	return commands.map(([name, args]) => {
-		if (platform !== 'win32') return { name, program: 'cargo', args: [...args], cwd };
-		const setup = 'C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Auxiliary\\Build\\vcvars64.bat';
-		return { name, program: process.env.ComSpec ?? 'cmd.exe',
-			args: ['/d', '/s', '/c', `"call "${setup}" >nul && cargo ${args.join(' ')}"`], cwd };
-	});
-}
-
-export function requireRustComponents(pin: string, installed: string): void {
-	for (const component of ['clippy', 'rustfmt']) {
-		if (!installed.split('\n').some((line) => line.startsWith(`${component}-`))) {
-			throw new Error(`Install ${component} for the pinned Rust ${pin} before checking; tests do not install components.`);
-		}
-	}
 }
 
 export function pythonModulesFor(selected: Selection): string[] {
@@ -240,17 +211,12 @@ async function main(args: string[]): Promise<number> {
 	if (selected.groups.includes('backend')) console.log(`Backend files: ${selected.backendFiles?.join(', ') || 'full suite'}`);
 	console.log(`Build: ${selected.groups.some((group) => group !== 'backend' && group !== 'logic') ? opts.mode : 'none'}`);
 	console.log(`Test tooling: ${selected.tooling ? 'selected' : 'not selected'}`);
-	console.log(`Rust checks: ${selected.rust ? 'selected; locked preparation before offline tests' : 'not selected'}`);
 	if (opts.list) return 0;
 	if (!selected.groups.length) return (await command('whitespace', 'git', ['diff', '--check'], root, process.env)).exitCode;
 	const python = pythonPath(root, opts.python);
 	const npm = npmPath();
 	const env: NodeJS.ProcessEnv = { ...process.env, PYTHONPATH: join(root, 'backend'), IDHAZH_PYTHON: python,
 		IDHAZH_TEST_BUILD: opts.mode };
-	if (selected.rust) {
-		env.CARGO_TARGET_DIR = join(root, 'backend/var/rust-host-telemetry');
-		env.IDHAZH_HOST_CODEC_FIXTURE = join(env.CARGO_TARGET_DIR, 'debug', process.platform === 'win32' ? 'codec-fixture.exe' : 'codec-fixture');
-	}
 	for (const name of ['DIGEST_ROOT', 'STATE_ROOT', 'PYTEST_ADDOPTS']) delete env[name];
 	const packages: Record<string, string> = {};
 	if (selected.groups.some((group) => group !== 'backend')) {
@@ -269,21 +235,11 @@ async function main(args: string[]): Promise<number> {
 		}
 	}
 	const modules = pythonModulesFor(selected);
-	let rustVersion: string | null = null;
-	if (selected.rust) {
-		const crate = join(root, 'backend/rust/host-telemetry');
-		const pin = readFileSync(join(crate, 'rust-toolchain.toml'), 'utf8').match(/channel\s*=\s*"([^"]+)"/)?.[1];
-		if (!pin || !execFileSync('rustup', ['toolchain', 'list'], { encoding: 'utf8' }).split('\n').some((line) => line.startsWith(`${pin}-`))) {
-			throw new Error(`Install the pinned Rust ${pin ?? 'toolchain'} before checking; tests do not install toolchains.`);
-		}
-		requireRustComponents(pin, execFileSync('rustup', ['component', 'list', '--toolchain', pin, '--installed'], { encoding: 'utf8' }));
-		rustVersion = execFileSync('rustc', ['--version'], { cwd: crate, env, encoding: 'utf8' }).trim();
-	}
 	const versions = modules.length ? execFileSync(python, ['-c',
 		'import importlib, importlib.metadata, json, sys; names=json.loads(sys.argv[1]); [importlib.import_module(name) for name in names]; print(json.dumps({"python":sys.version,"packages":sorted((package.metadata["Name"], package.version) for package in importlib.metadata.distributions())}))',
 		JSON.stringify(modules)], { cwd: root, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }) : null;
 	const source = inputFingerprint(root);
-	const id = createHash('sha256').update(JSON.stringify({ source, versions, packages, rustVersion, node: process.version,
+	const id = createHash('sha256').update(JSON.stringify({ source, versions, packages, node: process.version,
 		environment: buildEnvironment(env), groups: selected.groups, files: selected.backendFiles,
 		tooling: selected.tooling, mode: opts.mode, specs: opts.specs })).digest('hex');
 	const resultFile = join(directory, `${id}.json`);
@@ -340,17 +296,6 @@ async function main(args: string[]): Promise<number> {
 		};
 		try {
 			await run('whitespace', 'git', ['diff', '--check']);
-			if (selected.rust) {
-				const target = join(root, 'backend/var/rust-host-telemetry');
-				const temporary = join(root, 'backend/var/checks/rust-tmp');
-				mkdirSync(temporary, { recursive: true });
-				const rustEnv = { ...env, CARGO_TARGET_DIR: target, TEMP: temporary, TMP: temporary };
-				const commands = rustCommands(root);
-				for (const [index, command] of commands.entries()) {
-					await run(command.name, command.program, command.args, command.cwd,
-						index < 2 ? rustEnv : { ...rustEnv, CARGO_NET_OFFLINE: 'true' });
-				}
-			}
 			if (selected.groups.includes('backend')) {
 				await run('ruff', python, ['-m', 'ruff', 'check', '.']);
 				await run('mypy', python, ['-m', 'mypy']);

@@ -285,21 +285,19 @@ def stage_score(args: argparse.Namespace) -> None:
     from idhazh.contracts.base import ServerJob
     from idhazh.stages import common
     from idhazh.telemetry import job_machine
+    from idhazh.telemetry.host_control import enabled
 
     host_settings = config.load()
-    events = job_machine.from_environment(host_settings)
-    if events is None:
-        _score(args)
-        return
-
+    memory = enabled(host_settings.app.observability) and (
+        host_settings.app.observability.memory_profiling_enabled
+    )
     date = args.date
     execution = args.execution or os.environ.get("GITHUB_RUN_ID")
     commit = args.commit or os.environ.get("GITHUB_SHA")
-    if events.native and (not date or not execution or not commit):
-        raise ValueError("native encoder scoring requires --date, --execution and --commit")
     date = date or time.strftime("%Y-%m-%d", time.gmtime())
     if not execution or not commit:
-        raise ValueError("encoder scoring events require a run execution and commit")
+        _score(args, memory_profiling_enabled=memory)
+        return
     with job_machine.record(
         date=date,
         run_id=f"{date}-{execution}",
@@ -308,12 +306,11 @@ def stage_score(args: argparse.Namespace) -> None:
         commit_sha=commit,
         job=ServerJob.COLLECT,
         shard=args.shard,
-        host_events=events,
     ):
-        _score(args)
+        _score(args, memory_profiling_enabled=memory)
 
 
-def _score(args: argparse.Namespace) -> None:
+def _score(args: argparse.Namespace, *, memory_profiling_enabled: bool) -> None:
     """Encode in batches, writing the reading after every one.
 
     The write is atomic - a temporary file and a rename - so a shard killed
@@ -366,7 +363,7 @@ def _score(args: argparse.Namespace) -> None:
         beside.replace(args.out)
 
     def peak_memory_gb() -> float | None:
-        if sys.platform == "win32":
+        if not memory_profiling_enabled or sys.platform == "win32":
             return None
         else:
             import resource
