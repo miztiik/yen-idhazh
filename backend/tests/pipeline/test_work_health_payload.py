@@ -55,7 +55,11 @@ SUMMARIZE_AND_PLAN_REPLY: Final = (
 
 
 def worked(
-    tmp_path: Path, monkeypatch: MonkeyPatch, *, degraded: bool = False
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    *,
+    degraded: bool = False,
+    server_pid: int | None = None,
 ) -> tuple[RunPlan, Path]:
     """One real work stage, and the items directory it wrote."""
     run_plan, items_dir, _ = _work_stage(
@@ -64,6 +68,7 @@ def worked(
         replies=(LABEL_REPLY.read_bytes(), SUMMARIZE_AND_PLAN_REPLY.read_bytes()),
         fetcher=headless_page_fetch if degraded else captured_article_fetch,
         run_plan=headless_plan() if degraded else None,
+        server_pid=server_pid,
     )
     return run_plan, items_dir
 
@@ -203,7 +208,10 @@ def a_machine_that_answers(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
             # A counter that climbs, so the item's total is a real difference
             # rather than two reads of one number. `majflt` is the tenth cell
             # after the bracketed command.
-            return f"742 (llama-server) S 1 742 742 0 -1 0 900 0 {next(faulted)} 0\n"
+            return (
+                f"742 (llama-server) S 1 742 742 0 -1 0 900 0 {next(faulted)} 0 "
+                "0 0 0 0 20 0 1 0 12345\n"
+            )
         if path.name == "comm":
             return path.read_text(encoding="utf-8")
         return None
@@ -225,7 +233,7 @@ def test_every_host_column_reaches_the_row_the_shard_left_behind(
     slow - which is the entire question these columns exist to answer.
     """
     a_machine_that_answers(monkeypatch, tmp_path / "host")
-    _, items_dir = worked(tmp_path, monkeypatch)
+    _, items_dir = worked(tmp_path, monkeypatch, server_pid=742)
 
     written = rows(items_dir)
 

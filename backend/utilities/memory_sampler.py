@@ -99,6 +99,7 @@ DEFAULT_NAME: Final = "memory-sampler"
 #: than one interval is invisible to `VmRSS`, which is why `VmHWM` is recorded
 #: beside it - the kernel holds the peak the sampler slept through.
 SAMPLE_EVERY_SECONDS: Final = 15.0
+PROC_READ_LIMIT_BYTES: Final = 1 << 20
 
 #: How long the launched child gets to die before the parent calls the launch
 #: good. A loop handed a pid nothing owns is gone in well under a second, and
@@ -147,9 +148,13 @@ def _now() -> str:
 def _text(path: Path) -> str | None:
     """One small file, or nothing at all when it went away mid-walk."""
     try:
-        return path.read_text(encoding="utf-8", errors="replace")
+        with path.open("rb") as reading:
+            raw = reading.read(PROC_READ_LIMIT_BYTES + 1)
     except OSError:
         return None
+    if len(raw) > PROC_READ_LIMIT_BYTES:
+        return None
+    return raw.decode("utf-8", errors="replace")
 
 
 def _kilobytes(values: Mapping[str, str], key: str) -> int | None:
@@ -188,8 +193,11 @@ def _argv_fields(entry: Path) -> str | None:
     is dropped rather than written into an artifact.
     """
     try:
-        raw = (entry / "cmdline").read_bytes()
+        with (entry / "cmdline").open("rb") as reading:
+            raw = reading.read(PROC_READ_LIMIT_BYTES + 1)
     except OSError:
+        return None
+    if len(raw) > PROC_READ_LIMIT_BYTES:
         return None
     argv = [part for part in raw.decode("utf-8", "replace").split("\0") if part]
     return " ".join(" ".join(argv[ARGV_FIELDS]).split())

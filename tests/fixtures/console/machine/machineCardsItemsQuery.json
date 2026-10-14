@@ -5,6 +5,8 @@
       "date": "2026-08-20",
       "run_id": "2026-08-20-1",
       "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
       "machine_shard": 0,
       "cpu_model": "AMD EPYC 7763 64-Core Processor"
     },
@@ -12,6 +14,8 @@
       "date": "2026-08-20",
       "run_id": "2026-08-20-1",
       "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
       "machine_shard": 1,
       "cpu_model": "AMD EPYC 7763 64-Core Processor"
     },
@@ -19,6 +23,8 @@
       "date": "2026-08-20",
       "run_id": "2026-08-20-2",
       "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
       "machine_shard": 0,
       "cpu_model": "AMD EPYC 7763 64-Core Processor"
     },
@@ -26,6 +32,8 @@
       "date": "2026-08-20",
       "run_id": "2026-08-20-2",
       "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
       "machine_shard": 0,
       "cpu_model": "AMD EPYC 7763 64-Core Processor"
     },
@@ -33,6 +41,8 @@
       "date": "2026-08-20",
       "run_id": "2026-08-20-2",
       "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
       "machine_shard": 0,
       "cpu_model": null
     },
@@ -40,6 +50,8 @@
       "date": "2026-08-20",
       "run_id": "2026-08-20-2",
       "machine_job": null,
+      "machine_pipeline_name": null,
+      "machine_task_name": null,
       "machine_shard": 1,
       "cpu_model": null
     }

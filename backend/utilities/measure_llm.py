@@ -942,7 +942,7 @@ def run_bench(args: argparse.Namespace) -> int:
     from idhazh import config
     from idhazh.contracts.base import ServerJob
     from idhazh.stages import common
-    from idhazh.telemetry import job_machine
+    from idhazh.telemetry import task_telemetry
     from idhazh.telemetry.host_control import enabled as host_telemetry_enabled
 
     settings = config.with_memory_profiling_override(
@@ -972,7 +972,7 @@ def run_bench(args: argparse.Namespace) -> int:
             report.write(f"{ref} {source} bytes={remote.bytes} sha256={remote.sha256}\n")
 
     machine = (
-        job_machine.record(
+        task_telemetry.record(
             date=args.date,
             run_id=f"{args.date}-{args.execution}",
             settings=settings,

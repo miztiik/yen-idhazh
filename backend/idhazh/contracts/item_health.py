@@ -21,9 +21,11 @@ from idhazh.contracts.base import (
     Contract,
     DateStamp,
     ItemId,
+    PipelineName,
     RunId,
     ServerJob,
     Slug,
+    TaskName,
     Timestamp,
     Url,
     UrlKey,
@@ -220,6 +222,8 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
         ),
         "frontend/src/lib/console/queries/machine.ts": (
             "machine_job",
+            "machine_pipeline_name",
+            "machine_task_name",
             "cpu_steal_pct",
             "llama_major_faults",
             "os_mem_cached_bytes",
@@ -613,6 +617,11 @@ class ItemHealthRow(Contract):
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-14",
+            change="Allow machine pipeline and task identity without a legacy job value.",
+            why="Items resolve shared host rows through separate identity columns.",
+        ),
+        ChangelogEntry(
             version="2026-09-29",
             change="job and shard are machine_job and machine_shard.",
             why="The ledger's own job and shard name the writer; these name the machine.",
@@ -624,18 +633,8 @@ class ItemHealthRow(Contract):
         ),
         ChangelogEntry(
             version="2026-09-21",
-            change="Retired max_output_tokens; the two settings behind it left inference.",
-            why="The budgets that bounded a decode are the two derived ones still on the row.",
-        ),
-        ChangelogEntry(
-            version="2026-09-20T18:00",
-            change="Steal, faults, pinning and anonymous RSS added; empty cgroup_peak_bytes cut.",
-            why="Time another tenant used, and pages the kernel took back, are not our own work.",
-        ),
-        ChangelogEntry(
-            version="2026-08-23",
-            change="Earlier changes are in this file's git history.",
-            why="A changelog says what moved lately; git is the archive.",
+            change="Earlier changes are in this contract's git history.",
+            why="Git is the archive for older shape changes.",
         ),
     )
 
@@ -694,7 +693,7 @@ class ItemHealthRow(Contract):
             "column, which names the writer that filed the row."
         ),
     )
-    machine_job: ServerJob | None = Field(
+    machine_job: ServerJob | TaskName | None = Field(
         default=None,
         description=(
             "Which workflow job's machine took this row's readings - never which job "
@@ -705,6 +704,8 @@ class ItemHealthRow(Contract):
             "machine an item ran on, and every row written before this column predates it."
         ),
     )
+    machine_pipeline_name: PipelineName | None = None
+    machine_task_name: TaskName | None = None
     span_integrity: bool | None = Field(
         default=None,
         description=(
@@ -1371,6 +1372,15 @@ class ItemHealthRow(Contract):
         row written before the job column carries a shard and no job, and every
         such row still reads back, so `job iff shard` would refuse all of them.
         """
+        if (self.machine_pipeline_name is None) != (self.machine_task_name is None):
+            raise ValueError("machine_pipeline and machine_task must be present together")
+        if self.machine_task_name is not None and self.machine_shard is None:
+            raise ValueError("generic machine identity requires machine_shard")
+        if self.machine_task_name is not None and self.machine_job not in (
+            None,
+            self.machine_task_name,
+        ):
+            raise ValueError("machine_job must be absent or match machine_task_name")
         if self.machine_job is not None and self.machine_shard is None:
             raise ValueError("a machine_job on an item-health row names a machine_shard as well")
         return self

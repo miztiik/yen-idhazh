@@ -8,9 +8,11 @@
     "attempt": 1,
     "git_sha": "0735031c2a9e4b8f1d6c3a5e7b9d0f2a4c6e8b1d",
     "job": "run-tasks",
+    "pipeline_name": null,
     "producer": "gardener.tasks",
     "run_id": "2026-09-24-17482910337",
-    "shard": 3
+    "shard": 3,
+    "task_name": null
   },
   "ledger": "visual-prunes",
   "period": null,

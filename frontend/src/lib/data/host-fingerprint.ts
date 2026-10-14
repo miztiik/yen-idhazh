@@ -1,6 +1,12 @@
 /** Finite host-row read migration shared by disk and direct slice consumers. */
 
-export const HOST_SCHEMA_VERSION = '2026-10-10';
+export const HOST_SCHEMA_VERSION = '2026-10-14';
+
+const CORRECTED_VERSIONS = new Set([
+	'2026-10-10',
+	'2026-10-12',
+	HOST_SCHEMA_VERSION
+]);
 
 const LEGACY_VERSIONS = new Set([
 	'2026-09-16',
@@ -15,6 +21,8 @@ export const CORRECTED_HOST_COLUMNS = [
 	'date',
 	'run_id',
 	'job',
+	'pipeline_name',
+	'task_name',
 	'shard',
 	'fingerprint',
 	'fingerprint_version',
@@ -70,8 +78,8 @@ function positiveFinite(value: unknown): string {
 /** Normalize one declared legacy/current input without carrying legacy aliases onward. */
 export function normalizeHostRow(row: InputRow): Record<string, string> | null {
 	const sourceVersion = text(row.version);
-	if (sourceVersion !== HOST_SCHEMA_VERSION && !LEGACY_VERSIONS.has(sourceVersion)) return null;
-	const corrected = sourceVersion === HOST_SCHEMA_VERSION;
+	if (!CORRECTED_VERSIONS.has(sourceVersion) && !LEGACY_VERSIONS.has(sourceVersion)) return null;
+	const corrected = CORRECTED_VERSIONS.has(sourceVersion);
 	const fingerprint = text(row.fingerprint);
 	const fingerprintVersion = corrected
 		? text(row.fingerprint_version)
@@ -86,7 +94,7 @@ export function normalizeHostRow(row: InputRow): Record<string, string> | null {
 	}
 	const migrated: Record<string, string> = {};
 	for (const name of CORRECTED_HOST_COLUMNS) migrated[name] = text(row[name]);
-	migrated.version = HOST_SCHEMA_VERSION;
+	migrated.version = sourceVersion;
 	migrated.fingerprint = fingerprint;
 	migrated.fingerprint_version = fingerprintVersion;
 	if (!corrected) {

@@ -57,14 +57,19 @@ export function fingerprints(rows: readonly Row[]): CardHost[] {
 	return rows.flatMap((row) => {
 		const shard = finiteCell(row.shard);
 		const normalized = normalizeHostRow(row);
+		const genericTask = typeof row.pipeline_name === 'string' && typeof row.task_name === 'string';
 		if (typeof row.date !== 'string' || typeof row.run_id !== 'string' ||
-			typeof row.job !== 'string' || typeof row.fingerprint !== 'string' || !row.fingerprint ||
+			(typeof row.job !== 'string' && !genericTask) ||
+			typeof row.fingerprint !== 'string' || !row.fingerprint ||
 			shard === null || !Number.isSafeInteger(shard) || shard < 0 || normalized === null) return [];
 		const word = (name: string) => normalized[name] || null;
 		const number = (name: string) => finiteCell(normalized[name]);
 		return [{
 			version: normalized.version, date: row.date, run_id: row.run_id,
-			job: row.job, shard,
+			job: typeof row.job === 'string' ? row.job : null,
+			pipeline_name: typeof row.pipeline_name === 'string' ? row.pipeline_name : null,
+			task_name: typeof row.task_name === 'string' ? row.task_name : null,
+			shard,
 			fingerprint: normalized.fingerprint, fingerprint_version: number('fingerprint_version'),
 			cpu_model: word('cpu_model'), cpu_vendor: word('cpu_vendor'),
 			cpu_family: number('cpu_family'), cpu_model_number: number('cpu_model_number'),
@@ -86,11 +91,15 @@ export function fingerprints(rows: readonly Row[]): CardHost[] {
 export function processors(rows: readonly Row[]): MachineProcessors[] {
 	return rows.flatMap((row) => {
 		const shard = finiteCell(row.shard);
-		if (typeof row.date !== 'string' || typeof row.run_id !== 'string' || typeof row.job !== 'string' ||
+		const genericTask = typeof row.pipeline_name === 'string' && typeof row.task_name === 'string';
+		if (typeof row.date !== 'string' || typeof row.run_id !== 'string' ||
+			(typeof row.job !== 'string' && !genericTask) ||
 			shard === null || !Number.isSafeInteger(shard) || shard < 0) return [];
 		const normalized = normalizeHostRow(row);
 		if (normalized === null) return [];
-		return [{ date: row.date, run_id: row.run_id, job: row.job, shard,
+		return [{ date: row.date, run_id: row.run_id, job: typeof row.job === 'string' ? row.job : undefined,
+			pipeline_name: typeof row.pipeline_name === 'string' ? row.pipeline_name : undefined,
+			task_name: typeof row.task_name === 'string' ? row.task_name : undefined, shard,
 			cpu_logical_processors: finiteCell(normalized.cpu_logical_processors) }];
 	});
 }

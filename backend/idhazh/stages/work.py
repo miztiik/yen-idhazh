@@ -304,6 +304,7 @@ def stage_work(
     shards: int = 1,
     fetcher: Fetcher | None = None,
     model_endpoint: str | None = None,
+    server_pid: int | None = None,
 ) -> None:
     """Fetch, extract, summarize and score one item at a time, writing as it goes."""
     if shards < 1 or not 0 <= shard < shards:
@@ -366,11 +367,9 @@ def stage_work(
         len(mine),
         model.id,
     )
-    flags = Flags.of(settings.app.logging)
-    # Read once per shard and noted on every item. The process table scan and
-    # the CPU model read are each a few file opens; doing them per item would be
-    # 80 scans for an answer that cannot change inside a shard.
-    server_pid = host.llama_server_pid() if collect_host else None
+    flags = Flags.of(settings.app.logging    )
+    # The workflow passes the PID written by the model-server owner. Looking
+    # through the process table could select an unrelated server.
     shard_facts = (
         host.host_facts(job=ServerJob.WORK) if collect_host
         else host.HostFacts(cpu_model=None, runner_name=None, job=ServerJob.WORK)

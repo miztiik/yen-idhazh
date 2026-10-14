@@ -3,9 +3,11 @@
     "attempt": 1,
     "git_sha": "0000000000000000000000000000000000000000",
     "job": "save_council_results",
+    "pipeline_name": null,
     "producer": "council.session",
     "run_id": "2026-09-27-18012345678",
-    "shard": 0
+    "shard": 0,
+    "task_name": null
   },
   "version": "2026-10-09",
   "writes": {

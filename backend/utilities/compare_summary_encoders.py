@@ -284,7 +284,7 @@ def stage_score(args: argparse.Namespace) -> None:
     from idhazh import config
     from idhazh.contracts.base import ServerJob
     from idhazh.stages import common
-    from idhazh.telemetry import job_machine
+    from idhazh.telemetry import task_telemetry
     from idhazh.telemetry.host_control import enabled
 
     host_settings = config.load()
@@ -298,7 +298,7 @@ def stage_score(args: argparse.Namespace) -> None:
     if not execution or not commit:
         _score(args, memory_profiling_enabled=memory)
         return
-    with job_machine.record(
+    with task_telemetry.record(
         date=date,
         run_id=f"{date}-{execution}",
         settings=host_settings,

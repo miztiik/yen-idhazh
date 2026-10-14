@@ -15,7 +15,7 @@ from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.telemetry import job_machine, silicon
+from idhazh.telemetry import silicon, task_telemetry
 from idhazh.telemetry.host_control import enabled
 from idhazh.telemetry.item_heartbeat import ItemHeartbeat
 from utilities.host_telemetry_control import resolve
@@ -64,7 +64,7 @@ def test_off_writes_neither_python_host_half(
     settings = config.load(CONFIG_DIR)
     settings.app.observability.host_telemetry_enabled = not via_config
     monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MODE", "python" if via_config else "off")
-    with job_machine.record(
+    with task_telemetry.record(
         date="2026-10-10", run_id="2026-10-10-17", settings=settings,
         state_root=tmp_path / "state", commit_sha=SEED_COMMIT, job=ServerJob.RUNTIME,
     ) as paths:

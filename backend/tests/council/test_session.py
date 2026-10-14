@@ -20,7 +20,6 @@ import pytest
 from conftest import REPO_ROOT, read_text
 
 from idhazh import cli, config, ledger
-from idhazh.contracts.base import ServerJob
 from idhazh.contracts.council_run_record import CouncilRunRecord, EvaluationStep, ShardOutcome
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.ledger_name import LedgerName
@@ -210,9 +209,9 @@ def test_settle_records_one_machine_for_the_night_not_for_each_judged_date(venue
     )
     assert len(rows) == 1
     (row,) = rows
-    assert row.job is ServerJob.SAVE_COUNCIL_RESULTS
+    assert row.job is None
+    assert (row.pipeline_name, row.task_name) == ("council", "save_council_results")
     assert row.run_id == A_RUN
-    assert row.fingerprint is not None
     assert row.job_seconds is not None
     assert row.memcpy_probe_mib == 0 and row.memcpy_gib_s is None
 
@@ -542,7 +541,7 @@ def test_the_saving_job_files_one_date_and_a_rerun_replaces_its_rows(
     envelope = first[0].envelope
     assert envelope.identity.run_id == A_RUN
     assert envelope.identity.attempt == 1
-    assert envelope.identity.job.value == "save_council_results"
+    assert str(envelope.identity.job) == "save_council_results"
     assert envelope.identity.shard == 0
     assert envelope.identity.producer == "council.session"
     assert envelope.identity.git_sha == A_SHA

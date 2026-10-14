@@ -321,6 +321,7 @@ def _work_stage(
     fetcher: Callable[[str], FetchResult] = captured_article_fetch,
     run_plan: RunPlan | None = None,
     hold_s: float = 0.0,
+    server_pid: int | None = None,
 ) -> tuple[RunPlan, Path, RecordedEndpoint]:
     """One real work stage over captured pages and recorded replies.
 
@@ -346,6 +347,7 @@ def _work_stage(
             scorer=None,
             fetcher=fetcher,
             model_endpoint=server.endpoint,
+            server_pid=server_pid,
         )
     return run_plan, tmp_path / "run" / run_plan.date / "items", server
 

@@ -78,7 +78,7 @@ EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
     "processorLostQuery": ("date", "run_id", "machine_shard", "cpu_steal_pct"),
     "diskReadsQuery": ("date", "run_id", "item_index", "llama_major_faults", "os_mem_cached_bytes", "weights_pinned"),
     "machineCardsQuery": (
-        "version", "date", "run_id", "job", "shard", "fingerprint", "fingerprint_version",
+        "version", "date", "run_id", "job", "pipeline_name", "task_name", "shard", "fingerprint", "fingerprint_version",
         "cpu_model", "cpu_vendor", "cpu_family", "cpu_model_number", "cpu_stepping",
         "microcode", "cpu_physical_cores", "cpu_logical_processors",
         "cpu_allowed_processors", "cpu_quota_cores", "cpu_quota_state",
@@ -87,10 +87,10 @@ EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
         "memcpy_probe_mib", "vm_size", "vm_location", "vm_zone", "vm_fault_domain",
         *LEGACY_HOST_INPUT_COLUMNS,
     ),
-    "machineCardsItemsQuery": ("date", "run_id", "machine_job", "machine_shard", "cpu_model"),
+    "machineCardsItemsQuery": ("date", "run_id", "machine_job", "machine_pipeline_name", "machine_task_name", "machine_shard", "cpu_model"),
     "slowerMachinesQuery": ("run_id", "cpu_model", "prefill_ms", "input_tokens", "cached_tokens", "decode_ms", "output_tokens"),
     "platformMixQuery": (
-        "version", "date", "run_id", "job", "shard", "fingerprint", "fingerprint_version",
+        "version", "date", "run_id", "job", "pipeline_name", "task_name", "shard", "fingerprint", "fingerprint_version",
         "cpu_model", "cpu_logical_processors", "model_load_ms", "job_seconds",
         "server_prompt_tokens", "server_prompt_seconds",
         *LEGACY_HOST_INPUT_COLUMNS,
@@ -100,9 +100,9 @@ EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
     "closestToMemoryQuery": ("date", "item_id", "source_id", "os_mem_total_bytes", "os_mem_available_min_bytes", "source_words"),
     "memoryHeldQuery": ("date", "item_id", "os_mem_total_bytes", "os_mem_available_bytes", "llama_rss_bytes", "python_rss_bytes", "llama_rss_anon_bytes", "python_rss_anon_bytes", "os_swap_total_bytes", "os_swap_free_bytes"),
     "contextHeadroomQuery": ("label_input_tokens", "summary_input_tokens", "n_ctx_configured", "n_parallel", "truncation_cap_tokens"),
-    "articleCostQuery": ("date", "run_id", "machine_job", "machine_shard", "item_index", "item_total_ms", "cpu_busy_pct", "prefill_ms", "decode_ms", "llama_rss_bytes"),
+    "articleCostQuery": ("date", "run_id", "machine_job", "machine_pipeline_name", "machine_task_name", "machine_shard", "item_index", "item_total_ms", "cpu_busy_pct", "prefill_ms", "decode_ms", "llama_rss_bytes"),
     "articleCostHostsQuery": (
-        "version", "date", "run_id", "job", "shard", "cpu_logical_processors",
+        "version", "date", "run_id", "job", "pipeline_name", "task_name", "shard", "cpu_logical_processors",
         *LEGACY_HOST_INPUT_COLUMNS,
     ),
     "promptReuseQuery": ("date", "label_input_tokens", "label_cached_tokens", "label_cache_pct", "label_prefill_tokens_per_s", "summary_input_tokens", "summary_cached_tokens", "summary_cache_pct", "summary_prefill_tokens_per_s"),
@@ -328,16 +328,16 @@ def test_real_unread_map_still_refuses_failed_field_without_rejecting_failed_rul
 
 
 def test_query_registry_tracks_the_current_host_schema() -> None:
-    assert ItemHealthRow.schema_version() == "2026-09-29"
-    assert HostFingerprintRow.schema_version() == "2026-10-10"
+    assert ItemHealthRow.schema_version() == "2026-10-14"
+    assert HostFingerprintRow.schema_version() == "2026-10-14"
     assert "response headers" in (ItemHealthRow.model_fields["fetch_ttfb_ms"].description or "")
 
 
 @pytest.mark.parametrize(
     ("model", "expected"),
     (
-        (ItemHealthRow, "f34f9059d04779cff2c5b4239dc73a176fcaec396429e8f14ec794af2f0d4b3d"),
-        (HostFingerprintRow, "38b02ffd2dac59e7e34b606f84669b32725bf7c531211af30b7011e232843926"),
+        (ItemHealthRow, "9dd365744abe322279dcf621173a2047f1e1b0f9bcb536c15c37d7234793637c"),
+        (HostFingerprintRow, "67c9f942e3e8f0b2c3d044e408ec7d261f1247712e1b15e2cfa93b26beaf7f96"),
     ),
 )
 def test_registry_keeps_the_pre_query_persisted_shape(model: type[ItemHealthRow] | type[HostFingerprintRow], expected: str) -> None:

@@ -2,11 +2,11 @@
 
 **Last Updated**: 2026-10-14
 
-Every column of the host fingerprint, what it means, and what it is for.
-The producer records one row per instrumented job, or per shard of that job.
-Python is the only collector. It records job fingerprints, item resource
-measurements and diagnostic memory files without a separate monitor process
-or a message handoff. Shared readers, compaction and publication remain Python.
+Every host-fingerprint field, what it means and which readings are optional.
+The hardware fingerprint is reusable by any pipeline. Callers name their
+pipeline, task and shard; no workflow enum or digest-specific identity is needed.
+Python is the only collector. Item resource readings and diagnostic memory files
+are separate optional instruments.
 
 Read this when a number surprises you and you want to know which machine
 produced it. Why the record exists at all, and what the fleet does to a reading,
@@ -14,7 +14,7 @@ is [the processor lottery](benchmarks/the-processor-lottery.md).
 
 **The operator console reads it, from 2026-09-17.** Which machines one run was
 given, whether some machines do the same work slower, what kinds of machine we
-keep being given over a window, and what the job's own clock and its weights
+keep being given over a window, and what a task's own clock and its weights
 load cost. Which panels draw it today is
 [../architecture/publishing/console-machine.md](../architecture/publishing/console-machine.md),
 because the panel list is a config file and a count repeated here would go stale
@@ -30,21 +30,18 @@ operator console, not on the news-reading pages.
 | --- | --- |
 | Contract | [`backend/idhazh/contracts/host_fingerprint.py`](../../backend/idhazh/contracts/host_fingerprint.py) |
 | Schema | `HostFingerprintRow.json_schema()` from the contract above |
-| Ledger | `state/raw/host-fingerprint/<YYYY>/<MM>/<DD>/` for the daily run, packed under `state/compact/host-fingerprint/` by its production compaction; `state/raw/pipeline-tests/host-fingerprint/<YYYY>/<MM>/<DD>/` for a bench dispatch, packed under `state/compact/pipeline-tests/host-fingerprint/` by `compact-trial-host-fingerprint` |
+| Ledger | The caller's state root, then `raw/host-fingerprint/<YYYY>/<MM>/<DD>/`; compaction uses the matching `compact/host-fingerprint/` path |
 | Files | one immutable `<file_id>.parquet` per completed write in the day directory. The reader settles the later whole row of the same work unit; neither file is edited. |
-| Producer | [`silicon.py`](../../backend/idhazh/telemetry/silicon.py), through job commands and [`job_machine.record`](../../backend/idhazh/telemetry/job_machine.py). Python writes, reads, compacts and publishes the host records. |
+| Producer | [`silicon.py`](../../backend/idhazh/telemetry/silicon.py), through [`task_telemetry.record`](../../backend/idhazh/telemetry/task_telemetry.py). Callers use separate pipeline and task names; Python writes and reads the shared host ledger. |
 | Read by | `/console/machine/`, through the browser questions in `frontend/src/lib/console/queries/machine.ts` and shared helpers in `frontend/src/lib/console/machine/records.ts` |
-| Key | `date`, `run_id`, `job`, `shard` - one row a job |
+| Key | `date`, `run_id`, `pipeline_name`, `task_name`, `shard`; legacy rows use `job` instead |
 | Switch | `observability.host_telemetry_enabled` for the whole instrument; `host_fingerprint` for host-row writes; `memory_profiling_enabled` for memory/page-fault observations only |
-| Committed | **from 2026-09-16.** Each job's own commit step stages its ledger; every row taken before that date was deleted with its runner |
+| Committed | The caller owns publication of the files returned by the recorder |
 | Shown on news-reading pages | **no.** Operator surface only |
 
-**Python collects measurements in the job doing the work.** Digest
-plan/work/assemble, bench and encoder probes, gardener task shards and council
-result saving use the same Python instruments. Unmeasured jobs remain
-uninstrumented. There is no collector build, binary download, readiness message
-or telemetry receipt gate. Existing historical readings and recovery backups
-are not rewritten by this change.
+**The collector is independent of its callers.** A pipeline may use the shared
+recorder or leave host telemetry out. Existing historical readings and recovery
+backups are not rewritten.
 
 Whole-instrument off and memory-only off are different controls. Their exact
 configuration, overrides and effects are in [Controls and precedence](#controls-and-precedence).
@@ -52,28 +49,44 @@ configuration, overrides and effects are in [Controls and precedence](#controls-
 ## Collection and limits
 
 The fingerprint groups hardware characteristics; it is not a unique machine
-serial number. Its job/run/shard identity says which execution produced the row.
+serial number. Its pipeline/task/run/shard identity says which execution produced the row.
 Per-item resource readings live on the item-health row, not in a second copy of
 the job fingerprint.
 
+New Python rows use fingerprint algorithm 2. Logical counts come from the online
+CPU list, physical counts require complete package/core topology, and target
+capacity uses the Python process taking the reading. Missing or contradictory
+inputs stay null. A missing frequency entry does not reduce the CPU count.
+Item CPU shares are unknown when the aggregate line lacks its four required
+counters, any counter resets, or the resulting shares are impossible.
+
+The work stage receives the server PID written by the model-server owner. It
+checks the PID and the kernel start-time counter before and after each server
+status read. An exited or reused PID makes server memory and fault readings
+unknown; a job with no server PID records no server process values. Server
+status reads name one process and do not search the Python process list.
+Individual `/proc` and `/sys` reads stop at 1 MiB; a missing, denied, malformed
+or oversized reading stays unknown. Closing an item waits for its sampler to
+stop, and repeated closes return the same cells.
+
 Table A - collected measurements
 
-| ID | Capability | Recorded result | Scope and limit |
+| ID | Capability | Required status | Recorded result and limit |
 | --- | --- | --- | --- |
-| A1 | Hardware identity | CPU model/vendor/family/stepping, microcode, watched flags, L3 and versioned fingerprint | A fingerprint groups reported characteristics; it is not a machine serial number. See [Identity](#identity). |
-| A2 | CPU counts and historical target limits | Visible processor counts and any stored affinity/cpuset or quota observations | Visible topology and allowed capacity are different. A field the Python collector does not measure stays null. See [CPU capability fields](#what-the-processor-can-do). |
-| A3 | Job timing and model counters | Elapsed job time, model-load time, server prompt tokens and prompt seconds | Log/counter inputs must exist and be readable; non-server jobs do not invent server measurements. |
-| A4 | Item-window CPU and load | Whole-window busy/steal share, busy extrema and closing one-minute load | Host counters describe machine activity, not CPU instructions attributable to one model call. |
-| A5 | Memory and page faults | Selected server/worker RAM, machine RAM/swap, available-memory minimum and major page-fault delta | These are OS observations, not allocator, stack or per-region profiling. A high-water mark is not an item-local peak. |
-| A6 | Job and runtime memory artifacts | Sample and Python-process records, server RSS samples and available cgroup peak | Job rollcall includes readable Python processes; it is not the sum of one worker's descendants. |
-| A7 | Optional memory-copy rate | Cache-sized buffer, selected-job copy rate and actual buffer size | It allocates two buffers and competes for memory bandwidth. Memory-collection off alone does not disable it. |
-| A8 | Job records | Immutable ledger files through the shared Python writer | Compaction and publishing use the same declared ledger rules as other Python producers. |
+| A1 | Hardware identity | Core | CPU model/vendor/family/stepping, microcode, watched flags, L3 and versioned fingerprint. A fingerprint groups reported characteristics; it is not a machine serial number. |
+| A2 | CPU topology | Core | Visible logical processors and fully validated physical cores. Unknown or contradictory source data stays null. See [CPU capability fields](#what-the-processor-can-do). |
+| A3 | CPU capacity and frequency | Optional | Affinity/cpuset, quota and frequency observations. Frequency reads are off by default. |
+| A4 | Task timing and model counters | Optional | Elapsed task time, model-load time and server prompt counters when the caller has those inputs. |
+| A5 | CPU and load over an item window | Optional | Whole-window busy/steal share, busy extrema and closing one-minute load. |
+| A6 | Memory and page faults | Optional | Selected process RAM, machine RAM/swap, available-memory minimum and major page-fault delta. |
+| A7 | Memory artifacts and copy speed | Optional | Process/sample files, server RSS, cgroup peak and an opt-in copy benchmark. The copy probe allocates two buffers and competes for memory bandwidth. |
+| A8 | Ledger writing | Optional | Immutable ledger files through the shared Python writer. A pipeline chooses whether and how to publish its writes. |
 
 The live runtime is Linux with `/proc` and `/sys`, as on the Ubuntu runner.
 Windows development or recorded-fixture success does not certify live Linux
 collection. Unsupported or missing observations are unavailable, never zero.
 Missing observations remain empty cells; collection does not invent a reading.
-Memory diagnostics are separate from the persisted job fingerprint.
+Memory diagnostics are separate from the persisted hardware fingerprint.
 
 ## Controls and precedence
 
@@ -89,9 +102,9 @@ Table B - whole-instrument selection
 | ID | Setting | Meaning |
 | --- | --- | --- |
 | B1 | `observability.host_telemetry_enabled: true` | Allow Python collection. This is the committed default. |
-| B2 | `observability.host_telemetry_enabled: false` | Stop host collection, even if the workflow requests Python and memory is on. |
-| B3 | Workflow `host_telemetry: python` | Collect through Python. This is the workflow default and the only collector. |
-| B4 | Workflow `host_telemetry: off` | Stop host instrumentation for this run without changing the shared file. Real work, item-health records and progress logs continue. |
+| B2 | `observability.host_telemetry_enabled: false` | Stop host collection for every caller; no workflow choice can override it. |
+| B3 | Caller uses `task_telemetry.record` | Collect through the shared Python API with separate pipeline, task and shard identity. |
+| B4 | Caller does not record, or a workflow wrapper selects `off` | Leave host telemetry out for that invocation without changing stored data. Workflow dispatch controls are optional wrappers, not part of the recorder contract. |
 
 Table C - controls inside an enabled instrument
 
@@ -103,13 +116,12 @@ Table C - controls inside an enabled instrument
 | C4 | `observability.host_fingerprint: false` | Stop raw job fingerprint writes/probes | The complete resource monitor or per-item memory/CPU observations |
 | C5 | Empty `host_fingerprint_bandwidth_jobs`, or zero `host_fingerprint_bandwidth_floor_mib` | Stop the copy benchmark | Other host observations |
 
-The master false value or workflow off choice wins first. Memory on cannot
+The master false value or caller's off choice wins first. Memory on cannot
 restart a disabled instrument. Whole off skips Python host readings, raw host
 writes and host-memory artifacts. It keeps work, item health and progress
 logging. No setting deletes existing readings.
 
-For a single manual run, choose `host_telemetry=off` in the workflow dispatch.
-For scheduled runs too, change only the master field in the existing configuration:
+Set the master field to false to stop collection for every caller:
 
 ```json
 "host_telemetry_enabled": false
@@ -118,133 +130,62 @@ For scheduled runs too, change only the master field in the existing configurati
 Changing `memory_profiling_enabled` to false is not equivalent: CPU/load
 telemetry remains enabled.
 
-**The measured jobs of `digest.yml` write rows when enabled.** `plan`, `work` and
-`assemble` each draw their own runner, so a run that measured one of them could
-not say what the other two cost. The `work` shards had the record from the start
-because they hold the model server; the two jobs either side of them spent time
-nobody could attribute to a processor.
-
-**No job writes a shared day file, from 2026-09-17.** Each writes its own file
-and nothing else opens it. Ten writers on one path is
-what emptied 2026-09-16; the design rationale below says what it cost and why a
-merge driver was never going to settle it.
-
-**The row arrives in two halves, from 2026-09-18, and neither is ever edited.**
-The probe runs before the job's heaviest step, because the bandwidth reading
-wants a gigabyte and an idle machine. What the job cost - its wall clock, and
-what opening the weights cost before the first item - is only knowable once the
-job is over. The Python clock reads its preceding row and files the whole row
-again, with the job-end cells filled, under the same
-writer. The ledger door keeps the later file of one writer, so a job is one row
-wherever it is read
-([../architecture/contracts/persistence.md](../architecture/contracts/persistence.md#the-two-identifiers)).
-**A job that dies between the two leaves a usable half-row with its job-end
-cells empty**, which is the degrade path rather than a failure - and an empty
-cell is what says the reading was not taken, where a zero would claim a job that
-cost nothing.
-
-The two halves are one writer because the writer identity names the job and not
-the step: the run, the attempt, the job, the shard and the producer are the same
-for both steps of one job, so both files belong to one work unit and the later
-one is read.
-
-**`assemble` took the probe from 2026-09-17 and the clock only from 2026-10-08.**
-Its earlier rows name a machine but leave elapsed time unknown, not zero.
-It takes no server log and no counters file, because it stands no
-model server up - `model_load_ms` and the two prompt cells stay empty for it, and
-that is the reading rather than a gap. A probing job that never clocks itself now
-fails `backend/tests/workflows/test_worker_ledgers.py` instead of filing half a
-row for three weeks.
-
-**A bench dispatch writes into a tree of its own.** `measure.yml` redirects its
-whole state root with `run.trial_state_dirname`, so its rows land tier-first
-under `state/raw/pipeline-tests/` and `state/compact/pipeline-tests/`. The trial
-compaction declaration packs that root
-without changing the production ledger's retention policy. The reason is in
-the design rationale below.
-
-**The probe reads no run plan, from 2026-10-08.** A machine reading is about the
-job rather than about the work the job did, so `idhazh fingerprint` and
-`idhazh job-clock` are handed the day and the run address by the workflow that
-already holds both. They used to read a run plan back to recover those two
-strings, which made a machine reading something only the two workflows that open
-with a plan stage could take - `digest.yml` and `measure.yml`. A gardener wake or
-a council night reached a plan nothing had written and failed the step.
-
-**The gardener and council now record their committing jobs.** Each gardener
-`run-tasks` shard probes before its tasks and clocks afterwards. Both files are
-named among that shard's exact writes, so its existing publisher includes them
-without staging all of `state/`. It uses the settings, attempt and clock handed
-to the runner, not a second load of the default configuration.
-
-The council's `save_council_results` job probes around the full date loop in
-`council_publish.settle_and_publish`. Its observer records both machine files
-in exact publication receipts. Independent venue permissions include the host
-ledger; tenant permissions do not. The row uses the day the council run opened,
-not each date it judged.
-Repeated date settlements therefore read as one machine for that collecting
-job. The workflow passes one start stamp for the whole job. A night with no
-tenant writes neither a council record nor a machine record.
-
-This does not measure the gardener's planning or history-rewrite job, nor the
-council's planning and judging jobs. The collecting job's processor is not the
-processor that ran a council judging shard. Instrument I/O failures can log a
-missing reading. Missing individual observations remain unavailable values.
-Work failures are not hidden. Paused or retired families reject new host rows.
-
-**Memory-copy measurements are opt-in per job.** Set
+**Memory-copy measurements are opt-in per task.** Set
 `observability.host_fingerprint_bandwidth_jobs` in `config/idhazh.json`.
-The default is `["runtime"]`: the bench job alone. Use `[]` to disable the
-copy for every job, or add `work`, `run-tasks` or `save_council_results` to
-enable it there. Machine identity and timing still record when the copy is off.
-An unselected job has `memcpy_probe_mib=0` and an empty `memcpy_gib_s`. The
-existing buffer floor also disables copying when it is zero. The default
-change leaves older measurements intact and adds no persisted column.
+The default is `[]`. Use the task name in this list to enable the benchmark for
+that task; use `[]` to keep it off everywhere. The machine identity and core
+hardware fields still record when the copy is off. An unselected task has
+`memcpy_probe_mib=0` and an empty `memcpy_gib_s`. The buffer floor also disables
+copying when it is zero.
 
-To instrument another job, use
-[`job_machine.record`](../../backend/idhazh/telemetry/job_machine.py) around its
-real work, with already loaded settings, its run identity, attempt and UTC
-start clock. It returns exact completed paths, including the closing clock
-on work failure. Observe those writes and declare the host ledger separately
-when adopting [the publisher](../architecture/publishing/committing.md).
-Leave the job out of `host_fingerprint_bandwidth_jobs` unless it must measure
-memory copying. Do not claim that one collecting machine measured other jobs.
+**Any pipeline can record its task.** Use
+[`task_telemetry.record`](../../backend/idhazh/telemetry/task_telemetry.py)
+around the work, passing the pipeline name, task name, shard, run identity,
+loaded settings and state root. Pipeline and task names are separate validated
+strings, not workflow enums. The recorder writes the opening host row and
+closing task clock through the shared ledger, and returns the exact paths for
+the caller's publisher. A work failure still runs the closing step. The caller
+owns publication and may omit this optional instrument entirely.
 
-**A workflow that mints its own run name hands it over with `--run-id`.** The
-council names a night once and gives that name to every verb that writes a row,
-so a night's machine rows join its other rows on `run_id`. A workflow that names
-an execution passes `--execution` instead, and the address is computed from it
-the same way the plan stage computes it, so the probe and the plan agree by
-construction rather than by lookup. Both flags, naming different runs, is a step
-handed one of them by mistake and is refused before a row is written.
+New generic rows store `pipeline_name` and `task_name` as separate columns and
+leave legacy `job` null. Aggregations combine the names when they need a unique
+task key. Existing job-only rows keep their `job` values and remain readable.
+Readers compare a legacy job's text value, not its Python enum identity.
+The host and item-health ledgers join generic rows on date, run, pipeline, task
+and shard; legacy rows join on date, run, job and shard. No historical row is
+rewritten or relabelled.
+
+The file envelope, which records who wrote a ledger file, has its own version.
+Its pipeline and task columns are declared from envelope version `2026-10-12`.
+The site check uses that version for added writer columns and the row's version
+for its own fields. An older file can lack the added writer columns without a
+rewrite; a current file cannot.
+
+The Hardware page keeps generic host identity separate from the legacy job
+field. Its fleet list combines pipeline and task only for display. A generic
+host row covers a reported shard only when an item row matches its date, run,
+pipeline, task and shard; otherwise the item-backed placement remains visible.
 
 **It files by day, and that is the shape the read wants.** A host record only
 earns its keep when somebody counts across many days, and a day tree is the
 shape a bounded window can read (Guardrail #12).
 
-**Two tables join on the key, and no column is duplicated to make that work.**
-This table and the item-health ledger both carry `date` and `run_id`, and both
-name the job and the shard - `job` and `shard` here, `machine_job` and
-`machine_shard` on the item row - and a job runs on one machine, so the key is the
-join. There is deliberately no `host_fingerprint` column on the item row: it
-would be a second copy of a value this table already holds, and a second copy is
-a thing that can disagree.
-
-**The item row is the third from 2026-09-17, and it is the one that answers per
-item.** It carried the shard from 2026-08-30 and could spell three of the four
-columns; `plan`, `work` and `assemble` all write shard 0, so three of the four
-found every job of the run rather than the one that read the item. With the job
-beside it the question "which processor summarized this item, and what could it
-do" is one equality. The item row's two are named for the machine because the
-ledger door's own `job` and `shard` name the writer, and assemble writes census
-rows for items it did not run:
+**The item-health ledger can refer to a host row without copying its hardware.**
+Generic rows join on date, run, pipeline, task and shard. Legacy rows use the
+job and shard fields:
 
 ```sql
 SELECT ih.item_id, hf.fingerprint, hf.cpu_model, hf.microcode, hf.flags
 FROM item_health ih
 JOIN host_fingerprint hf
   ON hf.date = ih.date AND hf.run_id = ih.run_id
- AND hf.job  = ih.machine_job  AND hf.shard  = ih.machine_shard
+ AND hf.shard = ih.machine_shard
+ AND (
+      (ih.machine_pipeline_name IS NOT NULL
+       AND hf.pipeline_name = ih.machine_pipeline_name
+       AND hf.task_name = ih.machine_task_name)
+      OR (ih.machine_pipeline_name IS NULL AND hf.job = ih.machine_job)
+ )
 ```
 
 **What a machine WAS is here; what it HAD at the moment is on the item row.**
@@ -271,27 +212,24 @@ waiting heartbeat.
 | `version` | date stamp | The schema generation this row was written under |
 | `date` | `YYYY-MM-DD` | The run's date |
 | `run_id` | run id | The run |
-| `job` | **enum**: `plan`, `work`, `assemble`, `visuals`, `runtime`, `decide`, `migrate`, `run-tasks`, `history`, `save_council_results`, `operator` | Which workflow job drew this machine. The enum is the one job vocabulary every ledger shares, so it also names writers that record no machine, such as `decide` and `operator` |
-| `shard` | int, 0+ | The shard inside that job. A single-shard job writes 0 |
-| `fingerprint` | 16 hex characters? | A digest over the cells that cannot change inside a job |
+| `pipeline_name` | validated string? | The generic pipeline identity. Paired with `task_name`; both are absent on legacy rows |
+| `task_name` | validated string? | The generic task identity. Paired with `pipeline_name`; both are absent on legacy rows |
+| `job` | legacy enum or string, nullable | The old workflow identity. New generic rows store null |
+| `shard` | int, 0+ | The shard inside the task. A single-shard task writes 0 |
+| `fingerprint` | 16 hex characters? | A digest over the hardware cells that do not depend on the execution |
 | `fingerprint_version` | 1 or 2? | The digest algorithm; null exactly when the digest is null |
 
-**`fingerprint` is countable only with `fingerprint_version`.** The Python
-collector uses algorithm 1, including the old core/thread estimates. The reader
-does not treat those estimates as proven physical topology. Stored algorithm 2
-digests vendor,
-family, model, stepping, model name, L3 and watched flags only. Counts, target
-constraints, frequency, placement and clocks are excluded. Consumers group by
-the pair `(fingerprint_version, fingerprint)`; equal digest text under versions
-1 and 2 does not establish continuity.
+**`fingerprint` is countable only with `fingerprint_version`.** New Python rows
+use algorithm 2, which digests vendor, family, model, stepping, model name, L3
+and watched flags only. Counts, target constraints, frequency, placement and
+clocks are excluded. Existing algorithm 1 and 2 rows keep their original labels
+and values; no historical row is rewritten or replayed. Consumers group by the
+pair `(fingerprint_version, fingerprint)`; equal digest text under versions 1
+and 2 does not establish continuity.
 
-**Every value of `job` is that job's own id in its workflow file, lowercase,
-except `operator`.** A reader goes from a row to the steps that wrote it with
-nothing in between, and a display name would drift from the thing it identifies.
-`operator` names a command a person ran on their own machine, outside a workflow.
-`visuals` is the one workflow value with no producer left: `digest.yml` ran that
-job until 2026-09-13, and the member stays so the rows it wrote still read back.
-`runtime` is `measure.yml`'s bench job, and its rows are in the other ledger.
+**The closed `job` vocabulary is for legacy rows only.** A generic caller stores
+`pipeline_name` and `task_name` as separate validated strings and leaves `job`
+null. The ledger combines the pair only when it needs one unique task key.
 
 ## What the processor is
 
@@ -334,6 +272,15 @@ vocabulary lives in the contract rather than in the schema.
 
 **An empty `flags` is a reading, not a gap.** The machine we draw most, the EPYC
 7763, reports none of the watched AVX-512 entries at all.
+
+`cpu_logical_processors` counts IDs in `/sys/devices/system/cpu/online`, so
+sparse IDs count as processors and do not imply missing CPUs. A physical count
+is recorded only when every online CPU has a valid package and core ID.
+`cpu_allowed_processors` is the online intersection of the measured Python
+process's effective affinity mask; that mask already includes its cpuset.
+`cpu_quota_cores` is the tightest valid quota found from the process cgroup up
+through its visible ancestors. A denied, missing or malformed ancestor makes
+the quota unavailable rather than treating it as unlimited.
 
 ## What the processor will not tell us
 
@@ -437,11 +384,12 @@ reclaimed before any unmap records it leaves the next read lower than the last
 one. The archive shows the outside of that rule directly: the mark reads below
 the current set on 0 of 1,250 rows, and equals it exactly on 298.
 
-**What this reading cannot settle:** no row carries the server's process id, so
-a restart is ruled out by the resident set rather than by identity. That
-separates a restart from a reclaimed page; it cannot separate two processes that
-happened to hold the same amount. It also says nothing about how much of the
-mark is weights against working memory - there is no per-region reading here.
+**What this reading cannot settle:** the row does not store the server's process
+id or start-time counter, so old rows cannot be checked again for process
+identity. New reads validate both while collecting; a restart or reused PID
+leaves the affected cells unknown. This still says nothing about how much of
+the mark is weights against working memory - there is no per-region reading
+here.
 
 **The committed rows are not wrong; the column's description was.** Every value
 is what `/proc/<pid>/status` printed at that item's two boundaries, highest of
@@ -537,10 +485,10 @@ stage anywhere else records none of them.
 | `server_prompt_tokens` | int? | Prompt tokens llama-server itself counted reading, cached tokens excluded | **The second instrument.** The item ledger's own answer is `sum(input_tokens) - sum(cached_tokens)`, and arithmetic over that ledger cannot check that ledger |
 | `server_prompt_seconds` | float? | Seconds llama-server itself counted reading prompts | The other half. A rate is a ratio, and the 80 percent defect this check caught in August 2026 was in the numerator, so one cell alone could not see it |
 
-**`job_seconds` is a floor on the job's wall clock and never a ceiling.** The
-steps after it - the ledger push, two log summaries and the artifact uploads -
-are outside the window. Only the `work` job stamps the clock its first step
-reads, so only `work` rows carry these cells today.
+**`job_seconds` is a floor on the task's wall clock and never a ceiling.** The
+steps after it - the ledger push, log summaries and artifact uploads - are
+outside the window. A caller that records the closing clock can populate it;
+server counters remain empty unless that caller supplies their source files.
 
 **`server_prompt_tokens` and `server_prompt_seconds` are the only two cells on
 the site that can disagree with the item ledger.** Everything else that answers
@@ -557,133 +505,33 @@ clock parser lives in
 [`silicon.py`](../../backend/idhazh/telemetry/silicon.py), beside the writer.
 Python owns each invocation's host row.
 
-## Why almost nothing here is an enum
+## Identity names
 
-**`job` is an enum. Nothing else is, and that is the rule rather than an
-oversight.**
+Generic pipeline and task names are validated lowercase strings, not enum
+members. This lets another pipeline use the same writer without changing a
+shared vocabulary. The trade-off is that the schema checks their shape, not
+whether a pipeline exists. Legacy `job` values remain readable and retain their
+closed vocabulary where it applies. Hardware values stay open because vendors
+and cloud providers can add them without notice; rejecting a new value would
+discard the reading the fingerprint exists to capture.
 
-`job` is a name this project chose, in `.github/workflows/`. A closed set is
-correct: a typo should be refused, because a third job nobody can group by is a
-silent hole in every query.
-
-Every other identifier is **a string a vendor or a cloud chose, and they change
-it without telling us.** A vendor ships a new part, a cloud adds a machine size,
-a microcode revision lands. If `cpu_vendor` or `vm_size` were closed sets, the
-first unfamiliar value would fail validation and **the run would lose the very
-reading that was worth having** - the new machine is exactly the case the
-instrument exists to catch.
-
-So the rule for this record is: **a value we author is an enum; a value the
-machine reports is a string.** The cost is real and worth naming - a typo in a
-host string cannot be caught by the schema, and a query grouping by `cpu_model`
-will treat two spellings as two machines. `fingerprint` is the mitigation: it is
-derived from the strings rather than typed by hand, so grouping by it is stable
-even when a vendor changes how it spells a name.
-
-`flags` is the one judgement call. Its vocabulary IS closed - `WATCHED_FLAGS` -
-but it holds a set rather than one value, and every cell of this row holds one
-scalar. A joined
-string keeps one column; the cost is that a reader of the schema cannot see the
-closed set and has to open the contract.
+`flags` is a fixed set - `WATCHED_FLAGS` - stored as a space-separated string
+to keep one column. Its full vocabulary lives in the contract.
 
 ## Design rationale
 
-**Each instrumented job needs its own machine row.** A collecting job's runner
-cannot describe a different planning, judging or worker job. The implemented
-workflow coverage above is explicit; uninstrumented jobs and disabled runs make
-no machine-reading claim. Each publisher names only the completed files owned
-by its invocation.
+**A task record describes only the task that took it.** A collector does not
+claim that its runner measured another pipeline or task. The caller decides
+where to place the shared ledger and which exact writes its publisher commits.
 
-The placement rule travels with it. The probe wants about a gigabyte and an idle
-machine, so it runs before the job's heaviest step - ahead of the model server in
-`work`, ahead of the embeddings and the site build in `assemble` - and after the
-plan file exists in every job, because the row is filed under the run's own id.
-
-**A bench dispatch writes tier-first under `state/raw/pipeline-tests/` and
-`state/compact/pipeline-tests/`, not beside the
-production rows.** A bench is dispatched ad hoc, many times a day, against
-branches nobody merged. Mixing those rows into the ledger the console reads would
-mean every panel filtering by job for ever - a cost paid on every read, by every
-reader, to keep a few dispatches apart. The split pays it once instead. What it
-costs is a join whenever somebody asks what machines GitHub has given us across
-both, and that is a question asked rarely and by an operator. The mechanism is
-the one that already existed: `run.trial_state_dirname` names the trial root a
-run's ledgers splice in ahead of each tier, so one input on the candidate-config action puts every ledger
-that run writes under the trial tree, and no second way of doing the same thing
-was minted. Owner decision, 2026-09-16.
-
-**Nothing staged this ledger until 2026-09-16, so there is no history to query
-before that date.** The probe ran on every work shard, wrote its row into the
-runner's own checkout, and no commit step named the path - so the file went with
-the runner. `git ls-files state/host-fingerprint*` returned nothing at all, which
-is the proof and also why nobody noticed: the instrument reported success, the
-log line printed the machine, and the ledger stayed empty. Three things changed
-together: the work job's commit step stages `state/host-fingerprint`, a
-header-only day file is committed so `git add` under `set -euo pipefail` cannot
-abort that step on a fresh clone, and assemble's refresh set names the path so a
-lost push race hands it back to the tip rather than union-merging two copies.
-Authority: Carmack, 2026-09-16.
-
-**The guard that would have caught this was scoped to one source file.** A test
-already compares the ledgers a stage writes against the paths its job stages, and
-it reads `stages/work.py`. The probe is not there - it runs from `cli.py` as its
-own subcommand, early, because the bandwidth reading wants an idle host. So the
-guard was correct and blind at the same time. A second guard reading
-`telemetry/silicon.py` shipped beside the fix and was retired on 2026-09-17: a
-second file-scoped guard is the same defect a second time. **Scoping a
-drift guard to a file rather than to a question is what let a second writer
-through**, and what replaced both names no file - it charges each ledger to the
-job whose `python -m idhazh <verb>` step reaches its writer, so a fourth job that
-records a machine and stages nothing fails without an edit
-([../architecture/publishing/committing.md](../architecture/publishing/committing.md#the-caller-owns-recovery-policy)).
-
-**A repeated row now settles, and it could not have before.** Until 2026-09-16
-nothing paired this ledger with what makes two of its rows one record, which
-cost nothing while nothing was committed and would have cost a double-counted
-machine the moment something was. A job runs on one machine, so two rows under
-one `(date, run_id, job, shard)` are one machine written down twice, and the
-fleet distribution is the one question this record exists to answer. Within one work unit, the later write of the highest attempt supplies the whole
-row, so the closing clock supersedes its probe. Business-key settlement then
-keeps one row under `HOST_FINGERPRINT_KEY`, not a sum of probe and clock records.
-The exact rules are in
+The recorder accepts separate pipeline and task names plus a shard. Those
+columns form the generic identity; a unique ledger unit combines them only
+where a single key is required. Old job-only rows keep their original identity.
+The opening hardware row and closing clock share one work-unit identity, so the
+later file completes the row rather than adding a second task record. Each write
+is an immutable file through the shared ledger, and the reader settles attempts
+using the common rules in
 [Persistence](../architecture/contracts/persistence.md#the-two-identifiers).
-
-**Staging a shared path was not enough, and 2026-09-16 proved it.** The day was
-staged, committed and pushed by ten jobs of one run, and its shared day file held
-only a header. Each job appended to one path in its own checkout, the pushes
-raced, and a merge driver settling two appends could not help: a rebase hands a
-job the tip, the job replays its own append, and the last writer to win a race
-carries whatever its checkout held. **A shared path is the defect; a settlement
-rule on top of it is a repair.**
-
-So no job opens a shared day file. Every write is a raw file under
-`state/raw/host-fingerprint/<YYYY>/<MM>/<DD>/` that the ledger door names for its
-writer - the run, the try at it, the job and the shard - so a file is one
-writer's alone, and a run that died leaves its rows in the day they belong to
-with nothing to catch up
-([../architecture/contracts/persistence.md](../architecture/contracts/persistence.md#the-ledgers-on-the-door)).
-
-**The attempt is the writer's, and in no column of the contract.** GitHub keeps
-the run id stable across a re-run and increments the attempt. The door files each
-try as its own raw file and keeps the rows of the higher attempt, so a re-run
-replaces its first try - the one that died - instead of adding a second row.
-
-**The row's shape did not change.** Every file in the day
-carries the tree's own columns and the tree's own contract, so there is no
-version stamp, no migration and no second schema. A reader gets the same rows it
-got before. Authority: Fowler, 2026-09-17.
-
-**A bench dispatch writes the same way.** `measure.yml` has no `assemble` job,
-and it needs none: its probe writes its own file under the day and the commit
-stages `state/raw/pipeline-tests/host-fingerprint`; the gardener packs that
-root under `state/compact/pipeline-tests/host-fingerprint` through
-`compact-trial-host-fingerprint`. When this was decided it was
-the one state writer with
-no concurrency group
-at all, which is why it got its own file rather than being left on the shared
-path. It groups per target now, and a day is still shared by every dispatch
-of one target - shared as a directory, which is the whole point. Authority:
-Carmack, 2026-09-17.
 
 ## See also
 

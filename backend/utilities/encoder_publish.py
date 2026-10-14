@@ -101,7 +101,7 @@ def land(
     )
     identity = receipt.identity
     if (
-        identity.job is not ServerJob.COLLECT
+        identity.job != ServerJob.COLLECT
         or identity.shard != 0
         or identity.producer != PRODUCER
         or identity.run_id.split("-", 3)[-1] != execution

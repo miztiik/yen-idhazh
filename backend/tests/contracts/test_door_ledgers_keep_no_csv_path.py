@@ -42,7 +42,9 @@ ENVELOPE_NAMED_FIELDS: Final[Mapping[LedgerName, frozenset[str]]] = {
     LedgerName.ITEM_HEALTH: frozenset({"run_id", "tier"}),
     LedgerName.ITEM_HEALTH_SUMMARY: frozenset(),
     LedgerName.SUMMARY_QUALITY_EVALS: frozenset({"compression", "run_id"}),
-    LedgerName.HOST_FINGERPRINT: frozenset({"job", "run_id", "shard"}),
+    LedgerName.HOST_FINGERPRINT: frozenset(
+        {"job", "pipeline_name", "task_name", "run_id", "shard"}
+    ),
     LedgerName.COUNTERFACTUAL_SCORES: frozenset({"run_id"}),
     LedgerName.CANDIDATE_MODELS: frozenset({"run_id"}),
     LedgerName.FEED_HEALTH: frozenset({"run_id"}),

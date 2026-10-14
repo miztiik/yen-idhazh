@@ -22,6 +22,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import fields
 from pathlib import Path
 from types import FrameType
+from typing import IO
 
 import pytest
 from conftest import FIXTURES_DIR, read_text
@@ -63,6 +64,8 @@ def test_memory_control_keeps_cpu_but_skips_memory_and_fault_reads(
         (process / "status").write_text(
             "VmRSS: 100 kB\nVmHWM: 200 kB\nRssAnon: 80 kB\n", encoding="ascii"
         )
+        if pid == 7:
+            (process / "stat").write_text(proc_stat(pid, major_faults=0), encoding="ascii")
     for name, path in (
         ("PROC", proc), ("PROC_STAT", stat),
         ("LOADAVG", proc / "loadavg"), ("MEMINFO", proc / "meminfo")
@@ -354,33 +357,32 @@ def test_the_runner_name_is_read_off_the_platform_and_never_invented() -> None:
     assert host.runner_name({}) is None
 
 
-def test_the_server_pid_is_found_by_asking_the_kernel(
+def test_the_named_server_pid_wins_over_an_unrelated_server(
     monkeypatch: MonkeyPatch, tmp_path: Path
 ) -> None:
-    """The alternative is an environment variable set in a shell and read in a stage.
-
-    Driven from a `/proc` the test builds, so the case the developer box cannot
-    produce - a process table with the server in it - is present rather than
-    waited for.
-    """
-    for pid, comm in (("1", "systemd"), ("742", "llama-server"), ("900", "python3")):
-        entry = tmp_path / pid
+    """Use the PID from the server owner, not the first matching process."""
+    requested_pid, unrelated_pid = 742, 700
+    for pid, name, rss_kb in (
+        (requested_pid, "llama-server", A_SERVER_RSS_KB),
+        (unrelated_pid, "llama-server", A_SERVER_PEAK_KB),
+    ):
+        entry = tmp_path / str(pid)
         entry.mkdir()
-        (entry / "comm").write_text(f"{comm}\n", encoding="utf-8")
-    (tmp_path / "self").mkdir()
+        (entry / "stat").write_text(proc_stat(pid, major_faults=0), encoding="utf-8")
+        (entry / "status").write_text(
+            proc_status(name, rss_kb=rss_kb, peak_kb=rss_kb), encoding="utf-8"
+        )
+    own = tmp_path / str(os.getpid())
+    own.mkdir()
+    (own / "status").write_text(
+        proc_status("python3", rss_kb=OUR_OWN_RSS_KB, peak_kb=OUR_OWN_RSS_KB),
+        encoding="utf-8",
+    )
     monkeypatch.setattr(host, "PROC", tmp_path)
 
-    assert host.llama_server_pid() == 742
-    assert host.llama_server_pid("nothing-runs-under-this-name") is None
+    cells = host.Watch(interval_s=0, server_pid=requested_pid).close()
 
-
-def test_a_process_table_this_machine_will_not_open_reports_nothing(
-    monkeypatch: MonkeyPatch, tmp_path: Path
-) -> None:
-    """Nothing here is retried and nothing raises."""
-    monkeypatch.setattr(host, "PROC", tmp_path / "absent")
-
-    assert host.llama_server_pid() is None
+    assert cells.llama_rss_bytes == A_SERVER_RSS_KB * 1024
 
 
 #: One process's memory, at values the test chooses. `VmPeak` is the VIRTUAL
@@ -435,6 +437,8 @@ def test_one_open_a_tick_answers_every_one_of_a_processs_status_lines(
         entry = tmp_path / str(pid)
         entry.mkdir()
         (entry / "status").write_text(status, encoding="utf-8")
+        if pid == server_pid:
+            (entry / "stat").write_text(proc_stat(pid, major_faults=0), encoding="utf-8")
     monkeypatch.setattr(host, "PROC", tmp_path)
     # A spy over the module's one reader, so what is counted is a real open of a
     # real file rather than a stand-in that returned text (Guardrail #7).
@@ -454,7 +458,9 @@ def test_one_open_a_tick_answers_every_one_of_a_processs_status_lines(
     opens = Counter(opened)
     assert opens[tmp_path / str(server_pid) / "status"] == ticks
     assert opens[tmp_path / str(os.getpid()) / "status"] == ticks
-    assert max(opens.values()) <= ticks, f"a file was opened twice in one tick: {opens}"
+    assert all(
+        count <= ticks for path, count in opens.items() if path.name == "status"
+    ), f"a status file was opened twice in one tick: {opens}"
     assert cells.llama_rss_bytes == A_SERVER_RSS_KB * 1024
     assert cells.llama_rss_peak_bytes == A_SERVER_PEAK_KB * 1024
     assert cells.python_rss_bytes == OUR_OWN_RSS_KB * 1024
@@ -482,6 +488,8 @@ def test_the_anonymous_part_of_each_resident_set_is_recorded_apart_from_the_whol
         entry = tmp_path / str(pid)
         entry.mkdir()
         (entry / "status").write_text(status, encoding="utf-8")
+        if pid == server_pid:
+            (entry / "stat").write_text(proc_stat(pid, major_faults=0), encoding="utf-8")
     monkeypatch.setattr(host, "PROC", tmp_path)
 
     cells = host.Watch(interval_s=0, server_pid=server_pid).close()
@@ -531,6 +539,24 @@ def test_a_status_line_this_project_does_not_read_is_ignored(
     assert host.status_bytes(9931) == dict.fromkeys(host.STATUS_KEYS)
     assert host.status_bytes(None) == dict.fromkeys(host.STATUS_KEYS)
     assert host.status_bytes(4242) == dict.fromkeys(host.STATUS_KEYS)
+
+
+def test_an_oversized_or_denied_process_read_is_unknown(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    oversized = tmp_path / "oversized"
+    oversized.write_bytes(b"x" * (host._PROC_READ_LIMIT_BYTES + 1))
+    assert host._text(oversized) is None
+
+    original_open = Path.open
+
+    def denied(path: Path, *_: object, **__: object) -> IO[bytes]:
+        if path.name == "meminfo":
+            raise PermissionError("fixture denies the read")
+        return original_open(path, "rb")
+
+    monkeypatch.setattr(Path, "open", denied)
+    assert host.meminfo_bytes() == dict.fromkeys(host.MEMINFO_KEYS)
 
 
 def _aggregate_cpu_line(text: str) -> list[int]:
@@ -595,11 +621,18 @@ def test_a_capture_nobody_took_is_absent_rather_than_a_share_of_zero() -> None:
     assert host.cpu_ticks("") is None
     assert host.cpu_ticks("cpu\n") is None
     assert host.cpu_ticks("cpu not a number\n") is None
+    assert host.cpu_ticks("cpu 1 2 3\n") is None
     assert host.cpu_shares_between(at_start, None) is None
     assert host.cpu_shares_between(None, at_start) is None
     assert host.cpu_shares_between(at_start, at_start) is None, (
         "a window of no elapsed ticks has no share to report"
     )
+    assert host.cpu_shares_between(
+        "cpu 10 0 0 0\n", "cpu 9 0 0 0\n"
+    ) is None, "a reset counter is not negative CPU use"
+    assert host.cpu_shares_between(
+        "cpu 0 0 0 0 0 0 0 0 0 0\n", "cpu 0 0 0 0 0 0 0 0 1 0\n"
+    ) is None, "guest ticks cannot exceed the user ticks that include them"
 
 
 #: A window a test writes, with a quarter of it handed to somebody else. The
@@ -703,7 +736,8 @@ def proc_stat(pid: int, *, major_faults: int) -> str:
     cminflt, cmajflt, utime, stime = 0, 0, 4_200, 310
     return (
         f"{pid} ({A_SERVER_COMMAND}) S {ppid} {pgrp} {session} {tty_nr} {tpgid} {flags} "
-        f"{A_MINOR_FAULT_COUNT} {cminflt} {major_faults} {cmajflt} {utime} {stime} 0 0 20 0 9\n"
+        f"{A_MINOR_FAULT_COUNT} {cminflt} {major_faults} {cmajflt} {utime} {stime} "
+        f"0 0 20 0 9 0 123\n"
     )
 
 
@@ -780,10 +814,21 @@ def test_the_fault_counter_is_read_at_the_items_ends_and_never_on_a_tick(
     server_pid, _, opened = _a_server_the_test_owns(monkeypatch, tmp_path)
     stat_file = tmp_path / str(server_pid) / "stat"
     status_file = tmp_path / str(server_pid) / "status"
+    fault_reads: list[int | None] = []
+    read_faults = host.major_faults
+
+    def count_fault_reads(
+        pid: int | None, *, expected_start_ticks: int | None = None
+    ) -> int | None:
+        fault_reads.append(pid)
+        return read_faults(pid, expected_start_ticks=expected_start_ticks)
+
+    monkeypatch.setattr(host, "major_faults", count_fault_reads)
 
     with host.Watch(interval_s=0, server_pid=server_pid):
         pass
     at_rest = Counter(opened)
+    faults_at_rest = len(fault_reads)
     opened.clear()
     ticked = threading.Event()
     with host.Watch(interval_s=0.01, server_pid=server_pid, on_tick=lambda _: ticked.set()):
@@ -791,10 +836,10 @@ def test_the_fault_counter_is_read_at_the_items_ends_and_never_on_a_tick(
     sampling = Counter(opened)
 
     assert sampling[status_file] > at_rest[status_file], "the sampler took no sample to compare"
-    assert sampling[stat_file] == at_rest[stat_file] > 0, (
-        f"the fault counter was read {sampling[stat_file]} times with the sampler running "
-        f"against {at_rest[stat_file]} with it off"
+    assert sampling[stat_file] > at_rest[stat_file] > 0, (
+        "each server status read must be bracketed by process start-time checks"
     )
+    assert len(fault_reads) - faults_at_rest == 2, "fault counters are not sampled on a tick"
 
 
 def test_a_server_that_started_again_mid_item_records_no_fault_count(
@@ -836,6 +881,73 @@ def test_a_fault_counter_this_machine_will_not_answer_reports_nothing(
     assert host.major_faults(4242) is None
     assert host.major_faults(None) is None
     assert host.major_faults(7777) is None
+
+
+def test_a_reused_pid_cannot_supply_memory_or_faults(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    server_pid, _, _ = _a_server_the_test_owns(monkeypatch, tmp_path)
+    stat_file = tmp_path / str(server_pid) / "stat"
+    status_file = tmp_path / str(server_pid) / "status"
+    status_file.write_text(
+        proc_status("unrelated", rss_kb=A_SERVER_RSS_KB, peak_kb=A_SERVER_PEAK_KB),
+        encoding="utf-8",
+    )
+    watch = host.Watch(interval_s=0, server_pid=server_pid)
+    read_text = host._text
+
+    def reused_pid(path: Path) -> str | None:
+        if path == stat_file:
+            return proc_stat(server_pid, major_faults=FAULTS_AT_ITEM_CLOSE).replace(
+                " 123\n", " 456\n"
+            )
+        return read_text(path)
+
+    monkeypatch.setattr(host, "_text", reused_pid)
+
+    cells = watch.close()
+
+    assert cells.llama_rss_bytes is None
+    assert cells.llama_major_faults is None
+
+
+def test_close_waits_for_the_active_sample_and_is_idempotent(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    entered = threading.Event()
+    release = threading.Event()
+    sampled = {"count": 0}
+
+    def bounded_read(path: Path) -> str | None:
+        if path == host.PROC_STAT and threading.current_thread().name == "host-watch":
+            sampled["count"] += 1
+            entered.set()
+            assert release.wait(timeout=5), "the fixture did not release its active read"
+            return "cpu 10 0 0 10\n"
+        return None
+
+    monkeypatch.setattr(host, "_text", bounded_read)
+    watch = host.Watch(interval_s=0.001)
+    watch.__enter__()
+    assert entered.wait(timeout=5), "the sampler did not start"
+    closed = threading.Event()
+    result: list[host.HostCells] = []
+
+    def close_watch() -> None:
+        result.append(watch.close())
+        closed.set()
+
+    closer = threading.Thread(target=close_watch)
+    closer.start()
+    assert not closed.wait(timeout=0.02), "close returned while a sample was still active"
+    release.set()
+    closer.join(timeout=5)
+
+    assert closed.is_set()
+    assert not closer.is_alive()
+    reads_at_close = sampled["count"]
+    assert watch.close() == result[0]
+    assert sampled["count"] == reads_at_close
 
 
 def test_the_aggregate_line_is_read_out_of_a_whole_capture_or_out_of_the_line_alone() -> None:

@@ -138,15 +138,29 @@ def fragment_name(run_id: str) -> str:
 
 
 def unit_id(
-    *, ledger: str, covers: str, run_id: str, job: str, shard: int, producer: str
+    *,
+    ledger: str,
+    covers: str,
+    run_id: str,
+    shard: int,
+    producer: str,
+    job: str | None = None,
+    pipeline_name: str | None = None,
+    task_name: str | None = None,
 ) -> uuid.UUID:
     """Which work unit this file records. Identical for every attempt at that unit.
 
     A version 5 UUID with no clock and no attempt in it, so a re-run of a failed
     job, which GitHub files under the original run id, mints the same value and
-    the union keeps only its newest attempt.
+    the union keeps only its newest attempt. New telemetry identity uses the
+    pipeline and task columns; the legacy job spelling keeps its original UUID.
     """
-    return uuid.uuid5(NAMESPACE, f"{ledger}|{covers}|{run_id}|{job}|{shard}|{producer}")
+    if (pipeline_name is None) != (task_name is None) or (job is None) == (
+        pipeline_name is None
+    ):
+        raise ValueError("unit identity requires legacy job or pipeline and task")
+    label = job if job is not None else f"{pipeline_name}|{task_name}"
+    return uuid.uuid5(NAMESPACE, f"{ledger}|{covers}|{run_id}|{label}|{shard}|{producer}")
 
 
 def file_id(*, unit: uuid.UUID, attempt: int, written_at_ms: int) -> uuid.UUID:

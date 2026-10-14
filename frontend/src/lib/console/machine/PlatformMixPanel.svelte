@@ -297,7 +297,7 @@
 							<thead>
 								<tr>
 									<th scope="col">Run</th>
-									<th scope="col">Job</th>
+									<th scope="col">Job or pipeline/task</th>
 									<th scope="col" class="number">Shard</th>
 									<th scope="col">Machine</th>
 									<th scope="col" class="number">Seconds</th>
@@ -311,7 +311,9 @@
 									     carry their own words because the heading row is not shown. -->
 									<tr data-fleet-job={line.row}>
 										<td class="run">{line.runId}</td>
-										<td class="job">{line.job}</td>
+										<td class="job">{line.pipelineName !== null && line.taskName !== null
+											? `${line.pipelineName}/${line.taskName}`
+											: line.job ?? 'not recorded'}</td>
 										<td class="number shard"><span class="narrow-word" aria-hidden="true">{'shard '}</span>{line.shard ?? 'not recorded'}</td>
 										<td class="machine">{line.machine}</td>
 										{#if line.seconds === null}

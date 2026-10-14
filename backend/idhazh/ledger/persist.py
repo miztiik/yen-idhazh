@@ -86,7 +86,7 @@ _COUNT_PROVENANCE_COLUMNS: Final[tuple[Column, ...]] = arrow_schema.columns_of(R
 #: The identity cells a row's own contract may not contradict, because the
 #: union ranks and groups on them: a row carrying another try than its writer's
 #: would be kept or dropped for a try that never wrote it.
-_RANKED_CELLS: Final = ("attempt", "unit_id")
+_RANKED_CELLS: Final = ("attempt", "unit_id", "pipeline_name", "task_name")
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,11 +169,19 @@ def _compression(fmt: Format, tier: Tier, knobs: LedgerConfig) -> Compression:
     return knobs.compression_raw if tier is Tier.RAW else knobs.compression_compact
 
 
-def file_columns(model: type[Contract]) -> tuple[Column, ...]:
-    """The contract's own columns, then every identity column it does not declare itself."""
+def file_columns(
+    model: type[Contract], *, envelope_version: str | None = None
+) -> tuple[Column, ...]:
+    """The row's columns plus writer cells declared by this envelope version."""
     own = arrow_schema.columns_of(model)
     return own + tuple(
-        column for column in _IDENTITY_COLUMNS if column.name not in model.model_fields
+        column
+        for column in _IDENTITY_COLUMNS
+        if column.name not in model.model_fields
+        and (
+            envelope_version is None
+            or RowIdentity.__column_versions__.get(column.name, "") <= envelope_version
+        )
     ) + (_COUNT_PROVENANCE_COLUMNS if model is RunShards else ())
 
 
@@ -183,9 +191,11 @@ def _unit(ledger: LedgerName, covers: str, identity: WriterIdentity) -> uuid.UUI
         ledger=ledger,
         covers=covers,
         run_id=identity.run_id,
-        job=identity.job,
         shard=identity.shard,
         producer=identity.producer,
+        job=str(identity.job) if identity.pipeline_name is None else None,
+        pipeline_name=identity.pipeline_name,
+        task_name=identity.task_name,
     )
 
 
@@ -366,7 +376,9 @@ def persist(
             "covers": day,
             "run_id": identity.run_id,
             "attempt": identity.attempt,
-            "job": identity.job.value,
+            "job": str(identity.job) if identity.job is not None else None,
+            "pipeline_name": identity.pipeline_name,
+            "task_name": identity.task_name,
             "shard": identity.shard,
             "unit_id": str(_unit(ledger, day, identity)),
         }
@@ -806,9 +818,15 @@ def load_stored[C: Contract](paths: Sequence[Path], *, model: type[C]) -> list[S
                                 ledger=LedgerName.HOST_FINGERPRINT,
                                 covers=identity.covers,
                                 run_id=identity.run_id,
-                                job=identity.job,
                                 shard=identity.shard,
                                 producer="telemetry.silicon",
+                                job=(
+                                    str(identity.job)
+                                    if identity.pipeline_name is None
+                                    else None
+                                ),
+                                pipeline_name=identity.pipeline_name,
+                                task_name=identity.task_name,
                             )
                             if envelope.tier is Tier.RAW
                             and envelope.writer.startswith("idhazh_rust.")
