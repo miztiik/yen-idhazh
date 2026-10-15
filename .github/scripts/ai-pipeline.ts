@@ -2,18 +2,80 @@
 import http from "node:http";
 import fs from "node:fs";
 import os from "node:os";
+import crypto from "node:crypto";
+import { execSync } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { performance } from "node:perf_hooks";
 
+import { parseHTML } from "linkedom";
+import { Defuddle } from "defuddle/node";
+
 // -------------------------------------------------------------
-// 1. TYPES & SCHEMAS
+// 1. RFC 4122 UUID v5 GENERATOR (`evt-<uuidv5>`)
 // -------------------------------------------------------------
-export interface HostFingerprint {
-  runner_name: string;
-  run_id: string;
-  cpu_model: string;
-  cores: number;
-  total_memory_gb: number;
+const UUIDV5_NAMESPACE = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
+
+function uuidToBytes(uuid: string): Buffer {
+  return Buffer.from(uuid.replace(/-/g, ""), "hex");
+}
+
+function generateUuidV5(name: string, namespace: string = UUIDV5_NAMESPACE): string {
+  const nsBytes = uuidToBytes(namespace);
+  const hash = crypto.createHash("sha1");
+  hash.update(nsBytes);
+  hash.update(Buffer.from(name, "utf8"));
+  const digest = hash.digest();
+
+  digest[6] = (digest[6] & 0x0f) | 0x50; // Version 5
+  digest[8] = (digest[8] & 0x3f) | 0x80; // Variant RFC 4122
+
+  const hex = digest.subarray(0, 16).toString("hex");
+  return [
+    hex.substring(0, 8),
+    hex.substring(8, 12),
+    hex.substring(12, 16),
+    hex.substring(16, 20),
+    hex.substring(20, 32),
+  ].join("-");
+}
+
+// -------------------------------------------------------------
+// 2. SCHEMAS & INTERFACES
+// -------------------------------------------------------------
+export type ActiveSourceType = "URL" | "INPUT_TEXT" | "FALLBACK_INPUT_TEXT";
+
+export interface SourceAudit {
+  activeSource: ActiveSourceType;
+  sourceIdentifier: string;
+  sourceTitle: string;
+  resolutionReason: string;
+  extractedWordCount: number;
+  extractedCharCount: number;
+  extractedText: string;
+  scrapeError?: string;
+}
+
+export interface DetailedTokenMetrics {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  prompt_time_ms: number;
+  completion_time_ms: number;
+  total_duration_ms: number;
+  prompt_tokens_per_second: number;
+  completion_tokens_per_second: number;
+}
+
+export interface SwapActivityMetrics {
+  swappiness: number;
+  server_pid: number | null;
+  server_vm_rss_mb: number;
+  peak_server_swap_mb: number;
+  final_server_swap_mb: number;
+  system_swap_used_mb: number;
+  system_swap_total_mb: number;
+  swap_bytes_written_mb: number;
+  swap_bytes_read_mb: number;
 }
 
 export interface SummaryStructuredOutput {
@@ -22,20 +84,203 @@ export interface SummaryStructuredOutput {
   key_points: string[];
   sentiment: "positive" | "neutral" | "negative" | "mixed";
   compression_ratio: string;
+  raw_output: string;
+  source_audit: SourceAudit;
+  token_metrics: DetailedTokenMetrics;
+  swap_metrics: SwapActivityMetrics;
 }
 
 export interface PipelineEvent<T = any> {
   eventId: string;
-  eventType: "INPUT_RECEIVED" | "INFERENCE_STARTED" | "INFERENCE_COMPLETED" | "OUTPUT_STRUCTURED";
+  eventType:
+    | "URL_HTTP_FETCH_STARTED"
+    | "URL_HTTP_FETCH_COMPLETED"
+    | "URL_EXTRACTION_SUCCESS"
+    | "URL_EXTRACTION_FAILED"
+    | "INPUT_RESOLVED"
+    | "INFERENCE_DISPATCHED"
+    | "INFERENCE_COMPLETED"
+    | "OUTPUT_STRUCTURED";
   timestamp: string;
   correlationId: string;
   payload: T;
 }
 
 // -------------------------------------------------------------
-// 2. TIMEOUT-FREE HTTP CLIENT (Bypasses Undici 300s limit)
+// 3. SMART URL SCRAPER (Substack API + Defuddle + Fallback)
 // -------------------------------------------------------------
-function postJsonNoTimeout(urlStr: string, payload: any): Promise<any> {
+async function extractWebContent(
+  url: string,
+  emitEvent: (type: PipelineEvent["eventType"], payload: any) => void
+): Promise<{ title: string; content: string; wordCount: number }> {
+  emitEvent("URL_HTTP_FETCH_STARTED", { url });
+
+  // 1. Substack Native Public API Bypass (immune to Cloudflare 403 on HTML)
+  if (url.includes(".substack.com/p/")) {
+    try {
+      const match = url.match(/(https:\/\/[^/]+)\/p\/([^/?#]+)/);
+      if (match) {
+        const apiUrl = `${match[1]}/api/v1/posts/${match[2]}`;
+        console.log(`[SCRAPER] ⚡ Substack detected. Querying Substack API: ${apiUrl}`);
+        const apiRes = await fetch(apiUrl, {
+          headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/131.0.0.0" },
+          signal: AbortSignal.timeout(10000),
+        });
+
+        if (apiRes.ok) {
+          const postData: any = await apiRes.json();
+          const rawHtml = postData.body_html || postData.description || "";
+          if (rawHtml.length > 100) {
+            const { document } = parseHTML(rawHtml);
+            let extractedMd = "";
+            try {
+              const defuddleResult: any = await Defuddle(document, url, { markdown: true, useAsync: false });
+              extractedMd = defuddleResult.content || "";
+            } catch {}
+
+            if (!extractedMd) {
+              extractedMd = rawHtml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+            }
+
+            const title = postData.title || document.title || "Substack Article";
+            console.log(`[SCRAPER] ✅ Successfully extracted via Substack API: "${title}"`);
+            emitEvent("URL_HTTP_FETCH_COMPLETED", { url, source: "substack-api", wordCount: extractedMd.split(/\s+/).length });
+            return {
+              title,
+              content: extractedMd,
+              wordCount: extractedMd.split(/\s+/).filter(Boolean).length,
+            };
+          }
+        }
+      }
+    } catch (e: any) {
+      console.warn(`[SCRAPER] ⚠️ Substack API attempt failed: ${e.message}. Falling back to standard HTML fetch...`);
+    }
+  }
+
+  // 2. Standard Browser Fetch with Chrome User-Agent
+  const headers = {
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+  };
+
+  const res = await fetch(url, { headers, signal: AbortSignal.timeout(20000) });
+  console.log(`[SCRAPER] 📡 HTTP Status: ${res.status} ${res.statusText}`);
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+  }
+
+  const html = await res.text();
+  console.log(`[SCRAPER] 📥 Downloaded HTML size: ${(html.length / 1024).toFixed(1)} KB`);
+
+  // 3. Defuddle / Linkedom Parser
+  let content = "";
+  let title = "Web Document";
+  try {
+    const { document } = parseHTML(html);
+    title = document.title || "Web Document";
+    const result: any = await Defuddle(document, url, { markdown: true, useAsync: false });
+    content = result.content?.trim() || "";
+    if (result.title) title = result.title;
+  } catch (err: any) {
+    console.warn(`[SCRAPER] ⚠️ Defuddle DOM warning: ${err.message}. Using HTML cleaner...`);
+  }
+
+  // 4. HTML Text Cleanup Fallback
+  if (!content || content.length < 50) {
+    content = html
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/<style[\s\S]*?<\/style>/gi, "")
+      .replace(/<nav[\s\S]*?<\/nav>/gi, "")
+      .replace(/<header[\s\S]*?<\/header>/gi, "")
+      .replace(/<footer[\s\S]*?<\/footer>/gi, "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  if (!content || content.length < 50) {
+    throw new Error("Unable to extract readable text from URL response");
+  }
+
+  const wordCount = content.split(/\s+/).filter(Boolean).length;
+  emitEvent("URL_EXTRACTION_SUCCESS", { url, title, wordCount });
+
+  return { title, content, wordCount };
+}
+
+// -------------------------------------------------------------
+// 4. SWAP ACTIVITY & HARDWARE DIAGNOSTICS
+// -------------------------------------------------------------
+function readServerPid(): number | null {
+  try {
+    if (fs.existsSync(".llama_server.pid")) {
+      return parseInt(fs.readFileSync(".llama_server.pid", "utf8").trim(), 10);
+    }
+  } catch {}
+  return null;
+}
+
+function getVmstatSwap(): { pswpin: number; pswpout: number } {
+  try {
+    const vmstat = fs.readFileSync("/proc/vmstat", "utf8");
+    let pswpin = 0;
+    let pswpout = 0;
+    for (const line of vmstat.split("\n")) {
+      if (line.startsWith("pswpin ")) pswpin = parseInt(line.split(/\s+/)[1], 10);
+      if (line.startsWith("pswpout ")) pswpout = parseInt(line.split(/\s+/)[1], 10);
+    }
+    return { pswpin, pswpout };
+  } catch {
+    return { pswpin: 0, pswpout: 0 };
+  }
+}
+
+function getMemorySnapshot() {
+  let swappiness = -1;
+  try {
+    swappiness = parseInt(fs.readFileSync("/proc/sys/vm/swappiness", "utf8").trim(), 10);
+  } catch {}
+
+  let swapTotal = 0;
+  let swapFree = 0;
+  try {
+    const meminfo = fs.readFileSync("/proc/meminfo", "utf8");
+    for (const line of meminfo.split("\n")) {
+      if (line.startsWith("SwapTotal:")) swapTotal = parseInt(line.split(/\s+/)[1], 10) / 1024;
+      if (line.startsWith("SwapFree:")) swapFree = parseInt(line.split(/\s+/)[1], 10) / 1024;
+    }
+  } catch {}
+
+  const pid = readServerPid();
+  let vmRss = 0;
+  let vmSwap = 0;
+  if (pid) {
+    try {
+      const status = fs.readFileSync(`/proc/${pid}/status`, "utf8");
+      for (const line of status.split("\n")) {
+        if (line.startsWith("VmRSS:")) vmRss = parseInt(line.split(/\s+/)[1], 10) / 1024;
+        if (line.startsWith("VmSwap:")) vmSwap = parseInt(line.split(/\s+/)[1], 10) / 1024;
+      }
+    } catch {}
+  }
+
+  return {
+    swappiness,
+    pid,
+    vmRssMb: Math.round(vmRss),
+    vmSwapMb: Math.round(vmSwap),
+    systemSwapUsedMb: Math.round(swapTotal - swapFree),
+    systemSwapTotalMb: Math.round(swapTotal),
+  };
+}
+
+// -------------------------------------------------------------
+// 5. TIMEOUT-FREE OPENAPI HTTP CLIENT
+// -------------------------------------------------------------
+function postOpenAIChatCompletion(urlStr: string, payload: any): Promise<any> {
   return new Promise((resolve, reject) => {
     const url = new URL(urlStr);
     const bodyData = JSON.stringify(payload);
@@ -50,7 +295,7 @@ function postJsonNoTimeout(urlStr: string, payload: any): Promise<any> {
           "Content-Type": "application/json",
           "Content-Length": Buffer.byteLength(bodyData),
         },
-        timeout: 0, // No client-side timeout: allow 4 CPU cores to finish evaluation
+        timeout: 0,
       },
       (res) => {
         let raw = "";
@@ -60,11 +305,11 @@ function postJsonNoTimeout(urlStr: string, payload: any): Promise<any> {
           if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
             try {
               resolve(JSON.parse(raw));
-            } catch (err) {
-              reject(new Error(`Failed to parse response JSON: ${raw}`));
+            } catch {
+              reject(new Error(`Invalid JSON response from llama-server: ${raw}`));
             }
           } else {
-            reject(new Error(`llama-server responded with HTTP ${res.statusCode}: ${raw}`));
+            reject(new Error(`llama-server error HTTP ${res.statusCode}: ${raw}`));
           }
         });
       }
@@ -77,35 +322,44 @@ function postJsonNoTimeout(urlStr: string, payload: any): Promise<any> {
 }
 
 // -------------------------------------------------------------
-// 3. RUNNER FINGERPRINT
+// 6. EVENT-DRIVEN PIPELINE ORCHESTRATOR
 // -------------------------------------------------------------
-function collectQuickFingerprint(): HostFingerprint {
-  const cpus = os.cpus();
-  return {
-    runner_name: process.env.RUNNER_NAME || "local-runner",
-    run_id: process.env.GITHUB_RUN_ID || "local-run",
-    cpu_model: cpus[0]?.model || "unknown",
-    cores: cpus.length,
-    total_memory_gb: Number((os.totalmem() / 1024 ** 3).toFixed(2)),
-  };
-}
-
-// -------------------------------------------------------------
-// 4. EVENT-DRIVEN ORCHESTRATOR
-// -------------------------------------------------------------
-class AIEventPipeline extends EventEmitter {
+export class AIEventPipeline extends EventEmitter {
   private auditLog: PipelineEvent[] = [];
-  private correlationId = `corr-${Date.now()}`;
+  private correlationId: string;
+  private runnerName: string;
+  private shardId: string;
+  private jsonlFilePath: string;
 
-  private logEvent(eventType: PipelineEvent["eventType"], payload: any) {
+  constructor(runnerName = "runner-1", shardId = "shard-1", jsonlFilePath = "pipeline-events.jsonl") {
+    super();
+    this.runnerName = runnerName;
+    this.shardId = shardId;
+    this.correlationId = `corr-${Date.now()}`;
+    this.jsonlFilePath = jsonlFilePath;
+  }
+
+  private createEventId(eventType: string, epochMs: number): string {
+    const seed = `runner:${this.runnerName}:shard:${this.shardId}:epoch:${epochMs}:event:${eventType}`;
+    return `evt-${generateUuidV5(seed)}`;
+  }
+
+  public logEvent(eventType: PipelineEvent["eventType"], payload: any) {
+    const epochMs = Date.now();
     const event: PipelineEvent = {
-      eventId: `evt-${Math.random().toString(36).substring(2, 9)}`,
+      eventId: this.createEventId(eventType, epochMs),
       eventType,
-      timestamp: new Date().toISOString(),
+      timestamp: new Date(epochMs).toISOString(),
       correlationId: this.correlationId,
       payload,
     };
+
     this.auditLog.push(event);
+
+    const jsonlLine = JSON.stringify(event);
+    fs.appendFileSync(this.jsonlFilePath, jsonlLine + "\n", "utf8");
+    console.log(`[JSONL_EVENT] ${jsonlLine}`);
+
     this.emit(eventType, event);
     return event;
   }
@@ -114,43 +368,105 @@ class AIEventPipeline extends EventEmitter {
     return this.auditLog;
   }
 
-  public async execute(
-    inputText: string,
-    systemPrompt: string,
-    serverUrl = "http://127.0.0.1:9931"
-  ): Promise<SummaryStructuredOutput> {
-    // Event 1: Ingestion
-    this.logEvent("INPUT_RECEIVED", {
-      inputTextPreview: inputText.substring(0, 80) + "...",
-      inputLengthChars: inputText.length,
+  public async execute(options: {
+    url?: string;
+    fallbackText: string;
+    systemPrompt: string;
+    serverUrl?: string;
+    modelName?: string;
+  }): Promise<SummaryStructuredOutput> {
+    const {
+      url,
+      fallbackText,
       systemPrompt,
+      serverUrl = "http://127.0.0.1:9931",
+      modelName = "model.gguf",
+    } = options;
+
+    const cleanUrl = (url || "").trim();
+    let targetText = fallbackText;
+    let sourceAudit: SourceAudit;
+
+    // PRECEDENCE RESOLUTION:
+    if (cleanUrl.length > 0) {
+      console.log(`[PIPELINE] 🔍 Target URL provided: ${cleanUrl}`);
+      try {
+        const extracted = await extractWebContent(cleanUrl, (type, payload) => this.logEvent(type, payload));
+
+        sourceAudit = {
+          activeSource: "URL",
+          sourceIdentifier: cleanUrl,
+          sourceTitle: extracted.title,
+          resolutionReason: "URL took precedence and was successfully extracted.",
+          extractedWordCount: extracted.wordCount,
+          extractedCharCount: extracted.content.length,
+          extractedText: extracted.content,
+        };
+        targetText = extracted.content;
+
+        console.log(`[PIPELINE] ✅ URL TOOK HOLD: "${extracted.title}" (${extracted.wordCount} words)`);
+      } catch (err: any) {
+        console.warn(`[PIPELINE] ⚠️ URL extraction failed (${err.message}). Falling back to direct input_text.`);
+        this.logEvent("URL_EXTRACTION_FAILED", {
+          url: cleanUrl,
+          error: err.message,
+          resolution: "Fell back to direct input_text",
+        });
+
+        sourceAudit = {
+          activeSource: "FALLBACK_INPUT_TEXT",
+          sourceIdentifier: `Fallback (Scrape failed: ${cleanUrl})`,
+          sourceTitle: "Direct Input (Graceful Fallback)",
+          resolutionReason: `URL failed (${err.message}); gracefully fell back to direct input_text.`,
+          extractedWordCount: fallbackText.split(/\s+/).filter(Boolean).length,
+          extractedCharCount: fallbackText.length,
+          extractedText: fallbackText,
+          scrapeError: err.message,
+        };
+        targetText = fallbackText;
+      }
+    } else {
+      sourceAudit = {
+        activeSource: "INPUT_TEXT",
+        sourceIdentifier: "Direct Text Input (No URL provided)",
+        sourceTitle: "Direct Input Text",
+        resolutionReason: "URL was omitted; direct input_text took hold directly.",
+        extractedWordCount: fallbackText.split(/\s+/).filter(Boolean).length,
+        extractedCharCount: fallbackText.length,
+        extractedText: fallbackText,
+      };
+      targetText = fallbackText;
+      console.log(`[PIPELINE] ℹ️ Direct input_text took hold (No URL provided).`);
+    }
+
+    // Safety truncate to ~6,000 words
+    const words = targetText.split(/\s+/).filter(Boolean);
+    if (words.length > 6000) {
+      targetText = words.slice(0, 6000).join(" ") + "\n\n[...Truncated to fit context window...]";
+    }
+
+    this.logEvent("INPUT_RESOLVED", {
+      modelName,
+      activeSource: sourceAudit.activeSource,
+      sourceIdentifier: sourceAudit.sourceIdentifier,
+      sourceTitle: sourceAudit.sourceTitle,
+      wordCount: words.length,
+      charCount: targetText.length,
     });
 
-    // Event 2: Start Inference
-    const startTime = performance.now();
-    this.logEvent("INFERENCE_STARTED", {
-      serverUrl,
-      targetModel: "Ternary-Bonsai-2-27B-PTQ1_0",
-      temperature: 0.2,
-      streaming: false,
-    });
+    // Baseline Swap
+    const vmstatStart = getVmstatSwap();
+    let peakProcessSwapMb = 0;
+    const initialSnap = getMemorySnapshot();
+    peakProcessSwapMb = Math.max(peakProcessSwapMb, initialSnap.vmSwapMb);
 
-    // Clean terminal progress indicator (heartbeat every 15 seconds)
-    const progressInterval = setInterval(() => {
-      const elapsed = Math.round((performance.now() - startTime) / 1000);
-      console.log(`[PIPELINE] ⏳ Model is evaluating prompt on CPU (elapsed: ${elapsed}s)...`);
-    }, 15000);
-
-    let rawContent = "";
-    let usage: any = null;
-
-    try {
-      // POST without max_tokens and without streaming
-      const jsonResponse = await postJsonNoTimeout(`${serverUrl}/v1/chat/completions`, {
-        messages: [
-          {
-            role: "system",
-            content: `${systemPrompt}
+    // OpenAPI Spec Payload
+    const openAiPayload = {
+      model: modelName,
+      messages: [
+        {
+          role: "system",
+          content: `${systemPrompt}
 You MUST output ONLY a valid JSON object matching this schema:
 {
   "headline": "Short title",
@@ -158,40 +474,150 @@ You MUST output ONLY a valid JSON object matching this schema:
   "key_points": ["bullet 1", "bullet 2"],
   "sentiment": "positive" | "neutral" | "negative" | "mixed"
 }`,
-          },
-          {
-            role: "user",
-            content: `Summarize this text:\n"""\n${inputText}\n"""`,
-          },
-        ],
-        temperature: 0.2,
-        stream: false,
-        chat_template_kwargs: { enable_thinking: false },
-      });
+        },
+        {
+          role: "user",
+          content: `Document Title: ${sourceAudit.sourceTitle}\n\nContent:\n"""\n${targetText}\n"""`,
+        },
+      ],
+      temperature: 0.2,
+      response_format: { type: "json_object" },
+      stream: false,
+      chat_template_kwargs: { enable_thinking: false },
+    };
 
-      rawContent = jsonResponse.choices?.[0]?.message?.content || "";
-      usage = jsonResponse.usage;
-    } finally {
-      clearInterval(progressInterval);
-    }
+    // =========================================================
+    // INFERENCE TROUBLESHOOTING LOGS (BEFORE DISPATCH)
+    // =========================================================
+    console.log("\n" + "=".repeat(70));
+    console.log("🚀 [INFERENCE DISPATCH] -> llama-server (OpenAPI /v1/chat/completions)");
+    console.log("=".repeat(70));
+    console.log(`🤖 Model Name:        ${modelName}`);
+    console.log(`🎯 Active Source:     [${sourceAudit.activeSource}]`);
+    console.log(`📌 Document Title:    "${sourceAudit.sourceTitle}"`);
+    console.log(`📏 Text Word Count:   ${words.length} words (${targetText.length} characters)`);
+    console.log(`🌡️ Temperature:       0.2`);
+    console.log(`🌐 Endpoint:          ${serverUrl}/v1/chat/completions`);
+    console.log("-".repeat(70));
+    console.log(`📄 TEXT CONTENT PREVIEW BEING SENT TO MODEL:\n"""\n${targetText.substring(0, 300)}...\n"""`);
+    console.log("=".repeat(70) + "\n");
 
-    const inferenceDurationMs = Math.round(performance.now() - startTime);
-
-    // Event 3: Completed
-    this.logEvent("INFERENCE_COMPLETED", {
-      durationMs: inferenceDurationMs,
-      usage,
-      rawOutputLength: rawContent.length,
+    const startTime = performance.now();
+    this.logEvent("INFERENCE_DISPATCHED", {
+      serverUrl,
+      targetModel: modelName,
+      activeSource: sourceAudit.activeSource,
+      wordCount: words.length,
+      charCount: targetText.length,
     });
 
-    // Event 4: Parse Structured JSON
+    // Progress Heartbeat
+    const progressTimer = setInterval(() => {
+      const elapsed = Math.round((performance.now() - startTime) / 1000);
+      const snap = getMemorySnapshot();
+      peakProcessSwapMb = Math.max(peakProcessSwapMb, snap.vmSwapMb);
+
+      console.log(
+        `[INFERENCE_HEARTBEAT] ⏳ Processing... (elapsed: ${elapsed}s) | RAM: ${snap.vmRssMb} MB | Process Swap: ${snap.vmSwapMb} MB`
+      );
+    }, 10000);
+
+    let rawContent = "";
+    let usage: any = null;
+    let timings: any = null;
+
+    try {
+      const response = await postOpenAIChatCompletion(`${serverUrl}/v1/chat/completions`, openAiPayload);
+      rawContent = response.choices?.[0]?.message?.content || "";
+      usage = response.usage;
+      timings = response.timings;
+    } finally {
+      clearInterval(progressTimer);
+    }
+
+    const totalDurationMs = Math.round(performance.now() - startTime);
+
+    // Finalize Swap Stats
+    const finalSnap = getMemorySnapshot();
+    peakProcessSwapMb = Math.max(peakProcessSwapMb, finalSnap.vmSwapMb);
+    const vmstatEnd = getVmstatSwap();
+    const swapOutPages = Math.max(0, vmstatEnd.pswpout - vmstatStart.pswpout);
+    const swapInPages = Math.max(0, vmstatEnd.pswpin - vmstatStart.pswpin);
+
+    const swapMetrics: SwapActivityMetrics = {
+      swappiness: finalSnap.swappiness,
+      server_pid: finalSnap.pid,
+      server_vm_rss_mb: finalSnap.vmRssMb,
+      peak_server_swap_mb: peakProcessSwapMb,
+      final_server_swap_mb: finalSnap.vmSwapMb,
+      system_swap_used_mb: finalSnap.systemSwapUsedMb,
+      system_swap_total_mb: finalSnap.systemSwapTotalMb,
+      swap_bytes_written_mb: Number(((swapOutPages * 4) / 1024).toFixed(2)),
+      swap_bytes_read_mb: Number(((swapInPages * 4) / 1024).toFixed(2)),
+    };
+
+    // Calculate Ingestion vs Generation Speeds
+    const promptTokens = usage?.prompt_tokens || timings?.prompt_n || 0;
+    const completionTokens = usage?.completion_tokens || timings?.predicted_n || 0;
+    const totalTokens = usage?.total_tokens || promptTokens + completionTokens;
+
+    let promptTimeMs = timings?.prompt_ms ? Math.round(timings.prompt_ms) : 0;
+    let completionTimeMs = timings?.predicted_ms ? Math.round(timings.predicted_ms) : 0;
+    if (promptTimeMs === 0 && completionTimeMs === 0) {
+      completionTimeMs = totalDurationMs;
+    }
+
+    const promptTokensPerSec = timings?.prompt_per_second
+      ? Number(timings.prompt_per_second.toFixed(2))
+      : promptTimeMs > 0
+      ? Number((promptTokens / (promptTimeMs / 1000)).toFixed(2))
+      : 0;
+
+    const completionTokensPerSec = timings?.predicted_per_second
+      ? Number(timings.predicted_per_second.toFixed(2))
+      : completionTimeMs > 0
+      ? Number((completionTokens / (completionTimeMs / 1000)).toFixed(2))
+      : 0;
+
+    const tokenMetrics: DetailedTokenMetrics = {
+      prompt_tokens: promptTokens,
+      completion_tokens: completionTokens,
+      total_tokens: totalTokens,
+      prompt_time_ms: promptTimeMs,
+      completion_time_ms: completionTimeMs,
+      total_duration_ms: totalDurationMs,
+      prompt_tokens_per_second: promptTokensPerSec,
+      completion_tokens_per_second: completionTokensPerSec,
+    };
+
+    // =========================================================
+    // INFERENCE TROUBLESHOOTING LOGS (AFTER COMPLETION)
+    // =========================================================
+    console.log("\n" + "=".repeat(70));
+    console.log("✅ [INFERENCE COMPLETE] Performance Breakdown:");
+    console.log("=".repeat(70));
+    console.log(`⏱️ Total Time:             ${(totalDurationMs / 1000).toFixed(2)}s (${totalDurationMs} ms)`);
+    console.log(`📥 Prompt Ingest Speed:     ${tokenMetrics.prompt_tokens_per_second} tokens/sec (${tokenMetrics.prompt_tokens} tokens)`);
+    console.log(`⚡ Output Generation Speed: ${tokenMetrics.completion_tokens_per_second} tokens/sec (${tokenMetrics.completion_tokens} tokens)`);
+    console.log(`💾 Swap Telemetry:          Peak Process Swap: ${swapMetrics.peak_server_swap_mb} MB | RAM RSS: ${swapMetrics.server_vm_rss_mb} MB`);
+    console.log("-".repeat(70));
+    console.log(`🤖 RAW UNPARSED MODEL OUTPUT:\n${rawContent}`);
+    console.log("=".repeat(70) + "\n");
+
+    this.logEvent("INFERENCE_COMPLETED", {
+      modelName,
+      activeSource: sourceAudit.activeSource,
+      tokenMetrics,
+      swapMetrics,
+    });
+
     let parsed: any;
     try {
       const match = rawContent.match(/\{[\s\S]*\}/);
       parsed = JSON.parse(match ? match[0] : rawContent);
     } catch {
       parsed = {
-        headline: "Summary Output",
+        headline: sourceAudit.sourceTitle || "Document Summary",
         executive_summary: rawContent.trim(),
         key_points: ["Extracted from raw model text"],
         sentiment: "neutral",
@@ -199,11 +625,15 @@ You MUST output ONLY a valid JSON object matching this schema:
     }
 
     const structuredResult: SummaryStructuredOutput = {
-      headline: parsed.headline || "Document Summary",
+      headline: parsed.headline || sourceAudit.sourceTitle || "Summary Output",
       executive_summary: parsed.executive_summary || rawContent,
       key_points: Array.isArray(parsed.key_points) ? parsed.key_points : [],
       sentiment: parsed.sentiment || "neutral",
-      compression_ratio: `${((rawContent.length / inputText.length) * 100).toFixed(1)}%`,
+      compression_ratio: `${((rawContent.length / targetText.length) * 100).toFixed(1)}%`,
+      raw_output: rawContent,
+      source_audit: sourceAudit,
+      token_metrics: tokenMetrics,
+      swap_metrics: swapMetrics,
     };
 
     this.logEvent("OUTPUT_STRUCTURED", structuredResult);
@@ -212,104 +642,164 @@ You MUST output ONLY a valid JSON object matching this schema:
 }
 
 // -------------------------------------------------------------
-// 5. OUTPUT REPORTERS
+// 7. GITHUB STEP SUMMARY (Zero-Indent CommonMark)
 // -------------------------------------------------------------
-function printTerminalSummary(result: SummaryStructuredOutput) {
-  console.log("\n============================================================");
-  console.log("🎯 FINAL STRUCTURED SUMMARY RESULT");
-  console.log("============================================================");
-  console.log(`📌 Headline: ${result.headline}`);
-  console.log(`\n📝 Executive Summary:\n${result.executive_summary}\n`);
-  console.log("🔑 Key Takeaways:");
-  result.key_points.forEach((point) => console.log(`   • ${point}`));
-  console.log(`\n📊 Sentiment: [${result.sentiment.toUpperCase()}] | Compression: ${result.compression_ratio}`);
-  console.log("============================================================\n");
-}
-
 function publishStepSummary(
-  fp: HostFingerprint,
+  modelName: string,
   result: SummaryStructuredOutput,
   events: PipelineEvent[]
 ) {
+  const tm = result.token_metrics;
+  const sm = result.swap_metrics;
+  const sa = result.source_audit;
+
+  console.log(
+    `::notice title=AI Pipeline Succeeded (${modelName})::🎯 Source: ${sa.activeSource} | 📥 Ingest: ${tm.prompt_tokens_per_second} t/s (${tm.prompt_tokens}t) | ⚡ Gen: ${tm.completion_tokens_per_second} t/s (${tm.completion_tokens}t) | ⏱️ Time: ${(tm.total_duration_ms / 1000).toFixed(1)}s | 💾 Peak Swap: ${sm.peak_server_swap_mb} MB`
+  );
+
   const summaryPath = process.env.GITHUB_STEP_SUMMARY;
   if (!summaryPath) return;
 
-  const markdown = `
-## 🧠 AI Transformer Pipeline Execution Report
+  const lines: string[] = [
+    `# 🧠 AI Transformer Pipeline Execution Report`,
+    ``,
+    `> **🎯 Active Input Source:** \`${sa.activeSource}\`  `,
+    `> **Resolution Details:** ${sa.resolutionReason}`,
+    ``,
+    `---`,
+    ``,
+    `## ⏱️ Token Performance & Ingestion Rates`,
+    ``,
+    `| Metric | Token Count | Elapsed Time | Speed (Tokens / Sec) |`,
+    `| :--- | :--- | :--- | :--- |`,
+    `| **Prompt (Input Ingestion)** | **${tm.prompt_tokens} tokens** | ${tm.prompt_time_ms > 0 ? (tm.prompt_time_ms / 1000).toFixed(2) + "s" : "Batched"} | **⚡ ${tm.prompt_tokens_per_second} tokens/sec** |`,
+    `| **Completion (Output Gen)** | **${tm.completion_tokens} tokens** | ${(tm.completion_time_ms / 1000).toFixed(2)}s | **⚡ ${tm.completion_tokens_per_second} tokens/sec** |`,
+    `| **Total Evaluation** | **${tm.total_tokens} tokens** | **${(tm.total_duration_ms / 1000).toFixed(2)}s** | Overall Pipeline Throughput |`,
+    ``,
+    `---`,
+    ``,
+    `## 💾 Memory & Swap Diagnostics`,
+    ``,
+    `| Metric | Measured Value | Health Status |`,
+    `| :--- | :--- | :--- |`,
+    `| **Linux \`vm.swappiness\`** | **\`${sm.swappiness}\`** | ${sm.swappiness <= 10 ? "✅ Low Paging (Optimized)" : "⚠️ High Paging"} |`,
+    `| **Server Process PID** | \`${sm.server_pid || "unknown"}\` | Background Daemon |`,
+    `| **Server RAM (RSS)** | **${sm.server_vm_rss_mb} MB** | In Physical Memory |`,
+    `| **Peak Process Swap** | **${sm.peak_server_swap_mb} MB** | ${sm.peak_server_swap_mb > 0 ? "⚠️ Process Swapped" : "✅ 0 MB (Zero Process Swap)"} |`,
+    `| **Swap Written to SSD** | **${sm.swap_bytes_written_mb} MB** | Pages Paged Out |`,
+    `| **Swap Read from SSD** | **${sm.swap_bytes_read_mb} MB** | Pages Paged In |`,
+    `| **Total System Swap Used** | \`${sm.system_swap_used_mb} MB / ${sm.system_swap_total_mb} MB\` | Allocated Swapfile Space |`,
+    ``,
+    `---`,
+    ``,
+    `## 🌐 Ingestion Source Diagnostics`,
+    ``,
+    `| Parameter | Value |`,
+    `| :--- | :--- |`,
+    `| **Active Source Mode** | \`${sa.activeSource}\` |`,
+    `| **Source Identifier** | ${sa.sourceIdentifier.startsWith("http") ? `[${sa.sourceIdentifier}](${sa.sourceIdentifier})` : `\`${sa.sourceIdentifier}\``} |`,
+    `| **Document Title** | **${sa.sourceTitle}** |`,
+    `| **Word Count** | \`${sa.extractedWordCount} words\` (\`${sa.extractedCharCount} chars\`) |`,
+    `| **Status Details** | ${sa.activeSource === "URL" ? "✅ Successfully Scraped & Extracted" : sa.activeSource === "FALLBACK_INPUT_TEXT" ? `⚠️ Defuddle Fallback Invoked (${sa.scrapeError})` : "ℹ️ Direct Text Mode (URL omitted)"} |`,
+    ``,
+    `---`,
+    ``,
+    `## 📝 Structured Summary: *"${result.headline}"*`,
+    ``,
+    `> **Executive Summary:**  `,
+    `> ${result.executive_summary}`,
+    ``,
+    `**Key Takeaways:**`,
+    ...result.key_points.map((p) => `- ${p}`),
+    ``,
+    `| Attribute | Value |`,
+    `| :--- | :--- |`,
+    `| **Detected Sentiment** | \`${result.sentiment.toUpperCase()}\` |`,
+    `| **Compression Ratio** | \`${result.compression_ratio}\` |`,
+    ``,
+    `---`,
+    ``,
+    `## 📄 Cleaned Source Content That Took Hold`,
+    `<details>`,
+    `<summary><b>Click to expand input content (${sa.extractedWordCount} words)</b></summary>`,
+    ``,
+    `\`\`\`markdown`,
+    sa.extractedText || "No source text available",
+    `\`\`\``,
+    ``,
+    `</details>`,
+    ``,
+    `## 🤖 Raw Model Output Text`,
+    `<details>`,
+    `<summary><b>Click to expand raw response</b></summary>`,
+    ``,
+    `\`\`\`text`,
+    result.raw_output,
+    `\`\`\``,
+    ``,
+    `</details>`,
+    ``,
+    `---`,
+    ``,
+    `## ⚡ Event-Driven Audit Trail (UUIDv5)`,
+    ``,
+    `| Event Type | RFC 4122 UUIDv5 | Timestamp |`,
+    `| :--- | :--- | :--- |`,
+    ...events.map((e) => `| \`${e.eventType}\` | \`${e.eventId}\` | \`${e.timestamp}\` |`),
+    ``,
+    `<details>`,
+    `<summary><b>Inspect Full Event Stream Payloads (JSON)</b></summary>`,
+    ``,
+    `\`\`\`json`,
+    JSON.stringify(events, null, 2),
+    `\`\`\``,
+    ``,
+    `</details>`,
+    ``,
+  ];
 
-### 🖥️ Runner Snapshot
-- **Runner:** \`${fp.runner_name}\` | **Run ID:** \`${fp.run_id}\`
-- **CPU:** \`${fp.cpu_model}\` (${fp.cores} cores) | **RAM:** \`${fp.total_memory_gb} GB\`
-
----
-
-### 📝 Structured Summary: *"${result.headline}"*
-
-> **Executive Summary:**  
-> ${result.executive_summary}
-
-**Key Takeaways:**
-${result.key_points.map((p) => `- ${p}`).join("\n")}
-
-| Metric | Value |
-| :--- | :--- |
-| **Sentiment** | \`${result.sentiment.toUpperCase()}\` |
-| **Compression** | \`${result.compression_ratio}\` |
-
----
-
-### ⚡ Event-Driven Audit Trail
-| Event Type | Event ID | Timestamp |
-| :--- | :--- | :--- |
-${events.map((e) => `| \`${e.eventType}\` | \`${e.eventId}\` | \`${e.timestamp}\` |`).join("\n")}
-
-<details>
-<summary><b>Inspect Full Event Stream Payloads (JSON)</b></summary>
-
-\`\`\`json
-${JSON.stringify(events, null, 2)}
-\`\`\`
-
-</details>
-`;
-
-  fs.appendFileSync(summaryPath, markdown, "utf8");
+  fs.appendFileSync(summaryPath, lines.join("\n"), "utf8");
 }
 
 // -------------------------------------------------------------
-// 6. MAIN
+// 8. MAIN ENTRY POINT
 // -------------------------------------------------------------
 async function main() {
-  const fingerprint = collectQuickFingerprint();
-  console.log("Runner Hardware Captured:", {
-    cpu: fingerprint.cpu_model,
-    cores: fingerprint.cores,
-    totalRam: `${fingerprint.total_memory_gb} GB`,
-  });
+  const runnerName = process.env.RUNNER_NAME || "local-runner";
+  const shardId = process.env.SHARD_ID || "shard-1/1";
+  const modelName = process.env.MODEL_NAME || "model.gguf";
 
-  const pipeline = new AIEventPipeline();
-
-  pipeline.on("INPUT_RECEIVED", (e) => console.log(`[EVENT] 📥 Input Received (${e.payload.inputLengthChars} chars)`));
-  pipeline.on("INFERENCE_STARTED", (e) =>
-    console.log(`[EVENT] 🚀 Dispatched to llama-server on port 9931 (Non-streaming, no timeout)`)
-  );
-  pipeline.on("INFERENCE_COMPLETED", (e) =>
-    console.log(`[EVENT] ✅ Model execution finished in ${Math.round(e.payload.durationMs / 1000)}s`)
-  );
-  pipeline.on("OUTPUT_STRUCTURED", () => console.log(`[EVENT] 📦 Structured JSON Validated`));
-
+  const rawUrl = (process.env.URL || "").trim();
+  const rawInputText = (process.env.INPUT_TEXT || "").trim();
   const prompt =
-    process.env.PROMPT || "You are a concise analytical engine. Summarize the text accurately into key structured takeaways.";
-  const inputText =
-    process.env.INPUT_TEXT ||
-    "Ternary quantization maps neural network weights to {-1, 0, +1}, enabling high compression rates while preserving reasoning capabilities. This architecture allows 27B parameter models to run within 6 GB of memory.";
+    process.env.PROMPT ||
+    "You are an executive summarizer. Output ONLY the requested JSON. Do NOT output thinking tags.";
+
+  const fallbackText =
+    rawInputText ||
+    "Local LLMs allow running transformer architectures directly on edge devices and continuous integration runners without transmitting data over third-party APIs.";
+
+  const serverUrl = process.env.SERVER_URL || "http://127.0.0.1:9931";
+  const pipeline = new AIEventPipeline(runnerName, shardId);
 
   try {
-    const result = await pipeline.execute(inputText, prompt);
-    printTerminalSummary(result);
-    publishStepSummary(fingerprint, result, pipeline.getEventHistory());
-    console.log("All pipeline stages executed successfully.");
-  } catch (err) {
+    const result = await pipeline.execute({
+      url: rawUrl,
+      fallbackText,
+      systemPrompt: prompt,
+      serverUrl,
+      modelName,
+    });
+
+    console.log("============================================================");
+    console.log("🎯 PARSED STRUCTURED JSON RESULT:");
+    console.log("============================================================");
+    console.log(JSON.stringify(result, null, 2));
+    console.log("============================================================\n");
+
+    publishStepSummary(modelName, result, pipeline.getEventHistory());
+    console.log("Pipeline run completed successfully. JSONL saved to pipeline-events.jsonl");
+  } catch (err: any) {
     console.error("Pipeline failure:", err);
     process.exit(1);
   }
