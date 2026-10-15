@@ -61,13 +61,27 @@ jobs:
           npm pkg set type="module"
           npm install defuddle linkedom
 
-      # 3. Download llama-server binary
-      - name: Download llama-server
+      # 3. Download Official Standard llama.cpp Server (Zero PrismML)
+      - name: Download Official llama-server
         run: |
           mkdir -p ./bin
-          echo "Fetching llama-server binary..."
-          curl -L "https://github.com/PrismML-Eng/llama.cpp/releases/download/prism-b10685-7dffb15/llama-prism-b10685-7dffb15-bin-ubuntu-x64.tar.gz" -o llama-server.tar.gz
-          tar -xzf llama-server.tar.gz -C ./bin --strip-components=1 || tar -xzf llama-server.tar.gz -C ./bin
+          echo "Fetching latest official ggml-org/llama.cpp binary for Ubuntu x64..."
+
+          DOWNLOAD_URL=$(curl -sL -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/ggml-org/llama.cpp/releases/latest" | \
+            jq -r '.assets[] | select(.name | test("bin-ubuntu-x64\\.tar\\.gz$")) | .browser_download_url' | head -n 1)
+
+          if [ -z "$DOWNLOAD_URL" ] || [ "$DOWNLOAD_URL" = "null" ]; then
+            echo "::error::Failed to resolve official llama.cpp release asset."
+            exit 1
+          fi
+
+          echo "Downloading $DOWNLOAD_URL..."
+          curl -fL -o llama-package.tar.gz "$DOWNLOAD_URL"
+          tar -xzf llama-package.tar.gz -C ./bin
+
+          # Ensure binary is in ./bin/ and executable
+          find ./bin -type f -name "llama-server" -exec cp {} ./bin/llama-server \;
           chmod +x ./bin/llama-server
           ./bin/llama-server --version || true
 
@@ -79,13 +93,13 @@ jobs:
           path: ./models
           key: model-cache-${{ github.event.inputs.model_repo }}
 
-      # 5. Resolve & Download GGUF (Lightweight 2-line auto-detection)
+      # 5. Resolve & Download GGUF
       - name: Download Model from HuggingFace
         run: |
           mkdir -p ./models
           REPO="${{ github.event.inputs.model_repo }}"
 
-          # Resolve .gguf filename in 2 lines (prioritizes Q5_K_M or Q4_K_M, falls back to first .gguf)
+          # Discover the GGUF file in 2 lines
           FILE=$(curl -sL "https://huggingface.co/api/models/${REPO}/tree/main" | jq -r '.[].path' | grep -iE '\.gguf$' | grep -iE 'q5_k_m|q4_k_m' | head -n 1)
           [ -z "$FILE" ] && FILE=$(curl -sL "https://huggingface.co/api/models/${REPO}/tree/main" | jq -r '.[].path' | grep -iE '\.gguf$' | head -n 1)
 
@@ -110,7 +124,7 @@ jobs:
             exit 1
           fi
 
-      # 6. Start llama-server (16k Context on Port 9931)
+      # 6. Start Standard llama-server (16k Context on Port 9931)
       - name: Start llama-server (Port 9931)
         run: |
           CORES=$(nproc)
