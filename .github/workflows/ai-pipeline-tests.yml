@@ -10,11 +10,11 @@ on:
       url:
         description: 'URL to extract with Defuddle (leave empty to use input_text)'
         required: false
-        default: 'https://en.wikipedia.org/wiki/Ternary_numeral_system'
+        default: 'https://neuburger.substack.com/p/if-our-government-makes-dollars-what'
       input_text:
         description: 'Input text (used directly if URL is empty, or as fallback if URL fails)'
         required: false
-        default: 'Local LLMs allow running transformer architectures directly on edge devices and continuous integration runners without transmitting data over third-party APIs.'
+        default: ''
       context_size:
         description: 'Context Window Size'
         required: false
@@ -87,7 +87,7 @@ jobs:
             unzip -o llama-package -d ./llama-extract
           fi
 
-          # Copy binaries and dereference all .so libraries (resolves symlinks like libllama-common.so.0)
+          # Copy binaries and dereference all .so libraries
           find ./llama-extract -name "llama-server" -exec cp -L {} ./bin/llama-server \;
           find ./llama-extract -name "*.so*" -exec cp -L {} ./bin/ \; 2>/dev/null || true
           chmod +x ./bin/llama-server
@@ -145,7 +145,6 @@ jobs:
 
           echo "Starting llama-server for $MODEL_FILE on $CORES cores with ${CTX} context..."
 
-          # Export absolute path to shared libraries
           export LD_LIBRARY_PATH="$PWD/bin:$LD_LIBRARY_PATH"
 
           ./bin/llama-server \
@@ -192,7 +191,7 @@ jobs:
             exit 1
           fi
 
-      # 7. Run Event Pipeline with OpenAPI Spec & Full Terminal Logs
+      # 7. Run Event Pipeline with Config-Driven Environment Variables
       - name: Execute AI Event Pipeline
         env:
           URL: "${{ github.event.inputs.url }}"
@@ -200,7 +199,8 @@ jobs:
           INPUT_TEXT: "${{ github.event.inputs.input_text }}"
           SERVER_URL: "http://127.0.0.1:9931"
           MODEL_NAME: "${{ env.MODEL_FILE }}"
-          SHARD_ID: "shard-1/1"
+          SHARD_ID: "${{ github.job }}"
+          RUNNER_NAME: "${{ runner.name }}"
         run: |
           npx --yes tsx .github/scripts/ai-pipeline.ts
 
