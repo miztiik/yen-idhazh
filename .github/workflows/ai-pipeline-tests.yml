@@ -10,11 +10,11 @@ on:
       url:
         description: 'URL to extract with Defuddle (leave empty to use input_text)'
         required: false
-        default: 'https://neuburger.substack.com/p/if-our-government-makes-dollars-what'
+        default: 'https://en.wikipedia.org/wiki/Ternary_numeral_system'
       input_text:
         description: 'Input text (used directly if URL is empty, or as fallback if URL fails)'
         required: false
-        default: ''
+        default: 'Local LLMs allow running transformer architectures directly on edge devices and continuous integration runners without transmitting data over third-party APIs.'
       context_size:
         description: 'Context Window Size'
         required: false
@@ -61,43 +61,13 @@ jobs:
           npm pkg set type="module"
           npm install defuddle linkedom
 
-      # 3. Download Official llama-server & Dereference All Shared Libraries (.so)
-      - name: Download Official llama-server
+      # 3. Official llama.app Installer (Zero .so Dependency Issues)
+      - name: Install Official llama.cpp
         run: |
-          mkdir -p ./bin ./llama-extract
-          echo "Fetching latest official ggml-org/llama.cpp CPU binary for Ubuntu x64..."
-
-          RELEASE_JSON=$(curl -sL -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=1")
-
-          DOWNLOAD_URL=$(echo "$RELEASE_JSON" | jq -r '.[0].assets[] | select(.name | test("^llama-.*-bin-ubuntu-x64\\.(tar\\.gz|zip)$")) | .browser_download_url' | head -n 1)
-
-          if [ -z "$DOWNLOAD_URL" ] || [ "$DOWNLOAD_URL" = "null" ]; then
-            TAG=$(echo "$RELEASE_JSON" | jq -r '.[0].tag_name')
-            DOWNLOAD_URL="https://github.com/ggml-org/llama.cpp/releases/download/${TAG}/llama-${TAG}-bin-ubuntu-x64.tar.gz"
-          fi
-
-          echo "Downloading CPU package from: $DOWNLOAD_URL"
-          curl -fL -o llama-package "$DOWNLOAD_URL"
-
-          # Extract into temporary folder
-          if [[ "$DOWNLOAD_URL" == *.tar.gz ]] || file llama-package | grep -qi "gzip"; then
-            tar -xzf llama-package -C ./llama-extract
-          else
-            unzip -o llama-package -d ./llama-extract
-          fi
-
-          # Copy binaries and dereference all .so libraries
-          find ./llama-extract -name "llama-server" -exec cp -L {} ./bin/llama-server \;
-          find ./llama-extract -name "*.so*" -exec cp -L {} ./bin/ \; 2>/dev/null || true
-          chmod +x ./bin/llama-server
-
-          echo "=== Libraries and binaries in ./bin ==="
-          ls -lah ./bin/
-
-          # Verify dynamic linking with absolute LD_LIBRARY_PATH
-          export LD_LIBRARY_PATH="$PWD/bin:$LD_LIBRARY_PATH"
-          ./bin/llama-server --version
+          echo "Installing official llama.cpp via llama.app installer..."
+          curl -LsSf https://llama.app/install.sh | SKIP_CUDA=1 SKIP_ROCM=1 SKIP_VULKAN=1 sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          ~/.local/bin/llama --version
 
       # 4. Cache Model Directory
       - name: Cache Model Directory
@@ -137,17 +107,15 @@ jobs:
             exit 1
           fi
 
-      # 6. Start llama-server (16k Context on Port 9931)
+      # 6. Start Server using 'llama serve' (Port 9931, 16k Context)
       - name: Start llama-server (Port 9931)
         run: |
           CORES=$(nproc)
           CTX="${{ github.event.inputs.context_size }}"
 
-          echo "Starting llama-server for $MODEL_FILE on $CORES cores with ${CTX} context..."
+          echo "Starting 'llama serve' for $MODEL_FILE on $CORES cores with ${CTX} context..."
 
-          export LD_LIBRARY_PATH="$PWD/bin:$LD_LIBRARY_PATH"
-
-          ./bin/llama-server \
+          llama serve \
             -m "./models/$MODEL_FILE" \
             --host 127.0.0.1 \
             --port 9931 \
@@ -165,18 +133,18 @@ jobs:
 
           SERVER_PID=$!
           echo "$SERVER_PID" > .llama_server.pid
-          echo "llama-server started (PID: $SERVER_PID). Monitoring health on port 9931..."
+          echo "llama server started (PID: $SERVER_PID). Monitoring health on port 9931..."
 
           READY=false
           for i in {1..60}; do
             if ! kill -0 $SERVER_PID 2>/dev/null; then
-              echo "::error::llama-server died on startup!"
+              echo "::error::llama server died on startup!"
               cat llama-server.log
               exit 1
             fi
 
             if curl -s http://127.0.0.1:9931/health | grep -q "ok"; then
-              echo "llama-server is ready on port 9931!"
+              echo "llama server is ready on port 9931!"
               READY=true
               break
             fi
@@ -186,7 +154,7 @@ jobs:
           done
 
           if [ "$READY" != "true" ]; then
-            echo "::error::llama-server failed to respond in 120s."
+            echo "::error::llama server failed to respond in 120s."
             cat llama-server.log
             exit 1
           fi
