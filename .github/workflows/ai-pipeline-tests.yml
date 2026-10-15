@@ -61,37 +61,45 @@ jobs:
           npm pkg set type="module"
           npm install defuddle linkedom
 
-      # 3. Download Official Standard llama.cpp Server (Fixed Asset Resolution)
+      # 3. Download Official Standard llama.cpp CPU Server (Strict CPU Regex & Safe Extraction)
       - name: Download Official llama-server
         run: |
           mkdir -p ./bin
-          echo "Fetching latest official ggml-org/llama.cpp pre-release asset for Ubuntu x64..."
+          echo "Fetching latest official ggml-org/llama.cpp CPU binary for Ubuntu x64..."
 
-          # Query releases array (.[0]) to capture nightly tags and avoid 404 on /releases/latest
           RELEASE_JSON=$(curl -sL -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=1")
 
-          DOWNLOAD_URL=$(echo "$RELEASE_JSON" | jq -r '.[0].assets[] | select(.name | test("bin-ubuntu.*x64\\.(zip|tar\\.gz)$")) | .browser_download_url' | head -n 1)
+          # Strict regex: must start with 'llama-' (excludes cudart-) and match CPU ubuntu-x64
+          DOWNLOAD_URL=$(echo "$RELEASE_JSON" | jq -r '.[0].assets[] | select(.name | test("^llama-.*-bin-ubuntu-x64\\.(tar\\.gz|zip)$")) | .browser_download_url' | head -n 1)
 
-          # Fallback: construct download URL from tag_name if asset query is empty
           if [ -z "$DOWNLOAD_URL" ] || [ "$DOWNLOAD_URL" = "null" ]; then
             TAG=$(echo "$RELEASE_JSON" | jq -r '.[0].tag_name')
-            DOWNLOAD_URL="https://github.com/ggml-org/llama.cpp/releases/download/${TAG}/llama-${TAG}-bin-ubuntu-x64.zip"
+            DOWNLOAD_URL="https://github.com/ggml-org/llama.cpp/releases/download/${TAG}/llama-${TAG}-bin-ubuntu-x64.tar.gz"
           fi
 
-          echo "Downloading binary package from: $DOWNLOAD_URL"
+          echo "Downloading CPU package from: $DOWNLOAD_URL"
           curl -fL -o llama-package "$DOWNLOAD_URL"
 
-          # Extract .zip or .tar.gz
-          if file llama-package | grep -qi "zip" || [[ "$DOWNLOAD_URL" == *.zip ]]; then
-            unzip -o llama-package -d ./bin
-          else
+          # Accurately distinguish .tar.gz (gzip) from .zip
+          if [[ "$DOWNLOAD_URL" == *.tar.gz ]] || file llama-package | grep -qi "gzip"; then
+            echo "Extracting tar.gz archive..."
             tar -xzf llama-package -C ./bin
+          else
+            echo "Extracting zip archive..."
+            unzip -o llama-package -d ./bin
           fi
 
-          # Ensure llama-server binary is placed in ./bin/
+          # Flatten nested build directories if present
+          if [ -d "./bin/build/bin" ]; then
+            cp -r ./bin/build/bin/* ./bin/ 2>/dev/null || true
+          fi
           find ./bin -type f -name "llama-server" -exec cp {} ./bin/llama-server \;
+          find ./bin -type f -name "*.so*" -exec cp {} ./bin/ \; 2>/dev/null || true
           chmod +x ./bin/llama-server
+
+          # Test binary with local library path
+          export LD_LIBRARY_PATH="./bin:$LD_LIBRARY_PATH"
           ./bin/llama-server --version || true
 
       # 4. Cache Model Directory
@@ -102,7 +110,7 @@ jobs:
           path: ./models
           key: model-cache-${{ github.event.inputs.model_repo }}
 
-      # 5. Resolve & Download GGUF (Lightweight 2-line auto-detection)
+      # 5. Resolve & Download GGUF
       - name: Download Model from HuggingFace
         run: |
           mkdir -p ./models
@@ -140,6 +148,8 @@ jobs:
           CTX="${{ github.event.inputs.context_size }}"
 
           echo "Starting llama-server for $MODEL_FILE on $CORES cores with ${CTX} context..."
+
+          export LD_LIBRARY_PATH="./bin:$LD_LIBRARY_PATH"
 
           ./bin/llama-server \
             -m "./models/$MODEL_FILE" \
@@ -202,7 +212,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ai-pipeline-telemetry
+          name: llama-pipeline-artifacts
           path: |
             llama-server.log
             pipeline-events.jsonl
