@@ -95,7 +95,8 @@ export interface PipelineEvent<T = any> {
   eventType:
     | "URL_HTTP_FETCH_STARTED"
     | "URL_HTTP_FETCH_COMPLETED"
-    | "URL_EXTRACTION_SUCCESS"
+    | "URL_DEFUDDLE_EXTRACTED"
+    | "URL_READER_PROXY_USED"
     | "URL_EXTRACTION_FAILED"
     | "INPUT_RESOLVED"
     | "INFERENCE_DISPATCHED"
@@ -106,59 +107,23 @@ export interface PipelineEvent<T = any> {
   payload: T;
 }
 
+export interface ExecuteOptions {
+  url?: string;
+  fallbackText: string;
+  systemPrompt: string;
+  serverUrl?: string;
+  modelName?: string;
+}
+
 // -------------------------------------------------------------
-// 3. SMART URL SCRAPER (Substack API + Defuddle + Fallback)
+// 3. DIRECT URL INGESTION (Defuddle + Cloudflare Bypass Fallback)
 // -------------------------------------------------------------
-async function extractWebContent(
+async function extractDirectUrl(
   url: string,
   emitEvent: (type: PipelineEvent["eventType"], payload: any) => void
 ): Promise<{ title: string; content: string; wordCount: number }> {
   emitEvent("URL_HTTP_FETCH_STARTED", { url });
 
-  // 1. Substack Native Public API Bypass (immune to Cloudflare 403 on HTML)
-  if (url.includes(".substack.com/p/")) {
-    try {
-      const match = url.match(/(https:\/\/[^/]+)\/p\/([^/?#]+)/);
-      if (match) {
-        const apiUrl = `${match[1]}/api/v1/posts/${match[2]}`;
-        console.log(`[SCRAPER] ⚡ Substack detected. Querying Substack API: ${apiUrl}`);
-        const apiRes = await fetch(apiUrl, {
-          headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/131.0.0.0" },
-          signal: AbortSignal.timeout(10000),
-        });
-
-        if (apiRes.ok) {
-          const postData: any = await apiRes.json();
-          const rawHtml = postData.body_html || postData.description || "";
-          if (rawHtml.length > 100) {
-            const { document } = parseHTML(rawHtml);
-            let extractedMd = "";
-            try {
-              const defuddleResult: any = await Defuddle(document, url, { markdown: true, useAsync: false });
-              extractedMd = defuddleResult.content || "";
-            } catch {}
-
-            if (!extractedMd) {
-              extractedMd = rawHtml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-            }
-
-            const title = postData.title || document.title || "Substack Article";
-            console.log(`[SCRAPER] ✅ Successfully extracted via Substack API: "${title}"`);
-            emitEvent("URL_HTTP_FETCH_COMPLETED", { url, source: "substack-api", wordCount: extractedMd.split(/\s+/).length });
-            return {
-              title,
-              content: extractedMd,
-              wordCount: extractedMd.split(/\s+/).filter(Boolean).length,
-            };
-          }
-        }
-      }
-    } catch (e: any) {
-      console.warn(`[SCRAPER] ⚠️ Substack API attempt failed: ${e.message}. Falling back to standard HTML fetch...`);
-    }
-  }
-
-  // 2. Standard Browser Fetch with Chrome User-Agent
   const headers = {
     "User-Agent":
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
@@ -166,49 +131,82 @@ async function extractWebContent(
     "Accept-Language": "en-US,en;q=0.9",
   };
 
-  const res = await fetch(url, { headers, signal: AbortSignal.timeout(20000) });
-  console.log(`[SCRAPER] 📡 HTTP Status: ${res.status} ${res.statusText}`);
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-  }
+  console.log(`[SCRAPER] 🌐 Directly querying URL: ${url}`);
+  let html = "";
+  let directFetchFailed = false;
 
-  const html = await res.text();
-  console.log(`[SCRAPER] 📥 Downloaded HTML size: ${(html.length / 1024).toFixed(1)} KB`);
-
-  // 3. Defuddle / Linkedom Parser
-  let content = "";
-  let title = "Web Document";
   try {
-    const { document } = parseHTML(html);
-    title = document.title || "Web Document";
-    const result: any = await Defuddle(document, url, { markdown: true, useAsync: false });
-    content = result.content?.trim() || "";
-    if (result.title) title = result.title;
+    const res = await fetch(url, { headers, signal: AbortSignal.timeout(15000) });
+    console.log(`[SCRAPER] 📡 Direct Response Status: ${res.status} ${res.statusText}`);
+
+    if (res.ok) {
+      html = await res.text();
+    } else {
+      console.warn(`[SCRAPER] ⚠️ Direct fetch blocked by WAF/Cloudflare (HTTP ${res.status}).`);
+      directFetchFailed = true;
+    }
   } catch (err: any) {
-    console.warn(`[SCRAPER] ⚠️ Defuddle DOM warning: ${err.message}. Using HTML cleaner...`);
+    console.warn(`[SCRAPER] ⚠️ Direct connection error: ${err.message}`);
+    directFetchFailed = true;
   }
 
-  // 4. HTML Text Cleanup Fallback
-  if (!content || content.length < 50) {
-    content = html
-      .replace(/<script[\s\S]*?<\/script>/gi, "")
-      .replace(/<style[\s\S]*?<\/style>/gi, "")
-      .replace(/<nav[\s\S]*?<\/nav>/gi, "")
-      .replace(/<header[\s\S]*?<\/header>/gi, "")
-      .replace(/<footer[\s\S]*?<\/footer>/gi, "")
-      .replace(/<[^>]+>/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
+  // 1. If Direct Fetch Succeeded -> Run standard defuddle/node
+  if (!directFetchFailed && html.length > 100) {
+    emitEvent("URL_HTTP_FETCH_COMPLETED", { url, bytes: Buffer.byteLength(html, "utf8") });
+
+    try {
+      const { document } = parseHTML(html);
+      const title = document.title || "Web Document";
+      const result: any = await Defuddle(document, url, { markdown: true, useAsync: false });
+      const content = result.content?.trim() || "";
+
+      if (content.length > 50) {
+        const wordCount = content.split(/\s+/).filter(Boolean).length;
+        emitEvent("URL_DEFUDDLE_EXTRACTED", { url, title: result.title || title, wordCount });
+        console.log(`[SCRAPER] ✅ Successfully parsed with Defuddle/node: "${result.title || title}" (${wordCount} words)`);
+        return {
+          title: result.title || title,
+          content,
+          wordCount,
+        };
+      }
+    } catch (parseErr: any) {
+      console.warn(`[SCRAPER] ⚠️ Defuddle DOM parse error: ${parseErr.message}`);
+    }
   }
 
-  if (!content || content.length < 50) {
-    throw new Error("Unable to extract readable text from URL response");
+  // 2. If Direct Fetch was Blocked by Cloudflare (403) -> Use Open Reader Proxy
+  console.log(`[SCRAPER] 🔄 Engaging Reader Proxy to bypass Cloudflare datacenter IP block...`);
+  const proxyUrl = `https://r.jina.ai/${url}`;
+
+  const proxyRes = await fetch(proxyUrl, {
+    headers: { Accept: "text/plain, text/markdown" },
+    signal: AbortSignal.timeout(20000),
+  });
+
+  if (!proxyRes.ok) {
+    throw new Error(`Both direct query and reader proxy failed (Proxy HTTP ${proxyRes.status})`);
   }
 
-  const wordCount = content.split(/\s+/).filter(Boolean).length;
-  emitEvent("URL_EXTRACTION_SUCCESS", { url, title, wordCount });
+  const markdownContent = await proxyRes.text();
+  const wordCount = markdownContent.split(/\s+/).filter(Boolean).length;
 
-  return { title, content, wordCount };
+  if (wordCount < 20) {
+    throw new Error("Reader proxy returned insufficient content");
+  }
+
+  // Extract title from markdown if available
+  const titleMatch = markdownContent.match(/^Title:\s*(.+)$/m) || markdownContent.match(/^#\s*(.+)$/m);
+  const title = titleMatch ? titleMatch[1].trim() : "Extracted Web Article";
+
+  emitEvent("URL_READER_PROXY_USED", { url, proxyUrl, title, wordCount });
+  console.log(`[SCRAPER] ✅ Reader proxy extracted article: "${title}" (${wordCount} words)`);
+
+  return {
+    title,
+    content: markdownContent,
+    wordCount,
+  };
 }
 
 // -------------------------------------------------------------
@@ -306,10 +304,10 @@ function postOpenAIChatCompletion(urlStr: string, payload: any): Promise<any> {
             try {
               resolve(JSON.parse(raw));
             } catch {
-              reject(new Error(`Invalid JSON response from llama-server: ${raw}`));
+              reject(new Error(`Invalid JSON response: ${raw}`));
             }
           } else {
-            reject(new Error(`llama-server error HTTP ${res.statusCode}: ${raw}`));
+            reject(new Error(`llama-server returned HTTP ${res.statusCode}: ${raw}`));
           }
         });
       }
@@ -389,15 +387,16 @@ export class AIEventPipeline extends EventEmitter {
 
     // PRECEDENCE RESOLUTION:
     if (cleanUrl.length > 0) {
-      console.log(`[PIPELINE] 🔍 Target URL provided: ${cleanUrl}`);
+      console.log(`[PIPELINE] 🔍 Target URL supplied: ${cleanUrl}`);
+
       try {
-        const extracted = await extractWebContent(cleanUrl, (type, payload) => this.logEvent(type, payload));
+        const extracted = await extractDirectUrl(cleanUrl, (type, payload) => this.logEvent(type, payload));
 
         sourceAudit = {
           activeSource: "URL",
           sourceIdentifier: cleanUrl,
           sourceTitle: extracted.title,
-          resolutionReason: "URL took precedence and was successfully extracted.",
+          resolutionReason: "Target URL took precedence and was successfully extracted.",
           extractedWordCount: extracted.wordCount,
           extractedCharCount: extracted.content.length,
           extractedText: extracted.content,
@@ -415,7 +414,7 @@ export class AIEventPipeline extends EventEmitter {
 
         sourceAudit = {
           activeSource: "FALLBACK_INPUT_TEXT",
-          sourceIdentifier: `Fallback (Scrape failed: ${cleanUrl})`,
+          sourceIdentifier: `Fallback (URL failed: ${cleanUrl})`,
           sourceTitle: "Direct Input (Graceful Fallback)",
           resolutionReason: `URL failed (${err.message}); gracefully fell back to direct input_text.`,
           extractedWordCount: fallbackText.split(/\s+/).filter(Boolean).length,
@@ -436,7 +435,7 @@ export class AIEventPipeline extends EventEmitter {
         extractedText: fallbackText,
       };
       targetText = fallbackText;
-      console.log(`[PIPELINE] ℹ️ Direct input_text took hold (No URL provided).`);
+      console.log(`[PIPELINE] ℹ️ Direct input_text took hold (No URL supplied).`);
     }
 
     // Safety truncate to ~6,000 words
@@ -486,9 +485,6 @@ You MUST output ONLY a valid JSON object matching this schema:
       chat_template_kwargs: { enable_thinking: false },
     };
 
-    // =========================================================
-    // INFERENCE TROUBLESHOOTING LOGS (BEFORE DISPATCH)
-    // =========================================================
     console.log("\n" + "=".repeat(70));
     console.log("🚀 [INFERENCE DISPATCH] -> llama-server (OpenAPI /v1/chat/completions)");
     console.log("=".repeat(70));
@@ -590,9 +586,6 @@ You MUST output ONLY a valid JSON object matching this schema:
       completion_tokens_per_second: completionTokensPerSec,
     };
 
-    // =========================================================
-    // INFERENCE TROUBLESHOOTING LOGS (AFTER COMPLETION)
-    // =========================================================
     console.log("\n" + "=".repeat(70));
     console.log("✅ [INFERENCE COMPLETE] Performance Breakdown:");
     console.log("=".repeat(70));
@@ -700,7 +693,7 @@ function publishStepSummary(
     `| **Source Identifier** | ${sa.sourceIdentifier.startsWith("http") ? `[${sa.sourceIdentifier}](${sa.sourceIdentifier})` : `\`${sa.sourceIdentifier}\``} |`,
     `| **Document Title** | **${sa.sourceTitle}** |`,
     `| **Word Count** | \`${sa.extractedWordCount} words\` (\`${sa.extractedCharCount} chars\`) |`,
-    `| **Status Details** | ${sa.activeSource === "URL" ? "✅ Successfully Scraped & Extracted" : sa.activeSource === "FALLBACK_INPUT_TEXT" ? `⚠️ Defuddle Fallback Invoked (${sa.scrapeError})` : "ℹ️ Direct Text Mode (URL omitted)"} |`,
+    `| **Status Details** | ${sa.activeSource === "URL" ? "✅ Successfully Extracted & Processed" : "⚠️ Direct Text Fallback Used"} |`,
     ``,
     `---`,
     ``,
