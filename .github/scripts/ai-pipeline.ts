@@ -42,6 +42,12 @@ function generateUuidV5(name: string, namespace: string = UUIDV5_NAMESPACE): str
 // -------------------------------------------------------------
 // 2. SCHEMAS & INTERFACES
 // -------------------------------------------------------------
+export type StanceOnChange = "conservatism" | "progressivism" | "not_applicable";
+export type StanceOnEconomicPower = "socialism" | "libertarianism" | "not_applicable";
+export type StanceOnStatePower = "statism" | "constitutionalism" | "not_applicable";
+export type StanceOnBorders = "nationalism" | "internationalism" | "not_applicable";
+export type StanceOnPersonalSphere = "civil_libertarianism" | "communitarianism" | "not_applicable";
+
 export interface SourceAudit {
   sourceType: "URL" | "INPUT_TEXT" | "FALLBACK_INPUT_TEXT";
   sourceIdentifier: string;
@@ -80,6 +86,11 @@ export interface SummaryStructuredOutput {
   executive_summary: string;
   key_points: string[];
   sentiment: "positive" | "neutral" | "negative" | "mixed";
+  stance_on_change: StanceOnChange;
+  stance_on_economic_power: StanceOnEconomicPower;
+  stance_on_state_power: StanceOnStatePower;
+  stance_on_borders: StanceOnBorders;
+  stance_on_personal_sphere: StanceOnPersonalSphere;
   compression_ratio: string;
   raw_output: string;
   source_audit: SourceAudit;
@@ -481,20 +492,50 @@ export class AIEventPipeline extends EventEmitter {
     const initialSnap = getMemorySnapshot();
     peakProcessSwapMb = Math.max(peakProcessSwapMb, initialSnap.vmSwapMb);
 
-    // OpenAPI Spec Payload
+    // OPENAPI CHAT COMPLETION PAYLOAD WITH EXPANDED SUMMARY & 5 STANCE AXES
     const openAiPayload = {
       model: modelName,
       messages: [
         {
           role: "system",
           content: `${systemPrompt}
-You MUST output ONLY a valid JSON object matching this schema:
+
+You MUST analyze the text and output ONLY a valid JSON object matching this exact schema:
 {
-  "headline": "Short title",
-  "executive_summary": "1-3 sentences",
-  "key_points": ["bullet 1", "bullet 2"],
-  "sentiment": "positive" | "neutral" | "negative" | "mixed"
-}`,
+  "headline": "A concise, descriptive headline for the document",
+  "executive_summary": "Thorough, comprehensive narrative summary of the document. Do not artificially abbreviate or constrain the summary to a fixed sentence count; scale the length proportionally to capture the full depth, arguments, and substance of the content.",
+  "key_points": [
+    "Comprehensive array of all major arguments, key findings, and essential takeaways from the text (scale the number of points to the depth of the text)"
+  ],
+  "sentiment": "positive" | "neutral" | "negative" | "mixed",
+  "stance_on_change": "conservatism" | "progressivism" | "not_applicable",
+  "stance_on_economic_power": "socialism" | "libertarianism" | "not_applicable",
+  "stance_on_state_power": "statism" | "constitutionalism" | "not_applicable",
+  "stance_on_borders": "nationalism" | "internationalism" | "not_applicable",
+  "stance_on_personal_sphere": "civil_libertarianism" | "communitarianism" | "not_applicable"
+}
+
+Definitions for classification axes:
+- stance_on_change: Evaluates what to do about the existing arrangement.
+  * conservatism: Maintain, protect, or return to established structures.
+  * progressivism: Reform, replace, or advance beyond existing arrangements.
+  * not_applicable: Topic does not address institutional or social arrangements.
+- stance_on_economic_power: Evaluates who should hold economic power.
+  * socialism: Collective, public, state, or democratic control of economic resources.
+  * libertarianism: Private ownership, decentralized free markets, and property rights.
+  * not_applicable: Topic does not address economic power allocation.
+- stance_on_state_power: Evaluates whether state power is centralized or checked.
+  * statism: Strong centralized government authority is necessary or justified.
+  * constitutionalism: State power must be strictly constrained, distributed, and checked by rule of law.
+  * not_applicable: Topic does not discuss governance authority.
+- stance_on_borders: Evaluates whether solutions are inside or outside national borders.
+  * nationalism: Focus on domestic sovereignty, borders, and national self-interest.
+  * internationalism: Global cooperation, open borders, transnational agreements.
+  * not_applicable: Topic does not address borders or national scope.
+- stance_on_personal_sphere: Evaluates whether an individual retains an inviolable personal sphere.
+  * civil_libertarianism: Strict individual autonomy and privacy that nobody may enter.
+  * communitarianism: Social obligations, collective well-being, or communal cohesion supersede individual autonomy.
+  * not_applicable: Topic does not discuss individual vs communal rights.`,
         },
         {
           role: "user",
@@ -507,9 +548,7 @@ You MUST output ONLY a valid JSON object matching this schema:
       chat_template_kwargs: { enable_thinking: false },
     };
 
-    // =========================================================
-    // VERBATIM TERMINAL DUMP OF EXACT INPUTS BEFORE INFERENCE
-    // =========================================================
+    // Console Inspection
     console.log("\n" + "=".repeat(80));
     console.log("📥 [VERBATIM INPUT TEXT SENT TO PIPELINE]:");
     console.log("=".repeat(80));
@@ -519,7 +558,7 @@ You MUST output ONLY a valid JSON object matching this schema:
     console.log("📝 [VERBATIM INPUT PROMPT PAYLOAD (SYSTEM + USER)]:");
     console.log("=".repeat(80));
     console.log("--- SYSTEM PROMPT ---");
-    console.log(systemPrompt);
+    console.log(openAiPayload.messages[0].content);
     console.log("\n--- USER PROMPT ---");
     console.log(userPromptContent);
     console.log("=".repeat(80) + "\n");
@@ -612,9 +651,6 @@ You MUST output ONLY a valid JSON object matching this schema:
       completion_tokens_per_second: completionTokensPerSec,
     };
 
-    // =========================================================
-    // VERBATIM TERMINAL DUMP OF RAW MODEL OUTPUT
-    // =========================================================
     console.log("\n" + "=".repeat(80));
     console.log("🤖 [VERBATIM RAW MODEL OUTPUT]:");
     console.log("=".repeat(80));
@@ -640,6 +676,11 @@ You MUST output ONLY a valid JSON object matching this schema:
         executive_summary: rawContent.trim(),
         key_points: ["Extracted from raw model text"],
         sentiment: "neutral",
+        stance_on_change: "not_applicable",
+        stance_on_economic_power: "not_applicable",
+        stance_on_state_power: "not_applicable",
+        stance_on_borders: "not_applicable",
+        stance_on_personal_sphere: "not_applicable",
       };
     }
 
@@ -648,13 +689,18 @@ You MUST output ONLY a valid JSON object matching this schema:
       executive_summary: parsed.executive_summary || rawContent,
       key_points: Array.isArray(parsed.key_points) ? parsed.key_points : [],
       sentiment: parsed.sentiment || "neutral",
+      stance_on_change: parsed.stance_on_change || "not_applicable",
+      stance_on_economic_power: parsed.stance_on_economic_power || "not_applicable",
+      stance_on_state_power: parsed.stance_on_state_power || "not_applicable",
+      stance_on_borders: parsed.stance_on_borders || "not_applicable",
+      stance_on_personal_sphere: parsed.stance_on_personal_sphere || "not_applicable",
       compression_ratio: `${((rawContent.length / targetText.length) * 100).toFixed(1)}%`,
       raw_output: rawContent,
       source_audit: sourceAudit,
       token_metrics: tokenMetrics,
       swap_metrics: swapMetrics,
       input_text: targetText,
-      system_prompt: systemPrompt,
+      system_prompt: openAiPayload.messages[0].content,
       user_prompt: userPromptContent,
     };
 
@@ -664,7 +710,7 @@ You MUST output ONLY a valid JSON object matching this schema:
 }
 
 // -------------------------------------------------------------
-// 7. GITHUB STEP SUMMARY (No Active Source Box, Verbatim Logging)
+// 7. GITHUB STEP SUMMARY (Zero-Indent CommonMark)
 // -------------------------------------------------------------
 function publishStepSummary(
   modelName: string,
@@ -695,6 +741,19 @@ function publishStepSummary(
     ``,
     `---`,
     ``,
+    `## 🧭 Content Stance & Ideological Alignment`,
+    ``,
+    `| Axis | Classification | Question Evaluated |`,
+    `| :--- | :--- | :--- |`,
+    `| **General Sentiment** | \`${result.sentiment.toUpperCase()}\` | Overall emotional and qualitative tone |`,
+    `| **Stance on Change** | \`${result.stance_on_change}\` | What to do about the existing arrangement |`,
+    `| **Stance on Economic Power** | \`${result.stance_on_economic_power}\` | Who should hold economic power |`,
+    `| **Stance on State Power** | \`${result.stance_on_state_power}\` | Whether a power the state holds was properly checked |`,
+    `| **Stance on Borders** | \`${result.stance_on_borders}\` | Whether the answer is inside or outside the border |`,
+    `| **Stance on Personal Sphere** | \`${result.stance_on_personal_sphere}\` | Whether a person keeps an inviolable personal sphere |`,
+    ``,
+    `---`,
+    ``,
     `## 💾 Memory & Swap Diagnostics`,
     ``,
     `| Metric | Measured Value | Health Status |`,
@@ -712,16 +771,11 @@ function publishStepSummary(
     ``,
     `## 📝 Structured Summary: *"${result.headline}"*`,
     ``,
-    `> **Executive Summary:**  `,
-    `> ${result.executive_summary}`,
+    `### Comprehensive Executive Summary:`,
+    result.executive_summary,
     ``,
-    `**Key Takeaways:**`,
+    `### Core Takeaways:`,
     ...result.key_points.map((p) => `- ${p}`),
-    ``,
-    `| Attribute | Value |`,
-    `| :--- | :--- |`,
-    `| **Detected Sentiment** | \`${result.sentiment.toUpperCase()}\` |`,
-    `| **Compression Ratio** | \`${result.compression_ratio}\` |`,
     ``,
     `---`,
     ``,
@@ -837,6 +891,12 @@ async function main() {
       serverUrl,
       modelName,
     });
+
+    console.log("============================================================");
+    console.log("🎯 PARSED STRUCTURED JSON RESULT:");
+    console.log("============================================================");
+    console.log(JSON.stringify(result, null, 2));
+    console.log("============================================================\n");
 
     publishStepSummary(modelName, result, pipeline.getEventHistory());
     console.log("Pipeline run completed successfully. JSONL saved to pipeline-events.jsonl");
