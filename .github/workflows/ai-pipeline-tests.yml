@@ -176,7 +176,7 @@ jobs:
             exit 1
           fi
 
-      # 7. Run Event Pipeline with Defuddle URL / Direct Text Precedence
+# 7. Run Event Pipeline with Defuddle URL / Direct Text Precedence
       - name: Execute AI Event Pipeline
         env:
           URL: "${{ github.event.inputs.url }}"
@@ -188,10 +188,12 @@ jobs:
         run: |
           npx --yes tsx .github/scripts/ai-pipeline.ts
 
-      # 8. Debug Artifacts
-      - name: Upload Logs on Failure
+      # 8. Upload JSONL Telemetry & Server Logs as Artifacts
+      - name: Upload Logs and JSONL Telemetry
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: llama-server-log
-          path: llama-server.log
+          name: ai-pipeline-telemetry
+          path: |
+            llama-server.log
+            pipeline-events.jsonl
