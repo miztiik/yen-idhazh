@@ -61,16 +61,15 @@ jobs:
           npm pkg set type="module"
           npm install defuddle linkedom
 
-      # 3. Download Official Standard llama.cpp CPU Server (Strict CPU Regex & Safe Extraction)
+      # 3. Download Official llama-server & Dereference All Shared Libraries (.so)
       - name: Download Official llama-server
         run: |
-          mkdir -p ./bin
+          mkdir -p ./bin ./llama-extract
           echo "Fetching latest official ggml-org/llama.cpp CPU binary for Ubuntu x64..."
 
           RELEASE_JSON=$(curl -sL -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=1")
 
-          # Strict regex: must start with 'llama-' (excludes cudart-) and match CPU ubuntu-x64
           DOWNLOAD_URL=$(echo "$RELEASE_JSON" | jq -r '.[0].assets[] | select(.name | test("^llama-.*-bin-ubuntu-x64\\.(tar\\.gz|zip)$")) | .browser_download_url' | head -n 1)
 
           if [ -z "$DOWNLOAD_URL" ] || [ "$DOWNLOAD_URL" = "null" ]; then
@@ -81,26 +80,24 @@ jobs:
           echo "Downloading CPU package from: $DOWNLOAD_URL"
           curl -fL -o llama-package "$DOWNLOAD_URL"
 
-          # Accurately distinguish .tar.gz (gzip) from .zip
+          # Extract into temporary folder
           if [[ "$DOWNLOAD_URL" == *.tar.gz ]] || file llama-package | grep -qi "gzip"; then
-            echo "Extracting tar.gz archive..."
-            tar -xzf llama-package -C ./bin
+            tar -xzf llama-package -C ./llama-extract
           else
-            echo "Extracting zip archive..."
-            unzip -o llama-package -d ./bin
+            unzip -o llama-package -d ./llama-extract
           fi
 
-          # Flatten nested build directories if present
-          if [ -d "./bin/build/bin" ]; then
-            cp -r ./bin/build/bin/* ./bin/ 2>/dev/null || true
-          fi
-          find ./bin -type f -name "llama-server" -exec cp {} ./bin/llama-server \;
-          find ./bin -type f -name "*.so*" -exec cp {} ./bin/ \; 2>/dev/null || true
+          # Copy binaries and dereference all .so libraries (resolves symlinks like libllama-common.so.0)
+          find ./llama-extract -name "llama-server" -exec cp -L {} ./bin/llama-server \;
+          find ./llama-extract -name "*.so*" -exec cp -L {} ./bin/ \; 2>/dev/null || true
           chmod +x ./bin/llama-server
 
-          # Test binary with local library path
-          export LD_LIBRARY_PATH="./bin:$LD_LIBRARY_PATH"
-          ./bin/llama-server --version || true
+          echo "=== Libraries and binaries in ./bin ==="
+          ls -lah ./bin/
+
+          # Verify dynamic linking with absolute LD_LIBRARY_PATH
+          export LD_LIBRARY_PATH="$PWD/bin:$LD_LIBRARY_PATH"
+          ./bin/llama-server --version
 
       # 4. Cache Model Directory
       - name: Cache Model Directory
@@ -116,7 +113,6 @@ jobs:
           mkdir -p ./models
           REPO="${{ github.event.inputs.model_repo }}"
 
-          # Discover the GGUF file in 2 lines
           FILE=$(curl -sL "https://huggingface.co/api/models/${REPO}/tree/main" | jq -r '.[].path' | grep -iE '\.gguf$' | grep -iE 'q5_k_m|q4_k_m' | head -n 1)
           [ -z "$FILE" ] && FILE=$(curl -sL "https://huggingface.co/api/models/${REPO}/tree/main" | jq -r '.[].path' | grep -iE '\.gguf$' | head -n 1)
 
@@ -149,7 +145,8 @@ jobs:
 
           echo "Starting llama-server for $MODEL_FILE on $CORES cores with ${CTX} context..."
 
-          export LD_LIBRARY_PATH="./bin:$LD_LIBRARY_PATH"
+          # Export absolute path to shared libraries
+          export LD_LIBRARY_PATH="$PWD/bin:$LD_LIBRARY_PATH"
 
           ./bin/llama-server \
             -m "./models/$MODEL_FILE" \
