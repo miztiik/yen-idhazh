@@ -11,7 +11,9 @@
     {"bytes": 13466,"covers": "2026-10-08","lost_days": [],"rows": 82,"set_aside": 0,"state": "packed"},
     {"bytes": 12754,"covers": "2026-10-09","lost_days": [],"rows": 58,"set_aside": 0,"state": "packed"},
     {"bytes": 12300,"covers": "2026-10-10","lost_days": [],"rows": 29,"set_aside": 0,"state": "packed"},
-    {"bytes": 12280,"covers": "2026-10-11","lost_days": [],"rows": 29,"set_aside": 0,"state": "packed"}
+    {"bytes": 12280,"covers": "2026-10-11","lost_days": [],"rows": 29,"set_aside": 0,"state": "packed"},
+    {"bytes": 12762,"covers": "2026-10-12","lost_days": [],"rows": 30,"set_aside": 0,"state": "packed"},
+    {"bytes": 12734,"covers": "2026-10-13","lost_days": [],"rows": 30,"set_aside": 0,"state": "packed"}
   ],
   "ledger": "gardener",
   "period": "daily",

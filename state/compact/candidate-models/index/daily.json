@@ -40,7 +40,9 @@
     {"bytes": 0,"covers": "2026-10-08","lost_days": [],"rows": 0,"set_aside": 0,"state": "empty"},
     {"bytes": 0,"covers": "2026-10-09","lost_days": [],"rows": 0,"set_aside": 0,"state": "empty"},
     {"bytes": 0,"covers": "2026-10-10","lost_days": [],"rows": 0,"set_aside": 0,"state": "empty"},
-    {"bytes": 0,"covers": "2026-10-11","lost_days": [],"rows": 0,"set_aside": 0,"state": "empty"}
+    {"bytes": 0,"covers": "2026-10-11","lost_days": [],"rows": 0,"set_aside": 0,"state": "empty"},
+    {"bytes": 0,"covers": "2026-10-12","lost_days": [],"rows": 0,"set_aside": 0,"state": "empty"},
+    {"bytes": 0,"covers": "2026-10-13","lost_days": [],"rows": 0,"set_aside": 0,"state": "empty"}
   ],
   "ledger": "candidate-models",
   "period": "daily",
