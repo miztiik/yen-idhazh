@@ -42,13 +42,10 @@ function generateUuidV5(name: string, namespace: string = UUIDV5_NAMESPACE): str
 // -------------------------------------------------------------
 // 2. SCHEMAS & INTERFACES
 // -------------------------------------------------------------
-export type ActiveSourceType = "URL" | "INPUT_TEXT" | "FALLBACK_INPUT_TEXT";
-
 export interface SourceAudit {
-  activeSource: ActiveSourceType;
+  sourceType: "URL" | "INPUT_TEXT" | "FALLBACK_INPUT_TEXT";
   sourceIdentifier: string;
   sourceTitle: string;
-  resolutionReason: string;
   extractedWordCount: number;
   extractedCharCount: number;
   extractedText: string;
@@ -88,6 +85,9 @@ export interface SummaryStructuredOutput {
   source_audit: SourceAudit;
   token_metrics: DetailedTokenMetrics;
   swap_metrics: SwapActivityMetrics;
+  input_text: string;
+  system_prompt: string;
+  user_prompt: string;
 }
 
 export interface PipelineEvent<T = any> {
@@ -105,14 +105,6 @@ export interface PipelineEvent<T = any> {
   timestamp: string;
   correlationId: string;
   payload: T;
-}
-
-export interface ExecuteOptions {
-  url?: string;
-  fallbackText: string;
-  systemPrompt: string;
-  serverUrl?: string;
-  modelName?: string;
 }
 
 // -------------------------------------------------------------
@@ -150,7 +142,7 @@ async function extractDirectUrl(
     directFetchFailed = true;
   }
 
-  // 1. If Direct Fetch Succeeded -> Run standard defuddle/node
+  // 1. Direct fetch parsing with Defuddle
   if (!directFetchFailed && html.length > 100) {
     emitEvent("URL_HTTP_FETCH_COMPLETED", { url, bytes: Buffer.byteLength(html, "utf8") });
 
@@ -175,7 +167,7 @@ async function extractDirectUrl(
     }
   }
 
-  // 2. If Direct Fetch was Blocked by Cloudflare (403) -> Use Open Reader Proxy
+  // 2. Open Reader Proxy Fallback (bypasses datacenter 403 blocks)
   console.log(`[SCRAPER] 🔄 Engaging Reader Proxy to bypass Cloudflare datacenter IP block...`);
   const proxyUrl = `https://r.jina.ai/${url}`;
 
@@ -195,7 +187,6 @@ async function extractDirectUrl(
     throw new Error("Reader proxy returned insufficient content");
   }
 
-  // Extract title from markdown if available
   const titleMatch = markdownContent.match(/^Title:\s*(.+)$/m) || markdownContent.match(/^#\s*(.+)$/m);
   const title = titleMatch ? titleMatch[1].trim() : "Extracted Web Article";
 
@@ -215,7 +206,8 @@ async function extractDirectUrl(
 function readServerPid(): number | null {
   try {
     if (fs.existsSync(".llama_server.pid")) {
-      return parseInt(fs.readFileSync(".llama_server.pid", "utf8").trim(), 10);
+      const pidStr = fs.readFileSync(".llama_server.pid", "utf8").trim();
+      return pidStr ? parseInt(pidStr, 10) : null;
     }
   } catch {}
   return null;
@@ -275,6 +267,33 @@ function getMemorySnapshot() {
   };
 }
 
+function detectL3Cache(): string {
+  try {
+    const cacheDir = "/sys/devices/system/cpu/cpu0/cache";
+    if (fs.existsSync(cacheDir)) {
+      for (const idx of fs.readdirSync(cacheDir)) {
+        const levelPath = `${cacheDir}/${idx}/level`;
+        if (fs.existsSync(levelPath) && fs.readFileSync(levelPath, "utf8").trim() === "3") {
+          const raw = fs.readFileSync(`${cacheDir}/${idx}/size`, "utf8").trim();
+          let bytes = 0;
+          if (raw.endsWith("K")) bytes = parseInt(raw) * 1024;
+          else if (raw.endsWith("M")) bytes = parseInt(raw) * 1024 * 1024;
+          else bytes = parseInt(raw);
+          return `${(bytes / (1024 * 1024)).toFixed(2)} MB (${bytes} bytes)`;
+        }
+      }
+    }
+  } catch {}
+
+  try {
+    const out = execSync("lscpu", { encoding: "utf8" });
+    const match = out.match(/L3 cache:\s*(.+)$/m);
+    if (match) return match[1].trim();
+  } catch {}
+
+  return "Unknown";
+}
+
 // -------------------------------------------------------------
 // 5. TIMEOUT-FREE OPENAPI HTTP CLIENT
 // -------------------------------------------------------------
@@ -286,7 +305,7 @@ function postOpenAIChatCompletion(urlStr: string, payload: any): Promise<any> {
     const req = http.request(
       {
         hostname: url.hostname,
-        port: url.port || 9931,
+        port: url.port,
         path: url.pathname,
         method: "POST",
         headers: {
@@ -329,7 +348,7 @@ export class AIEventPipeline extends EventEmitter {
   private shardId: string;
   private jsonlFilePath: string;
 
-  constructor(runnerName = "runner-1", shardId = "shard-1", jsonlFilePath = "pipeline-events.jsonl") {
+  constructor(runnerName: string, shardId: string, jsonlFilePath = "pipeline-events.jsonl") {
     super();
     this.runnerName = runnerName;
     this.shardId = shardId;
@@ -368,24 +387,17 @@ export class AIEventPipeline extends EventEmitter {
 
   public async execute(options: {
     url?: string;
-    fallbackText: string;
+    fallbackText?: string;
     systemPrompt: string;
-    serverUrl?: string;
-    modelName?: string;
+    serverUrl: string;
+    modelName: string;
   }): Promise<SummaryStructuredOutput> {
-    const {
-      url,
-      fallbackText,
-      systemPrompt,
-      serverUrl = "http://127.0.0.1:9931",
-      modelName = "model.gguf",
-    } = options;
+    const { url, fallbackText = "", systemPrompt, serverUrl, modelName } = options;
 
     const cleanUrl = (url || "").trim();
     let targetText = fallbackText;
     let sourceAudit: SourceAudit;
 
-    // PRECEDENCE RESOLUTION:
     if (cleanUrl.length > 0) {
       console.log(`[PIPELINE] 🔍 Target URL supplied: ${cleanUrl}`);
 
@@ -393,30 +405,32 @@ export class AIEventPipeline extends EventEmitter {
         const extracted = await extractDirectUrl(cleanUrl, (type, payload) => this.logEvent(type, payload));
 
         sourceAudit = {
-          activeSource: "URL",
+          sourceType: "URL",
           sourceIdentifier: cleanUrl,
           sourceTitle: extracted.title,
-          resolutionReason: "Target URL took precedence and was successfully extracted.",
           extractedWordCount: extracted.wordCount,
           extractedCharCount: extracted.content.length,
           extractedText: extracted.content,
         };
         targetText = extracted.content;
 
-        console.log(`[PIPELINE] ✅ URL TOOK HOLD: "${extracted.title}" (${extracted.wordCount} words)`);
+        console.log(`[PIPELINE] ✅ URL extracted: "${extracted.title}" (${extracted.wordCount} words)`);
       } catch (err: any) {
-        console.warn(`[PIPELINE] ⚠️ URL extraction failed (${err.message}). Falling back to direct input_text.`);
+        if (!fallbackText) {
+          throw new Error(`URL extraction failed (${err.message}) and no input_text was provided.`);
+        }
+
+        console.warn(`[PIPELINE] ⚠️ URL extraction failed (${err.message}). Falling back to input_text.`);
         this.logEvent("URL_EXTRACTION_FAILED", {
           url: cleanUrl,
           error: err.message,
-          resolution: "Fell back to direct input_text",
+          resolution: "Fell back to input_text",
         });
 
         sourceAudit = {
-          activeSource: "FALLBACK_INPUT_TEXT",
+          sourceType: "FALLBACK_INPUT_TEXT",
           sourceIdentifier: `Fallback (URL failed: ${cleanUrl})`,
-          sourceTitle: "Direct Input (Graceful Fallback)",
-          resolutionReason: `URL failed (${err.message}); gracefully fell back to direct input_text.`,
+          sourceTitle: "Direct Input (Fallback)",
           extractedWordCount: fallbackText.split(/\s+/).filter(Boolean).length,
           extractedCharCount: fallbackText.length,
           extractedText: fallbackText,
@@ -425,17 +439,20 @@ export class AIEventPipeline extends EventEmitter {
         targetText = fallbackText;
       }
     } else {
+      if (!fallbackText) {
+        throw new Error("Execution rejected: Both URL and input_text are empty.");
+      }
+
       sourceAudit = {
-        activeSource: "INPUT_TEXT",
-        sourceIdentifier: "Direct Text Input (No URL provided)",
+        sourceType: "INPUT_TEXT",
+        sourceIdentifier: "Direct Text Input",
         sourceTitle: "Direct Input Text",
-        resolutionReason: "URL was omitted; direct input_text took hold directly.",
         extractedWordCount: fallbackText.split(/\s+/).filter(Boolean).length,
         extractedCharCount: fallbackText.length,
         extractedText: fallbackText,
       };
       targetText = fallbackText;
-      console.log(`[PIPELINE] ℹ️ Direct input_text took hold (No URL supplied).`);
+      console.log(`[PIPELINE] ℹ️ Using input_text directly (${sourceAudit.extractedWordCount} words).`);
     }
 
     // Safety truncate to ~6,000 words
@@ -444,13 +461,18 @@ export class AIEventPipeline extends EventEmitter {
       targetText = words.slice(0, 6000).join(" ") + "\n\n[...Truncated to fit context window...]";
     }
 
+    const userPromptContent = `Document Title: ${sourceAudit.sourceTitle}\n\nContent:\n"""\n${targetText}\n"""`;
+
     this.logEvent("INPUT_RESOLVED", {
       modelName,
-      activeSource: sourceAudit.activeSource,
+      sourceType: sourceAudit.sourceType,
       sourceIdentifier: sourceAudit.sourceIdentifier,
       sourceTitle: sourceAudit.sourceTitle,
       wordCount: words.length,
       charCount: targetText.length,
+      inputText: targetText,
+      systemPrompt,
+      userPrompt: userPromptContent,
     });
 
     // Baseline Swap
@@ -476,7 +498,7 @@ You MUST output ONLY a valid JSON object matching this schema:
         },
         {
           role: "user",
-          content: `Document Title: ${sourceAudit.sourceTitle}\n\nContent:\n"""\n${targetText}\n"""`,
+          content: userPromptContent,
         },
       ],
       temperature: 0.2,
@@ -485,29 +507,33 @@ You MUST output ONLY a valid JSON object matching this schema:
       chat_template_kwargs: { enable_thinking: false },
     };
 
-    console.log("\n" + "=".repeat(70));
-    console.log("🚀 [INFERENCE DISPATCH] -> llama-server (OpenAPI /v1/chat/completions)");
-    console.log("=".repeat(70));
-    console.log(`🤖 Model Name:        ${modelName}`);
-    console.log(`🎯 Active Source:     [${sourceAudit.activeSource}]`);
-    console.log(`📌 Document Title:    "${sourceAudit.sourceTitle}"`);
-    console.log(`📏 Text Word Count:   ${words.length} words (${targetText.length} characters)`);
-    console.log(`🌡️ Temperature:       0.2`);
-    console.log(`🌐 Endpoint:          ${serverUrl}/v1/chat/completions`);
-    console.log("-".repeat(70));
-    console.log(`📄 TEXT CONTENT PREVIEW BEING SENT TO MODEL:\n"""\n${targetText.substring(0, 300)}...\n"""`);
-    console.log("=".repeat(70) + "\n");
+    // =========================================================
+    // VERBATIM TERMINAL DUMP OF EXACT INPUTS BEFORE INFERENCE
+    // =========================================================
+    console.log("\n" + "=".repeat(80));
+    console.log("📥 [VERBATIM INPUT TEXT SENT TO PIPELINE]:");
+    console.log("=".repeat(80));
+    console.log(targetText);
+
+    console.log("\n" + "=".repeat(80));
+    console.log("📝 [VERBATIM INPUT PROMPT PAYLOAD (SYSTEM + USER)]:");
+    console.log("=".repeat(80));
+    console.log("--- SYSTEM PROMPT ---");
+    console.log(systemPrompt);
+    console.log("\n--- USER PROMPT ---");
+    console.log(userPromptContent);
+    console.log("=".repeat(80) + "\n");
 
     const startTime = performance.now();
     this.logEvent("INFERENCE_DISPATCHED", {
       serverUrl,
       targetModel: modelName,
-      activeSource: sourceAudit.activeSource,
+      sourceType: sourceAudit.sourceType,
       wordCount: words.length,
       charCount: targetText.length,
+      messages: openAiPayload.messages,
     });
 
-    // Progress Heartbeat
     const progressTimer = setInterval(() => {
       const elapsed = Math.round((performance.now() - startTime) / 1000);
       const snap = getMemorySnapshot();
@@ -586,22 +612,22 @@ You MUST output ONLY a valid JSON object matching this schema:
       completion_tokens_per_second: completionTokensPerSec,
     };
 
-    console.log("\n" + "=".repeat(70));
-    console.log("✅ [INFERENCE COMPLETE] Performance Breakdown:");
-    console.log("=".repeat(70));
-    console.log(`⏱️ Total Time:             ${(totalDurationMs / 1000).toFixed(2)}s (${totalDurationMs} ms)`);
-    console.log(`📥 Prompt Ingest Speed:     ${tokenMetrics.prompt_tokens_per_second} tokens/sec (${tokenMetrics.prompt_tokens} tokens)`);
-    console.log(`⚡ Output Generation Speed: ${tokenMetrics.completion_tokens_per_second} tokens/sec (${tokenMetrics.completion_tokens} tokens)`);
-    console.log(`💾 Swap Telemetry:          Peak Process Swap: ${swapMetrics.peak_server_swap_mb} MB | RAM RSS: ${swapMetrics.server_vm_rss_mb} MB`);
-    console.log("-".repeat(70));
-    console.log(`🤖 RAW UNPARSED MODEL OUTPUT:\n${rawContent}`);
-    console.log("=".repeat(70) + "\n");
+    // =========================================================
+    // VERBATIM TERMINAL DUMP OF RAW MODEL OUTPUT
+    // =========================================================
+    console.log("\n" + "=".repeat(80));
+    console.log("🤖 [VERBATIM RAW MODEL OUTPUT]:");
+    console.log("=".repeat(80));
+    console.log(rawContent);
+    console.log("=".repeat(80));
+    console.log(`⏱️ Duration: ${(totalDurationMs / 1000).toFixed(2)}s | Ingest: ${tokenMetrics.prompt_tokens_per_second} t/s | Gen: ${tokenMetrics.completion_tokens_per_second} t/s\n`);
 
     this.logEvent("INFERENCE_COMPLETED", {
       modelName,
-      activeSource: sourceAudit.activeSource,
+      sourceType: sourceAudit.sourceType,
       tokenMetrics,
       swapMetrics,
+      rawOutput: rawContent,
     });
 
     let parsed: any;
@@ -627,6 +653,9 @@ You MUST output ONLY a valid JSON object matching this schema:
       source_audit: sourceAudit,
       token_metrics: tokenMetrics,
       swap_metrics: swapMetrics,
+      input_text: targetText,
+      system_prompt: systemPrompt,
+      user_prompt: userPromptContent,
     };
 
     this.logEvent("OUTPUT_STRUCTURED", structuredResult);
@@ -635,7 +664,7 @@ You MUST output ONLY a valid JSON object matching this schema:
 }
 
 // -------------------------------------------------------------
-// 7. GITHUB STEP SUMMARY (Zero-Indent CommonMark)
+// 7. GITHUB STEP SUMMARY (No Active Source Box, Verbatim Logging)
 // -------------------------------------------------------------
 function publishStepSummary(
   modelName: string,
@@ -647,7 +676,7 @@ function publishStepSummary(
   const sa = result.source_audit;
 
   console.log(
-    `::notice title=AI Pipeline Succeeded (${modelName})::🎯 Source: ${sa.activeSource} | 📥 Ingest: ${tm.prompt_tokens_per_second} t/s (${tm.prompt_tokens}t) | ⚡ Gen: ${tm.completion_tokens_per_second} t/s (${tm.completion_tokens}t) | ⏱️ Time: ${(tm.total_duration_ms / 1000).toFixed(1)}s | 💾 Peak Swap: ${sm.peak_server_swap_mb} MB`
+    `::notice title=AI Pipeline Succeeded (${modelName})::📥 Ingest: ${tm.prompt_tokens_per_second} t/s (${tm.prompt_tokens}t) | ⚡ Gen: ${tm.completion_tokens_per_second} t/s (${tm.completion_tokens}t) | ⏱️ Time: ${(tm.total_duration_ms / 1000).toFixed(1)}s | 💾 Peak Swap: ${sm.peak_server_swap_mb} MB`
   );
 
   const summaryPath = process.env.GITHUB_STEP_SUMMARY;
@@ -655,11 +684,6 @@ function publishStepSummary(
 
   const lines: string[] = [
     `# 🧠 AI Transformer Pipeline Execution Report`,
-    ``,
-    `> **🎯 Active Input Source:** \`${sa.activeSource}\`  `,
-    `> **Resolution Details:** ${sa.resolutionReason}`,
-    ``,
-    `---`,
     ``,
     `## ⏱️ Token Performance & Ingestion Rates`,
     ``,
@@ -676,24 +700,13 @@ function publishStepSummary(
     `| Metric | Measured Value | Health Status |`,
     `| :--- | :--- | :--- |`,
     `| **Linux \`vm.swappiness\`** | **\`${sm.swappiness}\`** | ${sm.swappiness <= 10 ? "✅ Low Paging (Optimized)" : "⚠️ High Paging"} |`,
-    `| **Server Process PID** | \`${sm.server_pid || "unknown"}\` | Background Daemon |`,
+    `| **Server Process PID** | \`${sm.server_pid ?? ""}\` | Background Daemon |`,
     `| **Server RAM (RSS)** | **${sm.server_vm_rss_mb} MB** | In Physical Memory |`,
     `| **Peak Process Swap** | **${sm.peak_server_swap_mb} MB** | ${sm.peak_server_swap_mb > 0 ? "⚠️ Process Swapped" : "✅ 0 MB (Zero Process Swap)"} |`,
+    `| **Final Process Swap** | **${sm.final_server_swap_mb} MB** | Current Swap Allocation |`,
     `| **Swap Written to SSD** | **${sm.swap_bytes_written_mb} MB** | Pages Paged Out |`,
     `| **Swap Read from SSD** | **${sm.swap_bytes_read_mb} MB** | Pages Paged In |`,
     `| **Total System Swap Used** | \`${sm.system_swap_used_mb} MB / ${sm.system_swap_total_mb} MB\` | Allocated Swapfile Space |`,
-    ``,
-    `---`,
-    ``,
-    `## 🌐 Ingestion Source Diagnostics`,
-    ``,
-    `| Parameter | Value |`,
-    `| :--- | :--- |`,
-    `| **Active Source Mode** | \`${sa.activeSource}\` |`,
-    `| **Source Identifier** | ${sa.sourceIdentifier.startsWith("http") ? `[${sa.sourceIdentifier}](${sa.sourceIdentifier})` : `\`${sa.sourceIdentifier}\``} |`,
-    `| **Document Title** | **${sa.sourceTitle}** |`,
-    `| **Word Count** | \`${sa.extractedWordCount} words\` (\`${sa.extractedCharCount} chars\`) |`,
-    `| **Status Details** | ${sa.activeSource === "URL" ? "✅ Successfully Extracted & Processed" : "⚠️ Direct Text Fallback Used"} |`,
     ``,
     `---`,
     ``,
@@ -712,19 +725,39 @@ function publishStepSummary(
     ``,
     `---`,
     ``,
-    `## 📄 Cleaned Source Content That Took Hold`,
-    `<details>`,
-    `<summary><b>Click to expand input content (${sa.extractedWordCount} words)</b></summary>`,
+    `## 📝 Full Input Prompt (System + User Prompt)`,
+    `<details open>`,
+    `<summary><b>Click to collapse/expand exact prompt payload sent to model</b></summary>`,
     ``,
-    `\`\`\`markdown`,
-    sa.extractedText || "No source text available",
+    `### System Prompt:`,
+    `\`\`\`text`,
+    result.system_prompt,
+    `\`\`\``,
+    ``,
+    `### User Prompt:`,
+    `\`\`\`text`,
+    result.user_prompt,
     `\`\`\``,
     ``,
     `</details>`,
     ``,
-    `## 🤖 Raw Model Output Text`,
-    `<details>`,
-    `<summary><b>Click to expand raw response</b></summary>`,
+    `---`,
+    ``,
+    `## 📄 Full Input Text (Source Material)`,
+    `<details open>`,
+    `<summary><b>Click to collapse/expand input text (${sa.extractedWordCount} words, ${sa.extractedCharCount} chars)</b></summary>`,
+    ``,
+    `\`\`\`markdown`,
+    result.input_text,
+    `\`\`\``,
+    ``,
+    `</details>`,
+    ``,
+    `---`,
+    ``,
+    `## 🤖 Verbatim Raw Model Output`,
+    `<details open>`,
+    `<summary><b>Click to collapse/expand raw model output</b></summary>`,
     ``,
     `\`\`\`text`,
     result.raw_output,
@@ -755,40 +788,55 @@ function publishStepSummary(
 }
 
 // -------------------------------------------------------------
-// 8. MAIN ENTRY POINT
+// 8. MAIN ENTRY POINT (Strict Environment Checking)
 // -------------------------------------------------------------
 async function main() {
-  const runnerName = process.env.RUNNER_NAME || "local-runner";
-  const shardId = process.env.SHARD_ID || "shard-1/1";
-  const modelName = process.env.MODEL_NAME || "model.gguf";
+  const runnerName = process.env.RUNNER_NAME ?? "";
+  const shardId = process.env.SHARD_ID ?? "";
+  const modelName = process.env.MODEL_NAME ?? "";
+  const serverUrl = process.env.SERVER_URL;
 
-  const rawUrl = (process.env.URL || "").trim();
-  const rawInputText = (process.env.INPUT_TEXT || "").trim();
-  const prompt =
-    process.env.PROMPT ||
-    "You are an executive summarizer. Output ONLY the requested JSON. Do NOT output thinking tags.";
+  if (!serverUrl) {
+    throw new Error("Missing required environment variable: SERVER_URL");
+  }
+  if (!modelName) {
+    throw new Error("Missing required environment variable: MODEL_NAME");
+  }
 
-  const fallbackText =
-    rawInputText ||
-    "Local LLMs allow running transformer architectures directly on edge devices and continuous integration runners without transmitting data over third-party APIs.";
+  const rawUrl = (process.env.URL ?? "").trim();
+  const rawInputText = (process.env.INPUT_TEXT ?? "").trim();
+  const prompt = (process.env.PROMPT ?? "").trim();
 
-  const serverUrl = process.env.SERVER_URL || "http://127.0.0.1:9931";
+  if (!prompt) {
+    throw new Error("Missing required environment variable: PROMPT");
+  }
+  if (!rawUrl && !rawInputText) {
+    throw new Error("No input provided: Both URL and INPUT_TEXT environment variables are empty.");
+  }
+
+  const l3Cache = detectL3Cache();
+
+  console.log("=== Environment Configuration ===");
+  console.log({
+    runnerName: runnerName || "(empty)",
+    shardId: shardId || "(empty)",
+    modelName: modelName,
+    serverUrl: serverUrl,
+    hasUrl: Boolean(rawUrl),
+    hasInputText: Boolean(rawInputText),
+    l3Cache: l3Cache,
+  });
+
   const pipeline = new AIEventPipeline(runnerName, shardId);
 
   try {
     const result = await pipeline.execute({
       url: rawUrl,
-      fallbackText,
+      fallbackText: rawInputText,
       systemPrompt: prompt,
       serverUrl,
       modelName,
     });
-
-    console.log("============================================================");
-    console.log("🎯 PARSED STRUCTURED JSON RESULT:");
-    console.log("============================================================");
-    console.log(JSON.stringify(result, null, 2));
-    console.log("============================================================\n");
 
     publishStepSummary(modelName, result, pipeline.getEventHistory());
     console.log("Pipeline run completed successfully. JSONL saved to pipeline-events.jsonl");
