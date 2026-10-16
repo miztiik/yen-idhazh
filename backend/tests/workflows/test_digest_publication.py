@@ -559,11 +559,12 @@ def test_work_adapter_lands_exact_completed_raw_not_pre_staged_state(
     assert result.status is Status.LANDED, result
     assert git(repo, "rev-parse", "HEAD").strip() == source
     assert (repo / ".git/index").read_bytes() == index
-    assert Repository(origin).entry("main", "state/foreign-staged.json") is None
+    remote = Repository(origin, git_dir=origin)
+    assert remote.entry("main", "state/foreign-staged.json") is None
     for target in evidence:
-        entry = Repository(origin).entry("main", target.relative_to(repo).as_posix())
+        entry = remote.entry("main", target.relative_to(repo).as_posix())
         assert entry is not None and entry.mode == "100644"
-        assert Repository(origin).blob(entry.oid) == target.read_bytes()
+        assert remote.blob(entry.oid) == target.read_bytes()
 
 
 def test_plan_workflow_call_parses_and_bad_retry_config_stops_before_git_changes(
