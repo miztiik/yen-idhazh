@@ -79,14 +79,10 @@ frontend/vite.config.ts.timestamp-*.mjs
 
 # Staged by frontend/scripts/copy-visuals.mjs from the pipeline's own output.
 frontend/static/digest/
-frontend/static/telemetry/
 frontend/static/index/
 frontend/static/console/
 frontend/static/config/
 frontend/static/scores/
-frontend/static/run-days/
-frontend/static/day-metrics/
-frontend/static/machine/
 frontend/static/state/
 
 # Scaffolding for the reference-set authoring pass: a second copy of queue.jsonl,

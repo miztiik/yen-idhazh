@@ -1,58 +1,15 @@
-/** What the machine did, drawn from what the two surviving ledgers counted.
+/** What the native machine charts read from the independent clocks and article rows.
  *
- * `$lib/server/machine-counters.ts` reads `state/host-fingerprint/` and
- * `state/item-health/` and hands back one figure per shard and per run. This
- * module turns those figures into the seven things an operator can act on:
- * which shard was slow and why, whether the seconds went on reading or on
- * writing, how much of the context window a run actually used, how near the
- * runner's 16 GB a run got, whether the two clocks agree, whether the tail is
- * growing, and what a run's tokens would have cost somewhere else.
- *
- * Every function here is pure and every one takes its ceiling as an argument,
- * so a test drives it from a fixture ledger and Guardrail #6 keeps the knobs in
- * `config/`. Nothing reaches the disk and nothing reaches the network.
- *
- * **An empty cell is unknown and never zero.** The reader hands absence through
- * as `null` and so does this module: a figure that did not run leaves here as
- * `null` and a component prints a dash or a sentence. A zero is a measurement.
+ * An empty cell is unknown and never zero. The counters hand absence through
+ * as null and so does this module: a zero is a measurement.
  */
 
-import type { EChartsOption } from 'echarts';
-import { rangeMark, type RangeMark } from './d3/rankedList';
-export type { RangeMark } from './d3/rankedList';
-import type { MachineRun, ShardCounters } from '$lib/server/machine-counters';
-import { dayMonth } from '../format';
-import { AXIS_LABEL_GAP_PX, LABEL_ADVANCE_EM, labelWidth } from './frame';
+import { rankedList, type RankedGeometry } from './d3/rankedList';
+import type { MachineRun } from '$lib/console/machine/counters';
+import type { SeriesInput } from './d3/dateSeries';
+import { compareRuns } from '../console/queries/shared';
 import { readoutOf, type Readout, type ReadoutInput } from './readout';
-import { percentOf } from './rank';
 import { grouped } from './series';
-import { stacked, type StackShape } from './stacked';
-import { targetMarks, type TargetMarks } from './targetbar';
-import { paint, type ChartToken } from './theme';
-
-/** The runner's memory, from CLAUDE.md Guardrail #2: 4 vCPU, 16 GB RAM, no GPU.
- *
- * A constant and not a `config/` knob, for the same reason `PAGES_CAP_BYTES` in
- * `glance.ts` is a constant: it is a property of the platform we run on, not a
- * preference anybody may tune. Turning it into a knob would let a run that no
- * longer fits be made to look as though it did.
- */
-export const RUNNER_MEMORY_BYTES = 16 * 1024 * 1024 * 1024;
-
-/** The room an engine-drawn value axis needs for its own widest label.
- *
- * `stacked` and the run-by-run bars both took a fixed 48px, which is a gutter
- * sized for a four-digit count. Measured 2026-09-01 at 1440, 768 and 390 on the
- * built console, that clipped `200,000` by 1.35px and `1,200,000` by 10.44px on
- * a stacked chart whose day totals reached seven digits - six labels cut on
- * every width. The engine picks its own top tick, so the widest label it can
- * draw is the largest value grouped plus at most one more character; that
- * character is the slack added here.
- */
-export function valueGutter(highest: number, fontSize = 11): number {
-	const widest = labelWidth(grouped(Math.round(highest)), fontSize) + fontSize * LABEL_ADVANCE_EM;
-	return Math.ceil(widest) + AXIS_LABEL_GAP_PX;
-}
 
 /** The five points a latency curve is quoted at.
  *
@@ -100,702 +57,6 @@ export function gib(value: number | null): string {
 }
 
 // ---------------------------------------------------------------------------
-// The shard board
-// ---------------------------------------------------------------------------
-
-/** One shard of one run, as a row a person reads left to right.
- *
- * The shard is the unit and not a tooltip: a per-run average of a run whose
- * fastest reader ran 4.31x its slowest reports neither end of it, which is the
- * defect this whole route exists to close.
- */
-export interface BoardRow {
-	shard: number;
-	/** Items this shard finished. The work half of the work-or-host question: a
-	 * long clock at a normal read rate and a high count is a lot of articles. */
-	items: number;
-	readSeconds: number | null;
-	writeSeconds: number | null;
-	/** The two together. Null unless the shard reported both. */
-	modelSeconds: number | null;
-	/** CSS lengths for the two segments, against the heaviest shard's total, so
-	 * a short row means a short shard rather than a differently scaled bar. */
-	readWidth: string;
-	writeWidth: string;
-	/** False where the smaller segment would draw under one pixel at
-	 * `console.chart_width`. The track then draws whole and the two seconds are
-	 * printed, because a band nobody can see teaches a category is zero. */
-	splitDrawn: boolean;
-	readTokensPerSecond: number | null;
-	writeTokensPerSecond: number | null;
-	/** The two rates as CSS lengths, against whichever domain the board chose. */
-	readRateWidth: string;
-	writeRateWidth: string;
-	/** The processor, as the text `/proc/cpuinfo` printed. Null on a shard that
-	 * ran before the cell existed - which is absence, not an unknown machine. */
-	cpuModel: string | null;
-	cpuBusyPct: number | null;
-	/** A typical item's memory against the shard's worst, on the board's one
-	 * memory domain. */
-	memory: RangeMark;
-	/** A typical item's CPU against the shard's worst, on nought to a hundred. */
-	cpu: RangeMark;
-	/** A typical item's stolen share against the shard's worst, on the same
-	 * nought to a hundred the busy share is drawn on - the two are halves of one
-	 * reading and a second domain would invite a comparison that is not there.
-	 *
-	 * Beside the busy share rather than in a column of its own: a busy figure is
-	 * only readable once a reader knows how much of the interval we were given,
-	 * and a shard that lost a tenth of its processor explains the read rate two
-	 * cells to its left. */
-	stolen: RangeMark;
-	/** Items of the shard that recorded a stolen share. Zero on a shard that ran
-	 * before the ledger split it out of the busy share, which is why an empty
-	 * mark here is not a host that took nothing. */
-	stolenItems: number;
-	/** The highest load any of the shard's items ended under. */
-	loadMax: number | null;
-	/** Cores the host let the job see. The load figure's denominator. */
-	cores: number | null;
-	/** The load against those cores. Empty where either is missing. */
-	load: TargetMarks;
-	/** What the host had left to swap into, and what it has. */
-	swapFreeBytes: number | null;
-	swapTotalBytes: number | null;
-	/** Which of the three things the swap pair can say. `none` is a box with no
-	 * swap at all, which is not an emergency; `unrecorded` is a run older than
-	 * the cell. Carried rather than derived in markup so a test can name it. */
-	swapState: SwapState;
-	/** What the shard paid opening the weights, before its first item. */
-	modelLoadMs: number | null;
-	/** Seconds of this shard's items that no named stage claimed, added over
-	 * them and drawn exactly as the ledger holds it.
-	 *
-	 * **Signed, and never recomputed here.** The column is the one thing that can
-	 * catch a regression in a stage nobody named, and a figure this page worked
-	 * out from the stage clocks would agree with them by construction. Below zero
-	 * means the named stages claim more time than the items took - two clocks
-	 * disagreeing - and that is the reading, not a zero. */
-	unclaimedSeconds: number | null;
-	/** How many of the shard's items carried unclaimed time below zero. A sum can
-	 * cancel; a count cannot. */
-	clocksDisagreed: number;
-	/** How many of the shard's item rows carried an unclaimed figure at all. The
-	 * denominator the count above is read against. */
-	clockedItems: number;
-	/** The typical item's wait and the worst one, on the board's clock scale.
-	 *
-	 * Never a total. Each item's wait covers the queue ahead of it, so adding
-	 * them counts that queue once per item. */
-	queue: RangeMark;
-	queueMedianSeconds: number | null;
-	queueMaxSeconds: number | null;
-	jobSeconds: number | null;
-	/** The job clock against `run.shard_timeout_minutes`. */
-	job: TargetMarks;
-}
-
-export type SwapState = 'measured' | 'none' | 'unrecorded';
-
-/** A typical reading and the worst one, on one track.
- *
- * Two numbers with a span, drawn once rather than written as two sentences: the
- * fill runs to the median and the notch stands at the maximum, so the distance
- * between them IS the spread. Four figures each written as prose is four
- * sentences no two of which can be compared.
- */
-export interface ShardBoardView {
-	runId: string;
-	date: string;
-	/** Ranked by job clock, slowest first. A shard with no clock cannot be
-	 * ranked, so it follows in shard order rather than being dropped. */
-	rows: BoardRow[];
-	/** Shards the run planned. `rows.length` is short of it when a shard's job
-	 * died before it recorded anything. Null where the manifest recorded no
-	 * count, which is unknown rather than however many answered. */
-	shards: number | null;
-	/** The fastest reader over the slowest. Null with fewer than two readers -
-	 * one shard cannot spread against itself. */
-	readSpread: number | null;
-	/** The seconds the widest bar stands for. Every row shares it, and the queue
-	 * bars share it with the model bars - which is the whole point of drawing the
-	 * wait here rather than as a number of its own: a queue longer than the model
-	 * time is a length a reader can see against it. */
-	scaleSeconds: number;
-	/** The tokens a second the widest rate bar stands for, taken from the rates
-	 * drawn and never from a fixed ceiling. A 4x spread draws a quarter-length
-	 * bar rather than being clipped at a round number somebody chose. */
-	rateScale: number;
-	/** The write series' own domain. The same number as `rateScale` while the
-	 * two share an axis, and the write series' own maximum once they cannot. */
-	writeRateScale: number;
-	/** The larger rate over the smaller, measured across every rate on the
-	 * board. Null with nothing to compare. */
-	rateRatio: number | null;
-	/** True while `rateRatio` is under `RATE_AXIS_RATIO_LIMIT`, so the two rates
-	 * are lengths a reader may compare. False past it, when the smaller would
-	 * draw under a twentieth of the track and read as zero. */
-	ratesShareAxis: boolean;
-	/** The bytes the widest memory mark stands for: the largest of what the
-	 * shards reached and the runner's own ceiling, so a breach draws past the
-	 * ceiling rather than being clipped at it. */
-	memoryScaleBytes: number;
-	/** What the job clock is measured against, in seconds. Null unconfigured. */
-	timeoutSeconds: number | null;
-	/** Shards that named a processor, and shards the run had. */
-	cpuKnown: number;
-	/** Shards whose host recorded how much swap it has. Zero is every run
-	 * written before the cell landed, and the cells then say so. */
-	swapKnown: number;
-	empty: boolean;
-}
-
-function modelSeconds(shard: ShardCounters): number | null {
-	return shard.readSeconds === null || shard.writeSeconds === null
-		? null
-		: shard.readSeconds + shard.writeSeconds;
-}
-
-/** How far apart two series may be and still share one axis.
- *
- * Past this the smaller draws under a twentieth of the track and reads as zero,
- * so it takes its own domain and the board prints the ratio it measured. The
- * threshold is a measurement rather than a taste, which is why it is named here
- * once instead of being decided panel by panel.
- */
-export const RATE_AXIS_RATIO_LIMIT = 20;
-
-function swapStateOf(total: number | null): SwapState {
-	if (total === null) return 'unrecorded';
-	return total > 0 ? 'measured' : 'none';
-}
-
-/** One run as one row per shard, ranked by the clock the timeout applies to.
- *
- * Ranked by the job clock rather than by model seconds, because the job clock
- * is the one the platform kills a shard on: the row at the top is the shard
- * that would be killed first.
- *
- * `chartWidth` is `console.chart_width`, and it decides one thing only: whether
- * the smaller half of a shard's reading-against-writing split is wide enough to
- * be a band rather than a legend key with no mark.
- */
-export function shardBoard(
-	run: MachineRun | null,
-	timeoutSeconds: number | null,
-	chartWidth: number
-): ShardBoardView {
-	if (run === null || run.reported.length === 0) {
-		return {
-			runId: run?.runId ?? '',
-			date: run?.date ?? '',
-			rows: [],
-			shards: run?.shards ?? null,
-			readSpread: null,
-			scaleSeconds: 0,
-			rateScale: 0,
-			writeRateScale: 0,
-			rateRatio: null,
-			ratesShareAxis: true,
-			memoryScaleBytes: RUNNER_MEMORY_BYTES,
-			timeoutSeconds,
-			cpuKnown: 0,
-			swapKnown: 0,
-			empty: true
-		};
-	}
-
-	const totals = run.reported
-		.map(modelSeconds)
-		.filter((value): value is number => value !== null);
-	// The queue bars are drawn on this scale too, so it has to reach the longest
-	// wait as well as the heaviest model clock. A shard that queued longer than it
-	// computed then draws a longer bar, which is the sentence the pair exists to
-	// let a reader read.
-	const waits = run.reported
-		.map((shard) => shard.queueMaxSeconds)
-		.filter((value): value is number => value !== null);
-	const clocks = [...totals, ...waits];
-	const scaleSeconds = clocks.length === 0 ? 0 : Math.max(...clocks);
-
-	// Both domains come from the values drawn. The memory one takes the runner's
-	// ceiling in beside them rather than as its maximum, so a shard that went
-	// past 16 GiB still draws past the line instead of stopping on it.
-	const readRates = run.reported
-		.map((shard) => shard.readTokensPerSecond)
-		.filter((value): value is number => value !== null);
-	const writeRates = run.reported
-		.map((shard) => shard.writeTokensPerSecond)
-		.filter((value): value is number => value !== null);
-	const readTop = readRates.length === 0 ? 0 : Math.max(...readRates);
-	const writeTop = writeRates.length === 0 ? 0 : Math.max(...writeRates);
-	const larger = Math.max(readTop, writeTop);
-	const smaller = Math.min(readTop, writeTop);
-	const rateRatio = smaller > 0 ? larger / smaller : null;
-	const ratesShareAxis = rateRatio === null || rateRatio < RATE_AXIS_RATIO_LIMIT;
-	const rateScale = larger;
-	const writeRateScale = ratesShareAxis ? larger : writeTop;
-
-	const memoryMarks = run.reported.flatMap((shard) =>
-		[shard.rssMedianBytes, shard.peakRssBytes].filter((value): value is number => value !== null)
-	);
-	const memoryScaleBytes = Math.max(RUNNER_MEMORY_BYTES, ...memoryMarks);
-
-	// A band this narrow is a legend entry with no mark on the track.
-	const leastVisible = chartWidth > 0 ? 1 / chartWidth : 0;
-
-	const ordered = [...run.reported].sort((a, b) => {
-		// A shard with no clock has no rank. It goes last, in shard order, rather
-		// than being sorted as though its clock were zero.
-		if (a.jobSeconds === null && b.jobSeconds === null) return a.shard - b.shard;
-		if (a.jobSeconds === null) return 1;
-		if (b.jobSeconds === null) return -1;
-		return b.jobSeconds - a.jobSeconds;
-	});
-
-	const rows: BoardRow[] = ordered.map((shard) => {
-		const readShare = scaleSeconds > 0 ? (shard.readSeconds ?? 0) / scaleSeconds : 0;
-		const writeShare = scaleSeconds > 0 ? (shard.writeSeconds ?? 0) / scaleSeconds : 0;
-		// Only a band that is there at all has to be wide enough to see. A shard
-		// that spent no seconds writing has a real zero, not an invisible band.
-		const bands = [readShare, writeShare].filter((share) => share > 0);
-		return {
-			shard: shard.shard,
-			items: shard.items,
-			readSeconds: shard.readSeconds,
-			writeSeconds: shard.writeSeconds,
-			modelSeconds: modelSeconds(shard),
-			readWidth: percentOf(readShare),
-			writeWidth: percentOf(writeShare),
-			splitDrawn: bands.every((share) => share >= leastVisible),
-			readTokensPerSecond: shard.readTokensPerSecond,
-			writeTokensPerSecond: shard.writeTokensPerSecond,
-			readRateWidth: percentOf(
-				rateScale > 0 ? (shard.readTokensPerSecond ?? 0) / rateScale : 0
-			),
-			writeRateWidth: percentOf(
-				writeRateScale > 0 ? (shard.writeTokensPerSecond ?? 0) / writeRateScale : 0
-			),
-			cpuModel: shard.cpuModel,
-			cpuBusyPct: shard.cpuBusyPct,
-			memory: rangeMark(shard.rssMedianBytes, shard.peakRssBytes, memoryScaleBytes),
-			cpu: rangeMark(shard.cpuBusyMedianPct, shard.cpuBusyMaxPct, 100),
-			stolen: rangeMark(shard.cpuStolenMedianPct, shard.cpuStolenMaxPct, 100),
-			stolenItems: shard.cpuStolenItems,
-			loadMax: shard.loadMax,
-			cores: shard.cores,
-			load: targetMarks(shard.loadMax, shard.cores ?? 0, 'lower-is-better'),
-			swapFreeBytes: shard.swapFreeMinBytes,
-			swapTotalBytes: shard.swapTotalBytes,
-			swapState: swapStateOf(shard.swapTotalBytes),
-			modelLoadMs: shard.modelLoadMs,
-			unclaimedSeconds: shard.unclaimedSeconds,
-			clocksDisagreed: shard.clocksDisagreed,
-			clockedItems: shard.clockedItems,
-			queue: rangeMark(shard.queueMedianSeconds, shard.queueMaxSeconds, scaleSeconds),
-			queueMedianSeconds: shard.queueMedianSeconds,
-			queueMaxSeconds: shard.queueMaxSeconds,
-			jobSeconds: shard.jobSeconds,
-			job: targetMarks(shard.jobSeconds, timeoutSeconds ?? 0, 'lower-is-better')
-		};
-	});
-
-	return {
-		runId: run.runId,
-		date: run.date,
-		rows,
-		shards: run.shards,
-		readSpread: run.readSpread.value,
-		scaleSeconds,
-		rateScale,
-		writeRateScale,
-		rateRatio,
-		ratesShareAxis,
-		memoryScaleBytes,
-		timeoutSeconds,
-		cpuKnown: run.cpuModels.from,
-		swapKnown: run.reported.filter((shard) => shard.swapTotalBytes !== null).length,
-		empty: false
-	};
-}
-
-// ---------------------------------------------------------------------------
-// Reading against writing
-// ---------------------------------------------------------------------------
-
-// The split is drawn once per machine and lives in `machine-split.ts`. It was
-// one pooled figure over every shard of a run until 2026-09-17, and measured
-// over the committed ledger that figure averaged two or more different machines
-// on 86 of the 90 runs that name a processor.
-
-// ---------------------------------------------------------------------------
-// The prompt cache
-// ---------------------------------------------------------------------------
-
-// Prompt reuse is drawn one span a request and lives in
-// `$lib/console/machine/prompt-reuse.ts`. It was one stacked column a day until
-// 2026-09-21, and a day figure is the mean of a request that read its whole
-// prompt again and one that reused nearly all of its own, which is neither.
-
-// ---------------------------------------------------------------------------
-// Memory and load, at the item grain
-// ---------------------------------------------------------------------------
-
-/** How far the machine's own MemTotal may sit from the runner's 16 GiB and
- * still be read as that runner.
- *
- * `/proc/meminfo` is not namespaced, so inside a container MemTotal reports the
- * HOST rather than the job. That makes it the one cell that can say the other
- * five OS cells are about the wrong machine. A tolerance is needed because
- * MemTotal excludes the memory the kernel reserved at boot, which is a low
- * single-digit percent of a 16 GiB box - so ten percent is wide enough never to
- * fire on a healthy runner and narrow enough to catch a host twice or half the
- * size. Stated once here for the same reason `CLOCKS_AGREE_WITHIN_PCT` is.
- */
-export const MEM_TOTAL_AGREES_WITHIN_PCT = 10;
-
-/** What one item left the kernel, at its worst moment and at its last.
- *
- * Two ends and not one, because the pair separates two states nothing else on
- * this site can tell apart. A machine whose floor falls and whose end also
- * falls is leaking; one whose floor falls and whose end recovers was only
- * working hard. The floor alone reads the same on both.
- */
-export interface HeadroomMark {
-	/** The lowest MemAvailable seen while the model worked on this item. */
-	floorBytes: number | null;
-	/** MemAvailable when the item ended. */
-	endBytes: number | null;
-	floorWidth: string;
-	endWidth: string;
-	/** What the item gave back between those two. Null with either end missing,
-	 * and negative where the item ended lower than its own recorded floor. */
-	recoveredBytes: number | null;
-	empty: boolean;
-}
-
-/** One item of one run: what it left the kernel, what it held, and what it queued. */
-export interface ItemMemory {
-	itemId: string;
-	shard: number;
-	/** The clock the run order is taken from. Empty where the row carried none,
-	 * which puts the item last rather than first. */
-	startedAt: string;
-	/** What the model server was holding when the item ended, and what the
-	 * worker process was. Two readings of two processes at one moment; they
-	 * carry no width here because neither is drawn against the machine's total
-	 * (see `bracketScaleBytes`). */
-	serverEndBytes: number | null;
-	workerBytes: number | null;
-	headroom: HeadroomMark;
-	/** The one-minute load when the item ended. Past the core count it is a
-	 * queue, which is a different fact from a busy processor. */
-	load: number | null;
-	loadWidth: string;
-	/** Processor busy over the item's model window, trough as fill and peak as
-	 * notch. Near 100 on every row, which is why load is drawn beside it. */
-	busy: RangeMark;
-	/** True on the one item that took the kernel lowest. */
-	tightest: boolean;
-}
-
-/** Memory and machine load over one run, item by item.
- *
- * **A break panel.** It takes the extreme and the item that owns it, over every
- * item of one run. The lead is how close a single item took the machine to
- * running out, which is the one grain that can show it: a per-shard maximum
- * reads as a normal shard while one of its items is on the ceiling.
- */
-export interface MemoryBoardView {
-	runId: string;
-	date: string;
-	/** One entry an item, in run order. The x every track here shares. */
-	items: ItemMemory[];
-	/** THE LEAD: the least the kernel had left at any item's worst moment. */
-	floorLowBytes: number | null;
-	/** That figure as a share of the ceiling, whole percent - what was still
-	 * free, not what was used. */
-	floorLowPct: number | null;
-	/** The item that owns that figure, by name. */
-	floorItemId: string | null;
-	/** The largest end-of-item reading each process reached over the run. Two
-	 * brackets and never a track: see `bracketScaleBytes`. */
-	serverEndHighWater: number | null;
-	workerHighWater: number | null;
-	/** The two brackets added. */
-	bothHighWater: number | null;
-	/** True only where both maxima fall on the SAME item. False makes the sum an
-	 * upper bound rather than a reading, and the panel says which it is. */
-	coPeak: boolean;
-	/** What the two brackets are drawn against: the larger of them, so the pair
-	 * is a comparison of two processes and never a share of the machine. A
-	 * resident-set figure drawn against a machine total reads as a budget, and
-	 * that is the figure this project retracted on 2026-09-09. */
-	bracketScaleBytes: number;
-	/** What every kernel figure here is drawn against. */
-	ceilingBytes: number;
-	/** The byte domain the kernel track shares: the ceiling and every drawn
-	 * value, so a reading past the ceiling draws past the line rather than
-	 * stopping on it. */
-	scaleBytes: number;
-	/** The machine's own MemTotal, where the rows carried one. */
-	measuredTotalBytes: number | null;
-	/** Every distinct MemTotal the drawn rows carried, ascending. More than one
-	 * entry is a run that drew two machine sizes, which is itself a finding. */
-	totalsSeen: number[];
-	/** Whether that total reads as the runner we believe we are on. Null where
-	 * no row carried one, which is unknown rather than agreement. */
-	totalAgrees: boolean | null;
-	/** The highest load any item of the run ended under. */
-	loadHigh: number | null;
-	/** Cores the run's hosts let the jobs see. The smaller where they disagree,
-	 * for the same reason the memory denominator takes the smaller. */
-	cores: number | null;
-	load: TargetMarks;
-	/** Processor busy across the whole run, trough to peak. */
-	busySpan: RangeMark;
-	/** Items that carried a memory reading, and items the run's shards counted.
-	 * Null where no shard recorded its own item count. */
-	from: number;
-	outOf: number | null;
-	/** Items that carried each of the tracks. A track no item measured is a
-	 * sentence rather than a row of marks with nothing in them. */
-	heldFrom: number;
-	headroomFrom: number;
-	loadFrom: number;
-	/** Drawn items the kernel reading skipped. Printed rather than drawn, so a
-	 * day older than the columns is a stated count and never a line at zero. */
-	kernelSkipped: number;
-	/** The earliest date carrying the kernel reading among the rows this build
-	 * was handed, and the earliest date in those rows whatever they carried.
-	 * The pair bounds every sentence the panel writes about the reading's age
-	 * to the span it actually read - never to the whole archive. */
-	kernelBeginsOn: string | null;
-	readFrom: string | null;
-	itemsEmpty: boolean;
-	loadEmpty: boolean;
-	empty: boolean;
-}
-
-function numberCell(row: Record<string, string>, name: string): number | null {
-	const text = (row[name] ?? '').trim();
-	if (text === '') return null;
-	const value = Number(text);
-	return Number.isFinite(value) ? value : null;
-}
-
-function smallest(values: readonly (number | null)[]): number | null {
-	const known = values.filter((value): value is number => value !== null);
-	return known.length === 0 ? null : Math.min(...known);
-}
-
-function widthOf(value: number | null, scale: number): string {
-	return percentOf(value === null || scale <= 0 ? 0 : Math.min(value / scale, 1));
-}
-
-/** One run's memory and load, item by item.
- *
- * `health` is the item ledger, bounded by the caller; only the handed run's own
- * rows are drawn, and the rest are read for one thing only - the earliest date
- * carrying the kernel's own reading, which is what bounds every sentence the
- * panel writes about that reading's age.
- *
- * The denominator is the machine's own MemTotal where the rows carried one and
- * the runner's 16 GiB where they did not - and the two are printed together,
- * because a MemTotal that disagrees with the runner is the tell that every
- * other OS cell is about a different machine.
- *
- * The domain takes the ceiling in beside the drawn values rather than as its
- * maximum, so an item past the ceiling still draws past the line.
- */
-export function memoryBoard(
-	run: MachineRun | null,
-	health: readonly Record<string, string>[]
-): MemoryBoardView {
-	const runId = run?.runId ?? '';
-	const rows = runId === '' ? [] : health.filter((row) => (row.run_id ?? '') === runId);
-
-	// The two dates that bound the age sentence. Both come off the rows handed
-	// in, so the panel can say when the kernel reading starts without claiming
-	// anything about days nobody read.
-	const dated = health.map((row) => (row.date ?? '').trim()).filter((date) => date !== '');
-	const kernelDates = health
-		.filter((row) => numberCell(row, 'os_mem_available_min_bytes') !== null)
-		.map((row) => (row.date ?? '').trim())
-		.filter((date) => date !== '');
-	const readFrom = dated.length === 0 ? null : dated.reduce((a, b) => (a < b ? a : b));
-	const kernelBeginsOn =
-		kernelDates.length === 0 ? null : kernelDates.reduce((a, b) => (a < b ? a : b));
-
-	// The smaller of two totals, per decision 8: a run that drew two machine
-	// sizes is read against the smaller of them, because the smaller is the one
-	// that could have run out.
-	const totalsSeen = [
-		...new Set(rows.map((row) => numberCell(row, 'os_mem_total_bytes')).filter((v): v is number => v !== null))
-	].sort((left, right) => left - right);
-	const measuredTotalBytes = totalsSeen[0] ?? null;
-	const totalAgrees =
-		measuredTotalBytes === null
-			? null
-			: Math.abs(measuredTotalBytes - RUNNER_MEMORY_BYTES) / RUNNER_MEMORY_BYTES <=
-				MEM_TOTAL_AGREES_WITHIN_PCT / 100;
-	const denominator = measuredTotalBytes ?? RUNNER_MEMORY_BYTES;
-
-	const drawn = rows.filter(
-		(row) =>
-			numberCell(row, 'llama_rss_bytes') !== null ||
-			numberCell(row, 'python_rss_bytes') !== null ||
-			numberCell(row, 'os_mem_available_min_bytes') !== null ||
-			numberCell(row, 'os_mem_available_bytes') !== null
-	);
-	// Run order, from the item's own clock. A row with no clock has no place in
-	// that order, so it follows the ones that have rather than opening the strip.
-	const ordered = [...drawn].sort((left, right) => {
-		const leftAt = (left.item_started_at ?? '').trim();
-		const rightAt = (right.item_started_at ?? '').trim();
-		if (leftAt === '' && rightAt === '') return (left.item_id ?? '').localeCompare(right.item_id ?? '');
-		if (leftAt === '') return 1;
-		if (rightAt === '') return -1;
-		return leftAt.localeCompare(rightAt);
-	});
-
-	const servers = ordered
-		.map((row) => numberCell(row, 'llama_rss_bytes'))
-		.filter((value): value is number => value !== null);
-	const workers = ordered
-		.map((row) => numberCell(row, 'python_rss_bytes'))
-		.filter((value): value is number => value !== null);
-	const floors = ordered
-		.map((row) => numberCell(row, 'os_mem_available_min_bytes'))
-		.filter((value): value is number => value !== null);
-	const ends = ordered
-		.map((row) => numberCell(row, 'os_mem_available_bytes'))
-		.filter((value): value is number => value !== null);
-
-	// THE LEAD. A minimum and not a maximum: the question is how little the
-	// kernel had left, and the item that owns it is the one a reader goes and
-	// looks at.
-	const floorLowBytes = floors.length === 0 ? null : Math.min(...floors);
-	const floorRow =
-		floorLowBytes === null
-			? null
-			: (ordered.find((row) => numberCell(row, 'os_mem_available_min_bytes') === floorLowBytes) ??
-				null);
-	const floorItemId = floorRow === null ? null : (floorRow.item_id ?? '').trim() || null;
-
-	const serverEndHighWater = servers.length === 0 ? null : Math.max(...servers);
-	const workerHighWater = workers.length === 0 ? null : Math.max(...workers);
-	const serverRow =
-		serverEndHighWater === null
-			? null
-			: (ordered.find((row) => numberCell(row, 'llama_rss_bytes') === serverEndHighWater) ?? null);
-	// The two brackets added is a reading only where one item held both. Anywhere
-	// else it is arithmetic over two moments that never met.
-	const coPeak =
-		serverRow !== null &&
-		workerHighWater !== null &&
-		numberCell(serverRow, 'python_rss_bytes') === workerHighWater;
-
-	// The kernel track runs to this, ceiling included, so a reading past the
-	// ceiling draws past the line rather than stopping on it.
-	const scaleBytes = Math.max(denominator, ...floors, ...ends);
-	// The brackets run to the larger of themselves and never to the machine's
-	// total, because a resident-set figure drawn against a total reads as a
-	// budget - the figure this project retracted on 2026-09-09.
-	const bracketScaleBytes = Math.max(0, serverEndHighWater ?? 0, workerHighWater ?? 0);
-
-	const loads = ordered
-		.map((row) => numberCell(row, 'load_1m'))
-		.filter((value): value is number => value !== null);
-	const loadHigh = loads.length === 0 ? null : Math.max(...loads);
-	const cores = run === null ? null : smallest(run.reported.map((one) => one.cores));
-	const loadScale = Math.max(loadHigh ?? 0, cores ?? 0);
-	const busyLow = smallest(ordered.map((row) => numberCell(row, 'cpu_busy_min')));
-	const busyHighs = ordered
-		.map((row) => numberCell(row, 'cpu_busy_max'))
-		.filter((value): value is number => value !== null);
-
-	const items: ItemMemory[] = ordered.map((row) => {
-		const floorBytes = numberCell(row, 'os_mem_available_min_bytes');
-		const endBytes = numberCell(row, 'os_mem_available_bytes');
-		const load = numberCell(row, 'load_1m');
-		return {
-			itemId: (row.item_id ?? '').trim(),
-			shard: numberCell(row, 'machine_shard') ?? 0,
-			startedAt: (row.item_started_at ?? '').trim(),
-			serverEndBytes: numberCell(row, 'llama_rss_bytes'),
-			workerBytes: numberCell(row, 'python_rss_bytes'),
-			headroom: {
-				floorBytes,
-				endBytes,
-				floorWidth: widthOf(floorBytes, scaleBytes),
-				endWidth: widthOf(endBytes, scaleBytes),
-				recoveredBytes: floorBytes === null || endBytes === null ? null : endBytes - floorBytes,
-				empty: floorBytes === null && endBytes === null
-			},
-			load,
-			loadWidth: widthOf(load, loadScale),
-			busy: rangeMark(numberCell(row, 'cpu_busy_min'), numberCell(row, 'cpu_busy_max'), 100),
-			// The one row, not every row that ties with it. Two items that reached
-			// the same byte are a tie the panel names once, because "the item that
-			// took the machine lowest" has to be an item a reader can go and look at.
-			tightest: row === floorRow
-		};
-	});
-
-	const bothHighWater =
-		serverEndHighWater === null || workerHighWater === null
-			? null
-			: serverEndHighWater + workerHighWater;
-	// Items the shards said they had, which is a different number from the items
-	// that carried a reading. One count a shard, summed over the shards that
-	// recorded one - never the largest, which would report one shard's work as
-	// the run's. Null where no shard counted, because an unknown total is not
-	// the count of who answered.
-	const planned = new Map<number, number>();
-	for (const row of rows) {
-		const count = numberCell(row, 'shard_item_count');
-		const at = numberCell(row, 'machine_shard');
-		if (count !== null && at !== null) planned.set(at, count);
-	}
-	const headroomFrom = items.filter((one) => !one.headroom.empty).length;
-
-	return {
-		runId,
-		date: run?.date ?? '',
-		items,
-		floorLowBytes,
-		floorLowPct: floorLowBytes === null ? null : Math.round((floorLowBytes / denominator) * 100),
-		floorItemId,
-		serverEndHighWater,
-		workerHighWater,
-		bothHighWater,
-		coPeak,
-		bracketScaleBytes,
-		ceilingBytes: denominator,
-		scaleBytes,
-		measuredTotalBytes,
-		totalsSeen,
-		totalAgrees,
-		loadHigh,
-		cores,
-		load: targetMarks(loadHigh, cores ?? 0, 'lower-is-better'),
-		busySpan: rangeMark(busyLow, busyHighs.length === 0 ? null : Math.max(...busyHighs), 100),
-		from: items.length,
-		outOf: planned.size === 0 ? null : sum([...planned.values()]),
-		heldFrom: servers.length,
-		headroomFrom,
-		loadFrom: loads.length,
-		kernelSkipped: items.length - headroomFrom,
-		kernelBeginsOn,
-		readFrom,
-		itemsEmpty: items.length === 0,
-		loadEmpty: loadHigh === null && busyLow === null && busyHighs.length === 0,
-		empty: items.length === 0
-	};
-}
-
-// ---------------------------------------------------------------------------
 // The two clocks, compared
 // ---------------------------------------------------------------------------
 
@@ -831,12 +92,11 @@ export interface ClockView {
  * `input_tokens - cached_tokens` is the definition, and it is defined HERE
  * rather than in the reader so there is exactly one of it: the runtime reused
  * the cached ones instead of reading them, so leaving them in reports a rate
- * the machine never ran at. `poolLedger` in `$lib/server/machine-counters.ts`
+ * the machine never ran at. `poolLedger` in the native machine counters
  * calls this, which is why that module imports a chart module rather than the
  * other way round for this one function.
  *
- * neither direction, so it is skipped rather than counted as an item that read
- * nothing.
+ * A row without either instrument is skipped, not counted as reading nothing.
  */
 export function itemRead(
 	row: Record<string, string>
@@ -932,89 +192,19 @@ function pair(
 	return { label, ledger, server, gapPct, agrees: gapPct <= tolerancePct };
 }
 
-/** Two bars side by side, never stacked: they are two readings of one quantity,
- * and stacking would add a number to itself.
- *
- * No legend: the strip under the plot names both instruments in the colours
- * they are drawn in, at the column the reader is on. */
-export function clocksChart(pairs: readonly ClockPair[]): {
-	option: EChartsOption;
-	empty: boolean;
-} {
-	const drawn = pairs.filter((entry) => entry.ledger !== null && entry.server !== null);
-	if (drawn.length === 0) return { option: {}, empty: true };
-	const bar = (name: string, token: ChartToken, pick: (entry: ClockPair) => number | null) => ({
-		name,
-		type: 'bar' as const,
-		barMaxWidth: 22,
-		itemStyle: { color: paint(token) },
-		data: drawn.map((entry) => Number((pick(entry) ?? 0).toFixed(2)))
-	});
-	return {
-		empty: false,
-		option: {
-			animation: false,
-			grid: { left: 48, right: 12, top: 8, bottom: 26, containLabel: false },
-			tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-			xAxis: {
-				type: 'category',
-				data: drawn.map((entry) => entry.label),
-				axisLine: { lineStyle: { color: paint('--chart-axis') } },
-				axisTick: { show: false },
-				axisLabel: { color: paint('--color-text-tertiary'), fontSize: 11, hideOverlap: true }
-			},
-			yAxis: {
-				type: 'value',
-				axisLabel: { color: paint('--color-text-tertiary'), fontSize: 11 },
-				splitLine: { lineStyle: { color: paint('--chart-grid') } }
-			},
-			series: [
-				bar('Item ledger', '--chart-1', (entry) => entry.ledger),
-				bar('Model server', '--chart-4', (entry) => entry.server)
-			]
-		}
-	};
+/** Rank each measured gap against the rule, retaining both independent readings. */
+export function clocksChart(pairs: readonly ClockPair[], tolerancePct: number): RankedGeometry | null {
+	return rankedList(pairs.flatMap((pair) => pair.gapPct === null ? [] : [{
+		label: pair.label,
+		value: pair.gapPct,
+		context: `item ledger ${pair.ledger?.toFixed(2)}; server ${pair.server?.toFixed(2)} tokens a second`,
+		...(pair.agrees === false ? { status: 'disagrees' } : {})
+	}]), { rules: [{ at: tolerancePct, label: 'Allowed disagreement' }] });
 }
 
 // ---------------------------------------------------------------------------
 // The percentile curve
 // ---------------------------------------------------------------------------
-
-/** Both instruments at one column, for the strip under the clock chart.
- *
- * The panel exists to compare two readings of one quantity, and reading two
- * bars off a shared axis by eye is the thing it was built to stop.
- */
-export function clockColumns(pairs: readonly ClockPair[]): Readout {
-	const both = pairs.filter((pair) => pair.ledger !== null && pair.server !== null);
-	const rate = (value: number) => `${value.toFixed(2)} tok/s`;
-	return readoutOf({
-		type: 'dateSeries',
-		columns: both.map((pair) => pair.label),
-		series: [
-			{
-				label: 'Item ledger',
-				swatch: 'var(--chart-1)',
-				values: both.map((pair) => pair.ledger),
-				format: rate
-			},
-			{
-				label: 'Model server',
-				swatch: 'var(--chart-4)',
-				values: both.map((pair) => pair.server),
-				format: rate
-			},
-			{
-				label: 'Apart',
-				swatch: null,
-				values: both.map((pair) => pair.gapPct),
-				format: (value: number) => `${value.toFixed(2)}%`
-			}
-		],
-		notMeasured: 'Not measured by both clocks',
-		resting: 'last'
-	});
-}
 
 /** One run's whole distribution, as the small multiples draw it.
  *
@@ -1061,9 +251,7 @@ export function percentileHistory(
 
 	const runs: LatencyRun[] = [];
 	const tooFew: { runId: string; date: string; items: number }[] = [];
-	// Run ids are `<date>-<n>`, so a plain string sort orders a day's runs and
-	// orders the days too.
-	for (const runId of [...byRun.keys()].sort()) {
+	for (const runId of [...byRun.keys()].sort(compareRuns)) {
 		const bucket = byRun.get(runId) as { date: string; ms: number[] };
 		const values = [...bucket.ms].sort((a, b) => a - b);
 		if (values.length < floor) {
@@ -1128,19 +316,6 @@ export function latencyColumns(
 /** The two currencies a run's model work can be counted in. */
 export type WorkUnit = 'tokens' | 'seconds';
 
-/** Which unit the panel opens on, read by the server that draws the first
- * paint and by the browser that redraws it, so the two can never disagree.
- *
- * Seconds, because it is the true reading. Reading is batched prefill and
- * writing is sequential decode, so the taller token bar is the cheaper half of
- * the run - a panel that opens in tokens states the wrong answer first and
- * waits for the reader to find the switch. */
-export const DEFAULT_WORK_UNIT: WorkUnit = 'seconds';
-
-/** Past this, the smaller series draws under 5 percent and reads as zero, so
- * it takes its own row on a shared x rather than a sliver on a shared axis. */
-export const SHARED_AXIS_LIMIT = 20;
-
 export interface RunWork {
 	runId: string;
 	date: string;
@@ -1160,27 +335,13 @@ export interface RunWork {
 	timed: number;
 }
 
-export interface ReadWriteSummary {
-	/** Runs carrying a duration. Zero is the seconds grain's absent state. */
-	timedRuns: number;
-	/** Larger over smaller, per unit, over every run drawn. Null where the unit
-	 * has no reading or the smaller side is zero. */
-	ratio: Record<WorkUnit, number | null>;
-	/** Which side of the comparison is the taller one, per unit. The two
-	 * disagreeing is the finding this panel exists to deliver. */
-	taller: Record<WorkUnit, 'read' | 'written' | null>;
-	/** Where that ratio passed `SHARED_AXIS_LIMIT` and the smaller series takes
-	 * its own row. Measured rather than assumed. */
-	split: Record<WorkUnit, boolean>;
-}
-
-export interface ReadWriteView extends ReadWriteSummary {
+export interface ReadWriteView {
 	runs: RunWork[];
 }
 
 /** What a run read against what it wrote, counted twice over one row set.
  *
- * **One call returns both units, and the row set is decided once.** A row
+ * One call returns both units, and the row set is decided once. A row
  * qualifies on its token counts; the durations are then summed over exactly
  * those rows. Two independent filters would let the two grains cover different
  * runs, and a panel whose grains disagree about what they measured cannot be
@@ -1239,35 +400,7 @@ export function readAgainstWritten(health: readonly Record<string, string>[]): R
 		.filter((run) => run.items > 0)
 		.sort((a, b) => a.runId.localeCompare(b.runId));
 
-	const total = (pick: (run: RunWork) => number | null): number | null => {
-		const drawn = runs.map(pick).filter((value): value is number => value !== null);
-		return drawn.length === 0 ? null : drawn.reduce((carry, value) => carry + value, 0);
-	};
-	const pair = (read: number | null, written: number | null) => {
-		if (read === null || written === null) {
-			return { ratio: null, taller: null, split: false } as const;
-		}
-		const high = Math.max(read, written);
-		const low = Math.min(read, written);
-		const ratio = low === 0 ? null : high / low;
-		return {
-			ratio,
-			taller: (read === written ? null : read > written ? 'read' : 'written') as
-				| 'read'
-				| 'written'
-				| null,
-			split: ratio !== null && ratio > SHARED_AXIS_LIMIT
-		};
-	};
-	const counted = pair(total((run) => run.input), total((run) => run.output));
-	const clocked = pair(total((run) => run.prefillMs), total((run) => run.decodeMs));
-	return {
-		runs,
-		timedRuns: runs.filter((run) => run.timed > 0).length,
-		ratio: { tokens: counted.ratio, seconds: clocked.ratio },
-		taller: { tokens: counted.taller, seconds: clocked.taller },
-		split: { tokens: counted.split, seconds: clocked.split }
-	};
+	return { runs };
 }
 
 /** What one run's two sides measure in the open unit, or nothing.
@@ -1286,133 +419,23 @@ export function workValues(
 	};
 }
 
-/** One group a run: what it read beside what it wrote, in the open unit.
- *
- * **Two bars a group and one linear domain, because the comparison IS the
- * panel.** Two plots with a domain each let both series fill their own box, and
- * a reader who wants to know which half of the run costs more learns nothing
- * from two full boxes.
- *
- * **Past `SHARED_AXIS_LIMIT` the smaller series takes its own row on a shared
- * x.** Two grids, same categories, larger on top - the ratio is measured before
- * the shape is picked, and the page prints the ratio it measured. On the
- * committed ledger neither unit reaches the limit, so this is the degradation
- * and not the panel.
- *
- * The axis carries the run's DAY and not its run id. A run id is now
- * `<date>-<workflow run>`, and turned 45 degrees, measured 2026-09-01 on the
- * built console, seventeen of them made fourteen overlapping pairs at 1440 -
- * the worst two sat 67.9px on top of each other - and every one of them hung
- * 60.6px below the chart's own box. `hideOverlap` kept them all, because the
- * engine measures a turned label along the axis and not across the box it
- * actually draws. Horizontal short dates cost nothing a reader wanted: the run
- * id is in the strip below at the bar the pointer is on, in full.
- *
- * The engine's own `hideOverlap` does the thinning here rather than `dayTicks`,
- * and that is the difference between the two kinds of axis. `dayTicks` measures
- * against pixels we own; an engine relays out its own axis at every width, so a
- * label set computed at the authored width would be the wrong set at all the
- * others.
- */
-export function workChart(
-	runs: readonly RunWork[],
-	summary: ReadWriteSummary,
-	unit: WorkUnit
-): { option: EChartsOption; empty: boolean; grid: { left: number; right: number } } {
-	const values = runs.map((run) => workValues(run, unit));
-	const read = values.map((value) => value.read);
-	const written = values.map((value) => value.written);
-	const drawn = [...read, ...written].filter((value): value is number => value !== null);
-	const grid = { left: valueGutter(Math.max(0, ...drawn)), right: 12 };
-	if (drawn.length === 0) return { option: {}, empty: true, grid };
-
-	const name = unit === 'tokens' ? 'tokens' : 'seconds';
-	const dates = runs.map((run) => dayMonth(run.date));
-	const category = (extra: Record<string, unknown>) => ({
-		type: 'category' as const,
-		data: dates,
-		axisLine: { lineStyle: { color: paint('--chart-axis') } },
-		axisTick: { show: false },
-		axisLabel: {
-			color: paint('--color-text-tertiary'),
-			fontSize: 10,
-			hideOverlap: true
-		},
-		...extra
-	});
-	const value = (title: string, extra: Record<string, unknown>) => ({
-		type: 'value' as const,
-		name: title,
-		nameTextStyle: { color: paint('--color-text-tertiary'), fontSize: 11 },
-		axisLabel: { color: paint('--color-text-tertiary'), fontSize: 11 },
-		splitLine: { lineStyle: { color: paint('--chart-grid') } },
-		...extra
-	});
-	const bar = (title: string, token: ChartToken, data: (number | null)[], at: number) => ({
-		name: title,
-		type: 'bar' as const,
-		barMaxWidth: 24,
-		itemStyle: { color: paint(token) },
-		xAxisIndex: at,
-		yAxisIndex: at,
-		data
-	});
-	const READ = { title: 'Read', token: '--chart-1' as ChartToken, data: read };
-	const WRITTEN = { title: 'Written', token: '--chart-4' as ChartToken, data: written };
-
-	if (!summary.split[unit]) {
-		return {
-			empty: false,
-			grid,
-			option: {
-				animation: false,
-				// 30 at the top for the axis name, 26 at the bottom now that no label
-				// is turned. The 14px that buys goes back to the plot.
-				grid: { ...grid, top: 30, bottom: 26, containLabel: false },
-				tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-				xAxis: category({}),
-				yAxis: value(name, {}),
-				series: [
-					bar(READ.title, READ.token, READ.data, 0),
-					bar(WRITTEN.title, WRITTEN.token, WRITTEN.data, 0)
-				]
-			}
-		};
+/** Dated totals over the same qualified runs, with unmeasured seconds left unknown. */
+export function workSeries(runs: readonly RunWork[], unit: WorkUnit): SeriesInput[] {
+	const days = new Map<string, { read: number | null; written: number | null }>();
+	for (const run of runs) {
+		const values = workValues(run, unit);
+		const day = days.get(run.date) ?? { read: null, written: null };
+		if (values.read !== null) day.read = (day.read ?? 0) + values.read;
+		if (values.written !== null) day.written = (day.written ?? 0) + values.written;
+		days.set(run.date, day);
 	}
-
-	const readTotal = read.reduce<number>((carry, entry) => carry + (entry ?? 0), 0);
-	const writtenTotal = written.reduce<number>((carry, entry) => carry + (entry ?? 0), 0);
-	const [top, below] = readTotal >= writtenTotal ? [READ, WRITTEN] : [WRITTEN, READ];
-	return {
-		empty: false,
-		grid,
-		option: {
-			animation: false,
-			// Percentages rather than pixels: the renderer is handed a height and
-			// the two rows have to divide whatever it is.
-			grid: [
-				{ ...grid, top: 30, height: '34%', containLabel: false },
-				{ ...grid, top: '62%', bottom: 26, containLabel: false }
-			],
-			tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-			// One pointer over both rows, so a run is read on both at once.
-			axisPointer: { link: [{ xAxisIndex: 'all' }] },
-			// The top row borrows the bottom row's labels rather than printing the
-			// same dates twice.
-			xAxis: [
-				category({ gridIndex: 0, axisLabel: { show: false } }),
-				category({ gridIndex: 1 })
-			],
-			yAxis: [
-				value(`${top.title.toLowerCase()}, ${name}`, { gridIndex: 0 }),
-				value(`${below.title.toLowerCase()}, ${name}`, { gridIndex: 1 })
-			],
-			series: [
-				bar(top.title, top.token, top.data, 0),
-				bar(below.title, below.token, below.data, 1)
-			]
-		}
-	};
+	const dated = [...days].sort(([left], [right]) => left.localeCompare(right));
+	return [
+		{ label: `Read ${unit}`, token: '--chart-6',
+			points: dated.map(([date, values]) => ({ date, value: values.read })) },
+		{ label: `Written ${unit}`, token: '--chart-7',
+			points: dated.map(([date, values]) => ({ date, value: values.written })) }
+	];
 }
 
 /** A price per million tokens, and the currency it is quoted in. */
@@ -1441,7 +464,7 @@ export function costOf(tokens: { input: number; output: number }, rate: CostRate
  * `toLocaleString` reads the machine's locale and two builds have to agree, and
  * a currency symbol in front of a number is exactly the shape a bill takes.
  *
- * **A real cost never prints as zero.** An amount above nothing that rounds away
+ * A real cost never prints as zero. An amount above nothing that rounds away
  * at the decimals asked for comes back as `<0.01 USD`, the same rule the console
  * already applies to a millisecond total: a `0` there would say the work was
  * free, and the work was not free.

@@ -32,6 +32,7 @@ from ._harness import (
     RECORD_STEP,
     REVIEW_STEP,
     RUN_ARTIFACTS,
+    SCRAPE_STEP,
     SUBSTITUTED_DATE,
     SUBSTITUTED_DAY_DIR,
     SUBSTITUTED_SHARD,
@@ -78,7 +79,15 @@ def test_a_worker_commits_its_rows_before_the_run_can_throw_them_away() -> None:
 
     for name in WORK_LEDGER_STEPS:
         step = _step(workflow, "work", "name", name)
-        assert _normalize_condition(step.get("if"), f"work step {name}") == "always()"
+        condition = _normalize_condition(step.get("if"), f"work step {name}")
+        if name in {RECORD_STEP, COMMIT_STEPS["work"]}:
+            assert condition == "always()"
+        elif name == "What this job cost":
+            assert condition == "always() && env.IDHAZH_HOST_TELEMETRY_MODE == 'python'"
+        elif name == SCRAPE_STEP:
+            assert condition == "always() && env.IDHAZH_HOST_TELEMETRY_MODE != 'off'"
+        else:
+            assert condition == "always()"
 
     record = _substitute(
         _script(_step(workflow, "work", "name", RECORD_STEP), f"work step {RECORD_STEP}")

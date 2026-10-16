@@ -71,6 +71,13 @@
 	import { shortDate } from '$lib/format';
 	import type { StageTiming, StageTimingDay } from '$lib/charts/series';
 	import { daysInWindow, type TimeWindow } from '$lib/charts/viewport';
+	import {
+		checkedRule,
+		ruleBoundaries,
+		ruleDeclaration,
+		ruleEvents,
+		type ModelRule
+	} from '$lib/charts/d3/model-rule';
 
 	let {
 		days,
@@ -79,7 +86,8 @@
 		width,
 		tickDensity,
 		readoutMaxShare,
-		modelChanges = []
+		modelChanges = [],
+		rule
 	}: {
 		days: StageTimingDay[];
 		span: TimeWindow;
@@ -94,6 +102,7 @@
 		 * `extract` moves with the extractor version the same stamp digests. A step
 		 * in either that lines up with a rule has a candidate cause. */
 		modelChanges?: string[];
+		rule?: ModelRule;
 	} = $props();
 
 	const STAGES = [
@@ -173,6 +182,15 @@
 	/** The days the pipeline changed, of the days this chart drew. */
 	const rules = $derived(modelRules(modelChanges, calendar, columnsX));
 	const changedOn = $derived(new Set(rules.map((rule) => rule.date)));
+	const structuredRule = $derived.by(() => {
+		if (rule === undefined) return null;
+		if (modelChanges.length > 0) {
+			throw new Error('Stage timings take a structured rule or legacy model changes, not both.');
+		}
+		return checkedRule(rule);
+	});
+	const declaration = $derived(structuredRule === null ? { value: 'yes' as const } : ruleDeclaration(structuredRule));
+	const boundaries = $derived(structuredRule === null ? [] : ruleBoundaries(structuredRule, calendar, columnsX, box.left));
 	const newest = $derived(ordered[ordered.length - 1] ?? null);
 
 	/** A stage is on the chart where the window timed it at all, a zero
@@ -261,7 +279,9 @@
 			})),
 			// The rule is a mark on the plot and a line in the strip, so a reader
 			// stepping the days with an arrow key meets it without a pointer.
-			events: { lines: calendar.map((date) => (changedOn.has(date) ? [MODEL_RULE_ROW] : [])) },
+			events: structuredRule === null
+				? { lines: calendar.map((date) => (changedOn.has(date) ? [MODEL_RULE_ROW] : [])) }
+				: ruleEvents(structuredRule, calendar),
 			notMeasured: 'Nothing was timed on this day',
 			resting: 'newest'
 		})
@@ -384,7 +404,14 @@
 				we can time.</span
 			>
 		{/if}
-		{#if rules.length === 0}
+		{#if structuredRule !== null}
+			{#if 'declined' in structuredRule}
+				<span>{structuredRule.declined}</span>
+			{:else if structuredRule.note !== null}
+				<span data-model-rule-empty={structuredRule.changes.length === 0 ? 'timings' : undefined}
+					data-model-rule-note={structuredRule.changes.length > 0 ? 'timings' : undefined}>{structuredRule.note}</span>
+			{/if}
+		{:else if rules.length === 0}
 			<!-- Stated, not omitted. A chart that draws no rule and says nothing about
 			     it is indistinguishable from one where the rule was forgotten. -->
 			<span data-model-rule-empty="timings">{noModelRuleNote(calendar.length)}</span>
@@ -397,7 +424,8 @@
 		class="mt-4 rounded-md border border-rule bg-surface p-3"
 		data-timing="chart"
 		data-readout-columns={readout.columns.length}
-		data-model-rule="yes"
+		data-model-rule={declaration.value}
+		data-model-rule-none={'none' in declaration ? declaration.none : undefined}
 		data-model-rule-name="timings"
 		data-model-rule-from={calendar[0] ?? ''}
 		data-model-rule-to={calendar[calendar.length - 1] ?? ''}
@@ -412,6 +440,8 @@
 				tabindex="0"
 				aria-label={plotLabel}
 				data-timing="plot"
+				data-chart="stage-timings"
+				data-chart-name="timings"
 				data-timing-days={calendar.length}
 				data-timing-series={drawn.length}
 				data-timing-domain={timingExtent}
@@ -487,6 +517,12 @@
 				<!-- Dashed and in the rule's own ink, never on the health ramp: a
 				     pipeline change is an event, not a verdict. Drawn under the series,
 				     so a dash never hides a day's own point. -->
+				{#each boundaries as boundary (boundary.date)}
+					<line x1={boundary.x} x2={boundary.x} y1={box.top} y2={box.bottom}
+						stroke="var(--color-text-tertiary)" stroke-width="1"
+						stroke-dasharray={boundary.kind === 'settings' ? '3 3' : '1 3'}
+						data-model-rule-line={boundary.date} data-model-rule-kind={boundary.kind} />
+				{/each}
 				{#each rules as rule (rule.date)}
 					<line
 						x1={rule.x}

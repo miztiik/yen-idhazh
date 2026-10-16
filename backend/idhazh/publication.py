@@ -269,8 +269,7 @@ def upgrade_inventory(public_root: Path, *, state_root: Path | None = None) -> P
 def record_month(public_root: Path, month: str) -> PublicationInventory:
     """Refresh the named month of each published series, without listing a directory."""
     from idhazh.contracts.base import MonthStamp
-    from idhazh.telemetry.publish.public_telemetry import PUBLIC_TELEMETRY_DIRNAME
-    from idhazh.telemetry.publish.series import BAND_FILENAME, CONSOLE_DIRNAME, MONTH_SERIES
+    from idhazh.telemetry.publish.series import BAND_FILENAME, CONSOLE_DIRNAME
     from idhazh.telemetry.publish.source_health import PUBLIC_FILENAME
 
     month = TypeAdapter(MonthStamp).validate_python(month)
@@ -278,8 +277,6 @@ def record_month(public_root: Path, month: str) -> PublicationInventory:
     paths = [
         f"assist/index/{month}.json",
         f"assist/index/{month}.bin",
-        f"{PUBLIC_TELEMETRY_DIRNAME}/{month}.csv",
-        *(f"{dirname}/{month}{suffix}" for dirname, suffix in MONTH_SERIES),
         f"{CONSOLE_DIRNAME}/{BAND_FILENAME}",
         PUBLIC_FILENAME,
     ]

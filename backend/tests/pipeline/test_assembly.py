@@ -109,6 +109,7 @@ def test_a_hung_model_request_costs_one_item_not_the_shard(
     # test sits on the hanging endpoint until the job's own timeout kills it.
     summarizer = settings.models.summarizer
     fast_settings = config.Settings(
+        council=settings.council,
         app=settings.app,
         models=settings.models.model_copy(
             update={
@@ -172,6 +173,7 @@ def test_a_shard_out_of_clock_stops_itself_instead_of_being_killed(
     run_plan = plan(item_count=1)
     settings = config.load(CONFIG_DIR)
     out_of_time = config.Settings(
+        council=settings.council,
         app=settings.app.model_copy(
             update={
                 "run": settings.app.run.model_copy(

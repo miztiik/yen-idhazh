@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { render } from 'svelte/server';
+import type { Component } from 'svelte';
 import { serverCompiler } from './support/server-render';
 import { telemetryRow } from './support/telemetry-row';
 import { frame } from '../src/lib/charts/frame';
@@ -19,6 +20,7 @@ import { flow } from '../src/lib/charts/d3/flow';
 import { emptyState } from '../src/lib/charts/d3/empty';
 import { readoutOf } from '../src/lib/charts/readout';
 import { SERIES_TOKENS } from '../src/lib/console/series-tokens';
+import { failureRuleRows, failureRules } from '../src/lib/console/failure-rules';
 
 const frontend = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const box = frame(390, 220);
@@ -30,30 +32,41 @@ const points = [
 ];
 const options = { frame: box, density: 6, valueTicks: 4, padding: 0.2 };
 const common = { empty: emptyState('quiet', 'Nothing recorded.'), name: 'contract', label: 'Contract rows', width: 390, height: 220 };
+const compiledDrawings = new Map<string, Promise<{ default: Component<Record<string, unknown>> }>>();
 
 async function draw(name: string, props: Record<string, unknown>): Promise<string> {
+	let drawing = compiledDrawings.get(name);
+	if (drawing === undefined) {
+		drawing = compileDrawing(name);
+		compiledDrawings.set(name, drawing);
+	}
+	const loaded = await drawing;
+	const html = render(loaded.default, { props }).body;
+	for (const match of html.matchAll(/data-readout-none="([^"]+)"/g)) {
+		expect(match[1].endsWith('; agreed with Susan')).toBe(true);
+	}
+	return html;
+}
+
+async function compileDrawing(name: string): Promise<{ default: Component<Record<string, unknown>> }> {
 	const compiled = serverCompiler(path.join(frontend, 'test-results', 'chart-types', name));
 	const files: readonly [string, string][] = [
 		['Reserved', 'src/lib/components/Reserved.svelte'],
 		['EmptyState', 'src/lib/charts/d3/EmptyState.svelte'],
 		['ChartReadout', 'src/lib/components/ChartReadout.svelte'],
 		['RankedList', 'src/lib/components/RankedList.svelte'],
-		['Sparkline', 'src/lib/components/Sparkline.svelte']
+		['Sparkline', 'src/lib/components/Sparkline.svelte'],
+		['FailureRuleRanking', 'src/lib/components/FailureRuleRanking.svelte']
 	];
 	const rewrites = files.flatMap(([child]) => [
 		[`./${child}.svelte`, `./${child}.server.mjs`] as const,
 		[`$lib/components/${child}.svelte`, `./${child}.server.mjs`] as const
 	]);
 	for (const [child, file] of files) await compiled(file, child, rewrites);
-	const file = ['RankedList', 'KpiCard', 'FailureList', 'TimeHistogram'].includes(name)
+	const file = ['RankedList', 'KpiCard', 'FailureList', 'TimeHistogram', 'StageTimings'].includes(name)
 		? `src/lib/components/${name}.svelte` : `src/lib/charts/d3/${name}.svelte`;
 	const module = await compiled(file, name, rewrites);
-	const loaded = await import(pathToFileURL(module).href);
-	const html = render(loaded.default, { props }).body;
-	for (const match of html.matchAll(/data-readout-none="([^"]+)"/g)) {
-		expect(match[1].endsWith('; agreed with Susan')).toBe(true);
-	}
-	return html;
+	return import(pathToFileURL(module).href);
 }
 
 test('a range shares the divisor with ends and named rules; short rows rank last and draw no mark', async () => {
@@ -148,7 +161,9 @@ test('log distributions bin by decade and common domains place the same rule at 
 	const html = await draw('Distribution', { ...common, geometry: a });
 	expect(html).toContain('Limit');
 	expect(html).toContain('data-chart-type="distribution"');
-	expect(html).toContain('data-readout-columns="3"');
+	expect(html).toContain('data-readout-records="3"');
+	expect(html).toContain('data-readout-shape="record"');
+	expect(html).toContain('data-readout-subject');
 	expect(html).toContain('data-readout-row="share"');
 });
 
@@ -186,29 +201,24 @@ test('quantity colours are explicit, keyed by name, while omitted part colours a
 	expect(await draw('Flow', { ...common, geometry: flowed })).toContain('data-chart-type="flow"');
 });
 
-test('kept cards and failure lists keep omitted-prop behaviour, while the card can lead and declare its rule', async () => {
-	const ordinary = await draw('KpiCard', { label: 'Count', value: '12' });
+test('cards require their semantic rule and explicit failure stages keep the native ranking identity-free', async () => {
+	const ordinary = await draw('KpiCard', { label: 'Count', value: '12', rule: declined });
 	expect(ordinary).not.toContain('data-lede');
-	expect(ordinary).not.toContain('data-model-rule');
+	expect(ordinary).toContain('data-model-rule="no"');
 	const lede = await draw('KpiCard', { label: 'Count', value: '12', lede: true, rule: declined });
 	expect(lede).toContain('data-lede');
 	expect(lede).toContain('data-model-rule="no"');
-	const failure = { rows: [], window: { start: '2026-09-01', end: '2026-09-03' }, selectedCode: null, max: 20, sourceMax: 20, readoutMaxShare: 1 };
-	expect(await draw('FailureList', failure)).not.toContain('data-failure-stages');
-	expect(await draw('FailureList', { ...failure, stages: { options: ['fetch', 'extract'], chosen: 'extract' } })).toContain('data-failure-stages');
-	const rows = [
-		{ ...telemetryRow({ date: '2026-09-01', stage: 'fetch', outcome: 'failed', code: 'old-fetch' }), failed_rule: 'Fetch rule' },
-		{ ...telemetryRow({ date: '2026-09-01', stage: 'extract', outcome: 'failed', code: 'old-extract' }), failed_rule: 'Extract rule' }
-	];
-	const picked = await draw('FailureList', { ...failure, rows, stages: { options: ['fetch', 'extract'], chosen: 'extract' } });
+	const failure = { window: { start: '2026-09-01', end: '2026-09-03' }, max: 20, readoutMaxShare: 1 };
+	const ranking = failureRuleRows([
+		{ date: '2026-09-01', stage: 'fetch', outcome: 'failed', code: 'old-fetch', failed_rule: 'Fetch rule' },
+		{ date: '2026-09-01', stage: 'extract', outcome: 'failed', code: 'old-extract', failed_rule: 'Extract rule' }
+	]);
+	const picked = await draw('FailureList', { ...failure, ranking, stages: { options: ['fetch', 'extract'], chosen: 'extract' } });
 	expect(picked).toContain('Extract rule');
 	expect(picked).not.toContain('Fetch rule');
 	expect(picked).not.toContain('old-extract');
 	expect(picked.match(/type="radio"/g)?.length).toBe(2);
-	const kept = await draw('FailureList', { ...failure, rows });
-	expect(kept).toContain('old-fetch');
-	expect(kept).toContain('old-extract');
-	expect(kept).not.toContain('Extract rule');
+	expect(picked).not.toMatch(/data-failure-(item|source|rows)=|data-source-losses/);
 	const geometry = rankedGeometry(rank([{ key: 'stable', value: 2, row: { label: 'Stable name', value: '2 articles' } }], 20));
 	expect(geometry.rows[0].row.value).toBe('2 articles');
 });
@@ -231,9 +241,147 @@ test('kept time histograms share an optional positive domain and refuse one that
 	const medianX = (html: string) => html.match(/<line x1="([^"]+)"[^>]*data-hist-rule="median"/)?.[1];
 	expect(medianX(shared)).toBeDefined();
 	expect(medianX(shared)).toBe(medianX(other));
+	const coloured = await draw('TimeHistogram', { ...props, domain: [0.5, 8], barToken: SERIES_TOKENS['reading-prompt'] });
+	expect(shared).toContain('fill="var(--chart-1)"');
+	expect(coloured).toContain('fill="var(--chart-6)"');
+	expect(coloured).toContain('stroke="var(--chart-3)"');
+	expect(coloured).toContain('var(--chart-6)');
+	expect(medianX(coloured)).toBe(medianX(shared));
 	await expect(draw('TimeHistogram', { ...props, domain: [0, 8] })).rejects.toThrow(/positive/);
 	await expect(draw('TimeHistogram', { ...props, domain: [1, 8] })).rejects.toThrow(/contain/);
 	await expect(draw('TimeHistogram', { ...props, domain: [0.5, 1] })).rejects.toThrow(/contain/);
+});
+
+test('identity-free rule rankings count rows and unknown rules, never sources or invented item identities', async () => {
+	const rows = failureRuleRows([
+		{ date: '2026-09-01', stage: 'fetch', outcome: 'failed', code: 'network', failed_rule: 'Retry limit' },
+		{ date: '2026-09-01', stage: 'fetch', outcome: 'failed', code: 'network', failed_rule: 'Retry limit' },
+		{ date: '2026-09-02', stage: 'fetch', outcome: 'failed', code: 'blocked', failed_rule: 'Source permission' },
+		{ date: '2026-09-02', stage: 'fetch', outcome: 'failed', code: 'Retry limit', failed_rule: null },
+		{ date: '2026-09-03', stage: 'fetch', outcome: 'ok', code: null, failed_rule: '' },
+		{ date: '2026-09-03', stage: 'extract', outcome: 'failed', code: 'blank', failed_rule: 'Empty body' }
+	]);
+	const window = { start: '2026-09-01', end: '2026-09-03' };
+	expect(rows[4].code).toBeNull();
+	expect(() => failureRuleRows([{ date: '2026-09-01', stage: 'fetch', outcome: 'ok', failed_rule: null }])).toThrow(/code string or null/);
+	expect(() => failureRuleRows([{ date: '2026-09-01', stage: 'fetch', outcome: 'ok', code: 0, failed_rule: null }])).toThrow(/code string or null/);
+	expect(failureRules(rows, window, 'fetch')).toEqual({
+		dates: ['2026-09-01', '2026-09-02', '2026-09-03'], rows: 5, failed: 4, unknown: 1,
+		rules: [
+			{ label: 'Retry limit', count: 2, daily: [2, 0, 0], last: '2026-09-01' },
+			{ label: 'Source permission', count: 1, daily: [0, 1, 0], last: '2026-09-02' }
+		]
+	});
+	const props = { ranking: rows, window, stages: { options: ['fetch', 'extract'], chosen: 'fetch' },
+		max: 20, readoutMaxShare: 1 };
+	const html = await draw('FailureList', props);
+	expect(html).toContain('2 of 4 failures');
+	expect(html).toMatch(/1 of 4 failures at fetch\s+has no recorded failed rule\./);
+	expect(html).not.toContain('Empty body');
+	expect(html).not.toMatch(/data-failure-(item|source|rows)=|data-source-losses/);
+	expect(html).toContain('not distinct articles');
+	expect(html.match(/type="radio"/g)?.length).toBe(2);
+	const extracted = await draw('FailureList', { ...props, stages: { options: ['fetch', 'extract'], chosen: 'extract' } });
+	expect(extracted).toContain('Empty body');
+	expect(extracted).not.toContain('Retry limit');
+	const unnamed = await draw('FailureList', { ...props, ranking: rows.map((row) => ({ ...row, failed_rule: '' })) });
+	expect(unnamed).toMatch(/4 of 4 failures at fetch\s+have no recorded failed rule\./);
+	expect(unnamed).not.toContain('data-readout="failed-rule-trends"');
+	expect(() => failureRuleRows([{ date: '2026-02-30', stage: 'fetch', outcome: 'failed', code: '', failed_rule: null }])).toThrow(/UTC date/);
+	expect(() => failureRuleRows([{ date: '2026-09-01', stage: 'fetch', outcome: 'failed', code: '' }])).toThrow(/failed_rule/);
+	await expect(draw('FailureList', { ...props, stages: { options: ['fetch'], chosen: 'extract' } })).rejects.toThrow(/chosen stage/);
+});
+
+test('stage timings preserve structured rule availability and both kinds of readout event without changing legacy defaults', async () => {
+	const props = {
+		days: [
+			{ date: '2026-09-01', items: 1, fetch: { ms: 20, timed: 1, total: 1 },
+				extract: { ms: 0, timed: 1, total: 1 }, summarize: { ms: 1000, timed: 1, total: 1 } },
+			{ date: '2026-09-02', items: 1, fetch: { ms: 30, timed: 1, total: 1 },
+				extract: { ms: null, timed: 0, total: 1 }, summarize: { ms: 2000, timed: 1, total: 1 } }
+		],
+		span: { start: '2026-09-01', end: '2026-09-02' },
+		height: 220, width: 390, tickDensity: 6, readoutMaxShare: 1
+	};
+	const old = await draw('StageTimings', { ...props, modelChanges: ['2026-09-02'] });
+	expect(old).toContain('data-model-rule="yes"');
+	expect(old).toContain('data-model-rule-label="2026-09-02"');
+	const rule: ModelRule = { changes: [
+		{ date: '2026-09-01', kind: 'checker', words: 'The scoring weights changed.' },
+		{ date: '2026-09-02', kind: 'settings', words: 'The summary prompt changed.' },
+		{ date: '2026-09-02', kind: 'checker', words: 'The score checker changed.' }
+	], note: 'Compared with the preceding recorded settings.' };
+	const html = await draw('StageTimings', { ...props, rule });
+	expect(html).toContain('data-model-rule-kind="checker"');
+	expect(html).toContain('stroke-dasharray="1 3"');
+	expect(html).toContain('The summary prompt changed.');
+	expect(html).toContain('The score checker changed.');
+	expect(html).not.toContain('data-model-rule-label=');
+	expect(html.split('</svg>')[0]).not.toContain('The summary prompt changed.');
+	expect(html).toContain('data-timing-zero-key');
+	const unavailable = await draw('StageTimings', { ...props, rule: declined });
+	expect(unavailable).toContain('data-model-rule="no"');
+	expect(unavailable).toContain(declined.declined);
+	expect(unavailable).not.toContain('data-model-rule-empty');
+	const empty = await draw('StageTimings', { ...props, rule: { changes: [], note: 'No settings changed in this window.' } });
+	expect(empty).toContain('data-model-rule="yes"');
+	expect(empty).toContain('No settings changed in this window.');
+	await expect(draw('StageTimings', { ...props, rule, modelChanges: ['2026-09-01'] })).rejects.toThrow(/not both/);
+});
+
+test('elapsed reconciliation leaves stage heights intact and draws overlap beside, not below, their stack', async () => {
+	const dated = (values: readonly (number | null)[]) => values.map((value, index) => ({
+		date: `2026-09-0${index + 1}`, value
+	}));
+	const series = [
+		{ label: 'Fetch', token: SERIES_TOKENS.fetch, points: dated([2, 0, null]) },
+		{ label: 'Summarize', token: SERIES_TOKENS.summarize, points: dated([6, 0, null]) }
+	];
+	const reconciliation = {
+		elapsed: { label: 'Elapsed time', token: '--color-text-tertiary' as const, points: dated([5, 0, null]) },
+		overlap: { label: 'Overlap', token: '--color-text-secondary' as const, points: dated([3, 0, null]) }
+	};
+	const geometry = dateSeries(series, { ...options, stacked: true, rule: declined, reconciliation });
+	const reference = dateSeries(series, { ...options, stacked: true, rule: declined });
+	expect(geometry?.bars).toEqual(reference?.bars);
+	expect(geometry?.reconciliation?.marks).toHaveLength(2);
+	const first = geometry!.reconciliation!.marks[0];
+	expect(first.elapsed).toBe(5);
+	expect(first.overlap).toBe(3);
+	expect(first.y).toBe(geometry?.axis.scale(5));
+	expect(first.top).toBe(geometry?.axis.scale(8));
+	expect(first.bracket).toBeGreaterThan(first.end);
+	expect(first.bracket).toBeLessThanOrEqual(box.right);
+	expect(geometry?.reconciliation?.marks[1].y).toBe(box.bottom);
+	const html = await draw('DateSeries', { ...common, geometry });
+	expect(html).toContain('data-stack-overlap="2026-09-01"');
+	expect(html).toContain('data-elapsed-value="5"');
+	expect(html).toContain('Solid crossbar: Elapsed time.');
+	expect(html).toContain('Bracket beside the stack: Overlap');
+	expect(html).not.toContain('data-stack-elapsed="2026-09-03"');
+	expect(html).not.toContain('data-stack-overlap="2026-09-02"');
+	expect(html).toContain('data-readout="contract"');
+	const supplied = readoutOf({
+		type: 'dateSeries', columns: ['first', 'second', 'third'],
+		series: [{ label: 'Fetch', swatch: 'var(--chart-1)', values: [2, 0, null], format: (value) => `${value} ms` }],
+		notMeasured: 'Not recorded.', resting: 'first'
+	});
+	const supplemented = await draw('DateSeries', { ...common, geometry, readout: supplied });
+	expect(supplemented).toContain('data-readout-row="Elapsed time"');
+	expect(supplemented).toContain('data-readout-row="Overlap"');
+	expect(supplemented).toContain('2 ms');
+	await expect(draw('DateSeries', { ...common, geometry, readout: { ...supplied, columns: ['first'] } })).rejects.toThrow(/every drawn day/);
+	expect(() => dateSeries(series, { ...options, rule: declined, reconciliation })).toThrow(/stacked durations/);
+	expect(() => dateSeries(series, { ...options, stacked: true, rule: declined, reconciliation: {
+		...reconciliation, elapsed: { ...reconciliation.elapsed, points: dated([7, 0, null]) }
+	} })).toThrow(/do not equal/);
+	expect(() => dateSeries(series, { ...options, stacked: true, rule: declined, reconciliation: {
+		...reconciliation, overlap: { ...reconciliation.overlap, points: dated([null, 0, null]) }
+	} })).toThrow(/every stage/);
+	expect(() => dateSeries(series, { ...options, stacked: true, rule: declined, reconciliation: {
+		...reconciliation, overlap: { ...reconciliation.overlap, points: dated([-3, 0, null]) }
+	} })).toThrow(/non-negative/);
+	expect(() => dateSeries([{ ...series[0], points: dated([-1]) }], { ...options, stacked: true, rule: declined })).toThrow(/negative part/);
 });
 
 test('scatter readout uses the same recorded facts, and tokens retain the exact approved theme values', async () => {

@@ -13,9 +13,8 @@
 	 */
 	import Panel from '$lib/components/Panel.svelte';
 	import DateSeries from '$lib/charts/d3/DateSeries.svelte';
-	import EmptyState from '$lib/charts/d3/EmptyState.svelte';
 	import { dateSeries } from '$lib/charts/d3/dateSeries';
-	import { emptyState, recordEmptyState } from '$lib/charts/d3/empty';
+	import { emptyState } from '$lib/charts/d3/empty';
 	import { absentHatch } from '$lib/charts/d3/ordered-colour';
 	import {
 		FLEET_HINT,
@@ -30,17 +29,13 @@
 	} from '$lib/charts/fleet';
 	import { chartWidth, frame, observeWidth } from '$lib/charts/frame';
 	import { rateWords, type MachineRamp } from '$lib/charts/machine-colour';
-	import type { TimeWindow } from '$lib/charts/viewport';
 	import FleetDots from '$lib/console/machine/FleetDots.svelte';
-	import { platformMixQuery } from '$lib/console/queries/machine';
-	import { sliceOnce, windowRange } from '$lib/console/queries/window';
-	import type { LostDay, RecordingNotes } from '$lib/console/recording';
+	import type { LostDay } from '$lib/console/recording';
 	import { nameSpan } from '$lib/console/span-words';
-	import type { PanelState } from '$lib/console/waiting';
-	import { ledgerReach, type LedgerFault, type Row } from '$lib/data/ledger';
+	import type { Row } from '$lib/data/ledger';
 	import { longDate } from '$lib/format';
 	import type { ChartConfig, ConsoleConfig } from '$lib/server/config';
-	import { onMount, tick } from 'svelte';
+	import { tick } from 'svelte';
 
 	let {
 		ramp,
@@ -49,9 +44,9 @@
 		windowDays,
 		lost,
 		recording,
-		machineRecord,
 		chart,
-		knobs
+		knobs,
+		recordRows
 	}: {
 		/** The page's one ramp, so this panel and the machine cards colour a machine alike. */
 		ramp: MachineRamp;
@@ -59,12 +54,12 @@
 		start: string;
 		end: string;
 		windowDays: number;
-		/** Days that published articles and kept no machine row. */
+		/** Days with article records and no machine row. */
 		lost: LostDay[];
 		/** False where the machine record is switched off. */
 		recording: boolean;
-		machineRecord: RecordingNotes;
 		chart: ChartConfig;
+		recordRows: readonly Row[];
 		knobs: Pick<
 			ConsoleConfig,
 			'fleet_min_rows' | 'fleet_top_kinds' | 'fleet_dot_max_px' | 'absent_hatch_degrees'
@@ -80,61 +75,13 @@
 	const HATCH_GAP = 3;
 	const HATCH_LINE = 1;
 
-	let mounted = $state(false);
-	let rows = $state<Row[]>([]);
-	let span = $state<TimeWindow | null>(null);
-	let panelState = $state<PanelState>('loading');
-	let fault = $state<LedgerFault | null>(null);
-	onMount(() => { mounted = true; });
+	const rows = $derived(recordRows.filter((row) => String(row.date) >= start && String(row.date) <= end));
+	const span = $derived({ start, end });
 	$effect(() => {
-		const from = start;
-		const to = end;
-		const days = windowDays;
-		const enabled = recording;
-		if (!mounted) return;
-		let current = true;
-		rows = [];
-		span = null;
-		fault = null;
+		void start;
+		void end;
 		openDay = null;
-		panelState = enabled ? 'loading' : 'ready';
-		if (enabled) {
-			void (async () => {
-				try {
-					const reach = await ledgerReach('host-fingerprint');
-					if (!current) return;
-					if (reach.state !== 'ok') {
-						panelState = reach.state;
-						fault = reach.state === 'missing' ? reach.fault : null;
-						return;
-					}
-					// The route's own window, which ends on the site's newest published day,
-					// never on this record's newest packed day.
-					span = { start: from, end: to };
-					const answer = await sliceOnce(platformMixQuery, windowRange(days, to, from));
-					if (!current) return;
-					// The door cuts a window that starts before the record began, and names the day it answered from.
-					if (answer.state === 'ok' || answer.state === 'quiet') span = { start: answer.first, end: to };
-					rows = answer.rows;
-					panelState = answer.state === 'ok' ? 'ready' : answer.state;
-					fault = answer.state === 'missing' || answer.state === 'unreachable' ? answer.fault : reach.fault;
-				} catch (error) {
-					if (!current) return;
-					panelState = 'unreachable';
-					console.warn('[platform-mix] The machine record could not be read.', error);
-				}
-			})();
-		}
-		return () => { current = false; };
 	});
-	// Every ledger a panel reads is published, so `missing` is a record with no
-	// compact folder: one that is not packed yet, never one left unpublished.
-	const empty = $derived(
-		panelState === 'loading' ? recordEmptyState('loading')
-			: panelState === 'missing' ? emptyState('missing', 'The machine record is not packed yet.')
-				: panelState === 'unreachable' ? emptyState('unreachable', 'The machine record could not be read. Reload this page to try again.')
-					: emptyState('quiet', 'No jobs were recorded in this window.')
-	);
 	const jobs = $derived(fleetJobs(rows));
 	const view = $derived(
 		fleetView(jobs, {
@@ -233,19 +180,16 @@
 	}
 </script>
 
-<div data-windowed="machine-fleet" data-readout-fetched="host-fingerprint" data-window-days={windowDays} data-fleet-state={panelState} data-ledger-fault={fault} data-fleet-from={span?.start} data-fleet-through={span?.end}>
+<div data-windowed="machine-fleet" data-readout-fetched="host-fingerprint" data-window-days={windowDays} data-fleet-state="ready" data-fleet-from={span.start} data-fleet-through={span.end}>
 	<Panel heading="h3" id="platform-mix" title={windowDays === 1
 		? 'Which machines ran our jobs for this one day'
 		: 'Which machines ran our jobs, day by day'} {note}>
-		{#if panelState !== 'ready'}
-			<EmptyState drawing={empty} width={box.width} height={box.height} name="machine-fleet" label="Jobs a day by kind of machine" />
-		{:else if view.nothing === 'recording-off'}
+		{#if view.nothing === 'recording-off'}
 			<p class="empty" data-machine-panel-empty="fleet-off">
 				Which machine a job draws is not being recorded, so there is nothing to count.
 			</p>
 		{:else if view.nothing === 'record-lost'}
 			<p class="empty" data-machine-panel-empty="fleet-lost">
-				{machineRecord.recordDestroyed}
 				There is nothing left in {nameSpan(windowDays)} to count.
 			</p>
 		{:else if view.nothing === 'none'}
@@ -353,7 +297,7 @@
 							<thead>
 								<tr>
 									<th scope="col">Run</th>
-									<th scope="col">Job</th>
+									<th scope="col">Job or pipeline/task</th>
 									<th scope="col" class="number">Shard</th>
 									<th scope="col">Machine</th>
 									<th scope="col" class="number">Seconds</th>
@@ -367,7 +311,9 @@
 									     carry their own words because the heading row is not shown. -->
 									<tr data-fleet-job={line.row}>
 										<td class="run">{line.runId}</td>
-										<td class="job">{line.job}</td>
+										<td class="job">{line.pipelineName !== null && line.taskName !== null
+											? `${line.pipelineName}/${line.taskName}`
+											: line.job ?? 'not recorded'}</td>
 										<td class="number shard"><span class="narrow-word" aria-hidden="true">{'shard '}</span>{line.shard ?? 'not recorded'}</td>
 										<td class="machine">{line.machine}</td>
 										{#if line.seconds === null}

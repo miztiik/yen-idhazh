@@ -30,7 +30,11 @@ test.describe('route-owned console configuration', () => {
 	test('preserves the committed six routes and their judged panels', () => {
 		const routes = routeConsoles();
 		expect(Object.keys(routes).sort()).toEqual(BAND_UNREAD.routes.map(({ id }) => id).sort());
-		expect(routes.machine.judged).toEqual(['platform-mix']);
+		expect(routes.machine.judged).toEqual([
+			'two-clocks', 'processor-lost', 'disk-reads', 'machine-cards', 'slower-machines', 'platform-mix',
+			'slowest-articles', 'tail-trend', 'closest-to-memory', 'memory-held', 'context-headroom',
+			'article-cost', 'prompt-reuse', 'read-against-written', 'counterfactual-cost'
+		]);
 		expect(routes['data-explorer'].judged).toEqual(['data-explorer-rows', 'data-explorer-shape']);
 		const judgementPanels = [
 			'merged-stories', 'merge-line', 'judge-agreement',
@@ -40,10 +44,22 @@ test.describe('route-owned console configuration', () => {
 			{ id: 'judgement', title: '', panels: judgementPanels }
 		]);
 		expect(routes.judgement.judged).toEqual(judgementPanels);
-		for (const id of ['model', 'voices'] as const) {
-			expect(routes[id].panel_groups).toEqual([]);
-			expect(routes[id].judged).toEqual([]);
-		}
+		const modelPanels = [
+			'model-cards', 'model-throughput', 'call-ending', 'refusing-rule',
+			'doubt-reasons', 'faithfulness', 'source-doubts', 'write-cost',
+			'score-cost', 'summary-length', 'model-change'
+		];
+		expect(routes.model.panel_groups).toEqual([
+			{ id: 'summaries', title: '', panels: modelPanels }
+		]);
+		expect(routes.model.judged).toEqual(modelPanels);
+		const sources = ['source-health', 'feeds-failed', 'fetch-time', 'retiring', 'source-cuts'];
+		const ranking = ['ranking-discount', 'why-chosen', 'watchlist'];
+		expect(routes.voices.panel_groups).toEqual([
+			{ id: 'what-the-sources-supplied', title: 'What the sources supplied', panels: sources },
+			{ id: 'what-the-ranking-did', title: 'What the ranking did', panels: ranking }
+		]);
+		expect(routes.voices.judged).toEqual([...sources, ...ranking]);
 		expect(consoleConfig()).not.toHaveProperty('panel_groups');
 		expect(consoleConfig()).not.toHaveProperty('judged_panel_ids');
 	});
@@ -287,11 +303,11 @@ for (const key of pipelineOwned) expect(handed).not.toContain(key);
 });
 });
 
-/** Route-owned lists leave the shared block; the gate-only floor stays on disk. */
+/** Route-owned lists and retired presentation knobs do not reach a console page. */
 test.describe('the console block a page is handed', () => {
-	const NOT_HANDED = ['panel_groups', 'judged_panel_ids', 'plot_min_fill_share'];
+	const NOT_HANDED = ['panel_groups', 'judged_panel_ids', 'pan_days', 'zoom_factor', 'band_outlier_rows', 'plot_min_fill_share'];
 
-	test('carries none of the keys only a route or the gate specs read', () => {
+	test('carries none of the route-only lists or retired knobs', () => {
 		const onDisk = (
 			JSON.parse(readFileSync(join(REPO, 'config', 'appearance.json'), 'utf8')) as {
 				console: Record<string, unknown>;
@@ -299,9 +315,12 @@ test.describe('the console block a page is handed', () => {
 		).console;
 		const handed = Object.keys(consoleConfig());
 		for (const key of NOT_HANDED) {
-			if (key === 'plot_min_fill_share') expect(onDisk).toHaveProperty(key);
-			else expect(onDisk).not.toHaveProperty(key);
+			expect(onDisk).not.toHaveProperty(key);
 			expect(handed, `consoleConfig() hands every console page console.${key}`).not.toContain(key);
+		}
+		const legacy = JSON.parse(readFileSync(join(REPO, 'config', 'idhazh.json'), 'utf8')).console;
+		for (const key of ['pan_days', 'zoom_factor', 'band_outlier_rows', 'plot_min_fill_share']) {
+			expect(legacy).not.toHaveProperty(key);
 		}
 	});
 });

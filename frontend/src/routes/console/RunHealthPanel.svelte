@@ -124,7 +124,8 @@
 	{/if}
 </p>
 
-<div data-readout-columns={readout.columns.length} data-run-health-figures>
+<div data-readout-columns={readout.columns.length} data-run-health-figures
+	data-chart={!load.empty || runs > 0 ? 'run-health' : undefined}>
 	<RunYield
 		{load}
 		{height}

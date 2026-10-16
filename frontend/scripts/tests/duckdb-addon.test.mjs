@@ -29,7 +29,7 @@ test('an absent or invalid cached add-on names the setup command without downloa
 	}
 });
 
-test('Hardware browser tests share the cached add-on and HTTP-cache tests keep their own host', () => {
+test('browser tests that use the shared query engine use the common harness', () => {
 	const directory = fileURLToPath(new URL('../../tests/', import.meta.url));
 	assert.match(readFileSync(join(directory, 'support', 'door-page.ts'), 'utf8'), /export \* from '\.\/browser';/);
 	for (const [group, filenames] of Object.entries(groupedSpecs(directory))) {
@@ -41,5 +41,4 @@ test('Hardware browser tests share the cached add-on and HTTP-cache tests keep t
 			}
 		}
 	}
-	assert.doesNotMatch(readFileSync(join(directory, 'ledger-ranges.spec.ts'), 'utf8'), /support\/browser/);
 });

@@ -12,14 +12,11 @@
         "discard_share": 0.03,
         "enabled": false,
         "fall_weight": 0.5,
-        "flush_every_pairs": 1,
-        "judge_temperature": 0.0,
         "max_down_bins": 10,
         "max_up_bins": 3,
         "minimum_above_line": 30,
         "minimum_days": 10,
         "minimum_negatives": 200,
-        "pair_budget": 200,
         "rise_weight": 0.15,
         "settled_delta": 0.001,
         "settled_window_days": 7,
@@ -115,22 +112,8 @@
     "max_window_days": 366,
     "min_attempts_for_rate": 5,
     "min_window_days": 1,
-    "pan_days": 7,
     "source_rows": 10,
-    "today_anchor": "right",
-    "zoom_factor": 1.5
-  },
-  "council": {
-    "first_night": "2026-09-19",
-    "repair_dates_a_night": 1,
-    "repair_window_nights": 7,
-    "shard_preamble_minutes": 13,
-    "shard_timeout_minutes": 200,
-    "shard_wrap_up_minutes": 12,
-    "shards": 4,
-    "tenants": [
-      "content-similarity-judge"
-    ]
+    "today_anchor": "right"
   },
   "drift": {
     "extractiveness_rise": 0.15,
@@ -223,10 +206,12 @@
     "published": [
       "candidate-models",
       "counterfactual-scores",
+      "council-run-records",
       "gardener",
       "host-fingerprint",
       "item-health",
       "published",
+      "run-shards",
       "seen",
       "summary-quality-evals"
     ]
@@ -256,15 +241,11 @@
     "host_fingerprint": true,
     "host_fingerprint_bandwidth_cache_multiple": 2,
     "host_fingerprint_bandwidth_floor_mib": 512,
-    "host_fingerprint_bandwidth_jobs": [
-      "runtime"
-    ],
-    "public_day_metrics_keep_months": 14,
-    "public_machine_keep_months": 14,
-    "public_run_days_keep_months": 14,
-    "public_run_timeline_keep_months": 2,
+    "host_fingerprint_bandwidth_jobs": [],
+    "host_fingerprint_frequency_enabled": false,
+    "host_telemetry_enabled": true,
+    "memory_profiling_enabled": true,
     "sample_rate": 1.0,
-    "telemetry_publish": true,
     "tracing_enabled": true,
     "visual_aggregate_keep_months": null,
     "visuals_full_grain_months": 14
@@ -278,14 +259,15 @@
       "config/ledgers.json": 3400,
       "console/band.json": 2000,
       "state/compact/candidate-models/index/": 2200,
+      "state/compact/council-run-records/index/": 2088,
       "state/compact/counterfactual-scores/index/": 2200,
       "state/compact/gardener/index/": 2064,
       "state/compact/host-fingerprint/index/": 2200,
       "state/compact/item-health/index/": 2200,
       "state/compact/published/index/": 2200,
+      "state/compact/run-shards/index/": 2200,
       "state/compact/seen/index/": 2200,
-      "state/compact/summary-quality-evals/index/": 2200,
-      "telemetry/": 1100000
+      "state/compact/summary-quality-evals/index/": 2200
     }
   },
   "placement": {

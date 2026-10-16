@@ -379,7 +379,7 @@ def publish(
     return PushOutcome(
         code,
         landing,
-        max(1, result.push_count),
+        max(1, result.push_count) if landing is not None else None,
         result.refusal_paths if result.status is Status.STALE else (),
     )
 
@@ -551,6 +551,7 @@ def run_and_land(
     shard's summary is added to it. An exception that escapes is said the same
     way, by its type and place, and then goes on, so Python exits 1 with it.
     """
+    repo_root = repo_root.resolve()
     run = _ShardRun(
         names=tuple(names), shard=shard, run_id=run_id, attempt=attempt, config=settings.config
     )

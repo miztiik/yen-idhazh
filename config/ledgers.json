@@ -1,6 +1,21 @@
 {
   "families": [
     {
+      "name": "run-shards",
+      "lifecycle_status": "active",
+      "description": "Only each manifest's recorded shard count; no plan or manifest inputs.",
+      "onboarded": "2026-10-11",
+      "ledgers": [
+        {
+          "name": "run-shards",
+          "grain": "raw-and-compact",
+          "prefix": ["run-shards"],
+          "stem": null,
+          "suffix": null
+        }
+      ]
+    },
+    {
       "name": "seen",
       "lifecycle_status": "active",
       "description": "When each article address was first seen, so an article whose feed gave no date still has an age.",

@@ -18,8 +18,10 @@ from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import COLUMN_READERS as ITEM_READERS
 from idhazh.contracts.item_health import MACHINE_CELLS_RENAMED, UNREAD_CELLS, ItemHealthRow
 from idhazh.contracts.knobs.ledger import LedgerConfig
+from idhazh.contracts.run_shards import RunShards
 
 pytestmark = pytest.mark.contract
+LEGACY_HOST_INPUT_COLUMNS: Final = ("cores", "threads", "mhz_max", "mhz_at_probe")
 
 #: Fixed input inventory, in the registry's ownership order.
 QUERY_MODULES: Final = ("shared", "pipelines", "model", "machine", "voices", "window")
@@ -37,6 +39,7 @@ EXPECTED_NAMES: Final = {
         "summaryLengthQuery", "modelChangeQuery", "modelChangeItemsQuery",
     ),
     "machine": (
+        "runShardsQuery",
         "twoClocksQuery", "twoClocksHostsQuery", "processorLostQuery", "diskReadsQuery",
         "machineCardsQuery", "machineCardsItemsQuery", "slowerMachinesQuery", "platformMixQuery",
         "slowestArticlesQuery", "tailTrendQuery", "closestToMemoryQuery", "memoryHeldQuery",
@@ -49,6 +52,7 @@ EXPECTED_NAMES: Final = {
 
 #: Independent transcription of the panel tables, using the row's declared renames.
 EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
+    "runShardsQuery": ("date", "run_id", "shards"),
     "failedRuleQuery": ("date", "stage", "outcome", "code", "failed_rule"),
     "failureMixQuery": ("date", "stage", "outcome", "code", "failed_rule"),
     "itemTimeSplitQuery": ("date", "item_total_ms", "fetch_ms", "extract_ms", "summarize_ms", "label_ms", "summary_ms", "visual_plan_ms", "faithfulness_ms", "stage_gap_ms"),
@@ -73,17 +77,34 @@ EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
     "twoClocksHostsQuery": ("date", "run_id", "job", "shard", "server_prompt_tokens", "server_prompt_seconds"),
     "processorLostQuery": ("date", "run_id", "machine_shard", "cpu_steal_pct"),
     "diskReadsQuery": ("date", "run_id", "item_index", "llama_major_faults", "os_mem_cached_bytes", "weights_pinned"),
-    "machineCardsQuery": ("date", "run_id", "job", "shard", "fingerprint", "cpu_model", "cpu_family", "cpu_model_number", "cpu_stepping", "microcode", "flags", "l3_cache_bytes", "boot_seconds", "mhz_at_probe", "memcpy_gib_s", "memcpy_probe_mib", "vm_size", "vm_location", "vm_zone", "vm_fault_domain"),
-    "machineCardsItemsQuery": ("date", "run_id", "machine_job", "machine_shard", "cpu_model"),
+    "machineCardsQuery": (
+        "version", "date", "run_id", "job", "pipeline_name", "task_name", "shard", "fingerprint", "fingerprint_version",
+        "cpu_model", "cpu_vendor", "cpu_family", "cpu_model_number", "cpu_stepping",
+        "microcode", "cpu_physical_cores", "cpu_logical_processors",
+        "cpu_allowed_processors", "cpu_quota_cores", "cpu_quota_state",
+        "cpu_target_measured_at", "l3_cache_bytes", "cpu_observed_mhz",
+        "cpu_reported_max_mhz", "flags", "boot_seconds", "memcpy_gib_s",
+        "memcpy_probe_mib", "vm_size", "vm_location", "vm_zone", "vm_fault_domain",
+        *LEGACY_HOST_INPUT_COLUMNS,
+    ),
+    "machineCardsItemsQuery": ("date", "run_id", "machine_job", "machine_pipeline_name", "machine_task_name", "machine_shard", "cpu_model"),
     "slowerMachinesQuery": ("run_id", "cpu_model", "prefill_ms", "input_tokens", "cached_tokens", "decode_ms", "output_tokens"),
-    "platformMixQuery": ("date", "run_id", "job", "shard", "fingerprint", "cpu_model", "job_seconds", "server_prompt_tokens", "server_prompt_seconds"),
+    "platformMixQuery": (
+        "version", "date", "run_id", "job", "pipeline_name", "task_name", "shard", "fingerprint", "fingerprint_version",
+        "cpu_model", "cpu_logical_processors", "model_load_ms", "job_seconds",
+        "server_prompt_tokens", "server_prompt_seconds",
+        *LEGACY_HOST_INPUT_COLUMNS,
+    ),
     "slowestArticlesQuery": ("run_id", "item_id", "source_id", "machine_shard", "item_total_ms", "fetch_ms", "extract_ms", "summarize_ms", "faithfulness_ms", "stage_gap_ms", "queue_wait_ms"),
     "tailTrendQuery": ("date", "run_id", "summarize_ms"),
     "closestToMemoryQuery": ("date", "item_id", "source_id", "os_mem_total_bytes", "os_mem_available_min_bytes", "source_words"),
     "memoryHeldQuery": ("date", "item_id", "os_mem_total_bytes", "os_mem_available_bytes", "llama_rss_bytes", "python_rss_bytes", "llama_rss_anon_bytes", "python_rss_anon_bytes", "os_swap_total_bytes", "os_swap_free_bytes"),
     "contextHeadroomQuery": ("label_input_tokens", "summary_input_tokens", "n_ctx_configured", "n_parallel", "truncation_cap_tokens"),
-    "articleCostQuery": ("date", "run_id", "machine_job", "machine_shard", "item_index", "item_total_ms", "cpu_busy_pct", "prefill_ms", "decode_ms", "llama_rss_bytes"),
-    "articleCostHostsQuery": ("date", "run_id", "job", "shard", "threads"),
+    "articleCostQuery": ("date", "run_id", "machine_job", "machine_pipeline_name", "machine_task_name", "machine_shard", "item_index", "item_total_ms", "cpu_busy_pct", "prefill_ms", "decode_ms", "llama_rss_bytes"),
+    "articleCostHostsQuery": (
+        "version", "date", "run_id", "job", "pipeline_name", "task_name", "shard", "cpu_logical_processors",
+        *LEGACY_HOST_INPUT_COLUMNS,
+    ),
     "promptReuseQuery": ("date", "label_input_tokens", "label_cached_tokens", "label_cache_pct", "label_prefill_tokens_per_s", "summary_input_tokens", "summary_cached_tokens", "summary_cache_pct", "summary_prefill_tokens_per_s"),
     "readAgainstWrittenQuery": ("date", "run_id", "input_tokens", "output_tokens", "prefill_ms", "decode_ms"),
     "feedsFailedQuery": ("date", "source_id", "stage", "outcome", "code", "http_status", "source_form", "tier"),
@@ -146,7 +167,8 @@ def query_faults(
         faults.append(f"{where}: {query.ledger} names no declared panel row shape")
         return tuple(faults)
     for name in query.columns:
-        if name not in columns[query.ledger]:
+        legacy_host = query.ledger == "host-fingerprint" and name in LEGACY_HOST_INPUT_COLUMNS
+        if name not in columns[query.ledger] and not legacy_host:
             faults.append(f"{where}: {query.ledger}.{name} is not a column of its actual row")
         if name in unread.get(query.ledger, ()):
             faults.append(f"{where}: {query.ledger}.{name} is still in UNREAD_CELLS")
@@ -163,10 +185,23 @@ def load_queries() -> tuple[QueryDeclaration, ...]:
 
 def row_columns() -> dict[str, tuple[str, ...]]:
     return {
+        "run-shards": tuple(RunShards.model_fields),
         "item-health": ItemHealthRow.csv_columns(),
         "host-fingerprint": HostFingerprintRow.csv_columns(),
         "summary-quality-evals": EvalRow.csv_columns(),
     }
+
+
+def test_count_capability_binds_only_the_approved_business_columns() -> None:
+    settings = LedgerConfig.model_validate(
+        json.loads(read_text(REPO_ROOT / "config/idhazh.json"))["ledger"]
+    )
+    count = QueryDeclaration(
+        module="machine", name="runShardsQuery", ledger="run-shards",
+        columns=("date", "run_id", "shards"), span="widest",
+    )
+    assert query_faults(count, settings.published, row_columns(), {}) == ()
+    assert set(RunShards.model_fields) == {"version", *count.columns}
 
 
 def test_every_declared_query_uses_a_published_ledger_and_its_actual_row() -> None:
@@ -189,6 +224,8 @@ def test_each_declared_item_and_host_column_has_exactly_the_first_query_owner() 
         if query.ledger not in owners:
             continue
         for column in query.columns:
+            if query.ledger == "host-fingerprint" and column in LEGACY_HOST_INPUT_COLUMNS:
+                continue
             key = (query.ledger, column)
             if key in seen:
                 continue
@@ -237,7 +274,7 @@ def test_platform_mix_names_exactly_the_shipped_fleet_columns() -> None:
     assert match is not None
     expected = tuple(re.findall(r"'([^']+)'", match[1]))
     query = next(query for query in load_queries() if query.name == "platformMixQuery")
-    assert query.columns == expected
+    assert set(query.columns) == {*expected, "cpu_logical_processors", "model_load_ms"}
     assert query.ledger == "host-fingerprint"
 
 
@@ -261,7 +298,7 @@ def test_word_and_machine_renames_are_the_actual_contract_mappings() -> None:
 def test_query_span_and_fetch_predicate_match_the_panel_contracts() -> None:
     queries = load_queries()
     assert {query.name for query in queries if query.span == "widest"} == {
-        "modelChangeQuery", "modelChangeItemsQuery"
+        "modelChangeQuery", "modelChangeItemsQuery", "runShardsQuery", "platformMixQuery"
     }
     assert {query.name for query in queries if query.span == "newest-day"} == {
         "runTimelineQuery", "twoClocksQuery", "twoClocksHostsQuery", "machineCardsQuery",
@@ -290,21 +327,21 @@ def test_real_unread_map_still_refuses_failed_field_without_rejecting_failed_rul
     assert faults == ("shared/failedRuleQuery: item-health.failed_field is still in UNREAD_CELLS",)
 
 
-def test_registry_only_changes_metadata_and_the_fetch_header_description() -> None:
-    assert ItemHealthRow.schema_version() == "2026-09-29"
-    assert HostFingerprintRow.schema_version() == "2026-09-20"
+def test_query_registry_tracks_the_current_host_schema() -> None:
+    assert ItemHealthRow.schema_version() == "2026-10-14"
+    assert HostFingerprintRow.schema_version() == "2026-10-14"
     assert "response headers" in (ItemHealthRow.model_fields["fetch_ttfb_ms"].description or "")
 
 
 @pytest.mark.parametrize(
     ("model", "expected"),
     (
-        (ItemHealthRow, "f34f9059d04779cff2c5b4239dc73a176fcaec396429e8f14ec794af2f0d4b3d"),
-        (HostFingerprintRow, "ae2151ffdba753b463c5e3ea837dde7dff93ff433065991aa25fdc689678d93f"),
+        (ItemHealthRow, "9dd365744abe322279dcf621173a2047f1e1b0f9bcb536c15c37d7234793637c"),
+        (HostFingerprintRow, "67c9f942e3e8f0b2c3d044e408ec7d261f1247712e1b15e2cfa93b26beaf7f96"),
     ),
 )
 def test_registry_keeps_the_pre_query_persisted_shape(model: type[ItemHealthRow] | type[HostFingerprintRow], expected: str) -> None:
-    """Frozen pre-row-4 schemas retain field order, constraints, requiredness and defaults."""
+    """The declared query shapes retain exact field order, constraints and defaults."""
     def shape(value: object) -> object:
         if isinstance(value, dict):
             return {key: shape(child) for key, child in value.items() if key != "description"}

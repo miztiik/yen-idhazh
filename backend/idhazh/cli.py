@@ -104,9 +104,10 @@ from idhazh.telemetry import (
     cli as telemetry_cli,
 )
 from idhazh.telemetry import (
-    job_machine,
     silicon,
+    task_telemetry,
 )
+from idhazh.telemetry.host_control import enabled as host_telemetry_enabled
 
 
 def _today() -> str:
@@ -129,6 +130,15 @@ def _positive_int(text: str) -> int:
     return value
 
 
+def _memory_profiling(text: str) -> bool:
+    """Parse the public control without accepting truthy strings."""
+    if text == "on":
+        return True
+    if text == "off":
+        return False
+    raise argparse.ArgumentTypeError("memory profiling must be 'on' or 'off'")
+
+
 def _council_run(parser: argparse.ArgumentParser, stage: str, given: str | None) -> str:
     """The run a council verb is, refused rather than invented when a step forgets it.
 
@@ -143,6 +153,12 @@ def _council_run(parser: argparse.ArgumentParser, stage: str, given: str | None)
             "and a row filed under a digest run's id claims a machine and a clock "
             "this night never drew"
         )
+    from idhazh.council.run_identity import opened_on
+
+    try:
+        opened_on(given)
+    except ValueError:
+        parser.error(f"{stage} needs a valid --run-id")
     return given
 
 
@@ -210,25 +226,6 @@ STAGES: Final[tuple[str, ...]] = (
     telemetry_cli.VERB,
     gardener_cli.VERB,
 )
-
-
-def shard_count(items: int, *, run: RunConfig) -> int:
-    """How many worker jobs a day of `items` earns.
-
-    `run.shard_size` is what one worker is sized to carry, so a day that needs
-    fewer workers gets fewer. Every extra job restores the weights again, and
-    that restore is the largest fixed cost in the pipeline (Guardrail #2). The count
-    never passes `run.max_parallel` and never falls below one, so an empty day
-    still runs a worker that exits cleanly rather than an empty matrix.
-
-    This is what a run derives for itself. An operator dispatching `digest.yml`
-    names a count instead, and may name a larger one than this will ever return.
-
-    The bound this has to clear is the worst case, not the day in hand: at
-    `run.safety_ceiling_per_run` items the shard each worker draws must still
-    finish inside the `work` job's timeout.
-    """
-    return max(1, min(-(-items // run.shard_size), run.max_parallel))
 
 
 def qualification_repeats(override: int | None, *, run: RunConfig) -> int:
@@ -303,9 +300,7 @@ def _scorer(enabled: bool) -> object | None:
     return scorer
 
 
-def _scores_this_run(
-    observability: ObservabilityConfig, *, run_id: str, flag_allows: bool
-) -> bool:
+def _scores_this_run(observability: ObservabilityConfig, *, run_id: str, flag_allows: bool) -> bool:
     """Whether the work stage should load a scorer for this run at all.
 
     Three things have to agree. `observability.evaluation_enabled` is the
@@ -331,7 +326,7 @@ def _scores_this_run(
     return True
 
 
-def _planned(date: str, execution: int | None) -> RunPlan:
+def _planned(date: str, execution: int | None, *, run_id: str | None = None) -> RunPlan:
     """The plan a later stage works from: the plan of the run `--execution` names.
 
     Without `--execution` the newest plan of the day is read, which is only right
@@ -339,11 +334,25 @@ def _planned(date: str, execution: int | None) -> RunPlan:
     here only when the execution is given: the plan stage's fallback counts off
     the next free run number, which names a run that has not planned yet.
     """
-    run_id = plan_stage._run_id(date, execution) if execution is not None else None
-    return common._load_plan(date, run_id)
+    expected = plan_stage._run_id(date, execution) if execution is not None else run_id
+    if run_id is not None and expected != run_id:
+        raise ValueError("selected execution differs from the expected RunPlan identity")
+    return common._load_plan(date, expected)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    crash_trace.install()
+    words = list(sys.argv[1:]) if argv is None else list(argv)
+    if words and words[0] in ("council-prepare", "council-shard", "council-settle"):
+        from idhazh.contracts.council_events import CouncilProgram
+        from idhazh.council import outcome
+
+        program = CouncilProgram(words[0].removeprefix("council-"))
+        return outcome.run(program, lambda: _main(words))
+    return _main(words)
+
+
+def _main(argv: Sequence[str] | None = None) -> int:
     crash_trace.install()
     words = list(sys.argv[1:]) if argv is None else list(argv)
     if words and words[0] == telemetry_cli.VERB:
@@ -364,13 +373,26 @@ def main(argv: Sequence[str] | None = None) -> int:
         # checkout, because what it runs in is a checkout rather than a state tree.
         return gardener_cli.main(words[1:])
 
-    parser = argparse.ArgumentParser(prog="idhazh", description=__doc__)
+    council_command = bool(words and words[0].startswith("council-"))
+    parser: argparse.ArgumentParser
+    if council_command:
+        from idhazh.council.outcome import Parser
+
+        parser = Parser(prog="idhazh", description=__doc__)
+    else:
+        parser = argparse.ArgumentParser(prog="idhazh", description=__doc__)
     parser.add_argument("stage", choices=STAGES)
     parser.add_argument("--date", default=None, help="Defaults to today, UTC.")
     parser.add_argument("--config", type=Path, default=config.DEFAULT_CONFIG_DIR)
     parser.add_argument("--commit", default=_STAND_IN_COMMIT)
     parser.add_argument("--shard", type=int, default=0)
-    parser.add_argument("--shards", type=int, default=1)
+    parser.add_argument("--shards", type=int, default=None)
+    parser.add_argument(
+        "--server-pid",
+        type=_positive_int,
+        default=None,
+        help="PID written by the model-server owner, for process-scoped host readings.",
+    )
     parser.add_argument(
         "--execution",
         type=int,
@@ -408,6 +430,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--no-faithfulness",
         action="store_true",
         help="Skip the scorer. The digest still publishes; the ledger stays empty.",
+    )
+    parser.add_argument(
+        "--memory-profiling",
+        type=_memory_profiling,
+        default=None,
+        metavar="{on,off}",
+        help=(
+            "Override observability.memory_profiling_enabled for this invocation. "
+            "The value must be exactly on or off."
+        ),
     )
     parser.add_argument(
         "--leaderboard",
@@ -490,6 +522,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--pipeline-name",
+        default=None,
+        help="Generic pipeline identity for reusable telemetry; pair with --task-name.",
+    )
+    parser.add_argument(
+        "--task-name",
+        default=None,
+        help="Generic task identity for reusable telemetry; pair with --pipeline-name.",
+    )
+    parser.add_argument(
         "--job-started-at",
         default="",
         help=(
@@ -570,7 +612,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=None,
         help=(
             "Which registered tenant `council-shard` runs a shard of, by the slug "
-            "`council.tenants` names. One cell of the matrix is one tenant: two sharing "
+            "`judge_names` in config/llm_council.json names. One cell of the matrix is "
+            "one tenant: two sharing "
             "a job would each be handed the whole span the venue meant for one of them."
         ),
     )
@@ -580,9 +623,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Harvest even when finetune.harvest_every_days says it is not due yet.",
     )
     args = parser.parse_args(argv)
+    if args.stage in {"plan", "run"} and args.shards is not None and args.shards < 1:
+        parser.error("--shards must be at least 1")
+    if args.stage != "plan" and args.shards is None:
+        args.shards = 1
 
-    settings = config.load(args.config)
-    configure_command_logging(settings.app.logging.level.value)
+    try:
+        settings = config.with_memory_profiling_override(
+            config.load(args.config), args.memory_profiling
+        )
+        host_telemetry_enabled(settings.app.observability)
+    except ValueError as error:
+        parser.error(str(error))
+    if council_command:
+        from idhazh.council import event_log
+
+        event_log.install(settings.app.logging.level.value)
+    else:
+        configure_command_logging(settings.app.logging.level.value)
     # One place, once, before any stage opens a ledger. A trial run exercises
     # production's code path and must not be readable as a production day, and
     # the only way to guarantee that for every ledger at once is to overlay
@@ -606,8 +664,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 ledger.use_registry(ledger.overlay_registry(trial_segments))
             )
             logging.getLogger(__name__).warning(
-                "trial run: every ledger goes to state/<tier>/%s and no published "
-                "series reads it",
+                "trial run: every ledger goes to state/<tier>/%s and no published series reads it",
                 Path(*trial_segments).as_posix(),
             )
         return _dispatch(parser, args, settings)
@@ -616,6 +673,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 def _dispatch(
     parser: argparse.ArgumentParser, args: argparse.Namespace, settings: config.Settings
 ) -> int:
+    if args.stage.startswith("council-"):
+        from idhazh.council.selection import from_environment
+
+        council_selection = from_environment(settings.council)
     if args.stage == "derived-paths":
         # Above everything, including the config-dependent verbs: it reads one
         # tuple and prints one line, and the commit step that consumes it runs
@@ -707,60 +768,76 @@ def _dispatch(
         # Above the fetcher because picking the work is the council resolving its
         # own config and handing a date to whatever answers to a slug. Starting a
         # fetcher here would read every host's robots.txt for nothing.
-        council_session.prepare(
-            settings.app.council,
-            date=args.date or _today(),
+        from idhazh.council import outcome
+        from idhazh.council.night_plan import a_date
+
+        results = council_session.prepare(
+            settings.council,
+            date=a_date(args.date or _today(), what="--date"),
             run_id=_council_run(parser, args.stage, args.run_id),
+            selection=council_selection,
         )
-        return 0
+        return outcome.of_results(results)
 
     if args.stage == "council-settle":
         # Beside its siblings: it runs after every shard has reported and calls
         # no model of its own. It is also the one council verb that writes under
         # `state/`, so it is the one that is handed the root.
+        from idhazh.council import outcome
+        from idhazh.council.night_plan import a_date
+
         night = _council_run(parser, args.stage, args.run_id)
         state_dir = common.STATE_ROOT if args.state_root is None else args.state_root
         # Instrument the command without adding telemetry imports to the venue.
         # Every date uses the same night and job-start stamp.
         machine = (
-            job_machine.record(
+            task_telemetry.record(
                 date=council_identity.opened_on(night),
                 run_id=night,
                 settings=settings,
                 state_root=state_dir,
                 commit_sha=args.commit,
-                job=ServerJob.SAVE_COUNCIL_RESULTS,
+                pipeline_name="council",
+                task_name="save_council_results",
                 started_at=datetime.fromtimestamp(int(args.job_started_at), UTC)
                 if args.job_started_at
                 else None,
             )
-            if settings.app.council.tenants
+            if (
+                settings.council.running()
+                if council_selection is None
+                else council_selection.names(publish=True)
+            )
             else contextlib.nullcontext()
         )
         with machine:
-            council_session.settle(
-                settings.app.council,
-                date=args.date or _today(),
+            results = council_session.settle(
+                settings.council,
+                date=a_date(args.date or _today(), what="--date"),
                 run_id=night,
                 state_dir=state_dir,
                 commit_sha=args.commit,
+                selection=council_selection,
             )
-        return 0
+        return outcome.of_results(results)
 
     if args.stage == "council-shard":
         # Above the fetcher because a hosted unit reads committed files and posts
         # to loopback. Starting a fetcher here would read every host's robots.txt
         # to answer a question about files already on disk.
+        from idhazh.council import outcome
+        from idhazh.council.night_plan import a_date
+
         if args.tenant is None:
             parser.error(
                 "council-shard needs --tenant: a cell of the matrix names which "
                 "registered tenant it is a shard of, and a shard with no tenant would "
                 "spend a whole runner deciding it had nothing to do"
             )
-        council_session.run_shard(
-            settings.app.council,
+        result = council_session.run_shard(
+            settings.council,
             slug=args.tenant,
-            date=args.date or _today(),
+            date=a_date(args.date or _today(), what="--date"),
             run_id=_council_run(parser, args.stage, args.run_id),
             shard=args.shard,
             shards=args.shards,
@@ -768,8 +845,9 @@ def _dispatch(
             # install and the weights restore ran before this process, and the
             # council's own preamble knob is what accounts for them.
             started=time.monotonic(),
+            selection=council_selection,
         )
-        return 0
+        return outcome.of_results((result,))
 
     date = args.date or _today()
     # One fetcher for the whole invocation, so `idhazh run` reads each host's
@@ -835,9 +913,12 @@ def _dispatch(
         )
 
     if args.stage == "shards":
+        plan = _planned(date, args.execution)
+        if plan.shards is None:
+            parser.error(f"run {plan.run_id} has no recorded shard count")
         # stdout carries the answer and stderr carries the logs, so a caller
         # reads one number without parsing a log line.
-        print(shard_count(len(_planned(date, args.execution).items), run=settings.app.run))
+        print(plan.shards)
         return 0
 
     if args.stage in ("plan", "run"):
@@ -849,11 +930,12 @@ def _dispatch(
             cap=args.cap,
             article_limit=args.article_limit,
             execution=args.execution,
+            shards=args.shards,
         )
         common.LOG.info("planned date=%s items=%s feeds=%s", date, len(plan.items), plan.feeds_read)
 
     if args.stage in ("work", "run"):
-        work_plan = _planned(date, args.execution)
+        work_plan = _planned(date, args.execution, run_id=args.run_id)
         work.stage_work(
             work_plan,
             settings=settings,
@@ -867,6 +949,7 @@ def _dispatch(
             shard=args.shard,
             shards=args.shards,
             fetcher=read_url,
+            server_pid=args.server_pid,
         )
 
     if args.stage == "record":
@@ -885,28 +968,28 @@ def _dispatch(
     if args.stage == "fingerprint":
         silicon.stage_fingerprint(
             date=date,
-            run_id=_machine_run(
-                parser, date=date, given=args.run_id, execution=args.execution
-            ),
+            run_id=_machine_run(parser, date=date, given=args.run_id, execution=args.execution),
             settings=settings,
             state_root=common.STATE_ROOT,
             commit_sha=args.commit,
             shard=args.shard,
-            job=args.job,
+            job=None if args.pipeline_name is not None else args.job,
+            pipeline_name=args.pipeline_name,
+            task_name=args.task_name,
         )
         return 0
 
     if args.stage == "job-clock":
         silicon.stage_job_clock(
             date=date,
-            run_id=_machine_run(
-                parser, date=date, given=args.run_id, execution=args.execution
-            ),
+            run_id=_machine_run(parser, date=date, given=args.run_id, execution=args.execution),
             settings=settings,
             state_root=common.STATE_ROOT,
             commit_sha=args.commit,
             shard=args.shard,
-            job=args.job,
+            job=None if args.pipeline_name is not None else args.job,
+            pipeline_name=args.pipeline_name,
+            task_name=args.task_name,
             job_started_at=int(args.job_started_at) if args.job_started_at else None,
             server_log_path=args.server_log,
             metrics_path=args.counters_file,
@@ -914,16 +997,12 @@ def _dispatch(
         return 0
 
     if args.stage in ("assemble", "run"):
-        assemble_plan = _planned(date, args.execution)
+        assemble_plan = _planned(date, args.execution, run_id=args.run_id)
         assemble_stage.stage_assemble(
             assemble_plan,
             settings=settings,
             commit_sha=args.commit,
             runner=args.runner,
-            # The same arithmetic the `shards` verb prints for the workflow's
-            # fanout, read off the same plan file. The manifest records what was
-            # planned; the machine rows record who answered. Two instruments.
-            shards=shard_count(len(assemble_plan.items), run=settings.app.run),
         )
 
     if args.stage == "harvest":

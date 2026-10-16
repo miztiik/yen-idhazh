@@ -4,11 +4,13 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { FLEET_COLUMNS } from '../src/lib/charts/fleet';
-import { platformMixQuery } from '../src/lib/console/queries/machine';
+import { machineCardsItemsQuery, platformMixQuery } from '../src/lib/console/queries/machine';
 import { modelChangeQuery, summaryLengthQuery } from '../src/lib/console/queries/model';
 import { slowerOnSameWorkQuery } from '../src/lib/console/queries/pipelines';
 import { compareRuns, failedRuleQuery, hostKey, joinItemHosts, newestRunRows } from '../src/lib/console/queries/shared';
 import { feedsFailedQuery } from '../src/lib/console/queries/voices';
+import { modelThroughput } from '../src/lib/console/model/model-throughput';
+import { throughputWithin } from '../src/lib/server/model-work';
 import {
 	createQueryWindow, rangeFor, tallyAsks, windowRange,
 	type PanelDoor, type Range, type RouteReach
@@ -21,6 +23,61 @@ import { buildRows } from './support/ledger-lifecycle';
 import { readSession, renewReadSession } from '../src/lib/data/read-session';
 
 const PRESETS = [3, 7, 30] as const;
+
+test('native throughput uses the same nearest-rank readings for a day and its single run', () => {
+	const date = '2030-06-14';
+	const rows: Row[] = [10, 100].map((rate) => ({
+		date, run_id: `${date}-1`, input_tokens: 100, cached_tokens: 0,
+		output_tokens: 100, prefill_ms: 100_000 / rate, decode_ms: 200_000 / rate
+	}));
+	const [day] = modelThroughput(rows, { start: date, end: date });
+	expect(day.items).toBe(2);
+	expect(day.read).toEqual({ min: 10, p25: 10, median: 100, p75: 100, max: 100 });
+	expect(day.write).toEqual({ min: 5, p25: 5, median: 50, p75: 50, max: 50 });
+	expect(day.runs).toEqual([{ runId: `${date}-1`, items: 2, read: 100, write: 50 }]);
+	expect(day.readTps).toBeCloseTo(200 / 11);
+	expect(day.writeTps).toBeCloseTo(200 / 22);
+});
+
+test('native throughput keeps separate run populations and excludes an incomplete paired reading', () => {
+	const date = '2030-06-14';
+	const rows: Row[] = [10, 100, 20, 200].map((rate, index) => ({
+		date, run_id: `${date}-${index < 2 ? 1 : 2}`, input_tokens: 100, cached_tokens: 0,
+		output_tokens: 100, prefill_ms: 100_000 / rate, decode_ms: 200_000 / rate
+	}));
+	rows.push({ ...rows[0], prefill_ms: 1, decode_ms: null });
+	const [day] = modelThroughput(rows, { start: date, end: date });
+	expect(day.items).toBe(4);
+	expect(day.read.median).toBe(100);
+	expect(day.write.median).toBe(50);
+	expect(day.runs).toEqual([
+		{ runId: `${date}-1`, items: 2, read: 100, write: 50 },
+		{ runId: `${date}-2`, items: 2, read: 200, write: 100 }
+	]);
+	expect(modelThroughput(rows, { start: '2030-06-15', end: '2030-06-15' })).toEqual([]);
+});
+
+test('build-time throughput keeps interpolated readings without changing its weighted totals', () => {
+	const date = '2030-06-14';
+	const row = (run: string, prefill: string, input: string, decode: string, output: string) => ({
+		date, run_id: run, prefill_ms: prefill, input_tokens: input,
+		cached_tokens: '100', decode_ms: decode, output_tokens: output
+	});
+	const [day] = throughputWithin(new Map([[date, [
+		row(`${date}-1`, '1000', '1100', '2000', '100'),
+		row(`${date}-1`, '3000', '1600', '1000', '100'),
+		row(`${date}-2`, '1000', '600', '1000', '50')
+	]]]), new Map(), { start: date, end: date });
+	expect(day.readTps).toBe(600);
+	expect(day.writeTps).toBe(62.5);
+	expect(day.items).toBe(3);
+	expect(day.read).toEqual({ min: 500, p25: 500, median: 500, p75: 750, max: 1000 });
+	expect(day.write).toEqual({ min: 50, p25: 50, median: 50, p75: 75, max: 100 });
+	expect(day.runs).toEqual([
+		{ runId: `${date}-1`, items: 2, read: 750, write: 75 },
+		{ runId: `${date}-2`, items: 1, read: 500, write: 50 }
+	]);
+});
 
 /** A named, bounded day fixture; numeric and boolean cells really enter Parquet. */
 function item(day: string, cpu = 'machine-a'): Row {
@@ -35,8 +92,12 @@ function item(day: string, cpu = 'machine-a'): Row {
 
 function host(day: string): Row {
 	return {
-		date: day, run_id: `${day}-10`, job: 'work', shard: 0, fingerprint: '0123456789abcdef',
-		cpu_model: 'machine-a', job_seconds: 30, server_prompt_tokens: 200, server_prompt_seconds: 1
+		version: '2026-10-10', date: day, run_id: `${day}-10`, job: 'work',
+		pipeline_name: null, task_name: null, shard: 0,
+		fingerprint: '0123456789abcdef', fingerprint_version: 2,
+		cpu_model: 'machine-a', cpu_logical_processors: 8, model_load_ms: 2000,
+		job_seconds: 30, server_prompt_tokens: 200, server_prompt_seconds: 1,
+		cores: null, threads: null, mhz_max: null, mhz_at_probe: null
 	};
 }
 
@@ -78,6 +139,29 @@ function asRange(value: Range | LedgerReach): Range {
 	if (!('from' in value)) throw new Error(`expected a range, got ${value.state}`);
 	return value;
 }
+
+test('the count capability reads numeric and unknown rows and keeps unavailable states distinct', async ({}, info) => {
+	const root = info.outputPath('manifest-counts');
+	const options = { columns: ['date', 'run_id', 'shards'], from: '2026-10-11', to: '2026-10-11' };
+	expect(await sliceFromDisk(root, 'run-shards', options)).toEqual({
+		state: 'missing', rows: [], fault: 'not-packed'
+	});
+	await buildRows(root, 'run-shards', []);
+	expect((await sliceFromDisk(root, 'run-shards', options)).state).toBe('quiet');
+	const rows = [
+		{ date: '2026-10-11', run_id: '2026-10-11-1', shards: 3 },
+		{ date: '2026-10-11', run_id: '2026-10-11-2', shards: null }
+	];
+	await buildRows(root, 'run-shards', [{ covers: '2026-10-11', rows }]);
+	const answer = await sliceFromDisk(root, 'run-shards', options);
+	expect(answer.state).toBe('ok');
+	expect(answer.rows).toEqual(rows);
+	const file = path.join(root, 'compact', 'run-shards', 'daily', '2026', '10', '11.parquet');
+	rmSync(file);
+	expect(await sliceFromDisk(root, 'run-shards', options)).toEqual({
+		state: 'unreachable', rows: [], at: '2026-10-11', fault: 'file-missing'
+	});
+});
 
 test('UTC windows are inclusive across leap days and clamp at the ledger first day', () => {
 	expect(windowRange(3, '2024-03-01', '2024-02-01')).toEqual({
@@ -143,7 +227,16 @@ test('the real three-ledger door anchors at the oldest end and asks each ledger 
 		summary_words: 80, source_words_before_cap: 600, source_words: 400, compression: 0.2
 	}]);
 	expect(machines.rows).toEqual(['2026-09-24', '2026-09-25'].map(host));
-	expect(platformMixQuery.columns).toEqual(FLEET_COLUMNS);
+	expect(platformMixQuery.columns).toEqual([
+		'version', 'date', 'run_id', 'job', 'pipeline_name', 'task_name', 'shard', 'fingerprint', 'fingerprint_version',
+		'cpu_model', 'cpu_logical_processors', 'model_load_ms',
+		'job_seconds', 'server_prompt_tokens', 'server_prompt_seconds',
+		'cores', 'threads', 'mhz_max', 'mhz_at_probe'
+	]);
+	expect(platformMixQuery.columns).toEqual(expect.arrayContaining([...FLEET_COLUMNS]));
+	expect(machineCardsItemsQuery.columns).toEqual([
+		'date', 'run_id', 'machine_job', 'machine_pipeline_name', 'machine_task_name', 'machine_shard', 'cpu_model'
+	]);
 });
 
 test('structured fetch predicates cross the real door rather than filtering the answer afterward', async ({}, info) => {

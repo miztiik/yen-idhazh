@@ -1,6 +1,6 @@
 # What the page is drawn from
 
-**Last Updated**: 2026-10-10
+**Last Updated**: 2026-10-12
 
 Every knob a reader's page or an operator's console is drawn from: the file that
 owns them, the rule that decides which file owns a key when two name it, the
@@ -21,7 +21,7 @@ Its blocks:
 | `assist` | On-device archive search. Formerly `idhazh.json`'s `assist` block. |
 | `frame` | The frame maximums, the reading measure, the gutter range, and the three breakpoints. |
 | `theme` | Whether gradients, elevation and the display face are drawn, and how strongly a panel takes a tint. |
-| `chart` | Drawn height and server-side width, how wide the readout under a chart may be, tick density, and the sparkline height. `hover_readout` and `palette` are still in the contract, but nothing reads them, so setting either changes nothing. |
+| `chart` | Drawn height and seed coordinate width, how wide the readout under a chart may be, tick density, and the sparkline height. `hover_readout` and `palette` are still in the contract, but nothing reads them, so setting either changes nothing. |
 | `icons` | Icon size, whether an icon takes the hue of what it means, and whether a topic carries a mark. |
 | `motion` | The two durations, and one switch. `prefers-reduced-motion` sits above the switch and is deliberately not configurable. |
 
@@ -64,13 +64,16 @@ The rule the two shapes of mirror follow:
 
 **The gate is `test_a_moved_block_is_declared_in_one_file_and_the_other_does_not_argue`**, in `backend/tests/test_appearance_config.py`, and it runs over all three moved blocks. It refuses two files naming one knob twice with two answers; it tolerates two files naming it twice with one answer, because that is the migration's middle layer doing its job. `backend/idhazh/config.py` already followed the same rule before any of this: it reads `console.max_window_days` out of the appearance file, and says in a comment that `AppConfig.console` is the layer underneath and can disagree.
 
-**A mirror test has to hold the pair that decides the picture.** `test_the_console_chart_size_is_a_knob_the_frontend_agrees_with` used to compare the contract default against `config/idhazh.json` and then against the frontend's own fallback constant. All three were 600 and the console drew at 760, so the gate was green over three copies of a number nothing drew with - which is worse than no gate, because it reads as coverage. It now starts from what `config/appearance.json` declares, because that is the last merge layer and therefore what the server draws at, and requires the contract default and the frontend fallback to be that same number.
+**A mirror test has to hold the pair that decides the picture.** `test_the_console_chart_size_is_a_knob_the_frontend_agrees_with` used to compare the contract default against `config/idhazh.json` and then against the frontend's own fallback constant. All three were 600 and the console drew at 760, so the gate was green over three copies of a number nothing drew with - which is worse than no gate, because it reads as coverage. It now starts from what `config/appearance.json` declares, because that is the last merge layer and therefore what the console uses, and requires the contract default and the frontend fallback to be that same number.
 
 ### Why a frame width is a knob, when a 2026-08-28 ruling said it should not be
 
 The objection was that a config able to set the frame to 300px would need a code change to still look right. That is true of an unvalidated number and false of a validated one. **`frame.reading_max_px` cannot be set below 960 or above 1600; `measure_ch` cannot leave 52 to 80; `breakpoints_px` must be exactly three ascending, distinct widths; and `console_max_px` may not be narrower than `reading_max_px`.** A validator refuses a document that breaks any of them, so no reachable value breaks the design. The contract is the answer to the objection rather than a refusal of the knob, and `backend/tests/test_appearance_config.py` asserts every bound in both directions.
 
-One cross-block rule is worth naming because it is the one that bites in production rather than in review: `chart.width_px` may not exceed `frame.console_max_px`. The server prerenders every chart at `width_px` because a prerendered chart has no element to measure, and the client re-measures once a script runs. Draw wider than the container can ever be and every first paint is wrong and then visibly snaps - on the one kind of site whose whole premise is that the page is finished before any script runs.
+One cross-block rule keeps the initial coordinate frame within the shared shell:
+`chart.width_px` may not exceed `frame.console_max_px`. Native charts measure
+their actual browser container and redraw when it changes. This retained width
+validation does not imply that a server still prerenders chart values or SVG.
 
 Two knobs in that block decide what a chart's axis and its readout look like, and both exist because a number written into a component is a number nobody can move. **`chart.tick_density` is the most date labels an x axis may carry** - a ceiling and never a target, because the axis then measures those labels against the room the plot actually has and drops more of them until none touch. So a month of columns gets six dates on a desktop rather than one span string, three on a phone rather than six overlapping ones, and a column whose date was dropped keeps its tick mark. **`chart.readout_max_share` is the widest the readout strip under a plot may be, as a share of that plot** - 1, the whole plot, bounded above 0 and at or below 1. The strip sits below the plot, so no value here can cover a mark, and its entries lie side by side and wrap only when the next one does not fit. It was 0.33 until 2026-09-28, which left 119px of a 394px phone plot and stacked every entry on a line of its own; the floating box before that was measured on 2026-08-29 at 88 to 121px over a 220px plot, which is 40 to 55 percent of the chart it was explaining.
 
@@ -118,8 +121,6 @@ The shared console knobs are:
 - `console.default_window_days`
 - `console.window_presets`
 - `console.today_anchor`
-- `console.pan_days`
-- `console.zoom_factor`
 - `console.min_window_days`
 - `console.max_window_days`
 - `console.min_attempts_for_rate`
@@ -144,7 +145,6 @@ The shared console knobs are:
 - `console.explorer_bar_spread_share`
 - `console.explorer_counter_from_share`
 - `console.explorer_examples`
-- `console.plot_min_fill_share`
 - `console.machine_colour_stops`
 - `console.machine_colour_floor_share`
 - `console.absent_hatch_degrees`
@@ -155,18 +155,17 @@ route, so two routes always open on the same span and a reader can compare
 them. It was thirty until 2026-10-02, chosen because a page that states a
 fourteen-day rule shows that rule with no margin either side of it at fourteen;
 that is the cost of the change, and thirty is one press away. `failure_list_max` is
-the same idea one level down: the failed-item list shows a page at a time and
-offers the rest, so the charts above it stay reachable. `source_rows` and
-`feed_rows` are caps on two ranked lists beside it - the sources a window's
-failures cost the most articles, and the feeds that failed at least once. Both
-state their tail in one sentence rather than offering more rows, because a
-ranking is read from the top and a tail is a number, not a page.
+the same idea one level down: the identity-free failed-rule ranking shows a page
+at a time and offers the rest, so the charts above it stay reachable.
+`source_rows` bounds Voices' source census, ranking discount, fetch-time,
+truncation and retirement lists. `feed_rows` bounds the failed-feed list.
+These knobs do not imply a source or article identity in the failure-mix query.
 
-`today_anchor` (`right`) says where every console window places the site's
-newest published day, the day the console treats as today: `right` makes it the
-window's last day, and `centre` puts it in the middle, with room after it for
-days not yet published. That day, and never the build clock or a record's own
-newest day, is what every window on every route is placed on
+`today_anchor` (`right`) places the site's newest published day in build-time
+evidence windows: `right` makes it the last day, and `centre` puts it in the
+middle. Native panel queries instead end on their common returned record reach,
+never on the browser clock. Private build-time evidence keeps its published-day
+anchor
 ([which-console-surfaces-follow-the-window-and-which-say-why-not.md](../../architecture/publishing/which-console-surfaces-follow-the-window-and-which-say-why-not.md#one-window-governs-the-page)).
 
 The Data explorer route reads the `console.explorer_*` knobs. They bound the route chrome, the SQL editor, the row cap, the fetch ceiling, the length of a shared link, the fixed status-bar lines, the notice lifetime and the example questions. `console.explorer_chrome` lets the route ask the layout for compact workbench chrome without the layout reading a route name. `console.explorer_link_max_bytes` is the most bytes a link's path and query may hold and still carry the question; a longer link carries the ledgers and the days only. It is 8,192, the longest request target GitHub Pages answered ([../../reference/benchmarks/address-length-on-pages.md](../../reference/benchmarks/address-length-on-pages.md)), so a host with another limit is one edit. No knob sets a region's size: the workbench fills the window, and each region takes its share of it, except that the result region never takes less than the room a chart `console.chart_height` tall needs with its figure, readout and comparison, so a window too short for that scrolls the page ([how-the-data-explorer-shares-the-window.md](../console-design/how-the-data-explorer-shares-the-window.md)). `console.explorer_role_slots_per_line` sets how many of the Chart tab's role pills share one line in each band: a line holds the smaller of the knob and the most roles any chart the page draws has. Flow has four roles, so the role row takes 4, 2, 2 and 1 lines from the narrowest band to the widest under the defaults, for every chosen chart. `console.explorer_chart_note_lines` sets the lines each note under the chart reserves in each band: the foot reserves that many for each note the answer can give, and no room when it can give none, so on most answers the plot has the whole room. `console.explorer_editor_lines_shown` is the fewest lines the SQL editor shows: below 1024 px the editor is exactly that tall, and from 1024 px it fills its share and never drops under it. A long question, a long note or many answer rows scroll inside their region instead of moving the page. `console.explorer_max_fetch_bytes` is 64 MiB. Measured 2026-10-04 on a local real build in Chromium with the CPU slowed 4x, on a shared i7-1265U laptop: a question fetching 9.9 MB (10,379,116 bytes, 138 files, six ledgers over 30 days) answered in 6,435 ms, 6,209 ms and 5,926 ms on the page clock; the wall times were 10,120 ms, 9,644 ms and 10,163 ms. No main-thread task passed 1 second - the three longest were 546 ms, 328 ms and 857 ms - so 64 MiB stands. The site holds only 22.5 MB today, so 64 MiB itself is untested until a ledger holds 90 days. The status bar prints the bytes the page keeper still holds, not the sum of every call's possible fetch cost, so a byte-range year file does not inflate the reload total.
@@ -192,11 +191,16 @@ delete shards the console can still ask for, and a deleted shard draws as a gap
 that reads like a day the pipeline did nothing
 ([retention-ages.md](retention-ages.md#why-14-and-not-13)).
 
-`zoom_factor` has had no reader since the presets landed: the `+` and `-` keys
-step to the next preset instead of scaling the span, because a free span is the
-thing the presets exist to prevent. The knob is still in the contract, and
-retiring it is a removal with a read-side migration behind it
-([../config.md](../config.md#removing-a-config-field-is-breaking-and-its-migration-is-the-file)).
+The preset control is the console's only shared span control. `pan_days` and
+`zoom_factor` have no surviving reader and are removed. `band_outlier_rows`
+belonged only to the retired viewport. `plot_min_fill_share` belonged only to
+the removed per-panel picture gate. All four are absent from the contract,
+committed appearance file and full-knob fixtures. Unknown keys fail validation;
+an old local copy must delete them rather than expect a value to take effect.
+
+`min_attempts_for_rate` remains live for paired judge shares, Model comparisons
+and source shares, Hardware percentiles and Pipelines cost distributions. It is
+not a floor on the native failure mix's failed-row/recorded-row share.
 
 `completeness_grace_days` (1) is how many whole UTC days the day the console's
 record was written may trail the reader's own UTC day before the sentence under
@@ -208,11 +212,15 @@ count is said, never what it counts - the count is the whole days between the
 record's day and today, so zero is refused
 ([../../architecture/publishing/what-sits-above-every-console-route.md](../../architecture/publishing/what-sits-above-every-console-route.md#the-sentence-under-the-strip-dates-the-record)).
 
-`plot_min_fill_share` (0.85) is read by no page. Gate 1 fails a judged panel whose
-plots cover less of its width than this value. `consoleConfig()` does not expose
-this test-only knob to pages. Judged ids now live in the owning route's `judged`
-list, whose parser refuses an id the route does not draw or an id listed twice
-([../design-system.md](../design-system.md#sufficiency-is-a-gate-not-a-taste)).
+Keep a shared knob when a real reader computes with it, not because a deleted
+engine or a test object declares it. `min_window_days` still bounds the backend
+preset validator; `max_window_days` also protects retention. Native charts still
+read `chart_height` and `chart_width`. Data explorer reads `bandwidth_min_kinds`
+for its paired scatter and receives the `explorer_*` settings through
+`explorerConfig()`. Route-only `knobs` are a separate contract; a shared-knob
+retirement does not remove them. Design review follows the
+[representative-browser policy](../design-system.md#sufficiency-is-a-gate-not-a-taste),
+not a plot-width quota or a panel-picture matrix.
 
 Four knobs decide how the Hardware route colours a machine. A machine's colour
 is its speed: one hue in `machine_colour_stops` (5) steps, slowest to fastest,
@@ -324,15 +332,16 @@ on the 431-story day of 2026-08-30, `gzip -9`, the first fifteen stories cost a
 dated route 20,302 bytes across the two documents it emits, against 420,074 for
 all 431.
 
-**It is a floor and not the whole answer, and the day route spends the rest.**
+**It is a floor and not the whole answer, and the home page spends the rest.**
 Fifteen covers the twelve a flat list pages at and
 the five the leading block draws. But a lead is chosen across the WHOLE day, so
 it is not inside any prefix: measured 2026-09-01 on the 601-story day of
 2026-08-31, the five sat at positions 249, 285, 337, 344 and 493. The document
 carries those five as well as the seed, or their anchors land on nothing - so a
-day document is bounded at `shell_seed_items` plus `leading_stories` and a topic
-document at `shell_seed_items` alone, which is what
-`frontend/tests/payload-weight.spec.ts` holds them to.
+home document carries the seed plus any leads outside it. Dated day and topic
+addresses use the fallback shell and fetch the served day; they emit no dated
+document. `frontend/scripts/bundle-gate.mjs` enforces that document prohibition,
+not the home seed's count.
 
 `ui.payload_slow_ms` (1200) is the exact opposite knob, and the pair is worth
 reading together. It is how long a reader may wait for the rest of a day before
@@ -458,7 +467,7 @@ disagree. None of them reaches the prerendered `/archive/` document.
 ## See also
 
 - [../config.md](../config.md) - what a knob is, and what is not one.
-- [../design-system.md](../design-system.md) - the sufficiency checks a surface drawn from these knobs has to pass.
+- [../design-system.md](../design-system.md) - design review for surfaces drawn from these knobs.
 - [../console-design.md](../console-design.md) - what the operator viewport is for.
 - [../search-quality.md](../search-quality.md) - what the `assist` knobs are measured against.
 - [../../architecture/publishing/frontend.md](../../architecture/publishing/frontend.md) - how the published site reads them.

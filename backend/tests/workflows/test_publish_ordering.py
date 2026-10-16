@@ -62,7 +62,13 @@ def test_the_plan_a_day_is_built_from_cannot_go_missing_quietly() -> None:
     job away from whatever actually went wrong.
     """
     workflow = _load_workflows()["digest.yml"]
-    upload = _step(workflow, "plan", "uses", "actions/upload-artifact@v7")
+    uploads = [
+        step for step in _steps(workflow, "plan")
+        if step.get("uses") == "actions/upload-artifact@v7"
+        and _mapping(step.get("with"), "upload settings").get("name") == "plan"
+    ]
+    assert len(uploads) == 1, "one required plan upload must be separate from the monitor binary"
+    upload = uploads[0]
 
     settings = _mapping(upload.get("with"), "the plan upload's settings")
     assert settings["name"] == "plan"
@@ -223,7 +229,7 @@ def test_the_weight_gate_reads_a_build_of_the_tree_that_was_pushed(
     And it is conditional, because a push that landed first try left the tree
     the first build already read. The condition has to name every commit step
     that runs before it: `assemble` commits twice, the second stages
-    `frontend/public/telemetry`, and the console pages read that - so a
+    the current public and native console outputs - so a
     condition naming only the day's commit would skip the rebuild on the other
     one and put run 33270983446 straight back.
     """

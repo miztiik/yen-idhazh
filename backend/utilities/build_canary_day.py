@@ -54,6 +54,7 @@ from idhazh.assemble import (
 from idhazh.atomic_write import write_atomic
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import Contract, ServerJob, derive_url_key, normalize_prose
+from idhazh.contracts.council_run_record import CouncilRunRecord
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestRunRef, DigestVerticalRef
 from idhazh.contracts.element import ElementTable
@@ -104,9 +105,6 @@ from idhazh.telemetry import silicon
 from idhazh.telemetry.publish import (
     console_band,
     day_metrics,
-    machine,
-    run_days,
-    run_timeline,
     series,
     source_health,
 )
@@ -1397,12 +1395,11 @@ def write_source_health(target: Path) -> int:
 def console_payloads(*, state_root: Path, digest_root: Path) -> int:
     """Write every payload the console fetches, through the pipeline's producers.
 
-    The same six calls in the same order as `idhazh publish`, so the canary's
+    The remaining projections use the same producers as `idhazh publish`, so the canary's
     console reads a tree built by the code that builds the real one rather than
     by a fixture writer that can drift from it. The band is last because it
-    reads the run-day shards the call above it writes, and because its months
-    list is the union across every series - so each of them has to be on disk
-    before it is taken.
+    reads native manifests and state day-metrics, and its months list needs the
+    telemetry projection already on disk.
 
     **It is a separate step from building the day, and it has to be.** The
     item-health rows, the host records, the span rollup and the telemetry
@@ -1419,47 +1416,6 @@ def console_payloads(*, state_root: Path, digest_root: Path) -> int:
     """
     settings = config.load()
     today = calendar_date.fromisoformat(DATE)
-    months = {month_of(date) for date in [*earlier_days(), DATE]}
-    keep = len(months) + 1
-    # Where `build-canary.mjs` puts the projection, which is not where the real
-    # tree puts it: the canary keeps telemetry under `state/` and the four other
-    # series beside the digest. The band needs it by name because its months
-    # list is the union across all five.
-    telemetry_root = state_root / "telemetry"
-    written = 0
-    for producer in (
-        machine,
-        run_timeline,
-    ):
-        written += len(
-            producer.publish(
-                state_root=state_root,
-                digest_root=digest_root,
-                keep_months=keep,
-                today=today,
-                months=months,
-                ensure_month=month_of(DATE),
-            )
-        )
-    written += len(
-        day_metrics.publish_public(
-            state_root=state_root,
-            digest_root=digest_root,
-            keep_months=keep,
-            today=today,
-            months=months,
-            ensure_month=month_of(DATE),
-        )
-    )
-    written += len(
-        run_days.publish(
-            digest_root=digest_root,
-            keep_months=keep,
-            today=today,
-            months=months,
-            ensure_month=month_of(DATE),
-        )
-    )
     band = console_band.publish(
         state_root=state_root,
         digest_root=digest_root,
@@ -1469,9 +1425,8 @@ def console_payloads(*, state_root: Path, digest_root: Path) -> int:
         run=settings.app.run,
         collect=settings.app.collect,
         sources=source_health_view().sources,
-        telemetry_root=telemetry_root,
     )
-    return written + (1 if band is not None else 0)
+    return 1 if band is not None else 0
 
 
 def _scorer_version(evaluation: EvaluationConfig) -> str:
@@ -1750,6 +1705,19 @@ def file_published_fixture_rows(state: Path) -> dict[LedgerName, int]:
     url = "https://canary.example.com/published-ledger"
     url_key = derive_url_key(url)
     rows: dict[LedgerName, list[Contract]] = {
+        LedgerName.COUNCIL_RUN_RECORDS: [
+            CouncilRunRecord.model_validate(
+                CouncilRunRecord.read(
+                    Path(__file__).resolve().parents[2]
+                    / "tests" / "fixtures" / "contracts" / "council-run-record" / name
+                ).model_dump() | {
+                    "date": DATE,
+                    "run_id": SCORE_RUN_ID,
+                    "started_at": f"{DATE}T22:04:11Z",
+                }
+            )
+            for name in ("a-selection-that-ran-no-model.json", "a-part-that-raised.json")
+        ],
         LedgerName.CANDIDATE_MODELS: [
             ValidationRow(
                 version=ValidationRow.schema_version(),
@@ -1810,7 +1778,14 @@ def file_published_fixture_rows(state: Path) -> dict[LedgerName, int]:
             ledger_rows,
             ledger=which,
             covers=DATE,
-            identity=_fixture_writer(SCORE_RUN_ID),
+            identity=(
+                _fixture_writer(SCORE_RUN_ID).model_copy(update={
+                    "job": ServerJob.SAVE_COUNCIL_RESULTS,
+                    "producer": "council.session",
+                })
+                if which is LedgerName.COUNCIL_RUN_RECORDS
+                else _fixture_writer(SCORE_RUN_ID)
+            ),
         )
         filed[which] = len(ledger_rows)
     return filed
@@ -1918,7 +1893,12 @@ def clear_output(digest_root: Path, state_root: Path) -> None:
     for folder in (
         digest_root,
         search_index_root(digest_root),
-        *(series.series_root(digest_root, name) for name in series.PUBLISHED_ROOTS),
+        *(series.console_root(digest_root) / name for name in series.PUBLISHED_ROOTS),
+        # Retired public outputs from an earlier canary must not survive a rebuild.
+        *(
+            digest_root.parent / name
+            for name in ("machine", "run-days", "day-metrics", "telemetry", "run-timeline")
+        ),
         state_root,
     ):
         if folder.exists():
@@ -1959,9 +1939,20 @@ def main() -> int:
         print(json.dumps(scored_keys(args.state), sort_keys=True))
         return 0
     if args.file_fixture_rows is not None:
+        from idhazh.telemetry.run_shards import backfill
+
         filed = file_fixture_rows(args.state, args.file_fixture_rows)
         filed.update(file_published_fixture_rows(args.state))
-        pack_fixture_ledgers(args.state.resolve(), Path.cwd().resolve())
+        backfill(
+            args.out, args.state,
+            first=(calendar_date.fromisoformat(DATE) - timedelta(
+                days=max(config.load().appearance.console.window_presets) - 1
+            )).isoformat(),
+            through=DATE,
+            identity=_fixture_writer(SCORE_RUN_ID),
+        )
+        state = args.state.resolve()
+        pack_fixture_ledgers(state, state.parent)
         unpacked = file_unpacked_fixture_day(args.state)
         filed[LedgerName.ITEM_HEALTH] = filed.get(LedgerName.ITEM_HEALTH, 0) + unpacked
         for which, count in filed.items():

@@ -200,9 +200,9 @@ written by this run qualify. A revision belongs to `updated_by_run`, otherwise
 to `introduced_by_run`. Failed writes, refused plans, unpublished items and
 charts carried from another run add nothing.
 
-The run manifest records the totals in each run's `chart_evidence`. The
-[monthly run-days report](console-payloads.md#the-producers) copies that field
-unchanged. The existing frontend manifest reader returns it as `chartEvidence`.
+The native run manifest records the totals in each run's `chart_evidence`.
+The existing frontend manifest reader returns it as `chartEvidence`;
+there is no longer a public monthly run-days copy.
 There is no separate dashboard or evidence ledger.
 
 A missing field on an old payload means unknown. If any eligible chart lacks

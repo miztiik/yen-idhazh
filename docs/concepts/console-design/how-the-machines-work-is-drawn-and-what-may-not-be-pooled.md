@@ -1,6 +1,6 @@
 # How the machine's work is drawn, and what may not be pooled
 
-**Last Updated**: 2026-10-06
+**Last Updated**: 2026-10-11
 
 The Hardware route and the run timeline draw one machine's work. One measurement
 shapes all of it: **a run does not get one machine.** Measured 2026-09-17 over
@@ -22,18 +22,18 @@ The chart rules these panels obey are
 
 ## A machine is a colour and a name, and no rate is pooled across two of them
 
-- **The machine is the unit, and the pooled figure is deleted rather than kept
- for comparison.** Each group prints its own read rate, write rate and
- multiple, from its own shards, sum over sum. One headline survives and it is
- the write-cost multiple of **the machine that read the most tokens in that
- run**, named on the line.
+- **The machine is the unit, and no pooled speed headline survives.** Hardware
+ now draws Reading and Writing separately, as ranked comparisons against the
+ reference machine of each run. The reference is the kind with most qualifying
+ articles; its name breaks a tie. Each article is normalized against that run's
+ reference middle before a kind's typical seconds are quoted. Missing reference
+ readings stay unqualified. The old machine-split boards and their write-cost
+ headline are no longer Hardware drawings.
 - **Shards that recorded no machine are their own group and are never merged
  into a named one.** 24 of the 380 committed rows have no processor name, and
  folding them into a machine attributes somebody else's seconds to it.
-- **The one case where pooling is allowed carries its own sentence.** Where no
- shard of a run named a machine at all, the single group IS the pooled split,
- and the panel says so: a run that drew more than one machine - 86 of the 90
- did - would have had two machines averaged into it.
+- **A machine without a name cannot become the reference.** It does not acquire
+ another machine's speed by pooling. Hardware names the missing comparable work.
 - **A run that drew one machine says so too.** That is a good state, 4 of 90,
  and the panel reads as one rather than as a panel with a missing spread.
 - **A machine's colour is its speed, and nothing else.** A kind of machine is
@@ -46,7 +46,7 @@ The chart rules these panels obey are
  most of the readings - 102 of 176 on 2026-09-30 - and would otherwise take most
  of the steps for itself. The stronger the colour, the faster the machine, in
  both themes. The ramp is assigned once for the page, so the machine-kinds
- panel, the machine cards and the machine split colour one machine alike. The
+ panel and the machine cards colour one machine alike. The
  key over the machine-kinds plot names each step by the medians of the kinds on
  it, and leaves out a step no kind lands on, because a chip that names nothing
  is a chip a reader has to learn to skip.
@@ -62,8 +62,8 @@ The chart rules these panels obey are
  two kinds of one processor name are told apart in words as the faster and the
  slower.
 - **The name is on the row, always.** Colour here encodes a fact, so it is
- semantic and may never be the only carrier of it. That is also why the split
- is rows rather than a scatter: a scatter cannot carry a name per mark.
+ semantic and may never be the only carrier of it. The rankings use named rows,
+ not a scatter that cannot carry a name per mark.
 - **A card carries every watched instruction-set flag, present or absent.** A
  present flag takes `--tint-accent`; an absent one takes a hairline outline at
  the same width. The machine we draw most reports none of the watched AVX-512
@@ -233,14 +233,11 @@ left to hand out, and names the article it came from, so every part of that bar
 is read off one row. An average of two moments that never met is not a thing the
 machine was ever holding.
 
-The arithmetic is proved without a browser and the geometry is proved with one.
 The sum is asserted exactly, with no tolerance: a tolerance is the gap the
 1.87x stack fits back through
 ([../../../frontend/tests/memory-held.spec.ts](../../../frontend/tests/memory-held.spec.ts)).
-The overlap is read off the two brackets' boxes on the page and held to the
-narrower one's full width, so a change that put them end to end fails even
-though every number stayed right
-([../../../frontend/tests/console-memory-held.spec.ts](../../../frontend/tests/console-memory-held.spec.ts)).
+The two brackets must overlap by the narrower one's full width; putting them
+end to end would misstate the memory even if every number stayed right.
 What the readings say, and what the model behind the four-part shape is, are in
 [Interpreting machine memory](../../reference/pipeline-cost.md#how-much-of-the-runners-memory-a-run-needs).
 
@@ -263,8 +260,9 @@ the reading the panel exists for.
 
 > **The shape of the run is legible before a single number is.** A wide staircase is a run that queued; a solid block is a run that worked in parallel.
 
-The run timeline on `/console/` draws
-[`run-timeline/<YYYY-MM>.csv`](../../architecture/publishing/run-timeline.md).
+The run timeline on `/console/` derives its clock from
+[native item-health readings](../../architecture/publishing/run-timeline.md),
+not a monthly public CSV.
 
 - **A row is one item and the y axis is items, in start order.** Sorted by start
   rather than by cost, because the queue is the thing a reader cannot get
@@ -335,18 +333,14 @@ The run timeline on `/console/` draws
 
 **A column the panel reads has to carry a value somewhere on the canary day, or
 the panel does not ship.**
-[../../../frontend/tests/console-pipeline-timeline.spec.ts](../../../frontend/tests/console-pipeline-timeline.spec.ts)
-takes the declared list off `run-timeline.ts`, reads `backend/var/canary/`, and
-fails on any column empty across every row - then checks on the page that every
-step in the legend has a slice behind it and that all eight are accounted for as
-drawn, unproduced or unrecorded. The same file holds the grain oracle: it reads
-the two arrays off the page and holds the shard grain against the item grain,
-per shard and per step. The canary is the right fixture because it is
+Every step in the legend must have a slice behind it, and all eight must be
+accounted for as drawn, unproduced or unrecorded. Shard and item readings must
+agree per shard and per step. The canary is the right fixture because it is
 fixed in size (`CLAUDE.md` Guardrail #12) and because it is built, so it carries
 a case the archive has never produced: not one committed census row records an
 item clock, so nothing but a built day can place an item on one.
 
-**Three panels would fail that gate today** and are left for a later row. Measured
+**Three panels lacked those fixture values on 2026-09-16.** Measured
 2026-09-16 over the canary's own published payloads, by counting non-empty cells
 per column across every row of each file: the one `day-metrics` record the canary
 holds carries `extraction` null, `throughput` null and `stage_timing` empty, so
@@ -357,6 +351,26 @@ behind it - `day-metrics.addresses_considered` - which is a different defect and
 a cheaper one. The `run-days` payload is clean.
 
 ## Design rationale
+
+**The two independent clocks open Hardware.** The item ledger and the server
+measurement can disagree. A ranked percentage gap, with its allowed-gap rule,
+decides whether a quoted speed can be trusted before any speed drawing follows.
+The count needed to refuse an impossible shard index comes only from the
+recorded manifest count, through the narrow `run-shards` ledger. Unknown remains
+unknown; neither observed machines nor configuration supplies that denominator.
+
+**Requests and memory now answer different questions.** Context draws label and
+summary request distributions against recorded per-slot limits, not a run strip
+that conflates calls. Two positive readings is the smallest distribution floor;
+the route knob names that cost. Closest-to-memory ranks the tightest held reading
+of each dated article against its own total machine memory. Memory-held retains
+its process-overlap brackets. The removed prompt-to-memory carry was speculative:
+the ledger has no call-boundary measurement that attributes memory separately to
+read and written tokens. It is not moved to another panel.
+
+**All dated comparisons name settings changes.** A changed date with no measured
+column is named in words as an undrawn rule. No marks is not evidence that the
+model did not change. The five tail plots still share one scale and one rule.
 
 **The window needs no full-record context band.** It always ends at the newest
 day, and the route prints its dates; another band would repeat that context.

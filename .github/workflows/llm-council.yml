@@ -1,7 +1,7 @@
 name: LLM-COUNCIL
 
 # The council, once a night, on its own clock. It asks every tenant registered
-# in `council.tenants` to pick its work for the day, fans out over one job a
+# active in `judge_names` in `config/llm_council.json` to pick its work for the day, fans out over one job a
 # tenant a shard, and settles what came back.
 #
 # **Council, not judges, and the name is about where this goes** (owner,
@@ -39,18 +39,28 @@ on:
   workflow_dispatch:
     inputs:
       date:
-        description: 'Digest date to judge (YYYY-MM-DD). Defaults to yesterday, UTC.'
-        default: ''
-
-permissions:
-  contents: write
-  # Reading an artifact an EARLIER run wrote needs this scope, and a declared
-  # block sets every scope it does not list to none. Read-only, and no stored
-  # token: the default credential carries it. Nothing in this file crosses a run
-  # today - a dead night is repaired by judging its date again, which is what
-  # the night plan below is for - so this is the scope that keeps the cheaper
-  # recovery open rather than one a step here already uses.
-  actions: read
+        description: 'One required digest date (YYYY-MM-DD, UTC).'
+        required: true
+        type: string
+      judges:
+        description: 'One or more judge names from config/llm_council.json as JSON (["name"]). Active: publish as scheduled. Paused: download only, no commits. Retired: refused. Download council-results-<run_id>.'
+        required: true
+        type: string
+      host_telemetry:
+        description: 'Python host collector, or off for all host telemetry'
+        type: choice
+        default: python
+        options:
+          - python
+          - 'off'
+      memory_profiling:
+        description: 'OS memory and fault collection; inherit reads shared config'
+        type: choice
+        default: inherit
+        options:
+          - inherit
+          - 'on'
+          - 'off'
 
 concurrency:
   group: llm-council
@@ -60,13 +70,20 @@ env:
   # Where this job's own probes ask, for the reason `digest.yml` gives: the
   # server is on this runner, and where a unit posts is `model_server.base_url`.
   MODEL_SERVER_PROBE: 'http://127.0.0.1:8080'
+  IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry || 'python' }}
+  MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
 
 jobs:
   draw:
+    env:
+      COUNCIL_EVENT_FILE: backend/var/council/events/planner.jsonl
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
-      date: ${{ steps.decide.outputs.date }}
+      date: ${{ steps.plan.outputs.date }}
+      selection: ${{ steps.plan.outputs.selection }}
       run_id: ${{ steps.identity.outputs.run_id }}
       matrix: ${{ steps.fanout.outputs.matrix }}
       max_parallel: ${{ steps.fanout.outputs.max_parallel }}
@@ -86,49 +103,26 @@ jobs:
       - name: Install
         run: pip install -e .
 
-      - id: decide
-        env:
-          # Through `env`, not pasted into the program below. A value read by
-          # name is a value, whatever it contains.
-          DISPATCH_DATE: ${{ inputs.date }}
-        run: |
-          set -euo pipefail
-          DATE="${DISPATCH_DATE:-}"
-          # Yesterday, because a day publishes five times and the last slot can
-          # still be running at 22:00. Judging a day that is still being written
-          # would draw from a day the next run replaces.
-          [ -n "$DATE" ] || DATE=$(date -u -d 'yesterday' +%F)
-          # The same anchored pattern `digest.yml` uses, for the same reason: a
-          # typo files rows at an address no reader ever looks at, silently,
-          # after a run of about two hours. The month and the day are bounded as
-          # well as counted, because 2026-13-45 files as readily as 2026-08-27.
-          if ! [[ "$DATE" =~ ^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$ ]]; then
-            echo "date must be YYYY-MM-DD, and it becomes the address these rows file under" >&2
-            exit 1
-          fi
-          echo "date=$DATE" >> "$GITHUB_OUTPUT"
-
-      # Which dates tonight covers: tonight, plus the older nights the tenants
-      # say they are behind on, inside a window the council owns. The council
-      # ASKS - it opens no tenant's ledger - so a night with nobody registered
-      # plans tonight and nothing else, and every step below still runs.
-      #
-      # This is how a dead night is repaired, and it needs nobody to notice: the
-      # next run finds the gap because finding the gap is how it picks its work.
-      # A dispatched date replaces the plan outright, because a person naming a
-      # date is asserting something the plan cannot know.
+      # The planner validates the whole selection before work starts. Scheduled
+      # runs give each active judge yesterday UTC and its own bounded repairs.
+      # Manual runs require one date and selected active or paused judges.
       - id: plan
         name: Say which dates tonight judges
         env:
-          TONIGHT: ${{ steps.decide.outputs.date }}
-          # Through `env`, not pasted into the command. A value read by name is
-          # a value, whatever it contains.
+          EVENT_NAME: ${{ github.event_name }}
           DISPATCH_DATE: ${{ inputs.date }}
+          DISPATCH_JUDGES: ${{ inputs.judges }}
         run: |
           set -euo pipefail
+          case "$EVENT_NAME" in
+            schedule) MODE=scheduled ;;
+            workflow_dispatch) MODE=manual ;;
+            *) exit 2 ;;
+          esac
           python -m idhazh.council.night_plan \
-            --tonight "$TONIGHT" \
+            --mode "$MODE" \
             --dispatched "${DISPATCH_DATE:-}" \
+            --judges "${DISPATCH_JUDGES:-}" \
             | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
       # The name every row this night writes is filed under, minted once here.
@@ -179,12 +173,12 @@ jobs:
       - id: bounds
         run: |
           set -euo pipefail
-          python3 backend/utilities/shard_bound.py --key council.shard_timeout_minutes \
+          python3 backend/utilities/shard_bound.py --key shard_timeout_minutes --config-file llm_council.json \
             >> "$GITHUB_OUTPUT"
 
       # What tonight fans out to, asked of the tenants rather than computed
-      # here. A cell is flat - a tenant, a date, a shard and that tenant's own
-      # width - because a per-tenant width is not a third axis: a cross product
+      # here. A cell is flat - tenant, date, shard, shards and runs_model -
+      # because a per-tenant width is not a third axis: a cross product
       # would hand every tenant the widest tenant's width and pay a weights
       # restore for work that runs no model.
       #
@@ -194,16 +188,10 @@ jobs:
       - id: fanout
         name: Say what tonight fans out to and what it will commit
         env:
-          NIGHT_DATES: ${{ steps.plan.outputs.dates }}
+          COUNCIL_SELECTION: ${{ steps.plan.outputs.selection }}
         run: |
           set -euo pipefail
-          # Built as an array rather than by word splitting: the plan's answer
-          # is a list and it stays one, so a date can never arrive as two.
-          asked=()
-          while read -r judged; do
-            asked+=(--date "$judged")
-          done < <(echo "$NIGHT_DATES" | jq -r '.[]')
-          python3 backend/utilities/council_matrix.py "${asked[@]}" \
+          python3 backend/utilities/council_matrix.py \
             | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
       # Every tenant picks its own work, once a date, before any unit runs. It
@@ -211,6 +199,7 @@ jobs:
       # socket, no fetcher.
       - name: Pick the work for each date
         env:
+          COUNCIL_SELECTION: ${{ steps.plan.outputs.selection }}
           COUNCIL_DATES: ${{ steps.fanout.outputs.dates }}
           COUNCIL_RUN_ID: ${{ steps.identity.outputs.run_id }}
         run: |
@@ -224,11 +213,12 @@ jobs:
       # then land beside each other in the merged download rather than on top of
       # each other, which an artifact named for neither could not prevent.
       #
-      # Nothing writes this directory until a tenant is registered, so an empty
-      # upload is the no-tenant case rather than a failure.
-      - uses: actions/upload-artifact@v7
+      # The planner's safe event lines also travel here, even if preparation
+      # failed or no tenant ran.
+      - if: always()
+        uses: actions/upload-artifact@v7
         with:
-          name: council-selection-${{ steps.decide.outputs.date }}
+          name: council-selection-${{ steps.plan.outputs.date }}
           path: backend/var/council
           if-no-files-found: warn
           # Three nights, so what a night wrote is still reachable while the
@@ -239,6 +229,12 @@ jobs:
           retention-days: 3
 
   judge:
+    env:
+      COUNCIL_SELECTION: ${{ needs.draw.outputs.selection }}
+      COUNCIL_EVENT_FILE: backend/var/council/events/${{ matrix.tenant }}/${{ matrix.date }}/${{ matrix.shard }}.jsonl
+    permissions:
+      contents: read
+      actions: read
     needs: draw
     # An empty matrix is a strategy-evaluation failure, and the run reds on it
     # rather than skipping quietly. No tenant registered is a legal night, and
@@ -278,7 +274,7 @@ jobs:
           pattern: council-selection-*
           merge-multiple: true
           path: backend/var/council
-          # Passed rather than inherited. The `permissions` block above names
+          # Passed rather than inherited. This job's permissions block names
           # what this credential may do, and an artifact read is one of them.
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -293,6 +289,7 @@ jobs:
       # The probe address is handed over rather than inherited: it has one home,
       # the workflow `env` above, and this is the line that carries it in.
       - uses: ./.github/actions/model-server
+        if: matrix.runs_model
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           probe_url: ${{ env.MODEL_SERVER_PROBE }}
@@ -304,14 +301,18 @@ jobs:
       - name: Run this unit of the tenant's work
         env:
           COUNCIL_RUN_ID: ${{ needs.draw.outputs.run_id }}
+          COUNCIL_TENANT: ${{ matrix.tenant }}
+          COUNCIL_DATE: ${{ matrix.date }}
+          COUNCIL_SHARD: ${{ matrix.shard }}
+          COUNCIL_SHARDS: ${{ matrix.shards }}
         run: |
           set -euo pipefail
           python -m idhazh council-shard \
-            --tenant "${{ matrix.tenant }}" \
-            --date "${{ matrix.date }}" \
+            --tenant "$COUNCIL_TENANT" \
+            --date "$COUNCIL_DATE" \
             --run-id "$COUNCIL_RUN_ID" \
-            --shard ${{ matrix.shard }} \
-            --shards ${{ matrix.shards }}
+            --shard "$COUNCIL_SHARD" \
+            --shards "$COUNCIL_SHARDS"
 
       # The unit commits nothing, and an artifact is the only way its rows get
       # across. Every checkout here names no ref, so each job is pinned to the
@@ -332,12 +333,17 @@ jobs:
           path: |
             backend/var/council
             !backend/var/council/*/selection
+            !backend/var/council/trials/*/*/*/scratch/*/selection
+            !backend/var/council/events/planner.jsonl
           if-no-files-found: warn
           # The same three nights the selection keeps, and for the same reason:
           # a unit's verdicts outlive the run that produced them.
           retention-days: 3
 
   save_council_results:
+    permissions:
+      contents: write
+      actions: read
     needs: [draw, judge]
     # A unit that died still leaves the others' work worth keeping, and a date
     # still owes whatever its tenants settle.
@@ -349,6 +355,18 @@ jobs:
         run: echo "JOB_STARTED_AT=$(date -u +%s)" >> "$GITHUB_ENV"
 
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          filter: blob:none
+          sparse-checkout: |
+            config
+            backend
+            .github
+
+      - name: Keep collection sparse and disable implicit downloads
+        run: |
+          git config index.sparse true
+          echo "GIT_NO_LAZY_FETCH=1" >> "$GITHUB_ENV"
 
       - uses: actions/setup-python@v7
         with:
@@ -358,6 +376,15 @@ jobs:
 
       - name: Install
         run: pip install -e .
+      - name: Resolve host telemetry
+        id: host_telemetry
+        env:
+          REQUESTED: ${{ inputs.host_telemetry || 'python' }}
+        run: |
+          set -euo pipefail
+          MODE=$(python backend/utilities/host_telemetry_control.py "$REQUESTED" --config-root config)
+          echo "IDHAZH_HOST_TELEMETRY_MODE=$MODE" >> "$GITHUB_ENV"
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
 
       # Every unit's output, merged into one tree. Each upload carries the date
       # and the tenant as directory levels, so two tenants' first unit land
@@ -378,15 +405,29 @@ jobs:
       # run pushing `main` would race each other, and the workflow-level
       # `concurrency` group does not serialise jobs inside a run.
       - name: Settle and publish every completed tenant output
+        if: always()
         env:
-          COUNCIL_DATES: ${{ needs.draw.outputs.dates }}
+          COUNCIL_SELECTION: ${{ needs.draw.outputs.selection }}
           COUNCIL_RUN_ID: ${{ needs.draw.outputs.run_id }}
+          COUNCIL_COMMIT: ${{ github.sha }}
+          COUNCIL_UNITS_RESULT: ${{ needs.judge.result }}
+          COUNCIL_MATRIX: ${{ needs.draw.outputs.matrix }}
+          MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
         run: |
           set -euo pipefail
-          asked=()
-          while read -r judged; do
-            asked+=(--date "$judged")
-          done < <(echo "$COUNCIL_DATES" | jq -r '.[]')
-          python backend/utilities/council_publish.py "${asked[@]}" \
-            --run-id "$COUNCIL_RUN_ID" --commit "${{ github.sha }}" \
-            --job-started-at "$JOB_STARTED_AT"
+          python backend/utilities/council_publish.py \
+            --run-id "$COUNCIL_RUN_ID" --commit "$COUNCIL_COMMIT" \
+            --job-started-at "$JOB_STARTED_AT" --units-result "$COUNCIL_UNITS_RESULT" \
+            --matrix "$COUNCIL_MATRIX"
+
+
+      # Settlement writes paused judges' trial state after the unit downloads.
+      # Keep it, and active publication receipts, even when collection fails.
+      - name: Upload final council results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: council-results-${{ needs.draw.outputs.run_id }}
+          path: backend/var/council
+          if-no-files-found: warn
+          retention-days: 3

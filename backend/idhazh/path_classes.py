@@ -53,14 +53,9 @@ DERIVED: Final[tuple[str, ...]] = (
     f"{DAY_DIR}/digest.json",
     f"{DAY_DIR}/run.json",
     "frontend/public/publication.json",
-    "frontend/public/telemetry",
     "frontend/public/assist/index",
     "frontend/public/source-health.json",
     "frontend/public/console",
-    "frontend/public/run-days",
-    "frontend/public/day-metrics",
-    "frontend/public/machine",
-    "frontend/public/run-timeline",
     "state/day-metrics",
 )
 

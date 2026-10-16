@@ -32,13 +32,12 @@ from retention._trees import (
     totals_from_shard,
 )
 
-from idhazh import config, ledger, month_partition
+from idhazh import ledger, month_partition
 from idhazh.contracts.item_health import ItemHealthRow, ItemStage
 from idhazh.contracts.item_health_summary import ItemHealthSummaryRow, percentile
 from idhazh.contracts.knobs.gardener import MonthsWindow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.retention import compact_month, month_shards, oldest_month_kept
-from idhazh.telemetry.publish import public_telemetry
 
 from ._task import declared, run_task
 
@@ -85,11 +84,10 @@ def pruned(
         today=today,
         dry_run=dry_run,
         window=full,
-        series={"full-grain": full, "public-copy": full, "aggregate": aggregate},
+        series={"full-grain": full, "aggregate": aggregate},
         period_range=period_range,
         **knobs,
     )
-    copies = f"{public_telemetry.DEFAULT_PUBLIC_ROOT.relative_to(config.REPO_ROOT).as_posix()}/"
     summaries = f"{ledger.raw_root(state, LedgerName.ITEM_HEALTH_SUMMARY).relative_to(state.parent).as_posix()}/"
     return Folded(
         folded=tuple(
@@ -102,7 +100,7 @@ def pruned(
                 }
             )
         ),
-        public_deleted=tuple(Path(p).stem for p in outcome.taken if p.startswith(copies)),
+        public_deleted=(),
         hard_deleted=tuple(Path(p).stem for p in outcome.taken if p.startswith(summaries)),
         dry_run=outcome.dry_run,
         changed=outcome.changed,
@@ -357,73 +355,6 @@ def test_an_empty_state_tree_folds_nothing_and_says_so(tmp_path: Path) -> None:
     assert (result.changed, result.folded) == (False, ())
 
 
-def a_published_tree(tmp_path: Path) -> tuple[Path, Path]:
-    """A state tree and the browser's copy of every month in it, written by the publisher."""
-    state = a_state_tree(tmp_path)
-    public = tmp_path / "frontend" / "public" / "telemetry"
-    public_telemetry.publish(
-        state_root=state,
-        public_root=public,
-        months=set(item_health_months(state)),
-    )
-    return state, public
-
-
-def test_the_browser_copy_goes_with_the_month_it_copies(tmp_path: Path) -> None:
-    """One boundary, two trees. A copy nobody can check is worse than no copy."""
-    state, public = a_published_tree(tmp_path)
-    all_months = months_back(TODAY, HISTORY_MONTHS)
-    assert len(month_shards(public, all_months)) == HISTORY_MONTHS
-
-    result = pruned(state)
-
-    assert sorted(result.public_deleted) == sorted(result.folded)
-    assert [path.stem for path in month_shards(public, all_months)] == [
-        stem for stem in all_months if stem not in result.public_deleted
-    ]
-    for stem in result.public_deleted:
-        assert not public_telemetry.shard_path(public, stem).exists()
-
-
-def test_a_copy_whose_source_is_already_gone_is_still_taken(tmp_path: Path) -> None:
-    """A published month with no ledger behind it is the one copy nobody can check."""
-    state = tmp_path / "state"
-    public = tmp_path / "frontend" / "public" / "telemetry"
-    public.mkdir(parents=True)
-    orphan = public_telemetry.shard_path(public, "2024-01")
-    orphan.write_text(",".join(public_telemetry.PUBLIC_COLUMNS) + "\n", encoding="utf-8")
-    live = public_telemetry.shard_path(public, TODAY.strftime("%Y-%m"))
-    live.write_text(",".join(public_telemetry.PUBLIC_COLUMNS) + "\n", encoding="utf-8")
-
-    result = pruned(state)
-
-    assert result.folded == (), "there was no shard to fold"
-    assert result.public_deleted == (), "the scheduled task does not discover older backlog"
-    assert result.changed is False
-    assert orphan.exists()
-    assert live.exists()
-
-
-def test_a_dry_run_names_the_copy_it_would_take_and_leaves_it(tmp_path: Path) -> None:
-    """The list a dry run prints is the list a live run removes, file for file."""
-    state, public = a_published_tree(tmp_path)
-    all_months = months_back(TODAY, HISTORY_MONTHS)
-    before = {path.name: path.read_bytes() for path in month_shards(public, all_months)}
-
-    planned = pruned(state, dry_run=True)
-    done = pruned(state)
-    assert planned.public_deleted == done.public_deleted
-    assert planned.public_deleted == done.public_deleted
-    assert planned.folded == done.folded
-    assert {path.name for path in month_shards(public, all_months)} == set(before) - {
-        f"{stem}.csv" for stem in done.public_deleted
-    }
-    for name, content in before.items():
-        copy = public / name
-        if copy.exists():
-            assert copy.read_bytes() == content, f"{name} was rewritten rather than left alone"
-
-
 def test_a_checkout_with_no_published_copies_takes_no_copy(tmp_path: Path) -> None:
     """The runner hands the task only the folders the checkout holds, and this one has no site."""
     state = a_state_tree(tmp_path)
@@ -451,7 +382,7 @@ def test_a_checkout_that_holds_no_summary_yet_still_writes_its_first(tmp_path: P
     assert summary_stems(state) == sorted(result.folded)
 
 
-def test_a_fold_that_cannot_be_read_back_leaves_the_browser_copy(
+def test_a_fold_that_cannot_be_read_back_leaves_native_rows(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Nothing is deleted on the strength of a write nobody checked, not even a copy.
@@ -460,7 +391,8 @@ def test_a_fold_that_cannot_be_read_back_leaves_the_browser_copy(
     to delete, so a summary that does not read back stops the pass before its
     first deletion - which the runner records as a pass that reached no member.
     """
-    state, public = a_published_tree(tmp_path)
+    state = a_state_tree(tmp_path)
+    before = census_files(state)
     doomed = [
         month
         for month in item_health_months(state)
@@ -479,8 +411,7 @@ def test_a_fold_that_cannot_be_read_back_leaves_the_browser_copy(
     with pytest.raises(ValueError, match="did not read back"):
         pruned(state)
 
-    assert public_telemetry.shard_path(public, doomed[0]).exists()
-    assert len(month_shards(public, months_back(TODAY, HISTORY_MONTHS))) == HISTORY_MONTHS
+    assert census_files(state) == before
 
 
 def test_a_census_the_declaration_does_not_read_is_refused_and_never_read_as_empty(

@@ -113,14 +113,20 @@ _MAJOR_FAULTS_AFTER_COMM: Final = 9
 
 #: `/proc` reports these in kilobytes.
 _KB: Final = 1024
+_PROC_READ_LIMIT_BYTES: Final = 1 << 20
+_PROC_START_TIME_AFTER_COMM: Final = 19
 
 
 def _text(path: Path) -> str | None:
-    """A file this machine may not have. Absent text, never a failed run."""
+    """A bounded proc read. Missing, denied or oversized input stays unknown."""
     try:
-        return path.read_text(encoding="utf-8", errors="replace")
+        with path.open("rb") as reading:
+            raw = reading.read(_PROC_READ_LIMIT_BYTES + 1)
     except OSError:
         return None
+    if len(raw) > _PROC_READ_LIMIT_BYTES:
+        return None
+    return raw.decode("utf-8", errors="replace")
 
 
 def _kb_keys(text: str | None, keys: tuple[str, ...]) -> dict[str, int | None]:
@@ -149,7 +155,9 @@ def _kb_keys(text: str | None, keys: tuple[str, ...]) -> dict[str, int | None]:
     return found
 
 
-def status_bytes(pid: int | None) -> dict[str, int | None]:
+def status_bytes(
+    pid: int | None, *, expected_start_ticks: int | None = None
+) -> dict[str, int | None]:
     """What one process holds now, its high-water mark and its anonymous part, from one open.
 
     Three lines of one file, read together because they have to describe one
@@ -160,9 +168,15 @@ def status_bytes(pid: int | None) -> dict[str, int | None]:
     unknowns and never raises. That is the ordinary path on every machine this
     project is written on.
     """
-    if pid is None:
+    if pid is None or (
+        expected_start_ticks is not None
+        and process_start_ticks(pid) != expected_start_ticks
+    ):
         return dict.fromkeys(STATUS_KEYS)
-    return _kb_keys(_text(PROC / str(pid) / "status"), STATUS_KEYS)
+    found = _kb_keys(_text(PROC / str(pid) / "status"), STATUS_KEYS)
+    if expected_start_ticks is not None and process_start_ticks(pid) != expected_start_ticks:
+        return dict.fromkeys(STATUS_KEYS)
+    return found
 
 
 def load_1m() -> float | None:
@@ -180,7 +194,7 @@ def load_1m() -> float | None:
 
 
 def cpu_ticks(text: str | None) -> dict[str, int] | None:
-    """The aggregate `cpu` line of `/proc/stat`, by field name.
+    """Read the aggregate `cpu` counters; user, nice, system and idle are required.
 
     Reads the line out of whatever it is handed, so a whole capture of the file
     with the per-processor lines still attached is the same fact as the one line
@@ -194,11 +208,13 @@ def cpu_ticks(text: str | None) -> dict[str, int] | None:
         return None
     for line in text.splitlines():
         cells = line.split()
-        if cells[:1] != ["cpu"] or len(cells) < 2:
+        if cells[:1] != ["cpu"]:
             continue
+        if len(cells) < 5:
+            return None
         ticks: dict[str, int] = {}
         for name, raw in zip(_CPU_FIELDS, cells[1:], strict=False):
-            if not raw.isdigit():
+            if not raw.isascii() or not raw.isdigit():
                 return None
             ticks[name] = int(raw)
         return ticks
@@ -240,24 +256,58 @@ def cpu_shares_between(at_start: str | None, at_end: str | None) -> CpuShares | 
     end = cpu_ticks(at_end)
     if start is None or end is None:
         return None
-    totals = []
-    idles = []
-    for ticks in (start, end):
-        totals.append(sum(ticks.values()) - sum(ticks.get(n, 0) for n in _CPU_DOUBLE_COUNTED))
-        idles.append(sum(ticks.get(n, 0) for n in _CPU_IDLE))
-    available = totals[1] - totals[0]
+    common = start.keys() & end.keys()
+    deltas = {name: end[name] - start[name] for name in common}
+    if any(delta < 0 for delta in deltas.values()):
+        return None
+    available = sum(deltas.values()) - sum(
+        deltas[name] for name in _CPU_DOUBLE_COUNTED if name in deltas
+    )
     if available <= 0:
         return None
-    accounted = _CPU_STOLEN in start and _CPU_STOLEN in end
-    stolen = end.get(_CPU_STOLEN, 0) - start.get(_CPU_STOLEN, 0)
-    busy = available - (idles[1] - idles[0]) - stolen
+    idle = sum(deltas[name] for name in _CPU_IDLE if name in deltas)
+    accounted = _CPU_STOLEN in deltas
+    stolen = deltas.get(_CPU_STOLEN, 0)
+    busy = available - idle - stolen
+    if idle > available or stolen > available or busy < 0 or busy > available:
+        return None
     return CpuShares(
         busy_pct=round(100 * busy / available, 2),
         steal_pct=round(100 * stolen / available, 2) if accounted else None,
     )
 
 
-def major_faults(pid: int | None) -> int | None:
+def _process_counters(pid: int, text: str | None) -> tuple[int, int] | None:
+    """The start-time and major-fault counters for the named proc entry."""
+    if text is None:
+        return None
+    command_end = text.rfind(")")
+    if command_end < 0:
+        return None
+    pid_text, opening, _ = text.partition(" ")
+    if not opening or not pid_text.isascii() or not pid_text.isdigit() or int(pid_text) != pid:
+        return None
+    cells = text[command_end + 1 :].split()
+    if len(cells) <= _PROC_START_TIME_AFTER_COMM:
+        return None
+    faults = cells[_MAJOR_FAULTS_AFTER_COMM]
+    started = cells[_PROC_START_TIME_AFTER_COMM]
+    if not faults.isascii() or not faults.isdigit():
+        return None
+    if not started.isascii() or not started.isdigit():
+        return None
+    return int(started), int(faults)
+
+
+def process_start_ticks(pid: int | None) -> int | None:
+    """Read the start tick only when `/proc` confirms the requested PID."""
+    if pid is None or pid <= 0:
+        return None
+    counters = _process_counters(pid, _text(PROC / str(pid) / "stat"))
+    return None if counters is None else counters[0]
+
+
+def major_faults(pid: int | None, *, expected_start_ticks: int | None = None) -> int | None:
     """How often one process has waited for a page to come off disk, since it started.
 
     A minor fault costs a page-table entry. A major one costs a disk read, and
@@ -281,12 +331,12 @@ def major_faults(pid: int | None) -> int | None:
     text = _text(PROC / str(pid) / "stat")
     if text is None:
         return None
-    _, bracketed, rest = text.rpartition(")")
-    cells = rest.split() if bracketed else []
-    if len(cells) <= _MAJOR_FAULTS_AFTER_COMM:
+    counters = _process_counters(pid, text)
+    if counters is None or (
+        expected_start_ticks is not None and counters[0] != expected_start_ticks
+    ):
         return None
-    count = cells[_MAJOR_FAULTS_AFTER_COMM]
-    return int(count) if count.isdigit() else None
+    return counters[1]
 
 
 def _faults_between(at_open: int | None, at_close: int | None) -> int | None:
@@ -338,34 +388,6 @@ def runner_name(environ: dict[str, str] | None = None) -> str | None:
     """
     env = os.environ if environ is None else environ
     return env.get("RUNNER_NAME", "").strip() or None
-
-
-def llama_server_pid(comm: str = "llama-server") -> int | None:
-    """The inference server's process id, found by asking the kernel rather than being told.
-
-    The server is started by the workflow shell and the pipeline never learns
-    its pid, so the alternative is a new environment variable set in one place
-    and read in another - a contract between a shell script and a stage, with
-    nothing to check it (Guardrail #3).
-
-    **The scan is bounded by the process table and not by anything the
-    repository accumulates** (Guardrail #12): a runner holds a few hundred
-    entries, each one a short file read, and the answer is taken once per shard.
-    Nothing here is retried and nothing raises - a machine with no `/proc`
-    returns nothing and the two RSS cells record empty, which is what a
-    developer box already does.
-    """
-    try:
-        entries = sorted(PROC.iterdir())
-    except OSError:
-        return None
-    for entry in entries:
-        if not entry.name.isdigit():
-            continue
-        name = _text(entry / "comm")
-        if name is not None and name.strip() == comm:
-            return int(entry.name)
-    return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -453,11 +475,20 @@ class HostReading:
     swap_total_bytes: int | None
 
 
-def read_now(*, server_pid: int | None = None) -> HostReading:
+def read_now(
+    *,
+    server_pid: int | None = None,
+    server_start_ticks: int | None = None,
+    memory_profiling_enabled: bool = True,
+) -> HostReading:
     """Every point-in-time reading, taken together so they describe one instant."""
-    machine = meminfo_bytes()
-    server = status_bytes(server_pid)
-    ours = status_bytes(os.getpid())
+    machine = meminfo_bytes() if memory_profiling_enabled else dict.fromkeys(MEMINFO_KEYS)
+    server = (
+        status_bytes(server_pid, expected_start_ticks=server_start_ticks)
+        if memory_profiling_enabled and server_start_ticks is not None
+        else dict.fromkeys(STATUS_KEYS)
+    )
+    ours = status_bytes(os.getpid()) if memory_profiling_enabled else dict.fromkeys(STATUS_KEYS)
     return HostReading(
         cpu_stat=_text(PROC_STAT),
         load_1m=load_1m(),
@@ -556,13 +587,19 @@ class Watch:
 
     __slots__ = (
         "_busy",
+        "_cells",
+        "_close_lock",
+        "_closed",
         "_faults_at_open",
         "_first",
         "_headroom",
         "_interval",
         "_last",
+        "_memory",
         "_on_tick",
         "_pid",
+        "_sampling_lock",
+        "_start_ticks",
         "_stop",
         "_thread",
     )
@@ -573,21 +610,40 @@ class Watch:
         interval_s: float,
         server_pid: int | None = None,
         on_tick: Callable[[float], None] | None = None,
+        memory_profiling_enabled: bool = True,
     ) -> None:
         self._interval = interval_s
         self._pid = server_pid
         self._on_tick = on_tick
+        self._memory = memory_profiling_enabled
+        self._start_ticks = (
+            process_start_ticks(server_pid)
+            if memory_profiling_enabled and server_pid is not None
+            else None
+        )
         self._busy: list[float] = []
         self._headroom: list[int] = []
-        self._first = read_now(server_pid=server_pid)
+        self._first = read_now(
+            server_pid=server_pid,
+            server_start_ticks=self._start_ticks,
+            memory_profiling_enabled=self._memory,
+        )
         # A counter, not a gauge, so the item's total is the difference across
         # its two ends and the sampler's interval cannot change it. It stays
         # right with the sampling thread switched off.
-        self._faults_at_open = major_faults(server_pid)
+        self._faults_at_open = (
+            major_faults(server_pid, expected_start_ticks=self._start_ticks)
+            if self._memory and self._start_ticks is not None and server_pid is not None
+            else None
+        )
         self._note_headroom(self._first)
         self._last = self._first
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
+        self._close_lock = threading.Lock()
+        self._sampling_lock = threading.Lock()
+        self._closed = False
+        self._cells: HostCells | None = None
 
     def _note_headroom(self, reading: HostReading) -> None:
         """Keep what the kernel said was left, so the item's floor is this item's.
@@ -600,6 +656,8 @@ class Watch:
             self._headroom.append(reading.mem_available_bytes)
 
     def __enter__(self) -> Watch:
+        if self._closed:
+            return self
         if self._interval > 0:
             self._thread = threading.Thread(target=self._sample, name="host-watch", daemon=True)
             self._thread.start()
@@ -612,15 +670,22 @@ class Watch:
         opened = time.monotonic()
         previous = self._first
         while not self._stop.wait(self._interval):
-            now = read_now(server_pid=self._pid)
-            shares = cpu_shares_between(previous.cpu_stat, now.cpu_stat)
-            if shares is not None:
-                self._busy.append(shares.busy_pct)
-            self._note_headroom(now)
-            self._last = now
-            previous = now
-            if self._on_tick is not None:
-                self._on_tick(round(time.monotonic() - opened, 1))
+            with self._sampling_lock:
+                if self._closed or self._stop.is_set():
+                    return
+                now = read_now(
+                    server_pid=self._pid,
+                    server_start_ticks=self._start_ticks,
+                    memory_profiling_enabled=self._memory,
+                )
+                shares = cpu_shares_between(previous.cpu_stat, now.cpu_stat)
+                if shares is not None:
+                    self._busy.append(shares.busy_pct)
+                self._note_headroom(now)
+                self._last = now
+                previous = now
+                if self._on_tick is not None:
+                    self._on_tick(round(time.monotonic() - opened, 1))
 
     def close(self) -> HostCells:
         """Stop sampling and return what the machine did, as cells.
@@ -630,36 +695,50 @@ class Watch:
         ticks over available ticks across the item, and a mean of ratios taken
         over uneven intervals is not.
         """
-        self._stop.set()
-        if self._thread is not None:
-            self._thread.join(timeout=max(self._interval * 2, 1.0))
-            self._thread = None
-        end = read_now(server_pid=self._pid)
-        self._last = end
-        self._note_headroom(end)
-        shares = cpu_shares_between(self._first.cpu_stat, end.cpu_stat)
-        seen = [*self._busy, *([] if shares is None else [shares.busy_pct])]
-        peaks = [
-            value
-            for value in (self._first.llama_rss_peak_bytes, end.llama_rss_peak_bytes)
-            if value is not None
-        ]
-        return HostCells(
-            cpu_busy_pct=None if shares is None else shares.busy_pct,
-            cpu_busy_max=max(seen) if seen else None,
-            cpu_busy_min=min(seen) if seen else None,
-            cpu_steal_pct=None if shares is None else shares.steal_pct,
-            load_1m=end.load_1m,
-            llama_rss_bytes=end.llama_rss_bytes,
-            llama_rss_anon_bytes=end.llama_rss_anon_bytes,
-            llama_rss_peak_bytes=max(peaks) if peaks else None,
-            llama_major_faults=_faults_between(self._faults_at_open, major_faults(self._pid)),
-            python_rss_bytes=end.python_rss_bytes,
-            python_rss_anon_bytes=end.python_rss_anon_bytes,
-            os_mem_available_bytes=end.mem_available_bytes,
-            os_mem_total_bytes=end.mem_total_bytes,
-            os_mem_cached_bytes=end.mem_cached_bytes,
-            os_swap_free_bytes=end.swap_free_bytes,
-            os_swap_total_bytes=end.swap_total_bytes,
-            os_mem_available_min_bytes=min(self._headroom) if self._headroom else None,
-        )
+        with self._close_lock:
+            if self._cells is not None:
+                return self._cells
+            self._stop.set()
+            with self._sampling_lock:
+                self._closed = True
+            if self._thread is not None:
+                self._thread.join()
+            end = read_now(
+                server_pid=self._pid,
+                server_start_ticks=self._start_ticks,
+                memory_profiling_enabled=self._memory,
+            )
+            self._last = end
+            self._note_headroom(end)
+            shares = cpu_shares_between(self._first.cpu_stat, end.cpu_stat)
+            seen = [*self._busy, *([] if shares is None else [shares.busy_pct])]
+            peaks = [
+                value
+                for value in (self._first.llama_rss_peak_bytes, end.llama_rss_peak_bytes)
+                if value is not None
+            ]
+            self._cells = HostCells(
+                cpu_busy_pct=None if shares is None else shares.busy_pct,
+                cpu_busy_max=max(seen) if seen else None,
+                cpu_busy_min=min(seen) if seen else None,
+                cpu_steal_pct=None if shares is None else shares.steal_pct,
+                load_1m=end.load_1m,
+                llama_rss_bytes=end.llama_rss_bytes,
+                llama_rss_anon_bytes=end.llama_rss_anon_bytes,
+                llama_rss_peak_bytes=max(peaks) if peaks else None,
+                llama_major_faults=_faults_between(
+                    self._faults_at_open,
+                    major_faults(self._pid, expected_start_ticks=self._start_ticks)
+                    if self._memory and self._pid is not None and self._start_ticks is not None
+                    else None,
+                ),
+                python_rss_bytes=end.python_rss_bytes,
+                python_rss_anon_bytes=end.python_rss_anon_bytes,
+                os_mem_available_bytes=end.mem_available_bytes,
+                os_mem_total_bytes=end.mem_total_bytes,
+                os_mem_cached_bytes=end.mem_cached_bytes,
+                os_swap_free_bytes=end.swap_free_bytes,
+                os_swap_total_bytes=end.swap_total_bytes,
+                os_mem_available_min_bytes=min(self._headroom) if self._headroom else None,
+            )
+            return self._cells

@@ -1,6 +1,6 @@
 # What the quality and source panels draw
 
-**Last Updated**: 2026-10-07
+**Last Updated**: 2026-10-12
 
 The panels that report what the model wrote and how the sources behaved: the
 eleven measures on `/console/model/`, the two distributions under them, the
@@ -12,10 +12,11 @@ The chart rules these obey are
 What each panel is and where its data comes from is
 [../../architecture/publishing/console.md](../../architecture/publishing/console.md).
 
-**Quality is a table, never a line.** A line invites a trend across days whose
-articles have nothing in common. The one thing on these routes that draws a
-spread is the compression chart, because a spread is a property of a day's
-article mix and a single number cannot carry it.
+**Daily quality figures describe each day's own articles, not a controlled
+cohort.** Cards and their daily disclosure retain approved private build-time
+inputs. The native writing, checking and summary-length panels instead ask their
+declared browser queries. Their distributions describe the recorded mix; a
+single middle cannot carry its spread.
 
 ## Eleven measures are eleven cards, and the rows are one control away
 
@@ -31,9 +32,8 @@ protected and `frontend/tests/console-model.spec.ts` compares the rendered
 labels byte for byte against the page's own `COLUMNS`, so a paraphrase fails the
 build rather than a review; **the newest day's figure**, with which day printed
 once above the grid rather than eleven times; **a line over the window**, drawn
-as markup by `Sparkline`, because eleven engine-backed sparklines would be eleven
-chart instances on a page that renders complete without one; **the change across
-that line**, painted from the measure's own declared polarity; **what it is out
+as markup by `Sparkline`, so each card's line needs no chart instance;
+**the change across that line**, painted from the measure's own declared polarity; **what it is out
 of**, for the six quality figures, because a card has no row to put the
 denominator one column away; and **its sentence**, in the body where there is
 room.
@@ -101,37 +101,37 @@ summary, with a cumulative curve on a second axis and a rule at the median and
 at the 95th, each printing its own value.
 
 A median answers "how long does one take" and refuses "how bad does it get".
-Measured 2026-08-31 over the 3,500 timed summaries in `state/item-health/`, those
-are different questions by a factor of 2.5: the median is **122 s** and the 95th
-is **300 s**, with a slowest of 702 s. The second figure is the one that decides
-whether a shard fits `run.shard_timeout_minutes`, and no single number on the
-page was carrying it.
+Both ends of the distribution matter when deciding whether work fits the
+configured shard timeout.
 
-- **The bars double.** Writing times run from 0.3 s to 702 s, and on a linear
- axis every bar but one is a hairline against the left edge. Each bar is one
- doubling of the clock, so a bar is the same width wherever it sits. The lowest
- bar has no lower edge worth a label and carries the console's own `<1`.
+- **The bars double.** Each bar is one doubling of the clock, so a bar is the same
+ width wherever it sits. The lowest bar has no lower edge worth a label and
+ carries the console's own `<1`.
 - **The two rules are taken over the values, never off a bar.** A percentile read
  out of a bin is a guess at where inside a doubling it fell, and these are the
  two figures somebody quotes.
 - **Leading and trailing empty bars are dropped; a gap in the middle stays.** An
  empty span between two occupied bars is the distribution saying nothing landed
- there, which over the committed ledger is real and visible: one summary
- finished in 0.3 s and the next fastest took 16 s.
+ there, not a reason to join the occupied bands.
 
-**`score_ms` lives under the same heading, as two figures and no chart.** The
-scorer reads a summary the model has already finished, so it is not a fourth
-thing the run is held up by and must not be drawn as a fourth line on a
-stage-timing chart. Measured 2026-08-31 over the 3,534 timed rows of
-`state/scores.csv`, the middle is **2,463 ms** and the slowest one in twenty is
-**14,491 ms** - printed as 2 s and 14 s, because the console prints no decimal.
-Ten committed rows carry the zero the column defaulted to before it was written,
-and they are counted as untimed rather than as instant.
+**Writing and checking have separate native distributions.** The declared
+`writeCostQuery` reads `summarize_ms` from item-health; `scoreCostQuery` reads
+`score_ms` from summary-quality-evals. `model/cost.ts` and `TimeHistogram.svelte`
+derive and draw each one after the browser read. Checking happens after writing
+and is not another model-writing clock. Nonpositive or missing readings remain
+counted as untimed, not instant.
 
 ## Compression is three marks a run, and the band prints its bounds
 
 `How long the summaries came out` draws one column per run: the shortest summary
 it wrote, the middle one and the longest.
+
+The declared `summaryLengthQuery` reads the score ledger in the browser.
+`model/summary-length.ts` calls `model/work.ts::runLengths` for those endpoints
+and the requested bounds. Its native middle is the upper-middle recorded length;
+recorded zero remains a length. A run with no measured summary length has no
+column. Different runs remain separate even when they name the same article.
+Recorded compression ratios are a separate measure, not a distance from a band.
 
 **A mark per summary cannot be drawn, and the block is the reason.** Thousands of
 marks in one colour render their dense middle as a solid area, so the only marks
@@ -145,10 +145,12 @@ smallest thing on this page that a change can be attributed to.
 
 **The band's bounds print as numbers beside the chart.** A shaded region nobody
 can read a bound off is a decoration, and this one is a setting somebody chose.
-The band drawn behind each column is what that run's own articles were asked
-for, read through each article's own length rather than off `summarize.bands`
-directly - an article's length picks its band, so a run of short pieces is asked
-for less than a run of long ones.
+The band drawn behind each column uses the configured ladder through each
+article's measured pre-cap length, falling back to surviving length only when
+pre-cap length is absent. The highest rung that length reaches supplies its
+requested bounds. A missing ladder or an unreached first rung leaves the ask
+unknown, not zero. Those bounds describe the requests, not daily inside/short/
+long bins or a distance-ranked outlier list.
 
 ## A swap comparison carries direction in the arrow, and a verdict only where the measure has one
 

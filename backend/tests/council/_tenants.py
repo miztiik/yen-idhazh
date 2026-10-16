@@ -8,7 +8,7 @@ these tests ask is what the venue handed over rather than what a judge did with
 it.
 
 A package on disk rather than an object passed in, because the thing under test
-is the search: an object handed straight to the resolver would skip the one step
+is the import: an object handed straight to the resolver would skip the one step
 that can go wrong.
 """
 
@@ -21,7 +21,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Final
 
-#: What a tenant module binds, and what the search reads off it.
+#: What a tenant module binds, and what the resolver reads off it.
 TENANT_SOURCE: Final = '''
 """One tenant, declared the way a judge declares itself."""
 
@@ -49,8 +49,10 @@ class PaperTenant:
     ran: list[tuple[str, str, int, int]] = field(default_factory=list)
     prepared: list[str] = field(default_factory=list)
     settled: list[str] = field(default_factory=list)
+    asked: list[tuple[DateStamp, ...]] = field(default_factory=list)
 
     def nights_outstanding(self, *, window: tuple[DateStamp, ...]) -> tuple[DateStamp, ...]:
+        self.asked.append(window)
         return tuple(window)
 
     def prepare(self, *, date: DateStamp, run_id: RunId) -> ShardResult:
@@ -85,10 +87,8 @@ class PaperTenant:
 TENANT = PaperTenant()
 '''
 
-#: A package that declares no tenant and refuses to be imported at all. The
-#: search is supposed to walk past it on the listing, so importing it is the
-#: failure this makes visible.
-UNIMPORTABLE_SOURCE: Final = 'raise RuntimeError("the search imported a package with no tenant")\n'
+#: Importing any unrequested neighbor is the failure this makes visible.
+UNIMPORTABLE_SOURCE: Final = 'raise RuntimeError("an unrequested package was imported")\n'
 
 #: A tenant whose units end the way a night under test needs them to.
 #:
@@ -239,6 +239,7 @@ def a_venue(
     package: str,
     slugs: Mapping[str, tuple[int, tuple[str, ...]]],
     quiet_neighbour: str = "",
+    poisoned_neighbour: str = "",
     source: str = TENANT_SOURCE,
 ) -> None:
     """Write a package of tenants under `root`, one subpackage a slug.
@@ -246,6 +247,7 @@ def a_venue(
     `slugs` maps a slug to its shard width and the ledger paths it commits.
     `quiet_neighbour`, when named, is a subpackage that declares no tenant and
     raises if anything imports it.
+    `poisoned_neighbour` declares a tenant module that raises on import.
     """
     (root / package).mkdir(parents=True, exist_ok=True)
     (root / package / "__init__.py").write_text("", encoding="utf-8", newline="\n")
@@ -264,6 +266,13 @@ def a_venue(
         neighbour = root / package / quiet_neighbour
         neighbour.mkdir(parents=True, exist_ok=True)
         (neighbour / "__init__.py").write_text(
+            UNIMPORTABLE_SOURCE, encoding="utf-8", newline="\n"
+        )
+    if poisoned_neighbour:
+        neighbour = root / package / poisoned_neighbour.replace("-", "_")
+        neighbour.mkdir(parents=True, exist_ok=True)
+        (neighbour / "__init__.py").write_text("", encoding="utf-8", newline="\n")
+        (neighbour / "tenant.py").write_text(
             UNIMPORTABLE_SOURCE, encoding="utf-8", newline="\n"
         )
 

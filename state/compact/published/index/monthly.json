@@ -1,6 +1,8 @@
 {
-  "entries": [],
+  "entries": [
+    {"bytes": 182374,"covers": "2026-08","lost_days": [],"rows": 4062,"set_aside": 0,"state": "packed"}
+  ],
   "ledger": "published",
   "period": "monthly",
-  "version": "2026-10-01T16:50"
+  "version": "2026-10-07"
 }

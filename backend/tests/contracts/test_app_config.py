@@ -22,7 +22,6 @@ from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.knobs import placement
 from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.console import ConsoleConfig
-from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.knobs.ledger import LedgerConfig
 from idhazh.contracts.knobs.model_server import ModelServerConfig, is_loopback, resolve_base_url
@@ -144,8 +143,7 @@ def test_a_fresh_clone_runs_on_the_defaults() -> None:
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
     minimal = AppConfig.model_validate({})
     assert minimal.models_file == committed.models_file, (
-        "the default names the committed file, or a fresh clone reads a model "
-        "nobody put there"
+        "the default names the committed file, or a fresh clone reads a model nobody put there"
     )
     assert (CONFIG_DIR / minimal.models_file).is_file()
     assert minimal.run.safety_ceiling_per_run == committed.run.safety_ceiling_per_run
@@ -1018,9 +1016,7 @@ def test_the_side_a_figure_sits_on_is_a_knob_the_frontend_agrees_with() -> None:
     assert mirrored is not None, "the frontend dropped its visual_side default"
     assert mirrored.group(1) == UiConfig().visual_side.value
 
-    card = read_text(
-        REPO_ROOT / "frontend" / "src" / "lib" / "components" / "DigestItem.svelte"
-    )
+    card = read_text(REPO_ROOT / "frontend" / "src" / "lib" / "components" / "DigestItem.svelte")
     assert card.index("<ItemVisual") > card.index("data-item-summary"), (
         "the card draws its figure before the summary, so `trailing` is the wrong default"
     )
@@ -1129,44 +1125,33 @@ def test_a_fresh_clone_measures_itself_and_the_committed_config_agrees() -> None
 
     assert committed.observability.model_dump() == fresh.observability.model_dump()
     assert fresh.observability.evaluation_enabled
-    assert fresh.observability.telemetry_publish
     assert fresh.observability.tracing_enabled
 
 
 def test_the_item_health_census_is_not_switchable() -> None:
     """The denominator under every rate this project publishes has no off switch.
 
-    Turning the census off would not thin a measurement, it would make every
-    other measurement unreadable - a failure rate with no denominator beside it
-    is the exact defect the census exists to prevent. The guard is the switch
-    list itself, so adding a fifth boolean fails here and has to be argued for.
-
-    `tracing_enabled` was the third, added 2026-08-30 and turned on by default
-    2026-09-06. The argument it had to make: it switches an instrument nothing
-    else divides by. No page reads a span, no gate consults one, and every rate
-    the console prints keeps its denominator whether tracing is on or off - which
-    is not true of any of the other three in the same way, and is why it is
-    allowed to be a switch at all.
-
-    `host_fingerprint` is the fourth, added 2026-09-16, and it makes the same
-    argument. It records what silicon a job drew; nothing divides by it, no
-    published page reads it, and every rate keeps its denominator with it off.
-    What it costs to switch off is comparability rather than a measurement: a
-    throughput figure taken with no fingerprint beside it cannot be set against
-    another run's, because the machine moved 3.7x between draws and nothing says
-    which one produced the number.
+    Optional instruments can be disabled without removing item-health rows.
+    The explicit switch list keeps the census from gaining an off switch.
     """
     switches = {
-        name
-        for name, field in ObservabilityConfig.model_fields.items()
-        if field.annotation is bool
+        name for name, field in ObservabilityConfig.model_fields.items() if field.annotation is bool
     }
     assert switches == {
         "evaluation_enabled",
-        "telemetry_publish",
         "tracing_enabled",
         "host_fingerprint",
+        "host_telemetry_enabled",
+        "memory_profiling_enabled",
+        "host_fingerprint_frequency_enabled",
     }
+    assert ObservabilityConfig().memory_profiling_enabled is True
+    assert (
+        AppConfig.from_json(
+            read_text(APP_CONFIG_EVERY_KNOB_DIFFERS)
+        ).observability.memory_profiling_enabled
+        is False
+    )
     assert "census" in (ObservabilityConfig.__doc__ or "")
 
 
@@ -1194,16 +1179,13 @@ def test_every_published_window_outlives_the_shards_a_console_read_selects() -> 
     assert shards == 14, "a 366-day read reaches fourteen month shards, not thirteen"
     assert 13 * 30 > window, "the retired check passed 13, which is the whole point"
 
-    fresh = ObservabilityConfig()
-    assert set(fresh.full_grain_months()) == {
+    for name in (
         "public_run_days_keep_months",
         "public_day_metrics_keep_months",
         "public_machine_keep_months",
-    }
-    for name, months in fresh.full_grain_months().items():
-        assert months >= shards, f"observability.{name} is shorter than a console read"
-        with pytest.raises(ValidationError, match=name):
-            AppConfig.model_validate({"observability": {name: months - 1}})
+    ):
+        with pytest.raises(ValidationError, match="Extra inputs"):
+            AppConfig.model_validate({"observability": {name: 14}})
 
 
 def test_a_config_with_no_logging_block_reads_every_flag_at_its_documented_default() -> None:
@@ -1275,11 +1257,7 @@ def test_every_flag_but_the_permanent_one_names_the_reading_that_retires_it() ->
     every one of them is measured over. `item_lines` is the declared exception
     and has to say so; `level` is not a flag and carries no condition either.
     """
-    flags = {
-        name
-        for name, field in LoggingConfig.model_fields.items()
-        if name != "level"
-    }
+    flags = {name for name, field in LoggingConfig.model_fields.items() if name != "level"}
     assert flags == {
         "item_lines",
         "stage_lines",
@@ -1499,8 +1477,7 @@ def test_the_committed_defaults_build_a_record_the_contract_accepts() -> None:
         band_high=knobs.band_high,
         bin_width=knobs.bin_width,
         slots=tuple(
-            ScoreSlot(bin_low=round(knobs.band_low + i * knobs.bin_width, 3))
-            for i in range(slots)
+            ScoreSlot(bin_low=round(knobs.band_low + i * knobs.bin_width, 3)) for i in range(slots)
         ),
     )
 
@@ -1550,49 +1527,9 @@ def test_a_config_with_no_judge_in_it_validates_and_stays_that_way() -> None:
     none_at_all = AppConfig.model_validate({})
 
     assert none_at_all.assemble.same_story.adaptive_dedup_threshold is None
-    assert none_at_all.council.shard_timeout_minutes >= 1
-    assert none_at_all.council.shards >= 1
 
     committed = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
     del committed["assemble"]["same_story"]["adaptive_dedup_threshold"]
-    committed["council"]["tenants"] = []
     without_a_judge = AppConfig.model_validate(committed)
 
     assert without_a_judge.assemble.same_story.adaptive_dedup_threshold is None
-    assert without_a_judge.council == AppConfig.model_validate({}).council
-
-
-def test_the_whole_range_of_the_repair_cap_loads() -> None:
-    """A knob whose top half will not load is a lying bound.
-
-    Dates are a PARALLEL axis - one job a date, each under its own
-    `shard_timeout_minutes` - so nothing multiplies a per-shard time budget by
-    this number. A check that did would refuse a config the knob's own bound
-    admits, and would be comparing parallel work against a per-job clock.
-    """
-    field = CouncilConfig.model_fields["repair_dates_a_night"]
-    lowest = next(bound.ge for bound in field.metadata if hasattr(bound, "ge"))
-    highest = next(bound.le for bound in field.metadata if hasattr(bound, "le"))
-
-    for value in range(lowest, highest + 1):
-        loaded = AppConfig.model_validate({"council": {"repair_dates_a_night": value}})
-        assert loaded.council.repair_dates_a_night == value
-
-
-def test_the_council_carries_its_own_window_its_floor_and_its_cap() -> None:
-    """Three knobs the venue owns, because all three price a runner.
-
-    What counts as behind is the tenant's - only it knows what it has read - but
-    how far back the council asks, how far back it may reach at all, and how
-    many older dates one night repairs are the venue's, because each one is
-    another job a tenant a shard.
-    """
-    committed = AppConfig.model_validate(json.loads(read_text(CONFIG_DIR / "idhazh.json"))).council
-    fresh = AppConfig.model_validate({}).council
-
-    assert committed.repair_window_nights == fresh.repair_window_nights
-    assert committed.first_night == fresh.first_night
-    assert committed.repair_dates_a_night == fresh.repair_dates_a_night
-    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", committed.first_night), (
-        "the floor is a date the window arithmetic can read"
-    )

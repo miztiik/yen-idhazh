@@ -194,12 +194,15 @@ def _settings() -> config.Settings:
     return config.load(CONFIG_DIR)
 
 
-def _settings_flushing_every(pairs: int) -> config.Settings:
+def _settings_flushing_every(root: Path, pairs: int) -> config.Settings:
     """The committed settings with one knob moved, so the cadence is read and not assumed."""
     settings = _settings()
-    app = settings.app.model_copy(deep=True)
-    app.assemble.same_story.judging_knobs().flush_every_pairs = pairs
-    return dataclasses.replace(settings, app=app)
+    target = root / "judges" / "content-similarity-judge.json"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    raw = json.loads(read_text(CONFIG_DIR / "judges" / "content-similarity-judge.json"))
+    raw["flush_every_pairs"] = pairs
+    target.write_text(json.dumps(raw), encoding="utf-8", newline="\n")
+    return dataclasses.replace(settings, config_dir=root)
 
 
 def _settings_judging_behind_a_thinking_span() -> config.Settings:
@@ -651,7 +654,9 @@ def test_the_decode_is_sent_at_the_judging_knob_and_not_the_entry() -> None:
     this fails rather than passes by coincidence if the wiring is dropped.
     """
     settings = _settings()
-    tuning = settings.app.assemble.same_story.judging_knobs()
+    from idhazh.content_similarity_judge import settings as judge_settings
+
+    tuning = judge_settings.load(settings.config_dir)
     day = _a_day()
     with JudgeServer(_reply("two-events")) as server:
         judge.judge_pair(
@@ -1325,7 +1330,7 @@ def test_a_shard_that_dies_mid_draw_keeps_every_pair_it_had_already_judged(
     assert [row.pair_key for row in _rows(every_pair)] == [drawn[0].pair_key]
 
     every_second = judge_until_the_reply_goes_wrong(
-        tmp_path / "every-second-pair", _settings_flushing_every(2)
+        tmp_path / "every-second-pair", _settings_flushing_every(tmp_path / "config", 2)
     )
     assert not every_second.exists(), "the cadence was ignored and every pair was written"
 
@@ -1345,9 +1350,9 @@ def test_the_shard_stops_on_the_instant_the_councils_own_clocks_describe(
     root = _a_day_on_disk(tmp_path, day)
     config_dir = tmp_path / "config"
     shutil.copytree(CONFIG_DIR, config_dir)
-    raw = json.loads(read_text(config_dir / "idhazh.json"))
-    raw["council"]["shard_wrap_up_minutes"] = raw["council"]["shard_timeout_minutes"]
-    (config_dir / "idhazh.json").write_text(
+    raw = json.loads(read_text(config_dir / "llm_council.json"))
+    raw["shard_wrap_up_minutes"] = raw["shard_timeout_minutes"]
+    (config_dir / "llm_council.json").write_text(
         json.dumps(raw, indent=2), encoding="utf-8", newline="\n"
     )
     settings = config.load(config_dir)
@@ -1369,7 +1374,7 @@ def test_the_shard_stops_on_the_instant_the_councils_own_clocks_describe(
             digest_root=root,
             draw_path=_a_draw(judge_root / day.date),
             verdict_path=_a_verdict_file(judge_root / day.date, shard=0),
-            deadline=compute_shard_deadline(settings.app.council, started=time.monotonic()),
+            deadline=compute_shard_deadline(settings.council, started=time.monotonic()),
             base_url=server.base_url,
         )
         assert server.decodes == [], "the shard judged its pair, so no deadline reached it"

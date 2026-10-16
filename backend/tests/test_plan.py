@@ -57,6 +57,7 @@ from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.seen import PublishedRow
 from idhazh.contracts.sources import FeedDef, SalienceFeedDef, Sources
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceTier, VerticalDef
+from idhazh.fan_out import shard_count
 from idhazh.stages import common
 from idhazh.stages.common import Fetcher, shard_of
 from idhazh.stages.plan import RETIRED_DETAIL, _within_ceiling, stage_plan
@@ -263,6 +264,7 @@ def plan(
     source_share: float | None = None,
     cap: int | None = None,
     article_limit: int | None = None,
+    shards: int | None = None,
 ) -> RunPlan:
     settings = settings_for(feeds, salience=salience, verticals=verticals, retired=retired)
     if safety_ceiling is not None:
@@ -323,6 +325,7 @@ def plan(
         state_dir=state if state is not None else Path(tempfile.mkdtemp()),
         cap=cap,
         article_limit=article_limit,
+        shards=shards,
     )
 
 
@@ -340,6 +343,22 @@ def test_a_healthy_feed_is_read_and_its_entries_are_planned() -> None:
     assert built.verticals[0].id == "ai"
     assert titles(built)[0] == "Example Lab releases a smaller model", (
         "the story three feeds carried leads the day"
+    )
+
+
+def test_the_plan_records_an_operator_shard_count_even_when_it_exceeds_the_derivation() -> None:
+    built = plan([LAB, TRADE, COMMUNITY], article_limit=1, shards=8)
+    derived = shard_count(len(built.items), run=config.load(CONFIG_DIR).app.run)
+
+    assert derived < 8
+    assert built.shards == 8
+
+
+def test_the_plan_derives_its_shard_count_from_its_final_items() -> None:
+    built = plan([LAB, TRADE, COMMUNITY], article_limit=1)
+
+    assert built.shards == shard_count(
+        len(built.items), run=config.load(CONFIG_DIR).app.run
     )
 
 
@@ -707,6 +726,21 @@ def test_an_article_limit_keeps_the_best_stories_of_the_whole_run() -> None:
 def test_an_article_limit_below_one_is_refused_before_any_feed_is_read() -> None:
     with pytest.raises(ValueError, match="at least 1"):
         plan([LAB, TRADE, COMMUNITY], article_limit=0, fetcher=fetcher_over())
+
+
+def test_plan_refuses_a_nonpositive_shard_count_before_loading_config_or_reading_feeds(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(
+        common,
+        "live_fetcher",
+        lambda _settings: pytest.fail("the invalid count must stop before feed setup"),
+    )
+    with pytest.raises(SystemExit) as error:
+        cli.main(["plan", "--date", DATE, "--shards", "0"])
+
+    assert error.value.code == 2
+    assert "--shards must be at least 1" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("flag", ["--cap", "--article-limit"])
@@ -1852,25 +1886,25 @@ def test_the_shard_count_honours_the_configured_shard_size(items: int, expected:
     restore is the largest fixed cost in the pipeline.
     """
     run = run_config(shard_size=5, max_parallel=4)
-    assert cli.shard_count(items, run=run) == expected
+    assert shard_count(items, run=run) == expected
 
 
 def test_the_shard_count_never_exceeds_max_parallel() -> None:
     """The matrix cannot run a job the strategy will not start."""
     run = run_config(shard_size=5, max_parallel=4)
-    assert cli.shard_count(10_000, run=run) == run.max_parallel
-    assert cli.shard_count(10_000, run=run_config(shard_size=1, max_parallel=2)) == 2
+    assert shard_count(10_000, run=run) == run.max_parallel
+    assert shard_count(10_000, run=run_config(shard_size=1, max_parallel=2)) == 2
 
 
 def test_the_shard_count_is_at_least_one_so_an_empty_day_still_runs() -> None:
     """An empty matrix skips every worker, and the run publishes nothing without saying why."""
-    assert cli.shard_count(0, run=run_config(shard_size=5, max_parallel=4)) == 1
+    assert shard_count(0, run=run_config(shard_size=5, max_parallel=4)) == 1
 
 
 def test_the_worst_case_day_still_fits_the_configured_fan_out() -> None:
     """The ceiling is what sizes a worker's worst shard, so the two are read together."""
     run = config.load().app.run
-    shards = cli.shard_count(run.safety_ceiling_per_run, run=run)
+    shards = shard_count(run.safety_ceiling_per_run, run=run)
     assert shards == run.max_parallel == 8
     worst_shard = -(-run.safety_ceiling_per_run // shards)
     assert worst_shard == 10, "a worker's worst shard at the 80-item ceiling across eight workers"
@@ -1879,18 +1913,18 @@ def test_the_worst_case_day_still_fits_the_configured_fan_out() -> None:
 def test_the_manifest_records_the_count_it_was_handed_and_never_a_derived_one() -> None:
     """The denominator is carried, not recomputed. That is the whole point of it.
 
-    The router derives the count once, off the plan, and the same arithmetic
-    prints the number the workflow fans out on. A manifest that worked it out
-    again from anything the run produced could not disagree with the run, and the
-    check it feeds would have no red state (`CLAUDE.md` Guardrail #10).
+    The plan step records an operator's choice or derives the count from its
+    final items. The manifest carries that value unchanged; recounting it from
+    anything the run produced would erase a difference the check needs to find
+    (`CLAUDE.md` Guardrail #10).
 
-    Null is the other designed state: a manifest written before the cell existed
-    says nothing rather than claiming a run of one shard.
+    Null is also a designed state: a plan without a count says nothing rather
+    than claiming a run of one shard.
     """
     run = run_config(shard_size=5, max_parallel=4)
     built = built_plan()
 
-    handed = cli.shard_count(len(built.items), run=run)
+    handed = shard_count(len(built.items), run=run)
     recorded = RunRecord(
         run_id=f"{built.date}-1",
         n=1,

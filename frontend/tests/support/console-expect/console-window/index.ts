@@ -10,6 +10,7 @@ import { EXPECT as dataExplorer } from './data-explorer';
 export interface RouteExpect {
 	readonly windowed: readonly string[];
 	readonly dailyTable: boolean;
+	readonly ready?: string;
 }
 
 export const BY_ROUTE: Readonly<Record<RouteId, RouteExpect | null>> = {

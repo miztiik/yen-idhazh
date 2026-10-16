@@ -65,7 +65,7 @@
 			]
 		},
 		{
-			"why": "Two runs of one day, and the second re-ran a prompt the first day used. A day that only went back to an older value started nothing new, so the day draws no rule of its own.",
+			"why": "Two runs use different prompts. The second reverts to the first recorded prompt, which yesterday did not use, so this day marks the prompt. The following day uses one of today's two values and marks no prompt change.",
 			"date": "2026-09-18",
 			"records": [
 				{
@@ -95,7 +95,7 @@
 						"quantisation": "Q4_K_M",
 						"runtime_build": "b1234",
 						"chat_template_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
-						"prompt_sha256": "9999999999999999999999999999999999999999999999999999999999999999",
+						"prompt_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
 						"turn_markers_sha256": "8888888888888888888888888888888888888888888888888888888888888888",
 						"output_schema_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
 						"truncation_cap_tokens": 2400,

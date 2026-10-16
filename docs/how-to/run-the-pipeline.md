@@ -1,6 +1,6 @@
 # How to run the pipeline
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-11
 
 Running a digest end to end on your own machine, and what each stage is allowed
 to do. Project-specific by nature: this describes *this* pipeline, not a process
@@ -110,9 +110,9 @@ declaration, and this is the order:
  --log`. Each task logs one `task-finished` line of JSON
  ([the gardener page](../architecture/publishing/idhazh-gardener.md#what-a-shard-logs)):
  `outcome` says `dry-run`, and `taken` lists every file a live pass would take.
-3. Check the list against what you expect. On 2027-10-01 the retention tasks
- name one tree - `frontend/public/telemetry/2026-08.csv`. A second name, or a
- month that is not the oldest, means a boundary is wrong and the switch waits.
+3. Check the list against the task's current owned trees. The telemetry
+ aggregate owns no public tree and never deletes native source rows; its old
+ public-copy deletion is retired. An unexpected path means the switch waits.
  The item-health and feed-health rows are not on that list: their compactions
  delete them, and a compaction's own list is read as
  [the compaction page](../architecture/publishing/ledger-compaction.md#what-a-dry-run-does-and-what-the-record-says)
@@ -120,11 +120,9 @@ declaration, and this is the order:
 4. `compact-summary-quality-evals` keeps every month: its `monthly_window` is `forever`, so a
  live pass packs the eval rows into fewer files and drops none of them
  ([../concepts/evaluation.md](../concepts/evaluation.md#design-rationale)).
-5. Only then set that task's `dry_run` to `false` in its own declaration. In the
- same change, name the task in `LIVE_BY_DECISION` in
- `backend/tests/contracts/test_gardener_config.py`, with the reason in plain
- words, and correct every doc sentence the switch makes false: that test fails
- on a live switch the list does not name.
+5. Only then set that task's `dry_run` to `false` in its own declaration. Name
+ the decision and its reason in plain words in that commit's message, and in the
+ same change correct every doc sentence the switch makes false.
 
 **The console ledgers' packing tasks are the ones to turn on first.**
 `compact-item-health` and `compact-host-fingerprint` pack live.
@@ -269,14 +267,15 @@ strikes and no inherited retirement
 day's plan in the run-plan ledger and hands that day's folder of plans to the
 later jobs, and every step after it names its run with `--execution`
 ([../architecture/contracts/state-ledgers.md](../architecture/contracts/state-ledgers.md)).
-A matrix of worker jobs each restores the weights once and works a shard. A scheduled run
-derives its own worker count from the day it just planned - at most four, and
-fewer on a small day. Manual runs accept one to eight and default to four; the
-plan rejects any other dispatched value before it creates the matrix. The `visuals` job uses
-their output, and assemble runs **even when a worker failed** - a run that publishes nothing
-on a bad day is a run whose bad days are invisible. Each run appends to the
-day's payload rather than replacing it, so the day grows through the day. The
-workflow names and triggers are pinned in
+A matrix of worker jobs each restores the weights once and works a shard. The
+plan records either the count derived from its final items and run config or
+the operator's chosen count on a manual dispatch. The matrix and its
+concurrency cap use that recorded count
+([run-limits](../concepts/config/run-limits.md)). The `visuals` job uses their
+output, and assemble runs **even when a worker failed** - a run that publishes
+nothing on a bad day is a run whose bad days are invisible. Each run appends to
+the day's payload rather than replacing it, so the day grows through the day.
+The workflow names and triggers are pinned in
 [../reference/github-actions.md](../reference/github-actions.md)
 ([../architecture/publishing/layout.md](../architecture/publishing/layout.md)).
 

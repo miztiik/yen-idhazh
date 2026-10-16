@@ -1,9 +1,9 @@
 import { expect, test } from '@playwright/test';
+import { frame } from '../src/lib/charts/frame';
+import { dateSeries, type SeriesInput } from '../src/lib/charts/d3/dateSeries';
+import { partsOfOne } from '../src/lib/charts/d3/partsOfOne';
 import { sparklineShape } from '../src/lib/charts/sparkline';
-import { stacked } from '../src/lib/charts/stacked';
 import { targetGeometry } from '../src/lib/charts/targetbar';
-import { waterfall } from '../src/lib/charts/waterfall';
-import { SENTINEL_PATTERN } from '../src/lib/charts/theme';
 
 /**
  * A chart that draws a plausible but wrong shape is the failure mode worth a
@@ -11,21 +11,8 @@ import { SENTINEL_PATTERN } from '../src/lib/charts/theme';
  * recomputes the geometry from the inputs independently, and compares that to
  * what the specification says - never to a number copied out of the output.
  *
- * The arithmetic is ours and is tested. The drawing belongs to the engine and
- * is not.
+ * The actual native geometry carries the same measured values as its readout.
  */
-
-function colours(option: unknown): string[] {
-	const found: string[] = [];
-	const walk = (node: unknown) => {
-		if (typeof node === 'string') {
-			if (node.startsWith('#')) found.push(node);
-		} else if (Array.isArray(node)) node.forEach(walk);
-		else if (node !== null && typeof node === 'object') Object.values(node).forEach(walk);
-	};
-	walk(option);
-	return found;
-}
 
 test.describe('the target bar', () => {
 	test('the marker sits at the target fraction of the track', () => {
@@ -53,81 +40,46 @@ test.describe('the target bar', () => {
 	});
 });
 
-test.describe('the waterfall', () => {
-	test('the last running total is the opening plus every delta', () => {
-		const steps = [
-			{ label: 'Mon', delta: 12 },
-			{ label: 'Tue', delta: -4 },
-			{ label: 'Wed', delta: 9 }
-		];
-		const w = waterfall(100, steps);
-		expect(w.empty).toBe(false);
-		const expected = 100 + steps.reduce((sum, s) => sum + s.delta, 0);
-		expect(w.cumulative[w.cumulative.length - 1]).toBe(expected);
-		expect(w.cumulative).toEqual([100, 112, 108, 117]);
+test.describe('native dated parts', () => {
+	const dates = ['2026-09-01', '2026-09-02'];
+	const series: SeriesInput[] = [
+		{ label: 'Fetch', token: '--chart-1', points: dates.map((date, index) => ({ date, value: [2, 0][index] })) },
+		{ label: 'Extract', token: '--chart-2', points: dates.map((date, index) => ({ date, value: [1, 5][index] })) }
+	];
+	const options = { frame: frame(600, 240), density: 6, valueTicks: 4, padding: 0.2, rule: { changes: [], note: null } };
+
+	test('each dated stack conserves its measured total and fixed part order', () => {
+		const geometry = dateSeries(series, { ...options, stacked: true });
+		expect(geometry?.dates).toEqual(dates);
+		expect(dates.map((date) => geometry?.bars.filter((bar) => bar.date === date).reduce((sum, bar) => sum + bar.value, 0)))
+			.toEqual([3, 5]);
+		expect(geometry?.bars.filter((bar) => bar.date === dates[0]).map((bar) => [bar.label, bar.value])).toEqual([
+			['Fetch', 2], ['Extract', 1]
+		]);
+		expect(geometry?.readout.series.map((one) => [one.label, one.values])).toEqual([
+			['Fetch', ['2', '0']], ['Extract', ['1', '5']]
+		]);
 	});
 
-	test('a fall hangs from where it started', () => {
-		const w = waterfall(100, [{ label: 'Tue', delta: -4 }]);
-		const [spacer, bars] = w.option.series as Record<string, unknown>[];
-		// The invisible base is the LOWER end, so the visible bar spans 96 to 100
-		// rather than growing out of zero.
-		expect((spacer.data as number[])[0]).toBe(96);
-		expect((bars.data as { value: number }[])[0].value).toBe(4);
+	test('zero is measured and null is absent in both the marks and their key', () => {
+		const geometry = dateSeries([
+			{ label: 'Measured', token: '--chart-1', points: [{ date: dates[0], value: 0 }, { date: dates[1], value: null }] },
+			{ label: 'Absent', token: '--chart-2', points: dates.map((date) => ({ date, value: null })) }
+		], options);
+		expect(geometry?.lines[0].points.map((point) => [point.date, point.value])).toEqual([[dates[0], 0]]);
+		expect(geometry?.readout.series.map((one) => [one.label, one.values])).toEqual([['Measured', ['0', null]]]);
+		expect(dateSeries([{ ...series[0], points: dates.map((date) => ({ date, value: null })) }], options)).toBeNull();
 	});
 
-	test('the spacer can never be pointed at', () => {
-		const w = waterfall(10, [{ label: 'a', delta: 1 }]);
-		const spacer = (w.option.series as Record<string, unknown>[])[0];
-		expect(spacer.silent).toBe(true);
-	});
-
-	test('no steps is empty', () => {
-		expect(waterfall(100, []).empty).toBe(true);
-	});
-});
-
-test.describe('the stacked bars', () => {
-	test('a column total is the sum of its series', () => {
-		const s = stacked(
-			['Mon', 'Tue'],
-			[
-				{ label: 'fetch', token: '--chart-1', values: [2, 0] },
-				{ label: 'extract', token: '--chart-2', values: [1, 5] }
-			]
-		);
-		expect(s.empty).toBe(false);
-		expect(s.totals).toEqual([3, 5]);
-	});
-
-	test('a series with nothing in the window is not drawn at all', () => {
-		const s = stacked(
-			['Mon'],
-			[
-				{ label: 'fetch', token: '--chart-1', values: [2] },
-				{ label: 'never ran', token: '--chart-2', values: [0] }
-			]
-		);
-		const series = s.option.series as { name: string }[];
-		expect(series.map((one) => one.name)).toEqual(['fetch']);
-	});
-
-	test('no chart draws a legend, because the readout strip is the key', () => {
-		// The strip under the plot prints every series at the hovered column with
-		// its own swatch. A legend above the plot would draw the same pair a
-		// second time, and one fact drawn twice is how two of them drift.
-		const s = stacked(
-			['Mon'],
-			[
-				{ label: 'fetch', token: '--chart-1', values: [2] },
-				{ label: 'extract', token: '--chart-2', values: [1] }
-			]
-		);
-		expect(s.option.legend).toBeUndefined();
-	});
-
-	test('a stack of nothing is empty', () => {
-		expect(stacked(['Mon'], [{ label: 'a', token: '--chart-1', values: [0] }]).empty).toBe(true);
+	test('parts of one add to the row while overlapping readings never invent a total', () => {
+		const rows = [{ label: 'One run', parts: [{ label: 'Write', value: 1 }, { label: 'Read', value: 2 }, { label: 'Other', value: 0 }] }];
+		const geometry = partsOfOne(rows, { order: ['Read', 'Write', 'Other'] });
+		expect(geometry?.rows[0].total).toBe(3);
+		expect(geometry?.rows[0].segments.map((part) => [part.label, part.value, part.token])).toEqual([
+			['Read', 2, '--chart-1'], ['Write', 1, '--chart-2']
+		]);
+		expect(partsOfOne(rows, { order: ['Read', 'Write', 'Other'], overlapping: true })?.rows[0].total).toBeNull();
+		expect(partsOfOne([{ label: 'Quiet', parts: [{ label: 'Read', value: 0 }] }], { order: ['Read'] })).toBeNull();
 	});
 });
 
@@ -157,26 +109,5 @@ test.describe('the sparkline', () => {
 		const s = sparklineShape([980, 1000, 990]);
 		expect(s.min).toBe(980);
 		expect(s.max).toBe(1000);
-	});
-});
-
-test.describe('every chart in the vocabulary', () => {
-	const built = [
-		waterfall(10, [{ label: 'a', delta: 2 }]).option,
-		stacked(['a'], [{ label: 's', token: '--chart-1', values: [1] }]).option
-	];
-
-	test('paints with sentinels only, never a hex somebody typed', () => {
-		for (const option of built) {
-			const found = colours(option);
-			expect(found.length).toBeGreaterThan(0);
-			for (const colour of found) expect(colour).toMatch(SENTINEL_PATTERN);
-		}
-	});
-
-	test('never animates', () => {
-		// A reading surface that animates interrupts. The motion budget covers
-		// arrival, not drawing.
-		for (const option of built) expect(option.animation).toBe(false);
 	});
 });

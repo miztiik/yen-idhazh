@@ -17,11 +17,16 @@
  *
  * Relative imports only, and nothing from `$lib/server`: a panel draws this, so
  * the module has to be loadable in a browser bundle and in plain Node. That is
- * why the cutover date and the run-day shape live here rather than beside the
- * boundary derivation that also reads them.
+ * why the live comparison shape and word tables stay beside the readout rules,
+ * rather than a second production derivation of the movement answer.
  */
 
-/** The slice of a published day's runs both derivations need.
+import type { ConsoleShell } from './band';
+import type { ModelRule, RuleChange } from '../charts/d3/model-rule';
+import type { DateStamp } from '../data/ledger';
+import { nameSpan } from './span-words';
+
+/** The slice of a published day's runs the native model work comparison needs.
  *
  * Structural rather than imported, so `RunSummary` from the payload loader
  * satisfies it and this module goes on importing nothing at all.
@@ -193,9 +198,8 @@ function pairsOf(name: string, recorded: unknown): Record<string, string> {
 /** Every field of one record, flattened to the names the comparison asks about.
  *
  * A keyed block becomes one entry per setting, named `sampling.temperature`.
- * Everything else keeps its own name and its serialised value, so an absent key
- * and a recorded null are one value and a number and its own spelling as a
- * string are not.
+ * Everything else keeps its own name and serialised value. Missing, null and
+ * empty values are omitted, so they cannot erase an earlier recorded value.
  */
 export function comparableInputs(inputs: unknown): Map<string, string> {
 	const flat = new Map<string, string>();
@@ -203,18 +207,15 @@ export function comparableInputs(inputs: unknown): Map<string, string> {
 	const record = inputs as Record<string, unknown>;
 	for (const name of Object.keys(SETTING_WORDS)) {
 		if (!KEYED_SETTINGS.includes(name)) {
-			flat.set(name, JSON.stringify(record[name] ?? null));
+			if (record[name] !== null && record[name] !== undefined && record[name] !== '') {
+				flat.set(name, JSON.stringify(record[name]));
+			}
 			continue;
 		}
 		const pairs = pairsOf(name, record[name]);
-		// The words table's order first, then whatever the record holds that it
-		// does not name, so a key nobody has words for is still compared.
-		const known = Object.keys(SETTING_KEY_WORDS[name]);
-		const rest = Object.keys(pairs)
-			.filter((key) => !known.includes(key))
-			.sort();
-		for (const key of [...known, ...rest]) {
-			if (key in pairs) flat.set(`${name}.${key}`, pairs[key]);
+		// Compare every key in code-point order, including keys with no authored words.
+		for (const key of Object.keys(pairs).sort()) {
+			if (pairs[key] !== 'null' && pairs[key] !== '""') flat.set(`${name}.${key}`, pairs[key]);
 		}
 	}
 	return flat;
@@ -223,9 +224,9 @@ export function comparableInputs(inputs: unknown): Map<string, string> {
 /** The words for one comparison name, keyed or not. */
 function wordsFor(name: string): string {
 	const at = name.indexOf('.');
-	if (at < 0) return SETTING_WORDS[name];
+	if (at < 0) return SETTING_WORDS[name] ?? 'a recorded setting';
 	const field = name.slice(0, at);
-	return SETTING_KEY_WORDS[field][name.slice(at + 1)] ?? SETTING_WORDS[field];
+	return SETTING_KEY_WORDS[field]?.[name.slice(at + 1)] ?? SETTING_WORDS[field] ?? 'a recorded setting';
 }
 
 /** What one day's record says moved since the last day that kept one. */
@@ -238,61 +239,59 @@ export interface SettingsMoved {
 	settings: string[];
 }
 
-/** Every day the recorded inputs named a value the last recorded day did not.
- *
- * The same rule the whole-manifest boundary uses, asked once per setting: a day
- * is a change when it ran something the previous RECORDED day did not run, and
- * a day that only stopped using one of yesterday's values changed nothing. The
- * comparison is between consecutive recorded days, so a day with no record is
- * skipped rather than read as a day nothing moved on (`CLAUDE.md` Guardrail
- * #10, and the same refusal Row #10 made of a zero theft figure).
- *
- * **Once per setting rather than once per field**, because two of the fields
- * hold many settings each. Compared whole they moved as a block, so the day the
- * model file took llama-server's own flag names read as every switch changing
- * at once - a permanent rule on a published day where the decode had not moved.
- * Per key, a renamed switch compares against itself and a setting that stopped
- * being sent is a key that is absent, which this rule already treats as no
- * change.
- *
- * A run that recorded no inputs is skipped by the check below rather than by a
- * date. Before the record existed every run carries a null, so the two rules
- * remove the same days - and the check says why the day is skipped where a date
- * could only say when.
- */
-export function settingsMoved(runs: readonly RecordedRunDay[]): SettingsMoved[] {
-	const byDate = new Map<string, Map<string, Set<string>>>();
-	for (const day of runs) {
-		for (const record of day.records) {
-			const inputs = record.inputs;
-			if (inputs === null || inputs === undefined || typeof inputs !== 'object') continue;
-			const held = byDate.get(day.date) ?? new Map<string, Set<string>>();
-			for (const [name, value] of comparableInputs(inputs)) {
-				const values = held.get(name) ?? new Set<string>();
-				values.add(value);
-				held.set(name, values);
-			}
-			byDate.set(day.date, held);
+/** Retain each available rule independently when another kind did not arrive. */
+export function settingsRules(
+	shell: ConsoleShell,
+	window: { from: DateStamp; to: DateStamp },
+	checker: 'none' | 'score' | 'every',
+	spanWords?: string
+): ModelRule {
+	const requested = [
+		{ kind: 'settings' as const, record: shell.settingsMoved, verb: 'written' },
+		...(checker === 'none' ? [] :
+			[{ kind: 'checker' as const, record: shell.checkerMoved, verb: 'checked' }])
+	];
+	if (requested.every((one) => one.record === null)) return {
+		declined: 'The record of changes did not arrive with this page, so this chart cannot mark one.'
+	};
+	const changes: RuleChange[] = [];
+	const notes: string[] = [];
+	for (const one of requested) {
+		const record = one.record;
+		if (record === null) {
+			notes.push(`The record of how summaries are ${one.verb} did not arrive with this page, so this chart cannot mark those changes.`);
+			continue;
+		}
+		const drawn = record.changes.filter((change) => change.date >= window.from && change.date <= window.to &&
+			(one.kind !== 'checker' || checker !== 'score' || ('score_moved' in change && change.score_moved)));
+		for (const change of drawn) {
+			changes.push({
+				date: change.date as DateStamp, kind: one.kind,
+				words: 'inputs' in change
+					? `${namesMovedShort([...new Set(change.inputs.map(wordsFor))])} changed on this day`
+					: change.score_moved ? 'the faithfulness scorer changed on this day'
+						: 'the checker changed on this day; the faithfulness score did not'
+			});
+		}
+		if (record.compared_from === null) {
+			notes.push(`How the summaries are ${one.verb} was not recorded on these days, so this chart cannot mark a change.`);
+		} else if (window.from < record.compared_from) {
+			const stamp = new Date(`${record.compared_from}T00:00:00Z`);
+			const date = `${stamp.getUTCDate()} ${stamp.toLocaleString('en-GB', { month: 'short', timeZone: 'UTC' })}`;
+			const subject = one.kind === 'settings' ? 'how the summaries are written'
+				: checker === 'score' ? 'the faithfulness scorer' : 'the checker';
+			notes.push(`This chart can mark a change in ${subject} only from ${date} on.${window.to < record.compared_from ? ' That is after this window.' : drawn.length === 0 ? ' None came after that day.' : ''}`);
 		}
 	}
-	const dates = [...byDate.keys()].sort();
-	const moved: SettingsMoved[] = [];
-	for (let index = 1; index < dates.length; index += 1) {
-		const before = byDate.get(dates[index - 1]) as Map<string, Set<string>>;
-		const now = byDate.get(dates[index]) as Map<string, Set<string>>;
-		const changed = [...now.keys()].filter((name) =>
-			[...(now.get(name) ?? new Set<string>())].some(
-				(value) => !(before.get(name) ?? new Set<string>()).has(value)
-			)
-		);
-		// One entry a setting, deduplicated: a boolean that became a pair of flags
-		// moves both halves together and is one thing a reader changed.
-		const settings = [...new Set(changed.map(wordsFor))];
-		if (settings.length > 0) {
-			moved.push({ date: dates[index], settings });
-		}
+	changes.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 :
+		a.kind === b.kind ? 0 : a.kind === 'settings' ? -1 : 1);
+	if (changes.length === 0 && notes.length === 0) {
+		const days = (Date.parse(window.to) - Date.parse(window.from)) / 86_400_000 + 1;
+		notes.push(checker === 'score'
+			? `Nothing changed about how the summaries are written or the faithfulness scorer inside ${spanWords ?? nameSpan(days)}.`
+			: `Nothing changed about how the summaries are written${checker === 'none' ? '' : ' or checked'} inside ${spanWords ?? nameSpan(days)}.`);
 	}
-	return moved;
+	return { changes, note: notes.length > 0 ? notes.join(' ') : null };
 }
 
 /** The words for each date, for a chart asking once a column. */

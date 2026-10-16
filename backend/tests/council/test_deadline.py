@@ -80,7 +80,7 @@ class StopwatchTenant:
 
 def _committed_clocks() -> CouncilConfig:
     """The council block as the repository commits it, read inside each test."""
-    return config.load(CONFIG_DIR).app.council
+    return config.load_council(CONFIG_DIR)
 
 
 def test_the_deadline_leaves_the_margin_the_council_asked_for() -> None:

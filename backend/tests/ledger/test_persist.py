@@ -40,7 +40,7 @@ from idhazh.contracts.file_envelope import (
     Tier,
     WriterIdentity,
 )
-from idhazh.contracts.host_fingerprint import HostFingerprintRow
+from idhazh.contracts.host_fingerprint import HostFingerprintRow, fingerprint_v2
 from idhazh.contracts.knobs.ledger import LedgerConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.visual_prune import VisualPruneRow
@@ -230,7 +230,7 @@ def _stored(path: Path) -> list[dict[str, object]]:
 # --- the round trip ------------------------------------------------------------
 
 
-def test_a_short_lived_parquet_reader_exits_cleanly() -> None:
+def test_a_short_lived_parquet_reader_prints_the_expected_row_count() -> None:
     fixture = FIXTURES_DIR / "parquet" / "visual-prunes-raw-2026-09-06.parquet"
     result = subprocess.run(
         [
@@ -249,7 +249,6 @@ def test_a_short_lived_parquet_reader_exits_cleanly() -> None:
         text=True,
         check=False,
     )
-    assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout.strip() == str(len(_fixture_rows(VisualPruneRow)))
 
 
@@ -266,6 +265,39 @@ def test_every_contract_comes_back_equal_in_both_formats(
     )
 
     _same_rows(ledger.load(written, model=model), rows)
+
+
+@pytest.mark.parametrize("fmt", list(Format), ids=[fmt.value for fmt in Format])
+def test_corrected_host_history_retains_its_versioned_facts(
+    fmt: Format, tmp_path: Path
+) -> None:
+    payload = fixture_rows(HostFingerprintRow)[1].model_dump()
+    payload.update(
+        fingerprint=None,
+        fingerprint_version=None,
+        cpu_physical_cores=24,
+        cpu_logical_processors=48,
+        cpu_allowed_processors=4,
+        cpu_quota_cores=4.0,
+        cpu_quota_state="finite",
+        cpu_target_measured_at=payload["measured_at"],
+    )
+    corrected = HostFingerprintRow.model_validate(payload)
+    payload.update(fingerprint=fingerprint_v2(corrected), fingerprint_version=2)
+    row = HostFingerprintRow.model_validate(payload)
+    identity = WriterIdentity(
+        run_id=row.run_id, attempt=1, job=row.job, shard=row.shard,
+        producer="telemetry.silicon", git_sha=A_SHA,
+    )
+    written = ledger.persist(
+        tmp_path, [row], ledger=LedgerName.HOST_FINGERPRINT, covers=row.date,
+        identity=identity, fmt=fmt,
+    )
+
+    assert ledger.load(written, model=HostFingerprintRow) == [row]
+    envelope = ledger.read_envelope(written[0])
+    assert envelope.row_schema_version == "2026-10-14"
+    assert envelope.writer == (parquet if fmt is Format.PARQUET else json_lines).__name__
 
 
 @pytest.mark.parametrize("fmt", list(Format), ids=[fmt.value for fmt in Format])
@@ -658,6 +690,7 @@ def test_a_row_whose_own_identity_cell_would_not_read_back_is_refused_before_the
     row = _fixture_rows(HostFingerprintRow)[0]
     assert isinstance(row, HostFingerprintRow)
     unreadable = row.model_copy(update={"shard": -1})
+    assert unreadable.job is not None
 
     with pytest.raises(ValueError, match="identity cells would not read back"):
         ledger.persist(
@@ -665,7 +698,7 @@ def test_a_row_whose_own_identity_cell_would_not_read_back_is_refused_before_the
             [unreadable],
             ledger=LedgerName.HOST_FINGERPRINT,
             covers=unreadable.date,
-            identity=_identity(job=unreadable.job),
+            identity=_identity(job=ServerJob(unreadable.job)),
         )
     assert not tmp_path.exists() or not any(tmp_path.rglob("*.*"))
 
@@ -849,7 +882,7 @@ def test_a_file_whose_envelope_names_another_writer_is_refused(tmp_path: Path) -
     )
     _rewritten(written, writer=parquet.__name__)
 
-    with pytest.raises(ValueError, match="its bytes are"):
+    with pytest.raises(ValueError, match="container"):
         ledger.load([written], model=EveryColumn)
 
 

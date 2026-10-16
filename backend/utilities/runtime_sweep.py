@@ -12,19 +12,24 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import threading
 import time
 import urllib.request
 from collections import Counter
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, NamedTuple
 
 from pydantic import ValidationError
 
-from idhazh import config, ledger
+from idhazh import completed_writes, config, ledger, run_context
 from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.base import ServerJob
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.knobs.model_server import port_of_base_url
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.ledger_name import LedgerName
@@ -33,8 +38,9 @@ from idhazh.llm.server import loopback_url, server_argv
 from idhazh.stages import common
 from idhazh.stages import plan as plan_stage
 from idhazh.stages.common import CAPTURES_DIRNAME
-from idhazh.telemetry import silicon
-from utilities import sweep_verdict
+from idhazh.telemetry import silicon, task_telemetry
+from idhazh.telemetry.host_control import enabled as host_telemetry_enabled
+from utilities import publication_evidence, sweep_verdict
 from utilities.memory_sampler import read_status
 from utilities.model_runtime import refuse_a_server_that_died_at_startup
 
@@ -258,7 +264,9 @@ def case_plan(name: str, *, threads: int, threads_batch: int) -> CasePlan:
     )
 
 
-def write_config(label: str, update: dict[str, Any]) -> Path:
+def write_config(
+    label: str, update: dict[str, Any], *, config_root: Path = CANDIDATE_CONFIG
+) -> Path:
     """A scratch config for one case, from the candidate copy and never from `config/`.
 
     The committed config still names the incumbent, so a sweep that copied it
@@ -267,7 +275,7 @@ def write_config(label: str, update: dict[str, Any]) -> Path:
     dst = CONFIG_ROOT / label
     if dst.exists():
         shutil.rmtree(dst)
-    shutil.copytree(CANDIDATE_CONFIG, dst)
+    shutil.copytree(config_root, dst)
     pointer = json.loads((dst / "idhazh.json").read_text(encoding="utf-8"))["models_file"]
     path = dst / pointer
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -431,6 +439,82 @@ def keep_the_captures(date: str, label: str, repeat: int) -> str | None:
     return kept.as_posix()
 
 
+@contextmanager
+def _termination_signals(*, defer: bool = False) -> Iterator[None]:
+    """Unwind on cancellation, but finish acquiring or reaping owned processes first."""
+    received: int | None = None
+
+    def cancelled(signum: int, frame: object) -> None:
+        nonlocal received
+        del frame
+        if received is None:
+            received = signum
+            if not defer:
+                raise SystemExit(128 + signum)
+
+    previous = {}
+    try:
+        for signum in (signal.SIGTERM, signal.SIGINT):
+            previous[signum] = signal.signal(signum, cancelled)
+        yield
+    finally:
+        active = sys.exception()
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
+        if defer and received is not None:
+            if active is None:
+                raise SystemExit(128 + received)
+            active.add_note(f"runtime sweep also received signal {received}")
+
+
+def _reap_owned_process(process: subprocess.Popen[bytes]) -> None:
+    try:
+        if process.poll() is None:
+            process.terminate()
+        process.wait(timeout=20)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        try:
+            process.kill()
+        finally:
+            process.wait(timeout=20)
+        if isinstance(error, OSError):
+            raise
+
+
+def _cleanup_owned_processes(
+    server: subprocess.Popen[bytes] | None,
+    workers: Sequence[subprocess.Popen[bytes]],
+    stop: threading.Event,
+    sampler: threading.Thread | None,
+) -> None:
+    errors: list[Exception] = []
+    try:
+        with _termination_signals(defer=True):
+            stop.set()
+            # A failed reap must not skip another worker, the server, or the sampler.
+            processes = [*workers, *([server] if server is not None else [])]
+            for process in processes:
+                try:
+                    _reap_owned_process(process)
+                except (OSError, subprocess.TimeoutExpired) as error:
+                    errors.append(error)
+            if sampler is not None:
+                try:
+                    sampler.join(timeout=5)
+                except RuntimeError as error:
+                    errors.append(error)
+    finally:
+        active = sys.exception()
+        if errors:
+            if active is not None:
+                for cleanup_error in errors:
+                    active.add_note(f"runtime sweep cleanup also failed: {cleanup_error}")
+            else:
+                for cleanup_error in errors[1:]:
+                    errors[0].add_note(f"runtime sweep cleanup also failed: {cleanup_error}")
+                raise errors[0]
+
+
 def run_once(
     label: str,
     update: dict[str, Any],
@@ -443,10 +527,14 @@ def run_once(
     candidate_file: str,
     candidate_id: str,
     port: int,
+    commit_sha: str | None = None,
+    config_root: Path = CANDIDATE_CONFIG,
 ) -> dict[str, Any]:
     """One server start, one pass over the fixed corpus, one set of readings."""
-    cfg = write_config(f"{label}-{repeat}", update)
+    cfg = write_config(f"{label}-{repeat}", update, config_root=config_root)
     settings = config.load(cfg)
+    collect_host = host_telemetry_enabled(settings.app.observability)
+    collect_memory = collect_host and settings.app.observability.memory_profiling_enabled
     log_path = ROOT / f"{label}-{repeat}.llama-server.log"
     items_dir = RUN_ROOT / date / "items"
     # Both, and for the same reason: a repeat starts from an empty run directory
@@ -467,58 +555,51 @@ def run_once(
     started = time.perf_counter()
     rss_samples: list[dict[str, str]] = []
     with log_path.open("w", encoding="utf-8") as log:
-        server = subprocess.Popen(argv, stdout=log, stderr=subprocess.STDOUT, env=env)
-        refuse_a_server_that_died_at_startup(server, log_path)
+        server = None
+        workers: list[subprocess.Popen[bytes]] = []
         stop = threading.Event()
-
-        def sample_rss() -> None:
-            while not stop.is_set():
-                rss_samples.append(read_status(server.pid))
-                time.sleep(1)
-
-        sampler = threading.Thread(target=sample_rss, daemon=True)
-        sampler.start()
+        sampler = None
         try:
+            with _termination_signals(defer=True):
+                server = subprocess.Popen(argv, stdout=log, stderr=subprocess.STDOUT, env=env)
+            refuse_a_server_that_died_at_startup(server, log_path)
+
+            def sample_rss() -> None:
+                assert server is not None
+                while not stop.is_set():
+                    rss_samples.append(read_status(server.pid))
+                    time.sleep(1)
+
+            if collect_memory:
+                sampler = threading.Thread(target=sample_rss, daemon=True)
+                sampler.start()
             wait_for_health(port)
             assert_the_candidate_is_serving(port, candidate_id)
             startup_ms = int((time.perf_counter() - started) * 1000)
             work_started = time.perf_counter()
-            workers = [
-                subprocess.Popen(
-                    [
-                        sys.executable,
-                        "-m",
-                        "idhazh",
-                        "work",
-                        "--config",
-                        str(cfg),
-                        "--date",
-                        date,
-                        "--execution",
-                        str(execution),
-                        "--shard",
-                        str(shard),
-                        "--shards",
-                        str(worker_count),
-                        "--no-faithfulness",
-                    ]
-                )
-                for shard in range(worker_count)
-            ]
+            for shard in range(worker_count):
+                with _termination_signals(defer=True):
+                    workers.append(
+                        subprocess.Popen(
+                            work_command(
+                                config_root=cfg,
+                                date=date,
+                                execution=execution,
+                                shard=shard,
+                                shards=worker_count,
+                                commit_sha=commit_sha or os.environ.get("GITHUB_SHA", "0" * 40),
+                                server_pid=server.pid,
+                            ),
+                            env=env,
+                        )
+                    )
             failures = [proc.wait() for proc in workers]
             if any(failures):
                 raise RuntimeError(f"{label} repeat {repeat} worker failures: {failures}")
             work_ms = int((time.perf_counter() - work_started) * 1000)
             total_ms = int((time.perf_counter() - started) * 1000)
         finally:
-            stop.set()
-            server.terminate()
-            try:
-                server.wait(timeout=20)
-            except subprocess.TimeoutExpired:
-                server.kill()
-                server.wait(timeout=20)
-            sampler.join(timeout=5)
+            _cleanup_owned_processes(server, workers, stop, sampler)
 
     found = collect(date, label, repeat, items=settings.app.bench.corpus_items)
     return {
@@ -532,13 +613,35 @@ def run_once(
         "total_ms": total_ms,
         "model_path_ms": startup_ms + sum(item["summarize_ms"] for item in found.per_item),
         "server_rss_samples": rss_samples,
-        "cgroup_memory_peak_bytes": cgroup_peak(),
+        "cgroup_memory_peak_bytes": cgroup_peak() if collect_memory else None,
         "server_facts": parse_server_facts(log_path),
         "sources": found.sources,
         "digests": found.digests,
         "per_item": found.per_item,
         "captures": keep_the_captures(date, label, repeat),
     }
+
+
+def work_command(
+    *,
+    config_root: Path,
+    date: str,
+    execution: int,
+    shard: int,
+    shards: int,
+    commit_sha: str,
+    server_pid: int | None = None,
+) -> list[str]:
+    """Run the Python producer with this repeat's exact plan and shard."""
+    command = [
+        sys.executable, "-m", "idhazh", "work",
+        "--config", str(config_root), "--date", date, "--execution", str(execution),
+        "--commit", commit_sha, "--shard", str(shard), "--shards", str(shards),
+        "--no-faithfulness",
+    ]
+    if server_pid is not None:
+        command.extend(("--server-pid", str(server_pid)))
+    return command
 
 
 def corpus_offset(dispatch: str) -> int:
@@ -638,8 +741,47 @@ def server_port(config_root: Path) -> int:
 
 
 def sweep(args: argparse.Namespace) -> int:
+    previous_memory = os.environ.get("MEMORY_PROFILING")
+    if args.memory_profiling != "inherit":
+        os.environ["MEMORY_PROFILING"] = args.memory_profiling
+    try:
+        settings = config.load(args.config)
+        with completed_writes.collect() as writes:
+            try:
+                with task_telemetry.record(
+                    date=args.date,
+                    run_id=f"{args.date}-{args.execution}",
+                    settings=settings,
+                    state_root=common.state_root_of(settings, base=common.STATE_ROOT),
+                    commit_sha=args.commit,
+                    job=ServerJob.RUNTIME,
+                ):
+                    return _sweep(args)
+            finally:
+                publication_evidence.save(
+                    config.REPO_ROOT,
+                    WriterIdentity(
+                        run_id=f"{args.date}-{args.execution}",
+                        attempt=run_context.run_attempt(),
+                        job=ServerJob.RUNTIME,
+                        shard=0,
+                        producer="utilities.record_publish",
+                        git_sha=args.commit,
+                    ),
+                    "measure",
+                    writes,
+                )
+    finally:
+        if previous_memory is None:
+            os.environ.pop("MEMORY_PROFILING", None)
+        else:
+            os.environ["MEMORY_PROFILING"] = previous_memory
+
+
+def _sweep(args: argparse.Namespace) -> int:
     candidate = args.candidate
-    repeat_count = repeats(CANDIDATE_CONFIG, dispatch=args.repeats)
+    settings = config.load(args.config)
+    repeat_count = repeats(args.config, dispatch=args.repeats)
     # Two, because a spread needs two readings and this stops a dispatch that
     # cannot produce one. It is the sweep's own statement about what it can
     # read, kept beside the contract's floor rather than deferred to it: the
@@ -649,7 +791,7 @@ def sweep(args: argparse.Namespace) -> int:
     # is the knob sized against that same bound (Guardrail #2).
     if repeat_count < sweep_verdict.MIN_AGREEING_REPEATS:
         raise SystemExit("runtime_repeats must be at least 2 - one reading has no spread")
-    port = server_port(CANDIDATE_CONFIG)
+    port = server_port(args.config)
     threads = _bounded("threads", args.threads)
     threads_batch = _bounded("threads_batch", args.threads_batch)
 
@@ -671,6 +813,8 @@ def sweep(args: argparse.Namespace) -> int:
                 candidate_file=args.candidate_file,
                 candidate_id=args.candidate_id,
                 port=port,
+                commit_sha=args.commit,
+                config_root=args.config,
             )
             results.append(result)
             print(
@@ -695,7 +839,10 @@ def sweep(args: argparse.Namespace) -> int:
         # The machine THIS job drew. `llama-bench` runs in a different job and the
         # platform places each separately, so the processor beside a prefill rate
         # is not the processor beside these wall-clock figures.
-        "cpu": silicon.host_cpu_model() or "unrecorded",
+        "cpu": (
+            silicon.host_cpu_model() if host_telemetry_enabled(settings.app.observability)
+            else None
+        ) or "unrecorded",
         "repeats": repeat_count,
         # What the timing was actually taken over. It is not `repeats` whenever
         # a page moved mid-job, and a reader who assumed it was would be reading
@@ -751,6 +898,9 @@ def main(argv: list[str] | None = None) -> int:
 
     run = sub.add_parser("sweep", help="Time the candidate against the baseline.")
     run.add_argument("--date", required=True)
+    run.add_argument("--config", type=Path, default=CANDIDATE_CONFIG)
+    run.add_argument("--commit", default=os.environ.get("GITHUB_SHA", "0" * 40))
+    run.add_argument("--memory-profiling", choices=("inherit", "on", "off"), default="inherit")
     run.add_argument(
         "--execution", type=int, required=True, help="The run whose plan every repeat works."
     )
@@ -777,16 +927,23 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "freeze-corpus":
         settings = config.load(args.config) if args.config is not None else config.load()
-        freeze_corpus(
-            args.date,
-            items=corpus_items(args.config),
-            offset=corpus_offset(args.offset),
-            execution=args.execution,
-            commit_sha=args.commit,
-            state_dir=common.state_root_of(settings, base=common.STATE_ROOT),
+        segments = tuple(
+            value
+            for value in (settings.app.run.trial_state_dirname, settings.app.run.trial_case_dirname)
+            if value is not None
         )
+        with ledger.use_registry(ledger.overlay_registry(segments) if segments else None):
+            freeze_corpus(
+                args.date,
+                items=corpus_items(args.config),
+                offset=corpus_offset(args.offset),
+                execution=args.execution,
+                commit_sha=args.commit,
+                state_dir=common.STATE_ROOT,
+            )
         return 0
-    return sweep(args)
+    with _termination_signals():
+        return sweep(args)
 
 
 if __name__ == "__main__":

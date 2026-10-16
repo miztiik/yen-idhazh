@@ -44,12 +44,14 @@ POLICIES = {
 
 def capture(client: str, args: list[str]) -> int:
     job, _, verb = POLICIES[client]
+    if client == "measure":
+        job = measure_job(_flag(args, "--job", job.value))
     if args[0] != verb:
         raise ValueError("record client was not given its declared producer")
     date = _flag(args, "--date", datetime.now(UTC).date().isoformat())
     execution = _flag(args, "--execution", os.environ.get("GITHUB_RUN_ID", ""))
     identity = WriterIdentity(
-        run_id=f"{date}-{execution}",
+        run_id=_flag(args, "--run-id", f"{date}-{execution}"),
         attempt=run_context.run_attempt(),
         job=job,
         shard=0,
@@ -63,16 +65,40 @@ def capture(client: str, args: list[str]) -> int:
             publication_evidence.save(config.REPO_ROOT, identity, client, writes)
 
 
-def land(client: str, *, repo: Path) -> int:
+def measure_job(value: str) -> ServerJob:
+    job = ServerJob(value)
+    if job not in {ServerJob.RUNTIME, ServerJob.COLLECT}:
+        raise ValueError("measurement publication requires runtime or collect job identity")
+    return job
+
+
+def land(
+    client: str,
+    *,
+    repo: Path,
+    identity: WriterIdentity | None = None,
+) -> int:
     job, scopes, _ = POLICIES[client]
-    receipt = PublicationReceipt.read(repo / publication_evidence.ROOT / job / f"{client}-0.json")
+    if client == "measure" and identity is not None:
+        if identity.job is None:
+            raise ValueError("measurement publication requires a legacy job identity")
+        job = measure_job(str(identity.job))
+    receipt = PublicationReceipt.read(
+        repo / publication_evidence.ROOT / str(job) / f"{client}-0.json"
+    )
+    if identity is not None and receipt.identity != identity:
+        raise ValueError("record receipt does not belong to the expected invocation")
     identity = receipt.identity
+    if identity.job is None:
+        raise ValueError("record publication requires a legacy workflow job identity")
+    recorded_job = ServerJob(identity.job)
     if (
-        identity.job != job
+        recorded_job != job
         or identity.attempt != run_context.run_attempt()
         or identity.run_id.split("-", 3)[-1] != os.environ.get("GITHUB_RUN_ID", "")
         or identity.git_sha != os.environ.get("GITHUB_SHA", "")
         or identity.producer != "utilities.record_publish"
+        or identity.shard != 0
     ):
         raise ValueError("record receipt does not belong to this executed invocation")
     git = Repository(repo)
@@ -114,14 +140,34 @@ def main(argv: list[str] | None = None) -> int:
         return (
             capture(parsed.client, producer_args)
             if parsed.action == "run"
-            else land(
-                parsed.client,
-                repo=Path.cwd(),
-            )
+            else _land(parsed.client, producer_args)
         )
     except (ValueError, OSError, RuntimeError) as error:
         print(f"record publication integrity-refused: {error}", file=sys.stderr)
         return 2
+
+
+def _land(client: str, args: list[str]) -> int:
+    if not args:
+        return land(client, repo=Path.cwd())
+    parser = argparse.ArgumentParser(description="Identify the executed record publisher")
+    parser.add_argument("--date", required=True)
+    parser.add_argument("--execution", required=True)
+    parser.add_argument("--commit", required=True)
+    parser.add_argument("--job", default=POLICIES[client][0].value)
+    parsed = parser.parse_args(args)
+    return land(
+        client,
+        repo=Path.cwd(),
+        identity=WriterIdentity(
+            run_id=f"{parsed.date}-{parsed.execution}",
+            attempt=run_context.run_attempt(),
+            job=measure_job(parsed.job) if client == "measure" else POLICIES[client][0],
+            shard=0,
+            producer="utilities.record_publish",
+            git_sha=parsed.commit,
+        ),
+    )
 
 
 if __name__ == "__main__":

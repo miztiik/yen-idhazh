@@ -11,64 +11,41 @@ export type Selection = {
 	backendFiles: string[] | null;
 	contracts: boolean;
 	tooling: boolean;
-	rust: boolean;
 	reasons: { path: string; groups: TestGroup[]; reason: string }[];
 };
 
 const ALL: TestGroup[] = ['backend', ...FRONTEND_GROUPS];
 const READER: TestGroup[] = ['logic', 'reader', 'publishing'];
-const CONSOLE: TestGroup[] = ['logic', 'console', 'panels', 'publishing'];
+const CONSOLE: TestGroup[] = ['logic', 'console', 'publishing'];
 
 /** The operator console's own files.
  *
- * The console's specs are 584 of the browser suite's 997 tests, measured
- * 2026-09-05, and the console is a page one operator opens rather than anything
- * a reader is served. So a pull request buys them only when the change is the
- * console's own; every other change reaches them on the merge push to `main`,
- * which runs every group. What that costs is stated rather than implied: a
- * shared component or a token edit that breaks the console is found on that
- * push, not at the pull request. The shared panel frame is an exception: every
- * console route renders it, so its edits buy the console on the pull request.
+ * The browser group covers representative query-worker and recovery journeys;
+ * deterministic console rules run with logic. The console is an operator page,
+ * not a reader surface, so a pull request buys its browser journeys only for
+ * console-owned changes. Shared changes reach them on the merge push to `main`,
+ * which runs every group. The shared panel frame is an exception: every console
+ * route renders it, so its edits buy the console on the pull request.
  */
 const CONSOLE_OWNED =
-	/^(frontend\/(tests\/(?:console[-.]|support\/(?:console-expect|console-window|panel-drivers)\/)|src\/(routes|lib)\/console\/|src\/lib\/components\/(?:Console[A-Z]|Panel\.svelte$)|src\/lib\/server\/console-shell\.ts$)|config\/console\/)/;
-
-/** What a console panel's picture is drawn from, beyond the console's own files.
- *
- * The `panels` group is two spec files against the console's hundreds of
- * tests, so it is bought by a wider set: the panel frame and the readout strip
- * every panel shares, the chart modules, the stylesheets and tokens, the
- * appearance config the panels read, and the captures' own specs, fixture and
- * helpers. These are the edits that move every panel image at once, and
- * deferring them to the merge push would mean their first pictures arrive
- * after the change is already on `main`.
- */
-const PANELS_DRAWN =
-	/^(frontend\/(tests\/(panel-|fixtures\/panels\/|support\/)|src\/(styles|lib\/charts)\/|src\/lib\/components\/(Panel|PanelGroup|ChartReadout|Reserved)\.svelte$)|config\/(?:appearance\.json$|console\/))/;
+	/^(frontend\/(tests\/(?:console[-.]|support\/(?:(?:console-expect|console-window|panel-drivers)\/|(?:pipelines-ledgers|pipelines-span|retained-telemetry)\.ts$))|src\/(routes|lib)\/console\/|src\/lib\/components\/(?:Console[A-Z]|Panel\.svelte$)|src\/lib\/server\/console-shell\.ts$)|config\/console\/)/;
 
 /** A document a test reads is that test's input, not documentation.
  *
- * `frontend/tests/console-model.spec.ts` asserts the console's label set
- * against this page, so an edit to it can redden a suite the documentation
- * branch below would otherwise have answered for. The key is the constant the
- * spec reads its page from, so the two cannot name different pages.
- * `chart-vocabulary.spec.ts` reads the chart-type list the same way, and it is a
- * logic spec, so an edit to that page buys the logic group and no browser.
+ * `chart-vocabulary.spec.ts` reads the chart-type list from this page, so an edit
+ * buys the logic group and no browser. The key is the constant the spec reads
+ * its page from, so the selector and test cannot name different pages.
  */
 const DOC_TEST_INPUTS: Record<string, TestGroup[]> = {
-	[CONSOLE_MODEL_LABELS_PAGE]: ['console'],
+	[CONSOLE_MODEL_LABELS_PAGE]: ['logic'],
 	[CHART_VOCABULARY_PAGE]: ['logic']
 };
 
 function consoleIsTheSubject(paths: readonly string[]): boolean {
 	return paths.some((path) => {
 		const clean = path.replaceAll('\\', '/');
-		return CONSOLE_OWNED.test(clean) || (DOC_TEST_INPUTS[clean]?.includes('console') ?? false);
+		return CONSOLE_OWNED.test(clean);
 	});
-}
-
-function panelsAreTheSubject(paths: readonly string[]): boolean {
-	return paths.some((path) => PANELS_DRAWN.test(path.replaceAll('\\', '/')));
 }
 
 export type CiAnswer = {
@@ -76,7 +53,6 @@ export type CiAnswer = {
 	code: boolean;
 	modelAbsent: boolean;
 	console: boolean;
-	panels: boolean;
 	robots: boolean;
 	validateAll: boolean;
 };
@@ -116,8 +92,6 @@ export function ciAnswer(paths: readonly string[], isPr: boolean): CiAnswer {
 			return groups.some((group) => group !== 'backend');
 		})),
 		console: selection.groups.includes('console') && !deferred,
-		// Whatever buys the console buys panel assertions, as do shared drawing inputs.
-		panels: selection.groups.includes('panels') && (!deferred || panelsAreTheSubject(paths)),
 		// A full backend selection (null) is an unknown change, so it buys the job.
 		robots: selection.backendFiles?.includes(ROBOTS_TESTS) ?? true,
 		// A published day is frozen, so the only thing that can invalidate one is a
@@ -162,33 +136,12 @@ const MODULE_TESTS: Record<string, string[]> = {
 const UTILITY_TESTS: Record<string, string> = {
 	'backend/utilities/doc_load.py': 'backend/tests/test_doc_load.py'
 };
-export const RUST_PARITY_TEST = 'backend/tests/contracts/test_rust_host_file_parity.py';
-export const RUST_STORE_TEST = 'backend/tests/test_rust_host_store_parity.py';
-export const RUST_RECEIPTS_TEST = 'backend/tests/test_rust_host_receipts.py';
-export const RUST_TESTS = [RUST_PARITY_TEST, RUST_STORE_TEST, RUST_RECEIPTS_TEST];
-const HOST_TESTS: Record<string, string[]> = {
-	'backend/idhazh/contracts/host_events.py': ['backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_event_files.py', RUST_PARITY_TEST],
-	'backend/idhazh/contracts/host_output.py': ['backend/tests/contracts/test_host_output.py', 'backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_output_verify.py', RUST_PARITY_TEST],
-	'backend/idhazh/telemetry/host_event_files.py': ['backend/tests/test_host_event_files.py'],
-	'backend/idhazh/telemetry/host_output_verify.py': ['backend/tests/test_host_output_verify.py', ...RUST_TESTS],
-	'backend/idhazh/telemetry/host_parquet_admission.py': ['backend/tests/test_host_parquet_admission.py', 'backend/tests/test_host_output_verify.py', RUST_PARITY_TEST],
-	'backend/utilities/verify_host_output.py': ['backend/tests/test_host_output_verify.py'],
-	'config/host-telemetry-experiment.json': ['backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_event_files.py', RUST_PARITY_TEST],
-	'tests/fixtures/host-events/file-parity.json': [RUST_PARITY_TEST],
-	'tests/fixtures/host-events/storage-parity.json': [RUST_STORE_TEST],
-	'tests/fixtures/host-events/publication-parity.json': [RUST_RECEIPTS_TEST],
-	'tests/fixtures/host-events/manifest.json': ['backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_event_files.py', RUST_PARITY_TEST],
-	'tests/fixtures/host-events/cpu-snapshots.json': ['backend/tests/contracts/test_host_output.py'],
-	'tests/fixtures/host-events/fingerprint-versions.json': ['backend/tests/contracts/test_host_output.py']
-};
-
 export function selectPaths(paths: readonly string[]): Selection {
 	const groups = new Set<TestGroup>();
 	const backendFiles = new Set<string>();
 	let fullBackend = false;
 	let contracts = false;
 	let tooling = false;
-	let rust = false;
 	const reasons: Selection['reasons'] = [];
 	for (const original of [...new Set(paths)].sort()) {
 		const path = original.replaceAll('\\', '/');
@@ -199,16 +152,6 @@ export function selectPaths(paths: readonly string[]): Selection {
 			reason = 'documentation a test reads';
 		} else if (/^(docs\/|TODO\/|(?:README|AGENTS|CLAUDE)\.md$|\.claude\/|\.github\/(agents|instructions|prompts|skills)\/)/.test(path)) {
 			selected = [];
-		} else if (path.startsWith('backend/rust/host-telemetry/') || RUST_TESTS.includes(path)) {
-			selected = ['backend'];
-			for (const file of RUST_TESTS) backendFiles.add(file);
-			rust = true;
-			reason = 'native Rust module checks and actual cross-language codec fixtures';
-		} else if (Object.hasOwn(HOST_TESTS, path)) {
-			selected = ['backend'];
-			for (const file of HOST_TESTS[path]) backendFiles.add(file);
-			rust ||= HOST_TESTS[path].some((file) => RUST_TESTS.includes(file));
-			reason = 'isolated host exchange/verifier tests and declared native consumers';
 		} else if (/^backend\/tests\/(?:[^/]+\/)?test_[^/]+\.py$/.test(path)) {
 			selected = ['backend'];
 			backendFiles.add(path);
@@ -218,20 +161,32 @@ export function selectPaths(paths: readonly string[]): Selection {
 			selected = group ? [group] : [...FRONTEND_GROUPS];
 			reason = group ? 'changed frontend spec' : 'unmapped spec; all frontend groups';
 		} else if (/^frontend\/tests\/fixtures\/panels\//.test(path)) {
-			selected = ['panels'];
-			reason = 'the panel the sufficiency gates are proven against';
+			selected = ['logic'];
+			reason = 'deterministic panel fixture';
 		} else if (/^config\/console\//.test(path)) {
 			selected = CONSOLE;
 			reason = 'route-owned console config and panel checks';
-		} else if (/^frontend\/tests\/support\/(?:console-expect|panel-drivers)\//.test(path)) {
+		} else if (/^frontend\/src\/lib\/console\/model\//.test(path) ||
+			path === 'frontend/tests/support/model-route.ts') {
 			selected = CONSOLE;
-			reason = 'route-owned console expectations and drivers';
+			reason = 'Summaries declarations, private builder and state consumers';
+		} else if (/^frontend\/tests\/support\/console-expect\//.test(path)) {
+			selected = CONSOLE;
+			reason = 'route-owned console expectations';
 		} else if (/^frontend\/tests\/support\/console-window\//.test(path)) {
 			selected = CONSOLE;
 			reason = 'shared window controls and focused route window consumers';
 		} else if (/^frontend\/src\/routes\/(?:console)(?:\/|$)/.test(path)) {
 			selected = CONSOLE;
 			reason = 'console route and publishing checks';
+		} else if (/^frontend\/src\/lib\/console\/(?:voices|pipelines)\//.test(path) ||
+			/^frontend\/tests\/support\/(?:pipelines-ledgers|pipelines-span|retained-telemetry)\.ts$/.test(path) ||
+			path === 'frontend/tests/support/panel-drivers/pipelines.ts') {
+			selected = CONSOLE;
+			reason = 'route-owned Voices panels and publishing checks';
+		} else if (/^frontend\/src\/lib\/console\/machine\//.test(path)) {
+			selected = CONSOLE;
+			reason = 'route-owned Hardware panels and native publication checks';
 		} else if (/^frontend\/src\/routes\/archive\//.test(path)) {
 			selected = ['logic', 'archive', 'model-search', 'publishing'];
 			reason = 'archive route and search consumer';
@@ -270,7 +225,7 @@ export function selectPaths(paths: readonly string[]): Selection {
 			fullBackend = true;
 			reason = 'shared or unknown input; full coverage';
 		}
-		if (!Object.hasOwn(HOST_TESTS, path) && /^(config\/|backend\/idhazh\/contracts\/|pyproject\.toml$)/.test(path)) {
+		if (/^(config\/|backend\/idhazh\/contracts\/|pyproject\.toml$)/.test(path)) {
 			contracts = true;
 		}
 		if (/^(frontend\/(scripts\/|playwright(?:\.logic)?\.config\.ts$|package(?:-lock)?\.json$)|\.github\/workflows\/ci\.yml$|backend\/utilities\/gate_lock\.py$|pyproject\.toml$|unresolved-change-base$|full-ci-run$)/.test(path)) {
@@ -284,7 +239,6 @@ export function selectPaths(paths: readonly string[]): Selection {
 		backendFiles: fullBackend ? null : [...backendFiles].sort(),
 		contracts,
 		tooling,
-		rust: rust || fullBackend,
 		reasons
 	};
 }
@@ -339,7 +293,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
 		console.log(`code=${answer.code}`);
 		console.log(`model_absent=${answer.modelAbsent}`);
 		console.log(`console=${answer.console}`);
-		console.log(`panels=${answer.panels}`);
 		console.log(`robots=${answer.robots}`);
 		console.log(`validate_all=${answer.validateAll}`);
 	} else {

@@ -54,8 +54,9 @@
 	 * run: no committed day carries the reading yet, and "never" would be a
 	 * claim about runs this page did not read.
 	 */
+	const markedDays = $derived(span.days.filter((day) => day.state === 'marked').length);
 	const verdict = $derived(
-		span.from === 0 ? 'unrecorded' : span.named !== null ? 'named' : 'quiet'
+		span.from === 0 ? 'unrecorded' : span.named !== null ? 'named' : markedDays > 0 ? 'marked' : 'quiet'
 	);
 
 	function title(tile: LostTile): string {
@@ -125,7 +126,12 @@
 			? `one tile for ${nameSpan(windowDays)}`
 			: `one tile a day over ${nameSpan(windowDays)}`}, and one a shard of the newest run."
 	>
-		<p class="verdict" data-processor-lost-verdict={verdict}>
+		<p class="lede" data-lede>{span.daysRecording === 0 ? 'No day recorded the host share.'
+			: markedDays === 0 ? `The host took under ${markedAt} percent of the processor on every recorded day (${span.daysRecording} ${span.daysRecording === 1 ? 'day' : 'days'}).`
+				: `${markedDays} of ${span.daysRecording} recorded days reached ${markedAt} percent of the processor given elsewhere.`}</p>
+		<p data-comparison="Days past the marked share against days under it">Days past the marked share against days under it.</p>
+		<p class="verdict" data-processor-lost-verdict={verdict}
+			data-model-rule="no" data-model-rule-none="The host's stolen processor share is not a model-setting comparison.">
 			{#if verdict === 'unrecorded'}
 				<!-- "Over them" would point at days that are not on screen at one day. -->
 				No article in {nameSpan(days)} carries the reading, so this panel says nothing about whether
@@ -138,6 +144,9 @@
 			{:else if span.named !== null}
 				{span.named.label} is the worst day of these {days}: one article was kept off the processor
 				for {span.named.says} of an interval, at or past the {namedAt}% this panel names a day for.
+			{:else if markedDays > 0}
+				{markedDays} recorded {markedDays === 1 ? 'day reached' : 'days reached'} {markedAt}%,
+				but none reached the {namedAt}% share that names the worst day.
 			{:else}
 				No article in {nameSpan(days)} lost as much as {markedAt}% of an interval to another
 				tenant, read over the {grouped(span.daysRecording)}
@@ -150,6 +159,7 @@
 		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 		<div
 			class="grains"
+			data-chart-type="tileStrip" data-panel-question="is it working"
 			tabindex="0"
 			role="group"
 			aria-label={windowDays === 1
@@ -270,9 +280,13 @@
 </div>
 
 <style>
+	.lede { font-size: var(--text-xl); font-weight: 600; line-height: var(--leading-tight); }
 	.verdict {
 		margin: 0 0 var(--space-3);
 		color: var(--color-text);
+		font-size: var(--text-sm);
+		line-height: var(--leading-tight);
+		font-weight: 600;
 	}
 
 	.grain + .grain {

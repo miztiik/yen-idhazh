@@ -1,6 +1,6 @@
 # The ledgers under state/
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-11
 
 `state/` is the only memory this pipeline has. Every run starts on a fresh machine with a fresh checkout, so anything one run needs to tell the next is committed (CLAUDE.md Guardrail #1). This page says what each committed ledger answers and why it files at the grain it does.
 
@@ -27,6 +27,7 @@ A window lets the reader name the files it wants and skip the rest. Without one 
 | `state/raw/visual-prunes/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Is the picture backlog shrinking? One file per run | raw and compact | the whole tree |
 | `state/raw/gardener/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What did each gardener task see, take and leave at one wake? One file per shard | raw and compact | none yet |
 | `state/raw/run-plan/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What plan did the day hand to its later stages? One row per plan execution | raw and compact | the named UTC day |
+| `state/raw/run-shards/<YYYY>/<MM>/<DD>/<file_id>.parquet` | How many shards did the manifest record for this run? Only date, run identity and nullable count | raw and compact | the widest console window |
 | `state/raw/council-run-records/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Which step ran for each hosted judge, how it ended and what it cost | raw and compact | the judged UTC day |
 
 The seen ledger has no published mirror at all, so unlike the two health ledgers there is no second grain anywhere near it.
@@ -44,11 +45,28 @@ planned alone, as `idhazh run` does.
 The council save job files each judged date's run records through the ledger
 door. Each row names the step and part, while the envelope names the save job,
 attempt and council run. A retry therefore replaces the earlier attempt when
-the reader settles rows by `unit_id`.
+the reader settles rows by `unit_id`. A raised unit files `outcome=failed` and
+`fault=raised`; all other outcomes have an empty fault. Earlier rows load with
+no fault. Exception details are not persisted. The
+[council's recording rule](../publishing/llm-council.md#the-venue-keeps-its-own-record-of-every-unit-it-ran)
+owns collection, recording failures and isolated trials.
+
+The run-shards ledger publishes `RunRecord.shards` exactly. Assemble files the
+counts after its final manifest write. An absent count stays null; observed
+hosts, shard indexes and current configuration never fill it. Historical
+backfill reads one named daily manifest at a time over explicit inclusive UTC
+bounds. The last numeric record for a run survives a later unknown. The
+`compact-run-shards` task and normal site copy publish packed and unpacked days;
+whole manifests and plans are not added to the published ledger set.
+
+Before filing counts, the writer settles the named day's compact rows and
+pending raw corrections with their original filing provenance. A correction
+back to the packed value is still filed if a different count is pending.
+Repeating a pending count files nothing; an unknown never erases a number.
 
 The console reads the feed record at build time from its packed files under `state/compact/feed-health/`, so the Voices page stops at the newest packed day. There is no published mirror; the one that existed until 2026-09-16 was never fetched.
 
-`state/raw/item-health/` is the fastest-growing ledger in the table above. The console reads it a month at a time through the published projection, which stays monthly: `public_telemetry.publish` folds a month from that month's days, read through `ledger.load_days` ([persistence.md](persistence.md#reading-a-whole-ledger)).
+`state/raw/item-health/` is the fastest-growing ledger in the table above. The console reads native raw and compact rows through the ledger query door and compact indexes. There is no monthly public telemetry projection. Backend windowed reads still use `ledger.load_days` ([persistence.md](persistence.md#reading-a-whole-ledger)).
 
 `state/raw/feed-retirements/` is read whole because a retirement has no time bound. It files by day anyway, for the reason the section on the two whole-read ledgers gives below. It is also the smallest: a row is written only when a server has reported one address permanently gone on five distinct runs, and none had been written when it moved under `state/raw/` on 2026-09-28.
 

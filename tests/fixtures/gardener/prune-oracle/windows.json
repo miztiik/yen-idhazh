@@ -5,7 +5,6 @@
   "observability.host_fingerprint_keep_months": 14,
   "observability.item_health_aggregate_keep_months": null,
   "observability.item_health_full_grain_months": 14,
-  "observability.public_telemetry_keep_months": 14,
   "observability.score_archive_keep_months": null,
   "observability.scores_full_grain_months": 14,
   "observability.trace_window_days": 7,

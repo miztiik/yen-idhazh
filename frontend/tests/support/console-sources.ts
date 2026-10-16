@@ -11,23 +11,22 @@ export const FRONTEND = fileURLToPath(new URL('../..', import.meta.url));
 export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	'': [
 		'vite.config.ts', 'svelte.config.js', 'asset-base.js', 'playwright.config.ts',
-		'playwright.logic.config.ts', 'playwright.whole-day.config.ts'
+		'playwright.logic.config.ts'
 	],
 	src: ['app.d.ts', 'query-engine-assets.d.ts', 'service-worker.ts'],
 	'src/lib': [
-		'archive-calendar.ts', 'bands.ts', 'day-shape.ts', 'feed-health.ts', 'format.ts',
+		'archive-calendar.ts', 'bands.ts', 'chart-evidence.ts', 'day-shape.ts', 'feed-health.ts', 'format.ts',
 		'links.ts', 'offline.generated.ts', 'offline.ts', 'readstate.ts', 'reveal.ts', 'theme.ts'
 	],
 	'src/lib/assist': [
 		'day.ts', 'encoder.ts', 'index.ts', 'loader.ts', 'month.ts', 'search.ts', 'session.ts', 'weights.ts'
 	],
 	'src/lib/charts': [
-		'chart-flow.ts', 'Chart.svelte', 'core.ts', 'cost.ts', 'day-slots.ts', 'engine.ts',
-		'extraction-trend.ts', 'fleet.ts', 'frame.ts', 'glance.ts', 'indexed-runs.ts',
-		'machine-cards.ts', 'machine-colour.ts', 'machine-name.ts', 'machine-split.ts',
+		'cost.ts', 'day-slots.ts', 'fleet.ts', 'frame.ts', 'glance.ts', 'indexed-runs.ts',
+		'machine-cards.ts', 'machine-colour.ts', 'machine-name.ts',
 		'machine.ts', 'rank.ts', 'readout.ts', 'run-history.ts', 'run-yield.ts', 'series.ts',
-		'skeleton.ts', 'span-track.ts', 'sparkline.ts', 'stacked.ts', 'targetbar.ts',
-		'telemetry-hold.ts', 'theme.ts', 'viewport.ts', 'waterfall.ts'
+		'skeleton.ts', 'sparkline.ts', 'stack-types.ts', 'targetbar.ts',
+		'theme.ts', 'viewport.ts'
 	],
 	'src/lib/charts/d3': [
 		'axis.ts', 'DateSeries.svelte', 'dateSeries.ts', 'Distribution.svelte', 'distribution.ts',
@@ -36,29 +35,49 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'PartsOfOne.svelte', 'partsOfOne.ts', 'rankedList.ts', 'scale.ts', 'TileStrip.svelte', 'tileStrip.ts'
 	],
 	'src/lib/components': [
-		'ArchiveSearch.svelte', 'BandDistance.svelte', 'ChartReadout.svelte', 'ChoiceTiles.svelte',
+		'ArchiveSearch.svelte', 'ChartReadout.svelte', 'ChoiceTiles.svelte',
 		'ConfidenceChip.svelte', 'ConsoleBand.svelte', 'ConsoleNav.svelte', 'DayNotice.svelte',
-		'DigestItem.svelte', 'DigestList.svelte', 'EmptyDay.svelte', 'FailureList.svelte',
-		'FailurePanels.svelte', 'FilterBar.svelte', 'FoundStories.svelte', 'ItemMeta.svelte',
+		'DigestItem.svelte', 'DigestList.svelte', 'EmptyDay.svelte', 'FailureList.svelte', 'FailureRuleRanking.svelte',
+		'FilterBar.svelte', 'FoundStories.svelte', 'ItemMeta.svelte',
 		'ItemVisual.svelte', 'KpiCard.svelte', 'LeadingStories.svelte', 'LensChips.svelte',
-		'MachineCard.svelte', 'MachineSplitGroup.svelte', 'MemoryBoard.svelte', 'MoreDays.svelte',
+		'MachineCard.svelte', 'MoreDays.svelte',
 		'NotHere.svelte', 'Notice.svelte', 'Panel.svelte', 'PanelGroup.svelte', 'PayloadState.svelte',
 		'RankedList.svelte', 'RateControl.svelte', 'ReadAloud.svelte', 'Reserved.svelte', 'RouteStatus.svelte',
 		'RunLengths.svelte', 'RunSquares.svelte', 'RunYield.svelte', 'SearchState.svelte',
-		'ShapeSwitch.svelte', 'ShardBoard.svelte', 'SiteFooter.svelte', 'SiteHeader.svelte',
+		'ShapeSwitch.svelte', 'SiteFooter.svelte', 'SiteHeader.svelte',
 		'SourceCutRange.svelte', 'SourceLink.svelte', 'SourceMark.svelte', 'Sparkline.svelte',
 		'StageTimings.svelte', 'StatusChip.svelte', 'SwapDots.svelte', 'TargetBar.svelte',
-		'ThemeToggle.svelte', 'ThroughputTrend.svelte', 'TimeHistogram.svelte', 'Viewport.svelte',
+		'ThemeToggle.svelte', 'ThroughputTrend.svelte', 'TimeHistogram.svelte',
 		'WindowControl.svelte', 'WindowControlSource.svelte', 'WindowStatus.svelte'
 	],
 	'src/lib/console': [
 		'applied-line.ts', 'band.ts', 'chrome.ts', 'completeness.ts', 'daily-figures.ts',
-		'doubt-reasons.ts', 'eval-instruments.ts', 'extraction.ts', 'held-part-note.ts',
-		'holdout.ts', 'item-cost.ts', 'judgement-evidence.ts', 'merge-line.ts', 'model-cards.ts', 'prompt-cache-subtitle.ts',
+		'doubt-reasons.ts', 'duration-cohort.ts', 'eval-instruments.ts', 'extraction.ts', 'failure-rules.ts',
+		'holdout.ts', 'judgement-evidence.ts', 'merge-line.ts', 'model-cards.ts',
 		'query-state.ts', 'rates.ts', 'recording.ts', 'RecordNotes.svelte', 'route-console.ts', 'run-square.ts', 'series-tokens.ts',
 		'settings-moved.ts', 'span-words.ts', 'strip.ts', 'verdict-split.ts', 'waiting.ts', 'window-slot.ts'
 	],
 	'src/lib/console/queries': ['machine.ts', 'model.ts', 'pipelines.ts', 'shared.ts', 'voices.ts', 'window.ts'],
+	'src/lib/console/pipelines': [
+		'ArticleAge.svelte', 'AtAGlance.svelte', 'ChartDrawing.svelte', 'Extraction.svelte',
+		'FailureMix.svelte', 'ItemCost.svelte', 'ItemTimeSplit.svelte', 'RunHealth.svelte',
+		'RunTimeline.svelte', 'SiteCostPerItem.svelte', 'SlowerOnSameWork.svelte', 'StageTimings.svelte',
+		'article-age.ts', 'at-a-glance.ts', 'chart-drawing.ts', 'drawing-flow.ts', 'extraction.ts', 'failure-mix.ts',
+		'item-cost.ts', 'item-time-split.ts', 'record-window.ts', 'run-health.ts',
+		'run-timeline.ts', 'site-cost-per-item.ts', 'slower-on-same-work.ts', 'stage-timings.ts'
+	],
+	'src/lib/console/model': [
+		'rows.ts', 'call-ending.ts', 'faithfulness.ts', 'source-doubts.ts', 'summary-length.ts',
+		'model-change.ts', 'model-throughput.ts', 'model-rule.ts', 'refusing-rule.ts', 'cost.ts', 'Query.svelte', 'Series.svelte',
+		'Cards.svelte', 'cards.ts', 'Panels.svelte', 'panels.ts', 'Reasons.svelte', 'doubt-reasons.ts', 'slice.ts', 'work.ts'
+	],
+	'src/lib/console/voices': [
+		'record.ts', 'source-health.ts', 'feeds-failed.ts', 'fetch-time.ts',
+		'retiring.ts', 'source-cuts.ts', 'ranking-discount.ts', 'why-chosen.ts', 'watchlist.ts',
+		'VoicesPanel.svelte', 'RecordFrame.svelte', 'SourceHealthPanel.svelte', 'FeedsFailedPanel.svelte', 'FeedTiles.svelte',
+		'FetchTimePanel.svelte', 'RetiringPanel.svelte', 'SourceCutsPanel.svelte',
+		'RankingDiscountPanel.svelte', 'WhyChosenPanel.svelte', 'WatchlistPanel.svelte'
+	],
 	'src/lib/console/explorer': [
 		'address.ts', 'answer.ts', 'AnswerTable.svelte', 'chart-roles.ts', 'column-groups.ts',
 		'ColumnList.svelte', 'ColumnPicker.svelte', 'ColumnType.svelte', 'CopyAnswer.svelte',
@@ -68,26 +87,23 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'status.ts', 'strip-fit.ts', 'type-colour.ts', 'type-family.ts', 'utc-instant.ts'
 	],
 	'src/lib/console/machine': [
-		'article-cost.ts', 'ArticleCostPanel.svelte', 'context-cost.ts', 'ContextCostPanel.svelte',
-		'CounterfactualCostPanel.svelte', 'disk-reads.ts', 'DiskReadsPanel.svelte', 'FleetDots.svelte',
-		'MachineCardsPanel.svelte', 'MachineSplitPanel.svelte', 'memory-held.ts',
-		'MemoryBoardPanel.svelte', 'MemoryHeldPanel.svelte', 'PlatformMixPanel.svelte',
-		'processor-lost.ts', 'ProcessorLostPanel.svelte', 'prompt-reuse.ts', 'PromptReusePanel.svelte',
-		'ReadAgainstWrittenPanel.svelte', 'refused-runs.ts', 'run-axis.ts', 'ShardBoardPanel.svelte',
-		'TailTrendPanel.svelte', 'TwoClocksPanel.svelte'
+		'article-cost.ts', 'ArticleCostPanel.svelte', 'disk-reads.ts', 'DiskReadsPanel.svelte', 'FleetDots.svelte',
+		'MachineCardsPanel.svelte', 'MachineCharts.svelte', 'RecordFrame.svelte', 'counters.ts', 'host-types.ts', 'records.ts', 'memory-held.ts',
+		'MemoryHeldPanel.svelte', 'PlatformMixPanel.svelte',
+		'processor-lost.ts', 'ProcessorLostPanel.svelte',
+		'refused-runs.ts', 'run-axis.ts', 'TailTrendPanel.svelte'
 	],
 	'src/lib/data': [
-		'ask-reader.ts', 'compact-index.ts', 'engine.ts', 'fetched-bytes.ts', 'ledger-columns.ts',
+		'ask-reader.ts', 'compact-index.ts', 'engine.ts', 'fetched-bytes.ts', 'host-fingerprint.ts', 'ledger-columns.ts',
 		'ledger-reach.ts', 'ledger.ts', 'page-keeper.ts', 'raw-day-index.ts', 'read-session.ts', 'site-window.ts',
 		'slice-query.ts', 'slice-reader.ts', 'slice-shapes.ts', 'slice.ts', 'statement.ts'
 	],
 	'src/lib/icons': ['generated.ts', 'Icon.svelte'],
 	'src/lib/payload': ['desks.ts', 'drawing.ts', 'lenses.ts', 'project.ts', 'types.ts'],
 	'src/lib/server': [
-		'chart-days.ts', 'chart-render.ts', 'config.ts', 'cuts-by-run.ts', 'host-fingerprint.ts',
-		'ledger-disk.ts', 'ledger-rows.ts', 'machine-counters.ts', 'model-work.ts', 'payload.ts',
-		'publication.ts', 'recorded-line.ts', 'run-days.ts', 'run-timeline.ts', 'server-counter-notes.ts',
-		'content-similarity-holdout.ts', 'content-similarity-judge.ts', 'source-retiring.ts', 'stage-timing-days.ts', 'window-day.ts'
+		'chart-days.ts', 'config.ts', 'ledger-disk.ts', 'ledger-rows.ts', 'model-work.ts', 'payload.ts',
+		'publication.ts', 'recorded-line.ts',
+		'content-similarity-holdout.ts', 'content-similarity-judge.ts', 'source-retiring.ts', 'window-day.ts'
 	],
 	'src/lib/visual': ['bar.ts', 'width.ts'],
 	'src/routes': ['+error.svelte', '+layout.svelte', '+layout.ts', '+page.server.ts', '+page.svelte'],
@@ -118,19 +134,20 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'query-engine-assets.test.mjs', 'run-checks.test.mjs', 'test-results.test.mjs', 'test-scope.test.mjs'
 	],
 	'tests/support': [
-		'backend-python.ts', 'browser.ts', 'door-page.ts', 'canary-config.ts', 'charts-ready.ts', 'check-addons.ts',
-		'consecutive-days.ts', 'console-panels.ts', 'console-sources.ts', 'console-widths.ts', 'day-drawings.ts',
-		'day-loader.ts', 'day-ready.ts', 'explorer-answer.ts', 'in-zone.ts', 'judgement-route.ts',
+		'backend-python.ts', 'browser.ts', 'door-page.ts', 'check-addons.ts', 'charts-ready.ts',
+		'consecutive-days.ts', 'console-sources.ts', 'console-widths.ts',
+		'day-loader.ts', 'day-ready.ts', 'explorer-answer.ts', 'in-zone.ts',
 		'ledger-lifecycle.ts', 'machine-record-state.ts', 'machine-rows.ts', 'model-swap.ts',
+		'model-route.ts',
 		'month-shard.ts', 'panel-gates.ts', 'panel-tab.ts', 'published-site.ts', 'published.ts',
-		'range-host.ts', 'reduction-input.ts', 'served-telemetry.ts', 'server-render.ts', 'span-said.ts',
-		'telemetry-row.ts', 'views.ts'
+		'range-host.ts', 'reduction-input.ts', 'server-render.ts',
+		'telemetry-row.ts', 'views.ts', 'pipelines-ledgers.ts', 'pipelines-span.ts', 'retained-telemetry.ts'
 	],
-	'tests/fixtures/panels': ['WitnessPanel.svelte'],
+	'tests/fixtures/panels': ['WitnessPanel.svelte', 'DurationStack.svelte', 'LegacyReserved.svelte', 'RetainedTelemetry.svelte'],
 	'tests/support/console-window': [
-		'controls.ts', 'readout.ts', 'judgement-fixtures.ts', 'machine-spans.ts',
-		'client-render.ts', 'server-panels.ts'
-	]
+		'controls.ts', 'readout.ts', 'judgement-fixtures.ts', 'server-panels.ts', 'client-render.ts'
+	],
+	'tests/support/panel-drivers': ['pipelines.ts']
 };
 
 export function sourceFiles(): string[] {

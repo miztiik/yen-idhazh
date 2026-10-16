@@ -37,6 +37,21 @@ on:
       article_limit:
         description: 'Plan at most this many articles, best first, for a short test run. Blank plans the full day.'
         default: ''
+      memory_profiling:
+        description: 'OS memory and fault collection; inherit reads shared config'
+        type: choice
+        default: inherit
+        options:
+          - inherit
+          - 'on'
+          - 'off'
+      host_telemetry:
+        description: 'Python host collector, or off for all host telemetry'
+        type: choice
+        default: python
+        options:
+          - python
+          - 'off'
 
 permissions:
   contents: write
@@ -47,6 +62,8 @@ permissions:
 env:
   # Runner-local health probe; inference uses model_server.base_url from config.
   MODEL_SERVER_PROBE: 'http://127.0.0.1:8080'
+  IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry || 'python' }}
+  MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
 
 jobs:
   plan:
@@ -61,6 +78,7 @@ jobs:
       shard_timeout_minutes: ${{ steps.bounds.outputs.shard_timeout_minutes }}
       faithfulness: ${{ steps.decide.outputs.faithfulness }}
       llama_cpp_build: ${{ steps.runtime.outputs.llama_cpp_build }}
+      host_telemetry: ${{ steps.host_telemetry.outputs.mode }}
     steps:
       # Start before checkout so elapsed time includes setup.
       - name: Stamp the plan clock
@@ -78,6 +96,15 @@ jobs:
 
       - name: Install
         run: pip install -e .
+      - name: Resolve host telemetry
+        id: host_telemetry
+        env:
+          REQUESTED: ${{ inputs.host_telemetry || 'python' }}
+        run: |
+          set -euo pipefail
+          MODE=$(python backend/utilities/host_telemetry_control.py "$REQUESTED" --config-root config)
+          echo "IDHAZH_HOST_TELEMETRY_MODE=$MODE" >> "$GITHUB_ENV"
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
 
       - id: decide
         env:
@@ -144,6 +171,8 @@ jobs:
         env:
           # Pass dispatch input as data, not interpolated shell code.
           DISPATCH_ARTICLE_LIMIT: ${{ inputs.article_limit }}
+          MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
+          DISPATCH_SHARDS: ${{ inputs.shards }}
         run: |
           set -euo pipefail
           LIMIT=()
@@ -154,14 +183,25 @@ jobs:
             fi
             LIMIT=(--article-limit "$DISPATCH_ARTICLE_LIMIT")
           fi
+          SHARD_ARGS=()
+          if [ -n "${DISPATCH_SHARDS:-}" ]; then
+            SHARD_ARGS=(--shards "$DISPATCH_SHARDS")
+          fi
+          MEMORY_ARGS=()
+          if [ "$MEMORY_PROFILING" != "inherit" ]; then
+            MEMORY_ARGS=(--memory-profiling "$MEMORY_PROFILING")
+          fi
           python backend/utilities/digest_publish.py run plan \
             --date "${{ steps.decide.outputs.date }}" \
             --execution "${{ github.run_id }}" \
             --commit "${{ github.sha }}" \
-            "${LIMIT[@]}"
+            "${MEMORY_ARGS[@]}" \
+            "${LIMIT[@]}" \
+            "${SHARD_ARGS[@]}"
 
       # The probe needs the plan's execution ID and an otherwise idle runner.
       - name: What machine this job drew
+        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'python'
         run: |
           set -euo pipefail
           python backend/utilities/digest_publish.py run fingerprint \
@@ -177,14 +217,7 @@ jobs:
         run: |
           set -euo pipefail
           SHARD_PATTERN='^[1-8]$'
-          SHARDS="${{ inputs.shards }}"
-          if [ -z "$SHARDS" ]; then
-            SHARDS=$(python -m idhazh shards --date "${{ steps.decide.outputs.date }}" --execution "${{ github.run_id }}")
-            # Clamp derived counts to the dispatch range; reject invalid inputs below.
-            while [ "$SHARDS" -gt 1 ] && ! [[ "$SHARDS" =~ $SHARD_PATTERN ]]; do
-              SHARDS=$((SHARDS - 1))
-            done
-          fi
+          SHARDS=$(python -m idhazh shards --date "${{ steps.decide.outputs.date }}" --execution "${{ github.run_id }}")
           if ! [[ "$SHARDS" =~ $SHARD_PATTERN ]]; then
             echo "shards must be an integer from 1 through 8" >&2
             exit 1
@@ -194,6 +227,7 @@ jobs:
 
       # Record elapsed time before committing; commit and upload time are excluded.
       - name: What this job cost
+        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'python'
         run: |
           set -euo pipefail
           python backend/utilities/digest_publish.py run job-clock \
@@ -215,6 +249,7 @@ jobs:
           --date "${{ steps.decide.outputs.date }}"
           --execution "${{ github.run_id }}" --commit "${{ github.sha }}"
 
+
       # Hand this day's run plans on even after a failed push; fail here if the plan
       # stage wrote none. Later jobs pick their own run's plan by --execution.
       - uses: actions/upload-artifact@v7
@@ -224,6 +259,7 @@ jobs:
           path: ${{ steps.decide.outputs.plan_dir }}/
           retention-days: 1
           if-no-files-found: error
+
 
   # The worker timeout comes from run.shard_timeout_minutes in config.
   work:
@@ -261,6 +297,15 @@ jobs:
             pip install --index-url https://download.pytorch.org/whl/cpu torch
             pip install -e ".[faithfulness]"
           fi
+      - name: Resolve host telemetry
+        id: host_telemetry
+        env:
+          REQUESTED: ${{ needs.plan.outputs.host_telemetry }}
+        run: |
+          set -euo pipefail
+          MODE=$(python backend/utilities/host_telemetry_control.py "$REQUESTED" --config-root config)
+          echo "IDHAZH_HOST_TELEMETRY_MODE=$MODE" >> "$GITHUB_ENV"
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
 
       - uses: actions/download-artifact@v8
         with:
@@ -269,6 +314,7 @@ jobs:
 
       # Probe before the model server consumes memory and bandwidth.
       - name: What machine this job drew
+        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'python'
         run: |
           set -euo pipefail
           python backend/utilities/digest_publish.py run fingerprint \
@@ -296,7 +342,7 @@ jobs:
 
       # Record host, runtime and weights even if the shard fails.
       - name: What this runner is
-        if: always()
+        if: always() && env.IDHAZH_HOST_TELEMETRY_MODE != 'off'
         env:
           LLAMA_CPP_BUILD: ${{ needs.plan.outputs.llama_cpp_build }}
           MODEL_PATH: ${{ steps.model_server.outputs.weights_path }}
@@ -311,8 +357,17 @@ jobs:
 
       # Detach the sampler so it survives this step; track the sampler's own PID.
       - name: Sample memory
+        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'python'
+        env:
+          MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
         run: |
           set -euo pipefail
+          RESOLVED=$(python3 backend/utilities/memory_profiling_control.py \
+            "$MEMORY_PROFILING")
+          if [ "$RESOLVED" = "off" ]; then
+            echo "memory profiling is off; no sampler started"
+            exit 0
+          fi
           python3 backend/utilities/memory_sampler.py start-sampler \
             --pid "$(cat llama-server.pid)"
 
@@ -320,13 +375,21 @@ jobs:
       - name: Work the shard
         env:
           LLAMA_CPP_BUILD: ${{ needs.plan.outputs.llama_cpp_build }}
+          MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
         run: |
+          MEMORY_ARGS=()
+          if [ "$MEMORY_PROFILING" != "inherit" ]; then
+            MEMORY_ARGS=(--memory-profiling "$MEMORY_PROFILING")
+          fi
           python backend/utilities/digest_publish.py run work \
             --date "${{ needs.plan.outputs.date }}" \
             --execution "${{ github.run_id }}" \
+            --commit "${{ github.sha }}" \
             --shard ${{ matrix.shard }} \
             --shards ${{ needs.plan.outputs.shards }} \
+            "${MEMORY_ARGS[@]}" \
             ${{ needs.plan.outputs.faithfulness == 'false' && '--no-faithfulness' || '' }}
+
 
       - name: Runtime log on failure
         if: failure()
@@ -347,8 +410,10 @@ jobs:
 
       # Read cumulative counters once, before job-clock consumes them.
       - name: What the server counted
-        if: always()
+        if: always() && env.IDHAZH_HOST_TELEMETRY_MODE != 'off'
         continue-on-error: true
+        env:
+          MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
         run: |
           curl -sf --max-time 30 "${MODEL_SERVER_PROBE}/metrics" -o llama-metrics.prom || true
           if [ -s llama-metrics.prom ]; then
@@ -363,7 +428,11 @@ jobs:
             echo "no metrics: llama-server was already gone, or the role's inference.metrics is off"
           fi
           # Capture the runner's cgroup peak here; the portable stage reads this file.
-          if [ -f /sys/fs/cgroup/memory.peak ]; then
+          RESOLVED=$(python3 backend/utilities/memory_profiling_control.py \
+            "$MEMORY_PROFILING")
+          if [ "$RESOLVED" = "off" ]; then
+            rm -f memory-peak.txt
+          elif [ -f /sys/fs/cgroup/memory.peak ]; then
             echo "cgroup_memory_peak_bytes=$(cat /sys/fs/cgroup/memory.peak)" > memory-peak.txt
           else
             echo "cgroup_memory_peak_bytes=unavailable" > memory-peak.txt
@@ -372,7 +441,7 @@ jobs:
       # Combine startup timing, the server log and counters in the host record.
       # An absent start stamp leaves a missing reading, not a failed shard.
       - name: What this job cost
-        if: always()
+        if: always() && env.IDHAZH_HOST_TELEMETRY_MODE == 'python'
         continue-on-error: true
         run: |
           set -euo pipefail
@@ -428,8 +497,10 @@ jobs:
           done
 
       - name: What memory this shard used
-        if: always()
+        if: always() && env.IDHAZH_HOST_TELEMETRY_MODE == 'python'
         run: |
+          RESOLVED=$(python3 backend/utilities/memory_profiling_control.py "$MEMORY_PROFILING")
+          [ "$RESOLVED" != "off" ] || exit 0
           cat memory-peak.txt 2>/dev/null || echo "memory-peak.txt not found"
           python3 backend/utilities/memory_sampler.py summarize
 
@@ -440,6 +511,15 @@ jobs:
           name: runtime-log-${{ matrix.shard }}
           path: |
             llama-server.log
+          retention-days: 2
+          if-no-files-found: ignore
+
+      - name: Upload host measurements
+        if: always() && env.IDHAZH_HOST_TELEMETRY_MODE == 'python'
+        uses: actions/upload-artifact@v7
+        with:
+          name: host-measurements-${{ matrix.shard }}
+          path: |
             rss-samples.jsonl
             python-procs.jsonl
             memory-peak.txt
@@ -501,6 +581,15 @@ jobs:
 
       - name: Install
         run: pip install -e .
+      - name: Resolve host telemetry
+        id: host_telemetry
+        env:
+          REQUESTED: ${{ needs.plan.outputs.host_telemetry }}
+        run: |
+          set -euo pipefail
+          MODE=$(python backend/utilities/host_telemetry_control.py "$REQUESTED" --config-root config)
+          echo "IDHAZH_HOST_TELEMETRY_MODE=$MODE" >> "$GITHUB_ENV"
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
 
       - uses: actions/download-artifact@v8
         with:
@@ -510,6 +599,7 @@ jobs:
       # Before the embeddings and the site build, which want the runner the
       # bandwidth reading wants.
       - name: What machine this job drew
+        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'python'
         continue-on-error: true
         run: |
           set -euo pipefail
@@ -527,12 +617,21 @@ jobs:
           path: backend/var/run/${{ needs.plan.outputs.date }}/items/
 
       - name: Assemble and publish
+        env:
+          MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
         run: |
+          set -euo pipefail
+          MEMORY_ARGS=()
+          if [ "$MEMORY_PROFILING" != "inherit" ]; then
+            MEMORY_ARGS=(--memory-profiling "$MEMORY_PROFILING")
+          fi
           python backend/utilities/digest_publish.py run assemble \
             --date "${{ needs.plan.outputs.date }}" \
             --execution "${{ github.run_id }}" \
             --commit "${{ github.sha }}" \
+            "${MEMORY_ARGS[@]}" \
             --runner ubuntu-latest
+
 
       - name: Harvest the training corpus
         # Harvest while downloaded item text is available.
@@ -574,6 +673,7 @@ jobs:
       # as they are for plan and work. No server log or counters: assemble stands
       # no model server up, so those two readings are not its to take.
       - name: What this job cost
+        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'python'
         continue-on-error: true
         run: |
           set -euo pipefail

@@ -12,14 +12,11 @@
         "discard_share": 0.02,
         "enabled": true,
         "fall_weight": 0.6,
-        "flush_every_pairs": 5,
-        "judge_temperature": 0.7,
         "max_down_bins": 12,
         "max_up_bins": 4,
         "minimum_above_line": 40,
         "minimum_days": 20,
         "minimum_negatives": 300,
-        "pair_budget": 100,
         "rise_weight": 0.2,
         "settled_delta": 0.002,
         "settled_window_days": 14,
@@ -102,7 +99,6 @@
   },
   "console": {
     "absent_hatch_degrees": 30,
-    "band_outlier_rows": 6,
     "bandwidth_min_kinds": 4,
     "chart_coverage_pct": 5.0,
     "chart_height": 160,
@@ -219,8 +215,6 @@
     "min_window_days": 7,
     "model_disk_reads_marked": 3,
     "model_disk_reads_named": 9,
-    "pan_days": 3,
-    "plot_min_fill_share": 0.9,
     "precision_axis_multiple": 10.0,
     "processor_lost_pct_marked": 2.0,
     "processor_lost_pct_named": 25.0,
@@ -234,19 +228,6 @@
       21,
       60,
       180
-    ],
-    "zoom_factor": 2.0
-  },
-  "council": {
-    "first_night": "2026-09-20",
-    "repair_dates_a_night": 3,
-    "repair_window_nights": 14,
-    "shard_preamble_minutes": 7,
-    "shard_timeout_minutes": 120,
-    "shard_wrap_up_minutes": 9,
-    "shards": 8,
-    "tenants": [
-      "a-paper-tenant"
     ]
   },
   "drift": {
@@ -360,12 +341,10 @@
     "host_fingerprint_bandwidth_jobs": [
       "work"
     ],
-    "public_day_metrics_keep_months": 21,
-    "public_machine_keep_months": 22,
-    "public_run_days_keep_months": 19,
-    "public_run_timeline_keep_months": 5,
+    "host_fingerprint_frequency_enabled": true,
+    "host_telemetry_enabled": false,
+    "memory_profiling_enabled": false,
     "sample_rate": 0.25,
-    "telemetry_publish": false,
     "tracing_enabled": true,
     "visual_aggregate_keep_months": 42,
     "visuals_full_grain_months": 26
@@ -378,8 +357,7 @@
     },
     "cold_console_load_bytes": 900000,
     "payload_ceilings_bytes": {
-      "console/band.json": 4096,
-      "telemetry/": 500000
+      "console/band.json": 4096
     }
   },
   "placement": {

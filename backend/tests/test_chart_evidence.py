@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
-from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -26,7 +25,6 @@ from idhazh.contracts.visual_decision import VisualDecision, VisualKind, VisualS
 from idhazh.derived_values import measure_displayed_values, resolve_displayed_values
 from idhazh.render.chart import compile_bar
 from idhazh.render.write import asset_relpath, render_planned_visual
-from idhazh.telemetry.publish import run_days
 
 pytestmark = [pytest.mark.visual, pytest.mark.contract]
 
@@ -155,7 +153,7 @@ def _manifest(
     )
 
 
-def test_compiler_decision_manifest_and_month_reader_preserve_weighted_evidence(
+def test_compiler_decision_and_native_manifest_preserve_weighted_evidence(
     tmp_path: Path,
 ) -> None:
     wind = _render(tmp_path)
@@ -182,18 +180,10 @@ def test_compiler_decision_manifest_and_month_reader_preserve_weighted_evidence(
     folder.mkdir(parents=True, exist_ok=True)
     (folder / "digest.json").write_text(day.to_json(), encoding="utf-8", newline="\n")
     (folder / "run.json").write_text(manifest.to_json(), encoding="utf-8", newline="\n")
-    paths = run_days.publish(
-        digest_root=digest_root,
-        keep_months=1,
-        today=date(2026, 8, 21),
-        months=[DATE[:7]],
-    )
-    assert len(paths) == 1
-    loaded = run_days.read_shard(paths[0])
-    assert loaded[0].runs[0].chart_evidence == expected
-    assert json.loads(paths[0].read_text(encoding="utf-8"))[0]["runs"][0]["chart_evidence"] == (
-        expected.model_dump(mode="json")
-    )
+    loaded = RunManifest.read(folder / "run.json")
+    assert loaded.runs[0].chart_evidence == expected
+    recorded = json.loads((folder / "run.json").read_text(encoding="utf-8"))
+    assert recorded["runs"][0]["chart_evidence"] == expected.model_dump(mode="json")
 
 
 def test_reporting_does_not_count_unused_encodings_labels_or_annotations() -> None:

@@ -53,6 +53,7 @@
 	import ChartReadout from './ChartReadout.svelte';
 	import { plural } from '$lib/format';
 	import type { Distribution } from '../../routes/console/model/+page.server';
+	import type { ChartToken } from '$lib/charts/theme';
 
 	let {
 		times,
@@ -65,7 +66,8 @@
 		width,
 		height,
 		readoutMaxShare = 1,
-		domain
+		domain,
+		barToken = '--chart-1'
 	}: {
 		times: Distribution;
 		/** What this instance is of, so a page with two can tell them apart. */
@@ -88,6 +90,7 @@
 		/** `chart.readout_max_share`. */
 		readoutMaxShare?: number;
 		domain?: [number, number];
+		barToken?: ChartToken;
 	} = $props();
 
 	/** Room for the count axis, the percent axis and the two rule labels. */
@@ -253,7 +256,7 @@
 			series: [
 				{
 					label: `${verb.charAt(0).toUpperCase()}${verb.slice(1)} in this band`,
-					swatch: 'var(--chart-1)',
+					swatch: `var(${barToken})`,
 					values: bars.map((bar) => bar.bin.n),
 					format: (value: number) => plural(value, noun, nouns)
 				},
@@ -288,6 +291,8 @@
 	<div use:observeWidth={(next) => (measured = next)}>
 		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 		<svg
+			data-chart="time-histogram"
+			data-chart-name={name}
 			class="block max-w-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
 			width={box.width}
 			height={box.height}
@@ -350,7 +355,7 @@
 						y={round(bar.y)}
 						width={round(bar.width)}
 						height={round(bar.height)}
-						fill="var(--chart-1)"
+						fill={`var(${barToken})`}
 					/>
 				</g>
 			{/each}

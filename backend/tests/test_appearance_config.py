@@ -371,16 +371,23 @@ def test_route_panel_lists_are_not_shared_console_knobs(field: str) -> None:
         )
 
 
-def test_the_fill_floor_is_a_share_of_the_panel() -> None:
-    """Gate 1's floor is a share of one, so zero and anything past one are not floors.
-
-    Zero would pass a panel that draws nothing at all, and a floor over one
-    fails every panel that fills its frame edge to edge.
-    """
-    for refused in (0.0, -0.1, 1.01):
-        with pytest.raises(ValidationError, match="plot_min_fill_share"):
-            ConsoleConfig(plot_min_fill_share=refused)
-    assert ConsoleConfig(plot_min_fill_share=1.0).plot_min_fill_share == 1.0
+@pytest.mark.parametrize("contract", [AppearanceConfig, AppConfig])
+def test_the_retired_fill_floor_is_not_a_console_knob(
+    contract: type[AppearanceConfig] | type[AppConfig],
+) -> None:
+    """Both config files refuse the unread fill floor, even at its former bounds."""
+    field = "plot_min_fill_share"
+    assert field not in ConsoleConfig.model_fields
+    assert field not in contract.json_schema()["$defs"]["ConsoleConfig"]["properties"]
+    path = APPEARANCE_PATH if contract is AppearanceConfig else REPO_ROOT / "config" / "idhazh.json"
+    document = json.loads(path.read_text(encoding="utf-8"))
+    contract.model_validate(document)
+    for value in (0.0, -0.1, 0.85, 1.0, 1.01):
+        with pytest.raises(ValidationError) as refused:
+            contract.model_validate({**document, "console": {**document["console"], field: value}})
+        assert [(error["loc"], error["type"]) for error in refused.value.errors()] == [
+            (("console", field), "extra_forbidden")
+        ]
 
 
 def test_the_default_theme_is_the_one_root_carries() -> None:

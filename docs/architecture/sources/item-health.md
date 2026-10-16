@@ -10,7 +10,7 @@ shows where item evidence stops and feed quarantine or retirement begins.
 
 **This ledger is the pipeline's spine.** It is the most granular record the
 pipeline keeps, and every other telemetry surface is derived from it - the
-browser's month mirror under `frontend/public/telemetry/`, the day aggregate in
+native panel query answers, the day aggregate in
 `state/day-metrics/`, and the operator console. Owner decision, 2026-09-14: new
 telemetry lands here first and is projected outward, rather than each surface
 growing its own ledger.
@@ -57,8 +57,8 @@ file that is already there. It is not kept for ever: a month older than the
 `full-grain` series of `config/gardener/telemetry-aggregate.json` (14 months) is
 summarised to one row per `(date, stage)` in
 `state/raw/item-health-summary/` by the gardener's `telemetry-aggregate` task,
-then packed under `state/compact/item-health-summary/`, and the browser's copy of that same month under
-`frontend/public/telemetry/` goes in the same pass. The month's rows go later,
+then packed under `state/compact/item-health-summary/`. The public telemetry
+copy is retired; the summariser deletes no public files. The month's rows go later,
 when the 15-month `monthly_window` of `config/gardener/compact-item-health.json`
 passes, so a month is always summarised before its rows can be deleted.
 
@@ -68,16 +68,9 @@ through `ledger.load_days`, writes the summary through `ledger.persist` and
 reads it back. It deletes no row of this ledger; the item-health compaction
 takes the month's rows later.
 
-**The step ships in dry run.** It logs every file a live run would remove and
-removes none of them, because the `history` job of `.github/workflows/idhazh-gardener.yml` force-pushes `main`
-on a schedule and a deleted state file stops being recoverable from history once
-that prune passes over it (`CLAUDE.md` section 8). Turning the deletion on is a
-one-line commit taken after a scheduled run has printed the list. Measured on
-this checkout on 2026-09-02, the earliest a live run would remove anything is
-**2027-10-01**, when August 2026 falls below the window and its published copy
-goes. The month's rows are not this step's to remove: they are the
-`item-health` compaction's, which packs live and deletes a month's rows only
-when its 15-month `monthly_window` passes.
+**The summariser ships in dry run.** It reports the native summaries it would
+write and writes none. It deletes no source rows. Native row retention is
+the item-health compaction's responsibility, not the former public-copy policy.
 
 The 30-day window on this page is a read-side parameter and is unrelated to that
 age. Day files followed the published ledger, and the seen and feed-health
@@ -832,11 +825,11 @@ Three limits, in the order they will actually bite:
  with the rows written rather than with rewrites of one file. The lever if it
  bites is the projection width again, or a shorter retention on the ledger itself.
 3. **The 1 GB published site, last and least.** The ledger reaches the site
- twice: as the projection under `frontend/public/telemetry/`, about 10 MB gzipped
- a year, and as its compact files, copied whole for the browser's query door and
+ as its native files, copied for the browser's query door and
  bounded by the ledger's keep windows - 4.71 MB on 2026-09-30
  ([../publishing/how-the-query-door-answers-a-panel.md](../publishing/how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)).
- Neither is the thing that fills a gigabyte - the day payloads and their SVG
+ The retired public CSV no longer duplicates those files. Native rows are not
+ the thing that fills a gigabyte - the day payloads and their SVG
  assets are.
 
 What is deliberately **not** planned: pruning inside the window. The ledger is
@@ -1008,7 +1001,7 @@ by the row identity above. Authority: Fowler, over Carmack's original ruling.
 | Parse the throughput out of the runtime log | The log is a CI artifact kept for two days, and a rate nobody can recompute later is not a measurement. The reply already carries the numbers. |
 | Record the rates instead of the counts | A stored rate cannot be re-aggregated across a day, a week, or the four workers. Record what was measured; divide on read. |
 | Prune the ledger on a retention schedule | The rows worth keeping longest are the ones from the worst days, and those are the first a size-driven prune would take. Windows are a read-side parameter instead. |
-| Serve `state/item-health/` directly to the console | The row carries `canonical_url`, `url_key` and `detail`, none of which belongs in a browser. The narrow projection under `frontend/public/telemetry/` exists so the forbidden columns are absent by construction rather than filtered on read. |
+| Restore a public monthly telemetry mirror | Pipelines already reads native ledger files through its declared query door; a second producer and row contract would duplicate those facts. |
 | One row per item, updated as the item progresses | An update is a read-modify-write over the whole history, and two runs racing on that lose rows. Append is what makes the file safe for five runs a day. |
 | Keep the worker's rows in the `items-*` artifact and raise its retention | The artifact is never committed and expires, so a longer retention delays the loss rather than preventing it. The committed row is what a later run and the console read. |
 | Let a worker record every item it was planned, not only the settled ones | An item the shard was interrupted on would be filed as a failure, and an append-only ledger cannot take that back. |

@@ -10,6 +10,7 @@ touched neither (`CLAUDE.md` section 13). The run reports it instead:
 
 from __future__ import annotations
 
+import json
 from typing import Any, Final
 
 import pytest
@@ -106,6 +107,20 @@ def test_a_plan_written_before_the_guard_was_counted_reads_as_unknown() -> None:
     built = RunPlan.model_validate(bare_plan())
     assert built.dropped_published is None
     assert built.dropped_published_ages is None
+
+
+def test_a_plan_written_before_shards_were_recorded_reads_as_unknown() -> None:
+    payload = json.loads(read_text(FIXTURES_DIR / "contracts" / "run-plan" / "one-day.json"))
+    del payload["shards"]
+
+    assert RunPlan.model_validate(payload).shards is None
+    assert RunPlan.model_validate(bare_plan(shards=3)).shards == 3
+
+
+@pytest.mark.parametrize("shards", [0, -1, True, 1.5, "3"])
+def test_a_plan_refuses_an_invalid_shard_count(shards: object) -> None:
+    with pytest.raises(ValidationError):
+        RunPlan.model_validate(bare_plan(shards=shards))
 
 
 def test_the_guard_count_and_its_bands_are_recorded_together() -> None:

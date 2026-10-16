@@ -1,6 +1,6 @@
 # The ledger registry
 
-**Last Updated**: 2026-10-09
+**Last Updated**: 2026-10-11
 
 A ledger is a committed file or folder under `state/` that one run writes so that a later run can read it. A ledger exists in code only when it is registered, and registering it takes two edits. The first is one member of `LedgerName`, the ledger's one name in code. The second is one entry in `config/ledgers.json`, which puts the ledger in a family - one top-level folder under `state/` - and says where its files sit. When the code loads, it checks that the two edits agree, and the build stops if they do not.
 
@@ -93,18 +93,35 @@ The first row is what the registry is for. The claim used to be a hand-written P
 
 ## The three lifecycle statuses, and what each one changes
 
-`active` is written and read. `paused` is not written now and will resume. `retired` is no longer written and is not coming back. What a ledger's indexes record while its family is paused or retired, and at every other stage of its life, is [ledger-lifecycle.md](ledger-lifecycle.md).
+`active` is written and read. `paused` is not written in production now and will resume. `retired` is no longer written and is not coming back. What a ledger's indexes record while its family is paused or retired, and at every other stage of its life, is [ledger-lifecycle.md](ledger-lifecycle.md).
 
 **All three are claimed, so all three are protected.** The status says what a writer may do, never whether the rows survive. Deleting a family's data for good is something a person does on purpose, never a side effect of a status change.
 
 **The write path reads the status on every write.** One function decides: `accepts_new_rows` in `backend/idhazh/ledger/lifecycle.py`, which reads the family's status from the registry each time it is called. Every route that writes new rows asks it before it writes: the ledger door ([persistence.md](persistence.md)) for every raw write from a pipeline job, and the writers of the ledgers outside the door - the day record, the digest fragment, the trace sink once per shard, and the similarity judge's score distribution and archive. Two rules hold, and both are the owner's:
 
-- A write into a paused or retired family is skipped with one warning naming the ledger, its family, the status and the rows not written, and the run carries on. A status is a decision about one folder, and a run that stopped on it would cost every other family its rows.
+- A production write into a paused or retired family is skipped with one warning naming the ledger, its family, the status and the rows not written, and the run carries on. A status is a decision about one folder, and a run that stopped on it would cost every other family its rows.
 - The passes that compact closed days and age out old rows keep running over a paused or retired family. To freeze its old rows as well, pause the pass that deletes them: a status says whether new rows are written, never how long old ones are kept. Those passes never ask, and the ledger door exempts a compact-tier write and any write from `migrate`, `run-tasks` or `history`, because each of those files rows again that were already recorded - skipping one after its source was deleted would lose rows while the run reported success.
 
 **The check sits at the write, never in the path builders.** `path`, `tree_root` and `relpath` also serve readers, and a paused family is still read.
 
-**What pausing a family costs, beyond its own rows.** CI builds its canary day through the same writers, so pausing a family thins that fixture too. A paused `content-similarity-judge` re-judges the same nights at every council run until they leave the window, because what counts a night as outstanding reads the record the skip stops writing. And a paused `digest-fragments` stops the first run of a new day from publishing it at all: the day is assembled from the fragments on disk, and a day with none is refused. A paused `visual-prunes` stops the cleanup record while the cleanup itself still runs, because the record goes through the ledger door from the assemble job, which is not one of the maintenance jobs; nothing reads those rows yet, and the cleanup deletes nothing today.
+**Isolated council trials are the narrow raw-write exception.** The owner
+approved it on 2026-10-11 UTC. An explicitly selected paused manual judge may
+write raw rows into a paused family only under its run/attempt/judge trial root.
+The council opens a scoped authorization during settlement; the ledger checks
+the exact state root, run and attempt on every raw write. A different
+`state_dir` alone grants nothing. Retired families, production roots and writers
+outside the raw door keep their existing gate. Trial rows never enter
+publication. [Council trials](../publishing/llm-council-dates.md#a-paused-trial-cannot-enter-publication)
+owns the selection and isolation rules.
+
+**Pause a judge before pausing any family it commits into.** The council refuses
+an active judge if any of its committed ledgers belongs to a paused or retired
+family, naming the judge, ledger and family before work starts. The judge's own
+declaration controls whether it runs; the family controls whether rows are
+written. They need not have the same status. Pausing a judge leaves other writers
+into an active family unchanged. See [judge status](../publishing/llm-council.md#each-registered-judge-declares-whether-it-runs).
+
+**What pausing a family costs, beyond its own rows.** CI builds its canary day through the same writers, so pausing a family thins that fixture too. A paused `digest-fragments` stops the first run of a new day from publishing it at all: the day is assembled from the fragments on disk, and a day with none is refused. A paused `visual-prunes` stops the cleanup record while the cleanup itself still runs, because the record goes through the ledger door from the assemble job, which is not one of the maintenance jobs; nothing reads those rows yet, and the cleanup deletes nothing today.
 
 ## Onboarding and offboarding
 
@@ -122,7 +139,7 @@ The first row is what the registry is for. The claim used to be a hand-written P
   - A compaction declaration, `config/gardener/compact-<folder>.json`, where `<folder>` is its prefix with each `/` written `-`. `compaction_task` in `backend/idhazh/config.py` builds that name, and `test_a_compaction_and_a_door_ledger_come_together` refuses a door ledger without one.
   - That task's name in `task_names` of `config/idhazh_gardener.json`. The gardener loads only the declarations named there.
   - The owner-approved retention in that declaration: live packing (`dry_run` false, `compact_after_days` 1), `daily_keep_days` 45, `monthly_keep_days` 93, a `monthly_window` of `forever`, and yearly expiry after 36 calendar months (`yearly_keep_months` 36, `yearly_prune_enable` true). `test_every_ledger_uses_the_approved_live_retention_chain` holds every compaction to it.
-  - Its entry in the named-decision tables of `backend/tests/contracts/test_gardener_config.py` - the ledger in `RETENTION_LEDGERS`, or its task in `MOVED_LEDGER_TASKS` - so `LIVE_BY_DECISION` names the owner's decision beside each switch that runs live. A switch ships in dry run unless a named decision put it live, so a declaration missing from both tables is refused.
+  - Its entry in `backend/tests/contracts/test_gardener_config.py` - the ledger in `RETENTION_LEDGERS`, or its task in `MOVED_LEDGER_TASKS` - which `test_every_ledger_uses_the_approved_live_retention_chain` reads, so a compaction missing from both is refused. A switch ships in dry run, and the commit that turns one live names the owner's decision in its message; no test holds that list (owner ruling, 2026-10-11).
 
 **Pause or retire a family.** Change its `lifecycle_status`, and nothing else. Nothing is discovered, and nothing is a hand-list somebody can forget. The next write of new rows into it is skipped with one warning, and its old rows are read and aged as before: its compaction keeps packing them, and its yearly expiry keeps deleting what is older than its window.
 

@@ -1,10 +1,10 @@
 # Design System
 
-**Last Updated**: 2026-10-05
+**Last Updated**: 2026-10-12
 
 Shared rules for typography, layout, colour, motion and controls. [Console design](console-design.md) owns panel-specific presentation; [appearance configuration](config/appearance.md) owns tunable values.
 
-New designs, charts and visuals render in the browser. Do not add prerendered data surfaces. Existing prerendered routes and chart engines that conflict with [telemetry intent](telemetry-intent.md) are migration work, not precedents.
+New designs, charts and visuals render in the browser. Do not add prerendered data surfaces. The console uses d3, with no ECharts engine or server-side chart renderer. Its remaining private build-time inputs are not precedents for new panels; [console delivery](../architecture/publishing/console.md#rendering-direction) names that boundary.
 
 ## Typography is the interface
 
@@ -106,28 +106,23 @@ Derive the wide diagram and narrow list from one dataset. Show only one represen
 
 ## Sufficiency is a gate, not a taste
 
-Gates 1-4 apply to surfaces; gate 5 applies to drawings. Gates 6-10 apply to console drawings. A required exception states the current limitation, its cost and why it remains, not the review history.
+Design review asks whether the changed surface communicates its purpose,
+shows a clear first point of attention, and remains usable. Judge the surface
+in a representative view with realistic content. Include one narrow view only
+when the change can affect its layout. Review another theme or data state only
+when the change affects it. This review does not create a test case per page,
+panel, width, theme, chart or state.
 
-| Gate | Requirement | Failure |
-| --- | --- | --- |
-| 1 | Plots cover the configured `console.plot_min_fill_share` of panel content width at 390, 768 and 1440 px | Insufficient covered width or no plotted share; measure covered width, not the span between disconnected plots |
-| 2 | Panel and page have distinct rendered surfaces; plots use the panel's own ground | An indistinguishable panel or a separate tinted plot background |
-| 3 | Exactly one `data-lede`, visibly larger than every competing word or filled mark | Missing, duplicate or visually subordinate lede |
-| 4 | The picture communicates a considered hierarchy and useful comparison | Native `title=` mark tooltips, a bare numeric table without a visual comparison, or the wrong control for a two-state mode |
-| 5 | Exactly one `data-comparison` sentence containing "against" | Missing or duplicate comparison; composition instead declares `composition`, shows at least two stacked fills and states why on its owning page |
-| 6 | Every trend declares `data-model-rule` | `yes` without a settings-change rule or a visible no-change sentence; `no` without a reason of at least five words |
-| 7 | Drawn columns have declared readers | A column remains in `UNREAD_CELLS` |
-| 8 | Waiting, quiet, missing, unreachable and refused are visibly distinct where a panel can refuse input | Any two states have the same visible words and placeholder treatment |
-| 9 | The readout strip is declared and drawn | Missing readout attributes or an absent declared strip |
-| 10 | Queries request columns within a bounded date range | A query asks for a whole ledger or leaves its date range open |
+Keep the meaning and readings of a drawing consistent with its data. Make the
+readout usable with keyboard and touch, and make unavailable evidence clear
+without treating it as zero. The owning design or data contract defines any
+specific behavior that matters. Do not turn these principles into a fixed
+matrix of selectors, wording, boxes or per-panel gate drivers.
 
-The measured gates use `frontend/tests/panel-sufficiency.spec.ts` and `frontend/tests/support/panel-gates.ts`. Column readers, readouts and query coverage have their own contract and frontend tests. Gate 4 requires visual review.
-
-`console.judged_panel_ids` selects panels for the automated sufficiency checks. A redrawn panel joins that list with a driver for all four data states. A test-only witness verifies the gate machinery; it does not certify unlisted production panels.
-
-### Gate 4 is read from pictures
-
-Review each panel at the three widths in both themes, plus its broken-fetch state where it fetches data. Start with the 390 px dark image. The comparison must be apparent without reading a paragraph, and the phone layout must not be the desktop layout scaled down.
+The browser suite checks one representative shared layout and interaction.
+Lower-tier tests cover deterministic readers, column contracts and query
+bounds. Visual review is for the changed design; it is not a recurring
+inventory of every panel.
 
 Judge useful first-screen content and access to facts, not total page height. A reduction must state what the reader loses.
 
@@ -153,7 +148,7 @@ Icons belong in controls, chrome and declared classifications. Do not invent a s
 
 Use d3 for chart arithmetic and browser rendering. Theme values come from shared tokens. The browser measures the occupied width; floor fractional pixel widths when needed to prevent a resize loop. Reserve stable height where the chart's row count allows it.
 
-Do not introduce an engine that prerenders charts or requires a runtime server. Existing incompatible implementations follow [telemetry intent](telemetry-intent.md). Data preparation may happen in the producer; drawing and interaction happen on the reader's device.
+Do not introduce an engine that prerenders charts or requires a runtime server. Removing a chart engine does not remove route-shell prerendering or authorize publishing private inputs. Data preparation may happen in the producer; native console drawing and interaction happen on the reader's device.
 
 ## A figure on a chart is the article's or it is ours, and it never has to be guessed
 

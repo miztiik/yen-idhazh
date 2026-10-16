@@ -1,6 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { render } from 'svelte/server';
@@ -18,13 +17,12 @@ import {
 } from '../src/lib/console/recording';
 import { checkedRequest } from '../src/lib/data/slice-shapes';
 import { daysBetween } from '../src/lib/data/slice';
-import type { ObservabilityConfig } from '../src/lib/server/config';
-import { HOST_FINGERPRINT_COLUMNS, machineRecord } from '../src/lib/server/host-fingerprint';
 import { sliceFromDisk } from '../src/lib/server/ledger-disk';
-import { datedFirst, evalRows, ITEM_HEALTH_COLUMNS, SCORE_COLUMNS, windowRows } from '../src/lib/server/ledger-rows';
-import { machineCounters } from '../src/lib/server/machine-counters';
+import { datedFirst, evalRows, itemHealthRows, ITEM_HEALTH_COLUMNS, SCORE_COLUMNS, windowRows } from '../src/lib/server/ledger-rows';
+import { carriesServerCounters } from '../src/lib/console/machine/counters';
+import { countersFrom, fingerprints } from '../src/lib/console/machine/records';
+import { machineCardsQuery, platformMixQuery } from '../src/lib/console/queries/machine';
 import { listManifestDays } from '../src/lib/server/model-work';
-import { describeServerCounters } from '../src/lib/server/server-counter-notes';
 import { HOLDOUT_SCORE_COLUMNS, markedPairs, markReach, mergeLineHoldoutScore } from '../src/lib/server/content-similarity-holdout';
 import { windowDay } from '../src/lib/server/window-day';
 import { buildLedger, buildRows, daysBefore, everyDay, quietDays, type BuiltDay } from './support/ledger-lifecycle';
@@ -37,15 +35,13 @@ import { serverCompiler } from './support/server-render';
  *
  * Each reader case builds the record it reads with the lifecycle builder, in the
  * test's own output folder, with days counted back from a UTC day the test pins,
- * through the machine record: the article and score records take the same path
- * with other columns. The window cases build their own site and ledger the same
- * way. Nothing here grows with the archive (`CLAUDE.md` section 13), and nothing
+ * through the actual article and score readers. The window cases build their
+ * own site and ledger the same way. Nothing here grows with the archive (`CLAUDE.md` section 13), and nothing
  * touches the network but the engine, whose first query on a machine downloads
  * its parquet add-on (owner ruling, 2026-09-28).
  */
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const PACKED = path.join('compact', 'host-fingerprint');
 /** The UTC day every built record counts its days back from. */
 const PINNED = '2030-06-15';
 
@@ -77,190 +73,19 @@ async function printedNotes(notes: RecordNote[]) {
 /** A window of the fixture's days, both ends included. */
 const days = (start: string, end: string): TimeWindow => ({ start, end });
 
-test.describe('reading a packed record', () => {
-	test('a record with no packed file is not packed, and says so rather than throwing', async () => {
-		const root = mkdtempSync(path.join(tmpdir(), 'idhazh-unpacked-'));
-		try {
-			const table = await machineRecord(days('2026-09-01', '2026-09-05'), root);
-			expect(table.read).toEqual({ state: 'not-packed' });
-			expect(table.rows).toEqual([]);
-			// The header survives: a panel that reads its columns off the table still
-			// has them, so an empty record draws an empty panel and not a broken one.
-			expect(table.columns).toEqual([...HOST_FINGERPRINT_COLUMNS]);
-		} finally {
-			rmSync(root, { recursive: true, force: true });
-		}
-	});
-
-	test('a packed day missing from the middle makes the whole read unreadable, at that day, named day-missing', async () => {
-		// Packed on 10, 11, 12 and 15 Jun 2030, quiet on the 13th, and the 14th named by no
-		// index. Drawing the days either side of it would draw a gap as a quiet day.
-		const state = test.info().outputPath('state');
-		await buildLedger(state, {
-			ledger: 'host-fingerprint',
-			pinned: PINNED,
-			days: [{ ago: 5, rows: 1 }, { ago: 4, rows: 3 }, { ago: 3, rows: 2 }, { ago: 2, state: 'empty' }, { ago: 0, rows: 2 }]
-		});
-		const table = await machineRecord(days('2030-06-10', '2030-06-15'), state);
-		expect(table.read).toEqual({ state: 'unreadable', at: '2030-06-14', fault: 'day-missing' });
-		expect(table.rows).toEqual([]);
-	});
-
-	test('a packed file the list names and the disk lacks makes the read unreadable, named file-missing', async () => {
-		// Packed on 12 and 13 Jun 2030 and quiet on the 14th; the 13th's file is then removed.
-		const state = test.info().outputPath('state');
-		await buildLedger(state, {
-			ledger: 'host-fingerprint',
-			pinned: PINNED,
-			days: [{ ago: 3, rows: 1 }, { ago: 2, rows: 2 }, { ago: 1, state: 'empty' }]
-		});
-		rmSync(path.join(state, PACKED, 'daily', '2030', '06', '13.parquet'));
-		const table = await machineRecord(days('2030-06-13', '2030-06-14'), state);
-		expect(table.read).toEqual({ state: 'unreadable', at: '2030-06-13', fault: 'file-missing' });
-		expect(table.rows).toEqual([]);
-	});
-
-	test('one day reads on its own, and every cell comes back as the day files spelled it', async () => {
-		// Packed with one row on 14 Jun 2030 and two on the 15th, each holding a text,
-		// a whole number and a fraction the machine record reads. The rule, stated
-		// here rather than borrowed: nothing is '', a number is its decimal, and text
-		// is itself.
-		const state = test.info().outputPath('state');
-		await buildLedger(state, {
-			ledger: 'host-fingerprint',
-			pinned: PINNED,
-			days: [{ ago: 1, rows: 1 }, { ago: 0, rows: 2 }],
-			columns: { run_id: '2030-06-15-1', job: 'work', cpu_model: 'AMD EPYC 7763 64-Core Processor', cores: 4, job_seconds: 612.5 }
-		});
-		const table = await machineRecord(days('2030-06-15', '2030-06-15'), state);
-		expect(table.read).toEqual({
-			state: 'read',
-			through: '2030-06-15',
-			first: '2030-06-14',
-			lastRows: { period: 'daily', covers: '2030-06-15' },
-			lostDays: [],
-			setAside: {}
-		});
-		const nothing = Object.fromEntries(HOST_FINGERPRINT_COLUMNS.map((name) => [name, '']));
-		const spelled = {
-			...nothing,
-			date: '2030-06-15',
-			run_id: '2030-06-15-1',
-			job: 'work',
-			cpu_model: 'AMD EPYC 7763 64-Core Processor',
-			cores: '4',
-			job_seconds: '612.5'
-		};
-		expect(table.rows).toEqual([spelled, spelled]);
-	});
-
-	test('a window whose packed days hold no row reads no row, and names where the rows stop instead of reaching back', async () => {
-		// Packed on 12 and 13 Jun 2030, and quiet on the 14th. The reader used to read back to
-		// the 13th to fill the window; now the window is the read.
-		const state = test.info().outputPath('state');
-		await buildLedger(state, {
-			ledger: 'host-fingerprint',
-			pinned: PINNED,
-			days: [{ ago: 3, rows: 1 }, { ago: 2, rows: 2 }, { ago: 1, state: 'empty' }]
-		});
-		const table = await machineRecord(days('2030-06-14', '2030-06-14'), state);
-		expect(table.read).toEqual({
-			state: 'read',
-			through: '2030-06-14',
-			first: '2030-06-12',
-			lastRows: { period: 'daily', covers: '2030-06-13' },
-			lostDays: [],
-			setAside: {}
-		});
-		expect(table.rows).toEqual([]);
-	});
-
-	test('a window that starts before the first packed day is read from that day', async () => {
-		// Ninety days to 15 Jun 2030 start on 18 Mar, and the door cuts the days before the
-		// first packed day, the 12th: they are before the record began.
-		const state = test.info().outputPath('state');
-		await buildLedger(state, {
-			ledger: 'host-fingerprint',
-			pinned: PINNED,
-			days: [{ ago: 3, rows: 1 }, { ago: 2, rows: 3 }, { ago: 1, rows: 2 }, { ago: 0, state: 'empty' }]
-		});
-		const table = await machineRecord(days('2030-03-18', '2030-06-15'), state);
-		expect(table.read).toEqual({
-			state: 'read',
-			through: '2030-06-15',
-			first: '2030-06-12',
-			lastRows: { period: 'daily', covers: '2030-06-14' },
-			lostDays: [],
-			setAside: {}
-		});
-		expect(table.rows.map((row) => row.date)).toEqual([
-			'2030-06-12',
-			'2030-06-13',
-			'2030-06-13',
-			'2030-06-13',
-			'2030-06-14',
-			'2030-06-14'
-		]);
-	});
-
-	test('a day the packing recorded lost comes back named, beside the files each day set aside', async () => {
-		// Packed on 10, 11 and 12 Jun 2030 and quiet on the 13th. The 14th is lost with
-		// two files set aside, and the 15th kept its rows but set one file aside.
-		const state = test.info().outputPath('state');
-		await buildLedger(state, {
-			ledger: 'host-fingerprint',
-			pinned: PINNED,
-			days: [
-				{ ago: 5, rows: 1 },
-				{ ago: 4, rows: 3 },
-				{ ago: 3, rows: 2 },
-				{ ago: 2, state: 'empty' },
-				{ ago: 1, state: 'lost', setAside: 2 },
-				{ ago: 0, rows: 2, setAside: 1 }
-			]
-		});
-		const table = await machineRecord(days('2030-06-10', '2030-06-15'), state);
-		expect(table.read).toEqual({
-			state: 'read',
-			through: '2030-06-15',
-			first: '2030-06-10',
-			lastRows: { period: 'daily', covers: '2030-06-15' },
-			lostDays: ['2030-06-14'],
-			setAside: { '2030-06-14': 2, '2030-06-15': 1 }
-		});
-		expect(table.rows.map((row) => row.date)).toEqual([
-			'2030-06-10',
-			'2030-06-11',
-			'2030-06-11',
-			'2030-06-11',
-			'2030-06-12',
-			'2030-06-12',
-			'2030-06-15',
-			'2030-06-15'
-		]);
-	});
-
-	test('a day lost before the window is not named, because nothing before the window is read', async () => {
-		// 11 Jun 2030 set a file aside and the 12th is lost, both before the window of the 13th
-		// and 14th: the reader used to reach back over them, and named them.
-		const state = test.info().outputPath('state');
-		await buildLedger(state, {
-			ledger: 'host-fingerprint',
-			pinned: PINNED,
-			days: [{ ago: 4, rows: 1, setAside: 1 }, { ago: 3, state: 'lost' }, { ago: 2, rows: 2 }, { ago: 1, state: 'empty' }]
-		});
-		const table = await machineRecord(days('2030-06-13', '2030-06-14'), state);
-		expect(table.read).toEqual({
-			state: 'read',
-			through: '2030-06-14',
-			first: '2030-06-11',
-			lastRows: { period: 'daily', covers: '2030-06-13' },
-			lostDays: [],
-			setAside: {}
-		});
-		expect(table.rows.map((row) => row.date)).toEqual(['2030-06-13', '2030-06-13']);
-	});
+test('the actual article reader keeps explicitly supplied roots isolated', async ({}, info) => {
+	const date = '2030-06-15';
+	const left = info.outputPath('left-root');
+	const right = info.outputPath('right-root');
+	for (const [root, source] of [[left, 'left-source'], [right, 'right-source']]) {
+		await buildRows(root, 'item-health', [{
+			covers: date, rows: [{ date, run_id: `${date}-1`, item_id: 'one', source_id: source }]
+		}]);
+	}
+	expect((await itemHealthRows(days(date, date), left)).rows.map((row) => row.source_id)).toEqual(['left-source']);
+	expect((await itemHealthRows(days(date, date), right)).rows.map((row) => row.source_id)).toEqual(['right-source']);
 });
+
 test.describe('what a read asks the door for', () => {
 	test('the day and the run lead, so rows come back oldest day first and a run together', () => {
 		expect(datedFirst(['version', 'date', 'run_id', 'item_id'])).toEqual([
@@ -278,7 +103,7 @@ test.describe('what a read asks the door for', () => {
 		for (const [name, columns] of [
 			['article', ITEM_HEALTH_COLUMNS],
 			['score', SCORE_COLUMNS],
-			['machine', HOST_FINGERPRINT_COLUMNS],
+			['machine', machineCardsQuery.columns],
 			['holdout score', HOLDOUT_SCORE_COLUMNS]
 		] as const) {
 			expect(new Set(columns).size, `${name} names a column twice`).toBe(columns.length);
@@ -334,7 +159,7 @@ test.describe('a record filed inside its family folder', () => {
 	});
 
 	test('a holdout score with no packed file is no reading, rather than an error', async () => {
-		const root = mkdtempSync(path.join(tmpdir(), 'idhazh-unscored-'));
+		const root = test.info().outputPath('unscored');
 		try {
 			expect(await mergeLineHoldoutScore(days('2030-06-01', PINNED), root)).toEqual({ score: null, read: { state: 'not-packed' } });
 		} finally {
@@ -409,7 +234,7 @@ test.describe('the hand marks, once a pair over their reach', () => {
 	});
 
 	test('no packed mark reads as none, rather than an error', async () => {
-		const root = mkdtempSync(path.join(tmpdir(), 'idhazh-unmarked-'));
+		const root = test.info().outputPath('unmarked');
 		try {
 			expect(await markedPairs(markReach(PINNED, 730), root)).toEqual({ rows: [], read: { state: 'not-packed' } });
 		} finally {
@@ -437,16 +262,16 @@ function notesFor(reads: readonly RouteRecord[], newestDay: string | null, count
 /** The newest day the built sites publish. */
 const PUBLISHED = '2030-06-15';
 
-/** A site published on 14 and 15 Jun 2030, and a machine record built with `days` counted
+/** A site published on 14 and 15 Jun 2030, and an article record built with `days` counted
  *  back from the newest published day, in the test's own output folder. */
 async function builtSite(days: readonly BuiltDay[]): Promise<{ digest: string; state: string }> {
 	const { digest } = publishedSite(test.info().outputPath('site'), { published: ['2030-06-14', PUBLISHED] });
 	const state = test.info().outputPath('state');
-	await buildLedger(state, { ledger: 'host-fingerprint', pinned: PUBLISHED, days });
+	await buildLedger(state, { ledger: 'item-health', pinned: PUBLISHED, days });
 	return { digest, state };
 }
 
-/** A machine record whose rows stop 40 days before the newest published day: one row a day
+/** An article record whose rows stop 40 days before the newest published day: one row a day
  *  from 1 to 6 May 2030, then packed with empty days from 7 May to 14 Jun, the day before it. */
 const STOPPED = [...everyDay(45, 40), ...quietDays(39, 1)];
 
@@ -720,18 +545,18 @@ test.describe('what a route says about the records it read', () => {
 	});
 });
 
-test.describe('THE ORACLE for the Hardware note: a day the machine record lost reads as a day with no record', () => {
+test.describe('THE ORACLE: a lost article day is not a quiet day or a later recording start', () => {
 	test('it is printed once as a plain note, and the recording note never dates the start after it', async () => {
 		// A quiet day, then a lost day, then the first day with rows: read the old way,
 		// the lost day was a day before the record started, and the start the day after it.
 		const state = test.info().outputPath('state');
 		await buildLedger(state, {
-			ledger: 'host-fingerprint',
+			ledger: 'item-health',
 			pinned: PINNED,
 			days: [{ ago: 2, state: 'empty' }, { ago: 1, state: 'lost' }, { ago: 0, rows: 2 }]
 		});
-		const machine = await machineRecord(days('2030-06-13', '2030-06-15'), state);
-		expect(machine.read).toEqual({
+		const articles = await itemHealthRows(days('2030-06-13', '2030-06-15'), state);
+		expect(articles.read).toEqual({
 			state: 'read',
 			through: '2030-06-15',
 			first: '2030-06-13',
@@ -739,24 +564,24 @@ test.describe('THE ORACLE for the Hardware note: a day the machine record lost r
 			lostDays: ['2030-06-14'],
 			setAside: {}
 		});
-		const printed = await printedNotes(notesFor([{ record: 'machine', read: machine.read }], '2030-06-15'));
+		const printed = await printedNotes(notesFor([{ record: 'article', read: articles.read }], '2030-06-15'));
 		expect(printed).toEqual([
 			{
 				kind: 'lost',
-				records: 'machine',
+				records: 'article',
 				fault: false,
 				quiet: false,
-				text: 'There is no machine record for 14 Jun 2030, so nothing below that uses this record shows that day. The record for that day was lost and could not be recovered; it was not a quiet day.'
+				text: 'There is no article record for 14 Jun 2030, so nothing below that uses this record shows that day. The record for that day was lost and could not be recovered; it was not a quiet day.'
 			}
 		]);
 		const recording = recordingNotes({
 			enabled: true,
-			recorded: [...new Set(machine.rows.map((row) => row.date))],
+			recorded: [...new Set(articles.rows.map((row) => row.date))],
 			window: ['2030-06-14', '2030-06-15'],
-			reads: [machine.read],
+			reads: [articles.read],
 			from: '2030-06-13',
 			open: { days: 3, start: '2030-06-13', end: '2030-06-15' },
-			figures: 'machine record'
+			figures: 'server figures'
 		});
 		expect(recording.startedMidWindow).toBeNull();
 	});
@@ -764,7 +589,7 @@ test.describe('THE ORACLE for the Hardware note: a day the machine record lost r
 
 test.describe('THE ORACLE: a console window ends on the site\'s newest published day, and reads only its own days', () => {
 	test('a record whose rows stop 40 days before the newest published day reads nothing before the window, and the note names its last day', async () => {
-		// Published on 14 and 15 Jun 2030. The machine record holds one row a day up to
+		// Published on 14 and 15 Jun 2030. The article record holds one row a day up to
 		// 6 May, 40 days before the newest published day, and is packed with empty days
 		// from 7 May to 14 Jun, the day before it.
 		const { digest, state } = await builtSite(STOPPED);
@@ -776,9 +601,9 @@ test.describe('THE ORACLE: a console window ends on the site\'s newest published
 		expect(open).toEqual({ days: 30, start: '2030-05-17', end: '2030-06-15' });
 
 		const asked: [string, string][] = [];
-		const table = await windowRows(state, 'host-fingerprint', open, HOST_FINGERPRINT_COLUMNS, (from, to) => {
+		const table = await windowRows(state, 'item-health', open, ITEM_HEALTH_COLUMNS, (from, to) => {
 			asked.push([from, to]);
-			return sliceFromDisk(state, 'host-fingerprint', { columns: [...datedFirst(HOST_FINGERPRINT_COLUMNS)], from, to });
+			return sliceFromDisk(state, 'item-health', { columns: [...datedFirst(ITEM_HEALTH_COLUMNS)], from, to });
 		});
 		expect(asked).toEqual([['2030-05-17', '2030-06-15']]);
 		expect(table.rows).toEqual([]);
@@ -790,12 +615,11 @@ test.describe('THE ORACLE: a console window ends on the site\'s newest published
 			lostDays: [],
 			setAside: {}
 		});
-		// The machine record's own reader answers the same window the same way.
-		expect(await machineRecord(open, state)).toEqual(table);
+		expect(await itemHealthRows(open, state)).toEqual(table);
 
-		const notes = recordNotes([{ record: 'machine', read: table.read }], day, open, offeredOn(day));
+		const notes = recordNotes([{ record: 'article', read: table.read }], day, open, offeredOn(day));
 		expect(notes.map((note) => note.text)).toEqual([
-			'The newest packed rows in the machine record are from 6 May 2030. The packed days since then hold no rows, so nothing below that uses this record has anything to show in these 30 days. This page cannot tell if that is a quiet stretch or a fault. The 90-day window reaches back to 6 May 2030.'
+			'The newest packed rows in the article record are from 6 May 2030. The packed days since then hold no rows, so nothing below that uses this record has anything to show in these 30 days. This page cannot tell if that is a quiet stretch or a fault. The 90-day window reaches back to 6 May 2030.'
 		]);
 	});
 
@@ -815,11 +639,11 @@ test.describe('THE ORACLE: the "Measurement is off" line names only a day on scr
 	async function linesOver(digest: string, state: string): Promise<[number, string | null][]> {
 		const day = windowDay(digest);
 		const offered = offeredOn(day);
-		const machine = await machineRecord(openOn(day, 90), state);
-		const recorded = [...new Set(machine.rows.map((row) => row.date))];
+		const articles = await itemHealthRows(openOn(day, 90), state);
+		const recorded = [...new Set(articles.rows.map((row) => row.date))];
 		return offered.map((open) => [
 			open.days,
-			measurementOff({ enabled: false, recorded, read: machine.read, open, offered })
+			measurementOff({ enabled: false, recorded, read: articles.read, open, offered })
 		]);
 	}
 
@@ -852,7 +676,7 @@ test.describe('THE ORACLE: the "Measurement is off" line names only a day on scr
 });
 
 test.describe('THE ORACLE: a started line names a start the open window shows, and only a true one', () => {
-	/** The started line each window offers, for a machine record built with `days` and read over
+	/** The started line each window offers, for an article record built with `days` and read over
 	 *  the widest window, as the routes read it. The instrument recorded the days the record holds
 	 *  rows on, from `recordedFrom`, and every day had a run. A route hands each window the whole
 	 *  read, from its first day; a caller may hand only the window's days, from the window's first
@@ -865,8 +689,8 @@ test.describe('THE ORACLE: a started line names a start the open window shows, a
 		const { digest, state } = await builtSite(days);
 		const day = windowDay(digest);
 		const read = openOn(day, 90);
-		const machine = await machineRecord(read, state);
-		const recorded = [...new Set(machine.rows.map((row) => row.date))].filter((date) => date >= recordedFrom);
+		const articles = await itemHealthRows(read, state);
+		const recorded = [...new Set(articles.rows.map((row) => row.date))].filter((date) => date >= recordedFrom);
 		return offeredOn(day).map((open) => {
 			const span = handed === 'read' ? read : open;
 			return [
@@ -875,7 +699,7 @@ test.describe('THE ORACLE: a started line names a start the open window shows, a
 					enabled: true,
 					recorded: recorded.filter((date) => date >= span.start && date <= span.end),
 					window: daysBetween(span.start, span.end),
-					reads: [machine.read],
+					reads: [articles.read],
 					from: span.start,
 					open
 				}).startedMidWindow
@@ -925,19 +749,8 @@ test.describe('THE ORACLE: a started line names a start the open window shows, a
 	});
 });
 
-/** The observability block as the Hardware route holds it: everything on, every run scored. */
-const OBSERVABILITY: ObservabilityConfig = {
-	cost_currency: 'USD',
-	cost_input_per_million: 0.2,
-	cost_output_per_million: 0.6,
-	evaluation_enabled: true,
-	host_fingerprint: true,
-	host_fingerprint_bandwidth_cache_multiple: 2,
-	sample_rate: 1
-};
-
-test.describe("THE ORACLE: Hardware dates the server's figures from the machine record's first row that carries them", () => {
-	test('article rows alone, before the machine record holds a row, are never counted or dated as runs with server figures', async () => {
+test.describe("THE ORACLE: native server evidence is independent of article rows", () => {
+	test('the real declared host slice keeps migration and counter presence separate from article-only runs', async () => {
 		// Published on 14 and 15 Jun 2030. The machine record's indexes begin on 16 May, and it holds
 		// no row until 10 Jun, when one run's work job filed the server's two cells; quiet after. The
 		// article record holds rows from 31 May, and from 3 Jun one run a day took them on shard 0.
@@ -952,61 +765,40 @@ test.describe("THE ORACLE: Hardware dates the server's figures from the machine 
 				job: 'work',
 				shard: 0,
 				fingerprint: 'f00d',
+				cores: 4,
+				mhz_at_probe: 2445,
 				server_prompt_tokens: 900,
 				server_prompt_seconds: 9
 			}
 		});
 		const day = windowDay(digest);
 		const read = openOn(day, 90);
-		const machine = await machineRecord(read, state);
-		expect(machine.read).toMatchObject({ state: 'read', first: '2030-05-16', through: '2030-06-14' });
-		const articleDays = daysBetween('2030-05-31', '2030-06-14');
+		const answer = await sliceFromDisk(state, platformMixQuery.ledger, {
+			columns: [...platformMixQuery.columns], from: read.start, to: read.end
+		});
+		expect(answer.state).toBe('ok');
+		expect(answer.rows).toHaveLength(2);
+		expect(fingerprints(answer.rows).map((host) => [
+			host.version, host.fingerprint_version, host.cpu_physical_cores,
+			host.cpu_logical_processors, host.cpu_observed_mhz
+		])).toEqual([
+			['2026-09-20', 1, null, null, 2445],
+			['2026-09-20', 1, null, null, 2445]
+		]);
 		const articles = daysBetween('2030-06-03', '2030-06-14').map((date) => ({
 			date,
 			run_id: `${date}-1`,
 			machine_job: 'work',
-			machine_shard: '0'
+			machine_shard: 0
 		}));
-		const runs = machineCounters(machine.rows, articles, new Map(), { contextWindow: null, jobTimeoutSeconds: null }).runs;
-		const offered = offeredOn(day);
-		const said = offered.map((open) => {
-			const notes = describeServerCounters({
-				runs,
-				refused: [],
-				ran: articleDays,
-				articleDays,
-				machineRead: machine.read,
-				from: read.start,
-				open,
-				offered,
-				observability: OBSERVABILITY
-			});
-			return [open.days, notes.intro, notes.recording.startedMidWindow];
-		});
-		const one = 'Server figures started on 10 Jun 2030. Earlier in this window,';
-		expect(said).toEqual([
-			[1, 'This one day has no run on record. 2030-06-15.', null],
-			[
-				7,
-				'6 runs in these 7 days, 1 of them with figures from the model server itself. 2030-06-09 to 2030-06-15.',
-				`${one} 1 day had a run but no server figures.`
-			],
-			[
-				14,
-				'12 runs in these 14 days, 1 of them with figures from the model server itself. 2030-06-02 to 2030-06-15.',
-				`${one} 8 days had a run but no server figures.`
-			],
-			[
-				30,
-				'12 runs in these 30 days, 1 of them with figures from the model server itself. 2030-05-17 to 2030-06-15.',
-				`${one} 10 days had a run but no server figures.`
-			],
-			[
-				90,
-				'12 runs in these 90 days, 1 of them with figures from the model server itself. 2030-03-18 to 2030-06-15.',
-				`${one} 10 days had a run but no server figures.`
-			]
+		const { runs, refused } = countersFrom(answer.rows, articles, [], { contextWindow: null, jobTimeoutSeconds: null });
+		expect(refused).toEqual([]);
+		expect(runs).toHaveLength(12);
+		expect(runs.filter(carriesServerCounters).map((run) => [run.date, run.clocks.server.rate])).toEqual([
+			['2030-06-10', 100]
 		]);
+		expect(runs.filter((run) => run.date !== '2030-06-10').every((run) =>
+			run.promptTokens.value === null && run.readSeconds.value === null)).toBe(true);
 	});
 });
 

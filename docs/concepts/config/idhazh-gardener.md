@@ -54,7 +54,7 @@ Each kind adds its own keys, and a key on the wrong kind is refused by name:
 
 | Kind | Its own keys |
 | --- | --- |
-| `retention` | `series`, one window per series, for one task alone: `telemetry-aggregate` keeps `full-grain`, `aggregate` and `public-copy`. A `fold` block is refused by name: the closed-day fold it switched on is gone, because no ledger files a writer's CSV file into a day folder now |
+| `retention` | `series`, one window per series, for one task alone: `telemetry-aggregate` keeps native `full-grain` and `aggregate`. A `fold` block is refused by name: the closed-day fold it switched on is gone, because no ledger files a writer's CSV file into a day folder now |
 | `collection` | `collection` (required): `workflow-artifacts` or `workflow-runs`, the GitHub collection it deletes from, and the file is named for it. Its `window` is whole days and nothing else, because a pass counts a member's age in days. `mark_lookback_days`, default 7, at least 1: how many UTC days of the gardener's record, today included, a pass reads to find the day its last pass handled through. With no row in reach it starts with no mark, which is correct and only slower ([how the mark is used](../../architecture/publishing/idhazh-gardener.md#the-collection-tasks)) |
 | `compaction` | `ledger` and the keys in [the table below](#the-keys-of-a-compaction). Packing keys are required; the two yearly expiry keys have compatibility defaults. Its `window` is always `{unit: forever}` and its `max_deletes_per_run` always `null`: the periods are how far back it keeps, and `max_periods_per_run` is its budget, spent separately on days, months, years, old months dropped and indexed years expired |
 | `history` | `every_days`, how many whole days apart two rewrites may run; `push_attempts`, how many pushes one run makes in all, at least 1; `push_retry_delay_seconds`, how long a run waits after a refused push before it squashes again, at least 0. None of the three has a default. Its `window` is whole days and nothing else, because the squash cuts history at 00:00 UTC on the day that many days back |
@@ -69,7 +69,7 @@ Why each tree gets the age it has is
 
 | Task | Owns | Window | Why that window |
 | --- | --- | --- | --- |
-| `telemetry-aggregate` | `frontend/public/telemetry`; appends `item-health-summary` | 14 months: `full-grain` 14 months, `aggregate` forever, `public-copy` 14 months | a 366-day console read can open 14 month files; the summary is what a year-over-year claim reads, and it is written from the item-health ledger through the ledger door before `compact-item-health` can delete the month's rows; the browser's copy ages with its source. It `reads` `state/raw/item-health`, `state/compact/item-health` and `state/raw/item-health-summary`, so it finds due and already summarised months whichever shard it lands in |
+| `telemetry-aggregate` | no owned tree; appends `item-health-summary` | 14 months: `full-grain` 14 months, `aggregate` forever | a 366-day console read can open 14 month files; summaries are written from the native item-health ledger through the ledger door. It `reads` `state/raw/item-health`, `state/compact/item-health` and `state/raw/item-health-summary`, so it finds due and already summarised months whichever shard it lands in. It does not delete native rows or public copies |
 | `compact-item-health-summary` | `state/raw/item-health-summary`, `state/compact/item-health-summary` | 36 calendar months after year-end | the summary follows the same reviewed yearly policy as the other ledgers |
 | `traces` | `state/traces` | 7 days | an item inspection reads recent trace detail; item health keeps its stage measurements |
 | `trials` | everything under `state` that no other task owns and no ledger claims | 90 days | nothing reads a trial's rows, and 90 days is the artifact retention used everywhere else |
@@ -262,9 +262,8 @@ names the file an operator edits and the rule it broke.
 | `telemetry-aggregate` with no series, a series that is not one of its trees, or one of its trees with no series | A tree with no window is a tree nothing bounds |
 | A task's `window` that differs from its `full-grain` series, or a ceiling on a task that keeps series | One number is spelled once; a ceiling could stop a month's summary part way through |
 | An `aggregate` series that does not keep longer than the `full-grain` series beside it | A month would be deleted before it was ever summarised |
-| A `public-copy` series that is not equal to the `full-grain` series | The copy is the browser's copy of that ledger |
-| The compaction that governs `feed-health`, a `full-grain` series or a `public-copy` series keeping fewer month files than the widest console read selects | A panel blanks for a month that ran |
-| The declaration that governs the host-fingerprint ledger - its compaction - keeping less than `observability.public_machine_keep_months` | The published machine shard is folded from that ledger, so a source month deleted while its published month is kept is a shard nothing can rebuild |
+| An unknown series, including the retired `public-copy` series | No task owns that series |
+| The compaction that governs `feed-health` or a `full-grain` series keeping fewer month files than the widest console read selects | A panel blanks for a month that ran |
 | `digest-fragments` or `visual-prune` keeping anything but 30 days times `retention.image_months`, or anything but forever when that is `-1` | The archive page states that window to a reader |
 | `series` on any other task | One task keeps several series |
 | A compaction not called `compact-<folder>`, or `compact-trial-<folder>` for trial roots, where `<folder>` is its ledger's door folder with each `/` written `-` | One compaction a ledger folder, found by name, and separate names keep trial retention from governing production |

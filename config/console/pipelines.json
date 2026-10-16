@@ -8,16 +8,20 @@
         "site-cost-per-item",
         "failure-mix",
         "item-time-split",
-        "throughput-viewport",
+        "slower-on-same-work",
         "stage-timings",
         "item-cost",
         "run-timeline",
         "chart-drawing",
-        "extraction"
+        "extraction",
+        "article-age"
       ],
       "title": ""
     }
   ],
-  "judged": [],
+  "judged": [
+    "at-a-glance", "run-health", "site-cost-per-item", "failure-mix", "item-time-split",
+    "slower-on-same-work", "stage-timings", "item-cost", "run-timeline", "chart-drawing", "extraction", "article-age"
+  ],
   "knobs": {}
 }

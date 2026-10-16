@@ -7,7 +7,7 @@ held to the same bytes for the same fixture config, and the payload is held to
 the model that declares it.
 
 The script is also run the way the plan job runs it - a fresh interpreter with
-no site packages, in a folder holding only `config/`, the script and the two
+no site packages, in a folder holding only `config/`, the script and the three
 package files it imports to print a crash - so an import of anything outside
 the standard library fails here first.
 """
@@ -49,7 +49,7 @@ def a_bare_script(root: Path) -> tuple[Path, Path]:
     """A bare folder holding `config/`, the script and what it imports to start.
 
     The same layout the plan job's checkout holds: the script, and the package's
-    `__init__.py` and crash printer, with nothing of ours installed.
+    `__init__.py`, crash printer and shared event writer, with nothing installed.
     """
     bare = root / "bare"
     config_dir = a_fixture_config(bare, "garden")
@@ -58,7 +58,7 @@ def a_bare_script(root: Path) -> tuple[Path, Path]:
     script.parent.mkdir(parents=True)
     printer.mkdir()
     shutil.copyfile(SCRIPT, script)
-    for name in ("__init__.py", "crash_trace.py"):
+    for name in ("__init__.py", "crash_trace.py", "event_lines.py"):
         shutil.copyfile(PACKAGE / name, printer / name)
     return bare, config_dir
 
@@ -90,9 +90,9 @@ def test_both_writers_emit_one_payload_and_it_validates(tmp_path: Path, garden: 
 def test_the_script_runs_with_the_standard_library_alone(tmp_path: Path) -> None:
     """A fresh interpreter, no site packages, and `config/` with the script and what it reaches.
 
-    Beside the script are the two package files the plan job's checkout holds
+    Beside the script are the three package files the plan job's checkout holds
     and the script imports as it starts: the package's `__init__.py` and the
-    crash printer.
+    crash printer and its shared standard-library event writer.
     """
     bare, config_dir = a_bare_script(tmp_path)
     expected = shards.payload(shards.plan(config.load_gardener(config_dir)))

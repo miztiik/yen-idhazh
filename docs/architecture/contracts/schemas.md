@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-10-10
+**Last Updated**: 2026-10-12
 
 The persisted-shape subsystem: where the models live, how a schema is obtained from one, the small hand copy the frontend carries, and the tests that stop the two drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -13,7 +13,7 @@ backend/idhazh/contracts/*.py <- Pydantic models. HAND-WRITTEN. The source of tr
  |
  +--> Contract.json_schema() <- computed on demand. Nothing writes it to disk.
  |
- +--> a few names copied by hand into three frontend modules, each bound by a test.
+ +--> a few names copied by hand into frontend modules, each bound by a test.
 ```
 
 To change a persisted shape you edit the Pydantic model. Where the frontend copies something, you edit the copy in the same change, and the two tests below fail if you do not.
@@ -26,7 +26,20 @@ The ledger layer reads a field annotation as a recursive tree: scalar (`string`,
 
 ## What the frontend carries
 
-**Three modules type a contract shape by hand.** `frontend/src/lib/server/config.ts` declares `ConsolePanelGroup`; `frontend/src/lib/server/host-fingerprint.ts` declares `HostFingerprintRow` and the two closed sets `SERVER_JOB` and `WATCHED_FLAG`. What each field means stays on the Pydantic model, which is the one place it is written.
+**The machine record has one hand-written frontend type.**
+`frontend/src/lib/console/machine/host-types.ts` declares `HostFingerprintRow`
+and the two closed sets `SERVER_JOB` and `WATCHED_FLAG`. It owns types and
+vocabularies, not a record loader. What each field means stays on the Pydantic
+model.
+
+The host row is stamped `2026-10-10`. Native questions in
+`frontend/src/lib/console/queries/machine.ts` request the finite legacy CPU
+columns beside the corrected columns. `frontend/src/lib/data/host-fingerprint.ts`
+validates the source version and removes the legacy names before a panel uses
+the row.
+Historical fingerprints retain algorithm 1 and legitimate observed averages;
+corrected counts, target constraints and reported maximum frequency remain null
+when history never measured them.
 
 **A closed vocabulary is copied as a frozen array, and the union its members form.**
 
@@ -40,19 +53,24 @@ export const SERVER_JOB = [
 	'decide',
 	'migrate',
 	'run-tasks',
-	'history'
+	'history',
+	'save_council_results',
+	'collect',
+	'operator'
 ] as const;
 
 export type ServerJob = (typeof SERVER_JOB)[number];
 ```
 
-The union alone cannot be tested against at run time, and a reader that has to narrow a cell read as text would otherwise retype the members. `host-fingerprint.ts` narrows the `job` column against that array and `watchedFlags()` hands back `WATCHED_FLAG`, so no second list of jobs and no second list of instruction-set flags is typed anywhere in the frontend.
+The arrays and their union types live in `host-types.ts`. `watchedFlags()`
+returns a copy of `WATCHED_FLAG` for the machine cards. The binding tests below
+hold both vocabularies to the Python enums, including their order.
 
 **An optional field is copied optional.** Pydantic marks a field with a default as not required, so `cpu_model?: string | null` is what the contract says: the key may be absent, and present-but-null is the reading nobody took. A reader that fills every key says so by deriving from the copied type - `Required<HostFingerprintRow>` - rather than by declaring a second interface.
 
 **The query door carries a copy of the compact index, and the stamp it reads.** `frontend/src/lib/data/compact-index.ts` declares `CompactEntry` and `CompactIndex` by hand, because the door runs in a browser that fetches `state/compact/<ledger>/index/<period>.json` and cannot import the Pydantic model. Beside them sit `COMPACT_INDEX_STAMP`, the `CompactIndex` stamp this build reads, `COMPACT_PERIODS`, and `ENTRY_STATES`, the closed set an entry's `state` is drawn from. **The stamp rule is the backend's own**: an index stamped at that stamp or older is read when the fields the door acts on pass its guard, and a newer one is refused with both stamps in the console, because only a build at least that new knows what the shape means. The door's rules are [../publishing/how-the-query-door-answers-a-panel.md](../publishing/how-the-query-door-answers-a-panel.md).
 
-**The census row's column names are spelled once, in `frontend/src/lib/server/ledger-rows.ts`.** The door answers only the columns a read asks for, so `ITEM_HEALTH_COLUMNS` names every column `ItemHealthRow` declares, in its order, and `backend/tests/contracts/test_frontend_console_lists.py` fails when the contract gains, loses or renames one. `FEED_HEALTH_COLUMNS` beside it names only the `FeedHealthRow` columns the Voices page reads, in the contract's order, and the same test fails when the contract renames or drops one of them. The two other records a console route reads keep no second list. `SCORE_COLUMNS` is built from the keys of `frontend/src/lib/console/eval-instruments.ts`, which the same test already holds to `EvalRow`, and `HOST_FINGERPRINT_COLUMNS` is keyed by the `HostFingerprintRow` copy above, so the compiler refuses a column that copy does not name.
+**The census row's column names are spelled once, in `frontend/src/lib/server/ledger-rows.ts`.** The door answers only the columns a read asks for, so `ITEM_HEALTH_COLUMNS` names every column `ItemHealthRow` declares, in its order, and `backend/tests/contracts/test_frontend_console_lists.py` fails when the contract gains, loses or renames one. `FEED_HEALTH_COLUMNS` beside it names only the `FeedHealthRow` columns the Voices page reads, in the contract's order, and the same test fails when the contract renames or drops one of them. `SCORE_COLUMNS` is built from the keys of `frontend/src/lib/console/eval-instruments.ts`, which the same test already holds to `EvalRow`. The host questions in `console/queries/machine.ts` name only the cells each panel needs, plus its finite legacy migration inputs.
 
 ## What holds the copy in step
 
@@ -94,9 +112,8 @@ A JSON Schema is a good interchange format and a poor authoring format: it canno
 | `backend/idhazh/contracts/base.py` | The shared string types, the canonical serializer, and the two base models: `Model` for a nested shape and `Contract` for a top-level persisted document. `Contract` owns the `version` date-stamp, the `changelog` tuple, the invariant that `version` equals the newest changelog entry, the stable stem, and `json_schema()`. |
 | `backend/idhazh/contracts/__init__.py` | `CONTRACTS`, the registry of every top-level persisted document. What a check over all of them iterates. |
 | `backend/idhazh/contracts/<name>.py` | One module per persisted shape. |
-| `frontend/src/lib/server/host-fingerprint.ts` | The hand copy of `HostFingerprintRow`, `ServerJob` and `WatchedFlag`. |
+| `frontend/src/lib/console/machine/host-types.ts` | The hand copy of `HostFingerprintRow`, `ServerJob` and `WatchedFlag`, and the arrays the vocabulary tests bind. |
 | `frontend/src/lib/server/ledger-rows.ts` | `ITEM_HEALTH_COLUMNS` and `FEED_HEALTH_COLUMNS`, the column names of `ItemHealthRow` and `FeedHealthRow` a console route asks the door for. |
-| `frontend/src/lib/server/config.ts` | The hand copy of `ConsolePanelGroup`. |
 | `frontend/src/lib/data/compact-index.ts` | The hand copy of `CompactEntry` and `CompactIndex`, the entry states, and the stamp the query door reads. |
 | `frontend/src/lib/console/band.ts` | The hand copy of `RouteId` and `ROUTE_IDS`, the routes the console strip draws, in the order the band producer writes them. |
 | `frontend/src/lib/payload/types.ts` | The published payload's TypeScript shapes, mirroring `DigestDay`. Hand-written, and bound by nothing. |
@@ -122,7 +139,6 @@ The shapes, and where each one lives once written:
 | `FeedHealthRow` | `feed-health-row` | one row of `state/raw/feed-health/<YYYY>/<MM>/<DD>/`, in the raw file the plan job files through the ledger door, packed later under `state/compact/feed-health/` |
 | `FeedRetirementRow` | `feed-retirement-row` | one row of `state/raw/feed-retirements/<YYYY>/<MM>/<DD>/`, in the file its writer owns, filed under the day the address was retired |
 | `ItemHealthRow` | `item-health-row` | one row of `state/raw/item-health/<YYYY>/<MM>/<DD>/`, in the raw file its writer files through the ledger door, packed later under `state/compact/item-health/` |
-| `PublicTelemetryRow` | `public-telemetry` | one row of `frontend/public/telemetry/<YYYY-MM>.csv`, the browser-safe projection of the row above |
 | `ItemHealthSummaryRow` | `item-health-summary-row` | one row of `state/raw/item-health-summary/<YYYY>/<MM>/<DD>/`, filed through the ledger door and packed later under `state/compact/item-health-summary/` |
 | `DayMetrics` | `day-metrics` | `state/day-metrics/<YYYY>/<MM>/<DD>.json`, one whole document per published day, rewritten when that day is corrected |
 | `StorySimilarityPair` | `story-similarity-pair` | one row of `state/raw/content-similarity-judge/scored-pairs/<YYYY>/<MM>/<DD>/`, in the raw file the council's save job files through the ledger door under the judged date, packed later under `state/compact/content-similarity-judge/scored-pairs/` - one borderline pair, what it scored, what a judge said in both orders, the instrument that said it, and the part that judged it, `work_part_index`. The same shape holds the day's draw under `backend/var/council/<date>/selection/<judge>/` before a judging unit reads it |
@@ -164,34 +180,16 @@ The training corpus ships the same way and for the same reason: `corpus/corpus.j
 
 `state/content-similarity-judge/holdout-pairs.csv` was the fourth. It was committed as a header on 2026-09-18 and held marks from 2026-09-19, so a fresh clone got the marks rather than an empty file. Each harvest now files its marks through the ledger door under the day they were made, and the earlier marks were copied onto the door before the file was retired.
 
-### The one row contract whose CSV omits `version`
+### The retired public row contracts
 
-Every other row ledger writes `version` as its first cell, because
-`csv_columns` is `tuple(cls.model_fields)` and `version` is the first field the
-base contract declares. `PublicTelemetryRow` overrides that and writes nineteen
-cells, none of them `version`.
+The telemetry and run-timeline public row contracts and producers are gone.
+Their native item-health source remains unchanged. Native query declarations
+name each panel's columns; no public monthly copy is needed.
 
-The reason was on the far side of the boundary. Until 2026-09-16 `parseTelemetryCsv`
-in `frontend/src/lib/charts/series.ts` checked the header **position by position as
-a prefix**, so a name at position zero shifted every position the console read and
-blanked its charts on every cached bundle. It resolves every cell by its column
-name now, so an insert no longer blanks anything
-([../publishing/telemetry-series.md](../publishing/telemetry-series.md)). What
-keeps `version` off the row is what is left once that hazard is gone: a cell in
-every row of a payload the reader downloads, which no panel reads.
-
-The stamp is not lost: it is a field of the shape, and
-`PublicTelemetryRow` is where a reader of an old shard looks it
-up. What the row loses is the ability to say which *row* predates a change, which
-is the thing the eval ledger needs and this file does not - the console reads the
-projection for rates and never branches on a row's age.
-
-It is also the only contract here whose forbidden fields are a rule rather than
-an omission. `canonical_url`, `url_key` and `detail` are named in
-`FORBIDDEN_COLUMNS`, and the module raises at **import** if any of them ever
-appears on the model. A trust boundary spelled as a list of strings in the writer
-gains a cell by a one-word edit and nothing refuses it; spelled as a model, the
-edit does not start (Guardrail #11).
+The console band's `months` field is also retired. Its same-day version stamp
+and changelog record the removal. Before validation, an older band's dictionary
+is copied without that one field; every other unknown key still fails. Keep
+this migration only while a committed band still carries `months`.
 
 ### Two of these are contracts and are deliberately not migration surfaces
 
@@ -242,12 +240,9 @@ it any more** - `drift.read_windows` was the last and moved on 2026-09-13 with
 the eval ledger's month files. What it still answers is how many month-shaped buckets a
 day-counted window reaches, which is what sizes the `keep_months` knobs.
 
-**A ledger and its published mirror may file at different grains, and the
-item-health ledger is the worked example.** The ledger files by day because a
-run writes one day; the projection under `frontend/public/telemetry/` stays
-monthly because the console prices a window in the files a browser fetches. The
-publisher is the bridge: it folds a month from that month's days, read through
-`ledger.load_days`, at most 31. Both rules and what the bridge costs are in
+**Native write grain and read grain may differ.** Item health files each
+write by day; compact indexes select the packed files for a window. Its former
+monthly public telemetry mirror is retired. The native rules remain in
 [../../concepts/partitions.md](../../concepts/partitions.md#a-ledger-and-its-mirror-may-file-at-different-grains).
 
 For a whole-history scan, time sharding is a cost with no matching read saving.
@@ -413,15 +408,14 @@ Every persisted payload is written by one function: **sorted keys, two-space ind
 The helper also accepts explicitly selected record-list keys. `DigestDay` puts
 stories, leads, run references and verticals on one line each. `RunManifest`
 keeps runs and model settings expanded, and puts configuration digests and
-vertical counts on one line each. The published day-metrics month encoder
-keeps days expanded, and puts sources, instruments and stage timings on one
-line each. `DayMetrics` uses the same record selections for state day files,
+vertical counts on one line each. `DayMetrics` keeps state day files expanded,
+and puts sources, instruments and stage timings on one line each,
 including each instrument's nested statistics. Other fields stay expanded.
 Existing helper callers keep their layout. These producers preserve fields, values and stamps;
 older layouts load normally and take the new layout when rewritten.
 
-The published run-days month encoder keeps days expanded and puts runs on one
-line each. `SourceHealthView` puts each source, including its nested history,
+The retired public run-days encoder is gone; native manifest layout is unchanged.
+`SourceHealthView` puts each source, including its nested history,
 on one line. `ConsoleBand` puts routes and runs on one line each.
 `PublicationInventory` puts file entries and changelog records on one line
 each. `VisualData` puts chart marks on one line each and keeps the encoding

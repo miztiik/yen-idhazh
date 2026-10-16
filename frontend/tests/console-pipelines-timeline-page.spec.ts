@@ -1,0 +1,229 @@
+/** Actual native run-clock geometry, including the solid overrun rule. */
+import { expect, test, type Page } from './support/door-page';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+/**
+ * The run timeline draws at both grains, and every step it draws carries a value.
+ *
+ * **The empty-column gate is held at the contract.** Three console panels
+ * already apologise for a column nothing fills, and the rule this panel obeys is
+ * that a panel may not: every column the panel reads off every row has to be one
+ * the published row is required to carry. That is a question about two
+ * declarations, the panel's list and the row's contract, so it is answered
+ * where both are read with no site at all:
+ * `test_the_run_timeline_reads_only_columns_every_row_carries` in
+ * `backend/tests/contracts/test_frontend_console_lists.py`. It used to be read
+ * off the canary's rows here, which asked what the canary holds rather than what
+ * the code declares.
+ *
+ * **The grain oracle is this file.** The panel offers a shard grain beside
+ * its item grain, and a grain switch is only honest where one fold built both:
+ * two folds over two ledgers can name different runs and disagree about a step's
+ * seconds, which is what the two panels this one replaced actually did. The
+ * oracle holds the two arrays against each other, per shard and per step, rather
+ * than against any pixel.
+ */
+
+const panel = (page: Page) => page.locator('[data-run-timeline]');
+
+/** Every bar the panel has drawn, with the figures it carries. */
+async function drawnBars(
+	page: Page
+): Promise<{ id: string; shard: number; total: number; work: number; items: number; segs: Record<string, number> }[]> {
+	return page.locator('[data-timeline-bar]').evaluateAll((nodes) =>
+		nodes.map((node) => ({
+			id: node.getAttribute('data-timeline-bar') ?? '',
+			shard: Number(node.getAttribute('data-timeline-shard')),
+			total: Number(node.getAttribute('data-timeline-total-ms')),
+			work: Number(node.getAttribute('data-timeline-bar-work-ms')),
+			items: Number(node.getAttribute('data-timeline-bar-items')),
+			segs: Object.fromEntries(
+				[...node.querySelectorAll('[data-timeline-seg]')]
+					.filter((seg) => {
+						const name = seg.getAttribute('data-timeline-seg') ?? '';
+						return name !== 'residual' && name !== 'overrun';
+					})
+					.map((seg) => [
+						seg.getAttribute('data-timeline-seg') ?? '',
+						Number(seg.getAttribute('data-timeline-seg-ms'))
+					])
+			)
+		}))
+	);
+}
+
+/** Pick a grain on the panel's own switch and wait for the panel to say so.
+ *
+ * Click the label, never `check()` the input: the radio's box is hidden so the
+ * segment can carry the styling, and a hidden input is not checkable. The label
+ * is what a reader clicks too. */
+async function chooseGrain(page: Page, grain: string): Promise<void> {
+	await page.locator(`[data-shape-switch="timeline-grain"] [data-shape-option="${grain}"]`).click();
+	await expect(panel(page)).toHaveAttribute('data-timeline-grain', grain);
+}
+
+test('the retired span summary is absent from the built site', () => {
+	expect(existsSync(resolve(process.cwd(), 'build', 'span-rollup'))).toBe(false);
+});
+
+test('every step the panel draws carries a value, and the ones it does not are named', async ({
+	page
+}) => {
+	await page.goto('/console/');
+	const board = panel(page);
+	await expect(board).toHaveAttribute('data-run-timeline', /^\d{4}-\d{2}-\d{2}-\d+$/);
+	await expect(board.locator('[data-substeps]')).toHaveCount(0);
+
+	const drawn = ((await board.getAttribute('data-timeline-drawn')) ?? '').split(' ').filter(Boolean);
+	const unproduced = ((await board.getAttribute('data-timeline-unproduced')) ?? '')
+		.split(' ')
+		.filter(Boolean);
+	const unrecorded = ((await board.getAttribute('data-timeline-unrecorded')) ?? '')
+		.split(' ')
+		.filter(Boolean);
+
+	expect(drawn.length, 'the panel drew no step at all').toBeGreaterThan(0);
+	// The eight the contract declares, each accounted for exactly once: drawn, or
+	// named to the reader as one of the two silences. A step in none of the three
+	// is a step the panel dropped without saying so.
+	expect([...drawn, ...unproduced, ...unrecorded].sort()).toEqual(
+		[
+			'extract_ms',
+			'fetch_ms',
+			'label_ms',
+			'plan_ms',
+			'publish_ms',
+			'score_ms',
+			'summary_ms',
+			'visual_plan_ms'
+		].sort()
+	);
+
+	// Every drawn step has a slice somewhere on the board. A legend entry with no
+	// mark behind it is the failure this row exists to stop shipping.
+	for (const step of drawn) {
+		await expect(
+			page.locator(`[data-timeline-seg="${step}"]`).first(),
+			`${step} is in the legend and on no bar`
+		).toBeAttached();
+	}
+});
+
+test('a bar sits where its item started and is as long as the item took', async ({ page }) => {
+	await page.goto('/console/');
+	await expect(panel(page)).toHaveAttribute('data-run-timeline', /^\d{4}-\d{2}-\d{2}-\d+$/);
+	const bars = panel(page).locator('[data-timeline-bar]');
+	const count = await bars.count();
+	expect(count, 'the timeline drew no bars').toBeGreaterThan(0);
+
+	// In start order, which is what makes the queue legible: the y axis is items
+	// and the x axis is the run's own clock.
+	const starts: number[] = [];
+	for (let at = 0; at < count; at += 1) {
+		starts.push(Number(await bars.nth(at).getAttribute('data-timeline-start-ms')));
+	}
+	expect(starts).toEqual([...starts].sort((a, b) => a - b));
+	expect(starts[0], 'the first bar does not sit at the run start').toBe(0);
+
+	// The steps plus the residual are the item's own clock exactly, which is what
+	// makes the residual a figure that reconciles rather than an estimate.
+	const first = bars.first();
+	const total = Number(await first.getAttribute('data-timeline-total-ms'));
+	const residual = Number(await first.getAttribute('data-timeline-residual-ms'));
+	const segments = first.locator('[data-timeline-seg]:not([data-timeline-seg="residual"])');
+	let named = 0;
+	for (let at = 0; at < (await segments.count()); at += 1) {
+		const seg = segments.nth(at);
+		if ((await seg.getAttribute('data-timeline-seg')) === 'overrun') continue;
+		named += Number(await seg.getAttribute('data-timeline-seg-ms'));
+	}
+	expect(named + residual).toBe(total);
+});
+
+test('the run timeline renders when its published series is gone', async ({ page }) => {
+	// The panel reads one directory at build time. With the series absent the view
+	// is empty by construction, and the empty state is written rather than
+	// defaulted - so the page still answers, which is what `CLAUDE.md` section 12
+	// asks of every published surface.
+	await page.goto('/console/');
+	const board = panel(page);
+	await expect(page.locator('[data-reserved="run-timeline"][data-panel-state="loading"]')).toHaveCount(0);
+	const empty = (await board.getAttribute('data-run-timeline')) === 'empty';
+	if (empty) {
+		await expect(board.locator('[data-run-timeline-empty]')).toBeVisible();
+	} else {
+		await expect(board.locator('[data-timeline-residual-note]')).toBeVisible();
+	}
+	await expect(page.locator('main')).toBeVisible();
+	await expect(page.locator('[data-substeps]')).toHaveCount(0);
+});
+
+test.describe('one fold, two grains', () => {
+	test('THE ORACLE: the shard grain sums to the item grain, step for step', async ({ page }) => {
+		await page.goto('/console/');
+		const board = panel(page);
+		await expect(board).toHaveAttribute('data-run-timeline', /^\d{4}-\d{2}-\d{2}-\d+$/);
+		await expect(board).toHaveAttribute('data-timeline-grain', 'item');
+
+		// The item grain is capped at `console.timeline_bars`, and a comparison
+		// against a capped array would pass while reading half a run. Assert the cap
+		// did not bite before comparing anything.
+		const items = await drawnBars(page);
+		expect(items.length, 'the timeline drew no bars').toBeGreaterThan(0);
+		expect(
+			items.length,
+			'the drawing cap bit, so the two grains cannot be compared on this fixture'
+		).toBe(Number(await board.getAttribute('data-timeline-items')));
+
+		await chooseGrain(page, 'shard');
+		const shards = await drawnBars(page);
+		expect(shards.length, 'the shard grain drew no bars').toBeGreaterThan(1);
+
+		// One bar a shard, and every shard of the run is there exactly once.
+		expect(shards.map((bar) => bar.shard).sort((a, b) => a - b)).toEqual(
+			[...new Set(items.map((bar) => bar.shard))].sort((a, b) => a - b)
+		);
+
+		for (const shard of shards) {
+			const own = items.filter((bar) => bar.shard === shard.shard);
+			// The shard bar covers that shard's items and says how many.
+			expect(shard.items, `shard ${shard.shard} counted the wrong items`).toBe(own.length);
+			// Its work is those items' own clocks added up - the arithmetic the two
+			// grains must agree on, because they are one fold over one set of rows.
+			expect(shard.work, `shard ${shard.shard} drew the wrong item time`).toBe(
+				own.reduce((sum, bar) => sum + bar.total, 0)
+			);
+			// And every step of it is that step summed over the same items. A second
+			// fold over a second ledger is exactly what this cannot survive.
+			for (const [step, ms] of Object.entries(shard.segs)) {
+				expect(ms, `shard ${shard.shard} drew the wrong ${step}`).toBe(
+					own.reduce((sum, bar) => sum + (bar.segs[step] ?? 0), 0)
+				);
+			}
+		}
+
+		// The run's work is the same number at either grain.
+		expect(shards.reduce((sum, bar) => sum + bar.work, 0)).toBe(
+			Number(await board.getAttribute('data-timeline-work-ms'))
+		);
+	});
+
+	test('the by-shard order is the same bars, grouped by the worker that ran them', async ({
+		page
+	}) => {
+		await page.goto('/console/');
+		await expect(panel(page)).toHaveAttribute('data-run-timeline', /^\d{4}-\d{2}-\d{2}-\d+$/);
+		const byStart = await drawnBars(page);
+		await chooseGrain(page, 'by-shard');
+		const grouped = await drawnBars(page);
+
+		// The same set, re-ordered and never re-derived: an ordering that drops or
+		// invents a bar is a second derivation wearing a sort's clothes.
+		expect(grouped.map((bar) => bar.id).sort()).toEqual(byStart.map((bar) => bar.id).sort());
+		const shardRun = grouped.map((bar) => bar.shard);
+		expect(shardRun, 'the by-shard order is not grouped by shard').toEqual(
+			[...shardRun].sort((a, b) => a - b)
+		);
+	});
+});

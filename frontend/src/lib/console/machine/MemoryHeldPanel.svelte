@@ -31,6 +31,10 @@
 	} = $props();
 
 	const view = $derived(memoryHeldWithin(record, start, end));
+	const latest = $derived(view.days.at(-1));
+	const server = $derived(latest?.brackets.find((bracket) => bracket.key === 'server'));
+	const serverShare = $derived(latest && latest.totalBytes > 0 && server
+		? 100 * server.bytes / latest.totalBytes : null);
 </script>
 
 <Panel
@@ -43,6 +47,13 @@
 		: `one bar for the tightest moment of each day, over ${nameSpan(days)}`}."
 	wide
 >
+	<p class="lede" data-lede
+		data-model-rule-name="machine-memory-held"
+		data-model-rule="no" data-model-rule-none="This is one day's memory partition, not a comparison between days.">
+		{serverShare === null ? 'The model server did not record its memory bound.'
+			: `At most ${serverShare.toFixed(1)} percent of the machine's memory was resident in the model server at the tightest recorded moment.`}
+	</p>
+	<p data-comparison="The model server's memory against everything else">The model server's memory against everything else.</p>
 	{#if view.empty}
 		<p class="empty" data-machine-panel-empty="memory-held">
 			{#if record.firstDate === null}
@@ -58,6 +69,8 @@
 	{:else}
 		<ul
 			class="days"
+			data-chart-type="memoryHeld"
+			data-panel-question="is it working"
 			data-memory-days={view.days.length}
 			data-readout-none="one bar a day, and every part, bracket and swap it draws is printed in words under it; agreed with Susan"
 		>
@@ -206,6 +219,7 @@
 </Panel>
 
 <style>
+	.lede { font-size: var(--text-xl); font-weight: 600; line-height: var(--leading-tight); }
 	.empty,
 	.reads,
 	.overlap,

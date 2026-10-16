@@ -50,6 +50,8 @@ def test_the_item_health_ledger_columns_are_defined_once() -> None:
         "source_words_before_cap",
         "machine_shard",
         "machine_job",
+        "machine_pipeline_name",
+        "machine_task_name",
         "span_integrity",
         "elements_found",
         "element_class",

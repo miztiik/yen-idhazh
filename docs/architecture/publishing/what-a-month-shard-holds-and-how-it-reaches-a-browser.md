@@ -56,8 +56,8 @@ The obligation that does need stating: **every writer of a committed day payload
 
 ## An output path is derived at the call site, never held as a constant
 
-The index root comes off the digest root where it is used, the shape
-`public_telemetry` already had, so a caller that moves the days moves the index
+The index root comes off the digest root where it is used,
+so a caller that moves the days moves the index
 with them. **A constant that names an output path is safe only until a caller
 redirects a sibling path**, and the failure is silent by construction: the code
 runs, the file is written, and the only symptom is in a file nobody re-reads.

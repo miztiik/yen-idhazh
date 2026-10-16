@@ -226,7 +226,7 @@ def test_an_item_whose_shard_sealed_nothing_still_gets_a_census_line(
     ), "the fallback row says something the payloads cannot"
     assert kept[orphan.item_id].cpu_model is None
     assert all(kept[item.item_id].cpu_model is not None for item in run_plan.items[1:])
-    assert kept[orphan.item_id].machine_job is ServerJob.WORK, (
+    assert str(kept[orphan.item_id].machine_job) == ServerJob.WORK.value, (
         "the stage that rebuilt the row knows which job it is, even where the shard sealed nothing"
     )
 
@@ -265,8 +265,8 @@ def test_work_then_assemble_leaves_one_row_per_item(
     stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
 
     filed = ledger.list_raw_files(state, LedgerName.ITEM_HEALTH, days=[run_plan.date])
-    assert sorted(held.envelope.identity.job for held in filed) == sorted(
-        [ServerJob.WORK, ServerJob.ASSEMBLE]
+    assert sorted(str(held.envelope.identity.job) for held in filed) == sorted(
+        [ServerJob.WORK.value, ServerJob.ASSEMBLE.value]
     ), "each writer files the day once, under its own writer identity"
 
     rows = ledger.load_days(state, LedgerName.ITEM_HEALTH, [run_plan.date], model=ItemHealthRow)

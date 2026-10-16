@@ -1,6 +1,6 @@
 """Does the frontend's hand-written host-fingerprint row still name the contract's columns?
 
-`frontend/src/lib/server/host-fingerprint.ts` types the machine record by hand,
+`frontend/src/lib/console/machine/host-types.ts` types the machine record by hand,
 because a generator that ran on every contract change served six names in two
 files. This is half the control that replaces it: the field set AND the type of
 each field, so a column copied as `string` that the model declares a number
@@ -27,7 +27,9 @@ from idhazh.contracts.host_fingerprint import HostFingerprintRow
 
 pytestmark = pytest.mark.contract
 
-READER: Final[Path] = REPO_ROOT / "frontend" / "src" / "lib" / "server" / "host-fingerprint.ts"
+READER: Final[Path] = (
+    REPO_ROOT / "frontend" / "src" / "lib" / "console" / "machine" / "host-types.ts"
+)
 
 #: What a JSON Schema scalar becomes. Both JSON number kinds are one TypeScript
 #: type, because JavaScript has one.

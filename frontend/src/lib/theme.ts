@@ -14,17 +14,33 @@ export type ThemeChoice = 'light' | 'dark';
 
 const KEY = 'idhazh:theme';
 
+function storageRefused(error: unknown): boolean {
+	return typeof DOMException !== 'undefined' && error instanceof DOMException &&
+		(error.name === 'SecurityError' || error.name === 'QuotaExceededError');
+}
+
 /** The theme in force: the reader's stored choice, or the base. */
 export function storedChoice(): ThemeChoice {
-	if (typeof localStorage === 'undefined') return 'dark';
-	return localStorage.getItem(KEY) === 'light' ? 'light' : 'dark';
+	try {
+		if (typeof localStorage === 'undefined') return 'dark';
+		return localStorage.getItem(KEY) === 'light' ? 'light' : 'dark';
+	} catch (error) {
+		if (!storageRefused(error)) throw error;
+		console.warn('[theme] Browser storage is unavailable; the current theme remains usable for this page.');
+		return typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+	}
 }
 
 export function apply(choice: ThemeChoice): void {
 	if (typeof document === 'undefined') return;
 	document.documentElement.setAttribute('data-theme', choice);
 	paintBrowserChrome();
-	localStorage.setItem(KEY, choice);
+	try {
+		localStorage.setItem(KEY, choice);
+	} catch (error) {
+		if (!storageRefused(error)) throw error;
+		console.warn('[theme] This browser could not save the theme; it applies to this page only.');
+	}
 }
 
 /** Bring the chrome to the theme already on the page, storing nothing.

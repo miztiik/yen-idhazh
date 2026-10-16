@@ -13,6 +13,8 @@ export interface RouteExpect {
 	readonly records: boolean;
 	readonly fleetReady: string | null;
 	readonly fetchedRows: boolean;
+	readonly nativeRows?: boolean;
+	readonly fetchedRecord?: { readonly pattern: string; readonly strip: string };
 	readonly explorerShape: {
 		readonly askPanel: string;
 		readonly ledgersRegion: string;
