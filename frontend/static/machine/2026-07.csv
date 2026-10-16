@@ -1,3 +1,0 @@
-version,date,run_id,shard,shards,scraped_at,prompt_tokens_total,prompt_tokens_cached_total,prompt_seconds_total,tokens_predicted_total,tokens_predicted_seconds_total,n_decode_total,n_tokens_max,n_busy_slots_per_decode,job_seconds,cpu_model,cpu_busy_pct,peak_rss_bytes,model_load_ms,n_ctx_configured,python_peak_rss_bytes,cgroup_peak_bytes,job
-2026-08-30,2026-07-11,2026-07-11-1,0,2,2026-07-11T21:00:00Z,1210,300,96.4,188,35.5,190,3210,1.0,1020,AMD EPYC 7763 64-Core Processor,61.7,14495514624,6120.5,,,,work
-2026-08-30,2026-07-11,2026-07-11-1,1,2,2026-07-11T21:01:00Z,640,120,51.2,96,18.9,98,2740,1.0,940,AMD EPYC 7763 64-Core Processor,64.3,13958643712,5880.25,,,,work

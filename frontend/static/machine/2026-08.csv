@@ -1,7 +1,0 @@
-version,date,run_id,shard,shards,scraped_at,prompt_tokens_total,prompt_tokens_cached_total,prompt_seconds_total,tokens_predicted_total,tokens_predicted_seconds_total,n_decode_total,n_tokens_max,n_busy_slots_per_decode,job_seconds,cpu_model,cpu_busy_pct,peak_rss_bytes,model_load_ms,n_ctx_configured,python_peak_rss_bytes,cgroup_peak_bytes,job
-2026-08-30,2026-08-20,2026-08-20-2,0,2,2026-08-20T22:00:00Z,800,700,40.0,296,60.0,299,4096,1.0,900,INTEL(R) XEON(R) PLATINUM 8573C,94.5,12990730240,2470.828,8192,1739882496,,work
-2026-08-30,2026-08-20,2026-08-20-2,1,2,2026-08-20T22:01:00Z,253,583,52.0,22,4.0,23,2048,1.0,,,,,,,,,work
-2026-08-30,2026-08-20,2026-08-20-1,0,2,2026-08-20T21:00:00Z,942,0,79.1,170,29.062,172,1112,1.0,640,AMD EPYC 7763 64-Core Processor,88.4,10804060160,3881.795,,,,work
-2026-08-30,2026-08-20,2026-08-20-1,1,2,2026-08-20T21:01:00Z,975,900,7.12,167,28.206,169,1875,1.0,610,AMD EPYC 7763 64-Core Processor,91.2,11779497984,3769.648,,,,work
-2026-08-30,2026-08-19,2026-08-19-1,0,2,2026-08-19T21:00:00Z,1497,900,53.309,215,40.21,218,1712,1.0,720,INTEL(R) XEON(R) PLATINUM 8573C,93.1,13072498688,2418.609,,,,work
-2026-08-30,2026-08-19,2026-08-19-1,1,2,2026-08-19T21:01:00Z,1765,900,77.778,230,43.436,233,1995,1.0,780,INTEL(R) XEON(R) PLATINUM 8573C,92.8,12990730240,2470.828,,,,work
