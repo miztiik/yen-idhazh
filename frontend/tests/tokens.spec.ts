@@ -73,9 +73,7 @@ function resolvedIn(css: string, token: string): string {
 /** WCAG 2.2 relative luminance, written out rather than imported.
  *
  * Audit tooling is a project non-goal (CLAUDE.md section 0a). This is one
- * surface's oracle over the tokens that surface uses, and it adds no
- * dependency. `item-card.spec.ts` carries the same eight lines for the same
- * reason.
+ * surface's oracle over the tokens that surface uses, and it adds no dependency.
  */
 function luminance(hex: string): number {
 	const channel = (value: number) => {

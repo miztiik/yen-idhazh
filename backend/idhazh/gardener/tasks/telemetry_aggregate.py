@@ -18,10 +18,6 @@ Only a due month's folders are fetched, and the compact index with them: the
 ledger door decides from that index which files serve a day, and an index the
 checkout lacked would read as no compact file at all.
 
-The browser's copy of each month under `frontend/public/telemetry/` goes once it
-is past the public-copy series. A summary past the aggregate series is deleted
-outright; while that series is `forever`, none is.
-
 A month already summarised is not folded again. The summary's raw folder need
 not be in the checkout yet: the first summary a pass writes is what creates it,
 so a due month never waits on it. A dry run folds every due month in memory and
@@ -42,25 +38,22 @@ OWNED_LEDGERS = (LedgerName.ITEM_HEALTH_SUMMARY,)
 
 
 def run(context: TaskContext) -> Pass:
-    """Summarise each due month, then take expired copies and summaries past their series."""
+    """Summarise each due native month without deleting its source rows."""
     import dataclasses
 
-    from idhazh import config, day_partition, ledger, month_partition, retention
+    from idhazh import ledger, month_partition, retention
     from idhazh.config import FULL_GRAIN
     from idhazh.contracts.file_envelope import Format, Period, WriterIdentity
     from idhazh.contracts.item_health import ItemHealthRow
     from idhazh.contracts.item_health_summary import ItemHealthSummaryRow
-    from idhazh.contracts.knobs.gardener import ForeverWindow, RetentionPolicy
+    from idhazh.contracts.knobs.gardener import RetentionPolicy
     from idhazh.gardener import named_trees, retention_files
-    from idhazh.telemetry.publish import public_telemetry
 
     policy = context.policy
     series = policy.series if isinstance(policy, RetentionPolicy) and policy.series else {}
-    never = ForeverWindow(unit="forever")
     keep_from = retention_files.first_kept_month(
         series.get(FULL_GRAIN, policy.window), context.today
     )
-    public_from = retention_files.first_kept_month(series.get("public-copy", never), context.today)
 
     def expired(first_kept: str | None) -> list[str]:
         if first_kept is None:
@@ -77,11 +70,8 @@ def run(context: TaskContext) -> Pass:
         return requested
 
     expired_full_grain = expired(keep_from)
-    expired_public = expired(public_from)
     state = context.state_dir
     listing = context.listing
-    copies_root = public_telemetry.DEFAULT_PUBLIC_ROOT.relative_to(config.REPO_ROOT)
-    public = retention_files.owned_tree(context, context.repo_root / copies_root)
 
     held_item_health_months = set(named_trees.held_months(listing, state, LedgerName.ITEM_HEALTH))
     summarised_months = {
@@ -176,20 +166,12 @@ def run(context: TaskContext) -> Pass:
             raise ValueError(
                 f"{shown.as_posix()}/{month[:4]}/{month[5:7]} did not read back as it was written"
             )
-    copies = (
-        named_trees.month_files(listing, public, ".csv", expired_public)
-        if public is not None
-        else []
-    )
-    aged = [
-        *(retention_files.Aged(path=copy, day=f"{copy.stem}-01") for copy in copies),
-    ]
     outcome = retention_files.take_files(
         context,
-        aged,
-        collection=copies_root.as_posix(),
+        [],
+        collection=ledger.raw_root(state, LedgerName.ITEM_HEALTH_SUMMARY)
+        .relative_to(context.repo_root).as_posix(),
         first_kept=retention_files.first_day_of(keep_from),
-        after_delete=day_partition.drop_empty_day_dirs,
     )
     return dataclasses.replace(
         outcome,

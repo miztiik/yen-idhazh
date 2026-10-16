@@ -15,8 +15,8 @@ export const EXPECT: RouteExpect = {
 		minimumPanelCount: 5,
 		emptyPanels: '[data-machine-panel-empty]',
 		minimumEmptyLength: 20,
-		newestRunExemption: '[data-window-exempt="newest-run"]',
-		newestRunWords: 'newest run',
+		newestRunExemption: '[data-panel-query="two-clocks"][data-window-exempt="newest-run"]',
+		newestRunWords: 'the newest run',
 		twoClocksSubtitle: '[data-console-panel-id="two-clocks"] > header > p',
 		twoClocksWords: 'the newest run'
 	}

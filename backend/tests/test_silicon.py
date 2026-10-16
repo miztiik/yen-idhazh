@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import time
 from pathlib import Path
 
@@ -10,7 +11,8 @@ from conftest import FIXTURES_DIR, SEED_COMMIT
 
 from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.host_fingerprint import HostFingerprintRow
+from idhazh.contracts.file_envelope import WriterIdentity
+from idhazh.contracts.host_fingerprint import HostFingerprintRow, fingerprint_v2
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.telemetry import silicon
 
@@ -73,7 +75,7 @@ def test_only_the_jobs_config_names_take_the_bandwidth_reading(tmp_path: Path) -
     settings = config.load()
     settings.app.observability.host_fingerprint = True
     settings.app.observability.host_fingerprint_bandwidth_floor_mib = 1
-    settings.app.observability.host_fingerprint_bandwidth_jobs = (ServerJob.RUNTIME,)
+    settings.app.observability.host_fingerprint_bandwidth_jobs = ("runtime",)
 
     took = silicon.stage_fingerprint(
         date=FINGERPRINT_DAY,
@@ -107,7 +109,7 @@ def test_the_committed_config_reads_bandwidth_on_the_bench_and_nowhere_else() ->
     here, so moving the knob moves this test with it."""
     named = config.load().app.observability.host_fingerprint_bandwidth_jobs
 
-    assert named == (ServerJob.RUNTIME,)
+    assert named == ()
 
 
 CPUINFO_XEON = """processor\t: 0
@@ -159,21 +161,19 @@ def test_a_machine_with_no_watched_flags_records_an_empty_string() -> None:
     assert "avx512" not in found
 
 
-def test_the_fingerprint_ignores_everything_that_moves_between_two_jobs() -> None:
-    """Two draws of one machine type have to carry one id, or the column counts nothing."""
-    first = {"cpu_vendor": "GenuineIntel", "cpu_family": 6, "flags": "avx512f"}
-    second = dict(first)
-
-    assert silicon.fingerprint_of(first) == silicon.fingerprint_of(second)
-    assert len(silicon.fingerprint_of(first)) == 16
-
-
-def test_a_different_instruction_set_is_a_different_fingerprint() -> None:
-    """The flags are the cell that explains the throughput, so they must change the id."""
-    milan = {"cpu_vendor": "AuthenticAMD", "flags": "avx2"}
-    genoa = {"cpu_vendor": "AuthenticAMD", "flags": "avx2 avx512f"}
-
-    assert silicon.fingerprint_of(milan) != silicon.fingerprint_of(genoa)
+def cpu_topology(
+    root: Path, topology: dict[int, tuple[int, int]]
+) -> Path:
+    for cpu_id, (package, core) in topology.items():
+        cpu = root / f"cpu{cpu_id}"
+        directory = cpu / "topology"
+        directory.mkdir(parents=True)
+        (directory / "physical_package_id").write_text(f"{package}\n", encoding="ascii")
+        (directory / "core_id").write_text(f"{core}\n", encoding="ascii")
+        frequency = cpu / "cpufreq"
+        frequency.mkdir()
+        (frequency / "cpuinfo_max_freq").write_text("3500000\n", encoding="ascii")
+    return root
 
 
 def test_the_row_reads_family_model_stepping_off_the_text_it_is_given() -> None:
@@ -194,23 +194,147 @@ def test_the_row_reads_family_model_stepping_off_the_text_it_is_given() -> None:
     assert row.cpu_stepping == 2
     assert row.cpu_vendor == "GenuineIntel"
     assert row.microcode == "0x21000283"
+    assert row.cpu_observed_mhz is None
+    assert row.cpu_reported_max_mhz is None
 
 
-def test_the_clock_is_the_mean_across_processors_and_threads_is_their_count() -> None:
-    """One processor's clock is not the machine's, and the count comes from the same lines."""
+def test_missing_frequency_does_not_reduce_visible_cpu_count(tmp_path: Path) -> None:
+    """Online CPU IDs, not frequency rows, determine logical processor count."""
     row = silicon.read_row(
         date="2026-09-16",
         run_id="2026-09-16-1",
+        job=ServerJob.WORK,
+        shard=0,
+        frequency_enabled=True,
+        probe_floor_mib=0,
+        probe_cache_multiple=2,
+        ask_placement=False,
+        cpuinfo=CPUINFO_XEON.replace("cpu MHz\t\t: 2100.000\n", ""),
+        online_cpu_list="0,2",
+        cpu_root=cpu_topology(tmp_path, {0: (0, 0), 2: (0, 1)}),
+    )
+
+    assert row.cpu_logical_processors == 2
+    assert row.cpu_physical_cores == 2
+    assert row.cpu_observed_mhz == 2300.0
+    assert row.cpu_reported_max_mhz == 3500.0
+    assert row.fingerprint_version == 2
+    assert row.fingerprint == fingerprint_v2(row)
+
+
+def test_sparse_online_ids_and_incomplete_topology_keep_unknowns_explicit(
+    tmp_path: Path,
+) -> None:
+    topology = cpu_topology(tmp_path, {1: (0, 0), 3: (0, 0), 8: (1, 2)})
+    row = silicon.read_row(
+        date=FINGERPRINT_DAY,
+        run_id=A_RUN_ID,
         job=ServerJob.WORK,
         shard=0,
         probe_floor_mib=0,
         probe_cache_multiple=2,
         ask_placement=False,
         cpuinfo=CPUINFO_XEON,
+        online_cpu_list="1,3,8",
+        cpu_root=topology,
+    )
+    missing_topology = silicon.read_row(
+        date=FINGERPRINT_DAY,
+        run_id=A_RUN_ID,
+        job=ServerJob.WORK,
+        shard=0,
+        probe_floor_mib=0,
+        probe_cache_multiple=2,
+        ask_placement=False,
+        cpuinfo=CPUINFO_XEON,
+        online_cpu_list="1,3,8",
+        cpu_root=tmp_path / "missing-topology",
     )
 
-    assert row.threads == 2
-    assert row.mhz_at_probe == 2200.0
+    assert row.cpu_logical_processors == 3
+    assert row.cpu_physical_cores == 2
+    assert missing_topology.cpu_logical_processors == 3
+    assert missing_topology.cpu_physical_cores is None
+
+
+def test_target_capacity_uses_affinity_and_the_tightest_visible_cgroup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pid = 71
+    proc = tmp_path / "proc"
+    (proc / str(pid)).mkdir(parents=True)
+    (proc / str(pid) / "cgroup").write_text("0::/slice/job\n", encoding="ascii")
+    cgroups = tmp_path / "cgroup"
+    for name, value in (
+        ("cpu.max", "max 100000\n"),
+        ("slice/cpu.max", "250000 100000\n"),
+        ("slice/job/cpu.max", "400000 100000\n"),
+    ):
+        target = cgroups / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(value, encoding="ascii")
+    monkeypatch.setattr(os, "sched_getaffinity", lambda _pid: {1, 8}, raising=False)
+
+    row = silicon.read_row(
+        date=FINGERPRINT_DAY,
+        run_id=A_RUN_ID,
+        job=ServerJob.WORK,
+        shard=0,
+        probe_floor_mib=0,
+        probe_cache_multiple=2,
+        ask_placement=False,
+        cpuinfo=CPUINFO_XEON,
+        online_cpu_list="1,3,8",
+        cpu_root=cpu_topology(tmp_path / "sys-cpu", {1: (0, 0), 3: (0, 0), 8: (1, 2)}),
+        proc_root=proc,
+        cgroup_root=cgroups,
+        target_pid=pid,
+    )
+
+    assert row.cpu_allowed_processors == 2
+    assert row.cpu_quota_cores == 2.5
+    assert row.cpu_quota_state == "finite"
+    assert row.cpu_target_measured_at == row.measured_at
+
+
+def test_fingerprint_v2_ignores_counts_capacity_and_frequency() -> None:
+    """New identities use only stable hardware facts, not job placement."""
+    base = silicon.read_row(
+        date=FINGERPRINT_DAY,
+        run_id=A_RUN_ID,
+        job=ServerJob.WORK,
+        shard=0,
+        probe_floor_mib=0,
+        probe_cache_multiple=2,
+        ask_placement=False,
+        cpuinfo=CPUINFO_XEON,
+        online_cpu_list="0-1",
+    )
+    changed = base.model_copy(
+        update={
+            "cpu_physical_cores": 1,
+            "cpu_logical_processors": 1,
+            "cpu_allowed_processors": 1,
+            "cpu_observed_mhz": 9999.0,
+            "cpu_reported_max_mhz": 9999.0,
+        }
+    )
+    other_flags = silicon.read_row(
+        date=FINGERPRINT_DAY,
+        run_id=A_RUN_ID,
+        job=ServerJob.WORK,
+        shard=0,
+        probe_floor_mib=0,
+        probe_cache_multiple=2,
+        ask_placement=False,
+        cpuinfo=CPUINFO_XEON.replace("avx512f", "avx2"),
+        online_cpu_list="0-1",
+    )
+
+    assert base.fingerprint_version == 2
+    assert base.fingerprint == fingerprint_v2(base)
+    assert changed.fingerprint == base.fingerprint
+    assert other_flags.fingerprint != base.fingerprint
 
 
 def test_a_probe_size_of_zero_switches_the_bandwidth_reading_off() -> None:
@@ -476,17 +600,35 @@ def test_a_row_survives_the_round_trip_through_the_ledger_shape(tmp_path: Path) 
     Read off the one raw file the writer left rather than through the settled
     reader, because that file is where the writer's own rendering lands.
     """
-    silicon.stage_fingerprint(
+    row = silicon.read_row(
         date=FINGERPRINT_DAY,
         run_id=A_RUN_ID,
-        settings=a_probe(),
-        state_root=tmp_path,
-        commit_sha=SEED_COMMIT,
+        job=ServerJob.WORK,
         shard=0,
+        probe_floor_mib=0,
+        probe_cache_multiple=2,
+        ask_placement=False,
+        cpuinfo=CPUINFO_XEON,
+        online_cpu_list="0,1",
+        cpu_root=cpu_topology(tmp_path / "sys-cpu", {0: (0, 0), 1: (0, 1)}),
+        cache_root=a_cache_tree(tmp_path / "sys-cache", "4M"),
+    )
+    paths = ledger.persist(
+        tmp_path,
+        [row],
+        ledger=LedgerName.HOST_FINGERPRINT,
+        covers=FINGERPRINT_DAY,
+        identity=WriterIdentity(
+            run_id=A_RUN_ID,
+            attempt=1,
+            job=ServerJob.WORK,
+            shard=0,
+            producer="telemetry.silicon",
+            git_sha=SEED_COMMIT,
+        ),
     )
 
-    (written,) = raw_files(tmp_path)
-    (read,) = ledger.load([written.path], model=HostFingerprintRow)
+    (read,) = ledger.load(paths, model=HostFingerprintRow)
 
     assert read.memcpy_gib_s is None, "a probe that did not run is absent, not zero"
     assert read.memcpy_probe_mib == 0
@@ -568,7 +710,6 @@ def test_a_job_that_died_before_its_clock_leaves_a_usable_half_row(tmp_path: Pat
 
     (row,) = settled(tmp_path)
 
-    assert row.fingerprint is not None, "the machine is still known"
     assert row.job_seconds is None
     assert row.model_load_ms is None
     assert row.csv_row()["job_seconds"] == ""

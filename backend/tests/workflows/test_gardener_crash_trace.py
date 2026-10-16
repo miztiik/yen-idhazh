@@ -22,8 +22,8 @@ The package cases run `idhazh work --config <missing planted path>` through the
 installed console script and through `python -m idhazh`. The missing config ends
 the command before it can start network work.
 
-The last test holds the four workflow programs to every command in the workflow
-that starts Python, so a fifth program cannot land without a case here. What
+The last test holds the five workflow programs to every command in the workflow
+that starts Python, so a sixth program cannot land without a case here. What
 the trace holds for any chain is `test_crash_trace.py`.
 """
 
@@ -33,7 +33,6 @@ import ast
 import json
 import os
 import re
-import shlex
 import subprocess
 import sys
 from collections.abc import Callable
@@ -50,6 +49,7 @@ from ._harness import (
     SQUASH_DUE_MODULE,
     _load_workflows,
     _mapping,
+    _shell_words,
     _steps,
 )
 
@@ -275,7 +275,7 @@ def test_the_top_router_installs_the_crash_trace_before_any_other_action() -> No
 
 def programs_started(script: str) -> set[str]:
     """What each command of a step's script that starts Python runs: the word after it."""
-    words = shlex.split(script, comments=True)
+    words = _shell_words(script, comments=True)
     return {
         words[at + 1] if at + 1 < len(words) else word
         for at, word in enumerate(words)

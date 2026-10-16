@@ -1,13 +1,14 @@
 """Does ASSEMBLE really rebuild against fresh main without replacing completed raw bytes?"""
 
 import dataclasses
+import hashlib
 import json
 from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REFILL_PUBLISHED
-from gardener._garden import an_origin, git, on_origin, quiet_git, write
+from gardener._garden import an_origin, git, quiet_git, write
 from pipeline._builders import FULL_TEXT, plan, score_one_item
 from pipeline.test_publish_window import stage_visual_payloads
 from retention._trees import health_row
@@ -22,18 +23,22 @@ from idhazh.contracts.item_health import ItemStage
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.publication_inventory import PublicationInventory
+from idhazh.contracts.run_manifest import RunManifest
+from idhazh.contracts.run_shards import RunShards
 from idhazh.contracts.summary import Summary
 from idhazh.contracts.visual_data import VisualData
 from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX, VisualDecision
+from idhazh.fan_out import shard_count
 from idhazh.ledger import paths
 from idhazh.publication import record_files
 from idhazh.render import asset_relpath
 from idhazh.stages import common
 from idhazh.stages.assemble import stage_assemble
+from idhazh.telemetry.run_shards import rows_of
 from utilities import digest_assemble, digest_publish, publication_evidence
 from utilities.publication_git import Repository
-from utilities.publication_request import IntegrityError, PublicationRequest
-from utilities.publish_to_repo import Status, publish
+from utilities.publication_request import IntegrityError, PublicationRequest, Write
+from utilities.publish_to_repo import Status, _verify_preparation, publish
 from utilities.push_retry import PushRetry
 
 
@@ -52,7 +57,12 @@ def test_fresh_base_regeneration_preserves_completed_raw_and_newer_inventory(
             digest_publish.INVENTORY: seed.to_json(),
         },
     )
-    run_plan = plan()
+    base_plan = plan()
+    settings = config.load(CONFIG_DIR)
+    derived_shards = shard_count(len(base_plan.items), run=settings.app.run)
+    dispatched_shards = 8 if derived_shards != 8 else 7
+    run_plan = base_plan.model_copy(update={"shards": dispatched_shards})
+    assert run_plan.shards != derived_shards
     monkeypatch.setattr(common, "VAR_ROOT", repo / "backend" / "var" / "run")
     monkeypatch.setattr(common, "STATE_ROOT", repo / "state")
     monkeypatch.setattr(common, "PUBLIC_ROOT", repo / "frontend" / "public" / "digest")
@@ -103,7 +113,6 @@ def test_fresh_base_regeneration_preserves_completed_raw_and_newer_inventory(
         }
     )
     write(items / f"{first.item_id}{PAYLOAD_SUFFIX}", decision.to_json())
-    settings = config.load(CONFIG_DIR)
     summary_path = items / f"{first.item_id}.summary.json"
     summary = Summary.read(summary_path).model_copy(
         update={
@@ -148,15 +157,9 @@ def test_fresh_base_regeneration_preserves_completed_raw_and_newer_inventory(
         if path.is_relative_to(repo) and not path.is_relative_to(repo / "backend")
     }
     authority = digest_publish.permissions("assemble", date=run_plan.date)
-    month = run_plan.date[:7]
     projections = (
         "frontend/public/console/band.json",
-        f"frontend/public/day-metrics/{month}.json",
-        f"frontend/public/machine/{month}.csv",
-        f"frontend/public/run-days/{month}.json",
-        f"frontend/public/run-timeline/{month}.csv",
         "frontend/public/source-health.json",
-        f"frontend/public/telemetry/{month}.csv",
     )
     assert set(projections) <= hashes.keys(), "every changed projection needs write evidence"
     day = "frontend/public/digest/" + run_plan.date.replace("-", "/")
@@ -183,17 +186,22 @@ def test_fresh_base_regeneration_preserves_completed_raw_and_newer_inventory(
             permissions=authority,
             mutable=mutable,
         ),
-        preparation_scopes=mutable,
+        preparation_scopes=(*mutable, digest_assemble.count_scope(run_plan.date)),
     )
-    request = dataclasses.replace(
+    prepare = digest_assemble.preparation(
+        repo,
         request,
-        prepare=digest_assemble.preparation(
-            repo,
-            request,
-            date=run_plan.date,
-            settings=settings,
-        ),
+        date=run_plan.date,
+        settings=settings,
     )
+    prepared_requests: list[PublicationRequest] = []
+
+    def preparing(base: str, active: PublicationRequest) -> PublicationRequest:
+        prepared = prepare(base, active)
+        prepared_requests.append(prepared)
+        return prepared
+
+    request = dataclasses.replace(request, prepare=preparing)
     raw = {
         path: (repo / path).read_bytes()
         for path in request.writes
@@ -229,7 +237,7 @@ def test_fresh_base_regeneration_preserves_completed_raw_and_newer_inventory(
         refusal = publish(request, repo=repo, retry=PushRetry({"default": 300}, 0.001, 0.001, 1))
         assert refusal.status is Status.PREPARATION_FAILURE
         assert refusal.push_count == 0
-        assert git(origin, "rev-parse", "main").strip() == observed
+        assert git(origin, "--git-dir=.", "rev-parse", "main").strip() == observed
         assert {path: (repo / path).read_bytes() for path in request.writes} == original_bytes
     finally:
         summary_path.write_bytes(completed_summary)
@@ -238,34 +246,84 @@ def test_fresh_base_regeneration_preserves_completed_raw_and_newer_inventory(
     result = publish(request, repo=repo, retry=PushRetry({"default": 300}, 0.001, 0.001, 1))
     assert result.status is Status.LANDED, result
     assert result.prepared
+    prepared = prepared_requests[-1]
+    count_writes = {
+        path: write
+        for path, write in prepared.writes.items()
+        if path.startswith("state/raw/run-shards/")
+    }
+    assert count_writes and all(
+        write.immutable and path in raw for path, write in count_writes.items()
+    )
+    assert {
+        path: write.sha256 for path, write in count_writes.items()
+    } == {
+        path: hashlib.sha256(data).hexdigest()
+        for path, data in raw.items()
+        if path.startswith("state/raw/run-shards/")
+    }
+    git(mover, "fetch", "--quiet", "origin", "main")
+    remote = Repository(mover)
     for path in projections:
-        entry = Repository(origin, git_dir=origin).entry("main", path)
+        entry = remote.entry("origin/main", path)
         assert entry is not None, f"projection was omitted from publication: {path}"
-        assert Repository(origin, git_dir=origin).blob(entry.oid) == (repo / path).read_bytes()
+        assert remote.blob(entry.oid) == (repo / path).read_bytes()
     assert result.observed_tip is not None
     digest_publish.published_inputs(repo, result.observed_tip, date=run_plan.date, settings=settings)
-    manifest_text = on_origin(origin, f"{day}/run.json")
-    assert manifest_text is not None
-    from idhazh.cli import shard_count
-
-    assert json.loads(manifest_text)["runs"][-1]["shards"] == shard_count(
-        len(run_plan.items), run=settings.app.run
-    )
-    assert on_origin(origin, "frontend/public/other.json") == '{"newer":true}\n'
+    manifest_text = git(mover, "show", f"origin/main:{day}/run.json")
+    assert json.loads(manifest_text)["runs"][-1]["shards"] == dispatched_shards
+    counts = ledger.load_days(repo / "state", LedgerName.RUN_SHARDS, [run_plan.date], model=RunShards)
+    assert {row.run_id: row.shards for row in counts} == {
+        row.run_id: row.shards for row in rows_of(RunManifest.from_json(manifest_text))
+    }
+    assert git(mover, "show", "origin/main:frontend/public/other.json") == '{"newer":true}\n'
     for path, data in raw.items():
-        entry = Repository(origin, git_dir=origin).entry("main", path)
+        entry = remote.entry("origin/main", path)
         assert entry is not None
-        assert Repository(origin, git_dir=origin).blob(entry.oid) == data
-    entry = Repository(origin, git_dir=origin).entry("main", asset)
+        assert remote.blob(entry.oid) == data
+    if not empty_harvest:
+        # Another fresh-base preparation keeps the already completed count.
+        repeated = prepare(result.observed_tip, prepared)
+        _verify_preparation(prepared, repeated, result.observed_tip)
+        assert {
+            path: write.sha256
+            for path, write in repeated.writes.items()
+            if path.startswith("state/raw/run-shards/")
+        } == {
+            path: write.sha256
+            for path, write in prepared.writes.items()
+            if path.startswith("state/raw/run-shards/")
+        }
+    entry = remote.entry("origin/main", asset)
     assert entry is not None
-    assert Repository(origin, git_dir=origin).blob(entry.oid) == raced
+    assert remote.blob(entry.oid) == raced
     expected = corpus.roll(remote_rows, incoming, window=2)
     assert corpus.read_rows(repo / "corpus") == expected
     corpus.refuse_a_miscounted_census(expected, corpus.read_meta(repo / "corpus"))
     for path in ("corpus/corpus.jsonl", "corpus/corpus.meta.json"):
-        entry = Repository(origin, git_dir=origin).entry("main", path)
+        entry = remote.entry("origin/main", path)
         assert entry is not None
-        assert Repository(origin, git_dir=origin).blob(entry.oid) == (repo / path).read_bytes()
+        assert remote.blob(entry.oid) == (repo / path).read_bytes()
+
+
+def test_preparation_cannot_change_immutable_counts_inside_its_scope() -> None:
+    source, fresh = "a" * 40, "b" * 40
+    scope = digest_assemble.count_scope("2026-08-21")
+    path = f"{scope}/completed.parquet"
+    identity = WriterIdentity(
+        run_id="2026-08-21-1", attempt=1, job=ServerJob.ASSEMBLE, shard=0,
+        producer="tests.publisher", git_sha=source,
+    )
+    original = PublicationRequest(
+        identity, "assembled", source, (scope,), (),
+        {path: Write("c" * 64, None, immutable=True)},
+        preparation_scopes=(scope,),
+    )
+    changed = dataclasses.replace(
+        original, source_tip=fresh, writes={path: Write("d" * 64, None, immutable=True)}
+    )
+    with pytest.raises(IntegrityError, match="changed completed artifact"):
+        _verify_preparation(original, changed, fresh)
 
 
 @pytest.mark.parametrize("staged", [False, True])
@@ -332,6 +390,22 @@ def test_named_indexes_import_old_permanent_heads_without_scanning_raw_archive(
     assert compact_path in inputs
     assert not any(path.startswith("state/raw/feed-retirements/1990") for path in inputs)
     assert "state/raw/feed-retirements" not in inputs
+
+
+def test_native_band_inputs_include_both_spans_without_retired_projection_roots() -> None:
+    settings = config.load(CONFIG_DIR)
+    through = "2026-10-09"
+    widest = max(settings.appearance.console.window_presets)
+    first = (date.fromisoformat(through) - timedelta(days=2 * widest - 1)).isoformat()
+    inputs = digest_assemble.input_paths(date=through, settings=settings)
+    day = first.replace("-", "/")
+    assert f"frontend/public/digest/{day}/run.json" in inputs
+    assert f"state/day-metrics/{day}.json" in inputs
+    assert f"frontend/public/digest/{day}/digest.json" not in inputs
+    assert not any(
+        path.startswith(f"frontend/public/{root}/")
+        for path in inputs for root in ("machine", "run-days", "day-metrics")
+    )
 
 
 def test_inputs_include_the_full_seen_and_published_consumer_windows() -> None:
@@ -485,11 +559,11 @@ def test_work_adapter_lands_exact_completed_raw_not_pre_staged_state(
     assert result.status is Status.LANDED, result
     assert git(repo, "rev-parse", "HEAD").strip() == source
     assert (repo / ".git/index").read_bytes() == index
-    assert Repository(origin, git_dir=origin).entry("main", "state/foreign-staged.json") is None
+    assert Repository(origin).entry("main", "state/foreign-staged.json") is None
     for target in evidence:
-        entry = Repository(origin, git_dir=origin).entry("main", target.relative_to(repo).as_posix())
+        entry = Repository(origin).entry("main", target.relative_to(repo).as_posix())
         assert entry is not None and entry.mode == "100644"
-        assert Repository(origin, git_dir=origin).blob(entry.oid) == target.read_bytes()
+        assert Repository(origin).blob(entry.oid) == target.read_bytes()
 
 
 def test_plan_workflow_call_parses_and_bad_retry_config_stops_before_git_changes(

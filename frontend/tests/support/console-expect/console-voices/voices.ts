@@ -7,25 +7,25 @@ export const EXPECT: RouteExpect | null = {
 	panels: [
 		{
 			name: 'the source census',
-			selector: '[data-source-health-lead], [data-source-health="absent"]'
+			selector: '[data-console-panel-id="source-health"]'
 		},
 		{
 			name: 'the ranking weight',
-			selector: '[data-voices="reliability"], [data-console-empty="voices"]'
+			selector: '[data-console-panel-id="ranking-discount"]'
 		},
-		{ name: 'the feed failure record', selector: '[data-window-exempt="feeds"]' },
-		{ name: 'the truncation cap cost', selector: '[data-windowed="source-cuts"]' }
+		{ name: 'the feed and article failure record', selector: '[data-console-panel-id="feeds-failed"]' },
+		{ name: 'the truncation cap cost', selector: '[data-console-panel-id="source-cuts"]' },
+		{ name: 'the fetch clock record', selector: '[data-console-panel-id="fetch-time"]' },
+		{ name: 'the retirement distance', selector: '[data-console-panel-id="retiring"]' },
+		{ name: 'the newest choice', selector: '[data-console-panel-id="why-chosen"]' },
+		{ name: 'the watchlist catch', selector: '[data-console-panel-id="watchlist"]' }
 	],
 	ownedSelectors: [
-		'[data-feed]',
+		'[data-failed-source]',
 		'[data-feeds]',
-		'[data-feed-result]',
 		'[data-feed-reliability]',
 		'[data-feed-clean-name]',
 		'[data-feed-ineligible-name]',
-		'[data-feed-strip]',
-		'[data-feed-axis]',
-		'[data-rested]',
 		'[data-source-health]',
 		'[data-source-health-lead]',
 		'[data-source-state]',
@@ -33,8 +33,6 @@ export const EXPECT: RouteExpect | null = {
 		'[data-source-cut]',
 		'[data-source-cuts-intro]',
 		'[data-windowed="source-cuts"]',
-		'[data-windowed="feed-outcomes"]',
-		'[data-window-exempt="feeds"]',
 		'[data-window-exempt="source-health"]'
 	]
 };

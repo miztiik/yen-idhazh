@@ -15,12 +15,14 @@ from uuid import uuid4
 from idhazh import completed_writes, config, corpus
 from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
+from idhazh.contracts.knobs.windows import months_a_window_can_touch
 from idhazh.contracts.ledger_index import CompactIndex, EntryState
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain
 from idhazh.contracts.publication_inventory import PublicationInventory
 from idhazh.ledger import paths, staging
 from idhazh.path_classes import DERIVED
+from utilities import publication_evidence
 from utilities.publication_git import Repository
 from utilities.publication_inputs import ledger_window, materialize
 from utilities.publication_request import (
@@ -34,11 +36,16 @@ from utilities.publication_request import (
 INVENTORY = "frontend/public/publication.json"
 
 
+def _band_input_days(settings: config.Settings) -> int:
+    widest = max(settings.appearance.console.window_presets)
+    return max(2 * widest, months_a_window_can_touch(widest) * 31)
+
+
 def _input_window(which: LedgerName, settings: config.Settings) -> int:
     window = max(
         settings.app.console.max_window_days,
         settings.appearance.console.max_window_days,
-        max(settings.app.observability.full_grain_months().values()) * 31,
+        _band_input_days(settings),
         settings.app.collect.reliability_window_days,
     )
     if which is LedgerName.SEEN:
@@ -71,6 +78,12 @@ def input_paths(*, date: str, settings: config.Settings) -> tuple[str, ...]:
         asked.add(f"frontend/public/digest/{stamp}")
         asked.add(f"state/digest-fragments/{stamp}")
         asked.add(f"state/day-metrics/{stamp[:7]}")
+    # Retired month mirrors no longer supply the band during regeneration.
+    # Materialize its native manifest/state records, not historical day payloads.
+    for offset in range(_band_input_days(settings)):
+        stamp = (through - timedelta(days=offset)).isoformat().replace("-", "/")
+        asked.add(f"frontend/public/digest/{stamp}/run.json")
+        asked.add(f"state/day-metrics/{stamp}.json")
     for path in DERIVED:
         rendered = path.format(day_dir=f"frontend/public/digest/{date.replace('-', '/')}")
         # The files inside these derived roots are named by the fresh inventory,
@@ -89,13 +102,13 @@ def resolved_inputs(
     asked = set(input_paths(date=date, settings=settings))
     count = max(
         settings.app.console.max_window_days,
+        settings.appearance.console.max_window_days,
+        _band_input_days(settings),
         settings.app.collect.reliability_window_days,
         ledger.HEALTH_WINDOW_DAYS,
     )
     through = max(date_type.fromisoformat(date), datetime.now(UTC).date())
-    cutoff = through - timedelta(
-        days=max(count, max(settings.app.observability.full_grain_months().values()) * 31) - 1
-    )
+    cutoff = through - timedelta(days=count - 1)
     permanent = (LedgerName.FEED_RETIREMENTS, LedgerName.VISUAL_PRUNES)
     unbounded_published = settings.app.collect.published_window_days == UNBOUNDED_WINDOW
     if unbounded_published:
@@ -190,6 +203,11 @@ def resolved_inputs(
     return tuple(sorted(asked))
 
 
+def count_scope(date: str) -> str:
+    """Only this assemble day's newly completed count corrections may be added."""
+    return f"{staging.staged_path(LedgerName.RUN_SHARDS)}/{date.replace('-', '/')}"
+
+
 def preparation(
     repo: Path, original: PublicationRequest, *, date: str, settings: config.Settings
 ) -> Callable[[str, PublicationRequest], PublicationRequest]:
@@ -214,20 +232,18 @@ def preparation(
         corpus.read_meta(repo / "corpus") if "corpus/corpus.jsonl" in original.writes else None
     )
     scopes = original.preparation_scopes
-    immutable = {
-        path: write
-        for path, write in original.writes.items()
-        if not any(contains(scope, path) for scope in scopes)
-    }
-
     def prepare(base: str, active: PublicationRequest) -> PublicationRequest:
-        from idhazh.cli import shard_count
         from idhazh.publication_checks import runner as checks
         from idhazh.stages import assemble as producer
 
         scratch = repo / "backend" / "var" / "publication" / f"assemble-{uuid4().hex}"
         scratch.mkdir(parents=True)
         try:
+            immutable = {
+                path: write
+                for path, write in active.writes.items()
+                if write.immutable or not any(contains(scope, path) for scope in scopes)
+            }
             materialize(
                 git, base, resolved_inputs(git, base, date=date, settings=settings), scratch
             )
@@ -253,17 +269,14 @@ def preparation(
                             - timedelta(
                                 days=max(
                                     settings.app.console.max_window_days,
-                                    max(settings.app.observability.full_grain_months().values())
-                                    * 31,
+                                    _band_input_days(settings),
                                 )
                             )
                         ).isoformat()[:7]
                     )
                 ]
                 materialize(git, base, names, scratch)
-            for path in original.writes:
-                if any(contains(scope, path) for scope in scopes):
-                    continue
+            for path in immutable:
                 target = safe_file(scratch, path, exists=False)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes((repo / path).read_bytes())
@@ -290,7 +303,6 @@ def preparation(
                         settings=settings,
                         commit_sha=original.identity.git_sha,
                         runner="ubuntu-latest",
-                        shards=shard_count(len(plan.items), run=settings.app.run),
                         regenerate_only=True,
                     )
             finally:
@@ -326,8 +338,17 @@ def preparation(
                 path: dataclasses.replace(write, baseline=git.entry(base, path), baseline_tip=base)
                 for path, write in immutable.items()
             }
+            count_day = count_scope(date)
             for target, digest in rebuilt.items():
                 path = target.relative_to(scratch).as_posix()
+                if contains(count_day, path) and target.suffix == ".parquet":
+                    if path in immutable or git.entry(base, path) is not None:
+                        raise IntegrityError(
+                            "count correction would replace completed raw bytes", (path,)
+                        )
+                    publication_evidence.identified(scratch, original.identity, {path: digest})
+                    writes[path] = Write(digest, None, immutable=True, baseline_tip=base)
+                    continue
                 if not any(contains(scope, path) for scope in scopes):
                     raise IntegrityError("rebuild wrote outside derived declaration", (path,))
                 writes[path] = Write(digest, git.entry(base, path), baseline_tip=base)

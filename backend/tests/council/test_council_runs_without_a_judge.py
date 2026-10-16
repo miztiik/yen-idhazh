@@ -26,6 +26,7 @@ from idhazh.contracts.ledger_name import LedgerName
 from idhazh.council import night_plan, registry, run_identity, session
 
 from . import _imports
+from ._config import write_declarations
 from ._imports import imported_at_import_time, module_file, static_routes
 from ._tenants import a_belated_venue, a_venue, forget, written
 
@@ -46,9 +47,8 @@ TONIGHT: Final = "2026-09-26"
 
 A_PLATFORM_RUN: Final = "35534060762"
 
-#: The judge's own code, by package. A prefix is right here and nowhere else in
-#: this file: everything under it belongs to one judge by construction.
-JUDGE_CODE_PACKAGE: Final = "idhazh.similarity"
+#: Both the judge's declaration and the similarity implementation it routes to.
+JUDGE_CODE_PACKAGES: Final = ("idhazh.content_similarity_judge", "idhazh.similarity")
 
 #: The stage modules the content-similarity judge owns, spelled one by one. A
 #: stage is named for the work it does rather than for whose loop it is in, so a
@@ -66,6 +66,7 @@ JUDGE_STAGE_MODULES: Final = (
 #: holds the tuple against the tree.
 JUDGE_CONTRACT_MODULES: Final = (
     "idhazh.contracts.content_similarity_judge_metrics",
+    "idhazh.contracts.knobs.content_similarity_judge",
     "idhazh.contracts.fitted_similarity_threshold",
     "idhazh.contracts.judge_call",
     "idhazh.contracts.merge_line_holdout_score",
@@ -106,8 +107,7 @@ def reached() -> set[str]:
     return {
         name
         for name in routes
-        if name == JUDGE_CODE_PACKAGE
-        or name.startswith(f"{JUDGE_CODE_PACKAGE}.")
+        if any(name == package or name.startswith(f"{package}.") for package in JUDGE_CODE_PACKAGES)
         or name in JUDGE_STAGE_MODULES
         or name in JUDGE_CONTRACT_MODULES
     }
@@ -120,7 +120,7 @@ def test_every_judge_module_named_here_is_a_module_this_tree_has() -> None:
     module that moved would silently drop out of the two checks that use it. This
     is what makes them fail instead.
     """
-    named = (JUDGE_CODE_PACKAGE, *JUDGE_STAGE_MODULES, *JUDGE_CONTRACT_MODULES)
+    named = (*JUDGE_CODE_PACKAGES, *JUDGE_STAGE_MODULES, *JUDGE_CONTRACT_MODULES)
     missing = [name for name in named if module_file(name) is None]
 
     assert not missing, f"the judge surface names modules this tree does not have: {missing}"
@@ -148,8 +148,7 @@ def test_this_file_names_no_judge_either() -> None:
     judges = [
         name
         for name in mine
-        if name == JUDGE_CODE_PACKAGE
-        or name.startswith(f"{JUDGE_CODE_PACKAGE}.")
+        if any(name == package or name.startswith(f"{package}.") for package in JUDGE_CODE_PACKAGES)
         or name in JUDGE_STAGE_MODULES
         or name in JUDGE_CONTRACT_MODULES
     ]
@@ -232,17 +231,22 @@ def venue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     forget(A_VENUE)
 
 
-def _council(*slugs: str, repair_dates: int = 1) -> CouncilConfig:
+def _council(root: Path, *slugs: str, repair_dates: int = 1) -> CouncilConfig:
     """The committed council block with a tenant list this test decides.
 
     The knobs are the repository's own, so a night here is bounded by the clock
     a real night is bounded by. Only the guest list and how many older nights
     ride along are this test's.
     """
-    committed = config.load(CONFIG_DIR).app.council
-    return committed.model_copy(
-        update={"tenants": list(slugs), "repair_dates_a_night": repair_dates}
+    committed = config.load_council(CONFIG_DIR)
+    council = committed.model_copy(
+        update={"judge_names": tuple(slugs), "repair_dates_a_night": repair_dates}
     )
+    target = root / "config"
+    target.mkdir(exist_ok=True)
+    write_declarations(target, tuple(slugs))
+    council.bind_declarations(config.load_judge_declarations(target, council))
+    return council
 
 
 def _the_nights_record(state_root: Path, date: str) -> list[CouncilRunRecord]:
@@ -260,11 +264,11 @@ def test_a_whole_night_runs_with_nobody_registered(venue: Path) -> None:
     tonight, prepare and settle are no-ops that return cleanly, and the night
     leaves no phantom raw file behind. Six steps, none of them skipped.
     """
-    council = _council()
+    council = _council(venue)
     state_root = venue / "state"
 
     run_id = run_identity.council_run_id(opened_on=TONIGHT, platform_run_id=A_PLATFORM_RUN)
-    hosted = registry.tenants(council.tenants)
+    hosted = registry.tenants(council.running())
     planned = night_plan.plan_the_night(council, tonight=TONIGHT, hosted=hosted)
     prepared = session.prepare(council, date=TONIGHT, run_id=run_id)
     settled = session.settle(
@@ -273,7 +277,7 @@ def test_a_whole_night_runs_with_nobody_registered(venue: Path) -> None:
 
     assert run_id == f"{TONIGHT}-{A_PLATFORM_RUN}"
     assert hosted == ()
-    assert planned == (TONIGHT,), "a night with nobody registered plans tonight and no more"
+    assert planned.judges == (), "a night with nobody registered selects no judge"
     assert prepared == ()
     assert settled == ()
     assert not ledger.raw_root(state_root, LedgerName.COUNCIL_RUN_RECORDS).exists()
@@ -296,13 +300,16 @@ def test_two_tenants_union_their_nights_and_keep_their_own_width(venue: Path) ->
         behind_on=("2026-09-23", "2026-09-21"),
         shard_count=3,
     )
-    council = _council(A_SLUG, ANOTHER_SLUG, repair_dates=3)
+    council = _council(venue, A_SLUG, ANOTHER_SLUG, repair_dates=3)
 
-    hosted = registry.tenants(council.tenants)
+    hosted = registry.tenants(council.running())
     planned = night_plan.plan_the_night(council, tonight=TONIGHT, hosted=hosted)
 
     assert [host.judge_id for host in hosted] == [A_SLUG, ANOTHER_SLUG]
-    assert planned == (TONIGHT, "2026-09-23", "2026-09-22", "2026-09-21")
+    assert {judge.tenant: judge.dates for judge in planned.judges} == {
+        A_SLUG: (TONIGHT, "2026-09-23", "2026-09-22"),
+        ANOTHER_SLUG: (TONIGHT, "2026-09-23", "2026-09-21"),
+    }
     assert [session.shard_width(council, host) for host in hosted] == [2, 3]
 
 
@@ -314,12 +321,22 @@ def test_the_venue_runs_a_shard_under_its_own_clock_and_files_the_row(venue: Pat
     does. What is asserted is that the venue handed it a deadline it never asked
     for, and filed its own row on the way out.
     """
-    a_venue(venue, package=A_VENUE, slugs={A_SLUG: (2, ("state/a-judgeless-ledger",))})
-    council = _council(A_SLUG)
+    a_venue(
+        venue,
+        package=A_VENUE,
+        slugs={A_SLUG: (2, ("state/a-judgeless-ledger",))},
+        poisoned_neighbour="a-broken-unrequested-tenant",
+    )
+    council = _council(venue, A_SLUG)
     state_root = venue / "state"
     run_id = run_identity.council_run_id(opened_on=TONIGHT, platform_run_id=A_PLATFORM_RUN)
     opened = time.monotonic()
 
+    hosted = registry.tenants(council.running())
+    assert (
+        night_plan.plan_the_night(council, tonight=TONIGHT, hosted=hosted).judges[0].dates[0]
+        == TONIGHT
+    )
     session.prepare(council, date=TONIGHT, run_id=run_id)
     for shard in range(2):
         result = session.run_shard(
@@ -332,9 +349,7 @@ def test_the_venue_runs_a_shard_under_its_own_clock_and_files_the_row(venue: Pat
             started=opened,
         )
         assert result.outcome is ShardOutcome.COMPLETED
-    session.settle(
-        council, date=TONIGHT, run_id=run_id, state_dir=state_root, commit_sha=A_SHA
-    )
+    session.settle(council, date=TONIGHT, run_id=run_id, state_dir=state_root, commit_sha=A_SHA)
 
     handed = written(A_VENUE, A_SLUG).TENANT.handed
     filed = _the_nights_record(state_root, TONIGHT)
@@ -342,9 +357,7 @@ def test_the_venue_runs_a_shard_under_its_own_clock_and_files_the_row(venue: Pat
     assert len(handed) == 2, "each shard is handed a deadline of its own"
     assert all(instant > opened for instant in handed), "the clock is the council's"
     assert {row.judge_id for row in filed} == {A_SLUG}
-    assert sorted(
-        (row.evaluation_step, row.work_part_index) for row in filed
-    ) == sorted(
+    assert sorted((row.evaluation_step, row.work_part_index) for row in filed) == sorted(
         [
             (EvaluationStep.COMBINE_JUDGE_RESULTS, None),
             (EvaluationStep.SELECT_JUDGE_WORK, None),

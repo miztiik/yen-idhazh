@@ -135,7 +135,10 @@ function setAsideOf(day: BuiltDay): { set_aside?: number } {
 export async function buildLedger(root: string, built: BuiltLedger): Promise<void> {
 	const closed = new Set(built.closedMonths ?? []);
 	for (const month of closed) if (!MONTH.test(month)) throw new Error(`${month} is not a UTC month`);
-	const columns = built.columns ?? {};
+	const columns =
+		built.ledger === 'host-fingerprint'
+			? { version: '2026-09-20', ...(built.columns ?? {}) }
+			: (built.columns ?? {});
 	for (const name of Object.keys(columns)) {
 		if (name === '' || BUILT_COLUMNS.has(name)) throw new Error(`${built.ledger} chooses a column named ${JSON.stringify(name)}`);
 	}

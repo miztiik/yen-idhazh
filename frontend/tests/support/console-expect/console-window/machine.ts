@@ -1,4 +1,4 @@
-/** Hardware reports its window on ten measured surfaces. */
+/** Hardware reports its window on nine measured surfaces. */
 import type { RouteExpect } from './index';
 
 export const EXPECT: RouteExpect | null = {
@@ -11,8 +11,8 @@ export const EXPECT: RouteExpect | null = {
 		'machine-latency',
 		'machine-processor-lost',
 		'machine-prompt-reuse',
-		'machine-runs',
 		'machine-tokens'
 	],
-	dailyTable: false
+	dailyTable: false,
+	ready: '[data-console-panels="machine"]:not([data-route-state="loading"])'
 };

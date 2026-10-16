@@ -33,9 +33,7 @@
  * whether the build holds any of them is one existence check on each named
  * path. A directory key does read every file under itself, and that read grows -
  * a month a run appends is a file this opens. It is bounded where it matters by
- * retention: the gardener's telemetry-aggregate task keeps the public-copy
- * series of config/gardener/telemetry-aggregate.json, 14 months, so the
- * directory holds fourteen shards however long the project runs.
+ * native ledger retention. There is no ceiling for retired public CSV copies.
  */
 
 import { existsSync, readdirSync, statSync } from 'node:fs';

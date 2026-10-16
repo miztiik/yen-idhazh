@@ -78,11 +78,30 @@ on:
         description: 'Squash now, even if every_days in config/gardener/corpus-squash.json says it is not due. Every other task runs at every wake anyway'
         type: boolean
         default: false
+      host_telemetry:
+        description: 'Python host collector, or off for all host telemetry'
+        type: choice
+        default: python
+        options:
+          - python
+          - 'off'
+      memory_profiling:
+        description: 'OS memory and fault collection; inherit reads shared config'
+        type: choice
+        default: inherit
+        options:
+          - inherit
+          - 'on'
+          - 'off'
 
 # Reading only, at workflow level. Each job names the whole of what it uses, so
 # the job that force-pushes holds no Actions permission it never calls.
 permissions:
   contents: read
+
+env:
+  IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry || 'python' }}
+  MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
 
 # Never two of these at once, and never cancelled half way: the history job
 # rewrites a branch, and a second copy racing the first would push two different
@@ -184,6 +203,15 @@ jobs:
 
       - name: Install
         run: pip install -e .
+      - name: Resolve host telemetry
+        id: host_telemetry
+        env:
+          REQUESTED: ${{ inputs.host_telemetry || 'python' }}
+        run: |
+          set -euo pipefail
+          MODE=$(python backend/utilities/host_telemetry_control.py "$REQUESTED" --config-root config)
+          echo "IDHAZH_HOST_TELEMETRY_MODE=$MODE" >> "$GITHUB_ENV"
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
 
       # Runs the shard's tasks, writes its one record and pushes it, trying again
       # on a newer tip when another shard pushed first. It exits with the worst
@@ -200,7 +228,9 @@ jobs:
           RUN_ID: ${{ needs.plan.outputs.run_id }}
           ATTEMPT: ${{ github.run_attempt }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python backend/utilities/gardener_publish.py --shard "$SHARD" --run-id "$RUN_ID" --attempt "$ATTEMPT"
+        run: |
+          python backend/utilities/gardener_publish.py \
+            --shard "$SHARD" --run-id "$RUN_ID" --attempt "$ATTEMPT"
 
   history:
     # After every shard has ended, so history is rewritten last, and whatever

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, read_text
+from conftest import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 from pydantic import ValidationError
 
 from idhazh import ledger
@@ -28,7 +28,7 @@ FIXTURES = CONTRACT_FIXTURES_DIR / "council-run-record"
 FIRST_SHAPE_STAMP: Final = "2026-09-21T12:00"
 
 #: The cells a step that ran no model, and has no part, leaves empty.
-ABSENT: Final = ("work_part_index", "model_calls", "tokens_in", "tokens_out", "model_seconds")
+ABSENT: Final = ("work_part_index", "fault", "model_calls", "tokens_in", "tokens_out", "model_seconds")
 
 #: One row the first shape really filed, copied out of its committed day file
 #: rather than read from it: the heading line and the row, `host_model` included.
@@ -119,6 +119,34 @@ def test_a_cell_outside_its_column_is_refused_by_name(field: str, value: str) ->
 
     with pytest.raises(ValidationError, match=field):
         CouncilRunRecord.model_validate(payload | {field: value})
+
+
+@pytest.mark.parametrize(
+    ("outcome", "fault"),
+    [
+        ("failed", None),
+        ("completed", "raised"),
+        ("nothing_to_do", "raised"),
+        ("stopped_on_deadline", "raised"),
+        ("failed", "RuntimeError"),
+    ],
+)
+def test_only_a_failed_outcome_carries_the_closed_raised_fault(
+    outcome: str, fault: str | None,
+) -> None:
+    payload = a_record("a-part-that-raised").model_dump(mode="json")
+    with pytest.raises(ValidationError, match="fault"):
+        CouncilRunRecord.model_validate(payload | {"outcome": outcome, "fault": fault})
+
+
+def test_yesterdays_row_without_a_fault_loads_in_json_and_csv() -> None:
+    document = read_text(FIXTURES_DIR / "council" / "a-record-before-fault.json")
+    assert '"fault"' not in document
+    row = CouncilRunRecord.from_json(document)
+    assert row.version == "2026-10-04" and row.fault is None
+    cells = row.csv_row()
+    del cells["fault"]
+    assert CouncilRunRecord.from_csv_row(cells) == row
 
 
 def test_every_recorded_step_round_trips_through_one_csv_file() -> None:

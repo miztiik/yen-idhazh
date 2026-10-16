@@ -138,6 +138,11 @@ export interface ObservabilityConfig {
 	/** Whether a job records what machine it drew. False is why three panels have
 	 * nothing, and each says so in words that never name the setting. */
 	host_fingerprint: boolean;
+	/** Master host-instrument switch; false also disables CPU/load collection. */
+	host_telemetry_enabled: boolean;
+	/** Whether operating-system memory and fault collection is enabled. CPU and
+	 * lifecycle telemetry remain available when this is false. */
+	memory_profiling_enabled: boolean;
 	/** How many times a machine's cache the bandwidth probe's buffer has to be
 	 * before its copy rate is a memory reading. The probe sizes its buffer by it
 	 * and a machine card grades a committed row by it, so it has to be the same
@@ -246,8 +251,6 @@ export interface ConsoleConfig {
 	 * how many days are missing. It decides when the count is said, never what
 	 * it counts. */
 	completeness_grace_days: number;
-	pan_days: number;
-	zoom_factor: number;
 	min_window_days: number;
 	max_window_days: number;
 	min_attempts_for_rate: number;
@@ -267,8 +270,8 @@ export interface ConsoleConfig {
 	 * knob: it is the doubt threshold, because below that every summary carries
 	 * the same band and there is nothing left to zoom into. */
 	faithfulness_axis_floor_max: number;
-	/** The size a console chart is drawn at on the server, before a script
-	 * re-measures the container. Declared once, in `config/appearance.json`. */
+	/** Stable chart height and seed coordinate width. Native charts measure
+	 * their browser container. Declared once, in `config/appearance.json`. */
 	chart_height: number;
 	tile_min_px: number;
 	chart_width: number;
@@ -282,8 +285,6 @@ export interface ConsoleConfig {
 	source_rows: number;
 	/** How many failing feeds the feed section lists, before the tail sentence. */
 	feed_rows: number;
-	/** How many summaries the band section names before the tail sentence. */
-	band_outlier_rows: number;
 	/** How many sources the Summaries route ranks by the summaries its checker
 	 * doubted, before the tail sentence. */
 	doubt_rows: number;		/** How many items the run timeline draws as bars, in start order, before the
@@ -305,8 +306,7 @@ export interface ConsoleConfig {
 	fleet_top_kinds: number;
 	/** The largest square the fleet panel draws for one job, in CSS pixels. */
 	fleet_dot_max_px: number;
-	/** Distinct machine kinds that must carry a bandwidth reading before bandwidth
-	 * may be plotted against decode speed. Nothing plots it today. */
+	/** Distinct subjects needed for the Data explorer's paired scatter. */
 	bandwidth_min_kinds: number;
 	/** Steps of the machine speed colour, slowest to fastest, cut from every
 	 * kind's median prompt reading speed over the record the page holds. */
@@ -540,7 +540,9 @@ const OBSERVABILITY_DEFAULTS: ObservabilityConfig = {
 	cost_output_per_million: 0.6,
 	evaluation_enabled: true,
 	host_fingerprint: true,
+	host_telemetry_enabled: true,
 	host_fingerprint_bandwidth_cache_multiple: 2,
+	memory_profiling_enabled: true,
 	sample_rate: 1
 };
 const COLLECT_DEFAULTS: CollectConfig = { availability_strikes_before_rest: 5 };
@@ -559,8 +561,6 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	window_presets: [1, 7, 14, 30, 90],
 	today_anchor: 'right',
 	completeness_grace_days: 1,
-	pan_days: 7,
-	zoom_factor: 1.5,
 	min_window_days: 1,
 	max_window_days: 366,
 	min_attempts_for_rate: 5,
@@ -574,7 +574,6 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	failure_list_max: 25,
 	source_rows: 10,
 	feed_rows: 10,
-	band_outlier_rows: 10,
 	doubt_rows: 10,
 	timeline_bars: 120,
 	chart_rule_days: 14,

@@ -1,242 +1,126 @@
-/** Where an item's time went: the arithmetic under the console's time-split panel.
- *
- * The panel draws eight bands as one stacked column, so the one thing that can
- * make it lie is bands that do not add up to the bar. Everything here is that
- * claim from a different angle: per item, per day, with a step unmeasured, with
- * two clocks that disagreed, and through the chart option the engine is handed.
- *
- * Every row is BUILT rather than read off a committed shard. A test that walks
- * the archive costs more every published day (Guardrail #12), and the shapes
- * that matter most here - a run with no per-call split, a negative gap - are
- * ones the committed archive has never produced.
- */
-
+/** Authored clocks test the actual native cohort, additive stages and non-additive calls. */
 import { expect, test } from '@playwright/test';
-
-import {
-	TELEMETRY_COLUMNS,
-	TIME_BANDS,
-	itemTimeBands,
-	timeSplit,
-	type TelemetryRow
-} from '../src/lib/charts/series';
-import { timeSplitChart, timeSplitColumns } from '../src/lib/charts/glance';
+import { TELEMETRY_COLUMNS, type TelemetryRow } from '../src/lib/charts/series';
+import { nativeTimeSplit, timeSplitReadout } from '../src/lib/console/pipelines/item-time-split';
+import { dateSeries } from '../src/lib/charts/d3/dateSeries';
+import { frame } from '../src/lib/charts/frame';
 import { telemetryRow } from './support/telemetry-row';
 
-/** One item whose every step was timed and whose two calls were published.
- *
- * The numbers are chosen so each band is distinct and the identity the panel
- * rests on holds: fetch + extract + summarize + faithfulness + gap = total.
- */
-function fullyTimed(over: Partial<TelemetryRow> = {}): TelemetryRow {
-	return telemetryRow({
-		fetch_ms: 100,
-		extract_ms: 20,
-		summarize_ms: 600,
-		label_ms: 150,
-		summary_ms: 430,
-		visual_plan_ms: 60,
-		faithfulness_ms: 30,
-		item_total_ms: 800,
-		stage_gap_ms: 50,
-		...over
-	});
+function fullyTimed(over: Partial<TelemetryRow> = {}) {
+	return { ...telemetryRow({
+		date: '2026-09-14', fetch_ms: 100, extract_ms: 20, summarize_ms: 600,
+		label_ms: 150, summary_ms: 430, visual_plan_ms: 60, faithfulness_ms: 30,
+		item_total_ms: 800, stage_gap_ms: 50, ...over
+	}) };
 }
+const calendar = ['2026-09-14'];
+const options = {
+	frame: frame(760, 220), density: 6, valueTicks: 5, padding: 0.2,
+	rule: { changes: [], note: null }, stacked: true
+};
+const sum = (values: readonly number[]) => values.reduce((total, value) => total + value, 0);
 
-function sum(values: readonly number[]): number {
-	return values.reduce((total, value) => total + value, 0);
-}
-
-test('every band the panel draws is a cell the projection publishes', () => {
-	// The panel is worth nothing if it reads a column the browser never receives.
-	// This is the tie between the two halves of the change: widen the contract and
-	// the header below grows, drop a cell from it and this goes red rather than
-	// the chart quietly drawing zeroes.
-	const read = [
-		'fetch_ms',
-		'extract_ms',
-		'summarize_ms',
-		'label_ms',
-		'summary_ms',
-		'visual_plan_ms',
-		'faithfulness_ms',
-		'item_total_ms',
-		'stage_gap_ms'
-	];
-	for (const name of read) {
+test('every stage, elapsed, overlap and call detail is a published telemetry cell', () => {
+	for (const name of ['fetch_ms', 'extract_ms', 'summarize_ms', 'label_ms', 'summary_ms',
+		'visual_plan_ms', 'faithfulness_ms', 'item_total_ms', 'stage_gap_ms']) {
 		expect(TELEMETRY_COLUMNS, `${name} is not published`).toContain(name);
 	}
 });
 
-test('one item"s bands add up to its whole clock', () => {
-	const row = fullyTimed();
-
-	const bands = itemTimeBands(row);
-
-	expect(bands).toHaveLength(TIME_BANDS.length);
-	expect(sum(bands)).toBe(row.item_total_ms);
-	// Named, so a band that moved is a band this test can point at.
-	const at = (key: string) => bands[TIME_BANDS.findIndex((band) => band.key === key)];
-	expect(at('fetch')).toBe(100);
-	expect(at('extract')).toBe(20);
-	expect(at('label')).toBe(150);
-	expect(at('summary')).toBe(370); // 430 the call took, less the 60 the plan did
-	expect(at('plan')).toBe(60);
-	expect(at('model')).toBe(20); // 600 the stage took, less the 580 the two calls did
-	expect(at('faithfulness')).toBe(30);
-	expect(at('gap')).toBe(50);
+test('one item adds summarize once and conserves its whole clock', () => {
+	const split = nativeTimeSplit([fullyTimed()], calendar);
+	expect(split.series.map((one) => [one.label, one.points[0].value])).toEqual([
+		['Fetch', 100], ['Extract', 20], ['Summarize', 600], ['Checking', 30], ['Unattributed duration', 50]
+	]);
+	expect(sum(split.series.map((one) => one.points[0].value!))).toBe(800);
+	expect(split.days[0].elapsed).toBe(800);
+	expect(split.days[0].details.map((detail) => detail.value)).toEqual([150, 430, 60]);
 });
 
-test('a run that published no per-call split keeps its model time', () => {
-	// The whole summarize stage lands in `model` rather than in `gap`, and that is
-	// the honest reading: the stage was timed, the calls inside it were not. Every
-	// row the projection published before 2026-09-15 is this shape, so a split
-	// that lost their model time would have drawn the archive wrong.
-	const row = fullyTimed({ label_ms: null, summary_ms: null, visual_plan_ms: null });
-
-	const bands = itemTimeBands(row);
-	const at = (key: string) => bands[TIME_BANDS.findIndex((band) => band.key === key)];
-
-	expect(at('model')).toBe(600);
-	expect(at('label')).toBe(0);
-	expect(at('gap')).toBe(50);
-	expect(sum(bands)).toBe(800);
+test('a run with no per-call split keeps all its model time and leaves calls unknown', () => {
+	const split = nativeTimeSplit([fullyTimed({ label_ms: null, summary_ms: null, visual_plan_ms: null })], calendar);
+	expect(split.count).toBe(1);
+	expect(split.series[2].points[0].value).toBe(600);
+	expect(split.days[0].details.map((detail) => detail.value)).toEqual([null, null, null]);
+	expect(sum(split.series.map((one) => one.points[0].value!))).toBe(800);
 });
 
-test('a negative gap stays negative', () => {
-	// Below zero means two named stages overlapped or two clocks disagreed. The
-	// bar drawn from it looks wrong, which is correct - clamping it would hide
-	// the one fault this band exists to show.
-	const row = fullyTimed({ item_total_ms: 700, stage_gap_ms: -50 });
-
-	const bands = itemTimeBands(row);
-
-	expect(bands[TIME_BANDS.findIndex((band) => band.key === 'gap')]).toBe(-50);
-	expect(sum(bands)).toBe(700);
+test('a negative gap retains stage time and is deducted explicitly as overlap', () => {
+	const split = nativeTimeSplit([fullyTimed({ item_total_ms: 700, stage_gap_ms: -50 })], calendar);
+	expect(split.days[0].signedGap).toBe(-50);
+	expect(split.days[0].unattributed).toBe(0);
+	expect(split.days[0].overlap).toBe(50);
+	expect(sum(split.series.map((one) => one.points[0].value!)) - split.days[0].overlap!).toBe(700);
+	const geometry = dateSeries(split.series, { ...options, reconciliation: split.reconciliation })!;
+	expect(geometry.reconciliation?.marks[0]).toMatchObject({ date: calendar[0], elapsed: 700, overlap: 50, top: geometry.axis.scale(750) });
 });
 
-test('a gap that is below zero on every day drawn is still drawn', () => {
-	// The note under the chart promises that unclaimed time shows up there
-	// rather than nowhere. A window of one day whose gap is below zero has no
-	// day on which that band is above it, and the band is drawn all the same.
-	const days = timeSplit([fullyTimed({ date: '2026-09-14', item_total_ms: 700, stage_gap_ms: -50 })], {
-		start: '2026-09-14',
-		end: '2026-09-14'
-	});
-
-	const series = timeSplitChart(days).option.series as { name: string; data: (number | null)[] }[];
-
-	expect(series.find((one) => one.name === 'Unattributed')?.data).toEqual([-50]);
+test('a day is the mean item, and its stages still reconcile with the mean clock', () => {
+	const split = nativeTimeSplit([fullyTimed(), fullyTimed({
+		item_id: 'ai-02', fetch_ms: 300, extract_ms: 40, summarize_ms: 1200,
+		label_ms: 200, summary_ms: 900, visual_plan_ms: 100, faithfulness_ms: 60,
+		item_total_ms: 1700, stage_gap_ms: 100
+	})], calendar);
+	expect(split.days).toHaveLength(1);
+	expect(split.count).toBe(2);
+	expect(split.days[0].elapsed).toBe(1250);
+	expect(sum(split.series.map((one) => one.points[0].value!))).toBeCloseTo(1250, 6);
+	expect(split.series[0].points[0].value).toBe(200);
 });
 
-test('a day is the mean item, and the bands still add up to the bar', () => {
-	// Means, not medians, and this is the test that says why. Medians do not add:
-	// a stack of per-stage medians draws a column whose height is not the median
-	// item, so every share it prints is wrong by an amount nobody can see.
-	const rows = [
-		fullyTimed({ date: '2026-09-14' }),
-		fullyTimed({
-			date: '2026-09-14',
-			item_id: 'ai-02',
-			fetch_ms: 300,
-			extract_ms: 40,
-			summarize_ms: 1200,
-			label_ms: 200,
-			summary_ms: 900,
-			visual_plan_ms: 100,
-			faithfulness_ms: 60,
-			item_total_ms: 1700,
-			stage_gap_ms: 100
-		})
-	];
-
-	const days = timeSplit(rows, { start: '2026-09-14', end: '2026-09-14' });
-
-	expect(days).toHaveLength(1);
-	expect(days[0].items).toBe(2);
-	expect(days[0].total).toBe(1250); // (800 + 1700) / 2
-	expect(sum(days[0].ms)).toBeCloseTo(days[0].total, 6);
-	expect(days[0].ms[TIME_BANDS.findIndex((band) => band.key === 'fetch')]).toBe(200);
+test('a row nothing timed is recorded but excluded from the comparable mean', () => {
+	const split = nativeTimeSplit([fullyTimed(), { date: calendar[0] }], calendar);
+	expect(split.recorded).toBe(2);
+	expect(split.count).toBe(1);
+	expect(split.days[0].missing).toBe(1);
+	expect(split.meanMs).toBe(800);
 });
 
-test('an item nothing timed is not in the average', () => {
-	// Counting it would divide real milliseconds by items nobody timed, and every
-	// band would shrink on the day a new instrument was rolled out - which reads
-	// as the pipeline getting faster.
-	const rows = [
-		fullyTimed({ date: '2026-09-14' }),
-		telemetryRow({ date: '2026-09-14', item_id: 'ai-02' })
-	];
-
-	const days = timeSplit(rows, { start: '2026-09-14', end: '2026-09-14' });
-
-	expect(days[0].items).toBe(1);
-	expect(days[0].total).toBe(800);
+test('an unmeasured calendar day remains unknown, not a measured zero', () => {
+	const days = ['2026-09-13', ...calendar, '2026-09-15'];
+	const split = nativeTimeSplit([fullyTimed()], days);
+	expect(split.days.map((day) => day.date)).toEqual(days);
+	expect(split.days.map((day) => day.count)).toEqual([0, 1, 0]);
+	expect(split.series.map((one) => one.points[0].value)).toEqual([null, null, null, null, null]);
+	const geometry = dateSeries(split.series, { ...options, reconciliation: split.reconciliation })!;
+	expect(geometry.bars.every((bar) => bar.date === calendar[0])).toBe(true);
+	expect(dateSeries(nativeTimeSplit([], days).series, options)).toBeNull();
 });
 
-test('a day with no timed row keeps its place on the axis', () => {
-	// Dropped from the array, it would shift every day after it and draw a gap as
-	// if it were the next day along.
-	const rows = [fullyTimed({ date: '2026-09-14' })];
-
-	const days = timeSplit(rows, { start: '2026-09-13', end: '2026-09-15' });
-
-	expect(days.map((day) => day.date)).toEqual(['2026-09-13', '2026-09-14', '2026-09-15']);
-	expect(days.map((day) => day.items)).toEqual([0, 1, 0]);
-	expect(days[0].ms).toEqual(TIME_BANDS.map(() => 0));
+test('the actual native stack contains only additive stages and totals the elapsed clock', () => {
+	const split = nativeTimeSplit([fullyTimed()], calendar);
+	const geometry = dateSeries(split.series, { ...options, reconciliation: split.reconciliation })!;
+	expect(geometry.bars.map((bar) => bar.label)).toEqual(split.series.map((one) => one.label));
+	expect(sum(geometry.bars.map((bar) => bar.value))).toBe(800);
+	expect(geometry.reconciliation?.marks[0]).toMatchObject({ elapsed: 800, overlap: 0, top: geometry.axis.scale(800) });
 });
 
-test('the chart hands the engine one series a band, and the column is the total', () => {
-	const rows = [fullyTimed({ date: '2026-09-14' })];
-	const days = timeSplit(rows, { start: '2026-09-14', end: '2026-09-14' });
-
-	const chart = timeSplitChart(days);
-
-	expect(chart.empty).toBe(false);
-	const series = chart.option.series as { name: string; data: number[] }[];
-	// `stacked` drops a band that is zero on every column, so the labels drawn are
-	// the non-zero ones in band order rather than all eight.
-	expect(series.map((one) => one.name)).toEqual(
-		TIME_BANDS.filter((_, index) => days[0].ms[index] !== 0).map((band) => band.label)
-	);
-	expect(chart.totals).toEqual([800]);
-	expect(sum(series.map((one) => one.data[0]))).toBe(800);
+test('the readout names every stage, calls as detail, and the complete-clock divisor', () => {
+	const strip = timeSplitReadout(nativeTimeSplit([fullyTimed()], calendar));
+	expect(strip.columns).toEqual(calendar);
+	expect(strip.series.map((one) => one.label)).toEqual([
+		'Fetch', 'Extract', 'Summarize', 'Checking', 'Unattributed duration',
+		'Elapsed time', 'Overlap', 'Label call', 'Summary call', 'Visual plan', 'Complete clocks'
+	]);
+	expect(strip.series.map((one) => one.values[0])).toEqual([
+		'0.10 s', '0.02 s', '0.60 s', '0.03 s', '0.05 s', '0.80 s', '0.00 s',
+		'0.15 s', '0.43 s', '0.06 s', '1 of 1'
+	]);
 });
 
-test('the strip prints every band with its share', () => {
-	// A stack is the hardest shape to read one band off, so the band a reader
-	// wants is the one the eye cannot measure. All eight, every time, and each
-	// with the share a reader would otherwise have to divide off the chart.
-	const rows = [fullyTimed({ date: '2026-09-14' })];
-	const days = timeSplit(rows, { start: '2026-09-14', end: '2026-09-14' });
-
-	const strip = timeSplitColumns(days);
-
-	// The day in the reader's spelling, the one every strip heads a column with.
-	expect(strip.columns).toEqual(['14 Sep 2026']);
-	expect(strip.series.map((one) => one.label)).toEqual(TIME_BANDS.map((band) => band.label));
-	expect(strip.series[0].values[0]).toBe('100 ms, 13%');
-	// Bound to the band and never to its size, so a colour cannot move when the
-	// mix does.
-	expect(new Set(strip.series.map((one) => one.swatch)).size).toBe(TIME_BANDS.length);
+test('a day without a complete clock prints unknown durations and a zero complete-clock count', () => {
+	const strip = timeSplitReadout(nativeTimeSplit([fullyTimed()], ['2026-09-13', ...calendar]));
+	expect(strip.notMeasured).toBe('Not measured for the complete cohort');
+	expect(strip.series.slice(0, 10).map((one) => one.values[0])).toEqual(Array(10).fill(null));
+	expect(strip.series[10].values).toEqual(['0 of 0', '1 of 1']);
+	expect(strip.series[0].values[1]).toBe('0.10 s');
 });
 
-test('a day that timed no item from start to finish prints that, and no milliseconds', () => {
-	// Eight zeroes would say the item took no time, where the truth is that
-	// nothing timed it - and a share taken against a total of nothing is a
-	// number nobody measured. So the day carries no value: no column on the
-	// chart, and one line in the strip, beside a day that was timed.
-	const days = timeSplit([fullyTimed({ date: '2026-09-14' })], {
-		start: '2026-09-13',
-		end: '2026-09-14'
-	});
-
-	const strip = timeSplitColumns(days);
-
-	expect(strip.notMeasured).toBe('No item was timed from start to finish on this day');
-	expect(strip.series.map((one) => one.values[0])).toEqual(TIME_BANDS.map(() => null));
-	expect(strip.series[0].values[1]).toBe('100 ms, 13%');
-	const series = timeSplitChart(days).option.series as { data: (number | null)[] }[];
-	expect(series.every((one) => one.data[0] === null)).toBe(true);
-	expect(timeSplitChart(timeSplit([], { start: '2026-09-14', end: '2026-09-14' })).empty).toBe(true);
+test('a fully timed zero remains measured and does not disappear into the missing cohort', () => {
+	const split = nativeTimeSplit([fullyTimed({
+		fetch_ms: 0, extract_ms: 0, summarize_ms: 0, faithfulness_ms: 0, item_total_ms: 0, stage_gap_ms: 0
+	})], calendar);
+	expect(split.count).toBe(1);
+	expect(split.meanMs).toBe(0);
+	expect(split.series.map((one) => one.points[0].value)).toEqual([0, 0, 0, 0, 0]);
 });

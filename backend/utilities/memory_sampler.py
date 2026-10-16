@@ -99,6 +99,7 @@ DEFAULT_NAME: Final = "memory-sampler"
 #: than one interval is invisible to `VmRSS`, which is why `VmHWM` is recorded
 #: beside it - the kernel holds the peak the sampler slept through.
 SAMPLE_EVERY_SECONDS: Final = 15.0
+PROC_READ_LIMIT_BYTES: Final = 1 << 20
 
 #: How long the launched child gets to die before the parent calls the launch
 #: good. A loop handed a pid nothing owns is gone in well under a second, and
@@ -147,9 +148,13 @@ def _now() -> str:
 def _text(path: Path) -> str | None:
     """One small file, or nothing at all when it went away mid-walk."""
     try:
-        return path.read_text(encoding="utf-8", errors="replace")
+        with path.open("rb") as reading:
+            raw = reading.read(PROC_READ_LIMIT_BYTES + 1)
     except OSError:
         return None
+    if len(raw) > PROC_READ_LIMIT_BYTES:
+        return None
+    return raw.decode("utf-8", errors="replace")
 
 
 def _kilobytes(values: Mapping[str, str], key: str) -> int | None:
@@ -188,8 +193,11 @@ def _argv_fields(entry: Path) -> str | None:
     is dropped rather than written into an artifact.
     """
     try:
-        raw = (entry / "cmdline").read_bytes()
+        with (entry / "cmdline").open("rb") as reading:
+            raw = reading.read(PROC_READ_LIMIT_BYTES + 1)
     except OSError:
+        return None
+    if len(raw) > PROC_READ_LIMIT_BYTES:
         return None
     argv = [part for part in raw.decode("utf-8", "replace").split("\0") if part]
     return " ".join(" ".join(argv[ARGV_FIELDS]).split())
@@ -293,9 +301,7 @@ def sample(pid: int, *, every: float = SAMPLE_EVERY_SECONDS) -> int:
     return taken
 
 
-def _refuse_a_sampler_that_died_at_startup(
-    child: subprocess.Popen[bytes], log_path: Path
-) -> None:
+def _refuse_a_sampler_that_died_at_startup(child: subprocess.Popen[bytes], log_path: Path) -> None:
     """Say the loop is already gone, rather than leaving a pid file that lies."""
     try:
         child.wait(timeout=START_GRACE_SECONDS)
@@ -308,7 +314,9 @@ def _refuse_a_sampler_that_died_at_startup(
     raise SystemExit(f"the sampler exited {child.returncode} before it took a sample\n{tail}")
 
 
-def start_sampler(pid: int, name: str, every: float) -> None:
+def start_sampler(
+    pid: int, name: str, every: float, *, config_root: Path = Path("config")
+) -> None:
     """Launch the loop in its own session, prove it is running, and return.
 
     The parent is a foreground step that exits 0. `start_new_session` calls
@@ -332,6 +340,8 @@ def start_sampler(pid: int, name: str, every: float) -> None:
                 str(pid),
                 "--every",
                 str(every),
+                "--config-root",
+                str(config_root),
             ],
             stdin=subprocess.DEVNULL,
             stdout=log,
@@ -363,14 +373,17 @@ def _records(path: Path) -> list[dict[str, Any]] | None:
     return records
 
 
-def summarize() -> None:
+def summarize(
+    sample_file: Path = RSS_SAMPLE_FILE,
+    process_file: Path = PYTHON_PROCS_FILE,
+) -> None:
     """The five figures, and who the python kilobytes belonged to.
 
     It reads and never writes, and it fails on nothing: an absent file says so.
     """
-    samples = _records(RSS_SAMPLE_FILE)
+    samples = _records(sample_file)
     if samples is None:
-        LOG.info("%s not found", RSS_SAMPLE_FILE.name)
+        LOG.info("%s not found", sample_file.name)
     else:
         llama = max((row.get("llama_vmhwm_kb") or 0 for row in samples), default=0)
         python_peak = max((row.get("python_vmhwm_kb") or 0 for row in samples), default=0)
@@ -391,9 +404,9 @@ def summarize() -> None:
         )
 
     # A sum over three processes says nothing about which one to look at.
-    roll_call = _records(PYTHON_PROCS_FILE)
+    roll_call = _records(process_file)
     if roll_call is None:
-        LOG.info("%s not found", PYTHON_PROCS_FILE.name)
+        LOG.info("%s not found", process_file.name)
         return
     peak: dict[str, int] = {}
     seen: Counter[str] = Counter()
@@ -406,11 +419,15 @@ def summarize() -> None:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    from idhazh.contracts.app_config import AppConfig
+    from idhazh.telemetry.host_control import enabled, memory_override
+
     parser = argparse.ArgumentParser(description=__doc__)
     verbs = parser.add_subparsers(dest="verb", required=True)
 
     def watching(name: str, help_text: str) -> argparse.ArgumentParser:
         verb = verbs.add_parser(name, help=help_text)
+        verb.add_argument("--config-root", type=Path, default=Path("config"))
         verb.add_argument(
             "--pid", type=int, required=True, help="The process to sample until it goes away."
         )
@@ -427,23 +444,33 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--name", default=DEFAULT_NAME, help="The stem for <name>.log and <name>.pid."
     )
     watching("sample", "The loop itself, which start-sampler launches.")
-    verbs.add_parser("summarize", help="Print what the two files the loop wrote hold.")
+    summary = verbs.add_parser("summarize", help="Print what the two files the loop wrote hold.")
+    summary.add_argument("--config-root", type=Path, default=Path("config"))
+    summary.add_argument("--sample-file", type=Path, default=RSS_SAMPLE_FILE)
+    summary.add_argument("--process-file", type=Path, default=PYTHON_PROCS_FILE)
     args = parser.parse_args(argv)
 
     # CLAUDE.md section 1b takes the level from `config/`. This program reads no
-    # config on purpose - it runs beside a job rather than inside one, and it
-    # imports nothing from `idhazh` - so the level is fixed at INFO, which is
-    # what every line it writes needs.
+    # logger settings here - it runs beside a job rather than inside one - so
+    # the level is fixed at INFO, which is what every line it writes needs.
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
         stream=sys.stderr,
     )
+    app = AppConfig.from_json((args.config_root / "idhazh.json").read_text(encoding="utf-8"))
+    override = memory_override()
+    memory = app.observability.memory_profiling_enabled if override is None else override
+    if not enabled(app.observability) or not memory:
+        LOG.info("host memory profiling off; no sampler or memory artifact opened")
+        return 0
 
     ran: dict[str, Callable[[], object]] = {
-        "start-sampler": lambda: start_sampler(args.pid, args.name, args.every),
+        "start-sampler": lambda: start_sampler(
+            args.pid, args.name, args.every, config_root=args.config_root
+        ),
         "sample": lambda: sample(args.pid, every=args.every),
-        "summarize": summarize,
+        "summarize": lambda: summarize(args.sample_file, args.process_file),
     }
     ran[args.verb]()
     return 0

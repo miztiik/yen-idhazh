@@ -1,22 +1,20 @@
 # Console Charts
 
-**Last Updated**: 2026-10-09
-
-**Known noncompliance:** Existing prerendered charts do not meet [Telemetry Intent](../../concepts/telemetry-intent.md) and will be migrated to browser rendering. All new designs, charts and visuals must render in the browser; none may be prerendered.
+**Last Updated**: 2026-10-12
 
 What console charts must share: sizing, interaction, loading states and honest
-marks for missing measurements. These are forward requirements, not a claim that
-every existing chart meets them. Panel placement belongs to [console.md](console.md);
+marks for missing measurements. Panel placement and the private build-time
+exceptions belong to [console.md](console.md);
 wording, ranking and colour belong to
 [console design](../../concepts/console-design.md).
 
 ## Browser rendering and data
 
-- Use d3.js for new charts, as required by [Telemetry Intent](../../concepts/telemetry-intent.md). Do not add ECharts, server-rendered SVG fallbacks or chart data embedded in HTML.
+- Use d3.js and the native chart components. ECharts and its server-side SVG renderer are absent. Do not restore engine options or server-rendered fallbacks.
 - Fetch data at view time through the [shared data reader](../../concepts/console-design/how-a-console-chart-gets-its-data.md). Request the columns and dates needed for the view, never a whole collection to discard most of it.
 - Telemetry queries use DuckDB-Wasm over the published Parquet ledgers. Panels must not build their own URLs or import their own parsers. The [query module](how-the-query-door-answers-a-panel.md) owns those details.
-- Query, derive chart values and draw in the browser. Do not depend on a route's server loader or a build-time telemetry projection.
-- Share scales, readouts and loading behavior across panels. Migrate existing chart machinery to these rules; do not copy its prerender assumptions into new work.
+- Published-ledger panels query, derive chart values and draw in the browser. Their route loads carry no copy of those ledger values. Private build-time inputs keep their existing boundary; this is not a change to route-shell prerendering.
+- Share scales, readouts and loading behavior across panels. Retain pure math and types used by native components, not dead engine options or file readers.
 
 Static hosting remains unchanged: the site serves code, assets and data files.
 Browser rendering does not introduce a runtime backend.
@@ -43,30 +41,37 @@ deferred libraries still cost a download and still count toward the deployed sit
 
 ## Item-health charts
 
-**Failure rate against volume:** show daily item counts split by the stage where
-work stopped, with each stage's failure rate on a fixed 0 to 100 percent axis.
-The denominator is the number that reached that stage, not the whole day.
-Print counts and denominators beside rates. Below `console.min_attempts_for_rate`,
-show counts only and break the rate line, as
-[a share under the floor](#a-share-under-the-floor-gets-no-mark) requires.
-An empty window is not a day of zeroes. In the Pipelines viewport, this panel
-keeps its own place rather than taking a reserved box: while the monthly files
-are being read it says `Reading the monthly files. This chart is not ready yet.`;
-if a required file does not arrive it says `This chart is unavailable.` The
-shared line above the panels names a missing or failed month. Only a successful
-read with no planned items gets the quiet-window sentence.
+**Failure mix:** `nativeFailureMix` in `console/pipelines/failure-mix.ts` supplies
+daily failed-row counts split by stage. Its share is failed rows divided by all
+recorded rows in the window, not a population inferred to have reached a stage.
+The query selects no article identity, so neither count claims distinct articles.
+A recorded day with no failures is zero; a day with no rows is unknown. Other
+failed stages keep their counts in `Other stages`. There is no attempt floor for
+this recorded-row share. Shared route status distinguishes pending, quiet,
+missing and failed answers; only a successful empty read is quiet.
 
-**Summary length against the length asked for:** show daily counts inside, below
-and above the configured target band. Print the `summarize.bands` bounds and name
-the largest misses. Use categorical colours with a word beside each swatch, not
-the confidence ramp. Count and explain rows that cannot be assigned a band.
-The three bins must add up to the day's eligible article count.
+**Why rows failed:** `FailureList` ranks recorded rules at an explicitly selected
+stage. Counts and unknown-rule rows use that stage's failed rows as their
+denominator. `console.failure_list_max` bounds the visible rule list. This is
+an identity-free rule ranking, not an article or source failure disclosure.
 
-**Why items failed:** rank causes by stage and code, then sources by articles
-lost. Show how many sources a cause affected and the denominator for each source.
-Count articles, not repeated stage records. Use `console.source_rows` to bound
-the displayed list and describe its tail. Keep detailed records behind a closed
-disclosure. Do not colour a source as healthy or unhealthy without an agreed rule.
+**Where an item's time went:** `nativeTimeSplit` uses `durationCohort` for one
+complete cohort of recorded clocks. Fetch, extract, summarize, checking and
+positive unattributed duration are the five additive series. Summarize appears
+once; label, summary and visual-plan clocks are non-additive detail. Elapsed time
+and the explicit overlap deduction reconcile the stack. Missing, invalid or
+inconsistent clocks do not supply invented zeroes.
+
+**Reading against writing cost:** `nativeItemCost` in
+`console/pipelines/item-cost.ts` keeps independent complete rate pairs for each
+clock. Reading subtracts recorded cached tokens; unknown cache is not zero.
+Its two distributions share one seconds domain. Their sample floor remains
+separate from the failure mix's recorded-row divisor.
+
+Summary length belongs to the native Summaries panel: it shows each run's low,
+middle and high lengths, not daily distance bins or an outlier list. Its
+[drawing contract](../../concepts/console-design/what-the-quality-and-source-panels-draw.md#compression-is-three-marks-a-run-and-the-band-prints-its-bounds)
+names the measured lengths and the requested band.
 
 ## A share under the floor gets no mark
 
@@ -78,9 +83,10 @@ points; stage timings also break at measured zero and keep singleton runs
 without drawing them as lines. The d3 date-series chart keeps its library's
 `line().defined()` rule.
 
-Below `console.min_attempts_for_rate`, a share is not a measurement. The chart
-draws no mark for it; the readout strip and the column's accessible name print
-the counts instead.
+Where a panel declares `console.min_attempts_for_rate`, a share below that floor
+gets no mark; the readout strip and the column's accessible name print the counts
+instead. This is the judge's paired-reading rule, not a blanket floor on every
+recorded-row share.
 
 - Judge each share by the count it is taken over, so one column can keep one
   rate's mark and lose another's.
@@ -90,13 +96,13 @@ the counts instead.
 - Do not stand in for the mark on the baseline: an open point there means a
   measured zero.
 - When a window leaves a mark out, a caption under the panel's window sentence
-  says why, in the small grey type the failure chart's own note uses, so the
-  verdict stays the last thing in its paragraph. Leave it out where that
-  sentence already says the whole window is too few.
+  says why in the small note type, so the verdict stays the last thing in its
+  paragraph. Leave it out where that sentence already says the whole window
+  is too few.
 
-The failure chart applies this to each stage. The judge's agreement chart
-judges "disagreed" by every pair read twice and "could not tell" by the pairs
-whose two readings agreed. Reader chose its note: `A day has no "disagreed" dot
+The judge's agreement chart judges "disagreed" by every pair read twice and
+"could not tell" by the pairs whose two readings agreed. Reader chose its note:
+`A day has no "disagreed" dot
 if fewer than 5 pairs were read twice, and no "could not tell" dot if fewer than
 5 pairs agreed.`, with the floor read from config, and on a chart of two or more
 columns a second sentence that says the counts are in the strip above.
@@ -213,9 +219,11 @@ Use recorded input manifests, not `model_id` or `run_id`: a prompt, runtime or
 extraction setting can change without changing the model name, and a new run
 does not itself mean a new setup.
 
-Share one browser-side comparison across charts. Obtain the required records
-through the shared reader, including the comparison context before the displayed
-window. Do not precompute the markers in a server loader or embed them in HTML.
+The band's recorded settings-change answer supplies dates and words through
+`settingsRules` in `console/settings-moved.ts`. The producer owns the input
+comparison and its predecessor context. Browser panels select and draw those
+markers over their declared window; they do not recompute the comparison or
+publish private manifests to restore a removed frontend helper.
 
 - Mark a day when it introduces an input set absent from the preceding recorded day. Merely dropping an input set is not a new setup. Multiple changes on one day produce one boundary.
 - Prefer a named input manifest when a day also has a legacy fingerprint. Compare like record formats; a transition between formats does not itself prove the setup changed.
@@ -223,9 +231,9 @@ window. Do not precompute the markers in a server loader or embed them in HTML.
 - Missing records mean unknown, not unchanged. Do not print "nothing changed" for a day whose setup was not recorded.
 - These records explain results. They must not exclude rows, change scores or gate publication.
 
-The manifest's fields are owned by
+The producer's manifest fields are owned by
 [the input contract](../../../backend/idhazh/contracts/fingerprint.py).
-Reuse those recorded facts rather than copying them into new telemetry fields.
+Keep those recorded meanings rather than copying them into new telemetry fields.
 
 ## How the rule is drawn
 
@@ -248,29 +256,30 @@ absence from a forgotten marker.
 
 ## Verification
 
-Use bounded fixtures with empty, missing, partial and zero measurements. Include
-a mid-window setup change, missing input records and multiple changed settings.
-Verify bin totals, stage denominators and marker placement independently of the
-chart's own calculations. Exercise keyboard, touch, both themes, narrow containers,
-failed downloads and scripts-off behavior. Existing tests must move with their
-chart; they must not preserve a server-rendered picture as the required fallback.
+Test calculations, readers and date bounds with small fixtures below the browser.
+Use one representative browser journey to check shared drawing and readout
+behaviour. Add another runtime case only for a distinct boundary the ordinary
+journey cannot reach, such as an actual failed fetch or scripts-off rendering.
+Do not repeat chart, theme, width and input-state combinations in browser tests.
+When a chart changes, review that chart in context rather than adding a new
+per-chart interaction matrix.
 
 ## Design rationale
 
-- Browser rendering follows [Telemetry Intent](../../concepts/telemetry-intent.md). Existing prerendering is work to remove, not an exception for new designs.
+- Browser rendering follows [Telemetry Intent](../../concepts/telemetry-intent.md). Existing private build-time inputs are not an exception for new designs. Engine retirement does not change the route shells.
 - Shared coordinates and readouts make charts comparable without relearning each panel.
 - Counts and coverage distinguish sparse measurements from reliable rates. A missing sample is never evidence of zero work.
-- A mark for a share under the floor would place a value the strip beside it calls too few to report. Leaving the mark out is the only mark that claims no height, and a line joined across that column would draw the same false value.
+- A mark for a share its panel calls too few to report would contradict the strip beside it. Leaving that mark out and breaking its line avoids the false value without suppressing other panels' measured shares.
 - A fixed axis that stops at a mark hides exactly the reading a mark exists to show: how far past it a day went. Niceing the axis from the data as well as the marks keeps every share visible without ever pinning one to a line it does not sit on.
 - A thinned-out tick label is a deliberate trade against a wide window; it is not supposed to take a day's only date with it when that day also lost its neighbour's reading. A floating label kept clear of a mark's own label answers both without widening the shared thinning itself.
 - A date that cannot clear a mark above stays centred on its day below the dot. Its horizontal position still names the day; neither dashed mark nor its label moves to make room.
 - A visible readout survives touch use and screenshots; a pointer tooltip does not.
 - Named setup changes explain when a comparison is no longer like-for-like without changing the results themselves.
-- Failure rate remains unboxed in the item-telemetry viewport. A fixed box would add a slot to a group whose panels flow to their own empty states. The page names a missing or failed month once; the chart uses short state sentences and keeps its quiet-window sentence for a successful empty read.
+- One route status names missing or failed native reads without hiding usable sibling panels. A successful empty answer remains different from one that never arrived.
 
 ## See also
 
-- [../../concepts/telemetry-intent.md](../../concepts/telemetry-intent.md) - browser-owned telemetry and no prerendering.
+- [../../concepts/telemetry-intent.md](../../concepts/telemetry-intent.md) - browser-owned telemetry and the intended rendering boundary.
 - [../../concepts/console-design/how-a-console-chart-gets-its-data.md](../../concepts/console-design/how-a-console-chart-gets-its-data.md) - shared, bounded data queries.
 - [console.md](console.md) - which panel is on which route.
 - [../../concepts/console-design.md](../../concepts/console-design.md) - wording, ranking and colour.

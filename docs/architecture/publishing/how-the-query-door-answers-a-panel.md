@@ -1,6 +1,6 @@
 # How the query door answers a panel
 
-**Last Updated**: 2026-10-09
+**Last Updated**: 2026-10-11
 
 The query door is the one module a console panel calls to read a committed
 ledger: `slice()` for rows and `ledgerReach()` for how far a ledger reaches, both
@@ -19,7 +19,7 @@ it wants, a filter:
 
 ```ts
 const result = await slice('host-fingerprint', {
-	columns: ['date', 'job', 'shard', 'cores'],
+	columns: ['version', 'date', 'job', 'shard', 'fingerprint_version', 'cpu_logical_processors', 'cores', 'threads', 'mhz_max', 'mhz_at_probe'],
 	from: '2026-09-01',
 	to: '2026-09-30',
 	where: [{ column: 'job', op: '=', value: 'work' }]
@@ -172,16 +172,10 @@ does not give, or it is not there, which is `file-missing`. A reload fixes both.
 window for the page, and a panel that read a newer index than its neighbour would
 stop its rows on a different day beside it. Reading the
 index again before every slice would also put one more round trip in front of
-each one, where a cold load allows four serial round trips in all
-(`frontend/tests/console-cold-load.spec.ts`).
+each one, where the cold-load design allows four serial round trips in all.
 
-The Hardware cold-load check measures the larger of two paths: document,
-indexes, whole-file data and add-on; or document, indexes, core wasm and add-on.
-Data and core wasm are independent after file selection. A fast local data
-response ending before the wasm request starts does not prove an extra wait.
-Separate real-response gates hold each branch in turn and require the other to
-progress. The timing run holds nothing, counts planted pre-index waits on both
-paths, and keeps the four-hop ceiling and every engine download in scope.
+Whole-file data and core wasm can progress independently after file selection;
+neither should wait for the other.
 
 ## How far a ledger reaches
 
@@ -344,9 +338,6 @@ staged tree.
   `frontend/src/lib/data/slice-shapes.ts`, admits every declared ledger.
   `feed-health` is one the site does not hold: a build-time reader asks it
   through `sliceFromDisk`, and no browser panel asks it.
-  `frontend/tests/published-ledgers.spec.ts` asks the built
-  site the door's own questions: every address an index names is there, at the
-  size its entry gives, and nothing else of `state/` is.
 
 **What it weighs, and what bounds it.** Day and month indexes are bounded by each
 ledger's declaration: `daily_keep_days` plus 31 day entries and the months its
@@ -398,14 +389,13 @@ ends. The engine opens the file with a 1-byte GET and a `HEAD`, then asks only f
 its footer and for the parts of the row groups the query touches. Which periods
 are read this way is `RANGED_PERIODS` in `frontend/src/lib/data/slice-reader.ts`.
 `sliceFromDisk()` reads every file whole, because the engine's Node half reads no
-host. `frontend/tests/ledger-ranges.spec.ts` drives a real browser against a host
-on 127.0.0.1 that answers the way Pages does. Five facts shape the design.
+host. Five facts shape the design.
 
 - **The engine's own default reads an address whole.** DuckDB-Wasm opens with
   `forceFullHTTPReads` on, and then reads a registered address in one GET with no
   `Range`. `engine.ts` opens the database with it off. A read answered 200 rather
-  than 206 also makes the engine take the whole body without a word, so the spec
-  requires every GET for a year file to name a range and be answered 206.
+  than 206 also makes the engine take the whole body without a word, so every GET
+  for a year file must name a range and be answered 206.
 - **Pages answers a `HEAD` that carries a `Range` with 200 and the full length.**
   The engine takes a file's length from that `HEAD`, and accepts a 200 only while
   `allowFullHTTPReads` is on, so that setting stays on. The length it opened must
@@ -427,10 +417,9 @@ on 127.0.0.1 that answers the way Pages does. Five facts shape the design.
   `If-Range` naming the ETag it kept, and a host that honours `If-Range` answers a
   changed ETag with 200 and the whole file. At an address no earlier read used the
   browser holds nothing, so the only ETag a read names is the one the host gave
-  that same read. The spec drives both ways a deploy can fall between two reads -
-  the same page reading again, and a new page opened while what the first page
-  fetched is still fresh, within Pages' `max-age=600` - and requires every GET for
-  the year file to be answered 206.
+  that same read. This must hold whether the same page reads again or a new page
+  opens while what the first page fetched is still fresh, within Pages'
+  `max-age=600`: every GET for the year file must be answered 206.
 
 **Pages honours `If-Range`, measured on the live site.** A ranged GET whose
 `If-Range` names the ETag Pages serves now is answered 206 with the range; one

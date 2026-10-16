@@ -19,7 +19,7 @@ from idhazh.council.session import VENUE_LEDGERS
 from idhazh.ledger import staging
 from utilities import council_matrix
 
-from ._config import copy_config
+from ._config import copy_config, write_declarations
 from ._tenants import a_venue, forget
 
 A_VENUE = "a_paper_venue"
@@ -42,11 +42,12 @@ def venue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
 def _config_registering(root: Path, *, slugs: tuple[str, ...], shards: int | None = None) -> Path:
     """The loader's named config inputs, with those slugs registered."""
     target = copy_config(root)
-    raw = json.loads(read_text(target / "idhazh.json"))
-    raw["council"]["tenants"] = list(slugs)
+    write_declarations(target, slugs)
+    raw = json.loads(read_text(target / "llm_council.json"))
+    raw["judge_names"] = list(slugs)
     if shards is not None:
-        raw["council"]["shards"] = shards
-    (target / "idhazh.json").write_text(
+        raw["shards"] = shards
+    (target / "llm_council.json").write_text(
         json.dumps(raw, indent=2), encoding="utf-8", newline="\n"
     )
     return target
@@ -60,9 +61,7 @@ def _emitted(
     for date in dates:
         argv += ["--date", date]
     assert council_matrix.main(argv) == 0
-    return dict(
-        line.split("=", 1) for line in capsys.readouterr().out.splitlines() if line
-    )
+    return dict(line.split("=", 1) for line in capsys.readouterr().out.splitlines() if line)
 
 
 def test_a_night_with_no_tenant_fans_out_to_nothing(
@@ -78,9 +77,7 @@ def test_a_night_with_no_tenant_fans_out_to_nothing(
     registered a judge since 2026-09-21. Reading that would ask what the judge
     fans out to instead of what an empty room does.
     """
-    emitted = _emitted(
-        capsys, config_root=_config_registering(tmp_path, slugs=()), dates=(A_DATE,)
-    )
+    emitted = _emitted(capsys, config_root=_config_registering(tmp_path, slugs=()), dates=(A_DATE,))
 
     assert json.loads(emitted["matrix"]) == []
     assert json.loads(emitted["dates"]) == [A_DATE]
@@ -98,8 +95,8 @@ def test_a_cell_carries_the_tenant_the_date_the_shard_and_that_tenants_width(
     emitted = _emitted(capsys, config_root=config_root, dates=(A_DATE,))
 
     assert json.loads(emitted["matrix"]) == [
-        {"tenant": "a-paper-tenant", "date": A_DATE, "shard": 0, "shards": 2},
-        {"tenant": "a-paper-tenant", "date": A_DATE, "shard": 1, "shards": 2},
+        {"tenant": "a-paper-tenant", "date": A_DATE, "shard": 0, "shards": 2, "runs_model": False},
+        {"tenant": "a-paper-tenant", "date": A_DATE, "shard": 1, "shards": 2, "runs_model": False},
     ]
     assert emitted["committed_paths"].split() == [
         *(staging.staged_path(which) for which in VENUE_LEDGERS),
@@ -113,8 +110,8 @@ def test_a_tenant_cannot_declare_a_blanket_state_root(
 ) -> None:
     a_venue(venue, package=A_VENUE, slugs={"a-paper-tenant": (1, (root,))})
     config_root = _config_registering(venue, slugs=("a-paper-tenant",))
-    with pytest.raises(ValueError, match="blanket state"):
-        _emitted(capsys, config_root=config_root, dates=(A_DATE,))
+    assert council_matrix.main(["--config-root", str(config_root), "--date", A_DATE]) == 2
+    assert capsys.readouterr().out == ""
 
 
 def test_a_tenant_narrows_the_venues_width_and_cannot_widen_it(
@@ -132,13 +129,9 @@ def test_a_tenant_narrows_the_venues_width_and_cannot_widen_it(
         package=A_VENUE,
         slugs={"a-narrow-tenant": (1, ()), "a-greedy-tenant": (8, ())},
     )
-    config_root = _config_registering(
-        venue, slugs=("a-narrow-tenant", "a-greedy-tenant"), shards=2
-    )
+    config_root = _config_registering(venue, slugs=("a-narrow-tenant", "a-greedy-tenant"), shards=2)
 
-    cells = json.loads(
-        _emitted(capsys, config_root=config_root, dates=(A_DATE,))["matrix"]
-    )
+    cells = json.loads(_emitted(capsys, config_root=config_root, dates=(A_DATE,))["matrix"])
 
     widths = {cell["tenant"]: cell["shards"] for cell in cells}
     assert widths == {"a-narrow-tenant": 1, "a-greedy-tenant": 2}

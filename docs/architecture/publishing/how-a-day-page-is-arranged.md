@@ -1,6 +1,6 @@
 # How a day page is arranged
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-10-11
 
 A day page from top to bottom: the header that states each publication fact
 once, the leading block the day opens on, the two-column arrangement that gives
@@ -87,7 +87,7 @@ The aside needs the leads to come before the items in `digest.sections`. Any
 other order and the day is one column at every width, because an aside beside
 the day's controls is the arrangement the rule above refuses.
 
-### The zones are config, and a browser check proves they are relative
+### The zones are config, and they scale with the root font size
 
 `frame.zone_mark_rem`, `frame.zone_rail_rem` and `frame.zone_aside_rem` are read
 by [scripts/build-frame-css.mjs](../../../frontend/scripts/build-frame-css.mjs)
@@ -98,10 +98,8 @@ the first painted frame, so it cannot be injected from a layout.
 They are `rem` because a reader who set their browser text larger needs the
 furniture beside the text to grow with it. That is the one property of this
 layout no screenshot can check: `14rem` and `224px` are the same number at the
-default font size. [frontend/tests/item-zones.spec.ts](../../../frontend/tests/item-zones.spec.ts)
-reads each zone's used width with the root font size at 16px and again at 22px
-and fails unless every one of them scaled by 22/16, printing both numbers so a
-pass cannot be vacuous.
+default font size. Each zone's used width must scale by 22/16 when the root
+font size changes from 16px to 22px.
 
 ## The day header states each publication fact once
 
@@ -210,13 +208,6 @@ fallback shell: no footer, no layout payload, no rendered day, 4,351 raw bytes o
 both sides of the change. The one gzipped byte it moved is in the content hashes
 in its `modulepreload` list, which are the same length and different characters
 once any component changes.
-
-[frontend/tests/footer-facts.spec.ts](../../../frontend/tests/footer-facts.spec.ts)
-is what keeps the facts from leaking back or leaking away. It counts the three
-links exactly once in the footer of every route that has one, counts the three
-deleted sentences at zero there, counts the day's run facts at zero in the
-documents that render no day, pins `/404` as a footerless shell, and fails if the
-root layout imports the day loader again.
 
 ## Design rationale
 

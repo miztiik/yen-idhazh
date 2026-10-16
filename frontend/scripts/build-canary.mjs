@@ -193,7 +193,8 @@ function writeItemHealthCanary() {
 		'source_id', 'stage', 'outcome', 'code', 'http_status', 'source_chars', 'source_words',
 		'summary_words', 'detail', 'fetch_ms', 'extract_ms', 'summarize_ms', 'prefill_ms',
 		'decode_ms', 'input_tokens', 'output_tokens', 'cached_tokens', 'source_words_before_cap',
-		'machine_shard', 'machine_job', 'span_integrity', 'elements_found', 'element_class', 'model_calls',
+		'machine_shard', 'machine_job', 'machine_pipeline_name', 'machine_task_name',
+		'span_integrity', 'elements_found', 'element_class', 'model_calls',
 		'label_kind', 'label_prefill_ms', 'label_decode_ms', 'label_input_tokens',
 		'label_output_tokens', 'label_cached_tokens', 'summary_kind', 'summary_prefill_ms',
 		'summary_decode_ms', 'summary_input_tokens', 'summary_output_tokens', 'summary_cached_tokens',
@@ -978,9 +979,7 @@ function writeItemHealthCanary() {
 	//
 	// These rows are dated a month before the rest, so their own day files sit a
 	// month behind the others - and the month mirror the publisher folds from them
-	// is a file only the widest preset reaches. A browser that widens the window
-	// fetches it, and `console-telemetry-heal.spec.ts` fails that fetch to prove a
-	// retry heals it.
+	// is a file only the widest preset reaches.
 	const longAgoRows = [
 		...tailRows(longAgo, 1, [520, 640, 700, 810, 1100, 4300]),
 		...tailRows(longAgo, 2, [560, 690, 760, 880, 1250, 4900])
@@ -1035,9 +1034,11 @@ function writeItemHealthCanary() {
  */
 function writeHostFingerprintCanary() {
 	const COLUMNS = [
-		'version', 'date', 'run_id', 'job', 'shard', 'fingerprint', 'cpu_model', 'cpu_vendor',
-		'cpu_family', 'cpu_model_number', 'cpu_stepping', 'microcode', 'cores', 'threads',
-		'l3_cache_bytes', 'mhz_max', 'mhz_at_probe', 'flags', 'boot_seconds', 'memcpy_gib_s',
+		'version', 'date', 'run_id', 'job', 'shard', 'fingerprint', 'fingerprint_version',
+		'cpu_model', 'cpu_vendor', 'cpu_family', 'cpu_model_number', 'cpu_stepping', 'microcode',
+		'cpu_physical_cores', 'cpu_logical_processors', 'cpu_allowed_processors',
+		'cpu_quota_cores', 'cpu_quota_state', 'cpu_target_measured_at', 'l3_cache_bytes',
+		'cpu_observed_mhz', 'cpu_reported_max_mhz', 'flags', 'boot_seconds', 'memcpy_gib_s',
 		'memcpy_probe_mib', 'vm_size', 'vm_location', 'vm_zone', 'vm_fault_domain', 'runner_name',
 		'measured_at', 'model_load_ms', 'job_seconds', 'server_prompt_tokens',
 		'server_prompt_seconds'
@@ -1058,11 +1059,10 @@ function writeHostFingerprintCanary() {
 	// The EPYC reports none of the watched AVX-512 entries, which is what the
 	// fleet's most common machine really does.
 	const EPYC = {
-		fingerprint: '3a7f0b1c2d4e5f60',
 		cpu_model: 'AMD EPYC 7763 64-Core Processor',
 		cpu_vendor: 'AuthenticAMD',
 		cpu_family: 25, cpu_model_number: 1, cpu_stepping: 1, microcode: '0xa0011d3',
-		cores: 2, threads: 4, l3_cache_bytes: 33554432,
+		cpu_physical_cores: 2, cpu_logical_processors: 4, l3_cache_bytes: 33554432,
 		flags: 'avx2 f16c fma sse4_2',
 		memcpy_gib_s: 12.4, memcpy_probe_mib: 512,
 		vm_size: 'Standard_D4ads_v5', vm_location: 'eastus', vm_zone: '1', vm_fault_domain: '0'
@@ -1071,11 +1071,10 @@ function writeHostFingerprintCanary() {
 	// shape nine of the committed rows carry, and under the margin that proves
 	// the copy left the cache. So this card has to withhold its copy speed.
 	const XEON = {
-		fingerprint: 'c81d9e0a1b2c3d4e',
 		cpu_model: 'INTEL(R) XEON(R) PLATINUM 8573C',
 		cpu_vendor: 'GenuineIntel',
 		cpu_family: 6, cpu_model_number: 207, cpu_stepping: 2, microcode: '0x21000283',
-		cores: 2, threads: 4, l3_cache_bytes: 272629760,
+		cpu_physical_cores: 2, cpu_logical_processors: 4, l3_cache_bytes: 272629760,
 		flags: [
 			'amx_bf16', 'amx_int8', 'amx_tile', 'avx2', 'avx512_bf16', 'avx512_fp16',
 			'avx512_vnni', 'avx512f', 'avx_vnni', 'f16c', 'fma', 'sse4_2'
@@ -1084,15 +1083,28 @@ function writeHostFingerprintCanary() {
 		vm_size: 'Standard_D4ls_v5', vm_location: 'westus2', vm_zone: '2', vm_fault_domain: '1'
 	};
 
+	const fingerprintV2 = (machine) => createHash('sha256').update(JSON.stringify({
+		cpu_family: machine.cpu_family ?? null,
+		cpu_model: machine.cpu_model ?? null,
+		cpu_model_number: machine.cpu_model_number ?? null,
+		cpu_stepping: machine.cpu_stepping ?? null,
+		cpu_vendor: machine.cpu_vendor ?? null,
+		flags: machine.flags ?? '',
+		l3_cache_bytes: machine.l3_cache_bytes ?? null
+	})).digest('hex').slice(0, 16);
+
 	const line = (cells) => COLUMNS.map((name) => cells[name] ?? '').join(',');
 	const probe = (rowDate, run, job, index, machine, clocks) =>
 		line({
-			version: '2026-09-17',
+			version: '2026-10-10',
 			date: rowDate,
 			run_id: `${rowDate}-${run}`,
 			job,
 			shard: index,
-			mhz_max: 2450, mhz_at_probe: 2445,
+			fingerprint: fingerprintV2(machine),
+			fingerprint_version: 2,
+			cpu_observed_mhz: 2445,
+			cpu_reported_max_mhz: 2450,
 			boot_seconds: 410.5,
 			runner_name: `runner-${job}-${index}`,
 			measured_at: `${rowDate}T2${run}:0${index}:00Z`,
@@ -1108,7 +1120,7 @@ function writeHostFingerprintCanary() {
 	 */
 	const clocksOnly = (rowDate, run, job, index, clocks) =>
 		line({
-			version: '2026-09-17',
+			version: '2026-10-10',
 			date: rowDate,
 			run_id: `${rowDate}-${run}`,
 			job,
@@ -1212,24 +1224,10 @@ python([
 	'backend/utilities/build_canary_day.py',
 	'--file-fixture-rows',
 	FIXTURE_ROWS,
+	'--out',
+	ROOT,
 	'--state',
 	STATE
-]);
-
-const telemetryMonths = canaryDays.map((day) => day.slice(0, 7)).sort();
-const telemetryFromMonth = telemetryMonths[0];
-const telemetryThroughMonth = telemetryMonths[telemetryMonths.length - 1];
-python([
-	'-m',
-	'idhazh.telemetry.publish.public_telemetry',
-	'--state',
-	STATE,
-	'--public',
-	join(STATE, 'telemetry'),
-	'--from-month',
-	telemetryFromMonth,
-	'--through-month',
-	telemetryThroughMonth
 ]);
 
 // The payloads the console fetches, written here and not in `build_canary_day.py`
@@ -1249,9 +1247,6 @@ python([
 
 // This inventory describes one generated fixture run, not the archive. The
 // original eight-item producer remains the only writer of its stories.
-const publicTelemetry = join(CANARY, 'telemetry');
-rmSync(publicTelemetry, { recursive: true, force: true });
-cpSync(join(STATE, 'telemetry'), publicTelemetry, { recursive: true });
 const inventoryNames = canaryFiles(CANARY, STATE);
 const publicNames = join(CANARY, 'public-files.txt');
 const stateNames = join(CANARY, 'state-files.txt');
@@ -1273,7 +1268,7 @@ if (!options['fixtures-only']) {
 		shell: process.platform === 'win32',
 		env: {
 			...process.env, CANARY_BUILD: '1', DIGEST_ROOT: ROOT,
-			STATE_ROOT: STATE, TELEMETRY_ROOT: join(STATE, 'telemetry')
+			STATE_ROOT: STATE
 		}
 	});
 }

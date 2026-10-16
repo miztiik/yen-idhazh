@@ -1,44 +1,131 @@
 {
   "checker_moved": {
-    "changes": [],
-    "compared_from": null
+    "changes": [
+      {
+        "date": "2026-08-23",
+        "score_moved": false
+      },
+      {
+        "date": "2026-08-24",
+        "score_moved": false
+      },
+      {
+        "date": "2026-08-26",
+        "score_moved": true
+      },
+      {
+        "date": "2026-08-29",
+        "score_moved": true
+      },
+      {
+        "date": "2026-09-24",
+        "score_moved": false
+      }
+    ],
+    "compared_from": "2026-08-23"
   },
   "compaction_lag_days": 0,
-  "covers_through": null,
-  "generated_at": "2026-10-12T00:00:00Z",
+  "covers_through": "2026-10-16",
+  "generated_at": "2026-10-16T16:47:34Z",
   "routes": [
-    {"carries": "Nothing on this day recorded how long the model spent.","description": "Did the runs work, and what each stage cost.","href": "/console/","id": "pipelines","label": "Pipelines","severity": 0,"worst": null},
-    {"carries": "No run on this day recorded a read speed, so there is no spread to compare.","description": "What the model wrote, how long it took, and what it got wrong.","href": "/console/model/","id": "model","label": "Summaries","severity": 0,"worst": null},
-    {"carries": "No article is on record for this day.","description": "The hardware the model ran on, and how much it varied between runs.","href": "/console/machine/","id": "machine","label": "Hardware","severity": 1,"worst": "8 shards read 3.67x apart"},
-    {"carries": "Nothing on this day recorded how sure the model was.","description": "Which stories the day merged, and where the judge and a person disagreed.","href": "/console/judgement/","id": "judgement","label": "Judgement","severity": 0,"worst": null},
-    {"carries": "No feed failed or rested over these 0 runs.","description": "Who supplied the day, and how far each feed is discounted.","href": "/console/voices/","id": "voices","label": "Voices","severity": 0,"worst": null},
+    {"carries": "The model spent 27 h 53 m of this.","description": "Did the runs work, and what each stage cost.","href": "/console/","id": "pipelines","label": "Pipelines","severity": 3,"worst": "26 feeds resting"},
+    {"carries": "This day ran in 3 runs, 1.15x apart on read speed.","description": "What the model wrote, how long it took, and what it got wrong.","href": "/console/model/","id": "model","label": "Summaries","severity": 3,"worst": "45 items failed"},
+    {"carries": "195 articles on this day.","description": "The hardware the model ran on, and how much it varied between runs.","href": "/console/machine/","id": "machine","label": "Hardware","severity": 2,"worst": "free swap fell to 2559.0 MB"},
+    {"carries": "13 summaries were marked \"not sure\" on this day.","description": "Which stories the day merged, and where the judge and a person disagreed.","href": "/console/judgement/","id": "judgement","label": "Judgement","severity": 0,"worst": null},
+    {"carries": "26 feeds rested over these 279 runs.","description": "Who supplied the day, and how far each feed is discounted.","href": "/console/voices/","id": "voices","label": "Voices","severity": 2,"worst": "12 feeds discounted to the floor"},
     {"carries": "Every published ledger the other routes draw from, open to a question of your own.","description": "What the ledgers hold, and whatever you ask of them.","href": "/console/data-explorer/","id": "data-explorer","label": "Data explorer","severity": 0,"worst": null}
   ],
   "rows_uncompacted": 0,
   "settings_moved": {
-    "changes": [],
-    "compared_from": null
+    "changes": [
+      {
+        "date": "2026-09-14",
+        "inputs": [
+          "prompt_sha256",
+          "sanitizer_version"
+        ]
+      },
+      {
+        "date": "2026-09-15",
+        "inputs": [
+          "prompt_sha256",
+          "truncation_cap_tokens",
+          "n_ctx",
+          "extractor_version",
+          "sanitizer_version"
+        ]
+      },
+      {
+        "date": "2026-09-16",
+        "inputs": [
+          "prompt_sha256"
+        ]
+      },
+      {
+        "date": "2026-09-17",
+        "inputs": [
+          "prompt_sha256",
+          "sampling.max_think_tokens",
+          "sampling.temperature"
+        ]
+      },
+      {
+        "date": "2026-09-18",
+        "inputs": [
+          "prompt_sha256"
+        ]
+      },
+      {
+        "date": "2026-09-21",
+        "inputs": [
+          "sampling.max_answer_tokens",
+          "runtime_flags.-ctk",
+          "runtime_flags.-ctv",
+          "runtime_flags.-tb",
+          "n_batch"
+        ]
+      },
+      {
+        "date": "2026-09-22",
+        "inputs": [
+          "turn_markers_sha256"
+        ]
+      },
+      {
+        "date": "2026-09-24",
+        "inputs": [
+          "prompt_sha256",
+          "output_schema_sha256",
+          "truncation_cap_tokens"
+        ]
+      }
+    ],
+    "compared_from": "2026-09-14"
   },
   "size": {
-    "articles_to_cap": null,
-    "bytes": null,
-    "cap_fraction": null,
-    "left_mb": null,
-    "measured_days": 0,
-    "sentence": "No run has recorded a size yet, so there is nothing to hold against the 1 GB limit."
+    "articles_to_cap": 386034,
+    "bytes": 45937906,
+    "cap_fraction": 0.04278300888836384,
+    "left_mb": 980.1901988983154,
+    "measured_days": 55,
+    "sentence": "43.8 MB of the 1 GB limit - room for about 386,000 more articles."
   },
   "verdict": {
-    "date": null,
+    "date": "2026-10-16",
     "health": "amber",
     "more_runs": 0,
-    "runs": [],
-    "sentence": "No run has recorded a manifest yet, so there is nothing to report on."
+    "runs": [
+      {"health": "amber","label": "Run 1 is worth a look"},
+      {"health": "amber","label": "Run 2 is worth a look"},
+      {"health": "amber","label": "Run 3 is worth a look"}
+    ],
+    "sentence": "2026-10-16 ran 3 runs and published 195 of 240 planned items. 45 items failed."
   },
   "version": "2026-10-11T21:00",
   "worst": {
-    "href": "/console/machine/",
-    "id": "machine",
-    "label": "Hardware",
-    "sentence": "The newest run's shards read 3.67x apart, over the 8 shards of it that reported a read rate, so a rate taken over the whole run hides how slow the slowest of them was."
+    "href": "/console/",
+    "id": "pipelines",
+    "label": "Pipelines",
+    "sentence": "26 feeds are resting, so nothing they carry reaches the digest. Each is asked again after 5 runs."
   }
 }

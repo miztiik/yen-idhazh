@@ -16,11 +16,13 @@ from ._harness import (
     CONTENT_REFRESH_SHARD_DEFAULT,
     CONTENT_REFRESH_SHARDS,
     WORK_BOUND_KEYS,
+    _declared_steps,
     _dispatch_inputs,
     _evaluate_shard_matrix,
     _expression,
     _job,
     _load_workflows,
+    _local_action,
     _mapping,
     _needs,
     _script,
@@ -48,6 +50,17 @@ def test_content_refresh_has_eight_total_work_shards_at_most() -> None:
     assert shards.get("default") == CONTENT_REFRESH_SHARD_DEFAULT
     assert len(options) == len(CONTENT_REFRESH_SHARDS)
     assert frozenset(options) == CONTENT_REFRESH_SHARDS
+
+
+def test_run_parallelism_fits_the_dispatch_choices() -> None:
+    workflow = _load_workflows()["digest.yml"]
+    options = _string_list(
+        _mapping(_dispatch_inputs(workflow).get("shards"), "shards input").get("options"),
+        "shards options",
+    )
+    configured = json.loads(read_text(CONFIG_DIR / "idhazh.json"))["run"]["max_parallel"]
+
+    assert configured <= max(int(option) for option in options)
 
 
 def test_the_work_job_reads_its_bound_and_its_width_from_the_plan() -> None:
@@ -112,11 +125,11 @@ def test_the_work_bound_is_whatever_the_config_says_it_is(tmp_path: Path) -> Non
 
 
 def test_content_refresh_derives_the_shard_count_after_the_plan() -> None:
-    """The matrix was written before the plan existed, so `run.shard_size` could not reach it.
+    """The plan stores the dispatch choice before the fan-out reads it.
 
-    `shards` and `matrix` therefore move to their own step behind `Plan the day`,
-    and the job outputs move with them. A relocated step id that nothing
-    re-points is a silent break no shell assertion catches.
+    The operator value crosses into the planner as data, and the later fan-out
+    reads the stored count. A moved step id that nothing re-points is a silent
+    break no shell assertion catches.
     """
     workflow = _load_workflows()["digest.yml"]
     outputs = _mapping(_job(workflow, "plan").get("outputs"), "plan outputs")
@@ -131,28 +144,26 @@ def test_content_refresh_derives_the_shard_count_after_the_plan() -> None:
     assert isinstance(decide_script, str)
     assert "SHARDS" not in decide_script, "the fan-out no longer rides on the date step"
 
+    plan_step = _step(workflow, "plan", "name", "Plan the day")
+    env = _mapping(plan_step.get("env"), "plan environment")
+    assert env.get("DISPATCH_SHARDS") == "${{ inputs.shards }}"
+    script = _script(plan_step, "digest.yml/plan/Plan the day")
+    assert "SHARD_ARGS=()" in script
+    assert 'SHARD_ARGS=(--shards "$DISPATCH_SHARDS")' in script
+    assert script.index('"${LIMIT[@]}"') < script.index('"${SHARD_ARGS[@]}"')
 
-def test_content_refresh_caps_total_jobs_by_behavior() -> None:
+
+def test_content_refresh_uses_the_printed_count_without_clamping() -> None:
     workflow = _load_workflows()["digest.yml"]
     fanout = _step(workflow, "plan", "id", "fanout")
     script = fanout.get("run")
     assert isinstance(script, str)
 
-    # Nobody asked, so the day decides. A day that needs fewer workers gets
-    # fewer, and every extra worker restores the weights again.
-    for derived in sorted(int(shards) for shards in CONTENT_REFRESH_SHARDS):
-        assert _evaluate_shard_matrix(script, "", derived) == list(range(derived))
-    # A config that outruns the ceiling costs the tail of the fan-out, never the
-    # day: the feeds have already been read when this step runs.
-    assert _evaluate_shard_matrix(script, "", 12) == list(range(int(max(CONTENT_REFRESH_SHARDS))))
-
-    # An operator's own value still wins, and is still checked rather than clamped.
-    expected = {shards: list(range(int(shards))) for shards in sorted(CONTENT_REFRESH_SHARDS)}
-    for requested_shards, matrix in expected.items():
-        assert _evaluate_shard_matrix(script, requested_shards, 1) == matrix
-    # Both edges of the ceiling, plus the shapes that are not an integer.
-    for invalid_shards in ("0", "9", "10", "-1", "1.5", "text", "04", " 4"):
-        assert _evaluate_shard_matrix(script, invalid_shards, 4) is None
+    expected = {shards: list(range(int(shards))) for shards in CONTENT_REFRESH_SHARDS}
+    for printed, matrix in expected.items():
+        assert _evaluate_shard_matrix(script, printed) == matrix
+    for invalid in ("0", "9", "12", "04", "", "-1", "1.5", "text", " 4"):
+        assert _evaluate_shard_matrix(script, invalid) is None
 
 
 def test_every_output_a_job_reads_is_one_its_producer_declares() -> None:
@@ -187,6 +198,30 @@ def test_every_output_a_job_reads_is_one_its_producer_declares() -> None:
                 )
 
 
+def _artifact_name(workflow: dict[str, object], job: str, name: str) -> str:
+    """Follow an artifact name through composite inputs, outputs and job outputs."""
+    bindings: dict[str, str] = {}
+    for call in _declared_steps(workflow, job):
+        uses = call.get("uses")
+        if not isinstance(uses, str) or not uses.startswith("./"):
+            continue
+        for key, value in _mapping(call.get("with") or {}, "action arguments").items():
+            bindings[f"${{{{ inputs.{key} }}}}"] = str(value)
+        if isinstance(identifier := call.get("id"), str):
+            action = _local_action(uses)
+            for key, body in _mapping(action.get("outputs") or {}, "action outputs").items():
+                value = str(_mapping(body, "action output")["value"])
+                bindings[value] = f"${{{{ steps.{identifier}.outputs.{key} }}}}"
+    name = bindings.get(name, name)
+    referenced = re.fullmatch(
+        r"\$\{\{\s*needs\.([a-z0-9_-]+)\.outputs\.([a-z0-9_]+)\s*\}\}", name
+    )
+    if referenced:
+        producer, output = referenced.groups()
+        name = str(_mapping(_job(workflow, producer)["outputs"], "job outputs")[output])
+    return name
+
+
 def test_every_artifact_a_job_downloads_is_uploaded_by_a_job_it_waits_on() -> None:
     """An artifact name is a string agreed between two jobs and checked by nobody.
 
@@ -200,7 +235,9 @@ def test_every_artifact_a_job_downloads_is_uploaded_by_a_job_it_waits_on() -> No
     """
     for filename, workflow in sorted(_load_workflows().items()):
         uploads = {
-            str(_mapping(step.get("with"), "upload").get("name")): job_name
+            _artifact_name(
+                workflow, job_name, str(_mapping(step.get("with"), "upload").get("name"))
+            ): job_name
             for job_name in _mapping(workflow.get("jobs"), "jobs")
             for step in _steps(workflow, job_name)
             if str(step.get("uses", "")).startswith("actions/upload-artifact")
@@ -227,7 +264,7 @@ def test_every_artifact_a_job_downloads_is_uploaded_by_a_job_it_waits_on() -> No
                         "which it does not wait on"
                     )
                     continue
-                name = str(asked.get("name"))
+                name = _artifact_name(workflow, job_name, str(asked.get("name")))
                 assert name in uploads, f"{where} downloads {name}, which no job uploads"
                 assert uploads[name] in reachable, (
                     f"{where} downloads {name} from {uploads[name]}, which it does not wait on"

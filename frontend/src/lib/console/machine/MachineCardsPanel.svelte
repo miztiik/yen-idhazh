@@ -15,7 +15,7 @@
 	import Panel from '$lib/components/Panel.svelte';
 	import type { MachineCards } from '$lib/charts/machine-cards';
 
-	let { machines }: { machines: MachineCards } = $props();
+	let { machines, newestRunId = null }: { machines: MachineCards; newestRunId?: string | null } = $props();
 </script>
 
 <div
@@ -29,6 +29,15 @@
 		title="Which machines this run was given"
 		note="A run is not a machine and most runs draw more than one kind, so a rate quoted for the whole run belongs to none of them - one card a machine of the newest run."
 	>
+		<p class="lede" data-lede
+			data-model-rule-name="machine-cards"
+			data-model-rule="no" data-model-rule-none="These are the machines of one run, not a change over days.">
+			{machines.cards.length ? `${machines.cards.length} machine ${machines.cards.length === 1 ? 'kind' : 'kinds'} given to`
+				: 'No recorded machine identity in'} run {newestRunId ?? (machines.runId || 'not recorded')}.
+		</p>
+		<p data-comparison="Each machine's share of the shards against the other machines' shares">
+			Each machine's share of the shards against the other machines' shares.
+		</p>
 		{#if machines.nothing === 'recording-off'}
 			<p class="empty" data-machine-panel-empty="machines-off">
 				What machine this job drew is not being recorded. The processor name below comes from the
@@ -59,7 +68,7 @@
 					{machines.lostNote}
 				</p>
 			{/if}
-			<div class="machines">
+			<div class="machines" data-chart-type="machineCards" data-panel-question="is it working">
 				{#each machines.cards as card (card.identity.key)}
 					<MachineCard {card} lost={machines.lost !== null} />
 				{/each}
@@ -69,6 +78,7 @@
 </div>
 
 <style>
+	.lede { font-size: var(--text-xl); font-weight: 600; line-height: var(--leading-tight); }
 	.empty {
 		margin: var(--space-2) 0 0;
 		font-size: var(--text-sm);

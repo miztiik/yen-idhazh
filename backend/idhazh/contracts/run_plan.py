@@ -330,6 +330,11 @@ class RunPlan(Contract):
     __schema_stem__: ClassVar[str] = "run-plan"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-12",
+            change="A plan records the work shards its run dispatches.",
+            why="Assembly recounted the shards and missed an operator's dispatch count.",
+        ),
+        ChangelogEntry(
             version="2026-09-14",
             change="A planned item carries the eight terms that add up to rank_score.",
             why="Only the total survived, so nobody could read why a story ranked where it did.",
@@ -343,11 +348,6 @@ class RunPlan(Contract):
             version="2026-09-07",
             change="A run records what the already-published guard refused on dropped_published.",
             why="The guard is the whole reason the published ledger is read entire.",
-        ),
-        ChangelogEntry(
-            version="2026-09-02T23:00",
-            change="live_feeds on a vertical is renamed eligible_feeds and feed_floor is added.",
-            why="The count decided whether a desk publishes and counted the wrong feeds.",
         ),
         ChangelogEntry(
             version="2026-08-21T04:00",
@@ -393,6 +393,17 @@ class RunPlan(Contract):
     )
     verticals: list[VerticalPlan] = Field(default_factory=list)
     items: list[PlannedItem] = Field(default_factory=list)
+    shards: int | None = Field(
+        default=None,
+        ge=1,
+        strict=True,
+        description=(
+            "Work shards this run dispatches, decided once when the plan is made: "
+            "an operator's dispatch count when one was given, otherwise shard_count "
+            "over this plan's items. Every later job reads it here. Null on a plan "
+            "written before the count was recorded, which is unknown and never recomputed."
+        ),
+    )
 
     @model_validator(mode="after")
     def _the_guard_count_and_its_bands_agree(self) -> Self:

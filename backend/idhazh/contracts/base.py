@@ -35,12 +35,7 @@ JSON_SCHEMA_DIALECT: Final = "https://json-schema.org/draft/2020-12/schema"
 # than one revision lands on the same day (CLAUDE.md section 11).
 SCHEMA_VERSION_PATTERN: Final = r"^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2})?)?$"
 DATE_PATTERN: Final = r"^\d{4}-\d{2}-\d{2}$"
-# `<YYYY>-<MM>`: a shard period. The same stem `frontend/public/telemetry/` and
-# the other published series already file by, so a payload that names its own
-# month spells it the one way the directories do. It named `state/seen/` until
-# 2026-09-13, when that ledger moved to day files - a published mirror's grain
-# follows what a browser fetches and a ledger's follows what a run writes, so
-# the two came apart and this pattern belongs to the mirrors.
+# `<YYYY>-<MM>`: a native compact period or a search-index month.
 MONTH_PATTERN: Final = r"^\d{4}-\d{2}$"
 # `<YYYY>`: a UTC year, the stamp a compact yearly period carries.
 YEAR_PATTERN: Final = r"^\d{4}$"
@@ -98,19 +93,23 @@ PRINTABLE_LINE_PATTERN: Final = r"^[ -~]+$"
 # finish reason, a clock name. Never a sentence and never fetched prose.
 LOWER_TOKEN_PATTERN: Final = r"^[a-z0-9][a-z0-9_.+-]*$"
 
-#: The name of a pipeline job. Minted here rather than read from anywhere, so it
-#: sits with the other identities: a job this repository does not run is not a
-#: job a fold should invent a name for.
+#: Lowercase identity token for generic pipeline and task names. It checks the
+#: spelling, not membership in a repository-owned workflow list.
 JOB_NAME_PATTERN: Final = r"^[a-z][a-z0-9_-]*$"
+JobName = Annotated[
+    str,
+    StringConstraints(min_length=1, max_length=64, pattern=JOB_NAME_PATTERN),
+]
+PipelineName = JobName
+TaskName = JobName
 
 
 class ServerJob(StrEnum):
-    """Which workflow job produced a row.
+    """Closed legacy workflow-job vocabulary.
 
-    Ours to name, so it is a closed set. Every other identifier on a host row is
-    a string the machine chose and cannot be one - see
-    `docs/reference/host-metrics.md`. Refusing anything else is what stops a typo
-    becoming a job nobody can group by.
+    Generic host telemetry uses the validated `PipelineName` and `TaskName`
+    strings instead. Keep this enum for existing persisted rows and callers that
+    still use workflow-job identity.
 
     Every value is a job's own id in its workflow file, lowercase, so a reader
     goes from a row to the steps that wrote it with no lookup table in between.

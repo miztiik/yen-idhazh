@@ -20,6 +20,7 @@ export interface RouteExpect {
 	readonly verdict: { readonly state: string; readonly question: string } | null;
 	readonly runSquares: boolean;
 	readonly prerender: boolean;
+	readonly grains?: Readonly<Partial<Record<string, 'newest run' | 'newest day' | 'this one day' | `these ${number} days`>>>;
 }
 
 export const BY_ROUTE: Readonly<Record<RouteId, RouteExpect | null>> = {

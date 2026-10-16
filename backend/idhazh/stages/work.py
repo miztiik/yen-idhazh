@@ -66,6 +66,8 @@ from idhazh.stages.common import (
 )
 from idhazh.stages.two_calls import two_calls_one_item
 from idhazh.telemetry import census, host
+from idhazh.telemetry.host_control import enabled as host_telemetry_enabled
+from idhazh.telemetry.item_heartbeat import ItemHeartbeat
 from idhazh.telemetry.record import Flags, ItemRecorder, persist, shard_done
 
 
@@ -78,9 +80,7 @@ def _trace_id(run_id: str, item: PlannedItem) -> str:
     return f"{run_id}-{item.item_id}"
 
 
-def trace_sink(
-    settings: config.Settings, *, run_id: str, shard: int
-) -> telemetry.SpanSink:
+def trace_sink(settings: config.Settings, *, run_id: str, shard: int) -> telemetry.SpanSink:
     """Where this shard's spans go: nowhere, or a committed file.
 
     A file, and nothing else. Nothing this pipeline traces leaves the machine
@@ -304,8 +304,16 @@ def stage_work(
     shards: int = 1,
     fetcher: Fetcher | None = None,
     model_endpoint: str | None = None,
+    server_pid: int | None = None,
 ) -> None:
     """Fetch, extract, summarize and score one item at a time, writing as it goes."""
+    if shards < 1 or not 0 <= shard < shards:
+        raise ValueError("work shard must be inside the selected fanout")
+    mine = shard_of(plan, shard=shard, shards=shards)
+    collect_host = host_telemetry_enabled(settings.app.observability)
+    if not mine:
+        LOG.info("working shard=%s/%s items=0", shard, shards)
+        return
     model_endpoint = model_endpoint or resolve_endpoint(settings.app.model_server.base_url)
     shard_started = time.monotonic()
     tracer = telemetry.Tracer(
@@ -352,7 +360,6 @@ def stage_work(
 
     items_dir = _run_dir(plan.date) / "items"
     _write_inputs(items_dir, inputs=inputs)
-    mine = shard_of(plan, shard=shard, shards=shards)
     LOG.info(
         "working shard=%s/%s items=%s model=%s",
         shard,
@@ -360,23 +367,20 @@ def stage_work(
         len(mine),
         model.id,
     )
-    flags = Flags.of(settings.app.logging)
-    # Read once per shard and noted on every item. The process table scan and
-    # the CPU model read are each a few file opens; doing them per item would be
-    # 80 scans for an answer that cannot change inside a shard.
-    server_pid = host.llama_server_pid()
-    shard_facts = host.host_facts(job=ServerJob.WORK)
-    shard_cells = _shard_cells(
-        settings, shard=shard, shard_item_count=len(mine), facts=shard_facts
+    flags = Flags.of(settings.app.logging    )
+    # The workflow passes the PID written by the model-server owner. Looking
+    # through the process table could select an unrelated server.
+    shard_facts = (
+        host.host_facts(job=ServerJob.WORK) if collect_host
+        else host.HostFacts(cpu_model=None, runner_name=None, job=ServerJob.WORK)
     )
+    shard_cells = _shard_cells(settings, shard=shard, shard_item_count=len(mine), facts=shard_facts)
     failures: dict[str, int] = {}
     finished: list[ItemHealthRow] = []
     ready: list[_FetchedWorkItem] = []
     for original_index, item in enumerate(mine):
         started = time.monotonic()
-        recorder = ItemRecorder(
-            run_id=plan.run_id, flags=flags, now=assemble.utc_now, log=LOG
-        )
+        recorder = ItemRecorder(run_id=plan.run_id, flags=flags, now=assemble.utc_now, log=LOG)
         recorder.note(
             date=plan.date,
             run_id=plan.run_id,
@@ -450,9 +454,11 @@ def stage_work(
     # The gate is the slowest item this shard has already finished, which needs
     # no estimate and calibrates itself to whichever processor the shard drew.
     # Before the first item finishes it is zero, so the first item always runs.
-    deadline = shard_started + max(
-        settings.app.run.shard_timeout_minutes - settings.app.run.shard_wrap_up_minutes, 0
-    ) * 60
+    deadline = (
+        shard_started
+        + max(settings.app.run.shard_timeout_minutes - settings.app.run.shard_wrap_up_minutes, 0)
+        * 60
+    )
     slowest_item_s = 0.0
 
     for work in sorted(ready, key=lambda candidate: _summarize_band_sort_key(candidate, settings)):
@@ -482,14 +488,22 @@ def stage_work(
         )
         recorder.note(queue_wait_ms=queue_wait_ms)
         recorder.parked(queue_wait_ms)
-        with (
-            tracer.trace(_trace_id(plan.run_id, item)),
-            tracer.span(telemetry.SpanName.ITEM) as item_span,
-            host.Watch(
+        watch_context: Any
+        if not collect_host:
+            watch_context = ItemHeartbeat(
+                interval_s=flags.waiting_heartbeat_seconds, on_tick=_heartbeat(recorder)
+            )
+        else:
+            watch_context = host.Watch(
                 interval_s=flags.waiting_heartbeat_seconds,
                 server_pid=server_pid,
                 on_tick=_heartbeat(recorder),
-            ) as watch,
+                memory_profiling_enabled=settings.app.observability.memory_profiling_enabled,
+            )
+        with (
+            tracer.trace(_trace_id(plan.run_id, item)),
+            tracer.span(telemetry.SpanName.ITEM) as item_span,
+            watch_context as watch,
         ):
             telemetry.item_attributes(item_span, item, run_id=plan.run_id, shard=shard)
             model_started = time.monotonic()
@@ -523,9 +537,7 @@ def stage_work(
                     "summary_decode_ms",
                 )
             )
-            recorder.note(
-                summarize_ms=summarize_ms, model_wait_ms=max(summarize_ms - served, 0)
-            )
+            recorder.note(summarize_ms=summarize_ms, model_wait_ms=max(summarize_ms - served, 0))
             recorder.stage_done(ItemStage.SUMMARIZE, summarize_ms)
             summary = summary.model_copy(
                 update={
@@ -668,9 +680,7 @@ def stage_work(
             )
             persist(
                 items_dir,
-                work.recorder.abandoned(
-                    "the shard ran out of its own clock before this item ran"
-                ),
+                work.recorder.abandoned("the shard ran out of its own clock before this item ran"),
             )
             failures["abandoned"] = failures.get("abandoned", 0) + 1
     shard_done(

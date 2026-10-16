@@ -6,11 +6,12 @@ from dataclasses import replace
 from pathlib import Path
 
 from conftest import writer_identity
-from pytest import CaptureFixture
+from pytest import CaptureFixture, mark
 
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.file_envelope import Compression, Format, Period, WriterIdentity
+from idhazh.contracts.feed_health import FeedHealthRow
+from idhazh.contracts.file_envelope import Compression, FileEnvelope, Format, Period, WriterIdentity
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.ledger import parquet, published_columns
@@ -105,6 +106,60 @@ def test_current_published_columns_pass(tmp_path: Path, capsys: CaptureFixture[s
     )
 
 
+@mark.parametrize(
+    ("envelope_version", "missing", "exit_code"),
+    [
+        ("2026-10-10", ("pipeline_name", "task_name"), 0),
+        (FileEnvelope.schema_version(), ("pipeline_name", "task_name"), 1),
+        ("2026-10-10", ("unit_id",), 1),
+    ],
+)
+def test_writer_columns_follow_the_envelope_version_not_the_row_version(
+    tmp_path: Path, capsys: CaptureFixture[str],
+    envelope_version: str, missing: tuple[str, ...], exit_code: int,
+) -> None:
+    site_tree = tmp_path / "site"
+    row = fixture_rows(FeedHealthRow)[0]
+    (raw,) = ledger.persist(
+        site_tree / "state", [row], ledger=LedgerName.FEED_HEALTH,
+        covers=row.date, identity=_identity(), fmt=Format.PARQUET,
+    )
+    metadata, rows = parquet.read(raw.read_bytes())
+    columns = tuple(column for column in file_columns(FeedHealthRow) if column.name not in missing)
+    raw.write_bytes(parquet.render(
+        columns, [{key: value for key, value in cells.items() if key not in missing} for cells in rows],
+        envelope={**metadata, b"envelope_version": envelope_version.encode("ascii")},
+        compression=Compression.NONE,
+    ))
+
+    assert published_columns.check(site_tree, [LedgerName.FEED_HEALTH]) == exit_code
+    printed = capsys.readouterr().out
+    if exit_code:
+        assert all(f"column={name}" in printed for name in missing)
+    else:
+        assert "history " in printed
+        assert "missing [pipeline_name, task_name]" in printed
+        stored = ledger.load_stored([raw], model=FeedHealthRow)
+        assert stored[0].identity.pipeline_name is None
+        assert stored[0].identity.task_name is None
+
+
+def test_current_host_columns_are_not_exempted_by_an_old_envelope(
+    tmp_path: Path, capsys: CaptureFixture[str],
+) -> None:
+    site_tree, raw = _site_tree_with_host_file(tmp_path)
+    metadata, rows = parquet.read(raw.read_bytes())
+    columns = _columns_without("pipeline_name")
+    raw.write_bytes(parquet.render(
+        columns, [{key: value for key, value in cells.items() if key != "pipeline_name"} for cells in rows],
+        envelope={**metadata, b"envelope_version": b"2026-10-10"},
+        compression=Compression.NONE,
+    ))
+
+    assert published_columns.check(site_tree, [LedgerName.HOST_FINGERPRINT]) == 1
+    assert "column=pipeline_name" in capsys.readouterr().out
+
+
 def test_older_file_lacking_a_newer_column_passes_and_prints(
     tmp_path: Path, capsys: CaptureFixture[str]
 ) -> None:
@@ -133,7 +188,8 @@ def test_f1_current_stamp_with_missing_column_fails_and_prints(
         "file=state/raw/host-fingerprint/2026/09/16/"
     ) in printed
     assert (
-        "file_schema=2026-09-20 contract_schema=2026-09-20 column=unit_id "
+        f"file_schema={HostFingerprintRow.schema_version()} "
+        f"contract_schema={HostFingerprintRow.schema_version()} column=unit_id "
         "file_type=<not declared> contract_type=string; fix: give the contract a new "
         "version, CLAUDE.md section 11, or re-pack the file"
     ) in printed
@@ -174,7 +230,7 @@ def test_f3_newer_file_fails_and_prints(
     printed = capsys.readouterr().out
     assert "published-columns FAIL F3 ledger=host-fingerprint" in printed
     assert (
-        "file_schema=9999-01-01 contract_schema=2026-09-20 column=<not declared> "
+        f"file_schema=9999-01-01 contract_schema={HostFingerprintRow.schema_version()} column=<not declared> "
         "file_type=<not declared> contract_type=<not declared>; fix: re-pack the file "
         "with this build or run a build at least as new"
     ) in printed

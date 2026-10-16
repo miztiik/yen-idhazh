@@ -8,8 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 import yaml  # type: ignore[import-untyped]
-from test_story_dataset import articles, manifest, policy
-from test_story_encoder_candidates import registered_candidate
+from story_runner_fixtures import articles, manifest, policy, registered_candidate
 
 from idhazh.contracts.story_encoder_candidate import CandidateVectorState, CandidateVectorUnit
 from idhazh.contracts.story_runner import RunnerFile, RunnerPackage, RunnerResult, RunnerShard

@@ -174,6 +174,7 @@
 	 * lowest and the highest percentile drawn, so a change to `PERCENTILES`
 	 * moves the sentence with the plots. */
 	const newest = $derived(tailRuns.at(-1) ?? null);
+	const slowestTenth = $derived(newest?.ms[PERCENTILES.indexOf(90)] ?? null);
 	const spread = $derived.by(() => {
 		const middle = newest?.ms[0] ?? 0;
 		const slowest = newest?.ms.at(-1) ?? 0;
@@ -186,13 +187,6 @@
 	data-windowed="machine-latency"
 	data-window-days={windowDays}
 	data-tail-domain={JSON.stringify(tailY.domain)}
-	data-model-rule={tailRuns.length > 1 ? 'yes' : 'no'}
-	data-model-rule-name="machine-latency"
-	data-model-rule-none={tailRuns.length > 1
-		? undefined
-		: 'one run drawn, so there is no edge between two of them to draw between'}
-	data-model-rule-from={tailRuns[0]?.date ?? ''}
-	data-model-rule-to={tailRuns.at(-1)?.date ?? ''}
 >
 	<Panel
 		heading="h3"
@@ -200,7 +194,28 @@
 		title="Whether the slowest articles are getting slower"
 		note="A slow end that keeps drifting is the one that eventually runs a job past its limit - one mark a run, over {nameSpan(windowDays)}."
 	>
+		<div data-model-rule={tailRuns.length > 1 ? 'yes' : 'no'}
+			data-model-rule-name="machine-latency"
+			data-model-rule-none={tailRuns.length > 1 ? undefined : 'Fewer than two measured runs leave no edge between runs to mark.'}
+			data-model-rule-from={tailRuns[0]?.date ?? ''} data-model-rule-to={tailRuns.at(-1)?.date ?? ''}>
+		<p class="lede" data-lede>
+			{slowestTenth === null ? 'No slowest-tenth reading was recorded.'
+				: `${(slowestTenth / 1000).toFixed(1)} seconds at the slowest tenth of the newest measured run.`}
+		</p>
+		<p data-comparison="The slowest articles against the middle one">The slowest articles against the middle one.</p>
 		{#if tailRuns.length === 0}
+			<div data-readout-none="No run timed enough articles to draw a percentile; agreed with Susan"
+				use:observeWidth={(px) => (tailWidth = px)}>
+				<svg data-chart-type="dateSeries" data-panel-question="is it working"
+					style="width:100%" height={tailH} viewBox={`0 0 ${tailW} ${tailH}`} role="img"
+					aria-label="Five empty percentile frames; no run timed enough articles.">
+					{#each PERCENTILES as percentile, at (percentile)}
+						{@const box = tailBox(at)}
+						<line x1={box.left} x2={box.right} y1={box.bottom} y2={box.bottom} stroke="var(--chart-axis)" />
+						<text x={box.left} y={box.top} fill="var(--chart-label)" font-size="11">p{percentile}, not measured</text>
+					{/each}
+				</svg>
+			</div>
 			<p class="empty" data-machine-panel-empty="latency">
 				No run in {nameSpan(days)} timed {floor} items, which is the floor
 				below which a p99 is just the last item.
@@ -213,6 +228,8 @@
 				<div use:observeWidth={(px) => (tailWidth = px)}>
 					<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 					<svg
+						data-chart-type="dateSeries"
+						data-panel-question="is it working"
 						class="w-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
 						height={tailH}
 						viewBox={`0 0 ${tailW} ${tailH}`}
@@ -367,15 +384,15 @@
 				</p>
 			{/if}
 			{#if missingMarkers !== null}
-				<p class="reads" data-markers-missing="machine-latency">{missingMarkers}</p>
-			{:else if tailRules.length === 0 && tailRuns.length > 1}
+				<p class="reads" data-markers-missing="machine-latency" data-model-rule-empty="machine-latency">{missingMarkers}</p>
+			{:else if tailRules.length === 0 && tailRuns.length > 1 && tailUnread.length === 0}
 				<p class="reads">
 					<span data-model-rule-empty="machine-latency">{noModelRuleNote(days)}</span>
 				</p>
 			{/if}
 
 			{#if tailUnread.length > 0}
-				<p class="reads" data-model-rule-unread="machine-latency">{unreadRuleNote(tailUnread)}</p>
+				<p class="reads" data-model-rule-unread="machine-latency" data-model-rule-empty="machine-latency">{unreadRuleNote(tailUnread)}</p>
 			{/if}
 
 			<p class="reads" data-latency-note>
@@ -416,10 +433,12 @@
 				{/each}
 			</ul>
 		{/if}
+		</div>
 	</Panel>
 </div>
 
 <style>
+	.lede { font-size: var(--text-xl); font-weight: 600; line-height: var(--leading-tight); }
 	.empty {
 		margin: var(--space-2) 0 0;
 		font-size: var(--text-sm);

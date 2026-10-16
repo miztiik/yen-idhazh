@@ -1,6 +1,6 @@
 # Whether the site outgrows the 1 GB cap
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-10-12
 GitHub Pages refuses a deploy over 1 GB, so the published site has an ending and
 the only useful question is when. A level cannot answer it and a rate can, which
 is what this section of Pipelines draws.
@@ -62,11 +62,12 @@ the room is the most we have and never the least - the two trees were 14.63
 times apart on 2026-08-30 and the multiple is not stable. A figure that printed
 a date without that clause would be optimistic by a multiple nobody can see.
 
-**The chart measures its container.** A literal `760` seed is rejected because
-every other chart on the page reads `console.chart_width`; the drawn width
-already tracks, because `Chart.svelte` owns it from mount onward through a
-`ResizeObserver`. Measured 2026-09-01 at 1440, 768 and 390, the SVG is its
-host's width to within a pixel at all three.
+**The chart measures its container.** `SiteCostPerItem.svelte` uses
+`observeWidth` and `chartWidth` from `frontend/src/lib/charts/frame.ts`.
+`console.chart_width` supplies the width before measurement; a `ResizeObserver`
+then reports the container's width. The native `dateSeries` geometry and
+`DateSeries.svelte` use that same frame, so the drawing and readout share their
+column positions.
 
 **The window bounds what is drawn and never what is differenced.** A day's cost
 is its own bytes minus the previous manifest's, so the oldest day on screen
@@ -128,11 +129,10 @@ is what the per-article chart now answers directly.
 
 **`/console/judgement/` must use the screen it is on.** A heading, two
 sentences and one bordered panel leave most of the frame empty at 1440px. The
-other three sufficiency checks were inherited rather than invented - figure
-separated from ground through the shared `.console-panel` border, surface and
-shadow; the panel was the only block in the route's own content, so there was one
-thing the eye landed on; and the route took the page title, the five-tab strip
-and the standing band from the layout before it drew anything of its own.
+shared `.console-panel` border, surface and shadow separate figure from ground;
+the panel is the route's sole block of content, and the page title, five-tab
+strip and standing band come from the shared layout. These are design
+observations, not a checklist to repeat as tests for each route.
 
 **`Stories the day merged` is what cleared it.** The route now draws a chart the
 full width of the console frame with a window control above it, so the screen

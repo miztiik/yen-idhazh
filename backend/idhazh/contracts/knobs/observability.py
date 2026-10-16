@@ -9,7 +9,7 @@ from typing import Any, Final, Self
 
 from pydantic import Field, model_validator
 
-from idhazh.contracts.base import Model, ServerJob
+from idhazh.contracts.base import Model, TaskName
 from idhazh.contracts.knobs.removed import refuse_a_removed_knob
 
 
@@ -37,9 +37,9 @@ SUPERSEDED_RETENTION_NAMES: Final[Mapping[str, str]] = MappingProxyType(
         "item_health_aggregate_keep_months": (
             "series.aggregate in config/gardener/telemetry-aggregate.json"
         ),
-        "public_telemetry_keep_months": (
-            "series.public-copy.value in config/gardener/telemetry-aggregate.json"
-        ),
+        "public_telemetry_keep_months": "",
+        "public_run_timeline_keep_months": "",
+        "telemetry_publish": "",
         "feed_health_keep_months": (
             "monthly_window.value in config/gardener/compact-feed-health.json"
         ),
@@ -191,15 +191,15 @@ class ObservabilityConfig(Model):
             "Every run records the state of this switch on its run manifest."
         ),
     )
-    telemetry_publish: bool = Field(
+    host_telemetry_enabled: bool = Field(
         default=True,
+        strict=True,
         description=(
-            "Whether a run copies its item-health rows into "
-            "frontend/public/telemetry/<YYYY-MM>.csv. False leaves that month file at "
-            "whatever the last publishing run wrote, so every console chart ends on "
-            "that date and the page says which day it read to. Nothing is lost: "
-            "the item-health ledger still holds every row, so switching it back on "
-            "republishes the gap."
+            "Master host-instrument switch. False disables Python CPU/load, "
+            "memory/page-fault, machine probes, host-row writes and host-memory artifacts. "
+            "Actual work, complete item-health records and waiting heartbeats continue. "
+            "The memory_profiling_enabled sub-control cannot override this switch. "
+            "Retire only if host instrumentation is removed."
         ),
     )
     host_fingerprint: bool = Field(
@@ -217,22 +217,38 @@ class ObservabilityConfig(Model):
             "constant and a constant is not a reading."
         ),
     )
-    host_fingerprint_bandwidth_jobs: tuple[ServerJob, ...] = Field(
-        default=(ServerJob.RUNTIME,),
+    memory_profiling_enabled: bool = Field(
+        default=True,
+        strict=True,
         description=(
-            "Which workflow jobs take the memory-bandwidth reading. A job outside "
+            "Whether host telemetry collects operating-system process and machine "
+            "memory, faults, job samples and runtime memory artifacts. False keeps "
+            "CPU, load, process identity, timing, heartbeats and "
+            "the item-health census active while memory cells stay empty with a "
+            "disabled reason. This does not control allocator profiling or the "
+            "separately configured memory-bandwidth copy. Remove this capability "
+            "only if host memory collection is removed and its consumers approve "
+            "the loss."
+        ),
+    )
+    host_fingerprint_frequency_enabled: bool = Field(
+        default=False,
+        description=(
+            "Whether the host probe reads current and reported CPU frequencies. These "
+            "optional speed readings stay unknown when off. Remove this switch only "
+            "after operators approve losing frequency observations."
+        ),
+    )
+    host_fingerprint_bandwidth_jobs: tuple[TaskName, ...] = Field(
+        default=(),
+        description=(
+            "Which task names take the memory-bandwidth reading. A task outside "
             "this list records every other cell of the fingerprint and leaves "
             "memcpy_gib_s empty, with memcpy_probe_mib at zero beside it so the row "
             "says the reading was not taken rather than implying a machine that "
-            "could not copy. "
-            "The bench alone by default, because the reading wants a gigabyte and an "
-            "idle machine: measure.yml takes it between its corpus step and its "
-            "sweep, where nothing else is running, and that is the job whose whole "
-            "purpose is to tell one machine from another. A production job that took "
-            "it would allocate twice the cache it drew and time a copy against "
-            "whatever else it had already started, which measures the run rather "
-            "than the host. Add a job here to read its bandwidth; the cell is "
-            "nullable and nothing refuses a row without it."
+            "could not copy. It is empty by default because the optional probe "
+            "allocates two buffers and competes for memory bandwidth. Add a task name "
+            "to enable it; the cell is nullable and nothing refuses a row without it."
         ),
     )
     host_fingerprint_bandwidth_floor_mib: int = Field(
@@ -310,10 +326,10 @@ class ObservabilityConfig(Model):
             "full-grain shard goes, so a reader keeps every cause breakdown and every "
             "stratum and loses the per-attempt row and its join key. Fourteen matches "
             "the two ledgers it is read beside; a shorter one would leave a day whose "
-            "failures are still readable and whose refused pictures are not. It is NOT "
-            "in full_grain_months() yet, and the reason is that no console read opens "
-            "one of these shards today - the panels that will are their own plan, and "
-            "the window joins that check in the same commit as the first of them."
+            "failures are still readable and whose refused pictures are not. No console "
+            "read opens one of these shards today - the panels that will are their own "
+            "plan, and the retention-window check joins in the same commit as the first "
+            "of them."
         ),
     )
     visual_aggregate_keep_months: int | None = Field(
@@ -324,56 +340,6 @@ class ObservabilityConfig(Model):
             "never, on the same argument as the other two aggregates: the fold is the "
             "only record that a gate ever refused anything, and it is kilobytes. Set, "
             "it must sit ABOVE visuals_full_grain_months."
-        ),
-    )
-    public_run_days_keep_months: int = Field(
-        default=14,
-        ge=1,
-        description=(
-            "How long frontend/public/run-days/ keeps a month of day rows. Fourteen "
-            "because the console reaches 367 inclusive days and those days can fall in "
-            "fourteen month shards, which is the same reason the gardener's feed-health "
-            "task keeps fourteen months. It has no state ledger to be paired with: the "
-            "source is the committed day payloads themselves, whose retention is the "
-            "archive's, and this row is a reduction of two of them to counts."
-        ),
-    )
-    public_day_metrics_keep_months: int = Field(
-        default=14,
-        ge=1,
-        description=(
-            "How long frontend/public/day-metrics/ keeps a month of day records. "
-            "Fourteen on the same argument as public_run_days_keep_months. The source "
-            "under state/day-metrics/ has no age of its own - a day record is a few "
-            "kilobytes and it is the only place a band count or an extraction census "
-            "survives once the day's items are folded - so this bounds the published "
-            "copy without claiming to bound the ledger."
-        ),
-    )
-    public_machine_keep_months: int = Field(
-        default=14,
-        ge=1,
-        description=(
-            "How long frontend/public/machine/ keeps a month of machine rows. "
-            "Fourteen on the same argument. The shard is folded from the "
-            "item-health and host-fingerprint ledgers, so it may not outlive "
-            "either source: a published month whose source months are gone cannot be "
-            "rebuilt. config.load_gardener refuses a declaration governing the "
-            "host-fingerprint ledger - its compaction - that keeps less than this, on "
-            "the argument the telemetry copy makes for its own pair."
-        ),
-    )
-    public_run_timeline_keep_months: int = Field(
-        default=2,
-        ge=1,
-        description=(
-            "How long frontend/public/run-timeline/ keeps a published shard. Two, not "
-            "fourteen, and it is the one published series no window preset can reach: "
-            "the panel draws ONE run and names it, so a month older than the newest "
-            "buys nothing a reader can select. The second month is there so a run on "
-            "the first of a month still has the day before it. At roughly a kilobyte "
-            "per item this is the widest published row we write, so keeping it at the "
-            "console's window would publish megabytes nothing fetches."
         ),
     )
     cost_currency: str = Field(
@@ -439,40 +405,6 @@ class ObservabilityConfig(Model):
         would believe they had moved a window that did not move.
         """
         return refuse_a_removed_knob("observability", data, SUPERSEDED_RETENTION_NAMES)
-
-    def full_grain_months(self) -> Mapping[str, int]:
-        """Every published window here that has to outlive what a console read can select.
-
-        The console fetches these copies: a published shard deleted while a
-        window preset still reaches it blanks the panel that draws it, and it
-        does so silently, because a month with no file is indistinguishable from
-        a month with no runs. The windows of the ledgers behind them are the
-        gardener's, and `config.load_gardener` holds those to the same read.
-        """
-        return MappingProxyType(
-            {
-                "public_run_days_keep_months": self.public_run_days_keep_months,
-                "public_day_metrics_keep_months": self.public_day_metrics_keep_months,
-                "public_machine_keep_months": self.public_machine_keep_months,
-            }
-        )
-
-    def refuse_windows_shorter_than(self, shards: int, *, window_days: int) -> None:
-        """Refuse a config that would delete a shard a console read still opens.
-
-        Checked against the shards the window selects rather than against the
-        window's own length, because a month is not thirty days and the old
-        `months * 30` comparison passed a value that is one shard short.
-        """
-        short = {
-            name: months for name, months in self.full_grain_months().items() if months < shards
-        }
-        if short:
-            spelled = ", ".join(f"observability.{name} is {value}" for name, value in short.items())
-            raise ValueError(
-                f"a {window_days}-day read can select {shards} month shards, so every "
-                f"full-grain window must keep at least {shards}: {spelled}"
-            )
 
     @model_validator(mode="after")
     def _a_summary_outlives_the_rows_it_replaces(self) -> Self:

@@ -4,18 +4,13 @@
   "lifecycle_status": "active",
   "max_deletes_per_run": null,
   "owns": [
-    "state/item-health-summary",
-    "frontend/public/telemetry"
+    "state/item-health-summary"
   ],
   "series": {
     "aggregate": {
       "unit": "forever"
     },
     "full-grain": {
-      "unit": "months",
-      "value": 14
-    },
-    "public-copy": {
       "unit": "months",
       "value": 14
     }

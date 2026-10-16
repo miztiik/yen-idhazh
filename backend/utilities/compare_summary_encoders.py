@@ -281,6 +281,36 @@ def stage_pairs(args: argparse.Namespace) -> None:
 
 
 def stage_score(args: argparse.Namespace) -> None:
+    from idhazh import config
+    from idhazh.contracts.base import ServerJob
+    from idhazh.stages import common
+    from idhazh.telemetry import task_telemetry
+    from idhazh.telemetry.host_control import enabled
+
+    host_settings = config.load()
+    memory = enabled(host_settings.app.observability) and (
+        host_settings.app.observability.memory_profiling_enabled
+    )
+    date = args.date
+    execution = args.execution or os.environ.get("GITHUB_RUN_ID")
+    commit = args.commit or os.environ.get("GITHUB_SHA")
+    date = date or time.strftime("%Y-%m-%d", time.gmtime())
+    if not execution or not commit:
+        _score(args, memory_profiling_enabled=memory)
+        return
+    with task_telemetry.record(
+        date=date,
+        run_id=f"{date}-{execution}",
+        settings=host_settings,
+        state_root=common.state_root_of(host_settings, base=common.STATE_ROOT),
+        commit_sha=commit,
+        job=ServerJob.COLLECT,
+        shard=args.shard,
+    ):
+        _score(args, memory_profiling_enabled=memory)
+
+
+def _score(args: argparse.Namespace, *, memory_profiling_enabled: bool) -> None:
     """Encode in batches, writing the reading after every one.
 
     The write is atomic - a temporary file and a rename - so a shard killed
@@ -333,7 +363,7 @@ def stage_score(args: argparse.Namespace) -> None:
         beside.replace(args.out)
 
     def peak_memory_gb() -> float | None:
-        if sys.platform == "win32":
+        if not memory_profiling_enabled or sys.platform == "win32":
             return None
         else:
             import resource
@@ -654,6 +684,10 @@ def main() -> None:
         type=Path,
         help="keep the vectors, so a later job can ask where encoders disagree",
     )
+    one.add_argument("--date")
+    one.add_argument("--execution")
+    one.add_argument("--commit")
+    one.add_argument("--shard", type=int, default=0)
     one.set_defaults(run=stage_score)
 
     merge = stages.add_parser("collect", help="merge the readings")

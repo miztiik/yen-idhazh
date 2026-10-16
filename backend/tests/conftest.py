@@ -209,7 +209,9 @@ def seed_host_fingerprint(
     """
     by_job: dict[tuple[str, ServerJob, int], list[HostFingerprintRow]] = {}
     for row in rows:
-        by_job.setdefault((row.run_id, row.job, row.shard), []).append(row)
+        if row.job is None:
+            raise ValueError("this history fixture requires legacy job identities")
+        by_job.setdefault((row.run_id, ServerJob(row.job), row.shard), []).append(row)
     filed = 0
     for (run_id, job, shard), held in by_job.items():
         if ledger.persist(

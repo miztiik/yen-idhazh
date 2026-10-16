@@ -47,6 +47,7 @@ from idhazh import day_partition
 from idhazh.contracts.base import Contract
 from idhazh.contracts.file_envelope import FileEnvelope, Tier
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.run_shards import RunShards
 from idhazh.ledger import paths
 from idhazh.ledger.keys import preference_for
 from idhazh.ledger.persist import StoredRow, load_stored, read_envelope
@@ -262,6 +263,13 @@ def settle_rows[C: Contract](
     kept or dropped whole, and a cell only the dropped row filled is named in a
     warning.
     """
+    # Count corrections must not inherit the first-wins rule of run-plan,
+    # whose business key is also (date, run_id).
+    ledgers = {held.identity.ledger for rows in files for held in rows}
+    if LedgerName.RUN_SHARDS in ledgers:
+        if ledgers != {LedgerName.RUN_SHARDS}:
+            raise ValueError("count settlement requires only run-shards rows")
+        return _settle_run_shards(files, key)
     prefers = preference_for(key)
     current: dict[str, tuple[int, int]] = {}
     for position, rows in enumerate(files):
@@ -282,6 +290,35 @@ def settle_rows[C: Contract](
             winner, loser = (held, incumbent) if later_wins else (incumbent, held)
             kept[record] = winner
             _say_what_was_dropped(record, winner.row, loser.row)
+    return list(kept.values())
+
+
+def _settle_run_shards[C: Contract](
+    files: Sequence[Sequence[StoredRow[C]]], key: tuple[str, ...]
+) -> list[StoredRow[C]]:
+    """Last filed numeric count, using original envelope order through every packing.
+
+    A later unknown never erases a measurement. Retaining the original filing
+    order makes settlement associative: a packing schedule cannot choose a
+    different correction, nor can a compact file's own new clock promote it.
+    """
+    kept: dict[tuple[str, ...], StoredRow[C]] = {}
+
+    def rank(held: StoredRow[C]) -> tuple[bool, int, str]:
+        if held.provenance is None:
+            raise ValueError("run-shards requires its original filing provenance")
+        return (
+            cast(RunShards, held.row).shards is not None,
+            held.provenance.written_at_ms,
+            held.provenance.file_id,
+        )
+
+    for rows in files:
+        for held in rows:
+            record = tuple(str(getattr(held.row, name)) for name in key)
+            incumbent = kept.get(record)
+            if incumbent is None or rank(held) > rank(incumbent):
+                kept[record] = held
     return list(kept.values())
 
 

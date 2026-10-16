@@ -6,6 +6,10 @@ inherits nothing from the venue it runs in. The direction of the dependency is
 the whole point: registration points a judge at the council, never the council
 at a judge.
 
+Only active judges are hosted. Status and model need are declarations read
+before importing this protocol's implementation, not additional protocol members.
+A model-free judge declares runs_model false and restores no weights.
+
 Nothing here names a judge, and nothing here needs one to be declared,
 instantiated or type-checked.
 """
@@ -54,7 +58,7 @@ class ShardResult:
     reads no field of it by name.
     """
 
-    #: How the unit ended. The council files this and never infers it.
+    #: How returned work ended. FAILED is reserved for the council's raised-unit record.
     outcome: ShardOutcome
 
     #: How many model calls the unit made. Null, not zero, for a tenant that runs

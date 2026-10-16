@@ -12,11 +12,13 @@ from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.telemetry import job_machine
+from idhazh.telemetry import task_telemetry
 
 DAY = "2026-09-27"
 RUN = f"{DAY}-18012345678"
 START = datetime(2026, 9, 27, 0, 40, tzinfo=UTC)
+
+
 
 
 @pytest.mark.parametrize("fails", [False, True], ids=["success", "failed-work"])
@@ -29,13 +31,14 @@ def test_both_halves_name_one_attempt_and_clock_the_work(
     written: list[Path] = []
 
     def work() -> None:
-        with job_machine.record(
+        with task_telemetry.record(
             date=DAY,
             run_id=RUN,
             settings=settings,
             state_root=tmp_path,
             commit_sha=SEED_COMMIT,
-            job=ServerJob.RUN_TASKS,
+            pipeline_name="gardener",
+            task_name="run-tasks",
             shard=3,
             attempt=2,
             started_at=START,
@@ -56,11 +59,15 @@ def test_both_halves_name_one_attempt_and_clock_the_work(
         tmp_path, LedgerName.HOST_FINGERPRINT, [DAY], model=HostFingerprintRow
     )
     assert row.job_seconds == 60
-    assert row.fingerprint is not None
-    assert (row.job, row.shard, row.run_id) == (ServerJob.RUN_TASKS, 3, RUN)
+    assert (row.pipeline_name, row.task_name) == ("gardener", "run-tasks")
+    assert (row.job, row.shard, row.run_id) == (None, 3, RUN)
     files = ledger.list_raw_files(tmp_path, LedgerName.HOST_FINGERPRINT, days={DAY})
     assert len(files) == 2 and {f.envelope.identity.attempt for f in files} == {2}
     assert len({f.envelope.unit_id for f in files}) == 1
+    assert {
+        (f.envelope.identity.pipeline_name, f.envelope.identity.task_name) for f in files
+    } == {("gardener", "run-tasks")}
+    assert all(f.envelope.identity.job is None for f in files)
     if not fails:
         assert set(written) == {f.path for f in files}
 
@@ -68,7 +75,7 @@ def test_both_halves_name_one_attempt_and_clock_the_work(
 def test_disabled_recording_writes_neither_half(tmp_path: Path) -> None:
     settings = config.load()
     settings.app.observability.host_fingerprint = False
-    with job_machine.record(
+    with task_telemetry.record(
         date=DAY,
         run_id=RUN,
         settings=settings,
@@ -87,7 +94,7 @@ def test_instrument_io_failure_is_reported_without_losing_the_work(
     settings.app.observability.host_fingerprint_bandwidth_floor_mib = 0
     blocked = tmp_path / "not-a-directory"
     blocked.write_text("blocked", encoding="ascii")
-    with job_machine.record(
+    with task_telemetry.record(
         date=DAY,
         run_id=RUN,
         settings=settings,

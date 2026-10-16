@@ -17,6 +17,21 @@ on:
           - corpus
           - batched
           - budgets
+      memory_profiling:
+        description: 'OS memory and fault collection; inherit reads shared config'
+        type: choice
+        default: inherit
+        options:
+          - inherit
+          - 'on'
+          - 'off'
+      host_telemetry:
+        description: 'Python host collector, or off for all host telemetry'
+        type: choice
+        default: python
+        options:
+          - python
+          - 'off'
       # ONE argument names the candidate, and it is the same line a swap moves:
       # the models file. Every fact about a candidate is already written there,
       # and a form that asked for them again could bench one set of bytes while
@@ -131,6 +146,8 @@ env:
   # root's `model_server.base_url`, so no part of this repository spells the
   # number twice (Guardrail #6).
   MODEL_SERVER_PROBE: 'http://127.0.0.1:8080'
+  IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry || 'python' }}
+  MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
 
 jobs:
   # The model refs, read once from config and published to every target that
@@ -242,7 +259,26 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: pip install -e .
+      - name: Resolve host telemetry
+        id: host_telemetry
+        env:
+          REQUESTED: ${{ inputs.host_telemetry || 'python' }}
+        run: |
+          set -euo pipefail
+          MODE=$(python backend/utilities/host_telemetry_control.py "$REQUESTED" --config-root config)
+          echo "IDHAZH_HOST_TELEMETRY_MODE=$MODE" >> "$GITHUB_ENV"
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+
       - name: Record runner hardware
+        if: env.IDHAZH_HOST_TELEMETRY_MODE != 'off'
         run: |
           set -euo pipefail
           mkdir -p backend/var
@@ -379,6 +415,7 @@ jobs:
           CANDIDATE_ID: ${{ needs.models.outputs.candidate_id }}
           CANDIDATE_QUANTISATION: ${{ needs.models.outputs.candidate_quantisation }}
           THREAD_COUNTS: ${{ inputs.threads }}
+          MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
         run: |
           set -euo pipefail
           max_threads=$(( $(nproc) * 2 ))
@@ -393,7 +430,14 @@ jobs:
               exit 2
             fi
           done
+          BENCH_DATE="$(date -u +%F)"
+          MEMORY_ARGS=()
+          if [ "$MEMORY_PROFILING" != "inherit" ]; then
+            MEMORY_ARGS=(--memory-profiling "$MEMORY_PROFILING")
+          fi
           python3 backend/utilities/measure_llm.py bench \
+            --date "$BENCH_DATE" --execution "$GITHUB_RUN_ID" --commit "$GITHUB_SHA" \
+            "${MEMORY_ARGS[@]}" \
             --models "$CANDIDATE_REF" \
             --expect-sha256 "$CANDIDATE_SHA256" \
             --candidate-id "$CANDIDATE_ID" \
@@ -401,6 +445,7 @@ jobs:
             --threads "$THREAD_COUNTS" \
             --binary "$LLAMA_BIN/llama-bench" \
             --readings backend/var/bench/raw-case.json
+
 
       # The rates, on the run page. They used to reach a reader only through a
       # 90-day artifact, so reading them meant downloading a file - and the
@@ -435,6 +480,15 @@ jobs:
           path: backend/var/
           retention-days: 90
 
+      - name: Upload the benchmark host record
+        if: always() && env.IDHAZH_HOST_TELEMETRY_MODE == 'python'
+        uses: actions/upload-artifact@v7
+        with:
+          name: bench-host
+          path: state/raw/host-fingerprint/
+          retention-days: 90
+          if-no-files-found: ignore
+
   corpus:
     name: How long real articles are
     if: ${{ inputs.target == 'corpus' }}
@@ -454,11 +508,6 @@ jobs:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: pyproject.toml
-
-      - name: Record runner hardware
-        run: |
-          echo "nproc=$(nproc)"
-          lscpu | grep -E 'Model name' | head -1
 
       - name: Install the package
         run: pip install -e "."
@@ -532,26 +581,6 @@ jobs:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: pyproject.toml
-
-      - name: Record runner hardware
-        run: |
-          set -euo pipefail
-          mkdir -p backend/var/runtime-sweep
-          {
-            echo "measured_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            echo "runner=${RUNNER_OS:-unknown}"
-            echo "nproc=$(nproc)"
-            echo "nproc_all=$(nproc --all)"
-            echo "getconf_online=$(getconf _NPROCESSORS_ONLN)"
-            if [ -r /sys/fs/cgroup/cpu.max ]; then
-              echo "cgroup_cpu_max=$(cat /sys/fs/cgroup/cpu.max)"
-            fi
-            grep '^Cpus_allowed_list:' /proc/self/status
-            free -g | sed -n '1,2p'
-            lscpu
-            echo "cpu_core_map:"
-            lscpu -p=CPU,CORE,SOCKET,NODE
-          } | tee backend/var/runtime-sweep/hardware.txt
 
       - name: Install
         run: pip install -e .
@@ -652,6 +681,46 @@ jobs:
           models_file: ${{ needs.models.outputs.candidate_models_file }}
           trial_state: pipeline-tests
 
+      - name: Resolve host telemetry
+        id: host_telemetry
+        env:
+          REQUESTED: ${{ inputs.host_telemetry || 'python' }}
+        run: |
+          set -euo pipefail
+          MODE=$(python backend/utilities/host_telemetry_control.py "$REQUESTED" --config-root backend/var/candidate-config)
+          echo "IDHAZH_HOST_TELEMETRY_MODE=$MODE" >> "$GITHUB_ENV"
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+
+      - name: Record runner hardware
+        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'python'
+        run: |
+          set -euo pipefail
+          mkdir -p backend/var/runtime-sweep
+          {
+            echo "measured_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "runner=${RUNNER_OS:-unknown}"
+            echo "nproc=$(nproc)"
+            echo "nproc_all=$(nproc --all)"
+            echo "getconf_online=$(getconf _NPROCESSORS_ONLN)"
+            if [ -r /sys/fs/cgroup/cpu.max ]; then
+              echo "cgroup_cpu_max=$(cat /sys/fs/cgroup/cpu.max)"
+            fi
+            grep '^Cpus_allowed_list:' /proc/self/status
+            free -g | sed -n '1,2p'
+            lscpu
+            echo "cpu_core_map:"
+            lscpu -p=CPU,CORE,SOCKET,NODE
+          } | tee backend/var/runtime-sweep/hardware.txt
+
+      - name: Resolve runtime memory collection
+        env:
+          MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
+        run: >-
+          python3 backend/utilities/memory_profiling_control.py
+          "${MEMORY_PROFILING:-inherit}"
+          --config-root backend/var/candidate-config
+          --write
+
       # `--execution` is the GitHub run id for the reason digest.yml gives: two
       # dispatches on one day would otherwise compute the same run id, and the
       # machine record is keyed on it - so the second dispatch's host would read
@@ -715,6 +784,7 @@ jobs:
       # and before the sweep because the bandwidth reading wants a gigabyte and
       # an idle machine - the same order the `work` job uses around its server.
       - name: What machine this bench drew
+        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'python'
         run: |
           set -euo pipefail
           python backend/utilities/record_publish.py run measure fingerprint \
@@ -735,11 +805,19 @@ jobs:
           # first server start of this job measures, so the summary records it
           # rather than asserting it.
           GGUF_CACHE_HIT: ${{ steps.weights.outputs.cache-hit == 'true' }}
+          MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
         run: |
           set -euo pipefail
+          MEMORY_ARGS=()
+          if [ "$MEMORY_PROFILING" != "inherit" ]; then
+            MEMORY_ARGS=(--memory-profiling "$MEMORY_PROFILING")
+          fi
           python3 backend/utilities/runtime_sweep.py sweep \
+            --config backend/var/candidate-config \
             --date "$RUNTIME_DATE" \
             --execution "${{ github.run_id }}" \
+            --commit "$GITHUB_SHA" \
+            "${MEMORY_ARGS[@]}" \
             --candidate "$RUNTIME_CANDIDATE" \
             --candidate-file "$CANDIDATE_FILE" \
             --candidate-id "$CANDIDATE_ID" \
@@ -747,6 +825,7 @@ jobs:
             --threads "$RUNTIME_THREADS" \
             --threads-batch "$RUNTIME_THREADS_BATCH" \
             --gguf-cache-hit "$GGUF_CACHE_HIT"
+
 
       # Only when there is one to read. A bypassed speed case writes no
       # `bench-raw` artifact at all, and a download that named a missing
@@ -820,7 +899,7 @@ jobs:
       # `continue-on-error` because a lost push must not turn a five-hour
       # measurement into a red run.
       - name: Commit the machine this bench drew
-        if: always()
+        if: always() && env.IDHAZH_HOST_TELEMETRY_MODE == 'python'
         continue-on-error: true
         env:
           COMMIT_MESSAGE: "bench: the machine ${{ inputs.runtime_candidate }} drew"
@@ -828,7 +907,9 @@ jobs:
           PUSH_FAILED_MESSAGE: "could not push the bench host record"
         run: |
           if [ -d state/raw/pipeline-tests/host-fingerprint ]; then
-            python backend/utilities/record_publish.py land measure
+            python backend/utilities/record_publish.py land measure \
+              --date "$RUNTIME_DATE" --execution "$GITHUB_RUN_ID" \
+              --commit "$GITHUB_SHA" --job runtime
           else
             echo "$NOTHING_STAGED_MESSAGE"
           fi
@@ -840,6 +921,15 @@ jobs:
           name: bench-server-${{ inputs.runtime_candidate }}
           path: backend/var/runtime-sweep/
           retention-days: 90
+
+      - name: Upload the runtime host record
+        if: always() && env.IDHAZH_HOST_TELEMETRY_MODE == 'python'
+        uses: actions/upload-artifact@v7
+        with:
+          name: bench-server-host-${{ inputs.runtime_candidate }}
+          path: state/raw/pipeline-tests/host-fingerprint/
+          retention-days: 90
+          if-no-files-found: ignore
 
   # Three constants in this repository were sized by asking a tokenizer a
   # question, and `idhazh.measured.SIZED_BY_A_READING_HERE` says which. A model
@@ -1060,32 +1150,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Record runner hardware
-        run: |
-          set -euo pipefail
-          mkdir -p backend/var/batched-bench
-          {
-            echo "measured_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            echo "runner=${RUNNER_OS:-unknown}"
-            echo "nproc=$(nproc)"
-            echo "nproc_all=$(nproc --all)"
-            echo "runner_image_os=${ImageOS:-unknown}"
-            echo "runner_image_version=${ImageVersion:-unknown}"
-            if [ -r /sys/fs/cgroup/cpu.max ]; then
-              echo "cgroup_cpu_max=$(cat /sys/fs/cgroup/cpu.max)"
-            fi
-            grep '^Cpus_allowed_list:' /proc/self/status
-            free -g | sed -n '1,2p'
-            lscpu
-            echo "cpu_core_map:"
-            lscpu -p=CPU,CORE,SOCKET,NODE
-          } | tee backend/var/batched-bench/hardware.txt
-
       - name: Install pinned llama.cpp
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          mkdir -p backend/var/batched-bench
           URL=$(curl -fsS -H "Authorization: Bearer ${GITHUB_TOKEN}" \
             "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/${LLAMA_CPP_BUILD}" \
             | jq -r --arg asset "$LLAMA_CPP_ASSET" \

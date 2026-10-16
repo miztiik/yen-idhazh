@@ -30,9 +30,10 @@ import re
 import uuid
 from collections.abc import Mapping
 from enum import StrEnum
-from typing import Annotated, ClassVar, Final, Self, assert_never
+from types import MappingProxyType
+from typing import Annotated, ClassVar, Final, Literal, Self, assert_never, cast
 
-from pydantic import Field, StringConstraints, model_validator
+from pydantic import ConfigDict, Field, StringConstraints, model_validator
 
 from idhazh.contracts.base import (
     DATE_PATTERN,
@@ -42,12 +43,15 @@ from idhazh.contracts.base import (
     CommitSha,
     Contract,
     DateStamp,
+    JobName,
     Model,
     PeriodStamp,
+    PipelineName,
     RunId,
     SchemaVersion,
     ServerJob,
     Sha256,
+    TaskName,
 )
 from idhazh.contracts.ledger_name import LedgerName
 
@@ -94,9 +98,6 @@ _DAY: Final = re.compile(DATE_PATTERN)
 _MONTH: Final = re.compile(MONTH_PATTERN)
 _YEAR: Final = re.compile(YEAR_PATTERN)
 
-#: The module that wrote a file, as a dotted name inside the ledger package.
-_WRITER_PATTERN: Final = r"^idhazh\.ledger\.[a-z_]+$"
-
 #: The keys `as_metadata` writes, in the order the envelope's table lists them.
 #: A key outside this set is refused on the way back in, the way `extra="forbid"`
 #: refuses an unknown field.
@@ -111,6 +112,8 @@ _KEYS: Final = (
     "run_id",
     "attempt",
     "job",
+    "pipeline_name",
+    "task_name",
     "shard",
     "producer",
     "unit_id",
@@ -123,8 +126,24 @@ _KEYS: Final = (
     "built_from",
 )
 
-#: The keys that may be absent: a raw file names no period and read no sources.
-_OPTIONAL_KEYS: Final = frozenset({"period", "built_from"})
+#: A generic writer has pipeline/task identity and no legacy job key.
+_OPTIONAL_KEYS: Final = frozenset(
+    {"job", "period", "built_from", "pipeline_name", "task_name"}
+)
+_ENVELOPE_VERSIONS: Final = frozenset(
+    {
+        "2026-10-14",
+        "2026-09-25",
+        "2026-09-27",
+        "2026-09-28",
+        "2026-09-30",
+        "2026-10-01",
+        "2026-10-01T16:50",
+        "2026-10-06",
+        "2026-10-10",
+        "2026-10-12",
+    }
+)
 
 
 def covers_fits(covers: str, *, tier: Tier, period: Period | None) -> bool:
@@ -150,11 +169,7 @@ def covers_fits(covers: str, *, tier: Tier, period: Period | None) -> bool:
 
 
 class WriterIdentity(Model):
-    """Which run, attempt, job, shard and module wrote a file, and from which tree.
-
-    No field is nullable and none has a default: an identity with a hole in it
-    cannot mint a name.
-    """
+    """Which run, attempt, task, shard and module wrote a file, and from which tree."""
 
     run_id: RunId = Field(description="The run that wrote the file: `<YYYY-MM-DD>-<execution>`.")
     attempt: int = Field(
@@ -165,7 +180,15 @@ class WriterIdentity(Model):
             "union ranks on: the highest attempt at one work unit wins."
         ),
     )
-    job: ServerJob = Field(description="The workflow job that wrote the file.")
+    job: ServerJob | JobName | None = Field(
+        description="The legacy workflow job name, absent for a generic pipeline/task identity."
+    )
+    pipeline_name: PipelineName | None = Field(
+        default=None, description="The pipeline that wrote a generic telemetry record."
+    )
+    task_name: TaskName | None = Field(
+        default=None, description="The task within a generic telemetry pipeline."
+    )
     shard: int = Field(ge=0, description="Which shard of that job, from 0.")
     producer: str = Field(
         min_length=1,
@@ -180,6 +203,61 @@ class WriterIdentity(Model):
         description="The commit the writing run checked out: what ties a file to the code."
     )
 
+    @model_validator(mode="after")
+    def _has_one_job_identity(self) -> Self:
+        if (self.pipeline_name is None) != (self.task_name is None):
+            raise ValueError("writer identity requires both pipeline_name and task_name")
+        if self.task_name is None and self.job is None:
+            raise ValueError("writer identity requires a legacy job or pipeline and task")
+        if self.task_name is not None and self.job not in (None, self.task_name):
+            raise ValueError("generic writer job must be absent or match its task")
+        return self
+
+    @property
+    def task_key(self) -> str:
+        """A string key for callers that need one name for either identity form."""
+        if self.job is not None:
+            return str(self.job)
+        if self.pipeline_name is None or self.task_name is None:
+            raise ValueError("writer identity has no task key")
+        return f"{self.pipeline_name}-{self.task_name}"
+
+    @classmethod
+    def for_pipeline_task(
+        cls,
+        *,
+        run_id: RunId,
+        attempt: int,
+        pipeline_name: PipelineName,
+        task_name: TaskName,
+        shard: int,
+        producer: str,
+        git_sha: CommitSha,
+    ) -> Self:
+        """Build a reusable identity without requiring a workflow-job enum."""
+        return cls(
+            run_id=run_id,
+            attempt=attempt,
+            job=None,
+            pipeline_name=pipeline_name,
+            task_name=task_name,
+            shard=shard,
+            producer=producer,
+            git_sha=git_sha,
+        )
+
+
+class EnvelopeWriterIdentity(WriterIdentity):
+    """The immutable identity nested inside a file envelope."""
+
+    model_config = ConfigDict(frozen=True, revalidate_instances="always")
+
+    def __eq__(self, other: object) -> bool:
+        """Keep identity equality structural across the mutable/immutable boundary."""
+        if isinstance(other, WriterIdentity):
+            return self.model_dump() == other.model_dump()
+        return NotImplemented
+
 
 #: A version 5 UUID in its canonical lower-case spelling: a row's `unit_id` cell.
 _UNIT_ID_PATTERN: Final = (
@@ -188,7 +266,7 @@ _UNIT_ID_PATTERN: Final = (
 
 
 class RowIdentity(Model):
-    """The seven cells the ledger door stamps on every row: which writer filed it, and which try.
+    """The cells the ledger door stamps on every row: which writer filed it, and which try.
 
     Columns rather than footer keys, because a query groups on them: a union
     keeps the highest `attempt` per `unit_id`, and a bad run is traced by
@@ -198,6 +276,11 @@ class RowIdentity(Model):
     that lands after a day was compacted can still replace its first attempt.
     """
 
+    __column_versions__: ClassVar[Mapping[str, str]] = MappingProxyType({
+        "pipeline_name": "2026-10-12",
+        "task_name": "2026-10-12",
+    })
+
     ledger: LedgerName = Field(description="The ledger the row was filed into.")
     covers: DateStamp = Field(
         description="The UTC day the raw file that first held the row covers."
@@ -206,7 +289,11 @@ class RowIdentity(Model):
     attempt: int = Field(
         ge=1, description="Which try at that run filed it. The union keeps the highest."
     )
-    job: ServerJob = Field(description="The workflow job that filed the row.")
+    job: ServerJob | JobName | None = Field(
+        description="The legacy workflow job name, absent for a generic pipeline/task identity."
+    )
+    pipeline_name: PipelineName | None = Field(default=None)
+    task_name: TaskName | None = Field(default=None)
     shard: int = Field(ge=0, description="Which shard of that job, from 0.")
     unit_id: Annotated[str, StringConstraints(pattern=_UNIT_ID_PATTERN)] = Field(
         description=(
@@ -215,36 +302,47 @@ class RowIdentity(Model):
         )
     )
 
+    @model_validator(mode="after")
+    def _has_one_job_identity(self) -> Self:
+        if (self.pipeline_name is None) != (self.task_name is None):
+            raise ValueError("row identity requires both pipeline_name and task_name")
+        if self.task_name is None and self.job is None:
+            raise ValueError("row identity requires a legacy job or pipeline and task")
+        if self.task_name is not None and self.job not in (None, self.task_name):
+            raise ValueError("generic row job must be absent or match its task")
+        return self
+
 
 class FileEnvelope(Contract):
     """What one ledger file holds, written inside the file so its name is never parsed."""
 
+    model_config = ConfigDict(frozen=True, revalidate_instances="always")
     __schema_stem__: ClassVar[str] = "file-envelope"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-14",
+            change="Store generic pipeline and task names without a legacy job value.",
+            why="Shared ledgers group reusable telemetry by its separate identity columns.",
+        ),
+        ChangelogEntry(
+            version="2026-10-12",
+            change="Add generic pipeline and task writer identity.",
+            why="Shared telemetry must not require a closed workflow-job list.",
+        ),
+        ChangelogEntry(
+            version="2026-10-10",
+            change="Read corrected host history with its recorded file envelope.",
+            why="Previously published host rows remain readable after collector retirement.",
+        ),
         ChangelogEntry(
             version="2026-10-06",
             change="Writer identity `job` may name `operator`.",
             why="A person-run command now writes a door ledger.",
         ),
         ChangelogEntry(
-            version="2026-10-01T16:50",
-            change="Remove the retired aggregate from the ledger vocabulary.",
-            why="Only declared families may reach a ledger file; surviving fields are unchanged.",
-        ),
-        ChangelogEntry(
             version="2026-10-01",
-            change="ledger may name summary-quality-evals, and scores is refused.",
-            why="The eval ledger is named for what it holds; its files were rewritten.",
-        ),
-        ChangelogEntry(
-            version="2026-09-30",
-            change="period may be yearly, and covers then holds a UTC year, YYYY.",
-            why="A finished year's month files may be packed into one year file.",
-        ),
-        ChangelogEntry(
-            version="2026-09-28",
             change="Earlier changes are in this file's git history.",
-            why="The changelog keeps the four newest changes and one history pointer.",
+            why="Git is the archive for older shape changes.",
         ),
     )
 
@@ -296,7 +394,12 @@ class FileEnvelope(Contract):
             "two files can be told apart after a rename and a copy proven a copy."
         )
     )
-    writer: Annotated[str, StringConstraints(pattern=_WRITER_PATTERN)] = Field(
+    writer: Literal[
+        "idhazh.ledger.parquet",
+        "idhazh.ledger.json_lines",
+        "idhazh_rust.ledger.parquet",
+        "idhazh_rust.ledger.json_lines",
+    ] = Field(
         description=(
             "The ledger module that wrote the file. A parquet footer's own `created_by` "
             "names the engine, not this project."
@@ -315,6 +418,19 @@ class FileEnvelope(Contract):
         ge=0,
         description="On a compact file, how many files were read to make it. Absent on raw.",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _freeze_writer_identity(cls, data: object) -> object:
+        if isinstance(data, Mapping):
+            identity = data.get("identity")
+            if isinstance(identity, WriterIdentity):
+                identity = identity.model_dump()
+            if isinstance(identity, Mapping):
+                declared = cast("type[WriterIdentity]", cls.model_fields["identity"].annotation)
+                target = EnvelopeWriterIdentity if declared is WriterIdentity else declared
+                return dict(data) | {"identity": target.model_validate(identity)}
+        return data
 
     @model_validator(mode="after")
     def _the_period_fits_the_tier(self) -> Self:
@@ -350,12 +466,37 @@ class FileEnvelope(Contract):
             )
         return self
 
+    @model_validator(mode="after")
+    def _writer_scope_is_finite(self) -> Self:
+        if self.version not in _ENVELOPE_VERSIONS:
+            raise ValueError("unrecognized file envelope version")
+        if self.writer.startswith("idhazh_rust.") and (
+            self.version != "2026-10-10"
+            or self.row_schema_version != "2026-10-10"
+            or self.ledger is not LedgerName.HOST_FINGERPRINT
+            or self.tier is not Tier.RAW
+            or self.identity.producer != "telemetry.silicon"
+        ):
+            raise ValueError("historical host writer requires its recorded raw host contract")
+        if self.writer.endswith(".json_lines") and self.compression is not Compression.NONE:
+            raise ValueError("JSON lines must record compression none")
+        return self
+
+    def validate_container(self, container: Format) -> Self:
+        """Validate provenance against the container detected from the file bytes."""
+        container = Format(container)
+        expected = ".parquet" if container is Format.PARQUET else ".json_lines"
+        if not self.writer.endswith(expected):
+            raise ValueError("writer does not match the observed container")
+        return self
+
     def as_metadata(self) -> dict[bytes, bytes]:
         """Every key as UTF-8 bytes, the one place a value becomes a string.
 
         `attempt` and `shard` are zero-padded to two digits; `period` and
-        `built_from` are left out when they are absent. Two fields are kept under a
-        key of another name: `version` as `envelope_version`, because the file's
+        `built_from` and the legacy `job` key are left out when absent. Two
+        fields are kept under a key of another name: `version` as
+        `envelope_version`, because the file's
         rows have a version of their own, and `row_schema_version` as
         `schema_version`.
         """
@@ -369,7 +510,9 @@ class FileEnvelope(Contract):
             "written_at_ms": str(self.written_at_ms),
             "run_id": self.identity.run_id,
             "attempt": f"{self.identity.attempt:02d}",
-            "job": self.identity.job.value,
+            "job": str(self.identity.job) if self.identity.job is not None else None,
+            "pipeline_name": self.identity.pipeline_name,
+            "task_name": self.identity.task_name,
             "shard": f"{self.identity.shard:02d}",
             "producer": self.identity.producer,
             "unit_id": str(self.unit_id),
@@ -395,6 +538,9 @@ class FileEnvelope(Contract):
         refuses an unknown field; a required key that is missing is refused too.
         Every value is then validated by the fields themselves.
         """
+        for key in (b"attempt", b"shard", b"written_at_ms", b"built_from"):
+            if key in mapping and re.fullmatch(rb"[0-9]+", mapping[key]) is None:
+                raise ValueError(f"{key.decode()} metadata must be ASCII decimal")
         text = {key.decode("utf-8"): value.decode("utf-8") for key, value in mapping.items()}
         unknown = sorted(set(text) - set(_KEYS))
         if unknown:
@@ -402,6 +548,12 @@ class FileEnvelope(Contract):
         missing = sorted(set(_KEYS) - _OPTIONAL_KEYS - set(text))
         if missing:
             raise ValueError(f"the envelope is missing required keys: {missing}")
+        job: ServerJob | str | None = text.get("job")
+        if job is not None and not text.get("pipeline_name") and not text.get("task_name"):
+            try:
+                job = ServerJob(job)
+            except ValueError:
+                pass
         return cls.model_validate(
             {
                 "version": text["envelope_version"],
@@ -414,7 +566,9 @@ class FileEnvelope(Contract):
                 "identity": {
                     "run_id": text["run_id"],
                     "attempt": int(text["attempt"]),
-                    "job": text["job"],
+                    "job": job,
+                    "pipeline_name": text.get("pipeline_name"),
+                    "task_name": text.get("task_name"),
                     "shard": int(text["shard"]),
                     "producer": text["producer"],
                     "git_sha": text["git_sha"],

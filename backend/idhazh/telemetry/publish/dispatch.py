@@ -5,10 +5,8 @@ it (CLAUDE.md section 1a), and this file does three things: it names the order,
 it hands each unit the inputs that unit takes, and it reports the route it took.
 Nothing here derives a path, encodes a row or decides what a payload says.
 
-The order is the contract. `day-metrics` writes the record the public series and
-the band then read, and the band is last because it reads the run-day shards the
-step above it wrote - deriving either from the day payloads instead would be the
-walk those shards exist to remove (Guardrail #12).
+The order is the contract. `day-metrics` writes the native state record the
+band reads. The band is last, after the native day and telemetry are available.
 """
 
 from __future__ import annotations
@@ -28,10 +26,6 @@ from idhazh.contracts.source_health_view import SourceHealthView
 from idhazh.telemetry.publish import (
     console_band,
     day_metrics,
-    machine,
-    public_telemetry,
-    run_days,
-    run_timeline,
     series,
     source_health,
 )
@@ -48,16 +42,10 @@ class Projection:
 #: Every payload a publication step writes, in the order it writes them. This
 #: tuple IS the route: `publish_all` walks it and dispatches by name, so a
 #: projection listed here runs exactly once and one that is not listed never
-#: runs. `day_metrics` appears twice because it writes two payloads - the day's
-#: record under `state/`, and the month series the console fetches.
+#: runs. `day_metrics` writes only the day's native record under `state/`.
 PROJECTIONS: Final[tuple[Projection, ...]] = (
-    Projection("telemetry", "public_telemetry"),
     Projection("source-health", "source_health"),
     Projection("day-metrics", "day_metrics"),
-    Projection("machine", "machine"),
-    Projection("run-timeline", "run_timeline"),
-    Projection("public-day-metrics", "day_metrics"),
-    Projection("run-days", "run_days"),
     Projection("console-band", "console_band"),
 )
 
@@ -104,7 +92,6 @@ def publish_all(
     driving the pipeline from a temporary tree must never reach them - that is
     how a run over fixtures once truncated the committed telemetry projection.
     """
-    observability = settings.app.observability
     #: The one projection another projection reads. Keeping the view the
     #: source-health step folded means the band opens no file for it.
     folded: list[SourceHealthView] = []
@@ -124,13 +111,6 @@ def publish_all(
         )
 
     writers: dict[str, Callable[[], object]] = {
-        "telemetry": lambda: public_telemetry.publish(
-            state_root=state_root,
-            public_root=(
-                series.console_root(digest_root) / public_telemetry.PUBLIC_TELEMETRY_DIRNAME
-            ),
-            months={month},
-        ),
         "source-health": _fold_source_health,
         "day-metrics": lambda: day_metrics.publish(
             state_root=state_root,
@@ -138,37 +118,6 @@ def publish_all(
             day=day,
             manifest=manifest,
             taxonomy_vectors=taxonomy_vectors,
-        ),
-        "machine": lambda: machine.publish(
-            state_root=state_root,
-            digest_root=digest_root,
-            keep_months=observability.public_machine_keep_months,
-            today=today,
-            months={month},
-            ensure_month=month,
-        ),
-        "run-timeline": lambda: run_timeline.publish(
-            state_root=state_root,
-            digest_root=digest_root,
-            keep_months=observability.public_run_timeline_keep_months,
-            today=today,
-            months={month},
-            ensure_month=month,
-        ),
-        "public-day-metrics": lambda: day_metrics.publish_public(
-            state_root=state_root,
-            digest_root=digest_root,
-            keep_months=observability.public_day_metrics_keep_months,
-            today=today,
-            months={month},
-            ensure_month=month,
-        ),
-        "run-days": lambda: run_days.publish(
-            digest_root=digest_root,
-            keep_months=observability.public_run_days_keep_months,
-            today=today,
-            months={month},
-            ensure_month=month,
         ),
         "console-band": lambda: console_band.publish(
             state_root=state_root,

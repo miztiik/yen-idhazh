@@ -32,6 +32,7 @@ CONFIG_FILES: dict[str, type[Contract]] = {
 }
 
 FIXTURE_FILES: Final = (
+    "run-shards/unknown.json",
     "app-config/every-knob-differs-from-the-committed-config.json",
     "appearance-config/knobs-set-away-from-the-defaults.json",
     "article/brief.json",
@@ -60,6 +61,7 @@ FIXTURE_FILES: Final = (
     "corpus-row/harvested.json",
     "council-run-record/a-migrated-count-that-had-nothing-to-do.json",
     "council-run-record/a-part-that-ran-the-model.json",
+    "council-run-record/a-part-that-raised.json",
     "council-run-record/a-selection-that-ran-no-model.json",
     "counterfactual-score-row/a-refused-candidate-a-heavier-lens-would-lift.json",
     "counterfactual-score-row/no-lens-matched-so-both-scores-agree.json",
@@ -98,12 +100,7 @@ FIXTURE_FILES: Final = (
     "label-row/unsupported.json",
     "machine-panels/nothing-recorded-this-run.json",
     "machine-panels/three-machines-one-run.json",
-    "machine-shard-row/a-shard-both-instruments-reached.json",
-    "machine-shard-row/a-shard-that-kept-nothing.json",
     "pipeline-tests-config/the-smallest-list-that-draws.json",
-    "public-run-day/five-runs.json",
-    "public-telemetry/fetch-failed.json",
-    "public-telemetry/published.json",
     "publication-inventory/published.json",
     "publication-receipt/completed-writes.json",
     "published-row/one-item.json",
@@ -127,8 +124,6 @@ FIXTURE_FILES: Final = (
     "run-manifest/runs-with-a-gap.json",
     "run-manifest/two-runs.json",
     "run-plan/one-day.json",
-    "run-timeline-row/died-at-fetch.json",
-    "run-timeline-row/every-step.json",
     "search-index/one-month.json",
     "seen-row/first-sight.json",
     "similarity-holdout-pair/two-stories-a-person-marked-apart.json",
@@ -272,7 +267,16 @@ def copy_config(root: Path, *, models: dict[str, Any] | None = None) -> str:
     """
     target = root / "config"
     pointer = str(AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).models_file)
-    for name in ("idhazh.json", "sources.json", "taxonomy.json", "watchlist.json", "appearance.json", pointer):
+    for name in (
+        "idhazh.json",
+        "sources.json",
+        "taxonomy.json",
+        "watchlist.json",
+        "appearance.json",
+        "llm_council.json",
+        "judges/content-similarity-judge.json",
+        pointer,
+    ):
         destination = target / name
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(CONFIG_DIR / name, destination)

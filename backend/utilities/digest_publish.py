@@ -89,6 +89,9 @@ def run(args: list[str]) -> int:
     if job not in VERBS:
         job = "work" if verb in {"work", "record"} else "assemble" if verb == "harvest" else verb
     identity = identify(args, job=job)
+    if identity.job is None:
+        raise ValueError("digest publication requires a legacy workflow job identity")
+    job = ServerJob(identity.job)
     with completed_writes.collect() as writes:
         try:
             return cli.main(args)
@@ -98,7 +101,7 @@ def run(args: list[str]) -> int:
                     common.STATE_ROOT,
                     run_id=identity.run_id,
                     attempt=identity.attempt,
-                    job=identity.job,
+                    job=job,
                     shard=identity.shard,
                 )
                 if trace.is_file():
@@ -163,15 +166,23 @@ def inventory_preparation(
     return prepare
 
 
-def land(*, repo: Path, identity: WriterIdentity, date: str) -> PublicationResult:
+def land(
+    *,
+    repo: Path,
+    identity: WriterIdentity,
+    date: str,
+) -> PublicationResult:
     git = Repository(repo)
     head = git.git("rev-parse", "HEAD").strip()
     imported = git.run("rev-parse", "--verify", "--quiet", "refs/worktree/publication-input-state")
     source = imported.stdout.decode().strip() if imported.returncode == 0 else head
-    hashes = publication_evidence.read(repo, identity, VERBS[identity.job])
-    authority = permissions(identity.job, date=date)
+    if identity.job is None:
+        raise ValueError("digest publication requires a legacy workflow job identity")
+    job = ServerJob(identity.job)
+    hashes = publication_evidence.read(repo, identity, VERBS[job])
+    authority = permissions(job, date=date)
     mutable: tuple[str, ...] = (INVENTORY,)
-    if identity.job == ServerJob.ASSEMBLE:
+    if job is ServerJob.ASSEMBLE:
         from idhazh.path_classes import DERIVED
 
         day = "frontend/public/digest/" + date.replace("-", "/")
@@ -199,19 +210,25 @@ def land(*, repo: Path, identity: WriterIdentity, date: str) -> PublicationResul
         preparation_scopes=(INVENTORY,) if INVENTORY in writes else (),
     )
     if INVENTORY in writes:
-        request = dataclasses.replace(request, prepare=inventory_preparation(repo, request))
+        request = dataclasses.replace(
+            request, prepare=inventory_preparation(repo, request)
+        )
     if identity.job == ServerJob.ASSEMBLE and writes:
         from utilities import digest_assemble
 
-        request = dataclasses.replace(request, preparation_scopes=mutable)
+        request = dataclasses.replace(
+            request, preparation_scopes=(*mutable, digest_assemble.count_scope(date))
+        )
+        rebuild = digest_assemble.preparation(
+            repo,
+            request,
+            date=date,
+            settings=config.load(),
+        )
+
         request = dataclasses.replace(
             request,
-            prepare=digest_assemble.preparation(
-                repo,
-                request,
-                date=date,
-                settings=config.load(),
-            ),
+            prepare=rebuild,
         )
     result = publish(request, repo=repo, retry=load_retry(repo / DEFAULT_CONFIG))
     print(json.dumps(dataclasses.asdict(result), default=str))
@@ -330,7 +347,7 @@ def main(argv: list[str] | None = None) -> int:
     parsed = parser.parse_args(args)
     try:
         return land(
-            repo=Path.cwd(), identity=identify(args, job=parsed.job), date=parsed.date
+            repo=Path.cwd(), identity=identify(args, job=parsed.job), date=parsed.date,
         ).exit_code
     except (OSError, ValueError, RuntimeError) as error:
         print(f"publication integrity refused: {error}", file=sys.stderr)

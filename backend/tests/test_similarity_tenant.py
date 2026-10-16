@@ -17,12 +17,12 @@ import pytest
 from conftest import CONFIG_DIR
 
 from idhazh import config, ledger
+from idhazh.content_similarity_judge import tenant
 from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.council import registry
 from idhazh.council.tenancy import Tenant
 from idhazh.ledger import staging
-from idhazh.similarity import tenant
 
 #: A night the tests ask this judge about. Any date inside a window would do -
 #: what is asked is which of them come back, never which one it is.
@@ -42,7 +42,7 @@ def test_the_committed_config_registers_this_judge() -> None:
     still runs a night that hosts nobody: the venue plans tonight, fans out to no
     cell, and commits nothing.
     """
-    registered = config.load(CONFIG_DIR).app.council.tenants
+    registered = config.load_council(CONFIG_DIR).judge_names
 
     assert tenant.JUDGE_ID in registered, (
         f"config/idhazh.json registers {list(registered)} and not '{tenant.JUDGE_ID}', "
@@ -75,7 +75,8 @@ def test_this_judge_gets_its_say_on_a_night_it_could_not_finish() -> None:
         "this judge nothing about the night ahead and a draw that cannot finish "
         "reaches a runner"
     )
-    check(config.load(CONFIG_DIR).app)
+    settings = config.load(CONFIG_DIR)
+    check(settings.app, council=settings.council)
 
 
 @pytest.mark.parametrize("member", PROTOCOL_MEMBERS)
@@ -114,7 +115,7 @@ def test_this_judge_splits_its_work_the_way_its_draw_is_dealt() -> None:
     every unit reporting success and the day counted as though the missing pairs
     had never been drawn.
     """
-    assert tenant.TENANT.shard_count == config.load(CONFIG_DIR).app.council.shards
+    assert tenant.TENANT.shard_count == config.load_council(CONFIG_DIR).shards
 
 
 def test_this_judge_stages_each_ledger_it_writes_where_the_registry_files_it() -> None:

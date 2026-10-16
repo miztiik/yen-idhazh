@@ -11,7 +11,7 @@
  */
 
 import { plural } from '../../format';
-import type { RefusedRun } from '../../server/machine-counters';
+import type { RefusedRun } from './counters';
 
 /** What the box prints: its head, and for each run the sentence after its id. */
 export interface RefusedRunsBox {

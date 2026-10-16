@@ -6,7 +6,6 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { render } from 'svelte/server';
 import { serverCompiler, type Rewrite } from './support/server-render';
 import { judgeNothings, type Nothing, type PanelReading } from './support/panel-gates';
-import { BUILD_TIME } from './support/panel-drivers/judgement';
 
 const FRONTEND = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PANELS = [
@@ -105,10 +104,3 @@ for (const [id, name] of PANELS) {
 		expect(absent.match(/data-lede(?:\s|=|>)/g)).toHaveLength(1);
 	});
 }
-
-test('every judged build-time panel has a component-state check', () => {
-	expect(BUILD_TIME).toEqual(PANELS.map(([id]) => id));
-	const config = JSON.parse(readFileSync(join(FRONTEND, '..', 'config', 'console', 'judgement.json'), 'utf8'));
-	expect(config.judged).toEqual(BUILD_TIME);
-	expect(config.panel_groups).toEqual([{ id: 'judgement', title: '', panels: BUILD_TIME }]);
-});

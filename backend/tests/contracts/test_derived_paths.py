@@ -82,4 +82,6 @@ def test_the_days_metrics_record_is_rebuilt_and_never_merged() -> None:
     from a different tip. That is the producer's own test.
     """
     assert "state/day-metrics" in path_classes.DERIVED
-    assert "frontend/public/day-metrics" in path_classes.DERIVED
+    assert not {
+        "frontend/public/day-metrics", "frontend/public/run-days", "frontend/public/machine"
+    } & set(path_classes.DERIVED)

@@ -117,10 +117,12 @@ def _add_history(
     )
 
 
-def _contract_schema(model: type[Contract]) -> Any:
+def _contract_schema(
+    model: type[Contract], *, envelope_version: str | None = None
+) -> Any:
     from idhazh.ledger import parquet
 
-    return parquet.schema_of(file_columns(model))
+    return parquet.schema_of(file_columns(model, envelope_version=envelope_version))
 
 
 def _check_file(
@@ -129,12 +131,13 @@ def _check_file(
     path: Path,
     ledger: LedgerName,
     contract_stamp: str,
-    expected: Any,
+    model: type[Contract],
 ) -> tuple[FileEnvelope, Any, list[_Fault]]:
     from idhazh.ledger import parquet
 
     metadata, actual = parquet.read_footer_schema(path)
     envelope = FileEnvelope.from_metadata(metadata)
+    expected = _contract_schema(model, envelope_version=envelope.version)
     faults: list[_Fault] = []
     file_stamp = envelope.row_schema_version
     if file_stamp > contract_stamp:
@@ -248,14 +251,16 @@ def check(site_tree: Path, published: Sequence[LedgerName]) -> int:
                 path=path,
                 ledger=ledger,
                 contract_stamp=contract_stamp,
-                expected=expected,
+                model=model,
             )
             faults.extend(file_faults)
             missing = sorted(set(expected.names) - set(actual.names))
             extra = sorted(set(actual.names) - set(expected.names))
             if envelope.row_schema_version == contract_stamp and not missing and not extra:
                 current += 1
-            elif envelope.row_schema_version < contract_stamp:
+            elif envelope.row_schema_version < contract_stamp or (
+                envelope.version < FileEnvelope.schema_version() and (missing or extra)
+            ):
                 _add_history(
                     history, envelope.row_schema_version, missing=missing, extra=extra
                 )

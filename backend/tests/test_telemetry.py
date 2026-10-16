@@ -529,6 +529,7 @@ def test_a_summarize_failure_carries_stage_timings() -> None:
 _BY_PATTERN: Final[Mapping[str, str]] = {
     r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$": "2026-08-21T06:00:00Z",
     r"^[a-z0-9][a-z0-9_.+-]*$": "fixture",
+    r"^[a-z][a-z0-9_-]*$": "fixture",
     r"^[ -~]+$": "a value this column accepts",
 }
 
@@ -606,6 +607,7 @@ def a_recorded_row(**overrides: Any) -> ItemHealthRow:
         input_tokens=2,
         output_tokens=2,
         cached_tokens=2,
+        machine_job="fixture",
     )
     cells.update(overrides)
     return ItemHealthRow.model_validate(cells)

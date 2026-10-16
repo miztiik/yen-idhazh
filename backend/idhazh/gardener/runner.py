@@ -119,7 +119,7 @@ from idhazh.gardener.outcome import EXIT_INTEGRITY, EXIT_OK, EXIT_TASK_FAILED, O
 from idhazh.gardener.period_inputs import paths_for_task, scheduled_range
 from idhazh.ledger import staging
 from idhazh.site_weight import BYTES_PER_MB
-from idhazh.telemetry import job_machine
+from idhazh.telemetry import task_telemetry
 
 #: The name the record's writer carries in its envelope. This module writes it.
 PRODUCER: Final = "gardener.runner"
@@ -651,13 +651,14 @@ def run(
     too_heavy: str | None = None
     downloaded_bytes: int | None = None
     try:
-        with job_machine.record(
-            date=today.isoformat(),
+        with task_telemetry.record(
+            date=run_id[:10],
             run_id=run_id,
             settings=settings,
             state_root=state_dir,
             commit_sha=git_sha,
-            job=job,
+            pipeline_name="gardener",
+            task_name="run-tasks",
             shard=shard,
             attempt=attempt,
             started_at=started,

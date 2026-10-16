@@ -213,9 +213,10 @@ def test_a_shard_records_the_machine_it_drew_and_names_it_among_its_writes(
     )
     assert len(rows) == 1, "a wake draws one machine a shard"
     (machine,) = rows
-    assert machine.job is ServerJob.RUN_TASKS
+    assert machine.job is None
+    assert machine.pipeline_name == "gardener"
+    assert machine.task_name == "run-tasks"
     assert machine.run_id == RUN_ID, "the row is filed under the run the wake was given"
-    assert machine.fingerprint is not None, "the machine went unnamed"
     assert machine.memcpy_probe_mib == 0, "the wake timed a copy the knob did not ask for"
     assert machine.memcpy_gib_s is None, "an untaken reading is absent, never a rate"
     assert machine.job_seconds == 0, "the fixture's clock never advanced"

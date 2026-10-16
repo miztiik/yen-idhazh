@@ -1,4 +1,4 @@
-"""The band, the strip and the months list, derived once and fetched first.
+"""The band and strip, derived from native records and fetched first.
 
 `console-shell.ts` derives all of this at build time from six committed ledgers
 and inlines the result into all three console documents. This is the shape that
@@ -6,10 +6,8 @@ replaces that: one small payload at `frontend/public/console/band.json`, fetched
 before anything else, so the console can say "did it work, what is worst, how
 much room is left" without opening a single month file.
 
-**The months list rides along and that is the point.** A shell cannot ask for a
-month until it knows which months exist, so a band that left the list out would
-make the list a second serial hop and the first month a third. It is here
-because it is the cheapest place a fetch can learn it.
+Native ledger indexes own the reachable dates. Older bands may carry a months
+list; the read-side migration removes only that retired field.
 
 **Sentences, not raw ledgers.** Every string on this shape is one the pipeline
 wrote about its own work - a verdict, a route's worst state, a size. None of it
@@ -21,7 +19,7 @@ behind it stay under `state/`.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Annotated, ClassVar, Final, Self
+from typing import Annotated, Any, ClassVar, Final, Self
 
 from pydantic import Field, StringConstraints, model_validator
 
@@ -30,13 +28,11 @@ from idhazh.contracts.base import (
     Contract,
     DateStamp,
     Model,
-    MonthStamp,
     Timestamp,
     records_json,
 )
 
-#: Nothing is forbidden, for the same structural reason `public_run_day.py`
-#: gives: this shape is not a projection of a ledger row, so there is no cell to
+#: Nothing is forbidden: this shape is not a projection of a ledger row, so there is no cell to
 #: cut. Every string on it is a sentence the pipeline composed about its own run,
 #: bounded in length, and every number is a count or a measurement of our own
 #: work. A ledger cell that wanted to cross would have to be given a field here
@@ -183,6 +179,62 @@ class ConsoleRoute(Model):
     )
 
 
+InputName = Annotated[
+    str, StringConstraints(pattern=r"^[a-z][a-z0-9_]*(\.[A-Za-z0-9_-]+)?$", max_length=64)
+]
+
+
+class SettingsMove(Model):
+    """The names of inputs that moved on one UTC day, never their values."""
+
+    date: DateStamp
+    inputs: list[InputName] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _distinct_names(self) -> Self:
+        if len(self.inputs) != len(set(self.inputs)):
+            raise ValueError("input names must be distinct")
+        return self
+
+
+class CheckerMove(Model):
+    """Whether a checker change also moved the faithfulness scorer."""
+
+    date: DateStamp
+    score_moved: bool
+
+
+def _ordered_changes(compared_from: str | None, dates: list[str]) -> None:
+    if dates != sorted(set(dates)):
+        raise ValueError("change dates must be distinct and oldest first")
+    if dates and (compared_from is None or dates[0] < compared_from):
+        raise ValueError("changes need a comparison start no later than their first date")
+
+
+class BandSettingsMoved(Model):
+    """The span on which recorded input changes can be named."""
+
+    compared_from: DateStamp | None
+    changes: list[SettingsMove] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _ordered(self) -> Self:
+        _ordered_changes(self.compared_from, [change.date for change in self.changes])
+        return self
+
+
+class BandCheckerMoved(Model):
+    """The span on which checker changes can be named."""
+
+    compared_from: DateStamp | None
+    changes: list[CheckerMove] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _ordered(self) -> Self:
+        _ordered_changes(self.compared_from, [change.date for change in self.changes])
+        return self
+
+
 class ConsoleBand(Contract):
     """What every console route carries above its own panels."""
 
@@ -195,6 +247,16 @@ class ConsoleBand(Contract):
     __schema_stem__: ClassVar[str] = "console-band"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-11T21:00",
+            change="Removes months; native ledger indexes own the reachable dates.",
+            why="Pipelines no longer reads the monthly public projections.",
+        ),
+        ChangelogEntry(
+            version="2026-10-11",
+            change="Adds settings_moved and checker_moved: days a setting or the checker moved.",
+            why="Item-health cannot see the prompt or the checker; the run record and evals can.",
+        ),
+        ChangelogEntry(
             version="2026-10-02",
             change="RouteId gains the route id data-explorer.",
             why="Additive: an older payload names five of the six and validates unchanged.",
@@ -205,16 +267,6 @@ class ConsoleBand(Contract):
             why="Every writer files its own day, so no run finds a backlog to fold.",
         ),
         ChangelogEntry(
-            version="2026-09-19",
-            change="The band carries compaction_lag_days, rows_uncompacted and covers_through.",
-            why="A page brought current by this run looked the same as one two days behind.",
-        ),
-        ChangelogEntry(
-            version="2026-09-12",
-            change="RouteId gains the route ids judgement and voices.",
-            why="Additive: an older payload names three of the five and validates unchanged.",
-        ),
-        ChangelogEntry(
             version="2026-09-09",
             change="Earlier changes are in this file's git history.",
             why="A changelog says what moved lately; git is the archive.",
@@ -222,6 +274,8 @@ class ConsoleBand(Contract):
     )
 
     generated_at: Timestamp
+    settings_moved: BandSettingsMoved | None = None
+    checker_moved: BandCheckerMoved | None = None
     verdict: BandVerdict
     worst: BandWorst | None = Field(
         default=None,
@@ -231,15 +285,6 @@ class ConsoleBand(Contract):
     routes: list[ConsoleRoute] = Field(
         default_factory=list,
         description="The strip, in the order it is drawn.",
-    )
-    months: list[MonthStamp] = Field(
-        default_factory=list,
-        description=(
-            "Every month a payload shard exists for, oldest first. The console asks "
-            "for a month by name, so this is the list it picks from - and it is here "
-            "rather than in a file of its own so the first month is the second hop "
-            "and not the third."
-        ),
     )
     compaction_lag_days: int = Field(
         default=0,
@@ -275,13 +320,13 @@ class ConsoleBand(Contract):
             raise ValueError(f"the worst route {self.worst.id} is not on the strip")
         return self
 
-    @model_validator(mode="after")
-    def _the_months_are_sorted_and_distinct(self) -> Self:
-        """The console pans by index, so a repeated or out-of-order month reads
-        as a jump backwards in time."""
-        if self.months != sorted(set(self.months)):
-            raise ValueError("months must be distinct and oldest first")
-        return self
+    @model_validator(mode="before")
+    @classmethod
+    def _retired_months(cls, value: Any) -> Any:
+        # Delete when no committed band carries months.
+        if isinstance(value, dict) and "months" in value:
+            return {key: cell for key, cell in value.items() if key != "months"}
+        return value
 
 
 if FORBIDDEN_COLUMNS & set(ConsoleBand.model_fields):

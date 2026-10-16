@@ -30,7 +30,7 @@
 import { BANDS } from '../bands';
 import { readoutOf, type Readout } from '../charts/readout';
 import { bandFor, grouped, type SummaryBand } from '../charts/series';
-import type { StackRule, StackSeries } from '../charts/stacked';
+import type { StackRule, StackSeries } from '../charts/stack-types';
 import { dayMonth, shortDate } from '../format';
 import { countDays, nameSpan, openWithSpan } from './span-words';
 
@@ -54,8 +54,9 @@ export const EVAL_PANELS: readonly EvalPanel[] = [
 		title: matchTitle(),
 		route: '/console/model/'
 	},
-	{ id: 'recorded-only', title: 'Measured, and nothing acts on it', route: '/console/model/' },
-	{ id: 'summary-length', title: 'How long the summaries came out', route: '/console/model/' },
+	{ id: 'source-doubts', title: 'Which sources the checker doubts', route: '/console/model/' },
+	{ id: 'extraction', title: 'What the extractor found', route: '/console/' },
+	{ id: 'summary-length', title: 'How long summaries came out', route: '/console/model/' },
 	{ id: 'score-cost', title: 'What checking one summary cost', route: '/console/model/' }
 ];
 
@@ -85,14 +86,14 @@ export const DRAWN_BY: Readonly<Record<string, string>> = {
 	hhem: 'faithfulness',
 	hhem_full: 'faithfulness',
 	hhem_delta: 'faithfulness',
-	compression: 'recorded-only',
-	self_repetition: 'recorded-only',
-	evidential_density: 'recorded-only',
-	speculative_density: 'recorded-only',
-	coherence: 'recorded-only',
-	semantic_coverage: 'recorded-only',
-	extraction_suspect: 'recorded-only',
-	determinism_violation: 'recorded-only',
+	compression: 'summary-length',
+	self_repetition: 'daily-figures',
+	evidential_density: 'source-doubts',
+	speculative_density: 'source-doubts',
+	coherence: 'daily-figures',
+	semantic_coverage: 'daily-figures',
+	extraction_suspect: 'extraction',
+	determinism_violation: 'daily-figures',
 	// Already drawn, now declared.
 	summary_words: 'summary-length',
 	source_words_before_cap: 'summary-length',

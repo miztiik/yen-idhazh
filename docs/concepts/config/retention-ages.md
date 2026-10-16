@@ -17,7 +17,6 @@ why these are knobs rather than constants, is [../config.md](../config.md).
 | Knob | Default | What it switches off |
 | --- | --- | --- |
 | `evaluation_enabled` | `true` | The faithfulness scorer, and so every row in the eval ledger. |
-| `telemetry_publish` | `true` | The copy into `frontend/public/telemetry/<YYYY-MM>.csv`. |
 | `tracing_enabled` | `true` | The span tree. False writes no trace under `state/traces/` and no span rollup. |
 | `sample_rate` | `1.0` | Nothing. It is the fraction of runs whose scorer runs. |
 | `visuals_full_grain_months` | `14` | Where `state/visuals/` stops being kept attempt by attempt. Past it a month folds to the eight-term group in `state/visual-aggregate/` and the shard is deleted. |
@@ -26,9 +25,9 @@ why these are knobs rather than constants, is [../config.md](../config.md).
 | `cost_input_per_million` | `0.20` | Nothing. It is what a hosted provider would charge for a million prompt tokens. |
 | `cost_output_per_million` | `0.60` | Nothing. The same, for a million written tokens. |
 
-**Four switches and not one master switch.** Collection, scoring, publishing and
+**Separate instruments, not one master switch.** Collection, scoring and
 tracing fail in different ways: the eval ledger empties when the scorer will
-not load, the published telemetry file stops when a run does not publish, and
+not load, and
 the counters file is silent when llama-server was gone before it was read. Under
 one switch a reader sees three absences and cannot say which instrument went
 dark, so cannot say whether to fix the model, the publish step or the server.
@@ -43,8 +42,8 @@ for a developer looking at one slow item, and it is described in
 rate the console and the dashboard print divides by it, so switching it off does
 not thin a measurement - it makes every other measurement unreadable. A failure
 rate with no denominator beside it is the defect the census exists to prevent. A
-contract test asserts the switch list holds exactly four names, so adding a
-fifth has to be argued for rather than typed. The three cost knobs are not on
+contract test holds the retained switch list, so adding a
+switch has to be argued for rather than typed. The three cost knobs are not on
 that list because none of them is a boolean and none of them switches an
 instrument: they are a price, and they are described below.
 
@@ -100,25 +99,19 @@ fourth was tuned by a number that said nothing about them.
 Now every tree has an age of its own, and each age is a value in a file rather
 than a constant (Guardrail #6). **A ledger's age sits with whatever reads it.**
 Where a gardener task deletes the ledger, the age is that task's window, and a
-task that keeps several series of one tree - the rows, a summary of them, a
-published copy - names each one under `series`. Where a publisher or the visual
+task that keeps several native series - full-grain rows and summaries -
+names each one under `series`. Where the visual
 fold reads the age, it is a knob in `observability`, and
 `ObservabilityConfig.full_grain_months` returns the ones a console read opens so
 `refuse_windows_shorter_than` can check them against what that read still
 selects. `visuals_full_grain_months` is a full-grain window and is **not** in
 | `state/visuals/` | 14 months | forever, in `state/visual-aggregate/` | `visuals_full_grain_months` and `visual_aggregate_keep_months` (null) in `observability` |
 | the feed-health ledger, `state/raw/feed-health/` and `state/compact/feed-health/` | the 14-month `monthly_window` of its compaction | none - a per-feed-per-run record is not a total worth keeping | `config/gardener/compact-feed-health.json` |
-| the host-fingerprint ledger, `state/raw/host-fingerprint/` and `state/compact/host-fingerprint/` | the 14-month `monthly_window` of its compaction | none - one job's silicon on one run, and a total over an old month names no machine | `config/gardener/compact-host-fingerprint.json`, which may not keep less than `public_machine_keep_months` |
+| the host-fingerprint ledger, `state/raw/host-fingerprint/` and `state/compact/host-fingerprint/` | the 14-month `monthly_window` of its compaction | none - one job's silicon on one run, and a total over an old month names no machine | `config/gardener/compact-host-fingerprint.json`; native read floors stay enforced |
 
-And one for each published copy, because a reader fetches those and our own disk
-is not what bounds them:
-
-| Published copy | Age | Paired with |
-| --- | --- | --- |
-| `frontend/public/telemetry/` | 14 months, the `public-copy` series of `config/gardener/telemetry-aggregate.json` | the `full-grain` series of the same file, which it must equal |
-| `frontend/public/run-days/` | `public_run_days_keep_months` (14) | nothing - the source is the day payloads, whose retention is the archive's |
-| `frontend/public/day-metrics/` | `public_day_metrics_keep_months` (14) | nothing - `state/day-metrics/` has no age of its own |
-| `frontend/public/machine/` | `public_machine_keep_months` (14) | the `monthly_window` of `config/gardener/compact-host-fingerprint.json`, which may not keep less than it - the shard is folded from the host-fingerprint and item-health ledgers |
+The telemetry and run-timeline public copies and their switches and retention
+knobs are retired. A config still spelling a removed observability knob is
+refused by name. The gardener's native full-grain and aggregate windows remain.
 
 **Two ages left this table on 2026-09-16.** `public_scores_keep_months` and
 `public_feed_health_keep_months` bounded published copies of `state/scores/` and
@@ -159,15 +152,9 @@ other pair for the one task that keeps series, and the `observability` contract
 refuses it for the visual pair. Either way a month can never be deleted before
 the thing that replaces it has been written.
 
-**A published copy lasts as long as the ledger it is built from.** The loader
-refuses a `public-copy` series that differs from the `full-grain` series of
-`telemetry-aggregate`, in both directions: a published month whose source has
-been folded away is a rate nobody can check, and a source month with no
-published copy is a window the console cannot draw. The machine shard is folded
-from the host-fingerprint ledger, so the declaration that governs that ledger -
-its compaction, which is what deletes its rows now - is refused when it keeps
-less than `public_machine_keep_months`. The other three copies have no
-state ledger behind them and are bounded by their own knob alone.
+**Retired copies have no retention policy.** The loader refuses the removed
+`public-copy` series rather than pretending to apply it. Native host-fingerprint
+compaction, item-health rows and summaries, and state day-metrics remain.
 
 **This block sets the ages. Which policy a tree is under - fold, delete or keep
 - is [../adaptive-pruning.md](../adaptive-pruning.md)**, which is also where an age is
@@ -193,8 +180,8 @@ month is not thirty days. The check now compares against the shards, and
 `backend/tests/contracts/` sweeps every end date in one 400-year
 Gregorian cycle to prove it. The gardener loader makes the same comparison for
 every declaration whose files a console read opens - the feed-health
-compaction's `monthly_window`, the `full-grain` series of `telemetry-aggregate`, and the
-`public-copy` series - and refuses a window under fourteen months by naming the
+compaction's `monthly_window` and the `full-grain` series of
+`telemetry-aggregate` - and refuses a window under fourteen months by naming the
 file. Measured 2026-09-02 over all **146,097** anchor
 dates - arithmetic over the calendar, so the spread is zero by construction:
 fourteen months keeps back at least as far as the console reads on every one of
@@ -231,7 +218,7 @@ still spelling a moved name is refused the same way, naming the new place:
 | --- | --- | --- |
 | `observability.item_health_full_grain_months` | 14 | `series.full-grain` in `config/gardener/telemetry-aggregate.json` |
 | `observability.item_health_aggregate_keep_months` | null | `series.aggregate` in `config/gardener/telemetry-aggregate.json`, as `forever` |
-| `observability.public_telemetry_keep_months` | 14 | `series.public-copy` in `config/gardener/telemetry-aggregate.json` |
+| `observability.public_telemetry_keep_months` | 14 | retired with the public copy; no replacement |
 | `observability.scores_full_grain_months` | 14 | `monthly_window` in `config/gardener/compact-summary-quality-evals.json`, as `forever` since 2026-09-30 |
 | `observability.score_archive_keep_months` | null | `monthly_window` in `config/gardener/compact-summary-quality-evals.json`, as `forever`: no month is summarised |
 | `observability.feed_health_keep_months` | 14 | `monthly_window` in `config/gardener/compact-feed-health.json` |
@@ -285,8 +272,7 @@ stands, and the measurement only strengthens it.
 
 **Each of these ages is one task's own window, and that task spends it.** The
 `telemetry-aggregate` task summarises an item-health month past its `full-grain`
-series and unlinks the browser's copy of that month past its `public-copy`
-series. The item-health, host-fingerprint and feed-health rows are deleted by each ledger's
+series and deletes no source rows or public files. The item-health, host-fingerprint and feed-health rows are deleted by each ledger's
 compaction past its `monthly_window`, and the eval rows' compaction keeps every
 month.
 

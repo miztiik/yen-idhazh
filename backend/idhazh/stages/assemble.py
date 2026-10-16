@@ -45,7 +45,7 @@ from idhazh.stages.common import (
     _load_manifest,
     _run_dir,
 )
-from idhazh.telemetry import source_health
+from idhazh.telemetry import run_shards, source_health
 from idhazh.telemetry.publish import day_metrics, dispatch
 from idhazh.telemetry.publish import source_health as source_health_publish
 
@@ -66,8 +66,7 @@ def _index_root() -> Path:
     when a caller moves the days. A test that redirects `PUBLIC_ROOT` at a
     temporary tree used to leave this pointing at the repository, so the suite
     rebuilt the committed shard out of fixture days - which is how the shard on
-    `main` came to name one item no published day holds. `public_telemetry` is
-    passed its root the same way and for the same reason.
+    `main` came to name one item no published day holds.
     """
     return common.PUBLIC_ROOT.parent / "assist" / "index"
 
@@ -177,15 +176,13 @@ def stage_assemble(
     settings: config.Settings,
     commit_sha: str,
     runner: str = "local",
-    shards: int | None = None,
     regenerate_only: bool = False,
 ) -> DigestDay:
     """Collect whatever finished, publish it, and append the ledger.
 
-    `shards` is the count the plan derived, handed down by the router that
-    derived it. This stage never counts the work jobs that filed a row: a
-    denominator taken from those rows could not disagree with them, and
-    disagreeing is the only thing the cell is for.
+    The plan records the count its matrix dispatched. This stage never counts
+    the work jobs that filed a row: a denominator taken from those rows could
+    not disagree with them, and disagreeing is the only thing the cell is for.
     """
     publication.read_inventory(common.PUBLIC_ROOT.parent)
     items_dir = _run_dir(plan.date) / "items"
@@ -384,7 +381,7 @@ def stage_assemble(
         config_digests=settings.digests,
         site_bytes=site_bytes,
         site_files=site_files,
-        shards=shards,
+        shards=plan.shards,
         inputs=recorded_inputs,
         item_health_rows=item_health_rows,
         decisions=decisions,
@@ -414,6 +411,7 @@ def stage_assemble(
         producer=PRODUCER,
         git_sha=commit_sha,
     )
+    run_shards.record(common.STATE_ROOT, manifest, identity=identity)
     published = (
         0
         if regenerate_only

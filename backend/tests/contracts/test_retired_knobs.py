@@ -8,9 +8,35 @@ from pydantic import ValidationError
 
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.knobs.collect import SUPERSEDED_COLLECT_NAMES, CollectConfig
+from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.observability import SUPERSEDED_RETENTION_NAMES, ObservabilityConfig
 
 pytestmark = pytest.mark.contract
+
+
+@pytest.mark.parametrize(
+    ("removed", "value"),
+    [
+        ("pan_days", 7),
+        ("zoom_factor", 1.5),
+        ("band_outlier_rows", 10),
+        ("plot_min_fill_share", 0.85),
+    ],
+)
+def test_a_console_knob_with_no_surviving_reader_is_refused(
+    removed: str, value: int | float
+) -> None:
+    with pytest.raises(ValidationError) as raised:
+        ConsoleConfig.model_validate({removed: value})
+    assert raised.value.errors()[0]["loc"] == (removed,)
+    assert raised.value.errors()[0]["type"] == "extra_forbidden"
+
+
+def test_the_council_block_is_refused_naming_its_own_file() -> None:
+    with pytest.raises(ValidationError) as refused:
+        AppConfig.model_validate({"council": {}})
+    assert "config.council" in str(refused.value)
+    assert "config/llm_council.json" in str(refused.value)
 
 
 def test_a_config_still_carrying_a_removed_knob_is_refused_by_name() -> None:
@@ -59,6 +85,9 @@ def test_an_age_whose_store_is_gone_says_so_instead_of_naming_a_successor() -> N
         ("public_scores_keep_months", 13),
         ("public_feed_health_keep_months", 13),
         ("runtime_counters_scrape", False),
+        ("public_telemetry_keep_months", 13),
+        ("public_run_timeline_keep_months", 13),
+        ("telemetry_publish", False),
     ):
         with pytest.raises(ValidationError, match="nothing replaces it") as raised:
             ObservabilityConfig.model_validate({removed: value})
@@ -76,7 +105,14 @@ def test_every_removed_name_is_sent_somewhere_or_said_to_be_gone() -> None:
     assert dict(SUPERSEDED_COLLECT_NAMES) == {
         "quarantine_after_failures": "availability_strikes_before_rest"
     }
-    gone = {"public_scores_keep_months", "public_feed_health_keep_months", "runtime_counters_scrape"}
+    gone = {
+        "public_scores_keep_months",
+        "public_feed_health_keep_months",
+        "runtime_counters_scrape",
+        "public_telemetry_keep_months",
+        "public_run_timeline_keep_months",
+        "telemetry_publish",
+    }
     assert {name for name, successor in SUPERSEDED_RETENTION_NAMES.items() if not successor} == gone
     for name, successor in SUPERSEDED_RETENTION_NAMES.items():
         if successor:

@@ -28,13 +28,14 @@ import {
 	uptimeSentence
 } from '../src/lib/charts/machine-cards';
 import { UNRECORDED_STOP } from '../src/lib/charts/machine-colour';
-import { fingerprintsOf, machineRecordDays, watchedFlags } from '../src/lib/server/host-fingerprint';
-import type { HostFingerprint } from '../src/lib/server/host-fingerprint';
+import { fingerprints, countersFrom } from '../src/lib/console/machine/records';
+import { fleetJobs } from '../src/lib/charts/fleet';
+import { watchedFlags, type HostFingerprint } from '../src/lib/console/machine/host-types';
 import {
 	machineCounters,
 	type MachineLimits,
 	type MachineRun
-} from '../src/lib/server/machine-counters';
+} from '../src/lib/console/machine/counters';
 import { ledgers, plan, type ShardReading } from './support/machine-rows';
 import { observabilityConfig } from '../src/lib/server/config';
 
@@ -62,24 +63,31 @@ function shardOf(reading: ShardReading): ShardReading {
 }
 
 function fingerprint(over: Partial<HostFingerprint>): HostFingerprint {
-	return {
-		version: '2026-09-19',
+	const row = {
+		version: '2026-10-10',
 		date: '2026-09-12',
 		run_id: '2026-09-12-1',
 		job: 'work',
+		pipeline_name: null,
+		task_name: null,
 		shard: 0,
 		fingerprint: '3a7f0b1c2d4e5f60',
+		fingerprint_version: 2,
 		cpu_model: 'AMD EPYC 7763 64-Core Processor',
 		cpu_vendor: 'AuthenticAMD',
 		cpu_family: 25,
 		cpu_model_number: 1,
 		cpu_stepping: 1,
 		microcode: '0xa0011d3',
-		cores: 2,
-		threads: 4,
+		cpu_physical_cores: 2,
+		cpu_logical_processors: 4,
+		cpu_allowed_processors: null,
+		cpu_quota_cores: null,
+		cpu_quota_state: null,
+		cpu_target_measured_at: null,
 		l3_cache_bytes: 32 * MIB,
-		mhz_max: null,
-		mhz_at_probe: 2664.85,
+		cpu_observed_mhz: 2664.85,
+		cpu_reported_max_mhz: null,
 		flags: 'avx2 f16c fma sse4_2',
 		boot_seconds: 226.59,
 		memcpy_gib_s: 12.4,
@@ -95,6 +103,12 @@ function fingerprint(over: Partial<HostFingerprint>): HostFingerprint {
 		server_prompt_tokens: null,
 		server_prompt_seconds: null,
 		...over
+	};
+	return {
+		...row,
+		job: row.job === undefined ? 'work' : row.job,
+		pipeline_name: row.pipeline_name ?? null,
+		task_name: row.task_name ?? null
 	};
 }
 
@@ -116,12 +130,13 @@ const RUN = onlyRun([
 	{ shard: 1, cpuModel: 'INTEL(R) XEON(R) PLATINUM 8573C' }
 ]);
 
-function cardsFor(rows: HostFingerprint[], recording = true) {
+function cardsFor(rows: HostFingerprint[], recording = true, items: Record<string, string | number | null>[] = []) {
 	return machineCards(RUN, rows, {
 		watchedFlags: FLAGS,
 		colour: COLOUR,
 		cacheMargin: MARGIN,
-		recording
+		recording,
+		items
 	});
 }
 
@@ -159,23 +174,21 @@ test.describe('what a card says a machine can do', () => {
 	});
 
 	test('the heading is the name a person reads and the raw string survives behind it', () => {
-		const [card] = cardsFor([
+		const card = cardsFor([
 			fingerprint({ cpu_model: 'INTEL(R) XEON(R) PLATINUM 8573C', fingerprint: 'c81d9e0a1b2c3d4e' })
-		]).cards;
+		]).cards.find((one) => one.source === 'fingerprint');
+		if (card === undefined) throw new Error('the fixture drew no fingerprint card');
 		expect(card.identity.name).toBe('Intel Xeon Platinum 8573C');
 		expect(card.where?.cpuModelRaw).toBe('INTEL(R) XEON(R) PLATINUM 8573C');
 	});
 
-	test('a job the record missed joins the machine of its own name, not a card of its own', () => {
-		// The record reached work shard 0 and reported a Xeon; shard 1 reported the
-		// same processor name and nothing else. One machine, one card - two cards
-		// under one heading reads as a defect rather than as the absence it is.
+	test('a name-only job remains coarse and is never inferred into a fingerprint class', () => {
 		const view = cardsFor([
 			fingerprint({ cpu_model: 'INTEL(R) XEON(R) PLATINUM 8573C', fingerprint: 'c81d9e0a1b2c3d4e' })
 		]);
-		expect(view.cards).toHaveLength(1);
-		expect(view.cards[0].jobsDrawn).toBe(2);
-		expect(view.cards[0].source).toBe('fingerprint');
+		expect(view.cards).toHaveLength(2);
+		expect(view.cards.map((card) => card.source).sort()).toEqual(['fingerprint', 'name-only']);
+		expect(view.cards.every((card) => card.jobsDrawn === 1)).toBe(true);
 	});
 
 	test('the disclosure carries where the platform put it, and the microcode', () => {
@@ -294,19 +307,22 @@ test.describe('what the machine was doing when we asked', () => {
 		expect(uptimeSentence(card)).toBe('Uptime was not recorded on this job.');
 	});
 
-	test('the clock prints alone, never as a share of a ceiling nothing writes', () => {
-		// `mhz_max` is empty on all 65 committed rows, measured 2026-09-21. A card
-		// that divided by it would draw the empty-column defect a second time.
-		const [card] = cardsFor([fingerprint({ mhz_at_probe: 2664.85, mhz_max: null })]).cards;
-		expect(card.mhzAtProbe).toBe(2664.85);
+	test('the observed sample is distinct from the reported maximum', () => {
+		const [card] = cardsFor([
+			fingerprint({ cpu_observed_mhz: 2664.85, cpu_reported_max_mhz: null })
+		]).cards;
+		expect(card.observedMhz).toBe(2664.85);
 		const said = clockSentence(card);
-		expect(said).toBe("2665 MHz when the probe ran, before the job's heaviest step.");
-		expect(said).not.toContain('%');
+		expect(said).toContain('Observed sample average 2665 MHz');
+		expect(said).toContain('reported hardware maximum unknown');
+		expect(said).toContain('not a sustained rate');
 	});
 
 	test('a clock nobody recorded is a sentence, never a clock of zero', () => {
-		const [card] = cardsFor([fingerprint({ mhz_at_probe: null })]).cards;
-		expect(clockSentence(card)).toBe('Clock speed was not recorded on this job.');
+		const [card] = cardsFor([
+			fingerprint({ cpu_observed_mhz: null, cpu_reported_max_mhz: null })
+		]).cards;
+		expect(clockSentence(card)).toBe('Observed and reported maximum frequencies are unknown.');
 	});
 
 	test('a machine the record never reached carries neither, and both say so', () => {
@@ -315,9 +331,9 @@ test.describe('what the machine was doing when we asked', () => {
 		);
 		if (named === undefined) throw new Error('the fixture drew no name-only card');
 		expect(named.bootSeconds).toBeNull();
-		expect(named.mhzAtProbe).toBeNull();
+		expect(named.observedMhz).toBeNull();
 		expect(uptimeSentence(named)).toContain('not recorded');
-		expect(clockSentence(named)).toContain('not recorded');
+		expect(clockSentence(named)).toContain('unknown');
 	});
 });
 
@@ -458,6 +474,29 @@ test.describe('how many jobs drew a machine', () => {
 
 	test('a shard covered by a machine row is counted once, not twice', () => {
 		const view = cardsFor([fingerprint({ job: 'work', shard: 0 })]);
+		expect(view.cards.reduce((total, card) => total + card.jobsDrawn, 0)).toBe(2);
+	});
+
+	test('a generic task row covers its item-ledger shard without flattening its identity', () => {
+		const host = fingerprint({
+			job: null,
+			pipeline_name: 'gardener',
+			task_name: 'run-tasks',
+			shard: 0
+		});
+		const item = {
+			date: host.date,
+			run_id: host.run_id,
+			machine_pipeline_name: host.pipeline_name,
+			machine_task_name: host.task_name,
+			machine_shard: host.shard
+		};
+		const view = cardsFor([host], true, [item]);
+		expect(fingerprints([host])[0]).toMatchObject({
+			job: null,
+			pipeline_name: 'gardener',
+			task_name: 'run-tasks'
+		});
 		expect(view.cards.reduce((total, card) => total + card.jobsDrawn, 0)).toBe(2);
 	});
 });
@@ -604,12 +643,12 @@ test.describe('a day that published and kept no machine row', () => {
 
 		// Both days hold a row; only one row names its machine. 15 September holds
 		// none at all, and that is the day the record had not begun on.
-		expect(machineRecordDays(rows)).toEqual(['2026-09-16', '2026-09-17']);
-		expect(fingerprintsOf(rows).map((row) => row.date)).toEqual(['2026-09-17']);
+		expect(fleetJobs(rows).map((row) => row.date)).toEqual(['2026-09-16', '2026-09-17']);
+		expect(fingerprints(rows).map((row) => row.date)).toEqual(['2026-09-17']);
 	});
 
 	test('a record that holds no row reports no days rather than throwing', () => {
-		expect(machineRecordDays([])).toEqual([]);
+		expect(fleetJobs([])).toEqual([]);
 	});
 });
 
@@ -619,7 +658,7 @@ test.describe("one job's row", () => {
 		// row, so the newest row a job wrote names the machine AND what the job
 		// cost. The reader types that row whole, so the job's clock sits beside
 		// the machine it was measured on.
-		const rows = fingerprintsOf([
+		const input = [
 			{
 				version: '2026-09-20',
 				date: '2026-09-17',
@@ -632,12 +671,97 @@ test.describe("one job's row", () => {
 				model_load_ms: '2290.5',
 				job_seconds: '780'
 			}
-		]);
+		];
+		const rows = fingerprints(input);
 		expect(rows, 'one job is one placement').toHaveLength(1);
 		expect(rows[0].fingerprint).toBe('3a7f0b1c2d4e5f60');
 		expect(rows[0].cpu_model).toBe('AMD EPYC 7763 64-Core Processor');
-		expect(rows[0].cores).toBe(2);
-		expect(rows[0].job_seconds).toBe(780);
-		expect(rows[0].model_load_ms).toBe(2290.5);
+		expect(rows[0].fingerprint_version).toBe(1);
+		expect(rows[0].cpu_physical_cores).toBeNull();
+		const counter = countersFrom(input, [], [], LIMITS);
+		expect(counter.refused).toEqual([]);
+		expect(counter.runs[0].reported[0].jobSeconds).toBe(780);
+		expect(counter.runs[0].reported[0].modelLoadMs).toBe(2290.5);
+	});
+
+	test('mixed legacy and corrected rows normalize before consumers without invented counts', () => {
+		const rows = fingerprints([
+			{
+				version: '2026-09-20',
+				date: '2026-09-20',
+				run_id: '2026-09-20-1',
+				job: 'work',
+				shard: '0',
+				fingerprint: 'aaaaaaaaaaaaaaaa',
+				mhz_at_probe: '2400',
+				cores: '2',
+				threads: '4'
+			},
+			{
+				version: '2026-10-10',
+				date: '2026-10-10',
+				run_id: '2026-10-10-1',
+				job: 'work',
+				shard: '0',
+				fingerprint: 'aaaaaaaaaaaaaaaa',
+				fingerprint_version: '2',
+				cpu_logical_processors: '8',
+				cpu_observed_mhz: '2800',
+				cpu_reported_max_mhz: '3200'
+			},
+			{
+				version: '2026-10-12',
+				date: '2026-10-12',
+				run_id: '2026-10-12-1',
+				job: 'work',
+				shard: '0',
+				fingerprint: 'bbbbbbbbbbbbbbbb',
+				fingerprint_version: '2'
+			},
+			{
+				version: '2026-10-14',
+				date: '2026-10-14',
+				run_id: '2026-10-14-1',
+				job: 'work',
+				shard: '0',
+				fingerprint: 'cccccccccccccccc',
+				fingerprint_version: '2'
+			},
+			{ version: '2099-01-01', date: '2099-01-01', run_id: 'bad', job: 'work', shard: '0' }
+		]);
+		expect(rows).toHaveLength(4);
+		expect(rows[0]).toMatchObject({
+			version: '2026-09-20',
+			fingerprint_version: 1,
+			cpu_logical_processors: null,
+			cpu_observed_mhz: 2400,
+			cpu_reported_max_mhz: null
+		});
+		expect(rows[1]).toMatchObject({
+			fingerprint_version: 2,
+			cpu_logical_processors: 8,
+			cpu_observed_mhz: 2800,
+			cpu_reported_max_mhz: 3200
+		});
+		expect(rows.slice(1).map((row) => row.version)).toEqual([
+			'2026-10-10',
+			'2026-10-12',
+			'2026-10-14'
+		]);
+	});
+
+	test('generic pipeline/task identities reach cards and the fleet list distinctly', () => {
+		const row = fingerprint({
+			version: '2026-10-14',
+			job: null,
+			pipeline_name: 'gardener',
+			task_name: 'run-tasks'
+		});
+		expect(fingerprints([row]).map((host) => [host.job, host.pipeline_name, host.task_name])).toEqual([
+			[null, 'gardener', 'run-tasks']
+		]);
+		expect(fleetJobs([row]).map((job) => [job.job, job.pipelineName, job.taskName])).toEqual([
+			[null, 'gardener', 'run-tasks']
+		]);
 	});
 });

@@ -80,6 +80,8 @@ GROUPS: Final[tuple[Group, ...]] = (
             "source_id",
             "machine_shard",
             "machine_job",
+            "machine_pipeline_name",
+            "machine_task_name",
         ),
     ),
     Group(

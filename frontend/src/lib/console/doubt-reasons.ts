@@ -23,7 +23,7 @@
 import { readoutOf, type Readout } from '../charts/readout';
 import { dayMonth, shortDate } from '../format';
 import { grouped } from '../charts/series';
-import type { StackSeries } from '../charts/stacked';
+import type { StackSeries } from '../charts/stack-types';
 import type { ChartToken } from '../charts/theme';
 import { countDays, nameSpan } from './span-words';
 

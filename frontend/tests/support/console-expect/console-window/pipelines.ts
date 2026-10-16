@@ -1,18 +1,19 @@
-/** Pipelines reports its window on ten surfaces and its two stacked charts. */
+/** The newest-run timeline alone does not follow the day preset. */
 import type { RouteExpect } from './index';
 
 export const EXPECT: RouteExpect | null = {
 	windowed: [
-		'band-distance',
+		'at-a-glance',
 		'chart-drawing',
 		'extraction',
 		'failure-mix',
-		'failure-rate',
+		'article-age',
 		'item-cost',
 		'run-health',
 		'site-cost-per-item',
-		'telemetry-viewport',
-		'time-split'
+		'slower-on-same-work',
+		'stage-timings',
+		'item-time-split'
 	],
 	dailyTable: true
 };

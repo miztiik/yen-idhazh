@@ -16,6 +16,7 @@ import type { SliceResult } from '../src/lib/data/slice-shapes';
 import { consoleConfig } from '../src/lib/server/config';
 import { reachFromDisk, sliceFromDisk } from '../src/lib/server/ledger-disk';
 import { backendPython } from './support/backend-python';
+import { countersFrom, fingerprints, processors } from '../src/lib/console/machine/records';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const FIXTURES = path.join(REPO, 'tests', 'fixtures', 'console');
@@ -126,6 +127,7 @@ test('the packed canary retains length, inferred time, watchlist, negative gap a
 		],
 		from: reach.first, to: reach.through
 	});
+
 	expect(answer.state).toBe('ok');
 	const rows = answer.rows;
 	expect(rows.some((row) => row.summary_finish_reason === 'length' || row.label_finish_reason === 'length')).toBe(true);
@@ -149,6 +151,41 @@ test('the packed canary retains length, inferred time, watchlist, negative gap a
 	expect(joinItemHosts(legacy, hosts.rows).rows.some((row) => row.host !== null)).toBe(true);
 	const hostDays = new Set(hosts.rows.map((row) => row.date));
 	expect(rows.some((row) => row.stage === 'publish' && row.outcome === 'ok' && !hostDays.has(row.date))).toBe(true);
+});
+
+test('real packed Hardware projections carry corrected CPU identity and model clocks into the native adapters', async () => {
+	const reader = createQueryWindow({
+		reach: (ledger) => reachFromDisk(state, ledger),
+		rows: (ledger, options) => sliceFromDisk(state, ledger, options)
+	});
+	const span = { from: '2026-08-19', to: '2026-08-20', days: 2, asked: 2 };
+	const [platform, cards, hosts, counts] = await Promise.all([
+		reader.sliceOnce(machine.platformMixQuery, span),
+		reader.sliceOnce(machine.machineCardsQuery, { ...span, from: span.to, days: 1, asked: 1 }),
+		reader.sliceOnce(machine.articleCostHostsQuery, span),
+		reader.sliceOnce(machine.runShardsQuery, span)
+	]);
+	expect(platform.state).toBe('ok');
+	expect(cards.state).toBe('ok');
+	expect(hosts.state).toBe('ok');
+	expect(counts.state).toBe('ok');
+	expect([platform.rows.length, cards.rows.length, hosts.rows.length]).toEqual([11, 7, 11]);
+	for (const [answer, query] of [[platform, machine.platformMixQuery], [cards, machine.machineCardsQuery],
+		[hosts, machine.articleCostHostsQuery]] as const) {
+		for (const row of answer.rows) {
+			expect(Object.keys(row).sort()).toEqual([...query.columns].sort());
+			expect(row).toHaveProperty('cpu_logical_processors');
+		}
+		expect(answer.rows.some((row) => row.cpu_logical_processors === 4)).toBe(true);
+	}
+	expect(platform.rows.every((row) => Object.hasOwn(row, 'model_load_ms'))).toBe(true);
+	const held = countersFrom(platform.rows, [], counts.rows, { contextWindow: 8192, jobTimeoutSeconds: 9000 });
+	expect(held.refused).toEqual([]);
+	expect(held.runs.flatMap((run) => run.reported).some((shard) =>
+		shard.logicalProcessors === 4 && shard.fingerprintVersion === 2 && shard.modelLoadMs === 2470.828)).toBe(true);
+	expect(fingerprints(cards.rows).some((row) => row.cpu_logical_processors === 4 && row.fingerprint_version === 2)).toBe(true);
+	expect(processors(hosts.rows)).toHaveLength(11);
+	expect(processors(hosts.rows).some((row) => row.cpu_logical_processors === null)).toBe(true);
 });
 
 const FETCH_STATES = [

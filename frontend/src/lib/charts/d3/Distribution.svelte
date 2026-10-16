@@ -20,7 +20,8 @@
 		name,
 		label,
 		width,
-		height
+		height,
+		readoutMaxShare = 1
 	}: {
 		geometry: BinGeometry | null;
 		empty: EmptyDrawing;
@@ -28,6 +29,7 @@
 		label: string;
 		width: number;
 		height: number;
+		readoutMaxShare?: number;
 	} = $props();
 
 	/** A tick mark's length, the same as the reserved frame draws. */
@@ -53,6 +55,7 @@
 	<EmptyState drawing={empty} {height} {width} {name} {label} />
 {:else}
 	{@const box = geometry.frame}
+	<div class="distribution-plot" data-readout-records={geometry.bins.length}>
 	<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 	<svg
 		class="distribution"
@@ -63,7 +66,6 @@
 		aria-label={label}
 		data-chart-type="distribution"
 		data-chart-name={name}
-		data-readout-columns={geometry.bins.length}
 		tabindex="0"
 		use:pointerReadout={{ marks, width: box.width, onSelect: (index) => selected = index }}
 	>
@@ -133,12 +135,13 @@
 	</svg>
 	{#if readout !== null}
 		{@const at = selected ?? readout.resting}
-		<dl class="record-readout" data-readout={name} data-readout-shape="record">
+		<dl class="record-readout" data-readout={name} data-readout-shape="record" style="max-width: {readoutMaxShare * 100}%">
 			<dt data-readout-subject>{readout.columns[at]}</dt>
 			<div data-readout-row="rows"><dd>Rows</dd><dd>{readout.series[0]?.values[at]}</dd></div>
 			<div data-readout-row="share"><dd>At or below</dd><dd>{readout.series[1]?.values[at]}</dd></div>
 		</dl>
 	{/if}
+	</div>
 {/if}
 
 <style>

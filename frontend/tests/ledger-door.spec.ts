@@ -1045,8 +1045,7 @@ test.describe('what a page keeps', () => {
 	});
 
 	test('only a year file is offered to the engine by byte range, and an engine that reads no host is handed it whole', async () => {
-		// The Node engine has no reader for a host, so the browser's byte source hands
-		// it the year file whole; `ledger-ranges.spec.ts` drives the ranges in a browser.
+		// The Node engine has no reader for a host, so the byte source hands it the year file whole.
 		const offered: WantedFile[] = [];
 		const watched = (page: PageKeeper): PageKeeper => ({
 			...page,

@@ -79,21 +79,34 @@ export interface ArticleCost {
 export interface MachineProcessors {
 	date: string;
 	run_id: string;
-	shard: number;
+	job?: string | null;
+	pipeline_name?: string | null;
+	task_name?: string | null;
+	shard: number | string | null;
 	/** Logical processors, which is what the kernel's busy share is taken over.
 	 * Null where the record reached the machine but named no count. */
-	threads: number | null;
+	cpu_logical_processors: number | null;
 }
 
 function cell(value: string | undefined): number | null {
-	if (value === undefined || value === '') return null;
+	if (value === undefined || value.trim() === '') return null;
 	const parsed = Number(value);
 	return Number.isFinite(parsed) ? parsed : null;
 }
 
 /** The run and shard an item ran on, which is what a machine record is keyed by. */
-function shardKey(date: string, runId: string, shard: number | string): string {
-	return `${date}|${runId}|${shard}`;
+function shardKey(
+	date: string,
+	runId: string,
+	job: string | null | undefined,
+	shard: number | string | null,
+	pipelineName?: string | null,
+	taskName?: string | null
+): string | null {
+	if (shard === null || (typeof shard === 'string' && shard.trim() === '') ||
+		!Number.isSafeInteger(Number(shard)) || Number(shard) < 0) return null;
+	const task = pipelineName && taskName ? [pipelineName, taskName] : [job || 'work'];
+	return JSON.stringify([date, runId, task, Number(shard)]);
 }
 
 function figureOf(values: readonly number[], outOf: number): CostFigure {
@@ -122,11 +135,15 @@ function figureOf(values: readonly number[], outOf: number): CostFigure {
 function processorsByShard(hosts: readonly MachineProcessors[]): Map<string, number> {
 	const named = new Map<string, Set<number>>();
 	for (const host of hosts) {
-		if (host.threads === null || host.threads <= 0) continue;
-		const key = shardKey(host.date, host.run_id, host.shard);
+		if (host.cpu_logical_processors === null || !Number.isSafeInteger(host.cpu_logical_processors) ||
+			host.cpu_logical_processors <= 0) continue;
+		const key = shardKey(
+			host.date, host.run_id, host.job, host.shard, host.pipeline_name, host.task_name
+		);
+		if (key === null) continue;
 		const seen = named.get(key);
-		if (seen === undefined) named.set(key, new Set([host.threads]));
-		else seen.add(host.threads);
+		if (seen === undefined) named.set(key, new Set([host.cpu_logical_processors]));
+		else seen.add(host.cpu_logical_processors);
 	}
 	const found = new Map<string, number>();
 	for (const [key, counts] of named) {
@@ -161,9 +178,11 @@ function processorTime(
 		const totalMs = cell(row.item_total_ms);
 		if (busyPct === null || totalMs === null || totalMs <= 0) continue;
 		offered += 1;
-		const processors = byShard.get(
-			shardKey(row.date ?? '', row.run_id ?? '', row.machine_shard ?? '')
+		const key = shardKey(
+			row.date ?? '', row.run_id ?? '', row.machine_job, row.machine_shard ?? '',
+			row.machine_pipeline_name, row.machine_task_name
 		);
+		const processors = key === null ? undefined : byShard.get(key);
 		if (processors === undefined) continue;
 		counts.add(processors);
 		seconds.push((busyPct / PER_CENT) * processors * (totalMs / MS_PER_SECOND));
@@ -209,7 +228,11 @@ function addedMemory(health: readonly Record<string, string>[]): {
 		const index = cell(row.item_index);
 		const rss = cell(row.llama_rss_bytes);
 		if (index === null || rss === null) continue;
-		const key = shardKey(row.date ?? '', row.run_id ?? '', row.machine_shard ?? '');
+		const key = shardKey(
+			row.date ?? '', row.run_id ?? '', row.machine_job, row.machine_shard ?? '',
+			row.machine_pipeline_name, row.machine_task_name
+		);
+		if (key === null) continue;
 		const held = byShard.get(key);
 		if (held === undefined) byShard.set(key, [{ index, rss }]);
 		else held.push({ index, rss });

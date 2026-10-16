@@ -10,9 +10,6 @@
   "telemetry-aggregate": {
     "dry_written": [],
     "removed": [
-      "frontend/public/telemetry/2026-07.csv",
-      "frontend/public/telemetry/2026-08.csv",
-      "frontend/public/telemetry/2026-09.csv",
       "state/item-health/2026/08/04/settled.csv",
       "state/item-health/2026/08/17/settled.csv",
       "state/item-health/2026/09/04/settled.csv",
