@@ -1,0 +1,13 @@
+date,run_id,item_id,vertical,source_id,stage,outcome,code,source_words,summary_words,source_words_before_cap,fetch_ms,extract_ms,summarize_ms,prefill_ms,decode_ms,input_tokens,output_tokens,cached_tokens,model_calls,label_kind,label_prefill_ms,label_decode_ms,label_input_tokens,label_output_tokens,label_cached_tokens,summary_kind,summary_prefill_ms,summary_decode_ms,summary_input_tokens,summary_output_tokens,summary_cached_tokens,queue_wait_ms,label_ms,summary_ms,visual_plan_ms,visual_plan_ms_is_estimate,faithfulness_ms,model_wait_ms,item_total_ms,stage_gap_ms,visual_plan_tokens_written,label_prefill_tokens_per_s,label_decode_tokens_per_s,summary_prefill_tokens_per_s,summary_decode_tokens_per_s,cpu_model,cpu_busy_pct,load_1m
+2026-07-11,2026-07-11-1,tail-1-00,ai,canary,publish,ok,,180,45,,120,20,520,,,,,,,,,,,,,,,,,,,661,,,,,41,10,822,121,,,,,,AMD EPYC 7763 64-Core Processor,66.61,2.61
+2026-07-11,2026-07-11-1,tail-1-01,ai,canary,publish,ok,,180,45,,120,20,640,,,,,,,,,,,,,,,,,,,662,,,,,42,13,944,122,,,,,,AMD EPYC 7763 64-Core Processor,66.62,2.62
+2026-07-11,2026-07-11-1,tail-1-02,ai,canary,publish,ok,,180,45,,120,20,700,,,,,,,,,,,,,,,,,,,663,,,,,43,14,1006,123,,,,,,AMD EPYC 7763 64-Core Processor,66.63,2.63
+2026-07-11,2026-07-11-1,tail-1-03,ai,canary,publish,ok,,180,45,,120,20,810,,,,,,,,,,,,,,,,,,,664,,,,,44,16,1118,124,,,,,,AMD EPYC 7763 64-Core Processor,66.64,2.64
+2026-07-11,2026-07-11-1,tail-1-04,ai,canary,publish,ok,,180,45,,120,20,1100,,,,,,,,,,,,,,,,,,,665,,,,,45,22,1410,125,,,,,,AMD EPYC 7763 64-Core Processor,66.65,2.65
+2026-07-11,2026-07-11-1,tail-1-05,ai,canary,publish,ok,,180,45,,120,20,4300,,,,,,,,,,,,,,,,,,,666,,,,,46,86,4612,126,,,,,,AMD EPYC 7763 64-Core Processor,66.66,2.66
+2026-07-11,2026-07-11-2,tail-2-00,ai,canary,publish,ok,,180,45,,120,20,560,,,,,,,,,,,,,,,,,,,662,,,,,42,11,864,122,,,,,,AMD EPYC 7763 64-Core Processor,66.62,2.62
+2026-07-11,2026-07-11-2,tail-2-01,ai,canary,publish,ok,,180,45,,120,20,690,,,,,,,,,,,,,,,,,,,663,,,,,43,14,996,123,,,,,,AMD EPYC 7763 64-Core Processor,66.63,2.63
+2026-07-11,2026-07-11-2,tail-2-02,ai,canary,publish,ok,,180,45,,120,20,760,,,,,,,,,,,,,,,,,,,664,,,,,44,15,1068,124,,,,,,AMD EPYC 7763 64-Core Processor,66.64,2.64
+2026-07-11,2026-07-11-2,tail-2-03,ai,canary,publish,ok,,180,45,,120,20,880,,,,,,,,,,,,,,,,,,,665,,,,,45,18,1190,125,,,,,,AMD EPYC 7763 64-Core Processor,66.65,2.65
+2026-07-11,2026-07-11-2,tail-2-04,ai,canary,publish,ok,,180,45,,120,20,1250,,,,,,,,,,,,,,,,,,,666,,,,,46,25,1562,126,,,,,,AMD EPYC 7763 64-Core Processor,66.66,2.66
+2026-07-11,2026-07-11-2,tail-2-05,ai,canary,publish,ok,,180,45,,120,20,4900,,,,,,,,,,,,,,,,,,,667,,,,,47,98,5214,127,,,,,,AMD EPYC 7763 64-Core Processor,66.67,2.67
