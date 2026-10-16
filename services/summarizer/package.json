@@ -1,0 +1,23 @@
+{
+  "name": "@yen-idhazh/summarizer",
+  "version": "1.0.0",
+  "description": "Event-driven, local LLM summarization pipeline with Zod validation",
+  "type": "module",
+  "main": "src/start-api-server.ts",
+  "scripts": {
+    "start": "bun run src/start-api-server.ts",
+    "server": "bun run src/start-api-server.ts",
+    "cli": "tsx src/execute-cli-pipeline.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "defuddle": "^0.6.1",
+    "linkedom": "^0.18.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.8.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}
