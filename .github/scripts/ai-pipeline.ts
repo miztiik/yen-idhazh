@@ -9,6 +9,18 @@ import { performance } from "node:perf_hooks";
 
 import { parseHTML } from "linkedom";
 import { Defuddle } from "defuddle/node";
+import { parseFeed } from "feedsmith";
+
+// -------------------------------------------------------------
+// 0. HARDCODED FEED SOURCES & DEFAULT FALLBACK URL
+// -------------------------------------------------------------
+export const DEFAULT_FEED_URLS: string[] = [
+  "https://www.nakedcapitalism.com/feed",
+  "https://www.aljazeera.com/xml/rss/all.xml",
+];
+
+export const DEFAULT_FALLBACK_ARTICLE_URL =
+  "https://www.nakedcapitalism.com/2026/10/when-will-politicians-turn-to-mmt.html";
 
 // -------------------------------------------------------------
 // 1. UUID GENERATORS (RFC 4122 UUIDv4 & RFC 4122 UUIDv5)
@@ -138,7 +150,6 @@ class SystemCpuSampler {
       if (!line.startsWith("cpu ")) return null;
 
       const parts = line.trim().split(/\s+/).slice(1).map(Number);
-      // fields: user, nice, system, idle, iowait, irq, softirq, steal
       const idle = parts[3] + (parts[4] || 0);
       const nonIdle = parts[0] + parts[1] + parts[2] + (parts[5] || 0) + (parts[6] || 0) + (parts[7] || 0);
       const total = idle + nonIdle;
@@ -190,14 +201,43 @@ export type StanceOnStatePower = "statism" | "constitutionalism" | "not_applicab
 export type StanceOnBorders = "nationalism" | "internationalism" | "not_applicable";
 export type StanceOnPersonalSphere = "civil_libertarianism" | "communitarianism" | "not_applicable";
 
+export interface FeedArticleCandidate {
+  title: string;
+  url: string;
+  publishedDate?: string;
+  sourceFeed: string;
+  ageHours?: number;
+}
+
+export interface FeedSelectionAudit {
+  configuredFeeds: string[];
+  maxAgeHours: number;
+  goalCount: number;
+  collectedArticles: FeedArticleCandidate[];
+  usedFallback: boolean;
+  targetArticles: FeedArticleCandidate[];
+}
+
+export interface ExtractedArticleItem {
+  title: string;
+  url: string;
+  sourceFeed?: string;
+  ageHours?: number;
+  content: string;
+  wordCount: number;
+  charCount: number;
+}
+
 export interface SourceAudit {
-  sourceType: "URL" | "INPUT_TEXT" | "FALLBACK_INPUT_TEXT";
+  sourceType: "FEED" | "FEED_DEFAULT_FALLBACK" | "URL" | "INPUT_TEXT" | "FALLBACK_INPUT_TEXT";
   sourceIdentifier: string;
   sourceTitle: string;
   extractedWordCount: number;
   extractedCharCount: number;
   extractedText: string;
+  articles: ExtractedArticleItem[];
   scrapeError?: string;
+  feedAudit?: FeedSelectionAudit;
 }
 
 export interface DetailedTokenMetrics {
@@ -257,6 +297,12 @@ export interface SummaryStructuredOutput {
 export interface PipelineEvent<T = any> {
   eventId: string;
   eventType:
+    | "FEED_DISCOVERY_STARTED"
+    | "FEED_QUERY_SUCCESS"
+    | "FEED_QUERY_FAILED"
+    | "FEED_COLLECTION_GOAL_MET"
+    | "FEED_COLLECTION_GOAL_UNMET"
+    | "FEED_DEFAULT_FALLBACK_ENGAGED"
     | "URL_HTTP_FETCH_STARTED"
     | "URL_HTTP_FETCH_COMPLETED"
     | "URL_DEFUDDLE_EXTRACTED"
@@ -272,7 +318,197 @@ export interface PipelineEvent<T = any> {
 }
 
 // -------------------------------------------------------------
-// 4. DIRECT URL INGESTION (Defuddle + Reader Proxy Fallback)
+// 4. FEEDSMITH DISCOVERY & GOAL-BASED RANDOMIZED COLLECTION
+// -------------------------------------------------------------
+function normalizeFeedEntries(parsedResult: any): Array<{ title: string; url: string; publishedDate: Date | null }> {
+  const { format, feed } = parsedResult;
+  if (!feed) return [];
+
+  const rawEntries = format === "atom" ? feed.entries || [] : feed.items || [];
+  const normalized: Array<{ title: string; url: string; publishedDate: Date | null }> = [];
+
+  for (const item of rawEntries) {
+    const title = (item.title || "").trim();
+    let url = "";
+
+    if (format === "atom") {
+      if (Array.isArray(item.links) && item.links.length > 0) {
+        const alt = item.links.find((l: any) => l.rel === "alternate" || !l.rel);
+        url = (alt?.href || item.links[0]?.href || "").trim();
+      } else if (typeof item.link === "string") {
+        url = item.link.trim();
+      } else if (item.link?.href) {
+        url = item.link.href.trim();
+      }
+      if (!url && item.id && (item.id.startsWith("http://") || item.id.startsWith("https://"))) {
+        url = item.id.trim();
+      }
+    } else if (format === "json") {
+      url = (item.url || item.id || "").trim();
+    } else {
+      url = (item.link || item.guid?.value || (typeof item.guid === "string" ? item.guid : "") || "").trim();
+    }
+
+    const rawDate =
+      item.pubDate ||
+      item.published ||
+      item.updated ||
+      item.date_published ||
+      item.date_modified ||
+      item.dc?.date;
+
+    let publishedDate: Date | null = null;
+    if (rawDate) {
+      const d = new Date(rawDate);
+      if (!isNaN(d.getTime())) {
+        publishedDate = d;
+      }
+    }
+
+    if (url) {
+      normalized.push({
+        title: title || "Untitled Feed Item",
+        url,
+        publishedDate,
+      });
+    }
+  }
+
+  return normalized;
+}
+
+async function collectArticlesFromFeeds(
+  feedUrls: string[],
+  maxAgeHours: number,
+  goalCount: number,
+  emitEvent: (type: PipelineEvent["eventType"], payload: any) => void
+): Promise<FeedSelectionAudit> {
+  emitEvent("FEED_DISCOVERY_STARTED", { feedUrls, maxAgeHours, goalCount });
+  console.log(`[FEEDSMITH] 🎲 Order: Randomized | Target Goal: ${goalCount} article(s) published within ${maxAgeHours}h.`);
+
+  const headers = {
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, application/json, */*",
+  };
+
+  const cutoffMs = Date.now() - maxAgeHours * 60 * 60 * 1000;
+  // Randomized iteration order
+  const randomizedFeeds = [...feedUrls].sort(() => Math.random() - 0.5);
+  const collected: FeedArticleCandidate[] = [];
+  const seenUrls = new Set<string>();
+
+  for (const feedUrl of randomizedFeeds) {
+    if (collected.length >= goalCount) {
+      console.log(`[FEEDSMITH] 🛑 Target goal (${goalCount}) reached! Halting feed query loop early.`);
+      break;
+    }
+
+    try {
+      console.log(`[FEEDSMITH] 🔍 Querying feed: ${feedUrl}`);
+      const res = await fetch(feedUrl, { headers, signal: AbortSignal.timeout(15000) });
+      if (!res.ok) {
+        console.warn(`[FEEDSMITH] ⚠️ HTTP ${res.status} returned from ${feedUrl}`);
+        emitEvent("FEED_QUERY_FAILED", { feedUrl, status: res.status });
+        continue;
+      }
+
+      const body = await res.text();
+      const parsed = parseFeed(body);
+      const entries = normalizeFeedEntries(parsed);
+
+      emitEvent("FEED_QUERY_SUCCESS", { feedUrl, format: parsed.format, rawEntriesCount: entries.length });
+
+      // Filter entries within the publication age cutoff
+      const validEntries = entries.filter((entry) => {
+        if (!entry.publishedDate) return false;
+        return entry.publishedDate.getTime() >= cutoffMs;
+      });
+
+      // Sort newest first
+      validEntries.sort((a, b) => (b.publishedDate?.getTime() || 0) - (a.publishedDate?.getTime() || 0));
+
+      for (const entry of validEntries) {
+        if (collected.length >= goalCount) break;
+
+        if (!seenUrls.has(entry.url)) {
+          seenUrls.add(entry.url);
+          const ageHours = Number(
+            ((Date.now() - (entry.publishedDate?.getTime() || 0)) / (1000 * 60 * 60)).toFixed(1)
+          );
+
+          collected.push({
+            title: entry.title,
+            url: entry.url,
+            publishedDate: entry.publishedDate?.toISOString(),
+            sourceFeed: feedUrl,
+            ageHours,
+          });
+
+          console.log(
+            `[FEEDSMITH] ➕ Collected (${collected.length}/${goalCount}): "${entry.title}" (${ageHours}h old)`
+          );
+        }
+      }
+    } catch (err: any) {
+      console.warn(`[FEEDSMITH] ⚠️ Error querying feed ${feedUrl}: ${err.message}`);
+      emitEvent("FEED_QUERY_FAILED", { feedUrl, error: err.message });
+    }
+  }
+
+  // 1. Goal Met: Return collected batch to send to LLM
+  if (collected.length >= goalCount) {
+    console.log(`[FEEDSMITH] ✅ Collection goal satisfied (${collected.length} articles). Passing to LLM.`);
+    emitEvent("FEED_COLLECTION_GOAL_MET", {
+      goalCount,
+      collectedCount: collected.length,
+      articles: collected,
+    });
+
+    return {
+      configuredFeeds: feedUrls,
+      maxAgeHours,
+      goalCount,
+      collectedArticles: collected,
+      usedFallback: false,
+      targetArticles: collected,
+    };
+  }
+
+  // 2. Goal Unmet: Gracefully fail and engage the default fallback URL
+  console.warn(
+    `[FEEDSMITH] ⚠️ Collection goal unmet (${collected.length}/${goalCount} found in ${maxAgeHours}h).`
+  );
+  console.log(`[FEEDSMITH] 🔄 Gracefully defaulting to fallback URL: ${DEFAULT_FALLBACK_ARTICLE_URL}`);
+
+  emitEvent("FEED_COLLECTION_GOAL_UNMET", {
+    goalCount,
+    collectedCount: collected.length,
+    partialArticles: collected,
+  });
+
+  const fallbackArticle: FeedArticleCandidate = {
+    title: "When Will Politicians Turn to MMT?",
+    url: DEFAULT_FALLBACK_ARTICLE_URL,
+    sourceFeed: "graceful-default-fallback",
+  };
+
+  emitEvent("FEED_DEFAULT_FALLBACK_ENGAGED", {
+    defaultUrl: DEFAULT_FALLBACK_ARTICLE_URL,
+  });
+
+  return {
+    configuredFeeds: feedUrls,
+    maxAgeHours,
+    goalCount,
+    collectedArticles: collected,
+    usedFallback: true,
+    targetArticles: [fallbackArticle],
+  };
+}
+
+// -------------------------------------------------------------
+// 5. DIRECT URL INGESTION (Defuddle + Reader Proxy Fallback)
 // -------------------------------------------------------------
 async function extractDirectUrl(
   url: string,
@@ -365,7 +601,7 @@ async function extractDirectUrl(
 }
 
 // -------------------------------------------------------------
-// 5. SWAP ACTIVITY & MEMORY SNAPSHOTS
+// 6. SWAP ACTIVITY & MEMORY SNAPSHOTS
 // -------------------------------------------------------------
 function readServerPid(): number | null {
   try {
@@ -432,7 +668,7 @@ function getMemorySnapshot() {
 }
 
 // -------------------------------------------------------------
-// 6. TIMEOUT-FREE OPENAPI HTTP CLIENT
+// 7. TIMEOUT-FREE OPENAPI HTTP CLIENT
 // -------------------------------------------------------------
 function postOpenAIChatCompletion(urlStr: string, payload: any): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -476,7 +712,7 @@ function postOpenAIChatCompletion(urlStr: string, payload: any): Promise<any> {
 }
 
 // -------------------------------------------------------------
-// 7. EVENT-DRIVEN PIPELINE ORCHESTRATOR
+// 8. EVENT-DRIVEN PIPELINE ORCHESTRATOR
 // -------------------------------------------------------------
 export class AIEventPipeline extends EventEmitter {
   private auditLog: PipelineEvent[] = [];
@@ -489,7 +725,6 @@ export class AIEventPipeline extends EventEmitter {
     super();
     this.runnerMetadata = runnerMetadata;
     this.hostFingerprint = getHostFingerprint();
-    // Standard RFC 4122 UUIDv4 Correlation ID
     this.correlationId = `corr-${crypto.randomUUID()}`;
     this.jsonlFilePath = jsonlFilePath;
   }
@@ -524,24 +759,98 @@ export class AIEventPipeline extends EventEmitter {
   }
 
   public async execute(options: {
-    url?: string;
+    directUrl?: string;
     fallbackText?: string;
+    feedAudit?: FeedSelectionAudit;
     systemPrompt: string;
     serverUrl: string;
     modelName: string;
   }): Promise<SummaryStructuredOutput> {
-    const { url, fallbackText = "", systemPrompt, serverUrl, modelName } = options;
+    const { directUrl, fallbackText = "", feedAudit, systemPrompt, serverUrl, modelName } = options;
 
-    const cleanUrl = (url || "").trim();
-    let targetText = fallbackText;
     let sourceAudit: SourceAudit;
+    let targetText = "";
 
-    if (cleanUrl.length > 0) {
-      console.log(`[PIPELINE] 🔍 Target URL supplied: ${cleanUrl}`);
+    // A. Multi-Article / Single-Article Ingestion from Feeds
+    if (feedAudit) {
+      const extractedArticles: ExtractedArticleItem[] = [];
 
+      for (const target of feedAudit.targetArticles) {
+        try {
+          const res = await extractDirectUrl(target.url, (type, payload) => this.logEvent(type, payload));
+          extractedArticles.push({
+            title: res.title,
+            url: target.url,
+            sourceFeed: target.sourceFeed,
+            ageHours: target.ageHours,
+            content: res.content,
+            wordCount: res.wordCount,
+            charCount: res.content.length,
+          });
+        } catch (err: any) {
+          console.warn(`[PIPELINE] ⚠️ Could not extract article ${target.url}: ${err.message}`);
+        }
+      }
+
+      if (extractedArticles.length === 0) {
+        if (!fallbackText) {
+          throw new Error("Feed articles failed extraction and no input_text was provided.");
+        }
+        console.warn("[PIPELINE] ⚠️ All feed articles failed to extract. Falling back to input_text.");
+        targetText = fallbackText;
+        sourceAudit = {
+          sourceType: "FALLBACK_INPUT_TEXT",
+          sourceIdentifier: "Feed extraction failed -> Fallback to direct input",
+          sourceTitle: "Direct Input (Fallback)",
+          extractedWordCount: fallbackText.split(/\s+/).filter(Boolean).length,
+          extractedCharCount: fallbackText.length,
+          extractedText: fallbackText,
+          articles: [],
+          feedAudit,
+        };
+      } else {
+        // Compile multi-article ingestion payload for the LLM
+        if (extractedArticles.length === 1) {
+          const item = extractedArticles[0];
+          targetText = item.content;
+          sourceAudit = {
+            sourceType: feedAudit.usedFallback ? "FEED_DEFAULT_FALLBACK" : "FEED",
+            sourceIdentifier: item.url,
+            sourceTitle: item.title,
+            extractedWordCount: item.wordCount,
+            extractedCharCount: item.charCount,
+            extractedText: targetText,
+            articles: extractedArticles,
+            feedAudit,
+          };
+        } else {
+          targetText = extractedArticles
+            .map(
+              (art, idx) =>
+                `# Document ${idx + 1}: ${art.title}\nSource: ${art.url} (Feed: ${art.sourceFeed})\n\n${art.content}`
+            )
+            .join("\n\n---\n\n");
+
+          const totalWords = targetText.split(/\s+/).filter(Boolean).length;
+          sourceAudit = {
+            sourceType: "FEED",
+            sourceIdentifier: `${extractedArticles.length} Feed Articles Ingested`,
+            sourceTitle: `Multi-Article Digest (${extractedArticles.length} items)`,
+            extractedWordCount: totalWords,
+            extractedCharCount: targetText.length,
+            extractedText: targetText,
+            articles: extractedArticles,
+            feedAudit,
+          };
+        }
+      }
+    }
+    // B. Direct URL Ingestion
+    else if (directUrl && directUrl.trim().length > 0) {
+      const cleanUrl = directUrl.trim();
       try {
         const extracted = await extractDirectUrl(cleanUrl, (type, payload) => this.logEvent(type, payload));
-
+        targetText = extracted.content;
         sourceAudit = {
           sourceType: "URL",
           sourceIdentifier: cleanUrl,
@@ -549,22 +858,20 @@ export class AIEventPipeline extends EventEmitter {
           extractedWordCount: extracted.wordCount,
           extractedCharCount: extracted.content.length,
           extractedText: extracted.content,
+          articles: [
+            {
+              title: extracted.title,
+              url: cleanUrl,
+              content: extracted.content,
+              wordCount: extracted.wordCount,
+              charCount: extracted.content.length,
+            },
+          ],
         };
-        targetText = extracted.content;
-
-        console.log(`[PIPELINE] ✅ URL extracted: "${extracted.title}" (${extracted.wordCount} words)`);
       } catch (err: any) {
-        if (!fallbackText) {
-          throw new Error(`URL extraction failed (${err.message}) and no input_text was provided.`);
-        }
-
-        console.warn(`[PIPELINE] ⚠️ URL extraction failed (${err.message}). Falling back to input_text.`);
-        this.logEvent("URL_EXTRACTION_FAILED", {
-          url: cleanUrl,
-          error: err.message,
-          resolution: "Fell back to input_text",
-        });
-
+        if (!fallbackText) throw err;
+        console.warn(`[PIPELINE] ⚠️ Direct URL failed (${err.message}). Falling back to input_text.`);
+        targetText = fallbackText;
         sourceAudit = {
           sourceType: "FALLBACK_INPUT_TEXT",
           sourceIdentifier: `Fallback (URL failed: ${cleanUrl})`,
@@ -572,15 +879,17 @@ export class AIEventPipeline extends EventEmitter {
           extractedWordCount: fallbackText.split(/\s+/).filter(Boolean).length,
           extractedCharCount: fallbackText.length,
           extractedText: fallbackText,
+          articles: [],
           scrapeError: err.message,
         };
-        targetText = fallbackText;
       }
-    } else {
+    }
+    // C. Direct Raw Text Ingestion
+    else {
       if (!fallbackText) {
-        throw new Error("Execution rejected: Both URL and input_text are empty.");
+        throw new Error("Execution rejected: No input available (URL and input_text are empty).");
       }
-
+      targetText = fallbackText;
       sourceAudit = {
         sourceType: "INPUT_TEXT",
         sourceIdentifier: "Direct Text Input",
@@ -588,9 +897,8 @@ export class AIEventPipeline extends EventEmitter {
         extractedWordCount: fallbackText.split(/\s+/).filter(Boolean).length,
         extractedCharCount: fallbackText.length,
         extractedText: fallbackText,
+        articles: [],
       };
-      targetText = fallbackText;
-      console.log(`[PIPELINE] ℹ️ Using input_text directly (${sourceAudit.extractedWordCount} words).`);
     }
 
     // Context protection truncation
@@ -631,8 +939,8 @@ export class AIEventPipeline extends EventEmitter {
 
 You MUST analyze the text and output ONLY a valid JSON object matching this exact schema:
 {
-  "headline": "A concise, descriptive headline for the document",
-  "executive_summary": "Thorough, comprehensive narrative summary of the document. Do not artificially abbreviate or constrain the summary to a fixed sentence count; scale the length proportionally to capture the full depth, arguments, and substance of the content.",
+  "headline": "A concise, descriptive headline for the document collection",
+  "executive_summary": "Thorough, comprehensive narrative summary of the document(s). Do not artificially abbreviate or constrain the summary to a fixed sentence count; scale the length proportionally to capture the full depth, arguments, and substance of the content.",
   "key_points": [
     "Comprehensive array of all major arguments, key findings, and essential takeaways from the text (scale the number of points to the depth of the text)"
   ],
@@ -766,7 +1074,9 @@ Definitions for classification axes:
       completion_tokens_per_second: completionTokensPerSec,
     };
 
-    console.log(`⏱️ Duration: ${(totalDurationMs / 1000).toFixed(2)}s | CPU Peak: ${cpuMetrics.maxCpuPercent}% | Ingest: ${tokenMetrics.prompt_tokens_per_second} t/s | Gen: ${tokenMetrics.completion_tokens_per_second} t/s\n`);
+    console.log(
+      `⏱️ Duration: ${(totalDurationMs / 1000).toFixed(2)}s | CPU Peak: ${cpuMetrics.maxCpuPercent}% | Ingest: ${tokenMetrics.prompt_tokens_per_second} t/s | Gen: ${tokenMetrics.completion_tokens_per_second} t/s\n`
+    );
 
     this.logEvent("INFERENCE_COMPLETED", {
       modelName,
@@ -838,7 +1148,7 @@ Definitions for classification axes:
 }
 
 // -------------------------------------------------------------
-// 8. GITHUB STEP SUMMARY (Zero-Indent CommonMark)
+// 9. GITHUB STEP SUMMARY
 // -------------------------------------------------------------
 function publishStepSummary(
   modelName: string,
@@ -853,13 +1163,41 @@ function publishStepSummary(
   const sa = result.source_audit;
   const comp = result.compression;
 
-  // Annotated Notice including Host Fingerprint & Max CPU
   console.log(
     `::notice title=AI Pipeline Succeeded (${modelName})::🖥️ ${hf.rawFingerprint} | ⚡ Max CPU: ${cm.maxCpuPercent}% | 📥 Ingest: ${tm.prompt_tokens_per_second} t/s | ⚡ Gen: ${tm.completion_tokens_per_second} t/s | 💾 Peak Swap: ${sm.peak_server_swap_mb} MB`
   );
 
   const summaryPath = process.env.GITHUB_STEP_SUMMARY;
   if (!summaryPath) return;
+
+  const feedSection: string[] = [];
+  if (sa.feedAudit) {
+    const fa = sa.feedAudit;
+    feedSection.push(`### 📡 Feed Discovery & Ingested Articles`);
+    if (fa.usedFallback) {
+      feedSection.push(
+        `> ⚠️ **Collection goal unmet** (${fa.collectedArticles.length}/${fa.goalCount} articles found within ${fa.maxAgeHours}h). Gracefully engaged default fallback URL.`
+      );
+    } else {
+      feedSection.push(
+        `> ✅ **Collection goal met:** Ingested ${fa.targetArticles.length} article(s) published within ${fa.maxAgeHours}h.`
+      );
+    }
+
+    feedSection.push(
+      ``,
+      `| # | Article Title | Source Feed | Published Age | Link |`,
+      `| :--- | :--- | :--- | :--- | :--- |`
+    );
+
+    fa.targetArticles.forEach((art, idx) => {
+      feedSection.push(
+        `| **${idx + 1}** | **${art.title}** | \`${art.sourceFeed}\` | ${art.ageHours !== undefined ? `\`${art.ageHours}h ago\`` : "Default Fallback"} | [Visit Article](${art.url}) |`
+      );
+    });
+
+    feedSection.push(``, `---`, ``);
+  }
 
   const lines: string[] = [
     `# 🧠 AI Transformer Pipeline Execution Report`,
@@ -874,6 +1212,7 @@ function publishStepSummary(
     ``,
     `---`,
     ``,
+    ...feedSection,
     `## 🧭 Content Stance & Ideological Alignment`,
     ``,
     `| Axis | Classification | Question Evaluated |`,
@@ -1012,7 +1351,7 @@ function publishStepSummary(
 }
 
 // -------------------------------------------------------------
-// 9. MAIN ENTRY POINT
+// 10. MAIN ENTRY POINT
 // -------------------------------------------------------------
 async function main() {
   const runnerMetadata: RunnerMetadata = {
@@ -1036,37 +1375,55 @@ async function main() {
     throw new Error("Missing required environment variable: MODEL_NAME");
   }
 
-  const rawUrl = (process.env.URL ?? "").trim();
-  const rawInputText = (process.env.INPUT_TEXT ?? "").trim();
   const prompt = (process.env.PROMPT ?? "").trim();
-
   if (!prompt) {
     throw new Error("Missing required environment variable: PROMPT");
   }
-  if (!rawUrl && !rawInputText) {
-    throw new Error("No input provided: Both URL and INPUT_TEXT environment variables are empty.");
-  }
+
+  const inputSource = (process.env.INPUT_SOURCE || "feed").toLowerCase().trim();
+  const rawUrl = (process.env.URL ?? "").trim();
+  const rawInputText = (process.env.INPUT_TEXT ?? "").trim();
+  const maxAgeHours = parseFloat(process.env.FEED_MAX_AGE_HOURS || "24");
+  const goalCount = parseInt(process.env.ARTICLE_COUNT_GOAL || "1", 10);
 
   const hostFingerprint = getHostFingerprint();
 
   console.log("=== Host & Environment Configuration ===");
   console.log({
+    inputSource,
+    goalCount,
+    maxAgeHours,
     hostFingerprint: hostFingerprint.rawFingerprint,
-    l3Cache: hostFingerprint.l3Cache,
-    avxFlags: hostFingerprint.avxFlags,
     runnerMetadata,
     modelName,
     serverUrl,
-    hasUrl: Boolean(rawUrl),
-    hasInputText: Boolean(rawInputText),
   });
 
   const pipeline = new AIEventPipeline(runnerMetadata);
 
+  let directUrl: string | undefined;
+  let feedAudit: FeedSelectionAudit | undefined;
+
+  if (inputSource === "feed") {
+    feedAudit = await collectArticlesFromFeeds(
+      DEFAULT_FEED_URLS,
+      maxAgeHours,
+      goalCount,
+      (type, payload) => pipeline.logEvent(type, payload)
+    );
+  } else if (inputSource === "url") {
+    directUrl = rawUrl;
+  } else if (inputSource === "text") {
+    directUrl = "";
+  } else {
+    throw new Error(`Invalid INPUT_SOURCE: "${inputSource}". Must be "feed", "url", or "text".`);
+  }
+
   try {
     const result = await pipeline.execute({
-      url: rawUrl,
+      directUrl,
       fallbackText: rawInputText,
+      feedAudit,
       systemPrompt: prompt,
       serverUrl,
       modelName,
