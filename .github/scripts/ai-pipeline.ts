@@ -40,8 +40,59 @@ export const DEFAULT_INFERENCE_PARAMS: ModelInferenceParams = {
   max_tokens: 4096,
 };
 
+// Strict JSON Schema for GBNF grammar enforcement in llama.cpp
+export const STRICT_SUMMARY_JSON_SCHEMA = {
+  type: "object",
+  properties: {
+    headline: {
+      type: "string",
+      description: "A concise, descriptive headline for the document",
+    },
+    analytic_synthesis: {
+      type: "string",
+      description:
+        "Comprehensive, cohesive narrative prose synthesizing the core findings, mechanisms, and nuances of the document in uninterrupted paragraphs.",
+    },
+    sentiment: {
+      type: "string",
+      enum: ["positive", "neutral", "negative", "mixed"],
+    },
+    stance_on_change: {
+      type: "string",
+      enum: ["conservatism", "progressivism", "not_applicable"],
+    },
+    stance_on_economic_power: {
+      type: "string",
+      enum: ["socialism", "libertarianism", "not_applicable"],
+    },
+    stance_on_state_power: {
+      type: "string",
+      enum: ["statism", "constitutionalism", "not_applicable"],
+    },
+    stance_on_borders: {
+      type: "string",
+      enum: ["nationalism", "internationalism", "not_applicable"],
+    },
+    stance_on_personal_sphere: {
+      type: "string",
+      enum: ["civil_libertarianism", "communitarianism", "not_applicable"],
+    },
+  },
+  required: [
+    "headline",
+    "analytic_synthesis",
+    "sentiment",
+    "stance_on_change",
+    "stance_on_economic_power",
+    "stance_on_state_power",
+    "stance_on_borders",
+    "stance_on_personal_sphere",
+  ],
+  additionalProperties: false,
+};
+
 // -------------------------------------------------------------
-// 1. UUID GENERATORS (RFC 4122 UUIDv4 & RFC 4122 UUIDv5)
+// 1. UUID GENERATORS (RFC 4122 UUIDv5)
 // -------------------------------------------------------------
 const UUIDV5_NAMESPACE = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
 
@@ -129,7 +180,7 @@ function getHostFingerprint(): HostFingerprint {
   const cpus = os.cpus();
   const cpuModel = cpus[0]?.model?.trim() || "Unknown CPU";
   const coreCount = cpus.length;
-  const totalRamGb = (os.totalmem() / (1024 ** 3)).toFixed(2) + " GB";
+  const totalRamGb = (os.totalmem() / 1024 ** 3).toFixed(2) + " GB";
   const l3Cache = detectL3Cache();
 
   const avxFlags: string[] = [];
@@ -343,7 +394,7 @@ export interface PipelineEvent<T = any> {
 }
 
 // -------------------------------------------------------------
-// 4. STAGE 2 & STAGE 4: CLASSIFIERS
+// 4. CLASSIFIERS
 // -------------------------------------------------------------
 export function shallowClassify(item: any): ShallowClassificationResult {
   if (
@@ -464,7 +515,7 @@ export function deepClassify(cleanMarkdown: string, wordCount: number): DeepClas
 }
 
 // -------------------------------------------------------------
-// 5. STAGE 3: CONTENT EXTRACTION (DEFUDDLE + READER PROXY)
+// 5. CONTENT EXTRACTION (DEFUDDLE + READER PROXY)
 // -------------------------------------------------------------
 async function extractDirectUrl(
   url: string,
@@ -555,7 +606,7 @@ async function extractDirectUrl(
 }
 
 // -------------------------------------------------------------
-// 6. STAGE 1 & ORCHESTRATION: FEED PARSER & CLASSIFIER LOOP
+// 6. FEED DISCOVERY & PARSING
 // -------------------------------------------------------------
 function normalizeFeedEntries(parsedResult: any): Array<{ title: string; url: string; publishedDate: Date | null; rawItem: any }> {
   const { format, feed } = parsedResult;
@@ -784,7 +835,7 @@ async function collectAndClassifyFeedArticles(
 }
 
 // -------------------------------------------------------------
-// 7. SWAP ACTIVITY & MEMORY SNAPSHOTS
+// 7. SWAP & MEMORY METRICS
 // -------------------------------------------------------------
 function readServerPid(): number | null {
   try {
@@ -1032,7 +1083,10 @@ export class AIEventPipeline extends EventEmitter {
       presence_penalty: 0.2,
       frequency_penalty: 0.2,
       max_tokens: inferenceParams.max_tokens,
-      response_format: { type: "json_object" },
+      response_format: {
+        type: "json_object",
+        schema: STRICT_SUMMARY_JSON_SCHEMA,
+      },
       stream: false,
       chat_template_kwargs: { enable_thinking: false },
     };
@@ -1143,22 +1197,33 @@ export class AIEventPipeline extends EventEmitter {
       const match = rawContent.match(/\{[\s\S]*\}/);
       parsed = JSON.parse(match ? match[0] : rawContent);
     } catch {
-      parsed = {
-        headline: sourceTitle,
-        analytic_synthesis: rawContent.trim(),
-        sentiment: "neutral",
-        stance_on_change: "not_applicable",
-        stance_on_economic_power: "not_applicable",
-        stance_on_state_power: "not_applicable",
-        stance_on_borders: "not_applicable",
-        stance_on_personal_sphere: "not_applicable",
-      };
+      parsed = {};
     }
 
-    const synthesisText = parsed.analytic_synthesis || parsed.executive_summary || rawContent.trim();
+    // Defensive mapping to ensure clean Markdown prose is always produced
+    let synthesisProse = "";
+    if (typeof parsed.analytic_synthesis === "string" && parsed.analytic_synthesis.trim()) {
+      synthesisProse = parsed.analytic_synthesis.trim();
+    } else if (typeof parsed.summary === "string" && parsed.summary.trim()) {
+      synthesisProse = parsed.summary.trim();
+    } else if (typeof parsed.executive_summary === "string" && parsed.executive_summary.trim()) {
+      synthesisProse = parsed.executive_summary.trim();
+    } else {
+      // If the model produced non-standard keys (e.g. key_events, expert_analysis), synthesize them into paragraphs
+      const proseBlocks: string[] = [];
+      if (parsed.title) proseBlocks.push(`### ${parsed.title}`);
+      if (parsed.summary) proseBlocks.push(parsed.summary);
+      if (Array.isArray(parsed.key_points)) {
+        proseBlocks.push(parsed.key_points.map((p: any) => (typeof p === "string" ? p : p.point || JSON.stringify(p))).join(" "));
+      }
+      if (Array.isArray(parsed.key_events)) {
+        proseBlocks.push(parsed.key_events.map((e: any) => `${e.location || ""}: ${e.details || ""}`.trim()).join(" "));
+      }
+      synthesisProse = proseBlocks.length > 0 ? proseBlocks.join("\n\n") : rawContent.trim();
+    }
 
     const inLen = targetText.length || 1;
-    const outLen = synthesisText.length;
+    const outLen = synthesisProse.length;
     const retentionPct = ((outLen / inLen) * 100).toFixed(1);
     const reductionPct = Math.max(0, 100 - parseFloat(retentionPct)).toFixed(1);
 
@@ -1171,8 +1236,8 @@ export class AIEventPipeline extends EventEmitter {
     };
 
     const structuredResult: SummaryStructuredOutput = {
-      headline: parsed.headline || sourceTitle,
-      analytic_synthesis: synthesisText,
+      headline: parsed.headline || parsed.title || sourceTitle,
+      analytic_synthesis: synthesisProse,
       sentiment: parsed.sentiment || "neutral",
       stance_on_change: parsed.stance_on_change || "not_applicable",
       stance_on_economic_power: parsed.stance_on_economic_power || "not_applicable",
@@ -1199,7 +1264,7 @@ export class AIEventPipeline extends EventEmitter {
 }
 
 // -------------------------------------------------------------
-// 10. GITHUB STEP SUMMARY (COMPLETE RE-INTEGRATED SPECIFICATION)
+// 10. GITHUB STEP SUMMARY
 // -------------------------------------------------------------
 function publishStepSummary(
   modelName: string,
@@ -1268,8 +1333,8 @@ function publishStepSummary(
     `| **Top-K** | \`${inferenceParams.top_k}\` | Top-K vocabulary truncation |`,
     `| **Top-P (Nucleus)** | \`${inferenceParams.top_p}\` | Cumulative probability cutoff |`,
     `| **Min-P** | \`${inferenceParams.min_p}\` | Relative minimum probability threshold |`,
-    `| **Repeat Penalty** | \`${inferenceParams.repeat_penalty}\` | Penalty to prevent token loops |`,
-    `| **Max Completion Tokens** | \`${inferenceParams.max_tokens}\` | Hard ceiling circuit breaker |`,
+    `| **Repeat Penalty** | \`${inferenceParams.repeat_penalty}\` | Penalty against degenerative token loops |`,
+    `| **Max Output Tokens** | \`${inferenceParams.max_tokens}\` | Hard completion circuit-breaker |`,
     `| **Context Size** | \`${process.env.CONTEXT_SIZE || "16384"}\` | Maximum transformer context window |`,
     ``,
     `---`,
@@ -1419,7 +1484,11 @@ async function main() {
     throw new Error("Missing required environment variable: MODEL_NAME");
   }
 
-  const defaultSystemPrompt = `You are a precise, objective intelligence analyst. Your mandate is to produce a faithful, high-density synthesis of the provided document.
+  const defaultPreamble = `You are a precise, objective intelligence analyst. Your mandate is to produce a faithful, high-density synthesis of the provided document.`;
+  const promptPreamble = (process.env.PROMPT || defaultPreamble).trim();
+
+  // Full system prompt enforcing principles and exact schema
+  const systemPrompt = `${promptPreamble}
 
 OPERATIONAL PRINCIPLES:
 1. STRICT DERIVATIVE FIDELITY:
@@ -1431,7 +1500,7 @@ OPERATIONAL PRINCIPLES:
 3. NATURAL, COHERENT PROSE (NO ARRAYS, NO BULLETS):
    Deliver the entire summary in fluent, continuous paragraphs within "analytic_synthesis".
    - Trace the core reality or thesis.
-   - Detail the specific evidence, actors, figures, or causal mechanisms.
+   - Detail the specific evidence, actors, figures, or causal mechanisms in-line.
    - Note any acknowledged boundaries, limitations, or counter-claims.
    - Let the depth of the document determine the length naturally: simple news briefs require brief paragraphs; complex treatises naturally require thorough multi-paragraph exposition.
 
@@ -1472,7 +1541,6 @@ Definitions for classification axes:
   * communitarianism: Social obligations, collective well-being, or communal cohesion supersede individual autonomy.
   * not_applicable: Topic does not discuss individual vs communal rights.`;
 
-  const prompt = (process.env.PROMPT || defaultSystemPrompt).trim();
   const inputSource = (process.env.INPUT_SOURCE || "feed").toLowerCase().trim();
   const rawUrl = (process.env.URL ?? "").trim();
   const rawInputText = (process.env.INPUT_TEXT ?? "").trim();
@@ -1591,7 +1659,7 @@ Definitions for classification axes:
       sourceTitle: t.sourceTitle,
       targetText: t.content,
       feedAudit,
-      systemPrompt: prompt,
+      systemPrompt,
       serverUrl,
       modelName,
       inferenceParams,
