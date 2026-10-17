@@ -11,7 +11,7 @@ import { parseHTML } from "linkedom";
 import { Defuddle } from "defuddle/node";
 
 // -------------------------------------------------------------
-// 1. RFC 4122 UUID v5 GENERATOR (`evt-<uuidv5>`)
+// 1. UUID GENERATORS (RFC 4122 UUIDv4 & RFC 4122 UUIDv5)
 // -------------------------------------------------------------
 const UUIDV5_NAMESPACE = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
 
@@ -40,7 +40,149 @@ function generateUuidV5(name: string, namespace: string = UUIDV5_NAMESPACE): str
 }
 
 // -------------------------------------------------------------
-// 2. SCHEMAS & INTERFACES
+// 2. HARDWARE FINGERPRINT & HOST DIAGNOSTICS
+// -------------------------------------------------------------
+export interface HostFingerprint {
+  cpuModel: string;
+  coreCount: number;
+  l3Cache: string;
+  avxFlags: string[];
+  totalRamGb: string;
+  rawFingerprint: string;
+}
+
+export interface RunnerMetadata {
+  runnerName: string;
+  runId: string;
+  runNumber: string;
+  workflow: string;
+  osArch: string;
+  shardId: string;
+  modelFamily: string;
+  requestedModelId: string;
+}
+
+export interface CpuUtilizationMetrics {
+  maxCpuPercent: number;
+  avgCpuPercent: number;
+  samplesTaken: number;
+}
+
+function detectL3Cache(): string {
+  try {
+    const cacheDir = "/sys/devices/system/cpu/cpu0/cache";
+    if (fs.existsSync(cacheDir)) {
+      for (const idx of fs.readdirSync(cacheDir)) {
+        const levelPath = `${cacheDir}/${idx}/level`;
+        if (fs.existsSync(levelPath) && fs.readFileSync(levelPath, "utf8").trim() === "3") {
+          const raw = fs.readFileSync(`${cacheDir}/${idx}/size`, "utf8").trim();
+          let bytes = 0;
+          if (raw.endsWith("K")) bytes = parseInt(raw, 10) * 1024;
+          else if (raw.endsWith("M")) bytes = parseInt(raw, 10) * 1024 * 1024;
+          else bytes = parseInt(raw, 10);
+          return `${(bytes / (1024 * 1024)).toFixed(2)} MB (${bytes} bytes)`;
+        }
+      }
+    }
+  } catch {}
+
+  try {
+    const out = execSync("lscpu", { encoding: "utf8" });
+    const match = out.match(/L3 cache:\s*(.+)$/m);
+    if (match) return match[1].trim();
+  } catch {}
+
+  return "Unknown";
+}
+
+function getHostFingerprint(): HostFingerprint {
+  const cpus = os.cpus();
+  const cpuModel = cpus[0]?.model?.trim() || "Unknown CPU";
+  const coreCount = cpus.length;
+  const totalRamGb = (os.totalmem() / (1024 ** 3)).toFixed(2) + " GB";
+  const l3Cache = detectL3Cache();
+
+  const avxFlags: string[] = [];
+  try {
+    const cpuInfo = fs.readFileSync("/proc/cpuinfo", "utf8");
+    const flagsMatch = cpuInfo.match(/^flags\s*:\s*(.+)$/m);
+    if (flagsMatch) {
+      const flags = new Set(flagsMatch[1].split(/\s+/));
+      if (flags.has("avx")) avxFlags.push("AVX");
+      if (flags.has("avx2")) avxFlags.push("AVX2");
+      if (flags.has("avx512f")) avxFlags.push("AVX-512");
+      if (flags.has("fma")) avxFlags.push("FMA");
+      if (flags.has("neon")) avxFlags.push("NEON");
+    }
+  } catch {}
+
+  return {
+    cpuModel,
+    coreCount,
+    l3Cache,
+    avxFlags: avxFlags.length > 0 ? avxFlags : ["Not Detected / None"],
+    totalRamGb,
+    rawFingerprint: `CPU: ${cpuModel} (${coreCount} cores) | RAM: ${totalRamGb}`,
+  };
+}
+
+class SystemCpuSampler {
+  private prevStat: { total: number; idle: number } | null = null;
+  private samples: number[] = [];
+  private timer: NodeJS.Timeout | null = null;
+
+  private readStat(): { total: number; idle: number } | null {
+    try {
+      const stat = fs.readFileSync("/proc/stat", "utf8");
+      const line = stat.split("\n")[0];
+      if (!line.startsWith("cpu ")) return null;
+
+      const parts = line.trim().split(/\s+/).slice(1).map(Number);
+      // fields: user, nice, system, idle, iowait, irq, softirq, steal
+      const idle = parts[3] + (parts[4] || 0);
+      const nonIdle = parts[0] + parts[1] + parts[2] + (parts[5] || 0) + (parts[6] || 0) + (parts[7] || 0);
+      const total = idle + nonIdle;
+      return { total, idle };
+    } catch {
+      return null;
+    }
+  }
+
+  public start(intervalMs = 1000) {
+    this.prevStat = this.readStat();
+    this.samples = [];
+
+    this.timer = setInterval(() => {
+      const current = this.readStat();
+      if (current && this.prevStat) {
+        const deltaTotal = current.total - this.prevStat.total;
+        const deltaIdle = current.idle - this.prevStat.idle;
+        if (deltaTotal > 0) {
+          const utilPercent = Math.max(0, Math.min(100, ((deltaTotal - deltaIdle) / deltaTotal) * 100));
+          this.samples.push(utilPercent);
+        }
+      }
+      this.prevStat = current;
+    }, intervalMs);
+  }
+
+  public stop(): CpuUtilizationMetrics {
+    if (this.timer) clearInterval(this.timer);
+    if (this.samples.length === 0) {
+      return { maxCpuPercent: 0, avgCpuPercent: 0, samplesTaken: 0 };
+    }
+    const max = Math.max(...this.samples);
+    const avg = this.samples.reduce((a, b) => a + b, 0) / this.samples.length;
+    return {
+      maxCpuPercent: Number(max.toFixed(1)),
+      avgCpuPercent: Number(avg.toFixed(1)),
+      samplesTaken: this.samples.length,
+    };
+  }
+}
+
+// -------------------------------------------------------------
+// 3. SCHEMAS & INTERFACES
 // -------------------------------------------------------------
 export type StanceOnChange = "conservatism" | "progressivism" | "not_applicable";
 export type StanceOnEconomicPower = "socialism" | "libertarianism" | "not_applicable";
@@ -81,6 +223,14 @@ export interface SwapActivityMetrics {
   swap_bytes_read_mb: number;
 }
 
+export interface CompressionAnalysis {
+  inputChars: number;
+  outputChars: number;
+  retentionRatioPercent: string;
+  reductionRatioPercent: string;
+  explanation: string;
+}
+
 export interface SummaryStructuredOutput {
   headline: string;
   executive_summary: string;
@@ -91,11 +241,14 @@ export interface SummaryStructuredOutput {
   stance_on_state_power: StanceOnStatePower;
   stance_on_borders: StanceOnBorders;
   stance_on_personal_sphere: StanceOnPersonalSphere;
-  compression_ratio: string;
+  compression: CompressionAnalysis;
   raw_output: string;
   source_audit: SourceAudit;
   token_metrics: DetailedTokenMetrics;
   swap_metrics: SwapActivityMetrics;
+  cpu_metrics: CpuUtilizationMetrics;
+  host_fingerprint: HostFingerprint;
+  runner_metadata: RunnerMetadata;
   input_text: string;
   system_prompt: string;
   user_prompt: string;
@@ -119,7 +272,7 @@ export interface PipelineEvent<T = any> {
 }
 
 // -------------------------------------------------------------
-// 3. DIRECT URL INGESTION (Defuddle + Cloudflare Bypass Fallback)
+// 4. DIRECT URL INGESTION (Defuddle + Reader Proxy Fallback)
 // -------------------------------------------------------------
 async function extractDirectUrl(
   url: string,
@@ -153,7 +306,7 @@ async function extractDirectUrl(
     directFetchFailed = true;
   }
 
-  // 1. Direct fetch parsing with Defuddle
+  // Direct fetch parsing with Defuddle
   if (!directFetchFailed && html.length > 100) {
     emitEvent("URL_HTTP_FETCH_COMPLETED", { url, bytes: Buffer.byteLength(html, "utf8") });
 
@@ -178,7 +331,7 @@ async function extractDirectUrl(
     }
   }
 
-  // 2. Open Reader Proxy Fallback (bypasses datacenter 403 blocks)
+  // Fallback to Jina Reader Proxy
   console.log(`[SCRAPER] 🔄 Engaging Reader Proxy to bypass Cloudflare datacenter IP block...`);
   const proxyUrl = `https://r.jina.ai/${url}`;
 
@@ -212,7 +365,7 @@ async function extractDirectUrl(
 }
 
 // -------------------------------------------------------------
-// 4. SWAP ACTIVITY & HARDWARE DIAGNOSTICS
+// 5. SWAP ACTIVITY & MEMORY SNAPSHOTS
 // -------------------------------------------------------------
 function readServerPid(): number | null {
   try {
@@ -278,35 +431,8 @@ function getMemorySnapshot() {
   };
 }
 
-function detectL3Cache(): string {
-  try {
-    const cacheDir = "/sys/devices/system/cpu/cpu0/cache";
-    if (fs.existsSync(cacheDir)) {
-      for (const idx of fs.readdirSync(cacheDir)) {
-        const levelPath = `${cacheDir}/${idx}/level`;
-        if (fs.existsSync(levelPath) && fs.readFileSync(levelPath, "utf8").trim() === "3") {
-          const raw = fs.readFileSync(`${cacheDir}/${idx}/size`, "utf8").trim();
-          let bytes = 0;
-          if (raw.endsWith("K")) bytes = parseInt(raw) * 1024;
-          else if (raw.endsWith("M")) bytes = parseInt(raw) * 1024 * 1024;
-          else bytes = parseInt(raw);
-          return `${(bytes / (1024 * 1024)).toFixed(2)} MB (${bytes} bytes)`;
-        }
-      }
-    }
-  } catch {}
-
-  try {
-    const out = execSync("lscpu", { encoding: "utf8" });
-    const match = out.match(/L3 cache:\s*(.+)$/m);
-    if (match) return match[1].trim();
-  } catch {}
-
-  return "Unknown";
-}
-
 // -------------------------------------------------------------
-// 5. TIMEOUT-FREE OPENAPI HTTP CLIENT
+// 6. TIMEOUT-FREE OPENAPI HTTP CLIENT
 // -------------------------------------------------------------
 function postOpenAIChatCompletion(urlStr: string, payload: any): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -350,25 +476,26 @@ function postOpenAIChatCompletion(urlStr: string, payload: any): Promise<any> {
 }
 
 // -------------------------------------------------------------
-// 6. EVENT-DRIVEN PIPELINE ORCHESTRATOR
+// 7. EVENT-DRIVEN PIPELINE ORCHESTRATOR
 // -------------------------------------------------------------
 export class AIEventPipeline extends EventEmitter {
   private auditLog: PipelineEvent[] = [];
   private correlationId: string;
-  private runnerName: string;
-  private shardId: string;
+  private runnerMetadata: RunnerMetadata;
+  private hostFingerprint: HostFingerprint;
   private jsonlFilePath: string;
 
-  constructor(runnerName: string, shardId: string, jsonlFilePath = "pipeline-events.jsonl") {
+  constructor(runnerMetadata: RunnerMetadata, jsonlFilePath = "pipeline-events.jsonl") {
     super();
-    this.runnerName = runnerName;
-    this.shardId = shardId;
-    this.correlationId = `corr-${Date.now()}`;
+    this.runnerMetadata = runnerMetadata;
+    this.hostFingerprint = getHostFingerprint();
+    // Standard RFC 4122 UUIDv4 Correlation ID
+    this.correlationId = `corr-${crypto.randomUUID()}`;
     this.jsonlFilePath = jsonlFilePath;
   }
 
   private createEventId(eventType: string, epochMs: number): string {
-    const seed = `runner:${this.runnerName}:shard:${this.shardId}:epoch:${epochMs}:event:${eventType}`;
+    const seed = `runner:${this.runnerMetadata.runnerName}:shard:${this.runnerMetadata.shardId}:epoch:${epochMs}:event:${eventType}`;
     return `evt-${generateUuidV5(seed)}`;
   }
 
@@ -466,7 +593,7 @@ export class AIEventPipeline extends EventEmitter {
       console.log(`[PIPELINE] ℹ️ Using input_text directly (${sourceAudit.extractedWordCount} words).`);
     }
 
-    // Safety truncate to ~6,000 words
+    // Context protection truncation
     const words = targetText.split(/\s+/).filter(Boolean);
     if (words.length > 6000) {
       targetText = words.slice(0, 6000).join(" ") + "\n\n[...Truncated to fit context window...]";
@@ -486,13 +613,15 @@ export class AIEventPipeline extends EventEmitter {
       userPrompt: userPromptContent,
     });
 
-    // Baseline Swap
+    // Start swap & CPU sampling
     const vmstatStart = getVmstatSwap();
     let peakProcessSwapMb = 0;
     const initialSnap = getMemorySnapshot();
     peakProcessSwapMb = Math.max(peakProcessSwapMb, initialSnap.vmSwapMb);
 
-    // OPENAPI CHAT COMPLETION PAYLOAD WITH EXPANDED SUMMARY & 5 STANCE AXES
+    const cpuSampler = new SystemCpuSampler();
+    cpuSampler.start(1000);
+
     const openAiPayload = {
       model: modelName,
       messages: [
@@ -548,21 +677,6 @@ Definitions for classification axes:
       chat_template_kwargs: { enable_thinking: false },
     };
 
-    // Console Inspection
-    console.log("\n" + "=".repeat(80));
-    console.log("📥 [VERBATIM INPUT TEXT SENT TO PIPELINE]:");
-    console.log("=".repeat(80));
-    console.log(targetText);
-
-    console.log("\n" + "=".repeat(80));
-    console.log("📝 [VERBATIM INPUT PROMPT PAYLOAD (SYSTEM + USER)]:");
-    console.log("=".repeat(80));
-    console.log("--- SYSTEM PROMPT ---");
-    console.log(openAiPayload.messages[0].content);
-    console.log("\n--- USER PROMPT ---");
-    console.log(userPromptContent);
-    console.log("=".repeat(80) + "\n");
-
     const startTime = performance.now();
     this.logEvent("INFERENCE_DISPATCHED", {
       serverUrl,
@@ -597,6 +711,7 @@ Definitions for classification axes:
     }
 
     const totalDurationMs = Math.round(performance.now() - startTime);
+    const cpuMetrics = cpuSampler.stop();
 
     // Finalize Swap Stats
     const finalSnap = getMemorySnapshot();
@@ -651,18 +766,14 @@ Definitions for classification axes:
       completion_tokens_per_second: completionTokensPerSec,
     };
 
-    console.log("\n" + "=".repeat(80));
-    console.log("🤖 [VERBATIM RAW MODEL OUTPUT]:");
-    console.log("=".repeat(80));
-    console.log(rawContent);
-    console.log("=".repeat(80));
-    console.log(`⏱️ Duration: ${(totalDurationMs / 1000).toFixed(2)}s | Ingest: ${tokenMetrics.prompt_tokens_per_second} t/s | Gen: ${tokenMetrics.completion_tokens_per_second} t/s\n`);
+    console.log(`⏱️ Duration: ${(totalDurationMs / 1000).toFixed(2)}s | CPU Peak: ${cpuMetrics.maxCpuPercent}% | Ingest: ${tokenMetrics.prompt_tokens_per_second} t/s | Gen: ${tokenMetrics.completion_tokens_per_second} t/s\n`);
 
     this.logEvent("INFERENCE_COMPLETED", {
       modelName,
       sourceType: sourceAudit.sourceType,
       tokenMetrics,
       swapMetrics,
+      cpuMetrics,
       rawOutput: rawContent,
     });
 
@@ -684,6 +795,20 @@ Definitions for classification axes:
       };
     }
 
+    // Transparent Compression Calculation
+    const inLen = targetText.length || 1;
+    const outLen = rawContent.length;
+    const retentionPct = ((outLen / inLen) * 100).toFixed(1);
+    const reductionPct = Math.max(0, 100 - parseFloat(retentionPct)).toFixed(1);
+
+    const compression: CompressionAnalysis = {
+      inputChars: inLen,
+      outputChars: outLen,
+      retentionRatioPercent: `${retentionPct}%`,
+      reductionRatioPercent: `${reductionPct}%`,
+      explanation: `Retention Ratio = (Output Chars / Input Chars) * 100%. The summary retains ${retentionPct}% of the raw text size, corresponding to a ${reductionPct}% content reduction.`,
+    };
+
     const structuredResult: SummaryStructuredOutput = {
       headline: parsed.headline || sourceAudit.sourceTitle || "Summary Output",
       executive_summary: parsed.executive_summary || rawContent,
@@ -694,11 +819,14 @@ Definitions for classification axes:
       stance_on_state_power: parsed.stance_on_state_power || "not_applicable",
       stance_on_borders: parsed.stance_on_borders || "not_applicable",
       stance_on_personal_sphere: parsed.stance_on_personal_sphere || "not_applicable",
-      compression_ratio: `${((rawContent.length / targetText.length) * 100).toFixed(1)}%`,
+      compression,
       raw_output: rawContent,
       source_audit: sourceAudit,
       token_metrics: tokenMetrics,
       swap_metrics: swapMetrics,
+      cpu_metrics: cpuMetrics,
+      host_fingerprint: this.hostFingerprint,
+      runner_metadata: this.runnerMetadata,
       input_text: targetText,
       system_prompt: openAiPayload.messages[0].content,
       user_prompt: userPromptContent,
@@ -710,7 +838,7 @@ Definitions for classification axes:
 }
 
 // -------------------------------------------------------------
-// 7. GITHUB STEP SUMMARY (Zero-Indent CommonMark)
+// 8. GITHUB STEP SUMMARY (Zero-Indent CommonMark)
 // -------------------------------------------------------------
 function publishStepSummary(
   modelName: string,
@@ -719,10 +847,15 @@ function publishStepSummary(
 ) {
   const tm = result.token_metrics;
   const sm = result.swap_metrics;
+  const cm = result.cpu_metrics;
+  const hf = result.host_fingerprint;
+  const rm = result.runner_metadata;
   const sa = result.source_audit;
+  const comp = result.compression;
 
+  // Annotated Notice including Host Fingerprint & Max CPU
   console.log(
-    `::notice title=AI Pipeline Succeeded (${modelName})::📥 Ingest: ${tm.prompt_tokens_per_second} t/s (${tm.prompt_tokens}t) | ⚡ Gen: ${tm.completion_tokens_per_second} t/s (${tm.completion_tokens}t) | ⏱️ Time: ${(tm.total_duration_ms / 1000).toFixed(1)}s | 💾 Peak Swap: ${sm.peak_server_swap_mb} MB`
+    `::notice title=AI Pipeline Succeeded (${modelName})::🖥️ ${hf.rawFingerprint} | ⚡ Max CPU: ${cm.maxCpuPercent}% | 📥 Ingest: ${tm.prompt_tokens_per_second} t/s | ⚡ Gen: ${tm.completion_tokens_per_second} t/s | 💾 Peak Swap: ${sm.peak_server_swap_mb} MB`
   );
 
   const summaryPath = process.env.GITHUB_STEP_SUMMARY;
@@ -754,8 +887,37 @@ function publishStepSummary(
     ``,
     `---`,
     ``,
-    `## 💾 Memory & Swap Diagnostics`,
+    `## 🖥️ Host & System Diagnostics`,
     ``,
+    `### ⚙️ Host Machine & Hardware Fingerprint`,
+    `| Hardware Component | Detected Host Specification |`,
+    `| :--- | :--- |`,
+    `| **Host Machine CPU** | \`${hf.cpuModel}\` |`,
+    `| **Allocated Core Count** | **${hf.coreCount} physical/vCPU cores** |`,
+    `| **L3 Cache Size** | **${hf.l3Cache}** |`,
+    `| **SIMD / Vector Acceleration** | \`${hf.avxFlags.join(", ")}\` |`,
+    `| **Total Physical RAM** | **${hf.totalRamGb}** |`,
+    ``,
+    `### 🏃 GitHub Actions Runner & Model Telemetry`,
+    `| Attribute | Context Value |`,
+    `| :--- | :--- |`,
+    `| **Runner Name** | \`${rm.runnerName || "Self-Hosted / Local"}\` |`,
+    `| **GitHub Run ID** | \`${rm.runId || "N/A"}\` |`,
+    `| **GitHub Run Number** | \`#${rm.runNumber || "1"}\` |`,
+    `| **Runner OS & Architecture** | \`${rm.osArch}\` |`,
+    `| **HF Repo / Model Family** | \`${rm.modelFamily || "N/A"}\` |`,
+    `| **Model File / ID** | \`${modelName}${rm.requestedModelId ? " (Explicit: " + rm.requestedModelId + ")" : " (Auto-detected)"}\` |`,
+    `| **Workflow Name** | \`${rm.workflow || "CI"}\` |`,
+    `| **Job / Shard ID** | \`${rm.shardId || "N/A"}\` |`,
+    ``,
+    `### 📈 CPU Utilization Dynamics (Inference Phase)`,
+    `| Metric | Recorded Value | Measurement Details |`,
+    `| :--- | :--- | :--- |`,
+    `| **Peak CPU Utilization** | **\`${cm.maxCpuPercent}%\`** | Highest instantaneous utilization across all cores |`,
+    `| **Average CPU Utilization** | **\`${cm.avgCpuPercent}%\`** | Mean CPU load over ${cm.samplesTaken} samples |`,
+    `| **Inference Parallelism** | **${hf.coreCount} threads** | Threads configured for \`llama-server\` |`,
+    ``,
+    `### 💾 Memory & Linux Swap Diagnostics`,
     `| Metric | Measured Value | Health Status |`,
     `| :--- | :--- | :--- |`,
     `| **Linux \`vm.swappiness\`** | **\`${sm.swappiness}\`** | ${sm.swappiness <= 10 ? "✅ Low Paging (Optimized)" : "⚠️ High Paging"} |`,
@@ -776,6 +938,14 @@ function publishStepSummary(
     ``,
     `### Core Takeaways:`,
     ...result.key_points.map((p) => `- ${p}`),
+    ``,
+    `### 📊 Text Compression & Reduction Analysis`,
+    `| Metric | Value | Explanation & Formula |`,
+    `| :--- | :--- | :--- |`,
+    `| **Raw Input Size** | \`${comp.inputChars} chars\` | Character count of input text ingested by the model |`,
+    `| **Model Output Size** | \`${comp.outputChars} chars\` | Total characters produced in model completion |`,
+    `| **Retention Ratio** | **\`${comp.retentionRatioPercent}\`** | **\`(Output Chars / Input Chars) * 100%\`** (Proportion of original volume retained) |`,
+    `| **Content Reduction** | **\`${comp.reductionRatioPercent}\`** | **\`100% - Retention Ratio\`** (Space saved through summarization) |`,
     ``,
     `---`,
     ``,
@@ -821,7 +991,7 @@ function publishStepSummary(
     ``,
     `---`,
     ``,
-    `## ⚡ Event-Driven Audit Trail (UUIDv5)`,
+    `## ⚡ Event-Driven Audit Trail (RFC 4122 UUIDv5)`,
     ``,
     `| Event Type | RFC 4122 UUIDv5 | Timestamp |`,
     `| :--- | :--- | :--- |`,
@@ -842,11 +1012,20 @@ function publishStepSummary(
 }
 
 // -------------------------------------------------------------
-// 8. MAIN ENTRY POINT (Strict Environment Checking)
+// 9. MAIN ENTRY POINT
 // -------------------------------------------------------------
 async function main() {
-  const runnerName = process.env.RUNNER_NAME ?? "";
-  const shardId = process.env.SHARD_ID ?? "";
+  const runnerMetadata: RunnerMetadata = {
+    runnerName: process.env.RUNNER_NAME ?? "",
+    runId: process.env.GITHUB_RUN_ID ?? "",
+    runNumber: process.env.GITHUB_RUN_NUMBER ?? "",
+    workflow: process.env.GITHUB_WORKFLOW ?? "",
+    osArch: `${os.type()} ${os.arch()} (${os.release()})`,
+    shardId: process.env.SHARD_ID ?? "",
+    modelFamily: process.env.MODEL_FAMILY ?? "",
+    requestedModelId: process.env.REQUESTED_MODEL_ID ?? "",
+  };
+
   const modelName = process.env.MODEL_NAME ?? "";
   const serverUrl = process.env.SERVER_URL;
 
@@ -868,20 +1047,21 @@ async function main() {
     throw new Error("No input provided: Both URL and INPUT_TEXT environment variables are empty.");
   }
 
-  const l3Cache = detectL3Cache();
+  const hostFingerprint = getHostFingerprint();
 
-  console.log("=== Environment Configuration ===");
+  console.log("=== Host & Environment Configuration ===");
   console.log({
-    runnerName: runnerName || "(empty)",
-    shardId: shardId || "(empty)",
-    modelName: modelName,
-    serverUrl: serverUrl,
+    hostFingerprint: hostFingerprint.rawFingerprint,
+    l3Cache: hostFingerprint.l3Cache,
+    avxFlags: hostFingerprint.avxFlags,
+    runnerMetadata,
+    modelName,
+    serverUrl,
     hasUrl: Boolean(rawUrl),
     hasInputText: Boolean(rawInputText),
-    l3Cache: l3Cache,
   });
 
-  const pipeline = new AIEventPipeline(runnerName, shardId);
+  const pipeline = new AIEventPipeline(runnerMetadata);
 
   try {
     const result = await pipeline.execute({
