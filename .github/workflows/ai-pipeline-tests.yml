@@ -40,15 +40,11 @@ on:
         description: 'Context Window Size'
         required: false
         default: '16384'
-      prompt:
-        description: 'System Prompt'
-        required: false
-        default: 'You are an executive summarizer. Output ONLY the requested JSON. Do NOT output thinking tags or reasoning.'
 
 jobs:
-  run-inference:
+  run-pipeline:
     runs-on: ubuntu-latest
-    name: LLM Inference Pipeline
+    name: LLM Inference & Quality Evaluation Pipeline
 
     steps:
       - name: Checkout Code
@@ -59,21 +55,17 @@ jobs:
         with:
           node-version: 'latest'
 
-      # 1. TUNE SWAPPINESS & CONFIGURE 8GB SAFETY SWAP
+      # 1. TUNE LINUX MEMORY
       - name: Configure Linux Memory & Swappiness
         run: |
           echo "Setting swappiness to 1 (prevents unnecessary paging to SSD)..."
           sudo sysctl vm.swappiness=1
-
           sudo swapoff -a || true
           sudo rm -f /swapfile || true
           sudo fallocate -l 8G /swapfile
           sudo chmod 600 /swapfile
           sudo mkswap /swapfile
           sudo swapon /swapfile
-
-          echo "Swappiness value:"
-          cat /proc/sys/vm/swappiness
 
       # 2. Setup Node ES Module & Install Dependencies
       - name: Setup Node ES Module & Install Dependencies
@@ -82,15 +74,14 @@ jobs:
           npm pkg set type="module"
           npm install defuddle linkedom feedsmith
 
-      # 3. Official llama.app Installer
+      # 3. Install llama.cpp
       - name: Install Official llama.cpp
         run: |
-          echo "Installing official llama.cpp via llama.app installer..."
           curl -LsSf https://llama.app/install.sh | SKIP_CUDA=1 SKIP_ROCM=1 SKIP_VULKAN=1 sh
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           ~/.local/bin/llama --version
 
-      # 4. Cache Model Directory
+      # 4. Cache GGUF Model Directory
       - name: Cache Model Directory
         id: cache-model
         uses: actions/cache@v4
@@ -98,7 +89,7 @@ jobs:
           path: ./models
           key: model-cache-${{ github.event.inputs.model_family }}-${{ github.event.inputs.model_id }}
 
-      # 5. Resolve & Download GGUF (Specific Model ID or Auto-Detect)
+      # 5. Resolve & Download GGUF
       - name: Download Model from HuggingFace
         run: |
           mkdir -p ./models
@@ -106,10 +97,8 @@ jobs:
           SPECIFIC_FILE="${{ github.event.inputs.model_id }}"
 
           if [ -n "$SPECIFIC_FILE" ]; then
-            echo "Using explicitly requested model_id: $SPECIFIC_FILE"
             FILE="$SPECIFIC_FILE"
           else
-            echo "No specific model_id provided. Auto-resolving optimal GGUF from $REPO..."
             FILE=$(curl -sL "https://huggingface.co/api/models/${REPO}/tree/main" | jq -r '.[].path' | grep -iE '\.gguf$' | grep -iE 'q5_k_m|q4_k_m' | head -n 1)
             [ -z "$FILE" ] && FILE=$(curl -sL "https://huggingface.co/api/models/${REPO}/tree/main" | jq -r '.[].path' | grep -iE '\.gguf$' | head -n 1)
           fi
@@ -123,25 +112,19 @@ jobs:
           echo "MODEL_FILE=$FILE" >> $GITHUB_ENV
 
           if [ ! -f "./models/$FILE" ]; then
-            echo "Downloading $FILE..."
             curl -fL -o "./models/$FILE" "https://huggingface.co/${REPO}/resolve/main/${FILE}"
-          else
-            echo "Found $FILE in runner cache."
           fi
 
-          # Verify GGUF magic bytes
           if [ "$(head -c 4 "./models/$FILE")" != "GGUF" ]; then
             echo "::error::Downloaded file is corrupted or not a valid GGUF binary!"
             exit 1
           fi
 
-      # 6. Start Server using 'llama serve' (Port 9931, Context Configured)
+      # 6. Start llama-server (Background Daemon)
       - name: Start llama-server (Port 9931)
         run: |
           CORES=$(nproc)
           CTX="${{ github.event.inputs.context_size }}"
-
-          echo "Starting 'llama serve' for $MODEL_FILE on $CORES cores with ${CTX} context..."
 
           llama serve \
             -m "./models/$MODEL_FILE" \
@@ -157,11 +140,11 @@ jobs:
             -t $CORES \
             -tb $CORES \
             --temp 0.2 \
+            --repeat-penalty 1.15 \
             > llama-server.log 2>&1 &
 
           SERVER_PID=$!
           echo "$SERVER_PID" > .llama_server.pid
-          echo "llama server started (PID: $SERVER_PID). Monitoring health on port 9931..."
 
           READY=false
           for i in {1..60}; do
@@ -176,8 +159,6 @@ jobs:
               READY=true
               break
             fi
-
-            echo "Warming up... ($i/60)"
             sleep 2
           done
 
@@ -187,14 +168,13 @@ jobs:
             exit 1
           fi
 
-      # 7. Run Event Pipeline with Config-Driven Environment Variables
-      - name: Execute AI Event Pipeline
+      # 7. PHASE 1: Run Inference Pipeline (Node.js)
+      - name: Execute Summarization Inference Pipeline
         env:
           INPUT_SOURCE: "${{ github.event.inputs.input_source }}"
           ARTICLE_COUNT_GOAL: "${{ github.event.inputs.article_count_goal }}"
           FEED_MAX_AGE_HOURS: "${{ github.event.inputs.feed_max_age_hours }}"
           URL: "${{ github.event.inputs.url }}"
-          PROMPT: "${{ github.event.inputs.prompt }}"
           INPUT_TEXT: "${{ github.event.inputs.input_text }}"
           CONTEXT_SIZE: "${{ github.event.inputs.context_size }}"
           SERVER_URL: "http://127.0.0.1:9931"
@@ -208,20 +188,56 @@ jobs:
           GITHUB_RUN_ID: "${{ github.run_id }}"
           GITHUB_RUN_NUMBER: "${{ github.run_number }}"
           GITHUB_WORKFLOW: "${{ github.workflow }}"
-          # Optional overrides for model telemetry params:
           LLAMA_TEMPERATURE: "0.2"
           LLAMA_TOP_K: "40"
           LLAMA_TOP_P: "0.95"
           LLAMA_MIN_P: "0.05"
+          LLAMA_REPEAT_PENALTY: "1.15"
+          LLAMA_MAX_TOKENS: "4096"
         run: |
           npx --yes tsx .github/scripts/ai-pipeline.ts
 
-      # 8. Upload JSONL Telemetry & Server Logs
+      # 8. TEARDOWN: Kill llama-server to reclaim ~6 GB RAM
+      - name: Stop llama-server (Reclaim Memory)
+        if: always()
+        run: |
+          if [ -f .llama_server.pid ]; then
+            PID=$(cat .llama_server.pid)
+            echo "Stopping llama-server (PID: $PID) to reclaim physical memory for evaluation..."
+            kill -9 $PID 2>/dev/null || true
+            rm -f .llama_server.pid
+          fi
+
+      # 9. Setup Python Runtime for UniEval
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      # 10. Install Python Dependencies & Clone UniEval Codebase
+      - name: Install Quality Evaluator Dependencies
+        run: |
+          echo "Installing PyTorch CPU & Transformers..."
+          pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+          pip install --no-cache-dir transformers nltk rank-bm25
+          python -c "import nltk; nltk.download('punkt'); nltk.download('punkt_tab')"
+
+          echo "Cloning UniEval evaluation codebase..."
+          git clone --depth 1 https://github.com/maszhongming/UniEval.git /tmp/unieval
+
+      # 11. PHASE 2: Run Quality Evaluation Script (Python)
+      - name: Execute Quality Evaluation (UniEval)
+        run: |
+          python .github/scripts/evaluate.py \
+            --input-events pipeline-events.jsonl \
+            --unieval-dir /tmp/unieval
+
+      # 12. Upload Audit Artifacts
       - name: Upload Logs and JSONL Telemetry
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: llama-pipeline-artifacts
+          name: pipeline-telemetry-artifacts
           path: |
             llama-server.log
             pipeline-events.jsonl
