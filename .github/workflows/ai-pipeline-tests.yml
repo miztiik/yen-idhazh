@@ -196,6 +196,7 @@ jobs:
           URL: "${{ github.event.inputs.url }}"
           PROMPT: "${{ github.event.inputs.prompt }}"
           INPUT_TEXT: "${{ github.event.inputs.input_text }}"
+          CONTEXT_SIZE: "${{ github.event.inputs.context_size }}"
           SERVER_URL: "http://127.0.0.1:9931"
           MODEL_NAME: "${{ env.MODEL_FILE }}"
           MODEL_FAMILY: "${{ github.event.inputs.model_family }}"
@@ -207,6 +208,11 @@ jobs:
           GITHUB_RUN_ID: "${{ github.run_id }}"
           GITHUB_RUN_NUMBER: "${{ github.run_number }}"
           GITHUB_WORKFLOW: "${{ github.workflow }}"
+          # Optional overrides for model telemetry params:
+          LLAMA_TEMPERATURE: "0.2"
+          LLAMA_TOP_K: "40"
+          LLAMA_TOP_P: "0.95"
+          LLAMA_MIN_P: "0.05"
         run: |
           npx --yes tsx .github/scripts/ai-pipeline.ts
 
