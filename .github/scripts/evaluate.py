@@ -3,12 +3,6 @@
 .github/scripts/evaluate.py
 Evaluates summarization quality across Consistency, Discourse Coherence, and Fluency
 using the UniEval benchmark (MingZhong/unieval-sum on T5-large) via chunked BM25 retrieval.
-
-Standard:
-- Explicit CPU binding: device='cpu' to prevent CUDA crashes on standard runners.
-- Chunked windowing: Overcoming T5's 512/1024 token limit on 6,000-word texts.
-- Zero extra LLM tokens: Reference-free sentence consistency and sectional coverage.
-- Full parity with ai-pipeline.ts JSONL event stream and GitHub Step Summary.
 """
 
 import argparse
@@ -17,6 +11,31 @@ import os
 import re
 import sys
 from typing import Dict, List, Tuple
+
+# -------------------------------------------------------------
+# 0. PREVENT PRETTYTABLE IMPORT CRASHES VIA IN-MEMORY SHIM
+# -------------------------------------------------------------
+try:
+    import prettytable
+except ImportError:
+    import types
+
+    dummy = types.ModuleType("prettytable")
+
+    class DummyPrettyTable:
+
+        def __init__(self, *args, **kwargs):
+            self.field_names = []
+            self.rows = []
+
+        def add_row(self, row):
+            self.rows.append(row)
+
+        def get_string(self):
+            return ""
+
+    dummy.PrettyTable = DummyPrettyTable
+    sys.modules["prettytable"] = dummy
 
 import torch
 
@@ -355,7 +374,6 @@ def main():
 
         summary_lines.extend(["", "</details>", "", "---", ""])
 
-        # Write audit event to JSONL
         eval_event = {
             "eventId": f"eval-{payload.get('source_audit', {}).get('sourceIdentifier', idx)}",
             "eventType": "QUALITY_EVALUATION_COMPLETED",
