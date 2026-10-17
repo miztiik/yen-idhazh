@@ -3,6 +3,31 @@ name: Yen-Summarizers
 on:
   workflow_dispatch:
     inputs:
+      input_source:
+        description: 'Input Source Mode'
+        required: true
+        type: choice
+        options:
+          - 'feed'
+          - 'url'
+          - 'text'
+        default: 'feed'
+      article_count_goal:
+        description: 'Target number of articles to collect from feeds'
+        required: false
+        default: '1'
+      feed_max_age_hours:
+        description: 'Max article age in hours (feed mode only)'
+        required: false
+        default: '24'
+      url:
+        description: 'Direct URL to extract with Defuddle (used when input_source is url)'
+        required: false
+        default: 'https://en.wikipedia.org/wiki/Ternary_numeral_system'
+      input_text:
+        description: 'Input text (used directly if input_source is text, or as fallback)'
+        required: false
+        default: 'Local LLMs allow running transformer architectures directly on edge devices and continuous integration runners without transmitting data over third-party APIs.'
       model_family:
         description: 'HuggingFace Repo Name & Model Family (owner/repo)'
         required: true
@@ -11,14 +36,6 @@ on:
         description: 'Specific Model ID / GGUF Filename (leave blank for auto-detect)'
         required: false
         default: ''
-      url:
-        description: 'URL to extract with Defuddle (leave empty to use input_text)'
-        required: false
-        default: 'https://en.wikipedia.org/wiki/Ternary_numeral_system'
-      input_text:
-        description: 'Input text (used directly if URL is empty, or as fallback if URL fails)'
-        required: false
-        default: 'Local LLMs allow running transformer architectures directly on edge devices and continuous integration runners without transmitting data over third-party APIs.'
       context_size:
         description: 'Context Window Size'
         required: false
@@ -58,12 +75,12 @@ jobs:
           echo "Swappiness value:"
           cat /proc/sys/vm/swappiness
 
-      # 2. Setup Node ES Module & Install Defuddle
-      - name: Setup Node ES Module & Install Defuddle
+      # 2. Setup Node ES Module & Install Dependencies
+      - name: Setup Node ES Module & Install Dependencies
         run: |
           if [ ! -f package.json ]; then npm init -y; fi
           npm pkg set type="module"
-          npm install defuddle linkedom
+          npm install defuddle linkedom feedsmith
 
       # 3. Official llama.app Installer
       - name: Install Official llama.cpp
@@ -173,6 +190,9 @@ jobs:
       # 7. Run Event Pipeline with Config-Driven Environment Variables
       - name: Execute AI Event Pipeline
         env:
+          INPUT_SOURCE: "${{ github.event.inputs.input_source }}"
+          ARTICLE_COUNT_GOAL: "${{ github.event.inputs.article_count_goal }}"
+          FEED_MAX_AGE_HOURS: "${{ github.event.inputs.feed_max_age_hours }}"
           URL: "${{ github.event.inputs.url }}"
           PROMPT: "${{ github.event.inputs.prompt }}"
           INPUT_TEXT: "${{ github.event.inputs.input_text }}"
