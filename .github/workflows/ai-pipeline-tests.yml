@@ -134,7 +134,7 @@ jobs:
             exit 1
           fi
 
-      # 6. Start llama-server (Port 9931, repeat-penalty guard active)
+      # 6. Start llama-server (Port 9931, repeat-penalty active)
       - name: Start llama-server (Port 9931)
         run: |
           CORES=$(nproc)
@@ -234,12 +234,12 @@ jobs:
         with:
           python-version: '3.10'
 
-      # 10. Install Python Dependencies & Clone UniEval Codebase
+      # 10. Install Python Dependencies (INCLUDING PRETTYTABLE & SCIPY)
       - name: Install Quality Evaluator Dependencies
         run: |
-          echo "Installing PyTorch CPU & Transformers..."
+          echo "Installing PyTorch CPU, Transformers, and UniEval dependencies..."
           pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
-          pip install --no-cache-dir transformers nltk rank-bm25
+          pip install --no-cache-dir transformers nltk rank-bm25 prettytable scipy
           python -c "import nltk; nltk.download('punkt'); nltk.download('punkt_tab')"
 
           echo "Cloning UniEval evaluation codebase..."
