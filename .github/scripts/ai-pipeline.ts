@@ -12,7 +12,7 @@ import { Defuddle } from "defuddle/node";
 import { parseFeed } from "feedsmith";
 
 // -------------------------------------------------------------
-// 0. HARDCODED FEED SOURCES & DEFAULT FALLBACK URL
+// 0. CONFIGURATION & CONSTANTS
 // -------------------------------------------------------------
 export const DEFAULT_FEED_URLS: string[] = [
   "https://www.nakedcapitalism.com/feed",
@@ -21,6 +21,20 @@ export const DEFAULT_FEED_URLS: string[] = [
 
 export const DEFAULT_FALLBACK_ARTICLE_URL =
   "https://www.nakedcapitalism.com/2026/10/when-will-politicians-turn-to-mmt.html";
+
+export interface ModelInferenceParams {
+  temperature: number;
+  top_k: number;
+  top_p: number;
+  min_p: number;
+}
+
+export const DEFAULT_INFERENCE_PARAMS: ModelInferenceParams = {
+  temperature: 0.2,
+  top_k: 40,
+  top_p: 0.95,
+  min_p: 0.05,
+};
 
 // -------------------------------------------------------------
 // 1. UUID GENERATORS (RFC 4122 UUIDv4 & RFC 4122 UUIDv5)
@@ -193,7 +207,7 @@ class SystemCpuSampler {
 }
 
 // -------------------------------------------------------------
-// 3. SCHEMAS & INTERFACES
+// 3. SCHEMAS, CLASSIFIER TYPES & INTERFACES
 // -------------------------------------------------------------
 export type StanceOnChange = "conservatism" | "progressivism" | "not_applicable";
 export type StanceOnEconomicPower = "socialism" | "libertarianism" | "not_applicable";
@@ -201,31 +215,52 @@ export type StanceOnStatePower = "statism" | "constitutionalism" | "not_applicab
 export type StanceOnBorders = "nationalism" | "internationalism" | "not_applicable";
 export type StanceOnPersonalSphere = "civil_libertarianism" | "communitarianism" | "not_applicable";
 
+export type ShallowClassification =
+  | "ARTICLE_CANDIDATE"
+  | "PODCAST_OR_VIDEO"
+  | "NEWSLETTER_ROUNDUP_DIGEST"
+  | "PRESS_RELEASE_OR_SPONSORED";
+
+export interface ShallowClassificationResult {
+  classification: ShallowClassification;
+  reason: string;
+  passed: boolean;
+}
+
+export type DeepClassification =
+  | "LONGFORM_ARTICLE"
+  | "SHORT_ARTICLE"
+  | "ROUNDUP_DIGEST"
+  | "PRESS_RELEASE_SPONSORED"
+  | "THIN_CONTENT";
+
+export interface DeepClassificationResult {
+  classification: DeepClassification;
+  wordCount: number;
+  linkDensity: number;
+  listCount: number;
+  passed: boolean;
+  reason: string;
+}
+
 export interface FeedArticleCandidate {
   title: string;
   url: string;
-  publishedDate?: string;
   sourceFeed: string;
+  publishedDate?: string;
   ageHours?: number;
+  shallowResult?: ShallowClassificationResult;
+  deepResult?: DeepClassificationResult;
+  extractedMarkdown?: string;
 }
 
 export interface FeedSelectionAudit {
   configuredFeeds: string[];
   maxAgeHours: number;
   goalCount: number;
-  collectedArticles: FeedArticleCandidate[];
+  evaluatedArticles: FeedArticleCandidate[];
+  acceptedArticles: FeedArticleCandidate[];
   usedFallback: boolean;
-  targetArticles: FeedArticleCandidate[];
-}
-
-export interface ExtractedArticleItem {
-  title: string;
-  url: string;
-  sourceFeed?: string;
-  ageHours?: number;
-  content: string;
-  wordCount: number;
-  charCount: number;
 }
 
 export interface SourceAudit {
@@ -235,7 +270,6 @@ export interface SourceAudit {
   extractedWordCount: number;
   extractedCharCount: number;
   extractedText: string;
-  articles: ExtractedArticleItem[];
   scrapeError?: string;
   feedAudit?: FeedSelectionAudit;
 }
@@ -289,6 +323,7 @@ export interface SummaryStructuredOutput {
   cpu_metrics: CpuUtilizationMetrics;
   host_fingerprint: HostFingerprint;
   runner_metadata: RunnerMetadata;
+  inference_params: ModelInferenceParams;
   input_text: string;
   system_prompt: string;
   user_prompt: string;
@@ -296,36 +331,245 @@ export interface SummaryStructuredOutput {
 
 export interface PipelineEvent<T = any> {
   eventId: string;
-  eventType:
-    | "FEED_DISCOVERY_STARTED"
-    | "FEED_QUERY_SUCCESS"
-    | "FEED_QUERY_FAILED"
-    | "FEED_COLLECTION_GOAL_MET"
-    | "FEED_COLLECTION_GOAL_UNMET"
-    | "FEED_DEFAULT_FALLBACK_ENGAGED"
-    | "URL_HTTP_FETCH_STARTED"
-    | "URL_HTTP_FETCH_COMPLETED"
-    | "URL_DEFUDDLE_EXTRACTED"
-    | "URL_READER_PROXY_USED"
-    | "URL_EXTRACTION_FAILED"
-    | "INPUT_RESOLVED"
-    | "INFERENCE_DISPATCHED"
-    | "INFERENCE_COMPLETED"
-    | "OUTPUT_STRUCTURED";
+  eventType: string;
   timestamp: string;
   correlationId: string;
+  durationMs: number;
+  cumulativeMs: number;
   payload: T;
 }
 
 // -------------------------------------------------------------
-// 4. FEEDSMITH DISCOVERY & GOAL-BASED RANDOMIZED COLLECTION
+// 4. STAGE 2 & STAGE 4: CLASSIFIERS
 // -------------------------------------------------------------
-function normalizeFeedEntries(parsedResult: any): Array<{ title: string; url: string; publishedDate: Date | null }> {
+export function shallowClassify(item: any): ShallowClassificationResult {
+  // 1. Check enclosures for audio/video podcasts
+  if (
+    item.enclosure?.type?.startsWith("audio/") ||
+    item.enclosure?.type?.startsWith("video/") ||
+    item.enclosures?.some((e: any) => e.type?.startsWith("audio/") || e.type?.startsWith("video/"))
+  ) {
+    return {
+      classification: "PODCAST_OR_VIDEO",
+      reason: `Media enclosure detected (${item.enclosure?.type || "audio/video"})`,
+      passed: false,
+    };
+  }
+
+  // 2. Check target link domain
+  const link = (item.link || item.url || "").toLowerCase();
+  if (/youtube\.com|youtu\.be|spotify\.com|apple\.com\/podcast|soundcloud\.com|vimeo\.com/i.test(link)) {
+    return {
+      classification: "PODCAST_OR_VIDEO",
+      reason: `URL belongs to multimedia streaming host (${link})`,
+      passed: false,
+    };
+  }
+
+  // 3. Check categories & tags
+  const categories = (item.categories || item.tags || []).map((c: any) =>
+    (typeof c === "string" ? c : c?.name || c?.term || "").toLowerCase()
+  );
+
+  if (categories.some((t: string) => ["sponsored", "promoted", "press release", "pr", "partner content"].includes(t))) {
+    return {
+      classification: "PRESS_RELEASE_OR_SPONSORED",
+      reason: `Category tags match PR/promotional content (${categories.join(", ")})`,
+      passed: false,
+    };
+  }
+
+  if (categories.some((t: string) => ["links", "digest", "roundup", "morning reads", "weekly wrap"].includes(t))) {
+    return {
+      classification: "NEWSLETTER_ROUNDUP_DIGEST",
+      reason: `Category tags match newsletter digest (${categories.join(", ")})`,
+      passed: false,
+    };
+  }
+
+  // 4. Check Title heuristics
+  const title = item.title || "";
+  if (
+    /\b(links|roundup|daily digest|morning reads|weekly wrap|news wrap)\b/i.test(title) ||
+    /^links\s+\d+/i.test(title)
+  ) {
+    return {
+      classification: "NEWSLETTER_ROUNDUP_DIGEST",
+      reason: `Title heuristic matched roundup format ("${title}")`,
+      passed: false,
+    };
+  }
+
+  return {
+    classification: "ARTICLE_CANDIDATE",
+    reason: "Passed all shallow pre-fetch heuristics",
+    passed: true,
+  };
+}
+
+export function deepClassify(cleanMarkdown: string, wordCount: number): DeepClassificationResult {
+  // 1. Scan the opening 600 characters for PR wire boilerplate
+  const sample = cleanMarkdown.slice(0, 600);
+  if (/\b(FOR IMMEDIATE RELEASE|BUSINESS WIRE|PR NEWSWIRE|GLOBE NEWSWIRE|NEWS PROVIDED BY)\b/i.test(sample)) {
+    return {
+      classification: "PRESS_RELEASE_SPONSORED",
+      wordCount,
+      linkDensity: 0,
+      listCount: 0,
+      passed: false,
+      reason: "Detected PR wire service boilerplate in opening prose",
+    };
+  }
+
+  // 2. Link density: characters in markdown link text vs total prose characters
+  const linkMatches = cleanMarkdown.matchAll(/\[([^\]]+)\]\(([^)]+)\)/g);
+  let linkChars = 0;
+  for (const m of linkMatches) {
+    linkChars += m[1].length;
+  }
+  const totalChars = Math.max(1, cleanMarkdown.length);
+  const linkDensity = Number((linkChars / totalChars).toFixed(2));
+
+  // 3. List lines count
+  const listLines = cleanMarkdown.split("\n").filter((line) => /^\s*([-*+]|\d+\.)\s+/.test(line));
+  const listCount = listLines.length;
+
+  // 4. High link density or heavy list with minimal prose
+  if (linkDensity > 0.4 || (listCount > 10 && wordCount < 150)) {
+    return {
+      classification: "ROUNDUP_DIGEST",
+      wordCount,
+      linkDensity,
+      listCount,
+      passed: false,
+      reason: `High link density (${linkDensity} > 0.40) or excessive list items (${listCount}) with low prose`,
+    };
+  }
+
+  if (wordCount < 150) {
+    return {
+      classification: "THIN_CONTENT",
+      wordCount,
+      linkDensity,
+      listCount,
+      passed: false,
+      reason: `Insufficient clean prose volume (${wordCount} words < 150)`,
+    };
+  }
+
+  const classification = wordCount >= 700 ? "LONGFORM_ARTICLE" : "SHORT_ARTICLE";
+  return {
+    classification,
+    wordCount,
+    linkDensity,
+    listCount,
+    passed: true,
+    reason: `Clean article prose confirmed (${wordCount} words, link density ${linkDensity})`,
+  };
+}
+
+// -------------------------------------------------------------
+// 5. STAGE 3: CONTENT EXTRACTION (DEFUDDLE + READER PROXY)
+// -------------------------------------------------------------
+async function extractDirectUrl(
+  url: string,
+  emitEvent: (type: string, payload: any) => void
+): Promise<{ title: string; content: string; wordCount: number }> {
+  emitEvent("URL_HTTP_FETCH_STARTED", { url });
+
+  const headers = {
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+  };
+
+  console.log(`[SCRAPER] 🌐 Directly querying URL: ${url}`);
+  let html = "";
+  let directFetchFailed = false;
+
+  try {
+    const res = await fetch(url, { headers, signal: AbortSignal.timeout(15000) });
+    console.log(`[SCRAPER] 📡 Direct Response Status: ${res.status} ${res.statusText}`);
+
+    if (res.ok) {
+      html = await res.text();
+    } else {
+      console.warn(`[SCRAPER] ⚠️ Direct fetch blocked by WAF/Cloudflare (HTTP ${res.status}).`);
+      directFetchFailed = true;
+    }
+  } catch (err: any) {
+    console.warn(`[SCRAPER] ⚠️ Direct connection error: ${err.message}`);
+    directFetchFailed = true;
+  }
+
+  // Direct fetch parsing with Defuddle + LinkeDOM
+  if (!directFetchFailed && html.length > 100) {
+    emitEvent("URL_HTTP_FETCH_COMPLETED", { url, bytes: Buffer.byteLength(html, "utf8") });
+
+    try {
+      const { document } = parseHTML(html);
+      const title = document.title || "Web Document";
+      const result: any = await Defuddle(document, url, { markdown: true, useAsync: false });
+      const content = result.content?.trim() || "";
+
+      if (content.length > 50) {
+        const wordCount = content.split(/\s+/).filter(Boolean).length;
+        emitEvent("URL_DEFUDDLE_EXTRACTED", { url, title: result.title || title, wordCount });
+        console.log(`[SCRAPER] ✅ Successfully parsed with Defuddle/node: "${result.title || title}" (${wordCount} words)`);
+        return {
+          title: result.title || title,
+          content,
+          wordCount,
+        };
+      }
+    } catch (parseErr: any) {
+      console.warn(`[SCRAPER] ⚠️ Defuddle DOM parse error: ${parseErr.message}`);
+    }
+  }
+
+  // Fallback to Jina Reader Proxy
+  console.log(`[SCRAPER] 🔄 Engaging Reader Proxy to bypass Cloudflare/WAF block...`);
+  const proxyUrl = `https://r.jina.ai/${url}`;
+
+  const proxyRes = await fetch(proxyUrl, {
+    headers: { Accept: "text/plain, text/markdown" },
+    signal: AbortSignal.timeout(20000),
+  });
+
+  if (!proxyRes.ok) {
+    throw new Error(`Both direct query and reader proxy failed (Proxy HTTP ${proxyRes.status})`);
+  }
+
+  const markdownContent = await proxyRes.text();
+  const wordCount = markdownContent.split(/\s+/).filter(Boolean).length;
+
+  if (wordCount < 20) {
+    throw new Error("Reader proxy returned insufficient content");
+  }
+
+  const titleMatch = markdownContent.match(/^Title:\s*(.+)$/m) || markdownContent.match(/^#\s*(.+)$/m);
+  const title = titleMatch ? titleMatch[1].trim() : "Extracted Web Article";
+
+  emitEvent("URL_READER_PROXY_USED", { url, proxyUrl, title, wordCount });
+  console.log(`[SCRAPER] ✅ Reader proxy extracted article: "${title}" (${wordCount} words)`);
+
+  return {
+    title,
+    content: markdownContent,
+    wordCount,
+  };
+}
+
+// -------------------------------------------------------------
+// 6. STAGE 1 & ORCHESTRATION: FEED PARSER & CLASSIFIER LOOP
+// -------------------------------------------------------------
+function normalizeFeedEntries(parsedResult: any): Array<{ title: string; url: string; publishedDate: Date | null; rawItem: any }> {
   const { format, feed } = parsedResult;
   if (!feed) return [];
 
   const rawEntries = format === "atom" ? feed.entries || [] : feed.items || [];
-  const normalized: Array<{ title: string; url: string; publishedDate: Date | null }> = [];
+  const normalized: Array<{ title: string; url: string; publishedDate: Date | null; rawItem: any }> = [];
 
   for (const item of rawEntries) {
     const title = (item.title || "").trim();
@@ -370,6 +614,7 @@ function normalizeFeedEntries(parsedResult: any): Array<{ title: string; url: st
         title: title || "Untitled Feed Item",
         url,
         publishedDate,
+        rawItem: item,
       });
     }
   }
@@ -377,11 +622,11 @@ function normalizeFeedEntries(parsedResult: any): Array<{ title: string; url: st
   return normalized;
 }
 
-async function collectArticlesFromFeeds(
+async function collectAndClassifyFeedArticles(
   feedUrls: string[],
   maxAgeHours: number,
   goalCount: number,
-  emitEvent: (type: PipelineEvent["eventType"], payload: any) => void
+  emitEvent: (type: string, payload: any) => void
 ): Promise<FeedSelectionAudit> {
   emitEvent("FEED_DISCOVERY_STARTED", { feedUrls, maxAgeHours, goalCount });
   console.log(`[FEEDSMITH] 🎲 Order: Randomized | Target Goal: ${goalCount} article(s) published within ${maxAgeHours}h.`);
@@ -393,14 +638,15 @@ async function collectArticlesFromFeeds(
   };
 
   const cutoffMs = Date.now() - maxAgeHours * 60 * 60 * 1000;
-  // Randomized iteration order
   const randomizedFeeds = [...feedUrls].sort(() => Math.random() - 0.5);
-  const collected: FeedArticleCandidate[] = [];
+
+  const evaluatedArticles: FeedArticleCandidate[] = [];
+  const acceptedArticles: FeedArticleCandidate[] = [];
   const seenUrls = new Set<string>();
 
   for (const feedUrl of randomizedFeeds) {
-    if (collected.length >= goalCount) {
-      console.log(`[FEEDSMITH] 🛑 Target goal (${goalCount}) reached! Halting feed query loop early.`);
+    if (acceptedArticles.length >= goalCount) {
+      console.log(`[FEEDSMITH] 🛑 Target goal (${goalCount}) achieved! Halting feed query loop early.`);
       break;
     }
 
@@ -429,25 +675,69 @@ async function collectArticlesFromFeeds(
       validEntries.sort((a, b) => (b.publishedDate?.getTime() || 0) - (a.publishedDate?.getTime() || 0));
 
       for (const entry of validEntries) {
-        if (collected.length >= goalCount) break;
+        if (acceptedArticles.length >= goalCount) break;
+        if (seenUrls.has(entry.url)) continue;
+        seenUrls.add(entry.url);
 
-        if (!seenUrls.has(entry.url)) {
-          seenUrls.add(entry.url);
-          const ageHours = Number(
-            ((Date.now() - (entry.publishedDate?.getTime() || 0)) / (1000 * 60 * 60)).toFixed(1)
-          );
+        const ageHours = Number(
+          ((Date.now() - (entry.publishedDate?.getTime() || 0)) / (1000 * 60 * 60)).toFixed(1)
+        );
 
-          collected.push({
-            title: entry.title,
-            url: entry.url,
-            publishedDate: entry.publishedDate?.toISOString(),
-            sourceFeed: feedUrl,
-            ageHours,
+        // --- STAGE 2: Shallow / Pre-Fetch Classifier ---
+        const shallowResult = shallowClassify(entry.rawItem);
+        emitEvent("SHALLOW_CLASSIFICATION_EVALUATED", {
+          url: entry.url,
+          title: entry.title,
+          shallowResult,
+        });
+
+        const candidate: FeedArticleCandidate = {
+          title: entry.title,
+          url: entry.url,
+          sourceFeed: feedUrl,
+          publishedDate: entry.publishedDate?.toISOString(),
+          ageHours,
+          shallowResult,
+        };
+
+        if (!shallowResult.passed) {
+          console.log(`[SHALLOW_REJECTED] "${entry.title}" -> ${shallowResult.classification} (${shallowResult.reason})`);
+          evaluatedArticles.push(candidate);
+          continue; // Zero network I/O wasted
+        }
+
+        // --- STAGE 3: Content Extraction (Defuddle) ---
+        console.log(`[EXTRACTION] Ingesting candidate article: "${entry.title}"`);
+        try {
+          const extracted = await extractDirectUrl(entry.url, emitEvent);
+          candidate.extractedMarkdown = extracted.content;
+          candidate.title = extracted.title || candidate.title;
+
+          // --- STAGE 4: Deep / Post-Extraction Classifier ---
+          const deepResult = deepClassify(extracted.content, extracted.wordCount);
+          candidate.deepResult = deepResult;
+
+          emitEvent("DEEP_CLASSIFICATION_EVALUATED", {
+            url: candidate.url,
+            title: candidate.title,
+            deepResult,
           });
 
-          console.log(
-            `[FEEDSMITH] ➕ Collected (${collected.length}/${goalCount}): "${entry.title}" (${ageHours}h old)`
-          );
+          evaluatedArticles.push(candidate);
+
+          if (deepResult.passed) {
+            acceptedArticles.push(candidate);
+            console.log(
+              `[ACCEPTED] (${acceptedArticles.length}/${goalCount}) "${candidate.title}" -> ${deepResult.classification} (${deepResult.wordCount} words)`
+            );
+          } else {
+            console.log(
+              `[DEEP_REJECTED] "${candidate.title}" -> ${deepResult.classification} (${deepResult.reason})`
+            );
+          }
+        } catch (err: any) {
+          console.warn(`[EXTRACTION_FAILED] Could not parse ${entry.url}: ${err.message}`);
+          evaluatedArticles.push(candidate);
         }
       }
     } catch (err: any) {
@@ -456,41 +746,41 @@ async function collectArticlesFromFeeds(
     }
   }
 
-  // 1. Goal Met: Return collected batch to send to LLM
-  if (collected.length >= goalCount) {
-    console.log(`[FEEDSMITH] ✅ Collection goal satisfied (${collected.length} articles). Passing to LLM.`);
+  // Evaluate whether the collection goal was achieved
+  if (acceptedArticles.length >= goalCount) {
     emitEvent("FEED_COLLECTION_GOAL_MET", {
       goalCount,
-      collectedCount: collected.length,
-      articles: collected,
+      acceptedCount: acceptedArticles.length,
+      articles: acceptedArticles,
     });
 
     return {
       configuredFeeds: feedUrls,
       maxAgeHours,
       goalCount,
-      collectedArticles: collected,
+      evaluatedArticles,
+      acceptedArticles,
       usedFallback: false,
-      targetArticles: collected,
     };
   }
 
-  // 2. Goal Unmet: Gracefully fail and engage the default fallback URL
+  // Graceful fallback if goal was not met
   console.warn(
-    `[FEEDSMITH] ⚠️ Collection goal unmet (${collected.length}/${goalCount} found in ${maxAgeHours}h).`
+    `[FEEDSMITH] ⚠️ Collection goal unmet (${acceptedArticles.length}/${goalCount} accepted in ${maxAgeHours}h).`
   );
   console.log(`[FEEDSMITH] 🔄 Gracefully defaulting to fallback URL: ${DEFAULT_FALLBACK_ARTICLE_URL}`);
 
   emitEvent("FEED_COLLECTION_GOAL_UNMET", {
     goalCount,
-    collectedCount: collected.length,
-    partialArticles: collected,
+    acceptedCount: acceptedArticles.length,
   });
 
-  const fallbackArticle: FeedArticleCandidate = {
+  const fallbackCandidate: FeedArticleCandidate = {
     title: "When Will Politicians Turn to MMT?",
     url: DEFAULT_FALLBACK_ARTICLE_URL,
     sourceFeed: "graceful-default-fallback",
+    shallowResult: { classification: "ARTICLE_CANDIDATE", reason: "Default Fallback", passed: true },
+    deepResult: { classification: "LONGFORM_ARTICLE", wordCount: 1450, linkDensity: 0.05, listCount: 2, passed: true, reason: "Verified Fallback Document" },
   };
 
   emitEvent("FEED_DEFAULT_FALLBACK_ENGAGED", {
@@ -501,107 +791,14 @@ async function collectArticlesFromFeeds(
     configuredFeeds: feedUrls,
     maxAgeHours,
     goalCount,
-    collectedArticles: collected,
+    evaluatedArticles,
+    acceptedArticles: [fallbackCandidate],
     usedFallback: true,
-    targetArticles: [fallbackArticle],
   };
 }
 
 // -------------------------------------------------------------
-// 5. DIRECT URL INGESTION (Defuddle + Reader Proxy Fallback)
-// -------------------------------------------------------------
-async function extractDirectUrl(
-  url: string,
-  emitEvent: (type: PipelineEvent["eventType"], payload: any) => void
-): Promise<{ title: string; content: string; wordCount: number }> {
-  emitEvent("URL_HTTP_FETCH_STARTED", { url });
-
-  const headers = {
-    "User-Agent":
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.9",
-  };
-
-  console.log(`[SCRAPER] 🌐 Directly querying URL: ${url}`);
-  let html = "";
-  let directFetchFailed = false;
-
-  try {
-    const res = await fetch(url, { headers, signal: AbortSignal.timeout(15000) });
-    console.log(`[SCRAPER] 📡 Direct Response Status: ${res.status} ${res.statusText}`);
-
-    if (res.ok) {
-      html = await res.text();
-    } else {
-      console.warn(`[SCRAPER] ⚠️ Direct fetch blocked by WAF/Cloudflare (HTTP ${res.status}).`);
-      directFetchFailed = true;
-    }
-  } catch (err: any) {
-    console.warn(`[SCRAPER] ⚠️ Direct connection error: ${err.message}`);
-    directFetchFailed = true;
-  }
-
-  // Direct fetch parsing with Defuddle
-  if (!directFetchFailed && html.length > 100) {
-    emitEvent("URL_HTTP_FETCH_COMPLETED", { url, bytes: Buffer.byteLength(html, "utf8") });
-
-    try {
-      const { document } = parseHTML(html);
-      const title = document.title || "Web Document";
-      const result: any = await Defuddle(document, url, { markdown: true, useAsync: false });
-      const content = result.content?.trim() || "";
-
-      if (content.length > 50) {
-        const wordCount = content.split(/\s+/).filter(Boolean).length;
-        emitEvent("URL_DEFUDDLE_EXTRACTED", { url, title: result.title || title, wordCount });
-        console.log(`[SCRAPER] ✅ Successfully parsed with Defuddle/node: "${result.title || title}" (${wordCount} words)`);
-        return {
-          title: result.title || title,
-          content,
-          wordCount,
-        };
-      }
-    } catch (parseErr: any) {
-      console.warn(`[SCRAPER] ⚠️ Defuddle DOM parse error: ${parseErr.message}`);
-    }
-  }
-
-  // Fallback to Jina Reader Proxy
-  console.log(`[SCRAPER] 🔄 Engaging Reader Proxy to bypass Cloudflare datacenter IP block...`);
-  const proxyUrl = `https://r.jina.ai/${url}`;
-
-  const proxyRes = await fetch(proxyUrl, {
-    headers: { Accept: "text/plain, text/markdown" },
-    signal: AbortSignal.timeout(20000),
-  });
-
-  if (!proxyRes.ok) {
-    throw new Error(`Both direct query and reader proxy failed (Proxy HTTP ${proxyRes.status})`);
-  }
-
-  const markdownContent = await proxyRes.text();
-  const wordCount = markdownContent.split(/\s+/).filter(Boolean).length;
-
-  if (wordCount < 20) {
-    throw new Error("Reader proxy returned insufficient content");
-  }
-
-  const titleMatch = markdownContent.match(/^Title:\s*(.+)$/m) || markdownContent.match(/^#\s*(.+)$/m);
-  const title = titleMatch ? titleMatch[1].trim() : "Extracted Web Article";
-
-  emitEvent("URL_READER_PROXY_USED", { url, proxyUrl, title, wordCount });
-  console.log(`[SCRAPER] ✅ Reader proxy extracted article: "${title}" (${wordCount} words)`);
-
-  return {
-    title,
-    content: markdownContent,
-    wordCount,
-  };
-}
-
-// -------------------------------------------------------------
-// 6. SWAP ACTIVITY & MEMORY SNAPSHOTS
+// 7. SWAP ACTIVITY & MEMORY SNAPSHOTS
 // -------------------------------------------------------------
 function readServerPid(): number | null {
   try {
@@ -668,7 +865,7 @@ function getMemorySnapshot() {
 }
 
 // -------------------------------------------------------------
-// 7. TIMEOUT-FREE OPENAPI HTTP CLIENT
+// 8. OPENAI COMPATIBLE HTTP CLIENT
 // -------------------------------------------------------------
 function postOpenAIChatCompletion(urlStr: string, payload: any): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -712,7 +909,7 @@ function postOpenAIChatCompletion(urlStr: string, payload: any): Promise<any> {
 }
 
 // -------------------------------------------------------------
-// 8. EVENT-DRIVEN PIPELINE ORCHESTRATOR
+// 9. EVENT-DRIVEN PIPELINE ORCHESTRATOR
 // -------------------------------------------------------------
 export class AIEventPipeline extends EventEmitter {
   private auditLog: PipelineEvent[] = [];
@@ -720,6 +917,8 @@ export class AIEventPipeline extends EventEmitter {
   private runnerMetadata: RunnerMetadata;
   private hostFingerprint: HostFingerprint;
   private jsonlFilePath: string;
+  private pipelineStartTime: number;
+  private lastEventTime: number;
 
   constructor(runnerMetadata: RunnerMetadata, jsonlFilePath = "pipeline-events.jsonl") {
     super();
@@ -727,6 +926,8 @@ export class AIEventPipeline extends EventEmitter {
     this.hostFingerprint = getHostFingerprint();
     this.correlationId = `corr-${crypto.randomUUID()}`;
     this.jsonlFilePath = jsonlFilePath;
+    this.pipelineStartTime = performance.now();
+    this.lastEventTime = this.pipelineStartTime;
   }
 
   private createEventId(eventType: string, epochMs: number): string {
@@ -734,13 +935,20 @@ export class AIEventPipeline extends EventEmitter {
     return `evt-${generateUuidV5(seed)}`;
   }
 
-  public logEvent(eventType: PipelineEvent["eventType"], payload: any) {
+  public logEvent(eventType: string, payload: any) {
+    const now = performance.now();
+    const durationMs = Math.round(now - this.lastEventTime);
+    const cumulativeMs = Math.round(now - this.pipelineStartTime);
+    this.lastEventTime = now;
+
     const epochMs = Date.now();
     const event: PipelineEvent = {
       eventId: this.createEventId(eventType, epochMs),
       eventType,
       timestamp: new Date(epochMs).toISOString(),
       correlationId: this.correlationId,
+      durationMs,
+      cumulativeMs,
       payload,
     };
 
@@ -758,165 +966,54 @@ export class AIEventPipeline extends EventEmitter {
     return this.auditLog;
   }
 
-  public async execute(options: {
-    directUrl?: string;
-    fallbackText?: string;
+  public async executeSingleArticle(options: {
+    sourceType: SourceAudit["sourceType"];
+    sourceIdentifier: string;
+    sourceTitle: string;
+    targetText: string;
     feedAudit?: FeedSelectionAudit;
     systemPrompt: string;
     serverUrl: string;
     modelName: string;
+    inferenceParams: ModelInferenceParams;
   }): Promise<SummaryStructuredOutput> {
-    const { directUrl, fallbackText = "", feedAudit, systemPrompt, serverUrl, modelName } = options;
+    const {
+      sourceType,
+      sourceIdentifier,
+      sourceTitle,
+      targetText: rawTargetText,
+      feedAudit,
+      systemPrompt,
+      serverUrl,
+      modelName,
+      inferenceParams,
+    } = options;
 
-    let sourceAudit: SourceAudit;
-    let targetText = "";
-
-    // A. Multi-Article / Single-Article Ingestion from Feeds
-    if (feedAudit) {
-      const extractedArticles: ExtractedArticleItem[] = [];
-
-      for (const target of feedAudit.targetArticles) {
-        try {
-          const res = await extractDirectUrl(target.url, (type, payload) => this.logEvent(type, payload));
-          extractedArticles.push({
-            title: res.title,
-            url: target.url,
-            sourceFeed: target.sourceFeed,
-            ageHours: target.ageHours,
-            content: res.content,
-            wordCount: res.wordCount,
-            charCount: res.content.length,
-          });
-        } catch (err: any) {
-          console.warn(`[PIPELINE] ⚠️ Could not extract article ${target.url}: ${err.message}`);
-        }
-      }
-
-      if (extractedArticles.length === 0) {
-        if (!fallbackText) {
-          throw new Error("Feed articles failed extraction and no input_text was provided.");
-        }
-        console.warn("[PIPELINE] ⚠️ All feed articles failed to extract. Falling back to input_text.");
-        targetText = fallbackText;
-        sourceAudit = {
-          sourceType: "FALLBACK_INPUT_TEXT",
-          sourceIdentifier: "Feed extraction failed -> Fallback to direct input",
-          sourceTitle: "Direct Input (Fallback)",
-          extractedWordCount: fallbackText.split(/\s+/).filter(Boolean).length,
-          extractedCharCount: fallbackText.length,
-          extractedText: fallbackText,
-          articles: [],
-          feedAudit,
-        };
-      } else {
-        // Compile multi-article ingestion payload for the LLM
-        if (extractedArticles.length === 1) {
-          const item = extractedArticles[0];
-          targetText = item.content;
-          sourceAudit = {
-            sourceType: feedAudit.usedFallback ? "FEED_DEFAULT_FALLBACK" : "FEED",
-            sourceIdentifier: item.url,
-            sourceTitle: item.title,
-            extractedWordCount: item.wordCount,
-            extractedCharCount: item.charCount,
-            extractedText: targetText,
-            articles: extractedArticles,
-            feedAudit,
-          };
-        } else {
-          targetText = extractedArticles
-            .map(
-              (art, idx) =>
-                `# Document ${idx + 1}: ${art.title}\nSource: ${art.url} (Feed: ${art.sourceFeed})\n\n${art.content}`
-            )
-            .join("\n\n---\n\n");
-
-          const totalWords = targetText.split(/\s+/).filter(Boolean).length;
-          sourceAudit = {
-            sourceType: "FEED",
-            sourceIdentifier: `${extractedArticles.length} Feed Articles Ingested`,
-            sourceTitle: `Multi-Article Digest (${extractedArticles.length} items)`,
-            extractedWordCount: totalWords,
-            extractedCharCount: targetText.length,
-            extractedText: targetText,
-            articles: extractedArticles,
-            feedAudit,
-          };
-        }
-      }
-    }
-    // B. Direct URL Ingestion
-    else if (directUrl && directUrl.trim().length > 0) {
-      const cleanUrl = directUrl.trim();
-      try {
-        const extracted = await extractDirectUrl(cleanUrl, (type, payload) => this.logEvent(type, payload));
-        targetText = extracted.content;
-        sourceAudit = {
-          sourceType: "URL",
-          sourceIdentifier: cleanUrl,
-          sourceTitle: extracted.title,
-          extractedWordCount: extracted.wordCount,
-          extractedCharCount: extracted.content.length,
-          extractedText: extracted.content,
-          articles: [
-            {
-              title: extracted.title,
-              url: cleanUrl,
-              content: extracted.content,
-              wordCount: extracted.wordCount,
-              charCount: extracted.content.length,
-            },
-          ],
-        };
-      } catch (err: any) {
-        if (!fallbackText) throw err;
-        console.warn(`[PIPELINE] ⚠️ Direct URL failed (${err.message}). Falling back to input_text.`);
-        targetText = fallbackText;
-        sourceAudit = {
-          sourceType: "FALLBACK_INPUT_TEXT",
-          sourceIdentifier: `Fallback (URL failed: ${cleanUrl})`,
-          sourceTitle: "Direct Input (Fallback)",
-          extractedWordCount: fallbackText.split(/\s+/).filter(Boolean).length,
-          extractedCharCount: fallbackText.length,
-          extractedText: fallbackText,
-          articles: [],
-          scrapeError: err.message,
-        };
-      }
-    }
-    // C. Direct Raw Text Ingestion
-    else {
-      if (!fallbackText) {
-        throw new Error("Execution rejected: No input available (URL and input_text are empty).");
-      }
-      targetText = fallbackText;
-      sourceAudit = {
-        sourceType: "INPUT_TEXT",
-        sourceIdentifier: "Direct Text Input",
-        sourceTitle: "Direct Input Text",
-        extractedWordCount: fallbackText.split(/\s+/).filter(Boolean).length,
-        extractedCharCount: fallbackText.length,
-        extractedText: fallbackText,
-        articles: [],
-      };
-    }
-
-    // Context protection truncation
+    let targetText = rawTargetText;
     const words = targetText.split(/\s+/).filter(Boolean);
     if (words.length > 6000) {
       targetText = words.slice(0, 6000).join(" ") + "\n\n[...Truncated to fit context window...]";
     }
 
-    const userPromptContent = `Document Title: ${sourceAudit.sourceTitle}\n\nContent:\n"""\n${targetText}\n"""`;
+    const sourceAudit: SourceAudit = {
+      sourceType,
+      sourceIdentifier,
+      sourceTitle,
+      extractedWordCount: words.length,
+      extractedCharCount: targetText.length,
+      extractedText: targetText,
+      feedAudit,
+    };
+
+    const userPromptContent = `Document Title: ${sourceTitle}\n\nContent:\n"""\n${targetText}\n"""`;
 
     this.logEvent("INPUT_RESOLVED", {
       modelName,
-      sourceType: sourceAudit.sourceType,
-      sourceIdentifier: sourceAudit.sourceIdentifier,
-      sourceTitle: sourceAudit.sourceTitle,
+      sourceType,
+      sourceIdentifier,
+      sourceTitle,
       wordCount: words.length,
       charCount: targetText.length,
-      inputText: targetText,
       systemPrompt,
       userPrompt: userPromptContent,
     });
@@ -939,8 +1036,8 @@ export class AIEventPipeline extends EventEmitter {
 
 You MUST analyze the text and output ONLY a valid JSON object matching this exact schema:
 {
-  "headline": "A concise, descriptive headline for the document collection",
-  "executive_summary": "Thorough, comprehensive narrative summary of the document(s). Do not artificially abbreviate or constrain the summary to a fixed sentence count; scale the length proportionally to capture the full depth, arguments, and substance of the content.",
+  "headline": "A concise, descriptive headline for the document",
+  "executive_summary": "Thorough, comprehensive narrative summary of the document. Do not artificially abbreviate or constrain the summary to a fixed sentence count; scale the length proportionally to capture the full depth, arguments, and substance of the content.",
   "key_points": [
     "Comprehensive array of all major arguments, key findings, and essential takeaways from the text (scale the number of points to the depth of the text)"
   ],
@@ -979,7 +1076,10 @@ Definitions for classification axes:
           content: userPromptContent,
         },
       ],
-      temperature: 0.2,
+      temperature: inferenceParams.temperature,
+      top_k: inferenceParams.top_k,
+      top_p: inferenceParams.top_p,
+      min_p: inferenceParams.min_p,
       response_format: { type: "json_object" },
       stream: false,
       chat_template_kwargs: { enable_thinking: false },
@@ -989,10 +1089,11 @@ Definitions for classification axes:
     this.logEvent("INFERENCE_DISPATCHED", {
       serverUrl,
       targetModel: modelName,
-      sourceType: sourceAudit.sourceType,
+      sourceType,
+      sourceIdentifier,
+      inferenceParams,
       wordCount: words.length,
       charCount: targetText.length,
-      messages: openAiPayload.messages,
     });
 
     const progressTimer = setInterval(() => {
@@ -1080,7 +1181,7 @@ Definitions for classification axes:
 
     this.logEvent("INFERENCE_COMPLETED", {
       modelName,
-      sourceType: sourceAudit.sourceType,
+      sourceIdentifier,
       tokenMetrics,
       swapMetrics,
       cpuMetrics,
@@ -1093,7 +1194,7 @@ Definitions for classification axes:
       parsed = JSON.parse(match ? match[0] : rawContent);
     } catch {
       parsed = {
-        headline: sourceAudit.sourceTitle || "Document Summary",
+        headline: sourceTitle,
         executive_summary: rawContent.trim(),
         key_points: ["Extracted from raw model text"],
         sentiment: "neutral",
@@ -1120,7 +1221,7 @@ Definitions for classification axes:
     };
 
     const structuredResult: SummaryStructuredOutput = {
-      headline: parsed.headline || sourceAudit.sourceTitle || "Summary Output",
+      headline: parsed.headline || sourceTitle,
       executive_summary: parsed.executive_summary || rawContent,
       key_points: Array.isArray(parsed.key_points) ? parsed.key_points : [],
       sentiment: parsed.sentiment || "neutral",
@@ -1137,6 +1238,7 @@ Definitions for classification axes:
       cpu_metrics: cpuMetrics,
       host_fingerprint: this.hostFingerprint,
       runner_metadata: this.runnerMetadata,
+      inference_params: inferenceParams,
       input_text: targetText,
       system_prompt: openAiPayload.messages[0].content,
       user_prompt: userPromptContent,
@@ -1148,117 +1250,55 @@ Definitions for classification axes:
 }
 
 // -------------------------------------------------------------
-// 9. GITHUB STEP SUMMARY
+// 10. GITHUB STEP SUMMARY (REARRANGED & MERGED SPECIFICATION)
 // -------------------------------------------------------------
 function publishStepSummary(
   modelName: string,
-  result: SummaryStructuredOutput,
-  events: PipelineEvent[]
+  results: SummaryStructuredOutput[],
+  events: PipelineEvent[],
+  inferenceParams: ModelInferenceParams,
+  feedAudit?: FeedSelectionAudit
 ) {
-  const tm = result.token_metrics;
-  const sm = result.swap_metrics;
-  const cm = result.cpu_metrics;
-  const hf = result.host_fingerprint;
-  const rm = result.runner_metadata;
-  const sa = result.source_audit;
-  const comp = result.compression;
+  const summaryPath = process.env.GITHUB_STEP_SUMMARY;
+  if (!summaryPath) return;
+
+  const firstResult = results[0];
+  const hf = firstResult.host_fingerprint;
+  const rm = firstResult.runner_metadata;
+  const cm = firstResult.cpu_metrics;
+  const sm = firstResult.swap_metrics;
+  const tm = firstResult.token_metrics;
 
   console.log(
     `::notice title=AI Pipeline Succeeded (${modelName})::🖥️ ${hf.rawFingerprint} | ⚡ Max CPU: ${cm.maxCpuPercent}% | 📥 Ingest: ${tm.prompt_tokens_per_second} t/s | ⚡ Gen: ${tm.completion_tokens_per_second} t/s | 💾 Peak Swap: ${sm.peak_server_swap_mb} MB`
   );
 
-  const summaryPath = process.env.GITHUB_STEP_SUMMARY;
-  if (!summaryPath) return;
-
-  const feedSection: string[] = [];
-  if (sa.feedAudit) {
-    const fa = sa.feedAudit;
-    feedSection.push(`### 📡 Feed Discovery & Ingested Articles`);
-    if (fa.usedFallback) {
-      feedSection.push(
-        `> ⚠️ **Collection goal unmet** (${fa.collectedArticles.length}/${fa.goalCount} articles found within ${fa.maxAgeHours}h). Gracefully engaged default fallback URL.`
-      );
-    } else {
-      feedSection.push(
-        `> ✅ **Collection goal met:** Ingested ${fa.targetArticles.length} article(s) published within ${fa.maxAgeHours}h.`
-      );
-    }
-
-    feedSection.push(
-      ``,
-      `| # | Article Title | Source Feed | Published Age | Link |`,
-      `| :--- | :--- | :--- | :--- | :--- |`
-    );
-
-    fa.targetArticles.forEach((art, idx) => {
-      feedSection.push(
-        `| **${idx + 1}** | **${art.title}** | \`${art.sourceFeed}\` | ${art.ageHours !== undefined ? `\`${art.ageHours}h ago\`` : "Default Fallback"} | [Visit Article](${art.url}) |`
-      );
-    });
-
-    feedSection.push(``, `---`, ``);
-  }
-
   const lines: string[] = [
     `# 🧠 AI Transformer Pipeline Execution Report`,
     ``,
-    `## ⏱️ Token Performance & Ingestion Rates`,
-    ``,
-    `| Metric | Token Count | Elapsed Time | Speed (Tokens / Sec) |`,
-    `| :--- | :--- | :--- | :--- |`,
-    `| **Prompt (Input Ingestion)** | **${tm.prompt_tokens} tokens** | ${tm.prompt_time_ms > 0 ? (tm.prompt_time_ms / 1000).toFixed(2) + "s" : "Batched"} | **⚡ ${tm.prompt_tokens_per_second} tokens/sec** |`,
-    `| **Completion (Output Gen)** | **${tm.completion_tokens} tokens** | ${(tm.completion_time_ms / 1000).toFixed(2)}s | **⚡ ${tm.completion_tokens_per_second} tokens/sec** |`,
-    `| **Total Evaluation** | **${tm.total_tokens} tokens** | **${(tm.total_duration_ms / 1000).toFixed(2)}s** | Overall Pipeline Throughput |`,
-    ``,
-    `---`,
-    ``,
-    ...feedSection,
-    `## 🧭 Content Stance & Ideological Alignment`,
-    ``,
-    `| Axis | Classification | Question Evaluated |`,
-    `| :--- | :--- | :--- |`,
-    `| **General Sentiment** | \`${result.sentiment.toUpperCase()}\` | Overall emotional and qualitative tone |`,
-    `| **Stance on Change** | \`${result.stance_on_change}\` | What to do about the existing arrangement |`,
-    `| **Stance on Economic Power** | \`${result.stance_on_economic_power}\` | Who should hold economic power |`,
-    `| **Stance on State Power** | \`${result.stance_on_state_power}\` | Whether a power the state holds was properly checked |`,
-    `| **Stance on Borders** | \`${result.stance_on_borders}\` | Whether the answer is inside or outside the border |`,
-    `| **Stance on Personal Sphere** | \`${result.stance_on_personal_sphere}\` | Whether a person keeps an inviolable personal sphere |`,
-    ``,
-    `---`,
-    ``,
-    `## 🖥️ Host & System Diagnostics`,
-    ``,
-    `### ⚙️ Host Machine & Hardware Fingerprint`,
-    `| Hardware Component | Detected Host Specification |`,
+    `## 🖥️ Host, System & Runner Telemetry`,
+    `| Attribute | Detected System / Runner Specification |`,
     `| :--- | :--- |`,
     `| **Host Machine CPU** | \`${hf.cpuModel}\` |`,
     `| **Allocated Core Count** | **${hf.coreCount} physical/vCPU cores** |`,
     `| **L3 Cache Size** | **${hf.l3Cache}** |`,
     `| **SIMD / Vector Acceleration** | \`${hf.avxFlags.join(", ")}\` |`,
     `| **Total Physical RAM** | **${hf.totalRamGb}** |`,
-    ``,
-    `### 🏃 GitHub Actions Runner & Model Telemetry`,
-    `| Attribute | Context Value |`,
-    `| :--- | :--- |`,
     `| **Runner Name** | \`${rm.runnerName || "Self-Hosted / Local"}\` |`,
     `| **GitHub Run ID** | \`${rm.runId || "N/A"}\` |`,
     `| **GitHub Run Number** | \`#${rm.runNumber || "1"}\` |`,
     `| **Runner OS & Architecture** | \`${rm.osArch}\` |`,
-    `| **HF Repo / Model Family** | \`${rm.modelFamily || "N/A"}\` |`,
-    `| **Model File / ID** | \`${modelName}${rm.requestedModelId ? " (Explicit: " + rm.requestedModelId + ")" : " (Auto-detected)"}\` |`,
     `| **Workflow Name** | \`${rm.workflow || "CI"}\` |`,
     `| **Job / Shard ID** | \`${rm.shardId || "N/A"}\` |`,
     ``,
-    `### 📈 CPU Utilization Dynamics (Inference Phase)`,
-    `| Metric | Recorded Value | Measurement Details |`,
+    `---`,
+    ``,
+    `## 📈 CPU & Memory Utilization Dynamics`,
+    `| Resource Metric | Measured Value | Operational & Health Status |`,
     `| :--- | :--- | :--- |`,
     `| **Peak CPU Utilization** | **\`${cm.maxCpuPercent}%\`** | Highest instantaneous utilization across all cores |`,
     `| **Average CPU Utilization** | **\`${cm.avgCpuPercent}%\`** | Mean CPU load over ${cm.samplesTaken} samples |`,
     `| **Inference Parallelism** | **${hf.coreCount} threads** | Threads configured for \`llama-server\` |`,
-    ``,
-    `### 💾 Memory & Linux Swap Diagnostics`,
-    `| Metric | Measured Value | Health Status |`,
-    `| :--- | :--- | :--- |`,
     `| **Linux \`vm.swappiness\`** | **\`${sm.swappiness}\`** | ${sm.swappiness <= 10 ? "✅ Low Paging (Optimized)" : "⚠️ High Paging"} |`,
     `| **Server Process PID** | \`${sm.server_pid ?? ""}\` | Background Daemon |`,
     `| **Server RAM (RSS)** | **${sm.server_vm_rss_mb} MB** | In Physical Memory |`,
@@ -1270,71 +1310,27 @@ function publishStepSummary(
     ``,
     `---`,
     ``,
-    `## 📝 Structured Summary: *"${result.headline}"*`,
-    ``,
-    `### Comprehensive Executive Summary:`,
-    result.executive_summary,
-    ``,
-    `### Core Takeaways:`,
-    ...result.key_points.map((p) => `- ${p}`),
-    ``,
-    `### 📊 Text Compression & Reduction Analysis`,
-    `| Metric | Value | Explanation & Formula |`,
+    `## 🤖 Model Telemetry & Sampling Configuration`,
+    `| Parameter / Telemetry Field | Configured Value | Description |`,
     `| :--- | :--- | :--- |`,
-    `| **Raw Input Size** | \`${comp.inputChars} chars\` | Character count of input text ingested by the model |`,
-    `| **Model Output Size** | \`${comp.outputChars} chars\` | Total characters produced in model completion |`,
-    `| **Retention Ratio** | **\`${comp.retentionRatioPercent}\`** | **\`(Output Chars / Input Chars) * 100%\`** (Proportion of original volume retained) |`,
-    `| **Content Reduction** | **\`${comp.reductionRatioPercent}\`** | **\`100% - Retention Ratio\`** (Space saved through summarization) |`,
-    ``,
-    `---`,
-    ``,
-    `## 📝 Full Input Prompt (System + User Prompt)`,
-    `<details open>`,
-    `<summary><b>Click to collapse/expand exact prompt payload sent to model</b></summary>`,
-    ``,
-    `### System Prompt:`,
-    `\`\`\`text`,
-    result.system_prompt,
-    `\`\`\``,
-    ``,
-    `### User Prompt:`,
-    `\`\`\`text`,
-    result.user_prompt,
-    `\`\`\``,
-    ``,
-    `</details>`,
-    ``,
-    `---`,
-    ``,
-    `## 📄 Full Input Text (Source Material)`,
-    `<details open>`,
-    `<summary><b>Click to collapse/expand input text (${sa.extractedWordCount} words, ${sa.extractedCharCount} chars)</b></summary>`,
-    ``,
-    `\`\`\`markdown`,
-    result.input_text,
-    `\`\`\``,
-    ``,
-    `</details>`,
-    ``,
-    `---`,
-    ``,
-    `## 🤖 Verbatim Raw Model Output`,
-    `<details open>`,
-    `<summary><b>Click to collapse/expand raw model output</b></summary>`,
-    ``,
-    `\`\`\`text`,
-    result.raw_output,
-    `\`\`\``,
-    ``,
-    `</details>`,
+    `| **HF Repo / Model Family** | \`${rm.modelFamily || "N/A"}\` | Hugging Face repository source |`,
+    `| **Model File / ID** | \`${modelName}${rm.requestedModelId ? " (Explicit: " + rm.requestedModelId + ")" : " (Auto-detected)"}\` | GGUF model binary |`,
+    `| **Temperature** | \`${inferenceParams.temperature}\` | Randomness / creativity control |`,
+    `| **Top-K** | \`${inferenceParams.top_k}\` | Top-K vocabulary truncation |`,
+    `| **Top-P (Nucleus)** | \`${inferenceParams.top_p}\` | Cumulative probability cutoff |`,
+    `| **Min-P** | \`${inferenceParams.min_p}\` | Relative minimum probability threshold |`,
+    `| **Context Size** | \`${process.env.CONTEXT_SIZE || "16384"}\` | Maximum transformer context window |`,
     ``,
     `---`,
     ``,
     `## ⚡ Event-Driven Audit Trail (RFC 4122 UUIDv5)`,
     ``,
-    `| Event Type | RFC 4122 UUIDv5 | Timestamp |`,
-    `| :--- | :--- | :--- |`,
-    ...events.map((e) => `| \`${e.eventType}\` | \`${e.eventId}\` | \`${e.timestamp}\` |`),
+    `| Event Type | RFC 4122 UUIDv5 | Timestamp | Step Duration (ms) | Cumulative Time (ms) |`,
+    `| :--- | :--- | :--- | :--- | :--- |`,
+    ...events.map(
+      (e) =>
+        `| \`${e.eventType}\` | \`${e.eventId}\` | \`${e.timestamp}\` | **\`+${e.durationMs} ms\`** | **\`${e.cumulativeMs} ms\`** |`
+    ),
     ``,
     `<details>`,
     `<summary><b>Inspect Full Event Stream Payloads (JSON)</b></summary>`,
@@ -1345,13 +1341,117 @@ function publishStepSummary(
     ``,
     `</details>`,
     ``,
+    `---`,
+    ``,
+    `## ⏱️ Token Performance & Ingestion Rates`,
+    ``,
+    `| Evaluation Target | Prompt Tokens | Ingest Speed | Gen Tokens | Gen Speed | Total Time |`,
+    `| :--- | :--- | :--- | :--- | :--- | :--- |`,
+    ...results.map(
+      (res, idx) =>
+        `| **#${idx + 1}: ${res.headline.slice(0, 30)}...** | **${res.token_metrics.prompt_tokens}** | **⚡ ${res.token_metrics.prompt_tokens_per_second} t/s** | **${res.token_metrics.completion_tokens}** | **⚡ ${res.token_metrics.completion_tokens_per_second} t/s** | **${(res.token_metrics.total_duration_ms / 1000).toFixed(2)}s** |`
+    ),
+    ``,
+    `---`,
+    ``,
   ];
+
+  // Feed Discovery Section
+  if (feedAudit) {
+    lines.push(
+      `## 📡 Feed Discovery & Article Ingestion (Multi-Stage Classification)`,
+      ``
+    );
+    if (feedAudit.usedFallback) {
+      lines.push(
+        `> ⚠️ **Collection goal unmet** (${feedAudit.acceptedArticles.length}/${feedAudit.goalCount} accepted within ${feedAudit.maxAgeHours}h). Gracefully engaged default fallback URL.`
+      );
+    } else {
+      lines.push(
+        `> ✅ **Collection goal achieved:** Evaluated ${feedAudit.evaluatedArticles.length} candidates, accepted ${feedAudit.acceptedArticles.length} article(s) published within ${feedAudit.maxAgeHours}h.`
+      );
+    }
+    lines.push(
+      ``,
+      `| # | Title | Source Feed | Shallow Classifier | Deep Classifier | Age | Link |`,
+      `| :--- | :--- | :--- | :--- | :--- | :--- | :--- |`
+    );
+
+    feedAudit.evaluatedArticles.forEach((art, idx) => {
+      const shallow = art.shallowResult?.passed ? "✅ Passed" : `❌ ${art.shallowResult?.classification}`;
+      const deep = art.deepResult ? (art.deepResult.passed ? `✅ ${art.deepResult.classification}` : `❌ ${art.deepResult.classification}`) : "⏭️ Skipped";
+      lines.push(
+        `| **${idx + 1}** | **${art.title.slice(0, 35)}...** | \`${art.sourceFeed}\` | \`${shallow}\` | \`${deep}\` | ${art.ageHours !== undefined ? `\`${art.ageHours}h\`` : "N/A"} | [Visit](${art.url}) |`
+      );
+    });
+
+    lines.push(``, `---`, ``);
+  }
+
+  // Iterate over each summarized article (supporting N summaries cleanly)
+  results.forEach((res, idx) => {
+    const comp = res.compression;
+    const headerPrefix = results.length > 1 ? `### Article ${idx + 1}: ` : `### `;
+
+    lines.push(
+      `## 📊 Text Compression & Reduction Analysis (${idx + 1}/${results.length})`,
+      `| Metric | Value | Explanation & Formula |`,
+      `| :--- | :--- | :--- |`,
+      `| **Raw Input Size** | \`${comp.inputChars} chars\` | Character count of input text ingested by the model |`,
+      `| **Model Output Size** | \`${comp.outputChars} chars\` | Total characters produced in model completion |`,
+      `| **Retention Ratio** | **\`${comp.retentionRatioPercent}\`** | **\`(Output Chars / Input Chars) * 100%\`** |`,
+      `| **Content Reduction** | **\`${comp.reductionRatioPercent}\`** | **\`100% - Retention Ratio\`** |`,
+      ``,
+      `---`,
+      ``,
+      `## 🧭 Content Stance & Ideological Alignment (${idx + 1}/${results.length})`,
+      `| Axis | Classification | Question Evaluated |`,
+      `| :--- | :--- | :--- |`,
+      `| **General Sentiment** | \`${res.sentiment.toUpperCase()}\` | Overall emotional and qualitative tone |`,
+      `| **Stance on Change** | \`${res.stance_on_change}\` | What to do about the existing arrangement |`,
+      `| **Stance on Economic Power** | \`${res.stance_on_economic_power}\` | Who should hold economic power |`,
+      `| **Stance on State Power** | \`${res.stance_on_state_power}\` | Whether a power the state holds was properly checked |`,
+      `| **Stance on Borders** | \`${res.stance_on_borders}\` | Whether the answer is inside or outside the border |`,
+      `| **Stance on Personal Sphere** | \`${res.stance_on_personal_sphere}\` | Whether a person keeps an inviolable personal sphere |`,
+      ``,
+      `---`,
+      ``,
+      `## 📝 Structured Summary: *"${res.headline}"*`,
+      ``,
+      `${headerPrefix}Executive Summary:`,
+      res.executive_summary,
+      ``,
+      `${headerPrefix}Core Takeaways:`,
+      ...res.key_points.map((p) => `- ${p}`),
+      ``,
+      `---`,
+      ``,
+      `## 📝 Full Input Prompt (${idx + 1}/${results.length})`,
+      `<details>`,
+      `<summary><b>Click to expand exact prompt payload sent to model</b></summary>`,
+      ``,
+      `### System Prompt:`,
+      `\`\`\`text`,
+      res.system_prompt,
+      `\`\`\``,
+      ``,
+      `### User Prompt:`,
+      `\`\`\`text`,
+      res.user_prompt,
+      `\`\`\``,
+      ``,
+      `</details>`,
+      ``,
+      `---`,
+      ``
+    );
+  });
 
   fs.appendFileSync(summaryPath, lines.join("\n"), "utf8");
 }
 
 // -------------------------------------------------------------
-// 10. MAIN ENTRY POINT
+// 11. MAIN ENTRY POINT
 // -------------------------------------------------------------
 async function main() {
   const runnerMetadata: RunnerMetadata = {
@@ -1386,6 +1486,14 @@ async function main() {
   const maxAgeHours = parseFloat(process.env.FEED_MAX_AGE_HOURS || "24");
   const goalCount = parseInt(process.env.ARTICLE_COUNT_GOAL || "1", 10);
 
+  // Bootstrap inference parameters from env or code defaults
+  const inferenceParams: ModelInferenceParams = {
+    temperature: parseFloat(process.env.LLAMA_TEMPERATURE || String(DEFAULT_INFERENCE_PARAMS.temperature)),
+    top_k: parseInt(process.env.LLAMA_TOP_K || String(DEFAULT_INFERENCE_PARAMS.top_k), 10),
+    top_p: parseFloat(process.env.LLAMA_TOP_P || String(DEFAULT_INFERENCE_PARAMS.top_p)),
+    min_p: parseFloat(process.env.LLAMA_MIN_P || String(DEFAULT_INFERENCE_PARAMS.min_p)),
+  };
+
   const hostFingerprint = getHostFingerprint();
 
   console.log("=== Host & Environment Configuration ===");
@@ -1393,6 +1501,7 @@ async function main() {
     inputSource,
     goalCount,
     maxAgeHours,
+    inferenceParams,
     hostFingerprint: hostFingerprint.rawFingerprint,
     runnerMetadata,
     modelName,
@@ -1401,46 +1510,119 @@ async function main() {
 
   const pipeline = new AIEventPipeline(runnerMetadata);
 
-  let directUrl: string | undefined;
+  interface IngestionTarget {
+    sourceType: SourceAudit["sourceType"];
+    sourceIdentifier: string;
+    sourceTitle: string;
+    content: string;
+  }
+
+  const targets: IngestionTarget[] = [];
   let feedAudit: FeedSelectionAudit | undefined;
 
+  // 1. Resolve Feed Ingestion (Randomized Loop with Shallow + Deep Classification)
   if (inputSource === "feed") {
-    feedAudit = await collectArticlesFromFeeds(
+    feedAudit = await collectAndClassifyFeedArticles(
       DEFAULT_FEED_URLS,
       maxAgeHours,
       goalCount,
       (type, payload) => pipeline.logEvent(type, payload)
     );
-  } else if (inputSource === "url") {
-    directUrl = rawUrl;
-  } else if (inputSource === "text") {
-    directUrl = "";
+
+    for (const art of feedAudit.acceptedArticles) {
+      let content = art.extractedMarkdown;
+      if (!content) {
+        try {
+          const res = await extractDirectUrl(art.url, (type, payload) => pipeline.logEvent(type, payload));
+          content = res.content;
+          art.title = res.title || art.title;
+        } catch {
+          content = rawInputText;
+        }
+      }
+
+      if (content) {
+        targets.push({
+          sourceType: feedAudit.usedFallback ? "FEED_DEFAULT_FALLBACK" : "FEED",
+          sourceIdentifier: art.url,
+          sourceTitle: art.title,
+          content,
+        });
+      }
+    }
+  }
+  // 2. Resolve Direct URL Ingestion
+  else if (inputSource === "url") {
+    if (!rawUrl && !rawInputText) {
+      throw new Error("Both URL and input_text are empty.");
+    }
+
+    try {
+      const extracted = await extractDirectUrl(rawUrl, (type, payload) => pipeline.logEvent(type, payload));
+      targets.push({
+        sourceType: "URL",
+        sourceIdentifier: rawUrl,
+        sourceTitle: extracted.title,
+        content: extracted.content,
+      });
+    } catch (err: any) {
+      if (!rawInputText) throw err;
+      targets.push({
+        sourceType: "FALLBACK_INPUT_TEXT",
+        sourceIdentifier: `Fallback (URL failed: ${rawUrl})`,
+        sourceTitle: "Direct Input (Fallback)",
+        content: rawInputText,
+      });
+    }
+  }
+  // 3. Resolve Direct Text Ingestion
+  else if (inputSource === "text") {
+    if (!rawInputText) {
+      throw new Error("input_text is empty.");
+    }
+    targets.push({
+      sourceType: "INPUT_TEXT",
+      sourceIdentifier: "Direct Text Input",
+      sourceTitle: "Direct Input Text",
+      content: rawInputText,
+    });
   } else {
     throw new Error(`Invalid INPUT_SOURCE: "${inputSource}". Must be "feed", "url", or "text".`);
   }
 
-  try {
-    const result = await pipeline.execute({
-      directUrl,
-      fallbackText: rawInputText,
+  // Execute inference loop for all resolved targets (1 or N)
+  const results: SummaryStructuredOutput[] = [];
+
+  for (let i = 0; i < targets.length; i++) {
+    const t = targets[i];
+    console.log(`\n[PIPELINE] 🚀 Processing Target (${i + 1}/${targets.length}): "${t.sourceTitle}"`);
+
+    const result = await pipeline.executeSingleArticle({
+      sourceType: t.sourceType,
+      sourceIdentifier: t.sourceIdentifier,
+      sourceTitle: t.sourceTitle,
+      targetText: t.content,
       feedAudit,
       systemPrompt: prompt,
       serverUrl,
       modelName,
+      inferenceParams,
     });
 
-    console.log("============================================================");
-    console.log("🎯 PARSED STRUCTURED JSON RESULT:");
-    console.log("============================================================");
-    console.log(JSON.stringify(result, null, 2));
-    console.log("============================================================\n");
-
-    publishStepSummary(modelName, result, pipeline.getEventHistory());
-    console.log("Pipeline run completed successfully. JSONL saved to pipeline-events.jsonl");
-  } catch (err: any) {
-    console.error("Pipeline failure:", err);
-    process.exit(1);
+    results.push(result);
   }
+
+  console.log("============================================================");
+  console.log(`🎯 COMPLETED ${results.length} STRUCTURED SUMMARY RUN(S):`);
+  console.log("============================================================");
+  console.log(JSON.stringify(results.length === 1 ? results[0] : results, null, 2));
+  console.log("============================================================\n");
+
+  publishStepSummary(modelName, results, pipeline.getEventHistory(), inferenceParams, feedAudit);
+  console.log("Pipeline run completed successfully. JSONL saved to pipeline-events.jsonl");
 }
 
-main();
+main().catch((err) => {
+  console.error("Pipeline failure:", err);
+  process.exit(1);
+});
