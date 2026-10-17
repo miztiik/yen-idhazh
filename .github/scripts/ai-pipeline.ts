@@ -27,6 +27,8 @@ export interface ModelInferenceParams {
   top_k: number;
   top_p: number;
   min_p: number;
+  repeat_penalty: number;
+  max_tokens: number;
 }
 
 export const DEFAULT_INFERENCE_PARAMS: ModelInferenceParams = {
@@ -34,6 +36,8 @@ export const DEFAULT_INFERENCE_PARAMS: ModelInferenceParams = {
   top_k: 40,
   top_p: 0.95,
   min_p: 0.05,
+  repeat_penalty: 1.15,
+  max_tokens: 4096,
 };
 
 // -------------------------------------------------------------
@@ -307,8 +311,7 @@ export interface CompressionAnalysis {
 
 export interface SummaryStructuredOutput {
   headline: string;
-  executive_summary: string;
-  key_points: string[];
+  analytic_synthesis: string;
   sentiment: "positive" | "neutral" | "negative" | "mixed";
   stance_on_change: StanceOnChange;
   stance_on_economic_power: StanceOnEconomicPower;
@@ -343,7 +346,6 @@ export interface PipelineEvent<T = any> {
 // 4. STAGE 2 & STAGE 4: CLASSIFIERS
 // -------------------------------------------------------------
 export function shallowClassify(item: any): ShallowClassificationResult {
-  // 1. Check enclosures for audio/video podcasts
   if (
     item.enclosure?.type?.startsWith("audio/") ||
     item.enclosure?.type?.startsWith("video/") ||
@@ -356,7 +358,6 @@ export function shallowClassify(item: any): ShallowClassificationResult {
     };
   }
 
-  // 2. Check target link domain
   const link = (item.link || item.url || "").toLowerCase();
   if (/youtube\.com|youtu\.be|spotify\.com|apple\.com\/podcast|soundcloud\.com|vimeo\.com/i.test(link)) {
     return {
@@ -366,7 +367,6 @@ export function shallowClassify(item: any): ShallowClassificationResult {
     };
   }
 
-  // 3. Check categories & tags
   const categories = (item.categories || item.tags || []).map((c: any) =>
     (typeof c === "string" ? c : c?.name || c?.term || "").toLowerCase()
   );
@@ -387,7 +387,6 @@ export function shallowClassify(item: any): ShallowClassificationResult {
     };
   }
 
-  // 4. Check Title heuristics
   const title = item.title || "";
   if (
     /\b(links|roundup|daily digest|morning reads|weekly wrap|news wrap)\b/i.test(title) ||
@@ -408,7 +407,6 @@ export function shallowClassify(item: any): ShallowClassificationResult {
 }
 
 export function deepClassify(cleanMarkdown: string, wordCount: number): DeepClassificationResult {
-  // 1. Scan the opening 600 characters for PR wire boilerplate
   const sample = cleanMarkdown.slice(0, 600);
   if (/\b(FOR IMMEDIATE RELEASE|BUSINESS WIRE|PR NEWSWIRE|GLOBE NEWSWIRE|NEWS PROVIDED BY)\b/i.test(sample)) {
     return {
@@ -421,7 +419,6 @@ export function deepClassify(cleanMarkdown: string, wordCount: number): DeepClas
     };
   }
 
-  // 2. Link density: characters in markdown link text vs total prose characters
   const linkMatches = cleanMarkdown.matchAll(/\[([^\]]+)\]\(([^)]+)\)/g);
   let linkChars = 0;
   for (const m of linkMatches) {
@@ -430,11 +427,9 @@ export function deepClassify(cleanMarkdown: string, wordCount: number): DeepClas
   const totalChars = Math.max(1, cleanMarkdown.length);
   const linkDensity = Number((linkChars / totalChars).toFixed(2));
 
-  // 3. List lines count
   const listLines = cleanMarkdown.split("\n").filter((line) => /^\s*([-*+]|\d+\.)\s+/.test(line));
   const listCount = listLines.length;
 
-  // 4. High link density or heavy list with minimal prose
   if (linkDensity > 0.4 || (listCount > 10 && wordCount < 150)) {
     return {
       classification: "ROUNDUP_DIGEST",
@@ -503,7 +498,6 @@ async function extractDirectUrl(
     directFetchFailed = true;
   }
 
-  // Direct fetch parsing with Defuddle + LinkeDOM
   if (!directFetchFailed && html.length > 100) {
     emitEvent("URL_HTTP_FETCH_COMPLETED", { url, bytes: Buffer.byteLength(html, "utf8") });
 
@@ -528,7 +522,6 @@ async function extractDirectUrl(
     }
   }
 
-  // Fallback to Jina Reader Proxy
   console.log(`[SCRAPER] 🔄 Engaging Reader Proxy to bypass Cloudflare/WAF block...`);
   const proxyUrl = `https://r.jina.ai/${url}`;
 
@@ -665,13 +658,11 @@ async function collectAndClassifyFeedArticles(
 
       emitEvent("FEED_QUERY_SUCCESS", { feedUrl, format: parsed.format, rawEntriesCount: entries.length });
 
-      // Filter entries within the publication age cutoff
       const validEntries = entries.filter((entry) => {
         if (!entry.publishedDate) return false;
         return entry.publishedDate.getTime() >= cutoffMs;
       });
 
-      // Sort newest first
       validEntries.sort((a, b) => (b.publishedDate?.getTime() || 0) - (a.publishedDate?.getTime() || 0));
 
       for (const entry of validEntries) {
@@ -683,7 +674,6 @@ async function collectAndClassifyFeedArticles(
           ((Date.now() - (entry.publishedDate?.getTime() || 0)) / (1000 * 60 * 60)).toFixed(1)
         );
 
-        // --- STAGE 2: Shallow / Pre-Fetch Classifier ---
         const shallowResult = shallowClassify(entry.rawItem);
         emitEvent("SHALLOW_CLASSIFICATION_EVALUATED", {
           url: entry.url,
@@ -703,17 +693,15 @@ async function collectAndClassifyFeedArticles(
         if (!shallowResult.passed) {
           console.log(`[SHALLOW_REJECTED] "${entry.title}" -> ${shallowResult.classification} (${shallowResult.reason})`);
           evaluatedArticles.push(candidate);
-          continue; // Zero network I/O wasted
+          continue;
         }
 
-        // --- STAGE 3: Content Extraction (Defuddle) ---
         console.log(`[EXTRACTION] Ingesting candidate article: "${entry.title}"`);
         try {
           const extracted = await extractDirectUrl(entry.url, emitEvent);
           candidate.extractedMarkdown = extracted.content;
           candidate.title = extracted.title || candidate.title;
 
-          // --- STAGE 4: Deep / Post-Extraction Classifier ---
           const deepResult = deepClassify(extracted.content, extracted.wordCount);
           candidate.deepResult = deepResult;
 
@@ -746,7 +734,6 @@ async function collectAndClassifyFeedArticles(
     }
   }
 
-  // Evaluate whether the collection goal was achieved
   if (acceptedArticles.length >= goalCount) {
     emitEvent("FEED_COLLECTION_GOAL_MET", {
       goalCount,
@@ -764,7 +751,6 @@ async function collectAndClassifyFeedArticles(
     };
   }
 
-  // Graceful fallback if goal was not met
   console.warn(
     `[FEEDSMITH] ⚠️ Collection goal unmet (${acceptedArticles.length}/${goalCount} accepted in ${maxAgeHours}h).`
   );
@@ -1018,7 +1004,6 @@ export class AIEventPipeline extends EventEmitter {
       userPrompt: userPromptContent,
     });
 
-    // Start swap & CPU sampling
     const vmstatStart = getVmstatSwap();
     let peakProcessSwapMb = 0;
     const initialSnap = getMemorySnapshot();
@@ -1032,44 +1017,7 @@ export class AIEventPipeline extends EventEmitter {
       messages: [
         {
           role: "system",
-          content: `${systemPrompt}
-
-You MUST analyze the text and output ONLY a valid JSON object matching this exact schema:
-{
-  "headline": "A concise, descriptive headline for the document",
-  "executive_summary": "Thorough, comprehensive narrative summary of the document. Do not artificially abbreviate or constrain the summary to a fixed sentence count; scale the length proportionally to capture the full depth, arguments, and substance of the content.",
-  "key_points": [
-    "Comprehensive array of all major arguments, key findings, and essential takeaways from the text (scale the number of points to the depth of the text)"
-  ],
-  "sentiment": "positive" | "neutral" | "negative" | "mixed",
-  "stance_on_change": "conservatism" | "progressivism" | "not_applicable",
-  "stance_on_economic_power": "socialism" | "libertarianism" | "not_applicable",
-  "stance_on_state_power": "statism" | "constitutionalism" | "not_applicable",
-  "stance_on_borders": "nationalism" | "internationalism" | "not_applicable",
-  "stance_on_personal_sphere": "civil_libertarianism" | "communitarianism" | "not_applicable"
-}
-
-Definitions for classification axes:
-- stance_on_change: Evaluates what to do about the existing arrangement.
-  * conservatism: Maintain, protect, or return to established structures.
-  * progressivism: Reform, replace, or advance beyond existing arrangements.
-  * not_applicable: Topic does not address institutional or social arrangements.
-- stance_on_economic_power: Evaluates who should hold economic power.
-  * socialism: Collective, public, state, or democratic control of economic resources.
-  * libertarianism: Private ownership, decentralized free markets, and property rights.
-  * not_applicable: Topic does not address economic power allocation.
-- stance_on_state_power: Evaluates whether state power is centralized or checked.
-  * statism: Strong centralized government authority is necessary or justified.
-  * constitutionalism: State power must be strictly constrained, distributed, and checked by rule of law.
-  * not_applicable: Topic does not discuss governance authority.
-- stance_on_borders: Evaluates whether solutions are inside or outside national borders.
-  * nationalism: Focus on domestic sovereignty, borders, and national self-interest.
-  * internationalism: Global cooperation, open borders, transnational agreements.
-  * not_applicable: Topic does not address borders or national scope.
-- stance_on_personal_sphere: Evaluates whether an individual retains an inviolable personal sphere.
-  * civil_libertarianism: Strict individual autonomy and privacy that nobody may enter.
-  * communitarianism: Social obligations, collective well-being, or communal cohesion supersede individual autonomy.
-  * not_applicable: Topic does not discuss individual vs communal rights.`,
+          content: systemPrompt,
         },
         {
           role: "user",
@@ -1080,6 +1028,10 @@ Definitions for classification axes:
       top_k: inferenceParams.top_k,
       top_p: inferenceParams.top_p,
       min_p: inferenceParams.min_p,
+      repeat_penalty: inferenceParams.repeat_penalty,
+      presence_penalty: 0.2,
+      frequency_penalty: 0.2,
+      max_tokens: inferenceParams.max_tokens,
       response_format: { type: "json_object" },
       stream: false,
       chat_template_kwargs: { enable_thinking: false },
@@ -1122,7 +1074,6 @@ Definitions for classification axes:
     const totalDurationMs = Math.round(performance.now() - startTime);
     const cpuMetrics = cpuSampler.stop();
 
-    // Finalize Swap Stats
     const finalSnap = getMemorySnapshot();
     peakProcessSwapMb = Math.max(peakProcessSwapMb, finalSnap.vmSwapMb);
     const vmstatEnd = getVmstatSwap();
@@ -1141,7 +1092,6 @@ Definitions for classification axes:
       swap_bytes_read_mb: Number(((swapInPages * 4) / 1024).toFixed(2)),
     };
 
-    // Calculate Ingestion vs Generation Speeds
     const promptTokens = usage?.prompt_tokens || timings?.prompt_n || 0;
     const completionTokens = usage?.completion_tokens || timings?.predicted_n || 0;
     const totalTokens = usage?.total_tokens || promptTokens + completionTokens;
@@ -1195,8 +1145,7 @@ Definitions for classification axes:
     } catch {
       parsed = {
         headline: sourceTitle,
-        executive_summary: rawContent.trim(),
-        key_points: ["Extracted from raw model text"],
+        analytic_synthesis: rawContent.trim(),
         sentiment: "neutral",
         stance_on_change: "not_applicable",
         stance_on_economic_power: "not_applicable",
@@ -1206,9 +1155,10 @@ Definitions for classification axes:
       };
     }
 
-    // Transparent Compression Calculation
+    const synthesisText = parsed.analytic_synthesis || parsed.executive_summary || rawContent.trim();
+
     const inLen = targetText.length || 1;
-    const outLen = rawContent.length;
+    const outLen = synthesisText.length;
     const retentionPct = ((outLen / inLen) * 100).toFixed(1);
     const reductionPct = Math.max(0, 100 - parseFloat(retentionPct)).toFixed(1);
 
@@ -1217,13 +1167,12 @@ Definitions for classification axes:
       outputChars: outLen,
       retentionRatioPercent: `${retentionPct}%`,
       reductionRatioPercent: `${reductionPct}%`,
-      explanation: `Retention Ratio = (Output Chars / Input Chars) * 100%. The summary retains ${retentionPct}% of the raw text size, corresponding to a ${reductionPct}% content reduction.`,
+      explanation: `Retention Ratio = (Output Chars / Input Chars) * 100%. The synthesis retains ${retentionPct}% of the raw text size, corresponding to a ${reductionPct}% content reduction.`,
     };
 
     const structuredResult: SummaryStructuredOutput = {
       headline: parsed.headline || sourceTitle,
-      executive_summary: parsed.executive_summary || rawContent,
-      key_points: Array.isArray(parsed.key_points) ? parsed.key_points : [],
+      analytic_synthesis: synthesisText,
       sentiment: parsed.sentiment || "neutral",
       stance_on_change: parsed.stance_on_change || "not_applicable",
       stance_on_economic_power: parsed.stance_on_economic_power || "not_applicable",
@@ -1250,7 +1199,7 @@ Definitions for classification axes:
 }
 
 // -------------------------------------------------------------
-// 10. GITHUB STEP SUMMARY (REARRANGED & MERGED SPECIFICATION)
+// 10. GITHUB STEP SUMMARY (COMPLETE RE-INTEGRATED SPECIFICATION)
 // -------------------------------------------------------------
 function publishStepSummary(
   modelName: string,
@@ -1319,6 +1268,8 @@ function publishStepSummary(
     `| **Top-K** | \`${inferenceParams.top_k}\` | Top-K vocabulary truncation |`,
     `| **Top-P (Nucleus)** | \`${inferenceParams.top_p}\` | Cumulative probability cutoff |`,
     `| **Min-P** | \`${inferenceParams.min_p}\` | Relative minimum probability threshold |`,
+    `| **Repeat Penalty** | \`${inferenceParams.repeat_penalty}\` | Penalty to prevent token loops |`,
+    `| **Max Completion Tokens** | \`${inferenceParams.max_tokens}\` | Hard ceiling circuit breaker |`,
     `| **Context Size** | \`${process.env.CONTEXT_SIZE || "16384"}\` | Maximum transformer context window |`,
     ``,
     `---`,
@@ -1356,7 +1307,6 @@ function publishStepSummary(
     ``,
   ];
 
-  // Feed Discovery Section
   if (feedAudit) {
     lines.push(
       `## 📡 Feed Discovery & Article Ingestion (Multi-Stage Classification)`,
@@ -1388,10 +1338,8 @@ function publishStepSummary(
     lines.push(``, `---`, ``);
   }
 
-  // Iterate over each summarized article (supporting N summaries cleanly)
   results.forEach((res, idx) => {
     const comp = res.compression;
-    const headerPrefix = results.length > 1 ? `### Article ${idx + 1}: ` : `### `;
 
     lines.push(
       `## 📊 Text Compression & Reduction Analysis (${idx + 1}/${results.length})`,
@@ -1416,13 +1364,9 @@ function publishStepSummary(
       ``,
       `---`,
       ``,
-      `## 📝 Structured Summary: *"${res.headline}"*`,
+      `## 📝 Analytic Synthesis: *"${res.headline}"*`,
       ``,
-      `${headerPrefix}Executive Summary:`,
-      res.executive_summary,
-      ``,
-      `${headerPrefix}Core Takeaways:`,
-      ...res.key_points.map((p) => `- ${p}`),
+      res.analytic_synthesis,
       ``,
       `---`,
       ``,
@@ -1475,23 +1419,73 @@ async function main() {
     throw new Error("Missing required environment variable: MODEL_NAME");
   }
 
-  const prompt = (process.env.PROMPT ?? "").trim();
-  if (!prompt) {
-    throw new Error("Missing required environment variable: PROMPT");
-  }
+  const defaultSystemPrompt = `You are a precise, objective intelligence analyst. Your mandate is to produce a faithful, high-density synthesis of the provided document.
 
+OPERATIONAL PRINCIPLES:
+1. STRICT DERIVATIVE FIDELITY:
+   Distill ONLY what is explicitly reported or asserted in the document. Never introduce outside background history, unstated context, or speculative extrapolations.
+   
+2. ACCESSIBLE & OBJECTIVE TONE:
+   Write in clear, direct, and neutral prose for an intelligent reader. Do not tutorialize, do not define common terms, and do not use empty academic jargon.
+
+3. NATURAL, COHERENT PROSE (NO ARRAYS, NO BULLETS):
+   Deliver the entire summary in fluent, continuous paragraphs within "analytic_synthesis".
+   - Trace the core reality or thesis.
+   - Detail the specific evidence, actors, figures, or causal mechanisms.
+   - Note any acknowledged boundaries, limitations, or counter-claims.
+   - Let the depth of the document determine the length naturally: simple news briefs require brief paragraphs; complex treatises naturally require thorough multi-paragraph exposition.
+
+4. SEPARATION OF STANCE CLASSIFICATION:
+   Do NOT explain, defend, or mention your stance classifications inside the summary. Keep the synthesis strictly focused on the source content.
+
+You MUST analyze the text and output ONLY a valid JSON object matching this exact schema:
+{
+  "headline": "A concise, descriptive headline for the document",
+  "analytic_synthesis": "Comprehensive, cohesive narrative prose synthesizing the core findings, mechanisms, and nuances of the document.",
+  "sentiment": "positive" | "neutral" | "negative" | "mixed",
+  "stance_on_change": "conservatism" | "progressivism" | "not_applicable",
+  "stance_on_economic_power": "socialism" | "libertarianism" | "not_applicable",
+  "stance_on_state_power": "statism" | "constitutionalism" | "not_applicable",
+  "stance_on_borders": "nationalism" | "internationalism" | "not_applicable",
+  "stance_on_personal_sphere": "civil_libertarianism" | "communitarianism" | "not_applicable"
+}
+
+Definitions for classification axes:
+- stance_on_change: Evaluates what to do about the existing arrangement.
+  * conservatism: Maintain, protect, or return to established structures.
+  * progressivism: Reform, replace, or advance beyond existing arrangements.
+  * not_applicable: Topic does not address institutional or social arrangements.
+- stance_on_economic_power: Evaluates who should hold economic power.
+  * socialism: Collective, public, state, or democratic control of economic resources.
+  * libertarianism: Private ownership, decentralized free markets, and property rights.
+  * not_applicable: Topic does not address economic power allocation.
+- stance_on_state_power: Evaluates whether state power is centralized or checked.
+  * statism: Strong centralized government authority is necessary or justified.
+  * constitutionalism: State power must be strictly constrained, distributed, and checked by rule of law.
+  * not_applicable: Topic does not discuss governance authority.
+- stance_on_borders: Evaluates whether solutions are inside or outside national borders.
+  * nationalism: Focus on domestic sovereignty, borders, and national self-interest.
+  * internationalism: Global cooperation, open borders, transnational agreements.
+  * not_applicable: Topic does not address borders or national scope.
+- stance_on_personal_sphere: Evaluates whether an individual retains an inviolable personal sphere.
+  * civil_libertarianism: Strict individual autonomy and privacy that nobody may enter.
+  * communitarianism: Social obligations, collective well-being, or communal cohesion supersede individual autonomy.
+  * not_applicable: Topic does not discuss individual vs communal rights.`;
+
+  const prompt = (process.env.PROMPT || defaultSystemPrompt).trim();
   const inputSource = (process.env.INPUT_SOURCE || "feed").toLowerCase().trim();
   const rawUrl = (process.env.URL ?? "").trim();
   const rawInputText = (process.env.INPUT_TEXT ?? "").trim();
   const maxAgeHours = parseFloat(process.env.FEED_MAX_AGE_HOURS || "24");
   const goalCount = parseInt(process.env.ARTICLE_COUNT_GOAL || "1", 10);
 
-  // Bootstrap inference parameters from env or code defaults
   const inferenceParams: ModelInferenceParams = {
     temperature: parseFloat(process.env.LLAMA_TEMPERATURE || String(DEFAULT_INFERENCE_PARAMS.temperature)),
     top_k: parseInt(process.env.LLAMA_TOP_K || String(DEFAULT_INFERENCE_PARAMS.top_k), 10),
     top_p: parseFloat(process.env.LLAMA_TOP_P || String(DEFAULT_INFERENCE_PARAMS.top_p)),
     min_p: parseFloat(process.env.LLAMA_MIN_P || String(DEFAULT_INFERENCE_PARAMS.min_p)),
+    repeat_penalty: parseFloat(process.env.LLAMA_REPEAT_PENALTY || String(DEFAULT_INFERENCE_PARAMS.repeat_penalty)),
+    max_tokens: parseInt(process.env.LLAMA_MAX_TOKENS || String(DEFAULT_INFERENCE_PARAMS.max_tokens), 10),
   };
 
   const hostFingerprint = getHostFingerprint();
@@ -1520,7 +1514,6 @@ async function main() {
   const targets: IngestionTarget[] = [];
   let feedAudit: FeedSelectionAudit | undefined;
 
-  // 1. Resolve Feed Ingestion (Randomized Loop with Shallow + Deep Classification)
   if (inputSource === "feed") {
     feedAudit = await collectAndClassifyFeedArticles(
       DEFAULT_FEED_URLS,
@@ -1550,9 +1543,7 @@ async function main() {
         });
       }
     }
-  }
-  // 2. Resolve Direct URL Ingestion
-  else if (inputSource === "url") {
+  } else if (inputSource === "url") {
     if (!rawUrl && !rawInputText) {
       throw new Error("Both URL and input_text are empty.");
     }
@@ -1574,9 +1565,7 @@ async function main() {
         content: rawInputText,
       });
     }
-  }
-  // 3. Resolve Direct Text Ingestion
-  else if (inputSource === "text") {
+  } else if (inputSource === "text") {
     if (!rawInputText) {
       throw new Error("input_text is empty.");
     }
@@ -1590,7 +1579,6 @@ async function main() {
     throw new Error(`Invalid INPUT_SOURCE: "${inputSource}". Must be "feed", "url", or "text".`);
   }
 
-  // Execute inference loop for all resolved targets (1 or N)
   const results: SummaryStructuredOutput[] = [];
 
   for (let i = 0; i < targets.length; i++) {
