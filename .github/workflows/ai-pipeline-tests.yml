@@ -3,10 +3,14 @@ name: Yen-Summarizers
 on:
   workflow_dispatch:
     inputs:
-      model_repo:
-        description: 'HuggingFace Model (provider/model)'
+      model_family:
+        description: 'HuggingFace Repo Name & Model Family (owner/repo)'
         required: true
         default: 'ornith-ai/Ornith-1.5-9B-GGUF'
+      model_id:
+        description: 'Specific Model ID / GGUF Filename (leave blank for auto-detect)'
+        required: false
+        default: ''
       url:
         description: 'URL to extract with Defuddle (leave empty to use input_text)'
         required: false
@@ -61,7 +65,7 @@ jobs:
           npm pkg set type="module"
           npm install defuddle linkedom
 
-      # 3. Official llama.app Installer (Zero .so Dependency Issues)
+      # 3. Official llama.app Installer
       - name: Install Official llama.cpp
         run: |
           echo "Installing official llama.cpp via llama.app installer..."
@@ -75,23 +79,30 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ./models
-          key: model-cache-${{ github.event.inputs.model_repo }}
+          key: model-cache-${{ github.event.inputs.model_family }}-${{ github.event.inputs.model_id }}
 
-      # 5. Resolve & Download GGUF
+      # 5. Resolve & Download GGUF (Specific Model ID or Auto-Detect)
       - name: Download Model from HuggingFace
         run: |
           mkdir -p ./models
-          REPO="${{ github.event.inputs.model_repo }}"
+          REPO="${{ github.event.inputs.model_family }}"
+          SPECIFIC_FILE="${{ github.event.inputs.model_id }}"
 
-          FILE=$(curl -sL "https://huggingface.co/api/models/${REPO}/tree/main" | jq -r '.[].path' | grep -iE '\.gguf$' | grep -iE 'q5_k_m|q4_k_m' | head -n 1)
-          [ -z "$FILE" ] && FILE=$(curl -sL "https://huggingface.co/api/models/${REPO}/tree/main" | jq -r '.[].path' | grep -iE '\.gguf$' | head -n 1)
+          if [ -n "$SPECIFIC_FILE" ]; then
+            echo "Using explicitly requested model_id: $SPECIFIC_FILE"
+            FILE="$SPECIFIC_FILE"
+          else
+            echo "No specific model_id provided. Auto-resolving optimal GGUF from $REPO..."
+            FILE=$(curl -sL "https://huggingface.co/api/models/${REPO}/tree/main" | jq -r '.[].path' | grep -iE '\.gguf$' | grep -iE 'q5_k_m|q4_k_m' | head -n 1)
+            [ -z "$FILE" ] && FILE=$(curl -sL "https://huggingface.co/api/models/${REPO}/tree/main" | jq -r '.[].path' | grep -iE '\.gguf$' | head -n 1)
+          fi
 
           if [ -z "$FILE" ]; then
             echo "::error::No .gguf files found in repository '$REPO'!"
             exit 1
           fi
 
-          echo "Selected GGUF: $FILE"
+          echo "Selected Model File: $FILE"
           echo "MODEL_FILE=$FILE" >> $GITHUB_ENV
 
           if [ ! -f "./models/$FILE" ]; then
@@ -107,7 +118,7 @@ jobs:
             exit 1
           fi
 
-      # 6. Start Server using 'llama serve' (Port 9931, 16k Context)
+      # 6. Start Server using 'llama serve' (Port 9931, Context Configured)
       - name: Start llama-server (Port 9931)
         run: |
           CORES=$(nproc)
@@ -167,8 +178,15 @@ jobs:
           INPUT_TEXT: "${{ github.event.inputs.input_text }}"
           SERVER_URL: "http://127.0.0.1:9931"
           MODEL_NAME: "${{ env.MODEL_FILE }}"
+          MODEL_FAMILY: "${{ github.event.inputs.model_family }}"
+          REQUESTED_MODEL_ID: "${{ github.event.inputs.model_id }}"
           SHARD_ID: "${{ github.job }}"
           RUNNER_NAME: "${{ runner.name }}"
+          RUNNER_OS: "${{ runner.os }}"
+          RUNNER_ARCH: "${{ runner.arch }}"
+          GITHUB_RUN_ID: "${{ github.run_id }}"
+          GITHUB_RUN_NUMBER: "${{ github.run_number }}"
+          GITHUB_WORKFLOW: "${{ github.workflow }}"
         run: |
           npx --yes tsx .github/scripts/ai-pipeline.ts
 
