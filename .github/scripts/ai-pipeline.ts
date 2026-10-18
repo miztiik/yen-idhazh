@@ -25,7 +25,6 @@ export const DEFAULT_FALLBACK_ARTICLE_URL =
 
 export const PYTHON_EVAL_SERVER_URL = "http://127.0.0.1:9933";
 
-// Configurable array of blocked categories
 export const DEFAULT_BLOCKED_CATEGORIES: string[] = ["Links", "Show Types"];
 
 export interface ModelInferenceParams {
@@ -110,7 +109,6 @@ export function evaluateCategoryBlock(
 ): { isBlocked: boolean; matchedReason?: string } {
   const normalizedBlocked = blockedCategories.map((c) => c.toLowerCase().trim());
 
-  // 1. Check metadata categories/tags from feed
   const itemCategories = categories.map((c: any) =>
     (typeof c === "string" ? c : c?.name || c?.term || c?.value || "").toLowerCase().trim()
   );
@@ -121,7 +119,6 @@ export function evaluateCategoryBlock(
     }
   }
 
-  // 2. Check URL slug patterns (e.g., /category/links/ or /category/show-types/)
   const lowerUrl = url.toLowerCase();
   for (const blocked of normalizedBlocked) {
     const slug = blocked.replace(/\s+/g, "-");
@@ -137,8 +134,7 @@ export function cleanUrlWithTidy(rawUrl: string): { cleanUrl: string; wasCleaned
   try {
     const res = TidyURL.clean(rawUrl);
     const cleanUrl = res.url || rawUrl;
-    const wasCleaned = cleanUrl !== rawUrl;
-    return { cleanUrl, wasCleaned, reduction: res.info?.reduction || 0 };
+    return { cleanUrl, wasCleaned: cleanUrl !== rawUrl, reduction: res.info?.reduction || 0 };
   } catch {
     return { cleanUrl: rawUrl, wasCleaned: false, reduction: 0 };
   }
@@ -425,7 +421,6 @@ export interface PipelineEvent<T = any> {
 // 5. CLASSIFIERS WITH CATEGORY FILTER MODULE
 // -------------------------------------------------------------
 export function shallowClassify(item: any, rawUrl: string): ShallowClassificationResult {
-  // 1. Element Category & URL Filter Check
   const categories = item.categories || item.tags || [];
   const catCheck = evaluateCategoryBlock(categories, rawUrl);
   if (catCheck.isBlocked) {
@@ -436,7 +431,6 @@ export function shallowClassify(item: any, rawUrl: string): ShallowClassificatio
     };
   }
 
-  // 2. Audio/Video enclosure check
   if (
     item.enclosure?.type?.startsWith("audio/") ||
     item.enclosure?.type?.startsWith("video/") ||
@@ -449,7 +443,6 @@ export function shallowClassify(item: any, rawUrl: string): ShallowClassificatio
     };
   }
 
-  // 3. Multimedia host check
   const link = (item.link || item.url || rawUrl || "").toLowerCase();
   if (/youtube\.com|youtu\.be|spotify\.com|apple\.com\/podcast|soundcloud\.com|vimeo\.com/i.test(link)) {
     return {
@@ -459,7 +452,6 @@ export function shallowClassify(item: any, rawUrl: string): ShallowClassificatio
     };
   }
 
-  // 4. Title heuristics
   const title = item.title || "";
   if (/\b(links|roundup|daily digest|morning reads|weekly wrap|news wrap)\b/i.test(title) || /^links\s+\d+/i.test(title)) {
     return {
@@ -706,7 +698,6 @@ async function collectAndClassifyFeedArticles(
       for (const entry of validEntries) {
         if (acceptedArticles.length >= goalCount) break;
 
-        // 1. Tidy URL Step between Feedsmith and Extraction
         const tidyResult = cleanUrlWithTidy(entry.url);
         const targetUrl = tidyResult.cleanUrl;
 
@@ -720,7 +711,6 @@ async function collectAndClassifyFeedArticles(
 
         const ageHours = Number(((Date.now() - (entry.publishedDate?.getTime() || 0)) / (1000 * 60 * 60)).toFixed(1));
 
-        // 2. Shallow Classification with Category Filter Module
         const shallowResult = shallowClassify(entry.rawItem, targetUrl);
         emitEvent("SHALLOW_CLASSIFICATION_EVALUATED", {
           url: targetUrl,
@@ -744,14 +734,12 @@ async function collectAndClassifyFeedArticles(
           continue;
         }
 
-        // 3. Content Extraction (Defuddle)
         console.log(`[EXTRACTION] Ingesting candidate article: "${entry.title}"`);
         try {
           const extracted = await extractDirectUrl(targetUrl, emitEvent);
           candidate.extractedMarkdown = extracted.content;
           candidate.title = extracted.title || candidate.title;
 
-          // 4. Deep Post-Extraction Classification
           const deepResult = deepClassify(extracted.content, extracted.wordCount);
           candidate.deepResult = deepResult;
 
@@ -764,7 +752,7 @@ async function collectAndClassifyFeedArticles(
           } else {
             console.log(`[DEEP_REJECTED] "${candidate.title}" -> ${deepResult.classification} (${deepResult.reason})`);
           }
-        } catch (err: any) {
+        } catch {
           evaluatedArticles.push(candidate);
         }
       }
@@ -1154,7 +1142,7 @@ export class AIEventPipeline extends EventEmitter {
 }
 
 // -------------------------------------------------------------
-// 11. STEP SUMMARY BUILDER (MERGED TELEMETRY & QUALITY TABLES)
+// 11. STEP SUMMARY BUILDER (RESILIENT & DEFENSIVE)
 // -------------------------------------------------------------
 function publishStepSummary(
   modelName: string,
@@ -1166,12 +1154,45 @@ function publishStepSummary(
   const summaryPath = process.env.GITHUB_STEP_SUMMARY;
   if (!summaryPath) return;
 
+  if (!results || results.length === 0) {
+    console.warn("[STEP_SUMMARY] ⚠️ No results available to publish in GitHub Step Summary.");
+    return;
+  }
+
   const firstResult = results[0];
-  const hf = firstResult.host_fingerprint;
-  const rm = firstResult.runner_metadata;
-  const cm = firstResult.cpu_metrics;
-  const sm = firstResult.swap_metrics;
-  const tm = firstResult.token_metrics;
+  const hf = firstResult.host_fingerprint || getHostFingerprint();
+  const rm = firstResult.runner_metadata || {
+    runnerName: process.env.RUNNER_NAME || "GitHub Runner",
+    runId: process.env.GITHUB_RUN_ID || "N/A",
+    runNumber: process.env.GITHUB_RUN_NUMBER || "1",
+    workflow: process.env.GITHUB_WORKFLOW || "CI",
+    osArch: `${os.type()} ${os.arch()}`,
+    shardId: process.env.SHARD_ID || "N/A",
+    modelFamily: process.env.MODEL_FAMILY || "N/A",
+    requestedModelId: process.env.REQUESTED_MODEL_ID || "N/A",
+  };
+  const cm = firstResult.cpu_metrics || { maxCpuPercent: 0, avgCpuPercent: 0, samplesTaken: 0 };
+  const sm = firstResult.swap_metrics || {
+    swappiness: 0,
+    server_pid: null,
+    server_vm_rss_mb: 0,
+    peak_server_swap_mb: 0,
+    final_server_swap_mb: 0,
+    system_swap_used_mb: 0,
+    system_swap_total_mb: 0,
+    swap_bytes_written_mb: 0,
+    swap_bytes_read_mb: 0,
+  };
+  const tm = firstResult.token_metrics || {
+    prompt_tokens: 0,
+    completion_tokens: 0,
+    total_tokens: 0,
+    prompt_time_ms: 0,
+    completion_time_ms: 0,
+    total_duration_ms: 0,
+    prompt_tokens_per_second: 0,
+    completion_tokens_per_second: 0,
+  };
 
   console.log(`::notice title=AI Pipeline Execution Completed (${modelName})::🖥️ ${hf.rawFingerprint} | ⚡ Max CPU: ${cm.maxCpuPercent}% | 📥 Ingest: ${tm.prompt_tokens_per_second} t/s | ⚡ Gen: ${tm.completion_tokens_per_second} t/s`);
 
@@ -1250,7 +1271,7 @@ function publishStepSummary(
     `| :--- | :--- | :--- | :--- | :--- | :--- |`,
     ...results.map(
       (res, idx) =>
-        `| **#${idx + 1}: ${res.headline.slice(0, 30)}...** | **${res.token_metrics.prompt_tokens}** | **⚡ ${res.token_metrics.prompt_tokens_per_second} t/s** | **${res.token_metrics.completion_tokens}** | **⚡ ${res.token_metrics.completion_tokens_per_second} t/s** | **${(res.token_metrics.total_duration_ms / 1000).toFixed(2)}s** |`
+        `| **#${idx + 1}: ${res.headline.slice(0, 30)}...** | **${res.token_metrics?.prompt_tokens ?? "N/A"}** | **⚡ ${res.token_metrics?.prompt_tokens_per_second ?? "N/A"} t/s** | **${res.token_metrics?.completion_tokens ?? "N/A"}** | **⚡ ${res.token_metrics?.completion_tokens_per_second ?? "N/A"} t/s** | **${res.token_metrics ? (res.token_metrics.total_duration_ms / 1000).toFixed(2) + "s" : "N/A"}** |`
     ),
     ``,
     `---`,
@@ -1279,7 +1300,7 @@ function publishStepSummary(
   }
 
   results.forEach((res, idx) => {
-    const comp = res.compression;
+    const comp = res.compression || { inputChars: 0, outputChars: 0, retentionRatioPercent: "N/A", reductionRatioPercent: "N/A" };
     lines.push(
       `## 📊 Text Compression & Reduction Analysis (${idx + 1}/${results.length})`,
       `| Metric | Value | Explanation & Formula |`,
@@ -1370,7 +1391,7 @@ async function main() {
     runId: process.env.GITHUB_RUN_ID ?? "",
     runNumber: process.env.GITHUB_RUN_NUMBER ?? "",
     workflow: process.env.GITHUB_WORKFLOW ?? "",
-    osArch: `${os.type()} ${os.arch()} (${os.release()})`,
+    osArch: `${os.type()} ${os.arch()}`,
     shardId: process.env.SHARD_ID ?? "",
     modelFamily: process.env.MODEL_FAMILY ?? "",
     requestedModelId: process.env.REQUESTED_MODEL_ID ?? "",
@@ -1407,7 +1428,6 @@ async function main() {
     const correlationId = structuredEvents[0].correlationId;
     const pipeline = new AIEventPipeline(runnerMetadata, correlationId);
 
-    // Call Python FastAPI server in parallel for the batch of items
     console.log(`[EVAL_CLIENT] 🚀 Calling Python eval service in parallel for ${structuredEvents.length} items...`);
     const evalResults = await Promise.allSettled(
       structuredEvents.map(async (event) => {
@@ -1426,31 +1446,42 @@ async function main() {
           }),
         });
 
-        if (!res.ok) throw new Error(`Python eval HTTP ${res.status}`);
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`Python eval HTTP ${res.status}: ${errText}`);
+        }
         const data = await res.json();
-        return { payload, metrics: data.metrics };
+        return { metrics: data.metrics };
       })
     );
 
-    const updatedOutputs: SummaryStructuredOutput[] = [];
-    for (const r of evalResults) {
-      if (r.status === "fulfilled") {
-        const output: SummaryStructuredOutput = r.value.payload;
-        output.quality_metrics = r.value.metrics;
-        updatedOutputs.push(output);
+    // Map over structuredEvents to retain all Phase 1 summaries even if individual calls reject
+    const updatedOutputs: SummaryStructuredOutput[] = structuredEvents.map((evt, idx) => {
+      const output: SummaryStructuredOutput = evt.payload;
+      const evalRes = evalResults[idx];
 
+      if (evalRes && evalRes.status === "fulfilled") {
+        output.quality_metrics = evalRes.value.metrics;
         pipeline.logEvent("QUALITY_EVALUATION_COMPLETED", {
-          sourceIdentifier: output.source_audit.sourceIdentifier,
+          sourceIdentifier: output.source_audit?.sourceIdentifier,
           sourceTitle: output.headline,
-          metrics: r.value.metrics,
+          metrics: evalRes.value.metrics,
         });
+      } else {
+        console.warn(
+          `[EVAL_CLIENT] ⚠️ Evaluation call failed for "${output.headline}":`,
+          evalRes?.status === "rejected" ? evalRes.reason : "Unfulfilled"
+        );
       }
-    }
 
-    // Publish unified summary report with both LLM inference and UniEval metrics
+      if (!output.host_fingerprint) output.host_fingerprint = getHostFingerprint();
+      if (!output.runner_metadata) output.runner_metadata = runnerMetadata;
+      return output;
+    });
+
     const dummyParams: ModelInferenceParams = DEFAULT_INFERENCE_PARAMS;
     publishStepSummary(modelName || "GGUF-Model", updatedOutputs, pipeline.getEventHistory(), dummyParams);
-    console.log("[EVAL_CLIENT] ✅ Quality audit completed successfully.");
+    console.log("[EVAL_CLIENT] ✅ Quality audit completed.");
     return;
   }
 
