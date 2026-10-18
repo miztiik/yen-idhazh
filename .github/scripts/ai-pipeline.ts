@@ -18,6 +18,13 @@ import { TidyURL } from "tidy-url";
 export const DEFAULT_FEED_URLS: string[] = [
   "https://www.nakedcapitalism.com/feed",
   "https://www.aljazeera.com/xml/rss/all.xml",
+  "https://oilprice.com/rss/main",
+  "https://jomodevplus.substack.com/feed",
+  "wolfstreet.com/feed",
+  "https://neuburger.substack.com/feed",
+  "https://creditslips.org/feed",
+  "https://www.thebignewsletter.com/feed",
+  "https://angrybearblog.com/feed"
 ];
 
 export const DEFAULT_FALLBACK_ARTICLE_URL =
@@ -357,6 +364,9 @@ export interface SwapActivityMetrics {
   system_swap_total_mb: number;
   swap_bytes_written_mb: number;
   swap_bytes_read_mb: number;
+  page_size_bytes: number;
+  is_cgroup_constrained: boolean;
+  diagnostics_error?: string;
 }
 
 export interface CompressionAnalysis {
@@ -780,13 +790,29 @@ async function collectAndClassifyFeedArticles(
 }
 
 // -------------------------------------------------------------
-// 8. SWAP & MEMORY DIAGNOSTICS
+// 8. SWAP & MEMORY DIAGNOSTICS (STAFF HARDENED)
 // -------------------------------------------------------------
+let CACHED_PAGE_SIZE: number | null = null;
+export function getSystemPageSizeBytes(): number {
+  if (CACHED_PAGE_SIZE !== null) return CACHED_PAGE_SIZE;
+  try {
+    const out = execSync("getconf PAGESIZE", { encoding: "utf8" });
+    const parsed = parseInt(out.trim(), 10);
+    if (!isNaN(parsed) && parsed > 0) {
+      CACHED_PAGE_SIZE = parsed;
+      return CACHED_PAGE_SIZE;
+    }
+  } catch {}
+  CACHED_PAGE_SIZE = 4096; // Standard x86_64 baseline fallback
+  return CACHED_PAGE_SIZE;
+}
+
 function readServerPid(): number | null {
   try {
     if (fs.existsSync(".llama_server.pid")) {
       const pidStr = fs.readFileSync(".llama_server.pid", "utf8").trim();
-      return pidStr ? parseInt(pidStr, 10) : null;
+      const parsed = parseInt(pidStr, 10);
+      return !isNaN(parsed) && parsed > 0 ? parsed : null;
     }
   } catch {}
   return null;
@@ -807,42 +833,82 @@ function getVmstatSwap(): { pswpin: number; pswpout: number } {
   }
 }
 
-function getMemorySnapshot() {
+export interface MemorySnapshot {
+  swappiness: number;
+  pid: number | null;
+  vmRssMb: number | null;
+  vmSwapMb: number | null;
+  systemSwapUsedMb: number | null;
+  systemSwapTotalMb: number | null;
+  isCgroupConstrained: boolean;
+  diagnosticsError?: string;
+}
+
+function getMemorySnapshot(): MemorySnapshot {
   let swappiness = -1;
   try {
     swappiness = parseInt(fs.readFileSync("/proc/sys/vm/swappiness", "utf8").trim(), 10);
   } catch {}
 
-  let swapTotal = 0;
-  let swapFree = 0;
+  let swapTotalMb: number | null = null;
+  let swapUsedMb: number | null = null;
+  let isCgroupConstrained = false;
+
+  // 1. Inspect cgroups v2 swap usage (container-aware)
   try {
-    const meminfo = fs.readFileSync("/proc/meminfo", "utf8");
-    for (const line of meminfo.split("\n")) {
-      if (line.startsWith("SwapTotal:")) swapTotal = parseInt(line.split(/\s+/)[1], 10) / 1024;
-      if (line.startsWith("SwapFree:")) swapFree = parseInt(line.split(/\s+/)[1], 10) / 1024;
+    if (fs.existsSync("/sys/fs/cgroup/memory.swap.current")) {
+      const curBytes = parseInt(fs.readFileSync("/sys/fs/cgroup/memory.swap.current", "utf8").trim(), 10);
+      const maxRaw = fs.readFileSync("/sys/fs/cgroup/memory.swap.max", "utf8").trim();
+      const maxBytes = maxRaw === "max" ? null : parseInt(maxRaw, 10);
+
+      swapUsedMb = Math.round(curBytes / (1024 * 1024));
+      swapTotalMb = maxBytes !== null ? Math.round(maxBytes / (1024 * 1024)) : null;
+      isCgroupConstrained = true;
     }
   } catch {}
 
+  // 2. Fall back to host /proc/meminfo if cgroup swap is not constrained
+  if (swapTotalMb === null && !isCgroupConstrained) {
+    try {
+      const meminfo = fs.readFileSync("/proc/meminfo", "utf8");
+      let totalKb = 0;
+      let freeKb = 0;
+      for (const line of meminfo.split("\n")) {
+        if (line.startsWith("SwapTotal:")) totalKb = parseInt(line.split(/\s+/)[1], 10);
+        if (line.startsWith("SwapFree:")) freeKb = parseInt(line.split(/\s+/)[1], 10);
+      }
+      swapTotalMb = Math.round(totalKb / 1024);
+      swapUsedMb = Math.round((totalKb - freeKb) / 1024);
+    } catch {}
+  }
+
+  // 3. Inspect Process Memory & Virtual Swap
   const pid = readServerPid();
-  let vmRss = 0;
-  let vmSwap = 0;
+  let vmRssMb: number | null = null;
+  let vmSwapMb: number | null = null;
+  let diagnosticsError: string | undefined;
+
   if (pid) {
     try {
       const status = fs.readFileSync(`/proc/${pid}/status`, "utf8");
       for (const line of status.split("\n")) {
-        if (line.startsWith("VmRSS:")) vmRss = parseInt(line.split(/\s+/)[1], 10) / 1024;
-        if (line.startsWith("VmSwap:")) vmSwap = parseInt(line.split(/\s+/)[1], 10) / 1024;
+        if (line.startsWith("VmRSS:")) vmRssMb = Math.round(parseInt(line.split(/\s+/)[1], 10) / 1024);
+        if (line.startsWith("VmSwap:")) vmSwapMb = Math.round(parseInt(line.split(/\s+/)[1], 10) / 1024);
       }
-    } catch {}
+    } catch (err: any) {
+      diagnosticsError = `Failed reading /proc/${pid}/status: ${err.message}`;
+    }
   }
 
   return {
     swappiness,
     pid,
-    vmRssMb: Math.round(vmRss),
-    vmSwapMb: Math.round(vmSwap),
-    systemSwapUsedMb: Math.round(swapTotal - swapFree),
-    systemSwapTotalMb: Math.round(swapTotal),
+    vmRssMb,
+    vmSwapMb,
+    systemSwapUsedMb: swapUsedMb,
+    systemSwapTotalMb: swapTotalMb,
+    isCgroupConstrained,
+    diagnosticsError,
   };
 }
 
@@ -981,10 +1047,13 @@ export class AIEventPipeline extends EventEmitter {
 
     this.logEvent("INPUT_RESOLVED", { modelName, sourceType, sourceIdentifier, sourceTitle, wordCount: words.length, charCount: targetText.length });
 
+    const pageSizeBytes = getSystemPageSizeBytes();
     const vmstatStart = getVmstatSwap();
     let peakProcessSwapMb = 0;
     const initialSnap = getMemorySnapshot();
-    peakProcessSwapMb = Math.max(peakProcessSwapMb, initialSnap.vmSwapMb);
+    if (initialSnap.vmSwapMb !== null) {
+      peakProcessSwapMb = Math.max(peakProcessSwapMb, initialSnap.vmSwapMb);
+    }
 
     const cpuSampler = new SystemCpuSampler();
     cpuSampler.start(1000);
@@ -1011,12 +1080,20 @@ export class AIEventPipeline extends EventEmitter {
     const startTime = performance.now();
     this.logEvent("INFERENCE_DISPATCHED", { serverUrl, targetModel: modelName, sourceType, sourceIdentifier, inferenceParams, wordCount: words.length, charCount: targetText.length });
 
+    // High frequency sampling (500ms) with throttled 10s console logging
+    let tickCounter = 0;
     const progressTimer = setInterval(() => {
-      const elapsed = Math.round((performance.now() - startTime) / 1000);
+      tickCounter++;
       const snap = getMemorySnapshot();
-      peakProcessSwapMb = Math.max(peakProcessSwapMb, snap.vmSwapMb);
-      console.log(`[INFERENCE_HEARTBEAT] ⏳ Processing... (elapsed: ${elapsed}s) | RAM: ${snap.vmRssMb} MB | Process Swap: ${snap.vmSwapMb} MB`);
-    }, 10000);
+      if (snap.vmSwapMb !== null) {
+        peakProcessSwapMb = Math.max(peakProcessSwapMb, snap.vmSwapMb);
+      }
+
+      if (tickCounter % 20 === 0) {
+        const elapsed = Math.round((performance.now() - startTime) / 1000);
+        console.log(`[INFERENCE_HEARTBEAT] ⏳ Processing... (elapsed: ${elapsed}s) | RAM: ${snap.vmRssMb ?? 0} MB | Process Swap: ${snap.vmSwapMb ?? 0} MB (Peak: ${peakProcessSwapMb} MB)`);
+      }
+    }, 500);
 
     let rawContent = "";
     let usage: any = null;
@@ -1035,21 +1112,28 @@ export class AIEventPipeline extends EventEmitter {
     const cpuMetrics = cpuSampler.stop();
 
     const finalSnap = getMemorySnapshot();
-    peakProcessSwapMb = Math.max(peakProcessSwapMb, finalSnap.vmSwapMb);
+    if (finalSnap.vmSwapMb !== null) {
+      peakProcessSwapMb = Math.max(peakProcessSwapMb, finalSnap.vmSwapMb);
+    }
+
     const vmstatEnd = getVmstatSwap();
     const swapOutPages = Math.max(0, vmstatEnd.pswpout - vmstatStart.pswpout);
     const swapInPages = Math.max(0, vmstatEnd.pswpin - vmstatStart.pswpin);
+    const bytesPerMb = 1024 * 1024;
 
     const swapMetrics: SwapActivityMetrics = {
       swappiness: finalSnap.swappiness,
       server_pid: finalSnap.pid,
-      server_vm_rss_mb: finalSnap.vmRssMb,
+      server_vm_rss_mb: finalSnap.vmRssMb ?? 0,
       peak_server_swap_mb: peakProcessSwapMb,
-      final_server_swap_mb: finalSnap.vmSwapMb,
-      system_swap_used_mb: finalSnap.systemSwapUsedMb,
-      system_swap_total_mb: finalSnap.systemSwapTotalMb,
-      swap_bytes_written_mb: Number(((swapOutPages * 4) / 1024).toFixed(2)),
-      swap_bytes_read_mb: Number(((swapInPages * 4) / 1024).toFixed(2)),
+      final_server_swap_mb: finalSnap.vmSwapMb ?? 0,
+      system_swap_used_mb: finalSnap.systemSwapUsedMb ?? 0,
+      system_swap_total_mb: finalSnap.systemSwapTotalMb ?? 0,
+      swap_bytes_written_mb: Number(((swapOutPages * pageSizeBytes) / bytesPerMb).toFixed(2)),
+      swap_bytes_read_mb: Number(((swapInPages * pageSizeBytes) / bytesPerMb).toFixed(2)),
+      page_size_bytes: pageSizeBytes,
+      is_cgroup_constrained: finalSnap.isCgroupConstrained,
+      diagnostics_error: finalSnap.diagnosticsError,
     };
 
     const promptTokens = usage?.prompt_tokens || timings?.prompt_n || 0;
@@ -1173,7 +1257,7 @@ function publishStepSummary(
   };
   const cm = firstResult.cpu_metrics || { maxCpuPercent: 0, avgCpuPercent: 0, samplesTaken: 0 };
   const sm = firstResult.swap_metrics || {
-    swappiness: 0,
+    swappiness: -1,
     server_pid: null,
     server_vm_rss_mb: 0,
     peak_server_swap_mb: 0,
@@ -1182,6 +1266,8 @@ function publishStepSummary(
     system_swap_total_mb: 0,
     swap_bytes_written_mb: 0,
     swap_bytes_read_mb: 0,
+    page_size_bytes: 4096,
+    is_cgroup_constrained: false,
   };
   const tm = firstResult.token_metrics || {
     prompt_tokens: 0,
@@ -1207,6 +1293,7 @@ function publishStepSummary(
     `| **L3 Cache Size** | **${hf.l3Cache}** |`,
     `| **SIMD / Vector Acceleration** | \`${hf.avxFlags.join(", ")}\` |`,
     `| **Total Physical RAM** | **${hf.totalRamGb}** |`,
+    `| **Kernel Page Size** | **\`${sm.page_size_bytes} bytes\`** |`,
     `| **Runner Name** | \`${rm.runnerName || "Self-Hosted / Local"}\` |`,
     `| **GitHub Run ID** | \`${rm.runId || "N/A"}\` |`,
     `| **GitHub Run Number** | \`#${rm.runNumber || "1"}\` |`,
@@ -1221,15 +1308,22 @@ function publishStepSummary(
     `| :--- | :--- | :--- |`,
     `| **Peak CPU Utilization** | **\`${cm.maxCpuPercent}%\`** | Highest instantaneous utilization across all cores |`,
     `| **Average CPU Utilization** | **\`${cm.avgCpuPercent}%\`** | Mean CPU load over ${cm.samplesTaken} samples |`,
-    `| **Inference Parallelism** | **${hf.coreCount} threads** | Threads configured for \`llama-server\` |`,
-    `| **Linux \`vm.swappiness\`** | **\`${sm.swappiness}\`** | ${sm.swappiness <= 10 ? "✅ Low Paging (Optimized)" : "⚠️ High Paging"} |`,
-    `| **Server Process PID** | \`${sm.server_pid ?? ""}\` | Background Daemon |`,
-    `| **Server RAM (RSS)** | **${sm.server_vm_rss_mb} MB** | In Physical Memory |`,
-    `| **Peak Process Swap** | **${sm.peak_server_swap_mb} MB** | ${sm.peak_server_swap_mb > 0 ? "⚠️ Process Swapped" : "✅ 0 MB (Zero Process Swap)"} |`,
-    `| **Final Process Swap** | **${sm.final_server_swap_mb} MB** | Current Swap Allocation |`,
-    `| **Swap Written to SSD** | **${sm.swap_bytes_written_mb} MB** | Pages Paged Out |`,
-    `| **Swap Read from SSD** | **${sm.swap_bytes_read_mb} MB** | Pages Paged In |`,
-    `| **Total System Swap Used** | \`${sm.system_swap_used_mb} MB / ${sm.system_swap_total_mb} MB\` | Allocated Swapfile Space |`,
+    `| **Inference Parallelism** | **${hf.coreCount} threads** | Configured execution threads |`,
+    `| **Linux \`vm.swappiness\`** | **\`${sm.swappiness}\`** | ${sm.swappiness >= 0 ? (sm.swappiness <= 10 ? "✅ Low Paging (Optimized)" : "⚠️ High Paging") : "N/A"} |`,
+    `| **Server Process PID** | \`${sm.server_pid ?? "Unresolved"}\` | Background Daemon |`,
+    `| **Server RAM (RSS)** | **${sm.server_vm_rss_mb} MB** | Resident in Physical Memory |`,
+    `| **Peak Process Swap** | **${sm.peak_server_swap_mb} MB** | ${sm.peak_server_swap_mb > 0 ? "⚠️ Process Paged Out" : "✅ 0 MB (Zero Process Swap)"} |`,
+    `| **Final Process Swap** | **${sm.final_server_swap_mb} MB** | Current Process VmSwap |`,
+    `| **System Swap Space Out** | **${sm.swap_bytes_written_mb} MB** | Kernel Global Page-Out Activity |`,
+    `| **System Swap Space In** | **${sm.swap_bytes_read_mb} MB** | Kernel Global Page-In Activity |`,
+    `| **Total Swap Allocation** | \`${sm.system_swap_used_mb} MB / ${sm.system_swap_total_mb} MB\` | ${sm.is_cgroup_constrained ? "Cgroup v2 Container Boundary" : "Host Swapfile Space"} |`,
+  ];
+
+  if (sm.diagnostics_error) {
+    lines.push(`| **Diagnostics Warning** | \`${sm.diagnostics_error}\` | ⚠️ Incomplete Procfs Access |`);
+  }
+
+  lines.push(
     ``,
     `---`,
     ``,
@@ -1275,8 +1369,8 @@ function publishStepSummary(
     ),
     ``,
     `---`,
-    ``,
-  ];
+    ``
+  );
 
   if (feedAudit) {
     lines.push(`## 📡 Feed Discovery & Article Ingestion (Multi-Stage Classification)`, ``);
@@ -1455,7 +1549,6 @@ async function main() {
       })
     );
 
-    // Map over structuredEvents to retain all Phase 1 summaries even if individual calls reject
     const updatedOutputs: SummaryStructuredOutput[] = structuredEvents.map((evt, idx) => {
       const output: SummaryStructuredOutput = evt.payload;
       const evalRes = evalResults[idx];
