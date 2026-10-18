@@ -1188,6 +1188,50 @@ function postOpenAIChatCompletion(urlStr: string, payload: any): Promise<any> {
     req.end();
   });
 }
+function postPythonEvaluation(urlStr: string, payload: any): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const url = new URL(urlStr);
+    const bodyData = JSON.stringify(payload);
+
+    const req = http.request(
+      {
+        hostname: url.hostname,
+        port: url.port,
+        path: url.pathname,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(bodyData),
+        },
+        timeout: 900_000, // 15-minute socket timeout
+      },
+      (res) => {
+        let raw = "";
+        res.setEncoding("utf8");
+        res.on("data", (chunk) => (raw += chunk));
+        res.on("end", () => {
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+            try {
+              resolve(JSON.parse(raw));
+            } catch {
+              reject(new Error(`Invalid JSON returned from Python evaluator: ${raw}`));
+            }
+          } else {
+            reject(new Error(`Python eval HTTP ${res.statusCode}: ${raw}`));
+          }
+        });
+      }
+    );
+
+    req.on("timeout", () => {
+      req.destroy(new Error("Python evaluation socket timed out after 15 minutes"));
+    });
+
+    req.on("error", reject);
+    req.write(bodyData);
+    req.end();
+  });
+}
 
 // -------------------------------------------------------------
 // 10. AI EVENT PIPELINE ORCHESTRATOR
