@@ -2,8 +2,8 @@
 """
 .github/scripts/serve-evaluator.py
 Verb-Noun: Serves the UniEval quality evaluation microservice over FastAPI.
-Hosts MingZhong/unieval-sum (T5-Large) with in-flight CPU/RAM telemetry
-and RFC 4122 UUIDv5 audit trail generation.
+Hosts MingZhong/unieval-sum (T5-Large) with in-flight CPU/RAM telemetry,
+RFC 4122 UUIDv5 audit trail generation, and failure-focused forensic evidence.
 """
 
 import asyncio
@@ -144,7 +144,6 @@ class EvidenceRetriever:
             from rank_bm25 import BM25Okapi
 
             tokenized = [re.findall(r"\w+", c.lower()) for c in self.chunks]
-            # Ensure every chunk has at least one token for BM25 stability
             tokenized = [tok if tok else ["document"] for tok in tokenized]
             self.bm25 = BM25Okapi(tokenized)
             self.use_bm25 = True
@@ -189,7 +188,6 @@ CONCURRENCY_SEMAPHORE: asyncio.Semaphore | None = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global EVALUATOR_INSTANCE, UNIEVAL_MODULES, CONCURRENCY_SEMAPHORE
-    # Initialize semaphore inside active event loop (serialized on 2 vCPUs to prevent thrashing)
     CONCURRENCY_SEMAPHORE = asyncio.Semaphore(1)
 
     unieval_dir = os.getenv("UNIEVAL_DIR", "/tmp/unieval")
@@ -280,6 +278,7 @@ def compute_unieval_sync(
 
     sentence_details = []
     supported_chunks = set()
+    chunk_max_scores: dict[int, float] = {i: 0.0 for i in range(len(chunks))}
 
     if eval_out and eval_src:
         data_cons = convert_to_json(output_list=eval_out, src_list=eval_src)
@@ -292,6 +291,8 @@ def compute_unieval_sync(
         for idx, r in enumerate(cons_res):
             s_idx, c_idx = pair_meta[idx]
             sc = r.get("consistency", 0.0)
+            if sc > chunk_max_scores[c_idx]:
+                chunk_max_scores[c_idx] = sc
             if s_idx not in sentence_scores or sc > sentence_scores[s_idx]:
                 sentence_scores[s_idx] = sc
                 sentence_chunk_map[s_idx] = c_idx
@@ -302,6 +303,27 @@ def compute_unieval_sync(
             supported = sc >= 0.50
             if supported:
                 supported_chunks.add(c_idx)
+
+            # Find closest source sentence in the matched chunk for actionable diff
+            matched_chunk_text = chunks[c_idx] if c_idx < len(chunks) else source_text
+            chunk_sentences = split_sentences(matched_chunk_text)
+            best_source_sent = chunk_sentences[0] if chunk_sentences else matched_chunk_text[:200]
+            if len(chunk_sentences) > 1:
+                summary_words = set(re.findall(r"\w+", sentence.lower()))
+                best_overlap = -1
+                for cs in chunk_sentences:
+                    cs_words = set(re.findall(r"\w+", cs.lower()))
+                    overlap = len(summary_words.intersection(cs_words))
+                    if overlap > best_overlap:
+                        best_overlap = overlap
+                        best_source_sent = cs
+
+            reason = (
+                "Supported by source evidence"
+                if supported
+                else f"Consistency entailment score ({sc:.3f}) fell below the 0.50 threshold against matched section."
+            )
+
             sentence_details.append(
                 {
                     "sentence_index": s_idx + 1,
@@ -309,6 +331,29 @@ def compute_unieval_sync(
                     "score": sc,
                     "matched_chunk": c_idx + 1,
                     "supported": supported,
+                    "source_sentence": best_source_sent.strip(),
+                    "reason": reason,
+                }
+            )
+
+    # 4. Compute Uncovered Sections (What is missing and why)
+    uncovered_sections = []
+    for c_idx in range(len(chunks)):
+        if c_idx not in supported_chunks:
+            chunk_text = chunks[c_idx].strip()
+            words = chunk_text.split()
+            lead_snippet = " ".join(words[:35]) + ("..." if len(words) > 35 else "")
+            max_sc = round(chunk_max_scores.get(c_idx, 0.0), 3)
+            uncovered_sections.append(
+                {
+                    "chunk_index": c_idx + 1,
+                    "chunk_total": len(chunks),
+                    "excerpt": lead_snippet,
+                    "max_similarity_score": max_sc,
+                    "reason": (
+                        f"No summary claim reached the 0.50 grounding threshold for this section "
+                        f"(Peak entailment: {max_sc}). Key facts from this section were omitted."
+                    ),
                 }
             )
 
@@ -328,6 +373,7 @@ def compute_unieval_sync(
         "document_chunks_covered": len(supported_chunks),
         "chunk_coverage_percent": coverage_pct,
         "sentence_breakdown": sentence_details,
+        "uncovered_sections": uncovered_sections,
     }
 
 
