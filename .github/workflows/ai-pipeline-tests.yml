@@ -83,7 +83,8 @@ jobs:
           npm install defuddle linkedom feedsmith tidy-url
 
           pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
-          pip install --no-cache-dir transformers nltk rank-bm25 prettytable scipy fastapi uvicorn pydantic
+          # Added sentencepiece, protobuf, evaluate, rouge-score required by UniEval & T5
+          pip install --no-cache-dir transformers sentencepiece protobuf evaluate rouge-score nltk rank-bm25 prettytable scipy fastapi uvicorn pydantic
           python -c "import nltk; nltk.download('punkt'); nltk.download('punkt_tab')"
 
           git clone --depth 1 https://github.com/maszhongming/UniEval.git /tmp/unieval
@@ -188,16 +189,34 @@ jobs:
       # 8. Start Python FastAPI UniEval Engine (Port 9933)
       - name: Start Python FastAPI UniEval Engine (Port 9933)
         run: |
-          UNIEVAL_DIR=/tmp/unieval python .github/scripts/eval_server.py > eval_server.log 2>&1 &
-          echo $! > .eval_server.pid
+          # Use -u for unbuffered Python logging, and execute serve-evaluator.py
+          UNIEVAL_DIR=/tmp/unieval python -u .github/scripts/serve-evaluator.py > eval_server.log 2>&1 &
+          SERVER_PID=$!
+          echo $SERVER_PID > .eval_server.pid
 
+          echo "Waiting for UniEval server (PID: $SERVER_PID) to be healthy on port 9933..."
+          READY=0
           for i in {1..60}; do
-            if curl -s http://127.0.0.1:9933/health | grep -q "ok"; then
-              echo "Python UniEval FastAPI server ready on port 9933."
+            # Fail fast if the background server process crashed
+            if ! kill -0 $SERVER_PID 2>/dev/null; then
+              echo "❌ UniEval server process died unexpectedly! Tail of eval_server.log:"
+              cat eval_server.log
+              exit 1
+            fi
+
+            if curl -s http://127.0.0.1:9933/health | grep -q '"status":"ok"'; then
+              echo "✅ Python UniEval FastAPI server ready on port 9933."
+              READY=1
               break
             fi
             sleep 2
           done
+
+          if [ $READY -ne 1 ]; then
+            echo "❌ UniEval server failed to become ready within 120 seconds. Log output:"
+            cat eval_server.log
+            exit 1
+          fi
 
       # 9. PHASE 2: Run Quality Audit (Parallel HTTP Client)
       - name: Execute Phase 2 Quality Audit
