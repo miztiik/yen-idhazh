@@ -13,25 +13,32 @@ import { parseFeed } from "feedsmith";
 import { TidyURL } from "tidy-url";
 
 // -------------------------------------------------------------
-// 0. CONFIGURATION & CONSTANTS
+// 0. CONFIGURATION & STRUCTURED SCHEMAS
 // -------------------------------------------------------------
-export const DEFAULT_FEED_URLS: string[] = [
-  "https://www.nakedcapitalism.com/feed",
-  "https://www.aljazeera.com/xml/rss/all.xml",
-  "https://oilprice.com/rss/main",
-  "https://jomodevplus.substack.com/feed",
-  "https://wolfstreet.com/feed",
-  "https://neuburger.substack.com/feed",
-  "https://creditslips.org/feed",
-  "https://www.thebignewsletter.com/feed",
-  "https://angrybearblog.com/feed",
-];
+export interface ArticleProcessingConfig {
+  maxWordLength: number;
+  defaultFallbackArticleUrl: string;
+  blockedCategories: string[];
+  feedUrls: string[];
+}
 
-export const DEFAULT_FALLBACK_ARTICLE_URL =
-  "https://www.nakedcapitalism.com/2026/10/when-will-politicians-turn-to-mmt.html";
-
-export const PYTHON_EVAL_SERVER_URL = "http://127.0.0.1:9933";
-export const DEFAULT_BLOCKED_CATEGORIES: string[] = ["Links", "Show Types"];
+export const DEFAULT_ARTICLE_CONFIG: ArticleProcessingConfig = {
+  maxWordLength: 8200,
+  defaultFallbackArticleUrl:
+    "https://www.nakedcapitalism.com/2026/10/when-will-politicians-turn-to-mmt.html",
+  blockedCategories: ["Links", "Show Types"],
+  feedUrls: [
+    "https://www.nakedcapitalism.com/feed",
+    "https://www.aljazeera.com/xml/rss/all.xml",
+    "https://oilprice.com/rss/main",
+    "https://jomodevplus.substack.com/feed",
+    "https://wolfstreet.com/feed",
+    "https://neuburger.substack.com/feed",
+    "https://creditslips.org/feed",
+    "https://www.thebignewsletter.com/feed",
+    "https://angrybearblog.com/feed",
+  ],
+};
 
 export interface ModelInferenceParams {
   temperature: number;
@@ -39,17 +46,23 @@ export interface ModelInferenceParams {
   top_p: number;
   min_p: number;
   repeat_penalty: number;
+  presence_penalty: number;
+  frequency_penalty: number;
   max_tokens: number;
 }
 
-export const DEFAULT_INFERENCE_PARAMS: ModelInferenceParams = {
+export const DEFAULT_MODEL_CONFIG: ModelInferenceParams = {
   temperature: 0.2,
   top_k: 40,
   top_p: 0.95,
   min_p: 0.05,
   repeat_penalty: 1.15,
-  max_tokens: 4096,
+  presence_penalty: 0.2,
+  frequency_penalty: 0.2,
+  max_tokens: 4350,
 };
+
+export const PYTHON_EVAL_SERVER_URL = "http://127.0.0.1:9933";
 
 export const STRICT_SUMMARY_JSON_SCHEMA = {
   type: "object",
@@ -126,7 +139,7 @@ export function buildDeterministicEventId(runnerName: string, shardId: string, s
 export function evaluateCategoryBlock(
   categories: any[],
   url: string,
-  blockedCategories: string[] = DEFAULT_BLOCKED_CATEGORIES
+  blockedCategories: string[] = DEFAULT_ARTICLE_CONFIG.blockedCategories
 ): { isBlocked: boolean; matchedReason?: string } {
   const normalizedBlocked = blockedCategories.map((c) => c.toLowerCase().trim());
 
@@ -441,6 +454,7 @@ export interface SummaryStructuredOutput {
   input_text: string;
   system_prompt: string;
   user_prompt: string;
+  error_flag?: boolean;
   quality_metrics?: QualityEvaluationMetrics;
 }
 
@@ -455,7 +469,7 @@ export interface PipelineEvent<T = any> {
 }
 
 // -------------------------------------------------------------
-// 5. CLASSIFIERS
+// 5. CLASSIFIERS & PARSERS
 // -------------------------------------------------------------
 export function shallowClassify(item: any, rawUrl: string): ShallowClassificationResult {
   const categories = item.categories || item.tags || [];
@@ -562,8 +576,63 @@ export function deepClassify(cleanMarkdown: string, wordCount: number): DeepClas
   };
 }
 
+export function extractBalancedJson(raw: string): any {
+  let clean = raw.trim();
+  const fenceMatch = clean.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  if (fenceMatch) {
+    clean = fenceMatch[1].trim();
+  }
+
+  const startIdx = clean.indexOf("{");
+  if (startIdx === -1) return {};
+
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  let endIdx = -1;
+
+  for (let i = startIdx; i < clean.length; i++) {
+    const char = clean[i];
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (char === "\\") {
+      escape = true;
+      continue;
+    }
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (!inString) {
+      if (char === "{") depth++;
+      else if (char === "}") {
+        depth--;
+        if (depth === 0) {
+          endIdx = i;
+          break;
+        }
+      }
+    }
+  }
+
+  if (endIdx !== -1) {
+    try {
+      return JSON.parse(clean.substring(startIdx, endIdx + 1));
+    } catch {}
+  }
+
+  try {
+    const match = clean.match(/\{[\s\S]*\}/);
+    if (match) return JSON.parse(match[0]);
+  } catch {}
+
+  return {};
+}
+
 // -------------------------------------------------------------
-// 6. ZERO-PROXY RESILIENT EXTRACTION ENGINE
+// 6. EXTRACTION ENGINE & DOM SANITIZATION
 // -------------------------------------------------------------
 const PRIMARY_BROWSER_HEADERS = {
   "User-Agent":
@@ -592,28 +661,22 @@ const SECONDARY_BROWSER_HEADERS = {
 };
 
 async function fetchHtmlWithFallback(url: string): Promise<string> {
-  // Attempt 1: Primary Browser Footprint (Chrome/Win)
   try {
     const res = await fetch(url, { headers: PRIMARY_BROWSER_HEADERS, signal: AbortSignal.timeout(12000) });
     if (res.ok) {
       const html = await res.text();
       if (html.length > 200) return html;
     }
-    logStructured("WARN", "Primary fetch returned non-200 or short response, retrying with secondary UA", {
-      url,
-      status: res.status,
-    });
   } catch (err: any) {
-    logStructured("WARN", "Primary fetch encountered network error, retrying with secondary UA", {
+    logStructured("WARN", "Primary fetch failed, engaging secondary fallback footprint", {
       url,
       error: err.message,
     });
   }
 
-  // Attempt 2: Secondary Browser Footprint (Firefox/macOS)
   const res2 = await fetch(url, { headers: SECONDARY_BROWSER_HEADERS, signal: AbortSignal.timeout(15000) });
   if (!res2.ok) {
-    throw new Error(`Direct fetch failed with HTTP ${res2.status} on all user-agent profiles`);
+    throw new Error(`Direct fetch failed with HTTP ${res2.status} across all browser profiles`);
   }
   const html2 = await res2.text();
   if (html2.length < 200) {
@@ -628,7 +691,6 @@ function extractSemanticDomFallback(document: any): { title: string; content: st
     document.querySelector("title")?.textContent?.trim() ||
     "Extracted Document";
 
-  // Remove non-content structural noise
   const removeSelectors = [
     "script",
     "style",
@@ -657,7 +719,6 @@ function extractSemanticDomFallback(document: any): { title: string; content: st
     } catch {}
   }
 
-  // Candidate containers
   const containerSelectors = [
     "article",
     "main",
@@ -685,6 +746,15 @@ function extractSemanticDomFallback(document: any): { title: string; content: st
   const paragraphs: string[] = [];
   const nodes = selectedRoot.querySelectorAll("h1, h2, h3, h4, p, blockquote, li");
   for (const node of nodes) {
+    // Prevent duplicate capture of inner <p> or headings within blockquotes or list items
+    if (
+      (node.tagName === "P" || /^H[1-4]$/.test(node.tagName)) &&
+      node.closest("blockquote, li") &&
+      node.parentElement !== selectedRoot
+    ) {
+      continue;
+    }
+
     const txt = (node.textContent || "").replace(/\s+/g, " ").trim();
     if (txt.length > 25) {
       paragraphs.push(txt);
@@ -693,7 +763,6 @@ function extractSemanticDomFallback(document: any): { title: string; content: st
 
   let combined = paragraphs.join("\n\n").trim();
 
-  // If prose is still short, inspect meta description
   if (combined.split(/\s+/).length < 60) {
     const metaDesc =
       document.querySelector("meta[name='description']")?.getAttribute("content") ||
@@ -712,14 +781,11 @@ export async function extractDirectUrl(
   emitEvent: (type: string, payload: any) => void
 ): Promise<{ title: string; content: string; wordCount: number }> {
   emitEvent("URL_HTTP_FETCH_STARTED", { url });
-  logStructured("INFO", "Beginning direct URL extraction", { url });
-
   const html = await fetchHtmlWithFallback(url);
   emitEvent("URL_HTTP_FETCH_COMPLETED", { url, bytes: Buffer.byteLength(html, "utf8") });
 
   const { document } = parseHTML(html);
 
-  // Tier 1: Defuddle article parsing
   try {
     const defuddleResult: any = await Defuddle(document, url, { markdown: true, useAsync: false });
     const content = defuddleResult.content?.trim() || "";
@@ -728,26 +794,15 @@ export async function extractDirectUrl(
     if (wordCount >= 50) {
       const title = defuddleResult.title || document.title || "Web Document";
       emitEvent("URL_DEFUDDLE_EXTRACTED", { url, title, wordCount });
-      logStructured("INFO", "Successfully extracted article via Defuddle (Tier 1)", { url, title, wordCount });
       return { title, content, wordCount };
     }
-    logStructured("WARN", "Defuddle extraction yielded thin prose (< 50 words). Engaging Tier 2 fallback.", {
-      url,
-      defuddleWords: wordCount,
-    });
   } catch (err: any) {
-    logStructured("WARN", "Defuddle parse threw error. Engaging Tier 2 fallback.", { url, error: err.message });
+    logStructured("WARN", "Defuddle extraction failed, engaging semantic DOM parser", { url, error: err.message });
   }
 
-  // Tier 2: Semantic Linkedom DOM Fallback
   const fallback = extractSemanticDomFallback(document);
   if (fallback.wordCount >= 50) {
     emitEvent("URL_SEMANTIC_DOM_EXTRACTED", { url, title: fallback.title, wordCount: fallback.wordCount });
-    logStructured("INFO", "Successfully extracted article via Semantic Linkedom (Tier 2)", {
-      url,
-      title: fallback.title,
-      wordCount: fallback.wordCount,
-    });
     return fallback;
   }
 
@@ -806,8 +861,6 @@ async function collectAndClassifyFeedArticles(
   emitEvent: (type: string, payload: any) => void
 ): Promise<FeedSelectionAudit> {
   emitEvent("FEED_DISCOVERY_STARTED", { feedUrls, maxAgeHours, goalCount });
-  logStructured("INFO", "Querying RSS/Atom feeds concurrently", { count: feedUrls.length, goalCount, maxAgeHours });
-
   const cutoffMs = Date.now() - maxAgeHours * 60 * 60 * 1000;
 
   const feedResponses = await Promise.allSettled(
@@ -901,15 +954,10 @@ async function collectAndClassifyFeedArticles(
     };
 
     if (!shallowResult.passed) {
-      logStructured("INFO", "Candidate rejected by shallow classifier", {
-        title: entry.title,
-        reason: shallowResult.reason,
-      });
       evaluatedArticles.push(candidate);
       continue;
     }
 
-    logStructured("INFO", "Attempting extraction for candidate", { title: entry.title, url: targetUrl });
     try {
       const extracted = await extractDirectUrl(targetUrl, emitEvent);
       candidate.extractedMarkdown = extracted.content;
@@ -922,23 +970,9 @@ async function collectAndClassifyFeedArticles(
 
       if (deepResult.passed) {
         acceptedArticles.push(candidate);
-        logStructured("INFO", "Article candidate passed deep classification", {
-          title: candidate.title,
-          wordCount: deepResult.wordCount,
-          acceptedCount: acceptedArticles.length,
-          goalCount,
-        });
-      } else {
-        logStructured("WARN", "Article rejected by deep classifier", {
-          title: candidate.title,
-          reason: deepResult.reason,
-        });
       }
     } catch (err: any) {
-      logStructured("WARN", "Candidate extraction failed, moving gracefully to next queue item", {
-        url: targetUrl,
-        error: err.message,
-      });
+      logStructured("WARN", "Candidate extraction skipped upon error", { url: targetUrl, error: err.message });
       evaluatedArticles.push(candidate);
     }
   }
@@ -961,8 +995,8 @@ async function collectAndClassifyFeedArticles(
 
   const fallbackCandidate: FeedArticleCandidate = {
     title: "When Will Politicians Turn to MMT?",
-    url: DEFAULT_FALLBACK_ARTICLE_URL,
-    cleanedUrl: DEFAULT_FALLBACK_ARTICLE_URL,
+    url: DEFAULT_ARTICLE_CONFIG.defaultFallbackArticleUrl,
+    cleanedUrl: DEFAULT_ARTICLE_CONFIG.defaultFallbackArticleUrl,
     sourceFeed: "graceful-default-fallback",
     shallowResult: { classification: "ARTICLE_CANDIDATE", reason: "Default Fallback", passed: true },
     deepResult: {
@@ -975,10 +1009,7 @@ async function collectAndClassifyFeedArticles(
     },
   };
 
-  emitEvent("FEED_DEFAULT_FALLBACK_ENGAGED", { defaultUrl: DEFAULT_FALLBACK_ARTICLE_URL });
-  logStructured("WARN", "Zero candidates accepted from feeds, engaging verified default fallback article", {
-    fallbackUrl: DEFAULT_FALLBACK_ARTICLE_URL,
-  });
+  emitEvent("FEED_DEFAULT_FALLBACK_ENGAGED", { defaultUrl: DEFAULT_ARTICLE_CONFIG.defaultFallbackArticleUrl });
 
   return {
     configuredFeeds: feedUrls,
@@ -1111,7 +1142,7 @@ function getMemorySnapshot(): MemorySnapshot {
 }
 
 // -------------------------------------------------------------
-// 9. OPENAI HTTP CLIENT
+// 9. OPENAI HTTP CLIENT WITH HARD SOCKET TIMEOUT
 // -------------------------------------------------------------
 function postOpenAIChatCompletion(urlStr: string, payload: any): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -1128,7 +1159,7 @@ function postOpenAIChatCompletion(urlStr: string, payload: any): Promise<any> {
           "Content-Type": "application/json",
           "Content-Length": Buffer.byteLength(bodyData),
         },
-        timeout: 0,
+        timeout: 900_000, // 15-minute socket timeout (avoids unbounded CI deadlocks)
       },
       (res) => {
         let raw = "";
@@ -1139,7 +1170,7 @@ function postOpenAIChatCompletion(urlStr: string, payload: any): Promise<any> {
             try {
               resolve(JSON.parse(raw));
             } catch {
-              reject(new Error(`Invalid JSON returned: ${raw}`));
+              reject(new Error(`Invalid JSON returned from server: ${raw}`));
             }
           } else {
             reject(new Error(`Server error HTTP ${res.statusCode}: ${raw}`));
@@ -1147,6 +1178,10 @@ function postOpenAIChatCompletion(urlStr: string, payload: any): Promise<any> {
         });
       }
     );
+
+    req.on("timeout", () => {
+      req.destroy(new Error("LLM completion socket timed out after 15 minutes"));
+    });
 
     req.on("error", reject);
     req.write(bodyData);
@@ -1189,6 +1224,14 @@ export class AIEventPipeline extends EventEmitter {
           }
         })
         .filter((e): e is PipelineEvent => e !== null && typeof e.eventId === "string");
+
+      // Maintain monotonic cumulativeMs across discrete GitHub Actions workflow phases
+      if (this.auditLog.length > 0) {
+        const lastEvent = this.auditLog[this.auditLog.length - 1];
+        const priorCumulativeMs = typeof lastEvent.cumulativeMs === "number" ? lastEvent.cumulativeMs : 0;
+        this.pipelineStartTime = performance.now() - priorCumulativeMs;
+        this.lastEventTime = performance.now();
+      }
 
       logStructured("INFO", "Hydrated historical pipeline events from disk", {
         path: this.jsonlFilePath,
@@ -1253,6 +1296,7 @@ export class AIEventPipeline extends EventEmitter {
     serverUrl: string;
     modelName: string;
     inferenceParams: ModelInferenceParams;
+    maxWordLength: number;
   }): Promise<SummaryStructuredOutput> {
     const {
       sourceType,
@@ -1264,12 +1308,27 @@ export class AIEventPipeline extends EventEmitter {
       serverUrl,
       modelName,
       inferenceParams,
+      maxWordLength,
     } = options;
 
     let targetText = rawTargetText;
     const words = targetText.split(/\s+/).filter(Boolean);
-    if (words.length > 6000) {
-      targetText = words.slice(0, 6000).join(" ") + "\n\n[...Truncated to fit context window...]";
+    if (words.length > maxWordLength) {
+      targetText = words.slice(0, maxWordLength).join(" ") + "\n\n[...Truncated to fit context window...]";
+      this.logEvent(
+        "ARTICLE_TRUNCATED",
+        {
+          sourceIdentifier,
+          originalWords: words.length,
+          maxAllowedWords: maxWordLength,
+        },
+        sourceIdentifier
+      );
+      logStructured("WARN", "Article exceeded maximum configured length and was truncated", {
+        sourceIdentifier,
+        originalWords: words.length,
+        maxWordLength,
+      });
     }
 
     const sourceAudit: SourceAudit = {
@@ -1319,10 +1378,17 @@ export class AIEventPipeline extends EventEmitter {
       top_p: inferenceParams.top_p,
       min_p: inferenceParams.min_p,
       repeat_penalty: inferenceParams.repeat_penalty,
-      presence_penalty: 0.2,
-      frequency_penalty: 0.2,
+      presence_penalty: inferenceParams.presence_penalty,
+      frequency_penalty: inferenceParams.frequency_penalty,
       max_tokens: inferenceParams.max_tokens,
-      response_format: { type: "json_object", schema: STRICT_SUMMARY_JSON_SCHEMA },
+      response_format: {
+        type: "json_object",
+        schema: STRICT_SUMMARY_JSON_SCHEMA,
+        json_schema: {
+          schema: STRICT_SUMMARY_JSON_SCHEMA,
+          strict: true,
+        },
+      },
       stream: false,
       chat_template_kwargs: { enable_thinking: false },
     };
@@ -1364,12 +1430,28 @@ export class AIEventPipeline extends EventEmitter {
     let rawContent = "";
     let usage: any = null;
     let timings: any = null;
+    let targetLevelError: string | null = null;
 
     try {
       const response = await postOpenAIChatCompletion(`${serverUrl}/v1/chat/completions`, openAiPayload);
       rawContent = response.choices?.[0]?.message?.content || "";
       usage = response.usage;
       timings = response.timings;
+    } catch (err: any) {
+      targetLevelError = err.message || "Unknown completion failure";
+      logStructured("ERROR", "Target-level LLM inference exception trapped", {
+        sourceIdentifier,
+        error: targetLevelError,
+      });
+      this.logEvent(
+        "INFERENCE_FAILED",
+        {
+          modelName,
+          sourceIdentifier,
+          error: targetLevelError,
+        },
+        sourceIdentifier
+      );
     } finally {
       clearInterval(progressTimer);
     }
@@ -1433,32 +1515,30 @@ export class AIEventPipeline extends EventEmitter {
       completion_tokens_per_second: completionTokensPerSec,
     };
 
-    this.logEvent(
-      "INFERENCE_COMPLETED",
-      {
-        modelName,
-        sourceIdentifier,
-        tokenMetrics,
-        swapMetrics,
-        cpuMetrics,
-        rawOutput: rawContent,
-      },
-      sourceIdentifier
-    );
-
-    let parsed: any;
-    try {
-      const match = rawContent.match(/\{[\s\S]*\}/);
-      parsed = JSON.parse(match ? match[0] : rawContent);
-    } catch {
-      parsed = {};
+    if (!targetLevelError) {
+      this.logEvent(
+        "INFERENCE_COMPLETED",
+        {
+          modelName,
+          sourceIdentifier,
+          tokenMetrics,
+          swapMetrics,
+          cpuMetrics,
+          rawOutput: rawContent,
+        },
+        sourceIdentifier
+      );
     }
+
+    const parsed = extractBalancedJson(rawContent);
 
     let synthesisProse = "";
     if (typeof parsed.analytic_synthesis === "string" && parsed.analytic_synthesis.trim()) {
       synthesisProse = parsed.analytic_synthesis.trim();
     } else if (typeof parsed.summary === "string" && parsed.summary.trim()) {
       synthesisProse = parsed.summary.trim();
+    } else if (targetLevelError) {
+      synthesisProse = `[Inference Processing Failed: ${targetLevelError}]`;
     } else {
       synthesisProse = rawContent.trim();
     }
@@ -1477,7 +1557,7 @@ export class AIEventPipeline extends EventEmitter {
     };
 
     const structuredResult: SummaryStructuredOutput = {
-      headline: parsed.headline || parsed.title || sourceTitle,
+      headline: parsed.headline || parsed.title || (targetLevelError ? `[Error] ${sourceTitle}` : sourceTitle),
       analytic_synthesis: synthesisProse,
       sentiment: parsed.sentiment || "neutral",
       stance_on_change: parsed.stance_on_change || "not_applicable",
@@ -1486,7 +1566,7 @@ export class AIEventPipeline extends EventEmitter {
       stance_on_borders: parsed.stance_on_borders || "not_applicable",
       stance_on_personal_sphere: parsed.stance_on_personal_sphere || "not_applicable",
       compression,
-      raw_output: rawContent,
+      raw_output: rawContent || (targetLevelError ? `ERROR: ${targetLevelError}` : ""),
       source_audit: sourceAudit,
       token_metrics: tokenMetrics,
       swap_metrics: swapMetrics,
@@ -1497,6 +1577,7 @@ export class AIEventPipeline extends EventEmitter {
       input_text: targetText,
       system_prompt: openAiPayload.messages[0].content,
       user_prompt: userPromptContent,
+      error_flag: Boolean(targetLevelError),
     };
 
     this.logEvent("OUTPUT_STRUCTURED", structuredResult, sourceIdentifier);
@@ -1505,9 +1586,10 @@ export class AIEventPipeline extends EventEmitter {
 }
 
 // -------------------------------------------------------------
-// 11. STEP SUMMARY PUBLISHER
+// 11. STEP SUMMARY PUBLISHER (DE-DUPLICATED LIFECYCLE)
 // -------------------------------------------------------------
 export function publishStepSummary(
+  phase: "infer" | "eval",
   modelName: string,
   results: SummaryStructuredOutput[],
   events: PipelineEvent[],
@@ -1522,6 +1604,90 @@ export function publishStepSummary(
     return;
   }
 
+  // -------------------------------------------------------------
+  // PHASE 2: APPEND ONLY UNIEVAL AUDIT DATA
+  // -------------------------------------------------------------
+  if (phase === "eval") {
+    const evalLines: string[] = [
+      `# 🧪 UniEval Grounding & Factual Quality Audit Report`,
+      ``,
+      `| Metric Target | Consistency Score | Sectional Coverage | Discourse Coherence | Syntax Fluency |`,
+      `| :--- | :---: | :---: | :---: | :---: |`,
+      ...results.map((res, idx) => {
+        const qm = res.quality_metrics;
+        return `| **#${idx + 1}: ${res.headline.slice(0, 30)}...** | **\`${qm?.overall_consistency ?? "N/A"}\`** | **\`${qm?.chunk_coverage_percent ?? 0}%\`** | \`${qm?.coherence ?? "N/A"}\` | \`${qm?.fluency ?? "N/A"}\` |`;
+      }),
+      ``,
+      `---`,
+      ``,
+    ];
+
+    results.forEach((res, idx) => {
+      const qm = res.quality_metrics;
+      if (!qm) return;
+
+      evalLines.push(
+        `## 🧪 Quality Breakdown: *"${res.headline}"* (${idx + 1}/${results.length})`,
+        `| Quality Dimension | Metric Score | Operational Rating | Evaluation Methodology |`,
+        `| :--- | :---: | :---: | :--- |`,
+        `| **Factual Consistency** | **\`${qm.overall_consistency}\`** | ${qm.overall_consistency >= 0.75 ? "🟢 Fully Supported" : "⚠️ Grounding Variance"} | Chunked BM25 + T5 NLI Entailment |`,
+        `| **Sectional Coverage** | **\`${qm.chunk_coverage_percent}%\`** | ${qm.chunk_coverage_percent >= 60 ? "🟢 High Coverage" : "⚠️ Partial Coverage"} | ${qm.document_chunks_covered}/${qm.document_chunks_total} document chunks represented |`,
+        `| **Discourse Coherence** | **\`${qm.coherence}\`** | ${qm.coherence >= 0.70 ? "🟢 Fluid" : "⚠️ Fragmented"} | Inter-sentence discourse flow |`,
+        `| **Fluency (Syntax)** | **\`${qm.fluency}\`** | ${qm.fluency >= 0.85 ? "🟢 Natural" : "⚠️ Mechanical"} | Grammatical syntax & readability |`,
+        ``
+      );
+
+      if (qm.uncovered_sections && qm.uncovered_sections.length > 0) {
+        evalLines.push(
+          `### ⚠️ Uncovered Document Sections (${qm.uncovered_sections.length}/${qm.document_chunks_total} Chunks Omitted)`,
+          `> The following source sections have no supporting claims in the generated summary:`,
+          ``,
+          `| Missing Section | Section Topic / Lead Excerpt | Reason / Diagnostics |`,
+          `| :---: | :--- | :--- |`,
+          ...qm.uncovered_sections.map(
+            (u) =>
+              `| **Chunk ${u.chunk_index} of ${u.chunk_total}** | *"${u.excerpt.replace(/\|/g, "\\|")}"* | ⚠️ ${u.reason.replace(/\|/g, "\\|")} |`
+          ),
+          ``
+        );
+      } else {
+        evalLines.push(
+          `> ✅ **Full Document Grounding:** All ${qm.document_chunks_total}/${qm.document_chunks_total} document sections are represented in the analytic synthesis.`,
+          ``
+        );
+      }
+
+      const failedSentences = qm.sentence_breakdown.filter((s) => !s.supported);
+      if (failedSentences.length > 0) {
+        evalLines.push(
+          `### ❌ Unsupported Claims / Grounding Failures (${failedSentences.length}/${qm.sentence_breakdown.length} Sentences)`,
+          `> The following summary claims fell below the 0.50 factual consistency threshold against the retrieved evidence:`,
+          ``,
+          `| # | Summary Sentence (Generated Claim) | Matched Source Reference Passage | Consistency Score | Diagnostics |`,
+          `| :-: | :--- | :--- | :-: | :--- |`,
+          ...failedSentences.map(
+            (s) =>
+              `| **${s.sentence_index}** | "${s.text.replace(/\|/g, "\\|")}" | *"${(s.source_sentence || "[No direct counterpart found in source text]").replace(/\|/g, "\\|")}"* | **\`${s.score}\`** | ❌ ${s.reason || "Low entailment (< 0.50)"} |`
+          ),
+          ``
+        );
+      } else {
+        evalLines.push(
+          `> ✅ **100% Factually Grounded:** All ${qm.sentence_breakdown.length} summary sentences are verified and supported by source document evidence.`,
+          ``
+        );
+      }
+
+      evalLines.push(`---`, ``);
+    });
+
+    fs.appendFileSync(summaryPath, "\n\n" + evalLines.join("\n"), "utf8");
+    return;
+  }
+
+  // -------------------------------------------------------------
+  // PHASE 1: INITIALIZE STEP SUMMARY WITH TELEMETRY & INFERENCE
+  // -------------------------------------------------------------
   const firstResult = results[0];
   const hf = firstResult.host_fingerprint || getHostFingerprint();
   const rm = firstResult.runner_metadata || {
@@ -1618,6 +1784,8 @@ export function publishStepSummary(
     `| **Top-P (Nucleus)** | \`${inferenceParams.top_p}\` | Cumulative probability cutoff |`,
     `| **Min-P** | \`${inferenceParams.min_p}\` | Relative minimum probability threshold |`,
     `| **Repeat Penalty** | \`${inferenceParams.repeat_penalty}\` | Penalty against degenerative token loops |`,
+    `| **Presence Penalty** | \`${inferenceParams.presence_penalty}\` | Encourages exploring new subjects |`,
+    `| **Frequency Penalty** | \`${inferenceParams.frequency_penalty}\` | Discourages verbatim repetition |`,
     `| **Max Output Tokens** | \`${inferenceParams.max_tokens}\` | Hard completion circuit-breaker |`,
     `| **Context Size** | \`${process.env.CONTEXT_SIZE || "16384"}\` | Maximum transformer context window |`,
     ``,
@@ -1722,67 +1890,7 @@ export function publishStepSummary(
       res.analytic_synthesis,
       ``,
       `---`,
-      ``
-    );
-
-    if (res.quality_metrics) {
-      const qm = res.quality_metrics;
-      lines.push(
-        `## 🧪 UniEval Grounding & Factual Quality (${idx + 1}/${results.length})`,
-        `| Quality Dimension | Metric Score | Operational Rating | Evaluation Methodology |`,
-        `| :--- | :---: | :---: | :--- |`,
-        `| **Factual Consistency** | **\`${qm.overall_consistency}\`** | ${qm.overall_consistency >= 0.75 ? "🟢 Fully Supported" : "⚠️ Grounding Variance"} | Chunked BM25 Sentence Entailment |`,
-        `| **Sectional Coverage** | **\`${qm.chunk_coverage_percent}%\`** | ${qm.chunk_coverage_percent >= 60 ? "🟢 High Coverage" : "⚠️ Partial Coverage"} | ${qm.document_chunks_covered}/${qm.document_chunks_total} document chunks represented |`,
-        `| **Discourse Coherence** | **\`${qm.coherence}\`** | ${qm.coherence >= 0.70 ? "🟢 Fluid" : "⚠️ Fragmented"} | Inter-sentence discourse flow |`,
-        `| **Fluency (Syntax)** | **\`${qm.fluency}\`** | ${qm.fluency >= 0.85 ? "🟢 Natural" : "⚠️ Mechanical"} | Grammatical syntax & readability |`,
-        ``
-      );
-
-      if (qm.uncovered_sections && qm.uncovered_sections.length > 0) {
-        lines.push(
-          `### ⚠️ Uncovered Document Sections (${qm.uncovered_sections.length}/${qm.document_chunks_total} Chunks Omitted)`,
-          `> The following source sections have no supporting claims in the generated summary:`,
-          ``,
-          `| Missing Section | Section Topic / Lead Excerpt | Reason / Diagnostics |`,
-          `| :---: | :--- | :--- |`,
-          ...qm.uncovered_sections.map(
-            (u) =>
-              `| **Chunk ${u.chunk_index} of ${u.chunk_total}** | *"${u.excerpt.replace(/\|/g, "\\|")}"* | ⚠️ ${u.reason.replace(/\|/g, "\\|")} |`
-          ),
-          ``
-        );
-      } else {
-        lines.push(
-          `> ✅ **Full Document Grounding:** All ${qm.document_chunks_total}/${qm.document_chunks_total} document sections are represented in the analytic synthesis.`,
-          ``
-        );
-      }
-
-      const failedSentences = qm.sentence_breakdown.filter((s) => !s.supported);
-      if (failedSentences.length > 0) {
-        lines.push(
-          `### ❌ Unsupported Claims / Grounding Failures (${failedSentences.length}/${qm.sentence_breakdown.length} Sentences)`,
-          `> The following summary claims failed the factual consistency check against the source document:`,
-          ``,
-          `| # | Summary Sentence (Generated Claim) | Closest Source Evidence / Sentence | Consistency Score | Diagnostics |`,
-          `| :-: | :--- | :--- | :-: | :--- |`,
-          ...failedSentences.map(
-            (s) =>
-              `| **${s.sentence_index}** | "${s.text.replace(/\|/g, "\\|")}" | *"${(s.source_sentence || "No closely aligned passage").replace(/\|/g, "\\|")}"* | **\`${s.score}\`** | ❌ ${s.reason || "Low entailment (< 0.50)"} |`
-          ),
-          ``
-        );
-      } else {
-        lines.push(
-          `> ✅ **100% Factually Grounded:** All ${qm.sentence_breakdown.length} summary sentences are verified and supported by source document evidence.`,
-          ``
-        );
-      }
-
-      lines.push(`---`, ``);
-    }
-
-    lines.push(
+      ``,
       `## 📝 Full Input Prompt (${idx + 1}/${results.length})`,
       `<details>`,
       `<summary><b>Click to expand exact prompt payload sent to model</b></summary>`,
@@ -1861,7 +1969,11 @@ async function main() {
 
     const evalResults = await Promise.allSettled(
       structuredEvents.map(async (event) => {
-        const payload = event.payload;
+        const payload: SummaryStructuredOutput = event.payload;
+        if (payload.error_flag) {
+          throw new Error("Skipping quality evaluation on target that failed LLM inference");
+        }
+
         const res = await fetch(`${PYTHON_EVAL_SERVER_URL}/v1/evaluate`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1909,15 +2021,24 @@ async function main() {
 
       if (!output.host_fingerprint) output.host_fingerprint = getHostFingerprint();
       if (!output.runner_metadata) output.runner_metadata = runnerMetadata;
+
+      // Persist the fully enriched output schema back to the data lake
+      pipeline.logEvent(
+        "OUTPUT_ENRICHED",
+        output,
+        output.source_audit?.sourceIdentifier || "evaluation-target"
+      );
+
       return output;
     });
 
     pipeline.logEvent("QUALITY_EVALUATION_BATCH_COMPLETED", { totalEvaluated: updatedOutputs.length }, "evaluation-phase");
 
     const retainedFeedAudit = updatedOutputs.find((o) => o.source_audit?.feedAudit)?.source_audit?.feedAudit;
-    const activeInferenceParams = updatedOutputs[0]?.inference_params || DEFAULT_INFERENCE_PARAMS;
+    const activeInferenceParams = updatedOutputs[0]?.inference_params || DEFAULT_MODEL_CONFIG;
 
     publishStepSummary(
+      "eval",
       modelName || "GGUF-Model",
       updatedOutputs,
       pipeline.getEventHistory(),
@@ -1973,14 +2094,17 @@ You MUST analyze the text and output ONLY a valid JSON object matching this exac
   const rawInputText = (process.env.INPUT_TEXT ?? "").trim();
   const maxAgeHours = parseFloat(process.env.FEED_MAX_AGE_HOURS || "24");
   const goalCount = parseInt(process.env.ARTICLE_COUNT_GOAL || "1", 10);
+  const maxWordLength = parseInt(process.env.MAX_WORD_LENGTH || String(DEFAULT_ARTICLE_CONFIG.maxWordLength), 10);
 
   const inferenceParams: ModelInferenceParams = {
-    temperature: parseFloat(process.env.LLAMA_TEMPERATURE || String(DEFAULT_INFERENCE_PARAMS.temperature)),
-    top_k: parseInt(process.env.LLAMA_TOP_K || String(DEFAULT_INFERENCE_PARAMS.top_k), 10),
-    top_p: parseFloat(process.env.LLAMA_TOP_P || String(DEFAULT_INFERENCE_PARAMS.top_p)),
-    min_p: parseFloat(process.env.LLAMA_MIN_P || String(DEFAULT_INFERENCE_PARAMS.min_p)),
-    repeat_penalty: parseFloat(process.env.LLAMA_REPEAT_PENALTY || String(DEFAULT_INFERENCE_PARAMS.repeat_penalty)),
-    max_tokens: parseInt(process.env.LLAMA_MAX_TOKENS || String(DEFAULT_INFERENCE_PARAMS.max_tokens), 10),
+    temperature: parseFloat(process.env.LLAMA_TEMPERATURE || String(DEFAULT_MODEL_CONFIG.temperature)),
+    top_k: parseInt(process.env.LLAMA_TOP_K || String(DEFAULT_MODEL_CONFIG.top_k), 10),
+    top_p: parseFloat(process.env.LLAMA_TOP_P || String(DEFAULT_MODEL_CONFIG.top_p)),
+    min_p: parseFloat(process.env.LLAMA_MIN_P || String(DEFAULT_MODEL_CONFIG.min_p)),
+    repeat_penalty: parseFloat(process.env.LLAMA_REPEAT_PENALTY || String(DEFAULT_MODEL_CONFIG.repeat_penalty)),
+    presence_penalty: parseFloat(process.env.LLAMA_PRESENCE_PENALTY || String(DEFAULT_MODEL_CONFIG.presence_penalty)),
+    frequency_penalty: parseFloat(process.env.LLAMA_FREQUENCY_PENALTY || String(DEFAULT_MODEL_CONFIG.frequency_penalty)),
+    max_tokens: parseInt(process.env.LLAMA_MAX_TOKENS || String(DEFAULT_MODEL_CONFIG.max_tokens), 10),
   };
 
   const pipeline = new AIEventPipeline(runnerMetadata, undefined, pipelineEventsPath);
@@ -1996,7 +2120,7 @@ You MUST analyze the text and output ONLY a valid JSON object matching this exac
   let feedAudit: FeedSelectionAudit | undefined;
 
   if (inputSource === "feed") {
-    feedAudit = await collectAndClassifyFeedArticles(DEFAULT_FEED_URLS, maxAgeHours, goalCount, (type, payload) =>
+    feedAudit = await collectAndClassifyFeedArticles(DEFAULT_ARTICLE_CONFIG.feedUrls, maxAgeHours, goalCount, (type, payload) =>
       pipeline.logEvent(type, payload, "feed-crawler")
     );
 
@@ -2060,12 +2184,13 @@ You MUST analyze the text and output ONLY a valid JSON object matching this exac
       serverUrl,
       modelName,
       inferenceParams,
+      maxWordLength,
     });
 
     results.push(result);
   }
 
-  publishStepSummary(modelName, results, pipeline.getEventHistory(), inferenceParams, feedAudit);
+  publishStepSummary("infer", modelName, results, pipeline.getEventHistory(), inferenceParams, feedAudit);
   logStructured("INFO", "Phase 1 inference executed successfully", {
     processedCount: results.length,
     eventsRecorded: pipeline.getEventHistory().length,
