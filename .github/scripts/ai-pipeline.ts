@@ -31,7 +31,6 @@ export const DEFAULT_FALLBACK_ARTICLE_URL =
   "https://www.nakedcapitalism.com/2026/10/when-will-politicians-turn-to-mmt.html";
 
 export const PYTHON_EVAL_SERVER_URL = "http://127.0.0.1:9933";
-
 export const DEFAULT_BLOCKED_CATEGORIES: string[] = ["Links", "Show Types"];
 
 export interface ModelInferenceParams {
@@ -78,9 +77,19 @@ export const STRICT_SUMMARY_JSON_SCHEMA = {
 };
 
 // -------------------------------------------------------------
-// 1. UUID GENERATORS (RFC 4122 UUIDv5)
+// 1. STRUCTURED JSONL LOGGER & UUIDs
 // -------------------------------------------------------------
 const UUIDV5_NAMESPACE = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
+
+export function logStructured(level: "INFO" | "WARN" | "ERROR", message: string, meta: Record<string, any> = {}): void {
+  const record = {
+    timestamp: new Date().toISOString(),
+    level,
+    message,
+    ...meta,
+  };
+  process.stdout.write(JSON.stringify(record) + "\n");
+}
 
 function uuidToBytes(uuid: string): Buffer {
   return Buffer.from(uuid.replace(/-/g, ""), "hex");
@@ -106,8 +115,13 @@ export function generateUuidV5(name: string, namespace: string = UUIDV5_NAMESPAC
   ].join("-");
 }
 
+export function buildDeterministicEventId(runnerName: string, shardId: string, sourceUrl: string, eventType: string): string {
+  const seed = `runner:${runnerName}:shard:${shardId}:source:${sourceUrl}:event:${eventType}`;
+  return `evt-${generateUuidV5(seed)}`;
+}
+
 // -------------------------------------------------------------
-// 2. CATEGORY BLOCKLIST & URL TIDYING MODULES
+// 2. CATEGORY BLOCKLIST & URL TIDYING
 // -------------------------------------------------------------
 export function evaluateCategoryBlock(
   categories: any[],
@@ -148,7 +162,7 @@ export function cleanUrlWithTidy(rawUrl: string): { cleanUrl: string; wasCleaned
 }
 
 // -------------------------------------------------------------
-// 3. HARDWARE FINGERPRINT & HOST DIAGNOSTICS
+// 3. HARDWARE FINGERPRINT & CPU SAMPLER
 // -------------------------------------------------------------
 export interface HostFingerprint {
   cpuModel: string;
@@ -441,7 +455,7 @@ export interface PipelineEvent<T = any> {
 }
 
 // -------------------------------------------------------------
-// 5. CLASSIFIERS WITH CATEGORY FILTER MODULE
+// 5. CLASSIFIERS
 // -------------------------------------------------------------
 export function shallowClassify(item: any, rawUrl: string): ShallowClassificationResult {
   const categories = item.categories || item.tags || [];
@@ -549,84 +563,199 @@ export function deepClassify(cleanMarkdown: string, wordCount: number): DeepClas
 }
 
 // -------------------------------------------------------------
-// 6. CONTENT EXTRACTION (DEFUDDLE + READER PROXY)
+// 6. ZERO-PROXY RESILIENT EXTRACTION ENGINE
 // -------------------------------------------------------------
-async function extractDirectUrl(
-  url: string,
-  emitEvent: (type: string, payload: any) => void
-): Promise<{ title: string; content: string; wordCount: number }> {
-  emitEvent("URL_HTTP_FETCH_STARTED", { url });
+const PRIMARY_BROWSER_HEADERS = {
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+  "Accept-Language": "en-US,en;q=0.9",
+  "Sec-CH-UA": '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+  "Sec-CH-UA-Mobile": "?0",
+  "Sec-CH-UA-Platform": '"Windows"',
+  "Sec-Fetch-Dest": "document",
+  "Sec-Fetch-Mode": "navigate",
+  "Sec-Fetch-Site": "none",
+  "Sec-Fetch-User": "?1",
+  "Upgrade-Insecure-Requests": "1",
+};
 
-  const headers = {
-    "User-Agent":
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.9",
-  };
+const SECONDARY_BROWSER_HEADERS = {
+  "User-Agent":
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14.7; rv:132.0) Gecko/20100101 Firefox/132.0",
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "Accept-Language": "en-US,en;q=0.5",
+  "Sec-Fetch-Dest": "document",
+  "Sec-Fetch-Mode": "navigate",
+  "Sec-Fetch-Site": "none",
+  "Upgrade-Insecure-Requests": "1",
+};
 
-  console.log(`[SCRAPER] 🌐 Directly querying URL: ${url}`);
-  let html = "";
-  let directFetchFailed = false;
-
+async function fetchHtmlWithFallback(url: string): Promise<string> {
+  // Attempt 1: Primary Browser Footprint (Chrome/Win)
   try {
-    const res = await fetch(url, { headers, signal: AbortSignal.timeout(15000) });
+    const res = await fetch(url, { headers: PRIMARY_BROWSER_HEADERS, signal: AbortSignal.timeout(12000) });
     if (res.ok) {
-      html = await res.text();
-    } else {
-      directFetchFailed = true;
+      const html = await res.text();
+      if (html.length > 200) return html;
     }
-  } catch {
-    directFetchFailed = true;
+    logStructured("WARN", "Primary fetch returned non-200 or short response, retrying with secondary UA", {
+      url,
+      status: res.status,
+    });
+  } catch (err: any) {
+    logStructured("WARN", "Primary fetch encountered network error, retrying with secondary UA", {
+      url,
+      error: err.message,
+    });
   }
 
-  if (!directFetchFailed && html.length > 100) {
-    emitEvent("URL_HTTP_FETCH_COMPLETED", { url, bytes: Buffer.byteLength(html, "utf8") });
+  // Attempt 2: Secondary Browser Footprint (Firefox/macOS)
+  const res2 = await fetch(url, { headers: SECONDARY_BROWSER_HEADERS, signal: AbortSignal.timeout(15000) });
+  if (!res2.ok) {
+    throw new Error(`Direct fetch failed with HTTP ${res2.status} on all user-agent profiles`);
+  }
+  const html2 = await res2.text();
+  if (html2.length < 200) {
+    throw new Error(`Fetched HTML body below operational minimum (${html2.length} bytes)`);
+  }
+  return html2;
+}
 
+function extractSemanticDomFallback(document: any): { title: string; content: string; wordCount: number } {
+  const title =
+    document.querySelector("meta[property='og:title']")?.getAttribute("content") ||
+    document.querySelector("title")?.textContent?.trim() ||
+    "Extracted Document";
+
+  // Remove non-content structural noise
+  const removeSelectors = [
+    "script",
+    "style",
+    "nav",
+    "header",
+    "footer",
+    "aside",
+    "noscript",
+    "iframe",
+    "form",
+    "svg",
+    "button",
+    ".ad",
+    ".advertisement",
+    ".social-share",
+    ".cookie-banner",
+    ".comments",
+  ];
+
+  for (const sel of removeSelectors) {
     try {
-      const { document } = parseHTML(html);
-      const title = document.title || "Web Document";
-      const result: any = await Defuddle(document, url, { markdown: true, useAsync: false });
-      const content = result.content?.trim() || "";
-
-      if (content.length > 50) {
-        const wordCount = content.split(/\s+/).filter(Boolean).length;
-        emitEvent("URL_DEFUDDLE_EXTRACTED", { url, title: result.title || title, wordCount });
-        console.log(`[SCRAPER] ✅ Successfully parsed with Defuddle: "${result.title || title}" (${wordCount} words)`);
-        return { title: result.title || title, content, wordCount };
+      const elements = document.querySelectorAll(sel);
+      for (const el of elements) {
+        el.parentNode?.removeChild(el);
       }
     } catch {}
   }
 
-  console.log(`[SCRAPER] 🔄 Engaging Reader Proxy to bypass Cloudflare/WAF...`);
-  const proxyUrl = `https://r.jina.ai/${url}`;
+  // Candidate containers
+  const containerSelectors = [
+    "article",
+    "main",
+    '[role="main"]',
+    ".post-content",
+    ".article-content",
+    ".entry-content",
+    "#content",
+    ".story-body",
+  ];
 
-  const proxyRes = await fetch(proxyUrl, {
-    headers: { Accept: "text/plain, text/markdown" },
-    signal: AbortSignal.timeout(20000),
-  });
-
-  if (!proxyRes.ok) {
-    throw new Error(`Extraction failed for ${url}`);
+  let selectedRoot: any = null;
+  for (const sel of containerSelectors) {
+    const match = document.querySelector(sel);
+    if (match && (match.textContent || "").trim().length > 300) {
+      selectedRoot = match;
+      break;
+    }
   }
 
-  const markdownContent = await proxyRes.text();
-  const wordCount = markdownContent.split(/\s+/).filter(Boolean).length;
-
-  if (wordCount < 20) {
-    throw new Error("Reader proxy returned insufficient content");
+  if (!selectedRoot) {
+    selectedRoot = document.body || document;
   }
 
-  const titleMatch = markdownContent.match(/^Title:\s*(.+)$/m) || markdownContent.match(/^#\s*(.+)$/m);
-  const title = titleMatch ? titleMatch[1].trim() : "Extracted Web Article";
+  const paragraphs: string[] = [];
+  const nodes = selectedRoot.querySelectorAll("h1, h2, h3, h4, p, blockquote, li");
+  for (const node of nodes) {
+    const txt = (node.textContent || "").replace(/\s+/g, " ").trim();
+    if (txt.length > 25) {
+      paragraphs.push(txt);
+    }
+  }
 
-  emitEvent("URL_READER_PROXY_USED", { url, proxyUrl, title, wordCount });
-  console.log(`[SCRAPER] ✅ Reader proxy extracted article: "${title}" (${wordCount} words)`);
+  let combined = paragraphs.join("\n\n").trim();
 
-  return { title, content: markdownContent, wordCount };
+  // If prose is still short, inspect meta description
+  if (combined.split(/\s+/).length < 60) {
+    const metaDesc =
+      document.querySelector("meta[name='description']")?.getAttribute("content") ||
+      document.querySelector("meta[property='og:description']")?.getAttribute("content");
+    if (metaDesc && metaDesc.trim().length > 30) {
+      combined = `${metaDesc.trim()}\n\n${combined}`.trim();
+    }
+  }
+
+  const wordCount = combined.split(/\s+/).filter(Boolean).length;
+  return { title, content: combined, wordCount };
+}
+
+export async function extractDirectUrl(
+  url: string,
+  emitEvent: (type: string, payload: any) => void
+): Promise<{ title: string; content: string; wordCount: number }> {
+  emitEvent("URL_HTTP_FETCH_STARTED", { url });
+  logStructured("INFO", "Beginning direct URL extraction", { url });
+
+  const html = await fetchHtmlWithFallback(url);
+  emitEvent("URL_HTTP_FETCH_COMPLETED", { url, bytes: Buffer.byteLength(html, "utf8") });
+
+  const { document } = parseHTML(html);
+
+  // Tier 1: Defuddle article parsing
+  try {
+    const defuddleResult: any = await Defuddle(document, url, { markdown: true, useAsync: false });
+    const content = defuddleResult.content?.trim() || "";
+    const wordCount = content.split(/\s+/).filter(Boolean).length;
+
+    if (wordCount >= 50) {
+      const title = defuddleResult.title || document.title || "Web Document";
+      emitEvent("URL_DEFUDDLE_EXTRACTED", { url, title, wordCount });
+      logStructured("INFO", "Successfully extracted article via Defuddle (Tier 1)", { url, title, wordCount });
+      return { title, content, wordCount };
+    }
+    logStructured("WARN", "Defuddle extraction yielded thin prose (< 50 words). Engaging Tier 2 fallback.", {
+      url,
+      defuddleWords: wordCount,
+    });
+  } catch (err: any) {
+    logStructured("WARN", "Defuddle parse threw error. Engaging Tier 2 fallback.", { url, error: err.message });
+  }
+
+  // Tier 2: Semantic Linkedom DOM Fallback
+  const fallback = extractSemanticDomFallback(document);
+  if (fallback.wordCount >= 50) {
+    emitEvent("URL_SEMANTIC_DOM_EXTRACTED", { url, title: fallback.title, wordCount: fallback.wordCount });
+    logStructured("INFO", "Successfully extracted article via Semantic Linkedom (Tier 2)", {
+      url,
+      title: fallback.title,
+      wordCount: fallback.wordCount,
+    });
+    return fallback;
+  }
+
+  throw new Error(`All extraction tiers failed to yield minimum content (wordCount: ${fallback.wordCount})`);
 }
 
 // -------------------------------------------------------------
-// 7. ASYNC MULTI-FEED HARVESTING & ROUND-ROBIN DISTRIBUTION
+// 7. FEED HARVESTING & ROUND-ROBIN DISTRIBUTION
 // -------------------------------------------------------------
 function normalizeFeedEntries(parsedResult: any): Array<{ title: string; url: string; publishedDate: Date | null; rawItem: any }> {
   const { format, feed } = parsedResult;
@@ -677,21 +806,14 @@ async function collectAndClassifyFeedArticles(
   emitEvent: (type: string, payload: any) => void
 ): Promise<FeedSelectionAudit> {
   emitEvent("FEED_DISCOVERY_STARTED", { feedUrls, maxAgeHours, goalCount });
-  console.log(`[FEEDSMITH] 🎲 Querying all feeds in parallel | Target Goal: ${goalCount} article(s) across diverse sources within ${maxAgeHours}h.`);
-
-  const headers = {
-    "User-Agent":
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, application/json, */*",
-  };
+  logStructured("INFO", "Querying RSS/Atom feeds concurrently", { count: feedUrls.length, goalCount, maxAgeHours });
 
   const cutoffMs = Date.now() - maxAgeHours * 60 * 60 * 1000;
 
-  // 1. Fetch all feeds concurrently, ensuring valid URL schemes
   const feedResponses = await Promise.allSettled(
     feedUrls.map(async (rawUrl) => {
       const url = rawUrl.startsWith("http://") || rawUrl.startsWith("https://") ? rawUrl : `https://${rawUrl}`;
-      const res = await fetch(url, { headers, signal: AbortSignal.timeout(15000) });
+      const res = await fetch(url, { headers: PRIMARY_BROWSER_HEADERS, signal: AbortSignal.timeout(12000) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const body = await res.text();
       return { url, body };
@@ -732,7 +854,6 @@ async function collectAndClassifyFeedArticles(
     }
   }
 
-  // 2. Build Round-Robin Candidate Queue to guarantee diversity across distinct feeds
   const roundRobinCandidates: Array<{ feedUrl: string; entry: (typeof validBuckets)[0]["entries"][0] }> = [];
   const maxEntriesPerFeed = Math.max(0, ...validBuckets.map((b) => b.entries.length));
 
@@ -747,7 +868,6 @@ async function collectAndClassifyFeedArticles(
   const evaluatedArticles: FeedArticleCandidate[] = [];
   const acceptedArticles: FeedArticleCandidate[] = [];
   const seenUrls = new Set<string>();
-  const feedAcceptedCount = new Map<string, number>();
 
   for (const item of roundRobinCandidates) {
     if (acceptedArticles.length >= goalCount) break;
@@ -761,7 +881,6 @@ async function collectAndClassifyFeedArticles(
 
     if (tidyResult.wasCleaned) {
       emitEvent("URL_TIDIED", { originalUrl: entry.url, cleanUrl: targetUrl, reduction: tidyResult.reduction });
-      console.log(`[TIDY_URL] 🧹 Cleaned URL: "${entry.url}" -> "${targetUrl}"`);
     }
 
     const ageHours = entry.publishedDate
@@ -769,11 +888,7 @@ async function collectAndClassifyFeedArticles(
       : 0;
 
     const shallowResult = shallowClassify(entry.rawItem, targetUrl);
-    emitEvent("SHALLOW_CLASSIFICATION_EVALUATED", {
-      url: targetUrl,
-      title: entry.title,
-      shallowResult,
-    });
+    emitEvent("SHALLOW_CLASSIFICATION_EVALUATED", { url: targetUrl, title: entry.title, shallowResult });
 
     const candidate: FeedArticleCandidate = {
       title: entry.title,
@@ -786,12 +901,15 @@ async function collectAndClassifyFeedArticles(
     };
 
     if (!shallowResult.passed) {
-      console.log(`[SHALLOW_REJECTED] "${entry.title}" -> ${shallowResult.classification} (${shallowResult.reason})`);
+      logStructured("INFO", "Candidate rejected by shallow classifier", {
+        title: entry.title,
+        reason: shallowResult.reason,
+      });
       evaluatedArticles.push(candidate);
       continue;
     }
 
-    console.log(`[EXTRACTION] Ingesting candidate from ${feedUrl}: "${entry.title}"`);
+    logStructured("INFO", "Attempting extraction for candidate", { title: entry.title, url: targetUrl });
     try {
       const extracted = await extractDirectUrl(targetUrl, emitEvent);
       candidate.extractedMarkdown = extracted.content;
@@ -799,31 +917,46 @@ async function collectAndClassifyFeedArticles(
 
       const deepResult = deepClassify(extracted.content, extracted.wordCount);
       candidate.deepResult = deepResult;
-
       emitEvent("DEEP_CLASSIFICATION_EVALUATED", { url: targetUrl, title: candidate.title, deepResult });
       evaluatedArticles.push(candidate);
 
       if (deepResult.passed) {
         acceptedArticles.push(candidate);
-        feedAcceptedCount.set(feedUrl, (feedAcceptedCount.get(feedUrl) || 0) + 1);
-        console.log(`[ACCEPTED] (${acceptedArticles.length}/${goalCount}) "${candidate.title}" [${feedUrl}] -> ${deepResult.wordCount} words`);
+        logStructured("INFO", "Article candidate passed deep classification", {
+          title: candidate.title,
+          wordCount: deepResult.wordCount,
+          acceptedCount: acceptedArticles.length,
+          goalCount,
+        });
       } else {
-        console.log(`[DEEP_REJECTED] "${candidate.title}" -> ${deepResult.classification} (${deepResult.reason})`);
+        logStructured("WARN", "Article rejected by deep classifier", {
+          title: candidate.title,
+          reason: deepResult.reason,
+        });
       }
-    } catch {
+    } catch (err: any) {
+      logStructured("WARN", "Candidate extraction failed, moving gracefully to next queue item", {
+        url: targetUrl,
+        error: err.message,
+      });
       evaluatedArticles.push(candidate);
     }
   }
 
-  if (acceptedArticles.length >= goalCount) {
-    emitEvent("FEED_COLLECTION_GOAL_MET", { goalCount, acceptedCount: acceptedArticles.length, articles: acceptedArticles });
-    return { configuredFeeds: feedUrls, maxAgeHours, goalCount, evaluatedArticles, acceptedArticles, usedFallback: false };
-  }
-
-  if (acceptedArticles.length > 0) {
-    // Goal partially met; continue with accepted distinct articles rather than overwriting with fallback
-    emitEvent("FEED_COLLECTION_PARTIAL_MET", { goalCount, acceptedCount: acceptedArticles.length });
-    return { configuredFeeds: feedUrls, maxAgeHours, goalCount, evaluatedArticles, acceptedArticles, usedFallback: false };
+  if (acceptedArticles.length >= goalCount || acceptedArticles.length > 0) {
+    emitEvent("FEED_COLLECTION_GOAL_MET", {
+      goalCount,
+      acceptedCount: acceptedArticles.length,
+      articles: acceptedArticles,
+    });
+    return {
+      configuredFeeds: feedUrls,
+      maxAgeHours,
+      goalCount,
+      evaluatedArticles,
+      acceptedArticles,
+      usedFallback: false,
+    };
   }
 
   const fallbackCandidate: FeedArticleCandidate = {
@@ -832,15 +965,33 @@ async function collectAndClassifyFeedArticles(
     cleanedUrl: DEFAULT_FALLBACK_ARTICLE_URL,
     sourceFeed: "graceful-default-fallback",
     shallowResult: { classification: "ARTICLE_CANDIDATE", reason: "Default Fallback", passed: true },
-    deepResult: { classification: "LONGFORM_ARTICLE", wordCount: 1450, linkDensity: 0.05, listCount: 2, passed: true, reason: "Verified Fallback Document" },
+    deepResult: {
+      classification: "LONGFORM_ARTICLE",
+      wordCount: 1450,
+      linkDensity: 0.05,
+      listCount: 2,
+      passed: true,
+      reason: "Verified Fallback Document",
+    },
   };
 
   emitEvent("FEED_DEFAULT_FALLBACK_ENGAGED", { defaultUrl: DEFAULT_FALLBACK_ARTICLE_URL });
-  return { configuredFeeds: feedUrls, maxAgeHours, goalCount, evaluatedArticles, acceptedArticles: [fallbackCandidate], usedFallback: true };
+  logStructured("WARN", "Zero candidates accepted from feeds, engaging verified default fallback article", {
+    fallbackUrl: DEFAULT_FALLBACK_ARTICLE_URL,
+  });
+
+  return {
+    configuredFeeds: feedUrls,
+    maxAgeHours,
+    goalCount,
+    evaluatedArticles,
+    acceptedArticles: [fallbackCandidate],
+    usedFallback: true,
+  };
 }
 
 // -------------------------------------------------------------
-// 8. SWAP & MEMORY DIAGNOSTICS
+// 8. MEMORY & SWAP DIAGNOSTICS
 // -------------------------------------------------------------
 let CACHED_PAGE_SIZE: number | null = null;
 export function getSystemPageSizeBytes(): number {
@@ -988,7 +1139,7 @@ function postOpenAIChatCompletion(urlStr: string, payload: any): Promise<any> {
             try {
               resolve(JSON.parse(raw));
             } catch {
-              reject(new Error(`Invalid JSON: ${raw}`));
+              reject(new Error(`Invalid JSON returned: ${raw}`));
             }
           } else {
             reject(new Error(`Server error HTTP ${res.statusCode}: ${raw}`));
@@ -1004,7 +1155,7 @@ function postOpenAIChatCompletion(urlStr: string, payload: any): Promise<any> {
 }
 
 // -------------------------------------------------------------
-// 10. EVENT-DRIVEN PIPELINE ORCHESTRATOR (WITH HYDRATION)
+// 10. AI EVENT PIPELINE ORCHESTRATOR
 // -------------------------------------------------------------
 export class AIEventPipeline extends EventEmitter {
   private auditLog: PipelineEvent[] = [];
@@ -1038,28 +1189,33 @@ export class AIEventPipeline extends EventEmitter {
           }
         })
         .filter((e): e is PipelineEvent => e !== null && typeof e.eventId === "string");
-      console.log(`[EVENT_PIPELINE] 📥 Hydrated ${this.auditLog.length} historical event(s) from ${this.jsonlFilePath}`);
+
+      logStructured("INFO", "Hydrated historical pipeline events from disk", {
+        path: this.jsonlFilePath,
+        count: this.auditLog.length,
+      });
     } catch (err: any) {
-      console.warn(`[EVENT_PIPELINE] ⚠️ Warning: Failed hydrating historical events: ${err.message}`);
+      logStructured("WARN", "Failed hydrating historical pipeline events", { error: err.message });
     }
   }
 
-  private createEventId(eventType: string, epochMs: number): string {
-    const seed = `runner:${this.runnerMetadata.runnerName}:shard:${this.runnerMetadata.shardId}:epoch:${epochMs}:event:${eventType}`;
-    return `evt-${generateUuidV5(seed)}`;
-  }
-
-  public logEvent(eventType: string, payload: any): PipelineEvent {
+  public logEvent(eventType: string, payload: any, sourceUrl: string = "pipeline-lifecycle"): PipelineEvent {
     const now = performance.now();
     const durationMs = Math.round(now - this.lastEventTime);
     const cumulativeMs = Math.round(now - this.pipelineStartTime);
     this.lastEventTime = now;
 
-    const epochMs = Date.now();
+    const eventId = buildDeterministicEventId(
+      this.runnerMetadata.runnerName,
+      this.runnerMetadata.shardId,
+      sourceUrl,
+      eventType
+    );
+
     const event: PipelineEvent = {
-      eventId: this.createEventId(eventType, epochMs),
+      eventId,
       eventType,
-      timestamp: new Date(epochMs).toISOString(),
+      timestamp: new Date().toISOString(),
       correlationId: this.correlationId,
       durationMs,
       cumulativeMs,
@@ -1070,7 +1226,14 @@ export class AIEventPipeline extends EventEmitter {
 
     const jsonlLine = JSON.stringify(event);
     fs.appendFileSync(this.jsonlFilePath, jsonlLine + "\n", "utf8");
-    console.log(`[JSONL_EVENT] ${jsonlLine}`);
+
+    logStructured("INFO", `Pipeline Event: ${eventType}`, {
+      eventId,
+      eventType,
+      correlationId: this.correlationId,
+      durationMs,
+      cumulativeMs,
+    });
 
     this.emit(eventType, event);
     return event;
@@ -1091,7 +1254,17 @@ export class AIEventPipeline extends EventEmitter {
     modelName: string;
     inferenceParams: ModelInferenceParams;
   }): Promise<SummaryStructuredOutput> {
-    const { sourceType, sourceIdentifier, sourceTitle, targetText: rawTargetText, feedAudit, systemPrompt, serverUrl, modelName, inferenceParams } = options;
+    const {
+      sourceType,
+      sourceIdentifier,
+      sourceTitle,
+      targetText: rawTargetText,
+      feedAudit,
+      systemPrompt,
+      serverUrl,
+      modelName,
+      inferenceParams,
+    } = options;
 
     let targetText = rawTargetText;
     const words = targetText.split(/\s+/).filter(Boolean);
@@ -1111,7 +1284,18 @@ export class AIEventPipeline extends EventEmitter {
 
     const userPromptContent = `Document Title: ${sourceTitle}\n\nContent:\n"""\n${targetText}\n"""`;
 
-    this.logEvent("INPUT_RESOLVED", { modelName, sourceType, sourceIdentifier, sourceTitle, wordCount: words.length, charCount: targetText.length });
+    this.logEvent(
+      "INPUT_RESOLVED",
+      {
+        modelName,
+        sourceType,
+        sourceIdentifier,
+        sourceTitle,
+        wordCount: words.length,
+        charCount: targetText.length,
+      },
+      sourceIdentifier
+    );
 
     const pageSizeBytes = getSystemPageSizeBytes();
     const vmstatStart = getVmstatSwap();
@@ -1144,7 +1328,19 @@ export class AIEventPipeline extends EventEmitter {
     };
 
     const startTime = performance.now();
-    this.logEvent("INFERENCE_DISPATCHED", { serverUrl, targetModel: modelName, sourceType, sourceIdentifier, inferenceParams, wordCount: words.length, charCount: targetText.length });
+    this.logEvent(
+      "INFERENCE_DISPATCHED",
+      {
+        serverUrl,
+        targetModel: modelName,
+        sourceType,
+        sourceIdentifier,
+        inferenceParams,
+        wordCount: words.length,
+        charCount: targetText.length,
+      },
+      sourceIdentifier
+    );
 
     let tickCounter = 0;
     const progressTimer = setInterval(() => {
@@ -1156,7 +1352,12 @@ export class AIEventPipeline extends EventEmitter {
 
       if (tickCounter % 20 === 0) {
         const elapsed = Math.round((performance.now() - startTime) / 1000);
-        console.log(`[INFERENCE_HEARTBEAT] ⏳ Processing... (elapsed: ${elapsed}s) | RAM: ${snap.vmRssMb ?? 0} MB | Process Swap: ${snap.vmSwapMb ?? 0} MB (Peak: ${peakProcessSwapMb} MB)`);
+        logStructured("INFO", "LLM Inference Heartbeat", {
+          elapsedSeconds: elapsed,
+          ramRssMb: snap.vmRssMb ?? 0,
+          vmSwapMb: snap.vmSwapMb ?? 0,
+          peakProcessSwapMb,
+        });
       }
     }, 500);
 
@@ -1211,11 +1412,15 @@ export class AIEventPipeline extends EventEmitter {
 
     const promptTokensPerSec = timings?.prompt_per_second
       ? Number(timings.prompt_per_second.toFixed(2))
-      : promptTimeMs > 0 ? Number((promptTokens / (promptTimeMs / 1000)).toFixed(2)) : 0;
+      : promptTimeMs > 0
+      ? Number((promptTokens / (promptTimeMs / 1000)).toFixed(2))
+      : 0;
 
     const completionTokensPerSec = timings?.predicted_per_second
       ? Number(timings.predicted_per_second.toFixed(2))
-      : completionTimeMs > 0 ? Number((completionTokens / (completionTimeMs / 1000)).toFixed(2)) : 0;
+      : completionTimeMs > 0
+      ? Number((completionTokens / (completionTimeMs / 1000)).toFixed(2))
+      : 0;
 
     const tokenMetrics: DetailedTokenMetrics = {
       prompt_tokens: promptTokens,
@@ -1228,9 +1433,18 @@ export class AIEventPipeline extends EventEmitter {
       completion_tokens_per_second: completionTokensPerSec,
     };
 
-    console.log(`⏱️ Duration: ${(totalDurationMs / 1000).toFixed(2)}s | CPU Peak: ${cpuMetrics.maxCpuPercent}% | Ingest: ${tokenMetrics.prompt_tokens_per_second} t/s | Gen: ${tokenMetrics.completion_tokens_per_second} t/s\n`);
-
-    this.logEvent("INFERENCE_COMPLETED", { modelName, sourceIdentifier, tokenMetrics, swapMetrics, cpuMetrics, rawOutput: rawContent });
+    this.logEvent(
+      "INFERENCE_COMPLETED",
+      {
+        modelName,
+        sourceIdentifier,
+        tokenMetrics,
+        swapMetrics,
+        cpuMetrics,
+        rawOutput: rawContent,
+      },
+      sourceIdentifier
+    );
 
     let parsed: any;
     try {
@@ -1285,13 +1499,13 @@ export class AIEventPipeline extends EventEmitter {
       user_prompt: userPromptContent,
     };
 
-    this.logEvent("OUTPUT_STRUCTURED", structuredResult);
+    this.logEvent("OUTPUT_STRUCTURED", structuredResult, sourceIdentifier);
     return structuredResult;
   }
 }
 
 // -------------------------------------------------------------
-// 11. STEP SUMMARY BUILDER (FAILURE-FOCUSED & COMPLETE)
+// 11. STEP SUMMARY PUBLISHER
 // -------------------------------------------------------------
 export function publishStepSummary(
   modelName: string,
@@ -1304,7 +1518,7 @@ export function publishStepSummary(
   if (!summaryPath) return;
 
   if (!results || results.length === 0) {
-    console.warn("[STEP_SUMMARY] ⚠️ No results available to publish in GitHub Step Summary.");
+    logStructured("WARN", "No results available to publish in GitHub Step Summary");
     return;
   }
 
@@ -1345,7 +1559,9 @@ export function publishStepSummary(
     completion_tokens_per_second: 0,
   };
 
-  console.log(`::notice title=AI Pipeline Execution Report (${modelName})::🖥️ ${hf.rawFingerprint} | ⚡ Max CPU: ${cm.maxCpuPercent}% | 📥 Ingest: ${tm.prompt_tokens_per_second} t/s | ⚡ Gen: ${tm.completion_tokens_per_second} t/s`);
+  process.stdout.write(
+    `::notice title=AI Pipeline Execution Report (${modelName})::🖥️ ${hf.rawFingerprint} | ⚡ Max CPU: ${cm.maxCpuPercent}% | 📥 Ingest: ${tm.prompt_tokens_per_second} t/s | ⚡ Gen: ${tm.completion_tokens_per_second} t/s\n`
+  );
 
   const lines: string[] = [
     `# 🧠 AI Transformer & Quality Audit Execution Report`,
@@ -1407,11 +1623,14 @@ export function publishStepSummary(
     ``,
     `---`,
     ``,
-    `## ⚡ Event-Driven Audit Trail (RFC 4122 UUIDv5)`,
+    `## ⚡ Deterministic Event Audit Trail (RFC 4122 UUIDv5)`,
     ``,
-    `| Event Type | RFC 4122 UUIDv5 | Timestamp | Step Duration (ms) | Cumulative Time (ms) |`,
+    `| Event Type | Deterministic UUIDv5 | Timestamp | Step Duration (ms) | Cumulative Time (ms) |`,
     `| :--- | :--- | :--- | :--- | :--- |`,
-    ...events.map((e) => `| \`${e.eventType}\` | \`${e.eventId}\` | \`${e.timestamp}\` | **\`+${e.durationMs} ms\`** | **\`${e.cumulativeMs} ms\`** |`),
+    ...events.map(
+      (e) =>
+        `| \`${e.eventType}\` | \`${e.eventId}\` | \`${e.timestamp}\` | **\`+${e.durationMs} ms\`** | **\`${e.cumulativeMs} ms\`** |`
+    ),
     ``,
     `<details>`,
     `<summary><b>Inspect Full Event Stream Payloads (${events.length} Events - JSON)</b></summary>`,
@@ -1437,13 +1656,16 @@ export function publishStepSummary(
     ``
   );
 
-  // Render Feed Discovery Section whenever feed audit data is present
   if (feedAudit) {
     lines.push(`## 📡 Feed Discovery & Article Ingestion (Multi-Stage Classification)`, ``);
     if (feedAudit.usedFallback) {
-      lines.push(`> ⚠️ **Collection goal unmet** (${feedAudit.acceptedArticles.length}/${feedAudit.goalCount} accepted within ${feedAudit.maxAgeHours}h). Engaged fallback URL.`);
+      lines.push(
+        `> ⚠️ **Collection goal unmet** (${feedAudit.acceptedArticles.length}/${feedAudit.goalCount} accepted within ${feedAudit.maxAgeHours}h). Engaged fallback URL.`
+      );
     } else {
-      lines.push(`> ✅ **Collection goal achieved:** Evaluated ${feedAudit.evaluatedArticles.length} candidates, accepted ${feedAudit.acceptedArticles.length} article(s) across diverse feeds.`);
+      lines.push(
+        `> ✅ **Collection goal achieved:** Evaluated ${feedAudit.evaluatedArticles.length} candidates, accepted ${feedAudit.acceptedArticles.length} article(s) across diverse feeds.`
+      );
     }
     lines.push(
       ``,
@@ -1453,14 +1675,25 @@ export function publishStepSummary(
 
     feedAudit.evaluatedArticles.forEach((art, idx) => {
       const shallow = art.shallowResult?.passed ? "✅ Passed" : `❌ ${art.shallowResult?.classification}`;
-      const deep = art.deepResult ? (art.deepResult.passed ? `✅ ${art.deepResult.classification}` : `❌ ${art.deepResult.classification}`) : "⏭️ Skipped";
-      lines.push(`| **${idx + 1}** | **${art.title.slice(0, 35)}...** | \`${art.sourceFeed}\` | \`${shallow}\` | \`${deep}\` | ${art.ageHours !== undefined ? `\`${art.ageHours}h\`` : "N/A"} | [Visit](${art.url}) |`);
+      const deep = art.deepResult
+        ? art.deepResult.passed
+          ? `✅ ${art.deepResult.classification}`
+          : `❌ ${art.deepResult.classification}`
+        : "⏭️ Skipped";
+      lines.push(
+        `| **${idx + 1}** | **${art.title.slice(0, 35)}...** | \`${art.sourceFeed}\` | \`${shallow}\` | \`${deep}\` | ${art.ageHours !== undefined ? `\`${art.ageHours}h\`` : "N/A"} | [Visit](${art.url}) |`
+      );
     });
     lines.push(``, `---`, ``);
   }
 
   results.forEach((res, idx) => {
-    const comp = res.compression || { inputChars: 0, outputChars: 0, retentionRatioPercent: "N/A", reductionRatioPercent: "N/A" };
+    const comp = res.compression || {
+      inputChars: 0,
+      outputChars: 0,
+      retentionRatioPercent: "N/A",
+      reductionRatioPercent: "N/A",
+    };
     lines.push(
       `## 📊 Text Compression & Reduction Analysis (${idx + 1}/${results.length})`,
       `| Metric | Value | Explanation & Formula |`,
@@ -1505,7 +1738,6 @@ export function publishStepSummary(
         ``
       );
 
-      // Sectional Coverage: Failure-only forensic breakdown
       if (qm.uncovered_sections && qm.uncovered_sections.length > 0) {
         lines.push(
           `### ⚠️ Uncovered Document Sections (${qm.uncovered_sections.length}/${qm.document_chunks_total} Chunks Omitted)`,
@@ -1514,7 +1746,8 @@ export function publishStepSummary(
           `| Missing Section | Section Topic / Lead Excerpt | Reason / Diagnostics |`,
           `| :---: | :--- | :--- |`,
           ...qm.uncovered_sections.map(
-            (u) => `| **Chunk ${u.chunk_index} of ${u.chunk_total}** | *"${u.excerpt.replace(/\|/g, "\\|")}"* | ⚠️ ${u.reason.replace(/\|/g, "\\|")} |`
+            (u) =>
+              `| **Chunk ${u.chunk_index} of ${u.chunk_total}** | *"${u.excerpt.replace(/\|/g, "\\|")}"* | ⚠️ ${u.reason.replace(/\|/g, "\\|")} |`
           ),
           ``
         );
@@ -1525,7 +1758,6 @@ export function publishStepSummary(
         );
       }
 
-      // Sentence Consistency: Failure-only forensic breakdown
       const failedSentences = qm.sentence_breakdown.filter((s) => !s.supported);
       if (failedSentences.length > 0) {
         lines.push(
@@ -1542,7 +1774,7 @@ export function publishStepSummary(
         );
       } else {
         lines.push(
-          `> ✅ **100% Factually Grounded:** All ${qm.sentence_breakdown.length} summary sentences are verified and supported by source document evidence (no hallucinated or unsubstantiated claims detected).`,
+          `> ✅ **100% Factually Grounded:** All ${qm.sentence_breakdown.length} summary sentences are verified and supported by source document evidence.`,
           ``
         );
       }
@@ -1576,16 +1808,16 @@ export function publishStepSummary(
 }
 
 // -------------------------------------------------------------
-// 12. MAIN ENTRY POINT (DUAL PHASE SUPPORT)
+// 12. MAIN RUNTIME
 // -------------------------------------------------------------
 async function main() {
   const runnerMetadata: RunnerMetadata = {
-    runnerName: process.env.RUNNER_NAME ?? "",
-    runId: process.env.GITHUB_RUN_ID ?? "",
-    runNumber: process.env.GITHUB_RUN_NUMBER ?? "",
-    workflow: process.env.GITHUB_WORKFLOW ?? "",
+    runnerName: process.env.RUNNER_NAME ?? "Local-Runner",
+    runId: process.env.GITHUB_RUN_ID ?? "0",
+    runNumber: process.env.GITHUB_RUN_NUMBER ?? "1",
+    workflow: process.env.GITHUB_WORKFLOW ?? "CI",
     osArch: `${os.type()} ${os.arch()}`,
-    shardId: process.env.SHARD_ID ?? "",
+    shardId: process.env.SHARD_ID ?? "shard-1",
     modelFamily: process.env.MODEL_FAMILY ?? "",
     requestedModelId: process.env.REQUESTED_MODEL_ID ?? "",
   };
@@ -1593,18 +1825,19 @@ async function main() {
   const phase = (process.argv.find((a) => a.startsWith("--phase="))?.split("=")[1] || "infer").toLowerCase();
   const modelName = process.env.MODEL_NAME ?? "";
   const serverUrl = process.env.SERVER_URL || "http://127.0.0.1:9931";
+  const pipelineEventsPath = process.env.PIPELINE_EVENTS_PATH || "pipeline-events.jsonl";
 
   // -------------------------------------------------------------
-  // PHASE 2: EVALUATION ONLY (SERVER-CALLING OVER HTTP)
+  // PHASE 2: EVALUATION (CLIENT HTTP DISPATCH)
   // -------------------------------------------------------------
   if (phase === "eval") {
-    console.log("=== 🔬 EXECUTING PHASE 2: PARALLEL UNIEVAL QUALITY AUDIT ===");
-    if (!fs.existsSync("pipeline-events.jsonl")) {
-      console.log("No pipeline-events.jsonl found. Skipping eval phase.");
+    logStructured("INFO", "Executing Phase 2: Parallel UniEval Quality Audit");
+    if (!fs.existsSync(pipelineEventsPath)) {
+      logStructured("WARN", "No pipeline events file found. Skipping evaluation phase.", { path: pipelineEventsPath });
       return;
     }
 
-    const lines = fs.readFileSync("pipeline-events.jsonl", "utf8").split("\n").filter(Boolean);
+    const lines = fs.readFileSync(pipelineEventsPath, "utf8").split("\n").filter(Boolean);
     const structuredEvents = lines
       .map((l) => {
         try {
@@ -1616,17 +1849,16 @@ async function main() {
       .filter((e) => e && e.eventType === "OUTPUT_STRUCTURED");
 
     if (structuredEvents.length === 0) {
-      console.log("No OUTPUT_STRUCTURED events found. Exiting eval phase.");
+      logStructured("WARN", "No OUTPUT_STRUCTURED events discovered in pipeline events. Exiting.");
       return;
     }
 
     const correlationId = structuredEvents[0].correlationId;
-    const pipeline = new AIEventPipeline(runnerMetadata, correlationId);
+    const pipeline = new AIEventPipeline(runnerMetadata, correlationId, pipelineEventsPath);
     pipeline.loadPriorEvents();
 
-    pipeline.logEvent("QUALITY_EVALUATION_STARTED", { articleCount: structuredEvents.length });
+    pipeline.logEvent("QUALITY_EVALUATION_STARTED", { articleCount: structuredEvents.length }, "evaluation-phase");
 
-    console.log(`[EVAL_CLIENT] 🚀 Calling Python eval service in parallel for ${structuredEvents.length} items...`);
     const evalResults = await Promise.allSettled(
       structuredEvents.map(async (event) => {
         const payload = event.payload;
@@ -1659,16 +1891,20 @@ async function main() {
 
       if (evalRes && evalRes.status === "fulfilled") {
         output.quality_metrics = evalRes.value.metrics;
-        pipeline.logEvent("QUALITY_EVALUATION_COMPLETED", {
-          sourceIdentifier: output.source_audit?.sourceIdentifier,
-          sourceTitle: output.headline,
-          metrics: evalRes.value.metrics,
-        });
-      } else {
-        console.warn(
-          `[EVAL_CLIENT] ⚠️ Evaluation call failed for "${output.headline}":`,
-          evalRes?.status === "rejected" ? evalRes.reason : "Unfulfilled"
+        pipeline.logEvent(
+          "QUALITY_EVALUATION_COMPLETED",
+          {
+            sourceIdentifier: output.source_audit?.sourceIdentifier,
+            sourceTitle: output.headline,
+            metrics: evalRes.value.metrics,
+          },
+          output.source_audit?.sourceIdentifier || "evaluation-target"
         );
+      } else {
+        logStructured("WARN", "Evaluation request failed for target", {
+          headline: output.headline,
+          error: evalRes?.status === "rejected" ? evalRes.reason?.message : "Unfulfilled",
+        });
       }
 
       if (!output.host_fingerprint) output.host_fingerprint = getHostFingerprint();
@@ -1676,7 +1912,7 @@ async function main() {
       return output;
     });
 
-    pipeline.logEvent("QUALITY_EVALUATION_BATCH_COMPLETED", { totalEvaluated: updatedOutputs.length });
+    pipeline.logEvent("QUALITY_EVALUATION_BATCH_COMPLETED", { totalEvaluated: updatedOutputs.length }, "evaluation-phase");
 
     const retainedFeedAudit = updatedOutputs.find((o) => o.source_audit?.feedAudit)?.source_audit?.feedAudit;
     const activeInferenceParams = updatedOutputs[0]?.inference_params || DEFAULT_INFERENCE_PARAMS;
@@ -1688,14 +1924,15 @@ async function main() {
       activeInferenceParams,
       retainedFeedAudit
     );
-    console.log("[EVAL_CLIENT] ✅ Quality audit completed and Step Summary published.");
+
+    logStructured("INFO", "Quality evaluation phase completed successfully and step summary published.");
     return;
   }
 
   // -------------------------------------------------------------
-  // PHASE 1: INFERENCE & MULTI-FEED HARVESTING
+  // PHASE 1: INGESTION & INFERENCE
   // -------------------------------------------------------------
-  console.log("=== 🚀 EXECUTING PHASE 1: INGESTION & LLM INFERENCE ===");
+  logStructured("INFO", "Executing Phase 1: Ingestion & LLM Inference");
 
   const defaultPreamble = `You are a precise, objective intelligence analyst. Your mandate is to produce a faithful, high-density synthesis of the provided document.`;
   const promptPreamble = (process.env.PROMPT || defaultPreamble).trim();
@@ -1729,29 +1966,7 @@ You MUST analyze the text and output ONLY a valid JSON object matching this exac
   "stance_on_state_power": "statism" | "constitutionalism" | "not_applicable",
   "stance_on_borders": "nationalism" | "internationalism" | "not_applicable",
   "stance_on_personal_sphere": "civil_libertarianism" | "communitarianism" | "not_applicable"
-}
-
-Definitions for classification axes:
-- stance_on_change: Evaluates what to do about the existing arrangement.
-  * conservatism: Maintain, protect, or return to established structures.
-  * progressivism: Reform, replace, or advance beyond existing arrangements.
-  * not_applicable: Topic does not address institutional or social arrangements.
-- stance_on_economic_power: Evaluates who should hold economic power.
-  * socialism: Collective, public, state, or democratic control of economic resources.
-  * libertarianism: Private ownership, decentralized free markets, and property rights.
-  * not_applicable: Topic does not address economic power allocation.
-- stance_on_state_power: Evaluates whether state power is centralized or checked.
-  * statism: Strong centralized government authority is necessary or justified.
-  * constitutionalism: State power must be strictly constrained, distributed, and checked by rule of law.
-  * not_applicable: Topic does not discuss governance authority.
-- stance_on_borders: Evaluates whether solutions are inside or outside national borders.
-  * nationalism: Focus on domestic sovereignty, borders, and national self-interest.
-  * internationalism: Global cooperation, open borders, transnational agreements.
-  * not_applicable: Topic does not address borders or national scope.
-- stance_on_personal_sphere: Evaluates whether an individual retains an inviolable personal sphere.
-  * civil_libertarianism: Strict individual autonomy and privacy that nobody may enter.
-  * communitarianism: Social obligations, collective well-being, or communal cohesion supersede individual autonomy.
-  * not_applicable: Topic does not discuss individual vs communal rights.`;
+}`;
 
   const inputSource = (process.env.INPUT_SOURCE || "feed").toLowerCase().trim();
   const rawUrl = (process.env.URL ?? "").trim();
@@ -1768,7 +1983,7 @@ Definitions for classification axes:
     max_tokens: parseInt(process.env.LLAMA_MAX_TOKENS || String(DEFAULT_INFERENCE_PARAMS.max_tokens), 10),
   };
 
-  const pipeline = new AIEventPipeline(runnerMetadata);
+  const pipeline = new AIEventPipeline(runnerMetadata, undefined, pipelineEventsPath);
 
   interface IngestionTarget {
     sourceType: SourceAudit["sourceType"];
@@ -1781,13 +1996,15 @@ Definitions for classification axes:
   let feedAudit: FeedSelectionAudit | undefined;
 
   if (inputSource === "feed") {
-    feedAudit = await collectAndClassifyFeedArticles(DEFAULT_FEED_URLS, maxAgeHours, goalCount, (type, payload) => pipeline.logEvent(type, payload));
+    feedAudit = await collectAndClassifyFeedArticles(DEFAULT_FEED_URLS, maxAgeHours, goalCount, (type, payload) =>
+      pipeline.logEvent(type, payload, "feed-crawler")
+    );
 
     for (const art of feedAudit.acceptedArticles) {
       let content = art.extractedMarkdown;
       if (!content) {
         try {
-          const res = await extractDirectUrl(art.url, (type, payload) => pipeline.logEvent(type, payload));
+          const res = await extractDirectUrl(art.url, (type, payload) => pipeline.logEvent(type, payload, art.url));
           content = res.content;
           art.title = res.title || art.title;
         } catch {
@@ -1806,17 +2023,32 @@ Definitions for classification axes:
     }
   } else if (inputSource === "url") {
     const tidy = cleanUrlWithTidy(rawUrl);
-    pipeline.logEvent("URL_TIDIED", { rawUrl, cleanUrl: tidy.cleanUrl, reduction: tidy.reduction });
-    const extracted = await extractDirectUrl(tidy.cleanUrl, (type, payload) => pipeline.logEvent(type, payload));
-    targets.push({ sourceType: "URL", sourceIdentifier: tidy.cleanUrl, sourceTitle: extracted.title, content: extracted.content });
+    pipeline.logEvent("URL_TIDIED", { rawUrl, cleanUrl: tidy.cleanUrl, reduction: tidy.reduction }, tidy.cleanUrl);
+    const extracted = await extractDirectUrl(tidy.cleanUrl, (type, payload) =>
+      pipeline.logEvent(type, payload, tidy.cleanUrl)
+    );
+    targets.push({
+      sourceType: "URL",
+      sourceIdentifier: tidy.cleanUrl,
+      sourceTitle: extracted.title,
+      content: extracted.content,
+    });
   } else {
-    targets.push({ sourceType: "INPUT_TEXT", sourceIdentifier: "Direct Text Input", sourceTitle: "Direct Input Text", content: rawInputText });
+    targets.push({
+      sourceType: "INPUT_TEXT",
+      sourceIdentifier: "Direct Text Input",
+      sourceTitle: "Direct Input Text",
+      content: rawInputText,
+    });
   }
 
   const results: SummaryStructuredOutput[] = [];
   for (let i = 0; i < targets.length; i++) {
     const t = targets[i];
-    console.log(`\n[PIPELINE] 🚀 Processing Target (${i + 1}/${targets.length}): "${t.sourceTitle}"`);
+    logStructured("INFO", `Processing Ingestion Target (${i + 1}/${targets.length})`, {
+      title: t.sourceTitle,
+      sourceIdentifier: t.sourceIdentifier,
+    });
 
     const result = await pipeline.executeSingleArticle({
       sourceType: t.sourceType,
@@ -1833,13 +2065,14 @@ Definitions for classification axes:
     results.push(result);
   }
 
-  // Publish immediate initial Step Summary so Phase 1 is never lost
   publishStepSummary(modelName, results, pipeline.getEventHistory(), inferenceParams, feedAudit);
-
-  console.log(`[PIPELINE] ✅ Phase 1 Inference complete (${results.length} articles). Events written to pipeline-events.jsonl`);
+  logStructured("INFO", "Phase 1 inference executed successfully", {
+    processedCount: results.length,
+    eventsRecorded: pipeline.getEventHistory().length,
+  });
 }
 
 main().catch((err) => {
-  console.error("Pipeline failure:", err);
+  logStructured("ERROR", "Unhandled fatal pipeline exception", { error: err.message, stack: err.stack });
   process.exit(1);
 });
