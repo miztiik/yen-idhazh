@@ -10,6 +10,7 @@ import { performance } from "node:perf_hooks";
 import { parseHTML } from "linkedom";
 import { Defuddle } from "defuddle/node";
 import { parseFeed } from "feedsmith";
+import { TidyURL } from "tidy-url";
 
 // -------------------------------------------------------------
 // 0. CONFIGURATION & CONSTANTS
@@ -21,6 +22,11 @@ export const DEFAULT_FEED_URLS: string[] = [
 
 export const DEFAULT_FALLBACK_ARTICLE_URL =
   "https://www.nakedcapitalism.com/2026/10/when-will-politicians-turn-to-mmt.html";
+
+export const PYTHON_EVAL_SERVER_URL = "http://127.0.0.1:9933";
+
+// Configurable array of blocked categories
+export const DEFAULT_BLOCKED_CATEGORIES: string[] = ["Links", "Show Types"];
 
 export interface ModelInferenceParams {
   temperature: number;
@@ -40,43 +46,17 @@ export const DEFAULT_INFERENCE_PARAMS: ModelInferenceParams = {
   max_tokens: 4096,
 };
 
-// Strict JSON Schema for GBNF grammar enforcement in llama.cpp
 export const STRICT_SUMMARY_JSON_SCHEMA = {
   type: "object",
   properties: {
-    headline: {
-      type: "string",
-      description: "A concise, descriptive headline for the document",
-    },
-    analytic_synthesis: {
-      type: "string",
-      description:
-        "Comprehensive, cohesive narrative prose synthesizing the core findings, mechanisms, and nuances of the document in uninterrupted paragraphs.",
-    },
-    sentiment: {
-      type: "string",
-      enum: ["positive", "neutral", "negative", "mixed"],
-    },
-    stance_on_change: {
-      type: "string",
-      enum: ["conservatism", "progressivism", "not_applicable"],
-    },
-    stance_on_economic_power: {
-      type: "string",
-      enum: ["socialism", "libertarianism", "not_applicable"],
-    },
-    stance_on_state_power: {
-      type: "string",
-      enum: ["statism", "constitutionalism", "not_applicable"],
-    },
-    stance_on_borders: {
-      type: "string",
-      enum: ["nationalism", "internationalism", "not_applicable"],
-    },
-    stance_on_personal_sphere: {
-      type: "string",
-      enum: ["civil_libertarianism", "communitarianism", "not_applicable"],
-    },
+    headline: { type: "string" },
+    analytic_synthesis: { type: "string" },
+    sentiment: { type: "string", enum: ["positive", "neutral", "negative", "mixed"] },
+    stance_on_change: { type: "string", enum: ["conservatism", "progressivism", "not_applicable"] },
+    stance_on_economic_power: { type: "string", enum: ["socialism", "libertarianism", "not_applicable"] },
+    stance_on_state_power: { type: "string", enum: ["statism", "constitutionalism", "not_applicable"] },
+    stance_on_borders: { type: "string", enum: ["nationalism", "internationalism", "not_applicable"] },
+    stance_on_personal_sphere: { type: "string", enum: ["civil_libertarianism", "communitarianism", "not_applicable"] },
   },
   required: [
     "headline",
@@ -100,7 +80,7 @@ function uuidToBytes(uuid: string): Buffer {
   return Buffer.from(uuid.replace(/-/g, ""), "hex");
 }
 
-function generateUuidV5(name: string, namespace: string = UUIDV5_NAMESPACE): string {
+export function generateUuidV5(name: string, namespace: string = UUIDV5_NAMESPACE): string {
   const nsBytes = uuidToBytes(namespace);
   const hash = crypto.createHash("sha1");
   hash.update(nsBytes);
@@ -121,7 +101,51 @@ function generateUuidV5(name: string, namespace: string = UUIDV5_NAMESPACE): str
 }
 
 // -------------------------------------------------------------
-// 2. HARDWARE FINGERPRINT & HOST DIAGNOSTICS
+// 2. CATEGORY BLOCKLIST & URL TIDYING MODULES
+// -------------------------------------------------------------
+export function evaluateCategoryBlock(
+  categories: any[],
+  url: string,
+  blockedCategories: string[] = DEFAULT_BLOCKED_CATEGORIES
+): { isBlocked: boolean; matchedReason?: string } {
+  const normalizedBlocked = blockedCategories.map((c) => c.toLowerCase().trim());
+
+  // 1. Check metadata categories/tags from feed
+  const itemCategories = categories.map((c: any) =>
+    (typeof c === "string" ? c : c?.name || c?.term || c?.value || "").toLowerCase().trim()
+  );
+
+  for (const cat of itemCategories) {
+    if (normalizedBlocked.includes(cat)) {
+      return { isBlocked: true, matchedReason: `Element category matched: "${cat}"` };
+    }
+  }
+
+  // 2. Check URL slug patterns (e.g., /category/links/ or /category/show-types/)
+  const lowerUrl = url.toLowerCase();
+  for (const blocked of normalizedBlocked) {
+    const slug = blocked.replace(/\s+/g, "-");
+    if (lowerUrl.includes(`/category/${slug}`) || lowerUrl.includes(`/${slug}/`)) {
+      return { isBlocked: true, matchedReason: `URL slug matched blocked category: "${blocked}"` };
+    }
+  }
+
+  return { isBlocked: false };
+}
+
+export function cleanUrlWithTidy(rawUrl: string): { cleanUrl: string; wasCleaned: boolean; reduction: number } {
+  try {
+    const res = TidyURL.clean(rawUrl);
+    const cleanUrl = res.url || rawUrl;
+    const wasCleaned = cleanUrl !== rawUrl;
+    return { cleanUrl, wasCleaned, reduction: res.info?.reduction || 0 };
+  } catch {
+    return { cleanUrl: rawUrl, wasCleaned: false, reduction: 0 };
+  }
+}
+
+// -------------------------------------------------------------
+// 3. HARDWARE FINGERPRINT & HOST DIAGNOSTICS
 // -------------------------------------------------------------
 export interface HostFingerprint {
   cpuModel: string;
@@ -221,8 +245,7 @@ class SystemCpuSampler {
       const parts = line.trim().split(/\s+/).slice(1).map(Number);
       const idle = parts[3] + (parts[4] || 0);
       const nonIdle = parts[0] + parts[1] + parts[2] + (parts[5] || 0) + (parts[6] || 0) + (parts[7] || 0);
-      const total = idle + nonIdle;
-      return { total, idle };
+      return { total: idle + nonIdle, idle };
     } catch {
       return null;
     }
@@ -262,7 +285,7 @@ class SystemCpuSampler {
 }
 
 // -------------------------------------------------------------
-// 3. SCHEMAS, CLASSIFIER TYPES & INTERFACES
+// 4. DATA SCHEMAS & INTERFACES
 // -------------------------------------------------------------
 export type StanceOnChange = "conservatism" | "progressivism" | "not_applicable";
 export type StanceOnEconomicPower = "socialism" | "libertarianism" | "not_applicable";
@@ -270,27 +293,14 @@ export type StanceOnStatePower = "statism" | "constitutionalism" | "not_applicab
 export type StanceOnBorders = "nationalism" | "internationalism" | "not_applicable";
 export type StanceOnPersonalSphere = "civil_libertarianism" | "communitarianism" | "not_applicable";
 
-export type ShallowClassification =
-  | "ARTICLE_CANDIDATE"
-  | "PODCAST_OR_VIDEO"
-  | "NEWSLETTER_ROUNDUP_DIGEST"
-  | "PRESS_RELEASE_OR_SPONSORED";
-
 export interface ShallowClassificationResult {
-  classification: ShallowClassification;
+  classification: string;
   reason: string;
   passed: boolean;
 }
 
-export type DeepClassification =
-  | "LONGFORM_ARTICLE"
-  | "SHORT_ARTICLE"
-  | "ROUNDUP_DIGEST"
-  | "PRESS_RELEASE_SPONSORED"
-  | "THIN_CONTENT";
-
 export interface DeepClassificationResult {
-  classification: DeepClassification;
+  classification: string;
   wordCount: number;
   linkDensity: number;
   listCount: number;
@@ -301,6 +311,7 @@ export interface DeepClassificationResult {
 export interface FeedArticleCandidate {
   title: string;
   url: string;
+  cleanedUrl?: string;
   sourceFeed: string;
   publishedDate?: string;
   ageHours?: number;
@@ -360,6 +371,22 @@ export interface CompressionAnalysis {
   explanation: string;
 }
 
+export interface QualityEvaluationMetrics {
+  overall_consistency: number;
+  coherence: number;
+  fluency: number;
+  document_chunks_total: number;
+  document_chunks_covered: number;
+  chunk_coverage_percent: number;
+  sentence_breakdown: Array<{
+    sentence_index: number;
+    text: string;
+    score: number;
+    matched_chunk: number;
+    supported: boolean;
+  }>;
+}
+
 export interface SummaryStructuredOutput {
   headline: string;
   analytic_synthesis: string;
@@ -381,6 +408,7 @@ export interface SummaryStructuredOutput {
   input_text: string;
   system_prompt: string;
   user_prompt: string;
+  quality_metrics?: QualityEvaluationMetrics;
 }
 
 export interface PipelineEvent<T = any> {
@@ -394,9 +422,21 @@ export interface PipelineEvent<T = any> {
 }
 
 // -------------------------------------------------------------
-// 4. CLASSIFIERS
+// 5. CLASSIFIERS WITH CATEGORY FILTER MODULE
 // -------------------------------------------------------------
-export function shallowClassify(item: any): ShallowClassificationResult {
+export function shallowClassify(item: any, rawUrl: string): ShallowClassificationResult {
+  // 1. Element Category & URL Filter Check
+  const categories = item.categories || item.tags || [];
+  const catCheck = evaluateCategoryBlock(categories, rawUrl);
+  if (catCheck.isBlocked) {
+    return {
+      classification: "BLOCKED_BY_CATEGORY",
+      reason: catCheck.matchedReason || "Category blocklist match",
+      passed: false,
+    };
+  }
+
+  // 2. Audio/Video enclosure check
   if (
     item.enclosure?.type?.startsWith("audio/") ||
     item.enclosure?.type?.startsWith("video/") ||
@@ -409,7 +449,8 @@ export function shallowClassify(item: any): ShallowClassificationResult {
     };
   }
 
-  const link = (item.link || item.url || "").toLowerCase();
+  // 3. Multimedia host check
+  const link = (item.link || item.url || rawUrl || "").toLowerCase();
   if (/youtube\.com|youtu\.be|spotify\.com|apple\.com\/podcast|soundcloud\.com|vimeo\.com/i.test(link)) {
     return {
       classification: "PODCAST_OR_VIDEO",
@@ -418,31 +459,9 @@ export function shallowClassify(item: any): ShallowClassificationResult {
     };
   }
 
-  const categories = (item.categories || item.tags || []).map((c: any) =>
-    (typeof c === "string" ? c : c?.name || c?.term || "").toLowerCase()
-  );
-
-  if (categories.some((t: string) => ["sponsored", "promoted", "press release", "pr", "partner content"].includes(t))) {
-    return {
-      classification: "PRESS_RELEASE_OR_SPONSORED",
-      reason: `Category tags match PR/promotional content (${categories.join(", ")})`,
-      passed: false,
-    };
-  }
-
-  if (categories.some((t: string) => ["links", "digest", "roundup", "morning reads", "weekly wrap"].includes(t))) {
-    return {
-      classification: "NEWSLETTER_ROUNDUP_DIGEST",
-      reason: `Category tags match newsletter digest (${categories.join(", ")})`,
-      passed: false,
-    };
-  }
-
+  // 4. Title heuristics
   const title = item.title || "";
-  if (
-    /\b(links|roundup|daily digest|morning reads|weekly wrap|news wrap)\b/i.test(title) ||
-    /^links\s+\d+/i.test(title)
-  ) {
+  if (/\b(links|roundup|daily digest|morning reads|weekly wrap|news wrap)\b/i.test(title) || /^links\s+\d+/i.test(title)) {
     return {
       classification: "NEWSLETTER_ROUNDUP_DIGEST",
       reason: `Title heuristic matched roundup format ("${title}")`,
@@ -515,7 +534,7 @@ export function deepClassify(cleanMarkdown: string, wordCount: number): DeepClas
 }
 
 // -------------------------------------------------------------
-// 5. CONTENT EXTRACTION (DEFUDDLE + READER PROXY)
+// 6. CONTENT EXTRACTION (DEFUDDLE + READER PROXY)
 // -------------------------------------------------------------
 async function extractDirectUrl(
   url: string,
@@ -536,16 +555,12 @@ async function extractDirectUrl(
 
   try {
     const res = await fetch(url, { headers, signal: AbortSignal.timeout(15000) });
-    console.log(`[SCRAPER] 📡 Direct Response Status: ${res.status} ${res.statusText}`);
-
     if (res.ok) {
       html = await res.text();
     } else {
-      console.warn(`[SCRAPER] ⚠️ Direct fetch blocked by WAF/Cloudflare (HTTP ${res.status}).`);
       directFetchFailed = true;
     }
-  } catch (err: any) {
-    console.warn(`[SCRAPER] ⚠️ Direct connection error: ${err.message}`);
+  } catch {
     directFetchFailed = true;
   }
 
@@ -561,19 +576,13 @@ async function extractDirectUrl(
       if (content.length > 50) {
         const wordCount = content.split(/\s+/).filter(Boolean).length;
         emitEvent("URL_DEFUDDLE_EXTRACTED", { url, title: result.title || title, wordCount });
-        console.log(`[SCRAPER] ✅ Successfully parsed with Defuddle/node: "${result.title || title}" (${wordCount} words)`);
-        return {
-          title: result.title || title,
-          content,
-          wordCount,
-        };
+        console.log(`[SCRAPER] ✅ Successfully parsed with Defuddle: "${result.title || title}" (${wordCount} words)`);
+        return { title: result.title || title, content, wordCount };
       }
-    } catch (parseErr: any) {
-      console.warn(`[SCRAPER] ⚠️ Defuddle DOM parse error: ${parseErr.message}`);
-    }
+    } catch {}
   }
 
-  console.log(`[SCRAPER] 🔄 Engaging Reader Proxy to bypass Cloudflare/WAF block...`);
+  console.log(`[SCRAPER] 🔄 Engaging Reader Proxy to bypass Cloudflare/WAF...`);
   const proxyUrl = `https://r.jina.ai/${url}`;
 
   const proxyRes = await fetch(proxyUrl, {
@@ -582,7 +591,7 @@ async function extractDirectUrl(
   });
 
   if (!proxyRes.ok) {
-    throw new Error(`Both direct query and reader proxy failed (Proxy HTTP ${proxyRes.status})`);
+    throw new Error(`Extraction failed for ${url}`);
   }
 
   const markdownContent = await proxyRes.text();
@@ -598,15 +607,11 @@ async function extractDirectUrl(
   emitEvent("URL_READER_PROXY_USED", { url, proxyUrl, title, wordCount });
   console.log(`[SCRAPER] ✅ Reader proxy extracted article: "${title}" (${wordCount} words)`);
 
-  return {
-    title,
-    content: markdownContent,
-    wordCount,
-  };
+  return { title, content: markdownContent, wordCount };
 }
 
 // -------------------------------------------------------------
-// 6. FEED DISCOVERY & PARSING
+// 7. ASYNC FEED HARVESTING & URL TIDYING LOOP
 // -------------------------------------------------------------
 function normalizeFeedEntries(parsedResult: any): Array<{ title: string; url: string; publishedDate: Date | null; rawItem: any }> {
   const { format, feed } = parsedResult;
@@ -625,10 +630,8 @@ function normalizeFeedEntries(parsedResult: any): Array<{ title: string; url: st
         url = (alt?.href || item.links[0]?.href || "").trim();
       } else if (typeof item.link === "string") {
         url = item.link.trim();
-      } else if (item.link?.href) {
-        url = item.link.href.trim();
       }
-      if (!url && item.id && (item.id.startsWith("http://") || item.id.startsWith("https://"))) {
+      if (!url && item.id && item.id.startsWith("http")) {
         url = item.id.trim();
       }
     } else if (format === "json") {
@@ -637,29 +640,15 @@ function normalizeFeedEntries(parsedResult: any): Array<{ title: string; url: st
       url = (item.link || item.guid?.value || (typeof item.guid === "string" ? item.guid : "") || "").trim();
     }
 
-    const rawDate =
-      item.pubDate ||
-      item.published ||
-      item.updated ||
-      item.date_published ||
-      item.date_modified ||
-      item.dc?.date;
-
+    const rawDate = item.pubDate || item.published || item.updated || item.date_published || item.dc?.date;
     let publishedDate: Date | null = null;
     if (rawDate) {
       const d = new Date(rawDate);
-      if (!isNaN(d.getTime())) {
-        publishedDate = d;
-      }
+      if (!isNaN(d.getTime())) publishedDate = d;
     }
 
     if (url) {
-      normalized.push({
-        title: title || "Untitled Feed Item",
-        url,
-        publishedDate,
-        rawItem: item,
-      });
+      normalized.push({ title: title || "Untitled Feed Item", url, publishedDate, rawItem: item });
     }
   }
 
@@ -673,7 +662,7 @@ async function collectAndClassifyFeedArticles(
   emitEvent: (type: string, payload: any) => void
 ): Promise<FeedSelectionAudit> {
   emitEvent("FEED_DISCOVERY_STARTED", { feedUrls, maxAgeHours, goalCount });
-  console.log(`[FEEDSMITH] 🎲 Order: Randomized | Target Goal: ${goalCount} article(s) published within ${maxAgeHours}h.`);
+  console.log(`[FEEDSMITH] 🎲 Querying feeds in parallel | Target Goal: ${goalCount} article(s) within ${maxAgeHours}h.`);
 
   const headers = {
     "User-Agent":
@@ -682,28 +671,26 @@ async function collectAndClassifyFeedArticles(
   };
 
   const cutoffMs = Date.now() - maxAgeHours * 60 * 60 * 1000;
-  const randomizedFeeds = [...feedUrls].sort(() => Math.random() - 0.5);
+
+  const feedResponses = await Promise.allSettled(
+    feedUrls.map(async (url) => {
+      const res = await fetch(url, { headers, signal: AbortSignal.timeout(15000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const body = await res.text();
+      return { url, body };
+    })
+  );
 
   const evaluatedArticles: FeedArticleCandidate[] = [];
   const acceptedArticles: FeedArticleCandidate[] = [];
   const seenUrls = new Set<string>();
 
-  for (const feedUrl of randomizedFeeds) {
-    if (acceptedArticles.length >= goalCount) {
-      console.log(`[FEEDSMITH] 🛑 Target goal (${goalCount}) achieved! Halting feed query loop early.`);
-      break;
-    }
+  for (const resp of feedResponses) {
+    if (acceptedArticles.length >= goalCount) break;
+    if (resp.status !== "fulfilled") continue;
 
+    const { url: feedUrl, body } = resp.value;
     try {
-      console.log(`[FEEDSMITH] 🔍 Querying feed: ${feedUrl}`);
-      const res = await fetch(feedUrl, { headers, signal: AbortSignal.timeout(15000) });
-      if (!res.ok) {
-        console.warn(`[FEEDSMITH] ⚠️ HTTP ${res.status} returned from ${feedUrl}`);
-        emitEvent("FEED_QUERY_FAILED", { feedUrl, status: res.status });
-        continue;
-      }
-
-      const body = await res.text();
       const parsed = parseFeed(body);
       const entries = normalizeFeedEntries(parsed);
 
@@ -718,23 +705,33 @@ async function collectAndClassifyFeedArticles(
 
       for (const entry of validEntries) {
         if (acceptedArticles.length >= goalCount) break;
-        if (seenUrls.has(entry.url)) continue;
-        seenUrls.add(entry.url);
 
-        const ageHours = Number(
-          ((Date.now() - (entry.publishedDate?.getTime() || 0)) / (1000 * 60 * 60)).toFixed(1)
-        );
+        // 1. Tidy URL Step between Feedsmith and Extraction
+        const tidyResult = cleanUrlWithTidy(entry.url);
+        const targetUrl = tidyResult.cleanUrl;
 
-        const shallowResult = shallowClassify(entry.rawItem);
+        if (seenUrls.has(targetUrl)) continue;
+        seenUrls.add(targetUrl);
+
+        if (tidyResult.wasCleaned) {
+          emitEvent("URL_TIDIED", { originalUrl: entry.url, cleanUrl: targetUrl, reduction: tidyResult.reduction });
+          console.log(`[TIDY_URL] 🧹 Cleaned URL: "${entry.url}" -> "${targetUrl}"`);
+        }
+
+        const ageHours = Number(((Date.now() - (entry.publishedDate?.getTime() || 0)) / (1000 * 60 * 60)).toFixed(1));
+
+        // 2. Shallow Classification with Category Filter Module
+        const shallowResult = shallowClassify(entry.rawItem, targetUrl);
         emitEvent("SHALLOW_CLASSIFICATION_EVALUATED", {
-          url: entry.url,
+          url: targetUrl,
           title: entry.title,
           shallowResult,
         });
 
         const candidate: FeedArticleCandidate = {
           title: entry.title,
-          url: entry.url,
+          url: targetUrl,
+          cleanedUrl: targetUrl,
           sourceFeed: feedUrl,
           publishedDate: entry.publishedDate?.toISOString(),
           ageHours,
@@ -747,95 +744,55 @@ async function collectAndClassifyFeedArticles(
           continue;
         }
 
+        // 3. Content Extraction (Defuddle)
         console.log(`[EXTRACTION] Ingesting candidate article: "${entry.title}"`);
         try {
-          const extracted = await extractDirectUrl(entry.url, emitEvent);
+          const extracted = await extractDirectUrl(targetUrl, emitEvent);
           candidate.extractedMarkdown = extracted.content;
           candidate.title = extracted.title || candidate.title;
 
+          // 4. Deep Post-Extraction Classification
           const deepResult = deepClassify(extracted.content, extracted.wordCount);
           candidate.deepResult = deepResult;
 
-          emitEvent("DEEP_CLASSIFICATION_EVALUATED", {
-            url: candidate.url,
-            title: candidate.title,
-            deepResult,
-          });
-
+          emitEvent("DEEP_CLASSIFICATION_EVALUATED", { url: targetUrl, title: candidate.title, deepResult });
           evaluatedArticles.push(candidate);
 
           if (deepResult.passed) {
             acceptedArticles.push(candidate);
-            console.log(
-              `[ACCEPTED] (${acceptedArticles.length}/${goalCount}) "${candidate.title}" -> ${deepResult.classification} (${deepResult.wordCount} words)`
-            );
+            console.log(`[ACCEPTED] (${acceptedArticles.length}/${goalCount}) "${candidate.title}" -> ${deepResult.wordCount} words`);
           } else {
-            console.log(
-              `[DEEP_REJECTED] "${candidate.title}" -> ${deepResult.classification} (${deepResult.reason})`
-            );
+            console.log(`[DEEP_REJECTED] "${candidate.title}" -> ${deepResult.classification} (${deepResult.reason})`);
           }
         } catch (err: any) {
-          console.warn(`[EXTRACTION_FAILED] Could not parse ${entry.url}: ${err.message}`);
           evaluatedArticles.push(candidate);
         }
       }
     } catch (err: any) {
-      console.warn(`[FEEDSMITH] ⚠️ Error querying feed ${feedUrl}: ${err.message}`);
       emitEvent("FEED_QUERY_FAILED", { feedUrl, error: err.message });
     }
   }
 
   if (acceptedArticles.length >= goalCount) {
-    emitEvent("FEED_COLLECTION_GOAL_MET", {
-      goalCount,
-      acceptedCount: acceptedArticles.length,
-      articles: acceptedArticles,
-    });
-
-    return {
-      configuredFeeds: feedUrls,
-      maxAgeHours,
-      goalCount,
-      evaluatedArticles,
-      acceptedArticles,
-      usedFallback: false,
-    };
+    emitEvent("FEED_COLLECTION_GOAL_MET", { goalCount, acceptedCount: acceptedArticles.length, articles: acceptedArticles });
+    return { configuredFeeds: feedUrls, maxAgeHours, goalCount, evaluatedArticles, acceptedArticles, usedFallback: false };
   }
-
-  console.warn(
-    `[FEEDSMITH] ⚠️ Collection goal unmet (${acceptedArticles.length}/${goalCount} accepted in ${maxAgeHours}h).`
-  );
-  console.log(`[FEEDSMITH] 🔄 Gracefully defaulting to fallback URL: ${DEFAULT_FALLBACK_ARTICLE_URL}`);
-
-  emitEvent("FEED_COLLECTION_GOAL_UNMET", {
-    goalCount,
-    acceptedCount: acceptedArticles.length,
-  });
 
   const fallbackCandidate: FeedArticleCandidate = {
     title: "When Will Politicians Turn to MMT?",
     url: DEFAULT_FALLBACK_ARTICLE_URL,
+    cleanedUrl: DEFAULT_FALLBACK_ARTICLE_URL,
     sourceFeed: "graceful-default-fallback",
     shallowResult: { classification: "ARTICLE_CANDIDATE", reason: "Default Fallback", passed: true },
     deepResult: { classification: "LONGFORM_ARTICLE", wordCount: 1450, linkDensity: 0.05, listCount: 2, passed: true, reason: "Verified Fallback Document" },
   };
 
-  emitEvent("FEED_DEFAULT_FALLBACK_ENGAGED", {
-    defaultUrl: DEFAULT_FALLBACK_ARTICLE_URL,
-  });
-
-  return {
-    configuredFeeds: feedUrls,
-    maxAgeHours,
-    goalCount,
-    evaluatedArticles,
-    acceptedArticles: [fallbackCandidate],
-    usedFallback: true,
-  };
+  emitEvent("FEED_DEFAULT_FALLBACK_ENGAGED", { defaultUrl: DEFAULT_FALLBACK_ARTICLE_URL });
+  return { configuredFeeds: feedUrls, maxAgeHours, goalCount, evaluatedArticles, acceptedArticles: [fallbackCandidate], usedFallback: true };
 }
 
 // -------------------------------------------------------------
-// 7. SWAP & MEMORY METRICS
+// 8. SWAP & MEMORY DIAGNOSTICS
 // -------------------------------------------------------------
 function readServerPid(): number | null {
   try {
@@ -902,7 +859,7 @@ function getMemorySnapshot() {
 }
 
 // -------------------------------------------------------------
-// 8. OPENAI COMPATIBLE HTTP CLIENT
+// 9. OPENAI HTTP CLIENT
 // -------------------------------------------------------------
 function postOpenAIChatCompletion(urlStr: string, payload: any): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -930,10 +887,10 @@ function postOpenAIChatCompletion(urlStr: string, payload: any): Promise<any> {
             try {
               resolve(JSON.parse(raw));
             } catch {
-              reject(new Error(`Invalid JSON response: ${raw}`));
+              reject(new Error(`Invalid JSON: ${raw}`));
             }
           } else {
-            reject(new Error(`llama-server returned HTTP ${res.statusCode}: ${raw}`));
+            reject(new Error(`Server error HTTP ${res.statusCode}: ${raw}`));
           }
         });
       }
@@ -946,22 +903,22 @@ function postOpenAIChatCompletion(urlStr: string, payload: any): Promise<any> {
 }
 
 // -------------------------------------------------------------
-// 9. EVENT-DRIVEN PIPELINE ORCHESTRATOR
+// 10. EVENT-DRIVEN PIPELINE ORCHESTRATOR
 // -------------------------------------------------------------
 export class AIEventPipeline extends EventEmitter {
   private auditLog: PipelineEvent[] = [];
-  private correlationId: string;
+  public correlationId: string;
   private runnerMetadata: RunnerMetadata;
   private hostFingerprint: HostFingerprint;
   private jsonlFilePath: string;
   private pipelineStartTime: number;
   private lastEventTime: number;
 
-  constructor(runnerMetadata: RunnerMetadata, jsonlFilePath = "pipeline-events.jsonl") {
+  constructor(runnerMetadata: RunnerMetadata, existingCorrelationId?: string, jsonlFilePath = "pipeline-events.jsonl") {
     super();
     this.runnerMetadata = runnerMetadata;
     this.hostFingerprint = getHostFingerprint();
-    this.correlationId = `corr-${crypto.randomUUID()}`;
+    this.correlationId = existingCorrelationId || `corr-${crypto.randomUUID()}`;
     this.jsonlFilePath = jsonlFilePath;
     this.pipelineStartTime = performance.now();
     this.lastEventTime = this.pipelineStartTime;
@@ -1014,17 +971,7 @@ export class AIEventPipeline extends EventEmitter {
     modelName: string;
     inferenceParams: ModelInferenceParams;
   }): Promise<SummaryStructuredOutput> {
-    const {
-      sourceType,
-      sourceIdentifier,
-      sourceTitle,
-      targetText: rawTargetText,
-      feedAudit,
-      systemPrompt,
-      serverUrl,
-      modelName,
-      inferenceParams,
-    } = options;
+    const { sourceType, sourceIdentifier, sourceTitle, targetText: rawTargetText, feedAudit, systemPrompt, serverUrl, modelName, inferenceParams } = options;
 
     let targetText = rawTargetText;
     const words = targetText.split(/\s+/).filter(Boolean);
@@ -1044,16 +991,7 @@ export class AIEventPipeline extends EventEmitter {
 
     const userPromptContent = `Document Title: ${sourceTitle}\n\nContent:\n"""\n${targetText}\n"""`;
 
-    this.logEvent("INPUT_RESOLVED", {
-      modelName,
-      sourceType,
-      sourceIdentifier,
-      sourceTitle,
-      wordCount: words.length,
-      charCount: targetText.length,
-      systemPrompt,
-      userPrompt: userPromptContent,
-    });
+    this.logEvent("INPUT_RESOLVED", { modelName, sourceType, sourceIdentifier, sourceTitle, wordCount: words.length, charCount: targetText.length });
 
     const vmstatStart = getVmstatSwap();
     let peakProcessSwapMb = 0;
@@ -1066,14 +1004,8 @@ export class AIEventPipeline extends EventEmitter {
     const openAiPayload = {
       model: modelName,
       messages: [
-        {
-          role: "system",
-          content: systemPrompt,
-        },
-        {
-          role: "user",
-          content: userPromptContent,
-        },
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPromptContent },
       ],
       temperature: inferenceParams.temperature,
       top_k: inferenceParams.top_k,
@@ -1083,33 +1015,19 @@ export class AIEventPipeline extends EventEmitter {
       presence_penalty: 0.2,
       frequency_penalty: 0.2,
       max_tokens: inferenceParams.max_tokens,
-      response_format: {
-        type: "json_object",
-        schema: STRICT_SUMMARY_JSON_SCHEMA,
-      },
+      response_format: { type: "json_object", schema: STRICT_SUMMARY_JSON_SCHEMA },
       stream: false,
       chat_template_kwargs: { enable_thinking: false },
     };
 
     const startTime = performance.now();
-    this.logEvent("INFERENCE_DISPATCHED", {
-      serverUrl,
-      targetModel: modelName,
-      sourceType,
-      sourceIdentifier,
-      inferenceParams,
-      wordCount: words.length,
-      charCount: targetText.length,
-    });
+    this.logEvent("INFERENCE_DISPATCHED", { serverUrl, targetModel: modelName, sourceType, sourceIdentifier, inferenceParams, wordCount: words.length, charCount: targetText.length });
 
     const progressTimer = setInterval(() => {
       const elapsed = Math.round((performance.now() - startTime) / 1000);
       const snap = getMemorySnapshot();
       peakProcessSwapMb = Math.max(peakProcessSwapMb, snap.vmSwapMb);
-
-      console.log(
-        `[INFERENCE_HEARTBEAT] ⏳ Processing... (elapsed: ${elapsed}s) | RAM: ${snap.vmRssMb} MB | Process Swap: ${snap.vmSwapMb} MB`
-      );
+      console.log(`[INFERENCE_HEARTBEAT] ⏳ Processing... (elapsed: ${elapsed}s) | RAM: ${snap.vmRssMb} MB | Process Swap: ${snap.vmSwapMb} MB`);
     }, 10000);
 
     let rawContent = "";
@@ -1152,21 +1070,15 @@ export class AIEventPipeline extends EventEmitter {
 
     let promptTimeMs = timings?.prompt_ms ? Math.round(timings.prompt_ms) : 0;
     let completionTimeMs = timings?.predicted_ms ? Math.round(timings.predicted_ms) : 0;
-    if (promptTimeMs === 0 && completionTimeMs === 0) {
-      completionTimeMs = totalDurationMs;
-    }
+    if (promptTimeMs === 0 && completionTimeMs === 0) completionTimeMs = totalDurationMs;
 
     const promptTokensPerSec = timings?.prompt_per_second
       ? Number(timings.prompt_per_second.toFixed(2))
-      : promptTimeMs > 0
-      ? Number((promptTokens / (promptTimeMs / 1000)).toFixed(2))
-      : 0;
+      : promptTimeMs > 0 ? Number((promptTokens / (promptTimeMs / 1000)).toFixed(2)) : 0;
 
     const completionTokensPerSec = timings?.predicted_per_second
       ? Number(timings.predicted_per_second.toFixed(2))
-      : completionTimeMs > 0
-      ? Number((completionTokens / (completionTimeMs / 1000)).toFixed(2))
-      : 0;
+      : completionTimeMs > 0 ? Number((completionTokens / (completionTimeMs / 1000)).toFixed(2)) : 0;
 
     const tokenMetrics: DetailedTokenMetrics = {
       prompt_tokens: promptTokens,
@@ -1179,18 +1091,9 @@ export class AIEventPipeline extends EventEmitter {
       completion_tokens_per_second: completionTokensPerSec,
     };
 
-    console.log(
-      `⏱️ Duration: ${(totalDurationMs / 1000).toFixed(2)}s | CPU Peak: ${cpuMetrics.maxCpuPercent}% | Ingest: ${tokenMetrics.prompt_tokens_per_second} t/s | Gen: ${tokenMetrics.completion_tokens_per_second} t/s\n`
-    );
+    console.log(`⏱️ Duration: ${(totalDurationMs / 1000).toFixed(2)}s | CPU Peak: ${cpuMetrics.maxCpuPercent}% | Ingest: ${tokenMetrics.prompt_tokens_per_second} t/s | Gen: ${tokenMetrics.completion_tokens_per_second} t/s\n`);
 
-    this.logEvent("INFERENCE_COMPLETED", {
-      modelName,
-      sourceIdentifier,
-      tokenMetrics,
-      swapMetrics,
-      cpuMetrics,
-      rawOutput: rawContent,
-    });
+    this.logEvent("INFERENCE_COMPLETED", { modelName, sourceIdentifier, tokenMetrics, swapMetrics, cpuMetrics, rawOutput: rawContent });
 
     let parsed: any;
     try {
@@ -1200,26 +1103,13 @@ export class AIEventPipeline extends EventEmitter {
       parsed = {};
     }
 
-    // Defensive mapping to ensure clean Markdown prose is always produced
     let synthesisProse = "";
     if (typeof parsed.analytic_synthesis === "string" && parsed.analytic_synthesis.trim()) {
       synthesisProse = parsed.analytic_synthesis.trim();
     } else if (typeof parsed.summary === "string" && parsed.summary.trim()) {
       synthesisProse = parsed.summary.trim();
-    } else if (typeof parsed.executive_summary === "string" && parsed.executive_summary.trim()) {
-      synthesisProse = parsed.executive_summary.trim();
     } else {
-      // If the model produced non-standard keys (e.g. key_events, expert_analysis), synthesize them into paragraphs
-      const proseBlocks: string[] = [];
-      if (parsed.title) proseBlocks.push(`### ${parsed.title}`);
-      if (parsed.summary) proseBlocks.push(parsed.summary);
-      if (Array.isArray(parsed.key_points)) {
-        proseBlocks.push(parsed.key_points.map((p: any) => (typeof p === "string" ? p : p.point || JSON.stringify(p))).join(" "));
-      }
-      if (Array.isArray(parsed.key_events)) {
-        proseBlocks.push(parsed.key_events.map((e: any) => `${e.location || ""}: ${e.details || ""}`.trim()).join(" "));
-      }
-      synthesisProse = proseBlocks.length > 0 ? proseBlocks.join("\n\n") : rawContent.trim();
+      synthesisProse = rawContent.trim();
     }
 
     const inLen = targetText.length || 1;
@@ -1232,7 +1122,7 @@ export class AIEventPipeline extends EventEmitter {
       outputChars: outLen,
       retentionRatioPercent: `${retentionPct}%`,
       reductionRatioPercent: `${reductionPct}%`,
-      explanation: `Retention Ratio = (Output Chars / Input Chars) * 100%. The synthesis retains ${retentionPct}% of the raw text size, corresponding to a ${reductionPct}% content reduction.`,
+      explanation: `Retention Ratio = (Output Chars / Input Chars) * 100%. The synthesis retains ${retentionPct}% of the raw text size.`,
     };
 
     const structuredResult: SummaryStructuredOutput = {
@@ -1264,7 +1154,7 @@ export class AIEventPipeline extends EventEmitter {
 }
 
 // -------------------------------------------------------------
-// 10. GITHUB STEP SUMMARY
+// 11. STEP SUMMARY BUILDER (MERGED TELEMETRY & QUALITY TABLES)
 // -------------------------------------------------------------
 function publishStepSummary(
   modelName: string,
@@ -1283,12 +1173,10 @@ function publishStepSummary(
   const sm = firstResult.swap_metrics;
   const tm = firstResult.token_metrics;
 
-  console.log(
-    `::notice title=AI Pipeline Succeeded (${modelName})::🖥️ ${hf.rawFingerprint} | ⚡ Max CPU: ${cm.maxCpuPercent}% | 📥 Ingest: ${tm.prompt_tokens_per_second} t/s | ⚡ Gen: ${tm.completion_tokens_per_second} t/s | 💾 Peak Swap: ${sm.peak_server_swap_mb} MB`
-  );
+  console.log(`::notice title=AI Pipeline Execution Completed (${modelName})::🖥️ ${hf.rawFingerprint} | ⚡ Max CPU: ${cm.maxCpuPercent}% | 📥 Ingest: ${tm.prompt_tokens_per_second} t/s | ⚡ Gen: ${tm.completion_tokens_per_second} t/s`);
 
   const lines: string[] = [
-    `# 🧠 AI Transformer Pipeline Execution Report`,
+    `# 🧠 AI Transformer & Quality Audit Execution Report`,
     ``,
     `## 🖥️ Host, System & Runner Telemetry`,
     `| Attribute | Detected System / Runner Specification |`,
@@ -1343,10 +1231,7 @@ function publishStepSummary(
     ``,
     `| Event Type | RFC 4122 UUIDv5 | Timestamp | Step Duration (ms) | Cumulative Time (ms) |`,
     `| :--- | :--- | :--- | :--- | :--- |`,
-    ...events.map(
-      (e) =>
-        `| \`${e.eventType}\` | \`${e.eventId}\` | \`${e.timestamp}\` | **\`+${e.durationMs} ms\`** | **\`${e.cumulativeMs} ms\`** |`
-    ),
+    ...events.map((e) => `| \`${e.eventType}\` | \`${e.eventId}\` | \`${e.timestamp}\` | **\`+${e.durationMs} ms\`** | **\`${e.cumulativeMs} ms\`** |`),
     ``,
     `<details>`,
     `<summary><b>Inspect Full Event Stream Payloads (JSON)</b></summary>`,
@@ -1373,18 +1258,11 @@ function publishStepSummary(
   ];
 
   if (feedAudit) {
-    lines.push(
-      `## 📡 Feed Discovery & Article Ingestion (Multi-Stage Classification)`,
-      ``
-    );
+    lines.push(`## 📡 Feed Discovery & Article Ingestion (Multi-Stage Classification)`, ``);
     if (feedAudit.usedFallback) {
-      lines.push(
-        `> ⚠️ **Collection goal unmet** (${feedAudit.acceptedArticles.length}/${feedAudit.goalCount} accepted within ${feedAudit.maxAgeHours}h). Gracefully engaged default fallback URL.`
-      );
+      lines.push(`> ⚠️ **Collection goal unmet** (${feedAudit.acceptedArticles.length}/${feedAudit.goalCount} accepted within ${feedAudit.maxAgeHours}h). Engaged fallback URL.`);
     } else {
-      lines.push(
-        `> ✅ **Collection goal achieved:** Evaluated ${feedAudit.evaluatedArticles.length} candidates, accepted ${feedAudit.acceptedArticles.length} article(s) published within ${feedAudit.maxAgeHours}h.`
-      );
+      lines.push(`> ✅ **Collection goal achieved:** Evaluated ${feedAudit.evaluatedArticles.length} candidates, accepted ${feedAudit.acceptedArticles.length} article(s).`);
     }
     lines.push(
       ``,
@@ -1395,23 +1273,19 @@ function publishStepSummary(
     feedAudit.evaluatedArticles.forEach((art, idx) => {
       const shallow = art.shallowResult?.passed ? "✅ Passed" : `❌ ${art.shallowResult?.classification}`;
       const deep = art.deepResult ? (art.deepResult.passed ? `✅ ${art.deepResult.classification}` : `❌ ${art.deepResult.classification}`) : "⏭️ Skipped";
-      lines.push(
-        `| **${idx + 1}** | **${art.title.slice(0, 35)}...** | \`${art.sourceFeed}\` | \`${shallow}\` | \`${deep}\` | ${art.ageHours !== undefined ? `\`${art.ageHours}h\`` : "N/A"} | [Visit](${art.url}) |`
-      );
+      lines.push(`| **${idx + 1}** | **${art.title.slice(0, 35)}...** | \`${art.sourceFeed}\` | \`${shallow}\` | \`${deep}\` | ${art.ageHours !== undefined ? `\`${art.ageHours}h\`` : "N/A"} | [Visit](${art.url}) |`);
     });
-
     lines.push(``, `---`, ``);
   }
 
   results.forEach((res, idx) => {
     const comp = res.compression;
-
     lines.push(
       `## 📊 Text Compression & Reduction Analysis (${idx + 1}/${results.length})`,
       `| Metric | Value | Explanation & Formula |`,
       `| :--- | :--- | :--- |`,
-      `| **Raw Input Size** | \`${comp.inputChars} chars\` | Character count of input text ingested by the model |`,
-      `| **Model Output Size** | \`${comp.outputChars} chars\` | Total characters produced in model completion |`,
+      `| **Raw Input Size** | \`${comp.inputChars} chars\` | Ingested character count |`,
+      `| **Model Output Size** | \`${comp.outputChars} chars\` | Completion character count |`,
       `| **Retention Ratio** | **\`${comp.retentionRatioPercent}\`** | **\`(Output Chars / Input Chars) * 100%\`** |`,
       `| **Content Reduction** | **\`${comp.reductionRatioPercent}\`** | **\`100% - Retention Ratio\`** |`,
       ``,
@@ -1421,11 +1295,11 @@ function publishStepSummary(
       `| Axis | Classification | Question Evaluated |`,
       `| :--- | :--- | :--- |`,
       `| **General Sentiment** | \`${res.sentiment.toUpperCase()}\` | Overall emotional and qualitative tone |`,
-      `| **Stance on Change** | \`${res.stance_on_change}\` | What to do about the existing arrangement |`,
-      `| **Stance on Economic Power** | \`${res.stance_on_economic_power}\` | Who should hold economic power |`,
-      `| **Stance on State Power** | \`${res.stance_on_state_power}\` | Whether a power the state holds was properly checked |`,
-      `| **Stance on Borders** | \`${res.stance_on_borders}\` | Whether the answer is inside or outside the border |`,
-      `| **Stance on Personal Sphere** | \`${res.stance_on_personal_sphere}\` | Whether a person keeps an inviolable personal sphere |`,
+      `| **Stance on Change** | \`${res.stance_on_change}\` | Institutional preservation vs reform |`,
+      `| **Stance on Economic Power** | \`${res.stance_on_economic_power}\` | Public/collective vs private market control |`,
+      `| **Stance on State Power** | \`${res.stance_on_state_power}\` | Centralized authority vs constitutional constraints |`,
+      `| **Stance on Borders** | \`${res.stance_on_borders}\` | National self-interest vs internationalism |`,
+      `| **Stance on Personal Sphere** | \`${res.stance_on_personal_sphere}\` | Autonomy vs communitarian obligations |`,
       ``,
       `---`,
       ``,
@@ -1434,7 +1308,35 @@ function publishStepSummary(
       res.analytic_synthesis,
       ``,
       `---`,
-      ``,
+      ``
+    );
+
+    if (res.quality_metrics) {
+      const qm = res.quality_metrics;
+      lines.push(
+        `## 🧪 UniEval Grounding & Factual Quality (${idx + 1}/${results.length})`,
+        `| Quality Dimension | Metric Score | Operational Rating | Evaluation Methodology |`,
+        `| :--- | :---: | :---: | :--- |`,
+        `| **Factual Consistency** | **\`${qm.overall_consistency}\`** | ${qm.overall_consistency >= 0.75 ? "🟢 Fully Supported" : "⚠️ Grounding Variance"} | Chunked BM25 Sentence Entailment |`,
+        `| **Sectional Coverage** | **\`${qm.chunk_coverage_percent}%\`** | ${qm.chunk_coverage_percent >= 60 ? "🟢 High Coverage" : "⚠️ Partial Coverage"} | ${qm.document_chunks_covered}/${qm.document_chunks_total} document chunks represented |`,
+        `| **Discourse Coherence** | **\`${qm.coherence}\`** | ${qm.coherence >= 0.70 ? "🟢 Fluid" : "⚠️ Fragmented"} | Inter-sentence discourse flow |`,
+        `| **Fluency (Syntax)** | **\`${qm.fluency}\`** | ${qm.fluency >= 0.85 ? "🟢 Natural" : "⚠️ Mechanical"} | Grammatical syntax & readability |`,
+        ``,
+        `<details>`,
+        `<summary><b>Inspect Sentence Grounding Breakdown (${qm.sentence_breakdown.length} Sentences)</b></summary>`,
+        ``,
+        `| # | Summary Sentence | Matched Chunk | Consistency Score | Status |`,
+        `| :- | :--- | :-: | :-: | :-: |`,
+        ...qm.sentence_breakdown.map((s) => `| ${s.sentence_index} | ${s.text} | Chunk ${s.matched_chunk} | \`${s.score}\` | ${s.supported ? "✅ Supported" : "❌ Unsupported"} |`),
+        ``,
+        `</details>`,
+        ``,
+        `---`,
+        ``
+      );
+    }
+
+    lines.push(
       `## 📝 Full Input Prompt (${idx + 1}/${results.length})`,
       `<details>`,
       `<summary><b>Click to expand exact prompt payload sent to model</b></summary>`,
@@ -1460,7 +1362,7 @@ function publishStepSummary(
 }
 
 // -------------------------------------------------------------
-// 11. MAIN ENTRY POINT
+// 12. MAIN ENTRY POINT (DUAL PHASE SUPPORT)
 // -------------------------------------------------------------
 async function main() {
   const runnerMetadata: RunnerMetadata = {
@@ -1474,20 +1376,90 @@ async function main() {
     requestedModelId: process.env.REQUESTED_MODEL_ID ?? "",
   };
 
+  const phase = (process.argv.find((a) => a.startsWith("--phase="))?.split("=")[1] || "infer").toLowerCase();
   const modelName = process.env.MODEL_NAME ?? "";
-  const serverUrl = process.env.SERVER_URL;
+  const serverUrl = process.env.SERVER_URL || "http://127.0.0.1:9931";
 
-  if (!serverUrl) {
-    throw new Error("Missing required environment variable: SERVER_URL");
+  // PHASE 2: EVALUATION ONLY (SERVER-CALLING OVER HTTP)
+  if (phase === "eval") {
+    console.log("=== 🔬 EXECUTING PHASE 2: PARALLEL UNIEVAL QUALITY AUDIT ===");
+    if (!fs.existsSync("pipeline-events.jsonl")) {
+      console.log("No pipeline-events.jsonl found. Skipping eval phase.");
+      return;
+    }
+
+    const lines = fs.readFileSync("pipeline-events.jsonl", "utf8").split("\n").filter(Boolean);
+    const structuredEvents = lines
+      .map((l) => {
+        try {
+          return JSON.parse(l);
+        } catch {
+          return null;
+        }
+      })
+      .filter((e) => e && e.eventType === "OUTPUT_STRUCTURED");
+
+    if (structuredEvents.length === 0) {
+      console.log("No OUTPUT_STRUCTURED events found. Exiting eval phase.");
+      return;
+    }
+
+    const correlationId = structuredEvents[0].correlationId;
+    const pipeline = new AIEventPipeline(runnerMetadata, correlationId);
+
+    // Call Python FastAPI server in parallel for the batch of items
+    console.log(`[EVAL_CLIENT] 🚀 Calling Python eval service in parallel for ${structuredEvents.length} items...`);
+    const evalResults = await Promise.allSettled(
+      structuredEvents.map(async (event) => {
+        const payload = event.payload;
+        const res = await fetch(`${PYTHON_EVAL_SERVER_URL}/v1/evaluate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            correlationId,
+            runnerName: runnerMetadata.runnerName,
+            shardId: runnerMetadata.shardId,
+            sourceIdentifier: payload.source_audit.sourceIdentifier,
+            sourceTitle: payload.headline,
+            sourceText: payload.source_audit.extractedText,
+            summaryText: payload.analytic_synthesis,
+          }),
+        });
+
+        if (!res.ok) throw new Error(`Python eval HTTP ${res.status}`);
+        const data = await res.json();
+        return { payload, metrics: data.metrics };
+      })
+    );
+
+    const updatedOutputs: SummaryStructuredOutput[] = [];
+    for (const r of evalResults) {
+      if (r.status === "fulfilled") {
+        const output: SummaryStructuredOutput = r.value.payload;
+        output.quality_metrics = r.value.metrics;
+        updatedOutputs.push(output);
+
+        pipeline.logEvent("QUALITY_EVALUATION_COMPLETED", {
+          sourceIdentifier: output.source_audit.sourceIdentifier,
+          sourceTitle: output.headline,
+          metrics: r.value.metrics,
+        });
+      }
+    }
+
+    // Publish unified summary report with both LLM inference and UniEval metrics
+    const dummyParams: ModelInferenceParams = DEFAULT_INFERENCE_PARAMS;
+    publishStepSummary(modelName || "GGUF-Model", updatedOutputs, pipeline.getEventHistory(), dummyParams);
+    console.log("[EVAL_CLIENT] ✅ Quality audit completed successfully.");
+    return;
   }
-  if (!modelName) {
-    throw new Error("Missing required environment variable: MODEL_NAME");
-  }
+
+  // PHASE 1: INFERENCE & HARVESTING
+  console.log("=== 🚀 EXECUTING PHASE 1: INGESTION & LLM INFERENCE ===");
 
   const defaultPreamble = `You are a precise, objective intelligence analyst. Your mandate is to produce a faithful, high-density synthesis of the provided document.`;
   const promptPreamble = (process.env.PROMPT || defaultPreamble).trim();
 
-  // Full system prompt enforcing principles and exact schema
   const systemPrompt = `${promptPreamble}
 
 OPERATIONAL PRINCIPLES:
@@ -1556,20 +1528,6 @@ Definitions for classification axes:
     max_tokens: parseInt(process.env.LLAMA_MAX_TOKENS || String(DEFAULT_INFERENCE_PARAMS.max_tokens), 10),
   };
 
-  const hostFingerprint = getHostFingerprint();
-
-  console.log("=== Host & Environment Configuration ===");
-  console.log({
-    inputSource,
-    goalCount,
-    maxAgeHours,
-    inferenceParams,
-    hostFingerprint: hostFingerprint.rawFingerprint,
-    runnerMetadata,
-    modelName,
-    serverUrl,
-  });
-
   const pipeline = new AIEventPipeline(runnerMetadata);
 
   interface IngestionTarget {
@@ -1583,12 +1541,7 @@ Definitions for classification axes:
   let feedAudit: FeedSelectionAudit | undefined;
 
   if (inputSource === "feed") {
-    feedAudit = await collectAndClassifyFeedArticles(
-      DEFAULT_FEED_URLS,
-      maxAgeHours,
-      goalCount,
-      (type, payload) => pipeline.logEvent(type, payload)
-    );
+    feedAudit = await collectAndClassifyFeedArticles(DEFAULT_FEED_URLS, maxAgeHours, goalCount, (type, payload) => pipeline.logEvent(type, payload));
 
     for (const art of feedAudit.acceptedArticles) {
       let content = art.extractedMarkdown;
@@ -1612,43 +1565,15 @@ Definitions for classification axes:
       }
     }
   } else if (inputSource === "url") {
-    if (!rawUrl && !rawInputText) {
-      throw new Error("Both URL and input_text are empty.");
-    }
-
-    try {
-      const extracted = await extractDirectUrl(rawUrl, (type, payload) => pipeline.logEvent(type, payload));
-      targets.push({
-        sourceType: "URL",
-        sourceIdentifier: rawUrl,
-        sourceTitle: extracted.title,
-        content: extracted.content,
-      });
-    } catch (err: any) {
-      if (!rawInputText) throw err;
-      targets.push({
-        sourceType: "FALLBACK_INPUT_TEXT",
-        sourceIdentifier: `Fallback (URL failed: ${rawUrl})`,
-        sourceTitle: "Direct Input (Fallback)",
-        content: rawInputText,
-      });
-    }
-  } else if (inputSource === "text") {
-    if (!rawInputText) {
-      throw new Error("input_text is empty.");
-    }
-    targets.push({
-      sourceType: "INPUT_TEXT",
-      sourceIdentifier: "Direct Text Input",
-      sourceTitle: "Direct Input Text",
-      content: rawInputText,
-    });
+    const tidy = cleanUrlWithTidy(rawUrl);
+    pipeline.logEvent("URL_TIDIED", { rawUrl, cleanUrl: tidy.cleanUrl, reduction: tidy.reduction });
+    const extracted = await extractDirectUrl(tidy.cleanUrl, (type, payload) => pipeline.logEvent(type, payload));
+    targets.push({ sourceType: "URL", sourceIdentifier: tidy.cleanUrl, sourceTitle: extracted.title, content: extracted.content });
   } else {
-    throw new Error(`Invalid INPUT_SOURCE: "${inputSource}". Must be "feed", "url", or "text".`);
+    targets.push({ sourceType: "INPUT_TEXT", sourceIdentifier: "Direct Text Input", sourceTitle: "Direct Input Text", content: rawInputText });
   }
 
   const results: SummaryStructuredOutput[] = [];
-
   for (let i = 0; i < targets.length; i++) {
     const t = targets[i];
     console.log(`\n[PIPELINE] 🚀 Processing Target (${i + 1}/${targets.length}): "${t.sourceTitle}"`);
@@ -1668,14 +1593,7 @@ Definitions for classification axes:
     results.push(result);
   }
 
-  console.log("============================================================");
-  console.log(`🎯 COMPLETED ${results.length} STRUCTURED SUMMARY RUN(S):`);
-  console.log("============================================================");
-  console.log(JSON.stringify(results.length === 1 ? results[0] : results, null, 2));
-  console.log("============================================================\n");
-
-  publishStepSummary(modelName, results, pipeline.getEventHistory(), inferenceParams, feedAudit);
-  console.log("Pipeline run completed successfully. JSONL saved to pipeline-events.jsonl");
+  console.log(`[PIPELINE] ✅ Phase 1 Inference complete (${results.length} articles). Events written to pipeline-events.jsonl`);
 }
 
 main().catch((err) => {
