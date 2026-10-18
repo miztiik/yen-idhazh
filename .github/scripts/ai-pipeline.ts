@@ -1991,11 +1991,9 @@ async function main() {
   // -------------------------------------------------------------
   // PHASE 2: EVALUATION (CLIENT HTTP DISPATCH)
   // -------------------------------------------------------------
-// -------------------------------------------------------------
-  // PHASE 2: EVALUATION (CLIENT HTTP DISPATCH)
-  // -------------------------------------------------------------
+
   if (phase === "eval") {
-    logStructured("INFO", "Executing Phase 2: Parallel UniEval Quality Audit");
+    logStructured("INFO", "Executing Phase 2: Sequential UniEval Quality Audit");
     if (!fs.existsSync(pipelineEventsPath)) {
       logStructured("WARN", "No pipeline events file found. Skipping evaluation phase.", { path: pipelineEventsPath });
       return;
@@ -2023,49 +2021,48 @@ async function main() {
 
     pipeline.logEvent("QUALITY_EVALUATION_STARTED", { articleCount: structuredEvents.length }, "evaluation-phase");
 
-    const evalResults = await Promise.allSettled(
-      structuredEvents.map(async (event) => {
-        const payload: SummaryStructuredOutput = event.payload;
-        if (payload.error_flag) {
-          throw new Error("Skipping quality evaluation on target that failed LLM inference");
-        }
+    let evaluationFailures = 0;
+    const updatedOutputs: SummaryStructuredOutput[] = [];
 
-        const res = await fetch(`${PYTHON_EVAL_SERVER_URL}/v1/evaluate`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            correlationId,
-            runnerName: runnerMetadata.runnerName,
-            shardId: runnerMetadata.shardId,
-            sourceIdentifier: payload.source_audit.sourceIdentifier,
-            sourceTitle: payload.headline,
-            sourceText: payload.source_audit.extractedText,
-            summaryText: payload.analytic_synthesis,
-          }),
+    // Dispatch requests sequentially to eliminate socket queuing timeouts
+    for (let idx = 0; idx < structuredEvents.length; idx++) {
+      const event = structuredEvents[idx];
+      const payload: SummaryStructuredOutput = event.payload;
+      const output: SummaryStructuredOutput = { ...payload };
+
+      logStructured("INFO", `Evaluating target (${idx + 1}/${structuredEvents.length})`, {
+        headline: output.headline,
+        sourceIdentifier: output.source_audit?.sourceIdentifier,
+      });
+
+      if (payload.error_flag) {
+        logStructured("WARN", "Skipping quality evaluation on target that failed LLM inference", {
+          headline: output.headline,
+        });
+        evaluationFailures++;
+        updatedOutputs.push(output);
+        continue;
+      }
+
+      try {
+        const data = await postPythonEvaluation(`${PYTHON_EVAL_SERVER_URL}/v1/evaluate`, {
+          correlationId,
+          runnerName: runnerMetadata.runnerName,
+          shardId: runnerMetadata.shardId,
+          sourceIdentifier: payload.source_audit.sourceIdentifier,
+          sourceTitle: payload.headline,
+          sourceText: payload.source_audit.extractedText,
+          summaryText: payload.analytic_synthesis,
         });
 
-        if (!res.ok) {
-          const errText = await res.text();
-          throw new Error(`Python eval HTTP ${res.status}: ${errText}`);
-        }
-        const data = await res.json();
-        return { metrics: data.metrics };
-      })
-    );
+        output.quality_metrics = data.metrics;
 
-    let evaluationFailures = 0;
-    const updatedOutputs: SummaryStructuredOutput[] = structuredEvents.map((evt, idx) => {
-      const output: SummaryStructuredOutput = evt.payload;
-      const evalRes = evalResults[idx];
-
-      if (evalRes && evalRes.status === "fulfilled") {
-        output.quality_metrics = evalRes.value.metrics;
         pipeline.logEvent(
           "QUALITY_EVALUATION_COMPLETED",
           {
             sourceIdentifier: output.source_audit?.sourceIdentifier,
             sourceTitle: output.headline,
-            metrics: evalRes.value.metrics,
+            metrics: data.metrics,
           },
           output.source_audit?.sourceIdentifier || "evaluation-target"
         );
@@ -2075,20 +2072,18 @@ async function main() {
           output,
           output.source_audit?.sourceIdentifier || "evaluation-target"
         );
-      } else {
+      } catch (err: any) {
         evaluationFailures++;
-        const reason = evalRes?.status === "rejected" ? evalRes.reason?.message : "Unfulfilled";
         logStructured("ERROR", "Evaluation request failed for target", {
           headline: output.headline,
-          error: reason,
+          error: err.message,
         });
       }
 
       if (!output.host_fingerprint) output.host_fingerprint = getHostFingerprint();
       if (!output.runner_metadata) output.runner_metadata = runnerMetadata;
-
-      return output;
-    });
+      updatedOutputs.push(output);
+    }
 
     pipeline.logEvent("QUALITY_EVALUATION_BATCH_COMPLETED", {
       totalEvaluated: updatedOutputs.length - evaluationFailures,
