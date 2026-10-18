@@ -17,6 +17,7 @@ from pathlib import Path
 import re
 import sys
 import time
+import traceback
 from typing import Any
 import uuid
 
@@ -43,6 +44,7 @@ if importlib.util.find_spec("prettytable") is None:
     sys.modules["prettytable"] = dummy
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 import torch
 import uvicorn
@@ -275,6 +277,16 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="UniEval Quality Microservice", lifespan=lifespan)
 
 
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    tb = traceback.format_exc()
+    log_structured("ERROR", f"Unhandled server exception: {str(exc)}", traceback=tb)
+    return JSONResponse(
+        status_code=500,
+        content={"error": str(exc), "traceback": tb, "detail": str(exc)},
+    )
+
+
 @app.middleware("http")
 async def jsonl_logging_middleware(request: Request, call_next):
     start = time.perf_counter()
@@ -315,22 +327,24 @@ def compute_unieval_sync(source_text: str, summary_text: str) -> dict[str, Any]:
     convert_to_json = UNIEVAL_MODULES["convert_to_json"]
     evaluator = EVALUATOR_INSTANCE
 
-    # Execute all forward evaluations within torch.inference_mode (eliminates autograd overhead)
+    clean_summary = summary_text.strip() or "No summary content provided."
+    clean_source = source_text.strip() or "No source content provided."
+
     with torch.inference_mode():
-        # 1. Fluency
-        data_flu = convert_to_json(output_list=[summary_text])
-        eval_flu = evaluator.evaluate(data_flu, dims=["fluency"], overall=False, batch_size=16)
+        # 1. Fluency (evaluate() takes only data, dims, overall, print_result)
+        data_flu = convert_to_json(output_list=[clean_summary])
+        eval_flu = evaluator.evaluate(data_flu, dims=["fluency"], overall=False)
         fluency = round(eval_flu[0]["fluency"], 3) if eval_flu else 0.0
 
         # 2. Coherence
-        macro_ctx = extract_macro_skeleton(source_text, max_words=380)
-        data_coh = convert_to_json(output_list=[summary_text], src_list=[macro_ctx])
-        eval_coh = evaluator.evaluate(data_coh, dims=["coherence"], overall=False, batch_size=16)
+        macro_ctx = extract_macro_skeleton(clean_source, max_words=380)
+        data_coh = convert_to_json(output_list=[clean_summary], src_list=[macro_ctx])
+        eval_coh = evaluator.evaluate(data_coh, dims=["coherence"], overall=False)
         coherence = round(eval_coh[0]["coherence"], 3) if eval_coh else 0.0
 
-        # 3. Chunked Sentence-Level Consistency with Expanded Candidate Context (k=4)
-        chunks = chunk_document(source_text, chunk_words=380, stride_words=80)
-        sentences = split_sentences(summary_text)
+        # 3. Chunked Sentence-Level Consistency with Expanded Context (k=4)
+        chunks = chunk_document(clean_source, chunk_words=380, stride_words=80)
+        sentences = split_sentences(clean_summary)
 
         retriever = EvidenceRetriever(chunks)
         
@@ -354,7 +368,7 @@ def compute_unieval_sync(source_text: str, summary_text: str) -> dict[str, Any]:
             eval_out = [k[1] for k in unique_pairs.keys()]
 
             data_cons = convert_to_json(output_list=eval_out, src_list=eval_src)
-            cons_res = evaluator.evaluate(data_cons, dims=["consistency"], overall=False, batch_size=16)
+            cons_res = evaluator.evaluate(data_cons, dims=["consistency"], overall=False)
 
             for idx, r in enumerate(cons_res):
                 pair_key = (eval_src[idx], eval_out[idx])
@@ -378,7 +392,7 @@ def compute_unieval_sync(source_text: str, summary_text: str) -> dict[str, Any]:
                 if supported:
                     supported_chunks.add(c_idx)
 
-                matched_chunk_text = chunks[c_idx] if c_idx < len(chunks) else source_text
+                matched_chunk_text = chunks[c_idx] if c_idx < len(chunks) else clean_source
                 chunk_sentences = split_sentences(matched_chunk_text)
                 summary_content_words = get_content_words(sentence)
 
@@ -392,7 +406,6 @@ def compute_unieval_sync(source_text: str, summary_text: str) -> dict[str, Any]:
                         best_overlap_count = overlap
                         best_source_sent = cs
 
-                # If no meaningful content words align within the chunk, search across all source chunks
                 if best_overlap_count == 0:
                     for fallback_chunk in chunks:
                         for cs in split_sentences(fallback_chunk):
@@ -402,9 +415,8 @@ def compute_unieval_sync(source_text: str, summary_text: str) -> dict[str, Any]:
                                 best_overlap_count = overlap
                                 best_source_sent = cs
 
-                # If still zero lexical or entity overlap exists, explicitly mark as ungrounded
                 if best_overlap_count == 0 or not best_source_sent:
-                    source_attribution = "[No corresponding passage found in source document (potential ungrounded claim)]"
+                    source_attribution = "[No direct counterpart found in source text]"
                     diagnostic_reason = (
                         f"Zero content-word alignment with source document. Chunk entailment score was {sc:.3f} (< 0.50)."
                     )
@@ -476,10 +488,18 @@ async def evaluate_article(req: EvaluationRequest):
     t_start = time.perf_counter()
     stat_start_total, stat_start_idle = HardwareSampler.read_cpu_stat()
 
-    sem = CONCURRENCY_SEMAPHORE or asyncio.Semaphore(1)
-    async with sem:
-        metrics = await asyncio.to_thread(
-            compute_unieval_sync, req.source_text, req.summary_text
+    try:
+        sem = CONCURRENCY_SEMAPHORE or asyncio.Semaphore(1)
+        async with sem:
+            metrics = await asyncio.to_thread(
+                compute_unieval_sync, req.source_text, req.summary_text
+            )
+    except Exception as e:
+        tb = traceback.format_exc()
+        log_structured("ERROR", "compute_unieval_sync execution failed", error=str(e), traceback=tb)
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e), "traceback": tb, "detail": str(e)},
         )
 
     duration_ms = round((time.perf_counter() - t_start) * 1000)
