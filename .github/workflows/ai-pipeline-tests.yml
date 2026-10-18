@@ -15,7 +15,7 @@ on:
       article_count_goal:
         description: 'Target number of articles to collect from feeds'
         required: false
-        default: '1'
+        default: '3'
       feed_max_age_hours:
         description: 'Max article age in hours (feed mode only)'
         required: false
@@ -83,7 +83,6 @@ jobs:
           npm install defuddle linkedom feedsmith tidy-url
 
           pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
-          # Added sentencepiece, protobuf, evaluate, rouge-score required by UniEval & T5
           pip install --no-cache-dir transformers sentencepiece protobuf evaluate rouge-score nltk rank-bm25 prettytable scipy fastapi uvicorn pydantic
           python -c "import nltk; nltk.download('punkt'); nltk.download('punkt_tab')"
 
@@ -189,7 +188,6 @@ jobs:
       # 8. Start Python FastAPI UniEval Engine (Port 9933)
       - name: Start Python FastAPI UniEval Engine (Port 9933)
         run: |
-          # Use -u for unbuffered Python logging, and execute serve-evaluator.py
           UNIEVAL_DIR=/tmp/unieval python -u .github/scripts/serve-evaluator.py > eval_server.log 2>&1 &
           SERVER_PID=$!
           echo $SERVER_PID > .eval_server.pid
@@ -197,7 +195,6 @@ jobs:
           echo "Waiting for UniEval server (PID: $SERVER_PID) to be healthy on port 9933..."
           READY=0
           for i in {1..60}; do
-            # Fail fast if the background server process crashed
             if ! kill -0 $SERVER_PID 2>/dev/null; then
               echo "❌ UniEval server process died unexpectedly! Tail of eval_server.log:"
               cat eval_server.log
@@ -222,7 +219,14 @@ jobs:
       - name: Execute Phase 2 Quality Audit
         env:
           MODEL_NAME: "${{ env.MODEL_FILE }}"
+          MODEL_FAMILY: "${{ github.event.inputs.model_family }}"
+          REQUESTED_MODEL_ID: "${{ github.event.inputs.model_id }}"
           RUNNER_NAME: "${{ runner.name }}"
+          RUNNER_OS: "${{ runner.os }}"
+          RUNNER_ARCH: "${{ runner.arch }}"
+          GITHUB_RUN_ID: "${{ github.run_id }}"
+          GITHUB_RUN_NUMBER: "${{ github.run_number }}"
+          GITHUB_WORKFLOW: "${{ github.workflow }}"
           SHARD_ID: "${{ github.job }}"
         run: |
           npx --yes tsx .github/scripts/ai-pipeline.ts --phase=eval
