@@ -21,7 +21,7 @@ on:
         required: false
         default: '24'
       url:
-        description: 'Direct URL to extract with Defuddle (used when input_source is url)'
+        description: 'Direct URL to extract (used when input_source is url)'
         required: false
         default: 'https://en.wikipedia.org/wiki/Ternary_numeral_system'
       input_text:
@@ -140,7 +140,7 @@ jobs:
 
           for i in {1..60}; do
             if curl -s http://127.0.0.1:9931/health | grep -q "ok"; then
-              echo "llama server is ready on port 9931."
+              echo '{"timestamp":"'$(date -u +%FT%TZ)'","level":"INFO","message":"llama server is ready on port 9931"}'
               break
             fi
             sleep 2
@@ -167,6 +167,7 @@ jobs:
           GITHUB_RUN_ID: "${{ github.run_id }}"
           GITHUB_RUN_NUMBER: "${{ github.run_number }}"
           GITHUB_WORKFLOW: "${{ github.workflow }}"
+          PIPELINE_EVENTS_PATH: "pipeline-events.jsonl"
           LLAMA_TEMPERATURE: "0.2"
           LLAMA_TOP_K: "40"
           LLAMA_TOP_P: "0.95"
@@ -176,33 +177,34 @@ jobs:
         run: |
           npx --yes tsx .github/scripts/ai-pipeline.ts --phase=infer
 
-      # 7. TEARDOWN LLAMA-SERVER (Reclaim ~6 GB RAM)
+      # 7. TEARDOWN LLAMA-SERVER
       - name: Stop llama-server (Reclaim Memory)
         run: |
           if [ -f .llama_server.pid ]; then
-            echo "Stopping llama-server to reclaim RAM for UniEval..."
+            echo '{"timestamp":"'$(date -u +%FT%TZ)'","level":"INFO","message":"Stopping llama-server to reclaim RAM for UniEval..."}'
             kill -9 $(cat .llama_server.pid) || true
             rm -f .llama_server.pid
           fi
 
       # 8. Start Python FastAPI UniEval Engine (Port 9933)
       - name: Start Python FastAPI UniEval Engine (Port 9933)
+        env:
+          EVAL_EVENTS_PATH: "eval-events.jsonl"
         run: |
           UNIEVAL_DIR=/tmp/unieval python -u .github/scripts/serve-evaluator.py > eval_server.log 2>&1 &
           SERVER_PID=$!
           echo $SERVER_PID > .eval_server.pid
 
-          echo "Waiting for UniEval server (PID: $SERVER_PID) to be healthy on port 9933..."
           READY=0
           for i in {1..60}; do
             if ! kill -0 $SERVER_PID 2>/dev/null; then
-              echo "❌ UniEval server process died unexpectedly! Tail of eval_server.log:"
+              echo '{"timestamp":"'$(date -u +%FT%TZ)'","level":"ERROR","message":"UniEval server process terminated unexpectedly"}'
               cat eval_server.log
               exit 1
             fi
 
             if curl -s http://127.0.0.1:9933/health | grep -q '"status":"ok"'; then
-              echo "✅ Python UniEval FastAPI server ready on port 9933."
+              echo '{"timestamp":"'$(date -u +%FT%TZ)'","level":"INFO","message":"Python UniEval FastAPI server ready on port 9933"}'
               READY=1
               break
             fi
@@ -210,7 +212,7 @@ jobs:
           done
 
           if [ $READY -ne 1 ]; then
-            echo "❌ UniEval server failed to become ready within 120 seconds. Log output:"
+            echo '{"timestamp":"'$(date -u +%FT%TZ)'","level":"ERROR","message":"UniEval server failed to become ready within 120s"}'
             cat eval_server.log
             exit 1
           fi
@@ -228,6 +230,7 @@ jobs:
           GITHUB_RUN_NUMBER: "${{ github.run_number }}"
           GITHUB_WORKFLOW: "${{ github.workflow }}"
           SHARD_ID: "${{ github.job }}"
+          PIPELINE_EVENTS_PATH: "pipeline-events.jsonl"
         run: |
           npx --yes tsx .github/scripts/ai-pipeline.ts --phase=eval
 
@@ -250,3 +253,4 @@ jobs:
             llama-server.log
             eval_server.log
             pipeline-events.jsonl
+            eval-events.jsonl
