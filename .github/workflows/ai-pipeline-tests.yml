@@ -40,6 +40,10 @@ on:
         description: 'Context Window Size'
         required: false
         default: '16384'
+      max_word_length:
+        description: 'Maximum ingested word count per article before truncation'
+        required: false
+        default: '8200'
       prompt:
         description: 'System Prompt Preamble'
         required: false
@@ -113,7 +117,7 @@ jobs:
             curl -fL -o "./models/$FILE" "https://huggingface.co/${REPO}/resolve/main/${FILE}"
           fi
 
-      # 5. Start llama-server (Port 9931)
+      # 5. Start llama-server (Port 9931) with Fail-Fast Liveness Check
       - name: Start llama-server Daemon (Port 9931)
         run: |
           CORES=$(nproc)
@@ -136,15 +140,30 @@ jobs:
             --repeat-penalty 1.15 \
             > llama-server.log 2>&1 &
 
-          echo $! > .llama_server.pid
+          SERVER_PID=$!
+          echo $SERVER_PID > .llama_server.pid
 
-          for i in {1..60}; do
+          READY=0
+          for i in {1..120}; do
+            if ! kill -0 $SERVER_PID 2>/dev/null; then
+              echo '{"timestamp":"'$(date -u +%FT%TZ)'","level":"ERROR","message":"llama serve died on startup"}'
+              cat llama-server.log
+              exit 1
+            fi
+
             if curl -s http://127.0.0.1:9931/health | grep -q "ok"; then
               echo '{"timestamp":"'$(date -u +%FT%TZ)'","level":"INFO","message":"llama server is ready on port 9931"}'
+              READY=1
               break
             fi
-            sleep 2
+            sleep 0.5
           done
+
+          if [ $READY -ne 1 ]; then
+            echo '{"timestamp":"'$(date -u +%FT%TZ)'","level":"ERROR","message":"llama server failed to start within 60s"}'
+            cat llama-server.log
+            exit 1
+          fi
 
       # 6. PHASE 1: Run Ingestion & LLM Inference
       - name: Execute Phase 1 Inference
@@ -156,6 +175,7 @@ jobs:
           PROMPT: "${{ github.event.inputs.prompt }}"
           INPUT_TEXT: "${{ github.event.inputs.input_text }}"
           CONTEXT_SIZE: "${{ github.event.inputs.context_size }}"
+          MAX_WORD_LENGTH: "${{ github.event.inputs.max_word_length }}"
           SERVER_URL: "http://127.0.0.1:9931"
           MODEL_NAME: "${{ env.MODEL_FILE }}"
           MODEL_FAMILY: "${{ github.event.inputs.model_family }}"
@@ -173,17 +193,20 @@ jobs:
           LLAMA_TOP_P: "0.95"
           LLAMA_MIN_P: "0.05"
           LLAMA_REPEAT_PENALTY: "1.15"
-          LLAMA_MAX_TOKENS: "4096"
+          LLAMA_PRESENCE_PENALTY: "0.2"
+          LLAMA_FREQUENCY_PENALTY: "0.2"
+          LLAMA_MAX_TOKENS: "4350"
         run: |
           npx --yes tsx .github/scripts/ai-pipeline.ts --phase=infer
 
-      # 7. TEARDOWN LLAMA-SERVER
+      # 7. TEARDOWN LLAMA-SERVER & FLUSH OS PAGE CACHE
       - name: Stop llama-server (Reclaim Memory)
         run: |
           if [ -f .llama_server.pid ]; then
             echo '{"timestamp":"'$(date -u +%FT%TZ)'","level":"INFO","message":"Stopping llama-server to reclaim RAM for UniEval..."}'
             kill -9 $(cat .llama_server.pid) || true
             rm -f .llama_server.pid
+            sudo sync && echo 3 | sudo tee /proc/sys/vm/drop_caches
           fi
 
       # 8. Start Python FastAPI UniEval Engine (Port 9933)
@@ -196,7 +219,7 @@ jobs:
           echo $SERVER_PID > .eval_server.pid
 
           READY=0
-          for i in {1..60}; do
+          for i in {1..120}; do
             if ! kill -0 $SERVER_PID 2>/dev/null; then
               echo '{"timestamp":"'$(date -u +%FT%TZ)'","level":"ERROR","message":"UniEval server process terminated unexpectedly"}'
               cat eval_server.log
@@ -208,11 +231,11 @@ jobs:
               READY=1
               break
             fi
-            sleep 2
+            sleep 0.5
           done
 
           if [ $READY -ne 1 ]; then
-            echo '{"timestamp":"'$(date -u +%FT%TZ)'","level":"ERROR","message":"UniEval server failed to become ready within 120s"}'
+            echo '{"timestamp":"'$(date -u +%FT%TZ)'","level":"ERROR","message":"UniEval server failed to become ready within 60s"}'
             cat eval_server.log
             exit 1
           fi
