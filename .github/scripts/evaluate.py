@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-.github/scripts/evaluate.py
-FastAPI microservice hosting UniEval (MingZhong/unieval-sum on T5-large).
-Runs in Phase 2 with full system RAM (15 GB) to evaluate articles in parallel.
-Instruments in-flight CPU/RAM consumption and emits RFC 4122 UUIDv5 events.
+.github/scripts/serve-evaluator.py
+Verb-Noun: Serves the UniEval quality evaluation microservice over FastAPI.
+Hosts MingZhong/unieval-sum (T5-Large) with in-flight CPU/RAM telemetry
+and RFC 4122 UUIDv5 audit trail generation.
 """
 
 import asyncio
-import importlib.util
 from contextlib import asynccontextmanager
+import importlib.util
 import os
 from pathlib import Path
 import re
@@ -26,7 +26,6 @@ if importlib.util.find_spec("prettytable") is None:
     dummy = types.ModuleType("prettytable")
 
     class DummyPrettyTable:
-
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             self.field_names: list[str] = []
             self.rows: list[Any] = []
@@ -40,10 +39,10 @@ if importlib.util.find_spec("prettytable") is None:
     dummy.PrettyTable = DummyPrettyTable
     sys.modules["prettytable"] = dummy
 
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 import torch
 import uvicorn
-from fastapi import FastAPI, HTTPException
 
 # -------------------------------------------------------------
 # 1. CONSTANTS & RFC 4122 UUIDv5 GENERATOR
@@ -62,7 +61,6 @@ def generate_event_id(
 # 2. IN-FLIGHT HARDWARE SAMPLER
 # -------------------------------------------------------------
 class HardwareSampler:
-
     @staticmethod
     def read_cpu_stat() -> tuple[int, int]:
         try:
@@ -100,11 +98,11 @@ class HardwareSampler:
 def split_sentences(text: str) -> list[str]:
     try:
         from nltk.tokenize import sent_tokenize
-
         sentences = sent_tokenize(text)
     except Exception:
         sentences = re.split(r"(?<=[.!?])\s+", text)
-    return [s.strip() for s in sentences if len(s.strip()) > 10]
+    valid = [s.strip() for s in sentences if len(s.strip()) > 10]
+    return valid if valid else ([text.strip()] if text.strip() else ["Summary content sentence."])
 
 
 def chunk_document(
@@ -112,7 +110,7 @@ def chunk_document(
 ) -> list[str]:
     words = text.split()
     if len(words) <= chunk_words:
-        return [text]
+        return [text] if text.strip() else ["Empty document content."]
 
     chunks = []
     i = 0
@@ -122,13 +120,13 @@ def chunk_document(
         if i + chunk_words >= len(words):
             break
         i += chunk_words - stride_words
-    return chunks
+    return chunks if chunks else ["Empty document content."]
 
 
 def extract_macro_skeleton(text: str, max_words: int = 380) -> str:
     paragraphs = [p.strip() for p in text.split("\n\n") if len(p.strip()) > 40]
     if not paragraphs:
-        return text[:1500]
+        return text[:1500] if text else "Document body."
     if len(paragraphs) <= 3:
         return "\n\n".join(paragraphs)[:1800]
     lead = paragraphs[0] + "\n\n" + paragraphs[1]
@@ -139,7 +137,6 @@ def extract_macro_skeleton(text: str, max_words: int = 380) -> str:
 
 
 class EvidenceRetriever:
-
     def __init__(self, chunks: list[str]):
         self.chunks = chunks
         self.use_bm25 = False
@@ -147,20 +144,28 @@ class EvidenceRetriever:
             from rank_bm25 import BM25Okapi
 
             tokenized = [re.findall(r"\w+", c.lower()) for c in self.chunks]
+            # Ensure every chunk has at least one token for BM25 stability
+            tokenized = [tok if tok else ["document"] for tok in tokenized]
             self.bm25 = BM25Okapi(tokenized)
             self.use_bm25 = True
-        except ImportError:
-            pass
+        except Exception:
+            self.use_bm25 = False
 
     def retrieve_top_k(self, sentence: str, k: int = 2) -> list[tuple[int, str]]:
         if len(self.chunks) <= k:
             return list(enumerate(self.chunks))
         tokens = re.findall(r"\w+", sentence.lower())
+        if not tokens:
+            tokens = ["text"]
+
         if self.use_bm25:
-            scores = self.bm25.get_scores(tokens)
-            top_idx = sorted(
-                range(len(scores)), key=lambda i: scores[i], reverse=True
-            )[:k]
+            try:
+                scores = self.bm25.get_scores(tokens)
+                top_idx = sorted(
+                    range(len(scores)), key=lambda i: scores[i], reverse=True
+                )[:k]
+            except Exception:
+                top_idx = list(range(min(k, len(self.chunks))))
         else:
             token_set = set(tokens)
             scores = [
@@ -178,14 +183,19 @@ class EvidenceRetriever:
 # -------------------------------------------------------------
 EVALUATOR_INSTANCE = None
 UNIEVAL_MODULES: dict[str, Any] = {}
-CONCURRENCY_SEMAPHORE = asyncio.Semaphore(4)
+CONCURRENCY_SEMAPHORE: asyncio.Semaphore | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global EVALUATOR_INSTANCE, UNIEVAL_MODULES
+    global EVALUATOR_INSTANCE, UNIEVAL_MODULES, CONCURRENCY_SEMAPHORE
+    # Initialize semaphore inside active event loop (serialized on 2 vCPUs to prevent thrashing)
+    CONCURRENCY_SEMAPHORE = asyncio.Semaphore(1)
+
     unieval_dir = os.getenv("UNIEVAL_DIR", "/tmp/unieval")
-    sys.path.insert(0, unieval_dir)
+    if unieval_dir not in sys.path:
+        sys.path.insert(0, unieval_dir)
+
     try:
         from metric.evaluator import get_evaluator
         from utils import convert_to_json
@@ -193,23 +203,25 @@ async def lifespan(app: FastAPI):
         UNIEVAL_MODULES["get_evaluator"] = get_evaluator
         UNIEVAL_MODULES["convert_to_json"] = convert_to_json
     except ImportError as e:
-        print(f"[FASTAPI] ❌ Failed to load UniEval from {unieval_dir}: {e}")
+        print(f"[FASTAPI] ❌ Failed to load UniEval from {unieval_dir}: {e}", file=sys.stderr, flush=True)
         raise e
 
     cores = os.cpu_count() or 2
     torch.set_num_threads(cores)
 
     print(
-        f"[FASTAPI] 🤖 Initializing UniEval (T5-Large) with {cores} threads on device='cpu'..."
+        f"[FASTAPI] 🤖 Initializing UniEval (T5-Large) with {cores} threads on device='cpu'...",
+        flush=True,
     )
     EVALUATOR_INSTANCE = get_evaluator(
         "summarization", max_length=1024, device="cpu"
     )
     print(
-        "[FASTAPI] ✅ UniEval service warm and listening on http://127.0.0.1:9933"
+        "[FASTAPI] ✅ UniEval service warm and listening on http://127.0.0.1:9933",
+        flush=True,
     )
     yield
-    print("[FASTAPI] 🛑 Shutting down UniEval service.")
+    print("[FASTAPI] 🛑 Shutting down UniEval service.", flush=True)
 
 
 app = FastAPI(title="UniEval Quality Microservice", lifespan=lifespan)
@@ -245,17 +257,17 @@ def compute_unieval_sync(
     # 1. Fluency
     data_flu = convert_to_json(output_list=[summary_text])
     eval_flu = evaluator.evaluate(data_flu, dims=["fluency"], overall=False)
-    fluency = round(eval_flu[0]["fluency"], 3)
+    fluency = round(eval_flu[0]["fluency"], 3) if eval_flu else 0.0
 
     # 2. Coherence
     macro_ctx = extract_macro_skeleton(source_text, max_words=380)
     data_coh = convert_to_json(output_list=[summary_text], src_list=[macro_ctx])
     eval_coh = evaluator.evaluate(data_coh, dims=["coherence"], overall=False)
-    coherence = round(eval_coh[0]["coherence"], 3)
+    coherence = round(eval_coh[0]["coherence"], 3) if eval_coh else 0.0
 
     # 3. Chunked Sentence-Level Consistency
     chunks = chunk_document(source_text, chunk_words=380, stride_words=80)
-    sentences = split_sentences(summary_text) or [summary_text]
+    sentences = split_sentences(summary_text)
 
     retriever = EvidenceRetriever(chunks)
     eval_src, eval_out, pair_meta = [], [], []
@@ -266,44 +278,47 @@ def compute_unieval_sync(
             eval_out.append(sentence)
             pair_meta.append((s_idx, c_idx))
 
-    data_cons = convert_to_json(output_list=eval_out, src_list=eval_src)
-    cons_res = evaluator.evaluate(
-        data_cons, dims=["consistency"], overall=False
-    )
-
-    sentence_scores: dict[int, float] = {}
-    sentence_chunk_map: dict[int, int] = {}
-    for idx, r in enumerate(cons_res):
-        s_idx, c_idx = pair_meta[idx]
-        sc = r["consistency"]
-        if s_idx not in sentence_scores or sc > sentence_scores[s_idx]:
-            sentence_scores[s_idx] = sc
-            sentence_chunk_map[s_idx] = c_idx
-
     sentence_details = []
     supported_chunks = set()
-    for s_idx, sentence in enumerate(sentences):
-        sc = round(sentence_scores.get(s_idx, 0.0), 3)
-        c_idx = sentence_chunk_map.get(s_idx, 0)
-        supported = sc >= 0.50
-        if supported:
-            supported_chunks.add(c_idx)
-        sentence_details.append(
-            {
-                "sentence_index": s_idx + 1,
-                "text": sentence,
-                "score": sc,
-                "matched_chunk": c_idx + 1,
-                "supported": supported,
-            }
+
+    if eval_out and eval_src:
+        data_cons = convert_to_json(output_list=eval_out, src_list=eval_src)
+        cons_res = evaluator.evaluate(
+            data_cons, dims=["consistency"], overall=False
         )
+
+        sentence_scores: dict[int, float] = {}
+        sentence_chunk_map: dict[int, int] = {}
+        for idx, r in enumerate(cons_res):
+            s_idx, c_idx = pair_meta[idx]
+            sc = r.get("consistency", 0.0)
+            if s_idx not in sentence_scores or sc > sentence_scores[s_idx]:
+                sentence_scores[s_idx] = sc
+                sentence_chunk_map[s_idx] = c_idx
+
+        for s_idx, sentence in enumerate(sentences):
+            sc = round(sentence_scores.get(s_idx, 0.0), 3)
+            c_idx = sentence_chunk_map.get(s_idx, 0)
+            supported = sc >= 0.50
+            if supported:
+                supported_chunks.add(c_idx)
+            sentence_details.append(
+                {
+                    "sentence_index": s_idx + 1,
+                    "text": sentence,
+                    "score": sc,
+                    "matched_chunk": c_idx + 1,
+                    "supported": supported,
+                }
+            )
 
     avg_consistency = (
         round(sum(s["score"] for s in sentence_details) / len(sentence_details), 3)
         if sentence_details
         else 0.0
     )
-    coverage_pct = round((len(supported_chunks) / len(chunks)) * 100, 1)
+    total_chunks = len(chunks) if chunks else 1
+    coverage_pct = round((len(supported_chunks) / total_chunks) * 100, 1)
 
     return {
         "overall_consistency": avg_consistency,
@@ -324,7 +339,8 @@ async def evaluate_article(req: EvaluationRequest):
     t_start = time.perf_counter()
     stat_start_total, stat_start_idle = HardwareSampler.read_cpu_stat()
 
-    async with CONCURRENCY_SEMAPHORE:
+    sem = CONCURRENCY_SEMAPHORE or asyncio.Semaphore(1)
+    async with sem:
         metrics = await asyncio.to_thread(
             compute_unieval_sync, req.source_text, req.summary_text
         )
