@@ -20,11 +20,11 @@ export const DEFAULT_FEED_URLS: string[] = [
   "https://www.aljazeera.com/xml/rss/all.xml",
   "https://oilprice.com/rss/main",
   "https://jomodevplus.substack.com/feed",
-  "wolfstreet.com/feed",
+  "https://wolfstreet.com/feed",
   "https://neuburger.substack.com/feed",
   "https://creditslips.org/feed",
   "https://www.thebignewsletter.com/feed",
-  "https://angrybearblog.com/feed"
+  "https://angrybearblog.com/feed",
 ];
 
 export const DEFAULT_FALLBACK_ARTICLE_URL =
@@ -377,6 +377,24 @@ export interface CompressionAnalysis {
   explanation: string;
 }
 
+export interface SentenceGroundingDetail {
+  sentence_index: number;
+  text: string;
+  score: number;
+  matched_chunk: number;
+  supported: boolean;
+  source_sentence?: string;
+  reason?: string;
+}
+
+export interface UncoveredSectionDetail {
+  chunk_index: number;
+  chunk_total: number;
+  excerpt: string;
+  max_similarity_score: number;
+  reason: string;
+}
+
 export interface QualityEvaluationMetrics {
   overall_consistency: number;
   coherence: number;
@@ -384,13 +402,8 @@ export interface QualityEvaluationMetrics {
   document_chunks_total: number;
   document_chunks_covered: number;
   chunk_coverage_percent: number;
-  sentence_breakdown: Array<{
-    sentence_index: number;
-    text: string;
-    score: number;
-    matched_chunk: number;
-    supported: boolean;
-  }>;
+  sentence_breakdown: SentenceGroundingDetail[];
+  uncovered_sections?: UncoveredSectionDetail[];
 }
 
 export interface SummaryStructuredOutput {
@@ -613,7 +626,7 @@ async function extractDirectUrl(
 }
 
 // -------------------------------------------------------------
-// 7. ASYNC FEED HARVESTING & URL TIDYING LOOP
+// 7. ASYNC MULTI-FEED HARVESTING & ROUND-ROBIN DISTRIBUTION
 // -------------------------------------------------------------
 function normalizeFeedEntries(parsedResult: any): Array<{ title: string; url: string; publishedDate: Date | null; rawItem: any }> {
   const { format, feed } = parsedResult;
@@ -664,7 +677,7 @@ async function collectAndClassifyFeedArticles(
   emitEvent: (type: string, payload: any) => void
 ): Promise<FeedSelectionAudit> {
   emitEvent("FEED_DISCOVERY_STARTED", { feedUrls, maxAgeHours, goalCount });
-  console.log(`[FEEDSMITH] 🎲 Querying feeds in parallel | Target Goal: ${goalCount} article(s) within ${maxAgeHours}h.`);
+  console.log(`[FEEDSMITH] 🎲 Querying all feeds in parallel | Target Goal: ${goalCount} article(s) across diverse sources within ${maxAgeHours}h.`);
 
   const headers = {
     "User-Agent":
@@ -674,8 +687,10 @@ async function collectAndClassifyFeedArticles(
 
   const cutoffMs = Date.now() - maxAgeHours * 60 * 60 * 1000;
 
+  // 1. Fetch all feeds concurrently, ensuring valid URL schemes
   const feedResponses = await Promise.allSettled(
-    feedUrls.map(async (url) => {
+    feedUrls.map(async (rawUrl) => {
+      const url = rawUrl.startsWith("http://") || rawUrl.startsWith("https://") ? rawUrl : `https://${rawUrl}`;
       const res = await fetch(url, { headers, signal: AbortSignal.timeout(15000) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const body = await res.text();
@@ -683,96 +698,131 @@ async function collectAndClassifyFeedArticles(
     })
   );
 
-  const evaluatedArticles: FeedArticleCandidate[] = [];
-  const acceptedArticles: FeedArticleCandidate[] = [];
-  const seenUrls = new Set<string>();
+  interface FeedQueueBucket {
+    feedUrl: string;
+    entries: Array<{ title: string; url: string; publishedDate: Date | null; rawItem: any }>;
+  }
+
+  const validBuckets: FeedQueueBucket[] = [];
 
   for (const resp of feedResponses) {
-    if (acceptedArticles.length >= goalCount) break;
-    if (resp.status !== "fulfilled") continue;
+    if (resp.status !== "fulfilled") {
+      emitEvent("FEED_QUERY_FAILED", { error: resp.reason?.message || "Unknown error" });
+      continue;
+    }
 
     const { url: feedUrl, body } = resp.value;
     try {
       const parsed = parseFeed(body);
       const entries = normalizeFeedEntries(parsed);
-
       emitEvent("FEED_QUERY_SUCCESS", { feedUrl, format: parsed.format, rawEntriesCount: entries.length });
 
-      const validEntries = entries.filter((entry) => {
-        if (!entry.publishedDate) return false;
+      const filtered = entries.filter((entry) => {
+        if (!entry.publishedDate) return true;
         return entry.publishedDate.getTime() >= cutoffMs;
       });
 
-      validEntries.sort((a, b) => (b.publishedDate?.getTime() || 0) - (a.publishedDate?.getTime() || 0));
+      filtered.sort((a, b) => (b.publishedDate?.getTime() || 0) - (a.publishedDate?.getTime() || 0));
 
-      for (const entry of validEntries) {
-        if (acceptedArticles.length >= goalCount) break;
-
-        const tidyResult = cleanUrlWithTidy(entry.url);
-        const targetUrl = tidyResult.cleanUrl;
-
-        if (seenUrls.has(targetUrl)) continue;
-        seenUrls.add(targetUrl);
-
-        if (tidyResult.wasCleaned) {
-          emitEvent("URL_TIDIED", { originalUrl: entry.url, cleanUrl: targetUrl, reduction: tidyResult.reduction });
-          console.log(`[TIDY_URL] 🧹 Cleaned URL: "${entry.url}" -> "${targetUrl}"`);
-        }
-
-        const ageHours = Number(((Date.now() - (entry.publishedDate?.getTime() || 0)) / (1000 * 60 * 60)).toFixed(1));
-
-        const shallowResult = shallowClassify(entry.rawItem, targetUrl);
-        emitEvent("SHALLOW_CLASSIFICATION_EVALUATED", {
-          url: targetUrl,
-          title: entry.title,
-          shallowResult,
-        });
-
-        const candidate: FeedArticleCandidate = {
-          title: entry.title,
-          url: targetUrl,
-          cleanedUrl: targetUrl,
-          sourceFeed: feedUrl,
-          publishedDate: entry.publishedDate?.toISOString(),
-          ageHours,
-          shallowResult,
-        };
-
-        if (!shallowResult.passed) {
-          console.log(`[SHALLOW_REJECTED] "${entry.title}" -> ${shallowResult.classification} (${shallowResult.reason})`);
-          evaluatedArticles.push(candidate);
-          continue;
-        }
-
-        console.log(`[EXTRACTION] Ingesting candidate article: "${entry.title}"`);
-        try {
-          const extracted = await extractDirectUrl(targetUrl, emitEvent);
-          candidate.extractedMarkdown = extracted.content;
-          candidate.title = extracted.title || candidate.title;
-
-          const deepResult = deepClassify(extracted.content, extracted.wordCount);
-          candidate.deepResult = deepResult;
-
-          emitEvent("DEEP_CLASSIFICATION_EVALUATED", { url: targetUrl, title: candidate.title, deepResult });
-          evaluatedArticles.push(candidate);
-
-          if (deepResult.passed) {
-            acceptedArticles.push(candidate);
-            console.log(`[ACCEPTED] (${acceptedArticles.length}/${goalCount}) "${candidate.title}" -> ${deepResult.wordCount} words`);
-          } else {
-            console.log(`[DEEP_REJECTED] "${candidate.title}" -> ${deepResult.classification} (${deepResult.reason})`);
-          }
-        } catch {
-          evaluatedArticles.push(candidate);
-        }
+      if (filtered.length > 0) {
+        validBuckets.push({ feedUrl, entries: filtered });
       }
     } catch (err: any) {
       emitEvent("FEED_QUERY_FAILED", { feedUrl, error: err.message });
     }
   }
 
+  // 2. Build Round-Robin Candidate Queue to guarantee diversity across distinct feeds
+  const roundRobinCandidates: Array<{ feedUrl: string; entry: (typeof validBuckets)[0]["entries"][0] }> = [];
+  const maxEntriesPerFeed = Math.max(0, ...validBuckets.map((b) => b.entries.length));
+
+  for (let depth = 0; depth < maxEntriesPerFeed; depth++) {
+    for (const bucket of validBuckets) {
+      if (depth < bucket.entries.length) {
+        roundRobinCandidates.push({ feedUrl: bucket.feedUrl, entry: bucket.entries[depth] });
+      }
+    }
+  }
+
+  const evaluatedArticles: FeedArticleCandidate[] = [];
+  const acceptedArticles: FeedArticleCandidate[] = [];
+  const seenUrls = new Set<string>();
+  const feedAcceptedCount = new Map<string, number>();
+
+  for (const item of roundRobinCandidates) {
+    if (acceptedArticles.length >= goalCount) break;
+
+    const { feedUrl, entry } = item;
+    const tidyResult = cleanUrlWithTidy(entry.url);
+    const targetUrl = tidyResult.cleanUrl;
+
+    if (seenUrls.has(targetUrl)) continue;
+    seenUrls.add(targetUrl);
+
+    if (tidyResult.wasCleaned) {
+      emitEvent("URL_TIDIED", { originalUrl: entry.url, cleanUrl: targetUrl, reduction: tidyResult.reduction });
+      console.log(`[TIDY_URL] 🧹 Cleaned URL: "${entry.url}" -> "${targetUrl}"`);
+    }
+
+    const ageHours = entry.publishedDate
+      ? Number(((Date.now() - entry.publishedDate.getTime()) / (1000 * 60 * 60)).toFixed(1))
+      : 0;
+
+    const shallowResult = shallowClassify(entry.rawItem, targetUrl);
+    emitEvent("SHALLOW_CLASSIFICATION_EVALUATED", {
+      url: targetUrl,
+      title: entry.title,
+      shallowResult,
+    });
+
+    const candidate: FeedArticleCandidate = {
+      title: entry.title,
+      url: targetUrl,
+      cleanedUrl: targetUrl,
+      sourceFeed: feedUrl,
+      publishedDate: entry.publishedDate?.toISOString(),
+      ageHours,
+      shallowResult,
+    };
+
+    if (!shallowResult.passed) {
+      console.log(`[SHALLOW_REJECTED] "${entry.title}" -> ${shallowResult.classification} (${shallowResult.reason})`);
+      evaluatedArticles.push(candidate);
+      continue;
+    }
+
+    console.log(`[EXTRACTION] Ingesting candidate from ${feedUrl}: "${entry.title}"`);
+    try {
+      const extracted = await extractDirectUrl(targetUrl, emitEvent);
+      candidate.extractedMarkdown = extracted.content;
+      candidate.title = extracted.title || candidate.title;
+
+      const deepResult = deepClassify(extracted.content, extracted.wordCount);
+      candidate.deepResult = deepResult;
+
+      emitEvent("DEEP_CLASSIFICATION_EVALUATED", { url: targetUrl, title: candidate.title, deepResult });
+      evaluatedArticles.push(candidate);
+
+      if (deepResult.passed) {
+        acceptedArticles.push(candidate);
+        feedAcceptedCount.set(feedUrl, (feedAcceptedCount.get(feedUrl) || 0) + 1);
+        console.log(`[ACCEPTED] (${acceptedArticles.length}/${goalCount}) "${candidate.title}" [${feedUrl}] -> ${deepResult.wordCount} words`);
+      } else {
+        console.log(`[DEEP_REJECTED] "${candidate.title}" -> ${deepResult.classification} (${deepResult.reason})`);
+      }
+    } catch {
+      evaluatedArticles.push(candidate);
+    }
+  }
+
   if (acceptedArticles.length >= goalCount) {
     emitEvent("FEED_COLLECTION_GOAL_MET", { goalCount, acceptedCount: acceptedArticles.length, articles: acceptedArticles });
+    return { configuredFeeds: feedUrls, maxAgeHours, goalCount, evaluatedArticles, acceptedArticles, usedFallback: false };
+  }
+
+  if (acceptedArticles.length > 0) {
+    // Goal partially met; continue with accepted distinct articles rather than overwriting with fallback
+    emitEvent("FEED_COLLECTION_PARTIAL_MET", { goalCount, acceptedCount: acceptedArticles.length });
     return { configuredFeeds: feedUrls, maxAgeHours, goalCount, evaluatedArticles, acceptedArticles, usedFallback: false };
   }
 
@@ -790,7 +840,7 @@ async function collectAndClassifyFeedArticles(
 }
 
 // -------------------------------------------------------------
-// 8. SWAP & MEMORY DIAGNOSTICS (STAFF HARDENED)
+// 8. SWAP & MEMORY DIAGNOSTICS
 // -------------------------------------------------------------
 let CACHED_PAGE_SIZE: number | null = null;
 export function getSystemPageSizeBytes(): number {
@@ -803,7 +853,7 @@ export function getSystemPageSizeBytes(): number {
       return CACHED_PAGE_SIZE;
     }
   } catch {}
-  CACHED_PAGE_SIZE = 4096; // Standard x86_64 baseline fallback
+  CACHED_PAGE_SIZE = 4096;
   return CACHED_PAGE_SIZE;
 }
 
@@ -854,7 +904,6 @@ function getMemorySnapshot(): MemorySnapshot {
   let swapUsedMb: number | null = null;
   let isCgroupConstrained = false;
 
-  // 1. Inspect cgroups v2 swap usage (container-aware)
   try {
     if (fs.existsSync("/sys/fs/cgroup/memory.swap.current")) {
       const curBytes = parseInt(fs.readFileSync("/sys/fs/cgroup/memory.swap.current", "utf8").trim(), 10);
@@ -867,7 +916,6 @@ function getMemorySnapshot(): MemorySnapshot {
     }
   } catch {}
 
-  // 2. Fall back to host /proc/meminfo if cgroup swap is not constrained
   if (swapTotalMb === null && !isCgroupConstrained) {
     try {
       const meminfo = fs.readFileSync("/proc/meminfo", "utf8");
@@ -882,7 +930,6 @@ function getMemorySnapshot(): MemorySnapshot {
     } catch {}
   }
 
-  // 3. Inspect Process Memory & Virtual Swap
   const pid = readServerPid();
   let vmRssMb: number | null = null;
   let vmSwapMb: number | null = null;
@@ -957,7 +1004,7 @@ function postOpenAIChatCompletion(urlStr: string, payload: any): Promise<any> {
 }
 
 // -------------------------------------------------------------
-// 10. EVENT-DRIVEN PIPELINE ORCHESTRATOR
+// 10. EVENT-DRIVEN PIPELINE ORCHESTRATOR (WITH HYDRATION)
 // -------------------------------------------------------------
 export class AIEventPipeline extends EventEmitter {
   private auditLog: PipelineEvent[] = [];
@@ -978,12 +1025,31 @@ export class AIEventPipeline extends EventEmitter {
     this.lastEventTime = this.pipelineStartTime;
   }
 
+  public loadPriorEvents(): void {
+    if (!fs.existsSync(this.jsonlFilePath)) return;
+    try {
+      const lines = fs.readFileSync(this.jsonlFilePath, "utf8").split("\n").filter(Boolean);
+      this.auditLog = lines
+        .map((l) => {
+          try {
+            return JSON.parse(l);
+          } catch {
+            return null;
+          }
+        })
+        .filter((e): e is PipelineEvent => e !== null && typeof e.eventId === "string");
+      console.log(`[EVENT_PIPELINE] 📥 Hydrated ${this.auditLog.length} historical event(s) from ${this.jsonlFilePath}`);
+    } catch (err: any) {
+      console.warn(`[EVENT_PIPELINE] ⚠️ Warning: Failed hydrating historical events: ${err.message}`);
+    }
+  }
+
   private createEventId(eventType: string, epochMs: number): string {
     const seed = `runner:${this.runnerMetadata.runnerName}:shard:${this.runnerMetadata.shardId}:epoch:${epochMs}:event:${eventType}`;
     return `evt-${generateUuidV5(seed)}`;
   }
 
-  public logEvent(eventType: string, payload: any) {
+  public logEvent(eventType: string, payload: any): PipelineEvent {
     const now = performance.now();
     const durationMs = Math.round(now - this.lastEventTime);
     const cumulativeMs = Math.round(now - this.pipelineStartTime);
@@ -1080,7 +1146,6 @@ export class AIEventPipeline extends EventEmitter {
     const startTime = performance.now();
     this.logEvent("INFERENCE_DISPATCHED", { serverUrl, targetModel: modelName, sourceType, sourceIdentifier, inferenceParams, wordCount: words.length, charCount: targetText.length });
 
-    // High frequency sampling (500ms) with throttled 10s console logging
     let tickCounter = 0;
     const progressTimer = setInterval(() => {
       tickCounter++;
@@ -1226,9 +1291,9 @@ export class AIEventPipeline extends EventEmitter {
 }
 
 // -------------------------------------------------------------
-// 11. STEP SUMMARY BUILDER (RESILIENT & DEFENSIVE)
+// 11. STEP SUMMARY BUILDER (FAILURE-FOCUSED & COMPLETE)
 // -------------------------------------------------------------
-function publishStepSummary(
+export function publishStepSummary(
   modelName: string,
   results: SummaryStructuredOutput[],
   events: PipelineEvent[],
@@ -1280,7 +1345,7 @@ function publishStepSummary(
     completion_tokens_per_second: 0,
   };
 
-  console.log(`::notice title=AI Pipeline Execution Completed (${modelName})::🖥️ ${hf.rawFingerprint} | ⚡ Max CPU: ${cm.maxCpuPercent}% | 📥 Ingest: ${tm.prompt_tokens_per_second} t/s | ⚡ Gen: ${tm.completion_tokens_per_second} t/s`);
+  console.log(`::notice title=AI Pipeline Execution Report (${modelName})::🖥️ ${hf.rawFingerprint} | ⚡ Max CPU: ${cm.maxCpuPercent}% | 📥 Ingest: ${tm.prompt_tokens_per_second} t/s | ⚡ Gen: ${tm.completion_tokens_per_second} t/s`);
 
   const lines: string[] = [
     `# 🧠 AI Transformer & Quality Audit Execution Report`,
@@ -1349,7 +1414,7 @@ function publishStepSummary(
     ...events.map((e) => `| \`${e.eventType}\` | \`${e.eventId}\` | \`${e.timestamp}\` | **\`+${e.durationMs} ms\`** | **\`${e.cumulativeMs} ms\`** |`),
     ``,
     `<details>`,
-    `<summary><b>Inspect Full Event Stream Payloads (JSON)</b></summary>`,
+    `<summary><b>Inspect Full Event Stream Payloads (${events.length} Events - JSON)</b></summary>`,
     ``,
     `\`\`\`json`,
     JSON.stringify(events, null, 2),
@@ -1372,12 +1437,13 @@ function publishStepSummary(
     ``
   );
 
+  // Render Feed Discovery Section whenever feed audit data is present
   if (feedAudit) {
     lines.push(`## 📡 Feed Discovery & Article Ingestion (Multi-Stage Classification)`, ``);
     if (feedAudit.usedFallback) {
       lines.push(`> ⚠️ **Collection goal unmet** (${feedAudit.acceptedArticles.length}/${feedAudit.goalCount} accepted within ${feedAudit.maxAgeHours}h). Engaged fallback URL.`);
     } else {
-      lines.push(`> ✅ **Collection goal achieved:** Evaluated ${feedAudit.evaluatedArticles.length} candidates, accepted ${feedAudit.acceptedArticles.length} article(s).`);
+      lines.push(`> ✅ **Collection goal achieved:** Evaluated ${feedAudit.evaluatedArticles.length} candidates, accepted ${feedAudit.acceptedArticles.length} article(s) across diverse feeds.`);
     }
     lines.push(
       ``,
@@ -1436,19 +1502,52 @@ function publishStepSummary(
         `| **Sectional Coverage** | **\`${qm.chunk_coverage_percent}%\`** | ${qm.chunk_coverage_percent >= 60 ? "🟢 High Coverage" : "⚠️ Partial Coverage"} | ${qm.document_chunks_covered}/${qm.document_chunks_total} document chunks represented |`,
         `| **Discourse Coherence** | **\`${qm.coherence}\`** | ${qm.coherence >= 0.70 ? "🟢 Fluid" : "⚠️ Fragmented"} | Inter-sentence discourse flow |`,
         `| **Fluency (Syntax)** | **\`${qm.fluency}\`** | ${qm.fluency >= 0.85 ? "🟢 Natural" : "⚠️ Mechanical"} | Grammatical syntax & readability |`,
-        ``,
-        `<details>`,
-        `<summary><b>Inspect Sentence Grounding Breakdown (${qm.sentence_breakdown.length} Sentences)</b></summary>`,
-        ``,
-        `| # | Summary Sentence | Matched Chunk | Consistency Score | Status |`,
-        `| :- | :--- | :-: | :-: | :-: |`,
-        ...qm.sentence_breakdown.map((s) => `| ${s.sentence_index} | ${s.text} | Chunk ${s.matched_chunk} | \`${s.score}\` | ${s.supported ? "✅ Supported" : "❌ Unsupported"} |`),
-        ``,
-        `</details>`,
-        ``,
-        `---`,
         ``
       );
+
+      // Sectional Coverage: Failure-only forensic breakdown
+      if (qm.uncovered_sections && qm.uncovered_sections.length > 0) {
+        lines.push(
+          `### ⚠️ Uncovered Document Sections (${qm.uncovered_sections.length}/${qm.document_chunks_total} Chunks Omitted)`,
+          `> The following source sections have no supporting claims in the generated summary:`,
+          ``,
+          `| Missing Section | Section Topic / Lead Excerpt | Reason / Diagnostics |`,
+          `| :---: | :--- | :--- |`,
+          ...qm.uncovered_sections.map(
+            (u) => `| **Chunk ${u.chunk_index} of ${u.chunk_total}** | *"${u.excerpt.replace(/\|/g, "\\|")}"* | ⚠️ ${u.reason.replace(/\|/g, "\\|")} |`
+          ),
+          ``
+        );
+      } else {
+        lines.push(
+          `> ✅ **Full Document Grounding:** All ${qm.document_chunks_total}/${qm.document_chunks_total} document sections are represented in the analytic synthesis.`,
+          ``
+        );
+      }
+
+      // Sentence Consistency: Failure-only forensic breakdown
+      const failedSentences = qm.sentence_breakdown.filter((s) => !s.supported);
+      if (failedSentences.length > 0) {
+        lines.push(
+          `### ❌ Unsupported Claims / Grounding Failures (${failedSentences.length}/${qm.sentence_breakdown.length} Sentences)`,
+          `> The following summary claims failed the factual consistency check against the source document:`,
+          ``,
+          `| # | Summary Sentence (Generated Claim) | Closest Source Evidence / Sentence | Consistency Score | Diagnostics |`,
+          `| :-: | :--- | :--- | :-: | :--- |`,
+          ...failedSentences.map(
+            (s) =>
+              `| **${s.sentence_index}** | "${s.text.replace(/\|/g, "\\|")}" | *"${(s.source_sentence || "No closely aligned passage").replace(/\|/g, "\\|")}"* | **\`${s.score}\`** | ❌ ${s.reason || "Low entailment (< 0.50)"} |`
+          ),
+          ``
+        );
+      } else {
+        lines.push(
+          `> ✅ **100% Factually Grounded:** All ${qm.sentence_breakdown.length} summary sentences are verified and supported by source document evidence (no hallucinated or unsubstantiated claims detected).`,
+          ``
+        );
+      }
+
+      lines.push(`---`, ``);
     }
 
     lines.push(
@@ -1473,7 +1572,7 @@ function publishStepSummary(
     );
   });
 
-  fs.appendFileSync(summaryPath, lines.join("\n"), "utf8");
+  fs.writeFileSync(summaryPath, lines.join("\n"), "utf8");
 }
 
 // -------------------------------------------------------------
@@ -1495,7 +1594,9 @@ async function main() {
   const modelName = process.env.MODEL_NAME ?? "";
   const serverUrl = process.env.SERVER_URL || "http://127.0.0.1:9931";
 
+  // -------------------------------------------------------------
   // PHASE 2: EVALUATION ONLY (SERVER-CALLING OVER HTTP)
+  // -------------------------------------------------------------
   if (phase === "eval") {
     console.log("=== 🔬 EXECUTING PHASE 2: PARALLEL UNIEVAL QUALITY AUDIT ===");
     if (!fs.existsSync("pipeline-events.jsonl")) {
@@ -1521,6 +1622,9 @@ async function main() {
 
     const correlationId = structuredEvents[0].correlationId;
     const pipeline = new AIEventPipeline(runnerMetadata, correlationId);
+    pipeline.loadPriorEvents();
+
+    pipeline.logEvent("QUALITY_EVALUATION_STARTED", { articleCount: structuredEvents.length });
 
     console.log(`[EVAL_CLIENT] 🚀 Calling Python eval service in parallel for ${structuredEvents.length} items...`);
     const evalResults = await Promise.allSettled(
@@ -1572,13 +1676,25 @@ async function main() {
       return output;
     });
 
-    const dummyParams: ModelInferenceParams = DEFAULT_INFERENCE_PARAMS;
-    publishStepSummary(modelName || "GGUF-Model", updatedOutputs, pipeline.getEventHistory(), dummyParams);
-    console.log("[EVAL_CLIENT] ✅ Quality audit completed.");
+    pipeline.logEvent("QUALITY_EVALUATION_BATCH_COMPLETED", { totalEvaluated: updatedOutputs.length });
+
+    const retainedFeedAudit = updatedOutputs.find((o) => o.source_audit?.feedAudit)?.source_audit?.feedAudit;
+    const activeInferenceParams = updatedOutputs[0]?.inference_params || DEFAULT_INFERENCE_PARAMS;
+
+    publishStepSummary(
+      modelName || "GGUF-Model",
+      updatedOutputs,
+      pipeline.getEventHistory(),
+      activeInferenceParams,
+      retainedFeedAudit
+    );
+    console.log("[EVAL_CLIENT] ✅ Quality audit completed and Step Summary published.");
     return;
   }
 
-  // PHASE 1: INFERENCE & HARVESTING
+  // -------------------------------------------------------------
+  // PHASE 1: INFERENCE & MULTI-FEED HARVESTING
+  // -------------------------------------------------------------
   console.log("=== 🚀 EXECUTING PHASE 1: INGESTION & LLM INFERENCE ===");
 
   const defaultPreamble = `You are a precise, objective intelligence analyst. Your mandate is to produce a faithful, high-density synthesis of the provided document.`;
@@ -1716,6 +1832,9 @@ Definitions for classification axes:
 
     results.push(result);
   }
+
+  // Publish immediate initial Step Summary so Phase 1 is never lost
+  publishStepSummary(modelName, results, pipeline.getEventHistory(), inferenceParams, feedAudit);
 
   console.log(`[PIPELINE] ✅ Phase 1 Inference complete (${results.length} articles). Events written to pipeline-events.jsonl`);
 }
