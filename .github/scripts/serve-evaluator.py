@@ -214,7 +214,7 @@ class EvidenceRetriever:
         except Exception:
             self.use_bm25 = False
 
-    def retrieve_top_k(self, sentence: str, k: int = 4) -> list[tuple[int, str]]:
+    def retrieve_top_k(self, sentence: str, k: int = 2) -> list[tuple[int, str]]:
         if len(self.chunks) <= k:
             return list(enumerate(self.chunks))
         tokens = [tok for tok in re.findall(r"\w+", sentence.lower()) if tok not in STOPWORDS]
@@ -331,7 +331,7 @@ def compute_unieval_sync(source_text: str, summary_text: str) -> dict[str, Any]:
     clean_source = source_text.strip() or "No source content provided."
 
     with torch.inference_mode():
-        # 1. Fluency (evaluate() takes only data, dims, overall, print_result)
+        # 1. Fluency
         data_flu = convert_to_json(output_list=[clean_summary])
         eval_flu = evaluator.evaluate(data_flu, dims=["fluency"], overall=False)
         fluency = round(eval_flu[0]["fluency"], 3) if eval_flu else 0.0
@@ -342,7 +342,7 @@ def compute_unieval_sync(source_text: str, summary_text: str) -> dict[str, Any]:
         eval_coh = evaluator.evaluate(data_coh, dims=["coherence"], overall=False)
         coherence = round(eval_coh[0]["coherence"], 3) if eval_coh else 0.0
 
-        # 3. Chunked Sentence-Level Consistency with Expanded Context (k=4)
+        # 3. Chunked Sentence-Level Consistency (k=2 chunks)
         chunks = chunk_document(clean_source, chunk_words=380, stride_words=80)
         sentences = split_sentences(clean_summary)
 
@@ -353,7 +353,7 @@ def compute_unieval_sync(source_text: str, summary_text: str) -> dict[str, Any]:
         pair_mappings: list[tuple[int, int, str, str]] = []
 
         for s_idx, sentence in enumerate(sentences):
-            for c_idx, chunk in retriever.retrieve_top_k(sentence, k=4):
+            for c_idx, chunk in retriever.retrieve_top_k(sentence, k=2):
                 pair_key = (chunk, sentence)
                 if pair_key not in unique_pairs:
                     unique_pairs[pair_key] = 0.0
@@ -563,4 +563,12 @@ if __name__ == "__main__":
     handler.setFormatter(JsonlUvicornFormatter())
     uvicorn_logger.addHandler(handler)
 
-    uvicorn.run(app, host="127.0.0.1", port=9933, log_config=None, access_log=False)
+    uvicorn.run(
+        app,
+        host="127.0.0.1",
+        port=9933,
+        log_config=None,
+        access_log=False,
+        timeout_keep_alive=300,
+        timeout_graceful_shutdown=30,
+    )
