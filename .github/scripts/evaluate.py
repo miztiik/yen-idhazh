@@ -1,47 +1,49 @@
 #!/usr/bin/env python3
 """
-.github/scripts/eval_server.py
+.github/scripts/evaluate.py
 FastAPI microservice hosting UniEval (MingZhong/unieval-sum on T5-large).
 Runs in Phase 2 with full system RAM (15 GB) to evaluate articles in parallel.
 Instruments in-flight CPU/RAM consumption and emits RFC 4122 UUIDv5 events.
 """
 
 import asyncio
+import importlib.util
+from contextlib import asynccontextmanager
 import os
+from pathlib import Path
 import re
 import sys
 import time
+from typing import Any
 import uuid
-from contextlib import asynccontextmanager
-from typing import Any, Dict, List, Optional, Tuple
 
-# In-memory shim for prettytable to prevent import crashes
-try:
-    import prettytable
-except ImportError:
+# -------------------------------------------------------------
+# 0. IN-MEMORY SHIM FOR PRETTYTABLE (IF MISSING)
+# -------------------------------------------------------------
+if importlib.util.find_spec("prettytable") is None:
     import types
 
     dummy = types.ModuleType("prettytable")
 
     class DummyPrettyTable:
 
-        def __init__(self, *args, **kwargs):
-            self.field_names = []
-            self.rows = []
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            self.field_names: list[str] = []
+            self.rows: list[Any] = []
 
-        def add_row(self, row):
+        def add_row(self, row: Any) -> None:
             self.rows.append(row)
 
-        def get_string(self):
+        def get_string(self) -> str:
             return ""
 
     dummy.PrettyTable = DummyPrettyTable
     sys.modules["prettytable"] = dummy
 
+from pydantic import BaseModel, ConfigDict, Field
 import torch
 import uvicorn
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
 
 # -------------------------------------------------------------
 # 1. CONSTANTS & RFC 4122 UUIDv5 GENERATOR
@@ -62,9 +64,9 @@ def generate_event_id(
 class HardwareSampler:
 
     @staticmethod
-    def read_cpu_stat() -> Tuple[int, int]:
+    def read_cpu_stat() -> tuple[int, int]:
         try:
-            with open("/proc/stat", "r") as f:
+            with Path("/proc/stat").open() as f:
                 line = f.readline()
             parts = [int(p) for p in line.split()[1:]]
             idle = parts[3] + parts[4]
@@ -74,11 +76,11 @@ class HardwareSampler:
             return 0, 0
 
     @staticmethod
-    def get_memory_snapshot() -> Dict[str, int]:
+    def get_memory_snapshot() -> dict[str, int]:
         rss_kb = 0
         swap_kb = 0
         try:
-            with open("/proc/self/status", "r") as f:
+            with Path("/proc/self/status").open() as f:
                 for line in f:
                     if line.startswith("VmRSS:"):
                         rss_kb = int(line.split()[1])
@@ -95,7 +97,7 @@ class HardwareSampler:
 # -------------------------------------------------------------
 # 3. TEXT CHUNKING & EVIDENCE RETRIEVAL
 # -------------------------------------------------------------
-def split_sentences(text: str) -> List[str]:
+def split_sentences(text: str) -> list[str]:
     try:
         from nltk.tokenize import sent_tokenize
 
@@ -107,7 +109,7 @@ def split_sentences(text: str) -> List[str]:
 
 def chunk_document(
     text: str, chunk_words: int = 380, stride_words: int = 80
-) -> List[str]:
+) -> list[str]:
     words = text.split()
     if len(words) <= chunk_words:
         return [text]
@@ -138,7 +140,7 @@ def extract_macro_skeleton(text: str, max_words: int = 380) -> str:
 
 class EvidenceRetriever:
 
-    def __init__(self, chunks: List[str]):
+    def __init__(self, chunks: list[str]):
         self.chunks = chunks
         self.use_bm25 = False
         try:
@@ -150,7 +152,7 @@ class EvidenceRetriever:
         except ImportError:
             pass
 
-    def retrieve_top_k(self, sentence: str, k: int = 2) -> List[Tuple[int, str]]:
+    def retrieve_top_k(self, sentence: str, k: int = 2) -> list[tuple[int, str]]:
         if len(self.chunks) <= k:
             return list(enumerate(self.chunks))
         tokens = re.findall(r"\w+", sentence.lower())
@@ -175,8 +177,8 @@ class EvidenceRetriever:
 # 4. FASTAPI SERVICE LIFECYCLE
 # -------------------------------------------------------------
 EVALUATOR_INSTANCE = None
-UNIEVAL_MODULES: Dict[str, Any] = {}
-CONCURRENCY_SEMAPHORE = asyncio.Semaphore(4)  # Safe parallelism on 15 GB RAM
+UNIEVAL_MODULES: dict[str, Any] = {}
+CONCURRENCY_SEMAPHORE = asyncio.Semaphore(4)
 
 
 @asynccontextmanager
@@ -214,13 +216,15 @@ app = FastAPI(title="UniEval Quality Microservice", lifespan=lifespan)
 
 
 class EvaluationRequest(BaseModel):
-    correlationId: str
-    runnerName: str
-    shardId: str
-    sourceIdentifier: str
-    sourceTitle: str
-    sourceText: str
-    summaryText: str
+    model_config = ConfigDict(populate_by_name=True)
+
+    correlation_id: str = Field(..., alias="correlationId")
+    runner_name: str = Field(..., alias="runnerName")
+    shard_id: str = Field(..., alias="shardId")
+    source_identifier: str = Field(..., alias="sourceIdentifier")
+    source_title: str = Field(..., alias="sourceTitle")
+    source_text: str = Field(..., alias="sourceText")
+    summary_text: str = Field(..., alias="summaryText")
 
 
 @app.get("/health")
@@ -234,7 +238,7 @@ def health():
 
 def compute_unieval_sync(
     source_text: str, summary_text: str
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     convert_to_json = UNIEVAL_MODULES["convert_to_json"]
     evaluator = EVALUATOR_INSTANCE
 
@@ -267,8 +271,8 @@ def compute_unieval_sync(
         data_cons, dims=["consistency"], overall=False
     )
 
-    sentence_scores: Dict[int, float] = {}
-    sentence_chunk_map: Dict[int, int] = {}
+    sentence_scores: dict[int, float] = {}
+    sentence_chunk_map: dict[int, int] = {}
     for idx, r in enumerate(cons_res):
         s_idx, c_idx = pair_meta[idx]
         sc = r["consistency"]
@@ -322,7 +326,7 @@ async def evaluate_article(req: EvaluationRequest):
 
     async with CONCURRENCY_SEMAPHORE:
         metrics = await asyncio.to_thread(
-            compute_unieval_sync, req.sourceText, req.summaryText
+            compute_unieval_sync, req.source_text, req.summary_text
         )
 
     duration_ms = round((time.perf_counter() - t_start) * 1000)
@@ -338,7 +342,7 @@ async def evaluate_article(req: EvaluationRequest):
 
     epoch_ms = int(time.time() * 1000)
     event_id = generate_event_id(
-        req.runnerName, req.shardId, epoch_ms, "QUALITY_EVALUATION_COMPLETED"
+        req.runner_name, req.shard_id, epoch_ms, "QUALITY_EVALUATION_COMPLETED"
     )
 
     event_payload = {
@@ -347,12 +351,12 @@ async def evaluate_article(req: EvaluationRequest):
         "timestamp": time.strftime(
             "%Y-%m-%dT%H:%M:%SZ", time.gmtime(epoch_ms / 1000)
         ),
-        "correlationId": req.correlationId,
+        "correlationId": req.correlation_id,
         "durationMs": duration_ms,
         "cumulativeMs": 0,
         "payload": {
-            "sourceIdentifier": req.sourceIdentifier,
-            "sourceTitle": req.sourceTitle,
+            "sourceIdentifier": req.source_identifier,
+            "sourceTitle": req.source_title,
             "metrics": metrics,
             "serverTelemetry": {
                 "duration_ms": duration_ms,
