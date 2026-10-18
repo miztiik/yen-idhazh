@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
 """
-.github/scripts/evaluate.py
-Evaluates summarization quality across Consistency, Discourse Coherence, and Fluency
-using the UniEval benchmark (MingZhong/unieval-sum on T5-large) via chunked BM25 retrieval.
+.github/scripts/eval_server.py
+FastAPI microservice hosting UniEval (MingZhong/unieval-sum on T5-large).
+Runs in Phase 2 with full system RAM (15 GB) to evaluate articles in parallel.
+Instruments in-flight CPU/RAM consumption and emits RFC 4122 UUIDv5 events.
 """
 
-import argparse
-import json
+import asyncio
 import os
 import re
 import sys
-from typing import Dict, List, Tuple
+import time
+import uuid
+from contextlib import asynccontextmanager
+from typing import Any, Dict, List, Optional, Tuple
 
-# -------------------------------------------------------------
-# 0. PREVENT PRETTYTABLE IMPORT CRASHES VIA IN-MEMORY SHIM
-# -------------------------------------------------------------
+# In-memory shim for prettytable to prevent import crashes
 try:
     import prettytable
 except ImportError:
@@ -38,13 +39,63 @@ except ImportError:
     sys.modules["prettytable"] = dummy
 
 import torch
+import uvicorn
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+
+# -------------------------------------------------------------
+# 1. CONSTANTS & RFC 4122 UUIDv5 GENERATOR
+# -------------------------------------------------------------
+UUIDV5_NAMESPACE = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+
+
+def generate_event_id(
+    runner_name: str, shard_id: str, epoch_ms: int, event_type: str
+) -> str:
+    seed = f"runner:{runner_name}:shard:{shard_id}:epoch:{epoch_ms}:event:{event_type}"
+    return f"evt-{uuid.uuid5(UUIDV5_NAMESPACE, seed)}"
 
 
 # -------------------------------------------------------------
-# 1. TEXT CHUNKING & PRE-PROCESSING
+# 2. IN-FLIGHT HARDWARE SAMPLER
+# -------------------------------------------------------------
+class HardwareSampler:
+
+    @staticmethod
+    def read_cpu_stat() -> Tuple[int, int]:
+        try:
+            with open("/proc/stat", "r") as f:
+                line = f.readline()
+            parts = [int(p) for p in line.split()[1:]]
+            idle = parts[3] + parts[4]
+            total = sum(parts[:7])
+            return total, idle
+        except Exception:
+            return 0, 0
+
+    @staticmethod
+    def get_memory_snapshot() -> Dict[str, int]:
+        rss_kb = 0
+        swap_kb = 0
+        try:
+            with open("/proc/self/status", "r") as f:
+                for line in f:
+                    if line.startswith("VmRSS:"):
+                        rss_kb = int(line.split()[1])
+                    if line.startswith("VmSwap:"):
+                        swap_kb = int(line.split()[1])
+        except Exception:
+            pass
+        return {
+            "server_vm_rss_mb": round(rss_kb / 1024),
+            "server_vm_swap_mb": round(swap_kb / 1024),
+        }
+
+
+# -------------------------------------------------------------
+# 3. TEXT CHUNKING & EVIDENCE RETRIEVAL
 # -------------------------------------------------------------
 def split_sentences(text: str) -> List[str]:
-    """Splits prose into distinct sentences using NLTK or regex fallback."""
     try:
         from nltk.tokenize import sent_tokenize
 
@@ -57,7 +108,6 @@ def split_sentences(text: str) -> List[str]:
 def chunk_document(
     text: str, chunk_words: int = 380, stride_words: int = 80
 ) -> List[str]:
-    """Divides long texts (up to 6,000+ words) into overlapping semantic windows."""
     words = text.split()
     if len(words) <= chunk_words:
         return [text]
@@ -74,28 +124,19 @@ def chunk_document(
 
 
 def extract_macro_skeleton(text: str, max_words: int = 380) -> str:
-    """Extracts structural lead and tail paragraphs to evaluate macro document discourse coherence."""
     paragraphs = [p.strip() for p in text.split("\n\n") if len(p.strip()) > 40]
     if not paragraphs:
         return text[:1500]
-
     if len(paragraphs) <= 3:
         return "\n\n".join(paragraphs)[:1800]
-
     lead = paragraphs[0] + "\n\n" + paragraphs[1]
     tail = paragraphs[-1]
     combined = lead + "\n\n[...]\n\n" + tail
     words = combined.split()
-    if len(words) > max_words:
-        return " ".join(words[:max_words])
-    return combined
+    return " ".join(words[:max_words]) if len(words) > max_words else combined
 
 
-# -------------------------------------------------------------
-# 2. FAST BM25 EVIDENCE RETRIEVAL
-# -------------------------------------------------------------
 class EvidenceRetriever:
-    """Retrieves top-K candidate evidence chunks for a given summary sentence."""
 
     def __init__(self, chunks: List[str]):
         self.chunks = chunks
@@ -103,10 +144,8 @@ class EvidenceRetriever:
         try:
             from rank_bm25 import BM25Okapi
 
-            tokenized_corpus = [
-                re.findall(r"\w+", c.lower()) for c in self.chunks
-            ]
-            self.bm25 = BM25Okapi(tokenized_corpus)
+            tokenized = [re.findall(r"\w+", c.lower()) for c in self.chunks]
+            self.bm25 = BM25Okapi(tokenized)
             self.use_bm25 = True
         except ImportError:
             pass
@@ -114,123 +153,144 @@ class EvidenceRetriever:
     def retrieve_top_k(self, sentence: str, k: int = 2) -> List[Tuple[int, str]]:
         if len(self.chunks) <= k:
             return list(enumerate(self.chunks))
-
-        query_tokens = re.findall(r"\w+", sentence.lower())
+        tokens = re.findall(r"\w+", sentence.lower())
         if self.use_bm25:
-            scores = self.bm25.get_scores(query_tokens)
-            top_indices = sorted(
+            scores = self.bm25.get_scores(tokens)
+            top_idx = sorted(
                 range(len(scores)), key=lambda i: scores[i], reverse=True
             )[:k]
         else:
-            query_set = set(query_tokens)
+            token_set = set(tokens)
             scores = [
-                len(query_set.intersection(set(re.findall(r"\w+", c.lower()))))
+                len(token_set.intersection(set(re.findall(r"\w+", c.lower()))))
                 for c in self.chunks
             ]
-            top_indices = sorted(
+            top_idx = sorted(
                 range(len(scores)), key=lambda i: scores[i], reverse=True
             )[:k]
-
-        return [(idx, self.chunks[idx]) for idx in top_indices]
+        return [(idx, self.chunks[idx]) for idx in top_idx]
 
 
 # -------------------------------------------------------------
-# 3. UNIEVAL EVALUATION HARNESS
+# 4. FASTAPI SERVICE LIFECYCLE
 # -------------------------------------------------------------
-def run_evaluation(
-    source_text: str, summary_text: str, unieval_dir: str
-) -> Dict:
+EVALUATOR_INSTANCE = None
+UNIEVAL_MODULES: Dict[str, Any] = {}
+CONCURRENCY_SEMAPHORE = asyncio.Semaphore(4)  # Safe parallelism on 15 GB RAM
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global EVALUATOR_INSTANCE, UNIEVAL_MODULES
+    unieval_dir = os.getenv("UNIEVAL_DIR", "/tmp/unieval")
     sys.path.insert(0, unieval_dir)
     try:
         from metric.evaluator import get_evaluator
         from utils import convert_to_json
-    except ImportError as e:
-        raise RuntimeError(
-            f"Failed to import UniEval modules from {unieval_dir}: {e}"
-        )
 
-    # Allocate all available CPU cores for PyTorch
-    torch.set_num_threads(os.cpu_count() or 2)
+        UNIEVAL_MODULES["get_evaluator"] = get_evaluator
+        UNIEVAL_MODULES["convert_to_json"] = convert_to_json
+    except ImportError as e:
+        print(f"[FASTAPI] ❌ Failed to load UniEval from {unieval_dir}: {e}")
+        raise e
+
+    cores = os.cpu_count() or 2
+    torch.set_num_threads(cores)
 
     print(
-        "[EVALUATOR] 🤖 Initializing UniEval (MingZhong/unieval-sum) on device='cpu'..."
+        f"[FASTAPI] 🤖 Initializing UniEval (T5-Large) with {cores} threads on device='cpu'..."
     )
-    # Explicitly pass device='cpu' to prevent default CUDA assertion failure on GitHub Actions
-    evaluator = get_evaluator("summarization", max_length=1024, device="cpu")
+    EVALUATOR_INSTANCE = get_evaluator(
+        "summarization", max_length=1024, device="cpu"
+    )
+    print(
+        "[FASTAPI] ✅ UniEval service warm and listening on http://127.0.0.1:9933"
+    )
+    yield
+    print("[FASTAPI] 🛑 Shutting down UniEval service.")
 
-    # 1. Fluency (Summary only, reference-free)
-    print("[EVALUATOR] 🔬 Calculating Fluency score...")
+
+app = FastAPI(title="UniEval Quality Microservice", lifespan=lifespan)
+
+
+class EvaluationRequest(BaseModel):
+    correlationId: str
+    runnerName: str
+    shardId: str
+    sourceIdentifier: str
+    sourceTitle: str
+    sourceText: str
+    summaryText: str
+
+
+@app.get("/health")
+def health():
+    return {
+        "status": "ok",
+        "evaluator_loaded": EVALUATOR_INSTANCE is not None,
+        "memory": HardwareSampler.get_memory_snapshot(),
+    }
+
+
+def compute_unieval_sync(
+    source_text: str, summary_text: str
+) -> Dict[str, Any]:
+    convert_to_json = UNIEVAL_MODULES["convert_to_json"]
+    evaluator = EVALUATOR_INSTANCE
+
+    # 1. Fluency
     data_flu = convert_to_json(output_list=[summary_text])
     eval_flu = evaluator.evaluate(data_flu, dims=["fluency"], overall=False)
-    fluency_score = round(eval_flu[0]["fluency"], 3)
+    fluency = round(eval_flu[0]["fluency"], 3)
 
-    # 2. Coherence against Macro Structural Skeleton
-    print("[EVALUATOR] 🔬 Calculating Coherence against macro structure...")
-    macro_context = extract_macro_skeleton(source_text, max_words=380)
-    data_coh = convert_to_json(
-        output_list=[summary_text], src_list=[macro_context]
-    )
+    # 2. Coherence
+    macro_ctx = extract_macro_skeleton(source_text, max_words=380)
+    data_coh = convert_to_json(output_list=[summary_text], src_list=[macro_ctx])
     eval_coh = evaluator.evaluate(data_coh, dims=["coherence"], overall=False)
-    coherence_score = round(eval_coh[0]["coherence"], 3)
+    coherence = round(eval_coh[0]["coherence"], 3)
 
-    # 3. Chunked Sentence-Level Consistency (Grounding)
-    print(
-        "[EVALUATOR] 🔬 Calculating Chunked Sentence Grounding (Consistency)..."
-    )
+    # 3. Chunked Sentence-Level Consistency
     chunks = chunk_document(source_text, chunk_words=380, stride_words=80)
-    sentences = split_sentences(summary_text)
-
-    if not sentences:
-        sentences = [summary_text]
+    sentences = split_sentences(summary_text) or [summary_text]
 
     retriever = EvidenceRetriever(chunks)
-    eval_pairs_src = []
-    eval_pairs_out = []
-    pair_meta = []
+    eval_src, eval_out, pair_meta = [], [], []
 
     for s_idx, sentence in enumerate(sentences):
-        top_candidates = retriever.retrieve_top_k(sentence, k=2)
-        for c_idx, chunk in top_candidates:
-            eval_pairs_src.append(chunk)
-            eval_pairs_out.append(sentence)
+        for c_idx, chunk in retriever.retrieve_top_k(sentence, k=2):
+            eval_src.append(chunk)
+            eval_out.append(sentence)
             pair_meta.append((s_idx, c_idx))
 
-    data_cons = convert_to_json(
-        output_list=eval_pairs_out, src_list=eval_pairs_src
-    )
-    cons_results = evaluator.evaluate(
+    data_cons = convert_to_json(output_list=eval_out, src_list=eval_src)
+    cons_res = evaluator.evaluate(
         data_cons, dims=["consistency"], overall=False
     )
 
     sentence_scores: Dict[int, float] = {}
     sentence_chunk_map: Dict[int, int] = {}
-
-    for idx, res in enumerate(cons_results):
+    for idx, r in enumerate(cons_res):
         s_idx, c_idx = pair_meta[idx]
-        score = res["consistency"]
-        if (
-            s_idx not in sentence_scores
-            or score > sentence_scores[s_idx]
-        ):
-            sentence_scores[s_idx] = score
+        sc = r["consistency"]
+        if s_idx not in sentence_scores or sc > sentence_scores[s_idx]:
+            sentence_scores[s_idx] = sc
             sentence_chunk_map[s_idx] = c_idx
 
     sentence_details = []
     supported_chunks = set()
     for s_idx, sentence in enumerate(sentences):
-        score = round(sentence_scores.get(s_idx, 0.0), 3)
+        sc = round(sentence_scores.get(s_idx, 0.0), 3)
         c_idx = sentence_chunk_map.get(s_idx, 0)
-        is_supported = score >= 0.50
-        if is_supported:
+        supported = sc >= 0.50
+        if supported:
             supported_chunks.add(c_idx)
-
         sentence_details.append(
             {
                 "sentence_index": s_idx + 1,
                 "text": sentence,
-                "score": score,
+                "score": sc,
                 "matched_chunk": c_idx + 1,
-                "supported": is_supported,
+                "supported": supported,
             }
         )
 
@@ -239,160 +299,72 @@ def run_evaluation(
         if sentence_details
         else 0.0
     )
-    chunk_coverage_pct = round((len(supported_chunks) / len(chunks)) * 100, 1)
+    coverage_pct = round((len(supported_chunks) / len(chunks)) * 100, 1)
 
     return {
         "overall_consistency": avg_consistency,
-        "coherence": coherence_score,
-        "fluency": fluency_score,
+        "coherence": coherence,
+        "fluency": fluency,
         "document_chunks_total": len(chunks),
         "document_chunks_covered": len(supported_chunks),
-        "chunk_coverage_percent": chunk_coverage_pct,
+        "chunk_coverage_percent": coverage_pct,
         "sentence_breakdown": sentence_details,
     }
 
 
-# -------------------------------------------------------------
-# 4. STEP SUMMARY & JSONL AUDIT
-# -------------------------------------------------------------
-def main():
-    parser = argparse.ArgumentParser(
-        description="Run UniEval summarization audit"
+@app.post("/v1/evaluate")
+async def evaluate_article(req: EvaluationRequest):
+    if not EVALUATOR_INSTANCE:
+        raise HTTPException(status_code=503, detail="Evaluator not loaded")
+
+    t_start = time.perf_counter()
+    stat_start_total, stat_start_idle = HardwareSampler.read_cpu_stat()
+
+    async with CONCURRENCY_SEMAPHORE:
+        metrics = await asyncio.to_thread(
+            compute_unieval_sync, req.sourceText, req.summaryText
+        )
+
+    duration_ms = round((time.perf_counter() - t_start) * 1000)
+    stat_end_total, stat_end_idle = HardwareSampler.read_cpu_stat()
+    delta_total = stat_end_total - stat_start_total
+    delta_idle = stat_end_idle - stat_start_idle
+    cpu_pct = (
+        round(((delta_total - delta_idle) / delta_total) * 100, 1)
+        if delta_total > 0
+        else 0.0
     )
-    parser.add_argument(
-        "--input-events",
-        default="pipeline-events.jsonl",
-        help="Path to pipeline events file",
+    mem_snap = HardwareSampler.get_memory_snapshot()
+
+    epoch_ms = int(time.time() * 1000)
+    event_id = generate_event_id(
+        req.runnerName, req.shardId, epoch_ms, "QUALITY_EVALUATION_COMPLETED"
     )
-    parser.add_argument(
-        "--unieval-dir",
-        default="/tmp/unieval",
-        help="Path to cloned UniEval repository",
-    )
-    args = parser.parse_args()
 
-    if not os.path.exists(args.input_events):
-        print(f"❌ Input events file {args.input_events} does not exist.")
-        sys.exit(1)
-
-    structured_outputs = []
-    with open(args.input_events, "r", encoding="utf-8") as f:
-        for line in f:
-            if not line.strip():
-                continue
-            try:
-                event = json.loads(line)
-                if event.get("eventType") == "OUTPUT_STRUCTURED":
-                    structured_outputs.append(event)
-            except Exception:
-                continue
-
-    if not structured_outputs:
-        print("⚠️ No OUTPUT_STRUCTURED events found to evaluate.")
-        sys.exit(0)
-
-    summary_file = os.getenv("GITHUB_STEP_SUMMARY")
-    summary_lines = [
-        "## 🧪 Summarization Quality Audit (UniEval Suite)",
-        "",
-        "> Quality and factual grounding evaluated using `MingZhong/unieval-sum` (T5-Large) via chunked BM25 retrieval.",
-        "",
-    ]
-
-    for idx, item in enumerate(structured_outputs):
-        payload = item["payload"]
-        source_text = payload["source_audit"]["extractedText"]
-        summary_text = payload.get(
-            "analytic_synthesis"
-        ) or payload.get("executive_summary", "")
-        headline = payload.get("headline", "Article")
-
-        print(
-            f"\n[EVALUATOR] 🚀 Evaluating Target ({idx + 1}/{len(structured_outputs)}): '{headline}'..."
-        )
-        metrics = run_evaluation(source_text, summary_text, args.unieval_dir)
-
-        print(
-            f"::notice title=UniEval Quality Verified::Consistency: {metrics['overall_consistency']} | "
-            f"Coverage: {metrics['chunk_coverage_percent']}% | Coherence: {metrics['coherence']} | Fluency: {metrics['fluency']}"
-        )
-
-        unsupported = [
-            s for s in metrics["sentence_breakdown"] if not s["supported"]
-        ]
-        if unsupported:
-            print(
-                f"::warning title=Ungrounded Content Detected::{len(unsupported)} of {len(metrics['sentence_breakdown'])} "
-                f"sentences scored < 0.50 consistency against source chunks."
-            )
-
-        consistency_rating = (
-            "🟢 Fully Supported"
-            if metrics["overall_consistency"] >= 0.75
-            else "⚠️ Grounding Variance"
-        )
-        coverage_rating = (
-            "🟢 High Coverage"
-            if metrics["chunk_coverage_percent"] >= 60.0
-            else "⚠️ Partial Coverage"
-        )
-        coherence_rating = (
-            "🟢 Fluid"
-            if metrics["coherence"] >= 0.70
-            else "⚠️ Fragmented"
-        )
-        fluency_rating = (
-            "🟢 Natural"
-            if metrics["fluency"] >= 0.85
-            else "⚠️ Mechanical"
-        )
-
-        summary_lines.extend(
-            [
-                f"### Target {idx + 1}: *\"{headline}\"*",
-                "",
-                "| Evaluation Dimension | Metric Score | Operational Rating | Evaluation Methodology |",
-                "| :--- | :---: | :---: | :--- |",
-                f"| **Consistency (Factuality)** | **`{metrics['overall_consistency']}`** | {consistency_rating} | Chunked BM25 Sentence Entailment |",
-                f"| **Sectional Coverage** | **`{metrics['chunk_coverage_percent']}%`** | {coverage_rating} | {metrics['document_chunks_covered']} of {metrics['document_chunks_total']} document chunks represented |",
-                f"| **Discourse Coherence** | **`{metrics['coherence']}`** | {coherence_rating} | Inter-sentence discourse flow against macro skeleton |",
-                f"| **Fluency (Syntax)** | **`{metrics['fluency']}`** | {fluency_rating} | Grammatical well-formedness & readability |",
-                "",
-                "<details>",
-                f"<summary><b>Inspect Sentence-by-Sentence Grounding Matrix ({len(metrics['sentence_breakdown'])} Sentences)</b></summary>",
-                "",
-                "| # | Summary Sentence | Matched Chunk | Consistency Score | Status |",
-                "| :- | :--- | :-: | :-: | :-: |",
-            ]
-        )
-
-        for s in metrics["sentence_breakdown"]:
-            status = "✅ Supported" if s["supported"] else "❌ Unsupported"
-            summary_lines.append(
-                f"| {s['sentence_index']} | {s['text']} | Chunk {s['matched_chunk']} | `{s['score']}` | {status} |"
-            )
-
-        summary_lines.extend(["", "</details>", "", "---", ""])
-
-        eval_event = {
-            "eventId": f"eval-{payload.get('source_audit', {}).get('sourceIdentifier', idx)}",
-            "eventType": "QUALITY_EVALUATION_COMPLETED",
-            "timestamp": payload.get("source_audit", {}).get("sourceTitle", ""),
-            "payload": {
-                "headline": headline,
-                "sourceIdentifier": payload["source_audit"]["sourceIdentifier"],
-                "metrics": metrics,
+    event_payload = {
+        "eventId": event_id,
+        "eventType": "QUALITY_EVALUATION_COMPLETED",
+        "timestamp": time.strftime(
+            "%Y-%m-%dT%H:%M:%SZ", time.gmtime(epoch_ms / 1000)
+        ),
+        "correlationId": req.correlationId,
+        "durationMs": duration_ms,
+        "cumulativeMs": 0,
+        "payload": {
+            "sourceIdentifier": req.sourceIdentifier,
+            "sourceTitle": req.sourceTitle,
+            "metrics": metrics,
+            "serverTelemetry": {
+                "duration_ms": duration_ms,
+                "cpu_percent": cpu_pct,
+                "server_vm_rss_mb": mem_snap["server_vm_rss_mb"],
+                "server_vm_swap_mb": mem_snap["server_vm_swap_mb"],
             },
-        }
-        with open(args.input_events, "a", encoding="utf-8") as f:
-            f.write(json.dumps(eval_event) + "\n")
+        },
+    }
 
-    if summary_file:
-        with open(summary_file, "a", encoding="utf-8") as f:
-            f.write("\n".join(summary_lines) + "\n")
-
-    print("[EVALUATOR] ✅ Evaluation completed successfully.")
+    return {"status": "success", "event": event_payload, "metrics": metrics}
 
 
 if __name__ == "__main__":
-    main()
+    uvicorn.run(app, host="127.0.0.1", port=9933, log_level="info")
