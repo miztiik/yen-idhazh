@@ -2,13 +2,16 @@
 """
 .github/scripts/serve-evaluator.py
 Verb-Noun: Serves the UniEval quality evaluation microservice over FastAPI.
-Hosts MingZhong/unieval-sum (T5-Large) with in-flight CPU/RAM telemetry,
-RFC 4122 UUIDv5 audit trail generation, and failure-focused forensic evidence.
+Outputs structured JSONL to stdout, appends evaluation events to eval-events.jsonl,
+and implements deterministic RFC 4122 UUIDv5 hashing.
 """
 
 import asyncio
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 import importlib.util
+import json
+import logging
 import os
 from pathlib import Path
 import re
@@ -39,22 +42,54 @@ if importlib.util.find_spec("prettytable") is None:
     dummy.PrettyTable = DummyPrettyTable
     sys.modules["prettytable"] = dummy
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 import torch
 import uvicorn
 
 # -------------------------------------------------------------
-# 1. CONSTANTS & RFC 4122 UUIDv5 GENERATOR
+# 1. STRUCTURED JSONL LOGGING
 # -------------------------------------------------------------
+EVAL_EVENTS_PATH = Path(os.getenv("EVAL_EVENTS_PATH", "eval-events.jsonl"))
 UUIDV5_NAMESPACE = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
 
 
-def generate_event_id(
-    runner_name: str, shard_id: str, epoch_ms: int, event_type: str
+def log_structured(level: str, message: str, **kwargs: Any) -> None:
+    payload = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "level": level.upper(),
+        "service": "unieval-evaluator",
+        "message": message,
+        **kwargs,
+    }
+    sys.stdout.write(json.dumps(payload) + "\n")
+    sys.stdout.flush()
+
+
+def generate_deterministic_event_id(
+    runner_name: str, shard_id: str, source_url: str, event_type: str
 ) -> str:
-    seed = f"runner:{runner_name}:shard:{shard_id}:epoch:{epoch_ms}:event:{event_type}"
+    seed = f"runner:{runner_name}:shard:{shard_id}:source:{source_url}:event:{event_type}"
     return f"evt-{uuid.uuid5(UUIDV5_NAMESPACE, seed)}"
+
+
+def append_eval_event(event_dict: dict[str, Any]) -> None:
+    try:
+        with EVAL_EVENTS_PATH.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(event_dict) + "\n")
+    except Exception as e:
+        log_structured("ERROR", "Failed to write event to eval-events.jsonl", error=str(e))
+
+
+class JsonlUvicornFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        data = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "level": record.levelname,
+            "service": "uvicorn-server",
+            "message": record.getMessage(),
+        }
+        return json.dumps(data)
 
 
 # -------------------------------------------------------------
@@ -201,28 +236,35 @@ async def lifespan(app: FastAPI):
         UNIEVAL_MODULES["get_evaluator"] = get_evaluator
         UNIEVAL_MODULES["convert_to_json"] = convert_to_json
     except ImportError as e:
-        print(f"[FASTAPI] ❌ Failed to load UniEval from {unieval_dir}: {e}", file=sys.stderr, flush=True)
+        log_structured("ERROR", f"Failed to load UniEval from {unieval_dir}", error=str(e))
         raise e
 
     cores = os.cpu_count() or 2
     torch.set_num_threads(cores)
 
-    print(
-        f"[FASTAPI] 🤖 Initializing UniEval (T5-Large) with {cores} threads on device='cpu'...",
-        flush=True,
-    )
-    EVALUATOR_INSTANCE = get_evaluator(
-        "summarization", max_length=1024, device="cpu"
-    )
-    print(
-        "[FASTAPI] ✅ UniEval service warm and listening on http://127.0.0.1:9933",
-        flush=True,
-    )
+    log_structured("INFO", f"Initializing UniEval (T5-Large) with {cores} threads on device='cpu'")
+    EVALUATOR_INSTANCE = get_evaluator("summarization", max_length=1024, device="cpu")
+    log_structured("INFO", "UniEval service warmed and listening on port 9933")
     yield
-    print("[FASTAPI] 🛑 Shutting down UniEval service.", flush=True)
+    log_structured("INFO", "Shutting down UniEval service")
 
 
 app = FastAPI(title="UniEval Quality Microservice", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def jsonl_logging_middleware(request: Request, call_next):
+    start = time.perf_counter()
+    response = await call_next(request)
+    duration_ms = round((time.perf_counter() - start) * 1000, 2)
+    log_structured(
+        "INFO",
+        f"HTTP {request.method} {request.url.path} Completed",
+        status_code=response.status_code,
+        duration_ms=duration_ms,
+        client=request.client.host if request.client else "unknown",
+    )
+    return response
 
 
 class EvaluationRequest(BaseModel):
@@ -246,9 +288,7 @@ def health():
     }
 
 
-def compute_unieval_sync(
-    source_text: str, summary_text: str
-) -> dict[str, Any]:
+def compute_unieval_sync(source_text: str, summary_text: str) -> dict[str, Any]:
     convert_to_json = UNIEVAL_MODULES["convert_to_json"]
     evaluator = EVALUATOR_INSTANCE
 
@@ -282,9 +322,7 @@ def compute_unieval_sync(
 
     if eval_out and eval_src:
         data_cons = convert_to_json(output_list=eval_out, src_list=eval_src)
-        cons_res = evaluator.evaluate(
-            data_cons, dims=["consistency"], overall=False
-        )
+        cons_res = evaluator.evaluate(data_cons, dims=["consistency"], overall=False)
 
         sentence_scores: dict[int, float] = {}
         sentence_chunk_map: dict[int, int] = {}
@@ -304,7 +342,6 @@ def compute_unieval_sync(
             if supported:
                 supported_chunks.add(c_idx)
 
-            # Find closest source sentence in the matched chunk for actionable diff
             matched_chunk_text = chunks[c_idx] if c_idx < len(chunks) else source_text
             chunk_sentences = split_sentences(matched_chunk_text)
             best_source_sent = chunk_sentences[0] if chunk_sentences else matched_chunk_text[:200]
@@ -336,7 +373,6 @@ def compute_unieval_sync(
                 }
             )
 
-    # 4. Compute Uncovered Sections (What is missing and why)
     uncovered_sections = []
     for c_idx in range(len(chunks)):
         if c_idx not in supported_chunks:
@@ -402,17 +438,17 @@ async def evaluate_article(req: EvaluationRequest):
     )
     mem_snap = HardwareSampler.get_memory_snapshot()
 
-    epoch_ms = int(time.time() * 1000)
-    event_id = generate_event_id(
-        req.runner_name, req.shard_id, epoch_ms, "QUALITY_EVALUATION_COMPLETED"
+    event_id = generate_deterministic_event_id(
+        req.runner_name,
+        req.shard_id,
+        req.source_identifier,
+        "QUALITY_EVALUATION_COMPLETED",
     )
 
     event_payload = {
         "eventId": event_id,
         "eventType": "QUALITY_EVALUATION_COMPLETED",
-        "timestamp": time.strftime(
-            "%Y-%m-%dT%H:%M:%SZ", time.gmtime(epoch_ms / 1000)
-        ),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "correlationId": req.correlation_id,
         "durationMs": duration_ms,
         "cumulativeMs": 0,
@@ -429,8 +465,27 @@ async def evaluate_article(req: EvaluationRequest):
         },
     }
 
+    append_eval_event(event_payload)
+
+    log_structured(
+        "INFO",
+        "Evaluation completed successfully",
+        eventId=event_id,
+        correlationId=req.correlation_id,
+        sourceIdentifier=req.source_identifier,
+        durationMs=duration_ms,
+        consistency=metrics["overall_consistency"],
+        coveragePct=metrics["chunk_coverage_percent"],
+    )
+
     return {"status": "success", "event": event_payload, "metrics": metrics}
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=9933, log_level="info")
+    uvicorn_logger = logging.getLogger("uvicorn.access")
+    uvicorn_logger.handlers.clear()
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(JsonlUvicornFormatter())
+    uvicorn_logger.addHandler(handler)
+
+    uvicorn.run(app, host="127.0.0.1", port=9933, log_config=None, access_log=False)
