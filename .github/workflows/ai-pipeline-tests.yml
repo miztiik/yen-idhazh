@@ -302,7 +302,9 @@ jobs:
           echo $SERVER_PID > .eval_server.pid
 
           READY=0
-          for i in {1..120}; do
+          # 180 iterations * 1s = 180 seconds (3 minutes)
+          for i in {1..180}; do
+            # Immediate fail-fast: exit in <1s if Python crashes or OOMs
             if ! kill -0 $SERVER_PID 2>/dev/null; then
               echo '{"timestamp":"'$(date -u +%FT%TZ)'","level":"ERROR","message":"UniEval server process terminated unexpectedly"}'
               cat eval_server.log
@@ -310,15 +312,15 @@ jobs:
             fi
 
             if curl -s http://127.0.0.1:9933/health | grep -q '"status":"ok"'; then
-              echo '{"timestamp":"'$(date -u +%FT%TZ)'","level":"INFO","message":"Python UniEval FastAPI server ready on port 9933"}'
+              echo '{"timestamp":"'$(date -u +%FT%TZ)'","level":"INFO","message":"Python UniEval FastAPI server ready on port 9933 (warmed up in '$i's)"}'
               READY=1
               break
             fi
-            sleep 0.5
+            sleep 1
           done
 
           if [ $READY -ne 1 ]; then
-            echo '{"timestamp":"'$(date -u +%FT%TZ)'","level":"ERROR","message":"UniEval server failed to become ready within 60s"}'
+            echo '{"timestamp":"'$(date -u +%FT%TZ)'","level":"ERROR","message":"UniEval server failed to become ready within 180s"}'
             cat eval_server.log
             exit 1
           fi
