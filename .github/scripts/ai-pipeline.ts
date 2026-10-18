@@ -1624,7 +1624,16 @@ export function publishStepSummary(
 
     results.forEach((res, idx) => {
       const qm = res.quality_metrics;
-      if (!qm) return;
+      if (!qm) {
+        evalLines.push(
+          `## ⚠️ Quality Evaluation Unavailable: *"${res.headline}"* (${idx + 1}/${results.length})`,
+          `> ❌ **Evaluation Failure:** The UniEval microservice was unable to compute quality metrics for this target. Consult \`eval_server.log\` for stack traces.`,
+          ``,
+          `---`,
+          ``
+        );
+        return;
+      }
 
       evalLines.push(
         `## 🧪 Quality Breakdown: *"${res.headline}"* (${idx + 1}/${results.length})`,
@@ -1938,6 +1947,9 @@ async function main() {
   // -------------------------------------------------------------
   // PHASE 2: EVALUATION (CLIENT HTTP DISPATCH)
   // -------------------------------------------------------------
+// -------------------------------------------------------------
+  // PHASE 2: EVALUATION (CLIENT HTTP DISPATCH)
+  // -------------------------------------------------------------
   if (phase === "eval") {
     logStructured("INFO", "Executing Phase 2: Parallel UniEval Quality Audit");
     if (!fs.existsSync(pipelineEventsPath)) {
@@ -1997,6 +2009,7 @@ async function main() {
       })
     );
 
+    let evaluationFailures = 0;
     const updatedOutputs: SummaryStructuredOutput[] = structuredEvents.map((evt, idx) => {
       const output: SummaryStructuredOutput = evt.payload;
       const evalRes = evalResults[idx];
@@ -2012,27 +2025,31 @@ async function main() {
           },
           output.source_audit?.sourceIdentifier || "evaluation-target"
         );
+
+        pipeline.logEvent(
+          "OUTPUT_ENRICHED",
+          output,
+          output.source_audit?.sourceIdentifier || "evaluation-target"
+        );
       } else {
-        logStructured("WARN", "Evaluation request failed for target", {
+        evaluationFailures++;
+        const reason = evalRes?.status === "rejected" ? evalRes.reason?.message : "Unfulfilled";
+        logStructured("ERROR", "Evaluation request failed for target", {
           headline: output.headline,
-          error: evalRes?.status === "rejected" ? evalRes.reason?.message : "Unfulfilled",
+          error: reason,
         });
       }
 
       if (!output.host_fingerprint) output.host_fingerprint = getHostFingerprint();
       if (!output.runner_metadata) output.runner_metadata = runnerMetadata;
 
-      // Persist the fully enriched output schema back to the data lake
-      pipeline.logEvent(
-        "OUTPUT_ENRICHED",
-        output,
-        output.source_audit?.sourceIdentifier || "evaluation-target"
-      );
-
       return output;
     });
 
-    pipeline.logEvent("QUALITY_EVALUATION_BATCH_COMPLETED", { totalEvaluated: updatedOutputs.length }, "evaluation-phase");
+    pipeline.logEvent("QUALITY_EVALUATION_BATCH_COMPLETED", {
+      totalEvaluated: updatedOutputs.length - evaluationFailures,
+      totalFailed: evaluationFailures,
+    }, "evaluation-phase");
 
     const retainedFeedAudit = updatedOutputs.find((o) => o.source_audit?.feedAudit)?.source_audit?.feedAudit;
     const activeInferenceParams = updatedOutputs[0]?.inference_params || DEFAULT_MODEL_CONFIG;
@@ -2045,6 +2062,14 @@ async function main() {
       activeInferenceParams,
       retainedFeedAudit
     );
+
+    if (evaluationFailures > 0) {
+      logStructured("ERROR", `Quality evaluation phase encountered ${evaluationFailures} failure(s)`, {
+        failedCount: evaluationFailures,
+        total: updatedOutputs.length,
+      });
+      process.exit(1);
+    }
 
     logStructured("INFO", "Quality evaluation phase completed successfully and step summary published.");
     return;
