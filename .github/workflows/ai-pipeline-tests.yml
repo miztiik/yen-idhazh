@@ -79,32 +79,29 @@ jobs:
           sudo mkswap /swapfile
           sudo swapon /swapfile
 
-      # 2. Install Ingestion & Evaluator Dependencies
-      - name: Install Dependencies
-        run: |
-          if [ ! -f package.json ]; then npm init -y; fi
-          npm pkg set type="module"
-          npm install defuddle linkedom feedsmith tidy-url
-
-          pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
-          pip install --no-cache-dir transformers sentencepiece protobuf evaluate rouge-score nltk rank-bm25 prettytable scipy fastapi uvicorn pydantic
-          python -c "import nltk; nltk.download('punkt'); nltk.download('punkt_tab')"
-
-          git clone --depth 1 https://github.com/maszhongming/UniEval.git /tmp/unieval
-
-      # 3. Install llama.cpp
+      # 2. INSTALL LLAMA.CPP
       - name: Install Official llama.cpp
         run: |
           curl -LsSf https://llama.app/install.sh | SKIP_CUDA=1 SKIP_ROCM=1 SKIP_VULKAN=1 sh
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      # 4. Cache & Download GGUF Model
-      - name: Cache & Download GGUF Model
+      # 3. PARALLEL SETUP: DEPENDENCIES & GGUF MODEL DOWNLOAD
+      - name: Parallel Setup (Dependencies & Model Download)
         run: |
+          set -euo pipefail
+
+          # Ensure all child background jobs are killed if parent script exits unexpectedly
+          trap 'kill $(jobs -p) 2>/dev/null || true' EXIT
+
+          LOG_DEPS="/tmp/install_deps.log"
+          LOG_MODEL="/tmp/download_model.log"
           mkdir -p ./models
+
+          # Resolve Hugging Face Model Filename in Parent Shell
           REPO="${{ github.event.inputs.model_family }}"
           SPECIFIC_FILE="${{ github.event.inputs.model_id }}"
 
+          echo "[$(date +%T)] 🔍 Resolving model filename for '${REPO}'..."
           if [ -n "$SPECIFIC_FILE" ]; then
             FILE="$SPECIFIC_FILE"
           else
@@ -112,12 +109,98 @@ jobs:
             [ -z "$FILE" ] && FILE=$(curl -sL "https://huggingface.co/api/models/${REPO}/tree/main" | jq -r '.[].path' | grep -iE '\.gguf$' | head -n 1)
           fi
 
-          echo "MODEL_FILE=$FILE" >> $GITHUB_ENV
-          if [ ! -f "./models/$FILE" ]; then
-            curl -fL -o "./models/$FILE" "https://huggingface.co/${REPO}/resolve/main/${FILE}"
+          if [ -z "$FILE" ] || [ "$FILE" = "null" ]; then
+            echo "::error::Failed to resolve a valid .gguf file from Hugging Face repository: ${REPO}"
+            exit 1
           fi
 
-      # 5. Start llama-server (Port 9931) with Fail-Fast Liveness Check
+          echo "MODEL_FILE=$FILE" >> $GITHUB_ENV
+          echo "[$(date +%T)] 🎯 Target Model: $FILE"
+
+          # -------------------------------------------------------------
+          # FUNCTION 1: Runtime Dependencies Setup
+          # -------------------------------------------------------------
+          task_install_deps() {
+            echo "[$(date +%T)] Starting Node.js & Python dependencies installation..."
+            
+            if [ ! -f package.json ]; then npm init -y; fi
+            npm pkg set type="module"
+            npm install --no-audit --no-fund defuddle linkedom feedsmith tidy-url
+
+            pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+            pip install --no-cache-dir transformers sentencepiece protobuf evaluate rouge-score nltk rank-bm25 prettytable scipy fastapi uvicorn pydantic
+            python -c "import nltk; nltk.download('punkt'); nltk.download('punkt_tab')"
+
+            rm -rf /tmp/unieval
+            git clone --depth 1 https://github.com/maszhongming/UniEval.git /tmp/unieval
+            echo "[$(date +%T)] All runtime dependencies successfully installed."
+          }
+
+          # -------------------------------------------------------------
+          # FUNCTION 2: Model Binary Download
+          # -------------------------------------------------------------
+          task_download_model() {
+            echo "[$(date +%T)] Starting model download for ./models/$FILE..."
+            if [ ! -f "./models/$FILE" ]; then
+              curl -fL -C - \
+                --retry 3 \
+                --retry-delay 2 \
+                --retry-connrefused \
+                -o "./models/$FILE" \
+                "https://huggingface.co/${REPO}/resolve/main/${FILE}"
+            else
+              echo "Model file already exists in cache."
+            fi
+            echo "[$(date +%T)] Model binary download verified and complete."
+          }
+
+          # -------------------------------------------------------------
+          # DISPATCH PARALLEL JOBS
+          # -------------------------------------------------------------
+          task_install_deps > "$LOG_DEPS" 2>&1 &
+          PID_DEPS=$!
+
+          task_download_model > "$LOG_MODEL" 2>&1 &
+          PID_MODEL=$!
+
+          echo "[$(date +%T)] 🚀 Parallel tasks dispatched:"
+          echo "       ↳ [PID $PID_DEPS] Runtime Dependencies (logging to $LOG_DEPS)"
+          echo "       ↳ [PID $PID_MODEL] GGUF Model Download (logging to $LOG_MODEL)"
+
+          declare -A TASK_NAMES=( ["$PID_DEPS"]="Dependencies Installation" ["$PID_MODEL"]="GGUF Model Download" )
+          declare -A TASK_LOGS=( ["$PID_DEPS"]="$LOG_DEPS" ["$PID_MODEL"]="$LOG_MODEL" )
+
+          # -------------------------------------------------------------
+          # FAIL-FAST EVENT LOOP (wait -n)
+          # -------------------------------------------------------------
+          for _ in 1 2; do
+            EXITED_PID=""
+            if wait -n -p EXITED_PID; then
+              NAME="${TASK_NAMES[$EXITED_PID]}"
+              echo "[$(date +%T)] ✅ $NAME completed successfully."
+              echo "::group::📄 View $NAME Logs"
+              cat "${TASK_LOGS[$EXITED_PID]}"
+              echo "::endgroup::"
+            else
+              STATUS=$?
+              NAME="${TASK_NAMES[${EXITED_PID:-$PID_DEPS}]}"
+              echo "::error::[$(date +%T)] ❌ $NAME failed with exit code $STATUS!"
+
+              # Terminate sibling task immediately to release runner bandwidth
+              kill "$PID_DEPS" "$PID_MODEL" 2>/dev/null || true
+
+              echo "::group::🚨 FAILED TASK LOG: $NAME"
+              cat "${TASK_LOGS[${EXITED_PID:-$PID_DEPS}]}"
+              echo "::endgroup::"
+              exit $STATUS
+            fi
+          done
+
+          # Disable trap on clean completion
+          trap - EXIT
+          echo "[$(date +%T)] 🎉 Both setup stages completed in parallel without error."
+
+      # 4. START LLAMA-SERVER (PORT 9931)
       - name: Start llama-server Daemon (Port 9931)
         run: |
           CORES=$(nproc)
@@ -165,7 +248,7 @@ jobs:
             exit 1
           fi
 
-      # 6. PHASE 1: Run Ingestion & LLM Inference
+      # 5. PHASE 1: RUN INGESTION & LLM INFERENCE
       - name: Execute Phase 1 Inference
         env:
           INPUT_SOURCE: "${{ github.event.inputs.input_source }}"
@@ -199,7 +282,7 @@ jobs:
         run: |
           npx --yes tsx .github/scripts/ai-pipeline.ts --phase=infer
 
-      # 7. TEARDOWN LLAMA-SERVER & FLUSH OS PAGE CACHE
+      # 6. TEARDOWN LLAMA-SERVER & RECLAIM PHYSICAL RAM
       - name: Stop llama-server (Reclaim Memory)
         run: |
           if [ -f .llama_server.pid ]; then
@@ -209,7 +292,7 @@ jobs:
             sudo sync && echo 3 | sudo tee /proc/sys/vm/drop_caches
           fi
 
-      # 8. Start Python FastAPI UniEval Engine (Port 9933)
+      # 7. START FASTAPI UNIEVAL ENGINE (PORT 9933)
       - name: Start Python FastAPI UniEval Engine (Port 9933)
         env:
           EVAL_EVENTS_PATH: "eval-events.jsonl"
@@ -240,7 +323,7 @@ jobs:
             exit 1
           fi
 
-      # 9. PHASE 2: Run Quality Audit (Parallel HTTP Client)
+      # 8. PHASE 2: RUN QUALITY AUDIT
       - name: Execute Phase 2 Quality Audit
         env:
           MODEL_NAME: "${{ env.MODEL_FILE }}"
@@ -257,7 +340,7 @@ jobs:
         run: |
           npx --yes tsx .github/scripts/ai-pipeline.ts --phase=eval
 
-      # 10. TEARDOWN EVAL SERVER
+      # 9. TEARDOWN EVAL SERVER
       - name: Teardown Python Eval Server
         if: always()
         run: |
@@ -266,7 +349,7 @@ jobs:
             rm -f .eval_server.pid
           fi
 
-      # 11. Upload Logs and JSONL Telemetry
+      # 10. UPLOAD LOGS & JSONL TELEMETRY
       - name: Upload Logs and JSONL Telemetry
         if: always()
         uses: actions/upload-artifact@v4
