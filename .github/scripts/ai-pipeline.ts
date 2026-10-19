@@ -1992,6 +1992,9 @@ async function main() {
   // PHASE 2: EVALUATION (CLIENT HTTP DISPATCH)
   // -------------------------------------------------------------
 
+// -------------------------------------------------------------
+  // PHASE 2: EVALUATION (SEQUENTIAL DISPATCH & TELEMETRY INGESTION)
+  // -------------------------------------------------------------
   if (phase === "eval") {
     logStructured("INFO", "Executing Phase 2: Sequential UniEval Quality Audit");
     if (!fs.existsSync(pipelineEventsPath)) {
@@ -2021,10 +2024,12 @@ async function main() {
 
     pipeline.logEvent("QUALITY_EVALUATION_STARTED", { articleCount: structuredEvents.length }, "evaluation-phase");
 
-    let evaluationFailures = 0;
+    let evalFailedCount = 0;
+    let upstreamSkippedCount = 0;
+    let evaluatedCount = 0;
     const updatedOutputs: SummaryStructuredOutput[] = [];
 
-    // Dispatch requests sequentially to eliminate socket queuing timeouts
+    // Dispatch sequentially to avoid HTTP backlog timeout
     for (let idx = 0; idx < structuredEvents.length; idx++) {
       const event = structuredEvents[idx];
       const payload: SummaryStructuredOutput = event.payload;
@@ -2035,11 +2040,25 @@ async function main() {
         sourceIdentifier: output.source_audit?.sourceIdentifier,
       });
 
+      // Upstream inference failure: skip gracefully without failing the evaluation phase
       if (payload.error_flag) {
-        logStructured("WARN", "Skipping quality evaluation on target that failed LLM inference", {
+        upstreamSkippedCount++;
+        logStructured("WARN", "Skipping quality evaluation on target that failed upstream inference", {
           headline: output.headline,
         });
-        evaluationFailures++;
+
+        pipeline.logEvent(
+          "QUALITY_EVALUATION_SKIPPED",
+          {
+            sourceIdentifier: output.source_audit?.sourceIdentifier,
+            sourceTitle: output.headline,
+            reason: "Target failed upstream Phase 1 LLM inference",
+          },
+          output.source_audit?.sourceIdentifier || "evaluation-target"
+        );
+
+        if (!output.host_fingerprint) output.host_fingerprint = getHostFingerprint();
+        if (!output.runner_metadata) output.runner_metadata = runnerMetadata;
         updatedOutputs.push(output);
         continue;
       }
@@ -2055,6 +2074,7 @@ async function main() {
           summaryText: payload.analytic_synthesis,
         });
 
+        evaluatedCount++;
         output.quality_metrics = data.metrics;
 
         pipeline.logEvent(
@@ -2067,14 +2087,26 @@ async function main() {
           output.source_audit?.sourceIdentifier || "evaluation-target"
         );
 
+        // Ingest the evaluation microservice hardware telemetry into the event stream
+        if (data.event?.payload?.serverTelemetry) {
+          pipeline.logEvent(
+            "EVALUATION_SERVER_TELEMETRY",
+            {
+              sourceIdentifier: output.source_audit?.sourceIdentifier,
+              serverTelemetry: data.event.payload.serverTelemetry,
+            },
+            output.source_audit?.sourceIdentifier || "evaluation-target"
+          );
+        }
+
         pipeline.logEvent(
           "OUTPUT_ENRICHED",
           output,
           output.source_audit?.sourceIdentifier || "evaluation-target"
         );
       } catch (err: any) {
-        evaluationFailures++;
-        logStructured("ERROR", "Evaluation request failed for target", {
+        evalFailedCount++;
+        logStructured("ERROR", "Evaluation service request failed for target", {
           headline: output.headline,
           error: err.message,
         });
@@ -2085,10 +2117,16 @@ async function main() {
       updatedOutputs.push(output);
     }
 
-    pipeline.logEvent("QUALITY_EVALUATION_BATCH_COMPLETED", {
-      totalEvaluated: updatedOutputs.length - evaluationFailures,
-      totalFailed: evaluationFailures,
-    }, "evaluation-phase");
+    pipeline.logEvent(
+      "QUALITY_EVALUATION_BATCH_COMPLETED",
+      {
+        totalTargets: structuredEvents.length,
+        evaluatedCount,
+        upstreamSkippedCount,
+        evalFailedCount,
+      },
+      "evaluation-phase"
+    );
 
     const retainedFeedAudit = updatedOutputs.find((o) => o.source_audit?.feedAudit)?.source_audit?.feedAudit;
     const activeInferenceParams = updatedOutputs[0]?.inference_params || DEFAULT_MODEL_CONFIG;
@@ -2102,15 +2140,21 @@ async function main() {
       retainedFeedAudit
     );
 
-    if (evaluationFailures > 0) {
-      logStructured("ERROR", `Quality evaluation phase encountered ${evaluationFailures} failure(s)`, {
-        failedCount: evaluationFailures,
+    // Fail only if the evaluation microservice itself crashed on a valid candidate
+    if (evalFailedCount > 0) {
+      logStructured("ERROR", `Quality evaluation phase encountered ${evalFailedCount} microservice failure(s)`, {
+        failedCount: evalFailedCount,
+        skippedCount: upstreamSkippedCount,
+        evaluatedCount,
         total: updatedOutputs.length,
       });
       process.exit(1);
     }
 
-    logStructured("INFO", "Quality evaluation phase completed successfully and step summary published.");
+    logStructured("INFO", "Quality evaluation phase completed successfully and step summary published.", {
+      evaluatedCount,
+      upstreamSkippedCount,
+    });
     return;
   }
 
