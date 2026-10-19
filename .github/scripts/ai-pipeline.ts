@@ -130,7 +130,7 @@ export function generateUuidV5(name: string, namespace: string = UUIDV5_NAMESPAC
 
 export function buildDeterministicEventId(runnerName: string, shardId: string, sourceUrl: string, eventType: string): string {
   const seed = `runner:${runnerName}:shard:${shardId}:source:${sourceUrl}:event:${eventType}`;
-  return `evt-${generateUuidV5(seed)}`;
+  return `evt_${generateUuidV5(seed)}`;
 }
 
 // -------------------------------------------------------------
@@ -1249,7 +1249,7 @@ export class AIEventPipeline extends EventEmitter {
     super();
     this.runnerMetadata = runnerMetadata;
     this.hostFingerprint = getHostFingerprint();
-    this.correlationId = existingCorrelationId || `corr-${crypto.randomUUID()}`;
+    this.correlationId = existingCorrelationId || crypto.randomUUID();
     this.jsonlFilePath = jsonlFilePath;
     this.pipelineStartTime = performance.now();
     this.lastEventTime = this.pipelineStartTime;
