@@ -50,29 +50,10 @@ import torch
 import uvicorn
 
 # -------------------------------------------------------------
-# 1. STRUCTURED JSONL LOGGING
+# 1. STRUCTURED JSONL LOGGING & TELEMETRY
 # -------------------------------------------------------------
 EVAL_EVENTS_PATH = Path(os.getenv("EVAL_EVENTS_PATH", "eval-events.jsonl"))
 UUIDV5_NAMESPACE = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
-
-STOPWORDS = {
-    "a", "about", "above", "after", "again", "against", "all", "am", "an", "and", "any", "are", 
-    "aren't", "as", "at", "be", "because", "been", "before", "being", "below", "between", "both", 
-    "but", "by", "can't", "cannot", "could", "couldn't", "did", "didn't", "do", "does", "doesn't", 
-    "doing", "don't", "down", "during", "each", "few", "for", "from", "further", "had", "hadn't", 
-    "has", "hasn't", "have", "haven't", "having", "he", "he'd", "he'll", "he's", "her", "here", 
-    "here's", "hers", "herself", "him", "himself", "his", "how", "how's", "i", "i'd", "i'll", 
-    "i'm", "i've", "if", "in", "into", "is", "isn't", "it", "it's", "its", "itself", "let's", "me", 
-    "more", "most", "mustn't", "my", "myself", "no", "nor", "not", "of", "off", "on", "once", 
-    "only", "or", "other", "ought", "our", "ours", "ourselves", "out", "over", "own", "same", 
-    "shan't", "she", "she'd", "she'll", "she's", "should", "shouldn't", "so", "some", "such", 
-    "than", "that", "that's", "the", "their", "theirs", "them", "themselves", "then", "there", 
-    "there's", "these", "they", "they'd", "they'll", "they're", "they've", "this", "those", 
-    "through", "to", "too", "under", "until", "up", "very", "was", "wasn't", "we", "we'd", "we'll", 
-    "we're", "we've", "were", "weren't", "what", "what's", "when", "when's", "where", "where's", 
-    "which", "while", "who", "who's", "whom", "why", "why's", "with", "won't", "would", "wouldn't", 
-    "you", "you'd", "you'll", "you're", "you've", "your", "yours", "yourself", "yourselves"
-}
 
 
 def log_structured(level: str, message: str, **kwargs: Any) -> None:
@@ -149,7 +130,7 @@ class HardwareSampler:
 
 
 # -------------------------------------------------------------
-# 3. TEXT CHUNKING & EVIDENCE RETRIEVAL
+# 3. TEXT CHUNKING & BM25 RETRIEVAL
 # -------------------------------------------------------------
 def split_sentences(text: str) -> list[str]:
     try:
@@ -171,8 +152,7 @@ def chunk_document(
     chunks = []
     i = 0
     while i < len(words):
-        chunk = " ".join(words[i : i + chunk_words])
-        chunks.append(chunk)
+        chunks.append(" ".join(words[i : i + chunk_words]))
         if i + chunk_words >= len(words):
             break
         i += chunk_words - stride_words
@@ -185,16 +165,9 @@ def extract_macro_skeleton(text: str, max_words: int = 380) -> str:
         return text[:1500] if text else "Document body."
     if len(paragraphs) <= 3:
         return "\n\n".join(paragraphs)[:1800]
-    lead = paragraphs[0] + "\n\n" + paragraphs[1]
-    tail = paragraphs[-1]
-    combined = lead + "\n\n[...]\n\n" + tail
+    combined = paragraphs[0] + "\n\n" + paragraphs[1] + "\n\n[...]\n\n" + paragraphs[-1]
     words = combined.split()
     return " ".join(words[:max_words]) if len(words) > max_words else combined
-
-
-def get_content_words(text: str) -> set[str]:
-    tokens = re.findall(r"\w+", text.lower())
-    return {t for t in tokens if t not in STOPWORDS and len(t) > 2}
 
 
 class EvidenceRetriever:
@@ -204,10 +177,7 @@ class EvidenceRetriever:
         try:
             from rank_bm25 import BM25Okapi
 
-            tokenized = [
-                [tok for tok in re.findall(r"\w+", c.lower()) if tok not in STOPWORDS]
-                for c in self.chunks
-            ]
+            tokenized = [re.findall(r"\w+", c.lower()) for c in self.chunks]
             tokenized = [tok if tok else ["document"] for tok in tokenized]
             self.bm25 = BM25Okapi(tokenized)
             self.use_bm25 = True
@@ -217,7 +187,7 @@ class EvidenceRetriever:
     def retrieve_top_k(self, sentence: str, k: int = 2) -> list[tuple[int, str]]:
         if len(self.chunks) <= k:
             return list(enumerate(self.chunks))
-        tokens = [tok for tok in re.findall(r"\w+", sentence.lower()) if tok not in STOPWORDS]
+        tokens = re.findall(r"\w+", sentence.lower())
         if not tokens:
             tokens = ["text"]
 
@@ -230,11 +200,32 @@ class EvidenceRetriever:
         else:
             token_set = set(tokens)
             scores = [
-                len(token_set.intersection(get_content_words(c)))
+                len(token_set.intersection(set(re.findall(r"\w+", c.lower()))))
                 for c in self.chunks
             ]
             top_idx = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:k]
         return [(idx, self.chunks[idx]) for idx in top_idx]
+
+    def find_best_sentence(self, sentence: str, chunk_text: str) -> str:
+        sentences = split_sentences(chunk_text)
+        if not sentences:
+            return chunk_text[:200]
+        if len(sentences) == 1:
+            return sentences[0]
+        try:
+            from rank_bm25 import BM25Okapi
+
+            tokenized = [re.findall(r"\w+", s.lower()) for s in sentences]
+            tokenized = [t if t else ["sentence"] for t in tokenized]
+            sent_bm25 = BM25Okapi(tokenized)
+            query_tokens = re.findall(r"\w+", sentence.lower())
+            scores = sent_bm25.get_scores(query_tokens)
+            best_idx = int(max(range(len(scores)), key=lambda i: scores[i]))
+            if scores[best_idx] > 0.05:
+                return sentences[best_idx]
+        except Exception:
+            pass
+        return sentences[0]
 
 
 # -------------------------------------------------------------
@@ -342,13 +333,12 @@ def compute_unieval_sync(source_text: str, summary_text: str) -> dict[str, Any]:
         eval_coh = evaluator.evaluate(data_coh, dims=["coherence"], overall=False)
         coherence = round(eval_coh[0]["coherence"], 3) if eval_coh else 0.0
 
-        # 3. Chunked Sentence-Level Consistency (k=2 chunks)
+        # 3. Chunked Sentence-Level Consistency
         chunks = chunk_document(clean_source, chunk_words=380, stride_words=80)
         sentences = split_sentences(clean_summary)
 
         retriever = EvidenceRetriever(chunks)
-        
-        # Deduplicate identical (chunk, sentence) pairs before model execution
+
         unique_pairs: dict[tuple[str, str], float] = {}
         pair_mappings: list[tuple[int, int, str, str]] = []
 
@@ -393,40 +383,13 @@ def compute_unieval_sync(source_text: str, summary_text: str) -> dict[str, Any]:
                     supported_chunks.add(c_idx)
 
                 matched_chunk_text = chunks[c_idx] if c_idx < len(chunks) else clean_source
-                chunk_sentences = split_sentences(matched_chunk_text)
-                summary_content_words = get_content_words(sentence)
 
-                best_source_sent = ""
-                best_overlap_count = 0
-
-                for cs in chunk_sentences:
-                    cs_content_words = get_content_words(cs)
-                    overlap = len(summary_content_words.intersection(cs_content_words))
-                    if overlap > best_overlap_count:
-                        best_overlap_count = overlap
-                        best_source_sent = cs
-
-                if best_overlap_count == 0:
-                    for fallback_chunk in chunks:
-                        for cs in split_sentences(fallback_chunk):
-                            cs_words = get_content_words(cs)
-                            overlap = len(summary_content_words.intersection(cs_words))
-                            if overlap > best_overlap_count:
-                                best_overlap_count = overlap
-                                best_source_sent = cs
-
-                if best_overlap_count == 0 or not best_source_sent:
-                    source_attribution = "[No direct counterpart found in source text]"
-                    diagnostic_reason = (
-                        f"Zero content-word alignment with source document. Chunk entailment score was {sc:.3f} (< 0.50)."
-                    )
+                if supported:
+                    best_source_sent = retriever.find_best_sentence(sentence, matched_chunk_text)
+                    reason = "Supported by source evidence."
                 else:
-                    source_attribution = best_source_sent.strip()
-                    diagnostic_reason = (
-                        "Supported by source evidence."
-                        if supported
-                        else f"Consistency entailment score ({sc:.3f}) fell below the 0.50 threshold against chunk {c_idx + 1}."
-                    )
+                    best_source_sent = "[No strongly entailed passage in matched section]"
+                    reason = f"Chunk entailment score ({sc:.3f}) fell below the 0.50 threshold."
 
                 sentence_details.append(
                     {
@@ -435,8 +398,8 @@ def compute_unieval_sync(source_text: str, summary_text: str) -> dict[str, Any]:
                         "score": sc,
                         "matched_chunk": c_idx + 1,
                         "supported": supported,
-                        "source_sentence": source_attribution,
-                        "reason": diagnostic_reason,
+                        "source_sentence": best_source_sent.strip(),
+                        "reason": reason,
                     }
                 )
 
