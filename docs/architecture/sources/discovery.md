@@ -1,6 +1,6 @@
 # Source Discovery
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-20
 What the Collect stage consults, how those sources are organised, and how that organisation is changed without breaking a payload an earlier run wrote. Collect is one of the two stages that see the whole day ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape of what it sees.
 
 ## Three primitives, not one
@@ -434,6 +434,17 @@ floor read the right number. It makes the number it does read impossible to brea
 by accident.
 
 ## Design rationale
+
+**A source's `kind` is a judgement, not an article fact.** Its label can become
+stale, and reporting and announcements can overlap. New selection logic must
+treat it as a weak, configurable signal that can be set to zero, not as an age
+window, a required category count, or a reason to reject content by itself.
+Maintaining every source label by hand must not be a condition for a run to
+work. Article classification remains separate from the source label. Content
+formats such as text and video are a different dimension again; neither source
+kind nor today's format vocabulary describes every future format. These are
+design constraints for new selection logic, not a claim that the current
+ranker implements a new term.
 
 **The affiliate-page control sits at collection, not at the score.** An affiliate review that summarizes faithfully separates "the summary is wrong" from "the item should not be here" - every instrument in the eval ledger compares our summary to the article, and all of them pass. Collection is also the cheapest place a rejection can happen: a blocked address is never fetched, never summarized and never scored (Guardrail #2). Authority: owner, 2026-08-24, closing known defect 7.
 
