@@ -347,7 +347,13 @@ class Taxonomy(Contract):
         together: the id says nothing without the sentence the model reads it
         by, and the keywords say nothing without the lens they match for.
         """
-        return records_json(self.model_dump(mode="json"))
+        historical_fields = {
+            "source_kinds",
+            "source_tiers",
+            "default_source_kind",
+            "default_entity_tier",
+        } - self.model_fields_set
+        return records_json(self.model_dump(mode="json", exclude=historical_fields))
 
     def definition_block(self) -> str:
         """The definition sentences a labelling prompt is built from.

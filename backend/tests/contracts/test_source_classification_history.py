@@ -15,6 +15,7 @@ from idhazh.contracts.digest_run_fragment import DigestRunFragment
 from idhazh.contracts.digest_view import DigestView
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
+from idhazh.contracts.taxonomy import Taxonomy
 from idhazh.contracts.watchlist import EntityFeed
 from idhazh.ledger.arrow_schema import ColumnType, columns_of
 
@@ -30,6 +31,7 @@ pytestmark = pytest.mark.contract
         (DigestView, "digest-view/one-day.json"),
         (DigestRunFragment, "digest-run-fragment/one-block.json"),
         (ItemHealthRow, "item-health-row/published.json"),
+        (Taxonomy, "taxonomy/with-tombstones.json"),
     ],
 )
 def test_historical_payload_round_trip(model: type[Contract], fixture: str) -> None:
@@ -85,6 +87,15 @@ def test_legacy_config_weights_are_read_without_rewriting_the_fixture() -> None:
     assert legacy is not None
     assert (legacy.institution, legacy.trade_press, legacy.community) == (1.0, 0.6, 0.3)
     assert "tier_weights" not in json.loads(app.to_json())["collect"]
+
+
+def test_historical_taxonomy_does_not_gain_unrecorded_registry_fields() -> None:
+    path = FIXTURES_DIR / "contracts/taxonomy/with-tombstones.json"
+    recorded = path.read_text(encoding="utf-8")
+    taxonomy = Taxonomy.from_json(recorded)
+    assert taxonomy.to_json() == recorded
+    assert taxonomy.source_kinds == []
+    assert taxonomy.source_tiers == []
 
 
 @pytest.mark.parametrize("weights", [{}, {"institution": 1.0}])

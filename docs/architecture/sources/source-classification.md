@@ -18,6 +18,8 @@ current registry. Its recorded score is not recalculated.
 An omitted kind on an old published item still means `reporting`; an omitted
 tier on an old entity feed still means `1`. These are historical read rules,
 not the defaults for newly loaded configuration.
+Rewriting an old taxonomy retains the absence of registry fields that its
+writer did not record; it does not add empty registries or null defaults.
 
 ## Design rationale
 

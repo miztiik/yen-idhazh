@@ -981,6 +981,8 @@ export type CandidateRejectionRecord =
   - `backend/tests/conftest.py`
   - `backend/tests/contracts/test_source_classification_binding.py`
   - `backend/tests/contracts/test_source_classification_history.py`
+  - `backend/tests/contracts/test_panel_queries.py`
+  - `backend/tests/council/_imports.py`
   - `backend/tests/pipeline/_builders.py`
   - `backend/tests/pipeline/test_degrade.py`
   - `backend/tests/pipeline/test_desk_field.py`
@@ -1006,6 +1008,7 @@ export type CandidateRejectionRecord =
   - `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`
   - `tests/fixtures/source-classification/legacy-ledger-rows.json`
   - `frontend/src/lib/payload/types.ts`
+  - `frontend/src/lib/payload/project.ts`
   - `frontend/src/lib/bands.ts`
   - `frontend/src/lib/components/DigestItem.svelte`
   - `frontend/tests/item-meta.spec.ts`
