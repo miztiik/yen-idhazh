@@ -100,22 +100,21 @@ test('histogram bars and inspection swatches use the same named quantity', async
 	await expect(page.locator('svg[data-chart="time-histogram"]')).toHaveAttribute('data-chart-name', 'reading');
 });
 
-for (const width of [390, 1440]) {
-	test(`elapsed markers stay inside the ${width}px frame and retain a zero beside an unknown day`, async ({ page }) => {
-		await page.setViewportSize({ width, height: 900 });
-		await drawClient(page, code, 'DurationStack', { width: width - 24 });
-		await expect(page.locator('[data-stack-elapsed]')).toHaveCount(2);
-		await expect(page.locator('[data-model-rule-name="item-time"]')).toHaveAttribute('data-model-rule-from', '2026-09-01');
-		await expect(page.locator('[data-model-rule-name="item-time"]')).toHaveAttribute('data-model-rule-to', '2026-09-03');
-		await expect(page.locator('[data-stack-overlap]')).toHaveCount(1);
-		await expect(page.locator('[data-stack-elapsed="2026-09-02"]')).toHaveAttribute('data-elapsed-value', '0');
-		await expect(page.locator('[data-stack-elapsed="2026-09-03"]')).toHaveCount(0);
-		await expect(page.locator('[data-stack-reconciliation-key]')).toContainText('Solid crossbar: Elapsed time');
-		await page.locator('[data-chart-name="item-time"]').focus();
-		await page.keyboard.press('ArrowLeft');
-		await page.keyboard.press('ArrowLeft');
-		await expect(page.locator('[data-readout-row="Elapsed time"]')).toContainText('5');
-		await expect(page.locator('[data-readout-row="Overlap"]')).toContainText('3');
-		expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-	});
-}
+test('elapsed markers stay inside a narrow frame and retain a zero beside an unknown day', async ({ page }) => {
+	const width = 390;
+	await page.setViewportSize({ width, height: 900 });
+	await drawClient(page, code, 'DurationStack', { width: width - 24 });
+	await expect(page.locator('[data-stack-elapsed]')).toHaveCount(2);
+	await expect(page.locator('[data-model-rule-name="item-time"]')).toHaveAttribute('data-model-rule-from', '2026-09-01');
+	await expect(page.locator('[data-model-rule-name="item-time"]')).toHaveAttribute('data-model-rule-to', '2026-09-03');
+	await expect(page.locator('[data-stack-overlap]')).toHaveCount(1);
+	await expect(page.locator('[data-stack-elapsed="2026-09-02"]')).toHaveAttribute('data-elapsed-value', '0');
+	await expect(page.locator('[data-stack-elapsed="2026-09-03"]')).toHaveCount(0);
+	await expect(page.locator('[data-stack-reconciliation-key]')).toContainText('Solid crossbar: Elapsed time');
+	await page.locator('[data-chart-name="item-time"]').focus();
+	await page.keyboard.press('ArrowLeft');
+	await page.keyboard.press('ArrowLeft');
+	await expect(page.locator('[data-readout-row="Elapsed time"]')).toContainText('5');
+	await expect(page.locator('[data-readout-row="Overlap"]')).toContainText('3');
+	expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});

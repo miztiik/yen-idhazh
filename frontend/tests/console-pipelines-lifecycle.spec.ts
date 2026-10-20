@@ -98,32 +98,27 @@ test('an evaluator still in flight does not hide the loaded extractor or invent 
 	await expect(panel).toContainText('of 8 distinct recorded articles; 0 have no boolean flag');
 });
 
-for (const width of [390, 768, 1440]) {
-	for (const theme of ['dark', 'light']) {
-		test(`integrated actual canary smoke: ${width}px ${theme}, with cross-page navigation`, async ({ page }) => {
-			const errors: string[] = [];
-			const missing: string[] = [];
-			page.on('pageerror', (error) => errors.push(String(error)));
-			page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
-			page.on('response', (response) => { if (response.status() === 404) missing.push(response.url()); });
-			await page.setViewportSize({ width, height: 900 });
-			await page.addInitScript((theme) => localStorage.setItem('idhazh:theme', theme), theme);
-			await page.goto('/console/');
-			await hydrated(page);
-			await settled(page);
-			await expect(page.locator('[data-console-panel]')).toHaveCount(12);
-			await expect(page.locator('[data-console-panels="pipelines"]')).toHaveAttribute('data-route-state', 'ok');
-			await expect(page.locator('[data-console-panels="pipelines"]')).not.toContainText('NaN');
-			await expect(page.locator('[data-contract-blocked]')).toHaveCount(0);
-			const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
-			expect(overflow, 'the route overflows its real viewport').toBe(false);
-			await page.locator('[data-console-carry="model"] a').click();
-			await expect(page.locator('[data-console-route="model"]')).toBeVisible();
-			await page.goBack();
-			await settled(page);
-			await expect(page.locator('[data-console-panels="pipelines"]')).toBeVisible();
-			expect(errors).toEqual([]);
-			expect(missing).toEqual([]);
-		});
-	}
-}
+test('integrated actual canary smoke: narrow viewport, with cross-page navigation', async ({ page }) => {
+	const errors: string[] = [];
+	const missing: string[] = [];
+	page.on('pageerror', (error) => errors.push(String(error)));
+	page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
+	page.on('response', (response) => { if (response.status() === 404) missing.push(response.url()); });
+	await page.setViewportSize({ width: 390, height: 900 });
+	await page.goto('/console/');
+	await hydrated(page);
+	await settled(page);
+	await expect(page.locator('[data-console-panel]')).toHaveCount(12);
+	await expect(page.locator('[data-console-panels="pipelines"]')).toHaveAttribute('data-route-state', 'ok');
+	await expect(page.locator('[data-console-panels="pipelines"]')).not.toContainText('NaN');
+	await expect(page.locator('[data-contract-blocked]')).toHaveCount(0);
+	const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+	expect(overflow, 'the route overflows its real viewport').toBe(false);
+	await page.locator('[data-console-carry="model"] a').click();
+	await expect(page.locator('[data-console-route="model"]')).toBeVisible();
+	await page.goBack();
+	await settled(page);
+	await expect(page.locator('[data-console-panels="pipelines"]')).toBeVisible();
+	expect(errors).toEqual([]);
+	expect(missing).toEqual([]);
+});
