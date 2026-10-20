@@ -186,7 +186,7 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 | 12 | Isolated CI test workflow and verification suite | 4, 5, 11, 14 | G | PENDING | - | - | - |
 | 13 | Phase 2 publication reconciliation and rolling diversity metrics | 12, 14 | H | PENDING | - | - | - |
 | 14 | Phase 1 source-run audit and three-axis evidence | 11 | G | PENDING | - | - | - |
-| 15 | Config-driven source registries and compatible readers | - | A | IN-FLIGHT | fluffy-adventure (feed-registry-migration) | - | f7f18c64-813b-4a13-b421-1cd67b951db6 |
+| 15 | Config-driven source registries and compatible readers | - | A | DONE | fluffy-adventure (feed-registry-migration) | - | f7f18c64-813b-4a13-b421-1cd67b951db6 |
 | 16 | Public data-explorer enrollment and nested ledger delivery | 2 | B | PENDING | - | - | - |
 
 ---
@@ -1030,14 +1030,15 @@ opens a ready-for-review PR and does not merge or start another row.
 The frontend reads the committed registry in `bands.ts`; its server config
 needs no change. Historical gardener and ranking fixtures remain unchanged.
 
-### CI blocker - scope-change item
+### Authorized CI correction and closure
 
 Implementation and selected local gates pass. Repository-wide CI stopped at
 nine existing lint errors in `.github/scripts/serve-evaluator.py` before running
 the full backend suite. On 2026-10-20, the owner authorized a separate lint-only
 commit in this PR to correct that script without changing its behavior. This
-is the sole approved scope addition; no later plan row starts. Keep this row
-`IN-FLIGHT` until the required CI checks pass. Do not merge this worker's PR.
+is the sole approved scope addition; no later plan row starts. The correction
+and directly dependent contract bindings pass the full CI suite, site, browser
+and robots checks. Row #15 is delivered for review; this worker does not merge.
 
 ### Decisions
 
