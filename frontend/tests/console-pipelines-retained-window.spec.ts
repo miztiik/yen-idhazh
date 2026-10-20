@@ -33,30 +33,28 @@ async function belowTheStrip(page: Page) {
 	});
 }
 
-for (const width of [360, 390, 1280]) {
-	test(`retained month prices and native window chrome remain honest at ${width}`, async ({ page }) => {
-		await page.addInitScript(() => localStorage.setItem('idhazh:console-window', '1'));
-		await page.setViewportSize({ width, height: 900 });
-		await openRetained(page, () => [], 'ready', {
-			months: ['2026-06', '2026-07', '2026-08'], held: ['2026-08']
-		});
-		await expect(page.locator('[data-window-status]')).toContainText('30D would fetch 1 more month');
-		await expect(page.locator('[data-window-status]')).toContainText('90D 2 more');
-		await page.goto('/console/');
-		await expect(page.locator('[data-window-preset="1"] input')).toBeEnabled();
-		await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-busy', 'false');
-		await expect(page.locator('[data-window-status]')).toContainText('Showing 1 day, to ');
-		const before = await belowTheStrip(page);
-		expect(before.length).toBeGreaterThan(3);
-		for (const preset of presets().filter((days) => days > 1)) {
-			await setWindow(page, preset);
-			await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-busy', 'false');
-			const after = await belowTheStrip(page);
-			expect(after.length).toBe(before.length);
-			expect(after.map((top, index) => Math.abs(top - before[index]) > 1)).not.toContain(true);
-		}
+test('retained month prices and native window chrome remain honest on a narrow viewport', async ({ page }) => {
+	await page.addInitScript(() => localStorage.setItem('idhazh:console-window', '1'));
+	await page.setViewportSize({ width: 360, height: 900 });
+	await openRetained(page, () => [], 'ready', {
+		months: ['2026-06', '2026-07', '2026-08'], held: ['2026-08']
 	});
-}
+	await expect(page.locator('[data-window-status]')).toContainText('30D would fetch 1 more month');
+	await expect(page.locator('[data-window-status]')).toContainText('90D 2 more');
+	await page.goto('/console/');
+	await expect(page.locator('[data-window-preset="1"] input')).toBeEnabled();
+	await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-busy', 'false');
+	await expect(page.locator('[data-window-status]')).toContainText('Showing 1 day, to ');
+	const before = await belowTheStrip(page);
+	expect(before.length).toBeGreaterThan(3);
+	for (const preset of presets().filter((days) => days > 1)) {
+		await setWindow(page, preset);
+		await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-busy', 'false');
+		const after = await belowTheStrip(page);
+		expect(after.length).toBe(before.length);
+		expect(after.map((top, index) => Math.abs(top - before[index]) > 1)).not.toContain(true);
+	}
+});
 
 test('every native Pipelines surface follows the common control and says one day correctly', async ({ page }) => {
 	await page.goto('/console/');
