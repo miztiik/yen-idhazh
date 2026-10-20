@@ -1,6 +1,7 @@
 /** Copy lives here, once. A component never spells a band or a source kind. */
 
 import type { BandReason, ConfidenceBand, SourceKind } from './payload/types';
+import taxonomy from '../../../config/taxonomy.json' with { type: 'json' };
 
 export interface BandCopy {
 	label: string;
@@ -39,14 +40,25 @@ export function bandSentence(band: ConfidenceBand, reason: BandReason | null): s
 }
 
 /** Who is speaking. A vendor's own copy must not read like a reporter's. */
-export const SOURCE_KINDS: Record<SourceKind, string> = {
-	reporting: 'Reporting',
-	announcement: 'Announcement',
-	research: 'Research',
-	analysis: 'Analysis',
-	government: 'Official',
-	community: 'Community'
-};
+export interface SourceKindDefinition {
+	id: string;
+	display_name: string;
+	status: string;
+	retired_on: string | null;
+	show_on_item: boolean;
+	counts_as_reporting: boolean;
+	requires_reporting_for_lead: boolean;
+}
+
+export function sourceKindLabels(definitions: readonly SourceKindDefinition[]) {
+	return Object.fromEntries(definitions.map((entry) => [entry.id, entry.display_name]));
+}
+
+export function visibleSourceKinds(definitions: readonly SourceKindDefinition[]): SourceKind[] {
+	return definitions.filter((entry) => entry.show_on_item).map((entry) => entry.id);
+}
+
+export const SOURCE_KINDS = sourceKindLabels(taxonomy.source_kinds);
 
 /** Only kinds where the speaker has a stake worth naming get a label on the item.
  *
@@ -66,9 +78,14 @@ export const SOURCE_KINDS: Record<SourceKind, string> = {
  * wallpaper. `analysis` is a publication's own reading of a story it does not
  * stand to gain from, which is the line the other four are on the wrong side of.
  */
-export const KIND_WORTH_SAYING: SourceKind[] = [
-	'announcement',
-	'community',
-	'government',
-	'research'
-];
+export const KIND_WORTH_SAYING = visibleSourceKinds(taxonomy.source_kinds);
+
+export function sourceKindCopy(
+	kind: SourceKind,
+	definitions: readonly SourceKindDefinition[] = taxonomy.source_kinds
+): { label: string; showOnItem: boolean; registered: boolean } {
+	const entry = definitions.find((definition) => definition.id === kind);
+	return entry
+		? { label: entry.display_name, showOnItem: entry.show_on_item, registered: true }
+		: { label: `${kind} (unregistered source kind)`, showOnItem: true, registered: false };
+}

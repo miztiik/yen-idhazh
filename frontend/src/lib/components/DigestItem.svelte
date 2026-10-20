@@ -26,7 +26,7 @@
 	 * re-measured 2026-09-12 - so the story's own stamp came back here, where every
 	 * story has one.
 	 */
-	import { KIND_WORTH_SAYING, SOURCE_KINDS } from '$lib/bands';
+	import { sourceKindCopy } from '$lib/bands';
 	import { deskOf, markParts } from '$lib/day-shape';
 	import { itemTime, paragraphsOf, shortDate } from '$lib/format';
 	import Icon from '$lib/icons/Icon.svelte';
@@ -84,7 +84,7 @@
 	} = $props();
 
 	const lenses = $derived(shownLenses(item.lenses));
-	const kindWorthSaying = $derived(KIND_WORTH_SAYING.includes(item.source_kind));
+	const kindCopy = $derived(sourceKindCopy(item.source_kind));
 	/** The summary's paragraphs. One entry on every day published before
 	 * 2026-09-17 and on every short summary written since, so this draws exactly
 	 * what a single `<p>` drew before it existed. */
@@ -158,7 +158,7 @@
 				<!-- Only where the speaker has something to gain. A reporter who
 				     checked and a ministry announcing its own policy were arriving
 				     in the same typeface. -->
-				{#if kindWorthSaying}<span class="kind">{SOURCE_KINDS[item.source_kind]}</span>{/if}
+				{#if kindCopy.showOnItem}<span class="kind">{kindCopy.label}</span>{/if}
 			</span>
 
 			<!-- When, and the slot holds one thing at a time. On a dated page the date
@@ -439,4 +439,3 @@
 		}
 	}
 </style>
-

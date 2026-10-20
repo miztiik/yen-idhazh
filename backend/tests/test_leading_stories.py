@@ -18,12 +18,13 @@ import logging
 import pytest
 
 from idhazh.assemble import leading_stories, subject_clusters
+from idhazh.config import load
 from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestRunRef, DigestVerticalRef
 from idhazh.contracts.eval_row import ConfidenceBand
 from idhazh.contracts.item_health import TimeSource
 from idhazh.contracts.knobs.placement import PlacementConfig
 from idhazh.contracts.knobs.ui import UiConfig
-from idhazh.contracts.taxonomy import SourceKind
+from idhazh.contracts.taxonomy import SourceKind, Taxonomy
 from idhazh.contracts.watchlist import EntityDef, Watchlist
 
 #: The hour the block is chosen at. An hour after the default story appeared,
@@ -119,12 +120,14 @@ def choose(
     wl: Watchlist = EMPTY,
     now: str = NOW,
     placement: PlacementConfig | None = None,
+    taxonomy: Taxonomy | None = None,
     **knobs: object,
 ) -> list[str]:
     leads = leading_stories(
         items,
         date="2026-08-31",
         watchlist=wl,
+        taxonomy=taxonomy or load().taxonomy,
         ui=UiConfig(**knobs),  # type: ignore[arg-type]
         placement=placement or PlacementConfig(),
         now=now,
@@ -138,6 +141,7 @@ def reasons(items: list[DigestItem], *, wl: Watchlist = EMPTY, **knobs: object) 
         items,
         date="2026-08-31",
         watchlist=wl,
+        taxonomy=load().taxonomy,
         ui=UiConfig(**knobs),  # type: ignore[arg-type]
         placement=PlacementConfig(),
         now=NOW,
@@ -403,6 +407,7 @@ def test_a_story_the_pass_could_not_read_scores_no_corroboration() -> None:
 
 # --- eligibility ------------------------------------------------------------
 
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [
@@ -446,6 +451,46 @@ def test_an_announcement_leads_only_where_somebody_reported_the_same_subject() -
     assert corroborated.item_id in choose([corroborated, *items[1:], reporter], wl=REGISTRY)
 
 
+def test_registry_properties_not_kind_names_control_lead_safety() -> None:
+    taxonomy = load().taxonomy
+    reporting = taxonomy.source_kind("reporting")
+    announcement = taxonomy.source_kind("announcement")
+    assert reporting is not None and announcement is not None
+    taxonomy = taxonomy.model_copy(
+        update={
+            "source_kinds": [
+                reporting.model_copy(update={"id": "independent-review"}),
+                announcement.model_copy(update={"id": "publisher-statement"}),
+            ]
+        }
+    )
+    items = five_desks()
+    statement = items[0].model_copy(
+        update={
+            "source_kind": "publisher-statement", "rank_score": 99.0,
+            "title": "Nvidia ships a chip",
+        }
+    )
+    assert statement.item_id not in choose([statement, *items[1:]], taxonomy=taxonomy)
+    reporter = story(
+        "world-0000000099", vertical="world", source_id="independent",
+        title="Nvidia ships a chip, say analysts", source_kind="independent-review",
+        rank_score=0.1,
+    )
+    assert statement.item_id in choose(
+        [statement, *items[1:], reporter], wl=REGISTRY, taxonomy=taxonomy
+    )
+    no_reporting = taxonomy.model_copy(
+        update={"source_kinds": [
+            entry.model_copy(update={"counts_as_reporting": False})
+            for entry in taxonomy.source_kinds
+        ]}
+    )
+    assert statement.item_id not in choose(
+        [statement, *items[1:], reporter], wl=REGISTRY, taxonomy=no_reporting
+    )
+
+
 def test_an_excluded_story_is_still_in_the_day() -> None:
     """ESCALATE trigger (a): nothing may be dropped, hidden or unpublished.
 
@@ -459,6 +504,7 @@ def test_an_excluded_story_is_still_in_the_day() -> None:
         items,
         date="2026-08-31",
         watchlist=EMPTY,
+        taxonomy=load().taxonomy,
         ui=UiConfig(),
         placement=PlacementConfig(),
         now=NOW,
@@ -473,8 +519,7 @@ def test_an_excluded_story_is_still_in_the_day() -> None:
         items_failed=0,
         runs=[DigestRunRef(n=1, at="2026-08-31T10:00:00Z", items_added=len(items))],
         verticals=[
-            DigestVerticalRef(id=desk, display_name=name, count=1)
-            for desk, name in DESKS.items()
+            DigestVerticalRef(id=desk, display_name=name, count=1) for desk, name in DESKS.items()
         ],
         items=items,
         leads=leads,
@@ -503,9 +548,9 @@ def carriers(
 
 
 def test_a_subject_under_the_floor_earns_nothing() -> None:
-    below = subject_clusters(carriers("Nvidia", 2), REGISTRY)
+    below = subject_clusters(carriers("Nvidia", 2), REGISTRY, taxonomy=load().taxonomy)
     assert [cluster.qualifies(3) for cluster in below] == [False]
-    at_floor = subject_clusters(carriers("Nvidia", 3), REGISTRY)
+    at_floor = subject_clusters(carriers("Nvidia", 3), REGISTRY, taxonomy=load().taxonomy)
     assert [cluster.qualifies(3) for cluster in at_floor] == [True]
 
 
@@ -520,14 +565,16 @@ def test_one_source_filing_four_pieces_is_one_source() -> None:
         )
         for index in range(4)
     ]
-    cluster = subject_clusters(filed, REGISTRY)[0]
+    cluster = subject_clusters(filed, REGISTRY, taxonomy=load().taxonomy)[0]
     assert len(cluster.sources) == 1
     assert len(cluster.item_ids) == 4
     assert cluster.qualifies(3) is False
 
 
 def test_a_cluster_of_announcements_is_a_press_schedule_and_not_a_story() -> None:
-    announced = subject_clusters(carriers("Nvidia", 4, kind=SourceKind.ANNOUNCEMENT), REGISTRY)
+    announced = subject_clusters(
+        carriers("Nvidia", 4, kind=SourceKind.ANNOUNCEMENT), REGISTRY, taxonomy=load().taxonomy
+    )
     assert [cluster.qualifies(3) for cluster in announced] == [False]
 
 

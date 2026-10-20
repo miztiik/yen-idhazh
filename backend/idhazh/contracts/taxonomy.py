@@ -148,6 +148,24 @@ class Lifecycled(Model):
         return self
 
 
+class SourceKindDefinition(Lifecycled):
+    """A publisher description and its existing display and lead safeguards."""
+
+    id: SourceKindId
+    display_name: str = Field(min_length=1)
+    show_on_item: bool
+    counts_as_reporting: bool
+    requires_reporting_for_lead: bool
+
+
+class SourceTierDefinition(Lifecycled):
+    """One authority weight, addressed by a stable numeric identifier."""
+
+    id: SourceTierId
+    display_name: str = Field(min_length=1)
+    weight: float = Field(ge=0.0, le=1.0, allow_inf_nan=False)
+
+
 AUTO_DISCOVERED_DESCRIPTION: Final = (
     "True when a model proposed this entry rather than a person writing it. The marker "
     "survives promotion on purpose: a word that arrived from an article read six weeks "
@@ -241,6 +259,11 @@ class Taxonomy(Contract):
     __schema_stem__: ClassVar[str] = "taxonomy"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-20",
+            change="Added source-kind and source-tier registries and configured defaults.",
+            why="Membership, weights and publisher safeguards have one configuration owner.",
+        ),
+        ChangelogEntry(
             version="2026-09-13T13:49",
             change="Added VerticalDef.floor, the fewest stories a desk publishes in a day.",
             why="Nothing in the code stopped a desk going empty on a quiet day.",
@@ -256,11 +279,6 @@ class Taxonomy(Contract):
             why="Adding or retiring a lens was a source edit where it should be a config edit.",
         ),
         ChangelogEntry(
-            version="2026-09-12",
-            change="Added VocabularyEntry.definition to every vertical, lens and event.",
-            why="An id and a display name tell a model nothing.",
-        ),
-        ChangelogEntry(
             version="2026-08-21",
             change="Earlier changes are in this file's git history.",
             why="A changelog says what moved lately; git is the archive.",
@@ -270,6 +288,10 @@ class Taxonomy(Contract):
     verticals: list[VerticalDef]
     lenses: list[LensDef]
     events: list[EventDef]
+    source_kinds: list[SourceKindDefinition] = Field(default_factory=list)
+    source_tiers: list[SourceTierDefinition] = Field(default_factory=list)
+    default_source_kind: SourceKindId | None = None
+    default_entity_tier: SourceTierId | None = None
 
     @model_validator(mode="after")
     def _vocabulary_ids_are_distinct(self) -> Self:
@@ -288,10 +310,16 @@ class Taxonomy(Contract):
             ("vertical", [item.id for item in self.verticals]),
             ("lens", [item.id for item in self.lenses]),
             ("event", [item.id for item in self.events]),
+            ("source kind", [item.id for item in self.source_kinds]),
+            ("source tier", [item.id for item in self.source_tiers]),
         ):
             if len(set(ids)) != len(ids):
                 raise ValueError(f"{kind} ids must be distinct")
         return self
+
+    def source_kind(self, kind: str) -> SourceKindDefinition | None:
+        """History may name a kind the current registry no longer holds."""
+        return next((entry for entry in self.source_kinds if entry.id == kind), None)
 
     @model_validator(mode="after")
     def _every_offered_entry_carries_its_definition(self) -> Self:

@@ -6,11 +6,12 @@ from collections.abc import Mapping
 from types import MappingProxyType
 from typing import Any, Final, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, PrivateAttr, model_validator
 
 from idhazh.contracts.base import Model
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.knobs.removed import refuse_a_removed_knob
+from idhazh.contracts.taxonomy import SourceTierDefinition
 
 
 class TierWeights(Model):
@@ -35,6 +36,29 @@ UNBOUNDED_WINDOW: Final = -1
 
 
 class CollectConfig(Model):
+    _source_tier_weights: dict[int, float] = PrivateAttr(default_factory=dict)
+
+    def bind_source_tiers(self, tiers: list[SourceTierDefinition]) -> None:
+        """Resolve taxonomy's authority weights once at configuration loading."""
+        weights = {entry.id: entry.weight for entry in tiers}
+        if "tier_weights" in self.model_fields_set:
+            legacy = {
+                1: self.tier_weights.institution,
+                2: self.tier_weights.trade_press,
+                3: self.tier_weights.community,
+            }
+            for tier, weight in legacy.items():
+                if weights.get(tier) != weight:
+                    raise ValueError(f"collect.tier_weights conflicts with source tier {tier}")
+        self._source_tier_weights = weights
+
+    def source_tier_weight(self, tier: int) -> float:
+        """A missing configured weight is an error, never a ranking default."""
+        try:
+            return self._source_tier_weights[tier]
+        except KeyError as error:
+            raise ValueError(f"source tier {tier} has no configured weight") from error
+
     availability_strikes_before_rest: int = Field(
         default=5,
         ge=1,

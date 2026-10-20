@@ -53,11 +53,19 @@ from idhazh.rank import (
 )
 from idhazh.stages.plan import _counterfactual_rows, _record_plan_duplicates
 
+
+def collect_config(**values: Any) -> CollectConfig:
+    """A current config with its registry weights, optionally varied for a case."""
+    config = CollectConfig(**values)
+    config.bind_source_tiers(load().taxonomy.source_tiers)
+    return config
+
+
 DATE = "2026-08-23"
 RUN = "2026-08-23-1"
 STAMP = "2026-08-23T06:00:00Z"
 
-CONFIG = CollectConfig()
+CONFIG = collect_config()
 
 
 def _candidate(
@@ -307,13 +315,7 @@ def test_the_terms_rank_in_the_order_the_editor_set() -> None:
     fails it, which is the bite.
     """
     config = load().app.collect
-    tiers = sorted(
-        (
-            config.tier_weights.community,
-            config.tier_weights.trade_press,
-            config.tier_weights.institution,
-        )
-    )
+    tiers = sorted((*(entry.weight for entry in load().taxonomy.source_tiers),))
     authority_span = tiers[-1] - tiers[0]
     reliability_ceiling = (1.0 - config.reliability_floor) * tiers[-1]
 
@@ -350,13 +352,7 @@ def test_the_carriage_step_cannot_outrank_one_tier_step() -> None:
     thing worth buying.
     """
     config = load().app
-    tiers = sorted(
-        (
-            config.collect.tier_weights.community,
-            config.collect.tier_weights.trade_press,
-            config.collect.tier_weights.institution,
-        )
-    )
+    tiers = sorted((*(entry.weight for entry in load().taxonomy.source_tiers),))
     smallest_tier_step = min(high - low for low, high in pairwise(tiers))
     step = config.collect.carriage_step
 
@@ -626,7 +622,7 @@ def _one_slot_desk() -> tuple[dict[str, Any], list[Candidate]]:
 
 
 def _one_slot_config(fixture: dict[str, Any]) -> CollectConfig:
-    return CollectConfig(max_per_source=fixture["max_per_source"])
+    return collect_config(max_per_source=fixture["max_per_source"])
 
 
 def _one_slot_plan(*, ask: bool = True) -> tuple[dict[str, Any], DeskPlan]:
@@ -1047,13 +1043,11 @@ def test_record_only_logs_the_would_cut_pair_and_removes_nothing(
     headline = "Grid restored after a day-long outage"
     strong = _planned("ai", 1, source_id="alpha", rank_score=10.0, title=headline)
     weak = _planned("ai", 2, source_id="beta", rank_score=5.0, title=headline)
-    collect = CollectConfig()
+    collect = collect_config()
     assert collect.dedup_enforce is False, "the shipping default is record-only"
     embedder = Embedder(REPO_ROOT, AssistConfig())
     with caplog.at_level(logging.INFO):
-        kept = _record_plan_duplicates(
-            [strong, weak], embedder=embedder, leads={}, collect=collect
-        )
+        kept = _record_plan_duplicates([strong, weak], embedder=embedder, leads={}, collect=collect)
     assert kept == [strong, weak], "record-only removes nothing"
     assert any(
         "would-collapse" in message and weak.item_id in message for message in caplog.messages
@@ -1068,7 +1062,7 @@ def test_enforcing_cuts_the_weaker_telling() -> None:
     weak = _planned("ai", 2, source_id="beta", rank_score=5.0, title=headline)
     embedder = Embedder(REPO_ROOT, AssistConfig())
     kept = _record_plan_duplicates(
-        [strong, weak], embedder=embedder, leads={}, collect=CollectConfig(dedup_enforce=True)
+        [strong, weak], embedder=embedder, leads={}, collect=collect_config(dedup_enforce=True)
     )
     assert kept == [strong], "enforcing keeps the stronger telling and drops the weaker"
 

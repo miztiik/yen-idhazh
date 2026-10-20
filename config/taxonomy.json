@@ -1,4 +1,19 @@
 {
+  "default_source_kind": "reporting",
+  "default_entity_tier": 1,
+  "source_kinds": [
+    {"id": "reporting", "display_name": "Reporting", "status": "active", "retired_on": null, "show_on_item": false, "counts_as_reporting": true, "requires_reporting_for_lead": false},
+    {"id": "announcement", "display_name": "Announcement", "status": "active", "retired_on": null, "show_on_item": true, "counts_as_reporting": false, "requires_reporting_for_lead": true},
+    {"id": "research", "display_name": "Research", "status": "active", "retired_on": null, "show_on_item": true, "counts_as_reporting": false, "requires_reporting_for_lead": false},
+    {"id": "analysis", "display_name": "Analysis", "status": "active", "retired_on": null, "show_on_item": false, "counts_as_reporting": false, "requires_reporting_for_lead": false},
+    {"id": "government", "display_name": "Official", "status": "active", "retired_on": null, "show_on_item": true, "counts_as_reporting": false, "requires_reporting_for_lead": false},
+    {"id": "community", "display_name": "Community", "status": "active", "retired_on": null, "show_on_item": true, "counts_as_reporting": false, "requires_reporting_for_lead": false}
+  ],
+  "source_tiers": [
+    {"id": 1, "display_name": "Institution", "status": "active", "retired_on": null, "weight": 1.0},
+    {"id": 2, "display_name": "Trade press", "status": "active", "retired_on": null, "weight": 0.6},
+    {"id": 3, "display_name": "Community", "status": "active", "retired_on": null, "weight": 0.3}
+  ],
   "events": [
     {"definition": "Something was made available to use or buy for the first time, or a new version of it was.","display_name": "Release","id": "release","keywords": ["released","launch","launched","unveiled","now available","general availability","rolled out","new version"],"retired_on": null,"status": "active"},
     {"definition": "Two or more organisations agreed to work together, with neither buying the other.","display_name": "Deal","id": "deal","keywords": ["partnership","agreement","signed a deal","joint venture","contract with","teamed up"],"retired_on": null,"status": "active"},

@@ -26,12 +26,45 @@ Readers expand before configuration and consumers migrate. Closed live lookups
 are removed only after their consumers move. Historical read rules stay.
 No committed archive payload is rewritten.
 
+## Live configuration
+
+`config/taxonomy.json`, edited by maintainers, owns `source_kinds`,
+`source_tiers`, `default_source_kind` and `default_entity_tier`. Kind entries
+declare `display_name`, lifecycle, `show_on_item`, `counts_as_reporting` and
+`requires_reporting_for_lead`. Tier entries declare a display name, lifecycle
+and a finite weight from zero to one. Stable IDs are retired, never reused.
+
+The loader checks unique registry IDs, active live references, configured
+defaults and source vertical references before fetching. It supplies omitted
+kind and entity-tier defaults from that registry and binds tier weights to the
+ranking configuration. Contract modules never open configuration files.
+
+A new kind or numeric tier needs configuration edits only. The existing weights
+remain 1.0, 0.6 and 0.3 for IDs 1, 2 and 3. New IDs have no numeric ordering
+meaning. An announcement still needs reporting on its subject before it may
+lead; those two properties now come from the registry, not kind-name branches.
+Unknown historical kinds cannot count as reporting and need corroborating
+reporting before leading.
+
+The browser builds its label and display map from that same committed
+registry. Unknown historical kinds show their stored ID with an explicit
+"unregistered source kind" label. Retired kinds keep their configured label.
+There is no runtime server.
+
+Planning policy overrides belong to the later planner-configuration row, not
+this migration. No extraction format, article labels or production workflow
+changes here.
+
 ## Verification
 
 `backend/tests/contracts/test_source_classification_history.py` reads named
 historical payload fixtures and checks the open identifier shapes. The fixture
 `tests/fixtures/source-classification/legacy-ledger-rows.json` preserves old
 numeric tier cells and source-kind strings.
+
+`test_source_classification_binding.py` checks Python/TypeScript fields,
+registry-driven labels, configuration-only extension through the real ranker
+and publication adapter, defaults and named configuration refusals.
 
 ## See also
 
