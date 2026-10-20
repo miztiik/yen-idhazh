@@ -1029,10 +1029,11 @@ needs no change. Historical gardener and ranking fixtures remain unchanged.
 
 ### CI blocker - scope-change item
 
-Implementation and selected local gates pass. Repository-wide CI stops at nine
-existing lint errors in `.github/scripts/serve-evaluator.py`, unchanged from the
-base tree, before running the full backend suite. Correcting that script needs
-a separate authorized change; it is not part of Row #15. Keep this row
+Implementation and selected local gates pass. Repository-wide CI stopped at
+nine existing lint errors in `.github/scripts/serve-evaluator.py` before running
+the full backend suite. On 2026-10-20, the owner authorized a separate lint-only
+commit in this PR to correct that script without changing its behavior. This
+is the sole approved scope addition; no later plan row starts. Keep this row
 `IN-FLIGHT` until the required CI checks pass. Do not merge this worker's PR.
 
 ### Decisions
