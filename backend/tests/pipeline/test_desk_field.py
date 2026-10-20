@@ -6,7 +6,6 @@ from conftest import CONFIG_DIR
 
 from idhazh import assemble, config
 from idhazh.contracts.article import Article
-from idhazh.contracts.taxonomy import SourceKind
 
 from ._builders import (
     article,
@@ -46,7 +45,7 @@ def test_a_published_item_carries_the_desk_and_keeps_the_feeds_address() -> None
         summary=summary().model_copy(update={"item_id": "energy-01"}),
         band=row().band,
         source_name="Example Lab",
-        source_kind=SourceKind.REPORTING,
+        source_kind="reporting",
         run_n=1,
     )
 
@@ -66,7 +65,7 @@ def test_an_unlabelled_article_publishes_with_no_desk_at_all() -> None:
         summary=summary(),
         band=row().band,
         source_name="Example Lab",
-        source_kind=SourceKind.REPORTING,
+        source_kind="reporting",
         run_n=1,
     )
 
@@ -85,7 +84,7 @@ def test_a_story_relabelled_onto_a_desk_that_will_not_render_stays_put() -> None
         summary=summary().model_copy(update={"item_id": "energy-01"}),
         band=row().band,
         source_name="Example Lab",
-        source_kind=SourceKind.REPORTING,
+        source_kind="reporting",
         run_n=1,
         below_floor_desks=frozenset({"ai"}),
     )
@@ -110,7 +109,7 @@ def test_a_day_lists_both_words_and_counts_each_under_its_own() -> None:
                 summary=summary().model_copy(update={"item_id": "energy-01"}),
                 band=row().band,
                 source_name="Example Lab",
-                source_kind=SourceKind.REPORTING,
+                source_kind="reporting",
                 run_n=1,
             )
         ],

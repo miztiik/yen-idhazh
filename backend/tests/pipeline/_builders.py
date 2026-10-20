@@ -29,7 +29,6 @@ from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.summary import Summary
-from idhazh.contracts.taxonomy import SourceKind
 from idhazh.evals.score import to_eval_row
 from idhazh.fetch import FetchResult
 from idhazh.stages import common
@@ -233,7 +232,7 @@ def digest_item(run_n: int = 1):  # type: ignore[no-untyped-def]
         summary=summary(),
         band=row().band,
         source_name="Example Lab",
-        source_kind=SourceKind.ANNOUNCEMENT,
+        source_kind="announcement",
         run_n=run_n,
     )
     return built.model_copy(

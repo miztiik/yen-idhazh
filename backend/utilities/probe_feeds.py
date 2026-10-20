@@ -76,7 +76,6 @@ from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.sources import FeedDef
-from idhazh.contracts.taxonomy import SourceTier
 from idhazh.fetch import FetchResult
 from idhazh.stages import common
 from idhazh.stages.common import Fetcher
@@ -92,7 +91,6 @@ DEFAULT_TRACE_DIR: Final = Path("backend/var/probes")
 #: yet. Neither changes the verdict - they exist because `PlannedItem` needs an
 #: address of the form `<vertical>-NN` and `Candidate` carries a tier.
 ADHOC_VERTICAL: Final = "ai"
-ADHOC_TIER: Final = SourceTier.TRADE_PRESS
 
 #: Host labels that name no publisher, dropped when an address is turned into a
 #: readable id.
@@ -353,7 +351,8 @@ def targets(args: argparse.Namespace, settings: config.Settings) -> list[FeedDef
                 vertical=args.vertical or ADHOC_VERTICAL,
                 title=url,
                 url=url,
-                tier=ADHOC_TIER,
+                tier=settings.taxonomy.entity_tier_default(),
+                kind=settings.taxonomy.source_kind_default(),
             )
             for url in args.url
         ]

@@ -37,7 +37,6 @@ from idhazh.contracts.source_health_view import (
     SourcePermission,
 )
 from idhazh.contracts.sources import FeedDef, SourceForm
-from idhazh.contracts.taxonomy import SourceKind, SourceTier
 from idhazh.ledger import ledger_files, raw_files
 from idhazh.telemetry.publish import source_health
 from idhazh.telemetry.source_health import reliability
@@ -52,8 +51,8 @@ def feed(feed_id: str, *, vertical: str = "ai") -> FeedDef:
         vertical=vertical,
         title=f"{feed_id} title",
         url=f"https://{feed_id}.example.com/feed.xml",
-        tier=SourceTier.TRADE_PRESS,
-        kind=SourceKind.REPORTING,
+        tier=2,
+        kind="reporting",
         form=SourceForm.ARTICLE,
     )
 

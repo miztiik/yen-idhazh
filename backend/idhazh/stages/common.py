@@ -47,7 +47,6 @@ from idhazh.contracts.qualification import (
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.summary import Summary, SummaryStatus
-from idhazh.contracts.taxonomy import SourceTier
 from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX
 from idhazh.evals import evidence
 from idhazh.fingerprint import (
@@ -496,7 +495,7 @@ def _canary_article(
         source_url=url,
         canonical_url=url,
         source_id="canary",
-        tier=SourceTier.INSTITUTION,
+        tier=1,
         vertical="canary",
         rank_score=0.0,
         title=str(payload["raw_title"]),

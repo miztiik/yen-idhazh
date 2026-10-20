@@ -19,7 +19,7 @@ sentence's length - and never the words.
 
 from __future__ import annotations
 
-from enum import IntEnum, StrEnum
+from enum import StrEnum
 from typing import Annotated, ClassVar, Final, Self
 
 from pydantic import Field, StringConstraints, model_validator
@@ -42,35 +42,10 @@ class LifecycleStatus(StrEnum):
     RETIRED = "retired"
 
 
-class SourceTier(IntEnum):
-    """The tier IS the ranking weight (docs/architecture/sources/discovery.md)."""
-
-    INSTITUTION = 1
-    TRADE_PRESS = 2
-    COMMUNITY = 3
-
-
-class SourceKind(StrEnum):
-    """What kind of speaker this is - the thing a reader uses to decide belief.
-
-    "A company said its product is faster" and "a reporter measured it" are not
-    the same claim, and without this they arrive looking identical. The
-    dangerous case is `announcement`: forwarding a vendor's own copy without
-    knowing it was the vendor is how a reader ends up carrying an ad.
-    """
-
-    REPORTING = "reporting"
-    ANNOUNCEMENT = "announcement"
-    RESEARCH = "research"
-    ANALYSIS = "analysis"
-    GOVERNMENT = "government"
-    COMMUNITY = "community"
-
-
-SourceKindId = Slug
+SourceKind = Slug
 """An immutable publisher-kind identifier, including kinds no longer registered."""
 
-SourceTierId = Annotated[int, Field(strict=True, gt=0)]
+SourceTier = Annotated[int, Field(strict=True, gt=0)]
 """A numeric registry key, not an ordinal or a ranking weight."""
 
 
@@ -151,7 +126,7 @@ class Lifecycled(Model):
 class SourceKindDefinition(Lifecycled):
     """A publisher description and its existing display and lead safeguards."""
 
-    id: SourceKindId
+    id: SourceKind
     display_name: str = Field(min_length=1)
     show_on_item: bool
     counts_as_reporting: bool
@@ -161,7 +136,7 @@ class SourceKindDefinition(Lifecycled):
 class SourceTierDefinition(Lifecycled):
     """One authority weight, addressed by a stable numeric identifier."""
 
-    id: SourceTierId
+    id: SourceTier
     display_name: str = Field(min_length=1)
     weight: float = Field(ge=0.0, le=1.0, allow_inf_nan=False)
 
@@ -290,8 +265,8 @@ class Taxonomy(Contract):
     events: list[EventDef]
     source_kinds: list[SourceKindDefinition] = Field(default_factory=list)
     source_tiers: list[SourceTierDefinition] = Field(default_factory=list)
-    default_source_kind: SourceKindId | None = None
-    default_entity_tier: SourceTierId | None = None
+    default_source_kind: SourceKind | None = None
+    default_entity_tier: SourceTier | None = None
 
     @model_validator(mode="after")
     def _vocabulary_ids_are_distinct(self) -> Self:
@@ -320,6 +295,17 @@ class Taxonomy(Contract):
     def source_kind(self, kind: str) -> SourceKindDefinition | None:
         """History may name a kind the current registry no longer holds."""
         return next((entry for entry in self.source_kinds if entry.id == kind), None)
+
+    def source_kind_default(self) -> SourceKind:
+        """Historical taxonomy files need no defaults; live configuration does."""
+        if self.default_source_kind is None:
+            raise ValueError("taxonomy.default_source_kind is missing")
+        return self.default_source_kind
+
+    def entity_tier_default(self) -> SourceTier:
+        if self.default_entity_tier is None:
+            raise ValueError("taxonomy.default_entity_tier is missing")
+        return self.default_entity_tier
 
     @model_validator(mode="after")
     def _every_offered_entry_carries_its_definition(self) -> Self:

@@ -73,7 +73,7 @@ def story(
     truncated: bool = False,
     published_at: str | None = "2026-08-31T09:00:00Z",
     time_source: TimeSource | None = TimeSource.FEED,
-    source_kind: SourceKind = SourceKind.REPORTING,
+    source_kind: SourceKind = "reporting",
 ) -> DigestItem:
     """One published story, with every field the block reads set explicitly."""
     return DigestItem(
@@ -435,9 +435,7 @@ def test_a_story_with_no_time_at_all_cannot_lead() -> None:
 
 def test_an_announcement_leads_only_where_somebody_reported_the_same_subject() -> None:
     items = five_desks()
-    items[0] = items[0].model_copy(
-        update={"source_kind": SourceKind.ANNOUNCEMENT, "rank_score": 99.0}
-    )
+    items[0] = items[0].model_copy(update={"source_kind": "announcement", "rank_score": 99.0})
     assert items[0].item_id not in choose(items)
 
     corroborated = items[0].model_copy(update={"title": "Nvidia ships a chip"})
@@ -459,6 +457,7 @@ def test_registry_properties_not_kind_names_control_lead_safety() -> None:
     taxonomy = taxonomy.model_copy(
         update={
             "source_kinds": [
+                *taxonomy.source_kinds,
                 reporting.model_copy(update={"id": "independent-review"}),
                 announcement.model_copy(update={"id": "publisher-statement"}),
             ]
@@ -467,24 +466,30 @@ def test_registry_properties_not_kind_names_control_lead_safety() -> None:
     items = five_desks()
     statement = items[0].model_copy(
         update={
-            "source_kind": "publisher-statement", "rank_score": 99.0,
+            "source_kind": "publisher-statement",
+            "rank_score": 99.0,
             "title": "Nvidia ships a chip",
         }
     )
     assert statement.item_id not in choose([statement, *items[1:]], taxonomy=taxonomy)
     reporter = story(
-        "world-0000000099", vertical="world", source_id="independent",
-        title="Nvidia ships a chip, say analysts", source_kind="independent-review",
+        "world-0000000099",
+        vertical="world",
+        source_id="independent",
+        title="Nvidia ships a chip, say analysts",
+        source_kind="independent-review",
         rank_score=0.1,
     )
     assert statement.item_id in choose(
         [statement, *items[1:], reporter], wl=REGISTRY, taxonomy=taxonomy
     )
     no_reporting = taxonomy.model_copy(
-        update={"source_kinds": [
-            entry.model_copy(update={"counts_as_reporting": False})
-            for entry in taxonomy.source_kinds
-        ]}
+        update={
+            "source_kinds": [
+                entry.model_copy(update={"counts_as_reporting": False})
+                for entry in taxonomy.source_kinds
+            ]
+        }
     )
     assert statement.item_id not in choose(
         [statement, *items[1:], reporter], wl=REGISTRY, taxonomy=no_reporting
@@ -531,9 +536,7 @@ def test_an_excluded_story_is_still_in_the_day() -> None:
 # --- the shared-subject term ------------------------------------------------
 
 
-def carriers(
-    entity: str, count: int, *, kind: SourceKind = SourceKind.REPORTING
-) -> list[DigestItem]:
+def carriers(entity: str, count: int, *, kind: SourceKind = "reporting") -> list[DigestItem]:
     return [
         story(
             f"world-{900 + index:010d}",
@@ -573,7 +576,7 @@ def test_one_source_filing_four_pieces_is_one_source() -> None:
 
 def test_a_cluster_of_announcements_is_a_press_schedule_and_not_a_story() -> None:
     announced = subject_clusters(
-        carriers("Nvidia", 4, kind=SourceKind.ANNOUNCEMENT), REGISTRY, taxonomy=load().taxonomy
+        carriers("Nvidia", 4, kind="announcement"), REGISTRY, taxonomy=load().taxonomy
     )
     assert [cluster.qualifies(3) for cluster in announced] == [False]
 

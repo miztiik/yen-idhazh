@@ -81,7 +81,7 @@ from idhazh.contracts.digest_day import (
 )
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand
 from idhazh.contracts.item_health import TimeSource
-from idhazh.contracts.taxonomy import SourceKind, SourceKindId
+from idhazh.contracts.taxonomy import SourceKind
 from idhazh.contracts.visual_decision import VisualState
 
 #: How many publisher names a served item may carry.
@@ -242,8 +242,8 @@ class DigestViewItem(Model):
     visual: DigestViewVisual | None = None
     source_name: str = Field(min_length=1)
     source_id: Slug
-    source_kind: SourceKindId = Field(
-        default=SourceKind.REPORTING,
+    source_kind: SourceKind = Field(
+        default="reporting",
         description="Who is speaking. A vendor's own copy must not look like a reporter's.",
     )
     source_url: Url

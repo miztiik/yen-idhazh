@@ -18,9 +18,9 @@ The table is checked against configuration by [test_order_of_the_day.py](../../b
 
 | What it measures | Where the number lives | Today |
 | --- | --- | ---: |
-| Trust in an institution publishing about itself | `collect.tier_weights.institution` | 1.0 |
-| Trust in the trade press | `collect.tier_weights.trade_press` | 0.6 |
-| Trust in a community feed | `collect.tier_weights.community` | 0.3 |
+| Trust in an institution publishing about itself | `taxonomy.source_tiers.1.weight` | 1.0 |
+| Trust in the trade press | `taxonomy.source_tiers.2.weight` | 0.6 |
+| Trust in a community feed | `taxonomy.source_tiers.3.weight` | 0.3 |
 | What one more feed carrying the same link is worth | `collect.carriage_step` | 0.25 |
 | Naming a company or person we follow | `collect.watchlist_bonus` | 0.5 |
 | How far freshness may move a score | `collect.recency_weight` | 0.6 |

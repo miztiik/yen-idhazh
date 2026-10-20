@@ -36,7 +36,6 @@ from idhazh.contracts.knobs.extract import ExtractConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.summary import Summary
-from idhazh.contracts.taxonomy import SourceTier
 from idhazh.evals import writer
 from idhazh.evals.hhem import (
     HHEM_REVISION,
@@ -582,7 +581,7 @@ _PAGE_ITEM = PlannedItem(
     source_url=_PAGE_URL,
     canonical_url=_PAGE_URL,
     source_id="grid-newsroom",
-    tier=SourceTier.INSTITUTION,
+    tier=1,
     vertical="energy",
     title="Example Grid orders four small modular reactors",
     rank_score=1.4,

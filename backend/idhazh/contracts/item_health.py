@@ -35,7 +35,7 @@ from idhazh.contracts.base import (
 )
 from idhazh.contracts.call_cost import COST_FIELDS, CallKind
 from idhazh.contracts.sources import SourceForm
-from idhazh.contracts.taxonomy import SourceTierId
+from idhazh.contracts.taxonomy import SourceTier
 
 #: The two call slots, named for what each call does rather than for its turn.
 #: Every per-call cell is this prefix plus the quantity, so a reader that pools
@@ -842,7 +842,7 @@ class ItemHealthRow(Contract):
     on_front_page: bool | None = Field(
         default=None, description="Did this item reach the published front page?"
     )
-    tier: SourceTierId | None = Field(
+    tier: SourceTier | None = Field(
         default=None, description="The source's tier at the moment of the run."
     )
     source_form: SourceForm | None = Field(

@@ -6,6 +6,7 @@ import json
 import re
 import subprocess
 from pathlib import Path
+from typing import Any
 
 import pytest
 from conftest import CONTRACT_FIXTURES_DIR, REPO_ROOT
@@ -27,11 +28,12 @@ from ._fixtures import copy_config
 pytestmark = pytest.mark.contract
 
 
-def read(root: Path, name: str) -> dict:
-    return json.loads((root / name).read_text(encoding="utf-8"))
+def read(root: Path, name: str) -> dict[str, Any]:
+    value: dict[str, Any] = json.loads((root / name).read_text(encoding="utf-8"))
+    return value
 
 
-def write(root: Path, name: str, value: dict) -> None:
+def write(root: Path, name: str, value: dict[str, Any]) -> None:
     (root / name).write_text(json.dumps(value), encoding="utf-8")
 
 
@@ -56,7 +58,7 @@ def extended_config(tmp_path: Path) -> Path:
     return root
 
 
-def frontend_copies(definitions: list[dict]) -> dict:
+def frontend_copies(definitions: list[dict[str, Any]]) -> dict[str, Any]:
     script = """
 import {sourceKindCopy, sourceKindLabels, visibleSourceKinds}
     from './frontend/src/lib/bands.ts';
@@ -75,7 +77,8 @@ console.log(JSON.stringify({
         text=True,
         check=True,
     )
-    return json.loads(result.stdout)
+    value: dict[str, Any] = json.loads(result.stdout)
+    return value
 
 
 def test_frontend_kind_definition_fields_match_python() -> None:
@@ -109,7 +112,8 @@ def test_frontend_kind_vocabulary_comes_from_the_same_registry() -> None:
 
 
 def test_config_only_extension_reaches_plan_publication_and_frontend(tmp_path: Path) -> None:
-    settings = load(extended_config(tmp_path))
+    root = extended_config(tmp_path)
+    settings = load(root)
     feed = settings.sources.feeds[0]
     candidate = Candidate(
         canonical_url="https://example.test/registry",
@@ -139,7 +143,9 @@ def test_config_only_extension_reaches_plan_publication_and_frontend(tmp_path: P
         (CONTRACT_FIXTURES_DIR / "article/ok.json").read_text(encoding="utf-8")
     ).model_copy(
         update={
-            "source_id": feed.id, "tier": 4, "item_id": planned.item_id,
+            "source_id": feed.id,
+            "tier": 4,
+            "item_id": planned.item_id,
             "vertical": feed.vertical,
         }
     )
@@ -165,6 +171,11 @@ def test_config_only_extension_reaches_plan_publication_and_frontend(tmp_path: P
         "showOnItem": True,
         "registered": True,
     }
+    changed = read(root, "taxonomy.json")
+    changed["source_tiers"][-1]["weight"] = 0.2
+    write(root, "taxonomy.json", changed)
+    assert authority_terms(candidate, load(root).app.collect).tier_score == 0.2
+    assert planned.tier_score == 0.8
 
 
 @pytest.mark.parametrize(

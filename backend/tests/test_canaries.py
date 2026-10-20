@@ -44,7 +44,6 @@ from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.qualification import CanaryObservation
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.summary import Summary, SummaryStatus
-from idhazh.contracts.taxonomy import SourceTier
 from idhazh.contracts.visual_decision import VisualKind
 from idhazh.elements import element_table
 from idhazh.fetch import FetchResult
@@ -149,7 +148,7 @@ def served(title: str, text: str, url: str, *, from_the_feed: bool = True) -> Ar
         source_url=url,
         canonical_url=url,
         source_id="canary",
-        tier=SourceTier.INSTITUTION,
+        tier=1,
         vertical="canary",
         rank_score=0.0,
         title=title if from_the_feed else None,

@@ -29,7 +29,7 @@ from idhazh.contracts.base import (
 )
 from idhazh.contracts.item_health import FAILURE_CODE_STAGES, FailureCode, ItemStage
 from idhazh.contracts.sources import SourceForm
-from idhazh.contracts.taxonomy import SourceTierId
+from idhazh.contracts.taxonomy import SourceTier
 
 # Structural bounds on untrusted text that reaches a page or a log line. Not a
 # tunable: the extraction caps a reasonable operator would move live in config.
@@ -106,7 +106,7 @@ class Article(Contract):
         description="The address after canonicalisation. url_key derives from it."
     )
     source_id: Slug = Field(description="The feed that carried it.")
-    tier: SourceTierId
+    tier: SourceTier
     source_form: SourceForm = Field(
         default=SourceForm.ARTICLE,
         description="Declared by the feed config. Never inferred from extracted text.",

@@ -32,7 +32,7 @@ from idhazh.contracts.base import (
 )
 from idhazh.contracts.item_health import TimeSource
 from idhazh.contracts.sources import SourceForm
-from idhazh.contracts.taxonomy import SourceTierId
+from idhazh.contracts.taxonomy import SourceTier
 
 #: The day edges the already-published histogram is cut on, counted from the
 #: date an address was first published to the date of the run that refused it.
@@ -113,7 +113,7 @@ class PlannedItem(Model):
     source_url: Url = Field(description="The address as the feed gave it.")
     canonical_url: Url = Field(description="After canonicalisation. url_key derives from it.")
     source_id: Slug = Field(description="The feed that carried it first.")
-    tier: SourceTierId
+    tier: SourceTier
     source_form: SourceForm = Field(
         default=SourceForm.ARTICLE,
         description="Declared feed form, carried from config so workers never infer it.",
@@ -151,7 +151,7 @@ class PlannedItem(Model):
         default=None,
         ge=0.0,
         description=(
-            "collect.tier_weights for that feed's tier. From the same feed that won "
+            "taxonomy.source_tiers for that feed's tier. From the same feed that won "
             "authority_score, never from another carrier of the story."
         ),
     )

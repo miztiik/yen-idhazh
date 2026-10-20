@@ -186,7 +186,7 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 | 12 | Isolated CI test workflow and verification suite | 4, 5, 11, 14 | G | PENDING | - | - | - |
 | 13 | Phase 2 publication reconciliation and rolling diversity metrics | 12, 14 | H | PENDING | - | - | - |
 | 14 | Phase 1 source-run audit and three-axis evidence | 11 | G | PENDING | - | - | - |
-| 15 | Config-driven source registries and compatible readers | - | A | IN-FLIGHT | fluffy-adventure (feed-registry-migration) | - | f7f18c64-813b-4a13-b421-1cd67b951db6 |
+| 15 | Config-driven source registries and compatible readers | - | A | DONE | fluffy-adventure (feed-registry-migration) | - | f7f18c64-813b-4a13-b421-1cd67b951db6 |
 | 16 | Public data-explorer enrollment and nested ledger delivery | 2 | B | PENDING | - | - | - |
 
 ---
@@ -961,6 +961,7 @@ export type CandidateRejectionRecord =
   - `config/taxonomy.json`
   - `config/idhazh.json`
   - `backend/idhazh/config.py`
+  - `backend/idhazh/source_classification.py`
   - `backend/idhazh/contracts/taxonomy.py`
   - `backend/idhazh/contracts/knobs/collect.py`
   - `backend/idhazh/contracts/sources.py`
@@ -968,6 +969,7 @@ export type CandidateRejectionRecord =
   - `backend/idhazh/contracts/article.py`
   - `backend/idhazh/contracts/digest_day.py`
   - `backend/idhazh/contracts/digest_view.py`
+  - `backend/idhazh/contracts/digest_run_fragment.py`
   - `backend/idhazh/contracts/item_health.py`
   - `backend/idhazh/contracts/run_plan.py`
   - `backend/idhazh/contracts/__init__.py`
@@ -977,7 +979,6 @@ export type CandidateRejectionRecord =
   - `backend/idhazh/stages/assemble.py`
   - `backend/idhazh/stages/common.py`
   - `backend/tests/conftest.py`
-  - `backend/tests/contracts/test_app_config.py`
   - `backend/tests/contracts/test_source_classification_binding.py`
   - `backend/tests/contracts/test_source_classification_history.py`
   - `backend/tests/pipeline/_builders.py`
@@ -1003,17 +1004,15 @@ export type CandidateRejectionRecord =
   - `backend/utilities/data_wrangler.py`
   - `backend/utilities/probe_feeds.py`
   - `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`
-  - `tests/fixtures/gardener/pre-yearly-retention/config/idhazh.json`
-  - `tests/fixtures/rank/two-candidates-one-slot.json`
   - `tests/fixtures/source-classification/legacy-ledger-rows.json`
   - `frontend/src/lib/payload/types.ts`
   - `frontend/src/lib/bands.ts`
-  - `frontend/src/lib/server/config.ts`
   - `frontend/src/lib/components/DigestItem.svelte`
   - `frontend/tests/item-meta.spec.ts`
   - `docs/architecture/sources/source-classification.md`
   - `docs/architecture/sources/discovery.md`
   - `docs/concepts/taxonomy.md`
+  - `docs/concepts/placement.md`
   - `docs/architecture/contracts/schemas.md`
   - `TODO/20261020-66-feed-ingest-plan.md`
 - **Acceptance gates:** Local: shared selector, named affected contract/scoring/assembly tests, frontend field/vocabulary binding, and one representative published-page smoke. CI: full suite. Compare baseline outputs before/after the registry migration using the existing named fixtures. Without editing code, extend a copied configuration with a new kind and a new numeric tier ID; prove loading, scoring, publishing, and reader display accept them. Reject missing weights, unregistered live references, invalid overrides, and duplicate registry IDs by name.
@@ -1025,6 +1024,8 @@ labels and display filters; `frontend/src/lib/source-kinds.ts` does not exist.
 There is no root `AGENTS.md`; `CLAUDE.md` and `docs/agents/bootstrap.md` route
 the work. Owner authorization covers this row's Level 5 migration. This worker
 opens a ready-for-review PR and does not merge or start another row.
+The frontend reads the committed registry in `bands.ts`; its server config
+needs no change. Historical gardener and ranking fixtures remain unchanged.
 
 ### Decisions
 

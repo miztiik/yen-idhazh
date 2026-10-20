@@ -30,7 +30,7 @@ from idhazh.contracts.ledgers import LedgersConfig
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.run_plan import RunPlan, VerticalPlan
 from idhazh.contracts.sources import FeedDef, SourceForm
-from idhazh.contracts.taxonomy import LifecycleStatus, SourceKind, SourceTier
+from idhazh.contracts.taxonomy import LifecycleStatus
 from idhazh.contracts.visual_decision import VisualDecision
 from idhazh.fetch import FetchResult
 from idhazh.stages import common
@@ -209,8 +209,8 @@ def test_a_retired_feed_still_labels_the_items_it_published() -> None:
                     vertical="ai",
                     title="Defunct Daily",
                     url="https://defunct.example.com/rss",
-                    tier=SourceTier.INSTITUTION,
-                    kind=SourceKind.ANNOUNCEMENT,
+                    tier=1,
+                    kind="announcement",
                     status=LifecycleStatus.RETIRED,
                     retired_on="2026-07-04",
                     weight=0.0,
@@ -219,7 +219,7 @@ def test_a_retired_feed_still_labels_the_items_it_published() -> None:
         }
     )
     assert assemble.source_names(sources)["defunct-daily"] == "Defunct Daily"
-    assert assemble.source_kinds(sources)["defunct-daily"] is SourceKind.ANNOUNCEMENT
+    assert assemble.source_kinds(sources)["defunct-daily"] == "announcement"
 
 
 def test_abstract_items_publish_a_sentence_not_a_badge() -> None:
@@ -228,7 +228,7 @@ def test_abstract_items_publish_a_sentence_not_a_badge() -> None:
         summary=summary(),
         band=row().band,
         source_name="NBER",
-        source_kind=SourceKind.RESEARCH,
+        source_kind="research",
         run_n=1,
     )
 
@@ -245,7 +245,7 @@ def test_truncated_items_publish_the_partial_read_sentence() -> None:
         summary=summary(),
         band=row().band,
         source_name="Example Lab",
-        source_kind=SourceKind.REPORTING,
+        source_kind="reporting",
         run_n=1,
     )
 
@@ -265,7 +265,7 @@ def test_the_published_item_carries_the_plan_rows_own_ranking_signal() -> None:
         summary=summary(),
         band=row().band,
         source_name="Example Lab",
-        source_kind=SourceKind.REPORTING,
+        source_kind="reporting",
         run_n=1,
         planned=planned,
     )
@@ -285,7 +285,7 @@ def test_an_item_built_without_a_plan_row_publishes_no_signal_at_all() -> None:
         summary=summary(),
         band=row().band,
         source_name="Example Lab",
-        source_kind=SourceKind.REPORTING,
+        source_kind="reporting",
         run_n=1,
     )
 

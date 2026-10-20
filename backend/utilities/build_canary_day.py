@@ -80,7 +80,6 @@ from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
 from idhazh.contracts.source_health_view import SourceHealthView
 from idhazh.contracts.sources import FeedDef, SourceForm
-from idhazh.contracts.taxonomy import SourceKind, SourceTier
 from idhazh.contracts.validation_row import (
     LeaderboardProvenance,
     ValidationRow,
@@ -459,7 +458,7 @@ def article_for(index: int, canary: dict[str, object], measured: _Measured) -> A
         source_url=url,
         canonical_url=url,
         source_id="canary",
-        tier=SourceTier.INSTITUTION,
+        tier=1,
         source_form=SourceForm.ABSTRACT if index == ABSTRACT_AT else SourceForm.ARTICLE,
         vertical="ai",
         rank_score=0.0,
@@ -519,7 +518,7 @@ def to_item(
         source_url=str(canary["source_url"]),
         source_id="canary",
         source_name="Canary fixture",
-        source_kind=SourceKind.REPORTING,
+        source_kind="reporting",
         published_at=appeared_at,
         time_source=time_source,
         summary=summary_for(index, raw_text),
@@ -1296,8 +1295,8 @@ def _feed_defs() -> list[FeedDef]:
             vertical=vertical,
             title=title,
             url=f"https://{feed_id}.example.com/feed.xml",
-            tier=SourceTier.TRADE_PRESS,
-            kind=SourceKind.REPORTING,
+            tier=2,
+            kind="reporting",
             form=SourceForm.ARTICLE,
         )
         for feed_id, title, vertical in CANARY_FEEDS

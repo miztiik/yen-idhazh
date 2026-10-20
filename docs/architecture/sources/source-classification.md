@@ -39,6 +39,14 @@ defaults and source vertical references before fetching. It supplies omitted
 kind and entity-tier defaults from that registry and binds tier weights to the
 ranking configuration. Contract modules never open configuration files.
 
+Current configuration has no `collect.tier_weights`. The explicit historical
+reader retains the old named weight block and its omitted-field defaults, but
+refuses a conflict with a supplied registry. Those fixed defaults describe
+historical input only. It never writes that legacy block back. Missing live
+weights fail by tier ID. The feed probe uses configured defaults for an
+unregistered address; corpus reconstruction resolves retired feed IDs too and
+uses the lowest configured active weight only for an unknown historical feed.
+
 A new kind or numeric tier needs configuration edits only. The existing weights
 remain 1.0, 0.6 and 0.3 for IDs 1, 2 and 3. New IDs have no numeric ordering
 meaning. An announcement still needs reporting on its subject before it may

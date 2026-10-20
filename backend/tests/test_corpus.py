@@ -24,7 +24,6 @@ from idhazh.contracts.knobs.extract import ExtractConfig
 from idhazh.contracts.qualification import CorpusItem
 from idhazh.contracts.run_plan import PlannedItem, RunPlan, VerticalPlan
 from idhazh.contracts.sources import SourceForm
-from idhazh.contracts.taxonomy import SourceTier
 from idhazh.evals import qualify
 from idhazh.fetch import FetchResult
 from idhazh.stages.common import shard_of
@@ -82,7 +81,7 @@ def planned(index: int, band: int) -> PlannedItem:
         source_url=url,
         canonical_url=url,
         source_id="grid-newsroom",
-        tier=SourceTier.INSTITUTION,
+        tier=1,
         vertical="energy",
         # The bottom tier sits under `extract.min_source_words`, and the committed
         # config rejects a body that short unless its feed publishes abstracts -

@@ -25,8 +25,7 @@ from idhazh.contracts.taxonomy import (
     Lifecycled,
     LifecycleStatus,
     SourceKind,
-    SourceKindId,
-    SourceTierId,
+    SourceTier,
 )
 
 
@@ -42,9 +41,9 @@ class FeedDef(Lifecycled):
     vertical: Slug
     title: str = Field(min_length=1)
     url: Url
-    tier: SourceTierId
-    kind: SourceKindId = Field(
-        default=SourceKind.REPORTING,
+    tier: SourceTier
+    kind: SourceKind = Field(
+        default="reporting",
         description="Who is speaking. A reader needs this before they will share an item.",
     )
     form: SourceForm = Field(

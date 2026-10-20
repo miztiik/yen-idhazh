@@ -35,7 +35,7 @@
     {"definition": "The story turns on armed conflict - the fighting, the weapons, the people it displaces, or the talks to stop it.","display_name": "War","id": "war","is_auto_discovered": false,"keywords": ["at war","war in","war crimes","ceasefire","truce","invasion","troops","airstrike","air strike","missile strike","drone strike","military strike","shelling","peace talks","civilians killed"],"retired_on": null,"status": "active","weight": 0.0},
     {"definition": "","display_name": "Return on AI investment","id": "ai-roi","is_auto_discovered": false,"keywords": [],"retired_on": "2026-08-30","status": "retired","weight": 0.0}
   ],
-  "version": "2026-09-14",
+  "version": "2026-10-20",
   "verticals": [
     {"ceiling": 0.35,"definition": "The story is mainly about artificial intelligence - the models, the people and companies building or selling them, the machines and data centres they run on, or the rules being written for them.","display_name": "AI","floor": 6,"id": "ai","is_auto_discovered": false,"min_feeds": 35,"retired_on": null,"status": "active"},
     {"ceiling": 0.25,"definition": "The story is mainly about how energy is made, moved, stored or paid for - electricity, oil, gas, renewables, nuclear power and the grids that carry them.","display_name": "Energy","floor": 6,"id": "energy","is_auto_discovered": false,"min_feeds": 21,"retired_on": null,"status": "active"},

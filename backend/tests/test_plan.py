@@ -56,7 +56,7 @@ from idhazh.contracts.run_manifest import RunRecord, RunStatus
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.seen import PublishedRow
 from idhazh.contracts.sources import FeedDef, SalienceFeedDef, Sources
-from idhazh.contracts.taxonomy import LifecycleStatus, SourceTier, VerticalDef
+from idhazh.contracts.taxonomy import LifecycleStatus, VerticalDef
 from idhazh.fan_out import shard_count
 from idhazh.stages import common
 from idhazh.stages.common import Fetcher, shard_of
@@ -83,56 +83,56 @@ LAB = FeedDef(
     vertical="ai",
     title="Example Lab",
     url=LAB_URL,
-    tier=SourceTier.INSTITUTION,
+    tier=1,
 )
 TRADE = FeedDef(
     id="trade-press",
     vertical="ai",
     title="Example Trade Press",
     url=TRADE_URL,
-    tier=SourceTier.TRADE_PRESS,
+    tier=2,
 )
 COMMUNITY = FeedDef(
     id="community",
     vertical="ai",
     title="Example Community",
     url=COMMUNITY_URL,
-    tier=SourceTier.COMMUNITY,
+    tier=3,
 )
 QUIET = FeedDef(
     id="quiet-desk",
     vertical="ai",
     title="Example Quiet Desk",
     url=QUIET_URL,
-    tier=SourceTier.TRADE_PRESS,
+    tier=2,
 )
 NOTICES = FeedDef(
     id="notices",
     vertical="ai",
     title="Example Undated Notices",
     url=NOTICES_URL,
-    tier=SourceTier.INSTITUTION,
+    tier=1,
 )
 FORWARD = FeedDef(
     id="forward",
     vertical="ai",
     title="Example Forward Dating",
     url=FORWARD_URL,
-    tier=SourceTier.TRADE_PRESS,
+    tier=2,
 )
 DUPLICATE = FeedDef(
     id="energy-wire",
     vertical="energy",
     title="Example Energy Wire",
     url=DUPLICATE_URL,
-    tier=SourceTier.INSTITUTION,
+    tier=1,
 )
 PROLIFIC = FeedDef(
     id="prolific-wire",
     vertical="ai",
     title="Example Prolific Wire",
     url=PROLIFIC_URL,
-    tier=SourceTier.TRADE_PRESS,
+    tier=2,
 )
 #: Two feeds of one masthead. `title` is the masthead, so these two are one
 #: outlet however many feed ids they hold - which is the whole point of the
@@ -142,14 +142,14 @@ REPEAT_FIRST = FeedDef(
     vertical="ai",
     title="Example Repeat Wire",
     url=REPEAT_FIRST_URL,
-    tier=SourceTier.INSTITUTION,
+    tier=1,
 )
 REPEAT_SECOND = FeedDef(
     id="repeat-wire-rerun",
     vertical="ai",
     title="Example Repeat Wire",
     url=REPEAT_SECOND_URL,
-    tier=SourceTier.COMMUNITY,
+    tier=3,
 )
 FRONT_PAGE = SalienceFeedDef(
     id="front-page",

@@ -46,6 +46,11 @@ class DigestRunFragment(Contract):
     __sort_key__: ClassVar[tuple[str, str]] = ("completed_at", "run_id")
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-20",
+            change="Embedded item source kinds accept open identifiers.",
+            why="A fragment must accept every source kind its published day can read.",
+        ),
+        ChangelogEntry(
             version="2026-09-22",
             change="First version.",
             why="A file with one writer needs no merge, and two runs of a day had one.",
