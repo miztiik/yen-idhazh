@@ -26,7 +26,7 @@ This is the canonical writing rule. It binds every agent, every persona under `.
 - **A word earns a name only when its ordinary English meaning is what the thing does.** Where a reader has to know which field the word was borrowed from - racing, functional programming, benchmarking - it is a second name for something that already has one, and it is deleted rather than replaced.
 - **A third-party product name is not a design vocabulary.** Name the artefact and the property - "a reliability scorecard", "a tinted status card", "a target marker on a bar" - never the vendor whose screenshot it came from. This binds a design doc, a plan-doc, a code comment, a commit message, a branch name and a filename equally. Naming the artefact is also the more useful sentence: it says what to look at, where the product name only said where somebody once saw it.
 
-Everywhere else restates this section rather than inventing its own style rule (Guardrail #4): [`AGENTS.md`](AGENTS.md) carries it for agent tools that read that file instead of this one.
+Everywhere else restates this section rather than inventing its own style rule (Guardrail #4)
 
 ## 0c. Decision Requests and Tables
 
@@ -47,8 +47,6 @@ If a missing fact prevents a sound recommendation, identify it and recommend how
 Use multiple decision tables only when the decisions depend on each other. Do not bundle unrelated decisions. Apply the five-part structure once per message, not once per table.
 
 Routine progress updates do not need this structure.
-
-[AGENTS.md](AGENTS.md) restates this section; it must not extend it (Guardrail #4).
 
 ## 0d. Intent, Contract, Code
 
@@ -227,7 +225,6 @@ The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how
 - [ ] Review the changed reader-facing or operator-facing surface against the design requirements in [`docs/concepts/design-system.md`](docs/concepts/design-system.md). Use a representative view and only check another view or state when the change alters its behaviour. This is a design review, not a per-panel test matrix.
 - [ ] Canonical docs updated in `docs/` (right tier). A page you added a section to paid the split test first, or the PR says in one line why it stays whole ([`docs/reference/documentation-structure.md`](docs/reference/documentation-structure.md)).
 - [ ] Schemas version-stamped + changelogged (and migrated if breaking) when any persisted contract changed (section 11).
-- [ ] Module `AGENTS.md` updated if structure or invariants changed.
 - [ ] No `[DEBUG]` markers left.
 - [ ] No new hardcoded values.
 - [ ] No new mocks unless explicitly requested.
@@ -253,7 +250,7 @@ The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how
 - Add persisted fields without a schema `version` date, `changelog` entry and read-side migration in the same commit.
 - Raise platform limits to fit a feature: GitHub kills a 6 h job, and Pages refuses a site over 1 GB. Name a viable design and its trade-offs; scope changes require user approval.
 - Use runner figures as a refusal without stating their consequences. Cache eviction costs a re-download, not a failed run (Guardrail #2).
-- Treat `TODO/`, chat logs, [AGENTS.md](AGENTS.md) or private memory as authority. They are caches of `docs/`.
+- Treat `TODO/`, chat logs or private memory as authority. They are caches of `docs/`.
 - Make a domain-neutral process document project-specific (section 5).
 - Create empty modules for later.
 - Skip the documentation update.
@@ -273,7 +270,7 @@ What the base model enforces, how a same-day revision extends the stamp, which s
 
 ## 12. Published-Site Verification (Browser Smoke)
 
-Any change to the published site MUST be verified by the agent using integrated browser tools, not deferred to the human. The commands, and the three traps that make this check lie, are in [`docs/how-to/run-the-gates.md`](docs/how-to/run-the-gates.md).
+Any change to the published site MUST be verified by the agent using integrated browser tools, not deferred to the human. 
 
 Minimum loop:
 
