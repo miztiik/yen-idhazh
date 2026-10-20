@@ -1,0 +1,5 @@
+[
+  {"tier": 1, "source_kind": "reporting", "tier_score": 1.0},
+  {"tier": 2, "source_kind": "announcement", "tier_score": 0.6},
+  {"tier": 3, "source_kind": "community", "tier_score": 0.3}
+]

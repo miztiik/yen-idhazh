@@ -78,7 +78,7 @@ from idhazh.contracts.base import (
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand
 from idhazh.contracts.item_health import TimeSource
 from idhazh.contracts.sources import SourceForm
-from idhazh.contracts.taxonomy import SourceKind
+from idhazh.contracts.taxonomy import SourceKind, SourceKindId
 from idhazh.contracts.visual_decision import VisualKind, VisualState
 
 
@@ -332,7 +332,7 @@ class DigestItem(Model):
     source_url: Url
     source_id: Slug
     source_name: str = Field(min_length=1)
-    source_kind: SourceKind = Field(
+    source_kind: SourceKindId = Field(
         default=SourceKind.REPORTING,
         description="Who is speaking. A vendor's own copy must not look like a reporter's.",
     )
@@ -544,6 +544,11 @@ class DigestDay(Contract):
     __schema_stem__: ClassVar[str] = "digest-day"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-20",
+            change="Source classification accepts open kind and numeric tier identifiers.",
+            why="Registry membership can change without invalidating recorded payloads.",
+        ),
+        ChangelogEntry(
             version="2026-09-24",
             change="Removed DigestItem.key_points. A frozen day that carries it still loads.",
             why="Nothing drew them, and the search filter reads title and summary instead.",
@@ -557,11 +562,6 @@ class DigestDay(Contract):
             version="2026-09-22",
             change="Runs may be numbered with gaps, and two runs may not share an ordinal.",
             why="Runs land in parallel, so no writer can know what the next number is.",
-        ),
-        ChangelogEntry(
-            version="2026-09-17",
-            change="DigestItem.summary is Prose - paragraphs split by one blank line.",
-            why="A long summary is two paragraphs, and read-side folding keeps old days readable.",
         ),
         ChangelogEntry(
             version="2026-08-21",

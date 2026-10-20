@@ -3,7 +3,7 @@
 **Last Updated**: 2026-10-20
 **Level**: 5 (source-kind/tier and persisted-contract migration requires owner approval before execution; the later planner implementation follows the approved contracts)
 
-Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0.
 
 ---
 
@@ -186,7 +186,7 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 | 12 | Isolated CI test workflow and verification suite | 4, 5, 11, 14 | G | PENDING | - | - | - |
 | 13 | Phase 2 publication reconciliation and rolling diversity metrics | 12, 14 | H | PENDING | - | - | - |
 | 14 | Phase 1 source-run audit and three-axis evidence | 11 | G | PENDING | - | - | - |
-| 15 | Config-driven source registries and compatible readers | - | A | PENDING | - | - | - |
+| 15 | Config-driven source registries and compatible readers | - | A | IN-FLIGHT | fluffy-adventure (feed-registry-migration) | - | f7f18c64-813b-4a13-b421-1cd67b951db6 |
 | 16 | Public data-explorer enrollment and nested ledger delivery | 2 | B | PENDING | - | - | - |
 
 ---
@@ -1008,7 +1008,6 @@ export type CandidateRejectionRecord =
   - `tests/fixtures/source-classification/legacy-ledger-rows.json`
   - `frontend/src/lib/payload/types.ts`
   - `frontend/src/lib/bands.ts`
-  - `frontend/src/lib/source-kinds.ts`
   - `frontend/src/lib/server/config.ts`
   - `frontend/src/lib/components/DigestItem.svelte`
   - `frontend/tests/item-meta.spec.ts`
@@ -1019,6 +1018,13 @@ export type CandidateRejectionRecord =
   - `TODO/20261020-66-feed-ingest-plan.md`
 - **Acceptance gates:** Local: shared selector, named affected contract/scoring/assembly tests, frontend field/vocabulary binding, and one representative published-page smoke. CI: full suite. Compare baseline outputs before/after the registry migration using the existing named fixtures. Without editing code, extend a copied configuration with a new kind and a new numeric tier ID; prove loading, scoring, publishing, and reader display accept them. Reject missing weights, unregistered live references, invalid overrides, and duplicate registry IDs by name.
 - **Oracle:** Existing configured kinds/tiers produce the same scores, publication labels, and lead eligibility, and old payload fixtures remain readable; adding a registered kind or tier requires only configuration edits and passes the same pipeline/readers. This does not prove a new kind label is accurate or create a new extraction/scoring algorithm.
+
+Reconciled against main on 2026-10-20: `frontend/src/lib/bands.ts` owns kind
+labels and display filters; `frontend/src/lib/source-kinds.ts` does not exist.
+`docs/architecture/sources/source-classification.md` is a new living page.
+There is no root `AGENTS.md`; `CLAUDE.md` and `docs/agents/bootstrap.md` route
+the work. Owner authorization covers this row's Level 5 migration. This worker
+opens a ready-for-review PR and does not merge or start another row.
 
 ### Decisions
 

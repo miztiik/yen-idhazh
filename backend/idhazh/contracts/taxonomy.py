@@ -67,6 +67,13 @@ class SourceKind(StrEnum):
     COMMUNITY = "community"
 
 
+SourceKindId = Slug
+"""An immutable publisher-kind identifier, including kinds no longer registered."""
+
+SourceTierId = Annotated[int, Field(strict=True, gt=0)]
+"""A numeric registry key, not an ordinal or a ranking weight."""
+
+
 MatchTerm = Annotated[
     str, StringConstraints(pattern=r"^[A-Za-z0-9][A-Za-z0-9 '/&.-]*$", min_length=2)
 ]

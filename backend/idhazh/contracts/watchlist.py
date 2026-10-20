@@ -23,7 +23,7 @@ from typing import Annotated, ClassVar, Self
 from pydantic import Field, StringConstraints, model_validator
 
 from idhazh.contracts.base import ChangelogEntry, Contract, Model, Slug, Url, records_json
-from idhazh.contracts.taxonomy import Lifecycled, LifecycleStatus, SourceTier
+from idhazh.contracts.taxonomy import Lifecycled, LifecycleStatus, SourceTier, SourceTierId
 
 Cik = Annotated[str, StringConstraints(pattern=r"^[0-9]{10}$")]
 ContactEmail = Annotated[str, StringConstraints(pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")]
@@ -42,7 +42,7 @@ class EntityFeed(Lifecycled):
     id: Slug
     title: str = Field(min_length=1)
     url: Url
-    tier: SourceTier = SourceTier.INSTITUTION
+    tier: SourceTierId = SourceTier.INSTITUTION
 
 
 class EntityDef(Lifecycled):
@@ -110,6 +110,11 @@ class Watchlist(Contract):
 
     __schema_stem__: ClassVar[str] = "watchlist"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-20",
+            change="Source classification accepts open kind and numeric tier identifiers.",
+            why="Registry membership can change without invalidating recorded payloads.",
+        ),
         ChangelogEntry(
             version="2026-08-31",
             change="EntityDef gained kind, so an entry can be a subject and not only an outfit.",

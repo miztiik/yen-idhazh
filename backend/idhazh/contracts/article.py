@@ -29,7 +29,7 @@ from idhazh.contracts.base import (
 )
 from idhazh.contracts.item_health import FAILURE_CODE_STAGES, FailureCode, ItemStage
 from idhazh.contracts.sources import SourceForm
-from idhazh.contracts.taxonomy import SourceTier
+from idhazh.contracts.taxonomy import SourceTierId
 
 # Structural bounds on untrusted text that reaches a page or a log line. Not a
 # tunable: the extraction caps a reasonable operator would move live in config.
@@ -71,6 +71,11 @@ class Article(Contract):
     __schema_stem__: ClassVar[str] = "article"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-20",
+            change="Source classification accepts open kind and numeric tier identifiers.",
+            why="Registry membership can change without invalidating recorded payloads.",
+        ),
+        ChangelogEntry(
             version="2026-10-10",
             change="Successful articles may carry body text without a source headline.",
             why="The summarizer generates its own headline from the body.",
@@ -84,11 +89,6 @@ class Article(Contract):
             version="2026-09-15T22:10",
             change="FailureCode gained model_timed_out and shard_out_of_time.",
             why="Both were being reported under a name that sends an operator to the wrong place.",
-        ),
-        ChangelogEntry(
-            version="2026-09-15T20:00",
-            change="The embedded failure vocabulary gained model_refused.",
-            why="It follows item-health-row, where the vocabulary is declared.",
         ),
         ChangelogEntry(
             version="2026-08-21",
@@ -106,7 +106,7 @@ class Article(Contract):
         description="The address after canonicalisation. url_key derives from it."
     )
     source_id: Slug = Field(description="The feed that carried it.")
-    tier: SourceTier
+    tier: SourceTierId
     source_form: SourceForm = Field(
         default=SourceForm.ARTICLE,
         description="Declared by the feed config. Never inferred from extracted text.",

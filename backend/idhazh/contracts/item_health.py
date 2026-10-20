@@ -35,7 +35,7 @@ from idhazh.contracts.base import (
 )
 from idhazh.contracts.call_cost import COST_FIELDS, CallKind
 from idhazh.contracts.sources import SourceForm
-from idhazh.contracts.taxonomy import SourceTier
+from idhazh.contracts.taxonomy import SourceTierId
 
 #: The two call slots, named for what each call does rather than for its turn.
 #: Every per-call cell is this prefix plus the quantity, so a reader that pools
@@ -617,6 +617,11 @@ class ItemHealthRow(Contract):
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-20",
+            change="Source classification accepts open kind and numeric tier identifiers.",
+            why="Registry membership can change without invalidating recorded payloads.",
+        ),
+        ChangelogEntry(
             version="2026-10-14",
             change="Allow machine pipeline and task identity without a legacy job value.",
             why="Items resolve shared host rows through separate identity columns.",
@@ -837,7 +842,7 @@ class ItemHealthRow(Contract):
     on_front_page: bool | None = Field(
         default=None, description="Did this item reach the published front page?"
     )
-    tier: SourceTier | None = Field(
+    tier: SourceTierId | None = Field(
         default=None, description="The source's tier at the moment of the run."
     )
     source_form: SourceForm | None = Field(
