@@ -21,7 +21,7 @@ from itertools import pairwise
 from typing import Any, Final
 
 import pytest
-from conftest import FIXTURES_DIR, read_text
+from conftest import FIXTURES_DIR, collect_config, read_text
 
 from idhazh.config import REPO_ROOT, load
 from idhazh.contracts.base import ITEM_ID_PATTERN, derive_url_key
@@ -53,14 +53,6 @@ from idhazh.rank import (
 )
 from idhazh.stages.plan import _counterfactual_rows, _record_plan_duplicates
 
-
-def collect_config(**values: Any) -> CollectConfig:
-    """A current config with its registry weights, optionally varied for a case."""
-    config = CollectConfig(**values)
-    config.bind_source_tiers(load().taxonomy.source_tiers)
-    return config
-
-
 DATE = "2026-08-23"
 RUN = "2026-08-23-1"
 STAMP = "2026-08-23T06:00:00Z"
@@ -71,7 +63,7 @@ CONFIG = collect_config()
 def _candidate(
     *,
     source_id: str = "a-feed",
-    tier: SourceTier = SourceTier.INSTITUTION,
+    tier: SourceTier = 1,
     weight: float = 1.0,
 ) -> Candidate:
     return Candidate(
@@ -92,13 +84,13 @@ def _candidate(
 
 
 def test_authority_without_a_map_is_tier_times_weight() -> None:
-    cand = _candidate(tier=SourceTier.INSTITUTION, weight=1.0)
-    assert authority(cand, CONFIG) == pytest.approx(tier_weight(SourceTier.INSTITUTION, CONFIG))
+    cand = _candidate(tier=1, weight=1.0)
+    assert authority(cand, CONFIG) == pytest.approx(tier_weight(1, CONFIG))
 
 
 def test_reliability_scales_authority_multiplicatively() -> None:
     """The factor multiplies the authority; it is not added and not a re-rank."""
-    cand = _candidate(source_id="a-feed", tier=SourceTier.INSTITUTION, weight=1.0)
+    cand = _candidate(source_id="a-feed", tier=1, weight=1.0)
     base = authority(cand, CONFIG)
     assert authority(cand, CONFIG, {"a-feed": 0.5}) == pytest.approx(base * 0.5)
     assert authority(cand, CONFIG, {"a-feed": 0.8}) == pytest.approx(base * 0.8)
@@ -107,8 +99,8 @@ def test_reliability_scales_authority_multiplicatively() -> None:
 
 def test_the_factor_scales_a_hand_set_weight_too() -> None:
     """Reliability and the hand-set weight both multiply, so they compose."""
-    cand = _candidate(source_id="a-feed", tier=SourceTier.INSTITUTION, weight=0.5)
-    tier = tier_weight(SourceTier.INSTITUTION, CONFIG)
+    cand = _candidate(source_id="a-feed", tier=1, weight=0.5)
+    tier = tier_weight(1, CONFIG)
     assert authority(cand, CONFIG, {"a-feed": 0.5}) == pytest.approx(tier * 0.5 * 0.5)
 
 
@@ -127,7 +119,7 @@ def test_the_factor_only_ever_reduces() -> None:
     """Every value the ledger can hand authority lives in [floor, 1.0], and none
     of them lifts a score above its unscaled base.
     """
-    cand = _candidate(tier=SourceTier.INSTITUTION, weight=1.0)
+    cand = _candidate(tier=1, weight=1.0)
     base = authority(cand, CONFIG)
     for factor in (CONFIG.reliability_floor, 0.7, 1.0):
         assert authority(cand, CONFIG, {"a-feed": factor}) <= base + 1e-9
@@ -138,8 +130,8 @@ def test_a_dependable_feed_outranks_an_unreliable_peer_of_the_same_tier() -> Non
     though it did not, and drops below a feed of the same tier and weight that
     did.
     """
-    good = _candidate(source_id="good", tier=SourceTier.INSTITUTION, weight=1.0)
-    bad = _candidate(source_id="bad", tier=SourceTier.INSTITUTION, weight=1.0)
+    good = _candidate(source_id="good", tier=1, weight=1.0)
+    bad = _candidate(source_id="bad", tier=1, weight=1.0)
     factors = {"good": 1.0, "bad": 0.5}
     assert authority(good, CONFIG, factors) > authority(bad, CONFIG, factors)
 
@@ -151,7 +143,7 @@ def test_a_reduced_feed_scores_below_the_same_story_at_full_reliability() -> Non
     """A single-carrier story with no bonuses is exactly its authority, so a 0.5
     factor halves the score and changes nothing else.
     """
-    carried = [_candidate(source_id="a-feed", tier=SourceTier.INSTITUTION)]
+    carried = [_candidate(source_id="a-feed", tier=1)]
     full = score(
         carried,
         config=CONFIG,
@@ -183,7 +175,7 @@ AI: Final = VerticalDef(id="ai", display_name="AI", min_feeds=1)
 def _story(
     name: str,
     *,
-    tier: SourceTier = SourceTier.TRADE_PRESS,
+    tier: SourceTier = 2,
     weight: float = 1.0,
     carriers: int = 1,
     watchlist_hit: bool = False,
@@ -233,7 +225,7 @@ def test_every_term_the_order_names_moves_it_on_its_own() -> None:
     can attribute a move to, and the front-page vote was exactly that until
     2026-09-13.
     """
-    assert _story("a", tier=SourceTier.INSTITUTION) > _story("b", tier=SourceTier.TRADE_PRESS)
+    assert _story("a", tier=1) > _story("b", tier=2)
     assert _story("c", weight=1.0) > _story("d", weight=0.5)
     assert _story("e", appeared="2026-09-13T11:00:00Z") > _story(
         "f", appeared="2026-09-12T16:00:00Z"
@@ -252,7 +244,7 @@ def test_a_field_the_order_does_not_read_never_moves_it() -> None:
     assert _story("a", title="A story") == _story("a", title="A story " * 40)
 
 
-def _addressed(name: str, *, tier: SourceTier = SourceTier.TRADE_PRESS) -> Candidate:
+def _addressed(name: str, *, tier: SourceTier = 2) -> Candidate:
     """A candidate whose `url_key` is a real digest, so `item_id` can read it.
 
     `_candidate` above spells a readable `url_key` because nothing it drives
@@ -383,15 +375,15 @@ def test_one_feed_from_the_source_beats_the_wire_copy_that_repeated_it() -> None
     2 = 0.6 never beat 1.0 - and this row's own text claimed it was the half
     that fails. Corrected on execution, per the plan's section 0.1.
     """
-    institution = _story("primary", tier=SourceTier.INSTITUTION, carriers=1)
-    wire = _story("wire", tier=SourceTier.TRADE_PRESS, carriers=3)
+    institution = _story("primary", tier=1, carriers=1)
+    wire = _story("wire", tier=2, carriers=3)
     assert institution > wire, (
         f"the source's own account scores {institution} and wire copy three feeds "
         f"repeated scores {wire}. Repetition is our distribution, not the world's "
         "judgement."
     )
 
-    community = _story("forum", tier=SourceTier.COMMUNITY, carriers=2)
+    community = _story("forum", tier=3, carriers=2)
     assert institution > community
 
 
@@ -420,9 +412,9 @@ def test_the_step_is_flat_and_does_not_scale_with_the_tier() -> None:
     least. A tie-break pays the same to both.
     """
     gains = [
-        _story(f"t{tier.value}", tier=tier, carriers=2)
-        - _story(f"t{tier.value}", tier=tier, carriers=1)
-        for tier in (SourceTier.INSTITUTION, SourceTier.TRADE_PRESS, SourceTier.COMMUNITY)
+        _story(f"t{tier}", tier=tier, carriers=2)
+        - _story(f"t{tier}", tier=tier, carriers=1)
+        for tier in (1, 2, 3)
     ]
     assert all(gain == pytest.approx(CONFIG.carriage_step) for gain in gains), (
         f"carriage paid {gains} across the three tiers and a tie-break pays one amount"
@@ -439,7 +431,7 @@ def test_no_weight_can_admit_a_story_the_age_gate_refused() -> None:
     """
     stale = "2026-09-11T12:00:00Z"
     assert CONFIG.max_age_hours < 48.0, "the fixture below is only stale under a day-ish gate"
-    old = replace(_addressed("old", tier=SourceTier.INSTITUTION), published_at=stale)
+    old = replace(_addressed("old", tier=1), published_at=stale)
     plan, items, _ = plan_vertical(
         AI,
         [old],
@@ -498,9 +490,9 @@ def _terms_desk() -> list[PlannedItem]:
     return plan_vertical(
         AI,
         [
-            _carrier(CARRIED_URL, "community-feed", SourceTier.COMMUNITY, 1.0),
-            _carrier(CARRIED_URL, "institution-feed", SourceTier.INSTITUTION, WON_WEIGHT),
-            _carrier(SOLO_URL, "trade-feed", SourceTier.TRADE_PRESS, 1.0),
+            _carrier(CARRIED_URL, "community-feed", 3, 1.0),
+            _carrier(CARRIED_URL, "institution-feed", 1, WON_WEIGHT),
+            _carrier(SOLO_URL, "trade-feed", 2, 1.0),
         ],
         config=CONFIG,
         eligible_feeds=3,
@@ -568,7 +560,7 @@ def test_the_authority_factors_come_from_the_carrier_that_won_the_maximum() -> N
 
     assert carried.carried_by == 2
     assert carried.source_id == "institution-feed"
-    assert carried.tier_score == pytest.approx(tier_weight(SourceTier.INSTITUTION, CONFIG))
+    assert carried.tier_score == pytest.approx(tier_weight(1, CONFIG))
     assert carried.feed_weight == pytest.approx(WON_WEIGHT)
     assert carried.feed_reliability == pytest.approx(WON_RELIABILITY)
     assert carried.carriage_step == pytest.approx(CONFIG.carriage_step)
@@ -611,7 +603,7 @@ def _one_slot_desk() -> tuple[dict[str, Any], list[Candidate]]:
             url_key=derive_url_key(entry["canonical_url"]),
             source_id=entry["source_id"],
             vertical=fixture["vertical"],
-            tier=SourceTier(entry["tier"]),
+            tier=int(entry["tier"]),
             source_form=SourceForm(entry["source_form"]),
             title=entry["title"],
             published_at=entry["published_at"],
@@ -875,7 +867,7 @@ def _planned(
         source_url=url,
         canonical_url=url,
         source_id=source_id,
-        tier=SourceTier.INSTITUTION,
+        tier=1,
         vertical=vertical,
         title=title,
         rank_score=rank_score,

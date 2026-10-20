@@ -19,17 +19,15 @@ from dataclasses import replace
 from typing import Any
 
 import pytest
-from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
+from conftest import CONFIG_DIR, FIXTURES_DIR, collect_config, read_text
 
 from idhazh import config
-from idhazh.config import load
 from idhazh.contracts.base import TIMESTAMP_PATTERN, derive_url_key
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome, RobotsOutcome
 from idhazh.contracts.item_health import TimeSource
-from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.sources import FeedDef, SourceForm
-from idhazh.contracts.taxonomy import LifecycleStatus, SourceTier, VerticalDef
+from idhazh.contracts.taxonomy import LifecycleStatus, VerticalDef
 from idhazh.discover import (
     Candidate,
     candidates_from_feed,
@@ -66,38 +64,31 @@ LAB = FeedDef(
     vertical="ai",
     title="Example Lab",
     url="https://blog.example-lab.org/feed",
-    tier=SourceTier.INSTITUTION,
+    tier=1,
 )
 TRADE = FeedDef(
     id="trade-press",
     vertical="ai",
     title="Example Trade Press",
     url="https://trade.example-press.net/feed",
-    tier=SourceTier.TRADE_PRESS,
+    tier=2,
 )
 COMMUNITY = FeedDef(
     id="community",
     vertical="ai",
     title="Example Community",
     url="https://community.example.org/feed",
-    tier=SourceTier.COMMUNITY,
+    tier=3,
 )
 PROLIFIC = FeedDef(
     id="prolific-wire",
     vertical="ai",
     title="Example Prolific Wire",
     url="https://prolific.example-wire.net/feed",
-    tier=SourceTier.TRADE_PRESS,
+    tier=2,
 )
 
 AI = VerticalDef(id="ai", display_name="AI", min_feeds=3)
-
-
-def collect_config(**values: Any) -> CollectConfig:
-    """A current config with its registry weights, optionally varied for a case."""
-    config = CollectConfig(**values)
-    config.bind_source_tiers(load().taxonomy.source_tiers)
-    return config
 
 
 NOW = "2026-08-21T12:00:00Z"
@@ -191,7 +182,7 @@ def test_a_broken_feed_yields_nothing_rather_than_failing_the_run() -> None:
 
 def test_a_feed_carries_its_own_tier_and_vertical() -> None:
     found = candidates_from_feed(COMMUNITY, body("community.atom"))
-    assert {candidate.tier for candidate in found} == {SourceTier.COMMUNITY}
+    assert {candidate.tier for candidate in found} == {3}
     assert {candidate.vertical for candidate in found} == {"ai"}
 
 
@@ -359,7 +350,7 @@ def offered(url: str) -> Candidate:
         url_key=derive_url_key(canonical),
         source_id="cnn-world",
         vertical="world",
-        tier=SourceTier.TRADE_PRESS,
+        tier=2,
         source_form=SourceForm.ARTICLE,
         title="Experts: this is the best cash back card of 2022",
         published_at=NOW,
@@ -433,7 +424,7 @@ def test_a_draft_feed_is_not_read() -> None:
         vertical="ai",
         title="Soon",
         url="https://soon.example/feed",
-        tier=SourceTier.TRADE_PRESS,
+        tier=2,
         status=LifecycleStatus.DRAFT,
     )
     assert live([LAB, draft], "ai") == [LAB]
@@ -1067,7 +1058,7 @@ def _colliding_pool(fixture: dict[str, Any], name: str) -> list[Candidate]:
                 url_key=derive_url_key(url),
                 source_id=entry["source_id"],
                 vertical=fixture["vertical"],
-                tier=SourceTier(entry["tier"]),
+                tier=int(entry["tier"]),
                 source_form=SourceForm(entry["source_form"]),
                 title=entry["title"],
                 published_at=entry["published_at"],
@@ -1139,8 +1130,8 @@ def test_the_same_feeds_produce_the_same_day_twice() -> None:
 
 def test_tier_weights_come_from_config() -> None:
     config = collect_config()
-    assert tier_weight(SourceTier.INSTITUTION, config) > tier_weight(SourceTier.TRADE_PRESS, config)
-    assert tier_weight(SourceTier.TRADE_PRESS, config) > tier_weight(SourceTier.COMMUNITY, config)
+    assert tier_weight(1, config) > tier_weight(2, config)
+    assert tier_weight(2, config) > tier_weight(3, config)
 
 
 def test_no_hash_appears_in_any_planned_item_id() -> None:
