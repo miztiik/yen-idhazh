@@ -18,6 +18,7 @@ drives the door through, so a regenerated fixture cannot drop one quietly.
 from __future__ import annotations
 
 import json
+import re
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Final
@@ -209,10 +210,29 @@ def test_additional_answer_fixtures_are_recomputed_with_duckdb() -> None:
         "summarize": "SELECT COLUMNS(*)::VARCHAR FROM (SUMMARIZE SELECT * FROM hf) LIMIT 3",
         "duplicate-id": "SELECT COLUMNS(*)::VARCHAR FROM (SELECT h.shard AS id, i.shard AS id FROM hf h JOIN ih i USING (date) ORDER BY h.shard, i.shard) LIMIT 3",
         "empty-view": "SELECT COLUMNS(*)::VARCHAR FROM (SELECT count(*) AS rows FROM hf) LIMIT 11",
-        "explain": "EXPLAIN SELECT 1 AS one",
     }
     for name, sql in cases.items():
         rows = con.execute(sql).fetchall()
         columns = [column[0] for column in con.description]
         expected = json.loads((FIXTURE / "answers" / f"{name}.json").read_text())
         assert [dict(zip(columns, row, strict=True)) for row in rows] == expected
+
+
+def test_explain_fixture_matches_duckdb_plan_semantics() -> None:
+    """Native DuckDB and the browser fixture describe the same constant projection."""
+    import duckdb
+
+    with duckdb.connect() as con:
+        rows = con.execute("EXPLAIN SELECT 1 AS one").fetchall()
+        columns = [column[0] for column in con.description]
+    assert columns == ["explain_key", "explain_value"]
+    actual = [dict(zip(columns, row, strict=True)) for row in rows]
+    expected = json.loads((FIXTURE / "answers" / "explain.json").read_text())
+    for answer in (actual, expected):
+        assert len(answer) == 1
+        assert set(answer[0]) == {"explain_key", "explain_value"}
+        assert answer[0]["explain_key"] == "physical_plan"
+        words = re.findall(r"[a-z]+", answer[0]["explain_value"].casefold())
+        assert "projection" in words
+        assert "one" in words
+        assert "dummy scan" in " ".join(words)
