@@ -1392,7 +1392,11 @@ Row #13's shared integration adds
 `services/feed-ingest-plan/src/metrics/publication-metrics.ts` to separate
 publication calculations from per-run planning calculations. It consumes
 bounded, named publication files and digest evidence plus existing proven
-attempt memberships. Retry selection precedes attribution; rolling
+attempt memberships. The separate
+`services/feed-ingest-plan/src/metrics/planning-populations.ts` reconstructs
+those memberships from existing complete attempts, checks stage/candidate
+identity, terminal losses and source attribution, and performs no new
+completion inference. Retry selection precedes attribution; rolling
 populations come from actual recorded rows, not averaged daily ratios or
 unchecked caller lists. Packed publication membership can support publication
 readings independently of missing original planning completion proof.
