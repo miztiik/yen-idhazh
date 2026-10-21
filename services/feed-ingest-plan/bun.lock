@@ -9,6 +9,7 @@
         "@idhazh/ledger-file-writer": "file:../../packages/ledger-file-writer",
         "apache-arrow": "^21.2.0",
         "defuddle": "0.19.5",
+        "hono": "^4.10.0",
         "ipaddr.js": "2.5.0",
         "linkedom": "0.18.13",
         "parquet-wasm": "^0.9.0",
@@ -63,6 +64,8 @@
     "entities": ["entities@2.2.0", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/entities/-/entities-2.2.0.tgz", {}, "sha1-CY3JDruD2N/6CJ1VJWs1HTTE2lU="],
 
     "flatbuffers": ["flatbuffers@25.9.23", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/flatbuffers/-/flatbuffers-25.9.23.tgz", {}, "sha1-NGgRVX/pMSq1ZHU155PHYenIHrE="],
+
+    "hono": ["hono@4.13.13", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/hono/-/hono-4.13.13.tgz", {}, "sha512-CQ46U0ZkAGmbT/4UxdzzGJpacP2IeKgY4a5/tOI9AABbpOMfK739wfDXmv1usCk+3RkKj1hQy4/fjhiwa2xlrA=="],
 
     "html-escaper": ["html-escaper@3.0.3", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/html-escaper/-/html-escaper-3.0.3.tgz", {}, "sha1-TTNmdGUr6x3Lwp72trp/a+b9/tY="],
 
