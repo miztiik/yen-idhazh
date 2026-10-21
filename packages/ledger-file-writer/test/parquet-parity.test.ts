@@ -560,9 +560,9 @@ describe("ledger Parquet readback", () => {
     });
   });
 
-  test("writes a real flat host-fingerprint registration and follows row identity precedence", async () => {
+  test("writes a narrowed host-fingerprint identity row without claiming hardware retention", async () => {
     await withOutputRoot(async (root) => {
-      const hostFingerprintRowSchema = z.object({
+      const HostFingerprintIdentityCollisionSchema = z.object({
         version: z.string(),
         date: z.string(),
         run_id: z.string(),
@@ -572,9 +572,10 @@ describe("ledger Parquet readback", () => {
         shard: z.number().int(),
         flags: z.string(),
       });
-      const row = hostFingerprintRowSchema.parse(
-        await readLedgerFixture("host-fingerprint-row.json"),
-      );
+      const fixture = await readLedgerFixture("host-fingerprint-row.json");
+      expect(fixture).toHaveProperty("cpu_model");
+      const row = HostFingerprintIdentityCollisionSchema.parse(fixture);
+      expect(row).not.toHaveProperty("cpu_model");
       const hostWriter = WriterIdentitySchema.parse({
         run_id: "2026-10-21-777",
         attempt: 4,
@@ -589,7 +590,10 @@ describe("ledger Parquet readback", () => {
       expect(registrationEntry.prefix).toEqual(["host-fingerprint"]);
       const raw = await persistLedger({
         ledger: "host-fingerprint",
-        rowContract: { schema: hostFingerprintRowSchema, schemaVersion: "2026-10-14" },
+        rowContract: {
+          schema: HostFingerprintIdentityCollisionSchema,
+          schemaVersion: "2026-10-14",
+        },
         rows: [row],
         outputRoot: root,
         period: { tier: "raw", covers: "2026-10-21" },
@@ -602,7 +606,7 @@ describe("ledger Parquet readback", () => {
         "host-fingerprint",
         root,
         raw.files,
-        hostFingerprintRowSchema,
+        HostFingerprintIdentityCollisionSchema,
       );
       expect(readback.files[0]?.identity).toMatchObject({ job: "operator", shard: 7 });
       expect(readback.files[0]?.rows[0]).toMatchObject({
@@ -613,6 +617,7 @@ describe("ledger Parquet readback", () => {
         shard: 1,
       });
       expect(readback.files[0]?.rows[0]).toMatchObject(row);
+      expect(readback.files[0]?.rows[0]).not.toHaveProperty("cpu_model");
     });
   });
 
