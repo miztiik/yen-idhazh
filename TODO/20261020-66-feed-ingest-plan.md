@@ -1123,6 +1123,15 @@ A fresh process still requires current caller-supplied inventory. Keep this
 coordination in the already named runner/API modules, or name an additional
 helper before editing it.
 
+Reviewed runner increment `65c4e68abf87f2aad1980c07be09ecccf4b3bb77`
+implements this path with actual native seen writes before screening, earliest
+settled observations, serialized API requests and durable receipt retention
+after a later dispatch failure. Its strict TypeScript and 18 named tests
+passed. Retired historical sources now retain their snapshot and receive an
+inactive outcome with explicit run-context policy rather than a fabricated
+current vertical policy. Rows #12 and #14 integrate this tested interface.
+This accepts the implementation increment, not audited completion or merge.
+
 ### Decisions
 
 | # | Decision | Authority |
