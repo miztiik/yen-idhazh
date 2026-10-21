@@ -55,7 +55,12 @@ export function loadHarvestInputs(raw: {
     if (new Set<string | number>(ids).size !== ids.length) throw new Error(`${name} ids must be distinct`);
   }
   for (const source of sources) {
-    if (source.status === "retired") continue;
+    if (source.status === "retired") {
+      if (!registry.source_tiers.some(tier => tier.id === source.tier)) {
+        throw new Error(`source.${source.id}.tier: missing registered snapshot weight`);
+      }
+      continue;
+    }
     if (!registry.verticals.some(vertical => vertical.id === source.vertical)) {
       throw new Error(`source.${source.id}.vertical: unknown registry entry`);
     }
