@@ -984,6 +984,21 @@ Current-run partition construction and bounded reader implementation can
 continue. Historical completion proof remains an explicit unresolved part
 of this row, not a silent scope reduction.
 
+STOP-AND-SURFACE, 2026-10-21: the dispatch contract also requires content and
+selection dates and policies to be equal. Curation preserves the actual
+fetch day and harvested policy in content, and records the decision day and
+effective screening policy in selection. A freshness override or a fetch
+before UTC midnight followed by selection after midnight can therefore
+produce valid stage output that the current dispatch contract rejects.
+The coordinator requested approval to keep identity, source and labels
+equal while permitting the two genuine date/policy records, including a
+limited existing Python declaration update without execution. The
+unavailable-user response selected no option; no contract change is
+authorized. Row #9 adds real composition regressions. Row #10 must report
+the boundary explicitly, not falsify fetched content, discard the override
+or claim those cases work. Same-day, same-policy construction can continue;
+the full requested override/overnight behavior remains unresolved.
+
 ### Decisions
 
 | # | Decision | Authority |
