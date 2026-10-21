@@ -7,6 +7,7 @@
     {"change": "Declare published UTC days and public-root-relative file names.","version": "2026-10-03","why": "Static builds read a named inventory instead of walking an archive."}
   ],
   "dates": [
+    "2026-10-21",
     "2026-10-20",
     "2026-10-19",
     "2026-10-18",
@@ -73,9 +74,9 @@
     {"bytes": 691674,"items": 0,"path": "assist/index/2026-08.json","root": "public"},
     {"bytes": 3747840,"items": 0,"path": "assist/index/2026-09.bin","root": "public"},
     {"bytes": 1663315,"items": 0,"path": "assist/index/2026-09.json","root": "public"},
-    {"bytes": 2494464,"items": 0,"path": "assist/index/2026-10.bin","root": "public"},
-    {"bytes": 1104506,"items": 0,"path": "assist/index/2026-10.json","root": "public"},
-    {"bytes": 4516,"items": 0,"path": "console/band.json","root": "public"},
+    {"bytes": 2529792,"items": 0,"path": "assist/index/2026-10.bin","root": "public"},
+    {"bytes": 1119940,"items": 0,"path": "assist/index/2026-10.json","root": "public"},
+    {"bytes": 4273,"items": 0,"path": "console/band.json","root": "public"},
     {"bytes": 11547,"items": 4,"path": "digest/2026/08/21/digest.json","root": "public"},
     {"bytes": 4583,"items": 0,"path": "digest/2026/08/21/run.json","root": "public"},
     {"bytes": 27985,"items": 10,"path": "digest/2026/08/22/digest.json","root": "public"},
@@ -196,7 +197,9 @@
     {"bytes": 30786,"items": 0,"path": "digest/2026/10/19/run.json","root": "public"},
     {"bytes": 723157,"items": 380,"path": "digest/2026/10/20/digest.json","root": "public"},
     {"bytes": 36922,"items": 0,"path": "digest/2026/10/20/run.json","root": "public"},
-    {"bytes": 230854,"items": 0,"path": "source-health.json","root": "public"},
+    {"bytes": 177098,"items": 92,"path": "digest/2026/10/21/digest.json","root": "public"},
+    {"bytes": 12351,"items": 0,"path": "digest/2026/10/21/run.json","root": "public"},
+    {"bytes": 230892,"items": 0,"path": "source-health.json","root": "public"},
     {"bytes": 5985,"items": 0,"path": "compact/run-shards/daily/2026/10/01.parquet","root": "state"},
     {"bytes": 5986,"items": 0,"path": "compact/run-shards/daily/2026/10/02.parquet","root": "state"},
     {"bytes": 5972,"items": 0,"path": "compact/run-shards/daily/2026/10/03.parquet","root": "state"},
@@ -345,11 +348,13 @@
     {"bytes": 21650,"items": 0,"path": "raw/feed-health/2026/10/20/01a15a97-cec1-856c-831d-87df75ee65ba.parquet","root": "state"},
     {"bytes": 21708,"items": 0,"path": "raw/feed-health/2026/10/20/01a15b47-9701-8d4e-8e91-d284749a0a98.parquet","root": "state"},
     {"bytes": 21694,"items": 0,"path": "raw/feed-health/2026/10/21/01a15d04-3cf4-8f78-875a-37a58bae51f4.parquet","root": "state"},
+    {"bytes": 21662,"items": 0,"path": "raw/feed-health/2026/10/21/01a15d6d-cdbd-857a-bdb8-d4a52d1f1026.parquet","root": "state"},
+    {"bytes": 21662,"items": 0,"path": "raw/feed-health/2026/10/21/01a15e56-139f-830c-b945-2959b76c0447.parquet","root": "state"},
     {"bytes": 5626,"items": 0,"path": "raw/run-shards/2026/10/11/01a12b55-4743-8b65-b0ea-50d9081e4336.parquet","root": "state"},
     {"bytes": 5626,"items": 0,"path": "raw/run-shards/2026/10/11/01a12c0c-ffa5-8f85-9fd8-de8fc15684f8.parquet","root": "state"},
     {"bytes": 5682,"items": 0,"path": "raw/run-shards/2026/10/11/01a12d2f-f6c6-8e13-968b-e5d8f66aa6c4.parquet","root": "state"}
   ],
-  "total_bytes": 60469306,
-  "total_items": 20247,
+  "total_bytes": 60709312,
+  "total_items": 20339,
   "version": "2026-10-03T13:33"
 }
