@@ -1374,12 +1374,13 @@ files concurrently.
 This final head includes the reviewed UTC rollover correction by normal
 merge; it changes no recorder source or API from `ad26e1f90`.
 
-Publication review of tested increment `a58752dfd` found that the health
-retry key combines distinct processing stages for the same run and item.
-A normal item with both fetch and publish records therefore fails the join.
-The publication owner is correcting this in its existing scope with a
-recorded multi-stage and failed-then-successful publication case. Acceptance
-of that join remains open.
+Publication review of tested increment `a58752dfd` initially questioned the
+health retry key. Reading the owning contract corrected that premise:
+an item-health row records one terminal outcome, not each processing stage.
+No multi-stage fixture or key change is justified by that concern alone.
+The publication owner checks native retry settlement before changing the
+join. The review also checks whether the projection wrongly refuses a
+digest whose run completes after its named UTC day.
 
 ### Decisions
 
