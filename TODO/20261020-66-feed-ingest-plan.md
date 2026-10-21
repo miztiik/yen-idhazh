@@ -1384,6 +1384,19 @@ pending; unsupported timing or counts fail before any audit write and
 produce no result summary. Row #12 now integrates this tested entrypoint
 and verifies its returned files, rather than calling the recorder again.
 
+Row #13's shared integration adds
+`services/feed-ingest-plan/src/metrics/publication-metrics.ts` to separate
+publication calculations from per-run planning calculations. It consumes
+bounded, named publication files and digest evidence plus existing proven
+attempt memberships. Retry selection precedes attribution; rolling
+populations come from actual recorded rows, not averaged daily ratios or
+unchecked caller lists. Packed publication membership can support publication
+readings independently of missing original planning completion proof.
+Source publication counts require an actual complete source attempt.
+An observer running on a later UTC day must not backdate its observation
+to satisfy the existing same-day source-record constraint; that write
+stays explicitly unavailable until its contract can represent the truth.
+
 Publication review of tested increment `a58752dfd` initially questioned the
 health retry key. Reading the owning contract corrected that premise:
 an item-health row records one terminal outcome, not each processing stage.
