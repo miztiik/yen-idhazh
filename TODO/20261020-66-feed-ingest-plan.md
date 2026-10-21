@@ -46,6 +46,10 @@ Keep the writer head stable, merge updated main before final verification,
 and retain serialized green-only merges. The separate digest-schedule session
 owns the schedule repair; do not duplicate it in a plan row.
 
+Owner correction, 2026-10-21: do not fix CI issues; other agents own them.
+Build the remaining rows and keep them ready while those repairs proceed.
+An unrelated failed check blocks merge, not isolated implementation.
+
 Owner-directed scope change: repair the existing query-door EXPLAIN fixture
 check in a separate PR from main, not as a Plan 66 row. CI run 39608009522
 for PR #1607 passed 7185 backend tests and failed only
@@ -225,7 +229,7 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 | 4 | Host hardware and environment identity service | 6 | B | IN-FLIGHT | curly-parakeet | - | bd6fe115-c522-4078-bb9f-e7c0e5eceb60 |
 | 5 | Host CPU and memory profiling service | 1 | B | DONE | congenial-parakeet (plan-66-row-5) | - | c8de7d9d-dd55-4123-87fe-66095cc2aed5 |
 | 6 | Reusable TypeScript ledger file writer | 1, 2, 16 | B | IN-FLIGHT | fictional-tribble | - | c1194122-86e6-45b4-85e9-e1bb61dbdca6 |
-| 7 | RSS/Atom feed harvest and DOM text extraction | 3, 6 | B | IN-FLIGHT | reserved isolated child | - | coordinator dispatch pending |
+| 7 | RSS/Atom feed harvest and DOM text extraction | 3, 6 | B | IN-FLIGHT | redesigned-doodle | - | da505804-6ce7-4f03-aa0b-25bab323ba53 |
 | 8 | Candidate triage screening with Parquet rejection ledger | 6, 7 | C | PENDING | - | - | - |
 | 9 | Set-aware editorial portfolio curation | 8 | D | PENDING | - | - | - |
 | 10 | Contextual bin-packing partitioner with feature flag | 9 | E | PENDING | - | - | - |
@@ -551,12 +555,16 @@ export type CandidateRejectionRecord =
   - `services/host-fingerprints/src/api/server.ts`
   - `services/host-fingerprints/src/api/routes/fingerprint.route.ts`
   - `services/host-fingerprints/src/persist-fingerprint.ts`
+  - `services/host-fingerprints/src/collect-fingerprint.ts`
   - `services/host-fingerprints/src/inspect/cpu-model.ts`
   - `services/host-fingerprints/src/inspect/runner-env.ts`
   - `services/host-fingerprints/src/inspect/cpu-topology.ts`
   - `services/host-fingerprints/src/inspect/cpu-capacity.ts`
   - `services/host-fingerprints/src/inspect/hardware-identity.ts`
   - `services/host-fingerprints/src/inspect/bounded-input.ts`
+  - `services/host-fingerprints/src/inspect/placement.ts`
+  - `services/host-fingerprints/src/inspect/copy-bandwidth.ts`
+  - `services/host-fingerprints/test/fixture.ts`
   - `services/host-fingerprints/test/fingerprint.test.ts`
   - `services/host-fingerprints/test/fingerprint-persistence.test.ts`
   - `packages/common-contracts/src/schemas/host-fingerprint.schema.ts`
