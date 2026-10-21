@@ -98,3 +98,45 @@ test("pool concurrency changes with configuration and results retain offered ord
   }
   await expect(mapPool([1], 0, async value => value)).rejects.toThrow();
 });
+
+test("recorded robots HTTP and transport outcomes apply the absence-versus-unknown rule", async () => {
+  const safety = await readSafety();
+  const loaded = await inputs([], { harvest: { fetch_timeout_ms: 50 } });
+  for (const recording of safety.robots_responses) {
+    const recordings = await readRecordings();
+    recordings.responses["https://news.example/robots.txt"] = [recording];
+    const transport = new RecordedTransport(recordings);
+    const fetcher = createPermittedFetcher(loaded.config.harvest, loaded.extraction, { transport, resolve: transport.resolve });
+    const result = await fetcher.fetch("https://news.example/second");
+    expect(result.failure, JSON.stringify(recording)).toBe(recording.expected);
+    expect(transport.requests.some(request => request.url.pathname === "/second")).toBe(recording.expected === null);
+  }
+});
+
+test("DNS rebinding or a pending DNS request cannot bypass safe target checks or deadline", async () => {
+  const loaded = await inputs([], { harvest: { fetch_timeout_ms: 50 } });
+  const transport = new RecordedTransport(await readRecordings());
+  const addresses = transport.recordings.addresses["mixed.example"];
+  if (!addresses?.[0] || !addresses[1]) throw new Error("recorded mixed addresses missing");
+  const publicAddress = addresses[0], privateAddress = addresses[1];
+  let resolutions = 0;
+  const fetcher = createPermittedFetcher(loaded.config.harvest, loaded.extraction, {
+    transport,
+    resolve: async () => [++resolutions === 1 ? publicAddress : privateAddress],
+  });
+  expect((await fetcher.fetch("https://news.example/second")).failure).toBe("robots-unknown");
+  expect(transport.requests).toEqual([]);
+  const pending = createPermittedFetcher(loaded.config.harvest, loaded.extraction, {
+    transport, resolve: () => new Promise(() => {}),
+  });
+  expect((await pending.fetch("https://news.example/second")).failure).toBe("timeout");
+});
+
+test("existing byte controls reject a complete oversized recorded body without losing observed status", async () => {
+  const loaded = await inputs([], { extraction: { max_body_bytes: 1024 } });
+  const transport = new RecordedTransport(await readRecordings());
+  const fetcher = createPermittedFetcher(loaded.config.harvest, loaded.extraction, { transport, resolve: transport.resolve });
+  const result = await fetcher.fetch("https://news.example/second");
+  expect(result).toMatchObject({ body: null, failure: "body-too-large", http_status: 200 });
+  expect(transport.requests.every(request => request.max_body_bytes === 1024)).toBe(true);
+});

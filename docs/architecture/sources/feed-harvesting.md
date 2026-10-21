@@ -20,10 +20,12 @@ inputs, writer identity, correlation identity and rejection destination.
 ordinary callers omit it to use Undici and the operating system resolver.
 The destination takes the registered rejection prefix and ledger settings,
 not a second path policy. Rejections are actual Parquet through
-`@idhazh/ledger-file-writer`. A failed write rejects the operation.
+`@idhazh/ledger-file-writer`. A failed write rejects the operation. A paused
+or retired rejection registration also refuses completion when rows need to
+be written; an empty rejection set needs no file.
 
 The result contains `candidates`, `rejections`, `rejection_files`, the validated
-`inputs` and `config`, and `articles`. Each `articles` element has exactly one
+`inputs` and `config`, `feed_outcomes`, and `articles`. Each `articles` element has exactly one
 candidate or rejection, plus its `observation`. `HarvestObservationSchema`,
 `HarvestArticleResultSchema` and their types are public exports.
 
@@ -35,6 +37,19 @@ names publisher JSON-LD, a configured marker, no match, or not observed.
 Robots is allowed, denied, unknown, or null before permission was established.
 Extraction is success, empty, failed, or not attempted. The observation is
 transient serializable data, not an added persisted candidate field.
+
+Build a screening observation record by selecting the successful `articles`
+and indexing their complete observations by `candidate_id`. Rejected entries
+also have observations, but do not belong in a successful-candidate record.
+There is no separate partial observation shape or invented successful status.
+
+`feed_outcomes` contains one validated existing `FeedOutcomePayload` per
+configured source, including inactive sources. It retains the source snapshot,
+actual fetch and parse outcomes, parsed entry count, successful candidate count,
+measured fetch and parse durations in milliseconds, and feed rejection reason.
+Inactive sources were not requested or parsed, so their counts and durations
+are null. Empty parsed feeds have zero counts. Failed parsing does not claim
+a parsed count. The engine, not harvesting, adds the later event envelope.
 
 Screening consumes the actual HTTP/paywall cells without fetching again.
 It supplies settled prior `seen` rows separately when an undated article needs
@@ -53,6 +68,10 @@ Source snapshots retain source ID, feed URL, title, vertical, kind, tier,
 form, lifecycle status, source weight and the applied registry tier weight.
 The returned source input also retains `retired_on`. Inactive sources receive
 `SOURCE_INACTIVE` without a network request.
+Non-retired sources require active registered kind and tier entries. Retired
+sources may retain historical classifications, but a source snapshot still
+requires its genuine registered tier weight; a missing historical tier is an
+explicit input error, never a fabricated weight.
 
 The configuration fingerprint is SHA-256 of the UTF-8 JSON serialization of
 the validated planner configuration, relevant registry fields, source list and
@@ -86,6 +105,7 @@ checks before its target is requested. Robots-file redirects receive address
 checks, while their resulting document still governs the original origin.
 Redirect cycles refuse. One configured deadline bounds DNS, permission,
 retries, redirects and body reading.
+Oversized bodies refuse without losing an HTTP status already observed.
 
 Robots 2xx responses supply rules; 4xx other than 429 supply no restrictions.
 429, 5xx, failed requests and unsafe addresses leave permission unknown and
@@ -100,6 +120,9 @@ extractor keeps full usable prose and author attribution, not feed snippets.
 The sanitizer follows `idhazh-sanitizer-3` from the existing trust boundary.
 It removes machinery, not ordinary English instructions. There is no model
 call, prompt construction, shell execution or page-derived filename here.
+Missing document roots and DOM recursion overflow produce a typed extraction
+failure and rejection without aborting sibling articles. Empty content remains
+a distinct empty result. Unexpected programming failures still surface.
 
 ## Dependencies and cost
 

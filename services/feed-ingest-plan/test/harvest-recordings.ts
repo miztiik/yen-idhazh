@@ -127,5 +127,8 @@ export async function readSafety() {
     robots: z.array(z.object({
       name: z.string(), body: z.string(), allowed: z.array(z.string()), denied: z.array(z.string()),
     })),
+    robots_responses: z.array(ResponseSchema.extend({
+      expected: z.enum(["robots-denied", "robots-unknown"]).nullable(),
+    })),
   }).parse(await Bun.file(new URL("harvest-safety.json", fixtures)).json());
 }
