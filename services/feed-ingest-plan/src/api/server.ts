@@ -12,6 +12,7 @@ import type { PlanRuntime } from "../run-feed-plan";
 import type { PlanRequest } from "./plan-request";
 import { parseSeenDays, requiredSeenDays } from "../read-ledger-history/read-seen-evidence";
 import { RelativePathSchema } from "../config/service-settings";
+import { recordPlanningMetrics } from "../metrics/metrics-recorder";
 
 // Calendar-versioned HTTP protocol paths are not runtime planning controls.
 const apiPrefix = "/api/2026-10-20";
@@ -65,7 +66,7 @@ export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime) {
       const configured = new Set(authoredDays.map(day => day.day));
       for (const day of acceptedDays.keys()) if (!configured.has(day)) acceptedDays.delete(day);
       for (const day of seenDays) acceptedDays.set(day.day, JSON.stringify(day));
-      return result;
+      return { ...result, metrics: await recordPlanningMetrics(result, inputs) };
     });
     // The caller still receives the failure; only the listener queue is released.
     ready = result.then(() => undefined, () => undefined);

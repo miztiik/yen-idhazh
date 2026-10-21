@@ -2,10 +2,10 @@
 import { Hono } from "hono";
 import { PlanError, PlanRequestSchema } from "../plan-request";
 import { summarizePlan } from "../../run-feed-plan";
-import type { FeedPlanResult } from "../../run-feed-plan";
+import type { RecordedFeedPlanResult } from "../../run-feed-plan";
 import type { PlanRequest } from "../plan-request";
 
-export function planRoute(execute: (request: PlanRequest) => Promise<FeedPlanResult>) {
+export function planRoute(execute: (request: PlanRequest) => Promise<RecordedFeedPlanResult>) {
   return new Hono().post("/plan", async c => {
     let raw: unknown;
     try { raw = await c.req.json(); }
