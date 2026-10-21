@@ -20,7 +20,7 @@ export function fetchRejection(result: FetchResult, timeout_ms: number): {
 }
 
 export function recordRejection(
-  source: SourceSnapshot, context: HarvestContext, reason: DropReason,
+  source: Pick<SourceSnapshot, "source_id" | "feed_url">, context: HarvestContext, reason: DropReason,
   details: Partial<RejectionDetails> = {},
   article: {
     candidate_id: string; canonical_url: string | null; url_key: string | null;
@@ -41,14 +41,18 @@ export function recordRejection(
   return row;
 }
 
-export function persistHarvestRejections(
+export async function persistHarvestRejections(
   rows: readonly CandidateRejectionRecord[], context: HarvestContext, destination: RejectionDestination,
 ) {
   if (destination.ledgerSettings.format !== "parquet") throw new Error("harvest rejections require Parquet");
-  return persistLedger({
+  const result = await persistLedger({
     ledger: "rejections",
     rowContract: { schema: CandidateRejectionRecordSchema, schemaVersion: CONTRACT_VERSION },
     rows, ...destination, writerContext: context.writer,
     period: { tier: "raw", covers: context.writer.run_id.slice(0, 10) },
   });
+  if (rows.length && result.status === "skipped") {
+    throw new Error(`harvest rejection persistence refused: rejections registry is ${result.warning.lifecycle_status}`);
+  }
+  return result;
 }

@@ -14,7 +14,7 @@ export type FetchResult = {
   failure: FetchFailure | null;
   robots: "allowed" | "denied" | "unknown" | null;
 };
-type RawResult = { response: TransportResponse | null; failure: FetchFailure | null };
+type RawResult = { response: TransportResponse | null; failure: FetchFailure | null; http_status: number | null };
 type RobotDocument = ReturnType<typeof robotsParser> | null;
 export type PermittedFetcher = ReturnType<typeof createPermittedFetcher>;
 const retryableStatus = new Set([408, 425, 429, 500, 502, 503, 504]);
@@ -75,27 +75,29 @@ export function createPermittedFetcher(
 
   async function requestOnce(raw: string, signal: AbortSignal): Promise<TransportResponse> {
     const { url, addresses } = await validateTarget(raw, resolve, signal);
-    return transport.request({
+    const response = await transport.request({
       url, addresses, signal, user_agent: config.user_agent, max_body_bytes: controls.max_body_bytes,
     });
+    if (Buffer.byteLength(response.body, "utf8") > controls.max_body_bytes) throw new BodyLimitError(response.status);
+    return response;
   }
 
   async function read(raw: string, signal: AbortSignal): Promise<RawResult> {
-    let result: RawResult = { response: null, failure: "network" };
+    let result: RawResult = { response: null, failure: "network", http_status: null };
     for (let attempt = 0; attempt <= controls.max_retries; attempt++) {
       try {
         const response = await requestOnce(raw, signal);
-        result = { response, failure: null };
+        result = { response, failure: null, http_status: response.status };
         if (!retryableStatus.has(response.status)) return result;
       } catch (error) {
         const failure = transportFailure(error, signal);
-        result = { response: null, failure };
+        result = { response: null, failure, http_status: error instanceof BodyLimitError ? error.http_status : null };
         if (["timeout", "unsafe-target", "body-too-large"].includes(failure)) return result;
       }
       if (attempt < controls.max_retries) {
         try {
           await pause(controls.backoff_initial_seconds * 1000 * controls.backoff_multiplier ** attempt, signal);
-        } catch (error) { return { response: null, failure: transportFailure(error, signal) }; }
+        } catch (error) { return { response: null, failure: transportFailure(error, signal), http_status: null }; }
       }
     }
     return result;
@@ -141,7 +143,7 @@ export function createPermittedFetcher(
         return { body: null, http_status: null, failure: permission === "denied" ? "robots-denied" : "robots-unknown", robots: permission };
       }
       const result = await read(url.href, signal);
-      if (!result.response) return { body: null, http_status: null, failure: result.failure, robots: permission };
+      if (!result.response) return { body: null, http_status: result.http_status, failure: result.failure, robots: permission };
       const { response } = result;
       if (redirectStatus.has(response.status) && response.location) {
         try { target = new URL(response.location, url).href; }

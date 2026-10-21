@@ -4,6 +4,10 @@ import Defuddle from "defuddle";
 import type { HarvestObservation } from "./harvest-types";
 import { sanitizeText } from "./sanitize-text";
 
+export class ArticleExtractionError extends Error {
+  constructor(reason: "missing-document-root" | "dom-depth-exceeded") { super(reason); }
+}
+
 export function cleanText(raw: string): string {
   const { document } = parseHTML(`<html><body>${sanitizeText(raw)}</body></html>`);
   return sanitizeText(document.body.innerText).replace(/\s+/gu, " ").trim();
@@ -38,7 +42,22 @@ function paywallEvidence(document: Document, html: string, markers: readonly str
 }
 
 export function extractArticle(html: string, configuredUrl: string, markers: readonly string[]) {
+  if (!html.trim()) return {
+    article_text: "", word_count: 0, author: null, page_title: null,
+    paywall: false, paywall_evidence: "none" as const,
+  };
+  try { return extractDocument(html, configuredUrl, markers); }
+  catch (error) {
+    if (error instanceof RangeError && /call stack|recursion/i.test(error.message)) {
+      throw new ArticleExtractionError("dom-depth-exceeded");
+    }
+    throw error;
+  }
+}
+
+function extractDocument(html: string, configuredUrl: string, markers: readonly string[]) {
   const { document } = parseHTML(html);
+  if (!document.documentElement) throw new ArticleExtractionError("missing-document-root");
   const paywall = paywallEvidence(document, html, markers);
   const extracted = new Defuddle(document, {
     url: configuredUrl, useAsync: false,
