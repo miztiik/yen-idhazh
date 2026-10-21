@@ -9,9 +9,9 @@ import {
   DiversityMetricRowSchema, EditorialSelectionRowSchema, FeedIngestDispatchSchema, SourceRunRecordSchema,
 } from "@idhazh/common-contracts";
 import type { LedgerCompletionEvidence } from "@idhazh/common-contracts";
-import { persistLedger } from "@idhazh/ledger-file-writer";
+import { appendIdentityColumns, describeObjectSchema, digestRows, persistLedger } from "@idhazh/ledger-file-writer";
 import type { PersistLedgerResult, StoredLedgerRow } from "@idhazh/ledger-file-writer";
-import { tableFromIPC } from "apache-arrow";
+import { Int64, tableFromIPC, vectorFromArray } from "apache-arrow";
 import { Table as WasmTable, WriterPropertiesBuilder, readMetadata, readParquet, writeParquet } from "parquet-wasm/esm";
 import { tableToIPC } from "apache-arrow";
 import { readLedgerParquet } from "../src/read-ledger-history/read-parquet";
@@ -118,6 +118,16 @@ test("raw, daily, monthly and yearly native reads preserve original row identity
       expect(current.rows[0]!.identity.unit_id).toBe(original.identity.unit_id);
       if (period !== "daily") expect(current.notices.some(notice => notice.startsWith("overlapping-periods"))).toBe(true);
     }
+    const otherDay = "2026-10-20";
+    const neighbor = await writeRows(root, "editorial-selections", otherDay, EditorialSelectionRowSchema,
+      [{ ...original.row, date: otherDay }], writer(input.fixture.run_id));
+    const neighborRows = await readWritten(root, "editorial-selections", otherDay, selectionContract, neighbor);
+    const compact = await compactSelections(root, input, [...raw.rows, ...neighborRows.rows], "monthly");
+    const onlyRequested = await readLedgerDay({
+      ledger: "editorial-selections", day: input.fixture.date, contract: selectionContract, indexes: { monthly: compact.indexPath },
+    });
+    expect(onlyRequested.files[0]!.rows).toHaveLength(2);
+    expect(onlyRequested.rows).toEqual([original]);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -191,6 +201,9 @@ test("native digest tampering, wrong ledger, schema, index counts and raw identi
     await writeFile(compact.indexPath, JSON.stringify({ ...compact.index, entries: [{ ...compact.index.entries[0], rows: 2 }] }));
     await expect(readLedgerDay({ ledger: "editorial-selections", day: input.fixture.date, contract: selectionContract,
       indexes: { daily: compact.indexPath } })).rejects.toThrow("row count or byte size");
+    await writeFile(compact.indexPath, JSON.stringify({ ...compact.index, entries: [{ ...compact.index.entries[0], state: "empty", rows: 0, bytes: 0 }] }));
+    await expect(readLedgerDay({ ledger: "editorial-selections", day: input.fixture.date, contract: selectionContract,
+      indexes: { daily: compact.indexPath } })).rejects.toThrow("declares no file");
     const bytes = await readFile(path);
     const metadata = readMetadata(bytes);
     const footer = metadata.fileMetadata();
@@ -199,9 +212,22 @@ test("native digest tampering, wrong ledger, schema, index counts and raw identi
     metadata.free();
     pairs.set("content_sha256", "0".repeat(64));
     const table = tableFromIPC(readParquet(bytes).intoIPCStream());
+    const originalDigest = pairs.get("content_sha256")!;
     await writeFile(path, writeParquet(WasmTable.fromIPCStream(tableToIPC(table, "stream")),
       new WriterPropertiesBuilder().setKeyValueMetadata(pairs).build()));
     await expect(readLedgerParquet(path, "editorial-selections", selectionContract)).rejects.toThrow("content digest");
+    pairs.set("content_sha256", originalDigest);
+    pairs.set("attempt", "02");
+    await writeFile(path, writeParquet(WasmTable.fromIPCStream(tableToIPC(table, "stream")),
+      new WriterPropertiesBuilder().setKeyValueMetadata(pairs).build()));
+    await expect(readLedgerParquet(path, "editorial-selections", selectionContract)).rejects.toThrow("identifier differs");
+    pairs.set("attempt", "01");
+    const changedRow = { ...raw.rows[0]!.identity, ...raw.rows[0]!.row, shard: 7 };
+    pairs.set("content_sha256", digestRows([changedRow], appendIdentityColumns(describeObjectSchema(EditorialSelectionRowSchema).fields)));
+    const changedTable = table.setChild("shard", vectorFromArray([7n], new Int64()));
+    await writeFile(path, writeParquet(WasmTable.fromIPCStream(tableToIPC(changedTable, "stream")),
+      new WriterPropertiesBuilder().setKeyValueMetadata(pairs).build()));
+    await expect(readLedgerParquet(path, "editorial-selections", selectionContract)).rejects.toThrow("Raw row identity");
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
