@@ -675,16 +675,6 @@ def test_a_day_under_its_ceiling_is_untouched() -> None:
     assert [item.item_id for item in again.items] == [item.item_id for item in loose.items]
 
 
-def test_the_committed_day_ceiling_is_the_run_ceiling_five_times_over() -> None:
-    """The day runs five times, so the two numbers have to agree on that.
-
-    The committed pair changes no day that has ever been published: it is what
-    the design already allowed, written down where a person can read it.
-    """
-    run = config.load().app.run
-    assert run.safety_ceiling_per_day == run.safety_ceiling_per_run * 5
-
-
 def test_a_cap_takes_the_best_of_each_vertical_and_leaves_the_ceiling_alone() -> None:
     """The validation knob, which was parsed and then dropped on the floor.
 

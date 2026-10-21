@@ -54,23 +54,9 @@ on:
     # take is decided by each day's own end and never by where the wake falls,
     # and 40 minutes past the hour misses GitHub's top-of-hour surge.
     #
-    # The force push at the end of the history job has to land while no other
-    # scheduled run is pushing main. Read from the run list on 2026-09-28: the
-    # last digest run of each day ended by 00:52 UTC and none was created
-    # before 07:23 (2026-09-16 to 28), and the council ran from 23:57 to 01:23
-    # (2026-09-19 to 28), which leaves 01:23 to 07:23 quiet. A 00:40 wake is
-    # not measured yet. The two nearest cron lines were created 112 to 139
-    # minutes late (23:37) and 259 to 334 minutes late (04:20), so this one is
-    # estimated at 02:32 to 06:14, and the three jobs' timeouts bound the chain
-    # in front of the push at 5 + 20 + 30 = 55 minutes. The push lands between
-    # 02:32 and 07:09: 69 minutes after the council at the earliest, 14 minutes
-    # before the first digest at the latest. The first scheduled wakes' own
-    # delays replace the estimate. backend/tests/workflows/test_triggers.py
-    # holds these numbers, and docs/reference/github-actions.md derives them.
-    #
-    # This lowers the odds; it does not close them. What keeps a clash from
-    # costing another run its commits is the lease the push carries: git will
-    # not replace a main that moved after the job read it.
+    # Scheduled runs do not reserve a gap on main. If another writer moves main
+    # while this job runs, the push lease refuses the stale tip, and the next
+    # due wake retries the rewrite.
     - cron: '40 0 * * *'
   workflow_dispatch:
     inputs:
