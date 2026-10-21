@@ -71,7 +71,10 @@ The returned source input also retains `retired_on`. Inactive sources receive
 Non-retired sources require active registered kind and tier entries. Retired
 sources may retain historical classifications, but a source snapshot still
 requires its genuine registered tier weight; a missing historical tier is an
-explicit input error, never a fabricated weight.
+explicit input error before any requests start, never a fabricated weight.
+This follows the existing source-classification rule that stable identifiers
+are retired rather than reused and a missing live weight is a named config
+error. Retired kinds and verticals need not remain current registry members.
 
 The configuration fingerprint is SHA-256 of the UTF-8 JSON serialization of
 the validated planner configuration, relevant registry fields, source list and
