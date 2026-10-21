@@ -205,6 +205,24 @@ copies are held by the binding tests listed in the
 [contract guide](../architecture/contracts/schemas.md#what-holds-the-copy-in-step),
 which run inside the backend group.
 
+### Independent TypeScript packages and services
+
+Owner ruling, 2026-10-21: remaining feed-planner development and tests do not
+invoke Python or introduce Python tests/helpers. Its isolated workflow does
+not install Python packages. Existing repository-wide backend gates remain
+unchanged.
+
+Inspect `test:changed -- --list` for affected surfaces, but do not execute its
+Python-backed groups as a TypeScript development prerequisite. In each affected
+package or service, run its declared `bun run check` and `bun test` commands.
+Use actual Parquet readback and named recorded compatibility fixtures for
+schema, footer, identifier and canonical-digest checks. These results do not
+claim that a Python reader was executed. Persisted-contract changes still
+require the approval and compatibility rules in `CLAUDE.md`.
+
+This subsection stays here because it selects the local commands; format and
+compatibility rules remain in the persistence contract.
+
 ## Direct backend checks
 
 **CI is authoritative and it is faster than your machine by between six

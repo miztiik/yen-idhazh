@@ -9,6 +9,19 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ## 0. Operating contract
 
+### Owner correction - TypeScript-only development and verification
+
+Owner ruling, 2026-10-21: the remaining Plan 66 implementation introduces no
+Python tests, invokes no Python from TypeScript tests or development commands,
+and installs no Python packages in the isolated workflow created by this plan.
+This supersedes every Python execution or new Python-test requirement below.
+Existing merged backend work and existing repository-wide CI remain unchanged.
+Persisted format compatibility remains required, using TypeScript validation,
+real Parquet readback, and bounded recorded schema, identity and canonical-byte
+fixtures. These checks do not claim execution of the Python reader.
+Do not relocate a Python helper to another directory to evade this ruling.
+Record this separation in the owning persistence documentation before closure.
+
 ### Separate gate repair - 2026-10-21
 
 Owner-directed scope change: repair the existing query-door EXPLAIN fixture
@@ -520,11 +533,11 @@ export type CandidateRejectionRecord =
   - `services/host-fingerprints/test/fingerprint-persistence.test.ts`
   - `packages/common-contracts/src/schemas/host-fingerprint.schema.ts`
   - `docs/reference/host-metrics.md`
-- **Acceptance gates:** Local: shared test selector, strict TypeScript checks, bounded Linux input fixtures, API/CLI persistence tests, and Python HostFingerprintRow reader compatibility. CI: full suite. Verify configured-off behavior, null unavailable measurements, atomic-write failure propagation, and retry settlement without rewriting historical files.
-- **Oracle:** An API or CLI collection creates a valid HostFingerprintRow in the registered ledger, and the existing Python reader returns it with the expected pipeline/task/run/shard identity; invalid requests and failed writes cannot return persisted success. This does not certify Linux hardware collection from a Windows fixture run.
+- **Acceptance gates:** Local: inspect the shared selector without launching Python-backed groups, run strict TypeScript checks, bounded Linux input fixtures, API/CLI persistence tests, and recorded HostFingerprintRow compatibility checks in TypeScript. Existing repository CI remains authoritative for its unchanged suites. Verify configured-off behavior, null unavailable measurements, atomic-write failure propagation, and retry settlement without rewriting historical files.
+- **Oracle:** An API or CLI collection creates a valid HostFingerprintRow in the registered ledger, and TypeScript Parquet readback returns it with the expected pipeline/task/run/shard identity and recorded schema; invalid requests and failed writes cannot return persisted success. This does not certify Linux hardware collection from a Windows fixture run or execute the Python reader.
 
 Preflight: the listed TypeScript host schema is new, not an existing import.
-Include its public export and a named Python binding check when pricing the
+Include its public export and a named TypeScript recorded-schema check when pricing the
 supporting paths before dispatch. The service also needs a lockfile, authored
 listener/read controls, and bounded recorded Linux inputs. Preserve the
 existing fingerprint algorithm and observability controls; a nullable field
@@ -619,9 +632,9 @@ does not authorize skipping its collector.
   - `.github/workflows/ci.yml` (named TypeScript package checks and tests)
   - `docs/architecture/contracts/identity.md`
   - `docs/architecture/contracts/persistence.md`
-- **Acceptance gates:** Local: shared test selector, strict TypeScript checks, and package tests. CI: full suite. Exercise two distinct registered ledger contracts through the same public interface, including raw and compact writes, zero rows, nullable/list fields, invalid rows, and an interrupted write. Tests read actual WASM-produced Parquet through `parquet-wasm` and Apache Arrow and compare the footer, typed columns, stored rows, digest, and identifiers against bounded recorded compatibility fixtures.
-- **Oracle:** Python remains the format authority, but the owner override dated 2026-10-21 forbids running Python from TypeScript development, tests, or this package's CI checks. TypeScript tests therefore validate the actual Parquet with its WASM/Arrow reader and recorded compatibility fixtures. They do not claim Python reader execution or current Python cross-runtime readback.
-- **Preflight correction:** The identity page currently names a TypeScript implementation under `packages/common-contracts/src/identity/` that does not exist. The writer owns the new implementation. Correct that page's namespace and hash-bit descriptions against `backend/idhazh/ledger/filenames.py`; do not change the Python identity algorithm. The package lock and bounded Python parity helper support the declared package and cross-language acceptance gates.
+- **Acceptance gates:** Local: inspect the shared selector without launching Python-backed groups, run strict TypeScript checks and package tests with real Parquet readback against bounded recorded compatibility fixtures. CI executes the named Bun checks and tests. Exercise two distinct registered ledger contracts through the same public interface, including raw and compact writes, zero rows, nullable/list fields, invalid rows, and an interrupted write.
+- **Oracle:** TypeScript reads the actual Parquet footer, validates its envelope and native columns, reconstructs stored rows, and recomputes their canonical digest. Recorded fixtures independently pin schema, canonical bytes and identifiers to the existing contract. This does not execute the Python reader, prove speed or require byte-identical output from different Parquet engines.
+- **Preflight correction:** The identity page currently names a TypeScript implementation under `packages/common-contracts/src/identity/` that does not exist. The writer owns the new implementation. Correct that page's namespace and hash-bit descriptions against `backend/idhazh/ledger/filenames.py`; do not change the Python identity algorithm. The package lock and bounded recorded fixtures support the declared package and compatibility checks.
 
 Canonical-byte preflight: sorted `JSON.stringify` is not Python's row
 serialization. A fixed comparison produced Python numbers `1.0`,
@@ -638,16 +651,6 @@ hexadecimal string in both languages. Distinguish these existing contracts
 when correcting the identity page. Do not copy the older helper into planner
 events or change their declared type. Rejections do not declare an event ID,
 and correlation IDs are not undeclared file-envelope metadata.
-
-### Owner override - 2026-10-21
-
-The owner directed that TypeScript writer development and tests must not run
-Python, including through a test helper, and that this package's CI checks
-must not install Python dependencies or run a Python parity step. Keep actual
-WASM/Arrow readback and bounded recorded compatibility fixtures in TypeScript.
-Existing repository Python CI remains unchanged. This replaces the
-Python-execution acceptance gate for Row #6; do not report Python readback as
-verified.
 
 ### Decisions
 
@@ -721,8 +724,16 @@ independent safety requirements.
   - `services/feed-ingest-plan/src/screen-article-candidates/category-guard.ts`
   - `services/feed-ingest-plan/src/screen-article-candidates/rejection-sealer.ts`
   - `services/feed-ingest-plan/test/triage.test.ts`
-- **Acceptance gates:** `bun test` in `services/feed-ingest-plan/`; generated rejection files load through the Python ledger reader. Cover the configured word-count and HTTP rules plus Table R freshness boundaries with one fixed UTC clock, including undated articles and invalid overrides. Execute Table O's vertical-specific threshold substitution against this real screening stage, not only the resolver.
+- **Acceptance gates:** `bun test` in `services/feed-ingest-plan/`; generated rejection files pass TypeScript Parquet readback and recorded contract checks. Cover the configured word-count and HTTP rules plus Table R freshness boundaries with one fixed UTC clock, including undated articles and invalid overrides. Execute Table O's vertical-specific threshold substitution against this real screening stage, not only the resolver.
 - **Oracle:** Each rejected fixture has the expected typed reason, and changing only the freshness override changes admission at the stated age boundary without changing the ranking half-life. This does not settle editorial quality or live-source availability.
+
+Preflight: candidates contain publication and fetch instants, but not persisted
+first sight. Table R requires the existing first-sight evidence for undated or
+untrustworthy feed dates. Name the bounded seen-ledger input and URL-key join
+before dispatch; a repeated fetch must not reset an undated article's age.
+Preserve the existing future-date tolerance when deciding whether to trust
+the feed date. Price reader and fixture supporting paths rather than adding
+an undeclared candidate field.
 
 ### Decisions
 
@@ -754,6 +765,14 @@ independent safety requirements.
   - `services/feed-ingest-plan/test/curate.test.ts`
 - **Acceptance gates:** `bun test` in `services/feed-ingest-plan/`; bounded fixtures check the configured concentration limits and relaxation order. Vary only the source-kind coefficient: zero must remove its penalty; increasing it changes only the declared diversity term. Relabelling a source must not change screening eligibility or introduce a required-kind count. Execute Table O's vertical-specific scoring substitution against this real curation stage and compare exact components and selected identities. Vary each Table T dimension independently, including same lens/different event cluster, same event type/different occurrence, same entity/different story, and unavailable desk evidence.
 - **Oracle:** Source/domain shares and relaxation follow configuration, and the source-kind penalty equals the bounded term in Table F, including the zero-weight case. This does not prove that a subjective source label is correct or that the proposed coefficient is editorially optimal.
+
+Preflight: candidates carry labels and article text, but no semantic vectors.
+Reuse only the existing same-story rules whose inputs are available; record
+unavailable similarity evidence rather than claiming a vector comparison.
+Cross-outlet groups must satisfy the rule for every pair, not merely form a
+chain of matching neighbours. Publisher identity is the recorded masthead,
+not the feed ID; parent-domain concentration remains a separate control.
+Name the matcher, fixture and owning-doc supporting paths before dispatch.
 
 ### Decisions
 
@@ -789,6 +808,14 @@ independent safety requirements.
   - `services/feed-ingest-plan/test/partition.test.ts`
 - **Acceptance gates:** Local: shared selector and `bun test` over bounded uneven, equal-work, empty, and fewer-items-than-shards fixtures. Verify deterministic assignments, configured shard bounds, and the selected-to-dispatched identity/rank bijection. CI: full suite. Greedy bin-packing is a heuristic, not proof of minimum variance for every input.
 - **Oracle:** A hand-computable uneven-work fixture produces the expected greedy assignment and lower work spread than round-robin; equal-work fixtures may tie. With strategy `none`, all items have worker assignment zero and the effective dispatch count is one. These checks do not prove optimal packing or actual worker elapsed-time balance.
+
+Preflight: editorial selections do not contain article text or titles, while
+dispatches require the complete validated candidate. Name the candidate input
+and join it to settled selections by candidate identity, checking source and
+policy consistency. Do not reconstruct content from a selection row or fetch
+it again from the web. The shared writer is not a settled ledger reader;
+price the raw/compact reader and candidate-input supporting paths before
+dispatch. Worker assignment stays separate from the writer's identity shard.
 
 ### Decisions
 
@@ -848,16 +875,15 @@ independent safety requirements.
 
 ## 15. Row #12 - Isolated CI test workflow and verification suite
 
-- **Scope:** Create `.github/workflows/feed-ingest-plan-test.yml` with the inputs in Table R, Python compatibility checks, and a separate optional GitHub reporting adapter; leave production `digest.yml` unchanged.
+- **Scope:** Create `.github/workflows/feed-ingest-plan-test.yml` with the inputs in Table R, TypeScript-only compatibility checks, and a separate optional GitHub reporting adapter; leave production `digest.yml` unchanged. Do not install Python packages or invoke Python.
 - **Files touched:**
   - `.github/workflows/feed-ingest-plan-test.yml`
   - `.github/scripts/feed-ingest-plan-outputs.ts`
   - `.github/scripts/feed-ingest-plan-report.ts`
   - `.github/scripts/tests/feed-ingest-plan-report.test.ts`
   - `packages/common-contracts/test/verify-parquet.ts`
-  - `packages/common-contracts/test/verify-python-parity.py`
 - **Acceptance gates:** Local: shared test selector and fixture-driven workflow/reporting tests. CI: full suite and the isolated workflow's compatibility checks. Reporting enabled/disabled runs over identical fixtures must produce identical ledger content digests; disabled reporting produces no annotations or summary. Cover zero dispatches or zero rejections as valid outcomes, not failed count assertions.
-- **Oracle:** `verify-python-parity.py` validates dispatch and rejection rows through the Python ledger reader, compares expected fixture identities and canonical row digests, and checks list-column types; adapter tests check escaped annotations and summaries separately. This cannot settle real feed availability or hosted-runner speed; observe those on the next explicitly dispatched isolated run.
+- **Oracle:** `verify-parquet.ts` reads actual dispatch and rejection files, validates envelopes and rows, compares recorded fixture identities and canonical row digests, and checks native list-column types; adapter tests check escaped annotations and summaries separately. No Python runtime or packages are required. This cannot settle Python-reader execution, real feed availability or hosted-runner speed.
 
 ### Table R - Workflow inputs and freshness behavior
 
@@ -877,11 +903,11 @@ independent safety requirements.
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | Create isolated test workflow `feed-ingest-plan-test.yml` rather than modifying `digest.yml` directly | Plan proposal |
-| 2 | Verify Python ledger loading and DuckDB querying, not merely that PyArrow opens a file. Use the shared writer's envelope and digest oracle from Row #6. | persistence.md; owner requested contract confirmation |
+| 2 | Verify actual Parquet rows, native columns, envelope and digest through TypeScript and recorded compatibility fixtures. No Python install or invocation. Use Row #6's public writer and readback checks. | Owner ruling, 2026-10-21 |
 | 3 | Expose only the four inputs declared in Table R; derive the run date internally in UTC. | Owner request |
 | 4 | `.github/scripts/feed-ingest-plan-report.ts` alone formats `::notice::` annotations and Markdown for `$GITHUB_STEP_SUMMARY` from structured planner events. Escape workflow-command control characters and untrusted source strings. Invoke it as a separate workflow step only when the reporting config enables it. Core modules do not import it. | Owner request |
 | 5 | Keep required shard/matrix/path output conversion in `.github/scripts/feed-ingest-plan-outputs.ts`, separate from optional reporting, so disabling or deleting the report cannot break execution outputs. | Owner request; separation of concerns |
-| 6 | Use sparse checkout for the isolated workflow, with a named path inventory containing config, services, packages, relevant state inputs, Python contracts/ledger reader, fixtures, scripts, and dependency manifests/locks. Include compact indexes and the named compact files serving the bounded history window; raw-only checkout is insufficient after compaction. Verify parity and history reads from this checkout. | GIT-01, corrected for actual reader dependencies |
+| 6 | Use sparse checkout for the isolated workflow, with a named path inventory containing config, services, packages, relevant state inputs, recorded compatibility fixtures, scripts, and dependency manifests/locks. Include compact indexes and the named compact files serving the bounded history window; raw-only checkout is insufficient after compaction. Verify TypeScript compatibility and history reads without Python. | GIT-01; owner ruling, 2026-10-21 |
 
 ### Rejected alternatives
 
@@ -946,7 +972,7 @@ independent safety requirements.
   - `services/feed-ingest-plan/test/metrics.test.ts`
   - `docs/architecture/sources/feed-ingest-audit.md`
   - `docs/reference/diversity-metrics.md`
-- **Acceptance gates:** Local: shared selector, strict TypeScript checks, audit unit/contract tests, and Python ledger readback. CI: full suite. Reconcile stage counts and reasons, include inactive and zero-yield sources, retain source snapshots, verify unavailable later-stage fields, and run known-distribution metric fixtures.
+- **Acceptance gates:** Local: inspect the shared selector without launching Python-backed groups, run strict TypeScript checks, audit unit/contract tests, and TypeScript Parquet readback. Existing repository CI retains its unchanged suites. Reconcile stage counts and reasons, include inactive and zero-yield sources, retain source snapshots, verify unavailable later-stage fields, and run known-distribution metric fixtures.
 - **Oracle:** Each source/run observation and article assessment reconciles exactly with its input stage records, terminal rejections, and editorial selection rows, and all emitted planning metrics reproduce from those records. This does not prove publication or semantic article quality.
 
 Preflight decision required before dispatch: authored `metrics.top_source_counts`
@@ -1049,7 +1075,7 @@ binding tests. Never omit an unsupported configured count without an error.
 | M15 | NRM-01 | Row #9: base per-source allowance plus evidence-backed event-cluster, vertical, and primary-evidence bonuses before global selection; volume-amplification fixture. | 1 |
 | M16 | CRQ-01 | Row #14 and Table I: persisted separate operational, article, and portfolio evidence; unperformed semantic evaluation is explicitly not assessed. | 1 |
 | M17 | CRD-01 | Row #9: carrier identities, distinct outlets, grouping evidence, chosen representative, and replacement reasons. Row #13 measures cross-day repetition from actual published evidence. | 1 and 2 |
-| M18 | GIT-01 | Row #12: named sparse-checkout inventory includes both requested code/config paths and every actual Python/parity/compact-history dependency. | 1 |
+| M18 | GIT-01 | Row #12: named sparse-checkout inventory includes requested code/config paths and every TypeScript verification, recorded-fixture and compact-history dependency; no Python packages or invocation. | 1 |
 | M19 | EXP-01 | Row #9: configured exploration share, currently 8 percent of planned slots, only among candidates passing the declared viability checks; no quality bypass. | 1 |
 | M20 | MTR-01 | Row #14 computes available per-run readings now; Row #13 completes actual publication, lead, and rolling entropy/Gini/stage readings under Table L. | 1 and 2 |
 | M21 | MTR-02 | Row #13: all configured cross-day source/event overlap and novelty readings, with explicit missing-evidence handling. | 2 |
@@ -1198,7 +1224,7 @@ and robots checks. Row #15 is delivered for review; this worker does not merge.
 | P3 | Compaction and retention | Register the matching gardener task, add it to the explicit task_names manifest, and use the compact prefix under `state/compact/feed-ingest-plan/editorial-selections/`. Use the configured raw-to-daily-to-monthly-to-yearly retention chain. Absorbed raw files are removed only after compact writes/indexes land successfully; later expiry follows the task's retention settings. No separate cleanup script or permanent unowned file. |
 | P4 | Partition input | Resolve the chosen run/attempt's selection through the shared ledger reader, whether raw or compact. Read ranks and work estimates without scoring again. Initial dispatch construction receives the validated harvested-content payload; a later full dispatch replay uses recorded content from the dispatch ledger. Missing content is reported as unavailable, never fetched again silently. Assert a bijection between selected article identities and all dispatch rows across shards, with no missing, duplicated, or added article. |
 | P5 | Storage discipline | Reuse recorded assessment/selection fields by identity; do not duplicate full article text merely to preserve a ranking. The editorial ledger alone can reproduce worker allocation from work estimates, not recover article text. No unmanaged state JSON is a dependency of replay. Source-run observations distinguish a legitimate empty selection from missing selection evidence. |
-| P6 | Acceptance | Python reads both raw and compact selection fixtures with valid envelopes/digests. Gardener tests compact a generated run, confirm absorbed raw files are removed, then replay partitioning from compact data. Rankings remain unchanged, and an interrupted compaction preserves readable original evidence. |
+| P6 | Acceptance | TypeScript reads real raw and compact selection fixtures with valid envelopes/digests and recorded compatibility expectations. Replay partitioning from compact data; rankings remain unchanged and incomplete writes preserve readable original evidence. Existing merged gardener coverage remains unchanged; add no Python tests. |
 
 ---
 
