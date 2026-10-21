@@ -231,7 +231,7 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 | 6 | Reusable TypeScript ledger file writer | 1, 2, 16 | B | IN-FLIGHT | fictional-tribble | - | c1194122-86e6-45b4-85e9-e1bb61dbdca6 |
 | 7 | RSS/Atom feed harvest and DOM text extraction | 3, 6 | B | IN-FLIGHT | redesigned-doodle | - | da505804-6ce7-4f03-aa0b-25bab323ba53 |
 | 8 | Candidate triage screening with Parquet rejection ledger | 6, 7 | C | IN-FLIGHT | scaling-memory | - | d50de7c8-1c6a-4074-a390-25a077ae0ba8 |
-| 9 | Set-aware editorial portfolio curation | 8 | D | IN-FLIGHT | reserved isolated child | - | coordinator dispatch pending |
+| 9 | Set-aware editorial portfolio curation | 8 | D | IN-FLIGHT | bookish-carnival | - | 34c330c1-9d30-4222-8fa6-4e28e58a165e |
 | 10 | Contextual bin-packing partitioner with feature flag | 9 | E | PENDING | - | - | - |
 | 11 | Core plan engine entrypoint, dual-mode runner, and sealing | 6, 10 | F | PENDING | - | - | - |
 | 12 | Isolated CI test workflow and verification suite | 4, 5, 11, 14 | G | PENDING | - | - | - |
@@ -723,6 +723,8 @@ and correlation IDs are not undeclared file-envelope metadata.
   - `services/feed-ingest-plan/src/harvest-feeds/harvest-pool.ts`
   - `services/feed-ingest-plan/src/harvest-feeds/record-rejection.ts`
   - `services/feed-ingest-plan/src/harvest-feeds/harvest-types.ts`
+  - `services/feed-ingest-plan/src/harvest-feeds/harvest-article.ts`
+  - `services/feed-ingest-plan/src/harvest-feeds/transport.ts`
   - `services/feed-ingest-plan/src/harvest-feeds/safe-target.ts`
   - `services/feed-ingest-plan/src/harvest-feeds/robots-policy.ts`
   - `services/feed-ingest-plan/src/harvest-feeds/sanitize-text.ts`
