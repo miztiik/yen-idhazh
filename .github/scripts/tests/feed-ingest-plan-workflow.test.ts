@@ -167,7 +167,7 @@ test("rejects hostile dispatch strings before any input load or network request"
   }
 });
 
-test("strict-checks the actual inline workflow program against the installed service types", async () => {
+test("strict-checks adapters, tests and the actual inline program in one compiler invocation", async () => {
   const { steps } = await workflow();
   const script = steps.find(step => step.id === "plan")!.run!;
   const code = script.slice(script.indexOf("\n") + 1, script.lastIndexOf("\nTS"));
@@ -182,6 +182,9 @@ test("strict-checks the actual inline workflow program against the installed ser
       "--exactOptionalPropertyTypes", "--noFallthroughCasesInSwitch", "--noUnusedLocals",
       "--noUnusedParameters", "--verbatimModuleSyntax", "--skipLibCheck",
       "--types", "bun", "--typeRoots", join(service, "node_modules", "@types"), generated,
+      ...["feed-ingest-plan-outputs.ts", "feed-ingest-plan-report.ts",
+        "tests/feed-ingest-plan-outputs.test.ts", "tests/feed-ingest-plan-report.test.ts",
+        "tests/feed-ingest-plan-workflow.test.ts"].map(path => join(root, ".github", "scripts", ...path.split("/"))),
     ], { cwd: service, stdout: "pipe", stderr: "pipe" });
     const [output, errors] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()]);
     expect({ exit: await child.exited, output, errors }).toEqual({ exit: 0, output: "", errors: "" });

@@ -55,8 +55,9 @@ bun run packages/common-contracts/test/verify-parquet.ts
 ```
 
 The test command allows the embedded strict TypeScript compiler up to 30
-seconds per test; this is not a planner speed requirement. The workflow's
-named check step also runs strict package and adapter type checks.
+seconds per test; this is not a planner speed requirement. One invocation
+checks the adapters, tests and actual inline program together, without a
+second adapter compilation. The workflow also runs strict package checks.
 Use the [shared selector](run-the-gates.md) with `--list` to inspect broader
 coverage. Do not execute a selection that adds Python for these isolated
 checks. Repository-wide CI remains separate and authoritative at merge.
