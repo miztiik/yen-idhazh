@@ -185,7 +185,7 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Shared contracts, schemas, and identity types | 15 | A | DONE | supreme-train (plan-66-row-1) | - | 4729606a-ce50-4812-a45f-f4ac7314311b |
-| 2 | Ledger registration and gardener compaction configuration | 1 | A | IN-FLIGHT | crispy-spoon (plan-66-row-2) | - | 6f739fa3-8ef9-40a7-830d-e1cc57927a46 |
+| 2 | Ledger registration and gardener compaction configuration | 1 | A | DONE | crispy-spoon (plan-66-row-2) | - | 6f739fa3-8ef9-40a7-830d-e1cc57927a46 |
 | 3 | Dedicated feed ingest plan configuration file | 1 | A | DONE | vigilant-lamp (plan-66-row-3) | - | d8340612-ab74-49e7-99ac-19d9ce30e427 |
 | 4 | Host hardware and environment identity service | 6 | B | PENDING | - | - | - |
 | 5 | Host CPU and memory profiling service | 1 | B | DONE | congenial-parakeet (plan-66-row-5) | - | c8de7d9d-dd55-4123-87fe-66095cc2aed5 |
@@ -439,8 +439,13 @@ export type CandidateRejectionRecord =
   - `backend/tests/workflows/test_ledger_door_jobs.py`
   - `docs/architecture/contracts/ledger-registry.md`
   - `docs/architecture/contracts/persistence.md`
-- **Acceptance gates:** Local: shared test selector and focused `backend/tests/contracts/test_ledger_registry.py` / `test_ledger_name.py` cases. CI: full suite. Load the authored configuration through the repository's existing registry readers, not a new generated schema file. Verify attempts and their original identities survive raw settlement and real compact/read/repack cycles; a newer partial attempt must not erase an older complete attempt, and nested dispatch keys must settle correctly. Map UUID fields to their JSON string representation in Arrow and test a UUID round-trip through the schema adapter. Preserve every other ledger's existing settlement behavior.
-- **Oracle:** Registry fixtures confirm every declared feed-ingest ledger has its row contract, settlement key, valid prefix, and compaction configuration. A bounded retry fixture with an earlier attempt containing candidates A and B and a later partial attempt containing only A retains both attempts through compaction; complete-attempt selection can choose the later attempt without inheriting B. A later complete empty attempt is represented by explicit source-run evidence, not inferred from missing dispatch rows. This does not prove a TypeScript writer can encode that contract; Row #6 verifies it.
+  - `config/appearance.json`
+  - `frontend/src/lib/server/config.ts`
+  - `docs/reference/benchmarks/address-length-on-pages.md`
+  - `packages/common-contracts/src/schemas/envelope.schema.ts`
+  - `backend/tests/council/_imports.py`
+- **Acceptance gates:** Local: shared test selector and focused `backend/tests/contracts/test_ledger_registry.py` / `test_ledger_name.py` cases. CI: full suite. Load the authored configuration through the repository's existing registry readers, not a new generated schema file. Verify attempts and their original identities survive raw settlement and real compact/read/repack cycles; a newer partial attempt must not erase an older complete attempt, and nested dispatch keys must settle correctly. Map UUID fields to their JSON string representation in Arrow and test a UUID round-trip through the schema adapter. Preserve every other ledger's existing settlement behavior. Keep the unchanged `frontend/tests/console-data-explorer-address.spec.ts` green: with 31 ledgers the editor cap decreases from 6942 to 6855 characters, 87 characters (about 1.3 percent), to keep all-ledger share links inside the measured 8192-byte request limit.
+- **Oracle:** Registry fixtures confirm every declared feed-ingest ledger has its row contract, settlement key, valid prefix, and compaction configuration. The TypeScript envelope vocabulary agrees with Python, and the council's bounded dependency inventory includes the new row contracts without relaxing its import boundary. The registry description retains its meaning while fitting the unchanged payload ceiling and twice-gzipped-size assertion. A bounded retry fixture with an earlier attempt containing candidates A and B and a later partial attempt containing only A retains both attempts through compaction; complete-attempt selection can choose the later attempt without inheriting B. A later complete empty attempt is represented by explicit source-run evidence, not inferred from missing dispatch rows. This does not prove a TypeScript writer can encode that contract; Row #6 verifies it.
 
 ### Decisions
 

@@ -67,6 +67,54 @@ class LedgerStaging:
 #: same commit that gives it a writer - never before, and never silently
 #: after.
 REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
+    LedgerName.FEED_INGEST_PLAN_DISPATCHES: LedgerStaging(
+        writer=(
+            "planned TypeScript services/feed-ingest-plan seal-article-ledger adapter "
+            "through packages/ledger-file-writer; no writer exists yet"
+        ),
+        symbol=None,
+        job_labels=frozenset(),
+    ),
+    LedgerName.FEED_INGEST_PLAN_EDITORIAL_SELECTIONS: LedgerStaging(
+        writer=(
+            "planned TypeScript services/feed-ingest-plan seal-article-ledger adapter "
+            "through packages/ledger-file-writer; no writer exists yet"
+        ),
+        symbol=None,
+        job_labels=frozenset(),
+    ),
+    LedgerName.FEED_INGEST_PLAN_REJECTIONS: LedgerStaging(
+        writer=(
+            "planned TypeScript services/feed-ingest-plan seal-article-ledger adapter "
+            "through packages/ledger-file-writer; no writer exists yet"
+        ),
+        symbol=None,
+        job_labels=frozenset(),
+    ),
+    LedgerName.FEED_INGEST_PLAN_SOURCE_RUNS: LedgerStaging(
+        writer=(
+            "planned TypeScript services/feed-ingest-plan audit adapter "
+            "through packages/ledger-file-writer; no writer exists yet"
+        ),
+        symbol=None,
+        job_labels=frozenset(),
+    ),
+    LedgerName.FEED_INGEST_PLAN_ARTICLE_ASSESSMENTS: LedgerStaging(
+        writer=(
+            "planned TypeScript services/feed-ingest-plan audit adapter "
+            "through packages/ledger-file-writer; no writer exists yet"
+        ),
+        symbol=None,
+        job_labels=frozenset(),
+    ),
+    LedgerName.FEED_INGEST_PLAN_DIVERSITY: LedgerStaging(
+        writer=(
+            "planned TypeScript services/feed-ingest-plan audit adapter "
+            "through packages/ledger-file-writer; no writer exists yet"
+        ),
+        symbol=None,
+        job_labels=frozenset(),
+    ),
     LedgerName.RUN_SHARDS: LedgerStaging(
         writer="idhazh.telemetry.run_shards.record, after assemble writes run.json",
         symbol="idhazh.telemetry.run_shards.record",
