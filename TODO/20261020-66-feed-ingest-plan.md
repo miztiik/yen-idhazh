@@ -917,6 +917,18 @@ it again from the web. The shared writer is not a settled ledger reader;
 price the raw/compact reader and candidate-input supporting paths before
 dispatch. Worker assignment stays separate from the writer's identity shard.
 
+Initial construction and historical replay are different inputs. Initial
+construction receives the current run's validated selection write result and
+harvested candidates before dispatches and source completion exist. Requiring
+dispatch-completion evidence there would make a cycle. Historical replay
+selects a proven complete attempt and gets full content from recorded
+dispatches; selections alone can reproduce allocation, not recover text.
+Raw and compact readers preserve original row identities and planning
+attempts. They use explicitly named days or files and the existing index
+precedence: yearly, monthly, daily, then raw. A known empty period differs
+from lost or missing evidence. No repository history scan or network refetch
+can substitute for either input.
+
 ### Decisions
 
 | # | Decision | Authority |
