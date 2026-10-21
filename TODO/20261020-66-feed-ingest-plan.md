@@ -569,6 +569,7 @@ export type CandidateRejectionRecord =
 - **Files touched:**
   - `packages/ledger-file-writer/package.json`
   - `packages/ledger-file-writer/tsconfig.json`
+  - `packages/ledger-file-writer/bun.lock`
   - `packages/ledger-file-writer/src/index.ts`
   - `packages/ledger-file-writer/src/uuid/unit-id.ts`
   - `packages/ledger-file-writer/src/uuid/file-id.ts`
@@ -580,8 +581,12 @@ export type CandidateRejectionRecord =
   - `packages/ledger-file-writer/test/uuid.test.ts`
   - `packages/ledger-file-writer/test/parquet-parity.test.ts`
   - `packages/ledger-file-writer/test/persist-ledger.test.ts`
+  - `packages/ledger-file-writer/test/verify-python-parity.py`
+  - `docs/architecture/contracts/identity.md`
+  - `docs/architecture/contracts/persistence.md`
 - **Acceptance gates:** Local: shared test selector, strict TypeScript checks, package tests, and Python reader parity over bounded generated fixtures. CI: full suite and PyArrow/DuckDB compatibility. Exercise two distinct registered ledger contracts through the same public interface, including raw and compact writes, zero rows, nullable/list fields, invalid rows, and an interrupted write.
 - **Oracle:** Python reconstructs the envelope with `FileEnvelope.from_metadata`, loads the rows through the ledger reader, and recomputes `content_sha256` from the stored rows using `json_lines.rows_bytes`; identities match the Python implementation for identical inputs. This proves contract and digest compatibility, not speed or byte-identical output from different Parquet engines.
+- **Preflight correction:** The identity page currently names a TypeScript implementation under `packages/common-contracts/src/identity/` that does not exist. The writer owns the new implementation. Correct that page's namespace and hash-bit descriptions against `backend/idhazh/ledger/filenames.py`; do not change the Python identity algorithm. The package lock and bounded Python parity helper support the declared package and cross-language acceptance gates.
 
 ### Decisions
 
@@ -672,7 +677,7 @@ export type CandidateRejectionRecord =
 - **Files touched:**
   - `services/feed-ingest-plan/src/curate-article-portfolio/quota-normalizer.ts`
   - `services/feed-ingest-plan/src/curate-article-portfolio/quality-decoupler.ts`
-  - `services/feed-ingest-plan/src/curate-article-portfolio/carrier-cluster.tsf`
+  - `services/feed-ingest-plan/src/curate-article-portfolio/carrier-cluster.ts`
   - `services/feed-ingest-plan/src/curate-article-portfolio/mmr-portfolio.ts`
   - `services/feed-ingest-plan/src/curate-article-portfolio/editorial-selection.ts`
   - `services/feed-ingest-plan/src/curate-article-portfolio/record-rejection.ts`
