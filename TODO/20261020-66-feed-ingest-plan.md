@@ -255,7 +255,7 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 | 3 | Dedicated feed ingest plan configuration file | 1 | A | DONE | vigilant-lamp (plan-66-row-3) | - | d8340612-ab74-49e7-99ac-19d9ce30e427 |
 | 4 | Host hardware and environment identity service | 6 | B | IN-FLIGHT | curly-parakeet | - | bd6fe115-c522-4078-bb9f-e7c0e5eceb60 |
 | 5 | Host CPU and memory profiling service | 1 | B | DONE | congenial-parakeet (plan-66-row-5) | - | c8de7d9d-dd55-4123-87fe-66095cc2aed5 |
-| 6 | Reusable TypeScript ledger file writer | 1, 2, 16 | B | IN-FLIGHT | fictional-tribble | - | c1194122-86e6-45b4-85e9-e1bb61dbdca6 |
+| 6 | Reusable TypeScript ledger file writer | 1, 2, 16 | B | DONE | fictional-tribble | - | c1194122-86e6-45b4-85e9-e1bb61dbdca6 |
 | 7 | RSS/Atom feed harvest and DOM text extraction | 3, 6 | B | IN-FLIGHT | redesigned-doodle | - | da505804-6ce7-4f03-aa0b-25bab323ba53 |
 | 8 | Candidate triage screening with Parquet rejection ledger | 6, 7 | C | IN-FLIGHT | scaling-memory | - | d50de7c8-1c6a-4074-a390-25a077ae0ba8 |
 | 9 | Set-aware editorial portfolio curation | 8 | D | IN-FLIGHT | bookish-carnival | - | 34c330c1-9d30-4222-8fa6-4e28e58a165e |
@@ -692,23 +692,36 @@ the existing host-service scope, not new persisted fields or a new algorithm.
   - `packages/ledger-file-writer/src/parquet/wasm-serializer.ts`
   - `packages/ledger-file-writer/src/parquet/envelope-footer.ts`
   - `packages/ledger-file-writer/src/parquet/row-digest.ts`
+  - `packages/ledger-file-writer/src/ledger-types.ts`
+  - `packages/ledger-file-writer/src/row-schema.ts`
+  - `packages/ledger-file-writer/src/registration.ts`
+  - `packages/ledger-file-writer/src/row-identity.ts`
+  - `packages/ledger-file-writer/src/ledger-paths.ts`
+  - `packages/ledger-file-writer/src/atomic-file.ts`
+  - `packages/ledger-file-writer/src/render-ledger-file.ts`
+  - `packages/ledger-file-writer/src/persist-raw.ts`
+  - `packages/ledger-file-writer/src/persist-compact.ts`
   - `packages/ledger-file-writer/src/persist-ledger.ts`
   - `packages/ledger-file-writer/test/uuid.test.ts`
   - `packages/ledger-file-writer/test/parquet-parity.test.ts`
   - `packages/ledger-file-writer/test/persist-ledger.test.ts`
+  - `tests/fixtures/ledger-file-writer/host-fingerprint-row.json`
+  - `tests/fixtures/ledger-file-writer/feed-ingest-dispatch-row.json`
+  - `tests/fixtures/ledger-file-writer/dispatch-arrow-schema.json`
+  - `.github/workflows/ci.yml` (named TypeScript package checks and tests)
   - `docs/architecture/contracts/identity.md`
   - `docs/architecture/contracts/persistence.md`
-- **Acceptance gates:** Local: inspect the shared selector without launching Python-backed groups, run strict TypeScript checks and package tests with real Parquet readback against bounded recorded compatibility fixtures. CI executes the named Bun checks and tests. Exercise two distinct registered ledger contracts through the same public interface, including raw and compact writes, zero rows, nullable/list fields, invalid rows, and an interrupted write.
+- **Acceptance gates:** Local: inspect the shared selector without launching Python-backed groups, run strict TypeScript checks and package tests with real Parquet readback against bounded recorded compatibility fixtures. CI executes the named Bun checks and tests. Exercise two distinct registered ledger contracts through the same public interface, including raw and compact writes, zero rows, nullable/list fields, invalid rows, and an interrupted write. Compare the nested dispatch Parquet schema against `tests/fixtures/ledger-file-writer/dispatch-arrow-schema.json`, an independently recorded list of native column types and nullability, including nested/list children and identity columns. The host-fingerprint case narrows to writer-identity collision fields and does not claim full hardware-row validation or retention; that coverage belongs to Row #4.
 - **Oracle:** TypeScript reads the actual Parquet footer, validates its envelope and native columns, reconstructs stored rows, and recomputes their canonical digest. Recorded fixtures independently pin schema, canonical bytes and identifiers to the existing contract. This does not execute the Python reader, prove speed or require byte-identical output from different Parquet engines.
 - **Preflight correction:** The identity page currently names a TypeScript implementation under `packages/common-contracts/src/identity/` that does not exist. The writer owns the new implementation. Correct that page's namespace and hash-bit descriptions against `backend/idhazh/ledger/filenames.py`; do not change the Python identity algorithm. The package lock and bounded recorded fixtures support the declared package and compatibility checks.
 
 Canonical-byte preflight: sorted `JSON.stringify` is not Python's row
-serialization. A fixed local comparison produced Python numbers `1.0`,
+serialization. A fixed comparison produced Python numbers `1.0`,
 `1e-07`, `1e+20`, and `-0.0`, while Node produced `1`, `1e-7`,
 `100000000000000000000`, and `0`. Python also escapes non-ASCII text.
-Use the declared scalar types and actual stored rows to reproduce the Python
-bytes. Include these values, Unicode, nested lists, and nulls in the existing
-parity test; do not change Python's digest or reject valid floats to pass it.
+Use the declared scalar types and actual stored rows to reproduce those bytes.
+Include these values, Unicode, nested lists, and nulls in the canonical-byte
+vector; do not change the Python digest rules or reject valid floats to pass it.
 
 Identity-page preflight also found two unrelated identities described as one:
 the older `.github/scripts/ai-pipeline.ts` event helper returns an `evt_`
@@ -725,9 +738,9 @@ and correlation IDs are not undeclared file-envelope metadata.
 | 1 | Evaluate `apache-arrow` + `parquet-wasm` for Parquet writing; use the configured ledger compression rather than a caller-specific constant. Beneficiary: every TypeScript ledger producer. Record install size, loaded WASM memory, and runner time before dependency adoption. | Plan proposal; persistence.md |
 | 2 | Match Python `filenames.py` for UUIDv5 unit identity and UUIDv8 file identity, including generic pipeline/task context. | identity.md; filenames.py |
 | 3 | Write separate UTF-8 key-value entries matching `FileEnvelope.as_metadata`, not one JSON object. Preserve renamed metadata keys, optional-key omission, and zero-padded attempt/shard strings. Read row count from the Parquet footer, not an extra envelope key. | file_envelope.py; persistence.md |
-| 4 | Hash the stored rows, including stamped identity cells, in file order using the exact canonical JSON-lines bytes from `json_lines.rows_bytes`: sorted object keys, ASCII escaping, compact separators, and one LF per row. It is neither a hash of Parquet bytes nor an unspecified raw-row hash. Test Unicode, nested values, floats, and nullable cells against Python serialization. | persist.py; json_lines.py |
+| 4 | Hash the stored rows, including stamped identity cells, in file order using the exact canonical JSON-lines bytes from `json_lines.rows_bytes`: sorted object keys, ASCII escaping, compact separators, and one LF per row. It is neither a hash of Parquet bytes nor an unspecified raw-row hash. Test Unicode, nested values, floats, and nullable cells against the recorded canonical-byte vector. | persist.py; json_lines.py |
 | 5 | Accept ledger, row contract, rows, output root, UTC coverage period, writer context, and ledger settings. Derive paths and identifiers inside the package. Keep feed selection, HTTP serving, and GitHub reporting outside it. Use temporary-file-plus-rename writes. | Owner selection: shared package; persistence.md |
-| 6 | Validation checks row and envelope contracts before writing. Interoperability tests additionally check the Parquet encoding. Neither check encrypts, signs, or makes a file tamper-proof. | Clarification of the package contract |
+| 6 | Validation checks row and envelope contracts before writing. TypeScript tests read actual Parquet through WASM and Arrow, then check the footer and typed columns against bounded compatibility fixtures. The owner override prevents executing Python from this package's test and CI paths, so these checks do not claim current Python reader execution. Neither check encrypts, signs, or makes a file tamper-proof. | Clarification of the package contract; owner override |
 | 7 | Raw writes stamp row identity; compact writes preserve original row identity and record the compactor only in the envelope. Accept tier, period, and source-file count under the existing persistence rules; do not embed a compaction schedule or retention policy in the package. | persistence.md |
 
 ### Rejected alternatives
