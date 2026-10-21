@@ -33,7 +33,9 @@ export type ScreeningInput = {
 };
 
 export function validateScreeningInput(input: ScreeningInput) {
-  const candidates = z.array(FeedIngestCandidateSchema).parse(input.candidates);
+  const candidates = z.array(FeedIngestCandidateSchema.and(z.object({
+    fetched_at: UtcInstantSchema, published_at: UtcInstantSchema.nullable(),
+  }))).parse(input.candidates);
   const observations = z.record(Sha256Schema, HarvestObservationSchema).parse(input.observations);
   const seen = SeenEvidenceSchema.parse(input.seen);
   const run = ScreeningRunSchema.parse(input.run);
@@ -46,8 +48,6 @@ export function validateScreeningInput(input: ScreeningInput) {
     }
     if (ids.has(candidate.candidate_id)) throw new Error(`candidates.${candidate.candidate_id}: duplicate candidate_id`);
     ids.add(candidate.candidate_id);
-    UtcInstantSchema.parse(candidate.fetched_at);
-    if (candidate.published_at !== null) UtcInstantSchema.parse(candidate.published_at);
   }
   for (const id of Object.keys(observations)) {
     if (!ids.has(id)) throw new Error(`observations.${id}: no candidate in this screening batch`);
