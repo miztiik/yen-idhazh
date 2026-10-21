@@ -1406,6 +1406,14 @@ head `c3428c33c2eca90a603ad2ef01b8ab2c4c7f0ab6` is delivered in ready
 PR #1622 against the runner branch. Required CI and the remaining complete
 audit/observer integration remain acceptance gates. PR #1621 is merged into
 its runner base, not into main; this does not close the full audit row.
+PR #1622 CI found a new dependency error before backend tests:
+`packages/common-contracts/test/verify-parquet.ts` imports the writer and
+planner runtime, but the shared-contract check installs only its own
+dependencies. This is part of Row #12, not the unrelated schedule failure.
+The workflow owner relocates that executable verifier to
+`.github/scripts/feed-ingest-plan-verification.ts`, updates its callers and
+retains the recorded-byte oracle. The common-contract package must check
+independently; do not add runtime dependencies or alter CI to hide this error.
 
 Row #13's shared integration adds
 `services/feed-ingest-plan/src/metrics/publication-metrics.ts` to separate
