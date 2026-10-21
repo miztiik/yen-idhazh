@@ -4,6 +4,12 @@ import { fileURLToPath } from "node:url";
 import { PlanRequestSchema, parseCliRequest, resolvePlanRequest } from "../src/api/plan-request";
 import { loadPlanInputs } from "../src/load-plan-inputs";
 import { resolveRunContext } from "../src/resolve-run-context";
+import { main } from "../src/index";
+import { recordedPlan } from "./plan-recordings";
+import { source } from "./harvest-recordings";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { mkdir, writeFile } from "node:fs/promises";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 
@@ -74,4 +80,44 @@ test("real CLI process refuses disabled or invalid requests without Python or ne
     expect(failure.issues[0].field).toBe(field);
     expect(stderr).not.toContain(root);
   }
+}, 30000);
+
+test("the awaited entrypoint refuses unsupported audit values before any audit write or summary", async () => {
+  for (const mode of ["top_k", "negative_age", "first_seen"] as const) {
+    const recorded = await recordedPlan(mode === "first_seen"
+      ? [source({ url: "https://news.example/article-failures.xml" })] : undefined);
+    const printed: unknown[] = [];
+    try {
+      if (mode === "top_k") recorded.inputs.harvest.config.metrics.top_source_counts = [1, 2, 5];
+      if (mode === "negative_age") recorded.runtime.clock = () => new Date("2026-10-21T09:00:00Z");
+      if (mode === "first_seen") {
+        recorded.inputs.clock_config.collect.seen_window_days = 0;
+        recorded.inputs.settings.inputs.seen_days = [{ day: "2026-10-21", raw_files: [] }];
+      }
+      await expect(main(["--cli", "--partition-strategy=none"], {
+        inputs: recorded.inputs, runtime: recorded.runtime, output: value => { printed.push(value); },
+      })).rejects.toThrow(mode === "top_k" ? "top_k" : mode === "negative_age" ? "signed negative" : "first_seen");
+      expect(printed).toEqual([]);
+      for (const ledger of ["article-assessments", "diversity", "source-runs"]) {
+        expect(existsSync(join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan", ledger))).toBe(false);
+      }
+      expect(recorded.events.some(event => event.stage === "seal-article-ledger")).toBe(true);
+    } finally { await recorded.close(); }
+  }
+}, 30000);
+
+test("a real required assessment write failure cannot print a successful CLI summary", async () => {
+  const recorded = await recordedPlan();
+  const printed: unknown[] = [];
+  try {
+    const raw = join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan");
+    await mkdir(raw, { recursive: true });
+    await writeFile(join(raw, "article-assessments"), "A file cannot hold assessment output.");
+    await expect(main(["--cli"], {
+      inputs: recorded.inputs, runtime: recorded.runtime, output: value => { printed.push(value); },
+    })).rejects.toThrow();
+    expect(printed).toEqual([]);
+    expect(existsSync(join(raw, "diversity"))).toBe(false);
+    expect(existsSync(join(raw, "source-runs"))).toBe(false);
+  } finally { await recorded.close(); }
 }, 30000);
