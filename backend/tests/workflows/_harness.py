@@ -112,8 +112,6 @@ def _copy_config(target: Path, *, models_file: str | None = None) -> None:
         shutil.copyfile(CONFIG_DIR / pointer, destination)
 
 
-CONTENT_REFRESH_UTC_HOURS: Final = (2, 6, 10, 14, 18)
-
 # Every `workflow_dispatch` input in the repository, and the evidence that its
 # value is shaped before anything acts on it. Discovery is closed-world, so a
 # new input fails here until somebody writes down which of the three it is and

@@ -24,6 +24,59 @@ Record this separation in the owning persistence documentation before closure.
 
 ### Separate gate repair - 2026-10-21
 
+Cross-row oracle correction, 2026-10-21: Row #12 found that Row #7 includes
+`workflow_reporting` in its planning-input fingerprint. Changing optional
+reporting therefore changes policy fingerprints and ledger content, contrary
+to the existing reporting-independence requirement. The original Row #7
+owner corrects only its already named loader, harvest test and harvesting
+page: exclude reporting-only controls from the planning fingerprint while
+retaining their actual configuration for the external reporting adapter.
+Verify report flag/removal text substitutions leave the fingerprint alone
+and a genuine planning knob still changes it. Rows #11 and #12 integrate the
+tested follow-up; neither edits the loader concurrently. This changes no
+persisted field or format and is not a CI repair.
+
+Reviewed follow-up `9341af4d7512dc99fd6097aa4bac5863ce0334fa`
+changes only those three paths. Strict TypeScript and nine harvest tests
+passed. The substitution checks preserve reporting settings in the returned
+configuration, leave both reporting-only changes out of the fingerprint,
+and detect a real age-policy change. Row #12 still verifies the separate
+two-run ledger-digest comparison after integrating this head.
+
+Row #12 subsequently integrated that head and reported identical dispatch,
+selection and rejection content digests across real reporting-off and
+reporting-on runs. Its ten adapter/native tests passed; final strict checks
+and runner/audit integration remain open. CI on the harvest follow-up passed
+scope, site, browser and robots. Its backend gate passed 7249 tests and
+failed only the same two schedule assertions below. No merge is authorized
+while that required gate remains red.
+
+Row #6 merge blocker: CI run 39644823082 at writer head
+`bed0e6cc3080898644024a99200ec6a882a1dd1b` passes its TypeScript writer,
+site, browser and robots checks. The repository backend gate passes 7249 tests
+and fails two existing schedule checks after unrelated main commit
+`12b276024` adds digest runs at 00:20, 20:20 and 22:20 UTC.
+`backend/tests/workflows/test_triggers.py` still declares five approved hours
+and a history-rewrite overlap measurement for that earlier schedule.
+No writer code caused these failures. Keep Row #6 unmerged while CI is red.
+Restoring the earlier schedule gives up the three added runs; retaining them
+requires a separate measured schedule-safety repair and owner authorization
+for changes outside this TypeScript plan. Neither was authorized when the
+owner was unavailable. Do not add Python tests or silently change production
+scheduling to clear this blocker.
+
+Delivery continuation, 2026-10-21: the owner directed continued autonomous
+implementation after this blocker was reported. Row #6 implementation and
+review are complete; its merge remains blocked. Row #4 can build in an
+isolated child on the reviewed writer branch without merging either change.
+Keep the writer head stable, merge updated main before final verification,
+and retain serialized green-only merges. The separate digest-schedule session
+owns the schedule repair; do not duplicate it in a plan row.
+
+Owner correction, 2026-10-21: do not fix CI issues; other agents own them.
+Build the remaining rows and keep them ready while those repairs proceed.
+An unrelated failed check blocks merge, not isolated implementation.
+
 Owner-directed scope change: repair the existing query-door EXPLAIN fixture
 check in a separate PR from main, not as a Plan 66 row. CI run 39608009522
 for PR #1607 passed 7185 backend tests and failed only
@@ -203,14 +256,14 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 | 4 | Host hardware and environment identity service | 6 | B | IN-FLIGHT | plan-66-host-fingerprint-service | - | bd6fe115-c522-4078-bb9f-e7c0e5eceb60 |
 | 5 | Host CPU and memory profiling service | 1 | B | DONE | congenial-parakeet (plan-66-row-5) | - | c8de7d9d-dd55-4123-87fe-66095cc2aed5 |
 | 6 | Reusable TypeScript ledger file writer | 1, 2, 16 | B | DONE | fictional-tribble | - | c1194122-86e6-45b4-85e9-e1bb61dbdca6 |
-| 7 | RSS/Atom feed harvest and DOM text extraction | 3, 6 | B | PENDING | - | - | - |
-| 8 | Candidate triage screening with Parquet rejection ledger | 6, 7 | C | PENDING | - | - | - |
-| 9 | Set-aware editorial portfolio curation | 8 | D | PENDING | - | - | - |
-| 10 | Contextual bin-packing partitioner with feature flag | 9 | E | PENDING | - | - | - |
-| 11 | Core plan engine entrypoint, dual-mode runner, and sealing | 6, 10 | F | PENDING | - | - | - |
-| 12 | Isolated CI test workflow and verification suite | 4, 5, 11, 14 | G | PENDING | - | - | - |
-| 13 | Phase 2 publication reconciliation and rolling diversity metrics | 12, 14 | H | PENDING | - | - | - |
-| 14 | Phase 1 source-run audit and three-axis evidence | 11 | G | PENDING | - | - | - |
+| 7 | RSS/Atom feed harvest and DOM text extraction | 3, 6 | B | IN-FLIGHT | redesigned-doodle | - | da505804-6ce7-4f03-aa0b-25bab323ba53 |
+| 8 | Candidate triage screening with Parquet rejection ledger | 6, 7 | C | IN-FLIGHT | scaling-memory | - | d50de7c8-1c6a-4074-a390-25a077ae0ba8 |
+| 9 | Set-aware editorial portfolio curation | 8 | D | IN-FLIGHT | bookish-carnival | - | 34c330c1-9d30-4222-8fa6-4e28e58a165e |
+| 10 | Contextual bin-packing partitioner with feature flag | 9 | E | IN-FLIGHT | Session `86a9018f-dadb-4181-b82c-ca7fe9347116` builds on tested harvest foundation; integrates tested curation before final checks; historical completion proof remains unresolved below | - | - |
+| 11 | Core plan engine entrypoint, dual-mode runner, and sealing | 6, 10 | F | IN-FLIGHT | plan-66-api-cli-runner | - | ec780a10-5ab0-4ad7-a4e1-c36db811fbd7 |
+| 12 | Isolated CI test workflow and verification suite | 4, 5, 11, 14 | G | IN-FLIGHT | isolated workflow child | - | 31c9fcf0-3abc-41ff-a70e-624a4b419ee0 |
+| 13 | Phase 2 publication reconciliation and rolling diversity metrics | 12, 14 | H | IN-FLIGHT | publication observer child; independent history/publication modules first; shared metrics wait for Row 14 handoff | - | 79cc9244-f9d2-4223-905f-69fa0221f706 |
+| 14 | Phase 1 source-run audit and three-axis evidence | 11 | G | IN-FLIGHT | audit recorder child | - | f197c411-a156-460a-a772-f5205c11be1d |
 | 15 | Config-driven source registries and compatible readers | - | A | DONE | fluffy-adventure (feed-registry-migration) | - | f7f18c64-813b-4a13-b421-1cd67b951db6 |
 | 16 | Public data-explorer enrollment and nested ledger delivery | 2 | B | DONE | reimagined-enigma | - | 2b6ac0cc-60a2-4c13-a67a-8d8ec21a4fc1 |
 
@@ -522,16 +575,32 @@ export type CandidateRejectionRecord =
 - **Scope:** Implement `services/host-fingerprints` as an independent Bun API and CLI that collects the existing HostFingerprintRow and persists it through the shared ledger writer to the existing host-fingerprint ledger when host telemetry is enabled.
 - **Files touched:**
   - `services/host-fingerprints/package.json`
+  - `services/host-fingerprints/bun.lock`
   - `services/host-fingerprints/tsconfig.json`
+  - `services/host-fingerprints/src/config.ts`
   - `services/host-fingerprints/src/index.ts`
   - `services/host-fingerprints/src/api/server.ts`
   - `services/host-fingerprints/src/api/routes/fingerprint.route.ts`
   - `services/host-fingerprints/src/persist-fingerprint.ts`
+  - `services/host-fingerprints/src/collect-fingerprint.ts`
   - `services/host-fingerprints/src/inspect/cpu-model.ts`
   - `services/host-fingerprints/src/inspect/runner-env.ts`
+  - `services/host-fingerprints/src/inspect/cpu-topology.ts`
+  - `services/host-fingerprints/src/inspect/cpu-capacity.ts`
+  - `services/host-fingerprints/src/inspect/hardware-identity.ts`
+  - `services/host-fingerprints/src/inspect/bounded-input.ts`
+  - `services/host-fingerprints/src/inspect/placement.ts`
+  - `services/host-fingerprints/src/inspect/copy-bandwidth.ts`
+  - `services/host-fingerprints/test/fixture.ts`
   - `services/host-fingerprints/test/fingerprint.test.ts`
   - `services/host-fingerprints/test/fingerprint-persistence.test.ts`
   - `packages/common-contracts/src/schemas/host-fingerprint.schema.ts`
+  - `packages/common-contracts/src/index.ts`
+  - `packages/common-contracts/test/host-fingerprint.test.ts`
+  - `config/host-fingerprints.json`
+  - `tests/fixtures/host-fingerprints/linux-inputs.json`
+  - `tests/fixtures/host-fingerprints/host-schema.json`
+  - `.github/workflows/ci.yml` (named Bun service checks and tests)
   - `docs/reference/host-metrics.md`
 - **Acceptance gates:** Local: inspect the shared selector without launching Python-backed groups, run strict TypeScript checks, bounded Linux input fixtures, API/CLI persistence tests, and recorded HostFingerprintRow compatibility checks in TypeScript. Existing repository CI remains authoritative for its unchanged suites. Verify configured-off behavior, null unavailable measurements, atomic-write failure propagation, and retry settlement without rewriting historical files.
 - **Oracle:** An API or CLI collection creates a valid HostFingerprintRow in the registered ledger, and TypeScript Parquet readback returns it with the expected pipeline/task/run/shard identity and recorded schema; invalid requests and failed writes cannot return persisted success. This does not certify Linux hardware collection from a Windows fixture run or execute the Python reader.
@@ -542,6 +611,15 @@ supporting paths before dispatch. The service also needs a lockfile, authored
 listener/read controls, and bounded recorded Linux inputs. Preserve the
 existing fingerprint algorithm and observability controls; a nullable field
 does not authorize skipping its collector.
+
+Supporting scope for the existing service: the lockfile owns its install;
+validated listener/read controls belong in its named config; bounded input,
+topology, capacity and identity units keep collection out of routing code.
+The public contract export and TypeScript fixture checks must cover the full
+host row, not a field-stripping projection. The named fixture files hold
+bounded Linux readings and recorded schema expectations. CI adds Bun service
+checks only, with no new Python setup or test invocation. These paths implement
+the existing host-service scope, not new persisted fields or a new algorithm.
 
 ### Decisions
 
@@ -684,7 +762,23 @@ and correlation IDs are not undeclared file-envelope metadata.
   - `services/feed-ingest-plan/src/harvest-feeds/dom-extractor.ts`
   - `services/feed-ingest-plan/src/harvest-feeds/harvest-pool.ts`
   - `services/feed-ingest-plan/src/harvest-feeds/record-rejection.ts`
+  - `services/feed-ingest-plan/src/harvest-feeds/harvest-types.ts`
+  - `services/feed-ingest-plan/src/harvest-feeds/harvest-article.ts`
+  - `services/feed-ingest-plan/src/harvest-feeds/transport.ts`
+  - `services/feed-ingest-plan/src/harvest-feeds/safe-target.ts`
+  - `services/feed-ingest-plan/src/harvest-feeds/robots-policy.ts`
+  - `services/feed-ingest-plan/src/harvest-feeds/sanitize-text.ts`
+  - `services/feed-ingest-plan/src/harvest-feeds/load-harvest-inputs.ts`
+  - `services/feed-ingest-plan/package.json`
+  - `services/feed-ingest-plan/bun.lock`
   - `services/feed-ingest-plan/test/harvest.test.ts`
+  - `services/feed-ingest-plan/test/harvest-safety.test.ts`
+  - `tests/fixtures/feed-ingest-plan/harvest-rss.xml`
+  - `tests/fixtures/feed-ingest-plan/harvest-atom.xml`
+  - `tests/fixtures/feed-ingest-plan/harvest-article.html`
+  - `tests/fixtures/feed-ingest-plan/harvest-responses.json`
+  - `tests/fixtures/feed-ingest-plan/harvest-safety.json`
+  - `docs/architecture/sources/feed-harvesting.md`
 - **Acceptance gates:** Local: shared selector and `bun test` over named recorded RSS/Atom and HTML fixtures, with no external network. Verify valid candidates, categories, text, and typed fetch/parse failures. CI: full suite. Live-source availability is an observation of a separately dispatched isolated run, not a repeatable test gate.
 - **Oracle:** Pre-fetched article text contains >0 words for valid articles, captures author attribution when present, and extracts all XML category elements into `categories: string[]` or defaults to `[]` when missing.
 
@@ -696,6 +790,19 @@ validation before requests, robots permission, and sanitization. Include the
 bounded modules and fixtures needed to preserve those controls; DOM extraction
 must not load page resources. Do not substitute extraction success for these
 independent safety requirements.
+
+Supporting scope: the manifest and lock add the approved DOM extraction
+libraries, a mature feed parser, and any mature transport/address/robots
+libraries needed to preserve the existing controls. Record each dependency's
+benefit and installed cost. The named helpers separate target validation,
+robots permission, sanitization and authored input loading from routing.
+Read existing extraction byte/retry controls rather than inventing constants.
+Fixtures are named recorded RSS, Atom, HTML, response and safety inputs, not
+network tests. The owning harvesting page documents the isolated path without
+changing production extraction. No shared schema or CI workflow edits belong
+to this row: its Bun checks run locally, and the isolated workflow belongs to
+Row #12. Row #4 alone owns its named Bun CI addition, avoiding a shared-file
+collision while these rows are built.
 
 ### Decisions
 
@@ -724,7 +831,12 @@ independent safety requirements.
   - `services/feed-ingest-plan/src/screen-article-candidates/freshness-decay.ts`
   - `services/feed-ingest-plan/src/screen-article-candidates/category-guard.ts`
   - `services/feed-ingest-plan/src/screen-article-candidates/rejection-sealer.ts`
+  - `services/feed-ingest-plan/src/screen-article-candidates/screening-input.ts`
+  - `services/feed-ingest-plan/src/screen-article-candidates/seen-evidence.ts`
   - `services/feed-ingest-plan/test/triage.test.ts`
+  - `tests/fixtures/feed-ingest-plan/screening-cases.json`
+  - `tests/fixtures/feed-ingest-plan/seen-evidence.json`
+  - `docs/architecture/sources/feed-screening.md`
 - **Acceptance gates:** `bun test` in `services/feed-ingest-plan/`; generated rejection files pass TypeScript Parquet readback and recorded contract checks. Cover the configured word-count and HTTP rules plus Table R freshness boundaries with one fixed UTC clock, including undated articles and invalid overrides. Execute Table O's vertical-specific threshold substitution against this real screening stage, not only the resolver.
 - **Oracle:** Each rejected fixture has the expected typed reason, and changing only the freshness override changes admission at the stated age boundary without changing the ranking half-life. This does not settle editorial quality or live-source availability.
 
@@ -735,6 +847,18 @@ before dispatch; a repeated fetch must not reset an undated article's age.
 Preserve the existing future-date tolerance when deciding whether to trust
 the feed date. Price reader and fixture supporting paths rather than adding
 an undeclared candidate field.
+
+Supporting scope: screening consumes a validated candidate batch, actual
+transient HTTP/paywall observations from harvesting, and a caller-supplied
+bounded list of settled SeenRow payloads. `seen-evidence.ts` validates the
+existing seen fields and joins by `url_key`; it does not invent a new
+persisted shape or scan history. The later engine owns loading that bounded
+history from raw and compact files. Missing observations remain unknown.
+Read the existing future-date tolerance from authored configuration.
+The named fixtures and screening page cover repeated undated sightings,
+exact cutoff boundaries, configured checks and real rejection persistence.
+Row #7 owns the manifest and lock; Row #8 integrates that dependency foundation
+before final checks instead of editing either file concurrently.
 
 ### Decisions
 
@@ -763,7 +887,11 @@ an undeclared candidate field.
   - `services/feed-ingest-plan/src/curate-article-portfolio/mmr-portfolio.ts`
   - `services/feed-ingest-plan/src/curate-article-portfolio/editorial-selection.ts`
   - `services/feed-ingest-plan/src/curate-article-portfolio/record-rejection.ts`
+  - `services/feed-ingest-plan/src/curate-article-portfolio/portfolio-input.ts`
+  - `services/feed-ingest-plan/src/curate-article-portfolio/story-evidence.ts`
   - `services/feed-ingest-plan/test/curate.test.ts`
+  - `tests/fixtures/feed-ingest-plan/portfolio-cases.json`
+  - `docs/architecture/sources/feed-curation.md`
 - **Acceptance gates:** `bun test` in `services/feed-ingest-plan/`; bounded fixtures check the configured concentration limits and relaxation order. Vary only the source-kind coefficient: zero must remove its penalty; increasing it changes only the declared diversity term. Relabelling a source must not change screening eligibility or introduce a required-kind count. Execute Table O's vertical-specific scoring substitution against this real curation stage and compare exact components and selected identities. Vary each Table T dimension independently, including same lens/different event cluster, same event type/different occurrence, same entity/different story, and unavailable desk evidence.
 - **Oracle:** Source/domain shares and relaxation follow configuration, and the source-kind penalty equals the bounded term in Table F, including the zero-weight case. This does not prove that a subjective source label is correct or that the proposed coefficient is editorially optimal.
 
@@ -774,6 +902,17 @@ Cross-outlet groups must satisfy the rule for every pair, not merely form a
 chain of matching neighbours. Publisher identity is the recorded masthead,
 not the feed ID; parent-domain concentration remains a separate control.
 Name the matcher, fixture and owning-doc supporting paths before dispatch.
+
+Supporting scope: `portfolio-input.ts` validates already screened candidates
+and explicitly supplied operational, timing, publisher and story evidence.
+`story-evidence.ts` applies only the existing same-story rules supported by
+those inputs; absent vectors are not a fabricated semantic comparison.
+The named fixture and curation page define stable hand-computable selections,
+separate quality axes, each penalty and evidence availability. No new
+persisted contract or label inference is authorized. Row #7 owns the service
+manifest and lock; integrate its stable dependency foundation and Row #8's
+actual admitted-result boundary before final composed checks, without
+concurrent edits to those files.
 
 ### Decisions
 
@@ -806,7 +945,21 @@ Name the matcher, fixture and owning-doc supporting paths before dispatch.
   - `services/feed-ingest-plan/src/partition-article-shards/bin-pack.ts`
   - `services/feed-ingest-plan/src/partition-article-shards/round-robin.ts`
   - `services/feed-ingest-plan/src/partition-article-shards/read-editorial-selection.ts`
+  - `services/feed-ingest-plan/src/partition-article-shards/partition-input.ts`
+  - `services/feed-ingest-plan/src/read-ledger-history/read-period.ts`
+  - `services/feed-ingest-plan/src/read-ledger-history/read-parquet.ts`
+  - `services/feed-ingest-plan/src/read-ledger-history/complete-attempt.ts`
+  - `packages/common-contracts/src/schemas/ledger-index.schema.ts`
+  - `packages/common-contracts/src/index.ts`
+  - `packages/common-contracts/test/ledger-index.test.ts`
+  - `packages/ledger-file-writer/src/index.ts`
+  - `packages/ledger-file-writer/test/reader-integrity.test.ts`
   - `services/feed-ingest-plan/test/partition.test.ts`
+  - `services/feed-ingest-plan/test/ledger-history.test.ts`
+  - `services/feed-ingest-plan/test/partition-fixtures.ts`
+  - `tests/fixtures/feed-ingest-plan/ledger-history.json`
+  - `docs/architecture/sources/feed-partitioning.md`
+  - `docs/architecture/contracts/persistence.md`
 - **Acceptance gates:** Local: shared selector and `bun test` over bounded uneven, equal-work, empty, and fewer-items-than-shards fixtures. Verify deterministic assignments, configured shard bounds, and the selected-to-dispatched identity/rank bijection. CI: full suite. Greedy bin-packing is a heuristic, not proof of minimum variance for every input.
 - **Oracle:** A hand-computable uneven-work fixture produces the expected greedy assignment and lower work spread than round-robin; equal-work fixtures may tie. With strategy `none`, all items have worker assignment zero and the effective dispatch count is one. These checks do not prove optimal packing or actual worker elapsed-time balance.
 
@@ -817,6 +970,79 @@ policy consistency. Do not reconstruct content from a selection row or fetch
 it again from the web. The shared writer is not a settled ledger reader;
 price the raw/compact reader and candidate-input supporting paths before
 dispatch. Worker assignment stays separate from the writer's identity shard.
+
+Initial construction and historical replay are different inputs. Initial
+construction receives the current run's validated selection write result and
+harvested candidates before dispatches and source completion exist. Requiring
+dispatch-completion evidence there would make a cycle. Historical replay
+selects a proven complete attempt and gets full content from recorded
+dispatches; selections alone can reproduce allocation, not recover text.
+Raw and compact readers preserve original row identities and planning
+attempts. They use explicitly named days or files and the existing index
+precedence: yearly, monthly, daily, then raw. A known empty period differs
+from lost or missing evidence. No repository history scan or network refetch
+can substitute for either input.
+
+Supporting scope: the named history modules read actual Parquet through the
+existing Arrow/WASM libraries, validate envelopes and original row identity,
+resolve one named day's compact indexes or explicitly supplied raw files,
+and validate the completion evidence those inputs can actually prove. The shared
+index schemas are small TypeScript copies of the existing raw/compact
+contracts, held to bounded recorded field, vocabulary and validation
+fixtures. They do not execute or read Python source during tests. The
+generated history tests exercise raw, daily, monthly and yearly files,
+empty/lost/missing periods, incomplete retries and preserved original
+identities. No new persisted field or schema meaning is introduced.
+`partition-input.ts` validates current selections and supplied full candidate
+content without requiring future completion evidence. The owning partition
+page records the distinction and reader behavior. Row #7 owns the manifest
+and lock, including the existing Arrow/WASM runtime dependencies; this row
+integrates that foundation before final checks and does not edit those files
+concurrently. No writer implementation, frontend import, Python source or
+production workflow change belongs to this row.
+
+Reader integrity reuses the writer's existing canonical serialization:
+the package entry point may export `digestRows`, its logical field/type
+declarations, and the existing `describeObjectSchema` and
+`appendIdentityColumns` helpers. The named public-import test proves digest
+agreement over actual Parquet readback. This is an export-only addition,
+not a writer implementation or stored-format change; do not deep-import
+private modules or duplicate canonical serialization in the reader.
+
+STOP-AND-SURFACE, 2026-10-21: compact rows retain original run, attempt and
+unit identity, but not original raw-file membership or row order. Completion
+evidence names original file digests, and the writer hashes rows in input
+order. Packing can also settle duplicate occurrences. Consequently a reader
+cannot generally reproduce each recorded raw-file digest after raw removal.
+Current compact-file integrity and matching aggregate counts do not prove
+the original file commitments. Fowler confirmed this contract gap.
+The coordinator requested owner approval for a versioned logical-attempt
+commitment, with the existing Python declaration updated but never executed;
+alternatives were retaining referenced raw files or preserving full raw-file
+provenance through packing. The unavailable-user response selected none.
+Do not self-authorize a contract change or report packed replay as verified.
+Current-run partition construction and bounded reader implementation can
+continue. Historical completion proof remains an explicit unresolved part
+of this row, not a silent scope reduction.
+
+STOP-AND-SURFACE, 2026-10-21: the dispatch contract also requires content and
+selection dates and policies to be equal. Curation preserves the actual
+fetch day and harvested policy in content, and records the decision day and
+effective screening policy in selection. A freshness override or a fetch
+before UTC midnight followed by selection after midnight can therefore
+produce valid stage output that the current dispatch contract rejects.
+The coordinator requested approval to keep identity, source and labels
+equal while permitting the two genuine date/policy records, including a
+limited existing Python declaration update without execution. The
+unavailable-user response selected no option; no contract change is
+authorized. Row #9 adds real composition regressions. Row #10 must report
+the boundary explicitly, not falsify fetched content, discard the override
+or claim those cases work. Same-day, same-policy construction can continue.
+This does not inherently
+block a live freshness override: harvesting already accepts run overrides,
+so the runner must pass the same override to harvest and screening and one
+captured UTC instant through all stages. Independently supplied content
+harvested under a different policy or UTC day remains unrepresentable.
 
 ### Decisions
 
@@ -842,18 +1068,90 @@ dispatch. Worker assignment stays separate from the writer's identity shard.
 - **Scope:** Implement the planner REST API and CLI, pass the resolved freshness request through screening, and call the shared ledger package from the storage adapter in Table E to persist dispatches and return structured result paths.
 - **Files touched:**
   - `services/feed-ingest-plan/package.json`
+  - `services/feed-ingest-plan/bun.lock`
   - `services/feed-ingest-plan/tsconfig.json`
   - `services/feed-ingest-plan/src/index.ts`
   - `services/feed-ingest-plan/src/api/server.ts`
   - `services/feed-ingest-plan/src/api/routes/plan.route.ts`
   - `services/feed-ingest-plan/src/api/routes/health.route.ts`
   - `services/feed-ingest-plan/src/api/plan-request.ts`
+  - `services/feed-ingest-plan/src/run-feed-plan.ts`
+  - `services/feed-ingest-plan/src/load-plan-inputs.ts`
+  - `services/feed-ingest-plan/src/resolve-run-context.ts`
+  - `services/feed-ingest-plan/src/read-ledger-history/read-seen-evidence.ts`
+  - `services/feed-ingest-plan/src/config/service-settings.ts`
   - `services/feed-ingest-plan/src/seal-article-ledger/plan-sealer.ts`
   - `services/feed-ingest-plan/src/logging/structured-logger.ts`
+  - `services/feed-ingest-plan/src/logging/stage-assessments.ts`
   - `services/feed-ingest-plan/test/plan-cli.test.ts`
   - `services/feed-ingest-plan/test/plan-api.test.ts`
+  - `services/feed-ingest-plan/test/plan-engine.test.ts`
+  - `services/feed-ingest-plan/test/plan-recordings.ts`
+  - `config/feed-ingest-plan-service.json`
+  - `docs/architecture/sources/feed-plan-runner.md`
 - **Acceptance gates:** `bun test` in `services/feed-ingest-plan/`; CLI/API fixture tests cover the same age filter, automatically derived UTC date, and Python-readable dispatch output. No core module writes GitHub annotations, step summaries, or GitHub output files.
 - **Oracle:** Given the same bounded inputs and fixed UTC clock, CLI and API select the same article identities and return valid dispatch paths and shard assignments. This does not prove live-feed performance.
+
+Supporting scope: keep the entry point and HTTP routes as routing only.
+`run-feed-plan.ts` composes the real stages; named loaders resolve explicit
+config, ledger and bounded seen-evidence inputs; the context module captures
+one UTC instant and validates run/attempt/partition controls before fetching.
+Use the same freshness override in harvesting and screening. Named authored
+service settings govern listener, input limits and feature enablement, not
+an undeclared environment-only destination. Row #7's manifest ownership has
+ended at its pushed handoff; Row #11 owns the service manifest and lock from
+this point, including Hono's stated API-routing benefit and installation cost.
+No other row edits those files concurrently. Row #10 still owns its named
+history modules; do not edit them from this row.
+
+The runner emits existing typed stage events with genuine membership,
+measurements and unavailable evidence for Row #14. Before the audit recorder
+exists, dispatch persistence is not audited completion: never emit a
+plan-complete source snapshot or return complete success without all required
+audit writes. Build real composition now, not a success-shaped placeholder.
+The audit timing, top-count and packed-completion contract questions remain
+explicit integration dependencies. No new persisted contract or Python
+change is authorized by this supporting scope.
+
+First-sight integration uses `collect.seen_window_days` from the existing
+configuration and the same bounded-day meaning as the freshness page.
+Within its already named modules, Row #11 may consume transient named
+per-day index/file inputs through Row #10's reader. Only verified rows or
+known-empty evidence for every required UTC day establishes absence within
+that window. Missing, lost or expired history cannot establish a new sight;
+arbitrary available rows still do not prove absence. Preserve the earliest
+genuine settled sight for each URL key. After complete-window proof only,
+write newly encountered keys through the existing seen contract and public
+writer before screening uses them; failed or skipped persistence cannot
+masquerade as a recorded first sight. No global-history claim or new
+persisted input format is authorized. Named real native-window cases belong
+in the already scoped engine tests and owning runner documentation.
+
+The long-lived API must retain its own successful seen-write receipts within
+the configured UTC window so a later request does not reuse a stale
+known-empty inventory and reset first sight. Coordinate overlapping requests
+at that read/write boundary. Only genuine durable receipts extend the named
+history; neither a failed write nor process memory proves missing days.
+A fresh process still requires current caller-supplied inventory. Keep this
+coordination in the already named runner/API modules, or name an additional
+helper before editing it.
+
+Listener review follow-up: after the UTC day advances, previously accepted
+named days can age out of the window. The listener must not treat that aging
+as newly invalid authored input and abort every later request. Retain only
+still-relevant named evidence and durable own receipts; a newly required day
+without evidence stays missing, so it cannot establish a new first sight.
+Direct invocation still rejects invalid authored day bounds. Verify a real
+cross-midnight pair of requests before closing this listener behavior.
+
+Reviewed runner increment `65c4e68abf87f2aad1980c07be09ecccf4b3bb77`
+implements this path with actual native seen writes before screening, earliest
+settled observations, serialized API requests and durable receipt retention
+after a later dispatch failure. Its strict TypeScript and 18 named tests
+passed. Retired historical sources now retain their snapshot and receive an
+inactive outcome with explicit run-context policy rather than a fabricated
+current vertical policy. Rows #12 and #14 integrate this tested interface.
+This accepts the implementation increment, not audited completion or merge.
 
 ### Decisions
 
@@ -882,9 +1180,38 @@ dispatch. Worker assignment stays separate from the writer's identity shard.
   - `.github/scripts/feed-ingest-plan-outputs.ts`
   - `.github/scripts/feed-ingest-plan-report.ts`
   - `.github/scripts/tests/feed-ingest-plan-report.test.ts`
-  - `packages/common-contracts/test/verify-parquet.ts`
+  - `.github/scripts/tests/feed-ingest-plan-outputs.test.ts`
+  - `.github/scripts/tests/feed-ingest-plan-workflow.test.ts`
+  - `.github/scripts/feed-ingest-plan-verification.ts`
+  - `tests/fixtures/feed-ingest-plan/report-events.json`
+  - `docs/how-to/run-feed-ingest-plan-test.md`
 - **Acceptance gates:** Local: shared test selector and fixture-driven workflow/reporting tests. CI: full suite and the isolated workflow's compatibility checks. Reporting enabled/disabled runs over identical fixtures must produce identical ledger content digests; disabled reporting produces no annotations or summary. Cover zero dispatches or zero rejections as valid outcomes, not failed count assertions.
-- **Oracle:** `verify-parquet.ts` reads actual dispatch and rejection files, validates envelopes and rows, compares recorded fixture identities and canonical row digests, and checks native list-column types; adapter tests check escaped annotations and summaries separately. No Python runtime or packages are required. This cannot settle Python-reader execution, real feed availability or hosted-runner speed.
+- **Oracle:** `feed-ingest-plan-verification.ts` reads actual dispatch and rejection files, validates envelopes and rows, compares recorded fixture identities and canonical row digests, and checks native list-column types; adapter tests check escaped annotations and summaries separately. No Python runtime or packages are required. This cannot settle Python-reader execution, real feed availability or hosted-runner speed.
+
+Supporting scope: independent reporting implementation can consume existing
+typed events while the runner is being built. Final output conversion and
+workflow verification still depend on Rows #11 and #14; no invented result
+or successful placeholder substitutes for them. The named script tests
+separate required execution outputs from optional annotations and summaries
+and inspect only the named isolated workflow. The bounded event fixture
+uses the existing event contract. The owning how-to documents invocation,
+actual evidence and remaining audit integration requirements.
+
+Row #11 owns the service manifest and lock; coordinate dependency needs
+there, never edit them concurrently. Reuse Row #10's public canonical
+integrity functions and real Parquet reader rather than a second serializer.
+The isolated workflow does not commit generated state or invoke the
+production publisher. It must include compact indexes and their named
+files, not substitute a raw-only checkout or scan accumulated history.
+
+Report isolation uses the same actual produced files before and after each
+disabled/enabled report invocation. Every file, including source records,
+must retain identical bytes and content digests. Independent planning runs
+record different real elapsed durations and completion file IDs, so their
+source-file digests cannot be an equality oracle. Verify both runs' full
+native source records and completion proof without dropping fields; retain
+the independent-run equality checks for deterministic stage and metric
+content. Do not replace measured clocks or normalize persisted records.
 
 ### Table R - Workflow inputs and freshness behavior
 
@@ -925,17 +1252,55 @@ dispatch. Worker assignment stays separate from the writer's identity shard.
 - **Scope:** Join planning evidence to actual published items and leads, complete source-run publication observations, and compute every metric in Table L per run and over the configured rolling window.
 - **Files touched:**
   - `services/feed-ingest-plan/src/metrics/publication-outcomes.ts`
+  - `services/feed-ingest-plan/src/metrics/publication-evidence.ts`
+  - `services/feed-ingest-plan/src/metrics/publication-metrics.ts`
+  - `services/feed-ingest-plan/src/metrics/planning-populations.ts`
   - `services/feed-ingest-plan/src/metrics/history-window.ts`
   - `services/feed-ingest-plan/src/metrics/diversity-metrics.ts`
   - `services/feed-ingest-plan/src/metrics/fingerprint-dedup.ts`
+  - `services/feed-ingest-plan/src/curate-article-portfolio/headline-figures.ts`
+  - `services/feed-ingest-plan/src/curate-article-portfolio/story-evidence.ts`
   - `services/feed-ingest-plan/src/metrics/metrics-recorder.ts`
   - `services/feed-ingest-plan/test/metrics.test.ts`
   - `services/feed-ingest-plan/test/publication-outcomes.test.ts`
   - `services/feed-ingest-plan/test/history-window.test.ts`
+  - `tests/fixtures/feed-ingest-plan/publication-evidence.json`
   - `docs/architecture/sources/feed-ingest-audit.md`
   - `docs/reference/diversity-metrics.md`
 - **Acceptance gates:** Local: shared selector, strict TypeScript checks, contract fixtures, and focused metrics/reconciliation tests. CI: full suite. Cover repeated runs in one UTC day, retries, zero-publish runs, source-kind changes, known-empty versus missing days, missing event evidence, packed history, and each metric's arithmetic using generated bounded fixtures.
 - **Oracle:** Hand-computable fixtures produce every Table L reading with the declared denominator and window; missing evidence stays unavailable instead of turning into zero, and no selected article is counted as published without publication evidence. This does not validate a model's opinion of article quality or prove that event matching has no false matches.
+
+Implementation sequence, 2026-10-21: start the already named
+`publication-outcomes.ts`, `history-window.ts`, `fingerprint-dedup.ts` and
+their two named publication/history tests independently. They consume
+explicit bounded evidence and existing contracts, not a future audit-success
+claim. Rows #12 and #14 remain prerequisites for full integration and
+acceptance. While Row #14 writes shared metrics and documentation, this row
+does not edit `diversity-metrics.ts`, `metrics-recorder.ts`, `metrics.test.ts`,
+`feed-ingest-audit.md` or `diversity-metrics.md`. Obtain its tested API and
+file-ownership handoff before the remaining integration. Name any additional
+contract-copy or fixture path before editing it. This sequence does not
+change a persisted meaning or count selected articles as published.
+
+Supporting scope: `publication-evidence.ts` validates small read-only
+projections of the existing published, item-health and digest-day records,
+including recorded run references and lead identities. The named bounded
+fixture binds those projections to their existing wire fields and is loaded
+inside tests. It declares no new stored payload and requires no backend
+execution. Missing compatible cross-day event evidence remains unavailable.
+
+Event arithmetic may consume bounded transient projections of the existing
+`StorySimilarityPair` records joined to named published articles. Validate
+sorted URL keys and their recorded pair identity, agreement in both judging
+orders, usable status and compatible recorded scorer/judge configuration.
+Require every pair decision needed by the measured sets; missing, unclear
+or incompatible evidence makes the event reading unavailable. Use the
+existing same-source and figure-conflict safeguards before positive matches
+and complete-link grouping, not local cluster identifiers as global events.
+Extract the existing ASCII figure comparison unchanged into the named
+`headline-figures.ts` helper and reuse it from `story-evidence.ts`; preserve
+current curation behavior and its focused checks. These projections add no
+stored payload, new matcher policy or model invocation.
 
 ### Decisions
 
@@ -976,12 +1341,180 @@ dispatch. Worker assignment stays separate from the writer's identity shard.
 - **Acceptance gates:** Local: inspect the shared selector without launching Python-backed groups, run strict TypeScript checks, audit unit/contract tests, and TypeScript Parquet readback. Existing repository CI retains its unchanged suites. Reconcile stage counts and reasons, include inactive and zero-yield sources, retain source snapshots, verify unavailable later-stage fields, and run known-distribution metric fixtures.
 - **Oracle:** Each source/run observation and article assessment reconciles exactly with its input stage records, terminal rejections, and editorial selection rows, and all emitted planning metrics reproduce from those records. This does not prove publication or semantic article quality.
 
-Preflight decision required before dispatch: authored `metrics.top_source_counts`
+Preflight decision required before full completion wiring: authored `metrics.top_source_counts`
 accepts every positive integer, but `DiversityMetricRow.top_k` admits only
 `1`, `5`, and `10`. The defaults agree. Either restrict configuration to this
 declared vocabulary, which gives up other configured counts, or obtain owner
 approval to open the persisted field and update both language readers and
 binding tests. Never omit an unsupported configured count without an error.
+
+Timing preflight: the existing assessment clock vocabulary has
+`published_at`, `fetched_at` and `unavailable`, but screening also uses
+persisted `first_seen` evidence. An unavailable clock cannot retain its
+timestamp or age under the existing validator. Calling first sight a fetch
+time would be false. Screening also retains signed age for a trusted
+slightly future publication time, while persisted assessment age is
+nonnegative. Before wiring complete audit records, resolve how these real
+measurements are represented; do not silently discard them or change a
+persisted meaning. The stage's exact transient evidence remains available
+to the recorder while this contract question is unresolved.
+
+Implementation sequence, 2026-10-21: Fowler confirmed that real membership,
+source-summary calculations, assessment translation, metric arithmetic and
+durable assessment/diversity writes can proceed without changing a persisted
+meaning. Before any Row #14 write for an attempt, preflight all supplied exact
+timing and configured counts. A first-seen clock, signed negative age or
+unsupported top-k refuses the whole recording request by name; do not
+discard its measurement, clamp it or write only the supported subset.
+Current supported configuration and representable observations can exercise
+the real path. This does not authorize narrowing the promised full audit.
+
+`source-run-summary.ts` first returns genuine internal summary values, not a
+new persisted pending phase. `metrics-recorder.ts` returns actual written
+assessment/diversity receipts, never audited completion. Source completion
+stays blocked until the timing/count and packed-proof questions are settled.
+Partially durable files remain incomplete-attempt artifacts after a failure.
+The recorder consumes actual stage results alongside existing typed events
+because the event assessment alone cannot carry the unsupported exact timing.
+It introduces no second persisted event shape.
+
+Incremental completion clarification, 2026-10-21: missing original packed
+file proof does not prevent proving a newly written raw attempt. After the
+publication observer increment, the metrics owner may seal a representable
+current attempt using the existing `SourceRunRecord.plan_complete` phase:
+verify all five required ledgers natively, aggregate the three rejection
+file sets into one rejection receipt, and attach the exact source count
+and shared completion evidence before writing source records. Unsupported
+timing or configured counts must still refuse the entire batch before
+audit writes. This is not permission to claim packed historical proof,
+full audit acceptance, or changed persisted meaning.
+The runner owner prepares only the existing source-run registration in
+`services/feed-ingest-plan/src/load-plan-inputs.ts`, its existing loader
+test and runner documentation. The metrics owner retains exclusive write
+ownership of recorder, source-summary, metrics tests and audit documentation;
+that sealing increment starts after its current observer checkpoint.
+After source-file readback, the producer must pass its actual named files
+through the existing complete-attempt selector. Proven completion of that
+representable current run is distinct from accepting the whole plan or
+proving packed history. Return that evidence for a later runner/workflow
+integration; do not retain an unconditional pending result once the actual
+run has every required write and proof. Caller status changes stay with
+their existing owners after the tested producer handoff.
+Head `45f8778bd546f7f5ec13c4c6c17edebe19d6303d` implements this current-raw
+producer path, including native source readback and exact-attempt selection.
+The runner owner now integrates it normally and exposes proven planning
+completion separately from the unfinished full audit. The workflow stays
+based on the runner, verifies returned source files and completion evidence,
+and exercises publication observation only with a bounded generated published
+fixture. Neither integration claims real production publication or complete
+packed history.
+Reviewed caller head `60d97e779738121ae550cc8315ad7327d4b88f21` exposes
+`planning_complete: true` only with the producer's exact verified completion.
+That planning result returns HTTP 200 and CLI exit 0, while
+`audited_complete` stays false. Native API/CLI coverage independently reloads
+the named files and selects the same run, attempt and correlation; source-write
+failure returns no successful summary. Strict TypeScript and 11 caller tests
+passed. PR #1624 merged into the runner branch, not main, at 21:25:33 UTC.
+The workflow's separate full-audit gate remains unsuccessful while that
+broader audit is incomplete; generated publication evidence does not bypass it.
+
+Row #11 currently owns `src/index.ts`; Row #14 does not edit that file
+concurrently. Publish the tested recorder API from its own module, coordinate
+the exact in-memory result type with Row #11, then let the runner owner wire
+it in a separate integration increment. The final acceptance gates remain
+open; helper arithmetic and safe refusal are not a complete audit.
+
+Reviewed recorder increment `244435367dade47c9600894cd0506f7d6ee38662`
+is delivered in PR #1621. Strict TypeScript and 15 named audit tests passed;
+native readback verified actual assessment and diversity receipts. Its
+whole-request preflight retains exact timing for rejected candidates as
+well as admitted candidates. It still writes no source-complete record.
+The runner owner now integrates this exact recorder through the existing
+entrypoint/composition modules, exposes actual files and receipts, and keeps
+audited completion false. Unsupported observations fail explicitly rather
+than bypass the recorder. Row #13 owns the shared metrics, tests and owning
+documentation after this tested handoff; the runner does not edit those
+files concurrently.
+This final head includes the reviewed UTC rollover correction by normal
+merge; it changes no recorder source or API from `ad26e1f90`.
+
+Runner integration `524aafda05caefce05bb1cb0cf76d7539c5bd51a` now awaits
+the recorder in the real CLI and API after dispatch persistence. Its
+summary exposes actual assessment and diversity files, receipts and
+internal source summaries. Native readback through both entrypoints
+verified row counts and content digests. Strict TypeScript, 10 API/CLI
+tests and 11 base-engine tests passed. Supported runs still report audit
+pending; unsupported timing or counts fail before any audit write and
+produce no result summary. Row #12 now integrates this tested entrypoint
+and verifies its returned files, rather than calling the recorder again.
+The workflow owner reports 19 named tests passing after that integration,
+including native metric receipts, missing-file refusal, unsupported counts,
+known-empty assessments and report-on/off ledger digest equality. Reviewed
+head `c3428c33c2eca90a603ad2ef01b8ab2c4c7f0ab6` is delivered in ready
+PR #1622 against the runner branch. Required CI and the remaining complete
+audit/observer integration remain acceptance gates. PR #1621 is merged into
+its runner base, not into main; this does not close the full audit row.
+PR #1622 CI found a new dependency error before backend tests:
+`packages/common-contracts/test/verify-parquet.ts` imports the writer and
+planner runtime, but the shared-contract check installs only its own
+dependencies. This is part of Row #12, not the unrelated schedule failure.
+The workflow owner relocates that executable verifier to
+`.github/scripts/feed-ingest-plan-verification.ts`, updates its callers and
+retains the recorded-byte oracle. The common-contract package must check
+independently; do not add runtime dependencies or alter CI to hide this error.
+Corrective head `4810599a6e9a46fafebbfae7d73dc6924ee58528` restores that
+boundary. An isolated shared-contract install, check and 39 tests passed
+without writer or service dependencies. Hosted run `39675379776` then
+passed shared-contract bindings, site, browser, robots and scope. Its only
+remaining failures are the same two unrelated schedule assertions; 7249
+backend tests passed. The new dependency regression is resolved, but the
+candidate is not green for merge.
+
+Row #13's shared integration adds
+`services/feed-ingest-plan/src/metrics/publication-metrics.ts` to separate
+publication calculations from per-run planning calculations. It consumes
+bounded, named publication files and digest evidence plus existing proven
+attempt memberships. The separate
+`services/feed-ingest-plan/src/metrics/planning-populations.ts` reconstructs
+those memberships from existing complete attempts, checks stage/candidate
+identity, terminal losses and source attribution, and performs no new
+completion inference. Retry selection precedes attribution; rolling
+populations come from actual recorded rows, not averaged daily ratios or
+unchecked caller lists. Packed publication membership can support publication
+readings independently of missing original planning completion proof.
+Source publication counts require an actual complete source attempt.
+An observer running on a later UTC day must not backdate its observation
+to satisfy the existing same-day source-record constraint; that write
+stays explicitly unavailable until its contract can represent the truth.
+
+Publication review of tested increment `a58752dfd` initially questioned the
+health retry key. Reading the owning contract corrected that premise:
+an item-health row records one terminal outcome, not each processing stage.
+No multi-stage fixture or key change is justified by that concern alone.
+The publication owner checks native retry settlement before changing the
+join. The review also checks whether the projection wrongly refuses a
+digest whose run completes after its named UTC day.
+Tested event increment `4e9ccfa2c` removes that extra date restriction and
+uses compatible recorded pair decisions for real event arithmetic; 35
+focused tests passed. Review found one remaining publication-loader issue:
+a compact index's set-aside-file notice must not become complete historical
+coverage. The owner is adding that missing-evidence case before acceptance.
+Observer checkpoint `cc137c08a` includes durable native publication metrics
+and settled planning populations; 49 focused tests passed. Review requires
+one further identity check before source publication completion or a
+selection-to-publication comparison: every published URL and primary source
+must be a subset of that run's proven selections. Merely finding its source
+in the snapshot is insufficient. Missing planning proof may still support
+independent publication readings, never invented stage or source completion.
+Source observations also retain the proven planning attempt. Before any
+source-producing observer write, its writer attempt must match that retained
+attempt. A mismatch would write contradictory row identities and make later
+complete-attempt reads fail. The owner is adding native refusal coverage;
+independent diversity-only observations need not reuse the planning attempt.
+Reviewed head `45f8778bd546f7f5ec13c4c6c17edebe19d6303d` implements both
+identity checks before observer writes. Its publication fixture now obtains
+complete planning records from the actual producer, not manufactured source
+records. Strict TypeScript and 62 focused tests passed.
 
 ### Decisions
 
@@ -1044,10 +1577,10 @@ binding tests. Never omit an unsupported configured count without an error.
 | --- | --- | --- |
 | L1 | Active-source coverage | Distinct active sources with at least one eligible candidate divided by distinct active sources in the run's source snapshot. In a rolling window, use distinct sources active at least once and those with eligible items while active. Phase 1 per run; Phase 2 rolling. |
 | L2 | Selection coverage | Distinct sources with selected items divided by distinct sources with eligible items, using the same run/window and primary-source attribution. Phase 1 per run; Phase 2 rolling. |
-| L3 | Effective number of sources | For source shares p among unique articles, compute exp(-sum(p * ln(p))) over nonzero shares. A nonempty uniform N-source fixture yields N; a monopoly yields one. Define zero for an empty item set. Phase 1 selected and stage bases; Phase 2 actual published/leads bases and rolling windows. |
+| L3 | Effective number of sources | For source shares p, compute exp(-sum(p * ln(p))) over nonzero shares. Selected, published and lead bases use unique primary-source articles. Preselection stage bases use unique candidate identities, preserving distinct source-carrier instances as required by I9; do not deduplicate URLs before measuring the deduplication loss. A nonempty uniform N-source fixture yields N; a monopoly yields one. Define zero for an empty item set. Phase 1 selected and stage bases; Phase 2 actual published/leads bases and rolling windows. |
 | L4 | Top-source concentration | Sort primary-source article counts descending and divide the configured top-1, top-5, and top-10 sums by total articles. Phase 1 selected; Phase 2 published and rolling, without counting retries or carrier aliases twice. |
 | L5 | Gini coefficient of published items by source | Use every source active in the measured source snapshots, including those with zero published items. For sorted counts x, compute sum over ordered source pairs of abs(x_i - x_j), divided by 2 * source_count * sum(x). Phase 2 actual published per-run and rolling. Phase 1 may emit the same instrument with basis selected, never label it published. |
-| L6 | Source-kind distribution | Counts and shares by the source-kind snapshot used for the item, with an explicit unknown bucket if no label was recorded. Preserve observed labels; do not reinterpret historical items using current config or inferred article genre. Phase 1 eligible/selected; Phase 2 published and rolling. Measurement does not turn kind into a selection gate. |
+| L6 | Source-kind distribution | Counts and shares by the source-kind snapshot used for the item, with an explicit unknown bucket if no label was recorded. Eligible bases count unique source-candidate identities; selected and published bases count unique primary-source articles, never carrier aliases. Preserve observed labels; do not reinterpret historical items using current config or inferred article genre. Phase 1 eligible/selected; Phase 2 published and rolling. Measurement does not turn kind into a selection gate. |
 | L7 | Lost diversity by stage | Compute effective-source count before and after freshness, URL/story deduplication, ranking/normalization, portfolio selection, and published lead selection; record both values and their signed difference. Leads are a subset, so reduced lead diversity is not a claim that the rest were unpublished. Phase 1 available planning stages; Phase 2 publication/leads and rolling. |
 | L8 | Event repetition rate | Fraction of unique published articles whose event matches a published event within the preceding configured seven UTC days, using recorded matching evidence/version and excluding same-run duplicates from the historical match. Phase 2 per run and rolling; unavailable rather than zero if complete event evidence is missing. |
 | L9 | Cross-day source and event repetition | For each configured prior 1-, 3-, and 7-day window, report source-set and event-set intersection counts and Jaccard overlap: intersection divided by union. Compare each run's published sets with the preceding UTC days. For a rolling reading, union the current sets and their corresponding historical reference sets first, then compute intersection and union; do not average run ratios. Phase 2. |
