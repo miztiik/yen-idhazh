@@ -24,6 +24,32 @@ Record this separation in the owning persistence documentation before closure.
 
 ### Separate gate repair - 2026-10-21
 
+Row #6 merge blocker: CI run 39644823082 at writer head
+`bed0e6cc3080898644024a99200ec6a882a1dd1b` passes its TypeScript writer,
+site, browser and robots checks. The repository backend gate passes 7249 tests
+and fails two existing schedule checks after unrelated main commit
+`12b276024` adds digest runs at 00:20, 20:20 and 22:20 UTC.
+`backend/tests/workflows/test_triggers.py` still declares five approved hours
+and a history-rewrite overlap measurement for that earlier schedule.
+No writer code caused these failures. Keep Row #6 unmerged while CI is red.
+Restoring the earlier schedule gives up the three added runs; retaining them
+requires a separate measured schedule-safety repair and owner authorization
+for changes outside this TypeScript plan. Neither was authorized when the
+owner was unavailable. Do not add Python tests or silently change production
+scheduling to clear this blocker.
+
+Delivery continuation, 2026-10-21: the owner directed continued autonomous
+implementation after this blocker was reported. Row #6 implementation and
+review are complete; its merge remains blocked. Row #4 can build in an
+isolated child on the reviewed writer branch without merging either change.
+Keep the writer head stable, merge updated main before final verification,
+and retain serialized green-only merges. The separate digest-schedule session
+owns the schedule repair; do not duplicate it in a plan row.
+
+Owner correction, 2026-10-21: do not fix CI issues; other agents own them.
+Build the remaining rows and keep them ready while those repairs proceed.
+An unrelated failed check blocks merge, not isolated implementation.
+
 Owner-directed scope change: repair the existing query-door EXPLAIN fixture
 check in a separate PR from main, not as a Plan 66 row. CI run 39608009522
 for PR #1607 passed 7185 backend tests and failed only
@@ -200,12 +226,12 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 | 1 | Shared contracts, schemas, and identity types | 15 | A | DONE | supreme-train (plan-66-row-1) | - | 4729606a-ce50-4812-a45f-f4ac7314311b |
 | 2 | Ledger registration and gardener compaction configuration | 1 | A | DONE | crispy-spoon (plan-66-row-2) | - | 6f739fa3-8ef9-40a7-830d-e1cc57927a46 |
 | 3 | Dedicated feed ingest plan configuration file | 1 | A | DONE | vigilant-lamp (plan-66-row-3) | - | d8340612-ab74-49e7-99ac-19d9ce30e427 |
-| 4 | Host hardware and environment identity service | 6 | B | PENDING | - | - | - |
+| 4 | Host hardware and environment identity service | 6 | B | IN-FLIGHT | curly-parakeet | - | bd6fe115-c522-4078-bb9f-e7c0e5eceb60 |
 | 5 | Host CPU and memory profiling service | 1 | B | DONE | congenial-parakeet (plan-66-row-5) | - | c8de7d9d-dd55-4123-87fe-66095cc2aed5 |
-| 6 | Reusable TypeScript ledger file writer | 1, 2, 16 | B | DONE | fictional-tribble | - | c1194122-86e6-45b4-85e9-e1bb61dbdca6 |
-| 7 | RSS/Atom feed harvest and DOM text extraction | 3, 6 | B | PENDING | - | - | - |
-| 8 | Candidate triage screening with Parquet rejection ledger | 6, 7 | C | PENDING | - | - | - |
-| 9 | Set-aware editorial portfolio curation | 8 | D | PENDING | - | - | - |
+| 6 | Reusable TypeScript ledger file writer | 1, 2, 16 | B | IN-FLIGHT | fictional-tribble | - | c1194122-86e6-45b4-85e9-e1bb61dbdca6 |
+| 7 | RSS/Atom feed harvest and DOM text extraction | 3, 6 | B | IN-FLIGHT | redesigned-doodle | - | da505804-6ce7-4f03-aa0b-25bab323ba53 |
+| 8 | Candidate triage screening with Parquet rejection ledger | 6, 7 | C | IN-FLIGHT | plan-66-candidate-screening | - | d50de7c8-1c6a-4074-a390-25a077ae0ba8 |
+| 9 | Set-aware editorial portfolio curation | 8 | D | IN-FLIGHT | bookish-carnival | - | 34c330c1-9d30-4222-8fa6-4e28e58a165e |
 | 10 | Contextual bin-packing partitioner with feature flag | 9 | E | PENDING | - | - | - |
 | 11 | Core plan engine entrypoint, dual-mode runner, and sealing | 6, 10 | F | PENDING | - | - | - |
 | 12 | Isolated CI test workflow and verification suite | 4, 5, 11, 14 | G | PENDING | - | - | - |
@@ -522,16 +548,32 @@ export type CandidateRejectionRecord =
 - **Scope:** Implement `services/host-fingerprints` as an independent Bun API and CLI that collects the existing HostFingerprintRow and persists it through the shared ledger writer to the existing host-fingerprint ledger when host telemetry is enabled.
 - **Files touched:**
   - `services/host-fingerprints/package.json`
+  - `services/host-fingerprints/bun.lock`
   - `services/host-fingerprints/tsconfig.json`
+  - `services/host-fingerprints/src/config.ts`
   - `services/host-fingerprints/src/index.ts`
   - `services/host-fingerprints/src/api/server.ts`
   - `services/host-fingerprints/src/api/routes/fingerprint.route.ts`
   - `services/host-fingerprints/src/persist-fingerprint.ts`
+  - `services/host-fingerprints/src/collect-fingerprint.ts`
   - `services/host-fingerprints/src/inspect/cpu-model.ts`
   - `services/host-fingerprints/src/inspect/runner-env.ts`
+  - `services/host-fingerprints/src/inspect/cpu-topology.ts`
+  - `services/host-fingerprints/src/inspect/cpu-capacity.ts`
+  - `services/host-fingerprints/src/inspect/hardware-identity.ts`
+  - `services/host-fingerprints/src/inspect/bounded-input.ts`
+  - `services/host-fingerprints/src/inspect/placement.ts`
+  - `services/host-fingerprints/src/inspect/copy-bandwidth.ts`
+  - `services/host-fingerprints/test/fixture.ts`
   - `services/host-fingerprints/test/fingerprint.test.ts`
   - `services/host-fingerprints/test/fingerprint-persistence.test.ts`
   - `packages/common-contracts/src/schemas/host-fingerprint.schema.ts`
+  - `packages/common-contracts/src/index.ts`
+  - `packages/common-contracts/test/host-fingerprint.test.ts`
+  - `config/host-fingerprints.json`
+  - `tests/fixtures/host-fingerprints/linux-inputs.json`
+  - `tests/fixtures/host-fingerprints/host-schema.json`
+  - `.github/workflows/ci.yml` (named Bun service checks and tests)
   - `docs/reference/host-metrics.md`
 - **Acceptance gates:** Local: inspect the shared selector without launching Python-backed groups, run strict TypeScript checks, bounded Linux input fixtures, API/CLI persistence tests, and recorded HostFingerprintRow compatibility checks in TypeScript. Existing repository CI remains authoritative for its unchanged suites. Verify configured-off behavior, null unavailable measurements, atomic-write failure propagation, and retry settlement without rewriting historical files.
 - **Oracle:** An API or CLI collection creates a valid HostFingerprintRow in the registered ledger, and TypeScript Parquet readback returns it with the expected pipeline/task/run/shard identity and recorded schema; invalid requests and failed writes cannot return persisted success. This does not certify Linux hardware collection from a Windows fixture run or execute the Python reader.
@@ -542,6 +584,15 @@ supporting paths before dispatch. The service also needs a lockfile, authored
 listener/read controls, and bounded recorded Linux inputs. Preserve the
 existing fingerprint algorithm and observability controls; a nullable field
 does not authorize skipping its collector.
+
+Supporting scope for the existing service: the lockfile owns its install;
+validated listener/read controls belong in its named config; bounded input,
+topology, capacity and identity units keep collection out of routing code.
+The public contract export and TypeScript fixture checks must cover the full
+host row, not a field-stripping projection. The named fixture files hold
+bounded Linux readings and recorded schema expectations. CI adds Bun service
+checks only, with no new Python setup or test invocation. These paths implement
+the existing host-service scope, not new persisted fields or a new algorithm.
 
 ### Decisions
 
@@ -684,7 +735,23 @@ and correlation IDs are not undeclared file-envelope metadata.
   - `services/feed-ingest-plan/src/harvest-feeds/dom-extractor.ts`
   - `services/feed-ingest-plan/src/harvest-feeds/harvest-pool.ts`
   - `services/feed-ingest-plan/src/harvest-feeds/record-rejection.ts`
+  - `services/feed-ingest-plan/src/harvest-feeds/harvest-types.ts`
+  - `services/feed-ingest-plan/src/harvest-feeds/harvest-article.ts`
+  - `services/feed-ingest-plan/src/harvest-feeds/transport.ts`
+  - `services/feed-ingest-plan/src/harvest-feeds/safe-target.ts`
+  - `services/feed-ingest-plan/src/harvest-feeds/robots-policy.ts`
+  - `services/feed-ingest-plan/src/harvest-feeds/sanitize-text.ts`
+  - `services/feed-ingest-plan/src/harvest-feeds/load-harvest-inputs.ts`
+  - `services/feed-ingest-plan/package.json`
+  - `services/feed-ingest-plan/bun.lock`
   - `services/feed-ingest-plan/test/harvest.test.ts`
+  - `services/feed-ingest-plan/test/harvest-safety.test.ts`
+  - `tests/fixtures/feed-ingest-plan/harvest-rss.xml`
+  - `tests/fixtures/feed-ingest-plan/harvest-atom.xml`
+  - `tests/fixtures/feed-ingest-plan/harvest-article.html`
+  - `tests/fixtures/feed-ingest-plan/harvest-responses.json`
+  - `tests/fixtures/feed-ingest-plan/harvest-safety.json`
+  - `docs/architecture/sources/feed-harvesting.md`
 - **Acceptance gates:** Local: shared selector and `bun test` over named recorded RSS/Atom and HTML fixtures, with no external network. Verify valid candidates, categories, text, and typed fetch/parse failures. CI: full suite. Live-source availability is an observation of a separately dispatched isolated run, not a repeatable test gate.
 - **Oracle:** Pre-fetched article text contains >0 words for valid articles, captures author attribution when present, and extracts all XML category elements into `categories: string[]` or defaults to `[]` when missing.
 
@@ -696,6 +763,19 @@ validation before requests, robots permission, and sanitization. Include the
 bounded modules and fixtures needed to preserve those controls; DOM extraction
 must not load page resources. Do not substitute extraction success for these
 independent safety requirements.
+
+Supporting scope: the manifest and lock add the approved DOM extraction
+libraries, a mature feed parser, and any mature transport/address/robots
+libraries needed to preserve the existing controls. Record each dependency's
+benefit and installed cost. The named helpers separate target validation,
+robots permission, sanitization and authored input loading from routing.
+Read existing extraction byte/retry controls rather than inventing constants.
+Fixtures are named recorded RSS, Atom, HTML, response and safety inputs, not
+network tests. The owning harvesting page documents the isolated path without
+changing production extraction. No shared schema or CI workflow edits belong
+to this row: its Bun checks run locally, and the isolated workflow belongs to
+Row #12. Row #4 alone owns its named Bun CI addition, avoiding a shared-file
+collision while these rows are built.
 
 ### Decisions
 
@@ -724,7 +804,12 @@ independent safety requirements.
   - `services/feed-ingest-plan/src/screen-article-candidates/freshness-decay.ts`
   - `services/feed-ingest-plan/src/screen-article-candidates/category-guard.ts`
   - `services/feed-ingest-plan/src/screen-article-candidates/rejection-sealer.ts`
+  - `services/feed-ingest-plan/src/screen-article-candidates/screening-input.ts`
+  - `services/feed-ingest-plan/src/screen-article-candidates/seen-evidence.ts`
   - `services/feed-ingest-plan/test/triage.test.ts`
+  - `tests/fixtures/feed-ingest-plan/screening-cases.json`
+  - `tests/fixtures/feed-ingest-plan/seen-evidence.json`
+  - `docs/architecture/sources/feed-screening.md`
 - **Acceptance gates:** `bun test` in `services/feed-ingest-plan/`; generated rejection files pass TypeScript Parquet readback and recorded contract checks. Cover the configured word-count and HTTP rules plus Table R freshness boundaries with one fixed UTC clock, including undated articles and invalid overrides. Execute Table O's vertical-specific threshold substitution against this real screening stage, not only the resolver.
 - **Oracle:** Each rejected fixture has the expected typed reason, and changing only the freshness override changes admission at the stated age boundary without changing the ranking half-life. This does not settle editorial quality or live-source availability.
 
@@ -735,6 +820,18 @@ before dispatch; a repeated fetch must not reset an undated article's age.
 Preserve the existing future-date tolerance when deciding whether to trust
 the feed date. Price reader and fixture supporting paths rather than adding
 an undeclared candidate field.
+
+Supporting scope: screening consumes a validated candidate batch, actual
+transient HTTP/paywall observations from harvesting, and a caller-supplied
+bounded list of settled SeenRow payloads. `seen-evidence.ts` validates the
+existing seen fields and joins by `url_key`; it does not invent a new
+persisted shape or scan history. The later engine owns loading that bounded
+history from raw and compact files. Missing observations remain unknown.
+Read the existing future-date tolerance from authored configuration.
+The named fixtures and screening page cover repeated undated sightings,
+exact cutoff boundaries, configured checks and real rejection persistence.
+Row #7 owns the manifest and lock; Row #8 integrates that dependency foundation
+before final checks instead of editing either file concurrently.
 
 ### Decisions
 
@@ -763,7 +860,11 @@ an undeclared candidate field.
   - `services/feed-ingest-plan/src/curate-article-portfolio/mmr-portfolio.ts`
   - `services/feed-ingest-plan/src/curate-article-portfolio/editorial-selection.ts`
   - `services/feed-ingest-plan/src/curate-article-portfolio/record-rejection.ts`
+  - `services/feed-ingest-plan/src/curate-article-portfolio/portfolio-input.ts`
+  - `services/feed-ingest-plan/src/curate-article-portfolio/story-evidence.ts`
   - `services/feed-ingest-plan/test/curate.test.ts`
+  - `tests/fixtures/feed-ingest-plan/portfolio-cases.json`
+  - `docs/architecture/sources/feed-curation.md`
 - **Acceptance gates:** `bun test` in `services/feed-ingest-plan/`; bounded fixtures check the configured concentration limits and relaxation order. Vary only the source-kind coefficient: zero must remove its penalty; increasing it changes only the declared diversity term. Relabelling a source must not change screening eligibility or introduce a required-kind count. Execute Table O's vertical-specific scoring substitution against this real curation stage and compare exact components and selected identities. Vary each Table T dimension independently, including same lens/different event cluster, same event type/different occurrence, same entity/different story, and unavailable desk evidence.
 - **Oracle:** Source/domain shares and relaxation follow configuration, and the source-kind penalty equals the bounded term in Table F, including the zero-weight case. This does not prove that a subjective source label is correct or that the proposed coefficient is editorially optimal.
 
@@ -774,6 +875,17 @@ Cross-outlet groups must satisfy the rule for every pair, not merely form a
 chain of matching neighbours. Publisher identity is the recorded masthead,
 not the feed ID; parent-domain concentration remains a separate control.
 Name the matcher, fixture and owning-doc supporting paths before dispatch.
+
+Supporting scope: `portfolio-input.ts` validates already screened candidates
+and explicitly supplied operational, timing, publisher and story evidence.
+`story-evidence.ts` applies only the existing same-story rules supported by
+those inputs; absent vectors are not a fabricated semantic comparison.
+The named fixture and curation page define stable hand-computable selections,
+separate quality axes, each penalty and evidence availability. No new
+persisted contract or label inference is authorized. Row #7 owns the service
+manifest and lock; integrate its stable dependency foundation and Row #8's
+actual admitted-result boundary before final composed checks, without
+concurrent edits to those files.
 
 ### Decisions
 
