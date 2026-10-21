@@ -104,6 +104,15 @@ reader invocation. Existing repository Python CI gates remain unchanged. This
 package check does not claim that a Python process read the newly written
 files.
 
+Public readers can reuse `describeObjectSchema` and `appendIdentityColumns`
+to obtain the writer's declared stored columns, and `digestRows` to reproduce
+its ordered-row commitment. `LogicalField` and `LogicalType` describe those
+columns without exposing writer internals. These exports use the same existing
+schema mapping and canonical serializer as writes; they introduce no new byte
+format. The public-import integrity test reads an actual native Parquet file
+and reproduces its footer digest. The bounded planner reader and its completion
+proof limits are described in [feed-partitioning.md](../sources/feed-partitioning.md).
+
 Feed planning data remains typed Parquet under registered raw/compact prefixes.
 Nested rejection observations and completion evidence are structs and lists,
 not serialized JSON cells or extra footer keys. A source-run completion

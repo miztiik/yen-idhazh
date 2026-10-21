@@ -15,3 +15,4 @@ export * from "./schemas/editorial-selection.schema";
 export * from "./schemas/event.schema";
 export * from "./schemas/policy.schema";
 export * from "./schemas/config.schema";
+export * from "./schemas/ledger-index.schema";
