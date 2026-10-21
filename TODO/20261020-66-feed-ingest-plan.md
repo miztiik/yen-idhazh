@@ -1234,6 +1234,8 @@ files, not substitute a raw-only checkout or scan accumulated history.
   - `services/feed-ingest-plan/src/metrics/history-window.ts`
   - `services/feed-ingest-plan/src/metrics/diversity-metrics.ts`
   - `services/feed-ingest-plan/src/metrics/fingerprint-dedup.ts`
+  - `services/feed-ingest-plan/src/curate-article-portfolio/headline-figures.ts`
+  - `services/feed-ingest-plan/src/curate-article-portfolio/story-evidence.ts`
   - `services/feed-ingest-plan/src/metrics/metrics-recorder.ts`
   - `services/feed-ingest-plan/test/metrics.test.ts`
   - `services/feed-ingest-plan/test/publication-outcomes.test.ts`
@@ -1262,6 +1264,19 @@ including recorded run references and lead identities. The named bounded
 fixture binds those projections to their existing wire fields and is loaded
 inside tests. It declares no new stored payload and requires no backend
 execution. Missing compatible cross-day event evidence remains unavailable.
+
+Event arithmetic may consume bounded transient projections of the existing
+`StorySimilarityPair` records joined to named published articles. Validate
+sorted URL keys and their recorded pair identity, agreement in both judging
+orders, usable status and compatible recorded scorer/judge configuration.
+Require every pair decision needed by the measured sets; missing, unclear
+or incompatible evidence makes the event reading unavailable. Use the
+existing same-source and figure-conflict safeguards before positive matches
+and complete-link grouping, not local cluster identifiers as global events.
+Extract the existing ASCII figure comparison unchanged into the named
+`headline-figures.ts` helper and reuse it from `story-evidence.ts`; preserve
+current curation behavior and its focused checks. These projections add no
+stored payload, new matcher policy or model invocation.
 
 ### Decisions
 
