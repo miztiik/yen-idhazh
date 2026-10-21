@@ -1,0 +1,125 @@
+# Run the isolated feed planner checks
+
+**Last Updated**: 2026-10-21
+
+How do you check the TypeScript planner without changing daily publication?
+Use `.github/workflows/feed-ingest-plan-test.yml`. It starts only by manual
+dispatch, has read-only repository access, and never commits or publishes
+its output. The production digest workflow is unchanged.
+
+## Current readiness
+
+**A complete audited run is not available.** The runner's service flag remains
+off in `config/feed-ingest-plan-service.json`. Its removal condition requires
+the actual audit writes and complete-attempt verification to be integrated
+and approved. This workflow does not bypass that flag.
+
+The working runner reports `dispatches_persisted_audit_pending` and
+`audited_complete: false` after real stage execution. The last workflow step
+refuses an unaudited result with exit code 2. A disabled runner, missing input,
+invalid request or damaged file also fails; none becomes a successful empty
+plan. Green adapter tests do not certify hosted execution or audit completion.
+
+Row 14 still owns durable audit integration. The packed-history reader also
+cannot prove an original raw file's ordered-row commitment from aggregate
+compact counts. These are explicit missing capabilities, not completed checks.
+See [partition evidence](../architecture/sources/feed-partitioning.md).
+
+## Manual controls
+
+The workflow exposes four strings. The actual CLI parser converts them into
+the shared request validator; strings never become shell code.
+
+### Table A - Run controls
+
+| Id | Control | Meaning |
+| --- | --- | --- |
+| A1 | `freshness_hours` | Positive finite maximum article age; default 24 hours. Overrides this run's age cutoff, not the ranking half-life. |
+| A2 | `article_limit` | Optional positive integer; blank uses the configured selection limit. |
+| A3 | `shards` | Optional positive worker count; blank uses configuration. |
+| A4 | `partition_strategy` | `bin-pack`, `round-robin` or `none`; blank uses configuration. |
+
+There is no date or reporting input. One captured UTC clock supplies the run
+date and the runner. Strategy `none` resolves to one worker and refuses an
+explicit larger count before fetching. The committed planning configuration
+owns reporting and all other controls.
+
+## Local offline checks
+
+Use the installed Bun environment and declared package dependencies. From the
+repository root:
+
+```text
+bun test ./.github/scripts/tests/feed-ingest-plan-report.test.ts ./.github/scripts/tests/feed-ingest-plan-outputs.test.ts ./.github/scripts/tests/feed-ingest-plan-workflow.test.ts --timeout 30000
+bun run packages/common-contracts/test/verify-parquet.ts
+```
+
+The test command allows the embedded strict TypeScript compiler up to 30
+seconds per test; this is not a planner speed requirement. The workflow's
+named check step also runs strict package and adapter type checks.
+Use the [shared selector](run-the-gates.md) with `--list` to inspect broader
+coverage. Do not execute a selection that adds Python for these isolated
+checks. Repository-wide CI remains separate and authoritative at merge.
+
+The native verifier writes the bounded recorded dispatch fixture through the
+public ledger writer, then uses the real Parquet/WASM and Arrow reader. It
+checks native list and struct columns, envelope and row identities, row
+validation, ordered content digests, and recorded candidate, URL and UUID
+values. It also compares the existing canonical-byte compatibility vector,
+including Unicode, lists, nulls and floating-point values.
+
+Actual planner integration tests replay recorded HTTP and DNS responses
+through harvesting, screening, curation and partitioning. They read the
+generated dispatch files, distinguish missing files from explicit empty
+results, and compare real runs with reporting off and on. No test makes a
+network request or starts Python. These checks do not claim that the Python
+reader ran, that live feeds are reachable, or that a hosted job meets a speed
+target.
+
+## Inputs and isolated evidence
+
+The initial sparse checkout names configuration, relevant service and package
+directories, the adapter scripts and tests, dependency manifests and locks,
+and bounded recorded fixtures. It excludes the backend.
+
+The workflow reads only the configured UTC history window's named raw-day and
+yearly, monthly and daily compact indexes. It adds the actual files named by
+the validated indexes, preferring yearly over monthly over daily over raw.
+It does not scan a state tree. An absent index or file is not an empty day,
+and staging files alone is not proof of complete history.
+
+Trial writes go below the runner's temporary `feed-ingest-plan/state`
+directory. The required output adapter returns only resolved worker counts,
+worker matrix entries and registered identity-derived relative paths.
+It writes `GITHUB_OUTPUT` using noncolliding multiline delimiters and cannot
+claim audited success without a recorder.
+
+The optional artifact upload preserves generated evidence without committing
+it. Article text can be present in dispatch Parquet files, as declared by
+their existing contract. Treat artifacts as test evidence, never publication.
+No upload is proof that a plan is complete.
+
+## Optional GitHub report
+
+`workflow_reporting.enabled` in `config/feed-ingest-plan.json` defaults to
+false. When false, the report adapter writes no annotations or summary. It
+does not control the required execution outputs, ledger writes or events.
+
+When enabled, the separate adapter validates the existing typed event array
+and formats source outcomes, observed stage counts and candidate-decision
+counts. It labels missing evidence and incomplete audit explicitly. It
+escapes source titles for Markdown and workflow-command data for annotations.
+It omits source URLs, headers, full event dumps and article text.
+
+The adapter is not imported by core stages or the required output adapter.
+Remove the reporting key, adapter, its tests and its workflow invocation
+together when development reporting is no longer needed. The
+[policy contract](../architecture/sources/feed-ingest-policies.md) owns this
+flag and its default.
+
+## See also
+
+- [Planner execution](../architecture/sources/feed-plan-runner.md)
+- [Partition evidence](../architecture/sources/feed-partitioning.md)
+- [Ledger persistence](../architecture/contracts/persistence.md)
+- [Local gates](run-the-gates.md)

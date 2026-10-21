@@ -1,0 +1,200 @@
+name: Feed ingest plan test
+
+on:
+  workflow_dispatch:
+    inputs:
+      freshness_hours:
+        description: Maximum article age in hours for this run
+        required: true
+        default: '24'
+        type: string
+      article_limit:
+        description: Optional positive article limit; blank uses configuration
+        required: false
+        default: ''
+        type: string
+      shards:
+        description: Optional positive worker count; blank uses configuration
+        required: false
+        default: ''
+        type: string
+      partition_strategy:
+        description: Optional bin-pack, round-robin or none; blank uses configuration
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /config/
+            /packages/common-contracts/
+            /packages/ledger-file-writer/
+            /services/feed-ingest-plan/
+            /services/host-fingerprints/
+            /services/host-probes/
+            /.github/scripts/feed-ingest-plan-outputs.ts
+            /.github/scripts/feed-ingest-plan-report.ts
+            /.github/scripts/tests/feed-ingest-plan-outputs.test.ts
+            /.github/scripts/tests/feed-ingest-plan-report.test.ts
+            /.github/scripts/tests/feed-ingest-plan-workflow.test.ts
+            /.github/workflows/feed-ingest-plan-test.yml
+            /tests/fixtures/feed-ingest-plan/
+            /tests/fixtures/ledger-file-writer/
+            /docs/how-to/run-feed-ingest-plan-test.md
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.13'
+
+      - name: Install declared TypeScript dependencies
+        run: |
+          bun install --frozen-lockfile --cwd packages/common-contracts
+          bun install --frozen-lockfile --cwd packages/ledger-file-writer
+          bun install --frozen-lockfile --cwd services/feed-ingest-plan
+
+      - name: Check isolated adapters and native compatibility
+        run: |
+          bun run --cwd packages/common-contracts check
+          bun run --cwd packages/ledger-file-writer check
+          bun run --cwd services/feed-ingest-plan check
+          bun run --cwd services/feed-ingest-plan tsc --noEmit --target ESNext --module ESNext --moduleResolution Bundler --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --noFallthroughCasesInSwitch --noUnusedLocals --noUnusedParameters --verbatimModuleSyntax --skipLibCheck --types bun ../../.github/scripts/feed-ingest-plan-outputs.ts ../../.github/scripts/feed-ingest-plan-report.ts ../../.github/scripts/tests/feed-ingest-plan-outputs.test.ts ../../.github/scripts/tests/feed-ingest-plan-report.test.ts ../../.github/scripts/tests/feed-ingest-plan-workflow.test.ts
+          bun test ./.github/scripts/tests/feed-ingest-plan-report.test.ts ./.github/scripts/tests/feed-ingest-plan-outputs.test.ts ./.github/scripts/tests/feed-ingest-plan-workflow.test.ts --timeout 30000
+          bun run packages/common-contracts/test/verify-parquet.ts
+
+      - name: Read named history and run the real planner
+        id: plan
+        env:
+          FRESHNESS_HOURS: ${{ inputs.freshness_hours }}
+          ARTICLE_LIMIT: ${{ inputs.article_limit }}
+          SHARDS: ${{ inputs.shards }}
+          PARTITION_STRATEGY: ${{ inputs.partition_strategy }}
+        run: |
+          bun run - <<'TS'
+          import { mkdir, writeFile } from "node:fs/promises";
+          import { join } from "node:path";
+          import { loadPlanInputs } from "./services/feed-ingest-plan/src/load-plan-inputs";
+          import { parseCliRequest, describePlanError } from "./services/feed-ingest-plan/src/api/plan-request";
+          import { runFeedPlan, summarizePlan } from "./services/feed-ingest-plan/src/run-feed-plan";
+          import { ServiceSettingsSchema } from "./services/feed-ingest-plan/src/config/service-settings";
+          import { CompactIndexSchema, RawDayIndexSchema } from "./packages/common-contracts/src/index";
+          import type { CompactIndex, FeedIngestEvent, RawDayIndex } from "./packages/common-contracts/src/index";
+          import { createExecutionOutputs, historyDays, historyIndexPaths, resolveHistoryInventory, writeGitHubOutputs } from "./.github/scripts/feed-ingest-plan-outputs";
+          import { verifyParquetFiles } from "./packages/common-contracts/test/verify-parquet";
+
+          const root = process.cwd();
+          try {
+            const args = ["--cli"];
+            for (const [field, flag] of [
+              ["FRESHNESS_HOURS", "--freshness-hours"], ["ARTICLE_LIMIT", "--article-limit"],
+              ["SHARDS", "--shards"], ["PARTITION_STRATEGY", "--partition-strategy"],
+            ] as const) {
+              const value = process.env[field];
+              if (value !== undefined && value.trim() !== "") args.push(`${flag}=${value}`);
+            }
+            const { request } = parseCliRequest(args);
+            const inputs = await loadPlanInputs(root);
+            const captured = new Date();
+            const days = historyDays(captured.toISOString().replace(".000Z", "Z"),
+              inputs.harvest.config.metrics.rolling_window_days, inputs.harvest.config.metrics.overlap_windows_days);
+            const registry: { families: { ledgers: { name: string; prefix: string[] }[] }[] } =
+              await Bun.file(inputs.settings.inputs.registrations).json();
+            const ledgers = ["seen", "source-runs", "article-assessments", "diversity", "editorial-selections", "dispatches", "rejections"] as const;
+            const inventory = new Set<string>();
+            async function readCommitted(path: string): Promise<unknown | undefined> {
+              const object = `HEAD:${path}`;
+              const exists = Bun.spawn(["git", "cat-file", "--batch-check"],
+                { stdin: "pipe", stdout: "pipe", stderr: "pipe" });
+              exists.stdin.write(`${object}\n`);
+              exists.stdin.end();
+              const [check] = await Promise.all([new Response(exists.stdout).text(), new Response(exists.stderr).text()]);
+              if (await exists.exited !== 0) throw new Error(`history: cannot inspect named file ${path}`);
+              if (check.trim() === `${object} missing`) return undefined;
+              if (!/^[a-f0-9]+ blob \d+\s*$/.test(check)) throw new Error(`history: named input is not a file ${path}`);
+              const held = Bun.spawn(["git", "show", `HEAD:${path}`], { stdout: "pipe", stderr: "pipe" });
+              const [text] = await Promise.all([new Response(held.stdout).text(), new Response(held.stderr).text()]);
+              if (await held.exited !== 0) throw new Error(`history: failed to read named file ${path}`);
+              return JSON.parse(text);
+            }
+            for (const ledger of ledgers) {
+              const entries = registry.families.flatMap(family => family.ledgers).filter(entry => entry.name === ledger);
+              if (entries.length !== 1) throw new Error(`history: expected one registration for ${ledger}`);
+              const prefix = entries[0]!.prefix;
+              const compact: CompactIndex[] = [];
+              const raw: RawDayIndex[] = [];
+              for (const path of historyIndexPaths(prefix, days)) {
+                const value = await readCommitted(path);
+                if (value !== undefined) {
+                  if (path.startsWith("state/compact/")) compact.push(CompactIndexSchema.parse(value));
+                  else raw.push(RawDayIndexSchema.parse(value));
+                }
+              }
+              for (const path of resolveHistoryInventory({ ledger, prefix, days, compact, raw })) inventory.add(`/${path}`);
+            }
+            const sparse = Bun.spawn(["git", "sparse-checkout", "add", "--skip-checks", ...inventory],
+              { stdout: "inherit", stderr: "inherit" });
+            if (await sparse.exited !== 0) throw new Error("history: named sparse checkout failed");
+            const git = Bun.spawn(["git", "rev-parse", "HEAD"], { stdout: "pipe", stderr: "inherit" });
+            const git_sha = (await new Response(git.stdout).text()).trim();
+            if (await git.exited !== 0) throw new Error("git_sha: cannot resolve the checkout commit");
+            const { RUNNER_TEMP, GITHUB_OUTPUT, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT } = process.env;
+            if (!RUNNER_TEMP || !GITHUB_OUTPUT || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT) {
+              throw new Error("workflow: runner directory, output path, run identity and attempt are required");
+            }
+            const settings = ServiceSettingsSchema.parse({ ...inputs.settings,
+              run: { ...inputs.settings.run, attempt: Number(GITHUB_RUN_ATTEMPT) } });
+            const artifactRoot = join(RUNNER_TEMP, "feed-ingest-plan");
+            await mkdir(artifactRoot, { recursive: true });
+            const events: FeedIngestEvent[] = [];
+            const result = await runFeedPlan(request, { ...inputs, settings, outputRoot: join(artifactRoot, "state") }, {
+              git_sha, clock: () => captured, run_number: GITHUB_RUN_ID,
+              log: event => { events.push(event); },
+            });
+            await writeFile(join(artifactRoot, "events.json"), JSON.stringify(events));
+            await verifyParquetFiles(join(artifactRoot, "state"), "dispatches", result.files.dispatches, inputs.registrations.dispatches);
+            for (const files of [result.files.harvest_rejections, result.files.screening_rejections, result.files.curation_rejections]) {
+              await verifyParquetFiles(join(artifactRoot, "state"), "rejections", files, inputs.registrations.rejections);
+            }
+            await writeGitHubOutputs(GITHUB_OUTPUT, {
+              ...createExecutionOutputs(summarizePlan(result), inputs.registrations),
+              workflow_reporting: String(inputs.harvest.config.workflow_reporting.enabled),
+            });
+          } catch (error) {
+            console.error(JSON.stringify(describePlanError(error, root)));
+            process.exitCode = 1;
+          }
+          TS
+
+      - name: Optional GitHub report
+        if: ${{ !cancelled() && steps.plan.outputs.workflow_reporting == 'true' }}
+        run: bun run .github/scripts/feed-ingest-plan-report.ts config/feed-ingest-plan.json "$RUNNER_TEMP/feed-ingest-plan/events.json"
+
+      - name: Preserve isolated test evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: feed-ingest-plan-evidence
+          path: ${{ runner.temp }}/feed-ingest-plan/
+          if-no-files-found: warn
+
+      - name: Require genuine audited completion
+        if: ${{ !cancelled() }}
+        env:
+          AUDITED_COMPLETE: ${{ steps.plan.outputs.audited_complete }}
+        run: |
+          bun run - <<'TS'
+          if (process.env.AUDITED_COMPLETE !== "true") {
+            console.error("Audit completion is unavailable. Preserved files are test evidence, not a complete audited plan or publication.");
+            process.exitCode = 2;
+          }
+          TS
