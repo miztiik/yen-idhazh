@@ -1,6 +1,6 @@
 /** Do real planner results retain native file evidence independently of optional reporting? */
 import { expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
@@ -9,11 +9,62 @@ import { persistLedger } from "../../../packages/ledger-file-writer/src/index";
 import { runFeedPlan, summarizePlan } from "../../../services/feed-ingest-plan/src/run-feed-plan";
 import { recordedPlan } from "../../../services/feed-ingest-plan/test/plan-recordings";
 import { source } from "../../../services/feed-ingest-plan/test/harvest-recordings";
-import { verifyParquetFiles, verifyRecordedCompatibility } from "../../../packages/common-contracts/test/verify-parquet";
+import { verifyLedgerReceipt, verifyParquetFiles, verifyRecordedCompatibility } from "../../../packages/common-contracts/test/verify-parquet";
 import { createExecutionOutputs, createSeenDayInputs, writeGitHubOutputs } from "../feed-ingest-plan-outputs";
 import { writePlannerReport } from "../feed-ingest-plan-report";
 import { readSeenEvidence, requiredSeenDays } from "../../../services/feed-ingest-plan/src/read-ledger-history/read-seen-evidence";
 import { utcTimestamp } from "../../../services/feed-ingest-plan/src/harvest-feeds/harvest-types";
+import { main } from "../../../services/feed-ingest-plan/src/index";
+
+test("the actual CLI returns native assessment/diversity files and matching receipts, never complete audit", async () => {
+  const fixture = await recordedPlan();
+  try {
+    const summary = await main(["--cli", "--partition-strategy=none"], {
+      inputs: fixture.inputs, runtime: fixture.runtime, output: () => {},
+    });
+    if (!("files" in summary) || summary.metrics === undefined) throw new Error("Actual CLI omitted metric evidence");
+    const metrics = summary.metrics;
+    const outputs = createExecutionOutputs(summary, fixture.inputs.registrations);
+    expect(outputs.metrics_status).toBe("assessment_diversity_recorded_audit_pending");
+    expect(outputs.audited_complete).toBe("false");
+    for (const [key, ledger] of [["assessments", "article-assessments"], ["diversity", "diversity"]] as const) {
+      const files = summary.metrics.files[key];
+      const checked = await verifyParquetFiles(fixture.inputs.outputRoot, ledger, files, fixture.inputs.registrations[key]);
+      expect(checked.row_count).toBe(summary.metrics.receipts[key].row_count);
+      expect(checked.row_count).toBeGreaterThan(0);
+      verifyLedgerReceipt(ledger, files, summary.metrics.receipts[key]);
+      expect(JSON.parse(outputs[`${key}_files`]!)).toEqual(files.files.map(file => file.path));
+    }
+    expect(() => createExecutionOutputs({ ...summary, metrics: {
+      ...metrics, receipts: { ...metrics.receipts, assessments: {
+        ...metrics.receipts.assessments, files: [], row_count: 0,
+      } },
+    } }, fixture.inputs.registrations)).toThrow("receipt");
+    const file = summary.metrics.files.diversity.files[0]!;
+    await rm(join(fixture.inputs.outputRoot, ...file.path.split("/")));
+    await expect(verifyParquetFiles(fixture.inputs.outputRoot, "diversity",
+      summary.metrics.files.diversity, fixture.inputs.registrations.diversity)).rejects.toMatchObject({ code: "ENOENT" });
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("unsupported actual CLI audit measurements produce no summary or assessment/diversity files", async () => {
+  const fixture = await recordedPlan();
+  try {
+    fixture.inputs.harvest.config.metrics.top_source_counts = [1, 2, 5];
+    let outputs = 0;
+    await expect(main(["--cli"], { inputs: fixture.inputs, runtime: fixture.runtime,
+      output: () => { outputs += 1; } })).rejects.toThrow("top_source_counts");
+    expect(outputs).toBe(0);
+    for (const key of ["assessments", "diversity"] as const) {
+      await expect(stat(join(fixture.inputs.outputRoot, "raw", ...fixture.inputs.registrations[key].prefix)))
+        .rejects.toMatchObject({ code: "ENOENT" });
+    }
+  } finally {
+    await fixture.close();
+  }
+});
 
 test("uses actual selected identities, worker count and real files without a reporting dependency", async () => {
   const fixture = await recordedPlan();
@@ -66,6 +117,15 @@ test("refuses mismatched counts, damaged bytes and missing actual files", async 
         task_name: "seal-article-ledger", shard: 0, producer: "tests.outputs", git_sha: "a".repeat(40) },
       ledgerSettings: { format: "parquet", compression_raw: "snappy", compression_compact: "zstd" },
     });
+    const receipt = { ledger: "dispatches", row_count: 1, files: result.files.map(file => ({
+      file_id: file.file_id, content_sha256: file.content_sha256, row_count: file.row_count,
+    })) };
+    expect(() => verifyLedgerReceipt("dispatches", result, receipt)).not.toThrow();
+    expect(() => verifyLedgerReceipt("diversity", result, receipt)).toThrow("ledger");
+    expect(() => verifyLedgerReceipt("dispatches", result, {
+      ...receipt, files: receipt.files.map(file => ({ ...file, content_sha256: "0".repeat(64) })),
+    })).toThrow("content_sha256");
+    expect(() => verifyLedgerReceipt("dispatches", result, { ...receipt, files: [], row_count: 0 })).toThrow("files");
     await expect(verifyParquetFiles(root, "dispatches", {
       status: "written", files: result.files.map(file => ({ ...file, row_count: file.row_count + 1 })),
     }, registration)).rejects.toThrow("row_count");
@@ -84,8 +144,11 @@ test("refuses mismatched counts, damaged bytes and missing actual files", async 
 test("zero dispatches and zero rejections are explicit valid evidence, not missing files", async () => {
   const fixture = await recordedPlan([source({ url: "https://news.example/empty.xml" })]);
   try {
-    const result = await runFeedPlan({ partition_strategy: "none" }, fixture.inputs, fixture.runtime);
-    const outputs = createExecutionOutputs(summarizePlan(result), fixture.inputs.registrations);
+    const result = await main(["--cli", "--partition-strategy=none"], {
+      inputs: fixture.inputs, runtime: fixture.runtime, output: () => {},
+    });
+    if (!("files" in result) || result.metrics === undefined) throw new Error("Actual CLI omitted metric evidence");
+    const outputs = createExecutionOutputs(result, fixture.inputs.registrations);
     expect(outputs.dispatch_files).toBe("[]");
     expect(outputs.dispatch_count).toBe("1");
     expect(result.files.dispatches.status).toBe("empty");
@@ -94,6 +157,12 @@ test("zero dispatches and zero rejections are explicit valid evidence, not missi
     expect(result.files.screening_rejections.status).toBe("empty");
     expect((await verifyParquetFiles(fixture.inputs.outputRoot, "rejections", result.files.screening_rejections,
       fixture.inputs.registrations.rejections)).row_count).toBe(0);
+    expect((await verifyParquetFiles(fixture.inputs.outputRoot, "article-assessments", result.metrics.files.assessments,
+      fixture.inputs.registrations.assessments)).status).toBe("verified_empty");
+    verifyLedgerReceipt("article-assessments", result.metrics.files.assessments, result.metrics.receipts.assessments);
+    expect(outputs.assessments_files).toBe("[]");
+    expect(() => verifyLedgerReceipt("article-assessments", { status: "empty", files: [] },
+      { ledger: "article-assessments", row_count: 0, files: [] })).not.toThrow();
     await expect(verifyParquetFiles(fixture.inputs.outputRoot, "dispatches",
       JSON.parse("{}"), fixture.inputs.registrations.dispatches)).rejects.toThrow("absent");
     await expect(verifyParquetFiles(fixture.inputs.outputRoot, "dispatches",
@@ -135,11 +204,23 @@ test("report configuration cannot change real-run ledger commitments", async () 
   try {
     disabled.inputs.harvest.config.workflow_reporting.enabled = false;
     enabled.inputs.harvest.config.workflow_reporting.enabled = true;
-    const first = await runFeedPlan({ article_limit: 1 }, disabled.inputs, disabled.runtime);
-    const second = await runFeedPlan({ article_limit: 1 }, enabled.inputs, enabled.runtime);
+    const first = await main(["--cli", "--article-limit=1"], {
+      inputs: disabled.inputs, runtime: disabled.runtime, output: () => {},
+    });
+    const second = await main(["--cli", "--article-limit=1"], {
+      inputs: enabled.inputs, runtime: enabled.runtime, output: () => {},
+    });
+    if (!("files" in first) || !("files" in second) || first.metrics === undefined || second.metrics === undefined) {
+      throw new Error("Actual CLI omitted metric evidence");
+    }
     for (const name of ["dispatches", "selections", "harvest_rejections", "screening_rejections", "curation_rejections", "seen"] as const) {
       expect(second.files[name].files.map(file => file.content_sha256)).toEqual(
         first.files[name].files.map(file => file.content_sha256),
+      );
+    }
+    for (const key of ["assessments", "diversity"] as const) {
+      expect(second.metrics.files[key].files.map(file => file.content_sha256)).toEqual(
+        first.metrics.files[key].files.map(file => file.content_sha256),
       );
     }
   } finally {

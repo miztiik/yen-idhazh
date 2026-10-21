@@ -69,8 +69,11 @@ test("offers exactly four manual controls, read-only access and a separate optio
   });
   expect(plan.run).not.toContain("${{");
   expect(plan.run).toContain("parseCliRequest(args)");
-  expect(plan.run).toContain("runFeedPlan(request");
+  expect(plan.run).toContain("await main(args,");
+  expect(plan.run).not.toContain("recordPlanningMetrics(");
   expect(plan.run).toContain("verifyParquetFiles(");
+  expect(plan.run).toContain("summary.metrics.files[key]");
+  expect(plan.run).toContain("verifyLedgerReceipt(");
   expect(plan.run).toContain("inputs: { ...inputs.settings.inputs, seen_days }");
   expect(plan.run).not.toContain("feed-ingest-plan-report");
   const reporting = steps.find(step => step.name === "Optional GitHub report")!;

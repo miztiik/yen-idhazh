@@ -11,11 +11,12 @@ import type { LedgerRegistration, PersistLedgerResult } from "../../packages/led
 import type { summarizePlan } from "../../services/feed-ingest-plan/src/run-feed-plan";
 import { UtcInstantSchema } from "../../services/feed-ingest-plan/src/screen-article-candidates/seen-evidence";
 import { RelativePathSchema } from "../../services/feed-ingest-plan/src/config/service-settings";
-import { validateLedgerFilePath } from "../../packages/common-contracts/test/verify-parquet";
+import { validateLedgerFilePath, verifyLedgerReceipt } from "../../packages/common-contracts/test/verify-parquet";
 
 type PlanSummary = ReturnType<typeof summarizePlan>;
 type Registrations = Readonly<{
   dispatches: LedgerRegistration; rejections: LedgerRegistration; selections: LedgerRegistration; seen: LedgerRegistration;
+  assessments: LedgerRegistration; diversity: LedgerRegistration;
 }>;
 
 function paths(result: PersistLedgerResult, entry: LedgerRegistration): string[] {
@@ -31,7 +32,7 @@ function paths(result: PersistLedgerResult, entry: LedgerRegistration): string[]
 
 export function createExecutionOutputs(summary: PlanSummary, registrations: Registrations): Record<string, string> {
   if (summary.status !== "dispatches_persisted_audit_pending" || summary.audited_complete !== false
-    || summary.audit.status !== "unavailable") {
+    || summary.audit.status !== (summary.metrics === undefined ? "unavailable" : "assessment_diversity_recorded_audit_pending")) {
     throw new Error("audited_complete requires durable recorder evidence; no complete audit is supported by this runner");
   }
   const runId = RunIdSchema.parse(summary.run_id);
@@ -68,7 +69,23 @@ export function createExecutionOutputs(summary: PlanSummary, registrations: Regi
     ...paths(summary.files.screening_rejections, registrations.rejections),
     ...paths(summary.files.curation_rejections, registrations.rejections),
   ];
-  const all = [...dispatches, ...selections, ...rejections, ...seen];
+  const metrics: Record<string, string> = {};
+  const metricPaths: string[] = [];
+  if (summary.metrics !== undefined) {
+    if (summary.metrics.audited_complete !== false || summary.metrics.status !== "assessment_diversity_recorded_audit_pending") {
+      throw new Error("metrics.status cannot claim complete audit");
+    }
+    for (const [key, ledger] of [["assessments", "article-assessments"], ["diversity", "diversity"]] as const) {
+      if (registrations[key].name !== ledger) throw new Error(`registrations.${key} names the wrong ledger`);
+      const files = summary.metrics.files[key];
+      const filePaths = paths(files, registrations[key]);
+      verifyLedgerReceipt(ledger, files, summary.metrics.receipts[key]);
+      metrics[`${key}_files`] = JSON.stringify(filePaths);
+      metricPaths.push(...filePaths);
+    }
+    metrics.metrics_status = summary.metrics.status;
+  }
+  const all = [...dispatches, ...selections, ...rejections, ...seen, ...metricPaths];
   if (new Set(all).size !== all.length) throw new Error("files.path occurs more than once");
   if (summary.files.dispatches.files.reduce((total, file) => total + file.row_count, 0) !== candidates.length
     || summary.files.selections.files.reduce((total, file) => total + file.row_count, 0) !== candidates.length) {
@@ -81,6 +98,7 @@ export function createExecutionOutputs(summary: PlanSummary, registrations: Regi
     dispatch_files: JSON.stringify(dispatches), rejection_files: JSON.stringify(rejections),
     selection_files: JSON.stringify(selections), seen_files: JSON.stringify(seen),
     first_sight_absence_proof: summary.first_sight.absence_proof,
+    ...metrics,
   };
 }
 

@@ -14,13 +14,21 @@ off in `config/feed-ingest-plan-service.json`. Its removal condition requires
 the actual audit writes and complete-attempt verification to be integrated
 and approved. This workflow does not bypass that flag.
 
-The working runner reports `dispatches_persisted_audit_pending` and
-`audited_complete: false` after real stage execution. The last workflow step
+The actual CLI entrypoint runs the stages and records article assessments
+and diversity measurements. It returns their real files and receipts with
+`assessment_diversity_recorded_audit_pending`; the overall plan still reports
+`dispatches_persisted_audit_pending` and `audited_complete: false`.
+The workflow calls that entrypoint once, not a separate recorder.
+The last workflow step
 refuses an unaudited result with exit code 2. A disabled runner, missing input,
 invalid request or damaged file also fails; none becomes a successful empty
 plan. Green adapter tests do not certify hosted execution or audit completion.
 
-Row 14 still owns durable audit integration. The packed-history reader also
+Source-complete records and complete-attempt verification remain unavailable.
+The recorder refuses unsupported publication timing, negative article ages
+or configured concentration counts outside the current contract before
+writing either measurement ledger. These failures produce no successful
+summary. The packed-history reader also
 cannot prove an original raw file's ordered-row commitment from aggregate
 compact counts. These are explicit missing capabilities, not completed checks.
 See [partition evidence](../architecture/sources/feed-partitioning.md).
@@ -72,7 +80,11 @@ including Unicode, lists, nulls and floating-point values.
 Actual planner integration tests replay recorded HTTP and DNS responses
 through harvesting, screening, curation and partitioning. They read the
 generated dispatch files, distinguish missing files from explicit empty
-results, and compare real runs with reporting off and on. No test makes a
+results, and invoke the actual CLI to record assessment and diversity files.
+Native readback verifies both ledgers; their file identities, row counts and
+content digests must match the returned receipts. Missing files or mismatched
+receipts fail verification. Actual CLI runs with reporting off and on must
+produce the same stage and measurement ledger digests. No test makes a
 network request or starts Python. These checks do not claim that the Python
 reader ran, that live feeds are reachable, or that a hosted job meets a speed
 target.

@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { isDeepStrictEqual } from "node:util";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import {
-  CandidateRejectionRecordSchema, CONTRACT_VERSION, DateStampSchema, FeedIngestDispatchSchema,
+  ArticleAssessmentRecordSchema, CandidateRejectionRecordSchema, CONTRACT_VERSION, DateStampSchema,
+  DiversityMetricRowSchema, FeedIngestDispatchSchema, LedgerCompletionEvidenceSchema,
   PositiveCountSchema, Sha256Schema, deriveCandidateId, deriveUrlKey,
 } from "../src/index";
 import { createFileId, createUnitId, digestRows, persistLedger } from "../../ledger-file-writer/src/index";
@@ -27,7 +28,7 @@ export function validateLedgerFilePath(
 }
 
 export async function verifyParquetFiles(
-  root: string, ledger: "dispatches" | "rejections", written: PersistLedgerResult,
+  root: string, ledger: "dispatches" | "rejections" | "article-assessments" | "diversity", written: PersistLedgerResult,
   registration: LedgerRegistration,
 ) {
   if (registration.name !== ledger) throw new Error("registration.name differs from the requested ledger");
@@ -58,7 +59,11 @@ export async function verifyParquetFiles(
     }
     const actual = ledger === "dispatches"
       ? await readLedgerParquet(actualPath, ledger, { schema: FeedIngestDispatchSchema, schemaVersion: CONTRACT_VERSION })
-      : await readLedgerParquet(actualPath, ledger, { schema: CandidateRejectionRecordSchema, schemaVersion: CONTRACT_VERSION });
+      : ledger === "rejections"
+        ? await readLedgerParquet(actualPath, ledger, { schema: CandidateRejectionRecordSchema, schemaVersion: CONTRACT_VERSION })
+        : ledger === "article-assessments"
+          ? await readLedgerParquet(actualPath, ledger, { schema: ArticleAssessmentRecordSchema, schemaVersion: CONTRACT_VERSION })
+          : await readLedgerParquet(actualPath, ledger, { schema: DiversityMetricRowSchema, schemaVersion: CONTRACT_VERSION });
     if (actual.envelope.tier !== "raw" || actual.envelope.file_id !== file.file_id
       || actual.envelope.unit_id !== file.unit_id || actual.envelope.covers !== file.covers
       || actual.envelope.content_sha256 !== file.content_sha256 || actual.rows.length !== file.row_count) {
@@ -68,6 +73,20 @@ export async function verifyParquetFiles(
     verified.push({ path, content_sha256: actual.envelope.content_sha256, row_count: actual.rows.length });
   }
   return { status: "verified" as const, row_count: rowCount, files: verified };
+}
+
+export function verifyLedgerReceipt(ledger: string, written: PersistLedgerResult, receipt: unknown): void {
+  const evidence = LedgerCompletionEvidenceSchema.parse(receipt);
+  if (evidence.ledger !== ledger || evidence.files.length !== written.files.length
+    || evidence.row_count !== written.files.reduce((count, file) => count + file.row_count, 0)) {
+    throw new Error(`${ledger}.receipt ledger, files or row_count differs from actual writes`);
+  }
+  for (const file of written.files) {
+    const held = evidence.files.find(item => item.file_id === file.file_id);
+    if (held === undefined || held.content_sha256 !== file.content_sha256 || held.row_count !== file.row_count) {
+      throw new Error(`${ledger}.receipt file_id, content_sha256 or row_count differs from actual writes`);
+    }
+  }
 }
 
 export async function verifyRecordedCompatibility() {
