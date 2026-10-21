@@ -1354,6 +1354,22 @@ The recorder consumes actual stage results alongside existing typed events
 because the event assessment alone cannot carry the unsupported exact timing.
 It introduces no second persisted event shape.
 
+Incremental completion clarification, 2026-10-21: missing original packed
+file proof does not prevent proving a newly written raw attempt. After the
+publication observer increment, the metrics owner may seal a representable
+current attempt using the existing `SourceRunRecord.plan_complete` phase:
+verify all five required ledgers natively, aggregate the three rejection
+file sets into one rejection receipt, and attach the exact source count
+and shared completion evidence before writing source records. Unsupported
+timing or configured counts must still refuse the entire batch before
+audit writes. This is not permission to claim packed historical proof,
+full audit acceptance, or changed persisted meaning.
+The runner owner prepares only the existing source-run registration in
+`services/feed-ingest-plan/src/load-plan-inputs.ts`, its existing loader
+test and runner documentation. The metrics owner retains exclusive write
+ownership of recorder, source-summary, metrics tests and audit documentation;
+that sealing increment starts after its current observer checkpoint.
+
 Row #11 currently owns `src/index.ts`; Row #14 does not edit that file
 concurrently. Publish the tested recorder API from its own module, coordinate
 the exact in-memory result type with Row #11, then let the runner owner wire
