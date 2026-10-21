@@ -24,6 +24,18 @@ Record this separation in the owning persistence documentation before closure.
 
 ### Separate gate repair - 2026-10-21
 
+Cross-row oracle correction, 2026-10-21: Row #12 found that Row #7 includes
+`workflow_reporting` in its planning-input fingerprint. Changing optional
+reporting therefore changes policy fingerprints and ledger content, contrary
+to the existing reporting-independence requirement. The original Row #7
+owner corrects only its already named loader, harvest test and harvesting
+page: exclude reporting-only controls from the planning fingerprint while
+retaining their actual configuration for the external reporting adapter.
+Verify report flag/removal text substitutions leave the fingerprint alone
+and a genuine planning knob still changes it. Rows #11 and #12 integrate the
+tested follow-up; neither edits the loader concurrently. This changes no
+persisted field or format and is not a CI repair.
+
 Row #6 merge blocker: CI run 39644823082 at writer head
 `bed0e6cc3080898644024a99200ec6a882a1dd1b` passes its TypeScript writer,
 site, browser and robots checks. The repository backend gate passes 7249 tests
