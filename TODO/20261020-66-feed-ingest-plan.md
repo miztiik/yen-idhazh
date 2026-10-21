@@ -1213,6 +1213,7 @@ files, not substitute a raw-only checkout or scan accumulated history.
 - **Scope:** Join planning evidence to actual published items and leads, complete source-run publication observations, and compute every metric in Table L per run and over the configured rolling window.
 - **Files touched:**
   - `services/feed-ingest-plan/src/metrics/publication-outcomes.ts`
+  - `services/feed-ingest-plan/src/metrics/publication-evidence.ts`
   - `services/feed-ingest-plan/src/metrics/history-window.ts`
   - `services/feed-ingest-plan/src/metrics/diversity-metrics.ts`
   - `services/feed-ingest-plan/src/metrics/fingerprint-dedup.ts`
@@ -1220,6 +1221,7 @@ files, not substitute a raw-only checkout or scan accumulated history.
   - `services/feed-ingest-plan/test/metrics.test.ts`
   - `services/feed-ingest-plan/test/publication-outcomes.test.ts`
   - `services/feed-ingest-plan/test/history-window.test.ts`
+  - `tests/fixtures/feed-ingest-plan/publication-evidence.json`
   - `docs/architecture/sources/feed-ingest-audit.md`
   - `docs/reference/diversity-metrics.md`
 - **Acceptance gates:** Local: shared selector, strict TypeScript checks, contract fixtures, and focused metrics/reconciliation tests. CI: full suite. Cover repeated runs in one UTC day, retries, zero-publish runs, source-kind changes, known-empty versus missing days, missing event evidence, packed history, and each metric's arithmetic using generated bounded fixtures.
@@ -1236,6 +1238,13 @@ does not edit `diversity-metrics.ts`, `metrics-recorder.ts`, `metrics.test.ts`,
 file-ownership handoff before the remaining integration. Name any additional
 contract-copy or fixture path before editing it. This sequence does not
 change a persisted meaning or count selected articles as published.
+
+Supporting scope: `publication-evidence.ts` validates small read-only
+projections of the existing published, item-health and digest-day records,
+including recorded run references and lead identities. The named bounded
+fixture binds those projections to their existing wire fields and is loaded
+inside tests. It declares no new stored payload and requires no backend
+execution. Missing compatible cross-day event evidence remains unavailable.
 
 ### Decisions
 
