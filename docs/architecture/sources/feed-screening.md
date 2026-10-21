@@ -21,10 +21,18 @@ no paywall. Only observed failures cause these gates to reject. Admitted results
 retain the observation and its nulls, not a claim that unknown checks passed.
 Terminal harvest failures are not candidates and must not be offered again.
 An observation for an ID outside the supplied batch fails by name.
+The public harvesting result includes observations for terminal failures too.
+Build the keyed screening input only from entries with a candidate, not entries
+with a rejection. Screening preserves the full public observation, including
+robots, extraction, paywall evidence and failure availability.
 
 The caller supplies a bounded list of settled seen rows, written by the plan
 stage under the existing seen ledger, or explicitly marks that evidence
 unavailable. An available empty list is not the same as unavailable history.
+Available means supplied validated rows, not proof of complete history.
+For a genuinely new undated item, the caller must create and supply its real
+first-sight row at the run instant after resolving history. An absent URL in an
+arbitrary bounded list cannot establish that the item has never been seen.
 The focused reader validates the existing `SeenRow` fields from
 `backend/idhazh/contracts/seen.py`: version, URL key, first-sight UTC instant and
 first-sight run. It joins by the candidate's canonical URL key. Conflicting

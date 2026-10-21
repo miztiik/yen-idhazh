@@ -11,10 +11,13 @@ import {
   RowIdentitySchema, SourceFormSchema, WriterIdentitySchema, deriveCandidateId,
 } from "@idhazh/common-contracts";
 import { loadPlanningConfig } from "../src/config/resolve-policy";
-import { HarvestObservationSchema } from "@idhazh/feed-ingest-plan/harvest-feeds";
+import { harvestFeeds, HarvestObservationSchema } from "@idhazh/feed-ingest-plan/harvest-feeds";
 import { screenArticleCandidates } from "../src/screen-article-candidates/triage-gates";
 import type { RejectionLedgerContext, ScreeningInput } from "../src/screen-article-candidates/triage-gates";
 import { indexSeenEvidence, SeenRowSchema } from "../src/screen-article-candidates/seen-evidence";
+import {
+  RecordedTransport, inputs as harvestInputs, readRecordings, source as recordedSource,
+} from "./harvest-recordings";
 
 const fixtureUrl = new URL("../../../tests/fixtures/feed-ingest-plan/screening-cases.json", import.meta.url);
 const seenUrl = new URL("../../../tests/fixtures/feed-ingest-plan/seen-evidence.json", import.meta.url);
@@ -324,7 +327,9 @@ test("real shared writer Parquet preserves rejection details, identity and UTC r
     const identityFields = new Set(Object.keys(RowIdentitySchema.shape));
     for (const [index, row] of stored.entries()) {
       const payload = Object.fromEntries(Object.entries(row).filter(([key]) => !identityFields.has(key)));
-      expect(CandidateRejectionRecordSchema.parse(payload)).toEqual(result.rejections[index]);
+      const expected = result.rejections[index];
+      if (!expected) throw new Error(`missing expected rejection at ${index}`);
+      expect(CandidateRejectionRecordSchema.parse(payload)).toEqual(expected);
       const identity = RowIdentitySchema.parse(Object.fromEntries(
         Object.entries(row).filter(([key]) => identityFields.has(key)),
       ));
@@ -334,6 +339,39 @@ test("real shared writer Parquet preserves rejection details, identity and UTC r
       candidate_id: candidate.candidate_id, url_key: candidate.url_key, canonical_url: candidate.canonical_url,
       details: { words_found: 1, words_required: 180 }, rejected_at: input.run.now,
     });
+  });
+});
+
+test("public harvesting observations compose with screening without duplicating terminal harvest failures", async () => {
+  await withLedger(async (ledger, { input }) => {
+    const transport = new RecordedTransport(await readRecordings());
+    const loaded = await harvestInputs([recordedSource()]);
+    const harvested = await harvestFeeds(loaded, {
+      writer: { ...ledger.writerContext, task_name: "harvest-feeds" },
+      correlation_id: input.run.correlation_id,
+      clock: () => new Date(input.run.now),
+    }, ledger, { transport, resolve: transport.resolve });
+    const observations = Object.fromEntries(harvested.articles.flatMap(article =>
+      article.candidate === null ? [] : [[article.candidate.candidate_id, article.observation]],
+    ));
+    const screened = await screenArticleCandidates({
+      ...input, candidates: harvested.candidates, observations,
+      planning: loadPlanningConfig({
+        ...loaded.config, triage: { ...loaded.config.triage, min_words_article: 100 },
+      }, input.planning.taxonomy),
+    }, ledger);
+    expect(screened.admitted.length + screened.rejections.length).toBe(harvested.candidates.length);
+    expect(screened.admitted.length).toBeGreaterThan(0);
+    const ids = new Set(harvested.rejections.map(row => row.candidate_id));
+    expect(screened.rejections.every(row => !ids.has(row.candidate_id))).toBe(true);
+    for (const entry of screened.admitted) {
+      const observation = observations[entry.candidate.candidate_id];
+      const candidate = harvested.candidates.find(row => row.candidate_id === entry.candidate.candidate_id);
+      if (!observation || !candidate) throw new Error("screening admitted an unharvested candidate");
+      expect(entry.observation).toEqual(observation);
+      expect(entry.candidate).toEqual(candidate);
+    }
+    expect(harvested.rejections.some(row => row.drop_reason === "MISSING_REQUIRED_FIELDS")).toBe(true);
   });
 });
 
