@@ -253,9 +253,9 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 | 1 | Shared contracts, schemas, and identity types | 15 | A | DONE | supreme-train (plan-66-row-1) | - | 4729606a-ce50-4812-a45f-f4ac7314311b |
 | 2 | Ledger registration and gardener compaction configuration | 1 | A | DONE | crispy-spoon (plan-66-row-2) | - | 6f739fa3-8ef9-40a7-830d-e1cc57927a46 |
 | 3 | Dedicated feed ingest plan configuration file | 1 | A | DONE | vigilant-lamp (plan-66-row-3) | - | d8340612-ab74-49e7-99ac-19d9ce30e427 |
-| 4 | Host hardware and environment identity service | 6 | B | IN-FLIGHT | curly-parakeet | - | bd6fe115-c522-4078-bb9f-e7c0e5eceb60 |
+| 4 | Host hardware and environment identity service | 6 | B | IN-FLIGHT | plan-66-host-fingerprint-service | - | bd6fe115-c522-4078-bb9f-e7c0e5eceb60 |
 | 5 | Host CPU and memory profiling service | 1 | B | DONE | congenial-parakeet (plan-66-row-5) | - | c8de7d9d-dd55-4123-87fe-66095cc2aed5 |
-| 6 | Reusable TypeScript ledger file writer | 1, 2, 16 | B | IN-FLIGHT | fictional-tribble | - | c1194122-86e6-45b4-85e9-e1bb61dbdca6 |
+| 6 | Reusable TypeScript ledger file writer | 1, 2, 16 | B | DONE | fictional-tribble | - | c1194122-86e6-45b4-85e9-e1bb61dbdca6 |
 | 7 | RSS/Atom feed harvest and DOM text extraction | 3, 6 | B | IN-FLIGHT | redesigned-doodle | - | da505804-6ce7-4f03-aa0b-25bab323ba53 |
 | 8 | Candidate triage screening with Parquet rejection ledger | 6, 7 | C | IN-FLIGHT | scaling-memory | - | d50de7c8-1c6a-4074-a390-25a077ae0ba8 |
 | 9 | Set-aware editorial portfolio curation | 8 | D | IN-FLIGHT | bookish-carnival | - | 34c330c1-9d30-4222-8fa6-4e28e58a165e |
@@ -692,23 +692,36 @@ the existing host-service scope, not new persisted fields or a new algorithm.
   - `packages/ledger-file-writer/src/parquet/wasm-serializer.ts`
   - `packages/ledger-file-writer/src/parquet/envelope-footer.ts`
   - `packages/ledger-file-writer/src/parquet/row-digest.ts`
+  - `packages/ledger-file-writer/src/ledger-types.ts`
+  - `packages/ledger-file-writer/src/row-schema.ts`
+  - `packages/ledger-file-writer/src/registration.ts`
+  - `packages/ledger-file-writer/src/row-identity.ts`
+  - `packages/ledger-file-writer/src/ledger-paths.ts`
+  - `packages/ledger-file-writer/src/atomic-file.ts`
+  - `packages/ledger-file-writer/src/render-ledger-file.ts`
+  - `packages/ledger-file-writer/src/persist-raw.ts`
+  - `packages/ledger-file-writer/src/persist-compact.ts`
   - `packages/ledger-file-writer/src/persist-ledger.ts`
   - `packages/ledger-file-writer/test/uuid.test.ts`
   - `packages/ledger-file-writer/test/parquet-parity.test.ts`
   - `packages/ledger-file-writer/test/persist-ledger.test.ts`
+  - `tests/fixtures/ledger-file-writer/host-fingerprint-row.json`
+  - `tests/fixtures/ledger-file-writer/feed-ingest-dispatch-row.json`
+  - `tests/fixtures/ledger-file-writer/dispatch-arrow-schema.json`
+  - `.github/workflows/ci.yml` (named TypeScript package checks and tests)
   - `docs/architecture/contracts/identity.md`
   - `docs/architecture/contracts/persistence.md`
-- **Acceptance gates:** Local: inspect the shared selector without launching Python-backed groups, run strict TypeScript checks and package tests with real Parquet readback against bounded recorded compatibility fixtures. CI executes the named Bun checks and tests. Exercise two distinct registered ledger contracts through the same public interface, including raw and compact writes, zero rows, nullable/list fields, invalid rows, and an interrupted write.
+- **Acceptance gates:** Local: inspect the shared selector without launching Python-backed groups, run strict TypeScript checks and package tests with real Parquet readback against bounded recorded compatibility fixtures. CI executes the named Bun checks and tests. Exercise two distinct registered ledger contracts through the same public interface, including raw and compact writes, zero rows, nullable/list fields, invalid rows, and an interrupted write. Compare the nested dispatch Parquet schema against `tests/fixtures/ledger-file-writer/dispatch-arrow-schema.json`, an independently recorded list of native column types and nullability, including nested/list children and identity columns. The host-fingerprint case narrows to writer-identity collision fields and does not claim full hardware-row validation or retention; that coverage belongs to Row #4.
 - **Oracle:** TypeScript reads the actual Parquet footer, validates its envelope and native columns, reconstructs stored rows, and recomputes their canonical digest. Recorded fixtures independently pin schema, canonical bytes and identifiers to the existing contract. This does not execute the Python reader, prove speed or require byte-identical output from different Parquet engines.
 - **Preflight correction:** The identity page currently names a TypeScript implementation under `packages/common-contracts/src/identity/` that does not exist. The writer owns the new implementation. Correct that page's namespace and hash-bit descriptions against `backend/idhazh/ledger/filenames.py`; do not change the Python identity algorithm. The package lock and bounded recorded fixtures support the declared package and compatibility checks.
 
 Canonical-byte preflight: sorted `JSON.stringify` is not Python's row
-serialization. A fixed local comparison produced Python numbers `1.0`,
+serialization. A fixed comparison produced Python numbers `1.0`,
 `1e-07`, `1e+20`, and `-0.0`, while Node produced `1`, `1e-7`,
 `100000000000000000000`, and `0`. Python also escapes non-ASCII text.
-Use the declared scalar types and actual stored rows to reproduce the Python
-bytes. Include these values, Unicode, nested lists, and nulls in the existing
-parity test; do not change Python's digest or reject valid floats to pass it.
+Use the declared scalar types and actual stored rows to reproduce those bytes.
+Include these values, Unicode, nested lists, and nulls in the canonical-byte
+vector; do not change the Python digest rules or reject valid floats to pass it.
 
 Identity-page preflight also found two unrelated identities described as one:
 the older `.github/scripts/ai-pipeline.ts` event helper returns an `evt_`
@@ -725,9 +738,9 @@ and correlation IDs are not undeclared file-envelope metadata.
 | 1 | Evaluate `apache-arrow` + `parquet-wasm` for Parquet writing; use the configured ledger compression rather than a caller-specific constant. Beneficiary: every TypeScript ledger producer. Record install size, loaded WASM memory, and runner time before dependency adoption. | Plan proposal; persistence.md |
 | 2 | Match Python `filenames.py` for UUIDv5 unit identity and UUIDv8 file identity, including generic pipeline/task context. | identity.md; filenames.py |
 | 3 | Write separate UTF-8 key-value entries matching `FileEnvelope.as_metadata`, not one JSON object. Preserve renamed metadata keys, optional-key omission, and zero-padded attempt/shard strings. Read row count from the Parquet footer, not an extra envelope key. | file_envelope.py; persistence.md |
-| 4 | Hash the stored rows, including stamped identity cells, in file order using the exact canonical JSON-lines bytes from `json_lines.rows_bytes`: sorted object keys, ASCII escaping, compact separators, and one LF per row. It is neither a hash of Parquet bytes nor an unspecified raw-row hash. Test Unicode, nested values, floats, and nullable cells against Python serialization. | persist.py; json_lines.py |
+| 4 | Hash the stored rows, including stamped identity cells, in file order using the exact canonical JSON-lines bytes from `json_lines.rows_bytes`: sorted object keys, ASCII escaping, compact separators, and one LF per row. It is neither a hash of Parquet bytes nor an unspecified raw-row hash. Test Unicode, nested values, floats, and nullable cells against the recorded canonical-byte vector. | persist.py; json_lines.py |
 | 5 | Accept ledger, row contract, rows, output root, UTC coverage period, writer context, and ledger settings. Derive paths and identifiers inside the package. Keep feed selection, HTTP serving, and GitHub reporting outside it. Use temporary-file-plus-rename writes. | Owner selection: shared package; persistence.md |
-| 6 | Validation checks row and envelope contracts before writing. Interoperability tests additionally check the Parquet encoding. Neither check encrypts, signs, or makes a file tamper-proof. | Clarification of the package contract |
+| 6 | Validation checks row and envelope contracts before writing. TypeScript tests read actual Parquet through WASM and Arrow, then check the footer and typed columns against bounded compatibility fixtures. The owner override prevents executing Python from this package's test and CI paths, so these checks do not claim current Python reader execution. Neither check encrypts, signs, or makes a file tamper-proof. | Clarification of the package contract; owner override |
 | 7 | Raw writes stamp row identity; compact writes preserve original row identity and record the compactor only in the envelope. Accept tier, period, and source-file count under the existing persistence rules; do not embed a compaction schedule or retention policy in the package. | persistence.md |
 
 ### Rejected alternatives
@@ -1169,11 +1182,11 @@ This accepts the implementation increment, not audited completion or merge.
   - `.github/scripts/tests/feed-ingest-plan-report.test.ts`
   - `.github/scripts/tests/feed-ingest-plan-outputs.test.ts`
   - `.github/scripts/tests/feed-ingest-plan-workflow.test.ts`
-  - `packages/common-contracts/test/verify-parquet.ts`
+  - `.github/scripts/feed-ingest-plan-verification.ts`
   - `tests/fixtures/feed-ingest-plan/report-events.json`
   - `docs/how-to/run-feed-ingest-plan-test.md`
 - **Acceptance gates:** Local: shared test selector and fixture-driven workflow/reporting tests. CI: full suite and the isolated workflow's compatibility checks. Reporting enabled/disabled runs over identical fixtures must produce identical ledger content digests; disabled reporting produces no annotations or summary. Cover zero dispatches or zero rejections as valid outcomes, not failed count assertions.
-- **Oracle:** `verify-parquet.ts` reads actual dispatch and rejection files, validates envelopes and rows, compares recorded fixture identities and canonical row digests, and checks native list-column types; adapter tests check escaped annotations and summaries separately. No Python runtime or packages are required. This cannot settle Python-reader execution, real feed availability or hosted-runner speed.
+- **Oracle:** `feed-ingest-plan-verification.ts` reads actual dispatch and rejection files, validates envelopes and rows, compares recorded fixture identities and canonical row digests, and checks native list-column types; adapter tests check escaped annotations and summaries separately. No Python runtime or packages are required. This cannot settle Python-reader execution, real feed availability or hosted-runner speed.
 
 Supporting scope: independent reporting implementation can consume existing
 typed events while the runner is being built. Final output conversion and
@@ -1190,6 +1203,24 @@ integrity functions and real Parquet reader rather than a second serializer.
 The isolated workflow does not commit generated state or invoke the
 production publisher. It must include compact indexes and their named
 files, not substitute a raw-only checkout or scan accumulated history.
+
+Report isolation uses the same actual produced files before and after each
+disabled/enabled report invocation. Every file, including source records,
+must retain identical bytes and content digests. Independent planning runs
+record different real elapsed durations and completion file IDs, so their
+source-file digests cannot be an equality oracle. Verify both runs' full
+native source records and completion proof without dropping fields; retain
+the independent-run equality checks for deterministic stage and metric
+content. Do not replace measured clocks or normalize persisted records.
+Reviewed workflow head `39fabddeb9c84521050551bf7d0ff5fbdb4b2c31` implements
+native source-row and original complete-attempt verification after the single
+actual CLI call. Its generated publication fixture joins actual selected
+identities to native published rows, a matching digest and settled health,
+then invokes the real observer and verifies its written files. The same-result
+report check preserves every output byte; both independent runs retain full
+source proof. Twenty focused tests passed, including the actual inline
+TypeScript check within its original timeout. The full-audit final gate and
+default-off controls remain unchanged.
 
 ### Table R - Workflow inputs and freshness behavior
 
@@ -1231,6 +1262,8 @@ files, not substitute a raw-only checkout or scan accumulated history.
 - **Files touched:**
   - `services/feed-ingest-plan/src/metrics/publication-outcomes.ts`
   - `services/feed-ingest-plan/src/metrics/publication-evidence.ts`
+  - `services/feed-ingest-plan/src/metrics/publication-metrics.ts`
+  - `services/feed-ingest-plan/src/metrics/planning-populations.ts`
   - `services/feed-ingest-plan/src/metrics/history-window.ts`
   - `services/feed-ingest-plan/src/metrics/diversity-metrics.ts`
   - `services/feed-ingest-plan/src/metrics/fingerprint-dedup.ts`
@@ -1354,6 +1387,46 @@ The recorder consumes actual stage results alongside existing typed events
 because the event assessment alone cannot carry the unsupported exact timing.
 It introduces no second persisted event shape.
 
+Incremental completion clarification, 2026-10-21: missing original packed
+file proof does not prevent proving a newly written raw attempt. After the
+publication observer increment, the metrics owner may seal a representable
+current attempt using the existing `SourceRunRecord.plan_complete` phase:
+verify all five required ledgers natively, aggregate the three rejection
+file sets into one rejection receipt, and attach the exact source count
+and shared completion evidence before writing source records. Unsupported
+timing or configured counts must still refuse the entire batch before
+audit writes. This is not permission to claim packed historical proof,
+full audit acceptance, or changed persisted meaning.
+The runner owner prepares only the existing source-run registration in
+`services/feed-ingest-plan/src/load-plan-inputs.ts`, its existing loader
+test and runner documentation. The metrics owner retains exclusive write
+ownership of recorder, source-summary, metrics tests and audit documentation;
+that sealing increment starts after its current observer checkpoint.
+After source-file readback, the producer must pass its actual named files
+through the existing complete-attempt selector. Proven completion of that
+representable current run is distinct from accepting the whole plan or
+proving packed history. Return that evidence for a later runner/workflow
+integration; do not retain an unconditional pending result once the actual
+run has every required write and proof. Caller status changes stay with
+their existing owners after the tested producer handoff.
+Head `45f8778bd546f7f5ec13c4c6c17edebe19d6303d` implements this current-raw
+producer path, including native source readback and exact-attempt selection.
+The runner owner now integrates it normally and exposes proven planning
+completion separately from the unfinished full audit. The workflow stays
+based on the runner, verifies returned source files and completion evidence,
+and exercises publication observation only with a bounded generated published
+fixture. Neither integration claims real production publication or complete
+packed history.
+Reviewed caller head `60d97e779738121ae550cc8315ad7327d4b88f21` exposes
+`planning_complete: true` only with the producer's exact verified completion.
+That planning result returns HTTP 200 and CLI exit 0, while
+`audited_complete` stays false. Native API/CLI coverage independently reloads
+the named files and selects the same run, attempt and correlation; source-write
+failure returns no successful summary. Strict TypeScript and 11 caller tests
+passed. PR #1624 merged into the runner branch, not main, at 21:25:33 UTC.
+The workflow's separate full-audit gate remains unsuccessful while that
+broader audit is incomplete; generated publication evidence does not bypass it.
+
 Row #11 currently owns `src/index.ts`; Row #14 does not edit that file
 concurrently. Publish the tested recorder API from its own module, coordinate
 the exact in-memory result type with Row #11, then let the runner owner wire
@@ -1383,12 +1456,44 @@ tests and 11 base-engine tests passed. Supported runs still report audit
 pending; unsupported timing or counts fail before any audit write and
 produce no result summary. Row #12 now integrates this tested entrypoint
 and verifies its returned files, rather than calling the recorder again.
+The workflow owner reports 19 named tests passing after that integration,
+including native metric receipts, missing-file refusal, unsupported counts,
+known-empty assessments and report-on/off ledger digest equality. Reviewed
+head `c3428c33c2eca90a603ad2ef01b8ab2c4c7f0ab6` is delivered in ready
+PR #1622 against the runner branch. Required CI and the remaining complete
+audit/observer integration remain acceptance gates. PR #1621 is merged into
+its runner base, not into main; this does not close the full audit row.
+PR #1622 CI found a new dependency error before backend tests:
+`packages/common-contracts/test/verify-parquet.ts` imports the writer and
+planner runtime, but the shared-contract check installs only its own
+dependencies. This is part of Row #12, not the unrelated schedule failure.
+The workflow owner relocates that executable verifier to
+`.github/scripts/feed-ingest-plan-verification.ts`, updates its callers and
+retains the recorded-byte oracle. The common-contract package must check
+independently; do not add runtime dependencies or alter CI to hide this error.
+Corrective head `4810599a6e9a46fafebbfae7d73dc6924ee58528` restores that
+boundary. An isolated shared-contract install, check and 39 tests passed
+without writer or service dependencies. Hosted run `39675379776` then
+passed shared-contract bindings, site, browser, robots and scope. Its only
+remaining failures are the same two unrelated schedule assertions; 7249
+backend tests passed. The new dependency regression is resolved, but the
+candidate is not green for merge.
+The independent schedule repair, PR #1623, passed all required checks and
+merged into main as `5e65c0dad0335fa4cfbdc9a8285471f9cfe314ac`. The owner
+directed dependent delivery to resume. Update the writer candidate normally
+against repaired main, resolve its merge conflict without changing unrelated
+work, and land the dependency chain only after each required candidate is
+green. Earlier red runs remain historical evidence, not a current repair veto.
 
 Row #13's shared integration adds
 `services/feed-ingest-plan/src/metrics/publication-metrics.ts` to separate
 publication calculations from per-run planning calculations. It consumes
 bounded, named publication files and digest evidence plus existing proven
-attempt memberships. Retry selection precedes attribution; rolling
+attempt memberships. The separate
+`services/feed-ingest-plan/src/metrics/planning-populations.ts` reconstructs
+those memberships from existing complete attempts, checks stage/candidate
+identity, terminal losses and source attribution, and performs no new
+completion inference. Retry selection precedes attribution; rolling
 populations come from actual recorded rows, not averaged daily ratios or
 unchecked caller lists. Packed publication membership can support publication
 readings independently of missing original planning completion proof.
@@ -1404,6 +1509,27 @@ No multi-stage fixture or key change is justified by that concern alone.
 The publication owner checks native retry settlement before changing the
 join. The review also checks whether the projection wrongly refuses a
 digest whose run completes after its named UTC day.
+Tested event increment `4e9ccfa2c` removes that extra date restriction and
+uses compatible recorded pair decisions for real event arithmetic; 35
+focused tests passed. Review found one remaining publication-loader issue:
+a compact index's set-aside-file notice must not become complete historical
+coverage. The owner is adding that missing-evidence case before acceptance.
+Observer checkpoint `cc137c08a` includes durable native publication metrics
+and settled planning populations; 49 focused tests passed. Review requires
+one further identity check before source publication completion or a
+selection-to-publication comparison: every published URL and primary source
+must be a subset of that run's proven selections. Merely finding its source
+in the snapshot is insufficient. Missing planning proof may still support
+independent publication readings, never invented stage or source completion.
+Source observations also retain the proven planning attempt. Before any
+source-producing observer write, its writer attempt must match that retained
+attempt. A mismatch would write contradictory row identities and make later
+complete-attempt reads fail. The owner is adding native refusal coverage;
+independent diversity-only observations need not reuse the planning attempt.
+Reviewed head `45f8778bd546f7f5ec13c4c6c17edebe19d6303d` implements both
+identity checks before observer writes. Its publication fixture now obtains
+complete planning records from the actual producer, not manufactured source
+records. Strict TypeScript and 62 focused tests passed.
 
 ### Decisions
 

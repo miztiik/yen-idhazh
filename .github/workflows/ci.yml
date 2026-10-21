@@ -148,6 +148,22 @@ jobs:
           bun run check
           bun test
 
+      - name: TypeScript ledger writer
+        if: needs.scope.outputs.code == 'true'
+        working-directory: packages/ledger-file-writer
+        run: |
+          bun install --frozen-lockfile
+          bun run check
+          bun run test
+
+      - name: TypeScript host fingerprints
+        if: needs.scope.outputs.code == 'true'
+        working-directory: services/host-fingerprints
+        run: |
+          bun install --frozen-lockfile
+          bun run check
+          bun run test
+
       - name: Tests, including the five injection canaries
         if: needs.scope.outputs.code == 'true'
         run: >-
