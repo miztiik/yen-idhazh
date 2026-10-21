@@ -1369,6 +1369,13 @@ The runner owner prepares only the existing source-run registration in
 test and runner documentation. The metrics owner retains exclusive write
 ownership of recorder, source-summary, metrics tests and audit documentation;
 that sealing increment starts after its current observer checkpoint.
+After source-file readback, the producer must pass its actual named files
+through the existing complete-attempt selector. Proven completion of that
+representable current run is distinct from accepting the whole plan or
+proving packed history. Return that evidence for a later runner/workflow
+integration; do not retain an unconditional pending result once the actual
+run has every required write and proof. Caller status changes stay with
+their existing owners after the tested producer handoff.
 
 Row #11 currently owns `src/index.ts`; Row #14 does not edit that file
 concurrently. Publish the tested recorder API from its own module, coordinate
