@@ -1383,6 +1383,10 @@ tests and 11 base-engine tests passed. Supported runs still report audit
 pending; unsupported timing or counts fail before any audit write and
 produce no result summary. Row #12 now integrates this tested entrypoint
 and verifies its returned files, rather than calling the recorder again.
+The workflow owner reports 19 named tests passing after that integration,
+including native metric receipts, missing-file refusal, unsupported counts,
+known-empty assessments and report-on/off ledger digest equality. Its final
+published head and required CI remain acceptance gates.
 
 Row #13's shared integration adds
 `services/feed-ingest-plan/src/metrics/publication-metrics.ts` to separate
@@ -1404,6 +1408,11 @@ No multi-stage fixture or key change is justified by that concern alone.
 The publication owner checks native retry settlement before changing the
 join. The review also checks whether the projection wrongly refuses a
 digest whose run completes after its named UTC day.
+Tested event increment `4e9ccfa2c` removes that extra date restriction and
+uses compatible recorded pair decisions for real event arithmetic; 35
+focused tests passed. Review found one remaining publication-loader issue:
+a compact index's set-aside-file notice must not become complete historical
+coverage. The owner is adding that missing-evidence case before acceptance.
 
 ### Decisions
 
