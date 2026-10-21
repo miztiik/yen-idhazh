@@ -411,6 +411,7 @@ export type CandidateRejectionRecord =
   - `config/gardener/compact-feed-ingest-plan-article-assessments.json`
   - `config/gardener/compact-feed-ingest-plan-diversity.json`
   - `backend/idhazh/contracts/ledger_name.py`
+  - `backend/idhazh/ledger/arrow_schema.py`
   - `backend/idhazh/ledger/keys.py`
   - `backend/idhazh/ledger/raw_files.py`
   - `backend/idhazh/ledger/staging.py`
@@ -418,13 +419,15 @@ export type CandidateRejectionRecord =
   - `backend/tests/contracts/test_ledger_registry.py`
   - `backend/tests/contracts/test_ledger_name.py`
   - `backend/tests/contracts/test_door_ledgers_keep_no_csv_path.py`
+  - `backend/tests/ledger/test_arrow_schema.py`
   - `backend/tests/ledger/test_feed_ingest_ledgers.py`
   - `backend/tests/contracts/test_frontend_index_shapes.py`
   - `backend/tests/contracts/test_gardener_config.py`
   - `backend/tests/workflows/test_ledger_staging.py`
   - `backend/tests/workflows/test_ledger_door_jobs.py`
   - `docs/architecture/contracts/ledger-registry.md`
-- **Acceptance gates:** Local: shared test selector and focused `backend/tests/contracts/test_ledger_registry.py` / `test_ledger_name.py` cases. CI: full suite. Load the authored configuration through the repository's existing registry readers, not a new generated schema file. Verify attempts and their original identities survive raw settlement and real compact/read/repack cycles; a newer partial attempt must not erase an older complete attempt, and nested dispatch keys must settle correctly. Preserve every other ledger's existing settlement behavior.
+  - `docs/architecture/contracts/persistence.md`
+- **Acceptance gates:** Local: shared test selector and focused `backend/tests/contracts/test_ledger_registry.py` / `test_ledger_name.py` cases. CI: full suite. Load the authored configuration through the repository's existing registry readers, not a new generated schema file. Verify attempts and their original identities survive raw settlement and real compact/read/repack cycles; a newer partial attempt must not erase an older complete attempt, and nested dispatch keys must settle correctly. Map UUID fields to their JSON string representation in Arrow and test a UUID round-trip through the schema adapter. Preserve every other ledger's existing settlement behavior.
 - **Oracle:** Registry fixtures confirm every declared feed-ingest ledger has its row contract, settlement key, valid prefix, and compaction configuration. A bounded retry fixture with an earlier attempt containing candidates A and B and a later partial attempt containing only A retains both attempts through compaction; complete-attempt selection can choose the later attempt without inheriting B. A later complete empty attempt is represented by explicit source-run evidence, not inferred from missing dispatch rows. This does not prove a TypeScript writer can encode that contract; Row #6 verifies it.
 
 ### Decisions
@@ -436,7 +439,7 @@ export type CandidateRejectionRecord =
 | 3 | Add the new ledger-name members and row/settlement bindings, and enroll every compaction declaration in config/idhazh_gardener.json's explicit task_names list. A declaration file alone does not schedule a task. Use each full ledger prefix with slashes replaced by hyphens for the compaction name. | Verified ledger registry, keys.py, and gardener task manifest |
 | 4 | Add every new ledger to staging.py REGISTRY and the frontend LEDGER_NAMES/LEDGER_FOLDERS bindings. Name the planned TypeScript writer explicitly, with no production digest commit labels while the isolated workflow is its only caller. Registry vocabulary/path bindings land here; public delivery lands in Row #16 before writers. | ledger-registry.md onboarding; existing finite staging table |
 | 5 | Enroll the tasks in the named gardener retention test inventory and use the approved live chain: compact_after_days 1, daily_keep_days 45, monthly_keep_days 93, monthly_window forever, yearly_keep_months 36, yearly_prune_enable true. Follow the existing dry-run-to-live approval rule; do not invent a separate retention policy for planner text or audit rows. | ledger-registry.md onboarding; owner-approved retention chain |
-| 6 | Feed-ingest settlement preserves each original run/attempt and deduplicates rows only within that attempt by its declared business key; trusted dotted paths may name nested fields. Existing ledgers retain their current settlement. Table J selects the complete attempt later: an incomplete newer attempt cannot erase an older complete attempt, while an explicitly recorded complete empty attempt supersedes it. Test raw settlement and real compact/read/repack cycles. | Table G candidate identity; reader-before-writer settlement contract |
+| 6 | Feed-ingest settlement preserves each original run/attempt and deduplicates rows only within that attempt by its declared business key; trusted dotted paths may name nested fields. Existing ledgers retain their current settlement. Table J selects the complete attempt later: an incomplete newer attempt cannot erase an older complete attempt, while an explicitly recorded complete empty attempt supersedes it. Test raw settlement and real compact/read/repack cycles. UUID contract fields use their JSON string representation in Arrow, so the reader validates their version after loading. | Table G candidate identity; reader-before-writer settlement contract; Pydantic JSON serialization |
 
 ### Rejected alternatives
 
