@@ -1,0 +1,49 @@
+{
+  "provenance": "Bounded Linux-format input transcript for the collector, with independently specified expected results. CPU labels and readings are test data, not a claim of live runner capture.",
+  "files": {
+    "proc/cpuinfo": "processor : 0\nvendor_id : GenuineIntel\ncpu family : 6\nmodel : 106\nmodel name : Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz\nstepping : 6\nmicrocode : 0xd000375\ncpu MHz : 2800.000\nflags : fpu avx2 avx512f f16c fma sse4_2 avx2\n\nprocessor : 2\ncpu MHz : 2400.000\n\nprocessor : 7\ncpu MHz : 2600.000\n\nprocessor : 9\n",
+    "proc/uptime": "1234.50 2400.00\n",
+    "proc/self/status": "Name:\tbun\nCpus_allowed_list:\t2,7,11\n",
+    "proc/self/cgroup": "0::/jobs/task\n",
+    "sys/devices/system/cpu/online": "0,2,7,9\n",
+    "sys/devices/system/cpu/cpu0/topology/physical_package_id": "0\n",
+    "sys/devices/system/cpu/cpu0/topology/core_id": "0\n",
+    "sys/devices/system/cpu/cpu2/topology/physical_package_id": "0\n",
+    "sys/devices/system/cpu/cpu2/topology/core_id": "0\n",
+    "sys/devices/system/cpu/cpu7/topology/physical_package_id": "1\n",
+    "sys/devices/system/cpu/cpu7/topology/core_id": "0\n",
+    "sys/devices/system/cpu/cpu9/topology/physical_package_id": "1\n",
+    "sys/devices/system/cpu/cpu9/topology/core_id": "0\n",
+    "sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq": "3500000\n",
+    "sys/devices/system/cpu/cpu2/cpufreq/cpuinfo_max_freq": "3500000\n",
+    "sys/devices/system/cpu/cpu7/cpufreq/cpuinfo_max_freq": "3600000\n",
+    "sys/devices/system/cpu/cpu9/cpufreq/cpuinfo_max_freq": "3500000\n",
+    "sys/devices/system/cpu/cpu0/cache/index0/level": "1\n",
+    "sys/devices/system/cpu/cpu0/cache/index1/level": "2\n",
+    "sys/devices/system/cpu/cpu0/cache/index2/level": "3\n",
+    "sys/devices/system/cpu/cpu0/cache/index2/size": "49152K\n",
+    "sys/fs/cgroup/jobs/task/cpu.max": "250000 100000\n",
+    "sys/fs/cgroup/jobs/cpu.max": "100000 100000\n",
+    "sys/fs/cgroup/cpu.max": "max 100000\n"
+  },
+  "metadata": {
+    "vmSize": "Standard_D4ds_v5",
+    "location": "eastus",
+    "zone": "1",
+    "platformFaultDomain": "0"
+  },
+  "environment": { "RUNNER_NAME": " fixture-linux " },
+  "expected": {
+    "fingerprint": "27f9cc4dc522f48d",
+    "cpu_logical_processors": 4,
+    "cpu_physical_cores": 2,
+    "cpu_allowed_processors": 2,
+    "cpu_quota_cores": 1,
+    "cpu_quota_state": "finite",
+    "cpu_observed_mhz": 2600,
+    "cpu_reported_max_mhz": 3600,
+    "l3_cache_bytes": 50331648,
+    "boot_seconds": 1234.5,
+    "runner_name": "fixture-linux"
+  }
+}
