@@ -1147,12 +1147,19 @@ and robots checks. Row #15 is delivered for review; this worker does not merge.
   - `frontend/scripts/copy-visuals.mjs`
   - `frontend/src/lib/data/slice-reader.ts`
   - `frontend/tests/ledger-copy.spec.ts`
+  - `frontend/tests/raw-listed-through.spec.ts`
   - `frontend/tests/ledger-door.spec.ts`
   - `frontend/tests/console-data-explorer.spec.ts`
   - `docs/architecture/publishing/how-the-query-door-answers-a-written-question.md`
   - `docs/architecture/publishing/how-the-query-door-answers-a-panel.md`
 - **Acceptance gates:** Local: shared selector, generated-state flat/nested ledger-copy fixtures, focused query-door tests, and one representative explorer journey, not a browser case per ledger. CI: full suite and site-size gate. Verify allowlist enrollment for all new ledger names, correct raw/daily/monthly/yearly/index paths, missing versus known-empty data, and raw-listing coverage after compaction. Use fixtures and the real build/query path, not mocks or external network.
 - **Oracle:** A generated nested feed-ingest-plan ledger is staged under its registered prefix, fetched and queried through the real door with its typed columns intact; a flat host-fingerprint fixture still resolves unchanged. This proves enrollment/path/query compatibility, not the eventual site size or live-run query latency.
+
+Preflight correction: the raw-listing reader has its own named test module,
+`frontend/tests/raw-listed-through.spec.ts`. Keep its flat-ledger and
+copied-module default-path checks, and add nested-prefix coverage there rather
+than leaving this direct reader outside the row's checks. Any test that copies
+the module must copy its named configuration dependencies too.
 
 ### Decisions
 
