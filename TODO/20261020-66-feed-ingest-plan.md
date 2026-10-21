@@ -233,7 +233,7 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 | 8 | Candidate triage screening with Parquet rejection ledger | 6, 7 | C | IN-FLIGHT | scaling-memory | - | d50de7c8-1c6a-4074-a390-25a077ae0ba8 |
 | 9 | Set-aware editorial portfolio curation | 8 | D | IN-FLIGHT | bookish-carnival | - | 34c330c1-9d30-4222-8fa6-4e28e58a165e |
 | 10 | Contextual bin-packing partitioner with feature flag | 9 | E | IN-FLIGHT | Session `86a9018f-dadb-4181-b82c-ca7fe9347116` builds on tested harvest foundation; integrates tested curation before final checks; historical completion proof remains unresolved below | - | - |
-| 11 | Core plan engine entrypoint, dual-mode runner, and sealing | 6, 10 | F | PENDING | - | - | - |
+| 11 | Core plan engine entrypoint, dual-mode runner, and sealing | 6, 10 | F | IN-FLIGHT | runner slot reserved | - | dispatching |
 | 12 | Isolated CI test workflow and verification suite | 4, 5, 11, 14 | G | PENDING | - | - | - |
 | 13 | Phase 2 publication reconciliation and rolling diversity metrics | 12, 14 | H | PENDING | - | - | - |
 | 14 | Phase 1 source-run audit and three-axis evidence | 11 | G | PENDING | - | - | - |
@@ -996,8 +996,12 @@ limited existing Python declaration update without execution. The
 unavailable-user response selected no option; no contract change is
 authorized. Row #9 adds real composition regressions. Row #10 must report
 the boundary explicitly, not falsify fetched content, discard the override
-or claim those cases work. Same-day, same-policy construction can continue;
-the full requested override/overnight behavior remains unresolved.
+or claim those cases work. Same-day, same-policy construction can continue.
+This does not inherently
+block a live freshness override: harvesting already accepts run overrides,
+so the runner must pass the same override to harvest and screening and one
+captured UTC instant through all stages. Independently supplied content
+harvested under a different policy or UTC day remains unrepresentable.
 
 ### Decisions
 
@@ -1023,18 +1027,48 @@ the full requested override/overnight behavior remains unresolved.
 - **Scope:** Implement the planner REST API and CLI, pass the resolved freshness request through screening, and call the shared ledger package from the storage adapter in Table E to persist dispatches and return structured result paths.
 - **Files touched:**
   - `services/feed-ingest-plan/package.json`
+  - `services/feed-ingest-plan/bun.lock`
   - `services/feed-ingest-plan/tsconfig.json`
   - `services/feed-ingest-plan/src/index.ts`
   - `services/feed-ingest-plan/src/api/server.ts`
   - `services/feed-ingest-plan/src/api/routes/plan.route.ts`
   - `services/feed-ingest-plan/src/api/routes/health.route.ts`
   - `services/feed-ingest-plan/src/api/plan-request.ts`
+  - `services/feed-ingest-plan/src/run-feed-plan.ts`
+  - `services/feed-ingest-plan/src/load-plan-inputs.ts`
+  - `services/feed-ingest-plan/src/resolve-run-context.ts`
+  - `services/feed-ingest-plan/src/read-ledger-history/read-seen-evidence.ts`
+  - `services/feed-ingest-plan/src/config/service-settings.ts`
   - `services/feed-ingest-plan/src/seal-article-ledger/plan-sealer.ts`
   - `services/feed-ingest-plan/src/logging/structured-logger.ts`
   - `services/feed-ingest-plan/test/plan-cli.test.ts`
   - `services/feed-ingest-plan/test/plan-api.test.ts`
+  - `services/feed-ingest-plan/test/plan-engine.test.ts`
+  - `config/feed-ingest-plan-service.json`
+  - `docs/architecture/sources/feed-plan-runner.md`
 - **Acceptance gates:** `bun test` in `services/feed-ingest-plan/`; CLI/API fixture tests cover the same age filter, automatically derived UTC date, and Python-readable dispatch output. No core module writes GitHub annotations, step summaries, or GitHub output files.
 - **Oracle:** Given the same bounded inputs and fixed UTC clock, CLI and API select the same article identities and return valid dispatch paths and shard assignments. This does not prove live-feed performance.
+
+Supporting scope: keep the entry point and HTTP routes as routing only.
+`run-feed-plan.ts` composes the real stages; named loaders resolve explicit
+config, ledger and bounded seen-evidence inputs; the context module captures
+one UTC instant and validates run/attempt/partition controls before fetching.
+Use the same freshness override in harvesting and screening. Named authored
+service settings govern listener, input limits and feature enablement, not
+an undeclared environment-only destination. Row #7's manifest ownership has
+ended at its pushed handoff; Row #11 owns the service manifest and lock from
+this point, including Hono's stated API-routing benefit and installation cost.
+No other row edits those files concurrently. Row #10 still owns its named
+history modules; do not edit them from this row.
+
+The runner emits existing typed stage events with genuine membership,
+measurements and unavailable evidence for Row #14. Before the audit recorder
+exists, dispatch persistence is not audited completion: never emit a
+plan-complete source snapshot or return complete success without all required
+audit writes. Build real composition now, not a success-shaped placeholder.
+The audit timing, top-count and packed-completion contract questions remain
+explicit integration dependencies. No new persisted contract or Python
+change is authorized by this supporting scope.
 
 ### Decisions
 
