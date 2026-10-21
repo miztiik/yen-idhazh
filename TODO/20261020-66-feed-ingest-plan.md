@@ -222,10 +222,10 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 | 1 | Shared contracts, schemas, and identity types | 15 | A | DONE | supreme-train (plan-66-row-1) | - | 4729606a-ce50-4812-a45f-f4ac7314311b |
 | 2 | Ledger registration and gardener compaction configuration | 1 | A | DONE | crispy-spoon (plan-66-row-2) | - | 6f739fa3-8ef9-40a7-830d-e1cc57927a46 |
 | 3 | Dedicated feed ingest plan configuration file | 1 | A | DONE | vigilant-lamp (plan-66-row-3) | - | d8340612-ab74-49e7-99ac-19d9ce30e427 |
-| 4 | Host hardware and environment identity service | 6 | B | IN-FLIGHT | reserved isolated child | - | coordinator dispatch pending |
+| 4 | Host hardware and environment identity service | 6 | B | IN-FLIGHT | curly-parakeet | - | bd6fe115-c522-4078-bb9f-e7c0e5eceb60 |
 | 5 | Host CPU and memory profiling service | 1 | B | DONE | congenial-parakeet (plan-66-row-5) | - | c8de7d9d-dd55-4123-87fe-66095cc2aed5 |
 | 6 | Reusable TypeScript ledger file writer | 1, 2, 16 | B | IN-FLIGHT | fictional-tribble | - | c1194122-86e6-45b4-85e9-e1bb61dbdca6 |
-| 7 | RSS/Atom feed harvest and DOM text extraction | 3, 6 | B | PENDING | - | - | - |
+| 7 | RSS/Atom feed harvest and DOM text extraction | 3, 6 | B | IN-FLIGHT | reserved isolated child | - | coordinator dispatch pending |
 | 8 | Candidate triage screening with Parquet rejection ledger | 6, 7 | C | PENDING | - | - | - |
 | 9 | Set-aware editorial portfolio curation | 8 | D | PENDING | - | - | - |
 | 10 | Contextual bin-packing partitioner with feature flag | 9 | E | PENDING | - | - | - |
@@ -714,7 +714,21 @@ and correlation IDs are not undeclared file-envelope metadata.
   - `services/feed-ingest-plan/src/harvest-feeds/dom-extractor.ts`
   - `services/feed-ingest-plan/src/harvest-feeds/harvest-pool.ts`
   - `services/feed-ingest-plan/src/harvest-feeds/record-rejection.ts`
+  - `services/feed-ingest-plan/src/harvest-feeds/harvest-types.ts`
+  - `services/feed-ingest-plan/src/harvest-feeds/safe-target.ts`
+  - `services/feed-ingest-plan/src/harvest-feeds/robots-policy.ts`
+  - `services/feed-ingest-plan/src/harvest-feeds/sanitize-text.ts`
+  - `services/feed-ingest-plan/src/harvest-feeds/load-harvest-inputs.ts`
+  - `services/feed-ingest-plan/package.json`
+  - `services/feed-ingest-plan/bun.lock`
   - `services/feed-ingest-plan/test/harvest.test.ts`
+  - `services/feed-ingest-plan/test/harvest-safety.test.ts`
+  - `tests/fixtures/feed-ingest-plan/harvest-rss.xml`
+  - `tests/fixtures/feed-ingest-plan/harvest-atom.xml`
+  - `tests/fixtures/feed-ingest-plan/harvest-article.html`
+  - `tests/fixtures/feed-ingest-plan/harvest-responses.json`
+  - `tests/fixtures/feed-ingest-plan/harvest-safety.json`
+  - `docs/architecture/sources/feed-harvesting.md`
 - **Acceptance gates:** Local: shared selector and `bun test` over named recorded RSS/Atom and HTML fixtures, with no external network. Verify valid candidates, categories, text, and typed fetch/parse failures. CI: full suite. Live-source availability is an observation of a separately dispatched isolated run, not a repeatable test gate.
 - **Oracle:** Pre-fetched article text contains >0 words for valid articles, captures author attribution when present, and extracts all XML category elements into `categories: string[]` or defaults to `[]` when missing.
 
@@ -726,6 +740,19 @@ validation before requests, robots permission, and sanitization. Include the
 bounded modules and fixtures needed to preserve those controls; DOM extraction
 must not load page resources. Do not substitute extraction success for these
 independent safety requirements.
+
+Supporting scope: the manifest and lock add the approved DOM extraction
+libraries, a mature feed parser, and any mature transport/address/robots
+libraries needed to preserve the existing controls. Record each dependency's
+benefit and installed cost. The named helpers separate target validation,
+robots permission, sanitization and authored input loading from routing.
+Read existing extraction byte/retry controls rather than inventing constants.
+Fixtures are named recorded RSS, Atom, HTML, response and safety inputs, not
+network tests. The owning harvesting page documents the isolated path without
+changing production extraction. No shared schema or CI workflow edits belong
+to this row: its Bun checks run locally, and the isolated workflow belongs to
+Row #12. Row #4 alone owns its named Bun CI addition, avoiding a shared-file
+collision while these rows are built.
 
 ### Decisions
 
