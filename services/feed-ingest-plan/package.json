@@ -3,13 +3,27 @@
   "version": "2026.10.20",
   "private": true,
   "type": "module",
-  "description": "Planner policy resolution; shared Zod validation has no browser bundle cost.",
+  "description": "Isolated feed harvesting and planner policy resolution; no browser bundle cost.",
+  "exports": {
+    "./harvest-feeds": "./src/harvest-feeds/harvest-pool.ts",
+    "./harvest-types": "./src/harvest-feeds/harvest-types.ts"
+  },
   "scripts": {
     "check": "tsc --noEmit",
     "test": "bun test"
   },
   "dependencies": {
-    "@idhazh/common-contracts": "file:../../packages/common-contracts"
+    "@idhazh/common-contracts": "file:../../packages/common-contracts",
+    "@idhazh/ledger-file-writer": "file:../../packages/ledger-file-writer",
+    "apache-arrow": "^21.2.0",
+    "defuddle": "0.19.5",
+    "ipaddr.js": "2.5.0",
+    "linkedom": "0.18.13",
+    "parquet-wasm": "^0.9.0",
+    "robots-parser": "3.0.1",
+    "rss-parser": "3.13.0",
+    "undici": "7.16.0",
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "@types/bun": "^1.3.0",
