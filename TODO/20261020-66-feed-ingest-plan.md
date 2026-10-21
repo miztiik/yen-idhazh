@@ -234,9 +234,9 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 | 9 | Set-aware editorial portfolio curation | 8 | D | DONE | plan-66-portfolio-curation | - | 34c330c1-9d30-4222-8fa6-4e28e58a165e |
 | 10 | Contextual bin-packing partitioner with feature flag | 9 | E | IN-FLIGHT | plan-66-article-partitioning; current construction and raw replay tested; packed completion proof unresolved | - | bdd46d9e-08a5-466f-b37a-c8b4adeef51c |
 | 11 | Core plan engine entrypoint, dual-mode runner, and sealing | 6, 10 | F | IN-FLIGHT | plan-66-api-cli-runner; real composition and bounded complete-window first sight implemented; audited completion remains unavailable | - | 2c361133-cae1-461b-a1fd-74ba90daefaf |
-| 12 | Isolated CI test workflow and verification suite | 4, 5, 11, 14 | G | IN-FLIGHT | reporting slot reserved | - | dispatching |
+| 12 | Isolated CI test workflow and verification suite | 4, 5, 11, 14 | G | IN-FLIGHT | isolated workflow child | - | 31c9fcf0-3abc-41ff-a70e-624a4b419ee0 |
 | 13 | Phase 2 publication reconciliation and rolling diversity metrics | 12, 14 | H | PENDING | - | - | - |
-| 14 | Phase 1 source-run audit and three-axis evidence | 11 | G | PENDING | - | - | - |
+| 14 | Phase 1 source-run audit and three-axis evidence | 11 | G | IN-FLIGHT | plan-66-audit-recorder; assessment/diversity receipt increment; full completion remains blocked | - | 74a1e222-43a2-48c7-a7bf-5a24d2bf741e |
 | 15 | Config-driven source registries and compatible readers | - | A | DONE | fluffy-adventure (feed-registry-migration) | - | f7f18c64-813b-4a13-b421-1cd67b951db6 |
 | 16 | Public data-explorer enrollment and nested ledger delivery | 2 | B | DONE | reimagined-enigma | - | 2b6ac0cc-60a2-4c13-a67a-8d8ec21a4fc1 |
 
@@ -1056,9 +1056,11 @@ harvested under a different policy or UTC day remains unrepresentable.
   - `services/feed-ingest-plan/src/config/service-settings.ts`
   - `services/feed-ingest-plan/src/seal-article-ledger/plan-sealer.ts`
   - `services/feed-ingest-plan/src/logging/structured-logger.ts`
+  - `services/feed-ingest-plan/src/logging/stage-assessments.ts`
   - `services/feed-ingest-plan/test/plan-cli.test.ts`
   - `services/feed-ingest-plan/test/plan-api.test.ts`
   - `services/feed-ingest-plan/test/plan-engine.test.ts`
+  - `services/feed-ingest-plan/test/plan-recordings.ts`
   - `config/feed-ingest-plan-service.json`
   - `docs/architecture/sources/feed-plan-runner.md`
 - **Acceptance gates:** `bun test` in `services/feed-ingest-plan/`; CLI/API fixture tests cover the same age filter, automatically derived UTC date, and Python-readable dispatch output. No core module writes GitHub annotations, step summaries, or GitHub output files.
@@ -1226,7 +1228,7 @@ files, not substitute a raw-only checkout or scan accumulated history.
 - **Acceptance gates:** Local: inspect the shared selector without launching Python-backed groups, run strict TypeScript checks, audit unit/contract tests, and TypeScript Parquet readback. Existing repository CI retains its unchanged suites. Reconcile stage counts and reasons, include inactive and zero-yield sources, retain source snapshots, verify unavailable later-stage fields, and run known-distribution metric fixtures.
 - **Oracle:** Each source/run observation and article assessment reconciles exactly with its input stage records, terminal rejections, and editorial selection rows, and all emitted planning metrics reproduce from those records. This does not prove publication or semantic article quality.
 
-Preflight decision required before dispatch: authored `metrics.top_source_counts`
+Preflight decision required before full completion wiring: authored `metrics.top_source_counts`
 accepts every positive integer, but `DiversityMetricRow.top_k` admits only
 `1`, `5`, and `10`. The defaults agree. Either restrict configuration to this
 declared vocabulary, which gives up other configured counts, or obtain owner
@@ -1243,6 +1245,31 @@ nonnegative. Before wiring complete audit records, resolve how these real
 measurements are represented; do not silently discard them or change a
 persisted meaning. The stage's exact transient evidence remains available
 to the recorder while this contract question is unresolved.
+
+Implementation sequence, 2026-10-21: Fowler confirmed that real membership,
+source-summary calculations, assessment translation, metric arithmetic and
+durable assessment/diversity writes can proceed without changing a persisted
+meaning. Before any Row #14 write for an attempt, preflight all supplied exact
+timing and configured counts. A first-seen clock, signed negative age or
+unsupported top-k refuses the whole recording request by name; do not
+discard its measurement, clamp it or write only the supported subset.
+Current supported configuration and representable observations can exercise
+the real path. This does not authorize narrowing the promised full audit.
+
+`source-run-summary.ts` first returns genuine internal summary values, not a
+new persisted pending phase. `metrics-recorder.ts` returns actual written
+assessment/diversity receipts, never audited completion. Source completion
+stays blocked until the timing/count and packed-proof questions are settled.
+Partially durable files remain incomplete-attempt artifacts after a failure.
+The recorder consumes actual stage results alongside existing typed events
+because the event assessment alone cannot carry the unsupported exact timing.
+It introduces no second persisted event shape.
+
+Row #11 currently owns `src/index.ts`; Row #14 does not edit that file
+concurrently. Publish the tested recorder API from its own module, coordinate
+the exact in-memory result type with Row #11, then let the runner owner wire
+it in a separate integration increment. The final acceptance gates remain
+open; helper arithmetic and safe refusal are not a complete audit.
 
 ### Decisions
 
