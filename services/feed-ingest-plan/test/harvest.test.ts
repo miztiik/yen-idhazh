@@ -7,14 +7,17 @@ import { tableFromIPC } from "apache-arrow";
 import { default as initializeWasm, readMetadata, readParquet } from "parquet-wasm/esm";
 import {
   CandidateRejectionRecordSchema, FeedIngestCandidateSchema, deriveCandidateId, deriveUrlKey,
+  FeedOutcomePayloadSchema,
 } from "@idhazh/common-contracts";
-import { harvestFeeds } from "@idhazh/feed-ingest-plan/harvest-feeds";
+import { harvestFeeds, loadHarvestInputs } from "@idhazh/feed-ingest-plan/harvest-feeds";
 import { parseFeed } from "../src/harvest-feeds/feed-client";
 import { extractArticle } from "../src/harvest-feeds/dom-extractor";
 import { canonicalizeUrl } from "../src/harvest-feeds/url-cleaner";
 import {
   RecordedTransport, context, destination, inputs, readRecordings, source,
 } from "./harvest-recordings";
+
+let wasmInitialization: ReturnType<typeof initializeWasm> | undefined;
 
 test("RSS and prefixed Atom retain every category, author, ordinal and UTC timestamp", async () => {
   const recordings = await readRecordings();
@@ -75,6 +78,19 @@ test("public harvest returns validated full text, provenance and actual observat
     expect(result.candidates[1]?.candidate_id).toBe(deriveCandidateId(runContext.writer.run_id, "recorded-news", 2));
     expect(result.rejections[1]?.candidate_id).toBe(deriveCandidateId(runContext.writer.run_id, "recorded-news", 1));
     expect(result.inputs.sources[2]?.retired_on).toBe("2026-10-20");
+    expect(result.feed_outcomes.map(outcome => ({
+      fetch: outcome.fetch_status, parse: outcome.parse_status,
+      parsed: outcome.parsed_count, harvested: outcome.harvested_count, reason: outcome.rejection_reason,
+    }))).toEqual([
+      { fetch: "success", parse: "success", parsed: 3, harvested: 2, reason: null },
+      { fetch: "success", parse: "success", parsed: 2, harvested: 2, reason: null },
+      { fetch: "not_requested", parse: "not_attempted", parsed: null, harvested: null, reason: "SOURCE_INACTIVE" },
+    ]);
+    for (const outcome of result.feed_outcomes) expect(FeedOutcomePayloadSchema.parse(outcome)).toEqual(outcome);
+    expect(result.feed_outcomes[0]?.fetch_duration_ms).toBeGreaterThanOrEqual(0);
+    expect(result.feed_outcomes[0]?.parse_duration_ms).toBeGreaterThanOrEqual(0);
+    expect(result.feed_outcomes[2]?.fetch_duration_ms).toBeNull();
+    expect(result.feed_outcomes[2]?.parse_duration_ms).toBeNull();
     expect(result.articles[0]?.observation).toMatchObject({
       http_status: 200, robots: "allowed", paywall: false, paywall_evidence: "none", extraction: "success",
     });
@@ -88,7 +104,7 @@ test("public harvest returns validated full text, provenance and actual observat
     if (!file) throw new Error("real Parquet rejection file was not written");
     const bytes = await readFile(join(root, file.path));
     expect(bytes.subarray(0, 4).toString()).toBe("PAR1");
-    await initializeWasm();
+    await (wasmInitialization ??= initializeWasm());
     const metadata = readMetadata(bytes);
     const footer = metadata.fileMetadata();
     expect(footer.numRows()).toBe(2);
@@ -124,6 +140,11 @@ test("inactive, empty, malformed, HTTP, timeout and address failures are distinc
     ]);
     expect(result.rejections[3]?.details.http_status).toBe(404);
     expect(result.rejections[4]?.details.timeout_ms).toBe(loaded.config.harvest.fetch_timeout_ms);
+    expect(result.feed_outcomes.map(outcome => outcome.fetch_status)).toEqual([
+      "not_requested", "success", "success", "http_failure", "timeout", "network_failure",
+    ]);
+    expect(result.feed_outcomes[1]).toMatchObject({ parse_status: "empty", parsed_count: 0, harvested_count: 0 });
+    expect(result.feed_outcomes[2]).toMatchObject({ parse_status: "failure", parsed_count: null, harvested_count: null });
     expect(result.rejections.every(row => row.subject === "feed" && row.candidate_id === null && row.canonical_url === null)).toBe(true);
     expect(transport.requests.filter(request => request.url.href === "https://news.example/feed.xml")).toHaveLength(0);
     expect(transport.requests.filter(request => request.url.hostname === "inward.example")).toHaveLength(0);
@@ -149,4 +170,81 @@ test("URL identity uses discovery sorting, tracking removal and shared hashing",
   const result = canonicalizeUrl(" HTTPS://www.News.Example:443/a///?b=2&utm_campaign=x&a=2&a=1&ref=feed#fragment ");
   expect(result.canonical_url).toBe("https://news.example/a?a=1&a=2&b=2");
   expect(result.url_key).toBe(deriveUrlKey(result.canonical_url));
+  expect(canonicalizeUrl("https://news.example/a/../caf\u00e9/").canonical_url).toBe("https://news.example/a/../caf\u00e9");
+});
+
+test("rootless extraction, empty content and article request failures do not kill valid siblings", async () => {
+  const root = await mkdtemp(join(tmpdir(), "harvest-article-failures-"));
+  try {
+    const transport = new RecordedTransport(await readRecordings());
+    const loaded = await inputs([source({ url: "https://news.example/article-failures.xml" })]);
+    const result = await harvestFeeds(loaded, context(), destination(root), { transport, resolve: transport.resolve });
+    expect(result.articles).toHaveLength(9);
+    expect(result.candidates.map(candidate => candidate.entry_ordinal)).toEqual([4, 5, 6, 7]);
+    expect(result.articles[0]?.observation).toMatchObject({ http_status: 200, extraction: "failed", paywall: null });
+    expect(result.articles[0]?.rejection?.drop_reason).toBe("FETCH_FAILED");
+    expect(result.articles[1]?.observation.extraction).toBe("empty");
+    expect(result.articles[1]?.rejection?.drop_reason).toBe("MISSING_REQUIRED_FIELDS");
+    expect(result.articles[2]?.rejection?.details.http_status).toBe(404);
+    expect(result.articles[3]?.rejection?.details.timeout_ms).toBe(loaded.config.harvest.fetch_timeout_ms);
+    expect(result.articles[4]?.candidate?.title).toBe("Measured progress and public evidence");
+    expect(result.articles[6]?.observation).toMatchObject({ paywall: true, paywall_evidence: "json-ld" });
+    expect(result.articles[7]?.candidate?.published_at).toBeNull();
+    expect(result.articles[8]?.rejection?.title).toBeNull();
+    expect(result.articles[8]?.rejection?.drop_reason).toBe("MISSING_REQUIRED_FIELDS");
+    expect(result.feed_outcomes[0]).toMatchObject({ parsed_count: 9, harvested_count: 4 });
+    const file = result.rejection_files.files[0];
+    if (!file) throw new Error("article failures did not produce their Parquet file");
+    await (wasmInitialization ??= initializeWasm());
+    const wasmTable = readParquet(await readFile(join(root, file.path)));
+    const table = tableFromIPC(wasmTable.intoIPCStream());
+    expect(Array.from(table.getChild("drop_reason") ?? [])).toEqual(result.rejections.map(row => row.drop_reason));
+    expect(Array.from(table.getChild("candidate_id") ?? [])).toContain(deriveCandidateId(context().writer.run_id, "recorded-news", 0));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("a paused rejection registry cannot return a successful harvest with unwritten rejections", async () => {
+  const root = await mkdtemp(join(tmpdir(), "harvest-paused-ledger-"));
+  try {
+    const transport = new RecordedTransport(await readRecordings());
+    const loaded = await inputs([source({ status: "draft" })]);
+    const target = destination(root);
+    target.registryEntry.lifecycle_status = "paused";
+    await expect(harvestFeeds(loaded, context(), target, { transport, resolve: transport.resolve }))
+      .rejects.toThrow("harvest rejection persistence refused");
+    expect(transport.requests).toEqual([]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("live and draft sources require active registry classifications; retired sources preserve history", async () => {
+  const baseline = await inputs();
+  for (const status of ["active", "draft"] as const) {
+    for (const registryStatus of ["draft", "retired"] as const) {
+      const taxonomy = {
+        ...baseline.registry,
+        source_kinds: baseline.registry.source_kinds.map(kind => kind.id === "reporting"
+          ? { ...kind, status: registryStatus, retired_on: registryStatus === "retired" ? "2026-10-20" : null } : kind),
+      };
+      expect(() => loadHarvestInputs({
+        config: baseline.config, taxonomy, sources: { feeds: [source({ status })] }, extraction: { extract: baseline.extraction },
+      })).toThrow("source kind must be active and registered");
+      const tierTaxonomy = {
+        ...baseline.registry,
+        source_tiers: baseline.registry.source_tiers.map(tier => tier.id === 2
+          ? { ...tier, status: registryStatus, retired_on: registryStatus === "retired" ? "2026-10-20" : null } : tier),
+      };
+      expect(() => loadHarvestInputs({
+        config: baseline.config, taxonomy: tierTaxonomy, sources: { feeds: [source({ status })] }, extraction: { extract: baseline.extraction },
+      })).toThrow("source tier must be active and registered");
+    }
+  }
+  const historical = source({ status: "retired", retired_on: "2026-10-20", kind: "historical-kind", tier: 42, vertical: "historical-vertical" });
+  const loaded = loadHarvestInputs({
+    config: baseline.config, taxonomy: baseline.registry, sources: { feeds: [historical] }, extraction: { extract: baseline.extraction },
+  });
+  expect(loaded.sources[0]).toEqual(historical);
+  expect(() => loadHarvestInputs({
+    config: baseline.config, taxonomy: baseline.registry,
+    sources: { feeds: [source({ url: "https://user:secret@news.example/feed" })] }, extraction: { extract: baseline.extraction },
+  })).toThrow("credentials");
 });

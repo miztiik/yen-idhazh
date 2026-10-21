@@ -1,7 +1,7 @@
 /** Read the complete RSS/Atom entries offered by one configured source. */
 import Parser from "rss-parser";
-import { TimestampSchema } from "@idhazh/common-contracts";
-import type { CandidateRejectionRecord, SourceSnapshot } from "@idhazh/common-contracts";
+import { FeedOutcomePayloadSchema, TimestampSchema } from "@idhazh/common-contracts";
+import type { CandidateRejectionRecord, FeedOutcomePayload, SourceSnapshot } from "@idhazh/common-contracts";
 import type { FeedEntry, HarvestContext } from "./harvest-types";
 import type { PermittedFetcher } from "./robots-policy";
 import { cleanText } from "./dom-extractor";
@@ -59,22 +59,45 @@ export async function parseFeed(body: string): Promise<FeedEntry[]> {
 
 export async function readFeed(
   source: SourceSnapshot, fetcher: PermittedFetcher, context: HarvestContext, timeout_ms: number,
-): Promise<{ entries: FeedEntry[]; rejection: CandidateRejectionRecord | null }> {
+): Promise<{ entries: FeedEntry[]; rejection: CandidateRejectionRecord | null; outcome: FeedOutcomePayload }> {
+  const outcome: FeedOutcomePayload = {
+    kind: "feed_outcome", source,
+    fetch_status: "not_requested", parse_status: "not_attempted",
+    parsed_count: null, harvested_count: null, fetch_duration_ms: null, parse_duration_ms: null,
+    rejection_reason: null,
+  };
   if (source.status !== "active") {
-    return { entries: [], rejection: recordRejection(source, context, "SOURCE_INACTIVE") };
+    outcome.rejection_reason = "SOURCE_INACTIVE";
+    return { entries: [], rejection: recordRejection(source, context, "SOURCE_INACTIVE"), outcome: FeedOutcomePayloadSchema.parse(outcome) };
   }
+  const fetchStarted = performance.now();
   const response = await fetcher.fetch(source.feed_url);
+  outcome.fetch_duration_ms = Math.round(performance.now() - fetchStarted);
   if (response.body === null) {
     const { reason, details } = fetchRejection(response, timeout_ms);
-    return { entries: [], rejection: recordRejection(source, context, reason, details) };
+    outcome.fetch_status = response.failure === "timeout" ? "timeout"
+      : response.failure === "http" ? "http_failure" : "network_failure";
+    outcome.rejection_reason = reason;
+    return { entries: [], rejection: recordRejection(source, context, reason, details), outcome: FeedOutcomePayloadSchema.parse(outcome) };
   }
+  outcome.fetch_status = "success";
+  const parseStarted = performance.now();
   let entries: FeedEntry[];
   try { entries = await parseFeed(response.body); }
   catch {
-    return { entries: [], rejection: recordRejection(source, context, "FEED_PARSE_FAILED") };
+    outcome.parse_duration_ms = Math.round(performance.now() - parseStarted);
+    outcome.parse_status = "failure";
+    outcome.rejection_reason = "FEED_PARSE_FAILED";
+    return { entries: [], rejection: recordRejection(source, context, "FEED_PARSE_FAILED"), outcome: FeedOutcomePayloadSchema.parse(outcome) };
   }
+  outcome.parse_duration_ms = Math.round(performance.now() - parseStarted);
+  outcome.parse_status = entries.length ? "success" : "empty";
+  outcome.parsed_count = entries.length;
+  outcome.harvested_count = 0;
+  outcome.rejection_reason = entries.length ? null : "FEED_EMPTY";
   return {
     entries,
     rejection: entries.length ? null : recordRejection(source, context, "FEED_EMPTY"),
+    outcome: FeedOutcomePayloadSchema.parse(outcome),
   };
 }

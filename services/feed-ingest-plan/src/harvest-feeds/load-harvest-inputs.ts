@@ -14,20 +14,19 @@ const LifecycleSchema = z.object({
   message: "retired_on must be present only for retired entries",
 });
 const WeightSchema = z.number().finite().min(0).max(1);
-const SourceConfigSchema = z.object({
-  id: SlugSchema, url: UrlSchema, title: NonEmptySchema, vertical: SlugSchema,
+const ConfiguredUrlSchema = UrlSchema.refine(value => {
+  try { const url = new URL(value); return !url.username && !url.password; }
+  catch { return false; }
+}, { message: "configured feed URL must be valid and contain no credentials" });
+const SourceConfigSchema = LifecycleSchema.safeExtend({
+  id: SlugSchema, url: ConfiguredUrlSchema, title: NonEmptySchema, vertical: SlugSchema,
   kind: SlugSchema, tier: PositiveCountSchema, form: SourceFormSchema, weight: WeightSchema,
-  ...LifecycleSchema.shape,
-}).superRefine((value, ctx) => {
-  if ((value.status === "retired") !== (value.retired_on !== null)) {
-    ctx.addIssue({ code: "custom", message: "source lifecycle and retired_on disagree" });
-  }
 });
 const SourcesSchema = z.object({ feeds: z.array(SourceConfigSchema) });
 const RegistrySchema = z.object({
   verticals: z.array(z.object({ id: SlugSchema })),
-  source_kinds: z.array(z.object({ id: SlugSchema, ...LifecycleSchema.shape })),
-  source_tiers: z.array(z.object({ id: PositiveCountSchema, weight: WeightSchema, ...LifecycleSchema.shape })),
+  source_kinds: z.array(LifecycleSchema.safeExtend({ id: SlugSchema })),
+  source_tiers: z.array(LifecycleSchema.safeExtend({ id: PositiveCountSchema, weight: WeightSchema })),
 });
 const ExtractionSchema = z.object({
   extract: z.object({
@@ -56,14 +55,15 @@ export function loadHarvestInputs(raw: {
     if (new Set<string | number>(ids).size !== ids.length) throw new Error(`${name} ids must be distinct`);
   }
   for (const source of sources) {
+    if (source.status === "retired") continue;
     if (!registry.verticals.some(vertical => vertical.id === source.vertical)) {
       throw new Error(`source.${source.id}.vertical: unknown registry entry`);
     }
-    if (!registry.source_kinds.some(kind => kind.id === source.kind)) {
-      throw new Error(`source.${source.id}.kind: unknown registry entry`);
+    if (!registry.source_kinds.some(kind => kind.id === source.kind && kind.status === "active")) {
+      throw new Error(`source.${source.id}.kind: source kind must be active and registered`);
     }
-    if (!registry.source_tiers.some(tier => tier.id === source.tier)) {
-      throw new Error(`source.${source.id}.tier: unknown registry entry`);
+    if (!registry.source_tiers.some(tier => tier.id === source.tier && tier.status === "active")) {
+      throw new Error(`source.${source.id}.tier: source tier must be active and registered`);
     }
   }
   // This digest covers every validated input that can change harvested content or provenance.

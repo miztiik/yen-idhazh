@@ -1,5 +1,5 @@
 /** Route configured sources and their original entries through the bounded harvest stages. */
-import { WriterIdentitySchema, NonEmptySchema, PositiveCountSchema } from "@idhazh/common-contracts";
+import { FeedOutcomePayloadSchema, WriterIdentitySchema, NonEmptySchema, PositiveCountSchema } from "@idhazh/common-contracts";
 import type { HarvestContext, HarvestResult, OfferedArticle, RejectionDestination } from "./harvest-types";
 import type { HarvestInputs } from "./load-harvest-inputs";
 import { harvestPolicy, sourceSnapshot } from "./load-harvest-inputs";
@@ -40,10 +40,13 @@ export async function harvestFeeds(
   const fetcher = createPermittedFetcher(inputs.config.harvest, inputs.extraction, boundary);
   const feeds = await mapPool(inputs.sources, inputs.config.harvest.concurrency, async configured => {
     const source = sourceSnapshot(inputs, configured);
-    const policy = harvestPolicy(inputs, source.vertical, context.overrides);
     const result = await readFeed(source, fetcher, context, inputs.config.harvest.fetch_timeout_ms);
-    const offered: OfferedArticle[] = result.entries.map(entry => ({ source, policy, entry }));
-    return { offered, rejection: result.rejection };
+    const offered: OfferedArticle[] = [];
+    if (result.entries.length) {
+      const policy = harvestPolicy(inputs, source.vertical, context.overrides);
+      offered.push(...result.entries.map(entry => ({ source, policy, entry })));
+    }
+    return { offered, rejection: result.rejection, outcome: result.outcome };
   });
   const articles = await mapPool(feeds.flatMap(feed => feed.offered), inputs.config.harvest.concurrency,
     offered => harvestArticle(offered, inputs, fetcher, context));
@@ -52,8 +55,16 @@ export async function harvestFeeds(
     ...articles.flatMap(article => article.rejection ? [article.rejection] : []),
   ];
   const rejection_files = await persistHarvestRejections(rejections, context, destination);
+  const harvestedCounts = new Map<string, number>();
+  for (const article of articles) {
+    if (article.candidate) harvestedCounts.set(article.candidate.source_id, (harvestedCounts.get(article.candidate.source_id) ?? 0) + 1);
+  }
+  const feed_outcomes = feeds.map(({ outcome }) => FeedOutcomePayloadSchema.parse({
+    ...outcome,
+    harvested_count: outcome.parse_status === "success" ? harvestedCounts.get(outcome.source.source_id) ?? 0 : outcome.harvested_count,
+  }));
   return {
-    inputs, config: inputs.config, articles, rejections, rejection_files,
+    inputs, config: inputs.config, articles, feed_outcomes, rejections, rejection_files,
     candidates: articles.flatMap(article => article.candidate ? [article.candidate] : []),
   };
 }

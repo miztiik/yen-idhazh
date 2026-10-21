@@ -4,7 +4,7 @@ import { Agent, fetch } from "undici";
 import type { ResolvedAddress } from "./safe-target";
 
 export class BodyLimitError extends Error {
-  constructor() { super("response exceeds extract.max_body_bytes"); }
+  constructor(readonly http_status: number) { super("response exceeds extract.max_body_bytes"); }
 }
 export type TransportResponse = {
   status: number;
@@ -46,7 +46,7 @@ export const networkTransport: HarvestTransport = {
             const chunk = await reader.read();
             if (chunk.done) break;
             bytes += chunk.value.byteLength;
-            if (bytes > max_body_bytes) throw new BodyLimitError();
+            if (bytes > max_body_bytes) throw new BodyLimitError(response.status);
             chunks.push(chunk.value);
           }
         }

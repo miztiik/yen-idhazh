@@ -4,7 +4,7 @@ import type { HarvestContext, OfferedArticle, HarvestArticleResult } from "./har
 import { HarvestArticleResultSchema, utcTimestamp } from "./harvest-types";
 import type { HarvestInputs } from "./load-harvest-inputs";
 import type { PermittedFetcher } from "./robots-policy";
-import { extractArticle } from "./dom-extractor";
+import { ArticleExtractionError, extractArticle } from "./dom-extractor";
 import { canonicalizeUrl } from "./url-cleaner";
 import { fetchRejection, recordRejection } from "./record-rejection";
 
@@ -51,7 +51,16 @@ export async function harvestArticle(
       observation: fetchedObservation,
     });
   }
-  const extracted = extractArticle(fetched.body, entry.link, inputs.extraction.paywall_markers);
+  let extracted: ReturnType<typeof extractArticle>;
+  try { extracted = extractArticle(fetched.body, entry.link, inputs.extraction.paywall_markers); }
+  catch (error) {
+    if (!(error instanceof ArticleExtractionError)) throw error;
+    return HarvestArticleResultSchema.parse({
+      candidate: null,
+      rejection: recordRejection(source, context, article.title ? "FETCH_FAILED" : "MISSING_REQUIRED_FIELDS", {}, article),
+      observation: { ...fetchedObservation, extraction: "failed" },
+    });
+  }
   const pageTitle = extracted.page_title && [...extracted.page_title].length <= PAGE_TITLE_MAX_CHARS ? extracted.page_title : null;
   article.title ??= pageTitle;
   const extraction = extracted.article_text ? "success" : "empty";
