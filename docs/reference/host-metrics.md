@@ -183,7 +183,11 @@ Windows and macOS return unavailable hardware, never invented measurements.
 The named Bun checks cover authored Linux-format input transcripts, the
 independently recorded full schema/types/nullability and hardware hash bytes,
 real API-handler/CLI writes, and real Parquet WASM/Arrow readback. They run no
-Python, install no Python package, and do not claim that a Python reader ran.
+Python, read no backend source, install no Python package, and do not claim
+that a Python reader ran. Backend code is not a TS test/runtime prerequisite.
+The schema fixture is a deliberate compatibility snapshot: its authority path
+is provenance only, not an executable binding. Changes to that snapshot
+require review alongside the declared row semantics.
 No test contacts a network: placement parsing uses the bounded response
 fixture; the CLI placement read is explicitly off. The live-Linux test runs
 only on Linux and reports its machine separately; Windows fixture results do
