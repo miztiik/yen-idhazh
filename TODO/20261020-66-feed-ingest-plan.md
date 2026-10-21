@@ -236,7 +236,7 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 | 11 | Core plan engine entrypoint, dual-mode runner, and sealing | 6, 10 | F | IN-FLIGHT | plan-66-api-cli-runner | - | ec780a10-5ab0-4ad7-a4e1-c36db811fbd7 |
 | 12 | Isolated CI test workflow and verification suite | 4, 5, 11, 14 | G | IN-FLIGHT | isolated workflow child | - | 31c9fcf0-3abc-41ff-a70e-624a4b419ee0 |
 | 13 | Phase 2 publication reconciliation and rolling diversity metrics | 12, 14 | H | PENDING | - | - | - |
-| 14 | Phase 1 source-run audit and three-axis evidence | 11 | G | IN-FLIGHT | audit increment reserved | - | dispatching |
+| 14 | Phase 1 source-run audit and three-axis evidence | 11 | G | IN-FLIGHT | audit recorder child | - | f197c411-a156-460a-a772-f5205c11be1d |
 | 15 | Config-driven source registries and compatible readers | - | A | DONE | fluffy-adventure (feed-registry-migration) | - | f7f18c64-813b-4a13-b421-1cd67b951db6 |
 | 16 | Public data-explorer enrollment and nested ledger delivery | 2 | B | DONE | reimagined-enigma | - | 2b6ac0cc-60a2-4c13-a67a-8d8ec21a4fc1 |
 
@@ -1072,6 +1072,20 @@ audit writes. Build real composition now, not a success-shaped placeholder.
 The audit timing, top-count and packed-completion contract questions remain
 explicit integration dependencies. No new persisted contract or Python
 change is authorized by this supporting scope.
+
+First-sight integration uses `collect.seen_window_days` from the existing
+configuration and the same bounded-day meaning as the freshness page.
+Within its already named modules, Row #11 may consume transient named
+per-day index/file inputs through Row #10's reader. Only verified rows or
+known-empty evidence for every required UTC day establishes absence within
+that window. Missing, lost or expired history cannot establish a new sight;
+arbitrary available rows still do not prove absence. Preserve the earliest
+genuine settled sight for each URL key. After complete-window proof only,
+write newly encountered keys through the existing seen contract and public
+writer before screening uses them; failed or skipped persistence cannot
+masquerade as a recorded first sight. No global-history claim or new
+persisted input format is authorized. Named real native-window cases belong
+in the already scoped engine tests and owning runner documentation.
 
 ### Decisions
 
