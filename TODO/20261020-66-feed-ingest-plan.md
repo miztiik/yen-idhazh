@@ -905,7 +905,17 @@ concurrent edits to those files.
   - `services/feed-ingest-plan/src/partition-article-shards/bin-pack.ts`
   - `services/feed-ingest-plan/src/partition-article-shards/round-robin.ts`
   - `services/feed-ingest-plan/src/partition-article-shards/read-editorial-selection.ts`
+  - `services/feed-ingest-plan/src/partition-article-shards/partition-input.ts`
+  - `services/feed-ingest-plan/src/read-ledger-history/read-period.ts`
+  - `services/feed-ingest-plan/src/read-ledger-history/read-parquet.ts`
+  - `services/feed-ingest-plan/src/read-ledger-history/complete-attempt.ts`
+  - `packages/common-contracts/src/schemas/ledger-index.schema.ts`
+  - `packages/common-contracts/src/index.ts`
+  - `packages/common-contracts/test/ledger-index.test.ts`
   - `services/feed-ingest-plan/test/partition.test.ts`
+  - `services/feed-ingest-plan/test/ledger-history.test.ts`
+  - `tests/fixtures/feed-ingest-plan/ledger-history.json`
+  - `docs/architecture/sources/feed-partitioning.md`
 - **Acceptance gates:** Local: shared selector and `bun test` over bounded uneven, equal-work, empty, and fewer-items-than-shards fixtures. Verify deterministic assignments, configured shard bounds, and the selected-to-dispatched identity/rank bijection. CI: full suite. Greedy bin-packing is a heuristic, not proof of minimum variance for every input.
 - **Oracle:** A hand-computable uneven-work fixture produces the expected greedy assignment and lower work spread than round-robin; equal-work fixtures may tie. With strategy `none`, all items have worker assignment zero and the effective dispatch count is one. These checks do not prove optimal packing or actual worker elapsed-time balance.
 
@@ -928,6 +938,40 @@ attempts. They use explicitly named days or files and the existing index
 precedence: yearly, monthly, daily, then raw. A known empty period differs
 from lost or missing evidence. No repository history scan or network refetch
 can substitute for either input.
+
+Supporting scope: the named history modules read actual Parquet through the
+existing Arrow/WASM libraries, validate envelopes and original row identity,
+resolve one named day's compact indexes or explicitly supplied raw files,
+and validate the completion evidence those inputs can actually prove. The shared
+index schemas are small TypeScript copies of the existing raw/compact
+contracts, held to bounded recorded field, vocabulary and validation
+fixtures. They do not execute or read Python source during tests. The
+generated history tests exercise raw, daily, monthly and yearly files,
+empty/lost/missing periods, incomplete retries and preserved original
+identities. No new persisted field or schema meaning is introduced.
+`partition-input.ts` validates current selections and supplied full candidate
+content without requiring future completion evidence. The owning partition
+page records the distinction and reader behavior. Row #7 owns the manifest
+and lock, including the existing Arrow/WASM runtime dependencies; this row
+integrates that foundation before final checks and does not edit those files
+concurrently. No writer implementation, frontend import, Python source or
+production workflow change belongs to this row.
+
+STOP-AND-SURFACE, 2026-10-21: compact rows retain original run, attempt and
+unit identity, but not original raw-file membership or row order. Completion
+evidence names original file digests, and the writer hashes rows in input
+order. Packing can also settle duplicate occurrences. Consequently a reader
+cannot generally reproduce each recorded raw-file digest after raw removal.
+Current compact-file integrity and matching aggregate counts do not prove
+the original file commitments. Fowler confirmed this contract gap.
+The coordinator requested owner approval for a versioned logical-attempt
+commitment, with the existing Python declaration updated but never executed;
+alternatives were retaining referenced raw files or preserving full raw-file
+provenance through packing. The unavailable-user response selected none.
+Do not self-authorize a contract change or report packed replay as verified.
+Current-run partition construction and bounded reader implementation can
+continue. Historical completion proof remains an explicit unresolved part
+of this row, not a silent scope reduction.
 
 ### Decisions
 
