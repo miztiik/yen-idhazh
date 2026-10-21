@@ -1456,6 +1456,12 @@ passed shared-contract bindings, site, browser, robots and scope. Its only
 remaining failures are the same two unrelated schedule assertions; 7249
 backend tests passed. The new dependency regression is resolved, but the
 candidate is not green for merge.
+The independent schedule repair, PR #1623, passed all required checks and
+merged into main as `5e65c0dad0335fa4cfbdc9a8285471f9cfe314ac`. The owner
+directed dependent delivery to resume. Update the writer candidate normally
+against repaired main, resolve its merge conflict without changing unrelated
+work, and land the dependency chain only after each required candidate is
+green. Earlier red runs remain historical evidence, not a current repair veto.
 
 Row #13's shared integration adds
 `services/feed-ingest-plan/src/metrics/publication-metrics.ts` to separate
