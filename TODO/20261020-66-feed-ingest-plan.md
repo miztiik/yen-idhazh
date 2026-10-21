@@ -1199,6 +1199,15 @@ source-file digests cannot be an equality oracle. Verify both runs' full
 native source records and completion proof without dropping fields; retain
 the independent-run equality checks for deterministic stage and metric
 content. Do not replace measured clocks or normalize persisted records.
+Reviewed workflow head `39fabddeb9c84521050551bf7d0ff5fbdb4b2c31` implements
+native source-row and original complete-attempt verification after the single
+actual CLI call. Its generated publication fixture joins actual selected
+identities to native published rows, a matching digest and settled health,
+then invokes the real observer and verifies its written files. The same-result
+report check preserves every output byte; both independent runs retain full
+source proof. Twenty focused tests passed, including the actual inline
+TypeScript check within its original timeout. The full-audit final gate and
+default-off controls remain unchanged.
 
 ### Table R - Workflow inputs and freshness behavior
 
