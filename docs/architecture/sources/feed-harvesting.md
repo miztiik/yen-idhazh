@@ -77,9 +77,12 @@ are retired rather than reused and a missing live weight is a named config
 error. Retired kinds and verticals need not remain current registry members.
 
 The configuration fingerprint is SHA-256 of the UTF-8 JSON serialization of
-the validated planner configuration, relevant registry fields, source list and
+the validated planner configuration excluding `workflow_reporting`, relevant registry fields, source list and
 extraction controls, in that order. Each candidate carries that fingerprint
 and its resolved vertical policy. All unknown editorial labels remain null.
+Reporting settings remain available in the returned configuration, but neither
+their enabled flag nor removal text changes content identity or ledger digests.
+Content and policy settings still change the fingerprint.
 
 Candidate identity uses the shared run/source/original-entry-ordinal hash.
 A missing field does not renumber later siblings. URL identity follows the
