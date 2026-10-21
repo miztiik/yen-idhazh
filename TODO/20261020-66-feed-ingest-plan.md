@@ -1213,6 +1213,15 @@ source-file digests cannot be an equality oracle. Verify both runs' full
 native source records and completion proof without dropping fields; retain
 the independent-run equality checks for deterministic stage and metric
 content. Do not replace measured clocks or normalize persisted records.
+Reviewed workflow head `39fabddeb9c84521050551bf7d0ff5fbdb4b2c31` implements
+native source-row and original complete-attempt verification after the single
+actual CLI call. Its generated publication fixture joins actual selected
+identities to native published rows, a matching digest and settled health,
+then invokes the real observer and verifies its written files. The same-result
+report check preserves every output byte; both independent runs retain full
+source proof. Twenty focused tests passed, including the actual inline
+TypeScript check within its original timeout. The full-audit final gate and
+default-off controls remain unchanged.
 
 ### Table R - Workflow inputs and freshness behavior
 
@@ -1470,6 +1479,12 @@ passed shared-contract bindings, site, browser, robots and scope. Its only
 remaining failures are the same two unrelated schedule assertions; 7249
 backend tests passed. The new dependency regression is resolved, but the
 candidate is not green for merge.
+The independent schedule repair, PR #1623, passed all required checks and
+merged into main as `5e65c0dad0335fa4cfbdc9a8285471f9cfe314ac`. The owner
+directed dependent delivery to resume. Update the writer candidate normally
+against repaired main, resolve its merge conflict without changing unrelated
+work, and land the dependency chain only after each required candidate is
+green. Earlier red runs remain historical evidence, not a current repair veto.
 
 Row #13's shared integration adds
 `services/feed-ingest-plan/src/metrics/publication-metrics.ts` to separate
