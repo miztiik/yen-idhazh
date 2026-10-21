@@ -1,12 +1,24 @@
 /** Which authored settings bound the operator listener and its named input files? */
 import { z } from "zod";
-import { NonEmptySchema, PositiveCountSchema } from "@idhazh/common-contracts";
+import { DateStampSchema, NonEmptySchema, PositiveCountSchema } from "@idhazh/common-contracts";
 
 export const RelativePathSchema = NonEmptySchema.refine(
   value => !value.includes("\\") && !value.includes(":") && !value.startsWith("/")
     && value.split("/").every(part => part !== "" && part !== "." && part !== ".."),
   "must be a relative POSIX path without parent traversal",
 );
+export const SeenDayInputSchema = z.strictObject({
+  day: DateStampSchema,
+  indexes: z.strictObject({
+    yearly: RelativePathSchema.optional(), monthly: RelativePathSchema.optional(),
+    daily: RelativePathSchema.optional(),
+  }).optional(),
+  raw_files: z.array(RelativePathSchema).optional(),
+  raw_index: RelativePathSchema.optional(),
+}).refine(value => value.raw_files === undefined || value.raw_index === undefined, {
+  message: "name raw_files or raw_index, not both",
+});
+export type SeenDayInput = z.infer<typeof SeenDayInputSchema>;
 export const ServiceSettingsSchema = z.strictObject({
   enabled: z.boolean().default(false).describe(
     "Remove when complete-attempt audit writes and verification are integrated and approved.",
@@ -21,6 +33,7 @@ export const ServiceSettingsSchema = z.strictObject({
     planning: RelativePathSchema, taxonomy: RelativePathSchema, sources: RelativePathSchema,
     extraction: RelativePathSchema, registrations: RelativePathSchema,
     output_root: RelativePathSchema, seen_files: z.array(RelativePathSchema),
+    seen_days: z.array(SeenDayInputSchema).default([]),
   }),
   run: z.strictObject({ attempt: PositiveCountSchema, producer: NonEmptySchema }),
 });

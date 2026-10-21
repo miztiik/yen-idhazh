@@ -14,7 +14,8 @@
     "extraction": "config/idhazh.json",
     "registrations": "config/ledgers.json",
     "output_root": "state",
-    "seen_files": []
+    "seen_files": [],
+    "seen_days": []
   },
   "run": {
     "attempt": 1,
