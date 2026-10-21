@@ -1,6 +1,6 @@
 # How the query door answers a panel
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-10-21
 
 The query door is the one module a console panel calls to read a committed
 ledger: `slice()` for rows and `ledgerReach()` for how far a ledger reaches, both
@@ -73,10 +73,21 @@ for an `unreachable` with another cause.
 ## Which files a span reads
 
 The ledger carries its own indexes, because a browser cannot list a directory:
-`state/compact/<ledger>/index/daily.json`, `index/monthly.json` and
+`state/compact/<registered-prefix>/index/daily.json`, `index/monthly.json` and
 `index/yearly.json`, written together by the gardener's compaction task - an
 index for a period never packed names nothing - and declared as `CompactIndex` in
 `backend/idhazh/contracts/ledger_index.py`.
+
+The prefix is the ledger's `prefix` list in the committed
+`config/ledgers.json`, joined with `/`. The build checks each segment before
+using it as a path, refuses unknown ledger names and ambiguous mappings, and
+uses the same prefix for compact files, indexes and raw listings.
+`frontend/scripts/ledger-prefixes.mjs` owns that check.
+The browser's small `LEDGER_FOLDERS` copy is held in step by the registry
+binding checks. Thus `dispatches` resolves under
+`state/compact/feed-ingest-plan/dispatches/`, while `host-fingerprint` keeps
+`state/compact/host-fingerprint/`. Missing-file build warnings name the ledger,
+not its family's folder.
 
 1. **`daily.json` first; `monthly.json` only when the span starts before the
    oldest day `daily.json` names; and `yearly.json` only when it starts before the

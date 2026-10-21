@@ -1,12 +1,16 @@
 import { expect, test } from '@playwright/test';
-import { cpSync, copyFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { cpSync, copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { ledgerCopy, publishedLedgers } from '../scripts/published-ledgers.mjs';
 import { siteKeepsFrom, siteMayHaveTrimmed } from '../src/lib/data/site-window';
 import { daysBetween } from '../src/lib/data/slice';
 import { backendPython } from './support/backend-python';
 import { sliceFromDisk } from '../src/lib/server/ledger-disk';
+import { buildFeedLedgers, FEED_LEDGERS, stageFeedLedgers } from './support/feed-ledgers';
+import { ledgerFolders } from '../scripts/ledger-prefixes.mjs';
+import { ledgerFolder } from '../src/lib/data/slice-reader';
 
 /**
  * Which files of `state/` the build copies for a published ledger, and when it stops.
@@ -51,6 +55,97 @@ function aWholeLedger(ledger: string): Record<string, string> {
 		[`compact/${ledger}/daily/2026/09/03.parquet`]: 'PAR1'
 	};
 }
+
+test('Row16 ORACLE: nested Python-contract Parquet is staged whole and flat host paths stay unchanged', async () => {
+	const source = test.info().outputPath('feed-source');
+	const site = test.info().outputPath('feed-site');
+	await buildFeedLedgers(source);
+	const copy = stageFeedLedgers(source, site);
+	for (const ledger of FEED_LEDGERS) {
+		const file = `compact/feed-ingest-plan/${ledger}/daily/2026/10/20.parquet`;
+		expect(copy.files).toContain(file);
+		expect(readFileSync(join(site, file))).toEqual(readFileSync(join(source, file)));
+	}
+	expect(copy.files).toContain('compact/host-fingerprint/daily/2026/10/20.parquet');
+	const host = await sliceFromDisk(site, 'host-fingerprint', {
+		columns: ['cores'], from: '2026-10-20', to: '2026-10-20'
+	});
+	expect(host).toMatchObject({ state: 'ok', rows: [{ cores: 4 }] });
+});
+
+test('all six feed ledgers are explicitly published at the browser registry prefixes', () => {
+	const names = publishedLedgers();
+	const folders = ledgerFolders(names);
+	for (const ledger of FEED_LEDGERS) {
+		expect(names).toContain(ledger);
+		expect(folders[ledger]).toBe(`feed-ingest-plan/${ledger}`);
+		expect(ledgerFolder(ledger)).toBe(folders[ledger]);
+	}
+	expect(folders['host-fingerprint']).toBe('host-fingerprint');
+});
+
+test('registry prefixes reject unsafe segments, unknown names and ambiguous mappings before path use', () => {
+	const file = test.info().outputPath('ledgers.json');
+	const entry = { name: 'dispatches', grain: 'raw-and-compact', prefix: ['feed-ingest-plan', 'dispatches'] };
+	const registry = (entries: unknown[]) => writeFileSync(file, JSON.stringify({ families: [{ ledgers: entries }] }));
+	for (const prefix of [[], ['..'], ['.'], ['/absolute'], ['C:'], ['feed/dispatches'], ['feed\\dispatches'], [''], ['dispatches', 1]]) {
+		registry([{ ...entry, prefix }]);
+		expect(() => ledgerFolders(['dispatches'], file)).toThrow(/unsafe prefix/);
+	}
+	for (const duplicate of [
+		{ ...entry, prefix: ['other'] },
+		{ ...entry, name: 'other' },
+		{ ...entry, name: 'other', prefix: ['feed-ingest-plan'] }
+	]) {
+		registry([entry, duplicate]);
+		expect(() => ledgerFolders(['dispatches'], file)).toThrow(/ambiguous ledger mapping/);
+	}
+	registry([entry]);
+	expect(() => ledgerFolders(['feed-ingest-plan-dispatches'], file)).toThrow(/does not register/);
+});
+
+test('nested daily, monthly, yearly, index and raw paths retain the requested copy window', () => {
+	const folder = 'feed-ingest-plan/dispatches';
+	const tree = Object.fromEntries(Object.entries(aWholeLedger('dispatches')).map(
+		([name, text]) => [name.replace('compact/dispatches/', `compact/${folder}/`), text]
+	));
+	tree[`raw/${folder}/2026/09/04/writer.parquet`] = 'PAR1';
+	const copy = ledgerCopy(aStateTree(tree), ['dispatches'], 'state', 365);
+	expect(copy.files).toEqual([
+		`compact/${folder}/daily/2026/09/01.parquet`,
+		`compact/${folder}/daily/2026/09/02.parquet`,
+		`compact/${folder}/index/daily.json`,
+		`compact/${folder}/index/monthly.json`,
+		`compact/${folder}/index/yearly.json`,
+		`compact/${folder}/monthly/2026/08.parquet`,
+		`compact/${folder}/yearly/2025/2025.parquet`,
+		`raw/${folder}/2026/09/04/writer.parquet`,
+		`raw/${folder}/index/2026-09-03.json`,
+		`raw/${folder}/index/2026-09-04.json`
+	]);
+	expect(JSON.parse(copy.indexes[`raw/${folder}/index/2026-09-03.json`])).toMatchObject({ ledger: 'dispatches', files: [] });
+	expect(copy.refused).toEqual([]);
+	expect(copy.missing).toEqual([]);
+});
+
+test('the real staging script names the nested ledger, not its family, when a data file is missing', () => {
+	const folder = 'feed-ingest-plan/dispatches';
+	const tree = Object.fromEntries(Object.entries(aWholeLedger('dispatches')).map(
+		([name, text]) => [name.replace('compact/dispatches/', `compact/${folder}/`), text]
+	));
+	delete tree[`compact/${folder}/daily/2026/09/01.parquet`];
+	const source = aStateTree(tree);
+	const frontend = test.info().outputPath('frontend');
+	mkdirSync(frontend, { recursive: true });
+	const output = execFileSync(process.execPath, [
+		fileURLToPath(new URL('../scripts/copy-visuals.mjs', import.meta.url))
+	], { cwd: frontend, encoding: 'utf8', env: {
+		...process.env, STATE_ROOT: source, DIGEST_ROOT: join(frontend, 'public', 'digest')
+	} });
+	expect(output).toContain(`file-missing dispatches state/compact/${folder}/daily/2026/09/01.parquet:`);
+	expect(output).not.toContain('file-missing feed-ingest-plan ');
+	expect(readFileSync(join(frontend, 'static', 'state', 'compact', folder, 'daily/2026/09/02.parquet'), 'utf8')).toBe('PAR1');
+});
 
 test('THE ORACLE: committed publication copies real council records and the query door reads their outcomes', async () => {
 	test.setTimeout(300_000);

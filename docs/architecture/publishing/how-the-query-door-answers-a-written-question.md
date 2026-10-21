@@ -4,6 +4,15 @@
 
 The query door can run one operator-written, read-only DuckDB statement over the ledgers and UTC days the page chose. The statement sees views, not files.
 
+The published allowlist in `config/idhazh.json`, `ledger.published`, explicitly
+includes `dispatches`, `rejections`, `source-runs`, `article-assessments`,
+`diversity` and `editorial-selections`. Each uses its short registry name as its
+view name. Registration in `config/ledgers.json` alone does not publish a
+ledger. The site copies actual Parquet bytes, including dispatch article text
+and nested typed columns; it does not make a metadata-only copy. For example,
+`SELECT content.article_text FROM dispatches` reads the stored article text.
+There is no separate feed explorer or production planner cutover.
+
 ## Views
 
 `ask()` lives beside `slice()` in `frontend/src/lib/data/ledger.ts`. It uses the same page keeper as the panel path. For each selected ledger, `ask-reader.ts` creates one DuckDB view whose name is a member of `LEDGER_NAMES`. The files inside that view are engine-minted names such as `door/1.parquet`; no index, cell, caller text or fetched text becomes a file name.
@@ -55,6 +64,15 @@ handing the page an empty list. A page script that sets
 browser tests that serve a ledger they built do: a built ledger has no writer's
 files, so the build's list would name days of the canary's. The shipped page
 sets nothing, and no page script can name a day the build did not list.
+
+The build reads one named raw index folder per published registry prefix, not
+the first-level folders of `state/raw/` and not a recursive tree listing.
+For dispatches that folder is
+`state/raw/feed-ingest-plan/dispatches/index/`; the build still hands the
+browser the short key `dispatches`. After a packed day, a staged empty listing
+means a known-empty day; a missing listing inside the listed range is still a
+gap. The copy window, 64 MiB query fetch ceiling and 365-day explorer reach
+are unchanged. The reach does not promise that all 365 days are on the site.
 
 ## Archive tier
 

@@ -43,6 +43,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { siteKeepsFrom } from '../src/lib/data/site-window.ts';
 import { daysBetween, namesFile, newestNamed } from '../src/lib/data/slice.ts';
+import { ledgerFolders } from './ledger-prefixes.mjs';
 
 /** The tunable knobs, the same file `backend/idhazh/contracts/app_config.py` validates. */
 const CONFIG_FILE = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'config', 'idhazh.json');
@@ -174,12 +175,13 @@ function namedFile(period, covers) {
  *
  * @param {string} text
  * @param {string} ledger
+ * @param {string} folder
  * @param {Period} period
  * @param {number} firstDay
  * @param {number} lastDay
  * @returns {{files: string[], text: string} | string} The named files and trimmed index, or why it was refused.
  */
-function filesNamedIn(text, ledger, period, firstDay, lastDay) {
+function filesNamedIn(text, ledger, folder, period, firstDay, lastDay) {
 	/** @type {unknown} */
 	let index;
 	try {
@@ -207,7 +209,7 @@ function filesNamedIn(text, ledger, period, firstDay, lastDay) {
 		if (range === null) return `names ${JSON.stringify(covers)}, which is not a UTC period`;
 		if (range.last < firstDay || range.first > lastDay) continue;
 		entries.push(entry);
-		if (namesFile(entry)) files.push(`compact/${ledger}/${file}`);
+		if (namesFile(entry)) files.push(`compact/${folder}/${file}`);
 	}
 	return { files, text: `${JSON.stringify({ ...held, entries }, null, 2)}\n` };
 }
@@ -219,12 +221,23 @@ function filesNamedIn(text, ledger, period, firstDay, lastDay) {
  * @returns {{ newest: number | null, days: string[], errors: string[] }}
  */
 export function readPackedIndexes(stateRoot, ledger, rootName = 'state') {
+	const folder = ledgerFolders([ledger])[ledger];
+	return packedIndexes(stateRoot, ledger, folder, rootName);
+}
+
+/**
+ * @param {string} stateRoot
+ * @param {string} ledger
+ * @param {string} folder Validated at the registry boundary.
+ * @param {string} rootName
+ */
+function packedIndexes(stateRoot, ledger, folder, rootName) {
 	/** @type {Record<Period, {covers: string, rows: number, bytes: number}[]>} */
 	const byPeriod = { daily: [], monthly: [], yearly: [] };
 	/** @type {string[]} */
 	const errors = [];
 	for (const period of PERIODS) {
-		const index = `compact/${ledger}/index/${period}.json`;
+		const index = `compact/${folder}/index/${period}.json`;
 		const at = join(stateRoot, ...index.split('/'));
 		let parsed;
 		try {
@@ -323,13 +336,14 @@ function listingText(ledger, day, names, sizes, listedAt) {
  *
  * @param {string} stateRoot
  * @param {string} ledger
+ * @param {string} folder
  * @param {number | null} newestPacked
  * @param {number} spanDays
  * @param {string} listedAt
  * @param {string} rootName
  * @returns {{files: string[], listings: Record<string, string>, logs: string[]}}
  */
-function rawDaysNotPackedYet(stateRoot, ledger, newestPacked, spanDays, listedAt, rootName) {
+function rawDaysNotPackedYet(stateRoot, ledger, folder, newestPacked, spanDays, listedAt, rootName) {
 	if (newestPacked === null) {
 		return { files: [], listings: {}, logs: [`published ledgers: ${ledger} has no packed day; raw-day walk skipped.`] };
 	}
@@ -341,7 +355,7 @@ function rawDaysNotPackedYet(stateRoot, ledger, newestPacked, spanDays, listedAt
 	let newestRaw = null;
 	for (const day of daysBetween(dayString(start), dayString(end))) {
 		const [year, month, date] = dayParts(day);
-		const directory = join(stateRoot, 'raw', ledger, year, month, date);
+		const directory = join(stateRoot, 'raw', ...folder.split('/'), year, month, date);
 		const exists = existsSync(directory) && statSync(directory).isDirectory();
 		checked.push({ day, directory, exists });
 		if (exists) newestRaw = day;
@@ -355,7 +369,7 @@ function rawDaysNotPackedYet(stateRoot, ledger, newestPacked, spanDays, listedAt
 	const logs = [];
 	for (const dayInfo of checked) {
 		if (dayInfo.day > newestRaw) break;
-		const listing = `raw/${ledger}/index/${dayInfo.day}.json`;
+		const listing = `raw/${folder}/index/${dayInfo.day}.json`;
 		if (!dayInfo.exists) {
 			listings[listing] = listingText(ledger, dayInfo.day, [], [], listedAt);
 			files.push(listing);
@@ -368,7 +382,7 @@ function rawDaysNotPackedYet(stateRoot, ledger, newestPacked, spanDays, listedAt
 		if (refused.length > 0) {
 			for (const name of refused) {
 				logs.push(
-					`published ledgers: ${rootName}/raw/${ledger}/${dayInfo.day.replaceAll('-', '/')}/${name} is not parquet; ${dayInfo.day} is left unlisted.`
+					`published ledgers: ${rootName}/raw/${folder}/${dayInfo.day.replaceAll('-', '/')}/${name} is not parquet; ${dayInfo.day} is left unlisted.`
 				);
 			}
 			continue;
@@ -378,7 +392,7 @@ function rawDaysNotPackedYet(stateRoot, ledger, newestPacked, spanDays, listedAt
 		files.push(listing);
 		for (const name of names) {
 			const [year, month, date] = dayParts(dayInfo.day);
-			files.push(`raw/${ledger}/${year}/${month}/${date}/${name}`);
+			files.push(`raw/${folder}/${year}/${month}/${date}/${name}`);
 		}
 	}
 	return { files, listings, logs };
@@ -403,6 +417,7 @@ export function ledgerCopy(stateRoot, ledgers, rootName = 'state', spanDays = pu
 	/** @type {LedgerCopy} */
 	const copy = { files: [], indexes: {}, refused: [], missing: [], logs: [] };
 	if (ledgers.length === 0) return copy;
+	const folders = ledgerFolders(ledgers);
 	if (!existsSync(stateRoot) || !statSync(stateRoot).isDirectory()) {
 		copy.refused.push(
 			`the state root ${rootName}/ is not there, and ledger.published names ${ledgers.join(', ')}`
@@ -415,23 +430,24 @@ export function ledgerCopy(stateRoot, ledgers, rootName = 'state', spanDays = pu
 	const missing = new Set();
 	const listedAt = new Date(Date.now()).toISOString().replace(/\.\d{3}Z$/, 'Z');
 	for (const ledger of ledgers) {
-		if (!existsSync(join(stateRoot, 'compact', ledger))) {
+		const folder = folders[ledger];
+		if (!existsSync(join(stateRoot, 'compact', ...folder.split('/')))) {
 			copy.logs.push(
-				`published ledgers: ${rootName}/compact/${ledger}/ is not there, so ${ledger} is not packed yet ` +
+				`published ledgers: ${rootName}/compact/${folder}/ is not there, so ${ledger} is not packed yet ` +
 					'and the site holds none of its files. If it was packed before, restore that folder from git history.'
 			);
 			continue;
 		}
 		const missingIndexes = PERIODS.filter(
-			(period) => !existsSync(join(stateRoot, 'compact', ledger, 'index', `${period}.json`))
+			(period) => !existsSync(join(stateRoot, 'compact', ...folder.split('/'), 'index', `${period}.json`))
 		);
 		if (missingIndexes.length > 0) {
 			for (const period of missingIndexes) {
-				copy.refused.push(`${ledger}: ${rootName}/compact/${ledger}/index/${period}.json is missing`);
+				copy.refused.push(`${ledger}: ${rootName}/compact/${folder}/index/${period}.json is missing`);
 			}
 			continue;
 		}
-		const packed = readPackedIndexes(stateRoot, ledger, rootName);
+		const packed = packedIndexes(stateRoot, ledger, folder, rootName);
 		if (packed.errors.length > 0) {
 			copy.refused.push(...packed.errors);
 			continue;
@@ -439,7 +455,7 @@ export function ledgerCopy(stateRoot, ledgers, rootName = 'state', spanDays = pu
 		const newest = packed.newest;
 		if (newest === null) {
 			for (const period of PERIODS) {
-				const index = `compact/${ledger}/index/${period}.json`;
+				const index = `compact/${folder}/index/${period}.json`;
 				copy.indexes[index] = readFileSync(join(stateRoot, ...index.split('/')), 'utf8');
 				files.add(index);
 			}
@@ -448,13 +464,13 @@ export function ledgerCopy(stateRoot, ledgers, rootName = 'state', spanDays = pu
 		}
 		const firstDay = /** @type {number} */ (dayNumber(siteKeepsFrom(dayString(newest), spanDays)));
 		for (const period of PERIODS) {
-			const index = `compact/${ledger}/index/${period}.json`;
+			const index = `compact/${folder}/index/${period}.json`;
 			const at = join(stateRoot, ...index.split('/'));
 			if (!existsSync(at)) {
 				copy.refused.push(`${ledger}: ${rootName}/${index} is missing`);
 				continue;
 			}
-			const named = filesNamedIn(readFileSync(at, 'utf8'), ledger, period, firstDay, newest);
+			const named = filesNamedIn(readFileSync(at, 'utf8'), ledger, folder, period, firstDay, newest);
 			if (typeof named === 'string') {
 				copy.refused.push(`${ledger}: ${rootName}/${index} ${named}`);
 				continue;
@@ -466,7 +482,7 @@ export function ledgerCopy(stateRoot, ledgers, rootName = 'state', spanDays = pu
 				else missing.add(file);
 			}
 		}
-		const raw = rawDaysNotPackedYet(stateRoot, ledger, newest, spanDays, listedAt, rootName);
+		const raw = rawDaysNotPackedYet(stateRoot, ledger, folder, newest, spanDays, listedAt, rootName);
 		copy.logs.push(...raw.logs);
 		for (const file of raw.files) files.add(file);
 		Object.assign(copy.indexes, raw.listings);

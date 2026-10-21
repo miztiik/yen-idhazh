@@ -7,6 +7,7 @@ import { assetBaseUrl } from '../asset-base.js';
 import { projectDay } from '../src/lib/payload/project.ts';
 import { publicFiles } from '../src/lib/server/publication.ts';
 import { ledgerCopy, publishedLedgers } from './published-ledgers.mjs';
+import { ledgerFolders } from './ledger-prefixes.mjs';
 import { stagedPath } from './staged-publication.mjs';
 
 const digestRoot = process.env.DIGEST_ROOT
@@ -67,11 +68,13 @@ for (const file of publicFiles(publicRoot)) {
 const ledgers = publishedLedgers();
 const stateLabel = relative(resolve('..'), stateRoot).split(sep).join('/');
 const copy = ledgerCopy(stateRoot, ledgers, stateLabel);
+const folders = ledgerFolders(ledgers);
 if (copy.refused.length > 0) {
 	throw new Error(`Published ledger is incomplete:\n${copy.refused.join('\n')}`);
 }
 for (const file of copy.missing) {
-	const [, ledger] = file.split('/');
+	const ledger = ledgers.find((name) => file.startsWith(`compact/${folders[name]}/`));
+	if (ledger === undefined) throw new Error(`No published ledger owns state/${file}`);
 	console.log(
 		`::warning title=A published ledger file is missing::file-missing ${ledger} ${stateLabel}/${file}: ` +
 			'an index names it and it is not in the tree. The site is built without it, and the ' +

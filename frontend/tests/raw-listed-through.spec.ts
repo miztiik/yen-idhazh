@@ -28,6 +28,14 @@ test('a static folder with no staged listing names no day', () => {
 	expect(rawListedThrough(ROOT)).toEqual({});
 });
 
+test('nested registered prefixes report short ledger names and ignore unlisted folders', () => {
+	const root = test.info().outputPath('nested-static');
+	stageListings(root, 'feed-ingest-plan/dispatches', ['2026-10-22', '2026-10-23']);
+	stageListings(root, 'feed-ingest-plan/rejections', ['2026-10-21']);
+	stageListings(root, 'unregistered', ['2026-10-24']);
+	expect(rawListedThrough(root)).toEqual({ dispatches: '2026-10-23', rejections: '2026-10-21' });
+});
+
 test('a static folder that is not there stops the build and names the folder', () => {
 	expect(() => rawListedThrough(test.info().outputPath('no-static'))).toThrow(
 		/^the static folder frontend\/test-results\/[^\\:]+\/no-static\/ is not there, so the build cannot say which raw days it listed$/
@@ -39,8 +47,15 @@ test('THE ORACLE: called as the site build calls it, with no argument from front
 	const script = join(frontend, 'scripts', 'raw-listed-through.mjs');
 	mkdirSync(join(frontend, 'scripts'), { recursive: true });
 	copyFileSync(fileURLToPath(new URL('../scripts/raw-listed-through.mjs', import.meta.url)), script);
+	copyFileSync(fileURLToPath(new URL('../scripts/ledger-prefixes.mjs', import.meta.url)), join(frontend, 'scripts', 'ledger-prefixes.mjs'));
+	const config = join(frontend, '..', 'config');
+	mkdirSync(config, { recursive: true });
+	for (const name of ['idhazh.json', 'ledgers.json']) {
+		copyFileSync(fileURLToPath(new URL(`../../config/${name}`, import.meta.url)), join(config, name));
+	}
 	stageListings(join(frontend, 'static'), 'item-health', ['2030-06-14', '2030-06-15']);
 	stageListings(join(frontend, 'static'), 'seen', ['2030-06-12', '2030-06-13']);
+	stageListings(join(frontend, 'static'), 'feed-ingest-plan/dispatches', ['2030-06-13', '2030-06-14']);
 	const baked = execFileSync(
 		process.execPath,
 		[
@@ -50,5 +65,5 @@ test('THE ORACLE: called as the site build calls it, with no argument from front
 		],
 		{ cwd: frontend, encoding: 'utf8' }
 	);
-	expect(JSON.parse(baked)).toEqual({ 'item-health': '2030-06-15', seen: '2030-06-13' });
+	expect(JSON.parse(baked)).toEqual({ 'item-health': '2030-06-15', seen: '2030-06-13', dispatches: '2030-06-14' });
 });
