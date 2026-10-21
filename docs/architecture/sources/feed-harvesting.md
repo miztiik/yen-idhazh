@@ -71,12 +71,18 @@ The returned source input also retains `retired_on`. Inactive sources receive
 Non-retired sources require active registered kind and tier entries. Retired
 sources may retain historical classifications, but a source snapshot still
 requires its genuine registered tier weight; a missing historical tier is an
-explicit input error, never a fabricated weight.
+explicit input error before any requests start, never a fabricated weight.
+This follows the existing source-classification rule that stable identifiers
+are retired rather than reused and a missing live weight is a named config
+error. Retired kinds and verticals need not remain current registry members.
 
 The configuration fingerprint is SHA-256 of the UTF-8 JSON serialization of
-the validated planner configuration, relevant registry fields, source list and
+the validated planner configuration excluding `workflow_reporting`, relevant registry fields, source list and
 extraction controls, in that order. Each candidate carries that fingerprint
 and its resolved vertical policy. All unknown editorial labels remain null.
+Reporting settings remain available in the returned configuration, but neither
+their enabled flag nor removal text changes content identity or ledger digests.
+Content and policy settings still change the fingerprint.
 
 Candidate identity uses the shared run/source/original-entry-ordinal hash.
 A missing field does not renumber later siblings. URL identity follows the
