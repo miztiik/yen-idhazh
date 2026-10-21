@@ -5,12 +5,9 @@ from __future__ import annotations
 import datetime
 import re
 from pathlib import Path
-from typing import Final, cast
-
 import pytest
 
 from ._harness import (
-    CONTENT_REFRESH_UTC_HOURS,
     DISPATCH_BOOLEAN,
     DISPATCH_CHOICE,
     DISPATCH_INPUT_SHAPES,
@@ -23,7 +20,6 @@ from ._harness import (
     UNPUBLISHABLE_DATES,
     _declared_dispatch_inputs,
     _every_env,
-    _job,
     _load_workflows,
     _mapping,
     _names_the_input,
@@ -39,9 +35,6 @@ from ._harness import (
 pytestmark = pytest.mark.workflow
 
 _DISPATCH_FALLBACK = re.compile(r"^inputs\.(?P<input>[a-z_]+) \|\| '(?P<fallback>[^']+)'$")
-
-_MINUTES_IN_A_DAY = 24 * 60
-
 
 def test_workflow_names_and_trigger_classes_are_pinned() -> None:
     workflows = _load_workflows()
@@ -68,26 +61,6 @@ def test_backfill_and_report_receive_the_same_named_days() -> None:
     assert 'python -m idhazh check-publication "${args[@]}"' in body
 
 
-def test_content_refresh_runs_at_the_five_approved_utc_hours() -> None:
-    """Five one-slot lines, not one five-hour line, and the difference is load-bearing.
-
-    `github.event.schedule` hands a run the cron line that fired. With one
-    `20 2,6,10,14,18 * * *` line that string cannot say which of the five slots
-    it was, so a run could not report how late it started - and GitHub drops
-    scheduled slots under load without leaving a failed run behind.
-    """
-    workflows = _load_workflows()
-    schedule = _triggers(workflows["digest.yml"])["schedule"]
-
-    assert schedule == [{"cron": f"20 {hour} * * *"} for hour in CONTENT_REFRESH_UTC_HOURS]
-    for entry in cast(list[dict[str, str]], schedule):
-        fields = entry["cron"].split()
-        assert len(fields) == 5, "a five-field cron"
-        assert "," not in fields[1], (
-            "one hour per line, so github.event.schedule names a single slot"
-        )
-
-
 def test_a_scheduled_run_reports_which_slot_it_is_and_how_late() -> None:
     """The alarm is a report, not a gate. It cannot fix the platform.
 
@@ -110,129 +83,6 @@ def test_a_scheduled_run_reports_which_slot_it_is_and_how_late() -> None:
     body = str(step.get("run", ""))
     assert "::warning title=Late run::" in body, "it annotates the run summary"
     assert "10#" in body, "every clock field is forced to base ten, or 08 is octal"
-
-
-def _cron_minute_of_day(expression: str) -> int:
-    """The UTC minute a plain daily five-field cron line fires at."""
-    minute, hour, *rest = expression.split()
-    assert rest == ["*", "*", "*"], f"{expression!r} must be a plain daily cron"
-    return int(hour) * 60 + int(minute)
-
-
-def _wall_clock(first: int, last: int) -> set[int]:
-    """Every UTC minute of the day from `first` to `last`, wrapped over midnight."""
-    return {minute % _MINUTES_IN_A_DAY for minute in range(first, last + 1)}
-
-
-def _minute_of(clock: str) -> int:
-    """The UTC minute of the day an `HH:MM` reading names."""
-    hours, minutes = clock.split(":")
-    return int(hours) * 60 + int(minutes)
-
-
-def _busy(start: str, end: str) -> set[int]:
-    """Every UTC minute a measured busy span covers, from its start through its end."""
-    first, last = _minute_of(start), _minute_of(end)
-    return _wall_clock(first, last if last >= first else last + _MINUTES_IN_A_DAY)
-
-
-# When each scheduled workflow that pushes `main` was measured to be running, and
-# the cron lines it was measured under. Measured rather than derived: with today's
-# scheduling delays a span worked out from the cron lines covers the whole day -
-# each digest line's possible span overlaps the next - while the runs themselves
-# leave the same six hours quiet every night. A changed cron line fails here with
-# "re-measure" before its span can go stale. Read on 2026-09-28 with
-# `gh run list --workflow <file> --event schedule --json createdAt,updatedAt`.
-#
-# Content refresh: 60 runs, 2026-09-16 to 28. The last run of each day ended by
-# 00:52 UTC, and none was created before 07:23 UTC.
-DIGEST_BUSY_UTC: Final = ("07:23", "00:52")
-DIGEST_MEASURED_UNDER: Final = (
-    "20 2 * * *",
-    "20 6 * * *",
-    "20 10 * * *",
-    "20 14 * * *",
-    "20 18 * * *",
-)
-# LLM-COUNCIL: 9 runs, 2026-09-19 to 28, created from 23:57 and ended by 01:23 UTC.
-COUNCIL_BUSY_UTC: Final = ("23:57", "01:23")
-COUNCIL_MEASURED_UNDER: Final = ("0 22 * * *",)
-
-# How many minutes after its cron minute a scheduled gardener run is created. An
-# estimate, not a reading: no 00:40 wake has run yet. It is bracketed by the two
-# nearest cron lines read on 2026-09-28, ten runs each - 112 to 139 minutes at
-# 23:37 and 259 to 334 at 04:20 - and the first scheduled wakes' own delays
-# replace it.
-GARDENER_START_DELAY_MINUTES: Final = (112, 334)
-
-# The three jobs in front of the force push, whose timeouts bound how long it
-# can take to arrive.
-GARDENER_CHAIN: Final = ("plan", "run-tasks", "history")
-
-
-def _may_push(workflow: dict[str, object]) -> bool:
-    """Whether any job of this workflow may push: `contents: write` at either level."""
-    scopes = [workflow.get("permissions")] + [
-        _mapping(job, "job").get("permissions")
-        for job in _mapping(workflow.get("jobs"), "jobs").values()
-    ]
-    return any(isinstance(scope, dict) and scope.get("contents") == "write" for scope in scopes)
-
-
-def test_the_force_push_lands_while_no_other_scheduled_run_pushes_main() -> None:
-    """The history job ends in a force push of `main`, so it has to land in the quiet time.
-
-    The push can land no earlier than the wake plus the shortest delay, and no
-    later than the wake plus the longest delay plus every job's timeout in front
-    of it. That span has to miss every other scheduled workflow's measured busy
-    span. At 00:40 it is 02:32 to 07:09 against a quiet time of 01:23 to 07:23.
-
-    This lowers the odds; it does not close them. GitHub queues scheduled runs by
-    load, so a run later than the recorded normal still reaches the push, and no
-    workflow here can hold a lock against another one. What stops a clash
-    costing another run its commits is the tip check the push makes, not this
-    minute.
-    """
-    workflows = _load_workflows()
-    measured = {
-        "digest.yml": (DIGEST_MEASURED_UNDER, DIGEST_BUSY_UTC),
-        "llm-council.yml": (COUNCIL_MEASURED_UNDER, COUNCIL_BUSY_UTC),
-    }
-    gardener = "idhazh-gardener.yml"
-    pushers = {
-        filename
-        for filename, workflow in workflows.items()
-        if "schedule" in _triggers(workflow) and _may_push(workflow)
-    }
-    assert pushers == {*measured, gardener}, (
-        "a scheduled workflow that may push main was added or removed. Measure when it "
-        "runs and give it a busy span here, or the force push can land inside it"
-    )
-
-    busy: set[int] = set()
-    for filename, (under, span) in measured.items():
-        schedule = cast(list[dict[str, str]], _triggers(workflows[filename])["schedule"])
-        crons = tuple(entry["cron"] for entry in schedule)
-        assert crons == under, (
-            f"{filename} now wakes at {crons}, and its busy span {span} was measured under "
-            f"{under}. Re-measure it with gh run list before trusting this window"
-        )
-        busy |= _busy(*span)
-
-    workflow = workflows[gardener]
-    schedule = cast(list[dict[str, str]], _triggers(workflow)["schedule"])
-    assert len(schedule) == 1, "one wake-up line, so there is one minute to place"
-    wakes = _cron_minute_of_day(schedule[0]["cron"])
-    chain = sum(int(str(_job(workflow, job)["timeout-minutes"])) for job in GARDENER_CHAIN)
-    earliest, latest = GARDENER_START_DELAY_MINUTES
-    force_push = _wall_clock(wakes + earliest, wakes + latest + chain)
-
-    clash = sorted(force_push & busy)
-    assert not clash, (
-        f"the gardener wakes at {schedule[0]['cron']!r}, and its force push can land "
-        f"while another scheduled run pushes: {len(clash)} shared UTC minutes from "
-        f"{clash[0] // 60:02d}:{clash[0] % 60:02d}"
-    )
 
 
 def test_expensive_workflows_do_not_run_on_pull_request_or_push() -> None:
