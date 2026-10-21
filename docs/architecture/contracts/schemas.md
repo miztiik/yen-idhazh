@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-10-12
+**Last Updated**: 2026-10-21
 
 The persisted-shape subsystem: where the models live, how a schema is obtained from one, the small hand copy the frontend carries, and the tests that stop the two drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -78,6 +78,38 @@ hold both vocabularies to the Python enums, including their order.
 **The census row's column names are spelled once, in `frontend/src/lib/server/ledger-rows.ts`.** The door answers only the columns a read asks for, so `ITEM_HEALTH_COLUMNS` names every column `ItemHealthRow` declares, in its order, and `backend/tests/contracts/test_frontend_console_lists.py` fails when the contract gains, loses or renames one. `FEED_HEALTH_COLUMNS` beside it names only the `FeedHealthRow` columns the Voices page reads, in the contract's order, and the same test fails when the contract renames or drops one of them. `SCORE_COLUMNS` is built from the keys of `frontend/src/lib/console/eval-instruments.ts`, which the same test already holds to `EvalRow`. The host questions in `console/queries/machine.ts` name only the cells each panel needs, plus its finite legacy migration inputs.
 
 ## What holds the copy in step
+
+Feed planning carries strict hand-written Zod copies in
+`packages/common-contracts/src/schemas/`. Python remains the authority.
+`backend/tests/contracts/test_feed_ingest_contracts.py` compares the actual
+runtime schemas recursively: fields, nested types, required keys, nullability,
+defaults, and vocabularies. The package's tests exercise rejection evidence and
+cross-field refusals. Run `bun run check` and `bun test` in that package.
+The CI backend gate installs the locked package and runs these checks before
+pytest, which executes the Python-to-Zod bindings. It does not skip a binding
+when Bun or the package is absent.
+
+The eight feed planning contracts are stamped `2026-10-20`: harvested content,
+dispatches, terminal rejections, source-run observations, article assessments,
+diversity readings, unsharded editorial selections, and typed audit events.
+Their models live in `backend/idhazh/contracts/feed_ingest_*.py`.
+These declarations do not enable a producer, register a ledger, or change the
+production planner.
+
+Candidates keep source, original vertical, assigned desk, lenses, content event
+types, event cluster, and entities separate. Null labels mean unknown;
+empty lists mean assessed and empty. Known labels record their matcher and
+version. Resolved policy values and source classification weights travel with
+the evidence, so a later configuration edit cannot reinterpret history.
+
+Candidate identity is SHA-256 over validated run ID, source ID, and zero-based
+parsed-entry ordinal, separated by newline characters with no final newline.
+This is a protocol encoding, not a tunable selection rule. It exists before
+article validation and distinguishes two offered entries with the same URL.
+Article URL identity uses the existing `derive_url_key` function.
+Rejections require the deciding stage's reason and measurements; feed failures
+have no article identity. Audit payloads use declared variants and never carry
+full article text.
 
 Named tests in `backend/tests/contracts/`, each proving a specific binding.
 

@@ -1,0 +1,58 @@
+/** Which measured evidence decided a candidate at one planning stage? */
+import { z } from "zod";
+import { ArticleLabelsSchema, PolicyIdentitySchema, ScoreEvidenceSchema, SourceFormSchema, SourceSnapshotSchema } from "./source.schema";
+import { DropReasonSchema, REASON_STAGES } from "./rejection.schema";
+import { CountSchema, DateStampSchema, NonEmptySchema, NonNegativeSchema, PlanningStageSchema, PositiveCountSchema, PositiveSchema, Sha256Schema, SlugSchema, TimestampSchema, UrlSchema, VersionSchema, deriveUrlKey, reject } from "./primitives";
+
+export const VerdictStatusSchema = z.enum(["not_assessed", "assessed"]);
+export const ArticleAssessmentRecordSchema = z.strictObject({
+  version: VersionSchema, date: DateStampSchema, correlation_id: NonEmptySchema,
+  candidate_id: Sha256Schema, source_id: SlugSchema, source: SourceSnapshotSchema, labels: ArticleLabelsSchema,
+  canonical_url: UrlSchema.nullable(), url_key: Sha256Schema.nullable(),
+  stage: PlanningStageSchema, decision: z.enum(["admitted", "rejected", "selected"]),
+  reason: DropReasonSchema.nullable(), observed_at: TimestampSchema, policy: PolicyIdentitySchema,
+  effective_published_at: TimestampSchema.nullable(),
+  publication_clock: z.enum(["published_at", "fetched_at", "unavailable"]),
+  age_hours: NonNegativeSchema.nullable(), max_age_hours: PositiveSchema.nullable(),
+  extracted_word_count: CountSchema.nullable(), source_form: SourceFormSchema,
+  extraction_outcome: z.enum(["success", "failed", "not_attempted", "unavailable"]),
+  word_threshold: PositiveCountSchema.nullable(), author_present: z.boolean().nullable(),
+  publisher_identity: NonEmptySchema.nullable(), attribution_status: z.enum(["available", "unavailable"]),
+  paywall: z.boolean().nullable(), categories: z.array(NonEmptySchema).nullable(),
+  required_fields_present: z.boolean().nullable(), suitability_status: z.enum(["available", "unavailable"]),
+  informative_verdict_status: VerdictStatusSchema, informative_verdict: z.boolean().nullable(),
+  informative_evaluator_version: NonEmptySchema.nullable(),
+  suitability_verdict_status: VerdictStatusSchema, suitability_verdict: z.boolean().nullable(),
+  suitability_evaluator_version: NonEmptySchema.nullable(), score_evidence: ScoreEvidenceSchema.nullable(),
+  score_evidence_status: VerdictStatusSchema,
+}).superRefine((value, ctx) => {
+  if (value.source_id !== value.source.source_id) reject(ctx, "source_id must match the recorded source snapshot");
+  if (value.date !== value.observed_at.slice(0, 10)) reject(ctx, "date must match the UTC observation day");
+  if ((value.canonical_url === null) !== (value.url_key === null)) reject(ctx, "article URL and url_key are available together");
+  if (value.canonical_url !== null && value.url_key !== deriveUrlKey(value.canonical_url)) reject(ctx, "url_key must match canonical_url");
+  if ((value.decision === "rejected") !== (value.reason !== null)) reject(ctx, "only rejected decisions carry a rejection reason");
+  if (value.reason !== null && !(REASON_STAGES[value.reason] as readonly string[]).includes(value.stage)) reject(ctx, "rejection reason is not valid for the recorded stage");
+  if (value.publication_clock === "unavailable") {
+    if (value.effective_published_at !== null || value.age_hours !== null) reject(ctx, "unavailable publication timing carries no timestamp or age");
+  } else if (value.effective_published_at === null || value.age_hours === null) reject(ctx, "available publication timing carries its timestamp and age");
+  if ((value.age_hours === null) !== (value.max_age_hours === null)) reject(ctx, "age and its effective cutoff are recorded together");
+  if (value.extraction_outcome === "success") {
+    if (value.extracted_word_count === null || value.word_threshold === null) reject(ctx, "successful extraction records count and threshold");
+  } else if (value.extraction_outcome === "failed") {
+    if (value.word_threshold === null) reject(ctx, "failed extraction records the applied word threshold");
+  } else if (value.extracted_word_count !== null || value.word_threshold !== null) reject(ctx, "unperformed extraction has no count or threshold");
+  if (value.attribution_status === "unavailable") {
+    if (value.author_present !== null || value.publisher_identity !== null) reject(ctx, "unavailable attribution carries no inferred values");
+  } else if (value.author_present === null) reject(ctx, "available attribution records whether a byline exists");
+  const suitability = [value.paywall, value.categories, value.required_fields_present];
+  if (value.suitability_status === "unavailable" && suitability.some(v => v !== null)) reject(ctx, "unavailable suitability carries no inferred values");
+  if (value.suitability_status === "available" && suitability.some(v => v === null)) reject(ctx, "available suitability records each required check");
+  for (const [status, verdict, evaluator, name] of [
+    [value.informative_verdict_status, value.informative_verdict, value.informative_evaluator_version, "informative"],
+    [value.suitability_verdict_status, value.suitability_verdict, value.suitability_evaluator_version, "suitability"],
+  ] as const) {
+    if ((status === "assessed") !== (verdict !== null && evaluator !== null)) reject(ctx, `${name} verdict and evaluator version match assessed status`);
+  }
+  if ((value.score_evidence_status === "assessed") !== (value.score_evidence !== null)) reject(ctx, "score evidence must match its availability status");
+});
+export type ArticleAssessmentRecord = z.infer<typeof ArticleAssessmentRecordSchema>;

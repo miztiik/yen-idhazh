@@ -1,0 +1,110 @@
+{
+  "candidate_id": "e417e9ca6582c569940aae495f28be3adb0fa1aeff1cdf647321e87a4e365a76",
+  "canonical_url": "https://example.org/article",
+  "correlation_id": "fixture-plan",
+  "date": "2026-10-20",
+  "editorial_rank": 1,
+  "estimated_work": 6.0,
+  "labels": {
+    "assigned_desk": null,
+    "entities": null,
+    "event_cluster_id": null,
+    "event_types": null,
+    "lenses": null,
+    "matcher_version": null,
+    "origin": null
+  },
+  "policy": {
+    "base_source_allowance": 3,
+    "bonus_uncovered_event_cluster": 1,
+    "bonus_underrepresented_vertical": 1,
+    "bonus_unique_evidence": 1,
+    "config_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "lambda_coverage": 0.1,
+    "lambda_desk": 0.1,
+    "lambda_domain": 0.15,
+    "lambda_entity": 0.0,
+    "lambda_event_cluster": 0.3,
+    "lambda_event_type": 0.0,
+    "lambda_lens": 0.1,
+    "lambda_source": 0.25,
+    "lambda_source_kind": 0.05,
+    "lambda_vertical": 0.1,
+    "max_age_hours": 24.0,
+    "min_words_abstract": 60,
+    "min_words_article": 180,
+    "policy_version": "2026-10-20",
+    "recency_half_life_hours": 18.0,
+    "recency_weight": 0.6,
+    "source_authority_weight": 1.0
+  },
+  "ratings": {
+    "base_article_score": 1.0,
+    "bonus_uncovered_event_cluster": false,
+    "bonus_underrepresented_vertical": false,
+    "bonus_unique_evidence": false,
+    "cap_relaxations": [],
+    "carrier_outlets": [],
+    "coverage": {
+      "available": false,
+      "value": null
+    },
+    "desk": {
+      "available": false,
+      "value": null
+    },
+    "domain": {
+      "available": false,
+      "value": null
+    },
+    "entity": {
+      "available": false,
+      "value": null
+    },
+    "event_cluster": {
+      "available": false,
+      "value": null
+    },
+    "event_type": {
+      "available": false,
+      "value": null
+    },
+    "exploration_slot": false,
+    "lens": {
+      "available": false,
+      "value": null
+    },
+    "marginal_score": 1.0,
+    "replacement_url_key": null,
+    "representative_url_key": null,
+    "source": {
+      "available": false,
+      "value": null
+    },
+    "source_allowance": 3,
+    "source_kind": {
+      "available": false,
+      "value": null
+    },
+    "vertical": {
+      "available": false,
+      "value": null
+    }
+  },
+  "source": {
+    "applied_tier_weight": 0.8,
+    "feed_url": "https://example.org/feed.xml",
+    "form": "article",
+    "kind": "research",
+    "source_id": "fixture-feed",
+    "status": "active",
+    "tier": 4,
+    "title": "Fixture feed",
+    "vertical": "technology",
+    "weight": 1.0
+  },
+  "source_id": "fixture-feed",
+  "url_key": "9eba6b3c57ce169e19742b249a7f7542a620751a5c4b2f2c4990684f7e655f70",
+  "version": "2026-10-20",
+  "vertical": "technology"
+}

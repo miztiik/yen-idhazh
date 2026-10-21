@@ -1,0 +1,70 @@
+{
+  "attempt": 1,
+  "completion_evidence": [
+    {
+      "files": [],
+      "ledger": "article-assessments",
+      "row_count": 0
+    },
+    {
+      "files": [],
+      "ledger": "diversity",
+      "row_count": 0
+    },
+    {
+      "files": [],
+      "ledger": "editorial-selections",
+      "row_count": 0
+    },
+    {
+      "files": [],
+      "ledger": "dispatches",
+      "row_count": 0
+    },
+    {
+      "files": [],
+      "ledger": "rejections",
+      "row_count": 0
+    }
+  ],
+  "correlation_id": "feed-plan-2026-10-20-1",
+  "date": "2026-10-20",
+  "drop_reasons": [],
+  "duplicate_count": null,
+  "eligible_count": null,
+  "expected_source_count": 1,
+  "fetch_duration_ms": null,
+  "fetch_status": "not_requested",
+  "fresh_count": null,
+  "harvested_count": null,
+  "history_success_attempts": null,
+  "history_success_fraction": null,
+  "history_window_days": null,
+  "last_failure_at": null,
+  "last_failure_reason": null,
+  "lead_count": null,
+  "normalized_count": null,
+  "observation_phase": "plan_complete",
+  "observed_at": "2026-10-20T08:00:00Z",
+  "parse_duration_ms": null,
+  "parse_status": "not_attempted",
+  "parsed_count": null,
+  "published_count": null,
+  "run_id": "2026-10-20-1",
+  "selected_count": null,
+  "source": {
+    "applied_tier_weight": 1.0,
+    "feed_url": "https://news.example.com/feed.xml",
+    "form": "article",
+    "kind": "reporting",
+    "source_id": "sample-feed",
+    "status": "active",
+    "tier": 1,
+    "title": "Sample Feed",
+    "vertical": "world",
+    "weight": 1.0
+  },
+  "source_id": "sample-feed",
+  "status": "active",
+  "version": "2026-10-20"
+}
