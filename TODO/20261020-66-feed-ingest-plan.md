@@ -9,6 +9,18 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ## 0. Operating contract
 
+### Separate gate repair - 2026-10-21
+
+Owner-directed scope change: repair the existing query-door EXPLAIN fixture
+check in a separate PR from main, not as a Plan 66 row. CI run 39608009522
+for PR #1607 passed 7185 backend tests and failed only
+`test_additional_answer_fixtures_are_recomputed_with_duckdb`: native DuckDB
+changed its plan drawing, not the query's meaning. Check EXPLAIN fields and
+plan meaning while retaining every other exact answer comparison, the
+unchanged browser fixture and real browser EXPLAIN support. Do not change
+production behavior or dependency ranges. Rows #2, #3 and #5, their
+implementation and all row statuses remain unchanged.
+
 ### Table A - Operating contract
 
 | # | Field | Value |
