@@ -3,12 +3,13 @@
   "version": "2026.10.20",
   "private": true,
   "type": "module",
-  "description": "Isolated feed harvesting and planner policy resolution; no browser bundle cost.",
+  "description": "Isolated operator feed planner, API and CLI; no browser bundle cost.",
   "exports": {
     "./harvest-feeds": "./src/harvest-feeds/harvest-pool.ts",
     "./harvest-types": "./src/harvest-feeds/harvest-types.ts"
   },
   "scripts": {
+    "start": "bun src/index.ts",
     "check": "tsc --noEmit",
     "test": "bun test"
   },
@@ -17,6 +18,7 @@
     "@idhazh/ledger-file-writer": "file:../../packages/ledger-file-writer",
     "apache-arrow": "^21.2.0",
     "defuddle": "0.19.5",
+    "hono": "^4.10.0",
     "ipaddr.js": "2.5.0",
     "linkedom": "0.18.13",
     "parquet-wasm": "^0.9.0",
