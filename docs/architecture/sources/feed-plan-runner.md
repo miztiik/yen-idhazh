@@ -49,6 +49,10 @@ screening, curation, native selection readback, partitioning and persistence.
 It uses Row #10's public selection reader and partitioner, not a second
 implementation. The native reader verifies the actual written selection
 files against the current curation and original harvested content.
+The API and awaited CLI then pass that real stage result to
+`recordPlanningMetrics`. Its existing recorder verifies named stage files and
+writes and reads back actual assessment and diversity ledgers. It never runs
+as an optional reporter.
 
 The run captures one UTC instant. Harvesting, screening and curation use
 that same instant and the same freshness override, so live runs do not cross
@@ -111,6 +115,18 @@ seen-file receipts as additional per-day observations, even if a later stage
 fails. It validates receipts, rejects a backwards run clock and prunes receipts
 outside the configured window. A fresh process needs refreshed caller-provided
 inventories; this is not a repository scan or cross-process locking mechanism.
+After successful stage composition, that listener remembers which named day inputs it
+accepted. As UTC advances, it omits unchanged accepted inputs older than the
+new window without changing the authored inventory. New or changed invalid
+inputs still fail, as do out-of-window inputs in a direct run. Newly required
+days stay missing until the caller supplies their evidence; planning continues
+with available observations but cannot create new first sight without the
+complete window.
+These first-sight writes remain durable if subsequent required audit recording
+refuses their timing. The current assessment contract cannot retain first-sight
+timing, so an API or CLI run that consumes it fails explicitly after stage
+persistence, before either audit ledger is written. The listener still keeps
+the actual receipt; a retry cannot reset first sight to bypass that refusal.
 The returned evidence and API/CLI `first_sight` summary identify the window,
 per-day status, own receipts, created count and limited absence proof.
 
@@ -130,23 +146,39 @@ screening timing, source normalization, blocked/relaxed selection steps,
 file identities and worker assignments. It is the audit recorder's input,
 not a recomputed explanation of the final portfolio.
 
-`runFeedPlan` returns `dispatches_persisted_audit_pending`, never audited
-completion. `summarizePlan` gives the API/CLI the relative file paths and
-resolved worker count without publishing full article text. Until the audit
-recorder seals all required files and the final source snapshots, the API
-returns HTTP 409 and the CLI exits with code 2 after writing this explicit
-partial result. This is not a queued job or a promise of later completion.
+`runFeedPlan` returns the base `FeedPlanResult`, with
+`dispatches_persisted_audit_pending`, never audited completion. This base is
+also the recorder's input, so its type does not depend on its own audit output.
+The API and awaited CLI require `recordPlanningMetrics` to finish before
+returning a summary. Their `RecordedFeedPlanResult` adds `metrics`, containing
+actual assessment and diversity files, validated completion receipts, internal
+source summaries, measured evidence and remaining unavailable reasons.
+`summarizePlan` retains these under `metrics`; `files` still holds the original
+stage files. Neither source summaries nor ledger receipts claim source or
+attempt completion. No source-complete file or event is emitted.
+
+For representable runs, `metrics.status` and `audit.status` are
+`assessment_diversity_recorded_audit_pending`; `audited_complete` remains
+false. The API returns HTTP 409 and the CLI exits with code 2 after writing
+this partial summary. `main(args, {inputs, runtime, output})` returns that
+same summary to an awaited caller; only the standalone process sets its exit
+code. This is not a queued job or a promise of later completion.
 Invalid requests exit with code 1; disabled HTTP requests return 503.
 Persistence errors fail rather than returning a complete-looking result.
 Already durable immutable files may remain after a later failure.
 The public `loadPlanInputs` result also exposes actual `seen`, `assessments`
 and `diversity` ledger registrations for downstream native writes.
 
-Row #14 integrates directly after `runFeedPlan` returns: consume its captured
-context, existing events, actual stage evidence and persisted file results;
-write genuine assessment/metric files and the final source snapshot set;
-verify required completion evidence; only then replace the pending response.
-There is no fake audit callback or optional reporter on this completion path.
+The recorder preflights the whole attempt before any audit write. First-sight
+timing, signed negative publication ages and unsupported `top_k` concentration
+counts fail explicitly, as do missing or invalid native input files. No
+observation is skipped or rewritten to fit the persisted assessment contract.
+The API returns an error with HTTP 500, and the standalone CLI exits with
+code 1 without printing a summary. Required native write or readback failures
+also throw; earlier durable files may remain but no completion is reported.
+Final source snapshots and complete-attempt verification still require their
+own approved contract work. No flag or success-shaped fallback bypasses the
+required recorder.
 
 Known integration limits remain explicit. Packed files cannot prove the
 original completion-file ordered hashes after raw deletion with the current
@@ -178,6 +210,10 @@ The small recorded article fixture is shorter than the default article
 threshold. Its harness uses a validated 100-word article threshold, retaining
 the original recorded HTML and real extractor. It does not replace extraction
 or change the shipped 180-word setting.
+The real API/awaited-CLI parity test reads the assessment and diversity output
+through the native reader and compares their actual receipt hashes and row
+counts. Entry tests also prove whole-audit refusal for unsupported timing or
+counts and no successful output on a required audit write failure.
 
 ## Design rationale
 

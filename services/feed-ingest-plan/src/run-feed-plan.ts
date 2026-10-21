@@ -14,6 +14,7 @@ import { createStageLogger, resolveRunPolicy, writeJsonLine } from "./logging/st
 import { harvestAssessments, screeningAssessments } from "./logging/stage-assessments";
 import { prepareDispatches, sealDispatches } from "./seal-article-ledger/plan-sealer";
 import type { PlanInputs } from "./load-plan-inputs";
+import type { PlanningMetricsResult } from "./metrics/metrics-recorder";
 
 export type PlanRuntime = {
   git_sha: string;
@@ -148,8 +149,9 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   };
 }
 export type FeedPlanResult = Awaited<ReturnType<typeof runFeedPlan>>;
+export type RecordedFeedPlanResult = FeedPlanResult & { metrics: PlanningMetricsResult };
 
-export function summarizePlan(result: FeedPlanResult) {
+export function summarizePlan(result: FeedPlanResult & { metrics?: PlanningMetricsResult }) {
   return {
     status: result.status, audited_complete: false,
     run_id: result.context.run_id, correlation_id: result.context.correlation_id,
@@ -160,6 +162,7 @@ export function summarizePlan(result: FeedPlanResult) {
       candidate_id: dispatch.content.candidate_id, partition: dispatch.partition,
     })),
     files: result.files,
+    metrics: result.metrics,
     first_sight: {
       absence_proof: result.evidence.seen.absence_proof,
       global_absence: result.evidence.seen.global_absence,
@@ -167,6 +170,9 @@ export function summarizePlan(result: FeedPlanResult) {
       own_receipts: result.evidence.seen.own_receipts,
       created_count: result.evidence.seen.new_rows.length,
     },
-    audit: { status: "unavailable", reason: "Required audit writes and complete-attempt verification are not integrated" },
+    audit: {
+      status: result.metrics === undefined ? "unavailable" : "assessment_diversity_recorded_audit_pending",
+      reason: "Source completion and complete-attempt verification remain unavailable",
+    },
   };
 }
