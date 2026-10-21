@@ -1,0 +1,18 @@
+{
+  "name": "@idhazh/feed-ingest-plan",
+  "version": "2026.10.20",
+  "private": true,
+  "type": "module",
+  "description": "Planner policy resolution; shared Zod validation has no browser bundle cost.",
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@idhazh/common-contracts": "file:../../packages/common-contracts"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.0",
+    "typescript": "^5.9.3"
+  }
+}

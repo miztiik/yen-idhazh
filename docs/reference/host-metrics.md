@@ -1,12 +1,13 @@
 # What the pipeline records about the machine it ran on
 
-**Last Updated**: 2026-10-14
+**Last Updated**: 2026-10-21
 
 Every host-fingerprint field, what it means and which readings are optional.
 The hardware fingerprint is reusable by any pipeline. Callers name their
 pipeline, task and shard; no workflow enum or digest-specific identity is needed.
-Python is the only collector. Item resource readings and diagnostic memory files
-are separate optional instruments.
+Python collects the persisted host fingerprint. The independent Bun host probe
+returns transient CPU and memory samples without writing a ledger. Item resource
+readings and diagnostic memory files are separate optional instruments.
 
 Read this when a number surprises you and you want to know which machine
 produced it. Why the record exists at all, and what the fleet does to a reading,
@@ -87,6 +88,51 @@ Windows development or recorded-fixture success does not certify live Linux
 collection. Unsupported or missing observations are unavailable, never zero.
 Missing observations remain empty cells; collection does not invent a reading.
 Memory diagnostics are separate from the persisted hardware fingerprint.
+
+## Independent CPU and memory samples
+
+`services/host-probes` is an opt-in Bun service, separate from the production
+pipeline and the persisted Python instrument. From that directory, run
+`bun run src/index.ts --sample` for one JSON response, or
+`bun run src/index.ts --serve` for `GET /api/2026-10-20/sample`.
+The service does not create hardware identities or write state files.
+
+`config/host-probes.json` owns the sampling interval, listener and read limit.
+The defaults wait 1000 milliseconds between CPU snapshots, bind loopback
+`127.0.0.1` on port 3005, and read at most 1048576 bytes (1 MiB) per proc file.
+Missing or invalid controls fail startup by field name. No environment setting
+changes these controls. Each request has its own opening and closing snapshot;
+the wait is asynchronous, not a blocking sleep. `interval_ms` reports actual
+monotonic elapsed time between those snapshots; `sampled_at` is the closing
+observation's UTC instant.
+
+The response contains `cpu`, `memory_kb`, `vmstat`, and an `unavailable` map.
+CPU percentages are differences from the aggregate `/proc/stat` line, not
+lifetime averages. `user` includes nice time; `system` includes interrupt and
+soft-interrupt time. `idle`, `iowait`, and `steal` remain separate. All five
+percentages sum to 100 without intermediate rounding. Guest counters are
+already included in user/nice and are not counted twice. A reset of any
+contributing counter, no elapsed ticks, or invalid input makes CPU unavailable.
+
+Memory `total`, `free`, and `available` come directly from the corresponding
+`/proc/meminfo` fields. The `memory_kb` unit is Linux kB, meaning 1024 bytes.
+The available estimate is never substituted with free memory. `vmstat` reports
+the closing absolute counters `pgfault`, `pgmajfault`, `pswpin`, and `pswpout`
+from `/proc/vmstat`: fault counts for the first two and page counts for the
+last two. These are neither rates nor process-specific measurements.
+
+Missing, denied, malformed, or oversized inputs produce null measurements and
+explicit component/field reasons. Missing memory fields degrade independently.
+Unsupported platforms return null observations with `unsupported_platform`,
+without waiting for a CPU interval. Unexpected I/O errors fail explicitly:
+the CLI exits nonzero and the HTTP server logs the error and returns 500.
+Responses are not cacheable and are validated locally. They are transient
+API data, not a persisted contract or a replacement for host-fingerprint rows.
+
+`bun test` and `bun run check` in the service cover recorded Linux CPU inputs,
+authored bounded memory/vmstat fixtures, real temporary-file interval changes,
+the HTTP request handler and the CLI. No test contacts the network. Windows
+fixture results do not certify live Linux collection.
 
 ## Controls and precedence
 
@@ -519,6 +565,13 @@ discard the reading the fingerprint exists to capture.
 to keep one column. Its full vocabulary lives in the contract.
 
 ## Design rationale
+
+**A transient CPU sample retains the complete observed interval.** The Bun
+response keeps steal as a fifth bucket rather than hiding it inside idle or
+renormalizing the four requested buckets. The service reuses Zod for local
+validation and Bun's native HTTP server; there is no extra server framework
+or browser bundle. TypeScript and Bun type declarations affect development
+installs only.
 
 **A task record describes only the task that took it.** A collector does not
 claim that its runner measured another pipeline or task. The caller decides
