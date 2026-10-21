@@ -339,6 +339,9 @@ test("real shared writer Parquet preserves rejection details, identity and UTC r
 
 test("failed, invalid or paused rejection writes cannot report successful sealing", async () => {
   await withLedger(async (ledger, { input, candidate }) => {
+    const empty = await screenArticleCandidates({ ...input, candidates: [], observations: {} }, ledger);
+    expect(empty).toEqual({ admitted: [], rejections: [], sealing: { status: "empty", files: [] } });
+    expect(await readdir(ledger.outputRoot)).toEqual([]);
     input.candidates = [{ ...candidate, word_count: 1, article_text: "Researchers" }];
     await expect(screenArticleCandidates(input, {
       ...ledger, registryEntry: { ...ledger.registryEntry, lifecycle_status: "paused" },
@@ -346,6 +349,12 @@ test("failed, invalid or paused rejection writes cannot report successful sealin
     await expect(screenArticleCandidates(input, {
       ...ledger, ledgerSettings: { ...ledger.ledgerSettings, format: "json" },
     })).rejects.toThrow("Parquet");
+    await expect(screenArticleCandidates(input, {
+      ...ledger, registryEntry: { ...ledger.registryEntry, prefix: ["feed-ingest-plan", "dispatches"] },
+    })).rejects.toThrow("registryEntry.prefix");
+    await expect(screenArticleCandidates(input, {
+      ...ledger, writerContext: { ...ledger.writerContext, run_id: "2026-10-21-999" },
+    })).rejects.toThrow("writerContext.run_id");
     const blocked = join(ledger.outputRoot, "blocked-root");
     await writeFile(blocked, "not a directory");
     await expect(screenArticleCandidates(input, { ...ledger, outputRoot: blocked })).rejects.toThrow();
