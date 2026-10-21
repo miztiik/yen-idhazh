@@ -131,6 +131,7 @@ test("real composition shares one clock and override and reads native dispatches
     expect(rows[0]!.selection.policy).toEqual(rows[0]!.content.policy);
     expect(summarizePlan(result)).toMatchObject({
       audited_complete: false, dispatch_count: 1, status: "dispatches_persisted_audit_pending",
+      planning_complete: false, planning_completion: null, source_records: null,
     });
     expect(recorded.inputs.harvest.config.curate.article_limit).toBeNull();
     expect(recorded.inputs.harvest.config.triage.max_age_hours).toBe(24);

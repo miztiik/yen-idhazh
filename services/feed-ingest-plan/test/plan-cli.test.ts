@@ -106,18 +106,18 @@ test("the awaited entrypoint refuses unsupported audit values before any audit w
   }
 }, 30000);
 
-test("a real required assessment write failure cannot print a successful CLI summary", async () => {
+test("a real required source write failure cannot print a successful CLI summary", async () => {
   const recorded = await recordedPlan();
   const printed: unknown[] = [];
   try {
     const raw = join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan");
     await mkdir(raw, { recursive: true });
-    await writeFile(join(raw, "article-assessments"), "A file cannot hold assessment output.");
+    await writeFile(join(raw, "source-runs"), "A file cannot hold source output.");
     await expect(main(["--cli"], {
       inputs: recorded.inputs, runtime: recorded.runtime, output: value => { printed.push(value); },
     })).rejects.toThrow();
     expect(printed).toEqual([]);
-    expect(existsSync(join(raw, "diversity"))).toBe(false);
-    expect(existsSync(join(raw, "source-runs"))).toBe(false);
+    expect(existsSync(join(raw, "article-assessments"))).toBe(true);
+    expect(existsSync(join(raw, "diversity"))).toBe(true);
   } finally { await recorded.close(); }
 }, 30000);

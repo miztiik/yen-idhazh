@@ -152,8 +152,13 @@ export type FeedPlanResult = Awaited<ReturnType<typeof runFeedPlan>>;
 export type RecordedFeedPlanResult = FeedPlanResult & { metrics: PlanningMetricsResult };
 
 export function summarizePlan(result: FeedPlanResult & { metrics?: PlanningMetricsResult }) {
+  const planningCompletion = result.metrics?.planning_completion ?? null;
+  const planningComplete = planningCompletion?.status === "complete";
   return {
-    status: result.status, audited_complete: false,
+    status: planningComplete ? "planning_complete_audit_pending" as const : result.status,
+    planning_complete: planningComplete, audited_complete: false,
+    planning_completion: planningCompletion,
+    source_records: result.metrics?.source_records ?? null,
     run_id: result.context.run_id, correlation_id: result.context.correlation_id,
     date: result.context.date, observed_at: result.context.now, request: result.request,
     strategy: result.evidence.partition.strategy, dispatch_count: result.evidence.partition.dispatch_count,
@@ -161,7 +166,7 @@ export function summarizePlan(result: FeedPlanResult & { metrics?: PlanningMetri
     assignments: result.evidence.partition.dispatches.map(dispatch => ({
       candidate_id: dispatch.content.candidate_id, partition: dispatch.partition,
     })),
-    files: result.files,
+    files: { ...result.files, ...(result.metrics === undefined ? {} : { source_runs: result.metrics.files.source_runs }) },
     metrics: result.metrics,
     first_sight: {
       absence_proof: result.evidence.seen.absence_proof,
@@ -172,7 +177,9 @@ export function summarizePlan(result: FeedPlanResult & { metrics?: PlanningMetri
     },
     audit: {
       status: result.metrics === undefined ? "unavailable" : "assessment_diversity_recorded_audit_pending",
-      reason: "Source completion and complete-attempt verification remain unavailable",
+      reason: planningComplete
+        ? "Current planning is verified; publication and complete historical audit remain outside this result"
+        : "Current planning completion has not been verified",
     },
   };
 }

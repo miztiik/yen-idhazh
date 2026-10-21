@@ -33,7 +33,7 @@ export async function main(args: readonly string[], options: {
 if (import.meta.main) {
   try {
     const result = await main(Bun.argv.slice(2));
-    if ("audited_complete" in result && !result.audited_complete) process.exitCode = 2;
+    if ("planning_complete" in result && !result.planning_complete) process.exitCode = 2;
   } catch (error) {
     writeJsonLine({ event: "planner_error", ...describePlanError(error, fileURLToPath(new URL("../../../", import.meta.url))) });
     process.exitCode = 1;
