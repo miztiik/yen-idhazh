@@ -96,6 +96,10 @@ writers, with no production digest commit labels. The browser vocabulary and
 nested folder bindings are registered here; static publication and TypeScript
 byte-writing compatibility are separate delivery steps.
 
+The TypeScript file-envelope vocabulary must name the same ledgers as Python.
+The council's import test reads only a named dependency list; registration adds
+the new row contracts to that list without relaxing the import boundary.
+
 Every task is named `compact-feed-ingest-plan-<ledger>` and enrolled in the
 gardener's explicit `task_names`. The declarations use the approved live
 retention chain: compact after 1 whole day, retain daily files until 45 whole

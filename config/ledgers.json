@@ -3,7 +3,7 @@
     {
       "name": "feed-ingest-plan",
       "lifecycle_status": "active",
-      "description": "Article selections, dispatches, rejections and planning evidence, separate from production digest planning.",
+      "description": "Feed planning selections, dispatches, rejections and evidence, separate from production digest planning.",
       "onboarded": "2026-10-21",
       "ledgers": [
         {
