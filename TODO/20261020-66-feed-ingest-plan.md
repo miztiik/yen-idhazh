@@ -613,6 +613,14 @@ Use the declared scalar types and actual stored rows to reproduce the Python
 bytes. Include these values, Unicode, nested lists, and nulls in the existing
 parity test; do not change Python's digest or reject valid floats to pass it.
 
+Identity-page preflight also found two unrelated identities described as one:
+the older `.github/scripts/ai-pipeline.ts` event helper returns an `evt_`
+UUID string, while the declared `FeedIngestEvent.event_id` is a SHA-256
+hexadecimal string in both languages. Distinguish these existing contracts
+when correcting the identity page. Do not copy the older helper into planner
+events or change their declared type. Rejections do not declare an event ID,
+and correlation IDs are not undeclared file-envelope metadata.
+
 ### Decisions
 
 | # | Decision | Authority |
