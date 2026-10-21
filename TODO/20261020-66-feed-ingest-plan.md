@@ -236,7 +236,7 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 | 11 | Core plan engine entrypoint, dual-mode runner, and sealing | 6, 10 | F | IN-FLIGHT | plan-66-api-cli-runner | - | ec780a10-5ab0-4ad7-a4e1-c36db811fbd7 |
 | 12 | Isolated CI test workflow and verification suite | 4, 5, 11, 14 | G | IN-FLIGHT | isolated workflow child | - | 31c9fcf0-3abc-41ff-a70e-624a4b419ee0 |
 | 13 | Phase 2 publication reconciliation and rolling diversity metrics | 12, 14 | H | PENDING | - | - | - |
-| 14 | Phase 1 source-run audit and three-axis evidence | 11 | G | IN-FLIGHT | audit increment reserved | - | dispatching |
+| 14 | Phase 1 source-run audit and three-axis evidence | 11 | G | IN-FLIGHT | plan-66-audit-recorder; assessment/diversity receipt increment; full completion remains blocked | - | 74a1e222-43a2-48c7-a7bf-5a24d2bf741e |
 | 15 | Config-driven source registries and compatible readers | - | A | DONE | fluffy-adventure (feed-registry-migration) | - | f7f18c64-813b-4a13-b421-1cd67b951db6 |
 | 16 | Public data-explorer enrollment and nested ledger delivery | 2 | B | DONE | reimagined-enigma | - | 2b6ac0cc-60a2-4c13-a67a-8d8ec21a4fc1 |
 
