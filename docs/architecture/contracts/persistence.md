@@ -1,6 +1,6 @@
 # The Ledger Door: Parquet and JSON Lines Under state/raw and state/compact
 
-**Last Updated**: 2026-10-14
+**Last Updated**: 2026-10-21
 
 How a contract payload reaches disk under `state/raw/` and `state/compact/`, how it comes back, and how the parquet engine is swapped. The door is `backend/idhazh/ledger/persist.py`; everything a producer needs is two calls, `ledger.persist` and `ledger.load`. The registry and the lifecycle statuses are [ledger-registry.md](ledger-registry.md), what each ledger answers is [state-ledgers.md](state-ledgers.md), and the shape of a contract is [schemas.md](schemas.md).
 
@@ -66,6 +66,24 @@ The paths come back ascending by the day each file covers, never by path string.
 **A raw write into a paused or retired family from a pipeline job writes nothing**, returns an empty list and logs one warning, through `ledger.accepts_new_rows` ([ledger-registry.md](ledger-registry.md)). A `persist_period` write, and a raw write from `migrate`, `run-tasks` or `history` - the members of `MAINTENANCE_JOBS` beside `ServerJob` - are never skipped, because each files rows again that were already recorded.
 
 **`load` is the inverse of `persist` and nothing else.** It reads each file's container from the file's own first bytes, never from its suffix, and validates the envelope against finite provenance pairs. Current writes use the Python Parquet or JSON-lines producer. Historical corrected raw `host-fingerprint` files from `telemetry.silicon` retain their original provenance and remain readable; removing a collector does not rewrite stored bytes. It refuses a mismatched container/writer pair and a file written under a newer shape than this build declares. `load_stored` is the same read with identity cells retained. Host history has its original canonical digest and row identity checked before finite legacy normalization. Neither read removes duplicates.
+
+The envelope stamped `2026-10-20` also accepts
+`idhazh_typescript.ledger.parquet` as writer provenance. It is valid only for
+Parquet, not JSON lines, and cannot claim an earlier envelope stamp.
+The footer key set and identity encodings are unchanged; historical Python
+envelopes and the finite legacy host provenance remain readable.
+`backend/tests/ledger/test_typescript_writer.py` checks footer reconstruction,
+older-envelope reads and Python ledger readback with this provenance.
+Its bytes come from PyArrow: this establishes reader support, not compatibility
+of a future TypeScript Parquet engine. That writer must prove its own byte
+readback and canonical row digest before producing files.
+
+Feed planning data remains typed Parquet under registered raw/compact prefixes.
+Nested rejection observations and completion evidence are structs and lists,
+not serialized JSON cells or extra footer keys. A source-run completion
+records required ledger files, digests and row counts, including explicit
+zero-row outcomes. Declaring these contracts does not register their ledgers
+or implement attempt settlement.
 
 ## The two identifiers
 

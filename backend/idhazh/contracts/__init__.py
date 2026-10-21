@@ -49,6 +49,14 @@ from idhazh.contracts.element import ElementTable
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.evidence import EvidenceItem
 from idhazh.contracts.feed_health import FeedHealthRow
+from idhazh.contracts.feed_ingest_article_assessment import ArticleAssessmentRecord
+from idhazh.contracts.feed_ingest_candidate import FeedIngestCandidate
+from idhazh.contracts.feed_ingest_dispatch import FeedIngestDispatch
+from idhazh.contracts.feed_ingest_diversity import DiversityMetricRow
+from idhazh.contracts.feed_ingest_editorial_selection import EditorialSelectionRow
+from idhazh.contracts.feed_ingest_event import FeedIngestEvent
+from idhazh.contracts.feed_ingest_rejection import CandidateRejectionRecord
+from idhazh.contracts.feed_ingest_source_run import SourceRunRecord
 from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.file_envelope import FileEnvelope
 from idhazh.contracts.fingerprint import PipelineInputs
@@ -131,6 +139,14 @@ from idhazh.contracts.watchlist import EdgarPolicy, EntityDef, EntityFeed, Watch
 #: persisted documents has nothing to do with it (Guardrail #3, owner ruling
 #: 2026-09-21).
 CONTRACTS: Final[tuple[type[Contract], ...]] = (
+    ArticleAssessmentRecord,
+    CandidateRejectionRecord,
+    DiversityMetricRow,
+    EditorialSelectionRow,
+    FeedIngestCandidate,
+    FeedIngestDispatch,
+    FeedIngestEvent,
+    SourceRunRecord,
     AppConfig,
     AppearanceConfig,
     Article,
@@ -204,7 +220,9 @@ __all__ = [
     "CONTRACTS",
     "AppConfig",
     "Article",
+    "ArticleAssessmentRecord",
     "ArticleStatus",
+    "CandidateRejectionRecord",
     "ChangelogEntry",
     "CompactEntry",
     "CompactIndex",
@@ -220,12 +238,17 @@ __all__ = [
     "DigestViewItem",
     "DigestViewVisual",
     "DigestVisual",
+    "DiversityMetricRow",
     "EdgarPolicy",
+    "EditorialSelectionRow",
     "EntityDef",
     "EntityFeed",
     "EvalRow",
     "EventDef",
     "FeedDef",
+    "FeedIngestCandidate",
+    "FeedIngestDispatch",
+    "FeedIngestEvent",
     "FileEnvelope",
     "LedgerName",
     "LensDef",
@@ -247,6 +270,7 @@ __all__ = [
     "SourceForm",
     "SourceKind",
     "SourceKindDefinition",
+    "SourceRunRecord",
     "SourceTier",
     "SourceTierDefinition",
     "Sources",
