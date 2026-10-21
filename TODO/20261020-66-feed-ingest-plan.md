@@ -1123,6 +1123,14 @@ A fresh process still requires current caller-supplied inventory. Keep this
 coordination in the already named runner/API modules, or name an additional
 helper before editing it.
 
+Listener review follow-up: after the UTC day advances, previously accepted
+named days can age out of the window. The listener must not treat that aging
+as newly invalid authored input and abort every later request. Retain only
+still-relevant named evidence and durable own receipts; a newly required day
+without evidence stays missing, so it cannot establish a new first sight.
+Direct invocation still rejects invalid authored day bounds. Verify a real
+cross-midnight pair of requests before closing this listener behavior.
+
 Reviewed runner increment `65c4e68abf87f2aad1980c07be09ecccf4b3bb77`
 implements this path with actual native seen writes before screening, earliest
 settled observations, serialized API requests and durable receipt retention
