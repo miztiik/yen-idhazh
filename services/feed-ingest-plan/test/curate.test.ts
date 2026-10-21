@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
-  FeedIngestCandidateSchema, deriveCandidateId, deriveUrlKey,
+  FeedIngestCandidateSchema, FeedIngestDispatchSchema, deriveCandidateId, deriveUrlKey,
   WriterIdentitySchema,
 } from "@idhazh/common-contracts";
 import type { FeedIngestConfig } from "@idhazh/common-contracts";
@@ -452,6 +452,58 @@ test("real screening results compose into exact curation without losing harveste
     expect(result.rows.map(row => row.editorial_rank)).toEqual([1, 2]);
     expect(result.selected.map(value => value.candidate)).toEqual(originals.slice(0, 2).map(value => value.candidate));
     expect(result.rows.length + result.rejections.length + screened.rejections.length).toBe(4);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 30_000);
+
+test("real screening and curation expose dispatch contract conflicts without rewriting provenance", async () => {
+  const { screenArticleCandidates } = await import("../src/screen-article-candidates/triage-gates");
+  const { fixture, planning } = await inputs();
+  const root = await mkdtemp(join(tmpdir(), "portfolio-dispatch-contract-"));
+  try {
+    const original = article(fixture.candidates[0]!, fixture, planning);
+    const context = await persistenceContext(root, fixture);
+    for (const scenario of [
+      { name: "baseline", observedAt: fixture.observed_at, overrides: {}, conflict: null },
+      { name: "run override", observedAt: fixture.observed_at, overrides: { freshness_hours: 6 }, conflict: "policy" },
+      { name: "UTC midnight crossing", observedAt: "2026-10-22T00:00:00Z", overrides: {}, conflict: "date" },
+    ] as const) {
+      const screened = await screenArticleCandidates({
+        candidates: [original.candidate], observations: {},
+        seen: { availability: "unavailable" }, planning,
+        clock_config: { collect: { max_future_hours: 0 } },
+        run: {
+          now: scenario.observedAt, run_id: fixture.run_id,
+          correlation_id: fixture.correlation_id, overrides: scenario.overrides,
+        },
+      }, {
+        outputRoot: context.outputRoot,
+        writerContext: { ...context.writerContext, task_name: "screen-article-candidates" },
+        registryEntry: context.registrations.rejections, ledgerSettings: context.ledgerSettings,
+      });
+      expect(screened.admitted, scenario.name).toHaveLength(1);
+      const result = curateArticles({
+        articles: screened.admitted.map(admitted => ({ ...admitted, evidence: original.evidence })),
+        planning, opportunity: noOpportunity, observed_at: scenario.observedAt,
+      });
+      const content = result.selected[0]!.candidate;
+      const selection = result.rows[0]!;
+      expect(content, scenario.name).toEqual(original.candidate);
+      expect(content.date).toBe(content.fetched_at.slice(0, 10));
+      expect(selection.date).toBe(scenario.observedAt.slice(0, 10));
+      expect(selection.policy.max_age_hours).toBe(scenario.overrides.freshness_hours ?? planning.config.triage.max_age_hours);
+      const dispatch = FeedIngestDispatchSchema.safeParse({
+        content, selection,
+        partition: { strategy: "none", worker_assignment: 0, dispatch_count: 1 },
+      });
+      if (scenario.conflict === null) expect(dispatch.success).toBe(true);
+      else {
+        expect(dispatch.success, `${scenario.name}: unresolved persisted contract conflict`).toBe(false);
+        if (dispatch.success) throw new Error("Expected the documented dispatch contract conflict");
+        expect(dispatch.error.issues.map(issue => issue.path)).toEqual([["selection", scenario.conflict]]);
+      }
+    }
   } finally {
     await rm(root, { recursive: true, force: true });
   }
