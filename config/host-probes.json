@@ -1,0 +1,6 @@
+{
+  "sample_interval_ms": 1000,
+  "listen_host": "127.0.0.1",
+  "listen_port": 3005,
+  "max_proc_bytes": 1048576
+}
