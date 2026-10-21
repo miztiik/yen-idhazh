@@ -203,6 +203,34 @@ test("rootless extraction, empty content and article request failures do not kil
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("report settings remain available without changing the planning fingerprint", async () => {
+  const baseline = await inputs();
+  const load = (config: typeof baseline.config) => loadHarvestInputs({
+    config, taxonomy: baseline.registry,
+    sources: { feeds: baseline.sources }, extraction: { extract: baseline.extraction },
+  });
+  const enabled = load({
+    ...baseline.config,
+    workflow_reporting: { ...baseline.config.workflow_reporting, enabled: !baseline.config.workflow_reporting.enabled },
+  });
+  const removalText = load({
+    ...baseline.config,
+    workflow_reporting: {
+      ...baseline.config.workflow_reporting,
+      removal_condition: "Remove the report adapter when development reporting ends.",
+    },
+  });
+  expect(enabled.config.workflow_reporting.enabled).toBe(!baseline.config.workflow_reporting.enabled);
+  expect(removalText.config.workflow_reporting.removal_condition).toBe("Remove the report adapter when development reporting ends.");
+  expect(enabled.config_sha256).toBe(baseline.config_sha256);
+  expect(removalText.config_sha256).toBe(baseline.config_sha256);
+  const policyChange = load({
+    ...baseline.config,
+    triage: { ...baseline.config.triage, max_age_hours: baseline.config.triage.max_age_hours + 1 },
+  });
+  expect(policyChange.config_sha256).not.toBe(baseline.config_sha256);
+});
+
 test("a paused rejection registry cannot return a successful harvest with unwritten rejections", async () => {
   const root = await mkdtemp(join(tmpdir(), "harvest-paused-ledger-"));
   try {
@@ -239,10 +267,30 @@ test("live and draft sources require active registry classifications; retired so
     }
   }
   const historical = source({ status: "retired", retired_on: "2026-10-20", kind: "historical-kind", tier: 42, vertical: "historical-vertical" });
+  const historicalTaxonomy = {
+    ...baseline.registry,
+    source_tiers: [...baseline.registry.source_tiers, {
+      id: 42, weight: 0.6, status: "retired", retired_on: "2026-10-20",
+    }],
+  };
   const loaded = loadHarvestInputs({
-    config: baseline.config, taxonomy: baseline.registry, sources: { feeds: [historical] }, extraction: { extract: baseline.extraction },
+    config: baseline.config, taxonomy: historicalTaxonomy, sources: { feeds: [historical] }, extraction: { extract: baseline.extraction },
   });
   expect(loaded.sources[0]).toEqual(historical);
+  expect(() => loadHarvestInputs({
+    config: baseline.config, taxonomy: baseline.registry, sources: { feeds: [historical] }, extraction: { extract: baseline.extraction },
+  })).toThrow("source.recorded-news.tier: missing registered snapshot weight");
+  const root = await mkdtemp(join(tmpdir(), "harvest-historical-tier-"));
+  try {
+    const transport = new RecordedTransport(await readRecordings());
+    const result = await harvestFeeds(loaded, context(), destination(root), { transport, resolve: transport.resolve });
+    expect(transport.requests).toEqual([]);
+    expect(result.rejections[0]?.drop_reason).toBe("SOURCE_INACTIVE");
+    expect(result.feed_outcomes[0]?.source).toMatchObject({
+      kind: "historical-kind", tier: 42, vertical: "historical-vertical", applied_tier_weight: 0.6,
+    });
+    expect(result.rejection_files.status).toBe("written");
+  } finally { await rm(root, { recursive: true, force: true }); }
   expect(() => loadHarvestInputs({
     config: baseline.config, taxonomy: baseline.registry,
     sources: { feeds: [source({ url: "https://user:secret@news.example/feed" })] }, extraction: { extract: baseline.extraction },

@@ -55,7 +55,12 @@ export function loadHarvestInputs(raw: {
     if (new Set<string | number>(ids).size !== ids.length) throw new Error(`${name} ids must be distinct`);
   }
   for (const source of sources) {
-    if (source.status === "retired") continue;
+    if (source.status === "retired") {
+      if (!registry.source_tiers.some(tier => tier.id === source.tier)) {
+        throw new Error(`source.${source.id}.tier: missing registered snapshot weight`);
+      }
+      continue;
+    }
     if (!registry.verticals.some(vertical => vertical.id === source.vertical)) {
       throw new Error(`source.${source.id}.vertical: unknown registry entry`);
     }
@@ -67,7 +72,8 @@ export function loadHarvestInputs(raw: {
     }
   }
   // This digest covers every validated input that can change harvested content or provenance.
-  const snapshot = { config: planning.config, registry, sources, extraction };
+  const { workflow_reporting, ...contentConfig } = planning.config;
+  const snapshot = { config: contentConfig, registry, sources, extraction };
   const config_sha256 = createHash("sha256").update(JSON.stringify(snapshot)).digest("hex");
   return { ...planning, registry, sources, extraction, config_sha256 };
 }
