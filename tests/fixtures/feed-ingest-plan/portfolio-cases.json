@@ -1,0 +1,59 @@
+{
+  "observed_at": "2026-10-21T12:00:00Z",
+  "run_id": "2026-10-21-66",
+  "correlation_id": "portfolio-fixture",
+  "policy_version": "portfolio-recorded-1",
+  "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "candidates": [
+    {
+      "name": "first", "source": "alpha", "ordinal": 0, "vertical": "ai",
+      "kind": "reporting", "domain": "one.example", "publisher": "One News",
+      "title": "First distinct article", "published_at": "2026-10-21T12:00:00Z",
+      "desk": "ai", "lenses": ["shared", "second"], "event_types": ["release", "meeting"],
+      "cluster": "shared-occurrence", "entities": ["one", "two"]
+    },
+    {
+      "name": "middle", "source": "alpha", "ordinal": 1, "vertical": "ai",
+      "kind": "reporting", "domain": "one.example", "publisher": "One News",
+      "title": "Second distinct article", "published_at": "2026-10-20T18:00:00Z",
+      "desk": "ai", "lenses": ["shared", "second"], "event_types": ["release", "meeting"],
+      "cluster": "shared-occurrence", "entities": ["one", "two"]
+    },
+    {
+      "name": "alternative", "source": "gamma", "ordinal": 0, "vertical": "energy",
+      "kind": "research", "domain": "two.example", "publisher": "Two News",
+      "title": "Another distinct article", "published_at": "2026-10-20T00:00:00Z",
+      "desk": "energy", "lenses": ["different"], "event_types": ["acquisition"],
+      "cluster": "different-occurrence", "entities": ["three"]
+    }
+  ],
+  "expected": {
+    "baseline": ["first", "middle"],
+    "each_saturation_coefficient_one": ["first", "alternative"],
+    "base_scores": { "first": 1, "middle": 0.5, "alternative": 0.25 },
+    "selected_ranks": [1, 2]
+  },
+  "story_pairs": [
+    { "left": "Budget 2025", "right": "Budget 2026", "expected": "figure-clash" },
+    { "left": "Purchase $12.9 billion", "right": "Purchase $12.93bn", "expected": "recorded-event-cluster" },
+    { "left": "Unrelated original report", "right": "Unrelated original report", "expected": "unavailable" }
+  ],
+  "recorded_format": {
+    "row_schema_version": "2026-10-20",
+    "candidate_first": "2abf9cb422a726f33a6f4a80295c8e2efa7ab9d3691114b9d7d328e83334d07a",
+    "selection_unit_id": "fd2713f9-a8d3-5a9e-af1d-f81f8d50c1d8",
+    "rejection_unit_id": "71f34820-62ad-5876-899c-bd53e451d073",
+    "selection_scalar_types": {
+      "candidate_id": "Utf8",
+      "editorial_rank": "Int64",
+      "estimated_work": "Float64",
+      "run_id": "Utf8",
+      "attempt": "Int64",
+      "shard": "Int64"
+    },
+    "selection_columns": ["candidate_id", "editorial_rank", "estimated_work", "ratings", "policy", "unit_id", "run_id", "attempt", "shard"],
+    "rejection_reason": "MMR_PORTFOLIO_CUTOFF",
+    "selection_count": 2,
+    "rejection_count": 1
+  }
+}
