@@ -1,0 +1,23 @@
+{
+  "enabled": false,
+  "removal_condition": "Remove the enablement flag when all required audit writes and complete-attempt verification are integrated and approved for use.",
+  "listener": {
+    "hostname": "127.0.0.1",
+    "port": 8787,
+    "idle_timeout_seconds": 30,
+    "max_body_bytes": 16384
+  },
+  "inputs": {
+    "planning": "config/feed-ingest-plan.json",
+    "taxonomy": "config/taxonomy.json",
+    "sources": "config/sources.json",
+    "extraction": "config/idhazh.json",
+    "registrations": "config/ledgers.json",
+    "output_root": "state",
+    "seen_files": []
+  },
+  "run": {
+    "attempt": 1,
+    "producer": "feed-ingest-plan.runner"
+  }
+}

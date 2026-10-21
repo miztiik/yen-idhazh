@@ -1,0 +1,27 @@
+/** Which authored settings bound the operator listener and its named input files? */
+import { z } from "zod";
+import { NonEmptySchema, PositiveCountSchema } from "@idhazh/common-contracts";
+
+export const RelativePathSchema = NonEmptySchema.refine(
+  value => !value.includes("\\") && !value.includes(":") && !value.startsWith("/")
+    && value.split("/").every(part => part !== "" && part !== "." && part !== ".."),
+  "must be a relative POSIX path without parent traversal",
+);
+export const ServiceSettingsSchema = z.strictObject({
+  enabled: z.boolean().default(false).describe(
+    "Remove when complete-attempt audit writes and verification are integrated and approved.",
+  ),
+  removal_condition: NonEmptySchema,
+  listener: z.strictObject({
+    hostname: NonEmptySchema, port: PositiveCountSchema.max(65535),
+    idle_timeout_seconds: PositiveCountSchema.max(255),
+    max_body_bytes: PositiveCountSchema,
+  }),
+  inputs: z.strictObject({
+    planning: RelativePathSchema, taxonomy: RelativePathSchema, sources: RelativePathSchema,
+    extraction: RelativePathSchema, registrations: RelativePathSchema,
+    output_root: RelativePathSchema, seen_files: z.array(RelativePathSchema),
+  }),
+  run: z.strictObject({ attempt: PositiveCountSchema, producer: NonEmptySchema }),
+});
+export type ServiceSettings = z.infer<typeof ServiceSettingsSchema>;
