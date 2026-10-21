@@ -522,16 +522,28 @@ export type CandidateRejectionRecord =
 - **Scope:** Implement `services/host-fingerprints` as an independent Bun API and CLI that collects the existing HostFingerprintRow and persists it through the shared ledger writer to the existing host-fingerprint ledger when host telemetry is enabled.
 - **Files touched:**
   - `services/host-fingerprints/package.json`
+  - `services/host-fingerprints/bun.lock`
   - `services/host-fingerprints/tsconfig.json`
+  - `services/host-fingerprints/src/config.ts`
   - `services/host-fingerprints/src/index.ts`
   - `services/host-fingerprints/src/api/server.ts`
   - `services/host-fingerprints/src/api/routes/fingerprint.route.ts`
   - `services/host-fingerprints/src/persist-fingerprint.ts`
   - `services/host-fingerprints/src/inspect/cpu-model.ts`
   - `services/host-fingerprints/src/inspect/runner-env.ts`
+  - `services/host-fingerprints/src/inspect/cpu-topology.ts`
+  - `services/host-fingerprints/src/inspect/cpu-capacity.ts`
+  - `services/host-fingerprints/src/inspect/hardware-identity.ts`
+  - `services/host-fingerprints/src/inspect/bounded-input.ts`
   - `services/host-fingerprints/test/fingerprint.test.ts`
   - `services/host-fingerprints/test/fingerprint-persistence.test.ts`
   - `packages/common-contracts/src/schemas/host-fingerprint.schema.ts`
+  - `packages/common-contracts/src/index.ts`
+  - `packages/common-contracts/test/host-fingerprint.test.ts`
+  - `config/host-fingerprints.json`
+  - `tests/fixtures/host-fingerprints/linux-inputs.json`
+  - `tests/fixtures/host-fingerprints/host-schema.json`
+  - `.github/workflows/ci.yml` (named Bun service checks and tests)
   - `docs/reference/host-metrics.md`
 - **Acceptance gates:** Local: inspect the shared selector without launching Python-backed groups, run strict TypeScript checks, bounded Linux input fixtures, API/CLI persistence tests, and recorded HostFingerprintRow compatibility checks in TypeScript. Existing repository CI remains authoritative for its unchanged suites. Verify configured-off behavior, null unavailable measurements, atomic-write failure propagation, and retry settlement without rewriting historical files.
 - **Oracle:** An API or CLI collection creates a valid HostFingerprintRow in the registered ledger, and TypeScript Parquet readback returns it with the expected pipeline/task/run/shard identity and recorded schema; invalid requests and failed writes cannot return persisted success. This does not certify Linux hardware collection from a Windows fixture run or execute the Python reader.
@@ -542,6 +554,15 @@ supporting paths before dispatch. The service also needs a lockfile, authored
 listener/read controls, and bounded recorded Linux inputs. Preserve the
 existing fingerprint algorithm and observability controls; a nullable field
 does not authorize skipping its collector.
+
+Supporting scope for the existing service: the lockfile owns its install;
+validated listener/read controls belong in its named config; bounded input,
+topology, capacity and identity units keep collection out of routing code.
+The public contract export and TypeScript fixture checks must cover the full
+host row, not a field-stripping projection. The named fixture files hold
+bounded Linux readings and recorded schema expectations. CI adds Bun service
+checks only, with no new Python setup or test invocation. These paths implement
+the existing host-service scope, not new persisted fields or a new algorithm.
 
 ### Decisions
 
