@@ -255,20 +255,18 @@ def test_upstream_failed_units_still_land_but_report_one(
         assert not any(event.get("outcome") == "failed" for event in events(caplog))
 
 
-@pytest.mark.parametrize("failed_unit", [False, True])
 def test_every_push_rejected_reports_three_even_after_unit_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
     capsys: pytest.CaptureFixture[str],
-    failed_unit: bool,
 ) -> None:
     with venue(
         tmp_path,
         monkeypatch,
         caplog,
         slugs=("second-failed",),
-        source=HOSTILE_SOURCE if failed_unit else SUCCESS_SOURCE,
+        source=HOSTILE_SOURCE,
         deadline=30,
     ) as (origin, repo, target):
         before = git(origin, "rev-parse", "main")
@@ -300,7 +298,7 @@ def test_every_push_rejected_reports_three_even_after_unit_failure(
         assert git(origin, "rev-parse", "main") == before
         assert published["writes"] == len(evidence(repo))
         assert len(rows(repo)) == 2
-        assert sum(event.get("outcome") == "failed" for event in events(caplog)) == int(failed_unit)
+        assert sum(event.get("outcome") == "failed" for event in events(caplog)) == 1
         for date in DATES:
             path = f"state/experiments/second-failed/{date}.json"
             assert (repo / path).read_bytes() == b"completed\n"

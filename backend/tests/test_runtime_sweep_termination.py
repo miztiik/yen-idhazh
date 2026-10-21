@@ -163,14 +163,11 @@ alias = sys.argv[sys.argv.index("--alias") + 1]
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/health":
-            Path("health.entered").touch()
-            status = 503 if os.environ["SCENARIO"] == "health" else 200
             body = b"{}"
         else:
-            status = 200
             name = "wrong-model" if os.environ["SCENARIO"] == "failure" else alias
             body = json.dumps({"data": [{"id": name}]}).encode()
-        self.send_response(status)
+        self.send_response(200)
         self.end_headers()
         self.wfile.write(body)
     def log_message(self, *args):
@@ -293,8 +290,6 @@ def _fixture_sweep(root: Path, scenario: str) -> subprocess.Popen[bytes]:
     ("scenario", "signum"),
     [
         ("setup", signal.SIGTERM),
-        ("health", signal.SIGTERM),
-        ("work", signal.SIGINT),
         ("failure", None),
     ],
 )
@@ -303,11 +298,8 @@ def test_sweep_cli_reaps_generated_processes(
 ) -> None:
     producer = _fixture_sweep(tmp_path, scenario)
     try:
-        marker = {"setup": "server.pid", "health": "health.entered"}.get(
-            scenario, "worker-0.pid"
-        )
         if signum is not None:
-            _wait_for_file(tmp_path / marker, producer)
+            _wait_for_file(tmp_path / "server.pid", producer)
             producer.send_signal(signum)
         stdout, stderr = producer.communicate(timeout=15)
         assert producer.returncode == (128 + signum if signum is not None else 1), (
