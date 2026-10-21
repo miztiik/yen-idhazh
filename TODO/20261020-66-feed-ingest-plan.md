@@ -188,7 +188,7 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 | 2 | Ledger registration and gardener compaction configuration | 1 | A | IN-FLIGHT | crispy-spoon (plan-66-row-2) | - | 6f739fa3-8ef9-40a7-830d-e1cc57927a46 |
 | 3 | Dedicated feed ingest plan configuration file | 1 | A | IN-FLIGHT | vigilant-lamp (plan-66-row-3) | - | d8340612-ab74-49e7-99ac-19d9ce30e427 |
 | 4 | Host hardware and environment identity service | 6 | B | PENDING | - | - | - |
-| 5 | Host CPU and memory profiling service | 1 | B | IN-FLIGHT | congenial-parakeet (plan-66-row-5) | - | c8de7d9d-dd55-4123-87fe-66095cc2aed5 |
+| 5 | Host CPU and memory profiling service | 1 | B | DONE | congenial-parakeet (plan-66-row-5) | - | c8de7d9d-dd55-4123-87fe-66095cc2aed5 |
 | 6 | Reusable TypeScript ledger file writer | 1, 2, 16 | B | PENDING | - | - | - |
 | 7 | RSS/Atom feed harvest and DOM text extraction | 3, 6 | B | PENDING | - | - | - |
 | 8 | Candidate triage screening with Parquet rejection ledger | 6, 7 | C | PENDING | - | - | - |
