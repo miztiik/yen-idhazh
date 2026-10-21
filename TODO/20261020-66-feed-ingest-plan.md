@@ -257,7 +257,7 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 | 5 | Host CPU and memory profiling service | 1 | B | DONE | congenial-parakeet (plan-66-row-5) | - | c8de7d9d-dd55-4123-87fe-66095cc2aed5 |
 | 6 | Reusable TypeScript ledger file writer | 1, 2, 16 | B | DONE | fictional-tribble | - | c1194122-86e6-45b4-85e9-e1bb61dbdca6 |
 | 7 | RSS/Atom feed harvest and DOM text extraction | 3, 6 | B | DONE | redesigned-doodle (feed-harvest-engine) | - | da505804-6ce7-4f03-aa0b-25bab323ba53 |
-| 8 | Candidate triage screening with Parquet rejection ledger | 6, 7 | C | IN-FLIGHT | scaling-memory | - | d50de7c8-1c6a-4074-a390-25a077ae0ba8 |
+| 8 | Candidate triage screening with Parquet rejection ledger | 6, 7 | C | DONE | plan-66-candidate-screening | - | d50de7c8-1c6a-4074-a390-25a077ae0ba8 |
 | 9 | Set-aware editorial portfolio curation | 8 | D | IN-FLIGHT | bookish-carnival | - | 34c330c1-9d30-4222-8fa6-4e28e58a165e |
 | 10 | Contextual bin-packing partitioner with feature flag | 9 | E | IN-FLIGHT | Session `86a9018f-dadb-4181-b82c-ca7fe9347116` builds on tested harvest foundation; integrates tested curation before final checks; historical completion proof remains unresolved below | - | - |
 | 11 | Core plan engine entrypoint, dual-mode runner, and sealing | 6, 10 | F | IN-FLIGHT | plan-66-api-cli-runner | - | ec780a10-5ab0-4ad7-a4e1-c36db811fbd7 |
