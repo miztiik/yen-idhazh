@@ -38,6 +38,14 @@ for changes outside this TypeScript plan. Neither was authorized when the
 owner was unavailable. Do not add Python tests or silently change production
 scheduling to clear this blocker.
 
+Delivery continuation, 2026-10-21: the owner directed continued autonomous
+implementation after this blocker was reported. Row #6 implementation and
+review are complete; its merge remains blocked. Row #4 can build in an
+isolated child on the reviewed writer branch without merging either change.
+Keep the writer head stable, merge updated main before final verification,
+and retain serialized green-only merges. The separate digest-schedule session
+owns the schedule repair; do not duplicate it in a plan row.
+
 Owner-directed scope change: repair the existing query-door EXPLAIN fixture
 check in a separate PR from main, not as a Plan 66 row. CI run 39608009522
 for PR #1607 passed 7185 backend tests and failed only
@@ -214,7 +222,7 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 | 1 | Shared contracts, schemas, and identity types | 15 | A | DONE | supreme-train (plan-66-row-1) | - | 4729606a-ce50-4812-a45f-f4ac7314311b |
 | 2 | Ledger registration and gardener compaction configuration | 1 | A | DONE | crispy-spoon (plan-66-row-2) | - | 6f739fa3-8ef9-40a7-830d-e1cc57927a46 |
 | 3 | Dedicated feed ingest plan configuration file | 1 | A | DONE | vigilant-lamp (plan-66-row-3) | - | d8340612-ab74-49e7-99ac-19d9ce30e427 |
-| 4 | Host hardware and environment identity service | 6 | B | PENDING | - | - | - |
+| 4 | Host hardware and environment identity service | 6 | B | IN-FLIGHT | reserved isolated child | - | coordinator dispatch pending |
 | 5 | Host CPU and memory profiling service | 1 | B | DONE | congenial-parakeet (plan-66-row-5) | - | c8de7d9d-dd55-4123-87fe-66095cc2aed5 |
 | 6 | Reusable TypeScript ledger file writer | 1, 2, 16 | B | IN-FLIGHT | fictional-tribble | - | c1194122-86e6-45b4-85e9-e1bb61dbdca6 |
 | 7 | RSS/Atom feed harvest and DOM text extraction | 3, 6 | B | PENDING | - | - | - |
