@@ -1385,8 +1385,11 @@ produce no result summary. Row #12 now integrates this tested entrypoint
 and verifies its returned files, rather than calling the recorder again.
 The workflow owner reports 19 named tests passing after that integration,
 including native metric receipts, missing-file refusal, unsupported counts,
-known-empty assessments and report-on/off ledger digest equality. Its final
-published head and required CI remain acceptance gates.
+known-empty assessments and report-on/off ledger digest equality. Reviewed
+head `c3428c33c2eca90a603ad2ef01b8ab2c4c7f0ab6` is delivered in ready
+PR #1622 against the runner branch. Required CI and the remaining complete
+audit/observer integration remain acceptance gates. PR #1621 is merged into
+its runner base, not into main; this does not close the full audit row.
 
 Row #13's shared integration adds
 `services/feed-ingest-plan/src/metrics/publication-metrics.ts` to separate
