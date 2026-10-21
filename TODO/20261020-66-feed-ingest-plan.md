@@ -1378,6 +1378,14 @@ proving packed history. Return that evidence for a later runner/workflow
 integration; do not retain an unconditional pending result once the actual
 run has every required write and proof. Caller status changes stay with
 their existing owners after the tested producer handoff.
+Head `45f8778bd546f7f5ec13c4c6c17edebe19d6303d` implements this current-raw
+producer path, including native source readback and exact-attempt selection.
+The runner owner now integrates it normally and exposes proven planning
+completion separately from the unfinished full audit. The workflow stays
+based on the runner, verifies returned source files and completion evidence,
+and exercises publication observation only with a bounded generated published
+fixture. Neither integration claims real production publication or complete
+packed history.
 
 Row #11 currently owns `src/index.ts`; Row #14 does not edit that file
 concurrently. Publish the tested recorder API from its own module, coordinate
@@ -1472,6 +1480,10 @@ source-producing observer write, its writer attempt must match that retained
 attempt. A mismatch would write contradictory row identities and make later
 complete-attempt reads fail. The owner is adding native refusal coverage;
 independent diversity-only observations need not reuse the planning attempt.
+Reviewed head `45f8778bd546f7f5ec13c4c6c17edebe19d6303d` implements both
+identity checks before observer writes. Its publication fixture now obtains
+complete planning records from the actual producer, not manufactured source
+records. Strict TypeScript and 62 focused tests passed.
 
 ### Decisions
 
