@@ -16,7 +16,7 @@ import { readLedgerParquet } from "../read-ledger-history/read-parquet";
 import { preflightMeasurements, translateArticleAssessments } from "./article-assessments";
 import { calculateDiversityMetrics } from "./diversity-metrics";
 import { reconcileStageMembership, requireSame } from "./stage-membership";
-import { deriveSourceRunSummaries } from "./source-run-summary";
+import { completePlanningSources, deriveSourceRunSummaries } from "./source-run-summary";
 import { loadHarvestInputs } from "../harvest-feeds/load-harvest-inputs";
 import { UtcInstantSchema } from "../screen-article-candidates/seen-evidence";
 import { readPlanningHistory, settlePlanningDay } from "./planning-populations";
@@ -39,7 +39,9 @@ const SettingsSchema = z.object({
   compression_raw: z.enum(["snappy", "zstd", "none"]),
   compression_compact: z.enum(["snappy", "zstd", "none"]),
 });
-export type AuditRegistrations = Readonly<{ assessments: LedgerRegistration; diversity: LedgerRegistration }>;
+export type AuditRegistrations = Readonly<{
+  assessments: LedgerRegistration; diversity: LedgerRegistration; source_runs: LedgerRegistration;
+}>;
 
 function registration(raw: LedgerRegistration, name: "article-assessments" | "diversity" | "source-runs") {
   const entry = RegistrationSchema.parse(raw);
@@ -92,6 +94,7 @@ export function preparePlanningMetrics(
   const entries = {
     assessments: registration(registrations.assessments, "article-assessments"),
     diversity: registration(registrations.diversity, "diversity"),
+    source_runs: registration(registrations.source_runs, "source-runs"),
   };
   WriterIdentitySchema.parse(result.context.writer);
   if (result.context.writer.shard !== 0) throw new Error("audit.writer.shard: planning audit is unsharded");
@@ -112,13 +115,13 @@ export async function recordPlanningMetrics(
   const batch = preparePlanningMetrics(result, inputs, registrations);
   // Named input files are verified before creating either audit ledger.
   const rejectionContract = { schema: CandidateRejectionRecordSchema, schemaVersion: CONTRACT_VERSION };
-  await readWritten(result.files.harvest_rejections, "rejections", rejectionContract, result.evidence.harvest.rejections, inputs, result);
-  await readWritten(result.files.screening_rejections, "rejections", rejectionContract, result.evidence.screening.rejections, inputs, result);
-  await readWritten(result.files.curation_rejections, "rejections", rejectionContract, result.evidence.curation.rejections, inputs, result);
-  await readWritten(result.files.selections, "editorial-selections", {
+  const harvestRejections = await readWritten(result.files.harvest_rejections, "rejections", rejectionContract, result.evidence.harvest.rejections, inputs, result);
+  const screeningRejections = await readWritten(result.files.screening_rejections, "rejections", rejectionContract, result.evidence.screening.rejections, inputs, result);
+  const curationRejections = await readWritten(result.files.curation_rejections, "rejections", rejectionContract, result.evidence.curation.rejections, inputs, result);
+  const selections = await readWritten(result.files.selections, "editorial-selections", {
     schema: EditorialSelectionRowSchema, schemaVersion: CONTRACT_VERSION,
   }, result.evidence.curation.rows, inputs, result);
-  await readWritten(result.files.dispatches, "dispatches", {
+  const dispatches = await readWritten(result.files.dispatches, "dispatches", {
     schema: FeedIngestDispatchSchema, schemaVersion: CONTRACT_VERSION,
   }, result.evidence.partition.dispatches, inputs, result);
   const common = {
@@ -137,18 +140,51 @@ export async function recordPlanningMetrics(
     rowContract: diversityContract, rows: batch.diversity,
   });
   const diversityReceipt = await readWritten(diversity, "diversity", diversityContract, batch.diversity, inputs, result);
+  const rejectionReceipts = [harvestRejections, screeningRejections, curationRejections];
+  const rejections = LedgerCompletionEvidenceSchema.parse({
+    ledger: "rejections", row_count: rejectionReceipts.reduce((sum, receipt) => sum + receipt.row_count, 0),
+    files: rejectionReceipts.flatMap(receipt => receipt.files),
+  });
+  const completionEvidence = [assessmentReceipt, diversityReceipt, selections, dispatches, rejections];
+  const sourceRows = completePlanningSources(batch.sources, completionEvidence);
+  const sourceContract = { schema: SourceRunRecordSchema, schemaVersion: CONTRACT_VERSION };
+  const sourceRuns = await persistLedger({
+    ...common, ledger: "source-runs", registryEntry: batch.registrations.source_runs,
+    rowContract: sourceContract, rows: sourceRows,
+  });
+  await verifyLedgerWrite(sourceRuns, "source-runs", sourceContract, sourceRows, inputs.outputRoot, result.context.writer);
+  const paths = (files: readonly PersistLedgerResult[]) => ({
+    day: result.context.date, rawFiles: files.flatMap(written => written.files.map(file => resolve(inputs.outputRoot, ...file.path.split("/")))),
+  });
+  const history = await readPlanningHistory({
+    sources: paths([sourceRuns]), ledgers: {
+      "article-assessments": paths([assessments]), diversity: paths([diversity]),
+      "editorial-selections": paths([result.files.selections]), dispatches: paths([result.files.dispatches]),
+      rejections: paths([result.files.harvest_rejections, result.files.screening_rejections, result.files.curation_rejections]),
+    },
+  });
+  const complete = selectCompleteAttempt(history, result.context.run_id).selected;
+  if (complete === null || complete.attempt !== result.context.writer.attempt
+    || complete.correlation_id !== result.context.correlation_id) throw new Error("New raw planning source completion did not settle to this exact attempt");
+  requireSame(complete.sources, sourceRows, "audit.source-runs.completion");
   return {
     status: "assessment_diversity_recorded_audit_pending" as const,
     audited_complete: false as const,
-    receipts: { assessments: assessmentReceipt, diversity: diversityReceipt },
-    files: { assessments, diversity },
+    receipts: { assessments: assessmentReceipt, diversity: diversityReceipt, selections, dispatches, rejections },
+    files: { assessments, diversity, source_runs: sourceRuns },
+    planning_completion: {
+      status: complete.status, date: complete.date, run_id: complete.run_id, attempt: complete.attempt,
+      correlation_id: complete.correlation_id, source_count: complete.sources.length,
+      completion_evidence: completionEvidence,
+    },
+    source_records: sourceRows,
     source_summaries: batch.sources,
     evidence: {
       carrier_groups: batch.membership.carrier_groups, normalization: batch.membership.normalization,
       trace: batch.membership.trace, quality: batch.membership.quality,
     },
     unavailable: {
-      source_completion: "Timing/count contract decisions and packed completion proof remain unresolved",
+      source_completion: null,
       publication_stage_diversity: "No publication or lead membership was observed; no before/after values exist",
       rolling_metrics: "No complete historical source/publication membership window was supplied",
     },
@@ -193,6 +229,12 @@ export async function recordPublicationMetrics(input: PublicationRecorderInput) 
   const planningHistory = await Promise.all(input.planning_days.map(day => readPlanningHistory(day)));
   const planning = planningHistory.map(history => settlePlanningDay(history));
   const observed = await Promise.all(input.publication_days.map(day => readPublicationDay(day)));
+  for (const day of observed) for (const article of day.publication.articles) {
+    const run = planning.find(plan => plan.day === article.date)?.runs.find(run => run.run_id === article.run_id);
+    if (run !== undefined && !run.selected.some(selected => selected.url_key === article.url_key && selected.source_id === article.source_id)) {
+      throw new Error("Published URL and primary source do not belong to the proven selected run");
+    }
+  }
   const history = buildHistoryWindow(asOf, config, observed.map(day => day.publication), input.through);
   const eventItems = observed.flatMap(day => day.digest?.items.flatMap(item => {
     if (item.title === undefined || item.source_name === undefined) return [];
@@ -214,7 +256,10 @@ export async function recordPublicationMetrics(input: PublicationRecorderInput) 
   else if (input.correlation_id !== proven.correlation_id) throw new Error("Observer correlation differs from its complete source attempt");
   else if (proven.date !== asOf.slice(0, 10)) sourceReason = "The source observation contract cannot record this following-day observation without backdating";
   else if (outcome === undefined || outcome.availability !== "available") sourceReason = "No complete publication observation for the recorded run";
-  else sourceRows = completePublicationObservations(proven.sources, outcome, asOf);
+  else {
+    if (writer.attempt !== proven.attempt) throw new Error("Observer writer attempt differs from its proven source attempt");
+    sourceRows = completePublicationObservations(proven.sources, outcome, asOf);
+  }
   const common = {
     outputRoot: input.outputRoot, writerContext: writer, ledgerSettings: settings,
     period: { tier: "raw" as const, covers: asOf.slice(0, 10) },

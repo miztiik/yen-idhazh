@@ -1,6 +1,6 @@
 /** What did each configured source actually contribute before publication exists? */
-import { DropReasonCountSchema, FiniteSchema, PositiveCountSchema } from "@idhazh/common-contracts";
-import type { DropReasonCount, SourceRunRecord } from "@idhazh/common-contracts";
+import { DropReasonCountSchema, FiniteSchema, PositiveCountSchema, SourceRunRecordSchema } from "@idhazh/common-contracts";
+import type { DropReasonCount, SourceRunRecord, LedgerCompletionEvidence } from "@idhazh/common-contracts";
 import type { FeedPlanResult } from "../run-feed-plan";
 import type { StageMembership } from "./stage-membership";
 import { requireSame } from "./stage-membership";
@@ -24,6 +24,7 @@ export function deriveSourceRunSummaries(result: FeedPlanResult, membership: Sta
         subject: row.subject, stage: row.stage, reason: row.drop_reason, count: (previous?.count ?? 0) + 1,
       }));
     }
+
     const failures = drops.filter(row => row.subject === "feed" && row.drop_reason !== "SOURCE_INACTIVE" && row.drop_reason !== "FEED_EMPTY");
     const lastFailure = failures.toSorted((a, b) => b.rejected_at.localeCompare(a.rejected_at))[0];
     const operational = evidence.curation.input.filter(article => article.candidate.source_id === id)
@@ -53,4 +54,16 @@ export function deriveSourceRunSummaries(result: FeedPlanResult, membership: Sta
       observed_at: context.now,
     };
   });
+}
+
+export function completePlanningSources(
+  summaries: readonly SourceRunSummary[], evidence: readonly LedgerCompletionEvidence[],
+): SourceRunRecord[] {
+  if (summaries.length === 0 || new Set(summaries.map(row => row.source_id)).size !== summaries.length) {
+    throw new Error("Planning completion requires one recorded outcome per configured source");
+  }
+  return summaries.map(row => SourceRunRecordSchema.parse({
+    ...row, observation_phase: "plan_complete", expected_source_count: summaries.length,
+    completion_evidence: evidence,
+  }));
 }

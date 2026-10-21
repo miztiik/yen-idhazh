@@ -134,6 +134,8 @@ require complete planning evidence. Publication-stage loss needs both complete
 selected and published populations. Coverage counts only complete relevant UTC
 days for each reading. Today's partial day cannot be a complete rolling
 observation; a named run's observed publication counts remain measurable.
+A known-empty numerator remains an available count of zero. Its zero-denominator
+ratio is unavailable; missing history makes both measurements unavailable.
 
 Event titles and outlet names are taken from the same named digest item and URL
 used by publication reconciliation. An unchecked caller item cannot remove a

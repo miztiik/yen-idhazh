@@ -77,12 +77,17 @@ export function calculatePublicationMetrics(input: PublicationMetricInput) {
       row.unavailable_reason = reason ?? (row.value === null ? "empty_denominator" : null);
       row.availability = row.unavailable_reason === null ? "available" : "unavailable";
       if (row.availability === "unavailable") row.value = null;
+      if (row.unavailable_reason !== null && row.unavailable_reason !== "empty_denominator") {
+        row.numerator = null; row.denominator = null;
+      }
       output.push(DiversityMetricRowSchema.parse(row));
     };
     const planningReason = planningComplete ? null : "incomplete_history";
     const publicationReason = publicationComplete ? null : rolling ? "incomplete_history" : "missing_publication";
     const eligible = uniqueRecorded(runs.flatMap(run => run.eligible), row => row.candidate_id, isDeepStrictEqual);
     const selected = distinctSelected(runs.flatMap(run => run.selected));
+    const selectedPublication = published.every(article => runs.some(run => run.run_id === article.run_id
+      && run.selected.some(selected => selected.url_key === article.url_key && selected.source_id === article.source_id)));
     const eligibleSources = new Set(eligible.map(item => item.source_id));
     const selectedSources = new Set(selected.map(item => item.source_id));
     record({ metric: "active_source_coverage", basis: "eligible", unit: "ratio",
@@ -101,7 +106,7 @@ export function calculatePublicationMetrics(input: PublicationMetricInput) {
       record({ basis, value: reason === null ? effectiveSources(counts) : null, item_count: reason === null ? items.length : null }, reason);
       if (basis === "selected" || basis === "published") {
         const outsideSnapshot = planningComplete && items.some(item => !active.has(item.source_id));
-        const giniReason = reason ?? planningReason ?? (outsideSnapshot ? "incomplete_history" : null);
+        const giniReason = reason ?? planningReason ?? (outsideSnapshot || (basis === "published" && !selectedPublication) ? "incomplete_history" : null);
         if (outsideSnapshot) unavailable.push(`${rolling ? "rolling" : "run"}.${basis}.source_gini: published source is outside the measured active snapshots`);
         record({ metric: "source_gini", basis, unit: "ratio", value: giniReason === null ? sourceGini(counts) : null,
           item_count: giniReason === null ? items.length : null }, giniReason);
@@ -143,7 +148,7 @@ export function calculatePublicationMetrics(input: PublicationMetricInput) {
       if (stage !== "input" && !planningComplete) unavailable.push(`${rolling ? "rolling" : "run"}.${stage}: no complete before/after membership`);
     }
     for (const [stage, previous, items, reason] of [
-      ["publication", selected, published, publicationReason ?? planningReason],
+      ["publication", selected, published, publicationReason ?? planningReason ?? (selectedPublication ? null : "incomplete_history")],
       ["lead_selection", published, published.filter(article => article.lead), publicationReason],
     ] as const) {
       const after = effectiveSources(countSources(items, active));
@@ -161,7 +166,7 @@ export function calculatePublicationMetrics(input: PublicationMetricInput) {
         numerator: reading.numerator, denominator: reading.denominator,
         item_count: publicationComplete ? published.length : null,
         history_coverage_days: reading.coverage_days, history_required_days: reading.required_days,
-      }, publicationReason ?? reading.unavailable_reason);
+      }, publicationReason ?? (unit === "count" && reading.unavailable_reason === "empty_denominator" ? null : reading.unavailable_reason));
     };
     for (const span of new Set(config.overlap_windows_days)) {
       historical("source_event_overlap", "source", span, sourceOverlap(window, published, span, dates), ["count", "ratio"]);
