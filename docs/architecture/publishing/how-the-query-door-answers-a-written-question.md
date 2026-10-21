@@ -136,6 +136,17 @@ The engine module is unchanged. The only module importing `@duckdb/duckdb-wasm` 
 
 ## Design rationale
 
+**Real explorer fixtures use the backend dev install.** The representative
+query/chart journey generates all six feed ledgers through the Python contracts
+and Parquet writer. Native DuckDB supplies an independent column/type reading
+before the browser queries those bytes. Browser CI therefore installs
+`.[dev]`, like the site and backend gate jobs, rather than the base package
+alone. This reuses the declared dependency group instead of spelling a second
+DuckDB requirement in the workflow. It adds install time and disk for existing
+test tools and numeric libraries, with no published bytes; the incremental
+runner cost is not measured. A new narrower group would reduce that install
+but add a dependency group to maintain.
+
 **EXPLAIN fixtures preserve meaning, not native engine drawings.** The backend
 fixture check requires the `explain_key` and `explain_value` columns, one
 `physical_plan` row, and the constant query's projection, `one` alias and dummy

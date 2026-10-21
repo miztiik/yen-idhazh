@@ -89,6 +89,14 @@ binding checks. Thus `dispatches` resolves under
 `state/compact/host-fingerprint/`. Missing-file build warnings name the ledger,
 not its family's folder.
 
+Each published ledger also has a payload ceiling for its registered compact
+index folder in `config/idhazh.json`. The contract check derives the longest
+daily and monthly indexes from that ledger's configured compaction policy and
+requires at least twice their gzip size. The bundle gate uses the same checked
+prefix for ownership: no ledger files means not packed yet, while compact or
+raw files without their compact index still fail. A nested ledger is not an
+exception to either check.
+
 1. **`daily.json` first; `monthly.json` only when the span starts before the
    oldest day `daily.json` names; and `yearly.json` only when it starts before the
    oldest day those two name.** When `daily.json` names no day, the door reads

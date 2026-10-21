@@ -1149,6 +1149,7 @@ and robots checks. Row #15 is delivered for review; this worker does not merge.
   - `config/idhazh.json`
   - `frontend/scripts/published-ledgers.mjs`
   - `frontend/scripts/ledger-prefixes.mjs`
+  - `frontend/scripts/payload-ceilings.mjs`
   - `frontend/scripts/raw-listed-through.mjs`
   - `frontend/scripts/copy-visuals.mjs`
   - `frontend/src/lib/data/slice-reader.ts`
@@ -1158,6 +1159,9 @@ and robots checks. Row #15 is delivered for review; this worker does not merge.
   - `frontend/tests/console-data-explorer.spec.ts`
   - `frontend/tests/console-data-explorer-still.spec.ts`
   - `frontend/tests/support/feed-ledgers.ts`
+  - `frontend/tests/payload-ceilings.spec.ts`
+  - `backend/tests/contracts/test_page_ceilings.py`
+  - `.github/workflows/ci.yml`
   - `docs/architecture/publishing/how-the-query-door-answers-a-written-question.md`
   - `docs/architecture/publishing/how-the-query-door-answers-a-panel.md`
 - **Acceptance gates:** Local: shared selector, generated-state flat/nested ledger-copy fixtures, focused query-door tests, and one representative explorer journey, not a browser case per ledger. CI: full suite and site-size gate. Verify allowlist enrollment for all new ledger names, correct raw/daily/monthly/yearly/index paths, missing versus known-empty data, and raw-listing coverage after compaction. Use fixtures and the real build/query path, not mocks or external network.
@@ -1175,6 +1179,22 @@ chrome selection in the logic tier. Its existing real query/chart journey is
 second browser case. `ledger-prefixes.mjs` owns shared registry-prefix
 validation, and `support/feed-ledgers.ts` generates and stages bounded real
 Python-contract fixtures for the copy, door and browser checks.
+
+CI scope correction: the six published ledgers need payload ceilings at their
+registered nested index paths. Keep the existing longest-index bound check,
+using the shared registry and compaction-task name builders rather than flat
+names. The bundle gate uses `ledgerFolders` for absent-ledger checks as well;
+a ledger with compact or raw files but no compact index still fails.
+
+The coordinator approved these coupled supporting paths on 2026-10-21:
+`backend/tests/contracts/test_page_ceilings.py`,
+`frontend/scripts/payload-ceilings.mjs`,
+`frontend/tests/payload-ceilings.spec.ts`, and `.github/workflows/ci.yml`.
+The browser job installs the existing backend dev extra for the real fixture's
+native DuckDB schema check, as the site and backend gate jobs already do.
+This adds install time and disk for the existing dev dependencies, including
+numeric libraries; that incremental runner cost is not measured. It adds no
+published bytes, dependency group, mock or substitute journey.
 
 ### Decisions
 
