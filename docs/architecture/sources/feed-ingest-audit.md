@@ -12,6 +12,7 @@ an incomplete attempt is complete?
 actual `FeedPlanResult`, the `PlanInputs` used by that run, and the registered
 `article-assessments` and `diversity` destinations. The runner owns integration;
 the recorder does not change the API or CLI's completion status.
+When the third argument is omitted, it uses `inputs.registrations`.
 
 The recorder first checks every configured concentration count and every
 harvested candidate's exact screening timing, including rejected candidates.

@@ -58,7 +58,9 @@ async function readWritten<T extends object>(
   });
 }
 
-export function preparePlanningMetrics(result: FeedPlanResult, inputs: PlanInputs, registrations: AuditRegistrations) {
+export function preparePlanningMetrics(
+  result: FeedPlanResult, inputs: PlanInputs, registrations: AuditRegistrations = inputs.registrations,
+) {
   // Refuse the entire request before any Row 14 parse can erase exact timing.
   preflightMeasurements(result, inputs);
   const original = loadHarvestInputs({
@@ -87,7 +89,9 @@ export function preparePlanningMetrics(result: FeedPlanResult, inputs: PlanInput
   return { assessments, diversity, sources, membership, settings, registrations: entries };
 }
 
-export async function recordPlanningMetrics(result: FeedPlanResult, inputs: PlanInputs, registrations: AuditRegistrations) {
+export async function recordPlanningMetrics(
+  result: FeedPlanResult, inputs: PlanInputs, registrations: AuditRegistrations = inputs.registrations,
+) {
   const batch = preparePlanningMetrics(result, inputs, registrations);
   // Named input files are verified before creating either audit ledger.
   const rejectionContract = { schema: CandidateRejectionRecordSchema, schemaVersion: CONTRACT_VERSION };

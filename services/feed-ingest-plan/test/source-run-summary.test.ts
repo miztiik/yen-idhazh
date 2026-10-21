@@ -5,6 +5,7 @@ import { reconcileStageMembership } from "../src/metrics/stage-membership";
 import { deriveSourceRunSummaries } from "../src/metrics/source-run-summary";
 import { recordedPlan } from "./plan-recordings";
 import { source } from "./harvest-recordings";
+import { deriveCandidateId } from "@idhazh/common-contracts";
 
 test("real stage membership includes inactive, empty, failed and carrier sources without double counting", async () => {
   const recorded = await recordedPlan([
@@ -78,5 +79,34 @@ test("screening and normalization counts derive from actual memberships, not agg
     if (completion.payload.kind !== "stage_completion") throw new Error("Missing real completion");
     completion.payload.output_count++;
     expect(() => reconcileStageMembership(result)).toThrow("counts");
+  } finally { await recorded.close(); }
+}, 30000);
+
+test("recorded operational evidence keeps its attempts and window separate from article quality", async () => {
+  const recorded = await recordedPlan();
+  recorded.runtime.evidence = new Map([0, 2].map(ordinal => [
+    deriveCandidateId("2026-10-21-700", "recorded-news", ordinal), {
+      publisher: { value: "Recorded publisher", origin: "recorded-publisher-attribute" },
+      parent_domain: null, primary_evidence: null, estimated_work: 300,
+      operational: { success_fraction: 0.5, attempted: 4, window_days: 7 },
+    },
+  ]));
+  try {
+    const result = await runFeedPlan({ partition_strategy: "none" }, recorded.inputs, recorded.runtime);
+    const [summary] = deriveSourceRunSummaries(result, reconcileStageMembership(result));
+    expect(summary).toMatchObject({
+      history_success_fraction: 0.5, history_success_attempts: 4, history_window_days: 7,
+    });
+    for (const measurement of result.evidence.curation.quality) {
+      expect(measurement.operational).toEqual({ success_fraction: 0.5, attempted: 4, window_days: 7 });
+      expect(measurement.base_article_score).toBe(measurement.components.authority + measurement.components.recency);
+      expect(measurement.article.informative_verdict).toBeNull();
+    }
+    const membership = reconcileStageMembership(result);
+    const article = result.evidence.curation.input[1]!;
+    result.evidence.curation.input[1] = {
+      ...article, evidence: { ...article.evidence, operational: { success_fraction: 1, attempted: 4, window_days: 7 } },
+    };
+    expect(() => deriveSourceRunSummaries(result, membership)).toThrow("operational_history");
   } finally { await recorded.close(); }
 }, 30000);

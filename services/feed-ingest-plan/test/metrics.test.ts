@@ -5,7 +5,6 @@ import { join } from "node:path";
 import { z } from "zod";
 import { ArticleAssessmentRecordSchema, CONTRACT_VERSION, DiversityMetricRowSchema, deriveUrlKey } from "@idhazh/common-contracts";
 import { persistLedger } from "@idhazh/ledger-file-writer";
-import type { LedgerRegistration } from "@idhazh/ledger-file-writer";
 import { runFeedPlan } from "../src/run-feed-plan";
 import { recordPlanningMetrics, preparePlanningMetrics } from "../src/metrics/metrics-recorder";
 import { effectiveSources, measuredRatio, sourceGini, topSourceShare, validateCounts } from "../src/metrics/diversity-metrics";
@@ -13,23 +12,6 @@ import { readLedgerParquet } from "../src/read-ledger-history/read-parquet";
 import { SeenRowSchema } from "../src/screen-article-candidates/seen-evidence";
 import { recordedPlan } from "./plan-recordings";
 import { source } from "./harvest-recordings";
-
-async function registrations() {
-  const schema = z.object({ families: z.array(z.object({
-    name: z.string(), lifecycle_status: z.enum(["active", "paused", "retired"]),
-    ledgers: z.array(z.object({ name: z.string(), prefix: z.array(z.string()), grain: z.string() })),
-  })) });
-  const raw = schema.parse(await Bun.file(new URL("../../../config/ledgers.json", import.meta.url)).json());
-  const entries = raw.families.flatMap(family => family.ledgers.map(entry => ({
-    ...entry, family: family.name, lifecycle_status: family.lifecycle_status,
-  })));
-  const find = (name: string): LedgerRegistration => {
-    const found = entries.filter(entry => entry.name === name);
-    if (found.length !== 1) throw new Error(`Fixture registration ${name} must be unique`);
-    return { ...found[0]!, grain: z.literal("raw-and-compact").parse(found[0]!.grain) };
-  };
-  return { assessments: find("article-assessments"), diversity: find("diversity"), seen: find("seen") };
-}
 
 async function auditFiles(output: string) {
   const directory = join(output, "raw", "feed-ingest-plan");
@@ -63,7 +45,7 @@ test("real harvest through partition writes typed assessment/diversity receipts 
   ]);
   try {
     const result = await runFeedPlan({ partition_strategy: "round-robin", shards: 2 }, recorded.inputs, recorded.runtime);
-    const entries = await registrations();
+    const entries = recorded.inputs.registrations;
     const batch = preparePlanningMetrics(result, recorded.inputs, entries);
     const before = structuredClone(result);
     const audit = await recordPlanningMetrics(result, recorded.inputs, entries);
@@ -113,7 +95,7 @@ test("known-empty article input yields explicit empty assessment evidence, not a
   const recorded = await recordedPlan([source({ url: "https://news.example/empty.xml" })]);
   try {
     const result = await runFeedPlan({ partition_strategy: "none" }, recorded.inputs, recorded.runtime);
-    const entries = await registrations();
+    const entries = recorded.inputs.registrations;
     const batch = preparePlanningMetrics(result, recorded.inputs, entries);
     const audit = await recordPlanningMetrics(result, recorded.inputs, entries);
     expect(audit.files.assessments).toEqual({ status: "empty", files: [] });
@@ -136,7 +118,7 @@ test("one unsupported count or negative age refuses the whole batch before any a
     try {
       const result = await runFeedPlan({ partition_strategy: "none" }, recorded.inputs, recorded.runtime);
       const before = structuredClone(result);
-      const entries = await registrations();
+      const entries = recorded.inputs.registrations;
       const beforeInputs = structuredClone(recorded.inputs);
       const beforeEntries = structuredClone(entries);
       await expect(recordPlanningMetrics(result, recorded.inputs, entries)).rejects.toThrow(mode === "top_k" ? "top_source_counts.2" : "age_hours");
@@ -151,7 +133,7 @@ test("one unsupported count or negative age refuses the whole batch before any a
 test("actual settled first sight for an undated rejected candidate refuses the entire recording", async () => {
   const recorded = await recordedPlan([source({ url: "https://news.example/article-failures.xml" })]);
   try {
-    const entries = await registrations();
+    const entries = recorded.inputs.registrations;
     const stored = await persistLedger({
       ledger: "seen", registryEntry: entries.seen, outputRoot: recorded.inputs.outputRoot,
       writerContext: {
@@ -175,11 +157,27 @@ test("actual settled first sight for an undated rejected candidate refuses the e
   } finally { await recorded.close(); }
 }, 30000);
 
+test("new first sight from the runner's complete bounded window is preflighted after its real write", async () => {
+  const recorded = await recordedPlan([source({ url: "https://news.example/article-failures.xml" })]);
+  try {
+    recorded.inputs.clock_config.collect.seen_window_days = 0;
+    recorded.inputs.settings.inputs.seen_days = [{ day: "2026-10-21", raw_files: [] }];
+    const result = await runFeedPlan({ partition_strategy: "none" }, recorded.inputs, recorded.runtime);
+    expect(result.evidence.seen.absence_proof).toBe("within_configured_window");
+    expect(result.evidence.seen.new_rows.length).toBeGreaterThan(0);
+    expect(result.files.seen.status).toBe("written");
+    expect(result.evidence.screening.admitted.some(article => article.freshness.timing_source === "first_seen")).toBe(true);
+    await expect(recordPlanningMetrics(result, recorded.inputs)).rejects.toThrow("publication_clock");
+    expect(await auditFiles(recorded.inputs.outputRoot)).toEqual([]);
+    expect(result.evidence.seen.evidence.availability).toBe("available");
+  } finally { await recorded.close(); }
+}, 30000);
+
 test("paused registry and a real obstructed write cannot return completion; partial files stay incomplete", async () => {
   const recorded = await recordedPlan();
   try {
     const result = await runFeedPlan({ partition_strategy: "none" }, recorded.inputs, recorded.runtime);
-    const entries = await registrations();
+    const entries = recorded.inputs.registrations;
     await expect(recordPlanningMetrics(result, recorded.inputs, {
       ...entries, diversity: { ...entries.diversity, lifecycle_status: "paused" },
     })).rejects.toThrow();
@@ -197,7 +195,7 @@ test("paused registry and a real obstructed write cannot return completion; part
 test("two real attempts keep separate receipts and cannot combine earlier events or required files", async () => {
   const recorded = await recordedPlan();
   try {
-    const entries = await registrations();
+    const entries = recorded.inputs.registrations;
     const first = await runFeedPlan({ partition_strategy: "none" }, recorded.inputs, recorded.runtime);
     const firstAudit = await recordPlanningMetrics(first, recorded.inputs, entries);
     recorded.inputs.settings.run.attempt++;
@@ -220,7 +218,7 @@ test("a missing actual stage file refuses recording before creating either audit
   try {
     const result = await runFeedPlan({ partition_strategy: "none" }, recorded.inputs, recorded.runtime);
     await unlink(join(recorded.inputs.outputRoot, result.files.dispatches.files[0]!.path));
-    await expect(recordPlanningMetrics(result, recorded.inputs, await registrations())).rejects.toThrow();
+    await expect(recordPlanningMetrics(result, recorded.inputs)).rejects.toThrow();
     expect(await auditFiles(recorded.inputs.outputRoot)).toEqual([]);
   } finally { await recorded.close(); }
 }, 30000);

@@ -126,6 +126,12 @@ export function calculateDiversityMetrics(result: FeedPlanResult, membership: St
   // No planning observation can establish what was actually published.
   for (const basis of ["published", "leads"] as const) record({ basis, unavailable_reason: "missing_publication" });
   record({ metric: "source_gini", basis: "published", unit: "ratio", unavailable_reason: "missing_publication" });
+  for (const kind of new Set(membership.sources.map(source => source.kind))) {
+    for (const unit of ["count", "ratio"] as const) record({
+      metric: "source_kind_distribution", basis: "published", dimension: "source_kind", dimension_value: kind,
+      unit, unavailable_reason: "missing_publication",
+    });
+  }
   for (const count of new Set(config.top_source_counts)) {
     if (count !== 1 && count !== 5 && count !== 10) throw new Error("top_k: unsupported configured count");
     record({ metric: "top_source_concentration", basis: "published", unit: "ratio", top_k: count, unavailable_reason: "missing_publication" });
@@ -142,5 +148,7 @@ export function calculateDiversityMetrics(result: FeedPlanResult, membership: St
     metric, basis: "published", unit: "ratio", window_days: config.rolling_window_days,
     unavailable_reason: metric === "event_repetition_rate" ? "missing_event_evidence" : "incomplete_history",
   });
+  record({ metric: "novel_source_contribution", basis: "published", unit: "count",
+    window_days: config.rolling_window_days, unavailable_reason: "incomplete_history" });
   return rows;
 }
