@@ -1,0 +1,21 @@
+{
+  "date": "2026-10-21",
+  "run_id": "2026-10-21-66",
+  "correlation_id": "partition-fixture",
+  "observed_at": "2026-10-21T12:00:00Z",
+  "word_work": [8, 7, 6, 5, 4],
+  "bin_pack_workers": [0, 1, 1, 0, 0],
+  "bin_pack_work": [17, 13],
+  "round_robin_workers": [0, 1, 0, 1, 0],
+  "round_robin_work": [18, 12],
+  "index_contracts": {
+    "raw_fields": ["version", "ledger", "date", "files", "content_sha256", "bytes", "listed_at"],
+    "compact_fields": ["version", "ledger", "period", "entries", "expired_through"],
+    "entry_fields": ["covers", "rows", "bytes", "state", "lost_days", "set_aside"],
+    "states": ["packed", "empty", "lost"],
+    "periods": ["daily", "monthly", "yearly"],
+    "legacy_entry": { "covers": "2026-10-21", "rows": 0, "bytes": 128 },
+    "legacy_defaults": { "state": "packed", "lost_days": [], "set_aside": 0 },
+    "filename": "019a0000-0000-8000-8000-000000000000.parquet"
+  }
+}
