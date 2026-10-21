@@ -5,7 +5,9 @@
 Every host-fingerprint field, what it means and which readings are optional.
 The hardware fingerprint is reusable by any pipeline. Callers name their
 pipeline, task and shard; no workflow enum or digest-specific identity is needed.
-Python collects the persisted host fingerprint. The independent Bun host probe
+Python collects the production host fingerprint. The independent Bun fingerprint
+service writes the same existing host row through the shared TypeScript writer;
+it does not replace the production collector. The separate Bun host probe
 returns transient CPU and memory samples without writing a ledger. Item resource
 readings and diagnostic memory files are separate optional instruments.
 
@@ -33,7 +35,7 @@ operator console, not on the news-reading pages.
 | Schema | `HostFingerprintRow.json_schema()` from the contract above |
 | Ledger | The caller's state root, then `raw/host-fingerprint/<YYYY>/<MM>/<DD>/`; compaction uses the matching `compact/host-fingerprint/` path |
 | Files | one immutable `<file_id>.parquet` per completed write in the day directory. The reader settles the later whole row of the same work unit; neither file is edited. |
-| Producer | [`silicon.py`](../../backend/idhazh/telemetry/silicon.py), through [`task_telemetry.record`](../../backend/idhazh/telemetry/task_telemetry.py). Callers use separate pipeline and task names; Python writes and reads the shared host ledger. |
+| Producer | [`silicon.py`](../../backend/idhazh/telemetry/silicon.py), through [`task_telemetry.record`](../../backend/idhazh/telemetry/task_telemetry.py), or the independent [`host-fingerprints`](../../services/host-fingerprints/src/index.ts) API/CLI. Both use the existing host ledger and separate pipeline/task identity. |
 | Read by | `/console/machine/`, through the browser questions in `frontend/src/lib/console/queries/machine.ts` and shared helpers in `frontend/src/lib/console/machine/records.ts` |
 | Key | `date`, `run_id`, `pipeline_name`, `task_name`, `shard`; legacy rows use `job` instead |
 | Switch | `observability.host_telemetry_enabled` for the whole instrument; `host_fingerprint` for host-row writes; `memory_profiling_enabled` for memory/page-fault observations only |
@@ -81,13 +83,111 @@ Table A - collected measurements
 | A5 | CPU and load over an item window | Optional | Whole-window busy/steal share, busy extrema and closing one-minute load. |
 | A6 | Memory and page faults | Optional | Selected process RAM, machine RAM/swap, available-memory minimum and major page-fault delta. |
 | A7 | Memory artifacts and copy speed | Optional | Process/sample files, server RSS, cgroup peak and an opt-in copy benchmark. The copy probe allocates two buffers and competes for memory bandwidth. |
-| A8 | Ledger writing | Optional | Immutable ledger files through the shared Python writer. A pipeline chooses whether and how to publish its writes. |
+| A8 | Ledger writing | Optional | Immutable ledger files through the shared Python or TypeScript writer. A pipeline chooses whether and how to publish its writes. |
 
 The live runtime is Linux with `/proc` and `/sys`, as on the Ubuntu runner.
 Windows development or recorded-fixture success does not certify live Linux
 collection. Unsupported or missing observations are unavailable, never zero.
 Missing observations remain empty cells; collection does not invent a reading.
 Memory diagnostics are separate from the persisted hardware fingerprint.
+
+## Independent fingerprint API and CLI
+
+`services/host-fingerprints` collects the full existing 38-field
+`HostFingerprintRow`, including hardware, capacity, optional frequency, uptime,
+placement, runner label and caller-supplied timing/model counters. It adds no
+persisted fields and rewrites no historical files. The service is build-time
+operator tooling, not a backend for the published site.
+
+From the service directory, run:
+
+```text
+bun run src/index.ts --fingerprint --context caller.json --state-root generated-state
+bun run src/index.ts --serve --state-root generated-state
+```
+
+`caller.json` is an operator-authored input, not fetched article data. Its shape:
+
+```json
+{
+  "date": "2026-10-21",
+  "writer": {
+    "run_id": "2026-10-21-123",
+    "attempt": 1,
+    "job": null,
+    "pipeline_name": "fixture-pipeline",
+    "task_name": "inspect-host",
+    "shard": 0,
+    "producer": "telemetry.silicon",
+    "git_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "model_load_ms": null,
+  "job_seconds": null,
+  "server_prompt_tokens": null,
+  "server_prompt_seconds": null
+}
+```
+
+The four trailing cells default to null: the collector does not invent task
+timing or model counters. `job` is null or matches `task_name` for a generic
+caller. A legacy job-only identity remains valid. Producer `telemetry.silicon`
+preserves the existing host work-unit identity; attempts remain separate
+immutable writes and normal ledger settlement chooses the later whole row.
+Dates and timestamps are UTC. Integer inputs must be exactly representable
+JavaScript safe integers; values outside that range fail rather than round.
+
+`POST /api/2026-10-20/fingerprint` takes that same JSON body. Success returns
+`status: "written"`, the validated `row`, an `unavailable` reason map, and the
+shared writer's `files`. Each file's `path` is relative to the caller's state
+root, with POSIX separators; no absolute local path is returned. The caller
+owns publication. Validation failures return 400; oversized request bodies
+return 413. A collection or persistence failure returns 500, never a row or
+success-shaped paths. The CLI prints JSON only after persistence, or exits
+nonzero and logs the failure on stderr.
+
+`GET /api/2026-10-20/health` reports readiness and the selected instrument
+switch without collection or writes. GET on the write endpoint returns 405.
+Other methods are refused. Neither endpoint is cacheable. No endpoint accepts
+an output path or metadata URL from the request.
+
+`--settings <file>` selects the caller's `idhazh.json`; the committed file is
+the default. Both `observability.host_telemetry_enabled` and `host_fingerprint`
+must permit collection. Either false returns `status: "disabled"`, `row: null`
+and empty files, without host reads or directory creation. The shared
+frequency and bandwidth fields remain authoritative. There is no competing
+host telemetry setting in the service config.
+
+`--config <file>` selects the authored service controls in
+`config/host-fingerprints.json`. Defaults bind loopback on port 3004, limit
+each host input and HTTP body to 1048576 bytes (1 MiB), permit at most 8192
+online processors, read the eight named cache indices, and inspect at most
+64 cgroup ancestor levels. These limits bound one collection; exceeding a host
+input limit yields an unavailable reading, not a partial count.
+The metadata URL is committed and restricted to the host link-local address;
+its default deadline is 2000 milliseconds. `metadata_url: null` opts out of
+placement reads and records `configured_off`. Missing metadata remains null.
+`copy_repeats` defaults to three real memory transfers, taking their median.
+Only tasks selected by the existing observability bandwidth list take that
+optional benchmark; the recorded buffer size is derived from L3 and the shared
+floor/cache multiple.
+
+Linux reads named proc/sys files only. Online IDs determine logical count;
+every online CPU must supply a package/core pair for physical count.
+`/proc/self/status` supplies this Bun process's affinity, intersected with
+online IDs. Cgroup v1/v2 quota uses the tightest visible ancestor; one missing
+or malformed ancestor makes quota unknown. Frequency is optional; incomplete
+maximum-frequency coverage is null, never a smaller CPU count. Algorithm 2
+hashes only the existing seven static hardware facts using sorted ASCII JSON.
+Windows and macOS return unavailable hardware, never invented measurements.
+
+The named Bun checks cover authored Linux-format input transcripts, the
+independently recorded full schema/types/nullability and hardware hash bytes,
+real API-handler/CLI writes, and real Parquet WASM/Arrow readback. They run no
+Python, install no Python package, and do not claim that a Python reader ran.
+No test contacts a network: placement parsing uses the bounded response
+fixture; the CLI placement read is explicitly off. The live-Linux test runs
+only on Linux and reports its machine separately; Windows fixture results do
+not certify Linux collection or live cloud metadata access.
 
 ## Independent CPU and memory samples
 
@@ -147,7 +247,7 @@ Table B - whole-instrument selection
 
 | ID | Setting | Meaning |
 | --- | --- | --- |
-| B1 | `observability.host_telemetry_enabled: true` | Allow Python collection. This is the committed default. |
+| B1 | `observability.host_telemetry_enabled: true` | Allow host collection in either collector. This is the committed default. |
 | B2 | `observability.host_telemetry_enabled: false` | Stop host collection for every caller; no workflow choice can override it. |
 | B3 | Caller uses `task_telemetry.record` | Collect through the shared Python API with separate pipeline, task and shard identity. |
 | B4 | Caller does not record, or a workflow wrapper selects `off` | Leave host telemetry out for that invocation without changing stored data. Workflow dispatch controls are optional wrappers, not part of the recorder contract. |
@@ -163,7 +263,7 @@ Table C - controls inside an enabled instrument
 | C5 | Empty `host_fingerprint_bandwidth_jobs`, or zero `host_fingerprint_bandwidth_floor_mib` | Stop the copy benchmark | Other host observations |
 
 The master false value or caller's off choice wins first. Memory on cannot
-restart a disabled instrument. Whole off skips Python host readings, raw host
+restart a disabled instrument. Whole off skips host readings, raw host
 writes and host-memory artifacts. It keeps work, item health and progress
 logging. No setting deletes existing readings.
 
@@ -565,6 +665,16 @@ discard the reading the fingerprint exists to capture.
 to keep one column. Its full vocabulary lives in the contract.
 
 ## Design rationale
+
+**The independent collector shares the existing persistence stack.** Zod
+validates caller context and the full host row; the existing
+`packages/ledger-file-writer` supplies identity, typed Arrow columns, Parquet
+WASM serialization and atomic persistence. There is no second Parquet
+implementation or HTTP framework. The cost is installing the existing Arrow
+and WASM runtime assets with this operator tool; none enter the browser bundle.
+The service's direct Arrow/WASM development dependencies support independent
+readback tests, not a second writer. TypeScript and Bun declarations are
+development-only costs.
 
 **A transient CPU sample retains the complete observed interval.** The Bun
 response keeps steal as a fifth bucket rather than hiding it inside idle or
