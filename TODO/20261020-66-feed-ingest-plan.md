@@ -734,6 +734,14 @@ independent safety requirements.
 - **Acceptance gates:** `bun test` in `services/feed-ingest-plan/`; bounded fixtures check the configured concentration limits and relaxation order. Vary only the source-kind coefficient: zero must remove its penalty; increasing it changes only the declared diversity term. Relabelling a source must not change screening eligibility or introduce a required-kind count. Execute Table O's vertical-specific scoring substitution against this real curation stage and compare exact components and selected identities. Vary each Table T dimension independently, including same lens/different event cluster, same event type/different occurrence, same entity/different story, and unavailable desk evidence.
 - **Oracle:** Source/domain shares and relaxation follow configuration, and the source-kind penalty equals the bounded term in Table F, including the zero-weight case. This does not prove that a subjective source label is correct or that the proposed coefficient is editorially optimal.
 
+Preflight: candidates carry labels and article text, but no semantic vectors.
+Reuse only the existing same-story rules whose inputs are available; record
+unavailable similarity evidence rather than claiming a vector comparison.
+Cross-outlet groups must satisfy the rule for every pair, not merely form a
+chain of matching neighbours. Publisher identity is the recorded masthead,
+not the feed ID; parent-domain concentration remains a separate control.
+Name the matcher, fixture and owning-doc supporting paths before dispatch.
+
 ### Decisions
 
 | # | Decision | Authority |
@@ -768,6 +776,14 @@ independent safety requirements.
   - `services/feed-ingest-plan/test/partition.test.ts`
 - **Acceptance gates:** Local: shared selector and `bun test` over bounded uneven, equal-work, empty, and fewer-items-than-shards fixtures. Verify deterministic assignments, configured shard bounds, and the selected-to-dispatched identity/rank bijection. CI: full suite. Greedy bin-packing is a heuristic, not proof of minimum variance for every input.
 - **Oracle:** A hand-computable uneven-work fixture produces the expected greedy assignment and lower work spread than round-robin; equal-work fixtures may tie. With strategy `none`, all items have worker assignment zero and the effective dispatch count is one. These checks do not prove optimal packing or actual worker elapsed-time balance.
+
+Preflight: editorial selections do not contain article text or titles, while
+dispatches require the complete validated candidate. Name the candidate input
+and join it to settled selections by candidate identity, checking source and
+policy consistency. Do not reconstruct content from a selection row or fetch
+it again from the web. The shared writer is not a settled ledger reader;
+price the raw/compact reader and candidate-input supporting paths before
+dispatch. Worker assignment stays separate from the writer's identity shard.
 
 ### Decisions
 
