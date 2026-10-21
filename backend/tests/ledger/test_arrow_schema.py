@@ -11,6 +11,7 @@ from __future__ import annotations
 from enum import IntEnum, StrEnum
 from pathlib import Path
 from typing import Annotated, Any, ClassVar, Literal, cast
+from uuid import UUID
 
 import pytest
 from conftest import REPO_ROOT
@@ -245,6 +246,16 @@ def test_a_fixed_choice_row_round_trips_through_a_parquet_file(tmp_path: Path) -
         {"word": "b", "number": 2, "maybe_number": 3, "word_or_text": "free", "words": ("a",)}
     )
 
+    assert _round_trip(row, tmp_path) == row
+
+
+def test_a_uuid_uses_its_json_string_and_round_trips(tmp_path: Path) -> None:
+    model = _one_field(UUID)
+    row = model.model_validate({"field": "01a15c1e-d800-8000-8000-000000000001"})
+    assert logical_type_of(UUID) == LogicalType(kind="scalar", scalar="string")
+    assert columns_of(model)[-1] == Column("field", LogicalType(
+        kind="scalar", scalar="string"
+    ), nullable=False)
     assert _round_trip(row, tmp_path) == row
 
 
