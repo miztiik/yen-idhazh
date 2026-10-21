@@ -11,6 +11,11 @@ type PackageMetadata = { version: string };
 let wasmInitialization: ReturnType<typeof initializeWasm> | undefined;
 let writerVersionValue: Promise<string> | undefined;
 
+export async function initializeParquetWasm(): Promise<void> {
+  wasmInitialization ??= initializeWasm();
+  await wasmInitialization;
+}
+
 export async function readParquetEngineVersion(): Promise<string> {
   writerVersionValue ??= (async () => {
     const wasmEntry = import.meta.resolve("parquet-wasm");
@@ -45,8 +50,7 @@ export async function serializeParquet(
   metadata: Map<string, string>,
   compression: "snappy" | "zstd" | "none",
 ): Promise<ParquetBytes> {
-  wasmInitialization ??= initializeWasm();
-  await wasmInitialization;
+  await initializeParquetWasm();
   const properties = new WriterPropertiesBuilder()
     .setCompression(toParquetCompression(compression))
     .setKeyValueMetadata(metadata)

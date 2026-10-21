@@ -26,7 +26,7 @@ The `unit_id` answers: **which work unit does this record belong to?**
 - **Namespace UUID**: `uuid.uuid5(uuid.NAMESPACE_URL, "github.com/miztiik/yen-idhazh")`, which is `de055294-e352-5d65-a1b7-d14b5e20844d`. The `uuid.NAMESPACE_URL` value is only the input to this calculation.
 - **Seeding string**:
   ```
-  {ledger}|{covers}|{run_id}|{job}
+  {ledger}|{covers}|{run_id}|{job}|{shard}|{producer}
   {ledger}|{covers}|{run_id}|{pipeline_name}|{task_name}|{shard}|{producer}
   ```
   The first form is the legacy job identity. The second identifies a pipeline task.

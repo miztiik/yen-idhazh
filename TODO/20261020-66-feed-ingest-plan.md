@@ -601,24 +601,35 @@ does not authorize skipping its collector.
   - `packages/ledger-file-writer/src/parquet/wasm-serializer.ts`
   - `packages/ledger-file-writer/src/parquet/envelope-footer.ts`
   - `packages/ledger-file-writer/src/parquet/row-digest.ts`
+  - `packages/ledger-file-writer/src/ledger-types.ts`
+  - `packages/ledger-file-writer/src/row-schema.ts`
+  - `packages/ledger-file-writer/src/registration.ts`
+  - `packages/ledger-file-writer/src/row-identity.ts`
+  - `packages/ledger-file-writer/src/ledger-paths.ts`
+  - `packages/ledger-file-writer/src/atomic-file.ts`
+  - `packages/ledger-file-writer/src/render-ledger-file.ts`
+  - `packages/ledger-file-writer/src/persist-raw.ts`
+  - `packages/ledger-file-writer/src/persist-compact.ts`
   - `packages/ledger-file-writer/src/persist-ledger.ts`
   - `packages/ledger-file-writer/test/uuid.test.ts`
   - `packages/ledger-file-writer/test/parquet-parity.test.ts`
   - `packages/ledger-file-writer/test/persist-ledger.test.ts`
-  - `packages/ledger-file-writer/test/verify-python-parity.py`
+  - `tests/fixtures/ledger-file-writer/host-fingerprint-row.json`
+  - `tests/fixtures/ledger-file-writer/feed-ingest-dispatch-row.json`
+  - `.github/workflows/ci.yml` (named TypeScript package checks and tests)
   - `docs/architecture/contracts/identity.md`
   - `docs/architecture/contracts/persistence.md`
-- **Acceptance gates:** Local: shared test selector, strict TypeScript checks, package tests, and Python reader parity over bounded generated fixtures. CI: full suite and PyArrow/DuckDB compatibility. Exercise two distinct registered ledger contracts through the same public interface, including raw and compact writes, zero rows, nullable/list fields, invalid rows, and an interrupted write.
-- **Oracle:** Python reconstructs the envelope with `FileEnvelope.from_metadata`, loads the rows through the ledger reader, and recomputes `content_sha256` from the stored rows using `json_lines.rows_bytes`; identities match the Python implementation for identical inputs. This proves contract and digest compatibility, not speed or byte-identical output from different Parquet engines.
+- **Acceptance gates:** Local: shared test selector, strict TypeScript checks, and package tests. CI: full suite. Exercise two distinct registered ledger contracts through the same public interface, including raw and compact writes, zero rows, nullable/list fields, invalid rows, and an interrupted write. Tests read actual WASM-produced Parquet through `parquet-wasm` and Apache Arrow and compare the footer, typed columns, stored rows, digest, and identifiers against bounded recorded compatibility fixtures.
+- **Oracle:** Python remains the format authority, but the owner override dated 2026-10-21 forbids running Python from TypeScript development, tests, or this package's CI checks. TypeScript tests therefore validate the actual Parquet with its WASM/Arrow reader and recorded compatibility fixtures. They do not claim Python reader execution or current Python cross-runtime readback.
 - **Preflight correction:** The identity page currently names a TypeScript implementation under `packages/common-contracts/src/identity/` that does not exist. The writer owns the new implementation. Correct that page's namespace and hash-bit descriptions against `backend/idhazh/ledger/filenames.py`; do not change the Python identity algorithm. The package lock and bounded Python parity helper support the declared package and cross-language acceptance gates.
 
 Canonical-byte preflight: sorted `JSON.stringify` is not Python's row
-serialization. A fixed local comparison produced Python numbers `1.0`,
+serialization. A fixed comparison produced Python numbers `1.0`,
 `1e-07`, `1e+20`, and `-0.0`, while Node produced `1`, `1e-7`,
 `100000000000000000000`, and `0`. Python also escapes non-ASCII text.
-Use the declared scalar types and actual stored rows to reproduce the Python
-bytes. Include these values, Unicode, nested lists, and nulls in the existing
-parity test; do not change Python's digest or reject valid floats to pass it.
+Use the declared scalar types and actual stored rows to reproduce those bytes.
+Include these values, Unicode, nested lists, and nulls in the canonical-byte
+vector; do not change the Python digest rules or reject valid floats to pass it.
 
 Identity-page preflight also found two unrelated identities described as one:
 the older `.github/scripts/ai-pipeline.ts` event helper returns an `evt_`
@@ -628,6 +639,16 @@ when correcting the identity page. Do not copy the older helper into planner
 events or change their declared type. Rejections do not declare an event ID,
 and correlation IDs are not undeclared file-envelope metadata.
 
+### Owner override - 2026-10-21
+
+The owner directed that TypeScript writer development and tests must not run
+Python, including through a test helper, and that this package's CI checks
+must not install Python dependencies or run a Python parity step. Keep actual
+WASM/Arrow readback and bounded recorded compatibility fixtures in TypeScript.
+Existing repository Python CI remains unchanged. This replaces the
+Python-execution acceptance gate for Row #6; do not report Python readback as
+verified.
+
 ### Decisions
 
 | # | Decision | Authority |
@@ -635,9 +656,9 @@ and correlation IDs are not undeclared file-envelope metadata.
 | 1 | Evaluate `apache-arrow` + `parquet-wasm` for Parquet writing; use the configured ledger compression rather than a caller-specific constant. Beneficiary: every TypeScript ledger producer. Record install size, loaded WASM memory, and runner time before dependency adoption. | Plan proposal; persistence.md |
 | 2 | Match Python `filenames.py` for UUIDv5 unit identity and UUIDv8 file identity, including generic pipeline/task context. | identity.md; filenames.py |
 | 3 | Write separate UTF-8 key-value entries matching `FileEnvelope.as_metadata`, not one JSON object. Preserve renamed metadata keys, optional-key omission, and zero-padded attempt/shard strings. Read row count from the Parquet footer, not an extra envelope key. | file_envelope.py; persistence.md |
-| 4 | Hash the stored rows, including stamped identity cells, in file order using the exact canonical JSON-lines bytes from `json_lines.rows_bytes`: sorted object keys, ASCII escaping, compact separators, and one LF per row. It is neither a hash of Parquet bytes nor an unspecified raw-row hash. Test Unicode, nested values, floats, and nullable cells against Python serialization. | persist.py; json_lines.py |
+| 4 | Hash the stored rows, including stamped identity cells, in file order using the exact canonical JSON-lines bytes from `json_lines.rows_bytes`: sorted object keys, ASCII escaping, compact separators, and one LF per row. It is neither a hash of Parquet bytes nor an unspecified raw-row hash. Test Unicode, nested values, floats, and nullable cells against the recorded canonical-byte vector. | persist.py; json_lines.py |
 | 5 | Accept ledger, row contract, rows, output root, UTC coverage period, writer context, and ledger settings. Derive paths and identifiers inside the package. Keep feed selection, HTTP serving, and GitHub reporting outside it. Use temporary-file-plus-rename writes. | Owner selection: shared package; persistence.md |
-| 6 | Validation checks row and envelope contracts before writing. Interoperability tests additionally check the Parquet encoding. Neither check encrypts, signs, or makes a file tamper-proof. | Clarification of the package contract |
+| 6 | Validation checks row and envelope contracts before writing. TypeScript tests read actual Parquet through WASM and Arrow, then check the footer and typed columns against bounded compatibility fixtures. The owner override prevents executing Python from this package's test and CI paths, so these checks do not claim current Python reader execution. Neither check encrypts, signs, or makes a file tamper-proof. | Clarification of the package contract; owner override |
 | 7 | Raw writes stamp row identity; compact writes preserve original row identity and record the compactor only in the envelope. Accept tier, period, and source-file count under the existing persistence rules; do not embed a compaction schedule or retention policy in the package. | persistence.md |
 
 ### Rejected alternatives

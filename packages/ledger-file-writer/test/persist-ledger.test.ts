@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, test } from "bun:test";
-import { writeAtomically } from "../src/persist-ledger";
+import { writeAtomically } from "../src/atomic-file";
 
 describe("atomic ledger file writes", () => {
   test("removes a temporary file when the final rename is interrupted", async () => {

@@ -78,6 +78,32 @@ Its bytes come from PyArrow: this establishes reader support, not compatibility
 of a future TypeScript Parquet engine. That writer must prove its own byte
 readback and canonical row digest before producing files.
 
+`packages/ledger-file-writer` is the importable TypeScript writer for that
+boundary. A caller supplies a validated contract, registered ledger entry,
+rows, output root, UTC period, writer identity and the configured raw/compact
+compression settings; it returns written file metadata without owning a
+planner, API, or GitHub integration. Raw files group rows by their own `date`
+when present. Compact files retain each stored row's identity and place the
+compactor identity only in the envelope. The package validates and renders all
+files before its first atomic write. Empty raw input writes nothing; an empty
+compact period still writes a typed Parquet file.
+
+For an ordinary paused or retired ledger, a raw write returns a structured
+`ledger_write_skipped` warning and writes nothing. Raw writes from `migrate`,
+`run-tasks` and `history` still run for maintenance; compact writes remain
+available for stored rows. These rules apply at the TypeScript package
+boundary and do not alter Python's writer lifecycle.
+
+From `packages/ledger-file-writer`, `bun run check` type-checks the package and
+`bun run test` runs the TypeScript unit tests, including real WASM writes,
+Arrow readback and interrupted-write behavior. The tests use bounded recorded
+compatibility fixtures and validate the actual Parquet footer, typed schema,
+stored rows, digest and identifiers without starting Python. CI runs these
+package commands for code changes; its package step adds no Python install or
+reader invocation. Existing repository Python CI gates remain unchanged. This
+package check does not claim that a Python process read the newly written
+files.
+
 Feed planning data remains typed Parquet under registered raw/compact prefixes.
 Nested rejection observations and completion evidence are structs and lists,
 not serialized JSON cells or extra footer keys. A source-run completion
@@ -296,6 +322,16 @@ Every job installs the same set, so whichever job saves `setup-python`'s pip cac
 **2026-09-28: the union ranks on each row, and a compact file keeps each row's writer.** A compact file holds many work units under one envelope, so ranking on the file's `attempt` would rank the compaction rather than the writers. Each row keeps the identity cells its raw file gave it, the one settlement - `raw_files.settle_rows` - reads them, and the door refuses a row whose own cells contradict its writer's. The file-level pick it replaced is gone, so a raw union and a compact rebuild cannot disagree (Fowler).
 
 Trial traces use `state/raw/traces/pipeline-tests/<case>/<YYYY>/<MM>/<DD>/` but remain JSONL spans, not ledger-door files. Their declared case folders have a separate 90-day, report-only retention task; production traces stay at `state/traces/` with a 7-day task. Neither task owns a folder inside the other's claim, and the trial trace folders sit beside the compacting ledger folders under `state/raw/pipeline-tests/`.
+
+**2026-10-21: The TypeScript ledger package uses TypeScript-only tests.** The
+owner ruled that the package's developer lifecycle and CI must not execute
+Python, including from tests, and must not install Python dependencies for
+this package check. Real WASM writes are read back through `parquet-wasm` and
+Apache Arrow against bounded recorded compatibility fixtures. This avoids a
+Python runtime dependency in TypeScript development; it gives up an executed
+Python-reader check for each TypeScript change. The Python ledger reader
+remains the format authority, but this package gate does not claim current
+cross-runtime readback.
 
 ## See also
 

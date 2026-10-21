@@ -9,7 +9,7 @@ export type {
   PersistLedgerInput,
   PersistLedgerResult,
   StoredLedgerRow,
-} from "./persist-ledger";
+} from "./ledger-types";
 export { createFileId } from "./uuid/file-id";
 export type { FileIdentity } from "./uuid/file-id";
 export { createUnitId } from "./uuid/unit-id";

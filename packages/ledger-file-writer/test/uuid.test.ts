@@ -1,9 +1,9 @@
-/** Verifies both identifier forms against Python's ledger identity rules. */
+/** Verifies both identifier forms against recorded ledger identity vectors. */
 import { describe, expect, test } from "bun:test";
 import { createUnitId } from "../src/uuid/unit-id";
 import { createFileId } from "../src/uuid/file-id";
 
-describe("Python ledger identity parity", () => {
+describe("recorded ledger identity vectors", () => {
   test("uses the repository UUIDv5 namespace and generic pipeline identity", () => {
     expect(createUnitId({
       ledger: "covers",
