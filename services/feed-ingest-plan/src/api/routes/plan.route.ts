@@ -1,11 +1,11 @@
 /** Route a validated operator request to the real planner composition. */
 import { Hono } from "hono";
 import { PlanError, PlanRequestSchema } from "../plan-request";
-import { runFeedPlan, summarizePlan } from "../../run-feed-plan";
-import type { PlanRuntime } from "../../run-feed-plan";
-import type { PlanInputs } from "../../load-plan-inputs";
+import { summarizePlan } from "../../run-feed-plan";
+import type { FeedPlanResult } from "../../run-feed-plan";
+import type { PlanRequest } from "../plan-request";
 
-export function planRoute(inputs: PlanInputs, runtime: PlanRuntime) {
+export function planRoute(execute: (request: PlanRequest) => Promise<FeedPlanResult>) {
   return new Hono().post("/plan", async c => {
     let raw: unknown;
     try { raw = await c.req.json(); }
@@ -14,7 +14,7 @@ export function planRoute(inputs: PlanInputs, runtime: PlanRuntime) {
       throw error;
     }
     const request = PlanRequestSchema.parse(raw);
-    const result = await runFeedPlan(request, inputs, runtime);
+    const result = await execute(request);
     return c.json(summarizePlan(result), 409);
   });
 }

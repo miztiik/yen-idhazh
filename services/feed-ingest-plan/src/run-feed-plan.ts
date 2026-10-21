@@ -1,14 +1,16 @@
 /** Which real stages produce dispatches and pending audit evidence for one run? */
 import type { FeedIngestEvent } from "@idhazh/common-contracts";
+import type { PersistedLedgerFile } from "@idhazh/ledger-file-writer";
 import { harvestFeeds } from "./harvest-feeds/harvest-pool";
 import { harvestPolicy, loadHarvestInputs } from "./harvest-feeds/load-harvest-inputs";
 import { screenArticleCandidates } from "./screen-article-candidates/triage-gates";
 import { curateArticles, persistPortfolio } from "./curate-article-portfolio/editorial-selection";
 import type { ArticleEvidence, OpportunityEvidence } from "./curate-article-portfolio/portfolio-input";
 import { resolveRunContext } from "./resolve-run-context";
-import { readSeenEvidence } from "./read-ledger-history/read-seen-evidence";
+import { readSeenEvidence, rememberFirstSight } from "./read-ledger-history/read-seen-evidence";
+import type { OwnSeenReceipt } from "./read-ledger-history/read-seen-evidence";
 import { resolvePlanRequest, PlanError } from "./api/plan-request";
-import { createStageLogger, writeJsonLine } from "./logging/structured-logger";
+import { createStageLogger, resolveRunPolicy, writeJsonLine } from "./logging/structured-logger";
 import { harvestAssessments, screeningAssessments } from "./logging/stage-assessments";
 import { prepareDispatches, sealDispatches } from "./seal-article-ledger/plan-sealer";
 import type { PlanInputs } from "./load-plan-inputs";
@@ -21,6 +23,8 @@ export type PlanRuntime = {
   log?: (event: FeedIngestEvent) => void;
   evidence?: ReadonlyMap<string, ArticleEvidence>;
   opportunity?: OpportunityEvidence;
+  seen_receipts?: readonly OwnSeenReceipt[];
+  on_seen_persisted?: (receipt: { day: string; files: readonly PersistedLedgerFile[] }) => void;
 };
 
 export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: PlanRuntime) {
@@ -28,7 +32,10 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   const request = resolvePlanRequest(raw, inputs.harvest.config);
   const context = resolveRunContext(inputs.settings, runtime.git_sha, captured, runtime.run_number);
   if (!inputs.settings.enabled) throw new PlanError("PLANNER_DISABLED", "Planner is disabled by service settings", "enabled");
-  for (const entry of Object.values(inputs.registrations)) {
+  for (const entry of [
+    inputs.registrations.rejections, inputs.registrations.selections,
+    inputs.registrations.dispatches, inputs.registrations.seen,
+  ]) {
     if (entry.lifecycle_status !== "active") throw new PlanError("LEDGER_INACTIVE", `Required ledger ${entry.name} is not active`, entry.name);
   }
   // Recompute the effective input fingerprint instead of changing a harvested policy later.
@@ -38,14 +45,20 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     sources: { feeds: inputs.harvest.sources }, extraction: { extract: inputs.harvest.extraction },
   });
   const overrides = request.freshness_hours === undefined ? {} : { freshness_hours: request.freshness_hours };
-  const fallbackPolicy = harvestPolicy(harvestInputs, harvestInputs.taxonomy.verticals[0]!.id, overrides);
-  for (const source of harvestInputs.sources) harvestPolicy(harvestInputs, source.vertical, overrides);
+  const fallbackPolicy = resolveRunPolicy(harvestInputs, request.freshness_hours);
+  for (const source of harvestInputs.sources) {
+    if (source.status !== "retired") harvestPolicy(harvestInputs, source.vertical, overrides);
+  }
   const logger = createStageLogger(context, runtime.log ?? writeJsonLine);
   const complete = (stage: FeedIngestEvent["stage"], input_count: number, output_count: number,
     terminal_rejection_count: number, source_count: number | null = null) => logger.emit(stage, {
     kind: "stage_completion", stage, input_count, output_count, terminal_rejection_count, source_count,
   }, fallbackPolicy);
-  const seen = await readSeenEvidence(inputs.root, inputs.settings.inputs.seen_files);
+  const history = await readSeenEvidence(inputs.root, inputs.settings.inputs.seen_files, {
+    now: context.now, lookback_days: inputs.clock_config.collect.seen_window_days,
+    days: inputs.settings.inputs.seen_days,
+    ...(runtime.seen_receipts === undefined ? {} : { own_receipts: runtime.seen_receipts }),
+  });
   logger.startStep();
   const harvest = await harvestFeeds(harvestInputs, {
     writer: context.writer, correlation_id: context.correlation_id,
@@ -54,8 +67,13 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.rejections,
     ledgerSettings: inputs.ledgerSettings,
   }, runtime.boundary);
+  const seen = await rememberFirstSight(history, harvest.candidates, context, {
+    outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.seen, ledgerSettings: inputs.ledgerSettings,
+  });
+  if (seen.sealing.files.length > 0) runtime.on_seen_persisted?.({ day: context.date, files: seen.sealing.files });
   for (const outcome of harvest.feed_outcomes) {
-    logger.emit("harvest-feeds", outcome, harvestPolicy(harvestInputs, outcome.source.vertical, overrides), outcome.source.source_id);
+    logger.emit("harvest-feeds", outcome, outcome.source.status === "active"
+      ? harvestPolicy(harvestInputs, outcome.source.vertical, overrides) : fallbackPolicy, outcome.source.source_id);
   }
   for (const assessment of harvestAssessments({ harvest, context, overrides, evidence: runtime.evidence })) logger.emit(
     "harvest-feeds", { kind: "candidate_decision", assessment },
@@ -124,6 +142,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
       screening_rejections: screening.sealing,
       selections: portfolio.selections, curation_rejections: portfolio.rejections,
       dispatches,
+      seen: seen.sealing,
     },
     evidence: { harvest, screening, curation, seen, partition },
   };
@@ -141,6 +160,13 @@ export function summarizePlan(result: FeedPlanResult) {
       candidate_id: dispatch.content.candidate_id, partition: dispatch.partition,
     })),
     files: result.files,
+    first_sight: {
+      absence_proof: result.evidence.seen.absence_proof,
+      global_absence: result.evidence.seen.global_absence,
+      window: result.evidence.seen.window,
+      own_receipts: result.evidence.seen.own_receipts,
+      created_count: result.evidence.seen.new_rows.length,
+    },
     audit: { status: "unavailable", reason: "Required audit writes and complete-attempt verification are not integrated" },
   };
 }

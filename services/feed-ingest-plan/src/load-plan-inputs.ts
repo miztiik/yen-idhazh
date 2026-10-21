@@ -21,7 +21,7 @@ const RegistrySchema = z.object({
 });
 const ExtractionSettingsSchema = z.object({
   ledger: LedgerSettingsSchema,
-  collect: z.object({ max_future_hours: NonNegativeSchema }),
+  collect: z.object({ max_future_hours: NonNegativeSchema, seen_window_days: z.int().nonnegative() }),
 });
 
 export async function loadPlanInputs(root: string, settingsPath = "config/feed-ingest-plan-service.json") {
@@ -47,6 +47,8 @@ export async function loadPlanInputs(root: string, settingsPath = "config/feed-i
   const selected = {
     rejections: registration("rejections"), selections: registration("editorial-selections"),
     dispatches: registration("dispatches"),
+    seen: registration("seen"), assessments: registration("article-assessments"),
+    diversity: registration("diversity"),
   };
   for (const [entry, prefix] of [
     [selected.rejections, harvest.config.seal.rejections_prefix],

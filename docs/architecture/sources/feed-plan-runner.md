@@ -73,18 +73,46 @@ byline. Without a supplied work estimate, extracted word count is the measured
 work proxy, in words, not a time estimate. Curation receives the actual
 configured source snapshots. The returned harvest outcomes include inactive,
 failed and empty sources.
+Retired sources may retain an unregistered historical vertical or kind. They
+still produce `SOURCE_INACTIVE` without a fetch or a source-policy lookup.
+Their event envelope carries the explicit global run-context policy, including
+any request override, not a claim that a historical source policy was applied.
+Active and draft source references are still validated before harvesting.
 
 ## First sight and audit boundary
 
-`readSeenEvidence` reads only the configured `seen_files` through the native
-validated Parquet reader and the existing screening `SeenRow` declaration.
-The recorded wire version is `2026-08-31`. Settled matching rows supply first
-sight. Conflicting settled observations and missing named files fail
-explicitly. An omitted file inventory is unavailable history, not known empty
-history. Even an explicit bounded inventory is not proof that a URL has never
-been seen anywhere. This runner does not create a new first-sight row from
-fetch time or an arbitrary empty array. Undated candidates without settled
-history keep unknown timing and receive no invented recency bonus.
+`readSeenEvidence` uses the existing screening `SeenRow` declaration and its
+independent recorded wire version `2026-08-31`. Named `seen_files` supply actual
+observations, never absence proof. Observations for the same URL key retain
+the earliest actual first-sight instant and run across days and retries.
+Future first-sight instants and unreadable named observation files fail.
+
+For new first sight, `inputs.seen_days` names each UTC day and its native
+`readLedgerDay` inputs: `indexes` with optional `yearly`, `monthly`, `daily`
+relative paths, and either `raw_index` or an explicit complete `raw_files`
+list. An explicit empty `raw_files` list means a known empty day; an omitted
+day or inventory does not. Dates must be distinct, ascending and inside the
+configured window. `collect.seen_window_days` in `config/idhazh.json` supplies
+the lookback: the current UTC day plus 90 preceding days means 91 required
+days at the current setting, with both bounds included, as in
+[existing freshness rules](freshness.md).
+
+Every required day must resolve to actual rows or known empty, with no lost,
+missing, expired or set-aside evidence. Only then can an absent URL key get a
+new existing-format SeenRow at the captured run clock and identity. The native
+writer must persist it before screening; skipped or failed writes fail the
+run. Missing history preserves known observations but cannot create new first
+sight. Undated candidates without settled evidence retain unknown timing and
+no invented recency bonus. This proves absence within the configured retention
+window, never global absence.
+
+One Hono app serializes planning requests and retains only its actual durable
+seen-file receipts as additional per-day observations, even if a later stage
+fails. It validates receipts, rejects a backwards run clock and prunes receipts
+outside the configured window. A fresh process needs refreshed caller-provided
+inventories; this is not a repository scan or cross-process locking mechanism.
+The returned evidence and API/CLI `first_sight` summary identify the window,
+per-day status, own receipts, created count and limited absence proof.
 
 The runner emits existing typed `FeedIngestEvent` envelopes as JSONL on
 stderr. Event IDs follow run, attempt and sequence; elapsed and step durations
@@ -111,6 +139,8 @@ partial result. This is not a queued job or a promise of later completion.
 Invalid requests exit with code 1; disabled HTTP requests return 503.
 Persistence errors fail rather than returning a complete-looking result.
 Already durable immutable files may remain after a later failure.
+The public `loadPlanInputs` result also exposes actual `seen`, `assessments`
+and `diversity` ledger registrations for downstream native writes.
 
 Row #14 integrates directly after `runFeedPlan` returns: consume its captured
 context, existing events, actual stage evidence and persisted file results;

@@ -6,6 +6,12 @@ import { loadPlanInputs } from "../src/load-plan-inputs";
 import { RecordedTransport, readRecordings } from "./harvest-recordings";
 import { recordedPlan } from "./plan-recordings";
 import { main } from "../src/index";
+import { mkdir, unlink, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import type { PersistedLedgerFile } from "@idhazh/ledger-file-writer";
+import { readLedgerParquet } from "../src/read-ledger-history/read-parquet";
+import { SeenRowSchema } from "../src/screen-article-candidates/seen-evidence";
+import { source } from "./harvest-recordings";
 
 test("health is explicit; disabled, malformed, oversized and unknown controls cannot fetch", async () => {
   const inputs = await loadPlanInputs(fileURLToPath(new URL("../../../", import.meta.url)));
@@ -74,4 +80,78 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     expect(JSON.stringify(apiResult)).not.toContain(api.directory);
     expect(apiResult.audit.status).toBe("unavailable");
   } finally { await Promise.all([api.close(), cli.close()]); }
+}, 30000);
+
+test("one listener coordinates concurrent real requests and retains only its durable seen receipts", async () => {
+  const recorded = await recordedPlan([source({ url: "https://news.example/article-failures.xml" })]);
+  const receipts: { day: string; files: readonly PersistedLedgerFile[] }[] = [];
+  let clocks = 0;
+  try {
+    recorded.inputs.clock_config.collect.seen_window_days = 0;
+    recorded.inputs.settings.inputs.seen_days = [{ day: "2026-10-21", raw_files: [] }];
+    delete recorded.runtime.run_number;
+    recorded.runtime.clock = () => new Date(`2026-10-21T12:0${clocks++}:00Z`);
+    recorded.runtime.on_seen_persisted = receipt => { receipts.push(receipt); };
+    const app = createPlanApp(recorded.inputs, recorded.runtime);
+    const post = () => app.request("/api/2026-10-20/plan", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+    });
+    const responses = await Promise.all([post(), post()]);
+    const [first, second] = await Promise.all(responses.map(response => response.json()));
+    expect(responses.map(response => response.status)).toEqual([409, 409]);
+    expect(clocks).toBe(2);
+    expect(first.files.seen.status).toBe("written");
+    expect(second.files.seen).toEqual({ status: "empty", files: [] });
+    expect(first.first_sight.absence_proof).toBe("within_configured_window");
+    expect(second.first_sight.created_count).toBe(0);
+    expect(second.first_sight.own_receipts).toHaveLength(1);
+    expect(first.run_id).not.toBe(second.run_id);
+    expect(receipts).toHaveLength(1);
+    const file = await readLedgerParquet(join(recorded.inputs.outputRoot, receipts[0]!.files[0]!.path), "seen", {
+      schema: SeenRowSchema, schemaVersion: "2026-08-31",
+    });
+    expect(file.rows.every(row => row.row.first_seen_at === "2026-10-21T12:00:00Z")).toBe(true);
+    expect(file.rows.every(row => row.row.first_seen_run === first.run_id)).toBe(true);
+    const fetched = recorded.transport.requests.length;
+    recorded.runtime.clock = () => new Date("2026-10-21T11:59:59Z");
+    const backwards = await post();
+    expect(backwards.status).toBe(500);
+    expect((await backwards.json()).issues[0].field).toBe("now");
+    recorded.runtime.clock = () => new Date(Number.NaN);
+    expect((await post()).status).toBe(500);
+    expect(recorded.transport.requests).toHaveLength(fetched);
+  } finally { await recorded.close(); }
+}, 30000);
+
+test("a later dispatch failure does not lose already durable first sight from this listener", async () => {
+  const recorded = await recordedPlan([source({ url: "https://news.example/article-failures.xml" })]);
+  const receipts: { day: string; files: readonly PersistedLedgerFile[] }[] = [];
+  let clocks = 0;
+  try {
+    recorded.inputs.clock_config.collect.seen_window_days = 0;
+    recorded.inputs.settings.inputs.seen_days = [{ day: "2026-10-21", raw_files: [] }];
+    delete recorded.runtime.run_number;
+    recorded.runtime.clock = () => new Date(`2026-10-21T12:0${clocks++}:00Z`);
+    recorded.runtime.on_seen_persisted = receipt => { receipts.push(receipt); };
+    const blocked = join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan", "dispatches");
+    await mkdir(join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan"), { recursive: true });
+    await writeFile(blocked, "A file cannot hold dispatches.");
+    const app = createPlanApp(recorded.inputs, recorded.runtime);
+    const post = () => app.request("/api/2026-10-20/plan", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+    });
+    const failed = await post();
+    expect(failed.status).toBe(500);
+    expect((await failed.json()).code).toBe("PLAN_FAILED");
+    expect(receipts).toHaveLength(1);
+    await unlink(blocked);
+    const retried = await post();
+    expect(retried.status).toBe(409);
+    expect((await retried.json()).files.seen).toEqual({ status: "empty", files: [] });
+    expect(receipts).toHaveLength(1);
+    const native = await readLedgerParquet(join(recorded.inputs.outputRoot, receipts[0]!.files[0]!.path), "seen", {
+      schema: SeenRowSchema, schemaVersion: "2026-08-31",
+    });
+    expect(native.rows.every(row => row.row.first_seen_at === "2026-10-21T12:00:00Z")).toBe(true);
+  } finally { await recorded.close(); }
 }, 30000);
