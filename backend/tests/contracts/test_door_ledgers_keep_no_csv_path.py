@@ -16,7 +16,7 @@ ledger's first write.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Final
+from typing import Any, Final
 
 import pytest
 
@@ -58,6 +58,12 @@ ENVELOPE_NAMED_FIELDS: Final[Mapping[LedgerName, frozenset[str]]] = {
     LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS: frozenset({"run_id"}),
     LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS: frozenset({"run_id"}),
     LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS: frozenset({"run_id"}),
+    LedgerName.FEED_INGEST_PLAN_DISPATCHES: frozenset(),
+    LedgerName.FEED_INGEST_PLAN_EDITORIAL_SELECTIONS: frozenset(),
+    LedgerName.FEED_INGEST_PLAN_REJECTIONS: frozenset(),
+    LedgerName.FEED_INGEST_PLAN_SOURCE_RUNS: frozenset({"run_id", "attempt"}),
+    LedgerName.FEED_INGEST_PLAN_ARTICLE_ASSESSMENTS: frozenset(),
+    LedgerName.FEED_INGEST_PLAN_DIVERSITY: frozenset({"run_id"}),
 }
 
 
@@ -137,7 +143,14 @@ def test_every_door_key_names_fields_its_contract_declares(member: LedgerName) -
     model = keys.door_contract(member)
     fields = list(model.model_fields)
 
-    assert sorted(set(keys.door_key(member)) - set(fields)) == []
+    schema = model.model_json_schema()
+    for name in keys.door_key(member):
+        node: dict[str, Any] = schema
+        for segment in name.split("."):
+            if "$ref" in node:
+                node = schema["$defs"][node["$ref"].removeprefix("#/$defs/")]
+            assert segment in node["properties"], (member, name, segment)
+            node = node["properties"][segment]
     assert [column.name for column in arrow_schema.columns_of(model)] == fields
 
 

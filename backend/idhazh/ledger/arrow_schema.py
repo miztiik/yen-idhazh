@@ -14,6 +14,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import IntEnum, StrEnum
 from typing import Annotated, Any, Literal, Union, get_args, get_origin
+from uuid import UUID
 
 from pydantic import BaseModel
 
@@ -189,6 +190,8 @@ def logical_type_of(
         )
 
     if isinstance(bare, type):
+        if issubclass(bare, UUID):
+            return LogicalType(kind="scalar", scalar="string")
         if bare in _PLAIN:
             return LogicalType(
                 kind="scalar",

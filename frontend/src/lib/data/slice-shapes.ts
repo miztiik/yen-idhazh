@@ -17,12 +17,18 @@
 export type DateStamp = string;
 
 /** The ledgers the console may query. A closed set: a panel names a ledger, never a path. */
-export const LEDGER_NAMES = ['seen', 'feed-health', 'item-health', 'host-fingerprint', 'summary-quality-evals', 'candidate-models', 'item-health-summary', 'published', 'feed-retirements', 'visual-prunes', 'counterfactual-scores', 'scored-pairs', 'fitted-thresholds', 'holdout-pairs', 'score-distribution', 'archive', 'metrics', 'merge-line-holdout-scores', 'traces', 'day-metrics', 'digest-fragments', 'gardener', 'run-plan', 'run-shards', 'council-run-records'] as const;
+export const LEDGER_NAMES = ['seen', 'feed-health', 'item-health', 'host-fingerprint', 'summary-quality-evals', 'candidate-models', 'item-health-summary', 'published', 'feed-retirements', 'visual-prunes', 'counterfactual-scores', 'scored-pairs', 'fitted-thresholds', 'holdout-pairs', 'score-distribution', 'archive', 'metrics', 'merge-line-holdout-scores', 'traces', 'day-metrics', 'digest-fragments', 'gardener', 'run-plan', 'run-shards', 'council-run-records', 'editorial-selections', 'dispatches', 'rejections', 'source-runs', 'article-assessments', 'diversity'] as const;
 
 export type LedgerName = (typeof LEDGER_NAMES)[number];
 
 /** Door ledger folders that differ from the ledger's value. */
 export const LEDGER_FOLDERS = {
+	'editorial-selections': 'feed-ingest-plan/editorial-selections',
+	'dispatches': 'feed-ingest-plan/dispatches',
+	'rejections': 'feed-ingest-plan/rejections',
+	'source-runs': 'feed-ingest-plan/source-runs',
+	'article-assessments': 'feed-ingest-plan/article-assessments',
+	'diversity': 'feed-ingest-plan/diversity',
 	'holdout-pairs': 'content-similarity-judge/holdout-pairs',
 	'merge-line-holdout-scores': 'content-similarity-judge/merge-line-holdout-scores',
 	'scored-pairs': 'content-similarity-judge/scored-pairs',
