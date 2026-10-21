@@ -7,10 +7,10 @@ import {
   ArticleAssessmentRecordSchema, CandidateRejectionRecordSchema, CONTRACT_VERSION, DateStampSchema,
   DiversityMetricRowSchema, FeedIngestDispatchSchema, LedgerCompletionEvidenceSchema,
   PositiveCountSchema, Sha256Schema, deriveCandidateId, deriveUrlKey,
-} from "../src/index";
-import { createFileId, createUnitId, digestRows, persistLedger } from "../../ledger-file-writer/src/index";
-import type { LedgerRegistration, LogicalField, PersistLedgerResult } from "../../ledger-file-writer/src/index";
-import { readLedgerParquet } from "../../../services/feed-ingest-plan/src/read-ledger-history/read-parquet";
+} from "../../packages/common-contracts/src/index";
+import { createFileId, createUnitId, digestRows, persistLedger } from "../../packages/ledger-file-writer/src/index";
+import type { LedgerRegistration, LogicalField, PersistLedgerResult } from "../../packages/ledger-file-writer/src/index";
+import { readLedgerParquet } from "../../services/feed-ingest-plan/src/read-ledger-history/read-parquet";
 
 export function validateLedgerFilePath(
   path: string, fileId: string, covers: string, registration: LedgerRegistration,
@@ -91,7 +91,7 @@ export function verifyLedgerReceipt(ledger: string, written: PersistLedgerResult
 
 export async function verifyRecordedCompatibility() {
   const fixture = FeedIngestDispatchSchema.parse(JSON.parse(await readFile(
-    new URL("../../../tests/fixtures/ledger-file-writer/feed-ingest-dispatch-row.json", import.meta.url), "utf8",
+    new URL("../../tests/fixtures/ledger-file-writer/feed-ingest-dispatch-row.json", import.meta.url), "utf8",
   )));
   if (deriveCandidateId(fixture.content.run_id, fixture.content.source_id, fixture.content.entry_ordinal) !== fixture.content.candidate_id
     || deriveUrlKey(fixture.content.canonical_url) !== fixture.content.url_key) {

@@ -45,6 +45,7 @@ jobs:
             /services/host-probes/
             /.github/scripts/feed-ingest-plan-outputs.ts
             /.github/scripts/feed-ingest-plan-report.ts
+            /.github/scripts/feed-ingest-plan-verification.ts
             /.github/scripts/tests/feed-ingest-plan-outputs.test.ts
             /.github/scripts/tests/feed-ingest-plan-report.test.ts
             /.github/scripts/tests/feed-ingest-plan-workflow.test.ts
@@ -69,7 +70,7 @@ jobs:
           bun run --cwd packages/ledger-file-writer check
           bun run --cwd services/feed-ingest-plan check
           bun test ./.github/scripts/tests/feed-ingest-plan-report.test.ts ./.github/scripts/tests/feed-ingest-plan-outputs.test.ts ./.github/scripts/tests/feed-ingest-plan-workflow.test.ts --timeout 30000
-          bun run packages/common-contracts/test/verify-parquet.ts
+          bun run .github/scripts/feed-ingest-plan-verification.ts
 
       - name: Read named history and run the real planner
         id: plan
@@ -91,7 +92,7 @@ jobs:
           import { CompactIndexSchema, RawDayIndexSchema } from "./packages/common-contracts/src/index";
           import type { CompactIndex, FeedIngestEvent, RawDayIndex } from "./packages/common-contracts/src/index";
           import { createExecutionOutputs, createSeenDayInputs, historyDays, resolveHistoryInventory, sparseCheckoutPath, writeGitHubOutputs } from "./.github/scripts/feed-ingest-plan-outputs";
-          import { verifyLedgerReceipt, verifyParquetFiles } from "./packages/common-contracts/test/verify-parquet";
+          import { verifyLedgerReceipt, verifyParquetFiles } from "./.github/scripts/feed-ingest-plan-verification";
 
           const root = process.cwd();
           try {

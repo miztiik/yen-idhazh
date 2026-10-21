@@ -11,7 +11,7 @@ import type { LedgerRegistration, PersistLedgerResult } from "../../packages/led
 import type { summarizePlan } from "../../services/feed-ingest-plan/src/run-feed-plan";
 import { UtcInstantSchema } from "../../services/feed-ingest-plan/src/screen-article-candidates/seen-evidence";
 import { RelativePathSchema } from "../../services/feed-ingest-plan/src/config/service-settings";
-import { validateLedgerFilePath, verifyLedgerReceipt } from "../../packages/common-contracts/test/verify-parquet";
+import { validateLedgerFilePath, verifyLedgerReceipt } from "./feed-ingest-plan-verification";
 
 type PlanSummary = ReturnType<typeof summarizePlan>;
 type Registrations = Readonly<{

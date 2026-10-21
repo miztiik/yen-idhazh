@@ -59,7 +59,7 @@ repository root:
 
 ```text
 bun test ./.github/scripts/tests/feed-ingest-plan-report.test.ts ./.github/scripts/tests/feed-ingest-plan-outputs.test.ts ./.github/scripts/tests/feed-ingest-plan-workflow.test.ts --timeout 30000
-bun run packages/common-contracts/test/verify-parquet.ts
+bun run .github/scripts/feed-ingest-plan-verification.ts
 ```
 
 The test command allows the embedded strict TypeScript compiler up to 30
@@ -69,6 +69,11 @@ second adapter compilation. The workflow also runs strict package checks.
 Use the [shared selector](run-the-gates.md) with `--list` to inspect broader
 coverage. Do not execute a selection that adds Python for these isolated
 checks. Repository-wide CI remains separate and authoritative at merge.
+
+The cross-package native verifier lives with the workflow adapters at
+`.github/scripts/feed-ingest-plan-verification.ts`, not in the shared contracts
+package. The contracts package must check and test after only its own frozen
+dependency installation, before any writer or service dependency exists.
 
 The native verifier writes the bounded recorded dispatch fixture through the
 public ledger writer, then uses the real Parquet/WASM and Arrow reader. It

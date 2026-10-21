@@ -185,7 +185,7 @@ test("strict-checks adapters, tests and the actual inline program in one compile
       "--exactOptionalPropertyTypes", "--noFallthroughCasesInSwitch", "--noUnusedLocals",
       "--noUnusedParameters", "--verbatimModuleSyntax", "--skipLibCheck",
       "--types", "bun", "--typeRoots", join(service, "node_modules", "@types"), generated,
-      ...["feed-ingest-plan-outputs.ts", "feed-ingest-plan-report.ts",
+      ...["feed-ingest-plan-outputs.ts", "feed-ingest-plan-report.ts", "feed-ingest-plan-verification.ts",
         "tests/feed-ingest-plan-outputs.test.ts", "tests/feed-ingest-plan-report.test.ts",
         "tests/feed-ingest-plan-workflow.test.ts"].map(path => join(root, ".github", "scripts", ...path.split("/"))),
     ], { cwd: service, stdout: "pipe", stderr: "pipe" });
@@ -215,7 +215,7 @@ test("runs the native compatibility verifier in a named-input copy with no backe
     ].map(name => `packages/ledger-file-writer/src/${name}.ts`);
     const named = [
       ...common, ...writer, "packages/common-contracts/package.json", "packages/ledger-file-writer/package.json",
-      "packages/common-contracts/test/verify-parquet.ts",
+      ".github/scripts/feed-ingest-plan-verification.ts",
       "services/feed-ingest-plan/src/read-ledger-history/read-parquet.ts",
       "tests/fixtures/ledger-file-writer/feed-ingest-dispatch-row.json",
     ];
@@ -234,7 +234,7 @@ test("runs the native compatibility verifier in a named-input copy with no backe
         join(modules, packageName), "junction");
     }
     await expect(stat(join(directory, "backend"))).rejects.toMatchObject({ code: "ENOENT" });
-    const child = Bun.spawn([process.execPath, join(directory, "packages", "common-contracts", "test", "verify-parquet.ts")], {
+    const child = Bun.spawn([process.execPath, join(directory, ".github", "scripts", "feed-ingest-plan-verification.ts")], {
       cwd: directory, stdout: "pipe", stderr: "pipe",
     });
     const [output, errors] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()]);

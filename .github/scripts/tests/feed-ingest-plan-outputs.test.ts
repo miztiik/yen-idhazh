@@ -9,7 +9,7 @@ import { persistLedger } from "../../../packages/ledger-file-writer/src/index";
 import { runFeedPlan, summarizePlan } from "../../../services/feed-ingest-plan/src/run-feed-plan";
 import { recordedPlan } from "../../../services/feed-ingest-plan/test/plan-recordings";
 import { source } from "../../../services/feed-ingest-plan/test/harvest-recordings";
-import { verifyLedgerReceipt, verifyParquetFiles, verifyRecordedCompatibility } from "../../../packages/common-contracts/test/verify-parquet";
+import { verifyLedgerReceipt, verifyParquetFiles, verifyRecordedCompatibility } from "../feed-ingest-plan-verification";
 import { createExecutionOutputs, createSeenDayInputs, writeGitHubOutputs } from "../feed-ingest-plan-outputs";
 import { writePlannerReport } from "../feed-ingest-plan-report";
 import { readSeenEvidence, requiredSeenDays } from "../../../services/feed-ingest-plan/src/read-ledger-history/read-seen-evidence";
