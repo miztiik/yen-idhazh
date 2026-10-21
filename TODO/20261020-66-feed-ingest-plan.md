@@ -1374,6 +1374,16 @@ files concurrently.
 This final head includes the reviewed UTC rollover correction by normal
 merge; it changes no recorder source or API from `ad26e1f90`.
 
+Runner integration `524aafda05caefce05bb1cb0cf76d7539c5bd51a` now awaits
+the recorder in the real CLI and API after dispatch persistence. Its
+summary exposes actual assessment and diversity files, receipts and
+internal source summaries. Native readback through both entrypoints
+verified row counts and content digests. Strict TypeScript, 10 API/CLI
+tests and 11 base-engine tests passed. Supported runs still report audit
+pending; unsupported timing or counts fail before any audit write and
+produce no result summary. Row #12 now integrates this tested entrypoint
+and verifies its returned files, rather than calling the recorder again.
+
 Publication review of tested increment `a58752dfd` initially questioned the
 health retry key. Reading the owning contract corrected that premise:
 an item-health row records one terminal outcome, not each processing stage.
