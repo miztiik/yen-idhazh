@@ -233,7 +233,7 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 | 8 | Candidate triage screening with Parquet rejection ledger | 6, 7 | C | IN-FLIGHT | scaling-memory | - | d50de7c8-1c6a-4074-a390-25a077ae0ba8 |
 | 9 | Set-aware editorial portfolio curation | 8 | D | IN-FLIGHT | bookish-carnival | - | 34c330c1-9d30-4222-8fa6-4e28e58a165e |
 | 10 | Contextual bin-packing partitioner with feature flag | 9 | E | IN-FLIGHT | Session `86a9018f-dadb-4181-b82c-ca7fe9347116` builds on tested harvest foundation; integrates tested curation before final checks; historical completion proof remains unresolved below | - | - |
-| 11 | Core plan engine entrypoint, dual-mode runner, and sealing | 6, 10 | F | IN-FLIGHT | runner slot reserved | - | dispatching |
+| 11 | Core plan engine entrypoint, dual-mode runner, and sealing | 6, 10 | F | IN-FLIGHT | plan-66-api-cli-runner | - | ec780a10-5ab0-4ad7-a4e1-c36db811fbd7 |
 | 12 | Isolated CI test workflow and verification suite | 4, 5, 11, 14 | G | PENDING | - | - | - |
 | 13 | Phase 2 publication reconciliation and rolling diversity metrics | 12, 14 | H | PENDING | - | - | - |
 | 14 | Phase 1 source-run audit and three-axis evidence | 11 | G | PENDING | - | - | - |
@@ -916,6 +916,7 @@ concurrent edits to those files.
   - `packages/ledger-file-writer/test/reader-integrity.test.ts`
   - `services/feed-ingest-plan/test/partition.test.ts`
   - `services/feed-ingest-plan/test/ledger-history.test.ts`
+  - `services/feed-ingest-plan/test/partition-fixtures.ts`
   - `tests/fixtures/feed-ingest-plan/ledger-history.json`
   - `docs/architecture/sources/feed-partitioning.md`
   - `docs/architecture/contracts/persistence.md`
