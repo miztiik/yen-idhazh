@@ -36,6 +36,13 @@ and a genuine planning knob still changes it. Rows #11 and #12 integrate the
 tested follow-up; neither edits the loader concurrently. This changes no
 persisted field or format and is not a CI repair.
 
+Reviewed follow-up `9341af4d7512dc99fd6097aa4bac5863ce0334fa`
+changes only those three paths. Strict TypeScript and nine harvest tests
+passed. The substitution checks preserve reporting settings in the returned
+configuration, leave both reporting-only changes out of the fingerprint,
+and detect a real age-policy change. Row #12 still verifies the separate
+two-run ledger-digest comparison after integrating this head.
+
 Row #6 merge blocker: CI run 39644823082 at writer head
 `bed0e6cc3080898644024a99200ec6a882a1dd1b` passes its TypeScript writer,
 site, browser and robots checks. The repository backend gate passes 7249 tests
@@ -1098,6 +1105,15 @@ writer before screening uses them; failed or skipped persistence cannot
 masquerade as a recorded first sight. No global-history claim or new
 persisted input format is authorized. Named real native-window cases belong
 in the already scoped engine tests and owning runner documentation.
+
+The long-lived API must retain its own successful seen-write receipts within
+the configured UTC window so a later request does not reuse a stale
+known-empty inventory and reset first sight. Coordinate overlapping requests
+at that read/write boundary. Only genuine durable receipts extend the named
+history; neither a failed write nor process memory proves missing days.
+A fresh process still requires current caller-supplied inventory. Keep this
+coordination in the already named runner/API modules, or name an additional
+helper before editing it.
 
 ### Decisions
 
