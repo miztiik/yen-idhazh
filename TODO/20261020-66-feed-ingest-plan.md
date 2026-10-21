@@ -1421,6 +1421,13 @@ The workflow owner relocates that executable verifier to
 `.github/scripts/feed-ingest-plan-verification.ts`, updates its callers and
 retains the recorded-byte oracle. The common-contract package must check
 independently; do not add runtime dependencies or alter CI to hide this error.
+Corrective head `4810599a6e9a46fafebbfae7d73dc6924ee58528` restores that
+boundary. An isolated shared-contract install, check and 39 tests passed
+without writer or service dependencies. Hosted run `39675379776` then
+passed shared-contract bindings, site, browser, robots and scope. Its only
+remaining failures are the same two unrelated schedule assertions; 7249
+backend tests passed. The new dependency regression is resolved, but the
+candidate is not green for merge.
 
 Row #13's shared integration adds
 `services/feed-ingest-plan/src/metrics/publication-metrics.ts` to separate
@@ -1451,6 +1458,13 @@ uses compatible recorded pair decisions for real event arithmetic; 35
 focused tests passed. Review found one remaining publication-loader issue:
 a compact index's set-aside-file notice must not become complete historical
 coverage. The owner is adding that missing-evidence case before acceptance.
+Observer checkpoint `cc137c08a` includes durable native publication metrics
+and settled planning populations; 49 focused tests passed. Review requires
+one further identity check before source publication completion or a
+selection-to-publication comparison: every published URL and primary source
+must be a subset of that run's proven selections. Merely finding its source
+in the snapshot is insufficient. Missing planning proof may still support
+independent publication readings, never invented stage or source completion.
 
 ### Decisions
 
