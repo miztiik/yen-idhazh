@@ -239,10 +239,30 @@ test("live and draft sources require active registry classifications; retired so
     }
   }
   const historical = source({ status: "retired", retired_on: "2026-10-20", kind: "historical-kind", tier: 42, vertical: "historical-vertical" });
+  const historicalTaxonomy = {
+    ...baseline.registry,
+    source_tiers: [...baseline.registry.source_tiers, {
+      id: 42, weight: 0.6, status: "retired", retired_on: "2026-10-20",
+    }],
+  };
   const loaded = loadHarvestInputs({
-    config: baseline.config, taxonomy: baseline.registry, sources: { feeds: [historical] }, extraction: { extract: baseline.extraction },
+    config: baseline.config, taxonomy: historicalTaxonomy, sources: { feeds: [historical] }, extraction: { extract: baseline.extraction },
   });
   expect(loaded.sources[0]).toEqual(historical);
+  expect(() => loadHarvestInputs({
+    config: baseline.config, taxonomy: baseline.registry, sources: { feeds: [historical] }, extraction: { extract: baseline.extraction },
+  })).toThrow("source.recorded-news.tier: missing registered snapshot weight");
+  const root = await mkdtemp(join(tmpdir(), "harvest-historical-tier-"));
+  try {
+    const transport = new RecordedTransport(await readRecordings());
+    const result = await harvestFeeds(loaded, context(), destination(root), { transport, resolve: transport.resolve });
+    expect(transport.requests).toEqual([]);
+    expect(result.rejections[0]?.drop_reason).toBe("SOURCE_INACTIVE");
+    expect(result.feed_outcomes[0]?.source).toMatchObject({
+      kind: "historical-kind", tier: 42, vertical: "historical-vertical", applied_tier_weight: 0.6,
+    });
+    expect(result.rejection_files.status).toBe("written");
+  } finally { await rm(root, { recursive: true, force: true }); }
   expect(() => loadHarvestInputs({
     config: baseline.config, taxonomy: baseline.registry,
     sources: { feeds: [source({ url: "https://user:secret@news.example/feed" })] }, extraction: { extract: baseline.extraction },
