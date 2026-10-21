@@ -96,11 +96,6 @@
     "source_yield_alarm_min_decisions": 30,
     "source_yield_alarm_point": 0.5,
     "source_yield_min_complete_days": 30,
-    "tier_weights": {
-      "community": 0.3,
-      "institution": 1.0,
-      "trade_press": 0.6
-    },
     "watchlist_bonus": 0.5,
     "watchlist_max_entities": 30
   },

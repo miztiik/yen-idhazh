@@ -6,19 +6,20 @@ from collections.abc import Mapping
 from types import MappingProxyType
 from typing import Any, Final, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, PrivateAttr, model_validator
 
 from idhazh.contracts.base import Model
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.knobs.removed import refuse_a_removed_knob
+from idhazh.contracts.taxonomy import SourceTierDefinition
 
 
-class TierWeights(Model):
-    """The ranking weight of a source tier. Tier 1 is the institution that IS the fact."""
+class LegacyTierWeights(Model):
+    """Read only the named weights recorded in historical configuration fixtures."""
 
-    institution: float = Field(default=1.0, ge=0.0, le=1.0)
-    trade_press: float = Field(default=0.6, ge=0.0, le=1.0)
-    community: float = Field(default=0.3, ge=0.0, le=1.0)
+    institution: float = Field(default=1.0, ge=0.0, le=1.0, allow_inf_nan=False)
+    trade_press: float = Field(default=0.6, ge=0.0, le=1.0, allow_inf_nan=False)
+    community: float = Field(default=0.3, ge=0.0, le=1.0, allow_inf_nan=False)
 
 
 #: The `collect` names this block used to carry, and the knob that answers the
@@ -35,6 +36,29 @@ UNBOUNDED_WINDOW: Final = -1
 
 
 class CollectConfig(Model):
+    _source_tier_weights: dict[int, float] = PrivateAttr(default_factory=dict)
+
+    def bind_source_tiers(self, tiers: list[SourceTierDefinition]) -> None:
+        """Resolve taxonomy's authority weights once at configuration loading."""
+        weights = {entry.id: entry.weight for entry in tiers}
+        if self.legacy_tier_weights is not None:
+            legacy = {
+                1: self.legacy_tier_weights.institution,
+                2: self.legacy_tier_weights.trade_press,
+                3: self.legacy_tier_weights.community,
+            }
+            for tier, weight in legacy.items():
+                if weights.get(tier) != weight:
+                    raise ValueError(f"collect.tier_weights conflicts with source tier {tier}")
+        self._source_tier_weights = weights
+
+    def source_tier_weight(self, tier: int) -> float:
+        """A missing configured weight is an error, never a ranking default."""
+        try:
+            return self._source_tier_weights[tier]
+        except KeyError as error:
+            raise ValueError(f"source tier {tier} has no configured weight") from error
+
     availability_strikes_before_rest: int = Field(
         default=5,
         ge=1,
@@ -202,19 +226,12 @@ class CollectConfig(Model):
             "tighten the per-desk rule, which is a different decision and was refused."
         ),
     )
-    tier_weights: TierWeights = Field(
-        default_factory=TierWeights,
+    legacy_tier_weights: LegacyTierWeights | None = Field(
+        default=None,
+        validation_alias="tier_weights",
+        exclude=True,
         description=(
-            "The first and heaviest of the four terms the order is built from - what a "
-            "source tier is worth, before the feed's own weight and its recent record "
-            "scale it. The ladder spans 0.7, institution 1.0 down to community 0.3, "
-            "which is wider than any other term's ceiling and is why it is term one. An "
-            "estimate. Flattening every tier changes most of the head slots and several "
-            "of the lead stories, so the ladder, not any bonus, is what decides the "
-            "head. Institution feeds supply a small share of the stream and hold a much "
-            "larger share of the head; community feeds have held none of it, so the "
-            "bottom rung is not yet distinguishable from zero. Raising it, or saying "
-            "that tier admits rather than ranks, is the open question."
+            "Historical config input only; current weights belong to taxonomy.source_tiers."
         ),
     )
     reliability_window_days: int = Field(
@@ -260,7 +277,7 @@ class CollectConfig(Model):
             "(docs/architecture/publishing/layout.md). An estimate, and it is set by "
             "two written rules rather than by a measurement, because nothing inside "
             "the window they leave is measurable. It may not reach the smallest gap "
-            "between two collect.tier_weights values, or carriage would "
+            "between two configured source-tier weights, or carriage would "
             "promote a community story past a trade-press one; and it may not fall to "
             "ui.lead_shared_subject_weight, or a recurring subject would "
             "outrank a story two independent feeds carried today. The default is the "

@@ -63,6 +63,7 @@ from idhazh.contracts.sources import Sources
 from idhazh.contracts.taxonomy import Taxonomy
 from idhazh.contracts.watchlist import Watchlist
 from idhazh.llm.server import SETTING_KEYS, refuse_a_sampling_key_a_route_sets
+from idhazh.source_classification import bind_source_classification
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG_DIR: Final = REPO_ROOT / "config"
@@ -249,6 +250,12 @@ def load(config_dir: Path = DEFAULT_CONFIG_DIR) -> Settings:
             for name, text in sorted(read.items())
         ),
         config_dir=config_dir,
+    )
+    bind_source_classification(
+        taxonomy=settings.taxonomy,
+        sources=settings.sources,
+        watchlist=settings.watchlist,
+        collect=settings.app.collect,
     )
     from idhazh.telemetry.host_control import memory_override
 

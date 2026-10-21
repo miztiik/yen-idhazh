@@ -104,6 +104,7 @@ MODULE_NAMES = (
     "idhazh.run_context",
     "idhazh.llm.server",
     "idhazh.sanitize",
+    "idhazh.source_classification",
 )
 
 

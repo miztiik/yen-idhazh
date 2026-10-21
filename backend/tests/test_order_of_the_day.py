@@ -29,7 +29,7 @@ from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.item_health import TimeSource
 from idhazh.contracts.sources import FeedDef, SourceForm
-from idhazh.contracts.taxonomy import LensDef, SourceTier
+from idhazh.contracts.taxonomy import LensDef
 from idhazh.discover import Candidate
 
 PAGE: Final = REPO_ROOT / "docs" / "concepts" / "placement.md"
@@ -39,7 +39,7 @@ WORKED_EXAMPLE: Final = FIXTURES_DIR / "rank" / "worked-example.json"
 #: deliberately narrow: `CLAUDE.md`, `config/idhazh.json`, `FeedDef.weight` and
 #: `idhazh.config.load()` all appear on the page and none of them is a config
 #: address a run reads a value out of.
-ADDRESS: Final = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")
+ADDRESS: Final = re.compile(r"^[a-z][a-z0-9_]*(?:\.(?:[a-z][a-z0-9_]*|[0-9]+))+$")
 
 
 def _tables(text: str) -> list[list[list[str]]]:
@@ -79,10 +79,19 @@ def _number(cell: str) -> float | None:
 def _resolve(app: AppConfig, address: str) -> tuple[bool, Any]:
     """Walk a dotted address from `AppConfig`. Says whether it is one at all."""
     head, *rest = address.split(".")
-    if head not in type(app).model_fields:
-        return False, None
-    node: Any = app
-    for part in (head, *rest):
+    node: Any
+    if head == "taxonomy":
+        node = load().taxonomy
+        parts = rest
+    else:
+        if head not in type(app).model_fields:
+            return False, None
+        node = app
+        parts = [head, *rest]
+    for part in parts:
+        if isinstance(node, list) and part.isdigit():
+            node = next(entry for entry in node if entry.id == int(part))
+            continue
         assert hasattr(node, part), (
             f"{PAGE.name} prints the address `{address}`, and `{part}` is not a field of "
             f"{type(node).__name__}. Either the page is stale or the key was renamed."
@@ -108,7 +117,8 @@ def _carriers(story: dict[str, Any]) -> list[Candidate]:
             url_key=derive_url_key(carrier["canonical_url"]),
             source_id=carrier["source_id"],
             vertical=story["vertical"],
-            tier=SourceTier[str(carrier["tier"]).upper()],
+            # This named fixture predates numeric registry IDs.
+            tier={"institution": 1, "trade_press": 2, "community": 3}[carrier["tier"]],
             source_form=SourceForm.ARTICLE,
             title=story["name"],
             published_at=story["appeared"],

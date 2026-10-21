@@ -12,7 +12,7 @@ from conftest import CONFIG_DIR, REPO_ROOT
 from idhazh import config, tag
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import derive_url_key
-from idhazh.contracts.taxonomy import LifecycleStatus, SourceTier
+from idhazh.contracts.taxonomy import LifecycleStatus
 
 TAXONOMY = config.load(CONFIG_DIR).taxonomy
 WATCHLIST = config.load(CONFIG_DIR).watchlist
@@ -172,7 +172,7 @@ def article(status: ArticleStatus, text: str | None) -> Article:
         source_url=url,
         canonical_url=url,
         source_id="lab-blog",
-        tier=SourceTier.INSTITUTION,
+        tier=1,
         vertical="ai",
         rank_score=1.0,
         title="A model launched in Beijing",

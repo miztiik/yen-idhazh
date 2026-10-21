@@ -27,13 +27,13 @@ from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
+from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.extract import ElementsConfig
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.summary import Summary
-from idhazh.contracts.taxonomy import SourceTier
 from idhazh.corpus import Published
 from idhazh.elements import element_table
 from idhazh.evals import writer as eval_writer
@@ -50,6 +50,13 @@ CONFIG_DIR: Final = REPO_ROOT / "config"
 STATE_DIR: Final = REPO_ROOT / "state"
 FIXTURES_DIR: Final = REPO_ROOT / "tests" / "fixtures"
 CONTRACT_FIXTURES_DIR: Final = FIXTURES_DIR / "contracts"
+
+
+def collect_config(**values: Any) -> CollectConfig:
+    """A current config with registry weights, optionally varied for one case."""
+    collect = CollectConfig(**values)
+    collect.bind_source_tiers(config.load().taxonomy.source_tiers)
+    return collect
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -433,7 +440,7 @@ def refetched(
         source_url=url,
         canonical_url=url,
         source_id="grid-newsroom",
-        tier=SourceTier.INSTITUTION,
+        tier=1,
         vertical="energy",
         source_form=form,
         title="Nordic grid publishes its winter outlook",

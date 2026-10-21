@@ -49,7 +49,6 @@ from idhazh.contracts.run_manifest import (
 )
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.summary import Summary
-from idhazh.contracts.taxonomy import SourceTier
 from idhazh.contracts.visual_decision import VisualKind, VisualState
 from idhazh.evals import metrics
 from idhazh.fetch import FetchResult
@@ -100,7 +99,7 @@ def _planned(item_id: str, url: str) -> PlannedItem:
         source_url=url,
         canonical_url=url,
         source_id="probe",
-        tier=SourceTier.INSTITUTION,
+        tier=1,
         vertical="energy",
         rank_score=0.0,
         title="A grid story",

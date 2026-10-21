@@ -28,7 +28,7 @@ from idhazh.contracts.feed_retirement import FeedRetirementRow, RetirementCause
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.sources import FeedDef
-from idhazh.contracts.taxonomy import LifecycleStatus, SourceTier
+from idhazh.contracts.taxonomy import LifecycleStatus
 from idhazh.telemetry import source_health
 
 DATE = "2026-09-02"
@@ -42,14 +42,14 @@ TRADE = FeedDef(
     vertical="ai",
     title="Example Trade Press",
     url=FEED_URL,
-    tier=SourceTier.TRADE_PRESS,
+    tier=2,
 )
 LAB = FeedDef(
     id="lab-blog",
     vertical="ai",
     title="Example Lab",
     url=OTHER_URL,
-    tier=SourceTier.INSTITUTION,
+    tier=1,
 )
 
 #: The rule under test, at its committed value. Five distinct runs.

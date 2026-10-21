@@ -1,4 +1,6 @@
 {
+  "default_entity_tier": 1,
+  "default_source_kind": "reporting",
   "events": [
     {"definition": "Something was made available to use or buy for the first time, or a new version of it was.","display_name": "Release","id": "release","keywords": ["released","launch","launched","unveiled","now available","general availability","rolled out","new version"],"retired_on": null,"status": "active"},
     {"definition": "Two or more organisations agreed to work together, with neither buying the other.","display_name": "Deal","id": "deal","keywords": ["partnership","agreement","signed a deal","joint venture","contract with","teamed up"],"retired_on": null,"status": "active"},
@@ -20,7 +22,20 @@
     {"definition": "The story turns on armed conflict - the fighting, the weapons, the people it displaces, or the talks to stop it.","display_name": "War","id": "war","is_auto_discovered": false,"keywords": ["at war","war in","war crimes","ceasefire","truce","invasion","troops","airstrike","air strike","missile strike","drone strike","military strike","shelling","peace talks","civilians killed"],"retired_on": null,"status": "active","weight": 0.0},
     {"definition": "","display_name": "Return on AI investment","id": "ai-roi","is_auto_discovered": false,"keywords": [],"retired_on": "2026-08-30","status": "retired","weight": 0.0}
   ],
-  "version": "2026-09-14",
+  "source_kinds": [
+    {"counts_as_reporting": true,"display_name": "Reporting","id": "reporting","requires_reporting_for_lead": false,"retired_on": null,"show_on_item": false,"status": "active"},
+    {"counts_as_reporting": false,"display_name": "Announcement","id": "announcement","requires_reporting_for_lead": true,"retired_on": null,"show_on_item": true,"status": "active"},
+    {"counts_as_reporting": false,"display_name": "Research","id": "research","requires_reporting_for_lead": false,"retired_on": null,"show_on_item": true,"status": "active"},
+    {"counts_as_reporting": false,"display_name": "Analysis","id": "analysis","requires_reporting_for_lead": false,"retired_on": null,"show_on_item": false,"status": "active"},
+    {"counts_as_reporting": false,"display_name": "Official","id": "government","requires_reporting_for_lead": false,"retired_on": null,"show_on_item": true,"status": "active"},
+    {"counts_as_reporting": false,"display_name": "Community","id": "community","requires_reporting_for_lead": false,"retired_on": null,"show_on_item": true,"status": "active"}
+  ],
+  "source_tiers": [
+    {"display_name": "Institution","id": 1,"retired_on": null,"status": "active","weight": 1.0},
+    {"display_name": "Trade press","id": 2,"retired_on": null,"status": "active","weight": 0.6},
+    {"display_name": "Community","id": 3,"retired_on": null,"status": "active","weight": 0.3}
+  ],
+  "version": "2026-10-20",
   "verticals": [
     {"ceiling": 0.35,"definition": "The story is mainly about artificial intelligence - the models, the people and companies building or selling them, the machines and data centres they run on, or the rules being written for them.","display_name": "AI","floor": 6,"id": "ai","is_auto_discovered": false,"min_feeds": 35,"retired_on": null,"status": "active"},
     {"ceiling": 0.25,"definition": "The story is mainly about how energy is made, moved, stored or paid for - electricity, oil, gas, renewables, nuclear power and the grids that carry them.","display_name": "Energy","floor": 6,"id": "energy","is_auto_discovered": false,"min_feeds": 21,"retired_on": null,"status": "active"},

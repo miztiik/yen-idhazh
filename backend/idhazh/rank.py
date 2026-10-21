@@ -177,12 +177,7 @@ def recency_bonus(at: str | None, *, now: str, config: CollectConfig) -> float:
 
 
 def tier_weight(tier: SourceTier, config: CollectConfig) -> float:
-    weights = config.tier_weights
-    return {
-        SourceTier.INSTITUTION: weights.institution,
-        SourceTier.TRADE_PRESS: weights.trade_press,
-        SourceTier.COMMUNITY: weights.community,
-    }[tier]
+    return config.source_tier_weight(tier)
 
 
 class Authority(NamedTuple):

@@ -7,19 +7,19 @@ and implements deterministic RFC 4122 UUIDv5 hashing.
 """
 
 import asyncio
-from contextlib import asynccontextmanager
-from datetime import datetime, timezone
 import importlib.util
 import json
 import logging
 import os
-from pathlib import Path
 import re
 import sys
 import time
 import traceback
-from typing import Any
 import uuid
+from contextlib import asynccontextmanager
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
 
 # -------------------------------------------------------------
 # 0. IN-MEMORY SHIM FOR PRETTYTABLE (IF MISSING)
@@ -43,11 +43,11 @@ if importlib.util.find_spec("prettytable") is None:
     dummy.PrettyTable = DummyPrettyTable
     sys.modules["prettytable"] = dummy
 
+import torch
+import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
-import torch
-import uvicorn
 
 # -------------------------------------------------------------
 # 1. STRUCTURED JSONL LOGGING & TELEMETRY
@@ -58,7 +58,7 @@ UUIDV5_NAMESPACE = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
 
 def log_structured(level: str, message: str, **kwargs: Any) -> None:
     payload = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "level": level.upper(),
         "service": "unieval-evaluator",
         "message": message,
@@ -86,7 +86,7 @@ def append_eval_event(event_dict: dict[str, Any]) -> None:
 class JsonlUvicornFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         data = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "level": record.levelname,
             "service": "uvicorn-server",
             "message": record.getMessage(),
@@ -271,7 +271,7 @@ app = FastAPI(title="UniEval Quality Microservice", lifespan=lifespan)
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     tb = traceback.format_exc()
-    log_structured("ERROR", f"Unhandled server exception: {str(exc)}", traceback=tb)
+    log_structured("ERROR", f"Unhandled server exception: {exc!s}", traceback=tb)
     return JSONResponse(
         status_code=500,
         content={"error": str(exc), "traceback": tb, "detail": str(exc)},
@@ -351,7 +351,7 @@ def compute_unieval_sync(source_text: str, summary_text: str) -> dict[str, Any]:
 
         sentence_details = []
         supported_chunks = set()
-        chunk_max_scores: dict[int, float] = {i: 0.0 for i in range(len(chunks))}
+        chunk_max_scores: dict[int, float] = dict.fromkeys(range(len(chunks)), 0.0)
 
         if unique_pairs:
             eval_src = [k[0] for k in unique_pairs.keys()]
@@ -417,8 +417,9 @@ def compute_unieval_sync(source_text: str, summary_text: str) -> dict[str, Any]:
                         "excerpt": lead_snippet,
                         "max_similarity_score": max_sc,
                         "reason": (
-                            f"No summary claim reached the 0.50 grounding threshold for this section "
-                            f"(Peak entailment: {max_sc}). Key facts from this section were omitted."
+                            "No summary claim reached the 0.50 grounding threshold "
+                            f"for this section (Peak entailment: {max_sc}). "
+                            "Key facts from this section were omitted."
                         ),
                     }
                 )
@@ -486,7 +487,7 @@ async def evaluate_article(req: EvaluationRequest):
     event_payload = {
         "eventId": event_id,
         "eventType": "QUALITY_EVALUATION_COMPLETED",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "correlationId": req.correlation_id,
         "durationMs": duration_ms,
         "cumulativeMs": 0,

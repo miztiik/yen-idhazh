@@ -22,7 +22,6 @@ from idhazh.contracts.source_health_view import (
     SourcePermission,
 )
 from idhazh.contracts.sources import FeedDef
-from idhazh.contracts.taxonomy import SourceTier
 from idhazh.telemetry import source_health
 from idhazh.telemetry.publish.source_health import dwell, retires_on
 
@@ -34,7 +33,7 @@ FEEDS = [
         title="Quiet Wire",
         vertical="ai",
         url="https://quiet.test/f",
-        tier=SourceTier.TRADE_PRESS,
+        tier=2,
     )
 ]
 

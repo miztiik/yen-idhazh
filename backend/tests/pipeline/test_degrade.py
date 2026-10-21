@@ -26,7 +26,6 @@ from idhazh.contracts.article import Article, ArticleStatus, TitleSource
 from idhazh.contracts.eval_row import ConfidenceBand
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.summary import Summary, SummaryStatus
-from idhazh.contracts.taxonomy import SourceKind
 from idhazh.fetch import FetchResult
 
 from ._builders import _work_stage, captured_article_fetch, plan
@@ -111,7 +110,7 @@ def test_a_headless_article_publishes_with_the_generated_headline(
             summary=summary,
             band=ConfidenceBand.HIGH,
             source_name="Fixture source",
-            source_kind=SourceKind.ANNOUNCEMENT,
+            source_kind="announcement",
             run_n=1,
         )
         assert published.title == summary.title

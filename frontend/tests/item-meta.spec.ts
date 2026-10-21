@@ -36,7 +36,7 @@
  * without anybody changing a line.
  */
 import { expect, test } from '@playwright/test';
-import { KIND_WORTH_SAYING, SOURCE_KINDS } from '../src/lib/bands';
+import { KIND_WORTH_SAYING, SOURCE_KINDS, sourceKindCopy } from '../src/lib/bands';
 test.describe('the item names the speaker only where the speaker has a stake', () => {
     test('four kinds, each with copy, and never the one that is most of the tree', () => {
         // Four kinds carry copy. `government` is a ministry announcing its own
@@ -59,5 +59,20 @@ test.describe('the item names the speaker only where the speaker has a stake', (
             expect(SOURCE_KINDS[kind], `${kind} has no copy to print`).toBeTruthy();
         }
         expect(KIND_WORTH_SAYING, 'labelling reporting would label most of the page').not.toContain('reporting');
+    });
+
+    test('a configured kind supplies its label and an old unknown kind stays explicit', () => {
+        const kind = {
+            id: 'independent-review', display_name: 'Independent review',
+            status: 'active', retired_on: null, show_on_item: true,
+            counts_as_reporting: false, requires_reporting_for_lead: true
+        };
+        expect(sourceKindCopy(kind.id, [kind])).toEqual({
+            label: 'Independent review', showOnItem: true, registered: true
+        });
+        expect(sourceKindCopy('old-publisher-kind', [])).toEqual({
+            label: 'old-publisher-kind (unregistered source kind)',
+            showOnItem: true, registered: false
+        });
     });
 });

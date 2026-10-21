@@ -1,5 +1,9 @@
 # Taxonomy
 
+Source kinds and authority tiers are separate from article labels. Their
+configuration and history rules live in
+[../architecture/sources/source-classification.md](../architecture/sources/source-classification.md).
+
 **Last Updated**: 2026-09-23
 
 The words this project puts on a story, and which word answers which question.

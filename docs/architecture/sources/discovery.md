@@ -87,6 +87,10 @@ An entity matches by the same one-sentence rule, with `aliases` in `config/watch
 
 ## Sources are tiered, and the tier is scaled by the feed's own weight
 
+The kind/tier registries, configured defaults, weights and publisher safeguards
+are owned by [source-classification.md](source-classification.md). Tier IDs are
+stable keys, not ordinal values. Adding one changes configuration only.
+
 | Tier | What it is | Examples |
 | --- | --- | --- |
 | 1 | The institution that *is* the fact | a lab's own blog, a central bank, a statistical agency, a regulatory filing, a company newsroom |

@@ -151,7 +151,7 @@ class PlannedItem(Model):
         default=None,
         ge=0.0,
         description=(
-            "collect.tier_weights for that feed's tier. From the same feed that won "
+            "taxonomy.source_tiers for that feed's tier. From the same feed that won "
             "authority_score, never from another carrier of the story."
         ),
     )
@@ -330,6 +330,11 @@ class RunPlan(Contract):
     __schema_stem__: ClassVar[str] = "run-plan"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-20",
+            change="Source classification accepts open kind and numeric tier identifiers.",
+            why="Registry membership can change without invalidating recorded payloads.",
+        ),
+        ChangelogEntry(
             version="2026-10-12",
             change="A plan records the work shards its run dispatches.",
             why="Assembly recounted the shards and missed an operator's dispatch count.",
@@ -343,11 +348,6 @@ class RunPlan(Contract):
             version="2026-09-12T18:40",
             change="item_id accepts a second shape: sixteen Crockford base32 symbols.",
             why="Ten decimal digits is 33 bits of an address, which collides on a busy day.",
-        ),
-        ChangelogEntry(
-            version="2026-09-07",
-            change="A run records what the already-published guard refused on dropped_published.",
-            why="The guard is the whole reason the published ledger is read entire.",
         ),
         ChangelogEntry(
             version="2026-08-21T04:00",

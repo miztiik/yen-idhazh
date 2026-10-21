@@ -43,7 +43,6 @@ from idhazh.contracts.element import Element, ElementKind, ElementTable, Extract
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.knobs.extract import ElementsConfig
 from idhazh.contracts.run_plan import PlannedItem
-from idhazh.contracts.taxonomy import SourceTier
 from idhazh.elements import Candidates, date_elements, element_table, quantity_elements, settle
 from idhazh.fetch import FetchResult
 
@@ -88,7 +87,7 @@ def article_of(page: bytes, url: str, *, item_id: str = "probe-01") -> Article:
         source_url=url,
         canonical_url=url,
         source_id="probe",
-        tier=SourceTier.INSTITUTION,
+        tier=1,
         vertical="probe",
         rank_score=0.0,
         title="probe",

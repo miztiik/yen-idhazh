@@ -617,6 +617,11 @@ class ItemHealthRow(Contract):
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-20",
+            change="Source classification accepts open kind and numeric tier identifiers.",
+            why="Registry membership can change without invalidating recorded payloads.",
+        ),
+        ChangelogEntry(
             version="2026-10-14",
             change="Allow machine pipeline and task identity without a legacy job value.",
             why="Items resolve shared host rows through separate identity columns.",
