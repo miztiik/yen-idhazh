@@ -703,6 +703,14 @@ independent safety requirements.
 - **Acceptance gates:** `bun test` in `services/feed-ingest-plan/`; generated rejection files load through the Python ledger reader. Cover the configured word-count and HTTP rules plus Table R freshness boundaries with one fixed UTC clock, including undated articles and invalid overrides. Execute Table O's vertical-specific threshold substitution against this real screening stage, not only the resolver.
 - **Oracle:** Each rejected fixture has the expected typed reason, and changing only the freshness override changes admission at the stated age boundary without changing the ranking half-life. This does not settle editorial quality or live-source availability.
 
+Preflight: candidates contain publication and fetch instants, but not persisted
+first sight. Table R requires the existing first-sight evidence for undated or
+untrustworthy feed dates. Name the bounded seen-ledger input and URL-key join
+before dispatch; a repeated fetch must not reset an undated article's age.
+Preserve the existing future-date tolerance when deciding whether to trust
+the feed date. Price reader and fixture supporting paths rather than adding
+an undeclared candidate field.
+
 ### Decisions
 
 | # | Decision | Authority |
