@@ -1169,11 +1169,11 @@ This accepts the implementation increment, not audited completion or merge.
   - `.github/scripts/tests/feed-ingest-plan-report.test.ts`
   - `.github/scripts/tests/feed-ingest-plan-outputs.test.ts`
   - `.github/scripts/tests/feed-ingest-plan-workflow.test.ts`
-  - `packages/common-contracts/test/verify-parquet.ts`
+  - `.github/scripts/feed-ingest-plan-verification.ts`
   - `tests/fixtures/feed-ingest-plan/report-events.json`
   - `docs/how-to/run-feed-ingest-plan-test.md`
 - **Acceptance gates:** Local: shared test selector and fixture-driven workflow/reporting tests. CI: full suite and the isolated workflow's compatibility checks. Reporting enabled/disabled runs over identical fixtures must produce identical ledger content digests; disabled reporting produces no annotations or summary. Cover zero dispatches or zero rejections as valid outcomes, not failed count assertions.
-- **Oracle:** `verify-parquet.ts` reads actual dispatch and rejection files, validates envelopes and rows, compares recorded fixture identities and canonical row digests, and checks native list-column types; adapter tests check escaped annotations and summaries separately. No Python runtime or packages are required. This cannot settle Python-reader execution, real feed availability or hosted-runner speed.
+- **Oracle:** `feed-ingest-plan-verification.ts` reads actual dispatch and rejection files, validates envelopes and rows, compares recorded fixture identities and canonical row digests, and checks native list-column types; adapter tests check escaped annotations and summaries separately. No Python runtime or packages are required. This cannot settle Python-reader execution, real feed availability or hosted-runner speed.
 
 Supporting scope: independent reporting implementation can consume existing
 typed events while the runner is being built. Final output conversion and
@@ -1231,6 +1231,8 @@ files, not substitute a raw-only checkout or scan accumulated history.
 - **Files touched:**
   - `services/feed-ingest-plan/src/metrics/publication-outcomes.ts`
   - `services/feed-ingest-plan/src/metrics/publication-evidence.ts`
+  - `services/feed-ingest-plan/src/metrics/publication-metrics.ts`
+  - `services/feed-ingest-plan/src/metrics/planning-populations.ts`
   - `services/feed-ingest-plan/src/metrics/history-window.ts`
   - `services/feed-ingest-plan/src/metrics/diversity-metrics.ts`
   - `services/feed-ingest-plan/src/metrics/fingerprint-dedup.ts`
