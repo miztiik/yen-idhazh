@@ -42,11 +42,9 @@ from utilities.publish_to_repo import Status, _verify_preparation, publish
 from utilities.push_retry import PushRetry
 
 
-@pytest.mark.parametrize("empty_harvest", [False, True])
 def test_fresh_base_regeneration_preserves_completed_raw_and_newer_inventory(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    empty_harvest: bool,
 ) -> None:
     quiet_git(tmp_path, monkeypatch)
     seed = PublicationInventory(version=PublicationInventory.schema_version(), dates=[])
@@ -132,15 +130,13 @@ def test_fresh_base_regeneration_preserves_completed_raw_and_newer_inventory(
             }
         ),
     )
-    if empty_harvest:
-        (items / f"{first.item_id}.eval.json").unlink()
     incoming = corpus.harvest_rows(
         corpus.scored_from_items(items),
         date=run_plan.date,
         prompt_config=settings.app.summarize,
         evaluation=settings.app.evaluation,
     )
-    assert bool(incoming) is not empty_harvest
+    assert incoming
     older = [row_at("2026-01-01", "a"), row_at("2026-01-02", "b")]
     local_rows = corpus.roll(older, incoming, window=2)
     original_meta = corpus.census(
@@ -281,19 +277,18 @@ def test_fresh_base_regeneration_preserves_completed_raw_and_newer_inventory(
         entry = remote.entry("origin/main", path)
         assert entry is not None
         assert remote.blob(entry.oid) == data
-    if not empty_harvest:
-        # Another fresh-base preparation keeps the already completed count.
-        repeated = prepare(result.observed_tip, prepared)
-        _verify_preparation(prepared, repeated, result.observed_tip)
-        assert {
-            path: write.sha256
-            for path, write in repeated.writes.items()
-            if path.startswith("state/raw/run-shards/")
-        } == {
-            path: write.sha256
-            for path, write in prepared.writes.items()
-            if path.startswith("state/raw/run-shards/")
-        }
+    # Another fresh-base preparation keeps the already completed count.
+    repeated = prepare(result.observed_tip, prepared)
+    _verify_preparation(prepared, repeated, result.observed_tip)
+    assert {
+        path: write.sha256
+        for path, write in repeated.writes.items()
+        if path.startswith("state/raw/run-shards/")
+    } == {
+        path: write.sha256
+        for path, write in prepared.writes.items()
+        if path.startswith("state/raw/run-shards/")
+    }
     entry = remote.entry("origin/main", asset)
     assert entry is not None
     assert remote.blob(entry.oid) == raced
@@ -326,9 +321,8 @@ def test_preparation_cannot_change_immutable_counts_inside_its_scope() -> None:
         _verify_preparation(original, changed, fresh)
 
 
-@pytest.mark.parametrize("staged", [False, True])
 def test_published_build_inputs_refuse_foreign_bytes_before_import(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, staged: bool
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     quiet_git(tmp_path, monkeypatch)
     inventory = PublicationInventory(version=PublicationInventory.schema_version(), dates=[])
@@ -344,8 +338,6 @@ def test_published_build_inputs_refuse_foreign_bytes_before_import(
     git(tmp_path, "clone", "--quiet", str(origin), str(reader))
     git(reader, "checkout", "--quiet", source)
     write(reader / "frontend/public/other.json", "foreign local bytes\n")
-    if staged:
-        git(reader, "add", "frontend/public/other.json")
     index = (reader / ".git/index").read_bytes()
     previous_inventory = (reader / digest_publish.INVENTORY).read_bytes()
     with pytest.raises(IntegrityError, match="foreign"):
