@@ -1465,6 +1465,11 @@ selection-to-publication comparison: every published URL and primary source
 must be a subset of that run's proven selections. Merely finding its source
 in the snapshot is insufficient. Missing planning proof may still support
 independent publication readings, never invented stage or source completion.
+Source observations also retain the proven planning attempt. Before any
+source-producing observer write, its writer attempt must match that retained
+attempt. A mismatch would write contradictory row identities and make later
+complete-attempt reads fail. The owner is adding native refusal coverage;
+independent diversity-only observations need not reuse the planning attempt.
 
 ### Decisions
 
