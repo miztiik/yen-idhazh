@@ -605,6 +605,14 @@ export type CandidateRejectionRecord =
 - **Oracle:** Python reconstructs the envelope with `FileEnvelope.from_metadata`, loads the rows through the ledger reader, and recomputes `content_sha256` from the stored rows using `json_lines.rows_bytes`; identities match the Python implementation for identical inputs. This proves contract and digest compatibility, not speed or byte-identical output from different Parquet engines.
 - **Preflight correction:** The identity page currently names a TypeScript implementation under `packages/common-contracts/src/identity/` that does not exist. The writer owns the new implementation. Correct that page's namespace and hash-bit descriptions against `backend/idhazh/ledger/filenames.py`; do not change the Python identity algorithm. The package lock and bounded Python parity helper support the declared package and cross-language acceptance gates.
 
+Canonical-byte preflight: sorted `JSON.stringify` is not Python's row
+serialization. A fixed local comparison produced Python numbers `1.0`,
+`1e-07`, `1e+20`, and `-0.0`, while Node produced `1`, `1e-7`,
+`100000000000000000000`, and `0`. Python also escapes non-ASCII text.
+Use the declared scalar types and actual stored rows to reproduce the Python
+bytes. Include these values, Unicode, nested lists, and nulls in the existing
+parity test; do not change Python's digest or reject valid floats to pass it.
+
 ### Decisions
 
 | # | Decision | Authority |
@@ -895,6 +903,13 @@ export type CandidateRejectionRecord =
   - `docs/reference/diversity-metrics.md`
 - **Acceptance gates:** Local: shared selector, strict TypeScript checks, audit unit/contract tests, and Python ledger readback. CI: full suite. Reconcile stage counts and reasons, include inactive and zero-yield sources, retain source snapshots, verify unavailable later-stage fields, and run known-distribution metric fixtures.
 - **Oracle:** Each source/run observation and article assessment reconciles exactly with its input stage records, terminal rejections, and editorial selection rows, and all emitted planning metrics reproduce from those records. This does not prove publication or semantic article quality.
+
+Preflight decision required before dispatch: authored `metrics.top_source_counts`
+accepts every positive integer, but `DiversityMetricRow.top_k` admits only
+`1`, `5`, and `10`. The defaults agree. Either restrict configuration to this
+declared vocabulary, which gives up other configured counts, or obtain owner
+approval to open the persisted field and update both language readers and
+binding tests. Never omit an unsupported configured count without an error.
 
 ### Decisions
 
