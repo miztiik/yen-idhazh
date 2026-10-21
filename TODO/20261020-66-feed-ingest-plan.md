@@ -234,7 +234,7 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 | 9 | Set-aware editorial portfolio curation | 8 | D | DONE | plan-66-portfolio-curation | - | 34c330c1-9d30-4222-8fa6-4e28e58a165e |
 | 10 | Contextual bin-packing partitioner with feature flag | 9 | E | IN-FLIGHT | plan-66-article-partitioning; current construction and raw replay tested; packed completion proof unresolved | - | bdd46d9e-08a5-466f-b37a-c8b4adeef51c |
 | 11 | Core plan engine entrypoint, dual-mode runner, and sealing | 6, 10 | F | IN-FLIGHT | plan-66-api-cli-runner; real composition and bounded complete-window first sight implemented; audited completion remains unavailable | - | 2c361133-cae1-461b-a1fd-74ba90daefaf |
-| 12 | Isolated CI test workflow and verification suite | 4, 5, 11, 14 | G | PENDING | - | - | - |
+| 12 | Isolated CI test workflow and verification suite | 4, 5, 11, 14 | G | IN-FLIGHT | reporting slot reserved | - | dispatching |
 | 13 | Phase 2 publication reconciliation and rolling diversity metrics | 12, 14 | H | PENDING | - | - | - |
 | 14 | Phase 1 source-run audit and three-axis evidence | 11 | G | PENDING | - | - | - |
 | 15 | Config-driven source registries and compatible readers | - | A | DONE | fluffy-adventure (feed-registry-migration) | - | f7f18c64-813b-4a13-b421-1cd67b951db6 |
@@ -930,6 +930,7 @@ concurrent edits to those files.
   - `packages/ledger-file-writer/test/reader-integrity.test.ts`
   - `services/feed-ingest-plan/test/partition.test.ts`
   - `services/feed-ingest-plan/test/ledger-history.test.ts`
+  - `services/feed-ingest-plan/test/partition-fixtures.ts`
   - `tests/fixtures/feed-ingest-plan/ledger-history.json`
   - `docs/architecture/sources/feed-partitioning.md`
   - `docs/architecture/contracts/persistence.md`
@@ -1111,9 +1112,29 @@ change is authorized by this supporting scope.
   - `.github/scripts/feed-ingest-plan-outputs.ts`
   - `.github/scripts/feed-ingest-plan-report.ts`
   - `.github/scripts/tests/feed-ingest-plan-report.test.ts`
+  - `.github/scripts/tests/feed-ingest-plan-outputs.test.ts`
+  - `.github/scripts/tests/feed-ingest-plan-workflow.test.ts`
   - `packages/common-contracts/test/verify-parquet.ts`
+  - `tests/fixtures/feed-ingest-plan/report-events.json`
+  - `docs/how-to/run-feed-ingest-plan-test.md`
 - **Acceptance gates:** Local: shared test selector and fixture-driven workflow/reporting tests. CI: full suite and the isolated workflow's compatibility checks. Reporting enabled/disabled runs over identical fixtures must produce identical ledger content digests; disabled reporting produces no annotations or summary. Cover zero dispatches or zero rejections as valid outcomes, not failed count assertions.
 - **Oracle:** `verify-parquet.ts` reads actual dispatch and rejection files, validates envelopes and rows, compares recorded fixture identities and canonical row digests, and checks native list-column types; adapter tests check escaped annotations and summaries separately. No Python runtime or packages are required. This cannot settle Python-reader execution, real feed availability or hosted-runner speed.
+
+Supporting scope: independent reporting implementation can consume existing
+typed events while the runner is being built. Final output conversion and
+workflow verification still depend on Rows #11 and #14; no invented result
+or successful placeholder substitutes for them. The named script tests
+separate required execution outputs from optional annotations and summaries
+and inspect only the named isolated workflow. The bounded event fixture
+uses the existing event contract. The owning how-to documents invocation,
+actual evidence and remaining audit integration requirements.
+
+Row #11 owns the service manifest and lock; coordinate dependency needs
+there, never edit them concurrently. Reuse Row #10's public canonical
+integrity functions and real Parquet reader rather than a second serializer.
+The isolated workflow does not commit generated state or invoke the
+production publisher. It must include compact indexes and their named
+files, not substitute a raw-only checkout or scan accumulated history.
 
 ### Table R - Workflow inputs and freshness behavior
 
