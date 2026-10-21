@@ -104,6 +104,12 @@ RETENTION_LEDGERS: Final = (
     "visual-prunes",
 )
 MOVED_LEDGER_TASKS: Final = (
+    "compact-feed-ingest-plan-dispatches",
+    "compact-feed-ingest-plan-editorial-selections",
+    "compact-feed-ingest-plan-rejections",
+    "compact-feed-ingest-plan-source-runs",
+    "compact-feed-ingest-plan-article-assessments",
+    "compact-feed-ingest-plan-diversity",
     "compact-content-similarity-judge-merge-line-holdout-scores",
     "compact-content-similarity-judge-scored-pairs",
     "compact-content-similarity-judge-metrics",

@@ -1,6 +1,6 @@
 # The ledger registry
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-10-21
 
 A ledger is a committed file or folder under `state/` that one run writes so that a later run can read it. A ledger exists in code only when it is registered, and registering it takes two edits. The first is one member of `LedgerName`, the ledger's one name in code. The second is one entry in `config/ledgers.json`, which puts the ledger in a family - one top-level folder under `state/` - and says where its files sit. When the code loads, it checks that the two edits agree, and the build stops if they do not.
 
@@ -72,6 +72,38 @@ The fitted merge line's row contract is `FittedSimilarityThreshold`, whose `run_
 | The key includes `run_id`, and `work_part_index` on a row about one part | Two runs, or two parts of one run, never settle into one record. |
 | The job that saves the council's results files the rows, through `ledger.persist` | `council.session._collect` files `council-run-records` in `save_council_results`, and `Tenant.settle` takes the same writer identity: `run_id` the council run, `job` `save_council_results`, `shard` 0, the run's attempt and the `--commit` the job checked out. A tenant names its own producer. A person files `merge-line-holdout-scores`, so this rule does not reach it. |
 | Rows are filed under the judged date | The `date` cell decides the file, never the day the council ran. |
+
+### Feed planning evidence
+
+The `feed-ingest-plan` family holds six separate row ledgers:
+`editorial-selections`, `dispatches`, `rejections`, `source-runs`,
+`article-assessments`, and `diversity`. Each has a declared row contract and
+settlement key in `ledger/keys.py`. Dispatch identity stays under
+`content.date` and `content.candidate_id`; settlement reads only these trusted,
+declared attribute paths, never a path supplied by article text.
+
+Each row keeps its original run and attempt through daily, monthly and yearly
+packing. Settlement removes duplicates only within that run and attempt using
+the declared row key. It does not discard an older attempt when a newer attempt
+has fewer rows: source-run completion evidence later selects one complete
+attempt across all six ledgers. An explicitly empty completion has zero rows
+and no file references; absence of an output file alone proves no completion.
+Existing ledgers retain their existing settlement rules.
+
+The planned TypeScript adapters in `services/feed-ingest-plan` will write
+through `packages/ledger-file-writer`. Their staging entries name these planned
+writers, with no production digest commit labels. The browser vocabulary and
+nested folder bindings are registered here; static publication and TypeScript
+byte-writing compatibility are separate delivery steps.
+
+Every task is named `compact-feed-ingest-plan-<ledger>` and enrolled in the
+gardener's explicit `task_names`. The declarations use the approved live
+retention chain: compact after 1 whole day, retain daily files until 45 whole
+days after the month ends, pack months into years 93 whole days after the year
+ends, and expire yearly files 36 calendar months after their UTC end.
+The monthly window is forever. The bounded integration tests compare a dry
+run with a live pass, then repack a late attempt without losing earlier
+attempts. No production digest writer or label changes.
 
 ## What the registry refuses when it loads
 
@@ -278,6 +310,12 @@ CLAUDE.md section 11 does not apply to this file. It is a config file this proje
 **`Grain` is transitional and its declaring line says so.** [../../concepts/telemetry-intent.md](../../concepts/telemetry-intent.md) requires every tree under `state/` to reach one pattern, and `raw-and-compact` is that pattern. The other four grains are what that page has not yet removed: one JSON file (`flat`), JSON files named by a stamp (`stamp`), one JSON file a day (`day`) and one folder a day (`tree`). None of them holds CSV. They are recorded because all four really are on disk: the registry is an honest map of today.
 
 `test_every_ledger_the_door_may_query_is_a_ledger` holds `LEDGER_NAMES` in `frontend/src/lib/data/slice-shapes.ts` equal to this registry, so a new registry member joins the browser door vocabulary in the same change.
+
+**Planning attempts settle together, not file by file.** A partial retry can
+contain fewer articles than the previous complete attempt. Discarding older
+rows during packing would remove the only complete answer before the later
+reader can verify completion. The six planning ledgers therefore keep each
+attempt until that reader selects one.
 
 ## See also
 

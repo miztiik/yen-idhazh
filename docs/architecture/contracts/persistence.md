@@ -201,6 +201,7 @@ The `ledger` block of `config/idhazh.json` holds five knobs: `format` (default `
 | Python annotation | Column type | Nullable |
 | --- | --- | --- |
 | `str`, and every constrained string alias in `contracts/base.py` | string | no |
+| `uuid.UUID`, including a nested completion file identity | string in JSON UUID form | as annotated |
 | `int` | int64 | no |
 | `float` | float64 | no |
 | `bool` | bool | no |
@@ -211,6 +212,10 @@ The `ledger` block of `config/idhazh.json` holds five knobs: `format` (default `
 | a `Literal[...]` whose every choice is a plain `str` | string | as annotated |
 | a `Literal[...]` whose every choice is a plain `int` | int64 | as annotated |
 | anything else | a `TypeError` naming the field | - |
+
+A UUID keeps the string that `model_dump(mode="json")` produces. Pydantic
+validates the UUID and any required version when reading it back; the Arrow
+column does not replace contract validation.
 
 A date stays a string: it is a stamp a person reads in a diff and in a path, and a second type would be a second spelling of one value. The tuple row is there for `FeedRetirementRow`, whose evidence is a tuple of run ids and a tuple of dates. An `IntEnum` - `ItemHealthRow`'s `tier` is one - stays its number, the value its JSON form already carries, so a query filters on the number a person reads in the contract. A fixed choice, such as the judge's model name, is stored as its value. A choice set that mixes types, or holds a `bool`, `None` or an enum member, is refused by name: its column would not say what it holds.
 

@@ -49,10 +49,20 @@ from idhazh.contracts.file_envelope import FileEnvelope, Tier
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_shards import RunShards
 from idhazh.ledger import paths
-from idhazh.ledger.keys import preference_for
+from idhazh.ledger.keys import door_key, preference_for
 from idhazh.ledger.persist import StoredRow, load_stored, read_envelope
 
 logger = logging.getLogger(__name__)
+
+# These ledgers need complete-attempt selection across their related files.
+_PLANNING_LEDGERS = frozenset({
+    LedgerName.FEED_INGEST_PLAN_DISPATCHES,
+    LedgerName.FEED_INGEST_PLAN_EDITORIAL_SELECTIONS,
+    LedgerName.FEED_INGEST_PLAN_REJECTIONS,
+    LedgerName.FEED_INGEST_PLAN_SOURCE_RUNS,
+    LedgerName.FEED_INGEST_PLAN_ARTICLE_ASSESSMENTS,
+    LedgerName.FEED_INGEST_PLAN_DIVERSITY,
+})
 
 
 class RawFile(NamedTuple):
@@ -262,10 +272,21 @@ def settle_rows[C: Contract](
     keeps the later row wherever its preference says so. Either way a row is
     kept or dropped whole, and a cell only the dropped row filled is named in a
     warning.
+
+    The six feed planning ledgers retain every original run and attempt instead:
+    related source-run completion evidence, not a partial file, selects a whole
+    attempt later. Only their declared row keys may use nested attribute paths.
     """
     # Count corrections must not inherit the first-wins rule of run-plan,
     # whose business key is also (date, run_id).
     ledgers = {held.identity.ledger for rows in files for held in rows}
+    if ledgers & _PLANNING_LEDGERS:
+        if len(ledgers) != 1:
+            raise ValueError("planning settlement requires rows from only one ledger")
+        which = next(iter(ledgers))
+        if key != door_key(which):
+            raise ValueError(f"planning settlement requires the declared key for {which.value}")
+        return _settle_planning_rows(files, key)
     if LedgerName.RUN_SHARDS in ledgers:
         if ledgers != {LedgerName.RUN_SHARDS}:
             raise ValueError("count settlement requires only run-shards rows")
@@ -290,6 +311,28 @@ def settle_rows[C: Contract](
             winner, loser = (held, incumbent) if later_wins else (incumbent, held)
             kept[record] = winner
             _say_what_was_dropped(record, winner.row, loser.row)
+    return list(kept.values())
+
+
+def _settle_planning_rows[C: Contract](
+    files: Sequence[Sequence[StoredRow[C]]], key: tuple[str, ...]
+) -> list[StoredRow[C]]:
+    """Keep each run attempt until related completion evidence chooses a whole attempt."""
+    kept: dict[tuple[str, ...], StoredRow[C]] = {}
+    for rows in files:
+        for held in rows:
+            cells = [held.identity.run_id, str(held.identity.attempt)]
+            for name in key:
+                value: object = held.row
+                for segment in name.split("."):
+                    value = getattr(value, segment)
+                cells.append(str(value))
+            record = tuple(cells)
+            incumbent = kept.get(record)
+            if incumbent is None:
+                kept[record] = held
+            else:
+                _say_what_was_dropped(record, incumbent.row, held.row)
     return list(kept.values())
 
 

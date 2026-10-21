@@ -1,6 +1,56 @@
 {
   "families": [
     {
+      "name": "feed-ingest-plan",
+      "lifecycle_status": "active",
+      "description": "Article selections, dispatches, rejections and planning evidence, separate from production digest planning.",
+      "onboarded": "2026-10-21",
+      "ledgers": [
+        {
+          "name": "editorial-selections",
+          "grain": "raw-and-compact",
+          "prefix": ["feed-ingest-plan", "editorial-selections"],
+          "stem": null,
+          "suffix": null
+        },
+        {
+          "name": "dispatches",
+          "grain": "raw-and-compact",
+          "prefix": ["feed-ingest-plan", "dispatches"],
+          "stem": null,
+          "suffix": null
+        },
+        {
+          "name": "rejections",
+          "grain": "raw-and-compact",
+          "prefix": ["feed-ingest-plan", "rejections"],
+          "stem": null,
+          "suffix": null
+        },
+        {
+          "name": "source-runs",
+          "grain": "raw-and-compact",
+          "prefix": ["feed-ingest-plan", "source-runs"],
+          "stem": null,
+          "suffix": null
+        },
+        {
+          "name": "article-assessments",
+          "grain": "raw-and-compact",
+          "prefix": ["feed-ingest-plan", "article-assessments"],
+          "stem": null,
+          "suffix": null
+        },
+        {
+          "name": "diversity",
+          "grain": "raw-and-compact",
+          "prefix": ["feed-ingest-plan", "diversity"],
+          "stem": null,
+          "suffix": null
+        }
+      ]
+    },
+    {
       "name": "run-shards",
       "lifecycle_status": "active",
       "description": "Only each manifest's recorded shard count; no plan or manifest inputs.",
