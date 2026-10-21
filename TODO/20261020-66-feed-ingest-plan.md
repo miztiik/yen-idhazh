@@ -232,7 +232,7 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 | 7 | RSS/Atom feed harvest and DOM text extraction | 3, 6 | B | DONE | redesigned-doodle (feed-harvest-engine) | - | da505804-6ce7-4f03-aa0b-25bab323ba53 |
 | 8 | Candidate triage screening with Parquet rejection ledger | 6, 7 | C | DONE | plan-66-candidate-screening | - | d50de7c8-1c6a-4074-a390-25a077ae0ba8 |
 | 9 | Set-aware editorial portfolio curation | 8 | D | DONE | plan-66-portfolio-curation | - | 34c330c1-9d30-4222-8fa6-4e28e58a165e |
-| 10 | Contextual bin-packing partitioner with feature flag | 9 | E | IN-FLIGHT | Session `86a9018f-dadb-4181-b82c-ca7fe9347116` builds on tested harvest foundation; integrates tested curation before final checks; historical completion proof remains unresolved below | - | - |
+| 10 | Contextual bin-packing partitioner with feature flag | 9 | E | IN-FLIGHT | plan-66-article-partitioning; current construction and raw replay tested; packed completion proof unresolved | - | bdd46d9e-08a5-466f-b37a-c8b4adeef51c |
 | 11 | Core plan engine entrypoint, dual-mode runner, and sealing | 6, 10 | F | IN-FLIGHT | plan-66-api-cli-runner | - | ec780a10-5ab0-4ad7-a4e1-c36db811fbd7 |
 | 12 | Isolated CI test workflow and verification suite | 4, 5, 11, 14 | G | IN-FLIGHT | reporting slot reserved | - | dispatching |
 | 13 | Phase 2 publication reconciliation and rolling diversity metrics | 12, 14 | H | PENDING | - | - | - |
