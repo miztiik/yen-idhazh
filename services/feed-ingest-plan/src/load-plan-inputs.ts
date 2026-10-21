@@ -49,6 +49,11 @@ export async function loadPlanInputs(root: string, settingsPath = "config/feed-i
     dispatches: registration("dispatches"),
     seen: registration("seen"), assessments: registration("article-assessments"),
     diversity: registration("diversity"),
+    source_runs: z.object({
+      name: z.literal("source-runs"), family: z.literal("feed-ingest-plan"),
+      grain: z.literal("raw-and-compact"), lifecycle_status: z.literal("active"),
+      prefix: z.tuple([z.literal("feed-ingest-plan"), z.literal("source-runs")]),
+    }).parse(registration("source-runs")),
   };
   for (const [entry, prefix] of [
     [selected.rejections, harvest.config.seal.rejections_prefix],

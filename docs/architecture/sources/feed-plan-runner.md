@@ -168,6 +168,11 @@ Persistence errors fail rather than returning a complete-looking result.
 Already durable immutable files may remain after a later failure.
 The public `loadPlanInputs` result also exposes actual `seen`, `assessments`
 and `diversity` ledger registrations for downstream native writes.
+Its `registrations.source_runs` exposes the existing `source-runs` registration
+from the named ledger config. Loading requires exactly one such ledger, active
+under `feed-ingest-plan`, with `raw-and-compact` grain and the registered
+`["feed-ingest-plan", "source-runs"]` prefix. Invalid registration fails loading;
+exposing it does not write a source record or change audit-pending status.
 
 The recorder preflights the whole attempt before any audit write. First-sight
 timing, signed negative publication ages and unsupported `top_k` concentration
