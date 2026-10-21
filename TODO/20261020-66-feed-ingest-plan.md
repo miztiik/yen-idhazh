@@ -234,7 +234,7 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 | 9 | Set-aware editorial portfolio curation | 8 | D | IN-FLIGHT | bookish-carnival | - | 34c330c1-9d30-4222-8fa6-4e28e58a165e |
 | 10 | Contextual bin-packing partitioner with feature flag | 9 | E | IN-FLIGHT | Session `86a9018f-dadb-4181-b82c-ca7fe9347116` builds on tested harvest foundation; integrates tested curation before final checks; historical completion proof remains unresolved below | - | - |
 | 11 | Core plan engine entrypoint, dual-mode runner, and sealing | 6, 10 | F | IN-FLIGHT | plan-66-api-cli-runner | - | ec780a10-5ab0-4ad7-a4e1-c36db811fbd7 |
-| 12 | Isolated CI test workflow and verification suite | 4, 5, 11, 14 | G | IN-FLIGHT | reporting slot reserved | - | dispatching |
+| 12 | Isolated CI test workflow and verification suite | 4, 5, 11, 14 | G | IN-FLIGHT | isolated workflow child | - | 31c9fcf0-3abc-41ff-a70e-624a4b419ee0 |
 | 13 | Phase 2 publication reconciliation and rolling diversity metrics | 12, 14 | H | PENDING | - | - | - |
 | 14 | Phase 1 source-run audit and three-axis evidence | 11 | G | PENDING | - | - | - |
 | 15 | Config-driven source registries and compatible readers | - | A | DONE | fluffy-adventure (feed-registry-migration) | - | f7f18c64-813b-4a13-b421-1cd67b951db6 |
@@ -1042,9 +1042,11 @@ harvested under a different policy or UTC day remains unrepresentable.
   - `services/feed-ingest-plan/src/config/service-settings.ts`
   - `services/feed-ingest-plan/src/seal-article-ledger/plan-sealer.ts`
   - `services/feed-ingest-plan/src/logging/structured-logger.ts`
+  - `services/feed-ingest-plan/src/logging/stage-assessments.ts`
   - `services/feed-ingest-plan/test/plan-cli.test.ts`
   - `services/feed-ingest-plan/test/plan-api.test.ts`
   - `services/feed-ingest-plan/test/plan-engine.test.ts`
+  - `services/feed-ingest-plan/test/plan-recordings.ts`
   - `config/feed-ingest-plan-service.json`
   - `docs/architecture/sources/feed-plan-runner.md`
 - **Acceptance gates:** `bun test` in `services/feed-ingest-plan/`; CLI/API fixture tests cover the same age filter, automatically derived UTC date, and Python-readable dispatch output. No core module writes GitHub annotations, step summaries, or GitHub output files.
