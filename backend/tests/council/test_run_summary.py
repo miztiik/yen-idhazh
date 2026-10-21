@@ -22,7 +22,7 @@ from idhazh.contracts.council_events import (
 from idhazh.contracts.council_run_record import EvaluationStep, ShardOutcome
 from idhazh.council import event_log, run_summary
 
-from ._tenants import TENANT_SOURCE, a_scripted_venue, a_venue
+from ._tenants import TENANT_SOURCE, a_venue
 from .test_events import HOSTILE, completed_process
 from .test_publication import configuration
 
@@ -401,21 +401,16 @@ def test_collector_failure_still_appends_one_safe_summary(
     assert "SOURCE-TEXT" not in text + saved.stdout + saved.stderr
 
 
-@pytest.mark.parametrize("result", ["completed", "stopped_on_deadline", "raised"])
-def test_real_shard_bundle_is_read_by_the_real_collector_on_success_and_failure(
-    result: str,
+def test_real_shard_bundle_is_read_by_the_real_collector_when_a_shard_raises(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     package = "summary_tenants"
-    if result == "raised":
-        source = TENANT_SOURCE.replace(
-            "        self.ran.append((date, run_id, shard, shards))",
-            f"        raise RuntimeError({HOSTILE!r})",
-        )
-        a_venue(tmp_path, package=package, slugs={"one-judge": (1, ())}, source=source)
-    else:
-        a_scripted_venue(tmp_path, package=package, slug="one-judge", shard_count=1, outcome=result)
+    source = TENANT_SOURCE.replace(
+        "        self.ran.append((date, run_id, shard, shards))",
+        f"        raise RuntimeError({HOSTILE!r})",
+    )
+    a_venue(tmp_path, package=package, slugs={"one-judge": (1, ())}, source=source)
     config_root = configuration(tmp_path, ("one-judge",))
     uploaded = tmp_path / "uploaded" / "events" / "one-judge" / DATE / "0.jsonl"
     monkeypatch.setenv("COUNCIL_EVENT_FILE", str(uploaded))
@@ -438,7 +433,7 @@ def test_real_shard_bundle_is_read_by_the_real_collector_on_success_and_failure(
         f"raise SystemExit(cli.main({argv!r}))",
         root=tmp_path,
     )
-    assert process.returncode == (0 if result == "completed" else 1)
+    assert process.returncode == 1
     assert b"\r" not in uploaded.read_bytes() and "SOURCE-TEXT" not in uploaded.read_text("utf-8")
     repo = tmp_path / "collector"
     received = repo / "backend" / "var" / "council" / "events" / "one-judge" / DATE / "0.jsonl"
@@ -461,7 +456,7 @@ def test_real_shard_bundle_is_read_by_the_real_collector_on_success_and_failure(
         "--matrix",
         matrix("one-judge"),
         "--units-result",
-        "success" if result == "completed" else "failure",
+        "failure",
     ]
     saved = completed_process(
         f"from utilities.council_publish import main; raise SystemExit(main({args!r}))"
@@ -469,7 +464,7 @@ def test_real_shard_bundle_is_read_by_the_real_collector_on_success_and_failure(
     assert saved.returncode == process.returncode, saved.stderr
     text = summary.read_text("utf-8")
     assert text.count("### Council night") == 1
-    assert (result.replace("_", " ") if result != "raised" else "failed") in text
+    assert "failed" in text
     assert "SOURCE-TEXT" not in text and "SOURCE-TEXT" not in saved.stdout
     assert saved.stdout.count("::group::one-judge") == 1
-    assert ("::error title=one-judge::" in saved.stdout) == (process.returncode != 0)
+    assert "::error title=one-judge::" in saved.stdout

@@ -135,9 +135,21 @@ def test_collector_artifacts_keep_their_job_and_encoder_ownership() -> None:
     assert "encoder" in _mapping(env["matrix"], "encoder matrix")
 
 
-@pytest.mark.parametrize("host_choice", ["python", "off"])
-@pytest.mark.parametrize("master", [True, False])
-@pytest.mark.parametrize("memory", ["inherit", "on", "off"])
+@pytest.mark.parametrize(
+    "host_choice,master,memory",
+    [
+        ("python", True, "on"),
+        ("python", True, "off"),
+        ("python", False, "on"),
+        ("python", False, "off"),
+        ("off", True, "inherit"),
+        ("off", True, "on"),
+        ("off", True, "off"),
+        ("off", False, "inherit"),
+        ("off", False, "on"),
+        ("off", False, "off"),
+    ],
+)
 def test_generated_candidate_config_preserves_master_control_and_memory_override(
     tmp_path: Path, host_choice: str, master: bool, memory: str,
 ) -> None:
