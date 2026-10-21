@@ -72,7 +72,8 @@ export function loadHarvestInputs(raw: {
     }
   }
   // This digest covers every validated input that can change harvested content or provenance.
-  const snapshot = { config: planning.config, registry, sources, extraction };
+  const { workflow_reporting, ...contentConfig } = planning.config;
+  const snapshot = { config: contentConfig, registry, sources, extraction };
   const config_sha256 = createHash("sha256").update(JSON.stringify(snapshot)).digest("hex");
   return { ...planning, registry, sources, extraction, config_sha256 };
 }
