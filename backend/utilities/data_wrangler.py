@@ -49,7 +49,7 @@ from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.sources import SourceForm
-from idhazh.contracts.taxonomy import SourceTier
+from idhazh.contracts.taxonomy import LifecycleStatus, SourceTier
 from idhazh.ledger import STATE_DIRNAME
 from idhazh.stages import common
 from idhazh.stages.common import Fetcher, published_days
@@ -369,7 +369,9 @@ def _digest_items(digest_root: Path) -> dict[str, _Entry]:
     return found
 
 
-def _planned(candidate: _Rebuildable, *, tiers: dict[str, SourceTier]) -> PlannedItem:
+def _planned(
+    candidate: _Rebuildable, *, tiers: dict[str, SourceTier], fallback_tier: SourceTier
+) -> PlannedItem:
     """The plan entry the extractor needs, rebuilt from what the run recorded.
 
     `rank_score` is zero because ranking already chose this item once and cannot
@@ -390,7 +392,7 @@ def _planned(candidate: _Rebuildable, *, tiers: dict[str, SourceTier]) -> Planne
         source_url=row.source_url,
         canonical_url=row.source_url,
         source_id=entry.source_id,
-        tier=tiers.get(entry.source_id, SourceTier.COMMUNITY),
+        tier=tiers.get(entry.source_id, fallback_tier),
         source_form=entry.source_form,
         vertical=row.vertical,
         title=row.title,
@@ -509,13 +511,21 @@ def refill(
         return 0
 
     read = read_url or common.live_fetcher(settings)
-    tiers = {feed.id: feed.tier for feed in settings.sources.feeds}
+    tiers = {feed.id: feed.tier for feed in settings.sources.known_feeds()}
+    fallback_tier = min(
+        (
+            entry
+            for entry in settings.taxonomy.source_tiers
+            if entry.status is LifecycleStatus.ACTIVE
+        ),
+        key=lambda entry: (entry.weight, entry.id),
+    ).id
     meta = corpus.read_meta(corpus_dir)
     pending: list[corpus.Scored] = []
     rebuilt = 0
     dropped: Counter[str] = Counter()
     for index, candidate in enumerate(queued, start=1):
-        item = _planned(candidate, tiers=tiers)
+        item = _planned(candidate, tiers=tiers, fallback_tier=fallback_tier)
         article, full_text = extract.to_article_with_source(
             item,
             read(item.canonical_url),

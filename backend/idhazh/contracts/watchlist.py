@@ -42,7 +42,7 @@ class EntityFeed(Lifecycled):
     id: Slug
     title: str = Field(min_length=1)
     url: Url
-    tier: SourceTier = SourceTier.INSTITUTION
+    tier: SourceTier = 1
 
 
 class EntityDef(Lifecycled):
@@ -110,6 +110,11 @@ class Watchlist(Contract):
 
     __schema_stem__: ClassVar[str] = "watchlist"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-20",
+            change="Source classification accepts open kind and numeric tier identifiers.",
+            why="Registry membership can change without invalidating recorded payloads.",
+        ),
         ChangelogEntry(
             version="2026-08-31",
             change="EntityDef gained kind, so an entry can be a subject and not only an outfit.",

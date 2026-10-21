@@ -34,7 +34,6 @@ from idhazh.contracts.item_health import FailureCode, ItemHealthRow
 from idhazh.contracts.knobs.extract import ExtractConfig
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.sources import SourceForm
-from idhazh.contracts.taxonomy import SourceTier
 from idhazh.discover import TITLE_MAX_CHARS, clean_title
 from idhazh.extract import (
     EXTRACTOR_VERSION,
@@ -77,7 +76,7 @@ ITEM = PlannedItem(
     source_url=CANONICAL,
     canonical_url=CANONICAL,
     source_id="grid-newsroom",
-    tier=SourceTier.INSTITUTION,
+    tier=1,
     vertical="energy",
     title="Example Grid orders four small modular reactors",
     rank_score=1.4,
@@ -99,7 +98,7 @@ def fixture_item(source_id: str, url: str, index: int = 1) -> PlannedItem:
         source_url=url,
         canonical_url=url,
         source_id=source_id,
-        tier=SourceTier.INSTITUTION,
+        tier=1,
         source_form=SourceForm.ABSTRACT if source_id == "nber-new" else SourceForm.ARTICLE,
         vertical="energy",
         title=f"{source_id} fixture",

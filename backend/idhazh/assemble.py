@@ -872,6 +872,7 @@ def _pair_terms(left: str, right: str, day: _DayScoring) -> _Terms | None:
     score = 1.0 if headline else day.knobs.cosine_weight * cosine
     return _Terms(cosine=cosine, headline=headline, score=score)
 
+
 def _group_fit(cluster: Sequence[str], item_id: str, day: _DayScoring) -> float | None:
     """How well this item fits the whole group, or nothing if it does not.
 
@@ -1329,7 +1330,9 @@ class SubjectCluster:
         return len(self.sources) >= floor and self.holds_reporting
 
 
-def subject_clusters(items: Sequence[DigestItem], watchlist: Watchlist) -> list[SubjectCluster]:
+def subject_clusters(
+    items: Sequence[DigestItem], watchlist: Watchlist, *, taxonomy: Taxonomy
+) -> list[SubjectCluster]:
     """The day's shared subjects, matched on our own published titles.
 
     The title, never the body and never fetched text: the matcher reads words
@@ -1358,7 +1361,11 @@ def subject_clusters(items: Sequence[DigestItem], watchlist: Watchlist) -> list[
             display_name=names.get(entity, entity),
             item_ids=tuple(item.item_id for item in found),
             sources=frozenset(item.source_id for item in found),
-            holds_reporting=any(item.source_kind is SourceKind.REPORTING for item in found),
+            holds_reporting=any(
+                definition is not None and definition.counts_as_reporting
+                for item in found
+                for definition in (taxonomy.source_kind(item.source_kind),)
+            ),
         )
         for entity, found in sorted(members.items())
     ]
@@ -1489,7 +1496,10 @@ def _reason_for(
 
 
 def _eligible(
-    item: DigestItem, *, clusters_by_item: Mapping[str, tuple[SubjectCluster, ...]]
+    item: DigestItem,
+    *,
+    clusters_by_item: Mapping[str, tuple[SubjectCluster, ...]],
+    taxonomy: Taxonomy,
 ) -> str | None:
     """Why this story may not lead, or None when it may.
 
@@ -1505,7 +1515,8 @@ def _eligible(
         # A time we inferred is our clock, not the story's. A lead states when
         # something happened, so it may only lead on the feed's own answer.
         return "clock-not-the-feed"
-    if item.source_kind is SourceKind.ANNOUNCEMENT and not any(
+    kind = taxonomy.source_kind(item.source_kind)
+    if (kind is None or kind.requires_reporting_for_lead) and not any(
         cluster.holds_reporting for cluster in clusters_by_item.get(item.item_id, ())
     ):
         # A company announcing itself leads only where somebody reported the
@@ -1519,6 +1530,7 @@ def leading_stories(
     *,
     date: str,
     watchlist: Watchlist,
+    taxonomy: Taxonomy,
     ui: UiConfig,
     placement: PlacementConfig,
     now: str,
@@ -1552,7 +1564,7 @@ def leading_stories(
     five with one filler, and a day with too few is a day that goes straight to
     the stream.
     """
-    clusters = subject_clusters(items, watchlist)
+    clusters = subject_clusters(items, watchlist, taxonomy=taxonomy)
     floor = ui.lead_cluster_floor
     clusters_by_item: dict[str, tuple[SubjectCluster, ...]] = {}
     for cluster in clusters:
@@ -1563,7 +1575,7 @@ def leading_stories(
     omitted: dict[str, str] = {}
     candidates: list[LeadCandidate] = []
     for item in items:
-        refusal = _eligible(item, clusters_by_item=clusters_by_item)
+        refusal = _eligible(item, clusters_by_item=clusters_by_item, taxonomy=taxonomy)
         if refusal is None:
             named = clusters_by_item.get(item.item_id, ())
             reason, fallback = _reason_for(
@@ -2048,6 +2060,7 @@ def build_day(
         items=combined,
         leads=leading_stories(
             combined,
+            taxonomy=taxonomy,
             date=plan.date,
             watchlist=watchlist or Watchlist(version=Watchlist.schema_version(), entities=[]),
             ui=ui or UiConfig(),
@@ -2282,6 +2295,7 @@ def assemble_day(
         items=combined,
         leads=leading_stories(
             combined,
+            taxonomy=taxonomy,
             date=date,
             watchlist=watchlist or Watchlist(version=Watchlist.schema_version(), entities=[]),
             ui=ui or UiConfig(),
@@ -2436,7 +2450,8 @@ def site_size(root: Path) -> tuple[int, int]:
     """Source digest bytes and files from the producer's named inventory."""
     inventory = publication.read_inventory(root.parent)
     entries = [
-        entry for entry in inventory.entries
+        entry
+        for entry in inventory.entries
         if entry.root == "public" and entry.path.startswith(f"{root.name}/")
     ]
     return (sum(entry.bytes for entry in entries), len(entries))

@@ -3,7 +3,7 @@
 **Last Updated**: 2026-10-20
 **Level**: 5 (source-kind/tier and persisted-contract migration requires owner approval before execution; the later planner implementation follows the approved contracts)
 
-Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0.
 
 ---
 
@@ -186,7 +186,7 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 | 12 | Isolated CI test workflow and verification suite | 4, 5, 11, 14 | G | PENDING | - | - | - |
 | 13 | Phase 2 publication reconciliation and rolling diversity metrics | 12, 14 | H | PENDING | - | - | - |
 | 14 | Phase 1 source-run audit and three-axis evidence | 11 | G | PENDING | - | - | - |
-| 15 | Config-driven source registries and compatible readers | - | A | PENDING | - | - | - |
+| 15 | Config-driven source registries and compatible readers | - | A | DONE | fluffy-adventure (feed-registry-migration) | - | f7f18c64-813b-4a13-b421-1cd67b951db6 |
 | 16 | Public data-explorer enrollment and nested ledger delivery | 2 | B | PENDING | - | - | - |
 
 ---
@@ -961,6 +961,7 @@ export type CandidateRejectionRecord =
   - `config/taxonomy.json`
   - `config/idhazh.json`
   - `backend/idhazh/config.py`
+  - `backend/idhazh/source_classification.py`
   - `backend/idhazh/contracts/taxonomy.py`
   - `backend/idhazh/contracts/knobs/collect.py`
   - `backend/idhazh/contracts/sources.py`
@@ -968,6 +969,7 @@ export type CandidateRejectionRecord =
   - `backend/idhazh/contracts/article.py`
   - `backend/idhazh/contracts/digest_day.py`
   - `backend/idhazh/contracts/digest_view.py`
+  - `backend/idhazh/contracts/digest_run_fragment.py`
   - `backend/idhazh/contracts/item_health.py`
   - `backend/idhazh/contracts/run_plan.py`
   - `backend/idhazh/contracts/__init__.py`
@@ -977,9 +979,10 @@ export type CandidateRejectionRecord =
   - `backend/idhazh/stages/assemble.py`
   - `backend/idhazh/stages/common.py`
   - `backend/tests/conftest.py`
-  - `backend/tests/contracts/test_app_config.py`
   - `backend/tests/contracts/test_source_classification_binding.py`
   - `backend/tests/contracts/test_source_classification_history.py`
+  - `backend/tests/contracts/test_panel_queries.py`
+  - `backend/tests/council/_imports.py`
   - `backend/tests/pipeline/_builders.py`
   - `backend/tests/pipeline/test_degrade.py`
   - `backend/tests/pipeline/test_desk_field.py`
@@ -1003,22 +1006,39 @@ export type CandidateRejectionRecord =
   - `backend/utilities/data_wrangler.py`
   - `backend/utilities/probe_feeds.py`
   - `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`
-  - `tests/fixtures/gardener/pre-yearly-retention/config/idhazh.json`
-  - `tests/fixtures/rank/two-candidates-one-slot.json`
   - `tests/fixtures/source-classification/legacy-ledger-rows.json`
   - `frontend/src/lib/payload/types.ts`
+  - `frontend/src/lib/payload/project.ts`
   - `frontend/src/lib/bands.ts`
-  - `frontend/src/lib/source-kinds.ts`
-  - `frontend/src/lib/server/config.ts`
   - `frontend/src/lib/components/DigestItem.svelte`
   - `frontend/tests/item-meta.spec.ts`
   - `docs/architecture/sources/source-classification.md`
   - `docs/architecture/sources/discovery.md`
   - `docs/concepts/taxonomy.md`
+  - `docs/concepts/placement.md`
   - `docs/architecture/contracts/schemas.md`
   - `TODO/20261020-66-feed-ingest-plan.md`
 - **Acceptance gates:** Local: shared selector, named affected contract/scoring/assembly tests, frontend field/vocabulary binding, and one representative published-page smoke. CI: full suite. Compare baseline outputs before/after the registry migration using the existing named fixtures. Without editing code, extend a copied configuration with a new kind and a new numeric tier ID; prove loading, scoring, publishing, and reader display accept them. Reject missing weights, unregistered live references, invalid overrides, and duplicate registry IDs by name.
 - **Oracle:** Existing configured kinds/tiers produce the same scores, publication labels, and lead eligibility, and old payload fixtures remain readable; adding a registered kind or tier requires only configuration edits and passes the same pipeline/readers. This does not prove a new kind label is accurate or create a new extraction/scoring algorithm.
+
+Reconciled against main on 2026-10-20: `frontend/src/lib/bands.ts` owns kind
+labels and display filters; `frontend/src/lib/source-kinds.ts` does not exist.
+`docs/architecture/sources/source-classification.md` is a new living page.
+There is no root `AGENTS.md`; `CLAUDE.md` and `docs/agents/bootstrap.md` route
+the work. Owner authorization covers this row's Level 5 migration. This worker
+opens a ready-for-review PR and does not merge or start another row.
+The frontend reads the committed registry in `bands.ts`; its server config
+needs no change. Historical gardener and ranking fixtures remain unchanged.
+
+### Authorized CI correction and closure
+
+Implementation and selected local gates pass. Repository-wide CI stopped at
+nine existing lint errors in `.github/scripts/serve-evaluator.py` before running
+the full backend suite. On 2026-10-20, the owner authorized a separate lint-only
+commit in this PR to correct that script without changing its behavior. This
+is the sole approved scope addition; no later plan row starts. The correction
+and directly dependent contract bindings pass the full CI suite, site, browser
+and robots checks. Row #15 is delivered for review; this worker does not merge.
 
 ### Decisions
 

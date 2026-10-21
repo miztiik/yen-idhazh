@@ -26,7 +26,6 @@ from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.seen import PublishedRow
 from idhazh.contracts.source_health_view import SourceHealthView
 from idhazh.contracts.summary import Summary, SummaryStatus
-from idhazh.contracts.taxonomy import SourceKind
 from idhazh.contracts.visual_decision import VisualDecision
 from idhazh.embed import Embedder
 from idhazh.evals import metrics, sampling, score, writer
@@ -266,7 +265,7 @@ def stage_assemble(
                 band=decided.band,
                 band_reason=decided.reason,
                 source_name=names.get(article.source_id, article.source_id),
-                source_kind=kinds.get(article.source_id, SourceKind.REPORTING),
+                source_kind=kinds.get(article.source_id, settings.taxonomy.source_kind_default()),
                 run_n=1,
                 decision=decision,
                 planned=payload.planned,

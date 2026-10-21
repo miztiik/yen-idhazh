@@ -10,13 +10,8 @@ export type BandReason =
 	| 'hedge_dropped'
 	| 'faithfulness';
 
-export type SourceKind =
-	| 'reporting'
-	| 'announcement'
-	| 'research'
-	| 'analysis'
-	| 'government'
-	| 'community';
+/** Membership is configured; historical identifiers remain readable. */
+export type SourceKind = string;
 
 /** Which clock an item's `published_at` came from. `unknown` means neither the
  * feed nor our own first sight gave a time, so the item carries none. */

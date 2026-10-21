@@ -21,7 +21,12 @@ from typing import ClassVar, Self
 from pydantic import Field, model_validator
 
 from idhazh.contracts.base import ChangelogEntry, Contract, Slug, Url, records_json
-from idhazh.contracts.taxonomy import Lifecycled, LifecycleStatus, SourceKind, SourceTier
+from idhazh.contracts.taxonomy import (
+    Lifecycled,
+    LifecycleStatus,
+    SourceKind,
+    SourceTier,
+)
 
 
 class SourceForm(StrEnum):
@@ -38,7 +43,7 @@ class FeedDef(Lifecycled):
     url: Url
     tier: SourceTier
     kind: SourceKind = Field(
-        default=SourceKind.REPORTING,
+        default="reporting",
         description="Who is speaking. A reader needs this before they will share an item.",
     )
     form: SourceForm = Field(
@@ -82,6 +87,11 @@ class Sources(Contract):
     __schema_stem__: ClassVar[str] = "sources"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-20",
+            change="Source classification accepts open kind and numeric tier identifiers.",
+            why="Registry membership can change without invalidating recorded payloads.",
+        ),
+        ChangelogEntry(
             version="2026-09-13T18:00",
             change="A salience feed's description no longer prices a front-page vote.",
             why="The knob that paid for the vote was removed in the same commit.",
@@ -95,11 +105,6 @@ class Sources(Contract):
             version="2026-08-22T10:00",
             change="Split retired feeds out of feeds into their own list.",
             why="A retired feed sat in the list Collect loops, so it cost a request every run.",
-        ),
-        ChangelogEntry(
-            version="2026-08-22T09:00",
-            change="Removed weight from a salience feed.",
-            why="Nothing read it.",
         ),
         ChangelogEntry(
             version="2026-08-21",

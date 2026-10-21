@@ -243,7 +243,7 @@ class DigestViewItem(Model):
     source_name: str = Field(min_length=1)
     source_id: Slug
     source_kind: SourceKind = Field(
-        default=SourceKind.REPORTING,
+        default="reporting",
         description="Who is speaking. A vendor's own copy must not look like a reporter's.",
     )
     source_url: Url
@@ -355,6 +355,11 @@ class DigestView(Contract):
     __schema_stem__: ClassVar[str] = "digest-view"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-20",
+            change="Source classification accepts open kind and numeric tier identifiers.",
+            why="Registry membership can change without invalidating recorded payloads.",
+        ),
+        ChangelogEntry(
             version="2026-09-24",
             change="Removed DigestViewItem.key_points. A staged view that carries it still loads.",
             why="Nothing drew them, and the in-page filter reads title and summary instead.",
@@ -368,11 +373,6 @@ class DigestView(Contract):
             version="2026-09-17",
             change="DigestViewItem.summary is Prose - paragraphs split by one blank line.",
             why="A long summary is two paragraphs, and read-side folding keeps old days readable.",
-        ),
-        ChangelogEntry(
-            version="2026-09-16T00:40",
-            change="Added DigestViewItem.same_story_as and .covered_by.",
-            why="The page folds a group into one card, which has to name the other outlets.",
         ),
         ChangelogEntry(
             version="2026-08-31T12:00",
