@@ -43,6 +43,14 @@ configuration, leave both reporting-only changes out of the fingerprint,
 and detect a real age-policy change. Row #12 still verifies the separate
 two-run ledger-digest comparison after integrating this head.
 
+Row #12 subsequently integrated that head and reported identical dispatch,
+selection and rejection content digests across real reporting-off and
+reporting-on runs. Its ten adapter/native tests passed; final strict checks
+and runner/audit integration remain open. CI on the harvest follow-up passed
+scope, site, browser and robots. Its backend gate passed 7249 tests and
+failed only the same two schedule assertions below. No merge is authorized
+while that required gate remains red.
+
 Row #6 merge blocker: CI run 39644823082 at writer head
 `bed0e6cc3080898644024a99200ec6a882a1dd1b` passes its TypeScript writer,
 site, browser and robots checks. The repository backend gate passes 7249 tests
