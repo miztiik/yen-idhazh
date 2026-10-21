@@ -1,8 +1,8 @@
 /** Do actual recorded stages produce truthful dispatch files without claiming audit completion? */
 import { expect, test } from "bun:test";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, stat, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 import {
   CONTRACT_VERSION, FeedIngestDispatchSchema, FeedIngestEventSchema,
   deriveCandidateId, deriveUrlKey,
@@ -11,10 +11,55 @@ import { persistLedger } from "@idhazh/ledger-file-writer";
 import { runFeedPlan, summarizePlan } from "../src/run-feed-plan";
 import { loadPlanInputs } from "../src/load-plan-inputs";
 import { readLedgerParquet } from "../src/read-ledger-history/read-parquet";
-import { readSeenEvidence } from "../src/read-ledger-history/read-seen-evidence";
+import { readSeenEvidence, requiredSeenDays } from "../src/read-ledger-history/read-seen-evidence";
 import { SeenRowSchema } from "../src/screen-article-candidates/seen-evidence";
 import { recordedPlan } from "./plan-recordings";
 import { source } from "./harvest-recordings";
+
+async function seenWindow(recorded: Awaited<ReturnType<typeof recordedPlan>>, knownUrl: string) {
+  recorded.inputs.clock_config.collect.seen_window_days = 2;
+  recorded.runtime.clock = () => new Date("2026-10-21T12:00:00Z");
+  const registration = recorded.inputs.registrations.seen;
+  const contract = { schema: SeenRowSchema, schemaVersion: "2026-08-31" };
+  const local = (path: string) => relative(recorded.directory, path).replaceAll("\\", "/");
+  const write = async (day: string, first: string) => persistLedger({
+    ledger: "seen", registryEntry: registration, outputRoot: recorded.inputs.outputRoot,
+    ledgerSettings: recorded.inputs.ledgerSettings, rowContract: contract,
+    period: { tier: "raw", covers: day },
+    writerContext: {
+      run_id: `${day}-1`, attempt: 1, job: "plan", shard: 0,
+      pipeline_name: null, task_name: null, producer: "tests.seen-window", git_sha: "a".repeat(40),
+    },
+    rows: [SeenRowSchema.parse({
+      version: "2026-08-31", url_key: deriveUrlKey(knownUrl),
+      first_seen_at: first, first_seen_run: `${first.slice(0, 10)}-1`,
+    })],
+  });
+  const early = await write("2026-10-19", "2026-10-19T10:00:00Z");
+  const late = await write("2026-10-20", "2026-10-19T10:00:01Z");
+  const original = await readLedgerParquet(join(recorded.inputs.outputRoot, early.files[0]!.path), "seen", contract);
+  const compact = await persistLedger({
+    ledger: "seen", registryEntry: registration, outputRoot: recorded.inputs.outputRoot,
+    ledgerSettings: recorded.inputs.ledgerSettings, rowContract: contract,
+    period: { tier: "compact", period: "daily", covers: "2026-10-19", builtFrom: 1 },
+    writerContext: { ...original.envelope.identity, producer: "tests.compact-seen", attempt: 2 },
+    rows: original.rows,
+  });
+  const index = join(recorded.inputs.outputRoot, "compact", "seen", "index", "daily.json");
+  await mkdir(dirname(index), { recursive: true });
+  const indexed = compact.files[0]!;
+  const entries = [{
+    covers: "2026-10-19", state: "packed", rows: indexed.row_count,
+    bytes: (await stat(join(recorded.inputs.outputRoot, indexed.path))).size,
+  }];
+  await writeFile(index, JSON.stringify({ version: "2026-10-07", ledger: "seen", period: "daily", entries }));
+  recorded.inputs.settings.inputs.seen_days = [
+    { day: "2026-10-19", indexes: { daily: local(index) } },
+    { day: "2026-10-20", raw_files: late.files.map(file => local(join(recorded.inputs.outputRoot, file.path))) },
+    { day: "2026-10-21", raw_files: [] },
+  ];
+  return { index, entries, local };
+}
 
 test("real composition shares one clock and override and reads native dispatches with exact choices", async () => {
   const recorded = await recordedPlan([
@@ -204,3 +249,135 @@ test("named input loader works from a generated configuration root without any b
     expect(existsSync(join(recorded.directory, "backend"))).toBe(false);
   } finally { await recorded.close(); }
 });
+
+test("complete mixed native window creates real first sight; the next run retains its original clock", async () => {
+  const recorded = await recordedPlan([source({ url: "https://news.example/article-failures.xml" })]);
+  try {
+    const window = await seenWindow(recorded, "https://news.example/earlier-story");
+    const result = await runFeedPlan({}, recorded.inputs, recorded.runtime);
+    expect(requiredSeenDays("2026-10-21T12:00:00Z", 90)).toHaveLength(91);
+    expect(result.evidence.seen.absence_proof).toBe("within_configured_window");
+    expect(result.evidence.seen.global_absence).toBe("unavailable");
+    expect(result.evidence.seen.window).toMatchObject({
+      from_day: "2026-10-19", through_day: "2026-10-21", required_day_count: 3,
+      days: [{ status: "rows", tier: "daily" }, { status: "rows", tier: "raw" }, { status: "empty", tier: "raw" }],
+    });
+    const held = result.evidence.seen.evidence;
+    if (held.availability !== "available") throw new Error("Real seen window was not available");
+    expect(held.rows.find(row => row.url_key === deriveUrlKey("https://news.example/earlier-story"))!.first_seen_at)
+      .toBe("2026-10-19T10:00:00Z");
+    const key = deriveUrlKey("https://news.example/second");
+    const created = result.evidence.seen.new_rows.find(row => row.url_key === key)!;
+    expect(created).toMatchObject({ first_seen_at: "2026-10-21T12:00:00Z", first_seen_run: "2026-10-21-700" });
+    expect(result.files.seen.status).toBe("written");
+    const native = await readLedgerParquet(join(recorded.inputs.outputRoot, result.files.seen.files[0]!.path), "seen", {
+      schema: SeenRowSchema, schemaVersion: "2026-08-31",
+    });
+    expect(native.rows.map(row => row.row)).toContainEqual(created);
+    expect(result.evidence.screening.admitted.find(article => article.candidate.url_key === key)!.freshness)
+      .toMatchObject({ timing_source: "first_seen", age_hours: 0, effective_published_at: created.first_seen_at });
+    recorded.inputs.settings.inputs.seen_days[2]!.raw_files = result.files.seen.files.map(file =>
+      window.local(join(recorded.inputs.outputRoot, file.path)));
+    recorded.runtime.run_number = "701";
+    recorded.runtime.clock = () => new Date("2026-10-21T13:00:00Z");
+    const repeated = await runFeedPlan({}, recorded.inputs, recorded.runtime);
+    expect(repeated.evidence.seen.new_rows).toEqual([]);
+    expect(repeated.files.seen).toEqual({ status: "empty", files: [] });
+    expect(repeated.evidence.screening.admitted.find(article => article.candidate.url_key === key)!.freshness)
+      .toMatchObject({ timing_source: "first_seen", age_hours: 1, effective_published_at: created.first_seen_at });
+  } finally { await recorded.close(); }
+}, 30000);
+
+test("one missing or lost window day prevents new first sight but keeps the earliest real existing row", async () => {
+  const recorded = await recordedPlan([source({ url: "https://news.example/article-failures.xml" })]);
+  try {
+    const window = await seenWindow(recorded, "https://news.example/second");
+    recorded.inputs.settings.inputs.seen_days[1] = { day: "2026-10-20" };
+    let result = await runFeedPlan({}, recorded.inputs, recorded.runtime);
+    expect(result.evidence.seen.absence_proof).toBe("unavailable");
+    expect(result.evidence.seen.new_rows).toEqual([]);
+    expect(result.evidence.seen.window!.days[1]!.status).toBe("missing");
+    expect(result.evidence.seen.evidence.availability === "available"
+      && result.evidence.seen.evidence.rows[0]!.first_seen_at).toBe("2026-10-19T10:00:00Z");
+    expect(result.evidence.screening.rejections.some(row => row.drop_reason === "STALE_MAX_AGE_EXCEEDED")).toBe(true);
+    await writeFile(window.index, JSON.stringify({
+      version: "2026-10-07", ledger: "seen", period: "daily",
+      entries: [...window.entries, { covers: "2026-10-20", state: "lost", rows: 0, bytes: 0 }],
+    }));
+    recorded.inputs.settings.inputs.seen_days[1] = {
+      day: "2026-10-20", indexes: { daily: window.local(window.index) },
+    };
+    recorded.runtime.run_number = "702";
+    result = await runFeedPlan({}, recorded.inputs, recorded.runtime);
+    expect(result.evidence.seen.absence_proof).toBe("unavailable");
+    expect(result.evidence.seen.window!.days[1]!.status).toBe("lost");
+    expect(result.evidence.seen.new_rows).toEqual([]);
+    expect(result.files.seen).toEqual({ status: "empty", files: [] });
+  } finally { await recorded.close(); }
+}, 30000);
+
+test("window bounds, ordering and duplicate current-day inputs fail before fetching", async () => {
+  const recorded = await recordedPlan();
+  try {
+    recorded.inputs.clock_config.collect.seen_window_days = 2;
+    for (const days of [
+      [{ day: "2026-10-22", raw_files: [] }],
+      [{ day: "2026-10-18", raw_files: [] }],
+      [{ day: "2026-10-21", raw_files: [] }, { day: "2026-10-21", raw_files: [] }],
+      [{ day: "2026-10-21", raw_files: [] }, { day: "2026-10-20", raw_files: [] }],
+    ]) {
+      recorded.inputs.settings.inputs.seen_days = days;
+      await expect(runFeedPlan({}, recorded.inputs, recorded.runtime)).rejects.toThrow("seen_days");
+    }
+    recorded.runtime.clock = () => new Date("2026-10-21T12:00:00Z");
+    recorded.inputs.settings.inputs.seen_days = [];
+    const future = await persistLedger({
+      ledger: "seen", registryEntry: recorded.inputs.registrations.seen, outputRoot: recorded.inputs.outputRoot,
+      ledgerSettings: recorded.inputs.ledgerSettings,
+      rowContract: { schema: SeenRowSchema, schemaVersion: "2026-08-31" },
+      writerContext: {
+        run_id: "2026-10-21-1", attempt: 1, job: "plan", shard: 0,
+        pipeline_name: null, task_name: null, producer: "tests.seen-window", git_sha: "a".repeat(40),
+      },
+      period: { tier: "raw", covers: "2026-10-21" },
+      rows: [SeenRowSchema.parse({
+        version: "2026-08-31", url_key: deriveUrlKey("https://news.example/future"),
+        first_seen_at: "2026-10-21T12:00:01Z", first_seen_run: "2026-10-21-1",
+      })],
+    });
+    recorded.inputs.settings.inputs.seen_files = future.files.map(file =>
+      relative(recorded.directory, join(recorded.inputs.outputRoot, file.path)).replaceAll("\\", "/"));
+    await expect(runFeedPlan({}, recorded.inputs, recorded.runtime)).rejects.toThrow("captured run clock");
+    expect(recorded.transport.requests).toHaveLength(0);
+  } finally { await recorded.close(); }
+});
+
+test("a genuine seen-write failure cannot turn an absent address into first-sight evidence", async () => {
+  const recorded = await recordedPlan([source({ url: "https://news.example/article-failures.xml" })]);
+  try {
+    recorded.inputs.clock_config.collect.seen_window_days = 0;
+    recorded.inputs.settings.inputs.seen_days = [{ day: "2026-10-21", raw_files: [] }];
+    const raw = join(recorded.inputs.outputRoot, "raw");
+    await mkdir(raw, { recursive: true });
+    await writeFile(join(raw, "seen"), "A file cannot be a first-sight ledger directory.");
+    await expect(runFeedPlan({}, recorded.inputs, recorded.runtime)).rejects.toThrow();
+    expect(recorded.events.some(event => event.stage === "screen-article-candidates")).toBe(false);
+  } finally { await recorded.close(); }
+}, 30000);
+
+test("retired historical source has a genuine inactive outcome without a current vertical policy", async () => {
+  const recorded = await recordedPlan([
+    source({ id: "historical-news", status: "retired", retired_on: "2026-10-19",
+      vertical: "historical-vertical", kind: "historical-kind" }),
+  ]);
+  try {
+    const result = await runFeedPlan({}, recorded.inputs, recorded.runtime);
+    expect(recorded.transport.requests).toHaveLength(0);
+    const outcome = result.events.find(event => event.payload.kind === "feed_outcome")!;
+    expect(outcome.payload.kind === "feed_outcome" && outcome.payload.source.vertical).toBe("historical-vertical");
+    expect(outcome.payload.kind === "feed_outcome" && outcome.payload.rejection_reason).toBe("SOURCE_INACTIVE");
+    expect(outcome.policy.max_age_hours).toBe(recorded.inputs.harvest.config.triage.max_age_hours);
+    expect(outcome.policy.config_sha256).toBe(result.evidence.harvest.inputs.config_sha256);
+    expect(result.files.dispatches).toEqual({ status: "empty", files: [] });
+  } finally { await recorded.close(); }
+}, 30000);

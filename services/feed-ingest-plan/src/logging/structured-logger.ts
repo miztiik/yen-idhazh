@@ -1,8 +1,21 @@
 /** Which typed event records the stage observation made at this point in a run? */
 import { createHash } from "node:crypto";
-import { FeedIngestEventSchema } from "@idhazh/common-contracts";
+import {
+  FeedCurationPolicySchema, FeedIngestEventSchema, FeedScreeningPolicySchema, PolicyIdentitySchema,
+} from "@idhazh/common-contracts";
 import type { EventPayload, FeedIngestEvent, PolicyIdentity } from "@idhazh/common-contracts";
 import type { RunContext } from "../resolve-run-context";
+import type { HarvestInputs } from "../harvest-feeds/load-harvest-inputs";
+
+export function resolveRunPolicy(inputs: HarvestInputs, freshnessHours?: number): PolicyIdentity {
+  const triage = FeedScreeningPolicySchema.strip().parse(inputs.config.triage);
+  const { mmr_weights, ...curate } = FeedCurationPolicySchema.strip().parse(inputs.config.curate);
+  return PolicyIdentitySchema.parse({
+    policy_version: inputs.config.version, config_sha256: inputs.config_sha256,
+    ...triage, ...curate, ...mmr_weights,
+    ...(freshnessHours === undefined ? {} : { max_age_hours: freshnessHours }),
+  });
+}
 
 export function createStageLogger(context: RunContext, write: (event: FeedIngestEvent) => void) {
   const events: FeedIngestEvent[] = [];
