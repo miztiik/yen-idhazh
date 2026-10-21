@@ -92,7 +92,7 @@ jobs:
           import { CompactIndexSchema, RawDayIndexSchema } from "./packages/common-contracts/src/index";
           import type { CompactIndex, FeedIngestEvent, RawDayIndex } from "./packages/common-contracts/src/index";
           import { createExecutionOutputs, createSeenDayInputs, historyDays, resolveHistoryInventory, sparseCheckoutPath, writeGitHubOutputs } from "./.github/scripts/feed-ingest-plan-outputs";
-          import { verifyLedgerReceipt, verifyParquetFiles } from "./.github/scripts/feed-ingest-plan-verification";
+          import { verifyLedgerReceipt, verifyParquetFiles, verifyPlanningCompletion } from "./.github/scripts/feed-ingest-plan-verification";
 
           const root = process.cwd();
           try {
@@ -226,6 +226,12 @@ jobs:
               await verifyParquetFiles(join(artifactRoot, "state"), ledger, summary.metrics.files[key], inputs.registrations[key]);
               verifyLedgerReceipt(ledger, summary.metrics.files[key], summary.metrics.receipts[key]);
             }
+            if (summary.files.source_runs === undefined || summary.source_records === null) {
+              throw new Error("workflow: actual planning source evidence is absent");
+            }
+            await verifyParquetFiles(join(artifactRoot, "state"), "source-runs", summary.files.source_runs,
+              inputs.registrations.source_runs, summary.source_records);
+            await verifyPlanningCompletion(join(artifactRoot, "state"), summary);
             await writeGitHubOutputs(GITHUB_OUTPUT, {
               ...createExecutionOutputs(summary, inputs.registrations),
               workflow_reporting: String(inputs.harvest.config.workflow_reporting.enabled),

@@ -6,11 +6,12 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 import {
   ArticleAssessmentRecordSchema, CandidateRejectionRecordSchema, CONTRACT_VERSION, DateStampSchema,
   DiversityMetricRowSchema, FeedIngestDispatchSchema, LedgerCompletionEvidenceSchema,
-  PositiveCountSchema, Sha256Schema, deriveCandidateId, deriveUrlKey,
+  PositiveCountSchema, Sha256Schema, SourceRunRecordSchema, deriveCandidateId, deriveUrlKey,
 } from "../../packages/common-contracts/src/index";
 import { createFileId, createUnitId, digestRows, persistLedger } from "../../packages/ledger-file-writer/src/index";
 import type { LedgerRegistration, LogicalField, PersistLedgerResult } from "../../packages/ledger-file-writer/src/index";
 import { readLedgerParquet } from "../../services/feed-ingest-plan/src/read-ledger-history/read-parquet";
+import type { summarizePlan } from "../../services/feed-ingest-plan/src/run-feed-plan";
 
 export function validateLedgerFilePath(
   path: string, fileId: string, covers: string, registration: LedgerRegistration,
@@ -28,8 +29,8 @@ export function validateLedgerFilePath(
 }
 
 export async function verifyParquetFiles(
-  root: string, ledger: "dispatches" | "rejections" | "article-assessments" | "diversity", written: PersistLedgerResult,
-  registration: LedgerRegistration,
+  root: string, ledger: "dispatches" | "rejections" | "article-assessments" | "diversity" | "source-runs", written: PersistLedgerResult,
+  registration: LedgerRegistration, expectedRows?: readonly object[],
 ) {
   if (registration.name !== ledger) throw new Error("registration.name differs from the requested ledger");
   if (written === undefined || written === null || !Array.isArray(written.files)) {
@@ -37,6 +38,7 @@ export async function verifyParquetFiles(
   }
   if (written.status === "empty") {
     if (written.files.length !== 0) throw new Error(`${ledger}.empty must have no files`);
+    if (expectedRows !== undefined && expectedRows.length !== 0) throw new Error(`${ledger}.rows differ from native empty result`);
     return { status: "verified_empty" as const, row_count: 0, files: [] };
   }
   if (written.status !== "written" || written.files.length === 0) {
@@ -45,6 +47,7 @@ export async function verifyParquetFiles(
   const rootPath = await realpath(root);
   const seen = new Set<string>();
   const verified = [];
+  const rows: object[] = [];
   let rowCount = 0;
   for (const file of written.files) {
     const path = validateLedgerFilePath(file.path, file.file_id, file.covers, registration);
@@ -63,14 +66,20 @@ export async function verifyParquetFiles(
         ? await readLedgerParquet(actualPath, ledger, { schema: CandidateRejectionRecordSchema, schemaVersion: CONTRACT_VERSION })
         : ledger === "article-assessments"
           ? await readLedgerParquet(actualPath, ledger, { schema: ArticleAssessmentRecordSchema, schemaVersion: CONTRACT_VERSION })
-          : await readLedgerParquet(actualPath, ledger, { schema: DiversityMetricRowSchema, schemaVersion: CONTRACT_VERSION });
+          : ledger === "diversity"
+            ? await readLedgerParquet(actualPath, ledger, { schema: DiversityMetricRowSchema, schemaVersion: CONTRACT_VERSION })
+            : await readLedgerParquet(actualPath, ledger, { schema: SourceRunRecordSchema, schemaVersion: CONTRACT_VERSION });
     if (actual.envelope.tier !== "raw" || actual.envelope.file_id !== file.file_id
       || actual.envelope.unit_id !== file.unit_id || actual.envelope.covers !== file.covers
       || actual.envelope.content_sha256 !== file.content_sha256 || actual.rows.length !== file.row_count) {
       throw new Error(`${ledger}.files envelope, content_sha256 or row_count differs from native readback`);
     }
     rowCount += actual.rows.length;
+    if (expectedRows !== undefined) rows.push(...actual.rows.map(held => held.row));
     verified.push({ path, content_sha256: actual.envelope.content_sha256, row_count: actual.rows.length });
+  }
+  if (expectedRows !== undefined && !isDeepStrictEqual(rows, expectedRows)) {
+    throw new Error(`${ledger}.rows differ from native readback`);
   }
   return { status: "verified" as const, row_count: rowCount, files: verified };
 }
@@ -87,6 +96,45 @@ export function verifyLedgerReceipt(ledger: string, written: PersistLedgerResult
       throw new Error(`${ledger}.receipt file_id, content_sha256 or row_count differs from actual writes`);
     }
   }
+}
+
+export async function verifyPlanningCompletion(root: string, summary: ReturnType<typeof summarizePlan>) {
+  const { readPlanningHistory } = await import("../../services/feed-ingest-plan/src/metrics/planning-populations");
+  const { selectCompleteAttempt } = await import("../../services/feed-ingest-plan/src/read-ledger-history/complete-attempt");
+  const metrics = summary.metrics;
+  const proof = summary.planning_completion;
+  if (!summary.planning_complete || proof === null || proof.status !== "complete"
+    || metrics === undefined || summary.source_records === null || summary.files.source_runs === undefined) {
+    throw new Error("planning_completion requires actual source records and all original ledger files");
+  }
+  const named = (files: readonly PersistLedgerResult[]) => ({
+    day: summary.date, rawFiles: files.flatMap(result => result.files.map(file => {
+      const path = file.path;
+      if (isAbsolute(path) || path.split("/").includes("..") || path.includes("\\")) {
+        throw new Error("planning_completion.files.path must be a relative POSIX path");
+      }
+      return resolve(root, ...path.split("/"));
+    })),
+  });
+  const history = await readPlanningHistory({
+    sources: named([summary.files.source_runs]), ledgers: {
+      "article-assessments": named([metrics.files.assessments]), diversity: named([metrics.files.diversity]),
+      "editorial-selections": named([summary.files.selections]), dispatches: named([summary.files.dispatches]),
+      rejections: named([summary.files.harvest_rejections, summary.files.screening_rejections, summary.files.curation_rejections]),
+    },
+  });
+  const selected = selectCompleteAttempt(history, summary.run_id).selected;
+  if (selected === null || selected.run_id !== proof.run_id || selected.date !== proof.date
+    || selected.attempt !== proof.attempt || selected.correlation_id !== proof.correlation_id
+    || selected.correlation_id !== summary.correlation_id
+    || selected.sources.length !== proof.source_count || !isDeepStrictEqual(selected.sources, summary.source_records)
+    || selected.sources.some(row => !isDeepStrictEqual(row.completion_evidence, proof.completion_evidence))
+    || !isDeepStrictEqual(proof, metrics.planning_completion)
+    || !isDeepStrictEqual(summary.files.source_runs, metrics.files.source_runs)
+    || !isDeepStrictEqual(summary.source_records, metrics.source_records)) {
+    throw new Error("planning_completion differs from original native selector proof");
+  }
+  return selected;
 }
 
 export async function verifyRecordedCompatibility() {

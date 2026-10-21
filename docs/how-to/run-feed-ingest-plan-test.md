@@ -14,17 +14,20 @@ off in `config/feed-ingest-plan-service.json`. Its removal condition requires
 the actual audit writes and complete-attempt verification to be integrated
 and approved. This workflow does not bypass that flag.
 
-The actual CLI entrypoint runs the stages and records article assessments
-and diversity measurements. It returns their real files and receipts with
-`assessment_diversity_recorded_audit_pending`; the overall plan still reports
-`dispatches_persisted_audit_pending` and `audited_complete: false`.
-The workflow calls that entrypoint once, not a separate recorder.
-The last workflow step
-refuses an unaudited result with exit code 2. A disabled runner, missing input,
+The actual CLI entrypoint runs the stages and records article assessments,
+diversity measurements and source completion records. A verified current raw
+attempt can report `planning_complete: true` separately from
+`audited_complete: false`. The workflow calls that entrypoint once, not a
+separate planning recorder. It reads the returned source records and all five
+required ledger file sets through the original completion selector before
+exposing per-run planning completion.
+
+The last workflow step still refuses an unaudited result with exit code 2.
+Per-run planning completion is not full-audit or publication acceptance.
+A disabled runner, missing input,
 invalid request or damaged file also fails; none becomes a successful empty
 plan. Green adapter tests do not certify hosted execution or audit completion.
 
-Source-complete records and complete-attempt verification remain unavailable.
 The recorder refuses unsupported publication timing, negative article ages
 or configured concentration counts outside the current contract before
 writing either measurement ledger. These failures produce no successful
@@ -89,7 +92,23 @@ results, and invoke the actual CLI to record assessment and diversity files.
 Native readback verifies both ledgers; their file identities, row counts and
 content digests must match the returned receipts. Missing files or mismatched
 receipts fail verification. Actual CLI runs with reporting off and on must
-produce the same stage and measurement ledger digests. No test makes a
+produce the same deterministic stage and measurement ledger digests; each
+run's complete source files are independently read and proved.
+
+The full-file reporting check uses one actual result. It reads every stage,
+measurement and source file before and after disabled and enabled reporting,
+and requires identical bytes and digests after each call. Independent runs
+cannot have identical source-file digests: source records retain measured
+fetch/parse durations and commitments to newly generated file identities.
+Those values are verified unchanged, never removed or normalized to pass.
+
+One generated publication fixture writes native published rows from the actual
+CLI's selected dispatch identities, plus a matching digest and settled health
+evidence. The real publication observer reads those files and the actual
+producer's source completion files, then writes independently verified native
+diversity and source-observation files. This fixture proves the observer
+boundary, not production publication or a complete historical window.
+No test makes a
 network request or starts Python. These checks do not claim that the Python
 reader ran, that live feeds are reachable, or that a hosted job meets a speed
 target.

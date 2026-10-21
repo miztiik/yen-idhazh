@@ -16,7 +16,7 @@ import { validateLedgerFilePath, verifyLedgerReceipt } from "./feed-ingest-plan-
 type PlanSummary = ReturnType<typeof summarizePlan>;
 type Registrations = Readonly<{
   dispatches: LedgerRegistration; rejections: LedgerRegistration; selections: LedgerRegistration; seen: LedgerRegistration;
-  assessments: LedgerRegistration; diversity: LedgerRegistration;
+  assessments: LedgerRegistration; diversity: LedgerRegistration; source_runs: LedgerRegistration;
 }>;
 
 function paths(result: PersistLedgerResult, entry: LedgerRegistration): string[] {
@@ -31,7 +31,10 @@ function paths(result: PersistLedgerResult, entry: LedgerRegistration): string[]
 }
 
 export function createExecutionOutputs(summary: PlanSummary, registrations: Registrations): Record<string, string> {
-  if (summary.status !== "dispatches_persisted_audit_pending" || summary.audited_complete !== false
+  if (summary.status !== (summary.planning_complete ? "planning_complete_audit_pending" : "dispatches_persisted_audit_pending")
+    || summary.planning_complete !== (summary.planning_completion?.status === "complete")
+    || summary.planning_complete !== (summary.metrics !== undefined)
+    || summary.audited_complete !== false
     || summary.audit.status !== (summary.metrics === undefined ? "unavailable" : "assessment_diversity_recorded_audit_pending")) {
     throw new Error("audited_complete requires durable recorder evidence; no complete audit is supported by this runner");
   }
@@ -84,6 +87,25 @@ export function createExecutionOutputs(summary: PlanSummary, registrations: Regi
       metricPaths.push(...filePaths);
     }
     metrics.metrics_status = summary.metrics.status;
+    if (!summary.planning_complete || summary.planning_completion === null || summary.files.source_runs === undefined
+      || registrations.source_runs.name !== "source-runs" || summary.source_records === null
+      || summary.planning_completion.source_count !== summary.source_records.length) {
+      throw new Error("planning_completion requires actual source-run evidence");
+    }
+    const sourcePaths = paths(summary.files.source_runs, registrations.source_runs);
+    metrics.source_run_files = JSON.stringify(sourcePaths);
+    metricPaths.push(...sourcePaths);
+    const rejectionResult: PersistLedgerResult = rejections.length === 0 ? { status: "empty", files: [] } : {
+      status: "written", files: [
+        ...summary.files.harvest_rejections.files, ...summary.files.screening_rejections.files,
+        ...summary.files.curation_rejections.files,
+      ],
+    };
+    for (const [key, ledger, files] of [
+      ["selections", "editorial-selections", summary.files.selections],
+      ["dispatches", "dispatches", summary.files.dispatches],
+      ["rejections", "rejections", rejectionResult],
+    ] as const) verifyLedgerReceipt(ledger, files, summary.metrics.receipts[key]);
   }
   const all = [...dispatches, ...selections, ...rejections, ...seen, ...metricPaths];
   if (new Set(all).size !== all.length) throw new Error("files.path occurs more than once");
@@ -92,7 +114,8 @@ export function createExecutionOutputs(summary: PlanSummary, registrations: Regi
     throw new Error("files.row_count differs from selected_candidate_ids");
   }
   return {
-    status: summary.status, audited_complete: "false", run_id: runId, date: day,
+    status: summary.status, planning_complete: String(summary.planning_complete),
+    audited_complete: "false", run_id: runId, date: day,
     dispatch_count: String(count),
     matrix: JSON.stringify({ include: Array.from({ length: count }, (_, worker_assignment) => ({ worker_assignment })) }),
     dispatch_files: JSON.stringify(dispatches), rejection_files: JSON.stringify(rejections),
