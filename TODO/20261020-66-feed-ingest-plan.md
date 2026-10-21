@@ -24,6 +24,20 @@ Record this separation in the owning persistence documentation before closure.
 
 ### Separate gate repair - 2026-10-21
 
+Row #6 merge blocker: CI run 39644823082 at writer head
+`bed0e6cc3080898644024a99200ec6a882a1dd1b` passes its TypeScript writer,
+site, browser and robots checks. The repository backend gate passes 7249 tests
+and fails two existing schedule checks after unrelated main commit
+`12b276024` adds digest runs at 00:20, 20:20 and 22:20 UTC.
+`backend/tests/workflows/test_triggers.py` still declares five approved hours
+and a history-rewrite overlap measurement for that earlier schedule.
+No writer code caused these failures. Keep Row #6 unmerged while CI is red.
+Restoring the earlier schedule gives up the three added runs; retaining them
+requires a separate measured schedule-safety repair and owner authorization
+for changes outside this TypeScript plan. Neither was authorized when the
+owner was unavailable. Do not add Python tests or silently change production
+scheduling to clear this blocker.
+
 Owner-directed scope change: repair the existing query-door EXPLAIN fixture
 check in a separate PR from main, not as a Plan 66 row. CI run 39608009522
 for PR #1607 passed 7185 backend tests and failed only
