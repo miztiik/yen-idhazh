@@ -1,6 +1,6 @@
 # Plan 66 - Feed ingest plan engine
 
-**Last Updated**: 2026-10-20
+**Last Updated**: 2026-10-21
 **Level**: 5 (source-kind/tier and persisted-contract migration requires owner approval before execution; the later planner implementation follows the approved contracts)
 
 Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0.
@@ -245,6 +245,26 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 ---
 
 ## 3. Status Reckoner
+
+Delivery checkpoint, 2026-10-21 22:46 UTC: all implementation PRs are merged
+into main. The final dependency landings were writer #1614, host #1615,
+harvesting #1618, screening #1616, curation #1617, partitioning #1619,
+runner #1620 (including audit #1621 and observer #1624), and workflow #1622.
+Each main-target candidate passed all five repository CI checks before its
+guarded squash merge. The last merge is
+`b60c1283c2b6a91bded06394234e3fe729e4c1a7`; its reviewed workflow candidate
+`d1d1827e822c0b2d9c1824f31a034b8669ce8d6c` passed CI run 39688288511.
+
+Implementation delivery is not full plan acceptance. Rows #10 through #14
+remain open for the contract decisions recorded below: first-seen clocks,
+signed article age, configurable top-source counts, next-day observations,
+original completion proof after compaction, and separate harvest and selection
+dates. Supported current planning has native completion proof. Full audit
+completion and a successful isolated full-audit workflow are not claimed;
+the separate full-audit gate still refuses incomplete audit evidence.
+The owner decision request offered a separate compatible contract-repair
+phase or an explicit scope reduction. The owner was unavailable and selected
+neither, so neither a Python exception nor a scope reduction is authorized.
 
 ### Table D - Status Reckoner
 
