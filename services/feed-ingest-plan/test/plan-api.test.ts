@@ -12,8 +12,10 @@ import type { PersistedLedgerFile } from "@idhazh/ledger-file-writer";
 import { readLedgerParquet } from "../src/read-ledger-history/read-parquet";
 import { SeenRowSchema } from "../src/screen-article-candidates/seen-evidence";
 import { source } from "./harvest-recordings";
-import { ArticleAssessmentRecordSchema, CONTRACT_VERSION, DiversityMetricRowSchema } from "@idhazh/common-contracts";
+import { ArticleAssessmentRecordSchema, CONTRACT_VERSION, DiversityMetricRowSchema, SourceRunRecordSchema } from "@idhazh/common-contracts";
 import { existsSync } from "node:fs";
+import { readPlanningHistory } from "../src/metrics/planning-populations";
+import { selectCompleteAttempt } from "../src/read-ledger-history/complete-attempt";
 
 test("health is explicit; disabled, malformed, oversized and unknown controls cannot fetch", async () => {
   const inputs = await loadPlanInputs(fileURLToPath(new URL("../../../", import.meta.url)));
@@ -61,7 +63,7 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ freshness_hours: 18, article_limit: 1, partition_strategy: "none" }),
     });
-    expect(response.status).toBe(409);
+    expect(response.status).toBe(200);
     const apiResult = await response.json();
     const printed: unknown[] = [];
     const cliResult = await main([
@@ -69,6 +71,8 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     ], { inputs: cli.inputs, runtime: cli.runtime, output: value => { printed.push(value); } });
     if (!("audited_complete" in cliResult)) throw new Error("CLI unexpectedly started a server");
     expect(cliResult.audited_complete).toBe(false);
+    expect(cliResult.planning_complete).toBe(true);
+    expect(cliResult.status).toBe("planning_complete_audit_pending");
     expect(printed).toEqual([cliResult]);
     for (const field of ["run_id", "correlation_id", "date", "observed_at", "request",
       "strategy", "dispatch_count", "selected_candidate_ids", "assignments", "audit", "status"] as const) {
@@ -100,9 +104,58 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
       expect(measured.rows.length).toBe(metrics.receipts.diversity.row_count);
       expect(metrics.receipts.assessments.files[0]!.content_sha256).toBe(assessed.envelope.content_sha256);
       expect(metrics.receipts.diversity.files[0]!.content_sha256).toBe(measured.envelope.content_sha256);
-      expect(existsSync(join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan", "source-runs"))).toBe(false);
+      const sourceFile = summary.files.source_runs!.files[0]!;
+      const sources = await readLedgerParquet(join(recorded.inputs.outputRoot, sourceFile.path), "source-runs", {
+        schema: SourceRunRecordSchema, schemaVersion: CONTRACT_VERSION,
+      });
+      expect(sources.rows.map(row => row.row)).toEqual(summary.source_records!);
+      expect(sources.envelope.content_sha256).toBe(sourceFile.content_sha256);
+      const paths = (files: readonly { path: string }[]) => ({
+        day: summary.date, rawFiles: files.map(file => join(recorded.inputs.outputRoot, file.path)),
+      });
+      const history = await readPlanningHistory({
+        sources: paths(summary.files.source_runs!.files),
+        ledgers: {
+          "article-assessments": paths(metrics.files.assessments.files),
+          diversity: paths(metrics.files.diversity.files),
+          "editorial-selections": paths(summary.files.selections.files),
+          dispatches: paths(summary.files.dispatches.files),
+          rejections: paths([
+            ...summary.files.harvest_rejections.files, ...summary.files.screening_rejections.files,
+            ...summary.files.curation_rejections.files,
+          ]),
+        },
+      });
+      const selected = selectCompleteAttempt(history, summary.run_id).selected!;
+      expect(selected).not.toBeNull();
+      expect(summary.planning_completion).toMatchObject({
+        status: "complete", date: selected.date, run_id: selected.run_id,
+        attempt: selected.attempt, correlation_id: selected.correlation_id, source_count: selected.sources.length,
+      });
+      expect(selected.sources).toEqual(summary.source_records!);
+      expect(summary.planning_completion!.completion_evidence).toHaveLength(5);
     }
   } finally { await Promise.all([api.close(), cli.close()]); }
+}, 30000);
+
+test("a required source write failure returns an API error, not proven planning completion", async () => {
+  const recorded = await recordedPlan();
+  try {
+    const raw = join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan");
+    await mkdir(raw, { recursive: true });
+    await writeFile(join(raw, "source-runs"), "A file cannot hold source records.");
+    const app = createPlanApp(recorded.inputs, recorded.runtime);
+    const response = await app.request("/api/2026-10-20/plan", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+    });
+    expect(response.status).toBe(500);
+    const failed = await response.json();
+    expect(failed.code).toBe("PLAN_FAILED");
+    expect(failed).not.toHaveProperty("planning_complete");
+    expect(failed).not.toHaveProperty("planning_completion");
+    expect(existsSync(join(raw, "article-assessments"))).toBe(true);
+    expect(existsSync(join(raw, "diversity"))).toBe(true);
+  } finally { await recorded.close(); }
 }, 30000);
 
 test("one listener coordinates concurrent real requests and retains only its durable seen receipts", async () => {

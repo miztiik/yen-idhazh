@@ -131,6 +131,7 @@ test("real composition shares one clock and override and reads native dispatches
     expect(rows[0]!.selection.policy).toEqual(rows[0]!.content.policy);
     expect(summarizePlan(result)).toMatchObject({
       audited_complete: false, dispatch_count: 1, status: "dispatches_persisted_audit_pending",
+      planning_complete: false, planning_completion: null, source_records: null,
     });
     expect(recorded.inputs.harvest.config.curate.article_limit).toBeNull();
     expect(recorded.inputs.harvest.config.triage.max_age_hours).toBe(24);
@@ -246,7 +247,30 @@ test("named input loader works from a generated configuration root without any b
     await writeFile(join(configDirectory, "feed-ingest-plan-service.json"), JSON.stringify(authored));
     const loaded = await loadPlanInputs(recorded.directory);
     expect(loaded.harvest.config.version).toBe("2026-10-20");
+    expect(loaded.registrations.source_runs).toEqual({
+      name: "source-runs", family: "feed-ingest-plan", grain: "raw-and-compact",
+      lifecycle_status: "active", prefix: ["feed-ingest-plan", "source-runs"],
+    });
     expect(existsSync(join(recorded.directory, "backend"))).toBe(false);
+    const registryPath = join(recorded.directory, paths.registrations);
+    const registry = await Bun.file(registryPath).json();
+    const familyIndex = registry.families.findIndex((family: { name: string }) => family.name === "feed-ingest-plan");
+    const ledgerIndex = registry.families[familyIndex].ledgers.findIndex((ledger: { name: string }) => ledger.name === "source-runs");
+    for (const invalid of ["paused", "retired", "family", "prefix", "grain", "missing", "duplicate"] as const) {
+      const changed = structuredClone(registry);
+      const family = changed.families[familyIndex];
+      const ledger = family.ledgers[ledgerIndex];
+      if (invalid === "paused" || invalid === "retired") family.lifecycle_status = invalid;
+      if (invalid === "family") family.name = "other-family";
+      if (invalid === "prefix") ledger.prefix = ["feed-ingest-plan", "other-ledger"];
+      if (invalid === "grain") ledger.grain = "daily";
+      if (invalid === "missing") family.ledgers.splice(ledgerIndex, 1);
+      if (invalid === "duplicate") family.ledgers.push(structuredClone(ledger));
+      await writeFile(registryPath, JSON.stringify(changed));
+      await expect(loadPlanInputs(recorded.directory)).rejects.toThrow();
+    }
+    await writeFile(registryPath, JSON.stringify(registry));
+    expect((await loadPlanInputs(recorded.directory)).registrations.source_runs).toEqual(loaded.registrations.source_runs);
   } finally { await recorded.close(); }
 });
 

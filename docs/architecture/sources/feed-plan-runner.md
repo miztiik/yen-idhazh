@@ -151,23 +151,39 @@ not a recomputed explanation of the final portfolio.
 also the recorder's input, so its type does not depend on its own audit output.
 The API and awaited CLI require `recordPlanningMetrics` to finish before
 returning a summary. Their `RecordedFeedPlanResult` adds `metrics`, containing
-actual assessment and diversity files, validated completion receipts, internal
-source summaries, measured evidence and remaining unavailable reasons.
-`summarizePlan` retains these under `metrics`; `files` still holds the original
-stage files. Neither source summaries nor ledger receipts claim source or
-attempt completion. No source-complete file or event is emitted.
+actual assessment, diversity and source-run files, validated completion
+receipts, source records, measured evidence and remaining unavailable reasons.
+After checking all five required ledger receipts, the recorder writes existing
+`SourceRunRecord` rows and reads the new raw files through
+`readPlanningHistory` and `selectCompleteAttempt`. Only the exact current run,
+attempt and correlation identity can supply `planning_completion`.
+`summarizePlan` retains the recorder result under `metrics` and exposes its
+actual `source_records` and `planning_completion` at the top level. `files`
+keeps the original stage files and adds the actual `source_runs` write result.
 
-For representable runs, `metrics.status` and `audit.status` are
-`assessment_diversity_recorded_audit_pending`; `audited_complete` remains
-false. The API returns HTTP 409 and the CLI exits with code 2 after writing
-this partial summary. `main(args, {inputs, runtime, output})` returns that
-same summary to an awaited caller; only the standalone process sets its exit
-code. This is not a queued job or a promise of later completion.
+For a proven representable current run, `planning_complete` is true and
+`status` is `planning_complete_audit_pending`. The API returns HTTP 200 and the
+standalone CLI exits with code 0: the requested planning work succeeded.
+`planning_completion` names its verified date, run, attempt, correlation,
+source count and five ledger commitments. The recorder's narrower
+`metrics.status` and `audit.status` remain
+`assessment_diversity_recorded_audit_pending`; `audited_complete` stays false.
+This result does not certify publication, rolling history or a full audit.
+The workflow's separate full-audit gate can still exit with code 2.
+`main(args, {inputs, runtime, output})` returns the same summary to an awaited
+caller; only the standalone process sets its exit code. A base stage result
+without recorder proof remains `planning_complete: false` with its original
+pending status, never a fabricated completion.
 Invalid requests exit with code 1; disabled HTTP requests return 503.
 Persistence errors fail rather than returning a complete-looking result.
 Already durable immutable files may remain after a later failure.
 The public `loadPlanInputs` result also exposes actual `seen`, `assessments`
 and `diversity` ledger registrations for downstream native writes.
+Its `registrations.source_runs` exposes the existing `source-runs` registration
+from the named ledger config. Loading requires exactly one such ledger, active
+under `feed-ingest-plan`, with `raw-and-compact` grain and the registered
+`["feed-ingest-plan", "source-runs"]` prefix. Invalid registration fails loading;
+exposing it does not write a source record or change audit-pending status.
 
 The recorder preflights the whole attempt before any audit write. First-sight
 timing, signed negative publication ages and unsupported `top_k` concentration
@@ -176,9 +192,9 @@ observation is skipped or rewritten to fit the persisted assessment contract.
 The API returns an error with HTTP 500, and the standalone CLI exits with
 code 1 without printing a summary. Required native write or readback failures
 also throw; earlier durable files may remain but no completion is reported.
-Final source snapshots and complete-attempt verification still require their
-own approved contract work. No flag or success-shaped fallback bypasses the
-required recorder.
+Source-run persistence or native completion verification failures also prevent
+any successful summary. No flag or success-shaped fallback bypasses the
+required recorder or its exact-attempt selector.
 
 Known integration limits remain explicit. Packed files cannot prove the
 original completion-file ordered hashes after raw deletion with the current
@@ -210,10 +226,11 @@ The small recorded article fixture is shorter than the default article
 threshold. Its harness uses a validated 100-word article threshold, retaining
 the original recorded HTML and real extractor. It does not replace extraction
 or change the shipped 180-word setting.
-The real API/awaited-CLI parity test reads the assessment and diversity output
-through the native reader and compares their actual receipt hashes and row
-counts. Entry tests also prove whole-audit refusal for unsupported timing or
-counts and no successful output on a required audit write failure.
+The real API/awaited-CLI parity test reads assessment, diversity and source
+output through the native reader, compares actual hashes and rows, and runs
+the real history reader and attempt selector against every named output file.
+Entry tests also prove whole-audit refusal for unsupported timing or counts
+and no successful output on a required source write failure.
 
 ## Design rationale
 

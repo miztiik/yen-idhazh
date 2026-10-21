@@ -15,6 +15,7 @@ export function planRoute(execute: (request: PlanRequest) => Promise<RecordedFee
     }
     const request = PlanRequestSchema.parse(raw);
     const result = await execute(request);
-    return c.json(summarizePlan(result), 409);
+    const summary = summarizePlan(result);
+    return c.json(summary, summary.planning_complete ? 200 : 409);
   });
 }

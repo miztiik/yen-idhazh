@@ -63,8 +63,8 @@ Counts must be nonnegative safe integers; a ratio numerator cannot exceed its
 denominator. Empty ratio denominators produce a null value with
 `empty_denominator`. No result is NaN or infinity.
 
-Publication and lead effective-source readings, published Gini and published
-concentration stay unavailable with `missing_publication`. Historical overlaps
+At planning time, publication and lead effective-source readings, published Gini
+and published concentration stay unavailable with `missing_publication`. Historical overlaps
 and novel-source contribution stay unavailable with `incomplete_history`;
 event repetition stays unavailable with `missing_event_evidence`. Each
 history-dependent row names its configured window. Unknown item counts and
@@ -75,7 +75,72 @@ publication-stage loss is fabricated. The existing loss-row validator requires
 real before and after values even for an unavailable row. The recorder reports
 that unavailable measurement in its returned `unavailable` explanation instead
 of writing a false row. Rolling metrics likewise remain explicitly unavailable
-in the recorder result until a complete historical membership window is supplied.
+in the planning recorder result. The publication recorder can calculate them
+when their actual bounded membership inputs are supplied.
+
+## Publication and history observations
+
+The publication observer reads only named published-ledger Parquet files and the
+named day's digest. Published URL and item identities must agree with that digest.
+The digest's run reference identifies the introducing run. Where an old digest
+does not name a run, a matching settled successful terminal item-health record
+may identify it. An ordinal alone never assigns an old item to the latest run.
+Retry copies count once. Missing source kind remains unknown, not today's kind.
+The digest's completion can be after midnight without changing its publication day.
+
+History reads exactly the configured rolling days plus the larger of that window
+and its configured overlap windows. The default seven-day measurement and
+seven-day reference require fourteen named UTC days. A known-empty day
+contributes zero articles. Missing and lost days reduce reported coverage and
+make affected readings unavailable. Today's day remains partial until its UTC
+end; an explicitly named earlier end can measure a completed window.
+
+Source overlap unions all measured source sets and their corresponding prior-day
+reference sets before calculating intersection and union. Novel-source shares
+deduplicate article identities and use history before each publication day.
+Neither calculation averages daily ratios or treats another run on the same
+day as another historical novelty event.
+
+Event readings use existing recorded pair decisions, never within-run cluster
+numbers as global event identifiers. Every needed pair must carry sorted URL
+keys, their recomputed pair identity, agreeing usable YES or NO verdicts, and
+compatible complete recorded scorer and judge stamps. Missing, incompatible
+or unclear decisions make the reading unavailable. The existing same-outlet
+rule and unchanged ASCII headline-figure veto constrain positive decisions.
+Every member of an event group must match every other member; pair chains alone
+cannot merge events. Group names exist only inside this bounded calculation.
+No matching policy, model call or new stored event identity is introduced.
+
+## Durable per-run and rolling readings
+
+The publication recorder derives the complete measured run subset itself. A
+missing named run is unavailable, not an invented zero. An explicitly recorded
+zero-addition run is measurable. Native planning history is settled per run
+before combining days; an incomplete newer retry cannot erase an older complete
+attempt. Missing original file membership after packing remains unavailable.
+Assessments, selections, terminal losses and source counts must reconcile.
+
+Rolling eligible populations union unique candidate identities, including their
+distinct source carriers. Selected and published populations instead union
+unique article URLs, retaining the first recorded primary attribution and kind.
+Active source denominators union the retained active snapshots and keep zeros.
+All counts and sets are combined before entropy, concentration, Gini or ratios
+are calculated; daily ratios are never averaged. Published Gini is unavailable
+without complete active snapshots or when a published source is outside them.
+
+Publication and lead distributions can be measured independently of missing
+planning completion. Eligible/selected distributions and their stage losses
+require complete planning evidence. Publication-stage loss needs both complete
+selected and published populations. Coverage counts only complete relevant UTC
+days for each reading. Today's partial day cannot be a complete rolling
+observation; a named run's observed publication counts remain measurable.
+A known-empty numerator remains an available count of zero. Its zero-denominator
+ratio is unavailable; missing history makes both measurements unavailable.
+
+Event titles and outlet names are taken from the same named digest item and URL
+used by publication reconciliation. An unchecked caller item cannot remove a
+same-outlet or figure-conflict veto. Missing titles leave affected event readings
+unavailable. Source and article readings do not require event evidence.
 
 ## See also
 
