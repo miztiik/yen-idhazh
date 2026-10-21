@@ -13,3 +13,5 @@ export * from "./schemas/article-assessment.schema";
 export * from "./schemas/diversity.schema";
 export * from "./schemas/editorial-selection.schema";
 export * from "./schemas/event.schema";
+export * from "./schemas/policy.schema";
+export * from "./schemas/config.schema";
