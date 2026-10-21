@@ -1,6 +1,6 @@
 # How the query door answers a written question
 
-**Last Updated**: 2026-10-09
+**Last Updated**: 2026-10-21
 
 The query door can run one operator-written, read-only DuckDB statement over the ledgers and UTC days the page chose. The statement sees views, not files.
 
@@ -117,6 +117,18 @@ A question this browser keeps, saved or recently run, is read back with the same
 The engine module is unchanged. The only module importing `@duckdb/duckdb-wasm` remains `frontend/src/lib/data/engine.ts`. The browser's shipped `connect-src` policy applies to the engine worker, so a statement that tries to read an unlisted origin is refused by the browser. The boundary test builds its support page with the same policy directives as `svelte.config.js` and asserts the refused request never reaches the network.
 
 ## Design rationale
+
+**EXPLAIN fixtures preserve meaning, not native engine drawings.** The backend
+fixture check requires the `explain_key` and `explain_value` columns, one
+`physical_plan` row, and the constant query's projection, `one` alias and dummy
+scan in both native DuckDB output and
+`tests/fixtures/ledger-door/answers/explain.json`. Case, underscores, box
+characters and spacing are not part of that meaning. Native DuckDB and
+DuckDB-Wasm can draw the same plan differently, so comparing their drawings
+exactly would reject a supported engine update without finding a query fault.
+Every other answer fixture still compares exactly. The browser reader still
+runs EXPLAIN without a wrapper and checks its answer against the unchanged
+fixture; production behavior and dependency ranges do not change.
 
 **The next run and its answer count the same calendar span.** A selected window can include days before a ledger started or after it stopped. Pricing those as days the run reads overstates its reach. The action line uses the existing planner's bounds through `SpanCost`, rather than another copy of the date rule in the page. One calendar span keeps overlapping dates from being counted once per ledger, and keeps the count consistent with the answer's span line. The estimate remains separate from the actual answer because an archive file can fail after it was priced.
 
