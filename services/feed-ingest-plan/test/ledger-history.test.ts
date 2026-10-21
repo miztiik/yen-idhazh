@@ -1,5 +1,5 @@
 /** Does named native history retain original identities and distinguish proof from missing evidence? */
-import { expect, test } from "bun:test";
+import { beforeAll, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -12,7 +12,7 @@ import type { LedgerCompletionEvidence } from "@idhazh/common-contracts";
 import { appendIdentityColumns, describeObjectSchema, digestRows, persistLedger } from "@idhazh/ledger-file-writer";
 import type { PersistLedgerResult, StoredLedgerRow } from "@idhazh/ledger-file-writer";
 import { Int64, tableFromIPC, vectorFromArray } from "apache-arrow";
-import { Table as WasmTable, WriterPropertiesBuilder, readMetadata, readParquet, writeParquet } from "parquet-wasm/esm";
+import initializeParquet, { Table as WasmTable, WriterPropertiesBuilder, readMetadata, readParquet, writeParquet } from "parquet-wasm/esm";
 import { tableToIPC } from "apache-arrow";
 import { readLedgerParquet } from "../src/read-ledger-history/read-parquet";
 import { readLedgerDay } from "../src/read-ledger-history/read-period";
@@ -23,6 +23,7 @@ import { partitionArticles, persistDispatches } from "../src/partition-article-s
 import { fixtureInput, readWritten, registration, settings, writer, writeRows } from "./partition-fixtures";
 
 const selectionContract = { schema: EditorialSelectionRowSchema, schemaVersion: CONTRACT_VERSION };
+beforeAll(async () => { await initializeParquet(); });
 function evidence(ledger: LedgerCompletionEvidence["ledger"], written: PersistLedgerResult): LedgerCompletionEvidence {
   if (written.status === "skipped") throw new Error("Fixture completion ledger was skipped");
   return {
@@ -94,17 +95,43 @@ async function compactSelections(
   return { path, indexPath, index };
 }
 
-test("raw, daily, monthly and yearly native reads preserve original row identity and coarser precedence", async () => {
+test("native raw and daily reads preserve original writer identity instead of the compactor identity", async () => {
   const root = await mkdtemp(join(tmpdir(), "history-periods-"));
   try {
     const input = await fixtureInput(root, { count: 1 });
     const raw = await readWritten(root, "editorial-selections", input.fixture.date, selectionContract, input.persisted.selections);
-    const indexes: Partial<Record<"daily" | "monthly" | "yearly", string>> = {};
     expect(raw.tier).toBe("raw");
     expect(raw.rows).toHaveLength(1);
     const original = raw.rows[0]!;
-    for (const period of ["daily", "monthly", "yearly"] as const) {
-      const compact = await compactSelections(root, input, raw.rows, period);
+    const compact = await compactSelections(root, input, raw.rows, "daily");
+    const current = await readLedgerDay({
+      ledger: "editorial-selections", day: input.fixture.date, contract: selectionContract,
+      indexes: { daily: compact.indexPath }, rawFiles: input.persisted.selections.files.map(file => join(root, file.path)),
+    });
+    expect(current.tier).toBe("daily");
+    expect(current.rows).toEqual([original]);
+    expect(current.files[0]!.envelope.identity.attempt).toBe(9);
+    expect(current.rows[0]!.identity.attempt).toBe(1);
+    expect(current.rows[0]!.identity.shard).toBe(0);
+    expect(current.rows[0]!.identity.unit_id).toBe(original.identity.unit_id);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("native monthly and yearly precedence reads only the requested day's original rows", async () => {
+  const root = await mkdtemp(join(tmpdir(), "history-coarse-periods-"));
+  try {
+    const input = await fixtureInput(root, { count: 1 });
+    const raw = await readWritten(root, "editorial-selections", input.fixture.date, selectionContract, input.persisted.selections);
+    const original = raw.rows[0]!;
+    const otherDay = "2026-10-20";
+    const neighbor = await writeRows(root, "editorial-selections", otherDay, EditorialSelectionRowSchema,
+      [{ ...original.row, date: otherDay }], writer(input.fixture.run_id));
+    const neighborRows = await readWritten(root, "editorial-selections", otherDay, selectionContract, neighbor);
+    const indexes: Partial<Record<"daily" | "monthly" | "yearly", string>> = {};
+    const daily = await compactSelections(root, input, raw.rows, "daily");
+    indexes.daily = daily.indexPath;
+    for (const period of ["monthly", "yearly"] as const) {
+      const compact = await compactSelections(root, input, [...raw.rows, ...neighborRows.rows], period);
       indexes[period] = compact.indexPath;
       const current = await readLedgerDay({
         ledger: "editorial-selections", day: input.fixture.date, contract: selectionContract, indexes,
@@ -116,18 +143,9 @@ test("raw, daily, monthly and yearly native reads preserve original row identity
       expect(current.rows[0]!.identity.attempt).toBe(1);
       expect(current.rows[0]!.identity.shard).toBe(0);
       expect(current.rows[0]!.identity.unit_id).toBe(original.identity.unit_id);
-      if (period !== "daily") expect(current.notices.some(notice => notice.startsWith("overlapping-periods"))).toBe(true);
+      expect(current.files[0]!.rows).toHaveLength(2);
+      expect(current.notices.some(notice => notice.startsWith("overlapping-periods"))).toBe(true);
     }
-    const otherDay = "2026-10-20";
-    const neighbor = await writeRows(root, "editorial-selections", otherDay, EditorialSelectionRowSchema,
-      [{ ...original.row, date: otherDay }], writer(input.fixture.run_id));
-    const neighborRows = await readWritten(root, "editorial-selections", otherDay, selectionContract, neighbor);
-    const compact = await compactSelections(root, input, [...raw.rows, ...neighborRows.rows], "monthly");
-    const onlyRequested = await readLedgerDay({
-      ledger: "editorial-selections", day: input.fixture.date, contract: selectionContract, indexes: { monthly: compact.indexPath },
-    });
-    expect(onlyRequested.files[0]!.rows).toHaveLength(2);
-    expect(onlyRequested.rows).toEqual([original]);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
