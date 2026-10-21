@@ -2,15 +2,17 @@
 import { expect, test } from "bun:test";
 import { deriveUrlKey } from "@idhazh/common-contracts";
 import {
-  buildHistoryWindow, novelSourceContribution, requiredHistoryDays, shiftUtcDay, sourceOverlap, unavailableEvents,
+  buildHistoryWindow, eventOverlap, eventRepetitionRate, novelSourceContribution, requiredHistoryDays, shiftUtcDay, sourceOverlap, unavailableEvents,
 } from "../src/metrics/history-window";
 import type { PublicationDay } from "../src/metrics/history-window";
-import { uniquePublishedArticles } from "../src/metrics/fingerprint-dedup";
+import { groupPublishedEvents, recordedPairKey, uniquePublishedArticles } from "../src/metrics/fingerprint-dedup";
 import type { PublishedArticle } from "../src/metrics/fingerprint-dedup";
+import { RecordedEventPairSchema } from "../src/metrics/publication-evidence";
+import type { RecordedEventEvidence } from "../src/metrics/publication-evidence";
 
 const asOf = "2026-10-21T12:00:00Z";
 function article(date: string, source: string, n = 1, kind = "reporting"): PublishedArticle {
-  return { date, run_id: `${date}-${n}`, item_id: `ai-${source}-${n}0`, url_key: deriveUrlKey(`${date}/${source}/${n}`),
+  return { date, run_id: `${date}-${n}`, item_id: `ai-${source}-${n}0`, url_key: deriveUrlKey(`https://example.org/${date}/${source}/${n}`),
     source_id: source, source_kind: kind, lead: false };
 }
 function days(settings = { rolling_window_days: 2, overlap_windows_days: [1, 3] }, through = "2026-10-20"): PublicationDay[] {
@@ -27,6 +29,91 @@ test("default seven-day measurement plus seven-day reference names exactly fourt
   expect(shiftUtcDay("2024-03-01", -1)).toBe("2024-02-29");
   expect(() => shiftUtcDay("2026-02-30", 0)).toThrow("calendar");
   expect(() => requiredHistoryDays(asOf, { rolling_window_days: 7, overlap_windows_days: [] })).toThrow();
+});
+
+async function eventEvidence(
+  articles: readonly PublishedArticle[], events: readonly string[],
+): Promise<RecordedEventEvidence> {
+  const fixture = await Bun.file(new URL("../../../tests/fixtures/feed-ingest-plan/publication-evidence.json", import.meta.url)).json();
+  const items = articles.map((article, index) => ({
+    item_id: article.item_id, source_url: `https://example.org/${article.date}/${article.source_id}/${article.run_id.split("-").at(-1)}`,
+    title: `Recorded event ${events[index]}`, source_name: article.source_id,
+  }));
+  const pairs = articles.flatMap((left, index) => articles.slice(index + 1).map((right, offset) => {
+    const [a, b] = [left.url_key, right.url_key].sort();
+    const verdict = events[index] === events[index + offset + 1] ? "YES" : "NO";
+    return RecordedEventPairSchema.parse({
+      ...fixture.event_stamp, left_url_key: a, right_url_key: b,
+      pair_key: recordedPairKey(a!, b!), verdict, verdict_swapped: verdict, usable: true,
+    });
+  }));
+  return { items, pairs };
+}
+test("complete compatible recorded pairs yield true repetition and union-first event overlap", async () => {
+  const input = days();
+  const articles = [
+    article("2026-10-18", "a"), article("2026-10-19", "b"),
+    article("2026-10-19", "c"), article("2026-10-20", "d"),
+  ];
+  hold(input, "2026-10-18", [articles[0]!]);
+  hold(input, "2026-10-19", articles.slice(1, 3));
+  hold(input, "2026-10-20", articles.slice(3));
+  const window = buildHistoryWindow(asOf, { rolling_window_days: 2, overlap_windows_days: [1, 3] }, input, "2026-10-20");
+  const evidence = await eventEvidence(articles, ["fire", "fire", "flood", "fire"]);
+  const current = articles.slice(1);
+  expect(eventRepetitionRate(window, [...current, current[0]!], 1, evidence)).toMatchObject({
+    numerator: 2, denominator: 3, value: 2 / 3, unavailable_reason: null,
+  });
+  expect(eventOverlap(window, current, 1, evidence)).toMatchObject({
+    numerator: 2, denominator: 2, value: 1, unavailable_reason: null,
+  });
+  const sameDayInput = days();
+  hold(sameDayInput, "2026-10-19", articles.slice(1, 3));
+  const sameDay = buildHistoryWindow(asOf, { rolling_window_days: 2, overlap_windows_days: [1, 3] }, sameDayInput, "2026-10-20");
+  const sameEvent = await eventEvidence(articles.slice(1, 3), ["fire", "fire"]);
+  expect(eventRepetitionRate(sameDay, articles.slice(1, 3), 1, sameEvent, ["2026-10-19"]).value).toBe(0);
+});
+test("missing, unclear and incompatible complete-pair evidence cannot turn into zero repetition", async () => {
+  const articles = [article("2026-10-19", "a"), article("2026-10-20", "b"), article("2026-10-20", "c")];
+  const input = days();
+  hold(input, "2026-10-19", articles.slice(0, 1));
+  hold(input, "2026-10-20", articles.slice(1));
+  const window = buildHistoryWindow(asOf, { rolling_window_days: 2, overlap_windows_days: [1, 3] }, input, "2026-10-20");
+  const evidence = await eventEvidence(articles, ["fire", "fire", "flood"]);
+  const variants: (RecordedEventEvidence | undefined)[] = [
+    undefined, { ...evidence, pairs: evidence.pairs.slice(1) },
+    { ...evidence, pairs: evidence.pairs.map((pair, i) => i === 0 ? { ...pair, verdict: "UNCLEAR", verdict_swapped: "UNCLEAR" } : pair) },
+    { ...evidence, pairs: evidence.pairs.map((pair, i) => i === 0 ? { ...pair, prompt_digest: "c".repeat(64) } : pair) },
+    { ...evidence, pairs: evidence.pairs.map((pair, i) => i === 0 ? { ...pair, usable: false } : pair) },
+  ];
+  for (const variant of variants) {
+    expect(eventRepetitionRate(window, articles.slice(1), 1, variant, ["2026-10-20"])).toMatchObject({
+      value: null, numerator: null, denominator: null, unavailable_reason: "missing_event_evidence",
+    });
+    expect(eventOverlap(window, articles.slice(1), 1, variant, ["2026-10-20"]).unavailable_reason).toBe("missing_event_evidence");
+  }
+  const bad = { ...evidence.pairs[0]!, pair_key: "a".repeat(64) };
+  expect(() => groupPublishedEvents(articles, { ...evidence, pairs: [bad] })).toThrow("pair identity");
+});
+test("figure conflicts, same-outlet rules and complete-link groups constrain positive recorded matches", async () => {
+  const articles = [article("2026-10-19", "a"), article("2026-10-20", "b"), article("2026-10-20", "c")];
+  const evidence = await eventEvidence(articles, ["fire", "fire", "fire"]);
+  const chain = { ...evidence, pairs: evidence.pairs.map(pair =>
+    pair.pair_key === recordedPairKey(articles[0]!.url_key, articles[2]!.url_key)
+      ? { ...pair, verdict: "NO" as const, verdict_swapped: "NO" as const } : pair) };
+  const grouped = groupPublishedEvents(articles, chain);
+  expect(grouped.availability).toBe("available");
+  expect(grouped.groups.get(articles[0]!.url_key)).not.toBe(grouped.groups.get(articles[2]!.url_key));
+  const two = articles.slice(0, 2);
+  const pair = await eventEvidence(two, ["fire", "fire"]);
+  for (const titles of [["Budget 2025", "Budget 2026"], ["Budget 25 million", "Budget 50 million"]]) {
+    const result = groupPublishedEvents(two, { ...pair, items: pair.items.map((item, i) => ({ ...item, title: titles[i]! })) });
+    expect(new Set(result.groups.values()).size).toBe(2);
+  }
+  const sameOutlet = groupPublishedEvents(two, { ...pair, items: pair.items.map(item => ({ ...item, source_name: "One outlet" })) });
+  expect(new Set(sameOutlet.groups.values()).size).toBe(2);
+  const unsupported = groupPublishedEvents(two, { ...pair, items: pair.items.map(item => ({ ...item, title: "\u0ba4\u0bae\u0bbf\u0bb4\u0bcd" })) });
+  expect(unsupported.availability).toBe("unavailable");
 });
 test("rolling overlap unions current/reference source sets instead of averaging day ratios", () => {
   const input = days();

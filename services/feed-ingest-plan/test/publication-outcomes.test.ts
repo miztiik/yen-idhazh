@@ -8,10 +8,10 @@ import initializeParquet from "parquet-wasm/esm";
 import { CONTRACT_VERSION, deriveUrlKey } from "@idhazh/common-contracts";
 import { persistLedger } from "@idhazh/ledger-file-writer";
 import {
-  DigestPublicationSchema, ItemHealthPublicationSchema, PublishedRowSchema,
+  DigestEventItemSchema, DigestPublicationSchema, ItemHealthPublicationSchema, PublishedRowSchema, RecordedEventPairSchema,
 } from "../src/metrics/publication-evidence";
 import type { DigestPublication, ItemHealthPublication } from "../src/metrics/publication-evidence";
-import { reconcilePublication } from "../src/metrics/publication-outcomes";
+import { readPublicationDay, reconcilePublication } from "../src/metrics/publication-outcomes";
 import { readLedgerDay } from "../src/read-ledger-history/read-period";
 import { settings, writer } from "./partition-fixtures";
 
@@ -40,6 +40,11 @@ test("read projections bind the recorded field sets, scalar types and terminal v
   expect(Object.keys(DigestPublicationSchema.shape.runs.element.shape)).toEqual(bindings.DigestPublication.run_fields);
   expect(Object.keys(DigestPublicationSchema.shape.items.element.shape)).toEqual(bindings.DigestPublication.item_fields);
   expect(Object.keys(DigestPublicationSchema.shape.leads.unwrap().element.shape)).toEqual(bindings.DigestPublication.lead_fields);
+  expect(Object.keys(DigestEventItemSchema.shape)).toEqual(bindings.DigestEventItem.fields);
+  expect(Object.keys(RecordedEventPairSchema.shape)).toEqual(bindings.RecordedEventPair.fields);
+  expect(RecordedEventPairSchema.shape.verdict.unwrap().options).toEqual(bindings.RecordedEventPair.verdicts);
+  expect(RecordedEventPairSchema.shape.scorer_model.value).toBe(bindings.RecordedEventPair.scorer_model);
+  expect(RecordedEventPairSchema.shape.judge_model.unwrap().options).toEqual(bindings.RecordedEventPair.judge_models);
 });
 test("native published Parquet retries and compact history retain recorded item/run attribution", async () => {
   const root = await mkdtemp(join(tmpdir(), "publication-native-"));
@@ -82,6 +87,18 @@ test("native published Parquet retries and compact history retain recorded item/
       source_id: "source-0", source_kind: "reporting", lead: true,
     }]);
     expect(packed.rows.map(row => row.identity.attempt)).toEqual([1, 2]);
+    const digestPath = join(root, "digest.json");
+    await writeFile(digestPath, JSON.stringify(digest));
+    const observed = await readPublicationDay({
+      published: { day: digest.date, indexes: { monthly: index }, schema_version: CONTRACT_VERSION },
+      health: { day: digest.date, status: "rows", rows: health }, digest_path: digestPath,
+    });
+    expect(observed.publication.articles).toEqual(outcome.articles);
+    expect(observed.outcomes.find(run => run.run_id === "2026-10-19-2")!.articles).toEqual([]);
+    expect((await readPublicationDay({
+      published: { day: digest.date, indexes: { monthly: index }, schema_version: CONTRACT_VERSION },
+      health: { day: digest.date, status: "rows", rows: health }, digest_path: join(root, "absent-digest.json"),
+    })).publication.status).toBe("missing");
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 test("repeated runs, zero publication and legacy ordinals never become latest-run guesses", async () => {
@@ -116,4 +133,35 @@ test("selected items alone, absent manifests, conflicting joins and absent kind 
   const outcome = reconcilePublication({ ...input, digest: unlabelled,
     published: { day: digest.date, status: "rows", rows: published } });
   expect(outcome.articles[0]!.source_kind).toBeNull();
+});
+test("conflicting unsettled terminal health rows refuse attribution; known other runs do not poison zero runs", async () => {
+  const { digest, health, published } = await fixture();
+  const success = health[0]!;
+  const input = {
+    run_id: "2026-10-19-1", digest, published: { day: digest.date, status: "rows" as const, rows: published },
+    health: { day: digest.date, status: "rows" as const, rows: health },
+  };
+  expect(reconcilePublication(input).articles).toHaveLength(1);
+  expect(() => reconcilePublication({ ...input, health: { ...input.health, rows: [success, { ...success, outcome: "failed" }] } })).toThrow("Conflicting");
+  const missingOther = { ...digest, items: [], leads: [], runs: digest.runs.map(run => ({ ...run, items_added: 0 })) };
+  expect(reconcilePublication({ ...input, run_id: "2026-10-19-2", digest: missingOther }).availability).toBe("available");
+  expect(reconcilePublication({ ...input, digest: missingOther }).availability).toBe("unavailable");
+});
+test("the recorded run can finish after midnight without changing its publication day", async () => {
+  const { digest, health, published } = await fixture();
+  const outcome = reconcilePublication({
+    run_id: "2026-10-19-1", digest: { ...digest, generated_at: "2026-10-20T00:01:00Z" },
+    published: { day: digest.date, status: "rows", rows: published },
+    health: { day: digest.date, status: "rows", rows: health },
+  });
+  expect(outcome.availability).toBe("available");
+  expect(outcome.articles[0]!.date).toBe("2026-10-19");
+});
+test("a named known-empty publication day needs no invented digest; a missing manifest is not empty", async () => {
+  const input = {
+    published: { day: "2026-10-19", rawFiles: [] as string[], schema_version: CONTRACT_VERSION },
+    health: { day: "2026-10-19", status: "missing" as const, rows: [] }, digest_path: null,
+  };
+  expect((await readPublicationDay(input)).publication).toEqual({ day: "2026-10-19", status: "empty", articles: [] });
+  expect((await readPublicationDay({ ...input, published: { day: "2026-10-19", schema_version: CONTRACT_VERSION } })).publication.status).toBe("missing");
 });

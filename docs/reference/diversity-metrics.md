@@ -77,6 +77,39 @@ that unavailable measurement in its returned `unavailable` explanation instead
 of writing a false row. Rolling metrics likewise remain explicitly unavailable
 in the recorder result until a complete historical membership window is supplied.
 
+## Publication and history observations
+
+The publication observer reads only named published-ledger Parquet files and the
+named day's digest. Published URL and item identities must agree with that digest.
+The digest's run reference identifies the introducing run. Where an old digest
+does not name a run, a matching settled successful terminal item-health record
+may identify it. An ordinal alone never assigns an old item to the latest run.
+Retry copies count once. Missing source kind remains unknown, not today's kind.
+The digest's completion can be after midnight without changing its publication day.
+
+History reads exactly the configured rolling days plus the larger of that window
+and its configured overlap windows. The default seven-day measurement and
+seven-day reference require fourteen named UTC days. A known-empty day
+contributes zero articles. Missing and lost days reduce reported coverage and
+make affected readings unavailable. Today's day remains partial until its UTC
+end; an explicitly named earlier end can measure a completed window.
+
+Source overlap unions all measured source sets and their corresponding prior-day
+reference sets before calculating intersection and union. Novel-source shares
+deduplicate article identities and use history before each publication day.
+Neither calculation averages daily ratios or treats another run on the same
+day as another historical novelty event.
+
+Event readings use existing recorded pair decisions, never within-run cluster
+numbers as global event identifiers. Every needed pair must carry sorted URL
+keys, their recomputed pair identity, agreeing usable YES or NO verdicts, and
+compatible complete recorded scorer and judge stamps. Missing, incompatible
+or unclear decisions make the reading unavailable. The existing same-outlet
+rule and unchanged ASCII headline-figure veto constrain positive decisions.
+Every member of an event group must match every other member; pair chains alone
+cannot merge events. Group names exist only inside this bounded calculation.
+No matching policy, model call or new stored event identity is introduced.
+
 ## See also
 
 - [../architecture/sources/feed-ingest-audit.md](../architecture/sources/feed-ingest-audit.md) -

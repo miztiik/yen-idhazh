@@ -70,6 +70,25 @@ zero count and empty file list. No empty file is invented. A skipped write,
 failed write or failed readback throws. Files already written before a later
 failure remain incomplete-attempt artifacts; they do not establish completion.
 
+## Publication evidence reader
+
+`readPublicationDay` in `metrics/publication-outcomes.ts` reads named native
+published-ledger files and one named digest, with validated settled item-health
+read projections supplied by the caller. A known-empty published day needs no
+invented digest. Missing files, unassigned legacy runs and inconsistent day
+membership remain explicit missing publication evidence.
+
+`reconcilePublication` reports only articles confirmed by the published ledger.
+It joins recorded URL, item, source and run identities, and takes lead membership
+from the digest. Terminal health records with conflicting unsettled values are
+refused. A recorded other run can exclude an unrelated missing item from a
+known-zero run; a legacy item with no recorded owner cannot.
+
+These readers and the bounded history arithmetic do not seal an audit.
+`completePublicationObservations` accepts only already-complete, settled source
+records and actual reconciled publication evidence. It never turns the planning
+recorder's pending internal source summaries into completion records.
+
 ## Design rationale
 
 The existing source-run contract has only complete planning and publication

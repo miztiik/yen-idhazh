@@ -2,7 +2,7 @@
 import { z } from "zod";
 import {
   DateStampSchema, PositiveCountSchema, RunIdSchema, SchemaVersionSchema,
-  Sha256Schema, SlugSchema, UrlSchema,
+  Sha256Schema, SlugSchema, UrlSchema, deriveUrlKey,
 } from "@idhazh/common-contracts";
 import { UtcInstantSchema } from "../screen-article-candidates/seen-evidence";
 
@@ -36,7 +36,6 @@ export const DigestPublicationSchema = z.object({
   if (new Set(day.runs.map(run => run.n)).size !== day.runs.length) reject("digest run ordinals must be distinct");
   const named = day.runs.flatMap(run => run.run_id === null ? [] : [run.run_id]);
   if (new Set(named).size !== named.length) reject("digest run identities must be distinct");
-  if (day.generated_at.slice(0, 10) !== day.date) reject("digest generation must name the requested UTC day");
   for (const run of day.runs) {
     if (run.run_id !== null && run.run_id.slice(0, 10) !== day.date) reject("digest run belongs to another day");
     if (day.items.filter(item => item.introduced_by_run === run.n).length !== run.items_added) reject("digest run item count differs from membership");
@@ -50,6 +49,37 @@ export const DigestPublicationSchema = z.object({
 export type PublishedRow = z.infer<typeof PublishedRowSchema>;
 export type ItemHealthPublication = z.infer<typeof ItemHealthPublicationSchema>;
 export type DigestPublication = z.infer<typeof DigestPublicationSchema>;
+export const DigestEventItemSchema = z.object({
+  item_id: ItemIdSchema, source_url: UrlSchema,
+  title: z.string().min(1), source_name: z.string().min(1),
+});
+// Existing StorySimilarityPair fields only; the observer never writes a pair.
+export const RecordedEventPairSchema = z.object({
+  version: SchemaVersionSchema,
+  pair_key: Sha256Schema, left_url_key: Sha256Schema, right_url_key: Sha256Schema,
+  scorer_model: z.literal("all-minilm-l6-v2-quantized"), cosine_weight: z.number().finite().min(0).max(1),
+  verdict: z.enum(["YES", "NO", "UNCLEAR"]).nullable(),
+  verdict_swapped: z.enum(["YES", "NO", "UNCLEAR"]).nullable(), usable: z.boolean(),
+  judge_model: z.enum(["qwen3-5-9b-q4-k-m", "qwen3-5-9b-q4-k-m-thinking", "ornith-1-5-9b-q5-k-m",
+    "gemma-4-e4b-it-qat-ud-q4-k-xl"]).nullable(),
+  prompt_digest: Sha256Schema.nullable(), grammar_digest: Sha256Schema.nullable(),
+  judge_id: z.literal("content-similarity-judge"),
+  judge_temperature: z.number().finite().nonnegative().nullable(), grammar_applied: z.boolean().nullable(),
+}).superRefine((pair, ctx) => {
+  const reject = (message: string) => ctx.addIssue({ code: "custom", message });
+  if (pair.left_url_key >= pair.right_url_key || deriveUrlKey(pair.left_url_key + pair.right_url_key) !== pair.pair_key) {
+    reject("recorded pair must have sorted URL keys and their recomputed pair identity");
+  }
+  const judge = [pair.judge_model, pair.prompt_digest, pair.grammar_digest];
+  if (judge.some(value => value !== null) && judge.some(value => value === null)) reject("judge stamps must be present together");
+  if (pair.verdict !== null && pair.judge_model === null) reject("a recorded verdict names its judge");
+  if (pair.usable && (pair.verdict === null || pair.verdict !== pair.verdict_swapped)) reject("a usable recorded pair agrees in both orders");
+});
+export type RecordedEventPair = z.infer<typeof RecordedEventPairSchema>;
+export type RecordedEventEvidence = Readonly<{
+  pairs: readonly RecordedEventPair[];
+  items: readonly z.infer<typeof DigestEventItemSchema>[];
+}>;
 export type EvidenceDay<T> = Readonly<{
   day: string; status: "rows" | "empty" | "missing" | "lost"; rows: readonly T[];
 }>;

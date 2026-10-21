@@ -1,8 +1,9 @@
 /** Which named UTC days support publication overlap and novelty readings? */
 import { DateStampSchema, PositiveCountSchema } from "@idhazh/common-contracts";
 import { UtcInstantSchema } from "../screen-article-candidates/seen-evidence";
-import { uniquePublishedArticles } from "./fingerprint-dedup";
+import { groupPublishedEvents, uniquePublishedArticles } from "./fingerprint-dedup";
 import type { PublishedArticle } from "./fingerprint-dedup";
+import type { RecordedEventEvidence } from "./publication-evidence";
 
 // UTC calendar arithmetic uses milliseconds per day, not a local clock.
 const UTC_DAY_MS = 86_400_000;
@@ -85,6 +86,12 @@ function measuredDays(window: HistoryWindow, articles: readonly PublishedArticle
   return dates.map(date => {
     const day = window.days.find(day => day.day === date);
     if (day === undefined || date < window.start || date > window.end) throw new Error("Measurement day is outside the rolling window");
+    for (const article of articles.filter(article => article.date === date)) {
+      if (!day.articles.some(held => held.url_key === article.url_key && held.run_id === article.run_id
+        && held.source_id === article.source_id && held.source_kind === article.source_kind)) {
+        throw new Error("Measured article is absent from the recorded publication day");
+      }
+    }
     return day;
   });
 }
@@ -125,4 +132,50 @@ export function unavailableEvents(days: readonly PublicationDay[], asOf: string)
   const coverage = days.filter(day => available(day, asOf)).length;
   return { value: null, numerator: null, denominator: null, coverage_days: coverage, required_days: days.length,
     unavailable_reason: coverage === days.length ? "missing_event_evidence" : "incomplete_history" };
+}
+
+export function historicalReference(window: HistoryWindow, current: readonly PublishedArticle[], count: number, dates?: readonly string[]) {
+  const days = new Map<string, PublicationDay>();
+  const articles: PublishedArticle[] = [];
+  for (const day of measuredDays(window, current, dates)) {
+    days.set(day.day, day);
+    for (const held of prior(window, day.day, count)) {
+      days.set(held.day, held);
+      articles.push(...held.articles);
+    }
+  }
+  return { days: [...days.values()], articles: uniquePublishedArticles(articles) };
+}
+export function eventOverlap(
+  window: HistoryWindow, current: readonly PublishedArticle[], count: number,
+  evidence?: RecordedEventEvidence, dates?: readonly string[],
+): HistoryReading {
+  const measured = uniquePublishedArticles(current);
+  const reference = historicalReference(window, measured, count, dates);
+  const coverage = reading(0, 1, reference.days, window.as_of);
+  if (coverage.unavailable_reason !== null) return { ...coverage, value: null, numerator: null, denominator: null };
+  const events = groupPublishedEvents([...measured, ...reference.articles], evidence);
+  if (events.availability === "unavailable") return unavailableEvents(reference.days, window.as_of);
+  const left = new Set(measured.map(article => events.groups.get(article.url_key)!));
+  const right = new Set(reference.articles.map(article => events.groups.get(article.url_key)!));
+  return reading([...left].filter(event => right.has(event)).length, new Set([...left, ...right]).size,
+    reference.days, window.as_of);
+}
+export function eventRepetitionRate(
+  window: HistoryWindow, current: readonly PublishedArticle[], count: number,
+  evidence?: RecordedEventEvidence, dates?: readonly string[],
+): HistoryReading {
+  const measured = uniquePublishedArticles(current);
+  const reference = historicalReference(window, measured, count, dates);
+  const coverage = reading(0, 1, reference.days, window.as_of);
+  if (coverage.unavailable_reason !== null) return { ...coverage, value: null, numerator: null, denominator: null };
+  const events = groupPublishedEvents([...measured, ...reference.articles], evidence);
+  if (events.availability === "unavailable") return unavailableEvents(reference.days, window.as_of);
+  let repeated = 0;
+  for (const article of measured) {
+    const earlier = prior(window, article.date, count).flatMap(day => day.articles);
+    if (earlier.some(held => held.run_id !== article.run_id
+      && events.groups.get(held.url_key) === events.groups.get(article.url_key))) repeated++;
+  }
+  return reading(repeated, measured.length, reference.days, window.as_of);
 }

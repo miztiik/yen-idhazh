@@ -1,6 +1,10 @@
 /** Which published articles and leads belong to a recorded run? */
+import { readFile } from "node:fs/promises";
 import { deriveUrlKey, RunIdSchema, SourceRunRecordSchema } from "@idhazh/common-contracts";
 import type { SourceRunRecord } from "@idhazh/common-contracts";
+import { readLedgerDay } from "../read-ledger-history/read-period";
+import type { NamedDayInput } from "../read-ledger-history/read-period";
+import type { PublicationDay } from "./history-window";
 import {
   DigestPublicationSchema, ItemHealthPublicationSchema, PublishedRowSchema, validateEvidenceDay,
 } from "./publication-evidence";
@@ -19,6 +23,51 @@ export type PublicationOutcomes = Readonly<{
   unavailable_reason: "missing_publication" | null;
   articles: readonly PublishedArticle[]; unattributed_item_ids: readonly string[];
 }>;
+export type NamedPublicationDay = Readonly<{
+  published: Omit<NamedDayInput<PublishedRow>, "ledger" | "contract"> & { schema_version: string };
+  health: EvidenceDay<ItemHealthPublication>;
+  digest_path: string | null;
+}>;
+
+export async function readPublicationDay(input: NamedPublicationDay) {
+  const published = await readLedgerDay({
+    ...input.published, ledger: "published",
+    contract: { schema: PublishedRowSchema, schemaVersion: input.published.schema_version },
+  });
+  const health = validateEvidenceDay(input.health, ItemHealthPublicationSchema);
+  if (health.day !== published.day) throw new Error("Health input belongs to another named UTC day");
+  let digest: DigestPublication | null = null;
+  if (input.digest_path !== null) {
+    try {
+      digest = DigestPublicationSchema.parse(JSON.parse(await readFile(input.digest_path, "utf8")));
+    } catch (error) {
+      if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
+    }
+  }
+  if (digest !== null && digest.date !== published.day) throw new Error("Named digest belongs to another UTC day");
+  const missing = (status: "missing" | "lost") => ({
+    publication: { day: published.day, status, articles: [] } as PublicationDay, outcomes: [] as PublicationOutcomes[], digest,
+  });
+  if (published.status === "missing" || published.status === "lost") return missing(published.status);
+  if (published.status === "empty" && (digest === null || digest.items.length === 0)) {
+    const outcomes = digest?.runs.flatMap(run => run.run_id === null ? [] : [reconcilePublication({
+      run_id: run.run_id, published: { day: published.day, status: "empty", rows: [] }, health, digest,
+    })]) ?? [];
+    return { publication: { day: published.day, status: "empty", articles: [] } as PublicationDay, outcomes, digest };
+  }
+  if (digest === null) return missing("missing");
+  const runs = new Set([
+    ...digest.runs.flatMap(run => run.run_id === null ? [] : [run.run_id]),
+    ...health.rows.filter(row => row.stage === "publish" && row.outcome === "ok").map(row => row.run_id),
+  ]);
+  const outcomes = [...runs].map(run_id => reconcilePublication({
+    run_id, digest, health, published: { ...published, rows: published.rows.map(held => held.row) },
+  }));
+  const articles = uniquePublishedArticles(outcomes.flatMap(outcome => outcome.articles));
+  if (outcomes.some(outcome => outcome.availability === "unavailable") || articles.length !== new Set(published.rows.map(held => held.row.url_key)).size
+    || digest.items.length !== articles.length) return missing("missing");
+  return { publication: { day: published.day, status: articles.length === 0 ? "empty" : "rows", articles } as PublicationDay, outcomes, digest };
+}
 
 export function reconcilePublication(input: PublicationInput): PublicationOutcomes {
   const run = RunIdSchema.parse(input.run_id);
@@ -38,15 +87,20 @@ export function reconcilePublication(input: PublicationInput): PublicationOutcom
   const digest = DigestPublicationSchema.parse(input.digest);
   if (digest.date !== day) throw new Error("Digest belongs to another UTC day");
   const recordedRun = digest.runs.find(held => held.run_id === run);
-  const healthRows = uniqueRecorded(health.rows, row => JSON.stringify([row.run_id, row.item_id, row.url_key]),
-    (a, b) => a.source_id === b.source_id && a.stage === b.stage && a.outcome === b.outcome);
+  const healthRows = uniqueRecorded(health.rows, row => JSON.stringify([row.date, row.run_id, row.item_id]),
+    (a, b) => a.url_key === b.url_key && a.source_id === b.source_id && a.stage === b.stage && a.outcome === b.outcome);
   const rows = uniqueRecorded(published.rows, row => row.url_key,
     (a, b) => a.item_id === b.item_id && a.published_on === b.published_on);
   const articles: PublishedArticle[] = [];
   const missing: string[] = [];
   for (const row of rows) {
     const item = digest.items.find(item => item.item_id === row.item_id);
-    if (item === undefined) { missing.push(row.item_id); continue; }
+    if (item === undefined) {
+      const owners = new Set(healthRows.filter(held => held.item_id === row.item_id && held.url_key === row.url_key
+        && held.stage === "publish" && held.outcome === "ok").map(held => held.run_id));
+      if (owners.size !== 1 || owners.has(run)) missing.push(row.item_id);
+      continue;
+    }
     if (deriveUrlKey(item.source_url) !== row.url_key) throw new Error("Published item and digest URL identities disagree");
     if (healthRows.some(held => held.item_id === item.item_id && held.url_key !== row.url_key)) {
       throw new Error("Published health and digest URL identities disagree");
