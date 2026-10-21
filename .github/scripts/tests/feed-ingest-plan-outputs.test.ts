@@ -1,16 +1,19 @@
 /** Do real planner results retain native file evidence independently of optional reporting? */
 import { expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
-import { CONTRACT_VERSION, FeedIngestDispatchSchema } from "../../../packages/common-contracts/src/index";
+import { createHash } from "node:crypto";
+import { CONTRACT_VERSION, FeedIngestDispatchSchema, RawDayIndexSchema } from "../../../packages/common-contracts/src/index";
 import { persistLedger } from "../../../packages/ledger-file-writer/src/index";
 import { runFeedPlan, summarizePlan } from "../../../services/feed-ingest-plan/src/run-feed-plan";
 import { recordedPlan } from "../../../services/feed-ingest-plan/test/plan-recordings";
 import { source } from "../../../services/feed-ingest-plan/test/harvest-recordings";
 import { verifyParquetFiles, verifyRecordedCompatibility } from "../../../packages/common-contracts/test/verify-parquet";
-import { createExecutionOutputs, writeGitHubOutputs } from "../feed-ingest-plan-outputs";
+import { createExecutionOutputs, createSeenDayInputs, writeGitHubOutputs } from "../feed-ingest-plan-outputs";
 import { writePlannerReport } from "../feed-ingest-plan-report";
+import { readSeenEvidence, requiredSeenDays } from "../../../services/feed-ingest-plan/src/read-ledger-history/read-seen-evidence";
+import { utcTimestamp } from "../../../services/feed-ingest-plan/src/harvest-feeds/harvest-types";
 
 test("uses actual selected identities, worker count and real files without a reporting dependency", async () => {
   const fixture = await recordedPlan();
@@ -134,12 +137,59 @@ test("report configuration cannot change real-run ledger commitments", async () 
     enabled.inputs.harvest.config.workflow_reporting.enabled = true;
     const first = await runFeedPlan({ article_limit: 1 }, disabled.inputs, disabled.runtime);
     const second = await runFeedPlan({ article_limit: 1 }, enabled.inputs, enabled.runtime);
-    for (const name of ["dispatches", "selections", "harvest_rejections", "screening_rejections", "curation_rejections"] as const) {
+    for (const name of ["dispatches", "selections", "harvest_rejections", "screening_rejections", "curation_rejections", "seen"] as const) {
       expect(second.files[name].files.map(file => file.content_sha256)).toEqual(
         first.files[name].files.map(file => file.content_sha256),
       );
     }
   } finally {
     await Promise.all([disabled.close(), enabled.close()]);
+  }
+});
+
+test("forwards named-day proof to the actual runner and returns its real first-sight files", async () => {
+  const fixture = await recordedPlan();
+  try {
+    fixture.inputs.clock_config.collect.seen_window_days = 0;
+    const now = utcTimestamp(fixture.runtime.clock);
+    fixture.inputs.settings.inputs.seen_days = createSeenDayInputs(fixture.inputs.registrations.seen.prefix,
+      requiredSeenDays(now, fixture.inputs.clock_config.collect.seen_window_days));
+    const input = fixture.inputs.settings.inputs.seen_days[0]!;
+    const path = join(fixture.directory, ...input.raw_index!.split("/"));
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, JSON.stringify(RawDayIndexSchema.parse({
+      version: "2026-10-03", ledger: "seen", date: input.day, files: [], bytes: [],
+      content_sha256: createHash("sha256").update("").digest("hex"), listed_at: now,
+    })));
+    const result = await runFeedPlan({ article_limit: 1 }, fixture.inputs, fixture.runtime);
+    const outputs = createExecutionOutputs(summarizePlan(result), fixture.inputs.registrations);
+    expect(result.evidence.seen.absence_proof).toBe("within_configured_window");
+    expect(result.evidence.seen.global_absence).toBe("unavailable");
+    expect(result.evidence.seen.new_rows.length).toBeGreaterThan(0);
+    const files = result.files.seen.files.map(file => file.path);
+    expect(JSON.parse(outputs.seen_files!)).toEqual(files);
+    const actual = await readSeenEvidence(fixture.inputs.outputRoot, files);
+    expect(actual.evidence.availability).toBe("available");
+    if (actual.evidence.availability !== "available") throw new Error("Actual first-sight file was not readable");
+    expect(actual.evidence.rows).toEqual([...result.evidence.seen.new_rows].sort((a, b) => a.url_key.localeCompare(b.url_key)));
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("a missing named raw index stays unavailable and cannot manufacture new first sight", async () => {
+  const fixture = await recordedPlan();
+  try {
+    fixture.inputs.clock_config.collect.seen_window_days = 0;
+    const now = utcTimestamp(fixture.runtime.clock);
+    fixture.inputs.settings.inputs.seen_days = createSeenDayInputs(fixture.inputs.registrations.seen.prefix,
+      requiredSeenDays(now, fixture.inputs.clock_config.collect.seen_window_days));
+    const result = await runFeedPlan({ article_limit: 1 }, fixture.inputs, fixture.runtime);
+    expect(result.evidence.seen.absence_proof).toBe("unavailable");
+    expect(result.evidence.seen.window?.days[0]?.status).toBe("missing");
+    expect(result.files.seen).toEqual({ status: "empty", files: [] });
+    expect(createExecutionOutputs(summarizePlan(result), fixture.inputs.registrations).seen_files).toBe("[]");
+  } finally {
+    await fixture.close();
   }
 });

@@ -6,7 +6,9 @@ import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { CompactIndexSchema, RawDayIndexSchema } from "../../../packages/common-contracts/src/index";
-import { historyDays, historyIndexPaths, resolveHistoryInventory } from "../feed-ingest-plan-outputs";
+import { createSeenDayInputs, historyDays, historyIndexPaths, resolveHistoryInventory, sparseCheckoutPath } from "../feed-ingest-plan-outputs";
+import { requiredSeenDays } from "../../../services/feed-ingest-plan/src/read-ledger-history/read-seen-evidence";
+import { utcTimestamp } from "../../../services/feed-ingest-plan/src/harvest-feeds/harvest-types";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 type Workflow = {
@@ -14,6 +16,7 @@ type Workflow = {
   permissions: Record<string, string>;
   jobs: { "isolated-plan": { steps: {
     id?: string; name?: string; run?: string; uses?: string;
+    "continue-on-error"?: boolean;
     env?: Record<string, string>; if?: string; with?: Record<string, string | boolean>;
   }[] } };
 };
@@ -68,9 +71,12 @@ test("offers exactly four manual controls, read-only access and a separate optio
   expect(plan.run).toContain("parseCliRequest(args)");
   expect(plan.run).toContain("runFeedPlan(request");
   expect(plan.run).toContain("verifyParquetFiles(");
+  expect(plan.run).toContain("inputs: { ...inputs.settings.inputs, seen_days }");
   expect(plan.run).not.toContain("feed-ingest-plan-report");
   const reporting = steps.find(step => step.name === "Optional GitHub report")!;
   expect(reporting.if).toContain("workflow_reporting == 'true'");
+  expect(reporting["continue-on-error"]).toBe(true);
+  expect(steps.filter(step => step["continue-on-error"] === true)).toEqual([reporting]);
   const completion = steps.find(step => step.name === "Require genuine audited completion")!;
   expect(completion.run).toContain('process.env.AUDITED_COMPLETE !== "true"');
   expect(completion.run).toContain("process.exitCode = 2");
@@ -85,6 +91,19 @@ test("offers exactly four manual controls, read-only access and a separate optio
 test("derives UTC windows and stages indexed compact files before considering raw evidence", () => {
   const days = historyDays("2026-01-01T00:00:00Z", 1, [1]);
   expect(days).toEqual(["2026-01-01", "2025-12-31"]);
+  expect(historyDays(utcTimestamp(() => new Date("2026-01-01T00:00:00.999Z")), 1, [1])).toEqual(days);
+  expect(() => historyDays("2026-02-31T00:00:00Z", 1, [1])).toThrow();
+  const seenDays = requiredSeenDays("2026-01-01T00:00:00Z", 90);
+  expect(seenDays).toHaveLength(91);
+  expect([seenDays[0], seenDays.at(-1)]).toEqual(["2025-10-03", "2026-01-01"]);
+  expect(createSeenDayInputs(["seen"], ["2026-01-01"])).toEqual([{
+    day: "2026-01-01",
+    indexes: { yearly: "state/compact/seen/index/yearly.json", monthly: "state/compact/seen/index/monthly.json",
+      daily: "state/compact/seen/index/daily.json" },
+    raw_index: "state/raw/seen/2026/01/01/index.json",
+  }]);
+  expect(sparseCheckoutPath("state/raw/seen/[literal]*?.json")).toBe("/state/raw/seen/\\[literal\\]\\*\\?.json");
+  expect(() => sparseCheckoutPath("state/raw/seen/a\nstate/")).toThrow("control");
   expect(historyIndexPaths(["feed-ingest-plan", "dispatches"], days)).toContain(
     "state/compact/feed-ingest-plan/dispatches/index/yearly.json",
   );
@@ -110,8 +129,12 @@ test("derives UTC windows and stages indexed compact files before considering ra
     days: ["2026-01-01"], compact: [], raw: [raw] })).toContain(`state/raw/feed-ingest-plan/dispatches/2026/01/01/${rawName}`);
   const empty = CompactIndexSchema.parse({ version: "2026-10-07", ledger: "dispatches", period: "daily",
     entries: [{ covers: "2026-01-01", rows: 0, bytes: 0, state: "empty" }] });
-  expect(resolveHistoryInventory({ ledger: "dispatches", prefix: ["feed-ingest-plan", "dispatches"],
-    days: ["2026-01-01"], compact: [empty], raw: [raw] })).not.toContain(`state/raw/feed-ingest-plan/dispatches/2026/01/01/${rawName}`);
+  const emptyInventory = resolveHistoryInventory({ ledger: "dispatches", prefix: ["feed-ingest-plan", "dispatches"],
+    days: ["2026-01-01"], compact: [empty], raw: [raw] });
+  expect(emptyInventory).not.toContain(`state/raw/feed-ingest-plan/dispatches/2026/01/01/${rawName}`);
+  expect(emptyInventory).toContain("state/compact/feed-ingest-plan/dispatches/daily/2026/01/01.parquet");
+  expect(() => resolveHistoryInventory({ ledger: "dispatches", prefix: ["dispatches"], days,
+    compact: [{ ...empty, version: "2099-01-01" }], raw: [] })).toThrow("version");
   expect(() => historyIndexPaths([".."], days)).toThrow("prefix");
   expect(() => resolveHistoryInventory({ ledger: "dispatches", prefix: ["dispatches"], days,
     compact: [], raw: [{ ...raw, content_sha256: "a".repeat(64) }] })).toThrow("content_sha256");

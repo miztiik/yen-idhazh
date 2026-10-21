@@ -82,11 +82,24 @@ The initial sparse checkout names configuration, relevant service and package
 directories, the adapter scripts and tests, dependency manifests and locks,
 and bounded recorded fixtures. It excludes the backend.
 
-The workflow reads only the configured UTC history window's named raw-day and
-yearly, monthly and daily compact indexes. It adds the actual files named by
-the validated indexes, preferring yearly over monthly over daily over raw.
-It does not scan a state tree. An absent index or file is not an empty day,
-and staging files alone is not proof of complete history.
+The workflow uses the runner's `requiredSeenDays` with the same captured UTC
+clock. The current `collect.seen_window_days` value is 90, so its inclusive
+window names 91 days: today and the preceding 90 days. This is separate from
+the metrics window, currently 14 named days. It passes actual per-day inputs
+to `settings.inputs.seen_days`, preserving authored named inputs.
+
+Each day names raw-day and yearly, monthly and daily compact indexes. The
+workflow adds their actual named files, preferring yearly over monthly over
+daily over raw. It also stages a compact period's named path when its index
+declares no file, so a contradictory leftover file is not hidden by sparse
+checkout. It does not scan a state tree. An absent index or file is not an
+empty day, and staging files alone is not proof of complete history.
+
+Only actual rows or explicit empty evidence for every required day can
+establish absence within that configured window. Missing raw indexes stay
+missing inputs, never `raw_files: []`. New first-sight rows use the real
+runner's writer; its returned receipt paths are included in required outputs.
+The runner never claims absence across all historical time.
 
 Trial writes go below the runner's temporary `feed-ingest-plan/state`
 directory. The required output adapter returns only resolved worker counts,
@@ -112,6 +125,8 @@ escapes source titles for Markdown and workflow-command data for annotations.
 It omits source URLs, headers, full event dumps and article text.
 
 The adapter is not imported by core stages or the required output adapter.
+Report errors remain visible in their own step but do not fail execution.
+Required native verification and the final audit gate do not ignore errors.
 Remove the reporting key, adapter, its tests and its workflow invocation
 together when development reporting is no longer needed. The
 [policy contract](../architecture/sources/feed-ingest-policies.md) owns this

@@ -1,18 +1,21 @@
 /** Which validated identities, paths and worker counts may the isolated workflow use? */
 import { randomUUID, createHash } from "node:crypto";
 import { appendFile } from "node:fs/promises";
+import { posix } from "node:path";
 import {
-  CompactIndexSchema, DateStampSchema, PartitionAssignmentSchema, PositiveCountSchema,
-  RawDayIndexSchema, RunIdSchema, Sha256Schema, TimestampSchema,
+  COMPACT_INDEX_VERSION, RAW_DAY_INDEX_VERSION, CompactIndexSchema, DateStampSchema, PartitionAssignmentSchema, PositiveCountSchema,
+  RawDayIndexSchema, RunIdSchema, Sha256Schema,
 } from "../../packages/common-contracts/src/index";
 import type { CompactIndex, RawDayIndex } from "../../packages/common-contracts/src/index";
 import type { LedgerRegistration, PersistLedgerResult } from "../../packages/ledger-file-writer/src/index";
 import type { summarizePlan } from "../../services/feed-ingest-plan/src/run-feed-plan";
+import { UtcInstantSchema } from "../../services/feed-ingest-plan/src/screen-article-candidates/seen-evidence";
+import { RelativePathSchema } from "../../services/feed-ingest-plan/src/config/service-settings";
 import { validateLedgerFilePath } from "../../packages/common-contracts/test/verify-parquet";
 
 type PlanSummary = ReturnType<typeof summarizePlan>;
 type Registrations = Readonly<{
-  dispatches: LedgerRegistration; rejections: LedgerRegistration; selections: LedgerRegistration;
+  dispatches: LedgerRegistration; rejections: LedgerRegistration; selections: LedgerRegistration; seen: LedgerRegistration;
 }>;
 
 function paths(result: PersistLedgerResult, entry: LedgerRegistration): string[] {
@@ -33,7 +36,7 @@ export function createExecutionOutputs(summary: PlanSummary, registrations: Regi
   }
   const runId = RunIdSchema.parse(summary.run_id);
   const day = DateStampSchema.parse(summary.date);
-  const observedAt = TimestampSchema.parse(summary.observed_at);
+  const observedAt = UtcInstantSchema.parse(summary.observed_at);
   if (day !== observedAt.slice(0, 10)) throw new Error("date differs from the observed UTC instant");
   const count = PositiveCountSchema.parse(summary.dispatch_count);
   PartitionAssignmentSchema.parse({ strategy: summary.strategy, worker_assignment: 0, dispatch_count: count });
@@ -41,7 +44,9 @@ export function createExecutionOutputs(summary: PlanSummary, registrations: Regi
     throw new Error("request differs from the resolved worker count or strategy");
   }
   if (registrations.dispatches.name !== "dispatches" || registrations.rejections.name !== "rejections"
-    || registrations.selections.name !== "editorial-selections") throw new Error("registrations name the wrong ledgers");
+    || registrations.selections.name !== "editorial-selections" || registrations.seen.name !== "seen") {
+    throw new Error("registrations name the wrong ledgers");
+  }
   const candidates = summary.selected_candidate_ids.map(id => Sha256Schema.parse(id));
   if (new Set(candidates).size !== candidates.length || summary.assignments.length !== candidates.length) {
     throw new Error("selected_candidate_ids and assignments must identify the same distinct articles");
@@ -57,12 +62,13 @@ export function createExecutionOutputs(summary: PlanSummary, registrations: Regi
   if (summary.strategy === "none" && count !== 1) throw new Error("dispatch_count must be one for strategy none");
   const dispatches = paths(summary.files.dispatches, registrations.dispatches);
   const selections = paths(summary.files.selections, registrations.selections);
+  const seen = paths(summary.files.seen, registrations.seen);
   const rejections = [
     ...paths(summary.files.harvest_rejections, registrations.rejections),
     ...paths(summary.files.screening_rejections, registrations.rejections),
     ...paths(summary.files.curation_rejections, registrations.rejections),
   ];
-  const all = [...dispatches, ...selections, ...rejections];
+  const all = [...dispatches, ...selections, ...rejections, ...seen];
   if (new Set(all).size !== all.length) throw new Error("files.path occurs more than once");
   if (summary.files.dispatches.files.reduce((total, file) => total + file.row_count, 0) !== candidates.length
     || summary.files.selections.files.reduce((total, file) => total + file.row_count, 0) !== candidates.length) {
@@ -73,7 +79,8 @@ export function createExecutionOutputs(summary: PlanSummary, registrations: Regi
     dispatch_count: String(count),
     matrix: JSON.stringify({ include: Array.from({ length: count }, (_, worker_assignment) => ({ worker_assignment })) }),
     dispatch_files: JSON.stringify(dispatches), rejection_files: JSON.stringify(rejections),
-    selection_files: JSON.stringify(selections),
+    selection_files: JSON.stringify(selections), seen_files: JSON.stringify(seen),
+    first_sight_absence_proof: summary.first_sight.absence_proof,
   };
 }
 
@@ -88,13 +95,33 @@ export async function writeGitHubOutputs(path: string, outputs: Readonly<Record<
   await appendFile(path, lines.join(""), "utf8");
 }
 
-export function historyDays(observedAt: string, rollingDays: number, overlapDays: readonly number[]): string[] {
-  const instant = TimestampSchema.parse(observedAt);
-  const rolling = PositiveCountSchema.parse(rollingDays);
-  const span = rolling + Math.max(rolling, ...overlapDays.map(value => PositiveCountSchema.parse(value)));
+export function sparseCheckoutPath(path: string): string {
+  if (/[\u0000-\u001f\u007f]/.test(path)) throw new Error("history.path must not contain control characters");
+  RelativePathSchema.parse(path);
+  return `/${path.replace(/[\\*?[\]!#]/g, character => `\\${character}`)}`;
+}
+
+function utcDays(observedAt: string, count: number): string[] {
+  const instant = UtcInstantSchema.parse(observedAt);
   const midnight = Date.parse(`${instant.slice(0, 10)}T00:00:00Z`);
   // A UTC day is a protocol unit of 86,400,000 milliseconds, not a tuning control.
-  return Array.from({ length: span }, (_, offset) => new Date(midnight - offset * 86_400_000).toISOString().slice(0, 10));
+  return Array.from({ length: count }, (_, offset) => new Date(midnight - offset * 86_400_000).toISOString().slice(0, 10));
+}
+
+export function historyDays(observedAt: string, rollingDays: number, overlapDays: readonly number[]): string[] {
+  const rolling = PositiveCountSchema.parse(rollingDays);
+  const span = rolling + Math.max(rolling, ...overlapDays.map(value => PositiveCountSchema.parse(value)));
+  return utcDays(observedAt, span);
+}
+
+export function createSeenDayInputs(prefix: readonly string[], days: readonly string[]) {
+  const indexes = historyIndexPaths(prefix, []);
+  const base = prefix.join("/");
+  return days.map(day => ({
+    day: DateStampSchema.parse(day),
+    indexes: { yearly: indexes[0]!, monthly: indexes[1]!, daily: indexes[2]! },
+    raw_index: `state/raw/${base}/${day.replaceAll("-", "/")}/index.json`,
+  }));
 }
 
 export function historyIndexPaths(prefix: readonly string[], days: readonly string[]): string[] {
@@ -111,16 +138,25 @@ export function historyIndexPaths(prefix: readonly string[], days: readonly stri
 export function resolveHistoryInventory(input: Readonly<{
   ledger: CompactIndex["ledger"]; prefix: readonly string[]; days: readonly string[];
   compact: readonly CompactIndex[]; raw: readonly RawDayIndex[];
+  indexes?: Readonly<Partial<Record<CompactIndex["period"], string>>>;
+  rawIndexes?: Readonly<Record<string, string>>;
 }>): string[] {
-  const inventory = new Set(historyIndexPaths(input.prefix, input.days));
+  const defaults = historyIndexPaths(input.prefix, []);
+  const indexes = { yearly: defaults[0]!, monthly: defaults[1]!, daily: defaults[2]!, ...input.indexes };
+  const rawIndex = (day: string) => input.rawIndexes?.[day]
+    ?? `state/raw/${input.prefix.join("/")}/${day.replaceAll("-", "/")}/index.json`;
+  const inventory = new Set([...Object.values(indexes), ...input.days.map(rawIndex)]);
+  for (const path of inventory) RelativePathSchema.parse(path);
   const compact = input.compact.map(value => CompactIndexSchema.parse(value));
   const raw = input.raw.map(value => RawDayIndexSchema.parse(value));
+  if (compact.some(index => index.version > COMPACT_INDEX_VERSION) || raw.some(index => index.version > RAW_DAY_INDEX_VERSION)) {
+    throw new Error("history.index.version is newer than the declared reader");
+  }
   if (compact.some(index => index.ledger !== input.ledger) || raw.some(index => index.ledger !== input.ledger)
     || new Set(compact.map(index => index.period)).size !== compact.length
     || new Set(raw.map(index => index.date)).size !== raw.length) {
     throw new Error("history indexes repeat or belong to another ledger");
   }
-  const base = input.prefix.join("/");
   for (const day of input.days) {
     DateStampSchema.parse(day);
     const year = compact.find(index => index.period === "yearly");
@@ -132,17 +168,15 @@ export function resolveHistoryInventory(input: Readonly<{
     }).find(held => held.entry !== undefined);
     if (match?.entry !== undefined) {
       const entry = match.entry;
-      if (entry.state === "packed" && !entry.lost_days.includes(day)) {
-        const periodPath = match.period === "yearly" ? `${entry.covers}/${entry.covers}` : entry.covers.replaceAll("-", "/");
-        inventory.add(`state/compact/${base}/${match.period}/${periodPath}.parquet`);
-      }
+      const periodPath = match.period === "yearly" ? `${entry.covers}/${entry.covers}` : entry.covers.replaceAll("-", "/");
+      inventory.add(`${posix.dirname(posix.dirname(indexes[match.period]))}/${match.period}/${periodPath}.parquet`);
       continue;
     }
     const index = raw.find(index => index.date === day);
     if (index === undefined) continue;
     const digest = createHash("sha256").update(index.files.join("\n"), "utf8").digest("hex");
     if (digest !== index.content_sha256) throw new Error("history.raw.content_sha256 differs from its filename list");
-    for (const name of index.files) inventory.add(`state/raw/${base}/${day.replaceAll("-", "/")}/${name}`);
+    for (const name of index.files) inventory.add(`${posix.dirname(rawIndex(day))}/${name}`);
   }
   return [...inventory];
 }

@@ -86,10 +86,12 @@ jobs:
           import { loadPlanInputs } from "./services/feed-ingest-plan/src/load-plan-inputs";
           import { parseCliRequest, describePlanError } from "./services/feed-ingest-plan/src/api/plan-request";
           import { runFeedPlan, summarizePlan } from "./services/feed-ingest-plan/src/run-feed-plan";
+          import { utcTimestamp } from "./services/feed-ingest-plan/src/harvest-feeds/harvest-types";
           import { ServiceSettingsSchema } from "./services/feed-ingest-plan/src/config/service-settings";
+          import { requiredSeenDays } from "./services/feed-ingest-plan/src/read-ledger-history/read-seen-evidence";
           import { CompactIndexSchema, RawDayIndexSchema } from "./packages/common-contracts/src/index";
           import type { CompactIndex, FeedIngestEvent, RawDayIndex } from "./packages/common-contracts/src/index";
-          import { createExecutionOutputs, historyDays, historyIndexPaths, resolveHistoryInventory, writeGitHubOutputs } from "./.github/scripts/feed-ingest-plan-outputs";
+          import { createExecutionOutputs, createSeenDayInputs, historyDays, resolveHistoryInventory, sparseCheckoutPath, writeGitHubOutputs } from "./.github/scripts/feed-ingest-plan-outputs";
           import { verifyParquetFiles } from "./packages/common-contracts/test/verify-parquet";
 
           const root = process.cwd();
@@ -105,13 +107,33 @@ jobs:
             const { request } = parseCliRequest(args);
             const inputs = await loadPlanInputs(root);
             const captured = new Date();
-            const days = historyDays(captured.toISOString().replace(".000Z", "Z"),
+            const now = utcTimestamp(() => captured);
+            const days = historyDays(now,
               inputs.harvest.config.metrics.rolling_window_days, inputs.harvest.config.metrics.overlap_windows_days);
+            const required = requiredSeenDays(now, inputs.clock_config.collect.seen_window_days);
+            const authored = inputs.settings.inputs.seen_days;
+            if (authored.some((input, index) => !required.includes(input.day)
+              || (index > 0 && input.day <= authored[index - 1]!.day))) {
+              throw new Error("seen_days must name distinct ascending days inside the configured UTC window");
+            }
+            const seen = new Map(authored.map(input => [input.day, input]));
+            for (const input of createSeenDayInputs(inputs.registrations.seen.prefix, required)) {
+              if (!seen.has(input.day)) seen.set(input.day, input);
+            }
+            const seen_days = [...seen.values()].sort((left, right) => left.day.localeCompare(right.day));
             const registry: { families: { ledgers: { name: string; prefix: string[] }[] }[] } =
               await Bun.file(inputs.settings.inputs.registrations).json();
-            const ledgers = ["seen", "source-runs", "article-assessments", "diversity", "editorial-selections", "dispatches", "rejections"] as const;
+            const ledgers = ["source-runs", "article-assessments", "diversity", "editorial-selections", "dispatches", "rejections"] as const;
             const inventory = new Set<string>();
+            const cache = new Map<string, Promise<unknown | undefined>>();
             async function readCommitted(path: string): Promise<unknown | undefined> {
+              const cached = cache.get(path);
+              if (cached !== undefined) return cached;
+              const result = readObject(path);
+              cache.set(path, result);
+              return result;
+            }
+            async function readObject(path: string): Promise<unknown | undefined> {
               const object = `HEAD:${path}`;
               const exists = Bun.spawn(["git", "cat-file", "--batch-check"],
                 { stdin: "pipe", stdout: "pipe", stderr: "pipe" });
@@ -126,22 +148,51 @@ jobs:
               if (await held.exited !== 0) throw new Error(`history: failed to read named file ${path}`);
               return JSON.parse(text);
             }
+            async function stageHistory(ledger: CompactIndex["ledger"], prefix: readonly string[], days: readonly string[],
+              options: { indexes?: Partial<Record<CompactIndex["period"], string>>;
+                rawIndexes?: Record<string, string>; rawFiles?: readonly string[] } = {}) {
+              const defaults = createSeenDayInputs(prefix, days);
+              const indexes = { ...createSeenDayInputs(prefix, [days[0]!])[0]!.indexes, ...options.indexes };
+              const compact: CompactIndex[] = [];
+              const raw: RawDayIndex[] = [];
+              for (const [period, path] of Object.entries(indexes)) {
+                const value = await readCommitted(path);
+                if (value !== undefined) {
+                  const index = CompactIndexSchema.parse(value);
+                  if (index.period !== period) throw new Error(`history: ${period} index has another period`);
+                  compact.push(index);
+                }
+              }
+              const rawIndexes = Object.fromEntries(defaults.map(input =>
+                [input.day, options.rawIndexes?.[input.day] ?? input.raw_index]));
+              if (options.rawFiles === undefined) for (const [day, path] of Object.entries(rawIndexes)) {
+                const value = await readCommitted(path);
+                if (value !== undefined) {
+                  const index = RawDayIndexSchema.parse(value);
+                  if (index.date !== day) throw new Error("history: raw index has another UTC day");
+                  raw.push(index);
+                }
+              }
+              for (const path of resolveHistoryInventory({ ledger, prefix, days, compact, raw, indexes, rawIndexes })) {
+                inventory.add(path);
+              }
+              for (const path of options.rawFiles ?? []) inventory.add(path);
+            }
             for (const ledger of ledgers) {
               const entries = registry.families.flatMap(family => family.ledgers).filter(entry => entry.name === ledger);
               if (entries.length !== 1) throw new Error(`history: expected one registration for ${ledger}`);
-              const prefix = entries[0]!.prefix;
-              const compact: CompactIndex[] = [];
-              const raw: RawDayIndex[] = [];
-              for (const path of historyIndexPaths(prefix, days)) {
-                const value = await readCommitted(path);
-                if (value !== undefined) {
-                  if (path.startsWith("state/compact/")) compact.push(CompactIndexSchema.parse(value));
-                  else raw.push(RawDayIndexSchema.parse(value));
-                }
-              }
-              for (const path of resolveHistoryInventory({ ledger, prefix, days, compact, raw })) inventory.add(`/${path}`);
+              await stageHistory(ledger, entries[0]!.prefix, days);
             }
-            const sparse = Bun.spawn(["git", "sparse-checkout", "add", "--skip-checks", ...inventory],
+            for (const input of seen_days) {
+              await stageHistory("seen", inputs.registrations.seen.prefix, [input.day], {
+                ...(input.indexes === undefined ? {} : { indexes: Object.fromEntries(
+                  Object.entries(input.indexes).filter((entry): entry is [string, string] => entry[1] !== undefined)) }),
+                ...(input.raw_index === undefined ? {} : { rawIndexes: { [input.day]: input.raw_index } }),
+                ...(input.raw_files === undefined ? {} : { rawFiles: input.raw_files }),
+              });
+            }
+            for (const path of inputs.settings.inputs.seen_files) inventory.add(path);
+            const sparse = Bun.spawn(["git", "sparse-checkout", "add", "--skip-checks", ...[...inventory].map(sparseCheckoutPath)],
               { stdout: "inherit", stderr: "inherit" });
             if (await sparse.exited !== 0) throw new Error("history: named sparse checkout failed");
             const git = Bun.spawn(["git", "rev-parse", "HEAD"], { stdout: "pipe", stderr: "inherit" });
@@ -152,6 +203,7 @@ jobs:
               throw new Error("workflow: runner directory, output path, run identity and attempt are required");
             }
             const settings = ServiceSettingsSchema.parse({ ...inputs.settings,
+              inputs: { ...inputs.settings.inputs, seen_days },
               run: { ...inputs.settings.run, attempt: Number(GITHUB_RUN_ATTEMPT) } });
             const artifactRoot = join(RUNNER_TEMP, "feed-ingest-plan");
             await mkdir(artifactRoot, { recursive: true });
@@ -177,6 +229,7 @@ jobs:
 
       - name: Optional GitHub report
         if: ${{ !cancelled() && steps.plan.outputs.workflow_reporting == 'true' }}
+        continue-on-error: true
         run: bun run .github/scripts/feed-ingest-plan-report.ts config/feed-ingest-plan.json "$RUNNER_TEMP/feed-ingest-plan/events.json"
 
       - name: Preserve isolated test evidence
