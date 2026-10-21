@@ -166,6 +166,7 @@ test("actual CLI writes readable Parquet, honors selected settings, and exits no
     const child = Bun.spawn(args, { stdout: "pipe", stderr: "pipe" });
     const body = await new Response(child.stdout).text();
     expect(await child.exited).toBe(0);
+    expect(body.trim().length).toBeGreaterThan(0);
     const response = JSON.parse(body);
     const actual = storedRow((await readTable(outputRoot, response.files[0].path)).table);
     expect(actual.run_id).toBe(f.capture.writer.run_id);

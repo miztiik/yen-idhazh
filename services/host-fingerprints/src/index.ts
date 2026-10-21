@@ -31,9 +31,11 @@ async function main(): Promise<void> {
   }
 }
 if (import.meta.main) {
-  main().catch((error: unknown) => {
+  try {
+    await main();
+  } catch (error: unknown) {
     console.error(JSON.stringify({ event: "host_fingerprint_failed", error: error instanceof Error ? error.name : "UnknownError",
       detail: error instanceof Error && (error.name === "ZodError" || error.message.startsWith("Usage:")) ? error.message : "Collection or persistence failed" }));
     process.exitCode = 1;
-  });
+  }
 }
