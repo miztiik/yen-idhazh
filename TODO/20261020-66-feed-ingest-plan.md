@@ -1360,7 +1360,7 @@ the exact in-memory result type with Row #11, then let the runner owner wire
 it in a separate integration increment. The final acceptance gates remain
 open; helper arithmetic and safe refusal are not a complete audit.
 
-Reviewed recorder increment `ad26e1f909de199e56ca302972324b41042889e1`
+Reviewed recorder increment `244435367dade47c9600894cd0506f7d6ee38662`
 is delivered in PR #1621. Strict TypeScript and 15 named audit tests passed;
 native readback verified actual assessment and diversity receipts. Its
 whole-request preflight retains exact timing for rejected candidates as
@@ -1371,6 +1371,15 @@ audited completion false. Unsupported observations fail explicitly rather
 than bypass the recorder. Row #13 owns the shared metrics, tests and owning
 documentation after this tested handoff; the runner does not edit those
 files concurrently.
+This final head includes the reviewed UTC rollover correction by normal
+merge; it changes no recorder source or API from `ad26e1f90`.
+
+Publication review of tested increment `a58752dfd` found that the health
+retry key combines distinct processing stages for the same run and item.
+A normal item with both fetch and publish records therefore fails the join.
+The publication owner is correcting this in its existing scope with a
+recorded multi-stage and failed-then-successful publication case. Acceptance
+of that join remains open.
 
 ### Decisions
 
