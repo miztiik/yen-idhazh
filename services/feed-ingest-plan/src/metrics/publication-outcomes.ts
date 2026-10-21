@@ -49,6 +49,7 @@ export async function readPublicationDay(input: NamedPublicationDay) {
     publication: { day: published.day, status, articles: [] } as PublicationDay, outcomes: [] as PublicationOutcomes[], digest,
   });
   if (published.status === "missing" || published.status === "lost") return missing(published.status);
+  if (published.notices.some(notice => notice.startsWith("files-set-aside:"))) return missing("missing");
   if (published.status === "empty" && (digest === null || digest.items.length === 0)) {
     const outcomes = digest?.runs.flatMap(run => run.run_id === null ? [] : [reconcilePublication({
       run_id: run.run_id, published: { day: published.day, status: "empty", rows: [] }, health, digest,

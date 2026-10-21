@@ -1,17 +1,25 @@
 /** Do measured distributions and real durable audit files tell the same bounded story? */
 import { expect, test } from "bun:test";
-import { mkdir, readdir, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readdir, stat, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
-import { ArticleAssessmentRecordSchema, CONTRACT_VERSION, DiversityMetricRowSchema, deriveUrlKey } from "@idhazh/common-contracts";
+import { ArticleAssessmentRecordSchema, CONTRACT_VERSION, DiversityMetricRowSchema, SourceRunRecordSchema, deriveUrlKey } from "@idhazh/common-contracts";
+import type { LedgerCompletionEvidence } from "@idhazh/common-contracts";
 import { persistLedger } from "@idhazh/ledger-file-writer";
+import type { PersistLedgerResult } from "@idhazh/ledger-file-writer";
 import { runFeedPlan } from "../src/run-feed-plan";
-import { recordPlanningMetrics, preparePlanningMetrics } from "../src/metrics/metrics-recorder";
+import { recordPlanningMetrics, preparePlanningMetrics, recordPublicationMetrics } from "../src/metrics/metrics-recorder";
+import type { PublicationRecorderInput } from "../src/metrics/metrics-recorder";
 import { effectiveSources, measuredRatio, sourceGini, topSourceShare, validateCounts } from "../src/metrics/diversity-metrics";
 import { readLedgerParquet } from "../src/read-ledger-history/read-parquet";
 import { SeenRowSchema } from "../src/screen-article-candidates/seen-evidence";
 import { recordedPlan } from "./plan-recordings";
 import { source } from "./harvest-recordings";
+import { PublishedRowSchema, RecordedEventPairSchema } from "../src/metrics/publication-evidence";
+import type { DigestPublication, ItemHealthPublication } from "../src/metrics/publication-evidence";
+import { registration } from "./partition-fixtures";
+import { readPlanningHistory, settlePlanningDay } from "../src/metrics/planning-populations";
+import { recordedPairKey } from "../src/metrics/fingerprint-dedup";
 
 async function auditFiles(output: string) {
   const directory = join(output, "raw", "feed-ingest-plan");
@@ -221,4 +229,233 @@ test("a missing actual stage file refuses recording before creating either audit
     await expect(recordPlanningMetrics(result, recorded.inputs)).rejects.toThrow();
     expect(await auditFiles(recorded.inputs.outputRoot)).toEqual([]);
   } finally { await recorded.close(); }
+}, 30000);
+
+async function observedPublication() {
+  const recorded = await recordedPlan([
+    source(), source({ id: "carrier", kind: "research" }),
+    source({ id: "inactive", status: "draft" }), source({ id: "empty", url: "https://news.example/empty.xml" }),
+  ]);
+  try {
+    const result = await runFeedPlan({ partition_strategy: "none" }, recorded.inputs, recorded.runtime);
+    const audit = await recordPlanningMetrics(result, recorded.inputs);
+    const date = result.context.date;
+    function receipt(ledger: LedgerCompletionEvidence["ledger"], files: readonly PersistLedgerResult[]): LedgerCompletionEvidence {
+      return { ledger, row_count: files.reduce((sum, result) => sum + result.files.reduce((n, file) => n + file.row_count, 0), 0),
+        files: files.flatMap(result => result.files.map(({ file_id, content_sha256, row_count }) => ({ file_id, content_sha256, row_count }))) };
+    }
+    // A bounded preexisting complete attempt, built from the real run's verified native files.
+    const sourceRows = audit.source_summaries.map(row => SourceRunRecordSchema.parse({
+      ...row, version: CONTRACT_VERSION, observation_phase: "plan_complete",
+      expected_source_count: audit.source_summaries.length,
+      completion_evidence: [
+        audit.receipts.assessments, audit.receipts.diversity,
+        receipt("editorial-selections", [result.files.selections]), receipt("dispatches", [result.files.dispatches]),
+        receipt("rejections", [result.files.harvest_rejections, result.files.screening_rejections, result.files.curation_rejections]),
+      ],
+    }));
+    const sources = await persistLedger({
+      ledger: "source-runs", outputRoot: recorded.inputs.outputRoot, registryEntry: registration("source-runs"),
+      writerContext: result.context.writer, ledgerSettings: recorded.inputs.ledgerSettings,
+      period: { tier: "raw", covers: date }, rowContract: { schema: SourceRunRecordSchema, schemaVersion: CONTRACT_VERSION }, rows: sourceRows,
+    });
+    const selections = result.evidence.curation.rows;
+    const digest: DigestPublication = {
+      date, generated_at: result.context.now, runs: [{ n: 1, run_id: result.context.run_id, items_added: selections.length }],
+      items: selections.map((selection, index) => ({
+        item_id: `ai-0${index + 1}`, source_id: selection.source_id, source_kind: "vendor",
+        source_url: selection.canonical_url, introduced_by_run: 1,
+        title: result.evidence.harvest.candidates.find(item => item.candidate_id === selection.candidate_id)!.title,
+        source_name: selection.source.title,
+      })), leads: [{ item_id: "ai-01" }],
+    };
+    const digestPath = join(recorded.directory, "digest.json");
+    await writeFile(digestPath, JSON.stringify(digest));
+    const publishedRows = digest.items.map(item => PublishedRowSchema.parse({
+      version: CONTRACT_VERSION, item_id: item.item_id, published_on: date, url_key: deriveUrlKey(item.source_url),
+    }));
+    const published = await persistLedger({
+      ledger: "published", outputRoot: recorded.inputs.outputRoot,
+      registryEntry: { name: "published", family: "published", grain: "raw-and-compact", lifecycle_status: "active", prefix: ["published"] },
+      writerContext: result.context.writer, ledgerSettings: recorded.inputs.ledgerSettings,
+      period: { tier: "raw", covers: date }, rowContract: { schema: PublishedRowSchema, schemaVersion: CONTRACT_VERSION }, rows: publishedRows,
+    });
+    const health: ItemHealthPublication[] = digest.items.map(item => ({
+      date, run_id: result.context.run_id, item_id: item.item_id, url_key: deriveUrlKey(item.source_url),
+      source_id: item.source_id, stage: "publish", outcome: "ok",
+    }));
+    const paths = (files: readonly PersistLedgerResult[], day = date) => ({
+      day, rawFiles: files.flatMap(result => result.files.map(file => join(recorded.inputs.outputRoot, file.path))),
+    });
+    const planning = {
+      sources: paths([sources]), ledgers: {
+        "article-assessments": paths([audit.files.assessments]), diversity: paths([audit.files.diversity]),
+        "editorial-selections": paths([result.files.selections]), dispatches: paths([result.files.dispatches]),
+        rejections: paths([result.files.harvest_rejections, result.files.screening_rejections, result.files.curation_rejections]),
+      },
+    };
+    const prior = "2026-10-20";
+    const emptyPaths = paths([], prior);
+    const input: PublicationRecorderInput = {
+      run_id: result.context.run_id, correlation_id: result.context.correlation_id,
+      as_of: result.context.now, config_sha256: result.evidence.harvest.inputs.config_sha256,
+      config: { ...result.evidence.harvest.config.metrics, rolling_window_days: 1, overlap_windows_days: [1] },
+      writer: { ...result.context.writer, producer: "tests.publication-observer" },
+      outputRoot: join(recorded.directory, "observer"), ledgerSettings: recorded.inputs.ledgerSettings,
+      registrations: { diversity: recorded.inputs.registrations.diversity, sources: registration("source-runs") },
+      publication_days: [
+        { published: { ...paths([], prior), schema_version: CONTRACT_VERSION }, health: { day: prior, status: "empty", rows: [] }, digest_path: null },
+        { published: { ...paths([published]), schema_version: CONTRACT_VERSION }, health: { day: date, status: "rows", rows: health }, digest_path: digestPath },
+      ],
+      planning_days: [
+        { sources: emptyPaths, ledgers: { "article-assessments": emptyPaths, diversity: emptyPaths,
+          "editorial-selections": emptyPaths, dispatches: emptyPaths, rejections: emptyPaths } }, planning,
+      ], event_pairs: [],
+    };
+    return { recorded, result, audit, digest, digestPath, input, planning };
+  } catch (error) { await recorded.close(); throw error; }
+}
+
+test("actual native publication writes all per-run readings and real source observations without sealing the audit", async () => {
+  const fixture = await observedPublication();
+  try {
+    const written = await recordPublicationMetrics(fixture.input);
+    expect(written.status).toBe("publication_metrics_recorded_audit_pending");
+    expect(written.audited_complete).toBe(false);
+    expect(written.receipts.diversity.row_count).toBe(written.rows.length);
+    expect(written.receipts.diversity.files).toEqual(written.files.diversity.files.map(
+      ({ file_id, content_sha256, row_count }) => ({ file_id, content_sha256, row_count })));
+    const rows = written.rows.filter(row => row.window_start === null);
+    const metric = (name: string, basis: string, unit?: string) => rows.find(row =>
+      row.metric === name && row.basis === basis && (unit === undefined || row.unit === unit))!;
+    expect(metric("active_source_coverage", "eligible")).toMatchObject({ value: 2 / 3, numerator: 2, denominator: 3 });
+    expect(metric("selection_coverage", "selected")).toMatchObject({ value: 1 / 2, numerator: 1, denominator: 2 });
+    expect(metric("effective_number_of_sources", "eligible").value).toBeCloseTo(2, 12);
+    expect(metric("effective_number_of_sources", "published")).toMatchObject({ value: 1, item_count: 2 });
+    expect(metric("source_gini", "published").value).toBeCloseTo(2 / 3, 12);
+    expect(metric("top_source_concentration", "published")).toMatchObject({ value: 1, numerator: 2, denominator: 2 });
+    expect(rows.find(row => row.metric === "source_kind_distribution" && row.basis === "published" && row.dimension_value === "vendor" && row.unit === "count")!.value).toBe(2);
+    expect(rows.find(row => row.metric === "lost_diversity_by_stage" && row.stage === "deduplication")!.value).toBeCloseTo(1, 12);
+    expect(rows.find(row => row.metric === "lost_diversity_by_stage" && row.stage === "lead_selection")!.value).toBe(0);
+    expect(written.source_observations).toHaveLength(4);
+    expect(written.source_observations.reduce((sum, source) => sum + source.published_count!, 0)).toBe(2);
+    expect(written.source_observations.reduce((sum, source) => sum + source.lead_count!, 0)).toBe(1);
+    expect(written.source_observations[0]!.source.kind).toBe("reporting");
+    const [nativeMetrics, nativeSources] = await Promise.all([
+      readLedgerParquet(join(fixture.input.outputRoot, written.files.diversity.files[0]!.path), "diversity",
+        { schema: DiversityMetricRowSchema, schemaVersion: CONTRACT_VERSION }),
+      readLedgerParquet(join(fixture.input.outputRoot, written.files.sources!.files[0]!.path), "source-runs",
+        { schema: SourceRunRecordSchema, schemaVersion: CONTRACT_VERSION }),
+    ]);
+    expect(nativeMetrics.rows.map(held => held.row)).toEqual(written.rows);
+    expect(nativeSources.rows.map(held => held.row)).toEqual(written.source_observations);
+    expect(written.rows.filter(row => row.window_start !== null && row.basis === "published").every(row => row.availability === "unavailable")).toBe(true);
+  } finally { await fixture.recorded.close(); }
+}, 30000);
+
+test("a completed bounded window recomputes every metric from sets and never backdates source observations", async () => {
+  const fixture = await observedPublication();
+  try {
+    const written = await recordPublicationMetrics({ ...fixture.input, as_of: "2026-10-22T00:00:00Z", through: "2026-10-21" });
+    const rolling = written.rows.filter(row => row.window_start !== null);
+    expect(written.history).toEqual({ start: "2026-10-21", end: "2026-10-21", coverage_days: 2, required_days: 2 });
+    expect(rolling.filter(row => row.basis === "published").every(row => row.availability === "available")).toBe(true);
+    expect(rolling.find(row => row.metric === "event_repetition_rate")!.value).toBe(0);
+    expect(rolling.find(row => row.metric === "novel_source_contribution" && row.unit === "count")!.value).toBe(2);
+    expect(rolling.find(row => row.metric === "novel_source_contribution" && row.unit === "ratio")!.value).toBe(1);
+    expect(rolling.find(row => row.metric === "source_event_overlap" && row.dimension === "source" && row.unit === "ratio")!.value).toBe(0);
+    expect(written.source_observations).toEqual([]);
+    expect(written.files.sources).toBeNull();
+    expect(written.unavailable.source_observations).toContain("without backdating");
+  } finally { await fixture.recorded.close(); }
+}, 30000);
+
+test("native public boundary refuses foreign source attribution and does not measure an omitted member as a complete day", async () => {
+  const fixture = await observedPublication();
+  try {
+    await expect(recordPublicationMetrics({ ...fixture.input,
+      config: { ...fixture.result.evidence.harvest.config.metrics, top_source_counts: [2] },
+    })).rejects.toThrow("unsupported top_k");
+    await expect(stat(fixture.input.outputRoot)).rejects.toThrow();
+    const changed = structuredClone(fixture.digest);
+    changed.items[0]!.source_id = "foreign-source";
+    await writeFile(fixture.digestPath, JSON.stringify(changed));
+    await expect(recordPublicationMetrics(fixture.input)).rejects.toThrow("source identities disagree");
+    await expect(stat(fixture.input.outputRoot)).rejects.toThrow();
+    const omitted = { ...fixture.digest, items: fixture.digest.items.slice(1), leads: [],
+      runs: fixture.digest.runs.map(run => ({ ...run, items_added: 1 })) };
+    await writeFile(fixture.digestPath, JSON.stringify(omitted));
+    const observed = await recordPublicationMetrics(fixture.input);
+    expect(observed.rows.filter(row => row.basis === "published").every(row => row.availability === "unavailable")).toBe(true);
+    expect(observed.source_observations).toEqual([]);
+    expect(observed.files.sources).toBeNull();
+  } finally { await fixture.recorded.close(); }
+}, 30000);
+
+test("caller event titles, outlet names and current lists cannot replace the native digest evidence", async () => {
+  const fixture = await observedPublication();
+  try {
+    const date = "2026-10-20";
+    const prior = {
+      date, generated_at: `${date}T23:00:00Z`, runs: [{ n: 1, run_id: `${date}-1`, items_added: 1 }],
+      items: [{ ...fixture.digest.items[0]!, item_id: "ai-03", source_url: "https://news.example/prior", introduced_by_run: 1 }],
+      leads: [],
+    };
+    const path = join(fixture.recorded.directory, "prior-digest.json");
+    await writeFile(path, JSON.stringify(prior));
+    const written = await persistLedger({
+      ledger: "published", outputRoot: fixture.recorded.inputs.outputRoot,
+      registryEntry: { name: "published", family: "published", grain: "raw-and-compact", lifecycle_status: "active", prefix: ["published"] },
+      writerContext: { ...fixture.input.writer, run_id: `${date}-1` }, ledgerSettings: fixture.input.ledgerSettings,
+      period: { tier: "raw", covers: date }, rowContract: { schema: PublishedRowSchema, schemaVersion: CONTRACT_VERSION },
+      rows: [PublishedRowSchema.parse({ version: CONTRACT_VERSION, published_on: date, item_id: "ai-03", url_key: deriveUrlKey(prior.items[0]!.source_url) })],
+    });
+    const items = [...prior.items, ...fixture.digest.items];
+    const stamp = (await Bun.file(new URL("../../../tests/fixtures/feed-ingest-plan/publication-evidence.json", import.meta.url)).json()).event_stamp;
+    const pairs = items.flatMap((left, n) => items.slice(n + 1).map(right => {
+      const [a, b] = [deriveUrlKey(left.source_url), deriveUrlKey(right.source_url)].sort();
+      return RecordedEventPairSchema.parse({ ...stamp, left_url_key: a, right_url_key: b,
+        pair_key: recordedPairKey(a!, b!), verdict: "YES", verdict_swapped: "YES", usable: true });
+    }));
+    const input = {
+      ...fixture.input, as_of: "2026-10-22T00:00:00Z", through: "2026-10-21", event_pairs: pairs,
+      publication_days: [{
+        published: { day: date, rawFiles: written.files.map(file => join(fixture.recorded.inputs.outputRoot, file.path)), schema_version: CONTRACT_VERSION },
+        health: { day: date, status: "empty" as const, rows: [] }, digest_path: path,
+      }, fixture.input.publication_days[1]!],
+      // These unrecognised caller fields cannot enter the public recorder's derived populations.
+      current: [], event_evidence: { pairs, items: items.map((item, n) =>
+        ({ ...item, title: "Recorded event fire", source_name: `foreign-${n}` })) },
+    };
+    const observed = await recordPublicationMetrics(input);
+    expect(observed.rows.find(row => row.window_start !== null && row.metric === "event_repetition_rate")).toMatchObject({
+      availability: "available", value: 0, numerator: 0, denominator: 2,
+    });
+    expect(observed.rows.find(row => row.window_start !== null && row.metric === "effective_number_of_sources" && row.basis === "published")!.item_count).toBe(2);
+    expect(observed.rows.find(row => row.window_start !== null && row.metric === "novel_source_contribution" && row.unit === "count")!.value).toBe(0);
+  } finally { await fixture.recorded.close(); }
+}, 30000);
+
+test("missing native planning proof stays unavailable while independently recorded publication counts survive", async () => {
+  const fixture = await observedPublication();
+  try {
+    const incomplete = {
+      ...fixture.planning,
+      sources: { ...fixture.planning.sources, rawFiles: [join(fixture.recorded.directory, "absent.parquet")] },
+    };
+    const written = await recordPublicationMetrics({ ...fixture.input, as_of: "2026-10-22T00:00:00Z", through: "2026-10-21",
+      planning_days: [incomplete] });
+    const rolling = written.rows.filter(row => row.window_start !== null);
+    expect(rolling.find(row => row.metric === "effective_number_of_sources" && row.basis === "published")!.value).toBe(1);
+    expect(rolling.find(row => row.metric === "source_gini" && row.basis === "published")).toMatchObject({
+      value: null, unavailable_reason: "incomplete_history", history_coverage_days: 0,
+    });
+    expect(rolling.find(row => row.metric === "active_source_coverage")).toMatchObject({
+      value: null, unavailable_reason: "incomplete_history", history_coverage_days: 0,
+    });
+    const native = await readPlanningHistory(fixture.planning);
+    const settled = settlePlanningDay(native);
+    expect(settled.status).toBe("rows");
+    expect(settled.runs[0]!.eligible).toHaveLength(4);
+  } finally { await fixture.recorded.close(); }
 }, 30000);

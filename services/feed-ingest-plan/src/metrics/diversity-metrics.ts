@@ -53,20 +53,27 @@ function sourceCounts(items: readonly FeedIngestCandidate[], active: readonly st
   return [...counts.values()];
 }
 
-export function calculateDiversityMetrics(result: FeedPlanResult, membership: StageMembership): DiversityMetricRow[] {
-  const config = FeedMetricsConfigSchema.parse(result.evidence.harvest.config.metrics);
-  const active = membership.sources.filter(source => source.status === "active").map(source => source.source_id);
-  const { context } = result;
-  const base: DiversityMetricRow = {
+export function createMetricTemplate(
+  context: { date: string; correlation_id: string; run_id: string; now: string },
+  configSha256: string, sourceCount: number | null,
+): DiversityMetricRow {
+  return {
     version: CONTRACT_VERSION, date: context.date, correlation_id: context.correlation_id, run_id: context.run_id,
     metric: "effective_number_of_sources", basis: "selected", as_of: context.now,
     window_start: null, window_end: null, dimension: "source", stage: null, window_days: null,
     dimension_value: null, value: null, unit: "sources", before_value: null, after_value: null,
-    numerator: null, denominator: null, item_count: null, source_count: active.length,
+    numerator: null, denominator: null, item_count: null, source_count: sourceCount,
     history_coverage_days: null, history_required_days: null,
-    algorithm_version: CONTRACT_VERSION, config_sha256: result.evidence.harvest.inputs.config_sha256,
+    algorithm_version: CONTRACT_VERSION, config_sha256: configSha256,
     availability: "unavailable", unavailable_reason: "empty_denominator", top_k: null,
   };
+}
+
+export function calculateDiversityMetrics(result: FeedPlanResult, membership: StageMembership): DiversityMetricRow[] {
+  const config = FeedMetricsConfigSchema.parse(result.evidence.harvest.config.metrics);
+  const active = membership.sources.filter(source => source.status === "active").map(source => source.source_id);
+  const { context } = result;
+  const base = createMetricTemplate(context, result.evidence.harvest.inputs.config_sha256, active.length);
   const rows: DiversityMetricRow[] = [];
   function record(values: Partial<DiversityMetricRow>) {
     const row = { ...base, ...values };

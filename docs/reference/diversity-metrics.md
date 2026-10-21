@@ -63,8 +63,8 @@ Counts must be nonnegative safe integers; a ratio numerator cannot exceed its
 denominator. Empty ratio denominators produce a null value with
 `empty_denominator`. No result is NaN or infinity.
 
-Publication and lead effective-source readings, published Gini and published
-concentration stay unavailable with `missing_publication`. Historical overlaps
+At planning time, publication and lead effective-source readings, published Gini
+and published concentration stay unavailable with `missing_publication`. Historical overlaps
 and novel-source contribution stay unavailable with `incomplete_history`;
 event repetition stays unavailable with `missing_event_evidence`. Each
 history-dependent row names its configured window. Unknown item counts and
@@ -75,7 +75,8 @@ publication-stage loss is fabricated. The existing loss-row validator requires
 real before and after values even for an unavailable row. The recorder reports
 that unavailable measurement in its returned `unavailable` explanation instead
 of writing a false row. Rolling metrics likewise remain explicitly unavailable
-in the recorder result until a complete historical membership window is supplied.
+in the planning recorder result. The publication recorder can calculate them
+when their actual bounded membership inputs are supplied.
 
 ## Publication and history observations
 
@@ -109,6 +110,35 @@ rule and unchanged ASCII headline-figure veto constrain positive decisions.
 Every member of an event group must match every other member; pair chains alone
 cannot merge events. Group names exist only inside this bounded calculation.
 No matching policy, model call or new stored event identity is introduced.
+
+## Durable per-run and rolling readings
+
+The publication recorder derives the complete measured run subset itself. A
+missing named run is unavailable, not an invented zero. An explicitly recorded
+zero-addition run is measurable. Native planning history is settled per run
+before combining days; an incomplete newer retry cannot erase an older complete
+attempt. Missing original file membership after packing remains unavailable.
+Assessments, selections, terminal losses and source counts must reconcile.
+
+Rolling eligible populations union unique candidate identities, including their
+distinct source carriers. Selected and published populations instead union
+unique article URLs, retaining the first recorded primary attribution and kind.
+Active source denominators union the retained active snapshots and keep zeros.
+All counts and sets are combined before entropy, concentration, Gini or ratios
+are calculated; daily ratios are never averaged. Published Gini is unavailable
+without complete active snapshots or when a published source is outside them.
+
+Publication and lead distributions can be measured independently of missing
+planning completion. Eligible/selected distributions and their stage losses
+require complete planning evidence. Publication-stage loss needs both complete
+selected and published populations. Coverage counts only complete relevant UTC
+days for each reading. Today's partial day cannot be a complete rolling
+observation; a named run's observed publication counts remain measurable.
+
+Event titles and outlet names are taken from the same named digest item and URL
+used by publication reconciliation. An unchecked caller item cannot remove a
+same-outlet or figure-conflict veto. Missing titles leave affected event readings
+unavailable. Source and article readings do not require event evidence.
 
 ## See also
 

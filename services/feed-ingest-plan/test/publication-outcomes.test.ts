@@ -99,6 +99,14 @@ test("native published Parquet retries and compact history retain recorded item/
       published: { day: digest.date, indexes: { monthly: index }, schema_version: CONTRACT_VERSION },
       health: { day: digest.date, status: "rows", rows: health }, digest_path: join(root, "absent-digest.json"),
     })).publication.status).toBe("missing");
+    await writeFile(index, JSON.stringify({
+      version: "2026-10-07", ledger: "published", period: "monthly",
+      entries: [{ covers: "2026-10", rows: 2, bytes: (await stat(join(root, file.path))).size, state: "packed", set_aside: 1 }],
+    }));
+    expect((await readPublicationDay({
+      published: { day: digest.date, indexes: { monthly: index }, schema_version: CONTRACT_VERSION },
+      health: { day: digest.date, status: "rows", rows: health }, digest_path: digestPath,
+    })).publication.status).toBe("missing");
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 test("repeated runs, zero publication and legacy ordinals never become latest-run guesses", async () => {

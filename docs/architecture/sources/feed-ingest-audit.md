@@ -89,6 +89,42 @@ These readers and the bounded history arithmetic do not seal an audit.
 records and actual reconciled publication evidence. It never turns the planning
 recorder's pending internal source summaries into completion records.
 
+## Durable publication observations
+
+`recordPublicationMetrics(input)` in the same recorder accepts a named run,
+correlation, UTC observation instant, the recorded configuration hash and metric
+settings, a writer, ledger settings and active diversity/source-run registrations.
+`publication_days` names each day's native published files, digest and validated
+settled health projection. `planning_days` names its source-run files and all five
+completion ledgers. Missing named days remain missing; an explicit empty raw-file
+list means known-empty. Extra or repeated dates are refused before any write.
+
+The recorder settles complete planning attempts through their original file
+commitments before attribution. It reconstructs unique stage/candidate instances
+from assessments, checks their terminal rejection records, selected primary
+sources and per-source counts, and derives publication members from the native
+published/digest join. Callers cannot replace those populations with current-item
+lists. Optional `event_pairs` contains existing recorded similarity decisions.
+Titles and outlet names come only from the matching named digest items, not
+caller-supplied event-item projections.
+
+The full proposed diversity batch and any source observations validate before
+writes. Actual files are written through `persistLedger` and read back natively,
+including writer identities, digests, row counts and ordered rows.
+The result returns those files, readings, source observations, history coverage
+and unavailable explanations with `publication_metrics_recorded_audit_pending`
+and `audited_complete: false`.
+
+An original complete source attempt and a reconciled named run can produce
+`publication_complete` source observations with actual publication/lead counts.
+Existing planning file commitments remain unchanged. Missing or packed original
+planning proof cannot become new completion proof, but it does not erase
+independently proven publication membership. A following-day observation cannot
+fit the source contract's same-day `observed_at`: its source write stays explicitly
+unavailable instead of backdating. Publication metrics can still be recorded.
+Packed indexes reporting discarded files make publication history missing even
+when the index does not name this exact day as lost.
+
 ## Design rationale
 
 The existing source-run contract has only complete planning and publication

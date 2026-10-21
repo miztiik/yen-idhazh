@@ -28,6 +28,7 @@ export const DigestPublicationSchema = z.object({
   items: z.array(z.object({
     item_id: ItemIdSchema, source_id: SlugSchema, source_url: UrlSchema,
     source_kind: SlugSchema.optional(), introduced_by_run: PositiveCountSchema,
+    title: z.string().min(1).optional(), source_name: z.string().min(1).optional(),
   })),
   leads: z.array(z.object({ item_id: ItemIdSchema })).default([]),
 }).superRefine((day, ctx) => {

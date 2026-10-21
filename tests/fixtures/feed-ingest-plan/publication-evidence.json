@@ -26,7 +26,7 @@
       "authority": "backend/idhazh/contracts/digest_day.py:DigestDay",
       "fields": ["date", "generated_at", "runs", "items", "leads"],
       "run_fields": ["n", "run_id", "items_added"],
-      "item_fields": ["item_id", "source_id", "source_url", "source_kind", "introduced_by_run"],
+      "item_fields": ["item_id", "source_id", "source_url", "source_kind", "introduced_by_run", "title", "source_name"],
       "lead_fields": ["item_id"]
     }
   },
