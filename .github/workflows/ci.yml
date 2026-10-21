@@ -350,11 +350,10 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      # The canary day is built by the backend, through the same contracts and
-      # the same encoder the pipeline uses. Building it any other way would test
-      # a payload shape nothing actually writes.
-      - name: Install the backend, for the canary day builder
-        run: pip install -e .
+      # The canary day and explorer fixtures use the real backend contracts.
+      # The dev extra supplies DuckDB for the independent native schema oracle.
+      - name: Install the backend and test tooling
+        run: pip install -e ".[dev]"
 
       - uses: ./.github/actions/prepare-duckdb
 

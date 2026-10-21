@@ -28,14 +28,18 @@ function onDisk(file: string): number {
 	return statSync(file).size;
 }
 
-test('a published ledger whose build holds none of its files is not weighed, and the answer names it', () => {
+test('published flat and nested ledgers absent from the build are not weighed, and the answer names them', () => {
 	const build = aBuildTree({
 		'state/compact/seen/index/daily.json': 'daily',
 		'state/compact/seen/index/monthly.json': 'monthly',
 		'state/compact/seen/index/yearly.json': 'yearly'
 	});
-	const ceilings = { 'state/compact/item-health/index/': 2200, 'state/compact/seen/index/': 2200 };
-	expect(weighPayloads(build, ceilings, ['item-health', 'seen'], '', onDisk)).toEqual({
+	const ceilings = {
+		'state/compact/feed-ingest-plan/dispatches/index/': 2200,
+		'state/compact/item-health/index/': 2200,
+		'state/compact/seen/index/': 2200
+	};
+	expect(weighPayloads(build, ceilings, ['dispatches', 'item-health', 'seen'], '', onDisk)).toEqual({
 		weighed: [
 			{ key: 'state/compact/seen/index/', path: 'state/compact/seen/index/monthly.json', bytes: 7, ceiling: 2200 },
 			{ key: 'state/compact/seen/index/', path: 'state/compact/seen/index/yearly.json', bytes: 6, ceiling: 2200 },
@@ -45,12 +49,28 @@ test('a published ledger whose build holds none of its files is not weighed, and
 		namesNothing: [],
 		notWeighed: [
 			{
+				key: 'state/compact/feed-ingest-plan/dispatches/index/',
+				reason:
+					'dispatches is not packed yet, so the build holds none of its files. ' +
+					'If it was packed before, restore state/compact/feed-ingest-plan/dispatches/ from git history.'
+			},
+			{
 				key: 'state/compact/item-health/index/',
 				reason:
 					'item-health is not packed yet, so the build holds none of its files. ' +
 					'If it was packed before, restore state/compact/item-health/ from git history.'
 			}
 		]
+	});
+
+});
+
+test('a nested ledger index is weighed at its registered path and still fails above its ceiling', () => {
+	const key = 'state/compact/feed-ingest-plan/dispatches/index/';
+	const build = aBuildTree({ [`${key}daily.json`]: 'daily' });
+	const file = { key, path: `${key}daily.json`, bytes: 5, ceiling: 4 };
+	expect(weighPayloads(build, { [key]: 4 }, ['dispatches'], '', onDisk)).toEqual({
+		weighed: [file], over: [file], namesNothing: [], notWeighed: []
 	});
 });
 
@@ -82,18 +102,21 @@ const filesWithNoIndex: Record<string, Record<string, string>> = {
 	}
 };
 
-for (const [held, files] of Object.entries(filesWithNoIndex)) {
-	test(`a published ledger with ${held} in the build and nothing at its index key still fails`, () => {
-		const build = aBuildTree(files);
-		expect(
-			weighPayloads(build, { 'state/compact/item-health/index/': 2200 }, ['item-health'], '', onDisk)
-		).toEqual({
-			weighed: [],
-			over: [],
-			namesNothing: [{ key: 'state/compact/item-health/index/', ceiling: 2200 }],
-			notWeighed: []
+for (const [ledger, folder] of [['item-health', 'item-health'], ['dispatches', 'feed-ingest-plan/dispatches']] as const) {
+	for (const [held, files] of Object.entries(filesWithNoIndex)) {
+		test(`published ${ledger} with ${held} in the build and nothing at its index key still fails`, () => {
+			const build = aBuildTree(Object.fromEntries(
+				Object.entries(files).map(([path, text]) => [path.replace('item-health', folder), text])
+			));
+			const key = `state/compact/${folder}/index/`;
+			expect(weighPayloads(build, { [key]: 2200 }, [ledger], '', onDisk)).toEqual({
+				weighed: [],
+				over: [],
+				namesNothing: [{ key, ceiling: 2200 }],
+				notWeighed: []
+			});
 		});
-	});
+	}
 }
 
 test('a file over its ceiling fails, a file at its ceiling does not, and a directory key bounds each file on its own', () => {

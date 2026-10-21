@@ -199,7 +199,7 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 | 13 | Phase 2 publication reconciliation and rolling diversity metrics | 12, 14 | H | PENDING | - | - | - |
 | 14 | Phase 1 source-run audit and three-axis evidence | 11 | G | PENDING | - | - | - |
 | 15 | Config-driven source registries and compatible readers | - | A | DONE | fluffy-adventure (feed-registry-migration) | - | f7f18c64-813b-4a13-b421-1cd67b951db6 |
-| 16 | Public data-explorer enrollment and nested ledger delivery | 2 | B | IN-FLIGHT | reimagined-enigma | - | 2b6ac0cc-60a2-4c13-a67a-8d8ec21a4fc1 |
+| 16 | Public data-explorer enrollment and nested ledger delivery | 2 | B | DONE | reimagined-enigma | - | 2b6ac0cc-60a2-4c13-a67a-8d8ec21a4fc1 |
 
 ---
 
@@ -1187,6 +1187,8 @@ and robots checks. Row #15 is delivered for review; this worker does not merge.
 - **Files touched:**
   - `config/idhazh.json`
   - `frontend/scripts/published-ledgers.mjs`
+  - `frontend/scripts/ledger-prefixes.mjs`
+  - `frontend/scripts/payload-ceilings.mjs`
   - `frontend/scripts/raw-listed-through.mjs`
   - `frontend/scripts/copy-visuals.mjs`
   - `frontend/src/lib/data/slice-reader.ts`
@@ -1194,6 +1196,11 @@ and robots checks. Row #15 is delivered for review; this worker does not merge.
   - `frontend/tests/raw-listed-through.spec.ts`
   - `frontend/tests/ledger-door.spec.ts`
   - `frontend/tests/console-data-explorer.spec.ts`
+  - `frontend/tests/console-data-explorer-still.spec.ts`
+  - `frontend/tests/support/feed-ledgers.ts`
+  - `frontend/tests/payload-ceilings.spec.ts`
+  - `backend/tests/contracts/test_page_ceilings.py`
+  - `.github/workflows/ci.yml`
   - `docs/architecture/publishing/how-the-query-door-answers-a-written-question.md`
   - `docs/architecture/publishing/how-the-query-door-answers-a-panel.md`
 - **Acceptance gates:** Local: shared selector, generated-state flat/nested ledger-copy fixtures, focused query-door tests, and one representative explorer journey, not a browser case per ledger. CI: full suite and site-size gate. Verify allowlist enrollment for all new ledger names, correct raw/daily/monthly/yearly/index paths, missing versus known-empty data, and raw-listing coverage after compaction. Use fixtures and the real build/query path, not mocks or external network.
@@ -1204,6 +1211,29 @@ Preflight correction: the raw-listing reader has its own named test module,
 copied-module default-path checks, and add nested-prefix coverage there rather
 than leaving this direct reader outside the row's checks. Any test that copies
 the module must copy its named configuration dependencies too.
+
+Execution scope correction: `console-data-explorer.spec.ts` now checks only
+chrome selection in the logic tier. Its existing real query/chart journey is
+`console-data-explorer-still.spec.ts`; extend that journey rather than adding a
+second browser case. `ledger-prefixes.mjs` owns shared registry-prefix
+validation, and `support/feed-ledgers.ts` generates and stages bounded real
+Python-contract fixtures for the copy, door and browser checks.
+
+CI scope correction: the six published ledgers need payload ceilings at their
+registered nested index paths. Keep the existing longest-index bound check,
+using the shared registry and compaction-task name builders rather than flat
+names. The bundle gate uses `ledgerFolders` for absent-ledger checks as well;
+a ledger with compact or raw files but no compact index still fails.
+
+The coordinator approved these coupled supporting paths on 2026-10-21:
+`backend/tests/contracts/test_page_ceilings.py`,
+`frontend/scripts/payload-ceilings.mjs`,
+`frontend/tests/payload-ceilings.spec.ts`, and `.github/workflows/ci.yml`.
+The browser job installs the existing backend dev extra for the real fixture's
+native DuckDB schema check, as the site and backend gate jobs already do.
+This adds install time and disk for the existing dev dependencies, including
+numeric libraries; that incremental runner cost is not measured. It adds no
+published bytes, dependency group, mock or substitute journey.
 
 ### Decisions
 
