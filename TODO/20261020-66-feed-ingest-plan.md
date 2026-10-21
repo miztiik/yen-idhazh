@@ -1191,6 +1191,15 @@ The isolated workflow does not commit generated state or invoke the
 production publisher. It must include compact indexes and their named
 files, not substitute a raw-only checkout or scan accumulated history.
 
+Report isolation uses the same actual produced files before and after each
+disabled/enabled report invocation. Every file, including source records,
+must retain identical bytes and content digests. Independent planning runs
+record different real elapsed durations and completion file IDs, so their
+source-file digests cannot be an equality oracle. Verify both runs' full
+native source records and completion proof without dropping fields; retain
+the independent-run equality checks for deterministic stage and metric
+content. Do not replace measured clocks or normalize persisted records.
+
 ### Table R - Workflow inputs and freshness behavior
 
 | # | Input or rule | Contract |
