@@ -155,3 +155,77 @@ test("a later dispatch failure does not lose already durable first sight from th
     expect(native.rows.every(row => row.row.first_seen_at === "2026-10-21T12:00:00Z")).toBe(true);
   } finally { await recorded.close(); }
 }, 30000);
+
+test("a listener ages accepted history at UTC midnight without inventing new-day evidence", async () => {
+  const recorded = await recordedPlan([source({ url: "https://news.example/article-failures.xml" })]);
+  const receipts: { day: string; files: readonly PersistedLedgerFile[] }[] = [];
+  try {
+    recorded.inputs.clock_config.collect.seen_window_days = 1;
+    const authored = [
+      { day: "2026-10-20", raw_files: [] as string[] },
+      { day: "2026-10-21", raw_files: [] as string[] },
+    ];
+    recorded.inputs.settings.inputs.seen_days = authored;
+    delete recorded.runtime.run_number;
+    recorded.runtime.clock = () => new Date("2026-10-21T23:59:59Z");
+    recorded.runtime.on_seen_persisted = receipt => { receipts.push(receipt); };
+    const app = createPlanApp(recorded.inputs, recorded.runtime);
+    const post = () => app.request("/api/2026-10-20/plan", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+    });
+    const before = await post();
+    expect(before.status).toBe(409);
+    const first = await before.json();
+    expect(first.first_sight.absence_proof).toBe("within_configured_window");
+    expect(first.first_sight.created_count).toBeGreaterThan(0);
+    expect(receipts).toHaveLength(1);
+
+    recorded.runtime.clock = () => new Date("2026-10-22T00:00:01Z");
+    recorded.inputs.harvest.sources.push(source({ id: "new-feed" }));
+    const fetched = recorded.transport.requests.length;
+    const after = await post();
+    expect(after.status).toBe(409);
+    const second = await after.json();
+    expect(recorded.transport.requests.length).toBeGreaterThan(fetched);
+    expect(second.first_sight.absence_proof).toBe("unavailable");
+    expect(second.first_sight.created_count).toBe(0);
+    expect(second.files.seen).toEqual({ status: "empty", files: [] });
+    expect(second.first_sight.window.days).toMatchObject([
+      { input: { day: "2026-10-21", raw_files: [] }, status: "empty" },
+      { input: { day: "2026-10-22" }, status: "missing" },
+    ]);
+    expect(second.first_sight.own_receipts).toHaveLength(1);
+    expect(receipts).toHaveLength(1);
+    const settled = await readLedgerParquet(join(recorded.inputs.outputRoot, receipts[0]!.files[0]!.path), "seen", {
+      schema: SeenRowSchema, schemaVersion: "2026-08-31",
+    });
+    expect(settled.rows.every(row => row.row.first_seen_at === first.observed_at
+      && row.row.first_seen_run === first.run_id)).toBe(true);
+    expect(recorded.inputs.settings.inputs.seen_days).toEqual(authored);
+
+    recorded.inputs.settings.inputs.seen_days = [
+      ...authored, { day: "2026-10-22", raw_files: [] },
+    ];
+    const supplied = await post();
+    expect(supplied.status).toBe(409);
+    const third = await supplied.json();
+    expect(third.first_sight.absence_proof).toBe("within_configured_window");
+    expect(third.first_sight.created_count).toBeGreaterThan(0);
+    expect(receipts).toHaveLength(2);
+    const newlySeen = await readLedgerParquet(join(recorded.inputs.outputRoot, receipts[1]!.files[0]!.path), "seen", {
+      schema: SeenRowSchema, schemaVersion: "2026-08-31",
+    });
+    const previous = new Set(settled.rows.map(row => row.row.url_key));
+    expect(newlySeen.rows.every(row => !previous.has(row.row.url_key))).toBe(true);
+
+    const requests = recorded.transport.requests.length;
+    recorded.inputs.settings.inputs.seen_days = [authored[0]!, authored[0]!, authored[1]!];
+    expect((await post()).status).toBe(500);
+    recorded.inputs.settings.inputs.seen_days[0] = { day: "2026-10-19", raw_files: [] };
+    recorded.inputs.settings.inputs.seen_days.splice(1, 1);
+    expect((await post()).status).toBe(500);
+    recorded.inputs.settings.inputs.seen_days = [...authored, { day: "2026-10-23", raw_files: [] }];
+    expect((await post()).status).toBe(500);
+    expect(recorded.transport.requests).toHaveLength(requests);
+  } finally { await recorded.close(); }
+}, 30000);

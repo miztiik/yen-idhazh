@@ -111,6 +111,13 @@ seen-file receipts as additional per-day observations, even if a later stage
 fails. It validates receipts, rejects a backwards run clock and prunes receipts
 outside the configured window. A fresh process needs refreshed caller-provided
 inventories; this is not a repository scan or cross-process locking mechanism.
+After a successful request, that listener remembers which named day inputs it
+accepted. As UTC advances, it omits unchanged accepted inputs older than the
+new window without changing the authored inventory. New or changed invalid
+inputs still fail, as do out-of-window inputs in a direct run. Newly required
+days stay missing until the caller supplies their evidence; planning continues
+with available observations but cannot create new first sight without the
+complete window.
 The returned evidence and API/CLI `first_sight` summary identify the window,
 per-day status, own receipts, created count and limited absence proof.
 
