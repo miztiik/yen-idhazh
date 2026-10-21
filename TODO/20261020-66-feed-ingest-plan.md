@@ -254,7 +254,7 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 | 10 | Contextual bin-packing partitioner with feature flag | 9 | E | IN-FLIGHT | Session `86a9018f-dadb-4181-b82c-ca7fe9347116` builds on tested harvest foundation; integrates tested curation before final checks; historical completion proof remains unresolved below | - | - |
 | 11 | Core plan engine entrypoint, dual-mode runner, and sealing | 6, 10 | F | IN-FLIGHT | plan-66-api-cli-runner | - | ec780a10-5ab0-4ad7-a4e1-c36db811fbd7 |
 | 12 | Isolated CI test workflow and verification suite | 4, 5, 11, 14 | G | IN-FLIGHT | isolated workflow child | - | 31c9fcf0-3abc-41ff-a70e-624a4b419ee0 |
-| 13 | Phase 2 publication reconciliation and rolling diversity metrics | 12, 14 | H | PENDING | - | - | - |
+| 13 | Phase 2 publication reconciliation and rolling diversity metrics | 12, 14 | H | IN-FLIGHT | publication observer child; independent history/publication modules first; shared metrics wait for Row 14 handoff | - | - |
 | 14 | Phase 1 source-run audit and three-axis evidence | 11 | G | IN-FLIGHT | audit recorder child | - | f197c411-a156-460a-a772-f5205c11be1d |
 | 15 | Config-driven source registries and compatible readers | - | A | DONE | fluffy-adventure (feed-registry-migration) | - | f7f18c64-813b-4a13-b421-1cd67b951db6 |
 | 16 | Public data-explorer enrollment and nested ledger delivery | 2 | B | DONE | reimagined-enigma | - | 2b6ac0cc-60a2-4c13-a67a-8d8ec21a4fc1 |
@@ -1216,6 +1216,18 @@ files, not substitute a raw-only checkout or scan accumulated history.
   - `docs/reference/diversity-metrics.md`
 - **Acceptance gates:** Local: shared selector, strict TypeScript checks, contract fixtures, and focused metrics/reconciliation tests. CI: full suite. Cover repeated runs in one UTC day, retries, zero-publish runs, source-kind changes, known-empty versus missing days, missing event evidence, packed history, and each metric's arithmetic using generated bounded fixtures.
 - **Oracle:** Hand-computable fixtures produce every Table L reading with the declared denominator and window; missing evidence stays unavailable instead of turning into zero, and no selected article is counted as published without publication evidence. This does not validate a model's opinion of article quality or prove that event matching has no false matches.
+
+Implementation sequence, 2026-10-21: start the already named
+`publication-outcomes.ts`, `history-window.ts`, `fingerprint-dedup.ts` and
+their two named publication/history tests independently. They consume
+explicit bounded evidence and existing contracts, not a future audit-success
+claim. Rows #12 and #14 remain prerequisites for full integration and
+acceptance. While Row #14 writes shared metrics and documentation, this row
+does not edit `diversity-metrics.ts`, `metrics-recorder.ts`, `metrics.test.ts`,
+`feed-ingest-audit.md` or `diversity-metrics.md`. Obtain its tested API and
+file-ownership handoff before the remaining integration. Name any additional
+contract-copy or fixture path before editing it. This sequence does not
+change a persisted meaning or count selected articles as published.
 
 ### Decisions
 
