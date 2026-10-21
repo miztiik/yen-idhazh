@@ -1138,6 +1138,17 @@ declared vocabulary, which gives up other configured counts, or obtain owner
 approval to open the persisted field and update both language readers and
 binding tests. Never omit an unsupported configured count without an error.
 
+Timing preflight: the existing assessment clock vocabulary has
+`published_at`, `fetched_at` and `unavailable`, but screening also uses
+persisted `first_seen` evidence. An unavailable clock cannot retain its
+timestamp or age under the existing validator. Calling first sight a fetch
+time would be false. Screening also retains signed age for a trusted
+slightly future publication time, while persisted assessment age is
+nonnegative. Before wiring complete audit records, resolve how these real
+measurements are represented; do not silently discard them or change a
+persisted meaning. The stage's exact transient evidence remains available
+to the recorder while this contract question is unresolved.
+
 ### Decisions
 
 | # | Decision | Authority |
