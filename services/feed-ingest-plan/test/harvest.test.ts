@@ -203,6 +203,34 @@ test("rootless extraction, empty content and article request failures do not kil
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("report settings remain available without changing the planning fingerprint", async () => {
+  const baseline = await inputs();
+  const load = (config: typeof baseline.config) => loadHarvestInputs({
+    config, taxonomy: baseline.registry,
+    sources: { feeds: baseline.sources }, extraction: { extract: baseline.extraction },
+  });
+  const enabled = load({
+    ...baseline.config,
+    workflow_reporting: { ...baseline.config.workflow_reporting, enabled: !baseline.config.workflow_reporting.enabled },
+  });
+  const removalText = load({
+    ...baseline.config,
+    workflow_reporting: {
+      ...baseline.config.workflow_reporting,
+      removal_condition: "Remove the report adapter when development reporting ends.",
+    },
+  });
+  expect(enabled.config.workflow_reporting.enabled).toBe(!baseline.config.workflow_reporting.enabled);
+  expect(removalText.config.workflow_reporting.removal_condition).toBe("Remove the report adapter when development reporting ends.");
+  expect(enabled.config_sha256).toBe(baseline.config_sha256);
+  expect(removalText.config_sha256).toBe(baseline.config_sha256);
+  const policyChange = load({
+    ...baseline.config,
+    triage: { ...baseline.config.triage, max_age_hours: baseline.config.triage.max_age_hours + 1 },
+  });
+  expect(policyChange.config_sha256).not.toBe(baseline.config_sha256);
+});
+
 test("a paused rejection registry cannot return a successful harvest with unwritten rejections", async () => {
   const root = await mkdtemp(join(tmpdir(), "harvest-paused-ledger-"));
   try {
