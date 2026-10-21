@@ -230,8 +230,8 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 | 5 | Host CPU and memory profiling service | 1 | B | DONE | congenial-parakeet (plan-66-row-5) | - | c8de7d9d-dd55-4123-87fe-66095cc2aed5 |
 | 6 | Reusable TypeScript ledger file writer | 1, 2, 16 | B | IN-FLIGHT | fictional-tribble | - | c1194122-86e6-45b4-85e9-e1bb61dbdca6 |
 | 7 | RSS/Atom feed harvest and DOM text extraction | 3, 6 | B | IN-FLIGHT | redesigned-doodle | - | da505804-6ce7-4f03-aa0b-25bab323ba53 |
-| 8 | Candidate triage screening with Parquet rejection ledger | 6, 7 | C | IN-FLIGHT | reserved isolated child | - | coordinator dispatch pending |
-| 9 | Set-aware editorial portfolio curation | 8 | D | PENDING | - | - | - |
+| 8 | Candidate triage screening with Parquet rejection ledger | 6, 7 | C | IN-FLIGHT | scaling-memory | - | d50de7c8-1c6a-4074-a390-25a077ae0ba8 |
+| 9 | Set-aware editorial portfolio curation | 8 | D | IN-FLIGHT | reserved isolated child | - | coordinator dispatch pending |
 | 10 | Contextual bin-packing partitioner with feature flag | 9 | E | PENDING | - | - | - |
 | 11 | Core plan engine entrypoint, dual-mode runner, and sealing | 6, 10 | F | PENDING | - | - | - |
 | 12 | Isolated CI test workflow and verification suite | 4, 5, 11, 14 | G | PENDING | - | - | - |
@@ -845,7 +845,11 @@ before final checks instead of editing either file concurrently.
   - `services/feed-ingest-plan/src/curate-article-portfolio/mmr-portfolio.ts`
   - `services/feed-ingest-plan/src/curate-article-portfolio/editorial-selection.ts`
   - `services/feed-ingest-plan/src/curate-article-portfolio/record-rejection.ts`
+  - `services/feed-ingest-plan/src/curate-article-portfolio/portfolio-input.ts`
+  - `services/feed-ingest-plan/src/curate-article-portfolio/story-evidence.ts`
   - `services/feed-ingest-plan/test/curate.test.ts`
+  - `tests/fixtures/feed-ingest-plan/portfolio-cases.json`
+  - `docs/architecture/sources/feed-curation.md`
 - **Acceptance gates:** `bun test` in `services/feed-ingest-plan/`; bounded fixtures check the configured concentration limits and relaxation order. Vary only the source-kind coefficient: zero must remove its penalty; increasing it changes only the declared diversity term. Relabelling a source must not change screening eligibility or introduce a required-kind count. Execute Table O's vertical-specific scoring substitution against this real curation stage and compare exact components and selected identities. Vary each Table T dimension independently, including same lens/different event cluster, same event type/different occurrence, same entity/different story, and unavailable desk evidence.
 - **Oracle:** Source/domain shares and relaxation follow configuration, and the source-kind penalty equals the bounded term in Table F, including the zero-weight case. This does not prove that a subjective source label is correct or that the proposed coefficient is editorially optimal.
 
@@ -856,6 +860,17 @@ Cross-outlet groups must satisfy the rule for every pair, not merely form a
 chain of matching neighbours. Publisher identity is the recorded masthead,
 not the feed ID; parent-domain concentration remains a separate control.
 Name the matcher, fixture and owning-doc supporting paths before dispatch.
+
+Supporting scope: `portfolio-input.ts` validates already screened candidates
+and explicitly supplied operational, timing, publisher and story evidence.
+`story-evidence.ts` applies only the existing same-story rules supported by
+those inputs; absent vectors are not a fabricated semantic comparison.
+The named fixture and curation page define stable hand-computable selections,
+separate quality axes, each penalty and evidence availability. No new
+persisted contract or label inference is authorized. Row #7 owns the service
+manifest and lock; integrate its stable dependency foundation and Row #8's
+actual admitted-result boundary before final composed checks, without
+concurrent edits to those files.
 
 ### Decisions
 
