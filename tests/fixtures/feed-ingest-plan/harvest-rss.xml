@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:media="http://search.yahoo.com/mrss/">
+  <channel>
+    <title>Recorded science feed</title>
+    <link>https://news.example/</link>
+    <description>Bounded offline feed input.</description>
+    <lastBuildDate>Wed, 21 Oct 2026 10:00:00 GMT</lastBuildDate>
+    <item>
+      <title>Measured progress &amp; public evidence</title>
+      <link>https://news.example/story/?utm_source=feed&amp;b=2&amp;a=1#section</link>
+      <pubDate>Wed, 21 Oct 2026 09:15:00 GMT</pubDate>
+      <dc:creator>Feed Reporter</dc:creator>
+      <category>Science</category>
+      <category domain="https://taxonomy.example/">Energy / Research</category>
+      <media:category>Regional reporting</media:category>
+      <category><name>Nested category name</name></category>
+    </item>
+    <item>
+      <title>Missing link must not renumber the next entry</title>
+      <category>Science</category>
+    </item>
+    <item>
+      <title>A second usable entry</title>
+      <link>https://news.example/second</link>
+    </item>
+  </channel>
+</rss>

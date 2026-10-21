@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<atom:feed xmlns:atom="http://www.w3.org/2005/Atom">
+  <atom:title>Recorded Atom feed</atom:title>
+  <atom:updated>2026-10-21T10:00:00Z</atom:updated>
+  <atom:entry>
+    <atom:title>Atom entry with all categories</atom:title>
+    <atom:link rel="alternate" href="https://atom.example/entry"/>
+    <atom:published>2026-10-21T08:30:00+02:00</atom:published>
+    <atom:author><atom:name>Atom Reporter</atom:name></atom:author>
+    <atom:category term="Science"/>
+    <atom:category term="Research / Methods" scheme="https://taxonomy.example/"/>
+  </atom:entry>
+  <atom:entry>
+    <atom:title>Undated entry without categories</atom:title>
+    <atom:link rel="alternate" href="https://atom.example/undated"/>
+  </atom:entry>
+</atom:feed>

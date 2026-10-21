@@ -1,0 +1,34 @@
+{
+  "description": "Bounded offline protocol recordings for the authored RSS, Atom and HTML fixtures; no live-source availability claim.",
+  "addresses": {
+    "news.example": [{"address": "93.184.216.34", "family": 4}],
+    "atom.example": [{"address": "93.184.216.34", "family": 4}],
+    "denied.example": [{"address": "93.184.216.34", "family": 4}],
+    "unknown.example": [{"address": "93.184.216.34", "family": 4}],
+    "inward.example": [{"address": "10.0.0.7", "family": 4}],
+    "mixed.example": [{"address": "93.184.216.34", "family": 4}, {"address": "127.0.0.1", "family": 4}]
+  },
+  "responses": {
+    "https://news.example/robots.txt": [{"status": 200, "body": "User-agent: YenIdhazhBot\nAllow: /\nDisallow: /denied\n"}],
+    "https://news.example/feed.xml": [{"status": 200, "fixture": "rss"}],
+    "https://news.example/story/?utm_source=feed&b=2&a=1#section": [{"status": 200, "fixture": "article"}],
+    "https://news.example/second": [{"status": 200, "fixture": "article"}],
+    "https://news.example/empty.xml": [{"status": 200, "body": "<rss version=\"2.0\"><channel><title>Empty</title></channel></rss>"}],
+    "https://news.example/malformed.xml": [{"status": 200, "body": "<rss><channel><item></channel>"}],
+    "https://news.example/error": [{"status": 503, "body": ""}],
+    "https://news.example/not-found": [{"status": 404, "body": ""}],
+    "https://news.example/timeout": [{"error": "timeout"}],
+    "https://news.example/network-error": [{"error": "ECONNRESET"}],
+    "https://news.example/retry": [{"status": 503, "body": ""}, {"status": 200, "fixture": "article"}],
+    "https://news.example/unsafe-redirect": [{"status": 302, "body": "", "location": "http://127.0.0.1/secret"}],
+    "https://news.example/denied-redirect": [{"status": 302, "body": "", "location": "https://denied.example/story"}],
+    "https://news.example/safe-redirect": [{"status": 302, "body": "", "location": "/second"}],
+    "https://news.example/loop": [{"status": 302, "body": "", "location": "/loop"}],
+    "https://atom.example/robots.txt": [{"status": 404, "body": ""}],
+    "https://atom.example/feed.xml": [{"status": 200, "fixture": "atom"}],
+    "https://atom.example/entry": [{"status": 200, "fixture": "article"}],
+    "https://atom.example/undated": [{"status": 200, "fixture": "article"}],
+    "https://denied.example/robots.txt": [{"status": 200, "body": "User-agent: YenIdhazhBot\nDisallow: /\n"}],
+    "https://unknown.example/robots.txt": [{"status": 503, "body": ""}]
+  }
+}
