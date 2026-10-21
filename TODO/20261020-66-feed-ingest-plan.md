@@ -189,7 +189,7 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 | 3 | Dedicated feed ingest plan configuration file | 1 | A | DONE | vigilant-lamp (plan-66-row-3) | - | d8340612-ab74-49e7-99ac-19d9ce30e427 |
 | 4 | Host hardware and environment identity service | 6 | B | PENDING | - | - | - |
 | 5 | Host CPU and memory profiling service | 1 | B | DONE | congenial-parakeet (plan-66-row-5) | - | c8de7d9d-dd55-4123-87fe-66095cc2aed5 |
-| 6 | Reusable TypeScript ledger file writer | 1, 2, 16 | B | IN-FLIGHT | reserved for isolated writer session | - | - |
+| 6 | Reusable TypeScript ledger file writer | 1, 2, 16 | B | IN-FLIGHT | fictional-tribble | - | c1194122-86e6-45b4-85e9-e1bb61dbdca6 |
 | 7 | RSS/Atom feed harvest and DOM text extraction | 3, 6 | B | PENDING | - | - | - |
 | 8 | Candidate triage screening with Parquet rejection ledger | 6, 7 | C | PENDING | - | - | - |
 | 9 | Set-aware editorial portfolio curation | 8 | D | PENDING | - | - | - |
