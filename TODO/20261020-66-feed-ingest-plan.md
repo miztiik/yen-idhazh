@@ -400,6 +400,7 @@ export type CandidateRejectionRecord =
 ## 5. Row #2 - Ledger registration and gardener compaction configuration
 
 - **Scope:** Register editorial selections, dispatches, rejections, source-run summaries, article assessments, and diversity readings as separate ledgers in the feed-ingest-plan family, plus their gardener compaction configurations.
+- **Settlement:** Preserve the original run and attempt identity for every feed-ingest-plan row until complete-attempt selection. The existing ledger settlement drops lower attempts before applying business keys, so add a feed-ingest-only settlement path that retains attempts and deduplicates within each `(run_id, attempt)` by the declared business key. Support trusted declared dotted paths for nested fields such as `content.candidate_id`; do not change settlement for other ledgers.
 - **Files touched:**
   - `config/ledgers.json`
   - `config/idhazh_gardener.json`
@@ -410,19 +411,24 @@ export type CandidateRejectionRecord =
   - `config/gardener/compact-feed-ingest-plan-article-assessments.json`
   - `config/gardener/compact-feed-ingest-plan-diversity.json`
   - `backend/idhazh/contracts/ledger_name.py`
+  - `backend/idhazh/ledger/arrow_schema.py`
   - `backend/idhazh/ledger/keys.py`
+  - `backend/idhazh/ledger/raw_files.py`
   - `backend/idhazh/ledger/staging.py`
   - `frontend/src/lib/data/slice-shapes.ts`
   - `backend/tests/contracts/test_ledger_registry.py`
   - `backend/tests/contracts/test_ledger_name.py`
+  - `backend/tests/contracts/test_door_ledgers_keep_no_csv_path.py`
+  - `backend/tests/ledger/test_arrow_schema.py`
   - `backend/tests/ledger/test_feed_ingest_ledgers.py`
   - `backend/tests/contracts/test_frontend_index_shapes.py`
   - `backend/tests/contracts/test_gardener_config.py`
   - `backend/tests/workflows/test_ledger_staging.py`
   - `backend/tests/workflows/test_ledger_door_jobs.py`
   - `docs/architecture/contracts/ledger-registry.md`
-- **Acceptance gates:** Local: shared test selector and focused `backend/tests/contracts/test_ledger_registry.py` / `test_ledger_name.py` cases. CI: full suite. Load the authored configuration through the repository's existing registry readers, not a new generated schema file.
-- **Oracle:** Registry fixtures confirm every declared feed-ingest ledger has its row contract, settlement key, valid prefix, and compaction configuration. This does not prove a TypeScript writer can encode that contract; Row #6 verifies it.
+  - `docs/architecture/contracts/persistence.md`
+- **Acceptance gates:** Local: shared test selector and focused `backend/tests/contracts/test_ledger_registry.py` / `test_ledger_name.py` cases. CI: full suite. Load the authored configuration through the repository's existing registry readers, not a new generated schema file. Verify attempts and their original identities survive raw settlement and real compact/read/repack cycles; a newer partial attempt must not erase an older complete attempt, and nested dispatch keys must settle correctly. Map UUID fields to their JSON string representation in Arrow and test a UUID round-trip through the schema adapter. Preserve every other ledger's existing settlement behavior.
+- **Oracle:** Registry fixtures confirm every declared feed-ingest ledger has its row contract, settlement key, valid prefix, and compaction configuration. A bounded retry fixture with an earlier attempt containing candidates A and B and a later partial attempt containing only A retains both attempts through compaction; complete-attempt selection can choose the later attempt without inheriting B. A later complete empty attempt is represented by explicit source-run evidence, not inferred from missing dispatch rows. This does not prove a TypeScript writer can encode that contract; Row #6 verifies it.
 
 ### Decisions
 
@@ -433,7 +439,7 @@ export type CandidateRejectionRecord =
 | 3 | Add the new ledger-name members and row/settlement bindings, and enroll every compaction declaration in config/idhazh_gardener.json's explicit task_names list. A declaration file alone does not schedule a task. Use each full ledger prefix with slashes replaced by hyphens for the compaction name. | Verified ledger registry, keys.py, and gardener task manifest |
 | 4 | Add every new ledger to staging.py REGISTRY and the frontend LEDGER_NAMES/LEDGER_FOLDERS bindings. Name the planned TypeScript writer explicitly, with no production digest commit labels while the isolated workflow is its only caller. Registry vocabulary/path bindings land here; public delivery lands in Row #16 before writers. | ledger-registry.md onboarding; existing finite staging table |
 | 5 | Enroll the tasks in the named gardener retention test inventory and use the approved live chain: compact_after_days 1, daily_keep_days 45, monthly_keep_days 93, monthly_window forever, yearly_keep_months 36, yearly_prune_enable true. Follow the existing dry-run-to-live approval rule; do not invent a separate retention policy for planner text or audit rows. | ledger-registry.md onboarding; owner-approved retention chain |
-| 6 | Settlement must retain run/attempt identity across all planning ledgers until Table J's complete-attempt selection. Do not compact retries by URL or candidate alone: a later attempt with fewer or zero items must supersede the whole earlier attempt, including its leftover rows. Test this after compaction as well as on raw files. | Table G candidate identity; reader-before-writer settlement contract |
+| 6 | Feed-ingest settlement preserves each original run/attempt and deduplicates rows only within that attempt by its declared business key; trusted dotted paths may name nested fields. Existing ledgers retain their current settlement. Table J selects the complete attempt later: an incomplete newer attempt cannot erase an older complete attempt, while an explicitly recorded complete empty attempt supersedes it. Test raw settlement and real compact/read/repack cycles. UUID contract fields use their JSON string representation in Arrow, so the reader validates their version after loading. | Table G candidate identity; reader-before-writer settlement contract; Pydantic JSON serialization |
 
 ### Rejected alternatives
 
@@ -451,7 +457,12 @@ export type CandidateRejectionRecord =
   - `backend/idhazh/contracts/knobs/feed_ingest.py`
   - `packages/common-contracts/src/schemas/config.schema.ts`
   - `packages/common-contracts/src/schemas/policy.schema.ts`
+  - `packages/common-contracts/src/index.ts`
   - `packages/common-contracts/test/config.test.ts`
+  - `services/feed-ingest-plan/package.json`
+  - `services/feed-ingest-plan/tsconfig.json`
+  - `services/feed-ingest-plan/bun.lock`
+  - `backend/tests/contracts/test_feed_ingest_config.py`
   - `services/feed-ingest-plan/src/config/resolve-policy.ts`
   - `services/feed-ingest-plan/test/policy.test.ts`
   - `docs/architecture/sources/feed-ingest-policies.md`
@@ -516,17 +527,26 @@ export type CandidateRejectionRecord =
 
 ## 8. Row #5 - Host CPU and memory profiling service
 
-- **Scope:** Implement `services/host-probes` as an independent Bun microservice and CLI exposing `/api/2026-10-20/sample` to measure CPU utilization (user, system, idle, iowait) and memory metrics (`/proc/meminfo`, `/proc/vmstat`).
+- **Scope:** Implement `services/host-probes` as an independent Bun microservice and CLI exposing `/api/2026-10-20/sample` to measure CPU utilization (user, system, idle, iowait, steal) and memory metrics (`/proc/meminfo`, `/proc/vmstat`). Read the sampling interval and loopback listener settings from `config/host-probes.json`; keep Linux input parsing separate from sampling and request handling.
 - **Files touched:**
   - `services/host-probes/package.json`
   - `services/host-probes/tsconfig.json`
+  - `services/host-probes/bun.lock`
+  - `services/host-probes/src/config.ts`
   - `services/host-probes/src/index.ts`
   - `services/host-probes/src/api/server.ts`
+  - `services/host-probes/src/probe/proc-reader.ts`
   - `services/host-probes/src/probe/cpu-sampler.ts`
   - `services/host-probes/src/probe/memory-probe.ts`
+  - `services/host-probes/src/probe/sample-host.ts`
   - `services/host-probes/test/probe.test.ts`
-- **Acceptance gates:** `bun test` in `services/host-probes/`; periodic sampling test confirms delta calculations.
-- **Oracle:** Returns memory total, free, available in KB, and non-negative CPU percentages summing to 100 within 1% rounding error.
+  - `config/host-probes.json`
+  - `tests/fixtures/host-probes/meminfo.txt`
+  - `tests/fixtures/host-probes/vmstat.txt`
+  - `docs/reference/host-metrics.md`
+- **Acceptance gates:** Strict TypeScript check and `bun test` in `services/host-probes/`; recorded `/proc` fixtures cover parsing and periodic sampling confirms delta calculations. On non-Linux systems or when counters are reset or unchanged, return unavailable CPU percentages with a reason rather than a fabricated zero reading.
+- **Oracle:** Returns memory total, free, and available in KB, and nonnegative CPU percentages for user (including nice), system (including irq and softirq), idle, iowait, and steal that sum to 100 within 1% rounding error. Exclude guest counters already included in user/nice totals.
+- **Shared-file coordination:** Row #4 also edits `docs/reference/host-metrics.md`. Do not run Row #4 concurrently with Row #5 while both are active; if Row #4 becomes ready first, record Row #5 as an additional dependency before dispatch.
 
 ### Decisions
 
