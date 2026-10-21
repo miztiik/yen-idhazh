@@ -4,7 +4,7 @@ import {
   CandidateRejectionRecordSchema, FeedIngestCandidateSchema,
   Sha256Schema, SourceSnapshotSchema, TimestampSchema,
 } from "@idhazh/common-contracts";
-import type { FeedIngestConfig, PolicyIdentity, WriterIdentity } from "@idhazh/common-contracts";
+import type { FeedIngestConfig, FeedOutcomePayload, PolicyIdentity, WriterIdentity } from "@idhazh/common-contracts";
 import type { LedgerRegistration, LedgerSettings, PersistLedgerResult } from "@idhazh/ledger-file-writer";
 import type { HarvestInputs } from "./load-harvest-inputs";
 
@@ -67,6 +67,7 @@ export type HarvestResult = {
   inputs: HarvestInputs;
   config: FeedIngestConfig;
   articles: HarvestArticleResult[];
+  feed_outcomes: FeedOutcomePayload[];
   candidates: z.infer<typeof FeedIngestCandidateSchema>[];
   rejections: z.infer<typeof CandidateRejectionRecordSchema>[];
   rejection_files: PersistLedgerResult;
