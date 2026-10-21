@@ -523,6 +523,13 @@ export type CandidateRejectionRecord =
 - **Acceptance gates:** Local: shared test selector, strict TypeScript checks, bounded Linux input fixtures, API/CLI persistence tests, and Python HostFingerprintRow reader compatibility. CI: full suite. Verify configured-off behavior, null unavailable measurements, atomic-write failure propagation, and retry settlement without rewriting historical files.
 - **Oracle:** An API or CLI collection creates a valid HostFingerprintRow in the registered ledger, and the existing Python reader returns it with the expected pipeline/task/run/shard identity; invalid requests and failed writes cannot return persisted success. This does not certify Linux hardware collection from a Windows fixture run.
 
+Preflight: the listed TypeScript host schema is new, not an existing import.
+Include its public export and a named Python binding check when pricing the
+supporting paths before dispatch. The service also needs a lockfile, authored
+listener/read controls, and bounded recorded Linux inputs. Preserve the
+existing fingerprint algorithm and observability controls; a nullable field
+does not authorize skipping its collector.
+
 ### Decisions
 
 | # | Decision | Authority |
@@ -655,6 +662,15 @@ and correlation IDs are not undeclared file-envelope metadata.
   - `services/feed-ingest-plan/test/harvest.test.ts`
 - **Acceptance gates:** Local: shared selector and `bun test` over named recorded RSS/Atom and HTML fixtures, with no external network. Verify valid candidates, categories, text, and typed fetch/parse failures. CI: full suite. Live-source availability is an observation of a separately dispatched isolated run, not a repeatable test gate.
 - **Oracle:** Pre-fetched article text contains >0 words for valid articles, captures author attribution when present, and extracts all XML category elements into `categories: string[]` or defaults to `[]` when missing.
+
+Preflight: the service manifest currently declares only common-contracts.
+Price and name its manifest/lock changes for the approved DOM and feed
+libraries, recorded RSS/Atom/HTML fixture files, and the owning documentation
+before dispatch. The existing trust-boundary page also requires safe target
+validation before requests, robots permission, and sanitization. Include the
+bounded modules and fixtures needed to preserve those controls; DOM extraction
+must not load page resources. Do not substitute extraction success for these
+independent safety requirements.
 
 ### Decisions
 
