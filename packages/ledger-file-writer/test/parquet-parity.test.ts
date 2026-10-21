@@ -247,6 +247,28 @@ async function readActualParquet(path: string) {
   };
 }
 
+type NativeColumnRecord = [path: string, type: string, nullable: boolean];
+
+function describeNativeFields(fields: readonly Field[]): NativeColumnRecord[] {
+  const records: NativeColumnRecord[] = [];
+  const visit = (field: Field, path: string) => {
+    const renderedType = field.type.toString();
+    const type = renderedType.startsWith("Struct<")
+      ? "Struct"
+      : renderedType.startsWith("List<")
+        ? "List"
+        : renderedType;
+    records.push([path, type, field.nullable]);
+    const children = field.type.children ?? [];
+    for (const child of children) {
+      const childPath = type === "List" ? `${path}[]` : `${path}.${child.name}`;
+      visit(child, childPath);
+    }
+  };
+  for (const field of fields) visit(field, field.name);
+  return records;
+}
+
 async function checkParquetReadback<T extends object>(
   ledger: FileEnvelope["ledger"],
   root: string,
@@ -292,6 +314,7 @@ async function checkParquetReadback<T extends object>(
       content_sha256: envelope.content_sha256,
       identity: envelope.identity,
       rows: actual.rows,
+      nativeColumns: describeNativeFields(actual.fields),
     });
   }
   return { files: checkedFiles };
@@ -644,6 +667,11 @@ describe("ledger Parquet readback", () => {
         raw.files,
         FeedIngestDispatchSchema,
       );
+      const recordedSchema = z.object({
+        version: z.string(),
+        columns: z.array(z.tuple([z.string(), z.string(), z.boolean()])),
+      }).parse(await readLedgerFixture("dispatch-arrow-schema.json"));
+      expect(readback.files[0]?.nativeColumns).toEqual(recordedSchema.columns);
       expect(readback.files[0]?.identity.shard).toBe(writerContext.shard);
       expect(readback.files[0]?.rows[0]?.partition).toEqual(dispatch.partition);
       expect(readback.files[0]?.rows[0]?.content).toEqual(dispatch.content);
