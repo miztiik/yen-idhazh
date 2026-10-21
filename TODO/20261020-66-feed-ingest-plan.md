@@ -230,7 +230,7 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 | 5 | Host CPU and memory profiling service | 1 | B | DONE | congenial-parakeet (plan-66-row-5) | - | c8de7d9d-dd55-4123-87fe-66095cc2aed5 |
 | 6 | Reusable TypeScript ledger file writer | 1, 2, 16 | B | IN-FLIGHT | fictional-tribble | - | c1194122-86e6-45b4-85e9-e1bb61dbdca6 |
 | 7 | RSS/Atom feed harvest and DOM text extraction | 3, 6 | B | IN-FLIGHT | redesigned-doodle | - | da505804-6ce7-4f03-aa0b-25bab323ba53 |
-| 8 | Candidate triage screening with Parquet rejection ledger | 6, 7 | C | PENDING | - | - | - |
+| 8 | Candidate triage screening with Parquet rejection ledger | 6, 7 | C | IN-FLIGHT | reserved isolated child | - | coordinator dispatch pending |
 | 9 | Set-aware editorial portfolio curation | 8 | D | PENDING | - | - | - |
 | 10 | Contextual bin-packing partitioner with feature flag | 9 | E | PENDING | - | - | - |
 | 11 | Core plan engine entrypoint, dual-mode runner, and sealing | 6, 10 | F | PENDING | - | - | - |
@@ -789,7 +789,12 @@ collision while these rows are built.
   - `services/feed-ingest-plan/src/screen-article-candidates/freshness-decay.ts`
   - `services/feed-ingest-plan/src/screen-article-candidates/category-guard.ts`
   - `services/feed-ingest-plan/src/screen-article-candidates/rejection-sealer.ts`
+  - `services/feed-ingest-plan/src/screen-article-candidates/screening-input.ts`
+  - `services/feed-ingest-plan/src/screen-article-candidates/seen-evidence.ts`
   - `services/feed-ingest-plan/test/triage.test.ts`
+  - `tests/fixtures/feed-ingest-plan/screening-cases.json`
+  - `tests/fixtures/feed-ingest-plan/seen-evidence.json`
+  - `docs/architecture/sources/feed-screening.md`
 - **Acceptance gates:** `bun test` in `services/feed-ingest-plan/`; generated rejection files pass TypeScript Parquet readback and recorded contract checks. Cover the configured word-count and HTTP rules plus Table R freshness boundaries with one fixed UTC clock, including undated articles and invalid overrides. Execute Table O's vertical-specific threshold substitution against this real screening stage, not only the resolver.
 - **Oracle:** Each rejected fixture has the expected typed reason, and changing only the freshness override changes admission at the stated age boundary without changing the ranking half-life. This does not settle editorial quality or live-source availability.
 
@@ -800,6 +805,18 @@ before dispatch; a repeated fetch must not reset an undated article's age.
 Preserve the existing future-date tolerance when deciding whether to trust
 the feed date. Price reader and fixture supporting paths rather than adding
 an undeclared candidate field.
+
+Supporting scope: screening consumes a validated candidate batch, actual
+transient HTTP/paywall observations from harvesting, and a caller-supplied
+bounded list of settled SeenRow payloads. `seen-evidence.ts` validates the
+existing seen fields and joins by `url_key`; it does not invent a new
+persisted shape or scan history. The later engine owns loading that bounded
+history from raw and compact files. Missing observations remain unknown.
+Read the existing future-date tolerance from authored configuration.
+The named fixtures and screening page cover repeated undated sightings,
+exact cutoff boundaries, configured checks and real rejection persistence.
+Row #7 owns the manifest and lock; Row #8 integrates that dependency foundation
+before final checks instead of editing either file concurrently.
 
 ### Decisions
 
