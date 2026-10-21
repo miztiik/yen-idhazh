@@ -6,17 +6,20 @@
  * not there is a wrong path, never a build with no raw day: it stops the build rather than
  * baking an empty list. A static folder with no `state/raw/` names no day.
  *
- * The read lists names and opens no file. It reads what the last `copy-visuals.mjs` run staged,
- * and that run empties `static/state/` first: one listing of the raw folder, then at most one for
+ * The read opens named config files, but only lists raw listing names, not their contents.
+ * It reads what the last `copy-visuals.mjs` run staged,
+ * and that run empties `static/state/` first: one named registry prefix for
  * each ledger `ledger.published` names, each holding at most `max(console.window_presets)` days.
  */
 
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ledgerFolders } from './ledger-prefixes.mjs';
 
 const STATIC_ROOT = fileURLToPath(new URL('../static', import.meta.url));
 const REPOSITORY = fileURLToPath(new URL('../..', import.meta.url));
+const CONFIG = fileURLToPath(new URL('../../config/idhazh.json', import.meta.url));
 
 export function rawListedThrough(staticRoot = STATIC_ROOT) {
 	if (!existsSync(staticRoot)) {
@@ -25,17 +28,19 @@ export function rawListedThrough(staticRoot = STATIC_ROOT) {
 	}
 	const raw = join(staticRoot, 'state', 'raw');
 	if (!existsSync(raw)) return {};
+	const names = JSON.parse(readFileSync(CONFIG, 'utf8'))?.ledger?.published;
+	if (!Array.isArray(names)) throw new Error('ledger.published in config/idhazh.json is not a list');
+	const folders = ledgerFolders(names);
 	/** @type {Record<string, string>} */
 	const result = {};
-	for (const ledger of readdirSync(raw, { withFileTypes: true })) {
-		if (!ledger.isDirectory()) continue;
-		const index = join(raw, ledger.name, 'index');
+	for (const [ledger, folder] of Object.entries(folders)) {
+		const index = join(raw, ...folder.split('/'), 'index');
 		if (!existsSync(index)) continue;
 		const days = readdirSync(index)
 			.filter((name) => /^\d{4}-\d{2}-\d{2}\.json$/.test(name))
 			.map((name) => name.slice(0, -5))
 			.sort();
-		if (days.length > 0) result[ledger.name] = days[days.length - 1];
+		if (days.length > 0) result[ledger] = days[days.length - 1];
 	}
 	return result;
 }

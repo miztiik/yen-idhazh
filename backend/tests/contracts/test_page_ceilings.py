@@ -17,6 +17,7 @@ from idhazh.contracts.knobs.page_weight import PageWeightConfig
 from idhazh.contracts.knobs.windows import months_a_window_can_touch
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.ledger import door_folders
 
 pytestmark = pytest.mark.contract
 
@@ -36,8 +37,8 @@ REAL_DAY_INDEX_AT_62_ENTRIES: Final = 662
 
 
 def index_key(ledger: LedgerName) -> str:
-    """The payload key that bounds one published ledger's two indexes."""
-    return f"{LEDGERS}compact/{ledger.value}/index/"
+    """The payload key that bounds the indexes under one registered prefix."""
+    return f"{LEDGERS}compact/{'/'.join(door_folders(ledger))}/index/"
 
 
 def an_index(ledger: LedgerName, period: Period, entries: int) -> bytes:
@@ -220,7 +221,7 @@ def test_every_published_ledger_bounds_its_indexes_at_twice_their_longest() -> N
         "a key for a ledger that is not published names nothing in the build"
     )
     for ledger in committed.ledger.published:
-        policy = tasks.get(f"compact-{ledger.value}")
+        policy = tasks.get(config.compaction_task(ledger))
         assert isinstance(policy, CompactionPolicy), (
             f"{ledger.value} is published and no compaction task writes its indexes"
         )

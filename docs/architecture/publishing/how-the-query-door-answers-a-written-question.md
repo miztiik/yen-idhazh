@@ -4,6 +4,15 @@
 
 The query door can run one operator-written, read-only DuckDB statement over the ledgers and UTC days the page chose. The statement sees views, not files.
 
+The published allowlist in `config/idhazh.json`, `ledger.published`, explicitly
+includes `dispatches`, `rejections`, `source-runs`, `article-assessments`,
+`diversity` and `editorial-selections`. Each uses its short registry name as its
+view name. Registration in `config/ledgers.json` alone does not publish a
+ledger. The site copies actual Parquet bytes, including dispatch article text
+and nested typed columns; it does not make a metadata-only copy. For example,
+`SELECT content.article_text FROM dispatches` reads the stored article text.
+There is no separate feed explorer or production planner cutover.
+
 ## Views
 
 `ask()` lives beside `slice()` in `frontend/src/lib/data/ledger.ts`. It uses the same page keeper as the panel path. For each selected ledger, `ask-reader.ts` creates one DuckDB view whose name is a member of `LEDGER_NAMES`. The files inside that view are engine-minted names such as `door/1.parquet`; no index, cell, caller text or fetched text becomes a file name.
@@ -55,6 +64,15 @@ handing the page an empty list. A page script that sets
 browser tests that serve a ledger they built do: a built ledger has no writer's
 files, so the build's list would name days of the canary's. The shipped page
 sets nothing, and no page script can name a day the build did not list.
+
+The build reads one named raw index folder per published registry prefix, not
+the first-level folders of `state/raw/` and not a recursive tree listing.
+For dispatches that folder is
+`state/raw/feed-ingest-plan/dispatches/index/`; the build still hands the
+browser the short key `dispatches`. After a packed day, a staged empty listing
+means a known-empty day; a missing listing inside the listed range is still a
+gap. The copy window, 64 MiB query fetch ceiling and 365-day explorer reach
+are unchanged. The reach does not promise that all 365 days are on the site.
 
 ## Archive tier
 
@@ -117,6 +135,17 @@ A question this browser keeps, saved or recently run, is read back with the same
 The engine module is unchanged. The only module importing `@duckdb/duckdb-wasm` remains `frontend/src/lib/data/engine.ts`. The browser's shipped `connect-src` policy applies to the engine worker, so a statement that tries to read an unlisted origin is refused by the browser. The boundary test builds its support page with the same policy directives as `svelte.config.js` and asserts the refused request never reaches the network.
 
 ## Design rationale
+
+**Real explorer fixtures use the backend dev install.** The representative
+query/chart journey generates all six feed ledgers through the Python contracts
+and Parquet writer. Native DuckDB supplies an independent column/type reading
+before the browser queries those bytes. Browser CI therefore installs
+`.[dev]`, like the site and backend gate jobs, rather than the base package
+alone. This reuses the declared dependency group instead of spelling a second
+DuckDB requirement in the workflow. It adds install time and disk for existing
+test tools and numeric libraries, with no published bytes; the incremental
+runner cost is not measured. A new narrower group would reduce that install
+but add a dependency group to maintain.
 
 **EXPLAIN fixtures preserve meaning, not native engine drawings.** The backend
 fixture check requires the `explain_key` and `explain_value` columns, one

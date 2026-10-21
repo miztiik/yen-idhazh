@@ -29,7 +29,8 @@
  * The walk is over the named keys and not over the build, so what this costs is
  * set by how many ceilings are written rather than by how much the pipeline has
  * accumulated (Guardrail #12). A ledger's files are the two folders the site
- * copy stages for it, `state/compact/<ledger>/` and `state/raw/<ledger>/`, so
+ * copy stages for it, `state/compact/<registered-prefix>/` and
+ * `state/raw/<registered-prefix>/`, so
  * whether the build holds any of them is one existence check on each named
  * path. A directory key does read every file under itself, and that read grows -
  * a month a run appends is a file this opens. It is bounded where it matters by
@@ -38,6 +39,7 @@
 
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { ledgerFolders } from './ledger-prefixes.mjs';
 
 /**
  * Where the published ledgers sit in a build: `copy-visuals.mjs` copies each
@@ -88,14 +90,14 @@ function filesCovered(build, key) {
  *
  * @param {string} build
  * @param {string} key
- * @param {readonly string[]} published
+ * @param {Readonly<Record<string, string>>} folders
  * @returns {string | undefined}
  */
-function notPackedYet(build, key, published) {
-	const ledger = published.find((name) => key === `${LEDGERS}compact/${name}/index/`);
+function notPackedYet(build, key, folders) {
+	const ledger = Object.keys(folders).find((name) => key === `${LEDGERS}compact/${folders[name]}/index/`);
 	if (ledger === undefined) return undefined;
-	const folders = [`${LEDGERS}compact/${ledger}`, `${LEDGERS}raw/${ledger}`];
-	return folders.some((folder) => existsSync(join(build, ...folder.split('/')))) ? undefined : ledger;
+	const roots = [`${LEDGERS}compact/${folders[ledger]}`, `${LEDGERS}raw/${folders[ledger]}`];
+	return roots.some((folder) => existsSync(join(build, ...folder.split('/')))) ? undefined : ledger;
 }
 
 /**
@@ -109,6 +111,7 @@ function notPackedYet(build, key, published) {
  * @returns {PayloadWeights}
  */
 export function weighPayloads(build, ceilings, published, servedFrom, weigh) {
+	const folders = ledgerFolders(published);
 	/** @type {PayloadWeights} */
 	const answer = { weighed: [], over: [], namesNothing: [], notWeighed: [] };
 	for (const key of Object.keys(ceilings).sort()) {
@@ -128,7 +131,7 @@ export function weighPayloads(build, ceilings, published, servedFrom, weigh) {
 			answer.over.push(...files.filter(({ bytes }) => bytes > ceiling));
 			continue;
 		}
-		const ledger = notPackedYet(build, key, published);
+		const ledger = notPackedYet(build, key, folders);
 		if (ledger === undefined) {
 			answer.namesNothing.push({ key, ceiling });
 			continue;
@@ -137,7 +140,7 @@ export function weighPayloads(build, ceilings, published, servedFrom, weigh) {
 			key,
 			reason:
 				`${ledger} is not packed yet, so the build holds none of its files. ` +
-				`If it was packed before, restore ${LEDGERS}compact/${ledger}/ from git history.`
+				`If it was packed before, restore ${LEDGERS}compact/${folders[ledger]}/ from git history.`
 		});
 	}
 	return answer;

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { createHash } from 'node:crypto';
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -16,8 +16,11 @@ import { daysBetween, filesFor, namesFile, newestFile, newestNamed } from '../sr
 import { cellOf, SliceValueError, statementFor } from '../src/lib/data/slice-query';
 import { dataPath, indexPath, rawIndexPath, readSlice } from '../src/lib/data/slice-reader';
 import { checkedRequest, LEDGER_FAULTS, SliceRequestError, type LedgerName, type SliceOptions, type SliceResult } from '../src/lib/data/slice-shapes';
-import { engineExtensionRepository } from '../src/lib/server/config';
+import { engineExtensionRepository, explorerConfig } from '../src/lib/server/config';
 import { diskBytes, reachFromDisk, sliceFromDisk } from '../src/lib/server/ledger-disk';
+import { buildFeedLedgers, FEED_LEDGERS, stageFeedLedgers } from './support/feed-ledgers';
+import { rawListedThrough } from '../scripts/raw-listed-through.mjs';
+import { readColumns } from '../src/lib/data/ledger-columns';
 
 /**
  * THE ORACLE for the query door: a request is answered through exactly the
@@ -248,6 +251,67 @@ function askedCounts(asked: Asked[]): Record<string, number> {
 const dayFile = (covers: string): string => dataPath(LEDGER, 'daily', covers);
 const bytesOf = (relative: string): Uint8Array => new Uint8Array(readFileSync(path.join(STATE, ...relative.split('/'))));
 const expectedAnswer = (name: string): Record<string, string | null>[] => JSON.parse(readFileSync(path.join(FIXTURE, 'answers', `${name}.json`), 'utf8'));
+
+test('Row16 typed query ORACLE: staged Python-contract columns and article text survive the real door', async () => {
+	const source = test.info().outputPath('feed-source');
+	const staticRoot = test.info().outputPath('static');
+	const site = path.join(staticRoot, 'state');
+	const fixture = await buildFeedLedgers(source);
+	stageFeedLedgers(source, site);
+	const listed = rawListedThrough(staticRoot);
+	expect(listed).toEqual({ dispatches: '2026-10-23' });
+	const limits = explorerConfig();
+	expect(limits.max_fetch_bytes).toBe(67_108_864);
+	expect(limits.reach_days).toBe(365);
+	const { fetcher, asked } = recorded({}, site);
+	const keeper = freshPage(fetcher);
+	for (const ledger of FEED_LEDGERS) {
+		const columns = await readColumns(keeper, ledger, limits.max_fetch_bytes, listed);
+		expect(columns, ledger).toEqual(fixture.columns[ledger]);
+		const result = await readAsk(keeper, null, {
+			ledgers: [ledger], from: '2026-10-20', to: '2026-10-20', sql: `SELECT * FROM "${ledger}"`,
+			maxChars: limits.query_max_chars, maxRows: limits.max_rows, maxFetchBytes: limits.max_fetch_bytes
+		}, listed);
+		expect(result.state, ledger).toBe('ok');
+		if (result.state !== 'ok') throw new Error(`${ledger} did not answer`);
+		expect(result.columns).toEqual(fixture.columns[ledger]);
+		expect(result.rows).toHaveLength(1);
+	}
+	const question = {
+		ledgers: ['dispatches'] as const,
+		from: '2026-10-20', to: '2026-10-23',
+		sql: 'SELECT content.article_text AS text, content.author AS author, content.categories AS categories, ' +
+			'content.word_count AS words, selection.estimated_work AS work, selection.ratings.exploration_slot AS exploration, ' +
+			'partition.worker_assignment AS worker FROM dispatches ORDER BY covers',
+		maxChars: limits.query_max_chars, maxRows: limits.max_rows, maxFetchBytes: limits.max_fetch_bytes
+	};
+	const answer = await readAsk(keeper, null, question, listed);
+	expect(answer).toMatchObject({
+		state: 'ok',
+		columns: [
+			{ name: 'text', type: 'VARCHAR' }, { name: 'author', type: 'VARCHAR' },
+			{ name: 'categories', type: 'VARCHAR[]' }, { name: 'words', type: 'BIGINT' },
+			{ name: 'work', type: 'DOUBLE' }, { name: 'exploration', type: 'BOOLEAN' },
+			{ name: 'worker', type: 'BIGINT' }
+		],
+		rows: [1, 2].map(() => ({
+			text: 'An article contains this recorded text.', author: null, categories: '[]',
+			words: '6', work: '6.0', exploration: 'false', worker: '0'
+		}))
+	});
+	expect(asked.some((one) => one.path === fixture.rawFile)).toBe(true);
+	expect(asked.some((one) => one.path === 'raw/feed-ingest-plan/dispatches/index/2026-10-22.json')).toBe(true);
+	const quiet = await readAsk(keeper, null, { ...question, from: '2026-10-21', to: '2026-10-22' }, listed);
+	expect(quiet.state).toBe('quiet');
+	const missingKeeper = freshPage(recorded({}, test.info().outputPath('absent')).fetcher);
+	expect((await warnings(() => readAsk(missingKeeper, null, question, {}))).result.state).toBe('missing');
+	const bounded = freshPage(recorded({}, site).fetcher);
+	const refused = await readAsk(bounded, null, { ...question, maxFetchBytes: 1 }, listed);
+	expect(refused).toMatchObject({ state: 'refused', because: { kind: 'over-ceiling' } });
+	unlinkSync(path.join(site, 'raw/feed-ingest-plan/dispatches/index/2026-10-22.json'));
+	const gap = await warnings(() => readAsk(freshPage(recorded({}, site).fetcher), null, question, listed));
+	expect(gap.result).toMatchObject({ state: 'unreachable', at: '2026-10-22', fault: 'file-missing' });
+});
 /** The digest a listing that names no file carries: SHA-256 over no names, the empty string. */
 const EMPTY_NAMES_DIGEST = createHash('sha256').update('', 'utf8').digest('hex');
 
