@@ -199,7 +199,7 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 | 13 | Phase 2 publication reconciliation and rolling diversity metrics | 12, 14 | H | PENDING | - | - | - |
 | 14 | Phase 1 source-run audit and three-axis evidence | 11 | G | PENDING | - | - | - |
 | 15 | Config-driven source registries and compatible readers | - | A | DONE | fluffy-adventure (feed-registry-migration) | - | f7f18c64-813b-4a13-b421-1cd67b951db6 |
-| 16 | Public data-explorer enrollment and nested ledger delivery | 2 | B | PENDING | - | - | - |
+| 16 | Public data-explorer enrollment and nested ledger delivery | 2 | B | IN-FLIGHT | allocation pending | - | coordinator a1748a0f-745e-4c5e-9fa4-5d54fb1f0aef |
 
 ---
 
