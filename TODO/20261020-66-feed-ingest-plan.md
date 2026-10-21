@@ -232,9 +232,9 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 | 7 | RSS/Atom feed harvest and DOM text extraction | 3, 6 | B | DONE | redesigned-doodle (feed-harvest-engine) | - | da505804-6ce7-4f03-aa0b-25bab323ba53 |
 | 8 | Candidate triage screening with Parquet rejection ledger | 6, 7 | C | DONE | plan-66-candidate-screening | - | d50de7c8-1c6a-4074-a390-25a077ae0ba8 |
 | 9 | Set-aware editorial portfolio curation | 8 | D | DONE | plan-66-portfolio-curation | - | 34c330c1-9d30-4222-8fa6-4e28e58a165e |
-| 10 | Contextual bin-packing partitioner with feature flag | 9 | E | PENDING | - | - | - |
-| 11 | Core plan engine entrypoint, dual-mode runner, and sealing | 6, 10 | F | PENDING | - | - | - |
-| 12 | Isolated CI test workflow and verification suite | 4, 5, 11, 14 | G | PENDING | - | - | - |
+| 10 | Contextual bin-packing partitioner with feature flag | 9 | E | IN-FLIGHT | Session `86a9018f-dadb-4181-b82c-ca7fe9347116` builds on tested harvest foundation; integrates tested curation before final checks; historical completion proof remains unresolved below | - | - |
+| 11 | Core plan engine entrypoint, dual-mode runner, and sealing | 6, 10 | F | IN-FLIGHT | plan-66-api-cli-runner | - | ec780a10-5ab0-4ad7-a4e1-c36db811fbd7 |
+| 12 | Isolated CI test workflow and verification suite | 4, 5, 11, 14 | G | IN-FLIGHT | reporting slot reserved | - | dispatching |
 | 13 | Phase 2 publication reconciliation and rolling diversity metrics | 12, 14 | H | PENDING | - | - | - |
 | 14 | Phase 1 source-run audit and three-axis evidence | 11 | G | PENDING | - | - | - |
 | 15 | Config-driven source registries and compatible readers | - | A | DONE | fluffy-adventure (feed-registry-migration) | - | f7f18c64-813b-4a13-b421-1cd67b951db6 |
@@ -919,7 +919,21 @@ concurrent edits to those files.
   - `services/feed-ingest-plan/src/partition-article-shards/bin-pack.ts`
   - `services/feed-ingest-plan/src/partition-article-shards/round-robin.ts`
   - `services/feed-ingest-plan/src/partition-article-shards/read-editorial-selection.ts`
+  - `services/feed-ingest-plan/src/partition-article-shards/partition-input.ts`
+  - `services/feed-ingest-plan/src/read-ledger-history/read-period.ts`
+  - `services/feed-ingest-plan/src/read-ledger-history/read-parquet.ts`
+  - `services/feed-ingest-plan/src/read-ledger-history/complete-attempt.ts`
+  - `packages/common-contracts/src/schemas/ledger-index.schema.ts`
+  - `packages/common-contracts/src/index.ts`
+  - `packages/common-contracts/test/ledger-index.test.ts`
+  - `packages/ledger-file-writer/src/index.ts`
+  - `packages/ledger-file-writer/test/reader-integrity.test.ts`
   - `services/feed-ingest-plan/test/partition.test.ts`
+  - `services/feed-ingest-plan/test/ledger-history.test.ts`
+  - `services/feed-ingest-plan/test/partition-fixtures.ts`
+  - `tests/fixtures/feed-ingest-plan/ledger-history.json`
+  - `docs/architecture/sources/feed-partitioning.md`
+  - `docs/architecture/contracts/persistence.md`
 - **Acceptance gates:** Local: shared selector and `bun test` over bounded uneven, equal-work, empty, and fewer-items-than-shards fixtures. Verify deterministic assignments, configured shard bounds, and the selected-to-dispatched identity/rank bijection. CI: full suite. Greedy bin-packing is a heuristic, not proof of minimum variance for every input.
 - **Oracle:** A hand-computable uneven-work fixture produces the expected greedy assignment and lower work spread than round-robin; equal-work fixtures may tie. With strategy `none`, all items have worker assignment zero and the effective dispatch count is one. These checks do not prove optimal packing or actual worker elapsed-time balance.
 
@@ -930,6 +944,79 @@ policy consistency. Do not reconstruct content from a selection row or fetch
 it again from the web. The shared writer is not a settled ledger reader;
 price the raw/compact reader and candidate-input supporting paths before
 dispatch. Worker assignment stays separate from the writer's identity shard.
+
+Initial construction and historical replay are different inputs. Initial
+construction receives the current run's validated selection write result and
+harvested candidates before dispatches and source completion exist. Requiring
+dispatch-completion evidence there would make a cycle. Historical replay
+selects a proven complete attempt and gets full content from recorded
+dispatches; selections alone can reproduce allocation, not recover text.
+Raw and compact readers preserve original row identities and planning
+attempts. They use explicitly named days or files and the existing index
+precedence: yearly, monthly, daily, then raw. A known empty period differs
+from lost or missing evidence. No repository history scan or network refetch
+can substitute for either input.
+
+Supporting scope: the named history modules read actual Parquet through the
+existing Arrow/WASM libraries, validate envelopes and original row identity,
+resolve one named day's compact indexes or explicitly supplied raw files,
+and validate the completion evidence those inputs can actually prove. The shared
+index schemas are small TypeScript copies of the existing raw/compact
+contracts, held to bounded recorded field, vocabulary and validation
+fixtures. They do not execute or read Python source during tests. The
+generated history tests exercise raw, daily, monthly and yearly files,
+empty/lost/missing periods, incomplete retries and preserved original
+identities. No new persisted field or schema meaning is introduced.
+`partition-input.ts` validates current selections and supplied full candidate
+content without requiring future completion evidence. The owning partition
+page records the distinction and reader behavior. Row #7 owns the manifest
+and lock, including the existing Arrow/WASM runtime dependencies; this row
+integrates that foundation before final checks and does not edit those files
+concurrently. No writer implementation, frontend import, Python source or
+production workflow change belongs to this row.
+
+Reader integrity reuses the writer's existing canonical serialization:
+the package entry point may export `digestRows`, its logical field/type
+declarations, and the existing `describeObjectSchema` and
+`appendIdentityColumns` helpers. The named public-import test proves digest
+agreement over actual Parquet readback. This is an export-only addition,
+not a writer implementation or stored-format change; do not deep-import
+private modules or duplicate canonical serialization in the reader.
+
+STOP-AND-SURFACE, 2026-10-21: compact rows retain original run, attempt and
+unit identity, but not original raw-file membership or row order. Completion
+evidence names original file digests, and the writer hashes rows in input
+order. Packing can also settle duplicate occurrences. Consequently a reader
+cannot generally reproduce each recorded raw-file digest after raw removal.
+Current compact-file integrity and matching aggregate counts do not prove
+the original file commitments. Fowler confirmed this contract gap.
+The coordinator requested owner approval for a versioned logical-attempt
+commitment, with the existing Python declaration updated but never executed;
+alternatives were retaining referenced raw files or preserving full raw-file
+provenance through packing. The unavailable-user response selected none.
+Do not self-authorize a contract change or report packed replay as verified.
+Current-run partition construction and bounded reader implementation can
+continue. Historical completion proof remains an explicit unresolved part
+of this row, not a silent scope reduction.
+
+STOP-AND-SURFACE, 2026-10-21: the dispatch contract also requires content and
+selection dates and policies to be equal. Curation preserves the actual
+fetch day and harvested policy in content, and records the decision day and
+effective screening policy in selection. A freshness override or a fetch
+before UTC midnight followed by selection after midnight can therefore
+produce valid stage output that the current dispatch contract rejects.
+The coordinator requested approval to keep identity, source and labels
+equal while permitting the two genuine date/policy records, including a
+limited existing Python declaration update without execution. The
+unavailable-user response selected no option; no contract change is
+authorized. Row #9 adds real composition regressions. Row #10 must report
+the boundary explicitly, not falsify fetched content, discard the override
+or claim those cases work. Same-day, same-policy construction can continue.
+This does not inherently
+block a live freshness override: harvesting already accepts run overrides,
+so the runner must pass the same override to harvest and screening and one
+captured UTC instant through all stages. Independently supplied content
+harvested under a different policy or UTC day remains unrepresentable.
 
 ### Decisions
 
@@ -955,18 +1042,48 @@ dispatch. Worker assignment stays separate from the writer's identity shard.
 - **Scope:** Implement the planner REST API and CLI, pass the resolved freshness request through screening, and call the shared ledger package from the storage adapter in Table E to persist dispatches and return structured result paths.
 - **Files touched:**
   - `services/feed-ingest-plan/package.json`
+  - `services/feed-ingest-plan/bun.lock`
   - `services/feed-ingest-plan/tsconfig.json`
   - `services/feed-ingest-plan/src/index.ts`
   - `services/feed-ingest-plan/src/api/server.ts`
   - `services/feed-ingest-plan/src/api/routes/plan.route.ts`
   - `services/feed-ingest-plan/src/api/routes/health.route.ts`
   - `services/feed-ingest-plan/src/api/plan-request.ts`
+  - `services/feed-ingest-plan/src/run-feed-plan.ts`
+  - `services/feed-ingest-plan/src/load-plan-inputs.ts`
+  - `services/feed-ingest-plan/src/resolve-run-context.ts`
+  - `services/feed-ingest-plan/src/read-ledger-history/read-seen-evidence.ts`
+  - `services/feed-ingest-plan/src/config/service-settings.ts`
   - `services/feed-ingest-plan/src/seal-article-ledger/plan-sealer.ts`
   - `services/feed-ingest-plan/src/logging/structured-logger.ts`
   - `services/feed-ingest-plan/test/plan-cli.test.ts`
   - `services/feed-ingest-plan/test/plan-api.test.ts`
+  - `services/feed-ingest-plan/test/plan-engine.test.ts`
+  - `config/feed-ingest-plan-service.json`
+  - `docs/architecture/sources/feed-plan-runner.md`
 - **Acceptance gates:** `bun test` in `services/feed-ingest-plan/`; CLI/API fixture tests cover the same age filter, automatically derived UTC date, and Python-readable dispatch output. No core module writes GitHub annotations, step summaries, or GitHub output files.
 - **Oracle:** Given the same bounded inputs and fixed UTC clock, CLI and API select the same article identities and return valid dispatch paths and shard assignments. This does not prove live-feed performance.
+
+Supporting scope: keep the entry point and HTTP routes as routing only.
+`run-feed-plan.ts` composes the real stages; named loaders resolve explicit
+config, ledger and bounded seen-evidence inputs; the context module captures
+one UTC instant and validates run/attempt/partition controls before fetching.
+Use the same freshness override in harvesting and screening. Named authored
+service settings govern listener, input limits and feature enablement, not
+an undeclared environment-only destination. Row #7's manifest ownership has
+ended at its pushed handoff; Row #11 owns the service manifest and lock from
+this point, including Hono's stated API-routing benefit and installation cost.
+No other row edits those files concurrently. Row #10 still owns its named
+history modules; do not edit them from this row.
+
+The runner emits existing typed stage events with genuine membership,
+measurements and unavailable evidence for Row #14. Before the audit recorder
+exists, dispatch persistence is not audited completion: never emit a
+plan-complete source snapshot or return complete success without all required
+audit writes. Build real composition now, not a success-shaped placeholder.
+The audit timing, top-count and packed-completion contract questions remain
+explicit integration dependencies. No new persisted contract or Python
+change is authorized by this supporting scope.
 
 ### Decisions
 
@@ -995,9 +1112,29 @@ dispatch. Worker assignment stays separate from the writer's identity shard.
   - `.github/scripts/feed-ingest-plan-outputs.ts`
   - `.github/scripts/feed-ingest-plan-report.ts`
   - `.github/scripts/tests/feed-ingest-plan-report.test.ts`
+  - `.github/scripts/tests/feed-ingest-plan-outputs.test.ts`
+  - `.github/scripts/tests/feed-ingest-plan-workflow.test.ts`
   - `packages/common-contracts/test/verify-parquet.ts`
+  - `tests/fixtures/feed-ingest-plan/report-events.json`
+  - `docs/how-to/run-feed-ingest-plan-test.md`
 - **Acceptance gates:** Local: shared test selector and fixture-driven workflow/reporting tests. CI: full suite and the isolated workflow's compatibility checks. Reporting enabled/disabled runs over identical fixtures must produce identical ledger content digests; disabled reporting produces no annotations or summary. Cover zero dispatches or zero rejections as valid outcomes, not failed count assertions.
 - **Oracle:** `verify-parquet.ts` reads actual dispatch and rejection files, validates envelopes and rows, compares recorded fixture identities and canonical row digests, and checks native list-column types; adapter tests check escaped annotations and summaries separately. No Python runtime or packages are required. This cannot settle Python-reader execution, real feed availability or hosted-runner speed.
+
+Supporting scope: independent reporting implementation can consume existing
+typed events while the runner is being built. Final output conversion and
+workflow verification still depend on Rows #11 and #14; no invented result
+or successful placeholder substitutes for them. The named script tests
+separate required execution outputs from optional annotations and summaries
+and inspect only the named isolated workflow. The bounded event fixture
+uses the existing event contract. The owning how-to documents invocation,
+actual evidence and remaining audit integration requirements.
+
+Row #11 owns the service manifest and lock; coordinate dependency needs
+there, never edit them concurrently. Reuse Row #10's public canonical
+integrity functions and real Parquet reader rather than a second serializer.
+The isolated workflow does not commit generated state or invoke the
+production publisher. It must include compact indexes and their named
+files, not substitute a raw-only checkout or scan accumulated history.
 
 ### Table R - Workflow inputs and freshness behavior
 
@@ -1095,6 +1232,17 @@ accepts every positive integer, but `DiversityMetricRow.top_k` admits only
 declared vocabulary, which gives up other configured counts, or obtain owner
 approval to open the persisted field and update both language readers and
 binding tests. Never omit an unsupported configured count without an error.
+
+Timing preflight: the existing assessment clock vocabulary has
+`published_at`, `fetched_at` and `unavailable`, but screening also uses
+persisted `first_seen` evidence. An unavailable clock cannot retain its
+timestamp or age under the existing validator. Calling first sight a fetch
+time would be false. Screening also retains signed age for a trusted
+slightly future publication time, while persisted assessment age is
+nonnegative. Before wiring complete audit records, resolve how these real
+measurements are represented; do not silently discard them or change a
+persisted meaning. The stage's exact transient evidence remains available
+to the recorder while this contract question is unresolved.
 
 ### Decisions
 
