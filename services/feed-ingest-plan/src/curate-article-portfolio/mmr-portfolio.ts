@@ -153,5 +153,25 @@ export function choosePortfolio(
     selected.push(winner.article);
     remaining.splice(remaining.indexOf(winner.article), 1);
   }
-  return { selected, choices, trace, remaining, relaxations };
+  const cutoffs = remaining.map(article => {
+    const evaluated = trace.at(-1)?.evaluated.find(entry => entry.candidate_id === article.candidate.candidate_id);
+    const controls = selected.length >= target
+      ? [{ control: "article_limit", observed_value: selected.length + 1, limit: target }]
+      : (evaluated?.blocked_by ?? []).map(control => {
+        switch (control) {
+          case "source_share":
+            return { control, observed_value: selected.filter(a => a.candidate.source_id === article.candidate.source_id).length + 1, limit: sourceMaximum };
+          case "parent_domain_share":
+            return { control, observed_value: selected.filter(a => a.evidence.parent_domain?.value === article.evidence.parent_domain?.value).length + 1, limit: domainMaximum };
+          case "event_cluster_items":
+            return { control, observed_value: selected.filter(a => a.candidate.labels.event_cluster_id === article.candidate.labels.event_cluster_id).length + 1, limit: caps.max_event_cluster_items };
+          case "distinct_sources":
+            return { control, observed_value: new Set(selected.map(a => a.candidate.source_id)).size, limit: Math.min(caps.min_distinct_sources, target) };
+          default: throw new Error(`Unknown portfolio control: ${control}`);
+        }
+      });
+    if (controls.length === 0) throw new Error("Unselected candidate lacks a terminal portfolio control");
+    return { article, controls, last_evaluation: evaluated ?? null };
+  });
+  return { selected, choices, trace, remaining, relaxations, cutoffs };
 }

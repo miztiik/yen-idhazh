@@ -38,9 +38,9 @@ export function curateArticles(input: Readonly<{
       rejection.article, input.observed_at, "SOURCE_QUOTA_EXCEEDED",
       { observed_value: rejection.position, limit: rejection.allowance.allowance },
     )),
-    ...portfolio.remaining.map(article => recordRejection(
-      article, input.observed_at, "MMR_PORTFOLIO_CUTOFF",
-      { observed_value: portfolio.selected.length, limit: input.planning.config.curate.article_limit ?? normalization.admitted.length },
+    ...portfolio.cutoffs.map(cutoff => recordRejection(
+      cutoff.article, input.observed_at, "MMR_PORTFOLIO_CUTOFF",
+      { observed_value: cutoff.controls[0]!.observed_value, limit: cutoff.controls[0]!.limit },
     )),
   ];
   const choices = new Map(portfolio.choices.map(choice => [choice.candidate_id, choice]));
@@ -74,7 +74,8 @@ export function curateArticles(input: Readonly<{
   });
   if (articles.length !== rows.length + rejections.length) throw new Error("Curation terminal decisions do not reconcile");
   return {
-    input: articles, selected: portfolio.selected, rows, rejections, assessments,
+    input: articles, opportunity: structuredClone(input.opportunity),
+    selected: portfolio.selected, rows, rejections, assessments, cutoffs: portfolio.cutoffs,
     choices: portfolio.choices, trace: portfolio.trace,
     carriers, normalization, quality: articles.map(article => ({
       candidate_id: article.candidate.candidate_id, ...measureArticle(article),
@@ -95,6 +96,7 @@ function requireDurable(result: PersistLedgerResult): PersistLedgerResult {
 }
 
 export async function persistPortfolio(result: CurationResult, context: CurationPersistence) {
+  if (context.ledgerSettings.format !== "parquet") throw new Error("Curation requires Parquet ledger storage");
   if (context.writerContext.shard !== 0) throw new Error("Unsharded curation requires writer provenance shard 0");
   if (context.registrations.selections.name !== "editorial-selections"
     || context.registrations.rejections.name !== "rejections") throw new Error("Wrong curation ledger registration");

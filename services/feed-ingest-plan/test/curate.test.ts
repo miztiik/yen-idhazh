@@ -9,13 +9,14 @@ import {
 } from "@idhazh/common-contracts";
 import type { FeedIngestConfig } from "@idhazh/common-contracts";
 import { tableFromIPC } from "apache-arrow";
-import { readParquet, readMetadata } from "parquet-wasm/esm";
+import initializeParquet, { readParquet, readMetadata } from "parquet-wasm/esm";
 import { loadPlanningConfig, resolvePolicy } from "../src/config/resolve-policy";
 import type { PlanningConfig } from "../src/config/resolve-policy";
 import { curateArticles, persistPortfolio } from "../src/curate-article-portfolio/editorial-selection";
 import type { CurationPersistence } from "../src/curate-article-portfolio/editorial-selection";
 import type { ArticleEvidence, OpportunityEvidence, PortfolioArticle } from "../src/curate-article-portfolio/portfolio-input";
 import { compareStory } from "../src/curate-article-portfolio/story-evidence";
+import type { StoryComparison } from "../src/curate-article-portfolio/story-evidence";
 import { groupCarriers } from "../src/curate-article-portfolio/carrier-cluster";
 
 type CandidateCase = {
@@ -28,7 +29,7 @@ type Fixture = {
   observed_at: string; run_id: string; correlation_id: string; policy_version: string; config_sha256: string;
   candidates: CandidateCase[];
   expected: { baseline: string[]; each_saturation_coefficient_one: string[]; base_scores: Record<string, number>; selected_ranks: number[] };
-  story_pairs: { left: string; right: string; expected: string }[];
+  story_pairs: { left: string; right: string; expected: StoryComparison["method"] }[];
   recorded_format: {
     row_schema_version: string; candidate_first: string; selection_columns: string[];
     rejection_reason: string; selection_count: number; rejection_count: number;
@@ -272,7 +273,13 @@ test("soft caps relax only in configured order and parent-domain/cluster limits 
   expect(result.trace.filter(step => step.choice === null).map(step => step.relaxations))
     .toEqual([[], ["distinct_sources"]]);
   planning.config.curate.soft_caps.max_parent_domain_share = 0.2;
-  expect(run(planning, fixture).rows).toHaveLength(2);
+  const domainCapped = run(planning, fixture);
+  expect(domainCapped.rows).toHaveLength(2);
+  expect(domainCapped.cutoffs[0]!.controls).toContainEqual({
+    control: "parent_domain_share", observed_value: 2, limit: 1,
+  });
+  expect(domainCapped.rejections[0]!.details.observed_value).toBe(2);
+  expect(domainCapped.rejections[0]!.details.limit).toBe(1);
   planning.config.curate.soft_caps.max_parent_domain_share = 1;
   planning.config.curate.soft_caps.max_event_cluster_items = 1;
   expect(run(planning, fixture).rows).toHaveLength(2);
@@ -354,6 +361,16 @@ test("unknown timing stays unknown; first-seen is never presented as fetched pub
   }
 });
 
+test("admitted future timing preserves its signed observation and floors only the recency age", async () => {
+  const { fixture, planning } = await inputs();
+  const future = article({ ...fixture.candidates[0]!, published_at: "2026-10-21T13:00:00Z" }, fixture, planning);
+  const result = curateArticles({ articles: [future], planning, observed_at: fixture.observed_at, opportunity: noOpportunity });
+  expect(result.quality[0]!.article.timing.age_hours).toBe(-1);
+  expect(result.quality[0]!.components.recency).toBe(1);
+  expect(result.assessments[0]!.age_hours).toBe(0);
+  expect(result.assessments[0]!.effective_published_at).toBe("2026-10-21T13:00:00Z");
+});
+
 test("operational history, length, byline and kind never become model verdicts or a quality product", async () => {
   const { fixture, planning } = await inputs();
   planning.config.curate.source_authority_weight = 2;
@@ -402,6 +419,44 @@ test("run freshness overrides remain separate from the unchanged harvested polic
   expect(result.rows[0]!.policy.max_age_hours).toBe(6);
 });
 
+test("real screening results compose into exact curation without losing harvested content", async () => {
+  const { screenArticleCandidates } = await import("../src/screen-article-candidates/triage-gates");
+  const { fixture, planning } = await inputs();
+  const root = await mkdtemp(join(tmpdir(), "screened-portfolio-"));
+  try {
+    const originals = fixture.candidates.map(spec => article(spec, fixture, planning));
+    const short = article({ ...fixture.candidates[0]!, name: "short", ordinal: 99 }, fixture, planning).candidate;
+    short.word_count = 3;
+    short.article_text = "Too little substance";
+    const context = await persistenceContext(root, fixture);
+    const screened = await screenArticleCandidates({
+      candidates: [...originals.map(original => original.candidate), short], observations: {},
+      seen: { availability: "unavailable" }, planning,
+      clock_config: { collect: { max_future_hours: 0 } },
+      run: { now: fixture.observed_at, run_id: fixture.run_id, correlation_id: fixture.correlation_id, overrides: {} },
+    }, {
+      outputRoot: context.outputRoot,
+      writerContext: { ...context.writerContext, task_name: "screen-article-candidates" },
+      registryEntry: context.registrations.rejections, ledgerSettings: context.ledgerSettings,
+    });
+    expect(screened.sealing.status).toBe("written");
+    expect(screened.rejections.map(row => row.drop_reason)).toEqual(["STUB_CONTENT"]);
+    const result = curateArticles({
+      articles: screened.admitted.map(admitted => ({
+        ...admitted,
+        evidence: originals.find(original => original.candidate.candidate_id === admitted.candidate.candidate_id)!.evidence,
+      })),
+      planning, opportunity: noOpportunity, observed_at: fixture.observed_at,
+    });
+    expect(names(result)).toEqual(fixture.expected.baseline);
+    expect(result.rows.map(row => row.editorial_rank)).toEqual([1, 2]);
+    expect(result.selected.map(value => value.candidate)).toEqual(originals.slice(0, 2).map(value => value.candidate));
+    expect(result.rows.length + result.rejections.length + screened.rejections.length).toBe(4);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 30_000);
+
 function normalize(value: unknown): unknown {
   if (typeof value === "bigint") return Number(value);
   if (Array.isArray(value)) return value.map(normalize);
@@ -420,7 +475,7 @@ async function persistenceContext(root: string, fixture: Fixture): Promise<Curat
     family: family.name, lifecycle_status: family.lifecycle_status,
   });
   return {
-    outputRoot: root,
+    outputRoot: join(root, "state"),
     writerContext: WriterIdentitySchema.parse({
       run_id: fixture.run_id, attempt: 1, job: null, pipeline_name: "feed-ingest-plan",
       task_name: "curate-article-portfolio", shard: 0, producer: "portfolio-fixture", git_sha: "a".repeat(40),
@@ -437,6 +492,7 @@ test("actual unsharded selection and rejection Parquet read back exact rows and 
   const root = await mkdtemp(join(tmpdir(), "portfolio-parquet-"));
   try {
     const persisted = await persistPortfolio(result, await persistenceContext(root, fixture));
+    await initializeParquet();
     for (const [ledger, stored, expectedRows] of [
       ["editorial-selections", persisted.selections, result.rows],
       ["rejections", persisted.rejections, result.rejections],
@@ -444,8 +500,8 @@ test("actual unsharded selection and rejection Parquet read back exact rows and 
       expect(stored.status).toBe("written");
       expect(stored.files).toHaveLength(1);
       const file = stored.files[0]!;
-      expect(file.path).toContain(`state/raw/feed-ingest-plan/${ledger}/2026/10/21/`);
-      const bytes = new Uint8Array(await readFile(resolve(root, file.path)));
+      expect(file.path).toContain(`raw/feed-ingest-plan/${ledger}/2026/10/21/`);
+      const bytes = new Uint8Array(await readFile(resolve(root, "state", file.path)));
       const wasm = readParquet(bytes);
       const table = tableFromIPC(wasm.intoIPCStream());
       const actual = table.toArray().map(row => normalize(row) as Record<string, unknown>);
@@ -499,6 +555,9 @@ test("empty writes have no invented files and real failures cannot report comple
     await expect(persistPortfolio(run(planning, fixture), {
       ...context, writerContext: { ...context.writerContext, shard: 1 },
     })).rejects.toThrow("Unsharded");
+    await expect(persistPortfolio(run(planning, fixture), {
+      ...context, ledgerSettings: { ...context.ledgerSettings, format: "json" },
+    })).rejects.toThrow("Parquet");
     const paused = {
       ...context,
       registrations: { ...context.registrations, rejections: { ...context.registrations.rejections, lifecycle_status: "paused" as const } },

@@ -109,6 +109,9 @@ evaluated marginal score, blockers and current relaxations. A blocked step
 is retained before a relaxation is applied. These are actual observations,
 not final scores copied backwards. The later audit stage consumes this
 structured evidence; the runner owns event-envelope identity and stamping.
+Terminal cutoffs retain the actual blocking controls and their counts/limits.
+The existing rejection row records the first binding control's numbers, not
+a comparison against an article limit that was never reached.
 
 ## Story and carrier evidence
 
@@ -140,7 +143,8 @@ verification of the underlying claim.
 
 `persistPortfolio` writes the existing selection and terminal rejection
 contracts through `@idhazh/ledger-file-writer`, using caller-supplied registered
-ledger settings and prefixes from `config/ledgers.json`. Selection is
+ledger settings and prefixes from `config/ledgers.json`. Files are written
+relative to the caller's state-directory output root. Selection is
 unsharded; writer shard zero is provenance, not a worker assignment. Selected
 rows retain candidate identity, original source and labels, effective policy,
 positive rank, caller-supplied work estimate and the scores at their own
