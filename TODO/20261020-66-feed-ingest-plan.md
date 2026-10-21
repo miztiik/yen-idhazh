@@ -1386,6 +1386,15 @@ based on the runner, verifies returned source files and completion evidence,
 and exercises publication observation only with a bounded generated published
 fixture. Neither integration claims real production publication or complete
 packed history.
+Reviewed caller head `60d97e779738121ae550cc8315ad7327d4b88f21` exposes
+`planning_complete: true` only with the producer's exact verified completion.
+That planning result returns HTTP 200 and CLI exit 0, while
+`audited_complete` stays false. Native API/CLI coverage independently reloads
+the named files and selects the same run, attempt and correlation; source-write
+failure returns no successful summary. Strict TypeScript and 11 caller tests
+passed. PR #1624 merged into the runner branch, not main, at 21:25:33 UTC.
+The workflow's separate full-audit gate remains unsuccessful while that
+broader audit is incomplete; generated publication evidence does not bypass it.
 
 Row #11 currently owns `src/index.ts`; Row #14 does not edit that file
 concurrently. Publish the tested recorder API from its own module, coordinate
