@@ -10,7 +10,7 @@ import type { PlanInputs } from "../load-plan-inputs";
 import { runFeedPlan } from "../run-feed-plan";
 import type { PlanRuntime } from "../run-feed-plan";
 import type { PlanRequest } from "./plan-request";
-import { requiredSeenDays } from "../read-ledger-history/read-seen-evidence";
+import { parseSeenDays, requiredSeenDays } from "../read-ledger-history/read-seen-evidence";
 import { RelativePathSchema } from "../config/service-settings";
 
 // Calendar-versioned HTTP protocol paths are not runtime planning controls.
@@ -25,6 +25,7 @@ export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime) {
     }
     ownFiles.set(receipt.day, new Set(receipt.files.map(file => RelativePathSchema.parse(file))));
   }
+  const acceptedDays = new Map<string, string>();
   let lastRunAt: number | undefined;
   let ready = Promise.resolve();
   const execute = (request: PlanRequest) => {
@@ -41,7 +42,15 @@ export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime) {
         now.toISOString().replace(/\.\d{3}Z$/, "Z"), inputs.clock_config.collect.seen_window_days,
       ));
       for (const day of ownFiles.keys()) if (!required.has(day)) ownFiles.delete(day);
-      return runFeedPlan(request, inputs, {
+      const authoredDays = parseSeenDays(inputs.settings.inputs.seen_days);
+      const firstRequired = required.values().next().value!;
+      const seenDays = authoredDays.filter(day =>
+        day.day >= firstRequired || acceptedDays.get(day.day) !== JSON.stringify(day));
+      const result = await runFeedPlan(request, {
+        ...inputs, settings: {
+          ...inputs.settings, inputs: { ...inputs.settings.inputs, seen_days: seenDays },
+        },
+      }, {
         ...runtime, clock: () => now,
         seen_receipts: [...ownFiles].map(([day, files]) => ({ day, files: [...files] })),
         on_seen_persisted: receipt => {
@@ -53,6 +62,10 @@ export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime) {
           runtime.on_seen_persisted?.(receipt);
         },
       });
+      const configured = new Set(authoredDays.map(day => day.day));
+      for (const day of acceptedDays.keys()) if (!configured.has(day)) acceptedDays.delete(day);
+      for (const day of seenDays) acceptedDays.set(day.day, JSON.stringify(day));
+      return result;
     });
     // The caller still receives the failure; only the listener queue is released.
     ready = result.then(() => undefined, () => undefined);

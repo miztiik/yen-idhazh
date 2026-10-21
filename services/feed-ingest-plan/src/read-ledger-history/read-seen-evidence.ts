@@ -17,6 +17,16 @@ const millisecondsPerDay = 86_400_000;
 const seenContract = { schema: SeenRowSchema, schemaVersion: seenSchemaVersion };
 export type OwnSeenReceipt = Readonly<{ day: string; files: readonly string[] }>;
 
+export function parseSeenDays(days: readonly SeenDayInput[]): SeenDayInput[] {
+  const parsed = days.map(day => SeenDayInputSchema.parse(day));
+  for (const [index, day] of parsed.entries()) {
+    if (index > 0 && day.day <= parsed[index - 1]!.day) {
+      throw new Error("seen_days must have distinct UTC days in ascending order");
+    }
+  }
+  return parsed;
+}
+
 export function requiredSeenDays(now: string, lookbackDays: number): string[] {
   UtcInstantSchema.parse(now);
   if (!Number.isSafeInteger(lookbackDays) || lookbackDays < 0) throw new Error("seen_window_days must be a nonnegative safe integer");
@@ -53,10 +63,9 @@ export async function readSeenEvidence(
   files.forEach(file => RelativePathSchema.parse(file));
   if (new Set(files).size !== files.length) throw new Error("seen_files must name distinct files");
   const required = window === undefined ? [] : requiredSeenDays(window.now, window.lookback_days);
-  const namedDays = window?.days.map(day => SeenDayInputSchema.parse(day)) ?? [];
+  const namedDays = parseSeenDays(window?.days ?? []);
   for (const [index, day] of namedDays.entries()) {
     if (!required.includes(day.day)) throw new Error(`seen_days.${index}.day is outside the required UTC window`);
-    if (index > 0 && day.day <= namedDays[index - 1]!.day) throw new Error("seen_days must have distinct UTC days in ascending order");
   }
   const ownReceipts = window?.own_receipts ?? [];
   if (new Set(ownReceipts.map(receipt => receipt.day)).size !== ownReceipts.length) {
