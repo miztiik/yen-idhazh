@@ -1360,6 +1360,18 @@ the exact in-memory result type with Row #11, then let the runner owner wire
 it in a separate integration increment. The final acceptance gates remain
 open; helper arithmetic and safe refusal are not a complete audit.
 
+Reviewed recorder increment `ad26e1f909de199e56ca302972324b41042889e1`
+is delivered in PR #1621. Strict TypeScript and 15 named audit tests passed;
+native readback verified actual assessment and diversity receipts. Its
+whole-request preflight retains exact timing for rejected candidates as
+well as admitted candidates. It still writes no source-complete record.
+The runner owner now integrates this exact recorder through the existing
+entrypoint/composition modules, exposes actual files and receipts, and keeps
+audited completion false. Unsupported observations fail explicitly rather
+than bypass the recorder. Row #13 owns the shared metrics, tests and owning
+documentation after this tested handoff; the runner does not edit those
+files concurrently.
+
 ### Decisions
 
 | # | Decision | Authority |
