@@ -1,0 +1,32 @@
+{
+  "bindings": {
+    "PublishedRow": {
+      "authority": "backend/idhazh/contracts/seen.py:PublishedRow",
+      "fields": ["version", "url_key", "published_on", "item_id"],
+      "types": {"version": "string", "url_key": "string", "published_on": "string", "item_id": "string"}
+    },
+    "ItemHealthPublication": {
+      "authority": "backend/idhazh/contracts/item_health.py:ItemHealthRow",
+      "fields": ["date", "run_id", "item_id", "url_key", "source_id", "stage", "outcome"],
+      "stages": ["plan", "fetch", "extract", "summarize", "publish"],
+      "outcomes": ["ok", "failed"]
+    },
+    "DigestPublication": {
+      "authority": "backend/idhazh/contracts/digest_day.py:DigestDay",
+      "fields": ["date", "generated_at", "runs", "items", "leads"],
+      "run_fields": ["n", "run_id", "items_added"],
+      "item_fields": ["item_id", "source_id", "source_url", "source_kind", "introduced_by_run"],
+      "lead_fields": ["item_id"]
+    }
+  },
+  "health": [
+    {"date": "2026-10-19", "run_id": "2026-10-19-1", "item_id": "ai-01", "url_key": "9eba6b3c57ce169e19742b249a7f7542a620751a5c4b2f2c4990684f7e655f70", "source_id": "source-0", "stage": "publish", "outcome": "ok"}
+  ],
+  "digest": {
+    "date": "2026-10-19",
+    "generated_at": "2026-10-19T12:00:00Z",
+    "runs": [{"n": 1, "run_id": "2026-10-19-1", "items_added": 1}, {"n": 2, "run_id": "2026-10-19-2", "items_added": 0}],
+    "items": [{"item_id": "ai-01", "source_id": "source-0", "source_url": "https://example.org/article", "source_kind": "reporting", "introduced_by_run": 1}],
+    "leads": [{"item_id": "ai-01"}]
+  }
+}
