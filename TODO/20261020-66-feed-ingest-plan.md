@@ -912,10 +912,13 @@ concurrent edits to those files.
   - `packages/common-contracts/src/schemas/ledger-index.schema.ts`
   - `packages/common-contracts/src/index.ts`
   - `packages/common-contracts/test/ledger-index.test.ts`
+  - `packages/ledger-file-writer/src/index.ts`
+  - `packages/ledger-file-writer/test/reader-integrity.test.ts`
   - `services/feed-ingest-plan/test/partition.test.ts`
   - `services/feed-ingest-plan/test/ledger-history.test.ts`
   - `tests/fixtures/feed-ingest-plan/ledger-history.json`
   - `docs/architecture/sources/feed-partitioning.md`
+  - `docs/architecture/contracts/persistence.md`
 - **Acceptance gates:** Local: shared selector and `bun test` over bounded uneven, equal-work, empty, and fewer-items-than-shards fixtures. Verify deterministic assignments, configured shard bounds, and the selected-to-dispatched identity/rank bijection. CI: full suite. Greedy bin-packing is a heuristic, not proof of minimum variance for every input.
 - **Oracle:** A hand-computable uneven-work fixture produces the expected greedy assignment and lower work spread than round-robin; equal-work fixtures may tie. With strategy `none`, all items have worker assignment zero and the effective dispatch count is one. These checks do not prove optimal packing or actual worker elapsed-time balance.
 
@@ -956,6 +959,14 @@ and lock, including the existing Arrow/WASM runtime dependencies; this row
 integrates that foundation before final checks and does not edit those files
 concurrently. No writer implementation, frontend import, Python source or
 production workflow change belongs to this row.
+
+Reader integrity reuses the writer's existing canonical serialization:
+the package entry point may export `digestRows`, its logical field/type
+declarations, and the existing `describeObjectSchema` and
+`appendIdentityColumns` helpers. The named public-import test proves digest
+agreement over actual Parquet readback. This is an export-only addition,
+not a writer implementation or stored-format change; do not deep-import
+private modules or duplicate canonical serialization in the reader.
 
 STOP-AND-SURFACE, 2026-10-21: compact rows retain original run, attempt and
 unit identity, but not original raw-file membership or row order. Completion
