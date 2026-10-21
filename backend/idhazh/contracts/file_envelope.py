@@ -132,6 +132,7 @@ _OPTIONAL_KEYS: Final = frozenset(
 )
 _ENVELOPE_VERSIONS: Final = frozenset(
     {
+        "2026-10-20",
         "2026-10-14",
         "2026-09-25",
         "2026-09-27",
@@ -320,6 +321,11 @@ class FileEnvelope(Contract):
     __schema_stem__: ClassVar[str] = "file-envelope"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-20",
+            change="Read the shared TypeScript Parquet writer provenance.",
+            why="Compatible readers precede files emitted by the shared TypeScript writer.",
+        ),
+        ChangelogEntry(
             version="2026-10-14",
             change="Store generic pipeline and task names without a legacy job value.",
             why="Shared ledgers group reusable telemetry by its separate identity columns.",
@@ -333,11 +339,6 @@ class FileEnvelope(Contract):
             version="2026-10-10",
             change="Read corrected host history with its recorded file envelope.",
             why="Previously published host rows remain readable after collector retirement.",
-        ),
-        ChangelogEntry(
-            version="2026-10-06",
-            change="Writer identity `job` may name `operator`.",
-            why="A person-run command now writes a door ledger.",
         ),
         ChangelogEntry(
             version="2026-10-01",
@@ -399,6 +400,7 @@ class FileEnvelope(Contract):
         "idhazh.ledger.json_lines",
         "idhazh_rust.ledger.parquet",
         "idhazh_rust.ledger.json_lines",
+        "idhazh_typescript.ledger.parquet",
     ] = Field(
         description=(
             "The ledger module that wrote the file. A parquet footer's own `created_by` "
@@ -470,6 +472,8 @@ class FileEnvelope(Contract):
     def _writer_scope_is_finite(self) -> Self:
         if self.version not in _ENVELOPE_VERSIONS:
             raise ValueError("unrecognized file envelope version")
+        if self.writer == "idhazh_typescript.ledger.parquet" and self.version < "2026-10-20":
+            raise ValueError("TypeScript writer requires envelope version 2026-10-20 or later")
         if self.writer.startswith("idhazh_rust.") and (
             self.version != "2026-10-10"
             or self.row_schema_version != "2026-10-10"

@@ -123,6 +123,22 @@ def test_the_normal_backend_suite_keeps_its_complete_report() -> None:
     assert settings["if-no-files-found"] == "error"
 
 
+def test_shared_contract_runtime_precedes_python_binding_tests() -> None:
+    workflow = _load_workflows()["ci.yml"]
+    steps = _steps(workflow, "gates")
+    setup = _step(workflow, "gates", "uses", "oven-sh/setup-bun@v2")
+    binding = _step(workflow, "gates", "name", "Shared contract bindings")
+    tests = _step(workflow, "gates", "name", "Tests, including the five injection canaries")
+    assert steps.index(setup) < steps.index(binding) < steps.index(tests)
+    assert setup["if"] == binding["if"] == tests["if"]
+    assert _mapping(setup.get("with"), "Bun runtime")["bun-version"] == "1.3.13"
+    assert binding["working-directory"] == "packages/common-contracts"
+    assert _script(binding, "shared contract bindings").splitlines() == [
+        "bun install --frozen-lockfile", "bun run check", "bun test",
+    ]
+    assert not binding.get("continue-on-error")
+
+
 def _two_commits(
     tmp_path: Path, changed: Sequence[str]
 ) -> tuple[Path, dict[str, str], str, str]:

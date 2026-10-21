@@ -172,7 +172,7 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Shared contracts, schemas, and identity types | 15 | A | PENDING | - | - | - |
+| 1 | Shared contracts, schemas, and identity types | 15 | A | DONE | supreme-train (plan-66-row-1) | - | 4729606a-ce50-4812-a45f-f4ac7314311b |
 | 2 | Ledger registration and gardener compaction configuration | 1 | A | PENDING | - | - | - |
 | 3 | Dedicated feed ingest plan configuration file | 1 | A | PENDING | - | - | - |
 | 4 | Host hardware and environment identity service | 6 | B | PENDING | - | - | - |

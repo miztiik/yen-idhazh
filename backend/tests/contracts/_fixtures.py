@@ -32,6 +32,14 @@ CONFIG_FILES: dict[str, type[Contract]] = {
 }
 
 FIXTURE_FILES: Final = (
+    "feed-ingest-candidate/one-article.json",
+    "feed-ingest-dispatch/one-article.json",
+    "feed-ingest-rejection/empty-feed.json",
+    "feed-ingest-editorial-selection/one-article.json",
+    "feed-ingest-source-run/one-observation.json",
+    "feed-ingest-article-assessment/one-observation.json",
+    "feed-ingest-diversity/one-observation.json",
+    "feed-ingest-event/one-observation.json",
     "run-shards/unknown.json",
     "app-config/every-knob-differs-from-the-committed-config.json",
     "appearance-config/knobs-set-away-from-the-defaults.json",

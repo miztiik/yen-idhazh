@@ -1,0 +1,28 @@
+{
+  "candidate_id": null,
+  "canonical_url": null,
+  "categories": [],
+  "correlation_id": "fixture-plan",
+  "date": "2026-10-20",
+  "details": {
+    "age_hours": null,
+    "history_window_days": null,
+    "http_status": null,
+    "limit": null,
+    "matched_url_key": null,
+    "max_age_hours": null,
+    "observed_value": null,
+    "timeout_ms": null,
+    "words_found": null,
+    "words_required": null
+  },
+  "drop_reason": "FEED_EMPTY",
+  "feed_url": "https://example.org/feed.xml",
+  "rejected_at": "2026-10-20T19:40:00Z",
+  "source_id": "fixture-feed",
+  "stage": "harvest-feeds",
+  "subject": "feed",
+  "title": null,
+  "url_key": null,
+  "version": "2026-10-20"
+}
