@@ -34,6 +34,8 @@ export const ServiceSettingsSchema = z.strictObject({
     extraction: RelativePathSchema, registrations: RelativePathSchema,
     output_root: RelativePathSchema, seen_files: z.array(RelativePathSchema),
     seen_days: z.array(SeenDayInputSchema).default([]),
+    published_days: z.array(SeenDayInputSchema).default([]),
+    settled_failure_days: z.array(SeenDayInputSchema).default([]),
   }),
   run: z.strictObject({ attempt: PositiveCountSchema, producer: NonEmptySchema }),
 });

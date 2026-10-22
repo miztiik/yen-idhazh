@@ -105,6 +105,14 @@ existing discovery rules and shared `deriveUrlKey`. The original feed entry
 URL is the request input; a page's links, canonical tags and scripts never
 supply a new request target.
 
+Before page fetch, harvesting checks the configured blocked URL markers, the
+bounded `published` ledger history, and same-UTC-day `item-health` failures
+whose codes are listed in `collect.settled_failure_codes`. These checks use
+the canonical URL key. Each refusal has its own typed reason and records the
+matched marker or ledger evidence. Missing history remains missing in the run
+summary; it is never treated as an empty ledger. A refusal has no page response,
+robots, paywall or extraction measurement.
+
 Feed categories include repeated, namespace-qualified and nested text values,
 including Atom `term` attributes. Empty or whitespace-only labels contain no
 category and are removed at parsing; real labels and repeats remain unchanged.
@@ -137,6 +145,11 @@ those entries, before page failure, paywall, category or substance checks.
 Those checks did not run and receive no invented measurements. The configured
 age policy is unchanged; this is not a fetch cap, a new seen-URL exclusion or
 a change to the final selection limit. No extraction worker pool is added.
+
+Owner ruling (kumarsnaveen, 2026-10-22): also refuse already-published URLs,
+same-day settled failures and configured blocked URL markers before page
+download. Each refusal keeps its actual reason and known evidence; unavailable
+history is reported as unavailable and does not become an empty-history claim.
 
 Article progress names harvesting, not extraction: `ARTICLE_HARVEST_COMPLETED`
 includes the actual `extraction_outcome`. An early age refusal reports

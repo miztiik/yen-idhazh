@@ -1,12 +1,14 @@
 /** Why did a feed or candidate receive a terminal rejection? */
 import { z } from "zod";
 import { CountSchema, DateStampSchema, FiniteSchema, NonEmptySchema, NonNegativeSchema, PositiveCountSchema, PositiveSchema, RejectionStageSchema, Sha256Schema, SlugSchema, TimestampSchema, UrlSchema, checkUrlIdentity, reject } from "./primitives";
-import { CONTRACT_VERSION, FEED_INGEST_AUDIT_VERSION, HARVEST_DIAGNOSTICS_VERSION } from "../version";
+import { CONTRACT_VERSION, FEED_INGEST_AUDIT_VERSION, HARVEST_DIAGNOSTICS_VERSION, PLANNER_EXCLUSIONS_VERSION } from "../version";
 import { HarvestDiagnosticsSchema } from "./harvest-diagnostics.schema";
+import { ItemHealthFailureCodeSchema } from "./item-health-failure.schema";
 
 export const DropReasonSchema = z.enum([
   "SOURCE_INACTIVE", "FETCH_FAILED", "FETCH_FAILED_HTTP", "FETCH_TIMEOUT",
   "EXTRACT_FAILED", "EXTRACT_EMPTY",
+  "ALREADY_PUBLISHED", "SETTLED_FAILURE", "BLOCKED_URL_MARKER",
   "PAYWALL_OR_BLOCKED", "FEED_PARSE_FAILED", "FEED_EMPTY", "MISSING_REQUIRED_FIELDS",
   "CATEGORY_EXCLUDED", "STUB_CONTENT", "STALE_MAX_AGE_EXCEEDED", "STALE_HALF_LIFE_DECAY",
   "DUPLICATE_CANONICAL_URL", "EVENT_CLUSTER_SIMILARITY", "SOURCE_QUOTA_EXCEEDED",
@@ -25,6 +27,9 @@ export const RejectionDetailsSchema = z.strictObject({
   observed_value: FiniteSchema.nullable().default(null),
   limit: FiniteSchema.nullable().default(null),
   matched_url_key: Sha256Schema.nullable().default(null),
+  published_on: DateStampSchema.nullable().default(null),
+  failure_code: ItemHealthFailureCodeSchema.nullable().default(null),
+  matched_url_marker: NonEmptySchema.nullable().default(null),
   history_window_days: PositiveCountSchema.nullable().default(null),
   diagnostics: HarvestDiagnosticsSchema.nullable().default(null),
 });
@@ -32,6 +37,8 @@ export const REASON_STAGES: Readonly<Record<DropReason, readonly RejectionStage[
   SOURCE_INACTIVE: ["harvest-feeds"], FETCH_FAILED: ["harvest-feeds"],
   FETCH_FAILED_HTTP: ["harvest-feeds"], FETCH_TIMEOUT: ["harvest-feeds"],
   EXTRACT_FAILED: ["harvest-feeds"], EXTRACT_EMPTY: ["harvest-feeds"],
+  ALREADY_PUBLISHED: ["harvest-feeds"], SETTLED_FAILURE: ["harvest-feeds"],
+  BLOCKED_URL_MARKER: ["harvest-feeds"],
   FEED_PARSE_FAILED: ["harvest-feeds"], FEED_EMPTY: ["harvest-feeds"],
   MISSING_REQUIRED_FIELDS: ["harvest-feeds"],
   PAYWALL_OR_BLOCKED: ["screen-article-candidates"], CATEGORY_EXCLUDED: ["screen-article-candidates"],
@@ -49,6 +56,9 @@ export const REQUIRED_DETAILS: Readonly<Partial<Record<DropReason, readonly (key
   EXTRACT_FAILED: ["diagnostics"], EXTRACT_EMPTY: ["diagnostics"],
   STUB_CONTENT: ["words_found", "words_required"],
   STALE_MAX_AGE_EXCEEDED: ["age_hours", "max_age_hours"],
+  ALREADY_PUBLISHED: ["matched_url_key", "published_on", "history_window_days"],
+  SETTLED_FAILURE: ["matched_url_key", "failure_code"],
+  BLOCKED_URL_MARKER: ["matched_url_key", "matched_url_marker"],
   STALE_HALF_LIFE_DECAY: ["observed_value", "limit"],
   DUPLICATE_CANONICAL_URL: ["matched_url_key"],
   EVENT_CLUSTER_SIMILARITY: ["matched_url_key", "observed_value", "limit"],
@@ -61,7 +71,7 @@ export const REQUIRED_DETAILS: Readonly<Partial<Record<DropReason, readonly (key
   PUBLICATION_BUDGET_EXCEEDED: ["observed_value", "limit"],
 };
 export const CandidateRejectionRecordSchema = z.strictObject({
-  version: z.literal(HARVEST_DIAGNOSTICS_VERSION).default(HARVEST_DIAGNOSTICS_VERSION), date: DateStampSchema, correlation_id: NonEmptySchema,
+  version: z.literal(PLANNER_EXCLUSIONS_VERSION).default(PLANNER_EXCLUSIONS_VERSION), date: DateStampSchema, correlation_id: NonEmptySchema,
   source_id: SlugSchema, feed_url: UrlSchema, subject: z.enum(["feed", "article"]),
   candidate_id: Sha256Schema.nullable(), url_key: Sha256Schema.nullable(),
   canonical_url: UrlSchema.nullable(), title: z.string().nullable(), categories: z.array(z.string()),
@@ -74,6 +84,7 @@ export const CandidateRejectionRecordSchema = z.strictObject({
     if (!article && value[field] !== null) reject(ctx, `feed rejection requires null ${field}`, [field]);
     const missingTitle = field === "title" && [
       "FETCH_FAILED", "FETCH_FAILED_HTTP", "FETCH_TIMEOUT", "EXTRACT_FAILED", "EXTRACT_EMPTY",
+      "ALREADY_PUBLISHED", "SETTLED_FAILURE", "BLOCKED_URL_MARKER",
     ].includes(value.drop_reason);
     if (article && value.drop_reason !== "MISSING_REQUIRED_FIELDS" && value[field] === null && !missingTitle) reject(ctx, `article rejection requires ${field}`, [field]);
   }
@@ -91,26 +102,44 @@ export const CandidateRejectionRecordSchema = z.strictObject({
 export type CandidateRejectionRecord = z.infer<typeof CandidateRejectionRecordSchema>;
 export type RejectionDetails = z.infer<typeof RejectionDetailsSchema>;
 
-const { diagnostics: _diagnostics, ...previousDetails } = RejectionDetailsSchema.shape;
+const { diagnostics: _diagnostics, published_on: _publishedOn, failure_code: _failureCode,
+  matched_url_marker: _matchedUrlMarker, ...previousDetails } = RejectionDetailsSchema.shape;
 const PreviousRejectionSchema = z.strictObject({
   ...CandidateRejectionRecordSchema.shape, version: z.literal(CONTRACT_VERSION),
   details: z.strictObject(previousDetails),
-  drop_reason: DropReasonSchema.exclude(["EXTRACT_FAILED", "EXTRACT_EMPTY"]),
+  drop_reason: DropReasonSchema.exclude(["EXTRACT_FAILED", "EXTRACT_EMPTY", "ALREADY_PUBLISHED", "SETTLED_FAILURE", "BLOCKED_URL_MARKER"]),
 });
 const PriorHarvestRejectionSchema = PreviousRejectionSchema.extend({ version: z.literal(FEED_INGEST_AUDIT_VERSION) });
+export const PreviousPreDiagnosticsDropReasonSchema = DropReasonSchema.exclude([
+  "EXTRACT_FAILED", "EXTRACT_EMPTY", "ALREADY_PUBLISHED", "SETTLED_FAILURE", "BLOCKED_URL_MARKER",
+]);
+export const PreviousDiagnosticDropReasonSchema = DropReasonSchema.exclude([
+  "ALREADY_PUBLISHED", "SETTLED_FAILURE", "BLOCKED_URL_MARKER",
+]);
+const PreviousDiagnosticRejectionSchema = z.strictObject({
+  ...CandidateRejectionRecordSchema.shape, version: z.literal(HARVEST_DIAGNOSTICS_VERSION),
+  details: z.strictObject({ ...previousDetails, diagnostics: HarvestDiagnosticsSchema.nullable().default(null) }),
+  drop_reason: PreviousDiagnosticDropReasonSchema,
+});
 export const CandidateRejectionContract = {
-  schema: CandidateRejectionRecordSchema, schemaVersion: HARVEST_DIAGNOSTICS_VERSION,
+  schema: CandidateRejectionRecordSchema, schemaVersion: PLANNER_EXCLUSIONS_VERSION,
   legacyVersions: {
     [CONTRACT_VERSION]: {
       schema: PreviousRejectionSchema,
       migrate: (row: object): CandidateRejectionRecord => CandidateRejectionRecordSchema.parse({
-        ...PreviousRejectionSchema.parse(row), version: HARVEST_DIAGNOSTICS_VERSION,
+        ...PreviousRejectionSchema.parse(row), version: PLANNER_EXCLUSIONS_VERSION,
       }),
     },
     [FEED_INGEST_AUDIT_VERSION]: {
       schema: PriorHarvestRejectionSchema,
       migrate: (row: object): CandidateRejectionRecord => CandidateRejectionRecordSchema.parse({
-        ...PriorHarvestRejectionSchema.parse(row), version: HARVEST_DIAGNOSTICS_VERSION,
+        ...PriorHarvestRejectionSchema.parse(row), version: PLANNER_EXCLUSIONS_VERSION,
+      }),
+    },
+    [HARVEST_DIAGNOSTICS_VERSION]: {
+      schema: PreviousDiagnosticRejectionSchema,
+      migrate: (row: object): CandidateRejectionRecord => CandidateRejectionRecordSchema.parse({
+        ...PreviousDiagnosticRejectionSchema.parse(row), version: PLANNER_EXCLUSIONS_VERSION,
       }),
     },
   },

@@ -2,6 +2,7 @@
 import { z } from "zod";
 import {
   DiversityMetricRowSchema,
+  DropReasonCountSchema,
   FEED_INGEST_AUDIT_VERSION,
   FeedIngestDispatchSchema,
   LegacyArticleAssessmentSchema,
@@ -27,8 +28,18 @@ const LegacyDiversityMetricSchema = z.strictObject({
 type LegacyDiversityMetric = z.infer<typeof LegacyDiversityMetricSchema>;
 
 const { version: _sourceVersion, ...sourceRunFields } = SourceRunRecordSchema.shape;
-const LegacySourceRunSchema = z.strictObject({
+const PreviousDropReasonCountSchema = DropReasonCountSchema.extend({
+  reason: DropReasonCountSchema.shape.reason.exclude([
+    "ALREADY_PUBLISHED", "SETTLED_FAILURE", "BLOCKED_URL_MARKER",
+  ]),
+});
+const previousSourceRunFields = {
   ...sourceRunFields,
+  drop_reasons: z.array(PreviousDropReasonCountSchema),
+  last_failure_reason: PreviousDropReasonCountSchema.shape.reason.nullable(),
+};
+const LegacySourceRunSchema = z.strictObject({
+  ...previousSourceRunFields,
   version: previousVersion,
   completion_evidence: z.array(z.strictObject({
     ledger: LedgerCompletionEvidenceSchema.shape.ledger,
@@ -37,8 +48,9 @@ const LegacySourceRunSchema = z.strictObject({
   })).nullable().default(null),
 });
 const PreviousSourceRunSchema = LegacySourceRunSchema.extend({ version: z.literal("2026-10-22") });
+const PreviousDiagnosticSourceRunSchema = LegacySourceRunSchema.extend({ version: z.literal("2026-10-22T18:15") });
 const PreviousLogicalSourceRunSchema = z.strictObject({
-  ...sourceRunFields, version: z.literal("2026-10-22T10:05"),
+  ...previousSourceRunFields, version: z.literal("2026-10-22T10:05"),
 });
 
 const { version: _dispatchVersion, ...dispatchFields } = FeedIngestDispatchSchema.shape;
@@ -74,6 +86,7 @@ export const SourceRunContract: LedgerRowContract<SourceRunRecord> = {
   legacyVersions: {
     [PREVIOUS_VERSION]: { schema: LegacySourceRunSchema, migrate: migrateSourceRun },
     "2026-10-22": { schema: PreviousSourceRunSchema, migrate: migrateSourceRun },
+    "2026-10-22T18:15": { schema: PreviousDiagnosticSourceRunSchema, migrate: migrateSourceRun },
     "2026-10-22T10:05": { schema: PreviousLogicalSourceRunSchema, migrate: migrateSourceRun },
   },
 };

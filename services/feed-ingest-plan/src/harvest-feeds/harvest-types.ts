@@ -5,7 +5,7 @@ import {
   Sha256Schema, SourceSnapshotSchema, TimestampSchema,
   FetchFailureSchema, HarvestDiagnosticsSchema,
 } from "@idhazh/common-contracts";
-import type { FeedIngestConfig, FeedOutcomePayload, PolicyIdentity, WriterIdentity } from "@idhazh/common-contracts";
+import type { FeedIngestConfig, FeedOutcomePayload, ItemHealthFailureCode, PolicyIdentity, WriterIdentity } from "@idhazh/common-contracts";
 import type { LedgerRegistration, LedgerSettings, PersistLedgerResult } from "@idhazh/ledger-file-writer";
 import type { HarvestInputs } from "./load-harvest-inputs";
 import type { ProgressDetails, ProgressEventType } from "../logging/progress-logger";
@@ -59,6 +59,12 @@ export type HarvestContext = {
   writer: WriterIdentity;
   correlation_id: string;
   max_future_hours: number;
+  exclusions?: {
+    published_window_days: number;
+    published_on: ReadonlyMap<string, string>;
+    settled_failure_codes: ReadonlyMap<string, ItemHealthFailureCode>;
+    blocked_url_markers: readonly string[];
+  };
   overrides?: { freshness_hours?: number };
   clock?: () => Date;
   log?: (record: z.infer<typeof CandidateRejectionRecordSchema>) => void;

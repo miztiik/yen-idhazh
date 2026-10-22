@@ -24,6 +24,7 @@ from idhazh.contracts.feed_ingest_candidate import (
     Positive,
     PositiveCount,
 )
+from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.feed_ingest_diagnostics import HarvestDiagnostics
 
 RejectionStage = Literal[
@@ -40,6 +41,9 @@ class DropReason(StrEnum):
     FETCH_TIMEOUT = "FETCH_TIMEOUT"
     EXTRACT_FAILED = "EXTRACT_FAILED"
     EXTRACT_EMPTY = "EXTRACT_EMPTY"
+    ALREADY_PUBLISHED = "ALREADY_PUBLISHED"
+    SETTLED_FAILURE = "SETTLED_FAILURE"
+    BLOCKED_URL_MARKER = "BLOCKED_URL_MARKER"
     PAYWALL_OR_BLOCKED = "PAYWALL_OR_BLOCKED"
     FEED_PARSE_FAILED = "FEED_PARSE_FAILED"
     FEED_EMPTY = "FEED_EMPTY"
@@ -73,6 +77,9 @@ REASON_STAGES: dict[DropReason, tuple[RejectionStage, ...]] = {
             DropReason.FEED_PARSE_FAILED,
             DropReason.FEED_EMPTY,
             DropReason.MISSING_REQUIRED_FIELDS,
+            DropReason.ALREADY_PUBLISHED,
+            DropReason.SETTLED_FAILURE,
+            DropReason.BLOCKED_URL_MARKER,
         }
         else ("screen-article-candidates",)
         if reason
@@ -104,6 +111,9 @@ class RejectionDetails(Model):
     observed_value: Finite | None = None
     limit: Finite | None = None
     matched_url_key: Sha256 | None = None
+    published_on: DateStamp | None = None
+    failure_code: FailureCode | None = None
+    matched_url_marker: NonEmpty | None = None
     history_window_days: PositiveCount | None = None
     diagnostics: HarvestDiagnostics | None = None
 
@@ -115,6 +125,9 @@ REQUIRED_DETAILS: dict[DropReason, tuple[str, ...]] = {
     DropReason.EXTRACT_EMPTY: ("diagnostics",),
     DropReason.STUB_CONTENT: ("words_found", "words_required"),
     DropReason.STALE_MAX_AGE_EXCEEDED: ("age_hours", "max_age_hours"),
+    DropReason.ALREADY_PUBLISHED: ("matched_url_key", "published_on", "history_window_days"),
+    DropReason.SETTLED_FAILURE: ("matched_url_key", "failure_code"),
+    DropReason.BLOCKED_URL_MARKER: ("matched_url_key", "matched_url_marker"),
     DropReason.STALE_HALF_LIFE_DECAY: ("observed_value", "limit"),
     DropReason.DUPLICATE_CANONICAL_URL: ("matched_url_key",),
     DropReason.EVENT_CLUSTER_SIMILARITY: ("matched_url_key", "observed_value", "limit"),
@@ -139,6 +152,11 @@ class CandidateRejectionRecord(Contract):
     __schema_stem__: ClassVar[str] = "feed-ingest-rejection"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-22T20:30",
+            change="Record configured pre-fetch publication and settled-failure exclusions.",
+            why="A terminal refusal must name the exact known reason without page measurements.",
+        ),
+        ChangelogEntry(
             version="2026-10-22T18:15",
             change="Preserve typed fetch and extraction diagnostics and operation timings.",
             why="A terminal reason must not erase the operation that actually failed.",
@@ -154,7 +172,7 @@ class CandidateRejectionRecord(Contract):
             why="Every deciding stage retains typed reasons and observations.",
         ),
     )
-    version: Literal["2026-10-22T18:15"] = "2026-10-22T18:15"
+    version: Literal["2026-10-22T20:30"] = "2026-10-22T20:30"
     date: DateStamp
     correlation_id: NonEmpty
     source_id: Slug
@@ -173,8 +191,14 @@ class CandidateRejectionRecord(Contract):
     @model_validator(mode="before")
     @classmethod
     def migrate_previous_version(cls, value: Any) -> Any:
-        if isinstance(value, dict) and value.get("version") in {"2026-10-20", "2026-10-22"}:
-            return {**value, "version": "2026-10-22T18:15"}
+        if isinstance(value, dict) and value.get("version") in {
+            "2026-10-20", "2026-10-22", "2026-10-22T18:15"
+        }:
+            if value.get("drop_reason") in {
+                "ALREADY_PUBLISHED", "SETTLED_FAILURE", "BLOCKED_URL_MARKER"
+            }:
+                raise ValueError("planner exclusions require the declared exclusion contract version")
+            return {**value, "version": "2026-10-22T20:30"}
         return value
 
     @model_validator(mode="after")
@@ -192,6 +216,9 @@ class CandidateRejectionRecord(Contract):
                 DropReason.FETCH_TIMEOUT,
                 DropReason.EXTRACT_FAILED,
                 DropReason.EXTRACT_EMPTY,
+                DropReason.ALREADY_PUBLISHED,
+                DropReason.SETTLED_FAILURE,
+                DropReason.BLOCKED_URL_MARKER,
             }
             if (
                 article

@@ -10,7 +10,7 @@ import {
   PolicyIdentitySchema, REASON_STAGES, REQUIRED_DETAILS, RejectionDetailsSchema,
   SourceRunRecordSchema, SourceSnapshotSchema, StageCompletionPayloadSchema,
   WriterIdentitySchema, deriveCandidateId, deriveUrlKey, validateEnvelopeContainer,
-  readFeedIngestEvent, HarvestDiagnosticsSchema, HARVEST_DIAGNOSTICS_VERSION,
+  readFeedIngestEvent, HarvestDiagnosticsSchema, HARVEST_DIAGNOSTICS_VERSION, PLANNER_EXCLUSIONS_VERSION,
 } from "../src/index";
 import { runtimeSchemas, schemas } from "./schema-binding";
 
@@ -157,7 +157,8 @@ describe("rejection evidence", () => {
     const observations = RejectionDetailsSchema.parse({
       http_status: 503, timeout_ms: 200, words_found: 3, words_required: 100,
       age_hours: 60, max_age_hours: 48, observed_value: 1, limit: 2,
-      matched_url_key: digest, history_window_days: 7,
+      matched_url_key: digest, published_on: day, failure_code: "network_error",
+      matched_url_marker: "blocked", history_window_days: 7,
       diagnostics: HarvestDiagnosticsSchema.parse({
         extraction_failure: "missing-document-root", failure_code: "unknown",
         stopped_stage: "extract", detail: "missing-document-root", fetch_ms: 1, extract_ms: 1,
@@ -308,12 +309,16 @@ describe("planning audit contracts", () => {
     const fixture = await Bun.file(new URL(
       "../../../tests/fixtures/contracts/feed-ingest-event/one-observation.json", import.meta.url,
     )).json();
+    const incompatible = structuredClone(fixture);
+    incompatible.payload.assessment.reason = "ALREADY_PUBLISHED";
+    incompatible.payload.assessment.decision = "rejected";
+    expect(() => readFeedIngestEvent(incompatible)).toThrow();
     const record = readFeedIngestEvent(fixture);
     expect(record.payload.kind).toBe("candidate_decision");
     if (record.payload.kind !== "candidate_decision") throw new Error("Fixture must carry an article assessment");
     expect(record.payload.assessment.diagnostics).toBeNull();
     expect(record.payload.assessment).toEqual({
-      ...fixture.payload.assessment, version: HARVEST_DIAGNOSTICS_VERSION, diagnostics: null,
+      ...fixture.payload.assessment, version: PLANNER_EXCLUSIONS_VERSION, diagnostics: null,
     });
     expect(readFeedIngestEvent(JSON.parse(JSON.stringify(record)))).toEqual(record);
     const schema = z.toJSONSchema(FeedIngestEventSchema, { io: "input" });
@@ -321,6 +326,9 @@ describe("planning audit contracts", () => {
     expect(schema.version).toBe(record.version);
     expect(schema.changelog).toEqual([{
       version: record.version,
+      change: "Record pre-fetch planner exclusions with their measured ledger evidence.",
+    }, {
+      version: HARVEST_DIAGNOSTICS_VERSION,
       change: "Retain measured fetch and extraction diagnostics on feed and article decisions.",
     }, {
       version: fixture.version,

@@ -8,6 +8,7 @@ import { curateArticles, persistPortfolio } from "./curate-article-portfolio/edi
 import type { ArticleEvidence, OpportunityEvidence } from "./curate-article-portfolio/portfolio-input";
 import { resolveRunContext } from "./resolve-run-context";
 import { readSeenEvidence, rememberFirstSight } from "./read-ledger-history/read-seen-evidence";
+import { readExclusionEvidence } from "./read-ledger-history/read-exclusion-evidence";
 import type { OwnSeenReceipt } from "./read-ledger-history/read-seen-evidence";
 import { resolvePlanRequest, PlanError } from "./api/plan-request";
 import { createStageLogger, resolveRunPolicy, writeAuditEvent } from "./logging/structured-logger";
@@ -41,6 +42,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   for (const entry of [
     inputs.registrations.rejections, inputs.registrations.selections,
     inputs.registrations.dispatches, inputs.registrations.seen,
+    inputs.registrations.published, inputs.registrations.item_health,
   ]) {
     if (entry.lifecycle_status !== "active") throw new PlanError("LEDGER_INACTIVE", `Required ledger ${entry.name} is not active`, entry.name);
   }
@@ -71,11 +73,24 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     days: inputs.settings.inputs.seen_days,
     ...(runtime.seen_receipts === undefined ? {} : { own_receipts: runtime.seen_receipts }),
   });
+  const exclusionEvidence = {
+    ...await readExclusionEvidence({
+    root: inputs.root, now: context.now,
+    publishedWindowDays: inputs.clock_config.collect.published_window_days,
+    settledFailureCodes: inputs.clock_config.collect.settled_failure_codes,
+    publishedRegistration: inputs.registrations.published, itemHealthRegistration: inputs.registrations.item_health,
+    publishedDays: inputs.settings.inputs.published_days,
+    settledFailureDays: inputs.settings.inputs.settled_failure_days,
+    }),
+    published_window_days: inputs.clock_config.collect.published_window_days,
+    blocked_url_markers: inputs.clock_config.collect.blocked_url_markers,
+  };
   progress("HISTORY_READ_COMPLETED");
   logger.startStep();
   const harvest = await harvestFeeds(harvestInputs, {
     writer: context.writer, correlation_id: context.correlation_id,
     max_future_hours: inputs.clock_config.collect.max_future_hours,
+    exclusions: exclusionEvidence,
     overrides, clock: () => new Date(context.now), progress,
     log: record => progress(record.subject === "feed" ? "FEED_REJECTED" : "ARTICLE_REJECTED", {
       source_id: record.source_id, ...(record.candidate_id === null ? {} : { candidate_id: record.candidate_id }),
@@ -164,7 +179,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
       dispatches,
       seen: seen.sealing,
     },
-    evidence: { harvest, screening, curation, seen, partition },
+    evidence: { harvest, screening, curation, seen, exclusions: exclusionEvidence, partition },
   };
 }
 export type FeedPlanResult = Awaited<ReturnType<typeof runFeedPlan>>;
@@ -199,6 +214,12 @@ export function summarizePlan(result: FeedPlanResult & { metrics?: PlanningMetri
       window: result.evidence.seen.window,
       own_receipts: result.evidence.seen.own_receipts,
       created_count: result.evidence.seen.new_rows.length,
+    },
+    exclusions: {
+      already_published: result.evidence.harvest.rejections.filter(row => row.drop_reason === "ALREADY_PUBLISHED").length,
+      settled_failure: result.evidence.harvest.rejections.filter(row => row.drop_reason === "SETTLED_FAILURE").length,
+      blocked_url_marker: result.evidence.harvest.rejections.filter(row => row.drop_reason === "BLOCKED_URL_MARKER").length,
+      history: result.evidence.exclusions.history,
     },
     audit: {
       status: auditedComplete ? "complete" : result.metrics === undefined ? "unavailable" : "assessment_diversity_recorded_audit_pending",
