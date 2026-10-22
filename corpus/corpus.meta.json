@@ -1,20 +1,20 @@
 {
   "first_date": "2026-08-23",
-  "harvested_date": "2026-10-15",
-  "last_date": "2026-10-15",
+  "harvested_date": "2026-10-22",
+  "last_date": "2026-10-22",
   "last_run": "2026-09-29",
   "models": {
-    "qwen3-5-9b-q4-k-m": 642,
+    "qwen3-5-9b-q4-k-m": 695,
     "qwen3-8b-q4-k-m": 1015
   },
   "prompt_digest": "b4f14ea0ffd07a6132a181f8b67c9b82ddabb945e86d9fb1844126797c6f80e4",
-  "rows": 1657,
+  "rows": 1710,
   "version": "2026-09-28T21:00",
   "verticals": {
-    "ai": 441,
-    "business-economy": 130,
-    "energy": 245,
-    "india": 482,
-    "world": 359
+    "ai": 452,
+    "business-economy": 135,
+    "energy": 250,
+    "india": 495,
+    "world": 378
   }
 }
