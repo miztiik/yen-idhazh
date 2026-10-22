@@ -177,6 +177,9 @@ status is changed by this recorder.
 The current audit contract version is `2026-10-22`. TypeScript readers migrate
 named `2026-10-20` rows through their recorded old schemas; the Python source
 contracts also migrate those rows without supplying missing timing facts.
+Workflow verification uses these same current and legacy row contracts.
+The optional report reader migrates old event envelopes and their nested
+assessment fields before enforcing current event identity and policy checks.
 Full audit completion remains open because original completion-file membership
 cannot generally be reconstructed after raw files have been packed. That
 historical proof question is Phase 2; these changes do not define a substitute

@@ -57,3 +57,20 @@ export const ArticleAssessmentRecordSchema = z.strictObject({
   if ((value.score_evidence_status === "assessed") !== (value.score_evidence !== null)) reject(ctx, "score evidence must match its availability status");
 });
 export type ArticleAssessmentRecord = z.infer<typeof ArticleAssessmentRecordSchema>;
+
+const { timing_at: _timingAt, timing_basis: _timingBasis, ...legacyFields } = ArticleAssessmentRecordSchema.shape;
+export const LegacyArticleAssessmentSchema = z.strictObject({
+  ...legacyFields,
+  version: z.literal("2026-10-20"),
+  effective_published_at: TimestampSchema.nullable(),
+  publication_clock: z.enum(["published_at", "fetched_at", "unavailable"]),
+  age_hours: FiniteSchema.min(0).nullable(),
+});
+
+export function migrateArticleAssessment(row: object): ArticleAssessmentRecord {
+  const { effective_published_at, publication_clock, ...rest } = LegacyArticleAssessmentSchema.parse(row);
+  return ArticleAssessmentRecordSchema.parse({
+    ...rest, version: FEED_INGEST_AUDIT_VERSION,
+    timing_at: effective_published_at, timing_basis: publication_clock,
+  });
+}

@@ -58,6 +58,7 @@ class FeedIngestDispatch(Contract):
         for field in (
             "candidate_id",
             "source_id",
+            "vertical",
             "source",
             "canonical_url",
             "url_key",

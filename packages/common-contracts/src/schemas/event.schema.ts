@@ -1,7 +1,7 @@
 /** Which typed observation crosses a planning stage boundary? */
 import { z } from "zod";
 import { isDeepStrictEqual } from "node:util";
-import { ArticleAssessmentRecordSchema } from "./article-assessment.schema";
+import { ArticleAssessmentRecordSchema, LegacyArticleAssessmentSchema, migrateArticleAssessment } from "./article-assessment.schema";
 import { ArticleLabelsSchema, PolicyIdentitySchema, ScoreEvidenceSchema, SourceSnapshotSchema } from "./source.schema";
 import { DropReasonSchema } from "./rejection.schema";
 import { FetchStatusSchema, ParseStatusSchema } from "./source-run.schema";
@@ -70,3 +70,26 @@ export type FeedOutcomePayload = z.infer<typeof FeedOutcomePayloadSchema>;
 export type CandidateDecisionPayload = z.infer<typeof CandidateDecisionPayloadSchema>;
 export type PortfolioChoicePayload = z.infer<typeof PortfolioChoicePayloadSchema>;
 export type StageCompletionPayload = z.infer<typeof StageCompletionPayloadSchema>;
+
+const LegacyFeedIngestEventSchema = z.strictObject({
+  ...FeedIngestEventSchema.shape,
+  version: z.literal("2026-10-20"),
+  payload: z.discriminatedUnion("kind", [
+    FeedOutcomePayloadSchema,
+    z.strictObject({ kind: z.literal("candidate_decision"), assessment: LegacyArticleAssessmentSchema }),
+    PortfolioChoicePayloadSchema,
+    StageCompletionPayloadSchema,
+  ]),
+});
+
+export function readFeedIngestEvent(input: unknown): FeedIngestEvent {
+  if (typeof input !== "object" || input === null || !("version" in input) || input.version !== "2026-10-20") {
+    return FeedIngestEventSchema.parse(input);
+  }
+  const old = LegacyFeedIngestEventSchema.parse(input);
+  return FeedIngestEventSchema.parse({
+    ...old, version: FEED_INGEST_AUDIT_VERSION,
+    payload: old.payload.kind === "candidate_decision"
+      ? { ...old.payload, assessment: migrateArticleAssessment(old.payload.assessment) } : old.payload,
+  });
+}

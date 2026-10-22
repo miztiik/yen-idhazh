@@ -1,6 +1,6 @@
 [
   {
-    "version": "2026-10-22",
+    "version": "2026-10-20",
     "event_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "correlation_id": "report-fixture",
     "run_id": "2026-10-21-123",
@@ -61,7 +61,7 @@
     }
   },
   {
-    "version": "2026-10-22",
+    "version": "2026-10-20",
     "event_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
     "correlation_id": "report-fixture",
     "run_id": "2026-10-21-123",

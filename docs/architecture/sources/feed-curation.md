@@ -35,8 +35,7 @@ model verdicts. Informative and suitability verdicts remain not assessed.
 
 Publication timing comes from screening. An unknown publication time earns no
 invented recency bonus. A first-seen time remains first-seen in returned quality
-evidence. The current assessment contract has no first-seen clock, so its
-publication fields remain unavailable for that case, never relabelled fetched
+evidence and persisted assessments, never relabelled publication or fetch
 time. Harvest observations supply extraction and paywall outcomes when present;
 their absence does not become a claimed successful observation.
 Assessments retain the measured timing basis, timestamp and signed age. Ranking

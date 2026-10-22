@@ -5,6 +5,8 @@ import {
   DiversityMetricRowSchema,
   FEED_INGEST_AUDIT_VERSION,
   FeedIngestDispatchSchema,
+  LegacyArticleAssessmentSchema,
+  migrateArticleAssessment,
   SourceRunRecordSchema,
 } from "@idhazh/common-contracts";
 import type {
@@ -14,21 +16,9 @@ import type {
   SourceRunRecord,
 } from "@idhazh/common-contracts";
 import type { LedgerRowContract } from "@idhazh/ledger-file-writer";
-import { FiniteSchema, TimestampSchema } from "@idhazh/common-contracts";
 
 const PREVIOUS_VERSION = "2026-10-20";
 const previousVersion = z.literal(PREVIOUS_VERSION);
-
-const { timing_at: _timingAt, timing_basis: _timingBasis, ...assessmentFields } =
-  ArticleAssessmentRecordSchema.shape;
-const LegacyArticleAssessmentSchema = z.strictObject({
-  ...assessmentFields,
-  version: previousVersion,
-  effective_published_at: TimestampSchema.nullable(),
-  publication_clock: z.enum(["published_at", "fetched_at", "unavailable"]),
-  age_hours: FiniteSchema.min(0).nullable(),
-});
-type LegacyArticleAssessment = z.infer<typeof LegacyArticleAssessmentSchema>;
 
 const { top_k: _topK, ...diversityFields } = DiversityMetricRowSchema.shape;
 const LegacyDiversityMetricSchema = z.strictObject({
@@ -52,17 +42,6 @@ const LegacyDispatchSchema = z.strictObject({
 });
 type LegacyDispatch = z.infer<typeof LegacyDispatchSchema>;
 
-function migrateAssessment(row: object): ArticleAssessmentRecord {
-  const old = LegacyArticleAssessmentSchema.parse(row) as LegacyArticleAssessment;
-  const { effective_published_at, publication_clock, ...rest } = old;
-  return ArticleAssessmentRecordSchema.parse({
-    ...rest,
-    version: FEED_INGEST_AUDIT_VERSION,
-    timing_at: effective_published_at,
-    timing_basis: publication_clock,
-  });
-}
-
 function migrateDiversity(row: object): DiversityMetricRow {
   const old = LegacyDiversityMetricSchema.parse(row) as LegacyDiversityMetric;
   return DiversityMetricRowSchema.parse({ ...old, version: FEED_INGEST_AUDIT_VERSION });
@@ -81,7 +60,7 @@ function migrateDispatch(row: object): FeedIngestDispatch {
 export const ArticleAssessmentContract: LedgerRowContract<ArticleAssessmentRecord> = {
   schema: ArticleAssessmentRecordSchema,
   schemaVersion: FEED_INGEST_AUDIT_VERSION,
-  legacyVersions: { [PREVIOUS_VERSION]: { schema: LegacyArticleAssessmentSchema, migrate: migrateAssessment } },
+  legacyVersions: { [PREVIOUS_VERSION]: { schema: LegacyArticleAssessmentSchema, migrate: migrateArticleAssessment } },
 };
 export const DiversityMetricContract: LedgerRowContract<DiversityMetricRow> = {
   schema: DiversityMetricRowSchema,

@@ -20,6 +20,7 @@ import {
   DigestPublicationSchema, PublishedRowSchema,
 } from "../../../services/feed-ingest-plan/src/metrics/publication-evidence";
 import { readLedgerParquet } from "../../../services/feed-ingest-plan/src/read-ledger-history/read-parquet";
+import { DispatchContract } from "../../../services/feed-ingest-plan/src/metrics/audit-contracts";
 
 test("generated publication evidence joins actual main output and writes native observer files, not production publication", async () => {
   const fixture = await recordedPlan();
@@ -33,7 +34,7 @@ test("generated publication evidence joins actual main output and writes native 
     const first = summary.files.dispatches.files[0];
     if (first === undefined) throw new Error("Generated publication fixture requires a real selected dispatch");
     const dispatches = await readLedgerParquet(join(fixture.inputs.outputRoot, ...first.path.split("/")), "dispatches",
-      { schema: FeedIngestDispatchSchema, schemaVersion: CONTRACT_VERSION });
+      DispatchContract);
     const writer = dispatches.envelope.identity;
     const digest = DigestPublicationSchema.parse({
       date: summary.date, generated_at: summary.observed_at,
@@ -185,10 +186,10 @@ test("actual CLI planning proof and all native files survive both real report mo
   }
 });
 
-test("unsupported actual CLI audit measurements produce no summary or assessment/diversity files", async () => {
+test("invalid actual CLI audit measurements produce no summary or assessment/diversity files", async () => {
   const fixture = await recordedPlan();
   try {
-    fixture.inputs.harvest.config.metrics.top_source_counts = [1, 2, 5];
+    fixture.inputs.harvest.config.metrics.top_source_counts = [1, 0, 5];
     let outputs = 0;
     await expect(main(["--cli"], { inputs: fixture.inputs, runtime: fixture.runtime,
       output: () => { outputs += 1; } })).rejects.toThrow("top_source_counts");
@@ -247,7 +248,7 @@ test("refuses mismatched counts, damaged bytes and missing actual files", async 
       lifecycle_status: "active" as const, prefix: ["feed-ingest-plan", "dispatches"] };
     const result = await persistLedger({
       ledger: "dispatches", outputRoot: root, rows: [row],
-      rowContract: { schema: FeedIngestDispatchSchema, schemaVersion: CONTRACT_VERSION },
+      rowContract: DispatchContract,
       period: { tier: "raw", covers: row.content.date }, registryEntry: registration,
       writerContext: { run_id: row.content.run_id, attempt: 1, job: null, pipeline_name: "plan",
         task_name: "seal-article-ledger", shard: 0, producer: "tests.outputs", git_sha: "a".repeat(40) },
@@ -333,7 +334,7 @@ test("writes GitHub output records with noncolliding delimiters and refuses key 
 });
 
 test("checks recorded canonical bytes, identity values and real native dispatch compatibility", async () => {
-  expect(await verifyRecordedCompatibility()).toMatchObject({ status: "verified", row_count: 1 });
+  expect(await verifyRecordedCompatibility()).toMatchObject({ status: "verified", row_count: 1, legacy_row_count: 1 });
 });
 
 test("report configuration cannot change real-run ledger commitments", async () => {

@@ -220,7 +220,9 @@ test("runs the native compatibility verifier in a named-input copy with no backe
       ...common, ...writer, "packages/common-contracts/package.json", "packages/ledger-file-writer/package.json",
       ".github/scripts/feed-ingest-plan-verification.ts",
       "services/feed-ingest-plan/src/read-ledger-history/read-parquet.ts",
+      "services/feed-ingest-plan/src/metrics/audit-contracts.ts",
       "tests/fixtures/ledger-file-writer/feed-ingest-dispatch-row.json",
+      "tests/fixtures/contracts/feed-ingest-dispatch/one-article.json",
     ];
     for (const path of named) {
       const target = join(directory, ...path.split("/"));
@@ -241,9 +243,8 @@ test("runs the native compatibility verifier in a named-input copy with no backe
       cwd: directory, stdout: "pipe", stderr: "pipe",
     });
     const [output, errors] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()]);
-    expect(await child.exited).toBe(0);
-    expect(errors).toBe("");
-    expect(JSON.parse(output)).toMatchObject({ status: "verified", row_count: 1 });
+    expect({ exit: await child.exited, errors }).toEqual({ exit: 0, errors: "" });
+    expect(JSON.parse(output)).toMatchObject({ status: "verified", row_count: 1, legacy_row_count: 1 });
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

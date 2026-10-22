@@ -204,6 +204,7 @@ describe("content and writer identity", () => {
     } }).success).toBe(true);
     expect(FeedIngestDispatchSchema.safeParse({ ...row, selection: { ...row.selection, candidate_id: "c".repeat(64) } }).success).toBe(false);
     expect(FeedIngestDispatchSchema.safeParse({ ...row, selection: { ...row.selection, source_id: "other" } }).success).toBe(false);
+    expect(FeedIngestDispatchSchema.safeParse({ ...row, selection: { ...row.selection, vertical: "other" } }).success).toBe(false);
     expect(FeedIngestDispatchSchema.safeParse({ ...row, selection: { ...row.selection, labels: { ...row.selection.labels, assigned_desk: "other" } } }).success).toBe(false);
     expect(PartitionAssignmentSchema.safeParse({ strategy: "none", worker_assignment: 0, dispatch_count: 2 }).success).toBe(false);
     expect(PartitionAssignmentSchema.safeParse({ strategy: "round-robin", worker_assignment: 2, dispatch_count: 2 }).success).toBe(false);
