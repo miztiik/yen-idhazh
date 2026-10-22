@@ -1,5 +1,5 @@
 /** Route configured sources and their original entries through the bounded harvest stages. */
-import { FeedOutcomePayloadSchema, WriterIdentitySchema, NonEmptySchema, PositiveCountSchema } from "@idhazh/common-contracts";
+import { FeedOutcomePayloadSchema, WriterIdentitySchema, NonEmptySchema, PositiveCountSchema, NonNegativeSchema } from "@idhazh/common-contracts";
 import type { HarvestContext, HarvestResult, OfferedArticle, RejectionDestination } from "./harvest-types";
 import type { HarvestInputs } from "./load-harvest-inputs";
 import { harvestPolicy, sourceSnapshot } from "./load-harvest-inputs";
@@ -37,10 +37,18 @@ export async function harvestFeeds(
 ): Promise<HarvestResult> {
   WriterIdentitySchema.parse(context.writer);
   NonEmptySchema.parse(context.correlation_id);
+  NonNegativeSchema.parse(context.max_future_hours);
+  context.progress?.("FEED_DISCOVERY_STARTED", { input_count: inputs.sources.length });
   const fetcher = createPermittedFetcher(inputs.config.harvest, inputs.extraction, boundary);
   const feeds = await mapPool(inputs.sources, inputs.config.harvest.concurrency, async configured => {
     const source = sourceSnapshot(inputs, configured);
+    context.progress?.("FEED_FETCH_STARTED", { source_id: source.source_id });
     const result = await readFeed(source, fetcher, context, inputs.config.harvest.fetch_timeout_ms);
+    context.progress?.("FEED_FETCH_COMPLETED", {
+      source_id: source.source_id, fetch_status: result.outcome.fetch_status,
+      parse_status: result.outcome.parse_status, output_count: result.entries.length,
+      drop_reason: result.outcome.rejection_reason,
+    });
     const offered: OfferedArticle[] = [];
     if (result.entries.length) {
       const policy = harvestPolicy(inputs, source.vertical, context.overrides);
@@ -49,7 +57,16 @@ export async function harvestFeeds(
     return { offered, rejection: result.rejection, outcome: result.outcome };
   });
   const articles = await mapPool(feeds.flatMap(feed => feed.offered), inputs.config.harvest.concurrency,
-    offered => harvestArticle(offered, inputs, fetcher, context));
+    async offered => {
+      context.progress?.("ARTICLE_HARVEST_STARTED", { source_id: offered.source.source_id });
+      const result = await harvestArticle(offered, inputs, fetcher, context);
+      context.progress?.("ARTICLE_HARVEST_COMPLETED", {
+        source_id: offered.source.source_id, candidate_id: result.observation.candidate_id,
+        output_count: result.candidate === null ? 0 : 1, drop_reason: result.rejection?.drop_reason ?? null,
+        extraction_outcome: result.observation.extraction,
+      });
+      return result;
+    });
   const rejections = [
     ...feeds.flatMap(feed => feed.rejection ? [feed.rejection] : []),
     ...articles.flatMap(article => article.rejection ? [article.rejection] : []),

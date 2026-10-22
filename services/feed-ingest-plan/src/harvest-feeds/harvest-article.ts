@@ -7,6 +7,8 @@ import type { PermittedFetcher } from "./robots-policy";
 import { ArticleExtractionError, extractArticle } from "./dom-extractor";
 import { canonicalizeUrl } from "./url-cleaner";
 import { fetchRejection, recordRejection } from "./record-rejection";
+import { calculateFreshness } from "../screen-article-candidates/freshness-decay";
+import { resolvePolicy } from "../config/resolve-policy";
 
 // Existing discovery/extraction headline bounds, not editorial selection thresholds.
 const FEED_TITLE_MAX_CHARS = 500;
@@ -36,6 +38,20 @@ export async function harvestArticle(
     return HarvestArticleResultSchema.parse({
       candidate: null, rejection: recordRejection(source, context, "MISSING_REQUIRED_FIELDS", {}, article), observation,
     });
+  }
+  if (article.title) {
+    const effectivePolicy = resolvePolicy(inputs, source.vertical, context.overrides);
+    const freshness = calculateFreshness(entry, undefined, observation.observed_at, context.max_future_hours, effectivePolicy);
+    if (freshness.timing_source === "published_at" && freshness.age_hours !== null
+      && freshness.age_hours > effectivePolicy.triage.max_age_hours) {
+      return HarvestArticleResultSchema.parse({
+        candidate: null,
+        rejection: recordRejection(source, context, "STALE_MAX_AGE_EXCEEDED", {
+          age_hours: freshness.age_hours, max_age_hours: effectivePolicy.triage.max_age_hours,
+        }, article),
+        observation: { ...observation, preflight_freshness: freshness },
+      });
+    }
   }
   const fetched = await fetcher.fetch(entry.link);
   const fetched_at = utcTimestamp(context.clock);

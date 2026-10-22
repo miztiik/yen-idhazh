@@ -1,4 +1,4 @@
-"""Every persisted shape, as a Pydantic model.
+"""Every Python-owned persisted shape, as a Pydantic model.
 
 This package is the bottom of the dependency graph and MUST NOT import any other
 subpackage of `idhazh` (CLAUDE.md section 4). A contract that imports a stage is
@@ -54,7 +54,6 @@ from idhazh.contracts.feed_ingest_candidate import FeedIngestCandidate
 from idhazh.contracts.feed_ingest_dispatch import FeedIngestDispatch
 from idhazh.contracts.feed_ingest_diversity import DiversityMetricRow
 from idhazh.contracts.feed_ingest_editorial_selection import EditorialSelectionRow
-from idhazh.contracts.feed_ingest_event import FeedIngestEvent
 from idhazh.contracts.feed_ingest_rejection import CandidateRejectionRecord
 from idhazh.contracts.feed_ingest_source_run import SourceRunRecord
 from idhazh.contracts.feed_retirement import FeedRetirementRow
@@ -145,7 +144,6 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     EditorialSelectionRow,
     FeedIngestCandidate,
     FeedIngestDispatch,
-    FeedIngestEvent,
     SourceRunRecord,
     AppConfig,
     AppearanceConfig,
@@ -248,7 +246,6 @@ __all__ = [
     "FeedDef",
     "FeedIngestCandidate",
     "FeedIngestDispatch",
-    "FeedIngestEvent",
     "FileEnvelope",
     "LedgerName",
     "LensDef",

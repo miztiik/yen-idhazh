@@ -1,6 +1,7 @@
 /** Why did a feed or candidate receive a terminal rejection? */
 import { z } from "zod";
-import { CountSchema, DateStampSchema, FiniteSchema, NonEmptySchema, NonNegativeSchema, PositiveCountSchema, PositiveSchema, RejectionStageSchema, Sha256Schema, SlugSchema, TimestampSchema, UrlSchema, VersionSchema, checkUrlIdentity, reject } from "./primitives";
+import { CountSchema, DateStampSchema, FiniteSchema, NonEmptySchema, NonNegativeSchema, PositiveCountSchema, PositiveSchema, RejectionStageSchema, Sha256Schema, SlugSchema, TimestampSchema, UrlSchema, checkUrlIdentity, reject } from "./primitives";
+import { CONTRACT_VERSION, FEED_INGEST_AUDIT_VERSION } from "../version";
 
 export const DropReasonSchema = z.enum([
   "SOURCE_INACTIVE", "FETCH_FAILED", "FETCH_FAILED_HTTP", "FETCH_TIMEOUT",
@@ -30,7 +31,7 @@ export const REASON_STAGES: Readonly<Record<DropReason, readonly RejectionStage[
   FEED_PARSE_FAILED: ["harvest-feeds"], FEED_EMPTY: ["harvest-feeds"],
   MISSING_REQUIRED_FIELDS: ["harvest-feeds"],
   PAYWALL_OR_BLOCKED: ["screen-article-candidates"], CATEGORY_EXCLUDED: ["screen-article-candidates"],
-  STUB_CONTENT: ["screen-article-candidates"], STALE_MAX_AGE_EXCEEDED: ["screen-article-candidates"],
+  STUB_CONTENT: ["screen-article-candidates"], STALE_MAX_AGE_EXCEEDED: ["harvest-feeds", "screen-article-candidates"],
   STALE_HALF_LIFE_DECAY: ["screen-article-candidates"],
   DUPLICATE_CANONICAL_URL: ["screen-article-candidates", "curate-article-portfolio"],
   ROLLING_HISTORY_REPEAT: ["screen-article-candidates", "curate-article-portfolio"],
@@ -55,7 +56,7 @@ export const REQUIRED_DETAILS: Readonly<Partial<Record<DropReason, readonly (key
   PUBLICATION_BUDGET_EXCEEDED: ["observed_value", "limit"],
 };
 export const CandidateRejectionRecordSchema = z.strictObject({
-  version: VersionSchema, date: DateStampSchema, correlation_id: NonEmptySchema,
+  version: z.literal(FEED_INGEST_AUDIT_VERSION).default(FEED_INGEST_AUDIT_VERSION), date: DateStampSchema, correlation_id: NonEmptySchema,
   source_id: SlugSchema, feed_url: UrlSchema, subject: z.enum(["feed", "article"]),
   candidate_id: Sha256Schema.nullable(), url_key: Sha256Schema.nullable(),
   canonical_url: UrlSchema.nullable(), title: z.string().nullable(), categories: z.array(z.string()),
@@ -80,3 +81,18 @@ export const CandidateRejectionRecordSchema = z.strictObject({
 });
 export type CandidateRejectionRecord = z.infer<typeof CandidateRejectionRecordSchema>;
 export type RejectionDetails = z.infer<typeof RejectionDetailsSchema>;
+
+const PreviousRejectionSchema = z.strictObject({
+  ...CandidateRejectionRecordSchema.shape, version: z.literal(CONTRACT_VERSION),
+});
+export const CandidateRejectionContract = {
+  schema: CandidateRejectionRecordSchema, schemaVersion: FEED_INGEST_AUDIT_VERSION,
+  legacyVersions: {
+    [CONTRACT_VERSION]: {
+      schema: PreviousRejectionSchema,
+      migrate: (row: object): CandidateRejectionRecord => CandidateRejectionRecordSchema.parse({
+        ...PreviousRejectionSchema.parse(row), version: FEED_INGEST_AUDIT_VERSION,
+      }),
+    },
+  },
+};

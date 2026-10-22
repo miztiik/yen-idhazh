@@ -5,6 +5,7 @@ import { join, relative } from "node:path";
 import { describePlanError, PlanError } from "./plan-request";
 import { healthRoute } from "./routes/health.route";
 import { planRoute } from "./routes/plan.route";
+import type { PlanningBindings } from "./routes/plan.route";
 import { writeJsonLine } from "../logging/structured-logger";
 import type { PlanInputs } from "../load-plan-inputs";
 import { runFeedPlan } from "../run-feed-plan";
@@ -12,13 +13,13 @@ import type { PlanRuntime } from "../run-feed-plan";
 import type { PlanRequest } from "./plan-request";
 import { parseSeenDays, requiredSeenDays } from "../read-ledger-history/read-seen-evidence";
 import { RelativePathSchema } from "../config/service-settings";
-import { recordPlanningMetrics } from "../metrics/metrics-recorder";
+import { recordFeedPlan } from "../record-feed-plan";
 
 // Calendar-versioned HTTP protocol paths are not runtime planning controls.
 const apiPrefix = "/api/2026-10-20";
 
 export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime) {
-  const app = new Hono();
+  const app = new Hono<{ Bindings: PlanningBindings }>();
   const ownFiles = new Map<string, Set<string>>();
   for (const receipt of runtime.seen_receipts ?? []) {
     if (ownFiles.has(receipt.day) || new Set(receipt.files).size !== receipt.files.length) {
@@ -66,7 +67,7 @@ export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime) {
       const configured = new Set(authoredDays.map(day => day.day));
       for (const day of acceptedDays.keys()) if (!configured.has(day)) acceptedDays.delete(day);
       for (const day of seenDays) acceptedDays.set(day.day, JSON.stringify(day));
-      return { ...result, metrics: await recordPlanningMetrics(result, inputs) };
+      return recordFeedPlan(result, inputs, runtime);
     });
     // The caller still receives the failure; only the listener queue is released.
     ready = result.then(() => undefined, () => undefined);
@@ -78,7 +79,7 @@ export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime) {
       code: "BODY_TOO_LARGE", issues: [{ field: "body", message: "body exceeds configured max_body_bytes" }],
     }, 413),
   }));
-  app.route(apiPrefix, healthRoute(inputs));
+  app.route(apiPrefix, healthRoute(inputs, runtime.observe_publication !== undefined));
   app.route(apiPrefix, planRoute(execute));
   app.notFound(c => c.json({ code: "NOT_FOUND", issues: [{ field: "route", message: "Unknown API route" }] }, 404));
   app.onError((error, c) => {
@@ -97,6 +98,11 @@ export function servePlan(inputs: PlanInputs, runtime: PlanRuntime) {
     hostname: inputs.settings.listener.hostname,
     port: inputs.settings.listener.port,
     idleTimeout: inputs.settings.listener.idle_timeout_seconds,
-    fetch: app.fetch,
+    fetch(request, server) {
+      return app.fetch(request, {
+        // Keep the receive timeout until the bounded body and controls validate.
+        beginPlanning: () => server.timeout(request, 0),
+      });
+    },
   });
 }

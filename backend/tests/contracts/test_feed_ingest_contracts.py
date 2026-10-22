@@ -23,7 +23,6 @@ CONTRACT_NAMES = (
     ("feed_ingest_article_assessment", "ArticleAssessmentRecord"),
     ("feed_ingest_diversity", "DiversityMetricRow"),
     ("feed_ingest_editorial_selection", "EditorialSelectionRow"),
-    ("feed_ingest_event", "FeedIngestEvent"),
 )
 
 
@@ -148,6 +147,9 @@ def test_typescript_envelope_fields_and_footer_keys(typescript_schemas: dict[str
         theirs = typescript_schemas[contract.__name__]
         assert normalized_shape(theirs, theirs) == normalized_shape(ours, ours)
     assert typescript_schemas["__footer_keys"] == list(file_envelope._KEYS)
+    assert typescript_schemas["__row_identity_column_versions"] == dict(
+        file_envelope.RowIdentity.__column_versions__
+    )
 
 
 def rejection_payload() -> dict[str, Any]:

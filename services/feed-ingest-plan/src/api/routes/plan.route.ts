@@ -5,8 +5,10 @@ import { summarizePlan } from "../../run-feed-plan";
 import type { RecordedFeedPlanResult } from "../../run-feed-plan";
 import type { PlanRequest } from "../plan-request";
 
+export type PlanningBindings = { beginPlanning?: () => void };
+
 export function planRoute(execute: (request: PlanRequest) => Promise<RecordedFeedPlanResult>) {
-  return new Hono().post("/plan", async c => {
+  return new Hono<{ Bindings: PlanningBindings }>().post("/plan", async c => {
     let raw: unknown;
     try { raw = await c.req.json(); }
     catch (error) {
@@ -14,6 +16,7 @@ export function planRoute(execute: (request: PlanRequest) => Promise<RecordedFee
       throw error;
     }
     const request = PlanRequestSchema.parse(raw);
+    c.env?.beginPlanning?.();
     const result = await execute(request);
     const summary = summarizePlan(result);
     return c.json(summary, summary.planning_complete ? 200 : 409);

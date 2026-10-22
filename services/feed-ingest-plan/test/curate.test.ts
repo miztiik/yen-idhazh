@@ -575,7 +575,7 @@ test("actual unsharded selection and rejection Parquet read back exact rows and 
       const metadata = readMetadata(bytes);
       const fileMetadata = metadata.fileMetadata();
       const footer = new Map([...fileMetadata.keyValueMetadata()].map(([key, value]) => [String(key), String(value)]));
-      expect(footer.get("schema_version")).toBe(fixture.recorded_format.row_schema_version);
+      expect(footer.get("schema_version")).toBe(expectedRows[0]!.version);
       expect(footer.get("file_id")).toBe(file.file_id);
       expect(footer.get("content_sha256")).toBe(file.content_sha256);
       fileMetadata.free();

@@ -15,11 +15,14 @@ function scalar(value: unknown): string | null {
 
 function categories(value: unknown): string[] {
   if (value === undefined) return [];
-  if (typeof value === "string") return [cleanText(value)];
+  if (typeof value === "string") {
+    const text = cleanText(value);
+    return text ? [text] : [];
+  }
   if (Array.isArray(value)) return value.flatMap(categories);
   if (value && typeof value === "object") {
     if ("$" in value && value.$ && typeof value.$ === "object" &&
-      "term" in value.$ && typeof value.$.term === "string") return [cleanText(value.$.term)];
+      "term" in value.$ && typeof value.$.term === "string") return categories(value.$.term);
     return Object.entries(value).filter(([key]) => key !== "$").flatMap(([, child]) => categories(child));
   }
   throw new Error("category element is not XML text");

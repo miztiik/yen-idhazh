@@ -1,6 +1,6 @@
 /** Which unsharded selection and terminal losses does one screened run produce? */
 import {
-  ArticleAssessmentRecordSchema, CandidateRejectionRecordSchema,
+  ArticleAssessmentRecordSchema, CandidateRejectionContract,
   CONTRACT_VERSION, EditorialSelectionRowSchema,
 } from "@idhazh/common-contracts";
 import type { CandidateRejectionRecord, ScoreEvidence, WriterIdentity } from "@idhazh/common-contracts";
@@ -110,7 +110,7 @@ export async function persistPortfolio(result: CurationResult, context: Curation
   };
   const rejections = requireDurable(await persistLedger({
     ...common, ledger: "rejections", registryEntry: context.registrations.rejections,
-    rowContract: { schema: CandidateRejectionRecordSchema, schemaVersion: CONTRACT_VERSION },
+    rowContract: CandidateRejectionContract,
     rows: result.rejections,
   }));
   const selections = requireDurable(await persistLedger({

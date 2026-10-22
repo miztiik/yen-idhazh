@@ -3,14 +3,16 @@ import { mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isDeepStrictEqual } from "node:util";
 import { isAbsolute, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
-  CandidateRejectionRecordSchema, CONTRACT_VERSION, DateStampSchema,
+  CandidateRejectionContract, CONTRACT_VERSION, DateStampSchema,
   FeedIngestDispatchSchema, LedgerCompletionEvidenceSchema,
   PositiveCountSchema, Sha256Schema, deriveCandidateId, deriveUrlKey,
 } from "../../packages/common-contracts/src/index";
 import { createFileId, createUnitId, digestRows, persistLedger } from "../../packages/ledger-file-writer/src/index";
 import type { LedgerRegistration, LogicalField, PersistLedgerResult } from "../../packages/ledger-file-writer/src/index";
 import { readLedgerParquet } from "../../services/feed-ingest-plan/src/read-ledger-history/read-parquet";
+import { SeenRowSchema } from "../../services/feed-ingest-plan/src/screen-article-candidates/seen-evidence";
 import type { summarizePlan } from "../../services/feed-ingest-plan/src/run-feed-plan";
 import {
   ArticleAssessmentContract, DiversityMetricContract, DispatchContract, SourceRunContract, legacyAuditSchemas,
@@ -66,7 +68,7 @@ export async function verifyParquetFiles(
     const actual = ledger === "dispatches"
       ? await readLedgerParquet(actualPath, ledger, DispatchContract)
       : ledger === "rejections"
-        ? await readLedgerParquet(actualPath, ledger, { schema: CandidateRejectionRecordSchema, schemaVersion: CONTRACT_VERSION })
+        ? await readLedgerParquet(actualPath, ledger, CandidateRejectionContract)
         : ledger === "article-assessments"
           ? await readLedgerParquet(actualPath, ledger, ArticleAssessmentContract)
           : ledger === "diversity"
@@ -141,6 +143,14 @@ export async function verifyPlanningCompletion(root: string, summary: ReturnType
 }
 
 export async function verifyRecordedCompatibility() {
+  const legacySeen = await readLedgerParquet(
+    fileURLToPath(new URL("../../tests/fixtures/ledger-file-writer/legacy-seen-day.parquet", import.meta.url)),
+    "seen", { schema: SeenRowSchema, schemaVersion: "2026-08-31" },
+  );
+  if (legacySeen.envelope.version !== "2026-10-01T16:50" || legacySeen.rows.length === 0
+    || legacySeen.rows.some(({ identity }) => identity.job === null || identity.pipeline_name !== null || identity.task_name !== null)) {
+    throw new Error("Recorded legacy seen identities differ from their stored envelope");
+  }
   const fixture = FeedIngestDispatchSchema.parse(JSON.parse(await readFile(
     new URL("../../tests/fixtures/ledger-file-writer/feed-ingest-dispatch-row.json", import.meta.url), "utf8",
   )));
@@ -215,7 +225,8 @@ export async function verifyRecordedCompatibility() {
     const legacyChecked = await verifyParquetFiles(root, "dispatches", legacyWritten, registration,
       [FeedIngestDispatchSchema.parse({ ...legacy, version: DispatchContract.schemaVersion })]);
     return { status: "verified" as const, canonical_content_sha256: reading,
-      row_count: checked.row_count, legacy_row_count: legacyChecked.row_count };
+      row_count: checked.row_count, legacy_row_count: legacyChecked.row_count,
+      legacy_seen_row_count: legacySeen.rows.length };
   } finally {
     await rm(root, { recursive: true, force: true });
   }

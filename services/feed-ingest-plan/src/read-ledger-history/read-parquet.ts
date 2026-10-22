@@ -48,7 +48,7 @@ function checkType(field: Field, expected: LogicalType): void {
 }
 function checkFields(fields: readonly Field[], expected: readonly LogicalField[]): void {
   if (fields.length !== expected.length || new Set(fields.map(field => field.name)).size !== fields.length) {
-    throw new Error("Arrow columns differ from the declared stored schema");
+    throw new Error(`Arrow columns differ from the declared stored schema: expected ${expected.map(field => field.name).join(",")}; received ${fields.map(field => field.name).join(",")}`);
   }
   for (const column of expected) {
     const field = fields.find(field => field.name === column.name);
@@ -125,7 +125,7 @@ export async function readLedgerParquet<T extends object>(
     throw new Error("Raw filename differs from its envelope file identifier");
   }
   const table = tableFromIPC(readParquet(bytes).intoIPCStream());
-  const columns = appendIdentityColumns(describeObjectSchema(storedSchema).fields);
+  const columns = appendIdentityColumns(describeObjectSchema(storedSchema).fields, envelope.version);
   checkFields(table.schema.fields, columns);
   const records = table.toArray().map(value => {
     const record = normalize(value);
