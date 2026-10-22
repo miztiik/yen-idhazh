@@ -29,6 +29,14 @@ CLI execution and in-process route calls are not substitutes for this gate.
 Emit progress during work and append its records as they occur so interruption
 does not erase the only evidence of the running operation.
 
+Owner approval, 2026-10-22: the TypeScript schema is authoritative for planner
+audit events. Remove `backend/idhazh/contracts/feed_ingest_event.py`, its
+registration and event-specific Python comparison checks; update the
+conflicting repository rule and owning documentation. Keep current UUID
+validation and event tests in TypeScript. This exception applies to planner
+events, not shared ledger payloads that Python reads or compacts, and
+supersedes the Python-first event-model requirements below.
+
 Owner approval, 2026-10-22: @kumarsnaveen_microsoft approved delivery of
 Table A repairs A1-A7 from the review conversation, with tests and owning
 docs updated and green changes landed on remote main. This authorizes
@@ -1653,7 +1661,7 @@ records. Strict TypeScript and 62 focused tests passed.
 
 | # | Contract | Rule |
 | --- | --- | --- |
-| J1 | FeedIngestEvent | Declare a Python event model with strict TypeScript copies: version, UUIDv5 event_id, UUIDv4 correlation_id, run_id, attempt, sequence, UTC occurred_at, Table E stage, audit_event_type, source_id and candidate_id where applicable, elapsed_ms, step_elapsed_ms, and a typed payload. Follow section 0's existing UUID/live-envelope convention. Use discriminated payload variants for feed outcome, candidate decision, portfolio choice, and stage completion; no arbitrary map or JSON string payload. Audit observation types are not content event types or event clusters. |
+| J1 | FeedIngestEvent | Declare the authoritative TypeScript event schema: version, UUIDv5 event_id, UUIDv4 correlation_id, run_id, attempt, sequence, UTC occurred_at, Table E stage, audit_event_type, source_id and candidate_id where applicable, elapsed_ms, step_elapsed_ms, and a typed payload. No Python event declaration or cross-language event comparison is required. Follow section 0's existing UUID/live-envelope convention. Use discriminated payload variants for feed outcome, candidate decision, portfolio choice, and stage completion; no arbitrary map or JSON string payload. Audit observation types are not content event types or event clusters. |
 | J2 | Consumers | Stage boundaries exchange the declared candidate/selection/dispatch payloads. Table J events carry decision evidence for the Row #14 recorder and the optional external report; full article text remains in the content/dispatch payload, not decision logs. Events retain the policy/config identity and the fields required by Table I; reporting does not add evidence that audit depends on. |
 | J3 | Final write and failure | Row #14 seals assessment/metric files and then writes all source plan-complete snapshots together in one final source-runs raw write. Each snapshot carries the same typed list of required ledger file identities, digests, and row counts for the attempt, plus the expected source count. This includes editorial selections, dispatches, and rejections. A zero-row raw write produces no file, so record an explicit zero count/empty file list. Failed writes cannot emit completion or return complete success. |
 | J4 | Retry and compact reads | A complete attempt has the expected source snapshot set and its recorded file evidence; partial newer attempts do not displace it. Resolve the highest complete attempt before joining any candidate rows, including when it selected zero items. Compaction preserves these attempt identities and completion evidence; after raw removal, resolve the recorded rows through compact indexes rather than requiring old raw paths to exist. Failure/interruption fixtures must prove this rule without mocks. |
