@@ -296,72 +296,44 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 
 ## 3. Status Reckoner
 
-Delivery checkpoint, 2026-10-21 22:46 UTC: all implementation PRs are merged
-into main. The final dependency landings were writer #1614, host #1615,
-harvesting #1618, screening #1616, curation #1617, partitioning #1619,
-runner #1620 (including audit #1621 and observer #1624), and workflow #1622.
-Each main-target candidate passed all five repository CI checks before its
-guarded squash merge. The last merge is
-`b60c1283c2b6a91bded06394234e3fe729e4c1a7`; its reviewed workflow candidate
-`d1d1827e822c0b2d9c1824f31a034b8669ce8d6c` passed CI run 39688288511.
+Final acceptance, 2026-10-22 17:29 UTC: all sixteen rows and the owner-approved
+repairs are delivered on main. Original dependency PRs #1614-#1624 landed
+before Phase 1 repair [#1627](https://github.com/miztiik/yen-idhazh/pull/1627).
+Final repair [#1628](https://github.com/miztiik/yen-idhazh/pull/1628) landed as
+`e1497d2f49d695bf90c51e70bbe1e516e1896891` after guarded exact-head review.
+Its candidate `dcf9ae9fa8034e732ce6a0442159bbcd5a3e86f6` passed all five
+checks in [CI run 39820387788](https://github.com/miztiik/yen-idhazh/actions/runs/39820387788).
+Existing authoritative CI also exercised actual daily, monthly and yearly
+Python gardener compaction against the TypeScript producer and reader.
+No local Python execution or new Python test cases were added.
 
-Repair checkpoint, 2026-10-22 08:27 UTC: owner-approved Phase 1 landed in
-PR #1627 as `2fb5af470cc00adb2cb478db5e2099f3214b1fbc`. Reviewed candidate
-`27627763616c578d67f093549a27ca026592a550` passed all five CI jobs in run
-39747135353. Assessments now retain first-seen timing and signed age;
-concentration metrics accept positive configured counts; source observations
-retain their original run day and actual observation instant; dispatches
-preserve separate harvest and selection contexts. Old payload readers and
-owning documentation were updated.
+[Actual HTTP run 39821329902](https://github.com/miztiik/yen-idhazh/actions/runs/39821329902)
+passed at that same candidate. The real listener's health and planning POST
+returned successfully; HTTP 200 arrived after 406 seconds (6 minutes 46 seconds),
+and the listener stopped normally. All 11,220 offered entries from 156 feeds
+received decisions: 9,647 already-expired entries stopped before page download,
+leaving 1,573 article paths, with 1,296 successful extractions and five empty
+extractions. The remaining paths record their failures. The owner-approved
+early age rule, not a cap or worker pool, avoids the expired-page work.
+The external ten-minute diagnostic deadline is unchanged. Only the loopback
+POST's separate five-minute client idle timer was removed, after a real
+listener diagnostic reproduced it; server receive and article deadlines remain.
 
-Repair review checkpoint, 2026-10-22 11:22 UTC: checkout recovery succeeded.
-PR #1628 implements logical attempt commitments, conflict refusal before
-compaction deletes input, and computed full audit completion. Candidate
-`5fb4436eca98c97b1710ba9d4b6d41474eb5008f` passed all five CI jobs in run
-39766395074, including the actual daily, monthly and yearly gardener case.
-The isolated workflow run 39767221644 then found a real historical seen-file
-layout mismatch before live planning. Its final gate correctly failed.
-Reviewed repair `306ba11689240aa5dbd0aef83fbd583c7f8a45b6` verifies the
-recorded identity-column layout and original digest before migration.
-All five jobs in CI run 39769669253 passed. Isolated run 39770955528 passed
-history loading, then exposed Bun loading its incomplete built-in transport
-instead of the pinned installed package. Reviewed repair
-`4ab3b1b3c875a0ff608f9dd0b70fecee8662d41d` selects the installed package
-and adds an offline real-dispatcher lifecycle case without changing network
-safety controls. Fresh CI and isolated verification remain required; a
-successful isolated run is not claimed.
+The final gate retained `PLANNING_COMPLETE=true`, `AUDITED_COMPLETE=true`
+and `AUDIT_SCOPE=generated_fixture`. Native readback proved the live planning
+attempt and, separately, full audit completion from generated publication
+fixtures through the real publication observer and independent native verifier.
+The live plan is not claimed published. [Retained evidence](https://github.com/miztiik/yen-idhazh/actions/runs/39821329902/artifacts/12445725475)
+includes 32,715 immediate progress records with one UUIDv4 correlation and
+valid UUIDv5 live identities. Early age refusals report extraction as
+`not-attempted`; empty feed category labels do not become invalid measurements.
 
-Implementation delivery is not full plan acceptance. Rows #10 through #14
-remain open until the reviewed final candidate passes repository CI and the
-isolated workflow, then lands in main. That workflow requires real live
-planning proof and separately labelled generated-publication full-audit
-proof; it neither publishes production content nor treats fixtures as live
-publication. The committed service remains default-off. The contract-repair
-approval in section 0 remains in force, with no scope reduction.
-
-Owner review hold, 2026-10-22 12:36 UTC: CI run 39771665611 passed all five
-jobs at `4ab3b1b3c875a0ff608f9dd0b70fecee8662d41d`, but isolated run
-39772640624 was cancelled at the owner's request after 31 minutes without
-useful progress. The runtime buffered typed events until planning returned.
-A bounded diagnostic reproduced the transport failure: the old fetch adapter
-required external termination on 21 of 24 named targets; the supported
-request API completed all 24. The child is implementing that repair,
-immediate durable progress, the owner-directed UUID convention and actual
-HTTP-listener verification. These changes need exact-candidate review,
-fresh CI and a successful isolated run before merge or plan closure.
-
-HTTP verification checkpoint, 2026-10-22 13:48 UTC: reviewed candidate
-`622543ee821e9f0bb7df37e2d8926425f5da372b` passed all five CI jobs in
-run 39784001447. It removes the Python event model under the owner's ruling,
-uses current UUID events, and starts the actual HTTP listener in the workflow.
-Isolated run 39785121783 reached that listener but exceeded the added
-10-minute diagnostic deadline. Its retained artifact contains 9,685 progress
-records: all 156 feeds finished, offering 11,654 entries, and 3,963 article
-extractions completed before termination. This run was active, not frozen.
-The deadline is not a user requirement or the platform job limit. Bounded
-network-versus-extraction timing is pending before any runtime change or
-rerun; no fetch cap, selection-cap reinterpretation or full acceptance is
-authorized by these partial results.
+Completion proof survives compaction, rejects conflicting duplicates before
+input deletion, and preserves original historical proof stamps and stored
+identity layouts. Current planner events use the owner-approved TypeScript
+authority; shared Python ledger contracts remain. The service stays default-off,
+and this delivery does not cut production planning or workers over to it.
+Earlier failed-run checkpoints remain in Git history.
 
 ### Table D - Status Reckoner
 
@@ -370,17 +342,17 @@ authorized by these partial results.
 | 1 | Shared contracts, schemas, and identity types | 15 | A | DONE | supreme-train (plan-66-row-1) | - | 4729606a-ce50-4812-a45f-f4ac7314311b |
 | 2 | Ledger registration and gardener compaction configuration | 1 | A | DONE | crispy-spoon (plan-66-row-2) | - | 6f739fa3-8ef9-40a7-830d-e1cc57927a46 |
 | 3 | Dedicated feed ingest plan configuration file | 1 | A | DONE | vigilant-lamp (plan-66-row-3) | - | d8340612-ab74-49e7-99ac-19d9ce30e427 |
-| 4 | Host hardware and environment identity service | 6 | B | IN-FLIGHT | plan-66-host-fingerprint-service | - | bd6fe115-c522-4078-bb9f-e7c0e5eceb60 |
+| 4 | Host hardware and environment identity service | 6 | B | DONE | plan-66-host-fingerprint-service | #1615 | bd6fe115-c522-4078-bb9f-e7c0e5eceb60 |
 | 5 | Host CPU and memory profiling service | 1 | B | DONE | congenial-parakeet (plan-66-row-5) | - | c8de7d9d-dd55-4123-87fe-66095cc2aed5 |
 | 6 | Reusable TypeScript ledger file writer | 1, 2, 16 | B | DONE | fictional-tribble | - | c1194122-86e6-45b4-85e9-e1bb61dbdca6 |
 | 7 | RSS/Atom feed harvest and DOM text extraction | 3, 6 | B | DONE | redesigned-doodle (feed-harvest-engine) | - | da505804-6ce7-4f03-aa0b-25bab323ba53 |
 | 8 | Candidate triage screening with Parquet rejection ledger | 6, 7 | C | DONE | plan-66-candidate-screening | - | d50de7c8-1c6a-4074-a390-25a077ae0ba8 |
 | 9 | Set-aware editorial portfolio curation | 8 | D | DONE | plan-66-portfolio-curation | - | 34c330c1-9d30-4222-8fa6-4e28e58a165e |
-| 10 | Contextual bin-packing partitioner with feature flag | 9 | E | IN-FLIGHT | plan-66-article-partitioning; current construction and raw replay tested; packed completion proof unresolved | - | bdd46d9e-08a5-466f-b37a-c8b4adeef51c |
-| 11 | Core plan engine entrypoint, dual-mode runner, and sealing | 6, 10 | F | IN-FLIGHT | plan-66-api-cli-runner; real stages, bounded first sight and required assessment/diversity recording integrated; audited completion remains unavailable | - | 2c361133-cae1-461b-a1fd-74ba90daefaf |
-| 12 | Isolated CI test workflow and verification suite | 4, 5, 11, 14 | G | IN-FLIGHT | plan-66-isolated-workflow; actual CLI planning completion independently proved from native source rows and five ledger sets; generated publication observer and all-file report preservation checked; full-audit gate retained pending final acceptance | - | 382b4193-6a4b-45a6-92c9-9a4005ec9385 |
-| 13 | Phase 2 publication reconciliation and rolling diversity metrics | 12, 14 | H | IN-FLIGHT | publication observer child; independent history/publication modules first; shared metrics wait for Row 14 handoff | - | 79cc9244-f9d2-4223-905f-69fa0221f706 |
-| 14 | Phase 1 source-run audit and three-axis evidence | 11 | G | IN-FLIGHT | audit recorder child | - | f197c411-a156-460a-a772-f5205c11be1d |
+| 10 | Contextual bin-packing partitioner with feature flag | 9 | E | DONE | plan-66-article-partitioning; raw and compacted attempt proof verified | #1619, #1628 | bdd46d9e-08a5-466f-b37a-c8b4adeef51c |
+| 11 | Core plan engine entrypoint, dual-mode runner, and sealing | 6, 10 | F | DONE | plan-66-api-cli-runner; real HTTP planning and native completion proof accepted | #1620, #1627, #1628 | 2c361133-cae1-461b-a1fd-74ba90daefaf |
+| 12 | Isolated CI test workflow and verification suite | 4, 5, 11, 14 | G | DONE | plan-66-isolated-workflow; actual HTTP planning and separate generated full-audit gate passed | #1622, #1628 | 382b4193-6a4b-45a6-92c9-9a4005ec9385 |
+| 13 | Phase 2 publication reconciliation and rolling diversity metrics | 12, 14 | H | DONE | publication observer; generated publication verified through real observer and native readback | #1624, #1628 | 79cc9244-f9d2-4223-905f-69fa0221f706 |
+| 14 | Phase 1 source-run audit and three-axis evidence | 11 | G | DONE | audit recorder; exact-attempt commitments and full-audit evidence verified | #1621, #1627, #1628 | f197c411-a156-460a-a772-f5205c11be1d |
 | 15 | Config-driven source registries and compatible readers | - | A | DONE | fluffy-adventure (feed-registry-migration) | - | f7f18c64-813b-4a13-b421-1cd67b951db6 |
 | 16 | Public data-explorer enrollment and nested ledger delivery | 2 | B | DONE | reimagined-enigma | - | 2b6ac0cc-60a2-4c13-a67a-8d8ec21a4fc1 |
 
