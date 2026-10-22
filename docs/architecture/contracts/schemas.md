@@ -127,6 +127,10 @@ Article URL identity uses the existing `derive_url_key` function.
 Rejections require the deciding stage's reason and measurements; feed failures
 have no article identity. Audit payloads use declared variants and never carry
 full article text.
+Current planner event identities use UUIDv5 and execution correlations use
+UUIDv4, as defined by [the identity contract](identity.md). The owner's
+2026-10-22 correction replaces the unshipped SHA event implementation fixtures;
+it does not migrate or rewrite historical production ledger files.
 
 Named tests in `backend/tests/contracts/`, each proving a specific binding.
 

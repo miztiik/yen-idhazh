@@ -38,6 +38,12 @@ losses. A candidate cannot be admitted and rejected at the same stage. Feed
 decisions remain separate from article losses. Duplicate losses are a subset of
 terminal losses, not an extra term in the input/output equation. Carrier
 membership is retained separately from the unique selected primary source.
+Current event revision `2026-10-22T12:20` requires UUIDv5 `event_id` and
+UUIDv4 `correlation_id`, following [the identity contract](../contracts/identity.md).
+The same run correlation is retained by every dependent row and summary.
+Live progress is separate from decision evidence: it reports work immediately
+and cannot establish audit completion. The workflow appends each actual audit
+record before returning from its logger, not only after the run succeeds.
 
 Every configured source receives an internal summary, including inactive,
 failed, empty and zero-selection sources. Fetch and parse counts and durations

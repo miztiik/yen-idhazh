@@ -127,7 +127,8 @@ function diversity() {
 }
 function event() {
   return FeedIngestEventSchema.parse({
-    event_id: digest, correlation_id: "correlation", run_id: run, attempt: 1,
+    event_id: "01504bcb-60d1-5d4d-b92f-d6f0abee2022",
+    correlation_id: "7cef34e3-dd9f-40ce-9a56-4d01ff5115cc", run_id: run, attempt: 1,
     sequence: 0, occurred_at: at, stage: "harvest-feeds", audit_event_type: "stage_completion",
     source_id: null, candidate_id: null, elapsed_ms: 1, step_elapsed_ms: 1, policy,
     payload: { kind: "stage_completion", stage: "harvest-feeds", input_count: 0,

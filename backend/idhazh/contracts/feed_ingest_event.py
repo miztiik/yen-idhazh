@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any, ClassVar, Literal, Self
+from typing import Annotated, ClassVar, Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, StrictInt, UUID4, UUID5, model_validator
 
 from idhazh.contracts.base import (
     ChangelogEntry,
@@ -18,7 +18,6 @@ from idhazh.contracts.base import (
 from idhazh.contracts.feed_ingest_article_assessment import ArticleAssessmentRecord
 from idhazh.contracts.feed_ingest_candidate import (
     ArticleLabels,
-    NonEmpty,
     PlanningStage,
     PolicyIdentity,
     ScoreEvidence,
@@ -97,6 +96,11 @@ class FeedIngestEvent(Contract):
     __schema_stem__: ClassVar[str] = "feed-ingest-event"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-22T12:20",
+            change="Use UUID event and correlation identities for planner audit events.",
+            why="Live logs and audit evidence must identify the same execution.",
+        ),
+        ChangelogEntry(
             version="2026-10-22",
             change="Carry measured timing basis, timestamp and signed age in decisions.",
             why="Event consumers must see the same evidence retained by assessment rows.",
@@ -107,10 +111,10 @@ class FeedIngestEvent(Contract):
             why="Stage observations need a replayable contract without article text.",
         ),
     )
-    version: Literal["2026-10-22"] = "2026-10-22"
+    version: Literal["2026-10-22T12:20"] = "2026-10-22T12:20"
 
-    event_id: Sha256
-    correlation_id: NonEmpty
+    event_id: UUID5
+    correlation_id: UUID4
     run_id: RunId
     attempt: PositiveCount
     sequence: Count
@@ -125,13 +129,6 @@ class FeedIngestEvent(Contract):
     step_elapsed_ms: Count
     policy: PolicyIdentity
     payload: EventPayload
-
-    @model_validator(mode="before")
-    @classmethod
-    def migrate_previous_version(cls, value: Any) -> Any:
-        if isinstance(value, dict) and value.get("version") == "2026-10-20":
-            return {**value, "version": "2026-10-22"}
-        return value
 
     @model_validator(mode="after")
     def validate_event(self) -> Self:
@@ -149,6 +146,8 @@ class FeedIngestEvent(Contract):
                 raise ValueError("candidate decision events identify source and candidate")
             if self.stage != assessment.stage:
                 raise ValueError("candidate decision stage must match the event stage")
+            if str(self.correlation_id) != assessment.correlation_id:
+                raise ValueError("candidate decision correlation must match the event")
             if self.policy != assessment.policy:
                 raise ValueError("candidate decision policy must match the event policy")
         elif isinstance(self.payload, PortfolioChoicePayload):

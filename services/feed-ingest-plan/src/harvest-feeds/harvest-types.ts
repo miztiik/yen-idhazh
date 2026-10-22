@@ -7,6 +7,7 @@ import {
 import type { FeedIngestConfig, FeedOutcomePayload, PolicyIdentity, WriterIdentity } from "@idhazh/common-contracts";
 import type { LedgerRegistration, LedgerSettings, PersistLedgerResult } from "@idhazh/ledger-file-writer";
 import type { HarvestInputs } from "./load-harvest-inputs";
+import type { ProgressDetails, ProgressEventType } from "../logging/progress-logger";
 
 export const FetchFailureSchema = z.enum([
   "http", "timeout", "unsafe-target", "dns", "network", "robots-denied",
@@ -57,6 +58,7 @@ export type HarvestContext = {
   overrides?: { freshness_hours?: number };
   clock?: () => Date;
   log?: (record: z.infer<typeof CandidateRejectionRecordSchema>) => void;
+  progress?: (event: ProgressEventType, details?: ProgressDetails) => void;
 };
 export type RejectionDestination = {
   outputRoot: string;

@@ -130,9 +130,17 @@ to bypass that refusal.
 The returned evidence and API/CLI `first_sight` summary identify the window,
 per-day status, own receipts, created count and limited absence proof.
 
-The runner emits existing typed `FeedIngestEvent` envelopes as JSONL on
-stderr. Event IDs follow run, attempt and sequence; elapsed and step durations
-are measured in milliseconds. Full article text is not put in decision logs.
+The runner emits live JSONL progress before and after history reads, each
+feed, each article, each stage and required audit recording. It does not wait
+for a whole harvest batch before reporting its activity. The live envelope uses
+the existing pipeline logger's `timestamp`, `level`, `message`, `eventId`,
+`eventType`, `correlationId` and `durationMs` fields.
+UUIDv5 event identities and one UUIDv4 run correlation follow
+[the shared identity contract](../contracts/identity.md).
+Typed `FeedIngestEvent` evidence is included under `audit` in its live log;
+the workflow also appends the exact record to its audit JSONL file immediately.
+Elapsed and step durations are measured in milliseconds.
+Full article text is not put in decision logs.
 Feed outcomes, actual harvest/screening/curation decisions, marginal choices
 from curation's trace and stage counts retain their existing typed contracts.
 The early-stage mapper never fills an unavailable publisher or timing cell.
