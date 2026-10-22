@@ -18,14 +18,17 @@ and a preference is a callable, and a callable is not JSON.
 
 from __future__ import annotations
 
+import re
 from datetime import date
 from enum import UNIQUE, StrEnum, verify
 from typing import Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictBool, model_validator
 
 from idhazh.contracts.base import Model
 from idhazh.contracts.ledger_name import LedgerName
+
+LEDGER_SEGMENT_PATTERN = r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
 
 
 @verify(UNIQUE)
@@ -103,6 +106,7 @@ class LedgerEntry(Model):
     name: LedgerName
     grain: Grain
     prefix: tuple[str, ...]
+    publish_to_data_explorer: StrictBool
     stem: str | None = None
     suffix: str | None = None
 
@@ -115,11 +119,15 @@ class LedgerEntry(Model):
         carrying one, or a segment that walks out of `state/`.
         """
         for segment in self.prefix:
-            if not segment or "/" in segment or "\\" in segment or segment in {".", ".."}:
+            if not re.fullmatch(LEDGER_SEGMENT_PATTERN, segment):
                 raise ValueError(
                     f"{self.name} has {segment!r} in its prefix. A prefix is one directory "
                     "name per element, and it never leaves state/"
                 )
+        if self.publish_to_data_explorer and self.grain is not Grain.RAW_AND_COMPACT:
+            raise ValueError(
+                f"{self.name} enables publish_to_data_explorer but is not raw-and-compact"
+            )
         if not self.prefix:
             raise ValueError(
                 f"{self.name} files by {self.grain.value} and has no prefix, so its files "
@@ -143,7 +151,7 @@ class LedgerEntry(Model):
 class LedgerFamily(Model):
     """One top-level folder under `state/`: its status, what it holds, and its ledgers."""
 
-    name: str = Field(min_length=1)
+    name: str = Field(min_length=1, pattern=LEDGER_SEGMENT_PATTERN)
     lifecycle_status: LedgerLifecycleStatus
     description: str = Field(min_length=1, pattern=r"^[^\r\n]+$")
     onboarded: date

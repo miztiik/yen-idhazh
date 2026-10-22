@@ -48,6 +48,11 @@ test('THE ORACLE: called as the site build calls it, with no argument from front
 	mkdirSync(join(frontend, 'scripts'), { recursive: true });
 	copyFileSync(fileURLToPath(new URL('../scripts/raw-listed-through.mjs', import.meta.url)), script);
 	copyFileSync(fileURLToPath(new URL('../scripts/ledger-prefixes.mjs', import.meta.url)), join(frontend, 'scripts', 'ledger-prefixes.mjs'));
+	const data = join(frontend, 'src', 'lib', 'data');
+	mkdirSync(data, { recursive: true });
+	for (const name of ['configured-catalog.ts', 'ledger-catalog.ts']) {
+		copyFileSync(fileURLToPath(new URL(`../src/lib/data/${name}`, import.meta.url)), join(data, name));
+	}
 	const config = join(frontend, '..', 'config');
 	mkdirSync(config, { recursive: true });
 	for (const name of ['idhazh.json', 'ledgers.json']) {

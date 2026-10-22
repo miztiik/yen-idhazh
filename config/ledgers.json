@@ -8,6 +8,7 @@
       "ledgers": [
         {
           "name": "editorial-selections",
+          "publish_to_data_explorer": true,
           "grain": "raw-and-compact",
           "prefix": ["feed-ingest-plan", "editorial-selections"],
           "stem": null,
@@ -15,6 +16,7 @@
         },
         {
           "name": "dispatches",
+          "publish_to_data_explorer": true,
           "grain": "raw-and-compact",
           "prefix": ["feed-ingest-plan", "dispatches"],
           "stem": null,
@@ -22,6 +24,7 @@
         },
         {
           "name": "rejections",
+          "publish_to_data_explorer": true,
           "grain": "raw-and-compact",
           "prefix": ["feed-ingest-plan", "rejections"],
           "stem": null,
@@ -29,6 +32,7 @@
         },
         {
           "name": "source-runs",
+          "publish_to_data_explorer": true,
           "grain": "raw-and-compact",
           "prefix": ["feed-ingest-plan", "source-runs"],
           "stem": null,
@@ -36,6 +40,7 @@
         },
         {
           "name": "article-assessments",
+          "publish_to_data_explorer": true,
           "grain": "raw-and-compact",
           "prefix": ["feed-ingest-plan", "article-assessments"],
           "stem": null,
@@ -43,6 +48,7 @@
         },
         {
           "name": "diversity",
+          "publish_to_data_explorer": true,
           "grain": "raw-and-compact",
           "prefix": ["feed-ingest-plan", "diversity"],
           "stem": null,
@@ -58,6 +64,7 @@
       "ledgers": [
         {
           "name": "run-shards",
+          "publish_to_data_explorer": true,
           "grain": "raw-and-compact",
           "prefix": ["run-shards"],
           "stem": null,
@@ -73,6 +80,7 @@
       "ledgers": [
         {
           "name": "seen",
+          "publish_to_data_explorer": true,
           "grain": "raw-and-compact",
           "prefix": ["seen"],
           "stem": null,
@@ -88,6 +96,7 @@
       "ledgers": [
         {
           "name": "feed-health",
+          "publish_to_data_explorer": false,
           "grain": "raw-and-compact",
           "prefix": ["feed-health"],
           "stem": null,
@@ -103,6 +112,7 @@
       "ledgers": [
         {
           "name": "item-health",
+          "publish_to_data_explorer": true,
           "grain": "raw-and-compact",
           "prefix": ["item-health"],
           "stem": null,
@@ -118,6 +128,7 @@
       "ledgers": [
         {
           "name": "host-fingerprint",
+          "publish_to_data_explorer": true,
           "grain": "raw-and-compact",
           "prefix": ["host-fingerprint"],
           "stem": null,
@@ -133,6 +144,7 @@
       "ledgers": [
         {
           "name": "summary-quality-evals",
+          "publish_to_data_explorer": true,
           "grain": "raw-and-compact",
           "prefix": ["summary-quality-evals"],
           "stem": null,
@@ -148,6 +160,7 @@
       "ledgers": [
         {
           "name": "candidate-models",
+          "publish_to_data_explorer": true,
           "grain": "raw-and-compact",
           "prefix": ["candidate-models"],
           "stem": null,
@@ -163,6 +176,7 @@
       "ledgers": [
         {
           "name": "item-health-summary",
+          "publish_to_data_explorer": false,
           "grain": "raw-and-compact",
           "prefix": ["item-health-summary"],
           "stem": null,
@@ -178,6 +192,7 @@
       "ledgers": [
         {
           "name": "published",
+          "publish_to_data_explorer": true,
           "grain": "raw-and-compact",
           "prefix": ["published"],
           "stem": null,
@@ -193,6 +208,7 @@
       "ledgers": [
         {
           "name": "feed-retirements",
+          "publish_to_data_explorer": false,
           "grain": "raw-and-compact",
           "prefix": ["feed-retirements"],
           "stem": null,
@@ -208,6 +224,7 @@
       "ledgers": [
         {
           "name": "visual-prunes",
+          "publish_to_data_explorer": false,
           "grain": "raw-and-compact",
           "prefix": ["visual-prunes"],
           "stem": null,
@@ -223,6 +240,7 @@
       "ledgers": [
         {
           "name": "counterfactual-scores",
+          "publish_to_data_explorer": true,
           "grain": "raw-and-compact",
           "prefix": ["counterfactual-scores"],
           "stem": null,
@@ -238,6 +256,7 @@
       "ledgers": [
         {
           "name": "scored-pairs",
+          "publish_to_data_explorer": false,
           "grain": "raw-and-compact",
           "prefix": ["content-similarity-judge", "scored-pairs"],
           "stem": null,
@@ -245,6 +264,7 @@
         },
         {
           "name": "fitted-thresholds",
+          "publish_to_data_explorer": false,
           "grain": "raw-and-compact",
           "prefix": ["content-similarity-judge", "fitted-thresholds"],
           "stem": null,
@@ -252,6 +272,7 @@
         },
         {
           "name": "holdout-pairs",
+          "publish_to_data_explorer": false,
           "grain": "raw-and-compact",
           "prefix": ["content-similarity-judge", "holdout-pairs"],
           "stem": null,
@@ -259,6 +280,7 @@
         },
         {
           "name": "score-distribution",
+          "publish_to_data_explorer": false,
           "grain": "flat",
           "prefix": ["content-similarity-judge"],
           "stem": "score-distribution",
@@ -266,6 +288,7 @@
         },
         {
           "name": "archive",
+          "publish_to_data_explorer": false,
           "grain": "stamp",
           "prefix": ["content-similarity-judge", "archive"],
           "stem": null,
@@ -273,6 +296,7 @@
         },
         {
           "name": "metrics",
+          "publish_to_data_explorer": false,
           "grain": "raw-and-compact",
           "prefix": ["content-similarity-judge", "metrics"],
           "stem": null,
@@ -280,6 +304,7 @@
         },
         {
           "name": "merge-line-holdout-scores",
+          "publish_to_data_explorer": false,
           "grain": "raw-and-compact",
           "prefix": ["content-similarity-judge", "merge-line-holdout-scores"],
           "stem": null,
@@ -295,6 +320,7 @@
       "ledgers": [
         {
           "name": "traces",
+          "publish_to_data_explorer": false,
           "grain": "tree",
           "prefix": ["traces"],
           "stem": null,
@@ -310,6 +336,7 @@
       "ledgers": [
         {
           "name": "day-metrics",
+          "publish_to_data_explorer": false,
           "grain": "day",
           "prefix": ["day-metrics"],
           "stem": null,
@@ -325,6 +352,7 @@
       "ledgers": [
         {
           "name": "digest-fragments",
+          "publish_to_data_explorer": false,
           "grain": "tree",
           "prefix": ["digest-fragments"],
           "stem": null,
@@ -340,6 +368,7 @@
       "ledgers": [
         {
           "name": "gardener",
+          "publish_to_data_explorer": true,
           "grain": "raw-and-compact",
           "prefix": ["gardener"],
           "stem": null,
@@ -355,6 +384,7 @@
       "ledgers": [
         {
           "name": "run-plan",
+          "publish_to_data_explorer": false,
           "grain": "raw-and-compact",
           "prefix": ["run-plan"],
           "stem": null,
@@ -370,6 +400,7 @@
       "ledgers": [
         {
           "name": "council-run-records",
+          "publish_to_data_explorer": true,
           "grain": "raw-and-compact",
           "prefix": ["council-run-records"],
           "stem": null,

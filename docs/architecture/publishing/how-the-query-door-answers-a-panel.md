@@ -368,8 +368,10 @@ or month index. Most keys hold 2,200 gzipped bytes. The `gardener` key holds
 2,064, exactly twice its longest index: a day index of at most 76 entries, 45
 kept days plus one whole month of 31, weighs 1,032 bytes at gzip -5. The copied
 registry has its own
-`config/ledgers.json` key of 3,400 gzipped bytes, about 2.3 times the 1,494
-bytes measured at gzip -5 on 2026-10-08. The bundle gate weighs all
+`config/ledgers.json` key of 3,600 gzipped bytes. With explicit explorer consent,
+the registry weighs 1,761 bytes at Node gzip -5 on the GitHub Ubuntu runner,
+measured on 2026-10-22 UTC. The allowance preserves at least twice that size;
+the contract check also enforces this rule for the registry. The bundle gate weighs all
 three indexes and the registry; `backend/tests/contracts/test_page_ceilings.py`
 also fails when a day or month keep window grows past its bound. A ledger not
 packed yet has no file in the build, so the bundle gate reports its key as not

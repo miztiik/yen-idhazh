@@ -37,7 +37,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'explorer-type-family', 'extraction-trend', 'extraction-window', 'filter-bar',
 		'frame', 'glance-and-rank', 'holdout', 'holdout-domain', 'icons',
 		'indexed-runs', 'item-meta', 'item-time', 'item-visual', 'judgement-evidence',
-		'layout-overflow', 'ledger-copy', 'ledger-door', 'ledger-lifecycle', 'ledger-rows',
+		'layout-overflow', 'ledger-catalog', 'ledger-copy', 'ledger-door', 'ledger-lifecycle', 'ledger-rows',
 		'lenses', 'manifest', 'memory-held', 'merge-line', 'model-cards',
 		'one-pass-reductions', 'payload-ceilings',
 		'platform-mix', 'preview-port', 'processor-lost', 'prompt-reuse',

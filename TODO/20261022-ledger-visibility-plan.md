@@ -1,7 +1,7 @@
 # Compact ledgers without site rebuilds
 
 **Last Updated**: 2026-10-22
-**Level**: 5 - approved design; implementation is not authorized by this plan's publication.
+**Level**: 5 - approved design; execution authorized by kumarsnaveen on 2026-10-22 UTC.
 
 ## 0. Operating contract
 
@@ -20,7 +20,7 @@
 | A9 | ESCALATE triggers | Stop for a storage move or rename; changed family lifecycle or retention; a new or changed persisted payload; additional publication consent; raw discovery or a directory API; credentials or another destination; loss of the approved date range; an unresolved conflict with an owning document; or an execution-contract escalation. Return the finding and options to the owner before proceeding. |
 | A10 | Chosen strategy | Keep the grouped registry as authority; derive a flat catalog; use the existing three compact indexes as the complete file-discovery mechanism. Owner scope rulings are above; Fowler's construction ruling is recorded in Table H. |
 | A11 | Existing work | The authoring checkout contains uncommitted staging-script rename edits. They are not delivered by this plan commit and do not make a row DONE. Adopt and verify them under Row 1 without reverting unrelated work. |
-| A12 | Execution | Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes. |
+| A12 | Execution | Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. |
 | A13 | PR phases | Each reckoner row is one PR outcome. The rows are serial because they change shared readers and their authority; the pool width does not permit overlapping edits. Update each surface's owning doc with its code, then complete the bounded documentation reconciliation in Row 6. |
 
 **Table B - Exclusions and their costs**
@@ -41,7 +41,7 @@
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Complete the publication-staging rename | - | A | DONE | ledger-staging-rename | - | Ledger staging rename |
-| C2 | 2 | Declare explorer consent and the validated catalog | 1 | B | PENDING | - | - | - |
+| C2 | 2 | Declare explorer consent and the validated catalog | 1 | B | DONE | ledger-consent-catalog | - | Ledger consent catalog |
 | C3 | 3 | Bind every frontend ledger path to its catalog | 2 | C | PENDING | - | - | - |
 | C4 | 4 | Read compact repository data directly in the explorer | 3 | D | PENDING | - | - | - |
 | C5 | 5 | Remove raw staging and duplicate publication policy | 4 | E | PENDING | - | - | - |
