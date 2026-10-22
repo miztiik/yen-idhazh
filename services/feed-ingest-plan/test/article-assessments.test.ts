@@ -40,7 +40,7 @@ test("real publication timing and separate article/set scores survive translatio
   } finally { await recorded.close(); }
 }, 30000);
 
-test("originally unmeasured timing remains unknown, not fetched_at or invented first sight", async () => {
+test("an undated article uses its recorded current first sight, not its fetch time", async () => {
   const recorded = await recordedPlan([source({ url: "https://news.example/article-failures.xml" })]);
   try {
     const result = await runFeedPlan({ partition_strategy: "none" }, recorded.inputs, recorded.runtime);
@@ -56,10 +56,14 @@ test("originally unmeasured timing remains unknown, not fetched_at or invented f
     expect(undated.length).toBeGreaterThan(0);
     for (const candidate of undated) {
       for (const row of rows.filter(row => row.candidate_id === candidate.candidate_id)) {
-        expect(row.timing_basis).toBe("unavailable");
-        expect(row.timing_at).toBeNull();
-        expect(row.age_hours).toBeNull();
-        expect(row.max_age_hours).toBeNull();
+        if (row.stage === "harvest-feeds") {
+          expect(row.timing_basis).toBe("unavailable");
+          expect(row.timing_at).toBeNull();
+          continue;
+        }
+        expect(row.timing_basis).toBe("first_seen");
+        expect(row.timing_at).toBe(result.context.now);
+        expect(row.age_hours).toBe(0);
       }
     }
   } finally { await recorded.close(); }

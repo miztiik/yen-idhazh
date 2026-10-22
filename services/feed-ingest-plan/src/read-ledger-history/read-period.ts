@@ -1,6 +1,6 @@
 /** Which named source serves one UTC day, with yearly-to-raw precedence? */
 import { createHash } from "node:crypto";
-import { readFile, stat } from "node:fs/promises";
+import { readFile as readFileFromDisk, stat } from "node:fs/promises";
 import { dirname, join, basename } from "node:path";
 import {
   COMPACT_INDEX_VERSION, RAW_DAY_INDEX_VERSION,
@@ -9,7 +9,7 @@ import {
 import type { CompactIndex } from "@idhazh/common-contracts";
 import type { LedgerRowContract, StoredLedgerRow } from "@idhazh/ledger-file-writer";
 import { readLedgerParquet } from "./read-parquet";
-import type { ReadLedgerFile } from "./read-parquet";
+import type { LedgerRowProjectionContract, ReadLedgerFile } from "./read-parquet";
 
 type Period = CompactIndex["period"];
 export type LedgerDay<T extends object> = Readonly<{
@@ -23,10 +23,11 @@ export type LedgerDay<T extends object> = Readonly<{
 export type NamedDayInput<T extends object> = Readonly<{
   ledger: ReturnType<typeof LedgerNameSchema.parse>;
   day: string;
-  contract: LedgerRowContract<T>;
+  contract: LedgerRowContract<T> | LedgerRowProjectionContract<T>;
   indexes?: Readonly<Partial<Record<Period, string>>>;
   rawFiles?: readonly string[];
   rawIndex?: string;
+  fileCache?: Map<string, Promise<ReadLedgerFile<T>>>;
 }>;
 
 function missing(error: unknown): boolean {
@@ -43,11 +44,20 @@ function sourceRunPartitionDay(row: object): string | undefined {
 }
 async function readIndex(path: string): Promise<unknown | undefined> {
   try {
-    return JSON.parse(await readFile(path, "utf8")) as unknown;
+    return JSON.parse(await readFileFromDisk(path, "utf8")) as unknown;
   } catch (error) {
     if (missing(error)) return undefined;
     throw error;
   }
+}
+async function readFile<T extends object>(input: NamedDayInput<T>, path: string): Promise<ReadLedgerFile<T>> {
+  if (input.fileCache === undefined) return readLedgerParquet(path, input.ledger, input.contract);
+  let pending = input.fileCache.get(path);
+  if (pending === undefined) {
+    pending = readLedgerParquet(path, input.ledger, input.contract);
+    input.fileCache.set(path, pending);
+  }
+  return pending;
 }
 export async function readLedgerDay<T extends object>(input: NamedDayInput<T>): Promise<LedgerDay<T>> {
   const day = DateStampSchema.parse(input.day);
@@ -114,7 +124,7 @@ export async function readLedgerDay<T extends object>(input: NamedDayInput<T>): 
     if (entry.set_aside > 0) notices.push(`files-set-aside:${entry.set_aside}`);
     let file: ReadLedgerFile<T>;
     try {
-      file = await readLedgerParquet(filePath, ledger, input.contract);
+      file = await readFile(input, filePath);
     } catch (error) {
       if (!missing(error)) throw error;
       notices.push(`file-missing:${period}:${entry.covers}`);
@@ -151,7 +161,7 @@ export async function readLedgerDay<T extends object>(input: NamedDayInput<T>): 
   for (const [index, path] of rawFiles.entries()) {
     let file: ReadLedgerFile<T>;
     try {
-      file = await readLedgerParquet(path, ledger, input.contract);
+      file = await readFile(input, path);
     } catch (error) {
       if (!missing(error)) throw error;
       notices.push(`file-missing:${basename(path)}`);

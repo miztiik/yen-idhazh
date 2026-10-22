@@ -5,10 +5,11 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 import initializeParquet from "parquet-wasm/esm";
-import { CONTRACT_VERSION, deriveUrlKey } from "@idhazh/common-contracts";
+import { deriveUrlKey } from "@idhazh/common-contracts";
 import { persistLedger } from "@idhazh/ledger-file-writer";
 import {
-  DigestEventItemSchema, DigestPublicationSchema, ItemHealthPublicationSchema, PublishedRowSchema, RecordedEventPairSchema,
+  DigestEventItemSchema, DigestPublicationSchema, ItemHealthPublicationSchema,
+  PUBLISHED_ROW_SCHEMA_VERSION, PublishedRowSchema, RecordedEventPairSchema,
 } from "../src/metrics/publication-evidence";
 import type { DigestPublication, ItemHealthPublication } from "../src/metrics/publication-evidence";
 import { readPublicationDay, reconcilePublication } from "../src/metrics/publication-outcomes";
@@ -21,7 +22,7 @@ async function fixture() {
   const digest = DigestPublicationSchema.parse(recorded.digest);
   const health = recorded.health.map((row: unknown) => ItemHealthPublicationSchema.parse(row)) as ItemHealthPublication[];
   const published = digest.items.map(item => PublishedRowSchema.parse({
-    version: CONTRACT_VERSION, published_on: digest.date, item_id: item.item_id, url_key: deriveUrlKey(item.source_url),
+    version: PUBLISHED_ROW_SCHEMA_VERSION, published_on: digest.date, item_id: item.item_id, url_key: deriveUrlKey(item.source_url),
   }));
   return { recorded, digest, health, published };
 }
@@ -50,7 +51,7 @@ test("native published Parquet retries and compact history retain recorded item/
   const root = await mkdtemp(join(tmpdir(), "publication-native-"));
   try {
     const { digest, health, published } = await fixture();
-    const contract = { schema: PublishedRowSchema, schemaVersion: CONTRACT_VERSION };
+    const contract = { schema: PublishedRowSchema, schemaVersion: PUBLISHED_ROW_SCHEMA_VERSION };
     const registry = { name: "published", family: "published", grain: "raw-and-compact" as const, lifecycle_status: "active" as const, prefix: ["published"] };
     const files = [];
     for (const attempt of [1, 2]) {
@@ -90,13 +91,13 @@ test("native published Parquet retries and compact history retain recorded item/
     const digestPath = join(root, "digest.json");
     await writeFile(digestPath, JSON.stringify(digest));
     const observed = await readPublicationDay({
-      published: { day: digest.date, indexes: { monthly: index }, schema_version: CONTRACT_VERSION },
+      published: { day: digest.date, indexes: { monthly: index }, schema_version: PUBLISHED_ROW_SCHEMA_VERSION },
       health: { day: digest.date, status: "rows", rows: health }, digest_path: digestPath,
     });
     expect(observed.publication.articles).toEqual(outcome.articles);
     expect(observed.outcomes.find(run => run.run_id === "2026-10-19-2")!.articles).toEqual([]);
     expect((await readPublicationDay({
-      published: { day: digest.date, indexes: { monthly: index }, schema_version: CONTRACT_VERSION },
+      published: { day: digest.date, indexes: { monthly: index }, schema_version: PUBLISHED_ROW_SCHEMA_VERSION },
       health: { day: digest.date, status: "rows", rows: health }, digest_path: join(root, "absent-digest.json"),
     })).publication.status).toBe("missing");
     await writeFile(index, JSON.stringify({
@@ -104,7 +105,7 @@ test("native published Parquet retries and compact history retain recorded item/
       entries: [{ covers: "2026-10", rows: 2, bytes: (await stat(join(root, file.path))).size, state: "packed", set_aside: 1 }],
     }));
     expect((await readPublicationDay({
-      published: { day: digest.date, indexes: { monthly: index }, schema_version: CONTRACT_VERSION },
+      published: { day: digest.date, indexes: { monthly: index }, schema_version: PUBLISHED_ROW_SCHEMA_VERSION },
       health: { day: digest.date, status: "rows", rows: health }, digest_path: digestPath,
     })).publication.status).toBe("missing");
   } finally { await rm(root, { recursive: true, force: true }); }
@@ -167,9 +168,9 @@ test("the recorded run can finish after midnight without changing its publicatio
 });
 test("a named known-empty publication day needs no invented digest; a missing manifest is not empty", async () => {
   const input = {
-    published: { day: "2026-10-19", rawFiles: [] as string[], schema_version: CONTRACT_VERSION },
+    published: { day: "2026-10-19", rawFiles: [] as string[], schema_version: PUBLISHED_ROW_SCHEMA_VERSION },
     health: { day: "2026-10-19", status: "missing" as const, rows: [] }, digest_path: null,
   };
   expect((await readPublicationDay(input)).publication).toEqual({ day: "2026-10-19", status: "empty", articles: [] });
-  expect((await readPublicationDay({ ...input, published: { day: "2026-10-19", schema_version: CONTRACT_VERSION } })).publication.status).toBe("missing");
+  expect((await readPublicationDay({ ...input, published: { day: "2026-10-19", schema_version: PUBLISHED_ROW_SCHEMA_VERSION } })).publication.status).toBe("missing");
 });

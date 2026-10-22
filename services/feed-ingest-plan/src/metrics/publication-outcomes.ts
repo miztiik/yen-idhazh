@@ -6,11 +6,13 @@ import { readLedgerDay } from "../read-ledger-history/read-period";
 import type { NamedDayInput } from "../read-ledger-history/read-period";
 import type { PublicationDay } from "./history-window";
 import {
-  DigestPublicationSchema, ItemHealthPublicationSchema, PublishedRowSchema, validateEvidenceDay,
+  DigestPublicationSchema, ItemHealthPublicationSchema, PUBLISHED_ROW_SCHEMA_VERSION,
+  PublishedRowSchema, validateEvidenceDay,
 } from "./publication-evidence";
 import type { DigestPublication, EvidenceDay, ItemHealthPublication, PublishedRow } from "./publication-evidence";
 import { uniquePublishedArticles, uniqueRecorded } from "./fingerprint-dedup";
 import type { PublishedArticle } from "./fingerprint-dedup";
+import { PublishedRowProjectionContract } from "../read-ledger-history/published-row";
 
 export type PublicationInput = Readonly<{
   run_id: string;
@@ -30,9 +32,12 @@ export type NamedPublicationDay = Readonly<{
 }>;
 
 export async function readPublicationDay(input: NamedPublicationDay) {
+  if (input.published.schema_version !== PUBLISHED_ROW_SCHEMA_VERSION) {
+    throw new Error("Published row schema version differs from its native contract");
+  }
   const published = await readLedgerDay({
     ...input.published, ledger: "published",
-    contract: { schema: PublishedRowSchema, schemaVersion: input.published.schema_version },
+    contract: PublishedRowProjectionContract,
   });
   const health = validateEvidenceDay(input.health, ItemHealthPublicationSchema);
   if (health.day !== published.day) throw new Error("Health input belongs to another named UTC day");

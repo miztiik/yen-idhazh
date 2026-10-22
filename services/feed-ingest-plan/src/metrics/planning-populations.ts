@@ -27,30 +27,26 @@ export type PlanningDay = Readonly<{
   runs: readonly PlanningPopulation[]; findings: readonly AttemptFinding[];
 }>;
 type CompletionLedger = keyof AttemptHistory["ledgers"];
-type NamedPaths = Omit<NamedDayInput<object>, "ledger" | "contract">;
+type NamedPaths = Omit<NamedDayInput<object>, "ledger" | "contract" | "fileCache">;
 export type NamedPlanningHistory = Readonly<{
   sources: NamedPaths; ledgers: Readonly<Record<CompletionLedger, NamedPaths>>;
 }>;
 
 export async function readPlanningHistory(input: NamedPlanningHistory): Promise<AttemptHistory> {
-  const sources = await readLedgerDay({
+  const sources = await readLedgerDay<SourceRunRecord>({
     ...input.sources, ledger: "source-runs",
     contract: SourceRunContract,
   });
-  const schemas: Record<CompletionLedger, LedgerRowContract<object>> = {
-    "article-assessments": ArticleAssessmentContract,
-    diversity: DiversityMetricContract,
-    "editorial-selections": { schema: EditorialSelectionRowSchema, schemaVersion: CONTRACT_VERSION },
-    dispatches: DispatchContract,
-    rejections: CandidateRejectionContract,
-  };
-  const read = async (ledger: CompletionLedger) => {
+  const read = async <T extends object>(ledger: CompletionLedger, contract: LedgerRowContract<T>) => {
     const named = input.ledgers[ledger];
     if (named.day !== sources.day) throw new Error("Named planning ledgers belong to different UTC days");
-    return readLedgerDay({ ...named, ledger, contract: schemas[ledger] });
+    return readLedgerDay<T>({ ...named, ledger, contract });
   };
   const [assessments, diversity, selections, dispatches, rejections] = await Promise.all([
-    read("article-assessments"), read("diversity"), read("editorial-selections"), read("dispatches"), read("rejections"),
+    read("article-assessments", ArticleAssessmentContract),
+    read("diversity", DiversityMetricContract),
+    read("editorial-selections", { schema: EditorialSelectionRowSchema, schemaVersion: CONTRACT_VERSION }),
+    read("dispatches", DispatchContract), read("rejections", CandidateRejectionContract),
   ]);
   return { sources, ledgers: { "article-assessments": assessments, diversity, "editorial-selections": selections, dispatches, rejections } };
 }
@@ -85,6 +81,9 @@ export function derivePlanningPopulation(attempt: ProvenAttempt): PlanningPopula
   }
   const harvest = assessments.filter(row => row.stage === "harvest-feeds" && row.decision === "admitted");
   const earlyStale = assessments.filter(row => row.stage === "harvest-feeds" && row.reason === "STALE_MAX_AGE_EXCEEDED");
+  const earlyExclusions = assessments.filter(row => row.stage === "harvest-feeds" && [
+    "ALREADY_PUBLISHED", "SETTLED_FAILURE", "BLOCKED_URL_MARKER",
+  ].includes(row.reason ?? ""));
   const screen = assessments.filter(row => row.stage === "screen-article-candidates");
   const curated = assessments.filter(row => row.stage === "curate-article-portfolio");
   const ids = (rows: typeof assessments) => new Set(rows.map(row => row.candidate_id));
@@ -110,7 +109,8 @@ export function derivePlanningPopulation(attempt: ProvenAttempt): PlanningPopula
   const selected = curated.filter(row => row.decision === "selected").map(item);
   if (new Set(selected.map(row => row.url_key)).size !== selected.length) throw new Error("Historical selected primary articles are not unique");
   const stages = {
-    input: [...harvest, ...earlyStale].map(item), freshness: harvest.filter(row => !stale.has(row.candidate_id)).map(item),
+    input: [...harvest, ...earlyStale, ...earlyExclusions].map(item),
+    freshness: harvest.filter(row => !stale.has(row.candidate_id)).map(item),
     deduplication: eligible.filter(row => !duplicate.has(row.candidate_id)).map(item),
     normalization: eligible.filter(row => !duplicate.has(row.candidate_id) && !normalizedOut.has(row.candidate_id)).map(item),
     selection: selected,

@@ -70,7 +70,10 @@ export function commitLogicalRecords(
   function encodeHistoricalRecord(ledger: Ledger, row: object, version: string): object {
     if (ledger === "rejections") {
       const current = CandidateRejectionContract.schema.parse(row);
-      const { diagnostics, ...details } = current.details;
+      const {
+        diagnostics, published_on: _publishedOn, failure_code: _failureCode,
+        matched_url_marker: _matchedUrlMarker, ...details
+      } = current.details;
       if (diagnostics !== null) throw new Error("Historical rejection proof cannot omit measured diagnostics");
       return { ...current, version, details };
     }

@@ -4,7 +4,7 @@ import { mkdir, readdir, stat, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import {
-  ArticleAssessmentRecordSchema, CONTRACT_VERSION, DiversityMetricRowSchema,
+  ArticleAssessmentRecordSchema, DiversityMetricRowSchema,
   deriveUrlKey,
 } from "@idhazh/common-contracts";
 import { persistLedger } from "@idhazh/ledger-file-writer";
@@ -18,7 +18,7 @@ import { readLedgerParquet } from "../src/read-ledger-history/read-parquet";
 import { SeenRowSchema } from "../src/screen-article-candidates/seen-evidence";
 import { recordedPlan } from "./plan-recordings";
 import { source } from "./harvest-recordings";
-import { PublishedRowSchema, RecordedEventPairSchema } from "../src/metrics/publication-evidence";
+import { PUBLISHED_ROW_SCHEMA_VERSION, PublishedRowSchema, RecordedEventPairSchema } from "../src/metrics/publication-evidence";
 import type { DigestPublication, ItemHealthPublication } from "../src/metrics/publication-evidence";
 import { registration } from "./partition-fixtures";
 import { readPlanningHistory, settlePlanningDay } from "../src/metrics/planning-populations";
@@ -289,13 +289,13 @@ async function observedPublication(hasPublication = true) {
     const digestPath = join(recorded.directory, "digest.json");
     await writeFile(digestPath, JSON.stringify(digest));
     const publishedRows = digest.items.map(item => PublishedRowSchema.parse({
-      version: CONTRACT_VERSION, item_id: item.item_id, published_on: date, url_key: deriveUrlKey(item.source_url),
+      version: PUBLISHED_ROW_SCHEMA_VERSION, item_id: item.item_id, published_on: date, url_key: deriveUrlKey(item.source_url),
     }));
     const published = await persistLedger({
       ledger: "published", outputRoot: recorded.inputs.outputRoot,
       registryEntry: { name: "published", family: "published", grain: "raw-and-compact", lifecycle_status: "active", prefix: ["published"] },
       writerContext: result.context.writer, ledgerSettings: recorded.inputs.ledgerSettings,
-      period: { tier: "raw", covers: date }, rowContract: { schema: PublishedRowSchema, schemaVersion: CONTRACT_VERSION }, rows: publishedRows,
+      period: { tier: "raw", covers: date }, rowContract: { schema: PublishedRowSchema, schemaVersion: PUBLISHED_ROW_SCHEMA_VERSION }, rows: publishedRows,
     });
     const health: ItemHealthPublication[] = digest.items.map(item => ({
       date, run_id: result.context.run_id, item_id: item.item_id, url_key: deriveUrlKey(item.source_url),
@@ -321,8 +321,8 @@ async function observedPublication(hasPublication = true) {
       outputRoot: join(recorded.directory, "observer"), ledgerSettings: recorded.inputs.ledgerSettings,
       registrations: { diversity: recorded.inputs.registrations.diversity, sources: registration("source-runs") },
       publication_days: [
-        { published: { ...paths([], prior), schema_version: CONTRACT_VERSION }, health: { day: prior, status: "empty", rows: [] }, digest_path: null },
-        { published: { ...paths([published]), schema_version: CONTRACT_VERSION }, health: { day: date, status: health.length === 0 ? "empty" : "rows", rows: health }, digest_path: digestPath },
+        { published: { ...paths([], prior), schema_version: PUBLISHED_ROW_SCHEMA_VERSION }, health: { day: prior, status: "empty", rows: [] }, digest_path: null },
+        { published: { ...paths([published]), schema_version: PUBLISHED_ROW_SCHEMA_VERSION }, health: { day: date, status: health.length === 0 ? "empty" : "rows", rows: health }, digest_path: digestPath },
       ],
       planning_days: [
         { sources: emptyPaths, ledgers: { "article-assessments": emptyPaths, diversity: emptyPaths,
@@ -529,9 +529,9 @@ test("native public boundary refuses foreign source attribution and does not mea
       ledger: "published", outputRoot: fixture.recorded.inputs.outputRoot,
       registryEntry: { name: "published", family: "published", grain: "raw-and-compact", lifecycle_status: "active", prefix: ["published"] },
       writerContext: fixture.input.writer, ledgerSettings: fixture.input.ledgerSettings,
-      period: { tier: "raw", covers: foreign.date }, rowContract: { schema: PublishedRowSchema, schemaVersion: CONTRACT_VERSION },
+      period: { tier: "raw", covers: foreign.date }, rowContract: { schema: PublishedRowSchema, schemaVersion: PUBLISHED_ROW_SCHEMA_VERSION },
       rows: foreign.items.map(item => PublishedRowSchema.parse({
-        version: CONTRACT_VERSION, published_on: foreign.date, item_id: item.item_id, url_key: deriveUrlKey(item.source_url),
+        version: PUBLISHED_ROW_SCHEMA_VERSION, published_on: foreign.date, item_id: item.item_id, url_key: deriveUrlKey(item.source_url),
       })),
     });
     await expect(recordPublicationMetrics({ ...fixture.input, publication_days: [fixture.input.publication_days[0]!, {
@@ -565,8 +565,8 @@ test("caller event titles, outlet names and current lists cannot replace the nat
       ledger: "published", outputRoot: fixture.recorded.inputs.outputRoot,
       registryEntry: { name: "published", family: "published", grain: "raw-and-compact", lifecycle_status: "active", prefix: ["published"] },
       writerContext: { ...fixture.input.writer, run_id: `${date}-1` }, ledgerSettings: fixture.input.ledgerSettings,
-      period: { tier: "raw", covers: date }, rowContract: { schema: PublishedRowSchema, schemaVersion: CONTRACT_VERSION },
-      rows: [PublishedRowSchema.parse({ version: CONTRACT_VERSION, published_on: date, item_id: "ai-03", url_key: deriveUrlKey(prior.items[0]!.source_url) })],
+      period: { tier: "raw", covers: date }, rowContract: { schema: PublishedRowSchema, schemaVersion: PUBLISHED_ROW_SCHEMA_VERSION },
+      rows: [PublishedRowSchema.parse({ version: PUBLISHED_ROW_SCHEMA_VERSION, published_on: date, item_id: "ai-03", url_key: deriveUrlKey(prior.items[0]!.source_url) })],
     });
     const items = [...prior.items, ...fixture.digest.items];
     const stamp = (await Bun.file(new URL("../../../tests/fixtures/feed-ingest-plan/publication-evidence.json", import.meta.url)).json()).event_stamp;
@@ -578,7 +578,7 @@ test("caller event titles, outlet names and current lists cannot replace the nat
     const input = {
       ...fixture.input, as_of: "2026-10-22T00:00:00Z", through: "2026-10-21", event_pairs: pairs,
       publication_days: [{
-        published: { day: date, rawFiles: written.files.map(file => join(fixture.recorded.inputs.outputRoot, file.path)), schema_version: CONTRACT_VERSION },
+        published: { day: date, rawFiles: written.files.map(file => join(fixture.recorded.inputs.outputRoot, file.path)), schema_version: PUBLISHED_ROW_SCHEMA_VERSION },
         health: { day: date, status: "empty" as const, rows: [] }, digest_path: path,
       }, fixture.input.publication_days[1]!],
       // These unrecognised caller fields cannot enter the public recorder's derived populations.

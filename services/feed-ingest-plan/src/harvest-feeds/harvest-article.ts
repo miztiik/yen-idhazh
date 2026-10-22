@@ -42,6 +42,39 @@ export async function harvestArticle(
       candidate: null, rejection: recordRejection(source, context, "MISSING_REQUIRED_FIELDS", {}, article), observation,
     });
   }
+  const markers = context.exclusions?.blocked_url_markers ?? [];
+  const canonicalUrl = identity.canonical_url;
+  const blockedMarker = markers.find(marker => canonicalUrl.toLowerCase().includes(marker.toLowerCase()));
+  if (blockedMarker !== undefined) {
+    return HarvestArticleResultSchema.parse({
+      candidate: null,
+      rejection: recordRejection(source, context, "BLOCKED_URL_MARKER", {
+        matched_url_key: identity.url_key, matched_url_marker: blockedMarker,
+      }, article),
+      observation,
+    });
+  }
+  const publishedOn = context.exclusions?.published_on.get(identity.url_key);
+  if (publishedOn !== undefined) {
+    return HarvestArticleResultSchema.parse({
+      candidate: null,
+      rejection: recordRejection(source, context, "ALREADY_PUBLISHED", {
+        matched_url_key: identity.url_key, published_on: publishedOn,
+        history_window_days: context.exclusions!.published_window_days,
+      }, article),
+      observation,
+    });
+  }
+  const failureCode = context.exclusions?.settled_failure_codes.get(identity.url_key);
+  if (failureCode !== undefined) {
+    return HarvestArticleResultSchema.parse({
+      candidate: null,
+      rejection: recordRejection(source, context, "SETTLED_FAILURE", {
+        matched_url_key: identity.url_key, failure_code: failureCode,
+      }, article),
+      observation,
+    });
+  }
   if (article.title) {
     const effectivePolicy = resolvePolicy(inputs, source.vertical, context.overrides);
     const freshness = calculateFreshness(entry, undefined, observation.observed_at, context.max_future_hours, effectivePolicy);

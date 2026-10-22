@@ -10,7 +10,8 @@ import type { CompactIndex, RawDayIndex } from "../../packages/common-contracts/
 import type { LedgerRegistration, PersistLedgerResult } from "../../packages/ledger-file-writer/src/index";
 import type { summarizePlan } from "../../services/feed-ingest-plan/src/run-feed-plan";
 import { UtcInstantSchema } from "../../services/feed-ingest-plan/src/screen-article-candidates/seen-evidence";
-import { RelativePathSchema } from "../../services/feed-ingest-plan/src/config/service-settings";
+import { RelativePathSchema, SeenDayInputSchema } from "../../services/feed-ingest-plan/src/config/service-settings";
+import type { SeenDayInput } from "../../services/feed-ingest-plan/src/config/service-settings";
 import { validateLedgerFilePath, verifyLedgerReceipt } from "./feed-ingest-plan-verification";
 
 type PlanSummary = ReturnType<typeof summarizePlan>;
@@ -170,6 +171,21 @@ export function createSeenDayInputs(prefix: readonly string[], days: readonly st
     indexes: { yearly: indexes[0]!, monthly: indexes[1]!, daily: indexes[2]! },
     raw_index: `state/raw/${base}/${day.replaceAll("-", "/")}/index.json`,
   }));
+}
+
+export function completeHistoryDayInputs(
+  prefix: readonly string[], required: readonly string[], authored: readonly SeenDayInput[], name: string,
+): SeenDayInput[] {
+  const byDay = new Map<string, SeenDayInput>();
+  for (const [index, raw] of authored.entries()) {
+    const input = SeenDayInputSchema.parse(raw);
+    if ((index > 0 && input.day <= authored[index - 1]!.day) || !required.includes(input.day)) {
+      throw new Error(`${name} must name distinct ascending days inside the configured UTC window`);
+    }
+    byDay.set(input.day, input);
+  }
+  const defaults = new Map(createSeenDayInputs(prefix, required).map(input => [input.day, input]));
+  return required.map(day => byDay.get(day) ?? defaults.get(day)!);
 }
 
 export function historyIndexPaths(prefix: readonly string[], days: readonly string[]): string[] {

@@ -100,18 +100,35 @@ relative paths, and either `raw_index` or an explicit complete `raw_files`
 list. An explicit empty `raw_files` list means a known empty day; an omitted
 day or inventory does not. Dates must be distinct, ascending and inside the
 configured window. `collect.seen_window_days` in `config/idhazh.json` supplies
-the lookback: the current UTC day plus 90 preceding days means 91 required
-days at the current setting, with both bounds included, as in
+the lookback. Its current value is 90, meaning 90 preceding UTC days plus the
+current day, with both bounds included, as in
 [existing freshness rules](freshness.md).
 
-Every required day must resolve to actual rows or known empty, with no lost,
-missing, expired or set-aside evidence. Only then can an absent URL key get a
-new existing-format SeenRow at the captured run clock and identity. The native
-writer must persist it before screening; skipped or failed writes fail the
-run. Missing history preserves known observations but cannot create new first
-sight. Undated candidates without settled evidence retain unknown timing and
-no invented recency bonus. This proves absence within the configured retention
-window, never global absence.
+Published history uses its native `PublishedRow` stamp,
+`2026-09-12T18:40`, not the planner package version. Its bounded reader checks
+the file digest and projects the fields it uses, so compatible older rows keep
+working without being rewritten or assigned a new stamp.
+
+The reader folds the actual rows from named history inputs and keeps the
+earliest recorded first sight for each URL. First-sight candidates come from
+valid feed links after blocked-marker filtering and before article-page fetch.
+An absent URL gets a new existing-format SeenRow at the captured run clock and
+identity even if later rejected as published, settled, stale, or unable to
+fetch, and even if another required day is missing or lost. Blocked-marker
+links do not get a sighting. The native writer must persist it before
+screening; skipped or failed writes fail the run. Missing days remain missing
+in the per-day report; they are not relabelled empty and do not support an
+absence claim. `absence_proof` is available only when every required day has
+usable evidence. Unreadable named files and corrupt evidence still fail the
+run. Undated candidates without settled or current first-sight evidence retain
+unknown timing and no invented recency bonus.
+
+Owner ruling (kumarsnaveen, 2026-10-22): match the Python first-sight behavior
+without inventing older evidence. A missing day cannot prevent recording that
+an eligible URL was actually observed now, but it must stay visible as missing
+and must not be described as proof that the URL was absent from the full
+window. Keep the existing configured lookback, earliest-known timestamp, and
+durable write-before-screening behavior.
 
 One Hono app serializes planning requests and retains only its actual durable
 seen-file receipts as additional per-day observations, even if a later stage
@@ -123,8 +140,8 @@ accepted. As UTC advances, it omits unchanged accepted inputs older than the
 new window without changing the authored inventory. New or changed invalid
 inputs still fail, as do out-of-window inputs in a direct run. Newly required
 days stay missing until the caller supplies their evidence; planning continues
-with available observations but cannot create new first sight without the
-complete window.
+with available observations and can record current first sight without claiming
+full-window absence.
 These first-sight writes remain durable if subsequent required audit recording
 refuses their timing. The assessment contract retains actual first-sight timing.
 Invalid audit evidence can still refuse a run after stage persistence.
