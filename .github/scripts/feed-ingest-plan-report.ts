@@ -1,7 +1,7 @@
 /** Which source and stage outcomes can validated planner events actually prove? */
 import { appendFile, readFile } from "node:fs/promises";
-import { FeedIngestConfigSchema, HostFingerprintRowSchema, RunIdSchema, SourceRunRecordSchema, WriterIdentitySchema, readFeedIngestEvent } from "../../packages/common-contracts/src/index";
-import type { FeedIngestEvent } from "../../packages/common-contracts/src/index";
+import { FeedIngestConfigSchema, HarvestDiagnosticsSchema, HostFingerprintRowSchema, RunIdSchema, SourceRunRecordSchema, WriterIdentitySchema, readFeedIngestEvent } from "../../packages/common-contracts/src/index";
+import type { FeedIngestEvent, HarvestDiagnostics } from "../../packages/common-contracts/src/index";
 import { join } from "node:path";
 
 export type PlannerReport = Readonly<{ annotations: readonly string[]; summary: string }>;
@@ -132,7 +132,11 @@ export function formatExecutionReport(input: Readonly<{
     const measured = sources.filter(source => source[key] !== null);
     return `${measured.reduce((total, source) => total + source[key]!, 0)} articles; ${measured.length}/${sources.length} sources measured`;
   };
-  const progress = input.progress.map(object);
+  const progress = input.progress.map((value): Record<string, unknown> & { diagnostics: HarvestDiagnostics | null | undefined } => {
+    const entry = object(value);
+    return { ...entry, diagnostics: entry.diagnostics === undefined || entry.diagnostics === null
+      ? entry.diagnostics : HarvestDiagnosticsSchema.parse(entry.diagnostics) };
+  });
   for (const entry of progress) {
     if (typeof entry.eventType !== "string" || typeof entry.elapsedMs !== "number"
       || !Number.isFinite(entry.elapsedMs) || entry.elapsedMs < 0) throw new Error("Invalid progress timing evidence");
@@ -156,6 +160,34 @@ export function formatExecutionReport(input: Readonly<{
   const feedFailures = sources.filter(source => !["success", "not_requested"].includes(source.fetch_status)).length;
   const articleStarts = progress.filter(entry => entry.eventType === "ARTICLE_HARVEST_STARTED").length;
   const articleEnds = progress.filter(entry => entry.eventType === "ARTICLE_HARVEST_COMPLETED");
+  const measuredArticles = articleEnds.filter(entry => entry.diagnostics !== undefined);
+  const fetchedArticles = measuredArticles.filter(entry => entry.diagnostics?.fetch_ms !== null && entry.diagnostics?.fetch_ms !== undefined);
+  const extractedArticles = measuredArticles.filter(entry => entry.diagnostics?.extract_ms !== null && entry.diagnostics?.extract_ms !== undefined);
+  const earlyRefusals = measuredArticles.filter(entry => entry.diagnostics === null && typeof entry.drop_reason === "string");
+  const targetResponses = fetchedArticles.filter(entry => entry.diagnostics?.http_status !== null);
+  const measuredFeeds = progress.filter(entry => entry.eventType === "FEED_FETCH_COMPLETED" && entry.diagnostics != null);
+  const diagnosticArticles = measuredArticles.filter(entry => entry.diagnostics !== null);
+  const operationFailures = new Map<string, number>();
+  for (const entry of progress.filter(entry => ["FEED_FETCH_COMPLETED", "ARTICLE_HARVEST_COMPLETED"].includes(String(entry.eventType)))) {
+    const diagnostics = entry.diagnostics;
+    if (diagnostics === undefined || diagnostics === null) continue;
+    const subject = entry.eventType === "FEED_FETCH_COMPLETED" ? "feed" : "article";
+    for (const key of ["fetch_failure", "extraction_failure", "robots_failure", "error_code", "failure_code", "http_status", "robots", "robots_http_status"] as const) {
+      const value = diagnostics[key];
+      if (value === null) continue;
+      const label = `${subject} / ${key} / ${value}`;
+      operationFailures.set(label, (operationFailures.get(label) ?? 0) + 1);
+    }
+    for (const warning of diagnostics.warnings) {
+      const label = `${subject} / warning / ${warning}`;
+      operationFailures.set(label, (operationFailures.get(label) ?? 0) + 1);
+    }
+  }
+  function operationTime(entries: typeof fetchedArticles, key: "fetch_ms" | "extract_ms"): string {
+    if (entries.length === 0) return "Unavailable (no measured operations)";
+    const total = entries.reduce((sum, entry) => sum + entry.diagnostics![key]!, 0);
+    return `${(total / 1000).toFixed(3)} seconds summed over ${entries.length} measured operations; not elapsed wall time`;
+  }
   const extraction = (outcome: string) => articleEnds.filter(entry => entry.extraction_outcome === outcome).length;
   const staging = typeof input.historyStagingMs === "number" && Number.isFinite(input.historyStagingMs) && input.historyStagingMs >= 0
     ? `${(input.historyStagingMs / 1000).toFixed(3)} seconds` : "Unavailable";
@@ -174,9 +206,11 @@ export function formatExecutionReport(input: Readonly<{
     `| C8 | Feed fetch failures | ${feedFailures}/${feedAttempts} attempted feeds |`,
     `| C9 | Article harvest operations | ${progress.length === 0 ? "Unavailable" : `${articleEnds.length}/${articleStarts} started operations completed; not a page-request count`} |`,
     `| C10 | Extraction outcomes | ${progress.length === 0 ? "Unavailable" : `${extraction("success")} success; ${extraction("empty")} empty; ${extraction("failed")} failed; ${extraction("not-attempted")} not attempted; denominator ${articleEnds.length} completed operations`} |`,
-    "| C11 | Refused before fetching / actual page requests | Unavailable until shared operation diagnostics are supplied |",
+    `| C11 | Refused before permitted fetching | ${measuredArticles.length === 0 ? "Unavailable" : `${earlyRefusals.length}/${measuredArticles.length} article completions with declared diagnostics`} |`,
+    `| C12 | Permitted article fetch operations | ${measuredArticles.length === 0 ? "Unavailable" : `${fetchedArticles.length}/${measuredArticles.length} article completions with declared diagnostics; ${targetResponses.length} recorded target responses`} |`,
+    `| C13 | Extraction operations | ${measuredArticles.length === 0 ? "Unavailable" : `${extractedArticles.length}/${fetchedArticles.length} measured fetch operations reached extraction`} |`,
     "",
-    "Page-request counts and operation durations are unavailable unless recorded by the actual operation. Progress event gaps are not operation durations. Screened eligible does not mean previously unpublished.",
+    "A permitted fetch includes DNS, robots, retries and redirects; it is not a count of outbound HTTP requests. Target responses include recorded error or redirect statuses. Null diagnostics identify an operation that was not performed; absent historical diagnostics are unavailable. Screened eligible does not mean previously unpublished.",
     "",
     "## Table D - Refusals",
     "",
@@ -197,6 +231,8 @@ export function formatExecutionReport(input: Readonly<{
     `| E4 | Audit recording | ${duration("AUDIT_RECORDING_STARTED", "AUDIT_RECORDING_COMPLETED")} |`,
     `| E5 | HTTP listener through response | ${duration("HTTP_LISTENER_STARTED", "HTTP_RESPONSE_RECEIVED")} |`,
     `| E6 | Job start through host observation | ${host?.job_seconds === null || host === null ? "Unavailable" : `${host.job_seconds} seconds`} |`,
+    `| E7 | Article permitted fetch work | ${operationTime(fetchedArticles, "fetch_ms")} |`,
+    `| E8 | Article extraction work | ${operationTime(extractedArticles, "extract_ms")} |`,
     "",
     "Elapsed intervals overlap; do not add them. The job observation excludes the later report, commit and artifact upload.",
     "",
@@ -210,6 +246,15 @@ export function formatExecutionReport(input: Readonly<{
     `| F4 | CPU quota | ${host?.cpu_quota_state === "finite" ? `${host.cpu_quota_cores} cores` : host?.cpu_quota_state ?? "Unavailable"} |`,
     `| F5 | L3 cache | ${host?.l3_cache_bytes === null || host === null ? "Unavailable" : `${host.l3_cache_bytes} bytes`} |`,
     `| F6 | Pipeline / task | ${escapeMarkdown(host?.pipeline_name ?? "Unavailable")} / ${escapeMarkdown(host?.task_name ?? "Unavailable")} |`,
+    "",
+    "## Table G - Recorded operation diagnostics",
+    "",
+    "| Id | Subject / observation / value | Count and denominator |",
+    "| --- | --- | --- |",
+    ...[...operationFailures].map(([label, count], index) => `| G${index + 1} | ${escapeMarkdown(label)} | ${count}/${label.startsWith("feed /") ? measuredFeeds.length : diagnosticArticles.length} ${label.startsWith("feed /") ? "feed" : "article"} completions with recorded operation diagnostics |`),
+    ...(operationFailures.size === 0 ? ["Operation diagnostic observations unavailable."] : []),
+    "",
+    "Each diagnostic field is counted separately; one operation can appear in several rows. Do not add these rows as failures. Null values remain unavailable, not zero.",
     "",
     `Planning completion: ${response.planning_complete === true ? "verified" : "unavailable"}. Publication audit completion: ${response.audited_complete === true ? "verified" : "pending"}. Git commit status is reported by the separate exact-file commit step.`,
     "",

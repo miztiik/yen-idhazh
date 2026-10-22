@@ -119,6 +119,9 @@ and requires identical bytes and digests after each call. Independent runs
 cannot have identical source-file digests: source records retain measured
 fetch/parse durations and commitments to newly generated file identities.
 Those values are verified unchanged, never removed or normalized to pass.
+The same applies to newly recorded per-article diagnostic timings: independent
+runs need not have equal commitments. Reporting must preserve each run's own
+bytes, selected identities and recorded proof.
 
 One generated publication fixture writes native published rows from the actual
 CLI's selected dispatch identities, plus a matching digest and settled health
@@ -226,7 +229,15 @@ including inactive sources that were not fetched. Fetch failures separately
 use attempted feeds. Unknown feed entry counts remain unknown.
 Recorded progress supplies completed operation outcomes and paired elapsed
 intervals for history, planning, audit and HTTP. Event gaps are not summed as
-operation time. Intervals overlap and must not be added. The host row supplies
+operation time. Shared `HarvestDiagnosticsSchema` validates the actual operation
+diagnostics. Article completion records distinguish refusals before a fetch,
+measured permitted fetches, target responses and measured extractions. A
+permitted fetch includes DNS, robots, retries and redirects, so it is not an
+outbound HTTP request count. Fetch and extraction times are summed work across
+measured operations, not elapsed wall time. Diagnostic rows retain exact HTTP
+statuses, robots results, typed causes, safe error tokens and warnings, with
+explicit recorded-operation denominators. Missing historical diagnostics stay
+unavailable. Intervals overlap and must not be added. The host row supplies
 actual hardware identity and elapsed job observation. Screened eligible does
 not mean previously unpublished. Source run, attempt and correlation identities
 must match the response. Host run and recorded writer attempt must also match;

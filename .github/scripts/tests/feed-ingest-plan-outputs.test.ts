@@ -162,10 +162,23 @@ test("actual CLI planning proof and all native files survive both real report mo
     expect(executionSummary).toContain(`| F1 | Hardware fingerprint | ${hostFixture.fingerprint ?? "Unavailable"} |`);
     expect(executionSummary).toContain(`requested limit ${summary.request.article_limit}`);
     expect(executionSummary).toContain("Screened eligible does not mean previously unpublished");
+    const completedArticles = progress.filter(entry => entry.eventType === "ARTICLE_HARVEST_COMPLETED");
+    const fetches = completedArticles.filter(entry => entry.diagnostics?.fetch_ms !== null && entry.diagnostics?.fetch_ms !== undefined);
+    const extracts = completedArticles.filter(entry => entry.diagnostics?.extract_ms !== null && entry.diagnostics?.extract_ms !== undefined);
+    expect(executionSummary).toContain(`| C11 | Refused before permitted fetching | 1/${completedArticles.length}`);
+    expect(executionSummary).toContain(`| C12 | Permitted article fetch operations | ${fetches.length}/${completedArticles.length}`);
+    expect(executionSummary).toContain(`| C13 | Extraction operations | ${extracts.length}/${fetches.length}`);
+    expect(executionSummary).toContain(`${(fetches.reduce((sum, entry) => sum + entry.diagnostics!.fetch_ms!, 0) / 1000).toFixed(3)} seconds summed over ${fetches.length}`);
+    expect(executionSummary).toContain("http&#95;status / 200");
+    expect(() => formatExecutionReport({
+      response: summary, host, historyStagingMs: null,
+      progress: progress.map((entry, index) => index === 0 ? { ...entry, diagnostics: { error_code: "unsafe arbitrary prose" } } : entry),
+    })).toThrow();
     const unavailable = formatExecutionReport({ response: summary, host: null, progress: [], historyStagingMs: null });
     expect(unavailable).toContain("| F1 | Hardware fingerprint | Unavailable |");
     expect(unavailable).toContain("| C9 | Article harvest operations | Unavailable |");
     expect(unavailable).toContain("| C10 | Extraction outcomes | Unavailable |");
+    expect(unavailable).toContain("| C11 | Refused before permitted fetching | Unavailable |");
     expect(outputs.metrics_status).toBe("assessment_diversity_recorded_audit_pending");
     expect(outputs.audited_complete).toBe("false");
     expect(outputs.planning_complete).toBe("true");
@@ -401,18 +414,20 @@ test("report configuration cannot change real-run ledger commitments", async () 
     if (!("files" in first) || !("files" in second) || first.metrics === undefined || second.metrics === undefined) {
       throw new Error("Actual CLI omitted metric evidence");
     }
-    for (const name of ["dispatches", "selections", "harvest_rejections", "screening_rejections", "curation_rejections", "seen"] as const) {
-      expect(second.files[name].files.map(file => file.content_sha256)).toEqual(
-        first.files[name].files.map(file => file.content_sha256),
-      );
-    }
-    for (const key of ["assessments", "diversity"] as const) {
-      expect(second.metrics.files[key].files.map(file => file.content_sha256)).toEqual(
-        first.metrics.files[key].files.map(file => file.content_sha256),
-      );
-    }
+    expect(second.selected_candidate_ids).toEqual(first.selected_candidate_ids);
+    expect(second.assignments).toEqual(first.assignments);
     for (const [summary, fixture] of [[first, disabled], [second, enabled]] as const) {
       if (summary.files.source_runs === undefined || summary.source_records === null) throw new Error("Source proof absent");
+      const paths = [...Object.values(summary.files), ...Object.values(summary.metrics!.files)]
+        .flatMap(result => result?.files.map(file => file.path) ?? []);
+      const before = await Promise.all(paths.map(path => readFile(join(fixture.inputs.outputRoot, ...path.split("/")))));
+      await writePlannerReport({
+        enabled: fixture.inputs.harvest.config.workflow_reporting.enabled, events: fixture.events,
+        summaryPath: join(fixture.directory, "configured-report.md"), annotate: () => {},
+      });
+      for (const [index, path] of paths.entries()) {
+        expect(await readFile(join(fixture.inputs.outputRoot, ...path.split("/")))).toEqual(before[index]!);
+      }
       await verifyParquetFiles(fixture.inputs.outputRoot, "source-runs", summary.files.source_runs,
         fixture.inputs.registrations.source_runs, summary.source_records);
       await verifyPlanningCompletion(fixture.inputs.outputRoot, summary);
