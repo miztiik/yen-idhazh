@@ -6,8 +6,8 @@ that cannot import a Pydantic model. This holds that copy in step: each shape's
 field set, each field's TypeScript type and their order, the stamp against
 `CompactIndex.schema_version()`, the periods against `Period`, and the entry
 states against `EntryState`. It also
-holds three names the door carries beside the copy: every ledger it may query is
-a `LedgerName`, the cell it filters days on is the ledger's own date cell, and
+holds two names the door carries beside the copy: the cell it filters days on is
+the ledger's own date cell, and
 the four faults it names a missing file with are the backend's `LedgerFault`, in
 the same order, so the gardener's logs say what the console says.
 
@@ -29,7 +29,6 @@ from conftest import REPO_ROOT, read_text
 from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.ledger_fault import LedgerFault
 from idhazh.contracts.ledger_index import CompactIndex, EntryState, RawDayIndex
-from idhazh.contracts.ledger_name import LedgerName
 from idhazh.ledger.keys import DATE_CELL
 
 pytestmark = pytest.mark.contract
@@ -153,11 +152,12 @@ def test_the_entry_states_are_the_contract_s_own() -> None:
 
 
 def test_every_ledger_the_door_may_query_is_a_ledger() -> None:
-    """The written-question door names every declared ledger, and no other."""
+    """The frontend accepts names as strings and validates them against its catalog."""
     shapes = DOOR / "slice-shapes.ts"
-    names = constant_list(read_text(shapes), "LEDGER_NAMES", shapes)
-    expected = [ledger.value for ledger in LedgerName]
-    assert names == expected, f"{shapes.name} names {names}, and LedgerName declares {expected}"
+    source = read_text(shapes)
+    assert "export type LedgerName = string;" in source
+    assert "LEDGER_NAMES" not in source
+    assert "LEDGER_FOLDERS" not in source
 
 
 def test_the_raw_day_index_copy_names_the_contract_fields_and_requires_bytes() -> None:

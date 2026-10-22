@@ -19,6 +19,7 @@
  */
 
 import { base } from '$app/paths';
+import { configuredCatalog } from './configured-catalog';
 import { fetchedBytes } from './fetched-bytes';
 import { readAsk, readAskCost, type ArchiveTier, type RawListedThrough } from './ask-reader';
 import { readColumns } from './ledger-columns';
@@ -26,31 +27,13 @@ import { readReach, type LedgerReach } from './ledger-reach';
 import { pageKeeper, type PageKeeper } from './page-keeper';
 import { renewReadSession } from './read-session';
 import { readSlice } from './slice-reader';
+import type { LedgerCatalog } from './ledger-catalog';
 import type { QueryEngine } from './slice-query';
 import type { AskOptions, AskResult, Column, DateStamp, LedgerName, SliceOptions, SliceResult, SpanCost } from './slice-shapes';
 
 export type { LedgerReach } from './ledger-reach';
 export { readSession } from './read-session';
 export type { AskFault, AskOptions, AskRefusal, AskResult, Column, DateStamp, FetchCost, LedgerFault, LedgerName, Predicate, Row, SetAsideFiles, SliceOptions, SliceResult, SpanCost, SpanGap } from './slice-shapes';
-
-let kept: PageKeeper | null = null;
-let keptArchive: PageKeeper | null = null;
-let engine: Promise<QueryEngine> | null = null;
-
-function openEngine(): Promise<QueryEngine> {
-	engine ??= import('./engine').then((engineModule) => engineModule.browserEngine(__ENGINE_EXTENSION_REPOSITORY__));
-	return engine;
-}
-
-/** What this page has read from the published tree. The prefix is this build's
- *  own config, never a payload's. */
-function keeper(): PageKeeper {
-	kept ??= pageKeeper(
-		fetchedBytes(__ASSET_BASE_URL__ || base, (url, init) => fetch(url, init)),
-		openEngine
-	);
-	return kept;
-}
 
 /** The archive's prefix: this build's `ledger.archive_base_url`. A page script that sets
  *  `__ARCHIVE_BASE_URL__` to an empty string reads the site alone, as the browser test of a
@@ -62,28 +45,6 @@ function archiveBaseUrl(): string {
 
 /** The archive, and how many UTC days of each ledger the site copy keeps, so the archive is
  *  asked only for days the copy may have dropped; `null` when the page reads the site alone. */
-function archiveTier(): ArchiveTier | null {
-	const baseUrl = archiveBaseUrl();
-	if (!baseUrl) return null;
-	keptArchive ??= pageKeeper(
-		((source) => ({ index: source.index, data: source.data }))(fetchedBytes(baseUrl, (url, init) => fetch(url, init))),
-		openEngine
-	);
-	return { keeper: keptArchive, siteWindowDays: __SITE_WINDOW_DAYS__ };
-}
-
-/** Ask a committed ledger for the slice a panel draws. Columns and a date range
- *  are named by the caller; nothing fetches a whole ledger. */
-export function slice(ledger: LedgerName, options: SliceOptions): Promise<SliceResult> {
-	return readSlice(keeper(), ledger, options);
-}
-
-/** How far a committed ledger reaches: the oldest and the newest day its
- *  indexes name. Reads nothing else and starts no engine. */
-export function ledgerReach(ledger: LedgerName): Promise<LedgerReach> {
-	return readReach(keeper(), ledger);
-}
-
 /** The newest raw day the site build listed for each ledger: this build's `__RAW_LISTED_THROUGH__`.
  *  A page script that sets `__RAW_LISTED_THROUGH__` to an object with no keys reads no writer's
  *  file, as the browser tests that serve a ledger they built do, because a built ledger has no
@@ -94,34 +55,105 @@ function rawListedThrough(): RawListedThrough {
 	return switchedOff ? {} : ((__RAW_LISTED_THROUGH__ ?? {}) as RawListedThrough);
 }
 
+export interface LedgerReader {
+	slice(ledger: LedgerName, options: SliceOptions): Promise<SliceResult>;
+	ledgerReach(ledger: LedgerName): Promise<LedgerReach>;
+	ask(options: AskOptions): Promise<AskResult>;
+	askCost(ledgers: readonly LedgerName[], from: DateStamp, to: DateStamp): Promise<SpanCost>;
+	askColumns(ledger: LedgerName, maxFetchBytes: number): Promise<Column[]>;
+	startAfresh(): Promise<void>;
+	pageHeldBytes(): number;
+}
+
+/** Bind the query door's readers and their cache to one immutable ledger catalog. */
+export function createLedgerReader(catalog: LedgerCatalog): LedgerReader {
+	let kept: PageKeeper | null = null;
+	let keptArchive: PageKeeper | null = null;
+	let engine: Promise<QueryEngine> | null = null;
+
+	function openEngine(): Promise<QueryEngine> {
+		engine ??= import('./engine').then((engineModule) => engineModule.browserEngine(__ENGINE_EXTENSION_REPOSITORY__));
+		return engine;
+	}
+
+	/** What this page has read from the published tree. The prefix is this build's
+	 *  own config, never a payload's. */
+	function keeper(): PageKeeper {
+		kept ??= pageKeeper(
+			fetchedBytes(__ASSET_BASE_URL__ || base, (url, init) => fetch(url, init)),
+			openEngine,
+			catalog
+		);
+		return kept;
+	}
+
+	/** The archive, and how many UTC days of each ledger the site copy keeps. */
+	function archiveTier(): ArchiveTier | null {
+		const baseUrl = archiveBaseUrl();
+		if (!baseUrl) return null;
+		keptArchive ??= pageKeeper(
+			((source) => ({ index: source.index, data: source.data }))(fetchedBytes(baseUrl, (url, init) => fetch(url, init))),
+			openEngine,
+			catalog
+		);
+		return { keeper: keptArchive, siteWindowDays: __SITE_WINDOW_DAYS__ };
+	}
+
+	return {
+		slice: (ledger, options) => readSlice(keeper(), ledger, options),
+		ledgerReach: (ledger) => readReach(keeper(), ledger),
+		ask: (options) => readAsk(keeper(), archiveTier(), options, rawListedThrough()),
+		askCost: (ledgers, from, to) => readAskCost(keeper(), archiveTier(), ledgers, from, to, rawListedThrough()),
+		askColumns: (ledger, maxFetchBytes) => readColumns(keeper(), ledger, maxFetchBytes, rawListedThrough()),
+		async startAfresh() {
+			renewReadSession();
+			const current = kept;
+			const archive = keptArchive;
+			kept = null;
+			keptArchive = null;
+			if (current !== null) await current.release();
+			if (archive !== null) await archive.release();
+		},
+		pageHeldBytes: () => (kept?.heldBytes() ?? 0) + (keptArchive?.heldBytes() ?? 0)
+	};
+}
+
+const configuredReader = createLedgerReader(configuredCatalog);
+
+/** Ask a committed ledger for the slice a panel draws. Columns and a date range
+ *  are named by the caller; nothing fetches a whole ledger. */
+export function slice(ledger: LedgerName, options: SliceOptions): Promise<SliceResult> {
+	return configuredReader.slice(ledger, options);
+}
+
+/** How far a committed ledger reaches: the oldest and the newest day its
+ *  indexes name. Reads nothing else and starts no engine. */
+export function ledgerReach(ledger: LedgerName): Promise<LedgerReach> {
+	return configuredReader.ledgerReach(ledger);
+}
+
 /** Run one read-only statement over chosen ledgers and days. */
 export function ask(options: AskOptions): Promise<AskResult> {
-	return readAsk(keeper(), archiveTier(), options, rawListedThrough());
+	return configuredReader.ask(options);
 }
 
 /** What a written question would fetch before it runs. */
 export function askCost(ledgers: readonly LedgerName[], from: DateStamp, to: DateStamp): Promise<SpanCost> {
-	return readAskCost(keeper(), archiveTier(), ledgers, from, to, rawListedThrough());
+	return configuredReader.askCost(ledgers, from, to);
 }
 
 /** A chosen ledger's columns, from the files its empty view reads, whatever window is selected:
  *  it takes no window and moves none. Files over `maxFetchBytes` are not fetched. */
 export function askColumns(ledger: LedgerName, maxFetchBytes: number): Promise<Column[]> {
-	return readColumns(keeper(), ledger, maxFetchBytes, rawListedThrough());
+	return configuredReader.askColumns(ledger, maxFetchBytes);
 }
 
 /** Drop this page's query-door cache, so Refresh reads the registry and indexes anew. */
-export async function startAfresh(): Promise<void> {
-	renewReadSession();
-	const current = kept;
-	const archive = keptArchive;
-	kept = null;
-	keptArchive = null;
-	if (current !== null) await current.release();
-	if (archive !== null) await archive.release();
+export function startAfresh(): Promise<void> {
+	return configuredReader.startAfresh();
 }
 
 /** Whole-file bytes the current page keeper holds in the engine. */
 export function pageHeldBytes(): number {
-	return (kept?.heldBytes() ?? 0) + (keptArchive?.heldBytes() ?? 0);
+	return configuredReader.pageHeldBytes();
 }

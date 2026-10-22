@@ -5,7 +5,7 @@ import type { RecordWindow } from '../waiting';
 export function pipelinesRecord(reach: RouteReach | null, asked: number): RecordWindow | null {
 	if (reach?.through === null || reach?.through === undefined) return null;
 	const first = Object.values(reach.ledgers)
-		.flatMap((ledger) => ledger.state === 'ok' && ledger.first <= reach.through! ? [ledger.first] : [])
+		.flatMap((ledger) => ledger?.state === 'ok' && ledger.first <= reach.through! ? [ledger.first] : [])
 		.sort()[0];
 	return first === undefined ? null : { first, through: reach.through, asked };
 }

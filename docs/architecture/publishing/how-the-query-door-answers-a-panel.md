@@ -26,8 +26,9 @@ const result = await slice('host-fingerprint', {
 });
 ```
 
-The ledger is one of a closed set, so a panel names a ledger and never a path. A
-filter is a column, an operator and a value; the value is bound as a query
+The ledger name is checked against the catalog bound to the page keeper, so a
+panel names a registered ledger and never a path. A filter is a column, an
+operator and a value; the value is bound as a query
 parameter, so no text a panel passes can become SQL (Guardrail #11). The door
 refuses a request by name, before it fetches anything, when it names no columns,
 names a column that is not lower case, digits and `_`, gives a day that is not a
@@ -79,12 +80,12 @@ index for a period never packed names nothing - and declared as `CompactIndex` i
 `backend/idhazh/contracts/ledger_index.py`.
 
 The prefix is the ledger's `prefix` list in the committed
-`config/ledgers.json`, joined with `/`. The build checks each segment before
-using it as a path, refuses unknown ledger names and ambiguous mappings, and
-uses the same prefix for compact files, indexes and raw listings.
-`frontend/scripts/ledger-prefixes.mjs` owns that check.
-The browser's small `LEDGER_FOLDERS` copy is held in step by the registry
-binding checks. Thus `dispatches` resolves under
+`config/ledgers.json`, joined with `/`. The validated frontend catalog checks
+each segment before exposing the entry and refuses unknown names or ambiguous
+prefixes. The pure path helpers take that catalog explicitly and use the same
+prefix for compact files, indexes and raw listings. Ordinary panel and disk
+readers use the configured catalog; the Data explorer binds its reader to the
+catalog fetched for its source. Thus `dispatches` resolves under
 `state/compact/feed-ingest-plan/dispatches/`, while `host-fingerprint` keeps
 `state/compact/host-fingerprint/`. Missing-file build warnings name the ledger,
 not its family's folder.
@@ -152,7 +153,8 @@ address with one more part, `read`, which no earlier read used.
 A page keeps what the door read for it, so nothing it fetches whole crosses the
 network or enters the engine twice. A year file read by byte range is the
 exception: each read asks the host for the parts it needs again. The keeper is
-`frontend/src/lib/data/page-keeper.ts`.
+`frontend/src/lib/data/page-keeper.ts`; it also holds the immutable catalog
+that validates ledger names and supplies their path prefixes.
 
 - **Each index is read once a page and kept.** Every slice and every reach on the
   page acts on the same `daily.json`, `monthly.json` and `yearly.json`. Two asks
@@ -175,8 +177,10 @@ exception: each read asks the host for the parts it needs again. The keeper is
   meets one missing file prints the same line, so fifteen panels on a page
   print it once.
 
-`ledger.ts` makes one keeper when a panel first asks and keeps it until the page
-is reloaded. `sliceFromDisk()` makes a fresh one for each call, so it reads the
+`ledger.ts` makes one keeper with the configured catalog when a panel first
+asks and keeps it until the page is reloaded. The Data explorer makes its reader
+after it fetches its catalog. `sliceFromDisk()` makes a fresh keeper with the
+configured catalog for each call, so it reads the
 indexes as the disk holds them then, and drops every file it registered when the
 call ends: a build reads many ledgers in one process, and a development server
 reads `state/` again as it changes.
@@ -268,8 +272,8 @@ counts what a byte source is asked to prove it.
 ## Where each file is asked for
 
 The address is composed in `frontend/src/lib/data/slice-reader.ts` and nowhere
-else, from the closed ledger name, the period and a `covers` the index guard has
-already checked:
+else, from the keeper's catalog, the registered ledger name, the period and a
+`covers` the index guard has already checked:
 
 - `<prefix>/state/compact/<ledger>/index/<period>.json`
 - `<prefix>/state/compact/<ledger>/daily/<YYYY>/<MM>/<DD>.parquet`
