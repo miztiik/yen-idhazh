@@ -9,7 +9,7 @@ export function recordRejection(
 ) {
   const candidate = article.candidate;
   return CandidateRejectionRecordSchema.parse({
-    version: candidate.version, date: observedAt.slice(0, 10),
+    date: observedAt.slice(0, 10),
     correlation_id: candidate.correlation_id,
     source_id: candidate.source_id, feed_url: candidate.source.feed_url, subject: "article",
     candidate_id: candidate.candidate_id, url_key: candidate.url_key,

@@ -1,5 +1,5 @@
 /** Did every typed screening rejection reach the registered shared Parquet writer? */
-import { CandidateRejectionRecordSchema, CONTRACT_VERSION } from "@idhazh/common-contracts";
+import { CandidateRejectionRecordSchema, CandidateRejectionContract } from "@idhazh/common-contracts";
 import type { CandidateRejectionRecord } from "@idhazh/common-contracts";
 import { persistLedger } from "@idhazh/ledger-file-writer";
 import type { LedgerRegistration, LedgerSettings, PersistLedgerResult } from "@idhazh/ledger-file-writer";
@@ -25,7 +25,7 @@ export async function sealRejections(
     ...context,
     ledger: "rejections",
     period: { tier: "raw", covers: date },
-    rowContract: { schema: CandidateRejectionRecordSchema, schemaVersion: CONTRACT_VERSION },
+    rowContract: CandidateRejectionContract,
     rows: validated,
   });
   if (result.status === "skipped") {

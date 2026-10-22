@@ -164,6 +164,14 @@ jobs:
           bun run check
           bun run test
 
+      - name: TypeScript feed planner and native audit evidence
+        if: needs.scope.outputs.code == 'true'
+        working-directory: services/feed-ingest-plan
+        run: |
+          bun install --frozen-lockfile
+          bun run check
+          bun run test
+
       - name: Tests, including the five injection canaries
         if: needs.scope.outputs.code == 'true'
         run: >-

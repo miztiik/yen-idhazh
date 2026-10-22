@@ -69,7 +69,15 @@ test("offers exactly four manual controls, read-only access and a separate optio
   });
   expect(plan.run).not.toContain("${{");
   expect(plan.run).toContain("parseCliRequest(args)");
-  expect(plan.run).toContain("await main(args,");
+  expect(plan.run).toContain("const server = servePlan(");
+  expect(plan.run).toContain('await fetch(new URL("/api/2026-10-20/plan", server.url)');
+  expect(plan.run).toContain("timeout: false");
+  expect(plan.run).toContain("await server.stop(true)");
+  expect(plan.run).toContain('appendFileSync(join(artifactRoot, "audit-events.jsonl")');
+  expect(plan.run).toContain('appendFileSync(join(artifactRoot, "progress.jsonl")');
+  expect(plan.run).not.toContain("await main(");
+  expect(plan.run).not.toContain("app.request(");
+  expect(steps.find(step => step.name === "Preserve isolated test evidence")!.if).toBe("${{ always() }}");
   expect(plan.run).not.toContain("recordPlanningMetrics(");
   expect(plan.run).toContain("verifyParquetFiles(");
   expect(plan.run).toContain("summary.metrics.files[key]");
@@ -86,6 +94,14 @@ test("offers exactly four manual controls, read-only access and a separate optio
   const completion = steps.find(step => step.name === "Require genuine audited completion")!;
   expect(completion.run).toContain('process.env.AUDITED_COMPLETE !== "true"');
   expect(completion.run).toContain("process.exitCode = 2");
+  expect(completion.env).toEqual({
+    PLANNING_COMPLETE: "${{ steps.plan.outputs.planning_complete }}",
+    AUDITED_COMPLETE: "${{ steps.audit_fixture.outputs.audited_complete }}",
+    AUDIT_SCOPE: "${{ steps.audit_fixture.outputs.scope }}",
+  });
+  expect(completion.run).toContain('process.env.PLANNING_COMPLETE !== "true"');
+  expect(completion.run).toContain('process.env.AUDIT_SCOPE !== "generated_fixture"');
+  expect(steps.find(step => step.id === "audit_fixture")!.run).toContain("await verifyFullAuditFixture(");
   const runs = steps.flatMap(step => step.run === undefined ? [] : [step.run]).join("\n");
   expect(runs).not.toMatch(/\b(python|pip|pytest|uv)\b|git\s+(commit|push)|\beval\s*\(/i);
   const checkout = steps.find(step => step.uses?.startsWith("actions/checkout@"))!;
@@ -188,7 +204,7 @@ test("strict-checks adapters, tests and the actual inline program in one compile
       "--exactOptionalPropertyTypes", "--noFallthroughCasesInSwitch", "--noUnusedLocals",
       "--noUnusedParameters", "--verbatimModuleSyntax", "--skipLibCheck",
       "--types", "bun", "--typeRoots", join(service, "node_modules", "@types"), generated,
-      ...["feed-ingest-plan-outputs.ts", "feed-ingest-plan-report.ts", "feed-ingest-plan-verification.ts",
+      ...["feed-ingest-plan-outputs.ts", "feed-ingest-plan-report.ts", "feed-ingest-plan-verification.ts", "feed-ingest-plan-audit-fixture.ts",
         "tests/feed-ingest-plan-outputs.test.ts", "tests/feed-ingest-plan-report.test.ts",
         "tests/feed-ingest-plan-workflow.test.ts"].map(path => join(root, ".github", "scripts", ...path.split("/"))),
     ], { cwd: service, stdout: "pipe", stderr: "pipe" });
@@ -214,7 +230,7 @@ test("runs the native compatibility verifier in a named-input copy with no backe
       "atomic-file", "index", "ledger-paths", "ledger-types", "persist-compact", "persist-ledger",
       "persist-raw", "registration", "render-ledger-file", "row-identity", "row-schema",
       "parquet/arrow-builder", "parquet/envelope-footer", "parquet/row-digest",
-      "parquet/wasm-serializer", "uuid/file-id", "uuid/unit-id",
+      "parquet/wasm-serializer", "uuid/file-id", "uuid/unit-id", "uuid/name-id",
     ].map(name => `packages/ledger-file-writer/src/${name}.ts`);
     const named = [
       ...common, ...writer, "packages/common-contracts/package.json", "packages/ledger-file-writer/package.json",
@@ -222,6 +238,8 @@ test("runs the native compatibility verifier in a named-input copy with no backe
       "services/feed-ingest-plan/src/read-ledger-history/read-parquet.ts",
       "services/feed-ingest-plan/src/metrics/audit-contracts.ts",
       "tests/fixtures/ledger-file-writer/feed-ingest-dispatch-row.json",
+      "tests/fixtures/ledger-file-writer/legacy-seen-day.parquet",
+      "services/feed-ingest-plan/src/screen-article-candidates/seen-evidence.ts",
       "tests/fixtures/contracts/feed-ingest-dispatch/one-article.json",
     ];
     for (const path of named) {

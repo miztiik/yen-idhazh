@@ -1,6 +1,6 @@
 # Identity and Deterministic Identifiers
 
-**Last Updated**: 2026-10-21
+**Last Updated**: 2026-10-22
 
 How files, work units, events, and correlation contexts are identified across Python and TypeScript stages.
 
@@ -14,8 +14,8 @@ This page is the contract for identifiers under `state/raw/` and pipeline teleme
 | :--- | :--- | :--- | :--- | :--- |
 | `unit_id` | RFC 4122 Version 5 (UUIDv5) | Namespace UUID `de055294-e352-5d65-a1b7-d14b5e20844d` + legacy job or pipeline-task seed | Identifies a repeatable unit of work. Identical across job re-runs. | Durable across retries |
 | `file_id` | RFC 9562 Version 8 (UUIDv8) | 48-bit Unix millisecond clock + SHA-256(`{unit_id}|{attempt}|{written_at_ms}`) | Names an individual physical file under `state/raw/`. Chronologically sortable. | Immutable per file |
-| `event_id` | SHA-256 hexadecimal string | The `FeedIngestEvent` contract's declared `Sha256` field | Identifies one typed feed-ingest audit event. | Durable in the event record |
-| `correlation_id` | Run identity string | The run's declared correlation value | Connects records from one execution; it is not file-envelope metadata. | Lifetime of the run |
+| `event_id` | RFC 4122 UUIDv5 | DNS namespace and the correlation identity plus event sequence | Identifies one typed feed-ingest audit event. | Durable in the event record |
+| `correlation_id` | RFC 4122 UUIDv4 | Created once for one execution | Connects records from one execution; it is not file-envelope metadata. | Lifetime of the run |
 
 ---
 
@@ -73,9 +73,27 @@ Python (`backend/idhazh/ledger/filenames.py`) is the identity authority. The reu
 
 ## 4. Telemetry Event Identity (`event_id`)
 
-`FeedIngestEvent.event_id` is a SHA-256 hexadecimal string, as declared by the Python and TypeScript contracts. The contract defines its shape, not a UUID algorithm.
+`FeedIngestEvent.event_id` is UUIDv5. The live `eventId` is `evt_<event_id>`.
+The planner-only event is declared and validated by the
+[TypeScript event contract](schemas.md#one-source-of-truth-and-nothing-generated-from-it).
+This uses the existing pipeline logger's DNS namespace,
+`6ba7b810-9dad-11d1-80b4-00c04fd430c8`, and the same SHA-1 UUIDv5 algorithm.
+The planner's audit name is `audit\n{correlation_id}\n{sequence}`; its live
+progress name is `progress\n{correlation_id}\n{eventType}\n{sequence}`.
+These names distinguish repeated observations without changing the UUID standard.
+The shared writer's existing UUIDv5 implementation is reused.
 
-The older `.github/scripts/ai-pipeline.ts` helper `buildDeterministicEventId` returns an `evt_`-prefixed UUIDv5 for its own telemetry events. That helper is not the `FeedIngestEvent.event_id` contract and does not create planner event IDs. Rejection records do not declare an `event_id`.
+The live envelope retains `timestamp`, `level`, `message`, `eventId`,
+`eventType`, `correlationId` and `durationMs`. An audit log includes its actual
+typed record under `audit`; `audit_event_type` is the record's payload discriminator.
+Rejection ledger rows retain their declared shape; their live progress envelope
+has its own UUID event identity.
+
+Owner ruling, 2026-10-22, kumarsnaveen: use the existing UUID logging convention
+in current planner events and correlation identities, with no TypeScript legacy
+event branch. The earlier SHA event fixtures were implementation fixtures, not
+evidence that the Python production planner wrote such events. No historical
+ledger file is rewritten or assigned a retrospective UUID.
 
 ---
 
@@ -83,8 +101,10 @@ The older `.github/scripts/ai-pipeline.ts` helper `buildDeterministicEventId` re
 
 The `correlation_id` binds all operations belonging to a single pipeline invocation.
 
-- **Format**: `{YYYY-MM-DD}-{execution_id}` (e.g. `2026-10-20-39315527491`).
-- **Propagation**: Carried in run context and declared ledger rows.
+- **Format**: UUIDv4, for example `7cef34e3-dd9f-40ce-9a56-4d01ff5115cc`.
+- **Propagation**: Created once in run context and copied unchanged into logs,
+  candidates, rejections, assessments, selections, dispatches, source records,
+  measurements and summaries. The numeric dated run ID remains separate.
 - **Boundary**: A correlation ID is not metadata in the Parquet file envelope. The envelope carries only its declared identity and provenance fields.
 
 ---

@@ -349,6 +349,7 @@ test("public harvesting observations compose with screening without duplicating 
     const harvested = await harvestFeeds(loaded, {
       writer: { ...ledger.writerContext, task_name: "harvest-feeds" },
       correlation_id: input.run.correlation_id,
+      max_future_hours: input.clock_config.collect.max_future_hours,
       clock: () => new Date(input.run.now),
     }, ledger, { transport, resolve: transport.resolve });
     const observations = Object.fromEntries(harvested.articles.flatMap(article =>

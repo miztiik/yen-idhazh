@@ -31,13 +31,19 @@ function paths(result: PersistLedgerResult, entry: LedgerRegistration): string[]
 }
 
 export function createExecutionOutputs(summary: PlanSummary, registrations: Registrations): Record<string, string> {
-  if (summary.status !== (summary.planning_complete ? "planning_complete_audit_pending" : "dispatches_persisted_audit_pending")
+  const full = summary.publication?.audited_complete === true;
+  if (summary.status !== (full ? "audit_complete" : summary.planning_complete ? "planning_complete_audit_pending" : "dispatches_persisted_audit_pending")
     || summary.planning_complete !== (summary.planning_completion?.status === "complete")
     || summary.planning_complete !== (summary.metrics !== undefined)
-    || summary.audited_complete !== false
-    || summary.audit.status !== (summary.metrics === undefined ? "unavailable" : "assessment_diversity_recorded_audit_pending")) {
-    throw new Error("audited_complete requires durable recorder evidence; no complete audit is supported by this runner");
+    || summary.audited_complete !== full
+    || summary.audit.status !== (full ? "complete" : summary.metrics === undefined ? "unavailable" : "assessment_diversity_recorded_audit_pending")) {
+    throw new Error("audited_complete requires matching durable planning and publication evidence");
   }
+  if (full && (summary.publication?.audit_completion.status !== "complete"
+    || summary.publication.audit_completion.reasons.length !== 0
+    || summary.publication.run_id !== summary.run_id || summary.publication.correlation_id !== summary.correlation_id
+    || summary.publication.attempt !== summary.planning_completion?.attempt
+    || summary.publication.files.sources === null)) throw new Error("audited_complete differs from its full publication audit");
   const runId = RunIdSchema.parse(summary.run_id);
   const day = DateStampSchema.parse(summary.date);
   const observedAt = UtcInstantSchema.parse(summary.observed_at);
@@ -115,7 +121,7 @@ export function createExecutionOutputs(summary: PlanSummary, registrations: Regi
   }
   return {
     status: summary.status, planning_complete: String(summary.planning_complete),
-    audited_complete: "false", run_id: runId, date: day,
+    audited_complete: String(summary.audited_complete), run_id: runId, date: day,
     dispatch_count: String(count),
     matrix: JSON.stringify({ include: Array.from({ length: count }, (_, worker_assignment) => ({ worker_assignment })) }),
     dispatch_files: JSON.stringify(dispatches), rejection_files: JSON.stringify(rejections),

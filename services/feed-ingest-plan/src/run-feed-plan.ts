@@ -10,28 +10,33 @@ import { resolveRunContext } from "./resolve-run-context";
 import { readSeenEvidence, rememberFirstSight } from "./read-ledger-history/read-seen-evidence";
 import type { OwnSeenReceipt } from "./read-ledger-history/read-seen-evidence";
 import { resolvePlanRequest, PlanError } from "./api/plan-request";
-import { createStageLogger, resolveRunPolicy, writeJsonLine } from "./logging/structured-logger";
+import { createStageLogger, resolveRunPolicy, writeAuditEvent } from "./logging/structured-logger";
 import { harvestAssessments, screeningAssessments } from "./logging/stage-assessments";
 import { prepareDispatches, sealDispatches } from "./seal-article-ledger/plan-sealer";
 import type { PlanInputs } from "./load-plan-inputs";
-import type { PlanningMetricsResult } from "./metrics/metrics-recorder";
+import type { PlanningMetricsResult, PublicationMetricsResult, PublicationRecorderInput } from "./metrics/metrics-recorder";
+import { createProgressLogger } from "./logging/progress-logger";
+import type { ProgressRecord } from "./logging/progress-logger";
 
 export type PlanRuntime = {
   git_sha: string;
   run_number?: string;
+  correlation_id?: string;
   clock?: () => Date;
   boundary?: NonNullable<Parameters<typeof harvestFeeds>[3]>;
   log?: (event: FeedIngestEvent) => void;
+  progress?: (record: ProgressRecord) => void;
   evidence?: ReadonlyMap<string, ArticleEvidence>;
   opportunity?: OpportunityEvidence;
   seen_receipts?: readonly OwnSeenReceipt[];
   on_seen_persisted?: (receipt: { day: string; files: readonly PersistedLedgerFile[] }) => void;
+  observe_publication?: (plan: FeedPlanResult, metrics: PlanningMetricsResult) => Promise<PublicationRecorderInput>;
 };
 
 export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: PlanRuntime) {
   const captured = runtime.clock?.() ?? new Date();
   const request = resolvePlanRequest(raw, inputs.harvest.config);
-  const context = resolveRunContext(inputs.settings, runtime.git_sha, captured, runtime.run_number);
+  const context = resolveRunContext(inputs.settings, runtime.git_sha, captured, runtime.run_number, runtime.correlation_id);
   if (!inputs.settings.enabled) throw new PlanError("PLANNER_DISABLED", "Planner is disabled by service settings", "enabled");
   for (const entry of [
     inputs.registrations.rejections, inputs.registrations.selections,
@@ -50,20 +55,32 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   for (const source of harvestInputs.sources) {
     if (source.status !== "retired") harvestPolicy(harvestInputs, source.vertical, overrides);
   }
-  const logger = createStageLogger(context, runtime.log ?? writeJsonLine);
+  const logger = createStageLogger(context, runtime.log ?? writeAuditEvent);
+  const progress = createProgressLogger(context.correlation_id, runtime.progress);
+  progress("PIPELINE_STARTED");
   const complete = (stage: FeedIngestEvent["stage"], input_count: number, output_count: number,
-    terminal_rejection_count: number, source_count: number | null = null) => logger.emit(stage, {
-    kind: "stage_completion", stage, input_count, output_count, terminal_rejection_count, source_count,
-  }, fallbackPolicy);
+    terminal_rejection_count: number, source_count: number | null = null) => {
+    progress("STAGE_COMPLETED", { stage, input_count, output_count, rejection_count: terminal_rejection_count });
+    return logger.emit(stage, {
+      kind: "stage_completion", stage, input_count, output_count, terminal_rejection_count, source_count,
+    }, fallbackPolicy);
+  };
+  progress("HISTORY_READ_STARTED");
   const history = await readSeenEvidence(inputs.root, inputs.settings.inputs.seen_files, {
     now: context.now, lookback_days: inputs.clock_config.collect.seen_window_days,
     days: inputs.settings.inputs.seen_days,
     ...(runtime.seen_receipts === undefined ? {} : { own_receipts: runtime.seen_receipts }),
   });
+  progress("HISTORY_READ_COMPLETED");
   logger.startStep();
   const harvest = await harvestFeeds(harvestInputs, {
     writer: context.writer, correlation_id: context.correlation_id,
-    overrides, clock: () => new Date(context.now),
+    max_future_hours: inputs.clock_config.collect.max_future_hours,
+    overrides, clock: () => new Date(context.now), progress,
+    log: record => progress(record.subject === "feed" ? "FEED_REJECTED" : "ARTICLE_REJECTED", {
+      source_id: record.source_id, ...(record.candidate_id === null ? {} : { candidate_id: record.candidate_id }),
+      drop_reason: record.drop_reason,
+    }),
   }, {
     outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.rejections,
     ledgerSettings: inputs.ledgerSettings,
@@ -135,6 +152,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   logger.startStep();
   const dispatches = await sealDispatches(partition, inputs, context);
   complete("seal-article-ledger", partition.dispatches.length, partition.dispatches.length, 0);
+  progress("PLANNING_STAGES_COMPLETED", { output_count: partition.dispatches.length });
   return {
     status: "dispatches_persisted_audit_pending" as const,
     context, request, events: logger.events,
@@ -149,14 +167,20 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   };
 }
 export type FeedPlanResult = Awaited<ReturnType<typeof runFeedPlan>>;
-export type RecordedFeedPlanResult = FeedPlanResult & { metrics: PlanningMetricsResult };
+export type RecordedFeedPlanResult = FeedPlanResult & { metrics: PlanningMetricsResult; publication?: PublicationMetricsResult };
 
-export function summarizePlan(result: FeedPlanResult & { metrics?: PlanningMetricsResult }) {
+export function summarizePlan(result: FeedPlanResult & { metrics?: PlanningMetricsResult; publication?: PublicationMetricsResult }) {
   const planningCompletion = result.metrics?.planning_completion ?? null;
   const planningComplete = planningCompletion?.status === "complete";
+  const publication = result.publication ?? null;
+  const auditedComplete = planningComplete && publication?.audited_complete === true;
+  if (publication !== null && (publication.run_id !== result.context.run_id
+    || publication.attempt !== result.context.writer.attempt || publication.correlation_id !== result.context.correlation_id)) {
+    throw new Error("Publication audit differs from this planning attempt");
+  }
   return {
-    status: planningComplete ? "planning_complete_audit_pending" as const : result.status,
-    planning_complete: planningComplete, audited_complete: false,
+    status: auditedComplete ? "audit_complete" as const : planningComplete ? "planning_complete_audit_pending" as const : result.status,
+    planning_complete: planningComplete, audited_complete: auditedComplete, publication,
     planning_completion: planningCompletion,
     source_records: result.metrics?.source_records ?? null,
     run_id: result.context.run_id, correlation_id: result.context.correlation_id,
@@ -176,8 +200,8 @@ export function summarizePlan(result: FeedPlanResult & { metrics?: PlanningMetri
       created_count: result.evidence.seen.new_rows.length,
     },
     audit: {
-      status: result.metrics === undefined ? "unavailable" : "assessment_diversity_recorded_audit_pending",
-      reason: planningComplete
+      status: auditedComplete ? "complete" : result.metrics === undefined ? "unavailable" : "assessment_diversity_recorded_audit_pending",
+      reason: auditedComplete ? null : planningComplete
         ? "Current planning is verified; publication and complete historical audit remain outside this result"
         : "Current planning completion has not been verified",
     },

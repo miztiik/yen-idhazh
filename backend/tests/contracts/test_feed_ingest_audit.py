@@ -18,7 +18,6 @@ from idhazh.contracts.feed_ingest_candidate import (
     SourceSnapshot,
 )
 from idhazh.contracts.feed_ingest_diversity import DiversityMetricRow
-from idhazh.contracts.feed_ingest_event import FeedIngestEvent
 from idhazh.contracts.feed_ingest_source_run import (
     LedgerCompletionEvidence,
     SourceRunRecord,
@@ -35,7 +34,6 @@ FIXTURE_FILES = {
     "feed-ingest-diversity": FIXTURE_ROOT
     / "feed-ingest-diversity"
     / "one-observation.json",
-    "feed-ingest-event": FIXTURE_ROOT / "feed-ingest-event" / "one-observation.json",
 }
 
 
@@ -244,35 +242,11 @@ def make_diversity() -> dict[str, Any]:
     }
 
 
-def make_event() -> dict[str, Any]:
-    candidate_id = "b" * 64
-    return {
-        "event_id": "c" * 64,
-        "correlation_id": "feed-plan-2026-10-20-1",
-        "run_id": "2026-10-20-1",
-        "attempt": 1,
-        "sequence": 0,
-        "occurred_at": "2026-10-20T08:00:00Z",
-        "stage": "screen-article-candidates",
-        "audit_event_type": "candidate_decision",
-        "source_id": "sample-feed",
-        "candidate_id": candidate_id,
-        "elapsed_ms": 0,
-        "step_elapsed_ms": 0,
-        "policy": make_policy_identity(),
-        "payload": {
-            "kind": "candidate_decision",
-            "assessment": make_assessment(),
-        },
-    }
-
-
 def test_named_canonical_observations_round_trip() -> None:
     contracts = (
         (SourceRunRecord, "feed-ingest-source-run"),
         (ArticleAssessmentRecord, "feed-ingest-article-assessment"),
         (DiversityMetricRow, "feed-ingest-diversity"),
-        (FeedIngestEvent, "feed-ingest-event"),
     )
     for contract, stem in contracts:
         record = contract.model_validate(load_observation(stem))
@@ -411,22 +385,6 @@ def test_lost_diversity_accepts_signed_difference_with_nonnegative_endpoints() -
         }
         with pytest.raises(ValidationError, match="before and after readings"):
             DiversityMetricRow.model_validate(invalid)
-
-
-def test_event_discriminator_rejects_unknown_payload_and_never_carries_article_text() -> None:
-    event = FeedIngestEvent.model_validate(make_event())
-    serialized = event.model_dump_json()
-    assert "article_text" not in serialized
-
-    with_text = make_event()
-    with_text["payload"]["article_text"] = "Fetched article body"
-    with pytest.raises(ValidationError):
-        FeedIngestEvent.model_validate(with_text)
-
-    unknown_variant = make_event()
-    unknown_variant["payload"]["kind"] = "unregistered_observation"
-    with pytest.raises(ValidationError):
-        FeedIngestEvent.model_validate(unknown_variant)
 
 
 def test_shared_candidate_models_remain_closed_to_unknown_fields() -> None:
