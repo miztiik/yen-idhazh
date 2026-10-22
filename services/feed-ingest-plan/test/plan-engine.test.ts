@@ -69,6 +69,7 @@ test("real composition shares one clock and override and reads native dispatches
   ]);
   let clocks = 0;
   recorded.runtime.clock = () => new Date(++clocks === 1 ? "2026-10-21T23:59:59.999Z" : "2026-10-22T00:00:01Z");
+  const configuredLimit = recorded.inputs.harvest.config.curate.article_limit;
   try {
     const result = await runFeedPlan({
       freshness_hours: 18, article_limit: 1, partition_strategy: "none",
@@ -132,7 +133,7 @@ test("real composition shares one clock and override and reads native dispatches
       audited_complete: false, dispatch_count: 1, status: "dispatches_persisted_audit_pending",
       planning_complete: false, planning_completion: null, source_records: null,
     });
-    expect(recorded.inputs.harvest.config.curate.article_limit).toBeNull();
+    expect(recorded.inputs.harvest.config.curate.article_limit).toBe(configuredLimit);
     expect(recorded.inputs.harvest.config.triage.max_age_hours).toBe(24);
   } finally { await recorded.close(); }
 }, 30000);
