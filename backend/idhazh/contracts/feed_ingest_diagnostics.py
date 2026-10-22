@@ -6,7 +6,6 @@ from pydantic import Field
 
 from idhazh.contracts.base import Model
 from idhazh.contracts.feed_ingest_candidate import Count
-from idhazh.contracts.item_health import FailureCode
 
 FetchFailure = Literal[
     "http",
@@ -39,16 +38,16 @@ class HarvestDiagnostics(Model):
     extraction_failure: ExtractionFailure | None = None
     failure_code: (
         Literal[
-            FailureCode.ROBOTS_DENIED,
-            FailureCode.ROBOTS_UNREACHABLE,
-            FailureCode.BLOCKED_ADDRESS,
-            FailureCode.HTTP_CLIENT_ERROR,
-            FailureCode.HTTP_RATE_LIMITED,
-            FailureCode.HTTP_SERVER_ERROR,
-            FailureCode.NETWORK_ERROR,
-            FailureCode.NO_TEXT,
-            FailureCode.NO_TITLE,
-            FailureCode.UNKNOWN,
+            "robots_denied",
+            "robots_unreachable",
+            "blocked_address",
+            "http_client_error",
+            "http_rate_limited",
+            "http_server_error",
+            "network_error",
+            "no_text",
+            "no_title",
+            "unknown",
         ]
         | None
     ) = None

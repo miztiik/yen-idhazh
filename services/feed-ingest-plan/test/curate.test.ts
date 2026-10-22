@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
   FeedIngestCandidateSchema, FeedIngestDispatchSchema, deriveCandidateId, deriveUrlKey,
-  WriterIdentitySchema,
+  WriterIdentitySchema, HarvestDiagnosticsSchema,
 } from "@idhazh/common-contracts";
 import type { FeedIngestConfig } from "@idhazh/common-contracts";
 import { tableFromIPC } from "apache-arrow";
@@ -18,6 +18,7 @@ import type { ArticleEvidence, OpportunityEvidence, PortfolioArticle } from "../
 import { compareStory } from "../src/curate-article-portfolio/story-evidence";
 import type { StoryComparison } from "../src/curate-article-portfolio/story-evidence";
 import { groupCarriers } from "../src/curate-article-portfolio/carrier-cluster";
+import { HarvestObservationSchema } from "../src/harvest-feeds/harvest-types";
 
 type CandidateCase = {
   name: string; source: string; ordinal: number; vertical: string; kind: string;
@@ -114,7 +115,19 @@ function names(result: ReturnType<typeof run>) {
 
 test("fixed real stage selects exact identities, ranks, components and preserves content", async () => {
   const { fixture, planning } = await inputs();
-  const result = run(planning, fixture);
+  const diagnostics = HarvestDiagnosticsSchema.parse({ http_status: 200, fetch_ms: 17, extract_ms: 3 });
+  const articles = fixture.candidates.map(spec => {
+    const offered = article(spec, fixture, planning);
+    return {
+      ...offered,
+      observation: HarvestObservationSchema.parse({
+        candidate_id: offered.candidate.candidate_id, http_status: 200, paywall: false,
+        robots: "allowed", fetch_failure: null, extraction: "success",
+        observed_at: fixture.observed_at, paywall_evidence: "none", diagnostics,
+      }),
+    };
+  });
+  const result = curateArticles({ articles, planning, opportunity: noOpportunity, observed_at: fixture.observed_at });
   expect(names(result)).toEqual(fixture.expected.baseline);
   expect(result.rows.map(row => row.editorial_rank)).toEqual(fixture.expected.selected_ranks);
   expect(result.trace.map(step => step.selected_before.length)).toEqual([0, 1]);
@@ -132,6 +145,7 @@ test("fixed real stage selects exact identities, ranks, components and preserves
   expect(result.assessments.every(row => row.informative_verdict_status === "not_assessed"
     && row.suitability_verdict_status === "not_assessed")).toBe(true);
   expect(result.rejections).toHaveLength(1);
+  expect(result.rejections[0]?.details.diagnostics).toEqual(diagnostics);
   expect(result.input.length).toBe(result.rows.length + result.rejections.length);
 });
 

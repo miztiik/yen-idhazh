@@ -21,6 +21,8 @@ One diagnostic object travels through the article observation, rejection
 outcomes carry the same object as their feed rejection. Live completion and
 rejection events also carry `diagnostics`. Curation keeps the original
 measurement rather than measuring harvesting again.
+Screening and curation rejections retain the same original diagnostic object,
+including successful fetch and extraction measurements before a later refusal.
 
 Table A
 
@@ -121,6 +123,8 @@ One typed diagnostic object replaces loss-prone partial mappings. Separate
 extraction rejection reasons remove the false claim that a successful HTTP
 fetch failed. Native validation adapts existing cases and recordings only;
 no test cases, Python runtime dependency or test tooling are added.
+The Python failure-category subset uses string literals so the native Arrow
+writer can derive its column type without broadening the accepted vocabulary.
 
 The page is separate because harvesting owns request behavior while this page
 owns the evidence that crosses its boundaries.

@@ -15,6 +15,6 @@ export function recordRejection(
     candidate_id: candidate.candidate_id, url_key: candidate.url_key,
     canonical_url: candidate.canonical_url, title: candidate.title, categories: candidate.categories,
     stage: "curate-article-portfolio", drop_reason: reason,
-    details, rejected_at: observedAt,
+    details: { ...details, diagnostics: article.observation?.diagnostics ?? null }, rejected_at: observedAt,
   });
 }
