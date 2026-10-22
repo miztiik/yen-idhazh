@@ -1,6 +1,6 @@
 # Plan 66 - Feed ingest plan engine
 
-**Last Updated**: 2026-10-21
+**Last Updated**: 2026-10-22
 **Level**: 5 (source-kind/tier and persisted-contract migration requires owner approval before execution; the later planner implementation follows the approved contracts)
 
 Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0.
@@ -10,6 +10,24 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 ## 0. Operating contract
 
 ### Owner correction - TypeScript-only development and verification
+
+Owner correction, 2026-10-22: current planner event and correlation identities
+use the existing UUID convention, not a new identifier format. Persist
+`event_id` as UUIDv5 using the existing DNS namespace
+`6ba7b810-9dad-11d1-80b4-00c04fd430c8`; the live `eventId` is
+`evt_<same UUID>`. Generate each run's correlation as UUIDv4 and carry that
+same value in live `correlationId` and persisted `correlation_id`.
+The live envelope includes `eventType` for the actual observation, with
+`audit_event_type` remaining the persisted observation discriminator.
+Use a clean current TypeScript implementation, with no legacy planner
+event-ID union or migration branches. Earlier Python contract declarations
+and fixtures are not evidence of an older production planner event history.
+This supersedes the SHA-256 event-ID and unconstrained correlation wording
+below, not the separate requirement to read actual stored ledger inputs.
+The pipeline must start the actual HTTP server and call it through HTTP;
+CLI execution and in-process route calls are not substitutes for this gate.
+Emit progress during work and append its records as they occur so interruption
+does not erase the only evidence of the running operation.
 
 Owner approval, 2026-10-22: @kumarsnaveen_microsoft approved delivery of
 Table A repairs A1-A7 from the review conversation, with tests and owning
@@ -440,7 +458,7 @@ export const RejectionDetailsSchema = z.object({
 export const CandidateRejectionRecordSchema = z.object({
   version: z.literal("2026-10-20"),
   date: z.string().date(),
-  correlation_id: z.string().min(1),
+  correlation_id: z.uuid(),
   source_id: z.string().min(1),
   feed_url: z.string().url(),
   subject: z.enum(["feed", "article"]),
@@ -498,7 +516,7 @@ export type CandidateRejectionRecord =
 | --- | --- | --- | --- |
 | S1 | version | string | 2026-10-20 |
 | S2 | date | string, UTC day | 2026-10-20 |
-| S3 | correlation_id | string | 2026-10-20-123456789 |
+| S3 | correlation_id | UUID string | 550e8400-e29b-41d4-a716-446655440000 |
 | S4 | source_id | string | fixture-feed |
 | S5 | feed_url | string | https://example.org/feed.xml |
 | S6 | subject | string, contract vocabulary | feed |
@@ -780,13 +798,13 @@ Use the declared scalar types and actual stored rows to reproduce those bytes.
 Include these values, Unicode, nested lists, and nulls in the canonical-byte
 vector; do not change the Python digest rules or reject valid floats to pass it.
 
-Identity-page preflight also found two unrelated identities described as one:
-the older `.github/scripts/ai-pipeline.ts` event helper returns an `evt_`
-UUID string, while the declared `FeedIngestEvent.event_id` is a SHA-256
-hexadecimal string in both languages. Distinguish these existing contracts
-when correcting the identity page. Do not copy the older helper into planner
-events or change their declared type. Rejections do not declare an event ID,
-and correlation IDs are not undeclared file-envelope metadata.
+Identity-page correction, 2026-10-22: reuse the UUID convention already used
+by `.github/scripts/ai-pipeline.ts`, as directed in section 0. The planner's
+persisted `event_id` is UUIDv5; live `eventId` adds the existing `evt_` prefix.
+Run correlation is UUIDv4 throughout logs, rows and summaries. This replaces
+the initial SHA-256 planner-event declaration, not file IDs, content digests
+or candidate identities. Rejection rows do not become event envelopes, and
+correlation IDs are not undeclared file-envelope metadata.
 
 ### Decisions
 
@@ -1624,7 +1642,7 @@ records. Strict TypeScript and 62 focused tests passed.
 
 | # | Contract | Rule |
 | --- | --- | --- |
-| J1 | FeedIngestEvent | Declare a Python event model with strict TypeScript copies: version, event_id, correlation_id, run_id, attempt, sequence, UTC occurred_at, Table E stage, audit_event_type, source_id and candidate_id where applicable, elapsed_ms, step_elapsed_ms, and a typed payload. Use discriminated payload variants for feed outcome, candidate decision, portfolio choice, and stage completion; no arbitrary map or JSON string payload. Audit observation types are not content event types or event clusters. |
+| J1 | FeedIngestEvent | Declare a Python event model with strict TypeScript copies: version, UUIDv5 event_id, UUIDv4 correlation_id, run_id, attempt, sequence, UTC occurred_at, Table E stage, audit_event_type, source_id and candidate_id where applicable, elapsed_ms, step_elapsed_ms, and a typed payload. Follow section 0's existing UUID/live-envelope convention. Use discriminated payload variants for feed outcome, candidate decision, portfolio choice, and stage completion; no arbitrary map or JSON string payload. Audit observation types are not content event types or event clusters. |
 | J2 | Consumers | Stage boundaries exchange the declared candidate/selection/dispatch payloads. Table J events carry decision evidence for the Row #14 recorder and the optional external report; full article text remains in the content/dispatch payload, not decision logs. Events retain the policy/config identity and the fields required by Table I; reporting does not add evidence that audit depends on. |
 | J3 | Final write and failure | Row #14 seals assessment/metric files and then writes all source plan-complete snapshots together in one final source-runs raw write. Each snapshot carries the same typed list of required ledger file identities, digests, and row counts for the attempt, plus the expected source count. This includes editorial selections, dispatches, and rejections. A zero-row raw write produces no file, so record an explicit zero count/empty file list. Failed writes cannot emit completion or return complete success. |
 | J4 | Retry and compact reads | A complete attempt has the expected source snapshot set and its recorded file evidence; partial newer attempts do not displace it. Resolve the highest complete attempt before joining any candidate rows, including when it selected zero items. Compaction preserves these attempt identities and completion evidence; after raw removal, resolve the recorded rows through compact indexes rather than requiring old raw paths to exist. Failure/interruption fixtures must prove this rule without mocks. |
