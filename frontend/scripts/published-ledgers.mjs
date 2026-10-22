@@ -5,7 +5,7 @@
  * carries that ledger's three compact indexes trimmed to the widest console span
  * and every compact file those trimmed indexes name, each at the path it has
  * under `state/`, so the address a browser asks for and the committed path are
- * one string. `copy-visuals.mjs` stages what this returns; nothing here writes.
+ * one string. `stage-publication.mjs` stages what this returns; nothing here writes.
  *
  * **The indexes are the compact list, and raw days have one bounded exception.** A reader asks only
  * for compact files an index names, so a compact file no index names is bytes nobody fetches.

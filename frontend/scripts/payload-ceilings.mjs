@@ -42,7 +42,7 @@ import { join } from 'node:path';
 import { ledgerFolders } from './ledger-prefixes.mjs';
 
 /**
- * Where the published ledgers sit in a build: `copy-visuals.mjs` copies each
+ * Where the published ledgers sit in a build: `stage-publication.mjs` copies each
  * file to the path it has under the repository's `state/`.
  */
 export const LEDGERS = 'state/';

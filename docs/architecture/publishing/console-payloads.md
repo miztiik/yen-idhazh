@@ -29,7 +29,7 @@ ledgers stay. Removing a projection does not remove a source the console needs.
 **`source-health.json` is the one entry in that table nothing fetches**, and
 that has not changed since the panels reading it moved to `/console/voices/` on
 2026-09-14. `sourceHealthView` opens it at build time from a path derived off
-`DIGEST_ROOT`; it is not in `copy-visuals.mjs`'s `CONSOLE_SERIES`, so it is never
+`DIGEST_ROOT`; it is not in `stage-publication.mjs`'s `CONSOLE_SERIES`, so it is never
 staged into `frontend/static/` and never reaches the build. A
 `page_weight.payload_ceilings_bytes` key naming it would therefore match nothing
 and fail the bundle gate.

@@ -1,7 +1,7 @@
 /** The one allow-list: what a day payload keeps when it leaves
  * `frontend/public/`, and what it may never carry out.
  *
- * Two callers used to hold a copy each. `scripts/copy-visuals.mjs` writes the
+ * Two callers used to hold a copy each. `scripts/stage-publication.mjs` writes the
  * staged file a browser fetches, and `lib/server/payload.ts` reads the
  * committed day at build time. Both drop the vector block; only one of them
  * said so, and the list of kept names lived where TypeScript could not see it.
@@ -20,7 +20,7 @@
  * so an older payload and a newer one read the same way.
  *
  * **This module imports nothing at run time, and that is a constraint rather
- * than an accident.** `copy-visuals.mjs` is run by plain `node` before Vite
+ * than an accident.** `stage-publication.mjs` is run by plain `node` before Vite
  * starts, so it reaches this file through node's own type stripping - on by
  * default since node 22.18, and CI installs the newest 22.x. Stripping erases
  * annotations. It does not resolve a `$lib` alias and it does not supply a

@@ -179,7 +179,7 @@ test.describe('the valve moves the URL and not the carrier', () => {
 	test('the staging step and the fetch read the one value', () => {
 		// Two switches would let the bundle keep a copy of every visual the page
 		// is asking a host for, and the valve would move nothing.
-		const staging = readFileSync(join(FRONTEND, 'scripts', 'copy-visuals.mjs'), 'utf8');
+		const staging = readFileSync(join(FRONTEND, 'scripts', 'stage-publication.mjs'), 'utf8');
 		expect(staging).toContain("import { assetBaseUrl } from '../asset-base.js'");
 		expect(staging).toContain("const servedElsewhere = assetBaseUrl() !== ''");
 	});
