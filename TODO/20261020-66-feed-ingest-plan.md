@@ -278,14 +278,30 @@ retain their original run day and actual observation instant; dispatches
 preserve separate harvest and selection contexts. Old payload readers and
 owning documentation were updated.
 
+Repair review checkpoint, 2026-10-22 11:22 UTC: checkout recovery succeeded.
+PR #1628 implements logical attempt commitments, conflict refusal before
+compaction deletes input, and computed full audit completion. Candidate
+`5fb4436eca98c97b1710ba9d4b6d41474eb5008f` passed all five CI jobs in run
+39766395074, including the actual daily, monthly and yearly gardener case.
+The isolated workflow run 39767221644 then found a real historical seen-file
+layout mismatch before live planning. Its final gate correctly failed.
+Reviewed repair `306ba11689240aa5dbd0aef83fbd583c7f8a45b6` verifies the
+recorded identity-column layout and original digest before migration.
+All five jobs in CI run 39769669253 passed. Isolated run 39770955528 passed
+history loading, then exposed Bun loading its incomplete built-in transport
+instead of the pinned installed package. Reviewed repair
+`4ab3b1b3c875a0ff608f9dd0b70fecee8662d41d` selects the installed package
+and adds an offline real-dispatcher lifecycle case without changing network
+safety controls. Fresh CI and isolated verification remain required; a
+successful isolated run is not claimed.
+
 Implementation delivery is not full plan acceptance. Rows #10 through #14
-remain open for completion proof after compaction and truthful full-audit
-completion through the runner and isolated workflow. Supported current
-planning has native completion proof; a successful isolated full-audit run is
-not claimed. Phase 2 workspace initialization failed when local disk filled.
-The owner requested resumption on 2026-10-22; safe checkout recovery is pending
-before source work resumes. The contract-repair approval in section 0 remains
-in force, with no scope reduction.
+remain open until the reviewed final candidate passes repository CI and the
+isolated workflow, then lands in main. That workflow requires real live
+planning proof and separately labelled generated-publication full-audit
+proof; it neither publishes production content nor treats fixtures as live
+publication. The committed service remains default-off. The contract-repair
+approval in section 0 remains in force, with no scope reduction.
 
 ### Table D - Status Reckoner
 
