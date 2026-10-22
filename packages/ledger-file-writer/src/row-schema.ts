@@ -1,5 +1,5 @@
 /** Derives the stored Arrow columns from a row contract's declared JSON Schema. */
-import { RowIdentitySchema } from "@idhazh/common-contracts";
+import { RowIdentitySchema, ROW_IDENTITY_COLUMN_VERSIONS } from "@idhazh/common-contracts";
 import { z } from "zod";
 import type { ArrowColumn } from "./parquet/arrow-builder";
 import type { LogicalType } from "./parquet/row-digest";
@@ -132,13 +132,16 @@ export function describeObjectSchema(schema: z.ZodType): { root: JsonSchema; fie
   return { root: rootValue, fields };
 }
 
-export function appendIdentityColumns(contractFields: readonly ArrowColumn[]): ArrowColumn[] {
+export function appendIdentityColumns(contractFields: readonly ArrowColumn[], envelopeVersion?: string): ArrowColumn[] {
   const columns = [...contractFields];
   const byName = new Set(columns.map((column) => column.name));
   const identityFields = describeObjectSchema(RowIdentitySchema).fields;
   for (const identity of identityFields) {
+    if (envelopeVersion !== undefined && (ROW_IDENTITY_COLUMN_VERSIONS[identity.name] ?? "") > envelopeVersion) continue;
     if (!byName.has(identity.name)) {
-      columns.push(identity);
+      const legacyJob = identity.name === "job" && envelopeVersion !== undefined
+        && envelopeVersion < ROW_IDENTITY_COLUMN_VERSIONS.pipeline_name!;
+      columns.push(legacyJob ? { ...identity, nullable: false, type: { ...identity.type, nullable: false } } : identity);
       byName.add(identity.name);
     }
   }

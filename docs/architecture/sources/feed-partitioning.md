@@ -77,6 +77,11 @@ declared physical column types, envelope, file and unit identifiers, canonical
 ordered-row digest, contract rows and original row identities. Compact files
 keep each original run, attempt and unit; the compactor's identity is only in
 the envelope. Neither reader settles away older attempts.
+Identity-column availability follows the recorded envelope revision, independently
+of the payload schema stamp. Files before `2026-10-12` have no pipeline/task
+columns and a non-null legacy job. Their original stored digest is checked
+before the absent optional identity fields receive null defaults. The existing
+Python-to-TypeScript envelope binding holds the column-introduction map in step.
 
 `selectCompleteAttempt` requires source outcomes for the expected source count
 and checks each required ledger commitment against verified attempt rows.

@@ -92,6 +92,11 @@ including Unicode, lists, nulls and floating-point values.
 Current output reads use the shared current audit contracts and their legacy
 read migrations. Reporting also replays recorded old events, including nested
 assessment timing, without supplying facts absent from those events.
+The fixed `legacy-seen-day.parquet` fixture retains actual Python-written
+pre-generic-task storage. Its original envelope controls which identity columns
+exist and whether `job` is nullable. The native reader verifies its original
+digest before filling the absent optional task fields. This is separate from
+row-schema migration; a newer row declaration cannot add columns to old bytes.
 
 Actual planner integration tests replay recorded HTTP and DNS responses
 through harvesting, screening, curation and partitioning. They read the

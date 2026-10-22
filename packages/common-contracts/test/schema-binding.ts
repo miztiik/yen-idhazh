@@ -8,7 +8,7 @@ import {
   FileEnvelopeSchema, FOOTER_METADATA_KEYS, OPTIONAL_FOOTER_METADATA_KEYS,
   LedgerCompletionEvidenceSchema, PartitionAssignmentSchema,
   PenaltyEvidenceSchema, PolicyIdentitySchema, PortfolioChoicePayloadSchema,
-  RejectionDetailsSchema, RowIdentitySchema, ScoreEvidenceSchema, SourceRunRecordSchema,
+  RejectionDetailsSchema, RowIdentitySchema, ROW_IDENTITY_COLUMN_VERSIONS, ScoreEvidenceSchema, SourceRunRecordSchema,
   SourceSnapshotSchema, StageCompletionPayloadSchema, WriterIdentitySchema,
 } from "../src/index";
 
@@ -38,4 +38,5 @@ export const optionalFooterKeys = OPTIONAL_FOOTER_METADATA_KEYS;
 
 if (import.meta.main) process.stdout.write(`${JSON.stringify({
   ...schemas, __footer_keys: footerKeys, __optional_footer_keys: optionalFooterKeys,
+  __row_identity_column_versions: ROW_IDENTITY_COLUMN_VERSIONS,
 })}\n`);

@@ -230,6 +230,8 @@ test("runs the native compatibility verifier in a named-input copy with no backe
       "services/feed-ingest-plan/src/read-ledger-history/read-parquet.ts",
       "services/feed-ingest-plan/src/metrics/audit-contracts.ts",
       "tests/fixtures/ledger-file-writer/feed-ingest-dispatch-row.json",
+      "tests/fixtures/ledger-file-writer/legacy-seen-day.parquet",
+      "services/feed-ingest-plan/src/screen-article-candidates/seen-evidence.ts",
       "tests/fixtures/contracts/feed-ingest-dispatch/one-article.json",
     ];
     for (const path of named) {
