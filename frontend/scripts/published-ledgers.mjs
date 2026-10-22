@@ -1,7 +1,7 @@
 /**
  * Which files of `state/` does the site publish, and which faults stop the build?
  *
- * For every ledger `ledger.published` names in `config/idhazh.json`, the site
+ * For every ledger whose registry entry consents to explorer publication, the site
  * carries that ledger's three compact indexes trimmed to the widest console span
  * and every compact file those trimmed indexes name, each at the path it has
  * under `state/`, so the address a browser asks for and the committed path are
@@ -43,7 +43,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { siteKeepsFrom } from '../src/lib/data/site-window.ts';
 import { daysBetween, namesFile, newestNamed } from '../src/lib/data/slice.ts';
-import { ledgerFolders } from './ledger-prefixes.mjs';
+import { ledgerCatalog, ledgerFolders, REGISTRY } from './ledger-prefixes.mjs';
 
 /** The tunable knobs, the same file `backend/idhazh/contracts/app_config.py` validates. */
 const CONFIG_FILE = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'config', 'idhazh.json');
@@ -80,10 +80,11 @@ const PERIODS = /** @type {const} */ (['daily', 'monthly', 'yearly']);
  * the committed tree.
  *
  * @param {string} [file]
+ * @param {string} [registryFile]
  * @returns {string[]}
  */
-export function publishedLedgers(file = CONFIG_FILE) {
-	const named = JSON.parse(readFileSync(file, 'utf8'))?.ledger?.published ?? [];
+export function publishedLedgers(file = CONFIG_FILE, registryFile = REGISTRY) {
+	const named = JSON.parse(readFileSync(file, 'utf8'))?.ledger?.published;
 	if (!Array.isArray(named)) throw new Error('ledger.published in config/idhazh.json is not a list');
 	for (const name of named) {
 		if (typeof name !== 'string' || !LEDGER_NAME.test(name)) {
@@ -92,7 +93,15 @@ export function publishedLedgers(file = CONFIG_FILE) {
 			);
 		}
 	}
-	return named;
+	const consented = ledgerCatalog(registryFile).entries
+		.filter((entry) => entry.publish_to_data_explorer)
+		.map((entry) => entry.name);
+	// Remove the bridge when the last ledger.published consumer reads registry consent.
+	if (new Set(named).size !== named.length || named.length !== consented.length ||
+		named.some((name) => !consented.includes(name))) {
+		throw new Error('ledger.published disagrees with publish_to_data_explorer in config/ledgers.json');
+	}
+	return consented;
 }
 
 export function publishedWindowDays(file = APPEARANCE_FILE) {

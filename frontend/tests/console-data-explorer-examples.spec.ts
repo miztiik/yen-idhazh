@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkStatement } from '../src/lib/data/statement';
 import { consoleConfig, explorerConfig } from '../src/lib/server/config';
+import { parseLedgerCatalog, offersExample } from '../src/lib/data/ledger-catalog';
 
 /**
  * Can every configured Data explorer example be run as written?
@@ -38,4 +39,20 @@ test('every configured example names only registered ledgers and uses a configur
 		expect(example.ledgers.filter((ledger) => !ledgers.has(ledger)), `${example.id} names a ledger the registry does not list`).toEqual([]);
 		expect(presets, `${example.id} asks for ${example.days} days, which is not a preset`).toContain(example.days);
 	}
+});
+
+test('offered examples require every ledger consent but not available data or an active family', () => {
+	const payload = JSON.parse(readFileSync(path.join(repo, 'config', 'ledgers.json'), 'utf8'));
+	const example = explorerConfig().examples.find((example) => offersExample(parseLedgerCatalog(payload), example));
+	expect(example, 'at least one configured example must be offered').toBeDefined();
+	if (example === undefined) throw new Error('No consented example');
+	for (const family of payload.families) family.lifecycle_status = 'retired';
+	expect(offersExample(parseLedgerCatalog(payload), example)).toBe(true);
+	for (const family of payload.families) {
+		for (const entry of family.ledgers) {
+			if (entry.name === example.ledgers[0]) entry.publish_to_data_explorer = false;
+		}
+	}
+	expect(offersExample(parseLedgerCatalog(payload), example)).toBe(false);
+	expect(offersExample(parseLedgerCatalog(payload), { ledgers: ['unregistered-ledger'] })).toBe(false);
 });

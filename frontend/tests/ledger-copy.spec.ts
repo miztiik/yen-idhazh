@@ -130,11 +130,14 @@ test('all six feed ledgers are explicitly published at the browser registry pref
 
 test('registry prefixes reject unsafe segments, unknown names and ambiguous mappings before path use', () => {
 	const file = test.info().outputPath('ledgers.json');
-	const entry = { name: 'dispatches', grain: 'raw-and-compact', prefix: ['feed-ingest-plan', 'dispatches'] };
-	const registry = (entries: unknown[]) => writeFileSync(file, JSON.stringify({ families: [{ ledgers: entries }] }));
+	const entry = { name: 'dispatches', grain: 'raw-and-compact', prefix: ['feed-ingest-plan', 'dispatches'], publish_to_data_explorer: true };
+	const registry = (entries: unknown[]) => writeFileSync(file, JSON.stringify({ families: [{
+		name: 'feed-ingest-plan', lifecycle_status: 'active', description: 'Recorded dispatches.',
+		onboarded: '2026-10-21', ledgers: entries
+	}] }));
 	for (const prefix of [[], ['..'], ['.'], ['/absolute'], ['C:'], ['feed/dispatches'], ['feed\\dispatches'], [''], ['dispatches', 1]]) {
 		registry([{ ...entry, prefix }]);
-		expect(() => ledgerFolders(['dispatches'], file)).toThrow(/unsafe prefix/);
+		expect(() => ledgerFolders(['dispatches'], file)).toThrow(/prefix/);
 	}
 	for (const duplicate of [
 		{ ...entry, prefix: ['other'] },
@@ -142,7 +145,7 @@ test('registry prefixes reject unsafe segments, unknown names and ambiguous mapp
 		{ ...entry, name: 'other', prefix: ['feed-ingest-plan'] }
 	]) {
 		registry([entry, duplicate]);
-		expect(() => ledgerFolders(['dispatches'], file)).toThrow(/ambiguous ledger mapping/);
+		expect(() => ledgerFolders(['dispatches'], file)).toThrow(/prefix|duplicate ledger/);
 	}
 	registry([entry]);
 	expect(() => ledgerFolders(['feed-ingest-plan-dispatches'], file)).toThrow(/does not register/);
@@ -722,15 +725,35 @@ test('a refusal names the state root the way the build was told to, never by its
 	]);
 });
 
-test('the published list is read from the config, and a name that is not a ledger name is refused', () => {
+test('publication reads consent from the supplied registry and refuses migration-list disagreement', () => {
 	const config = test.info().outputPath('idhazh.json');
+	const registry = test.info().outputPath('ledgers.json');
 	mkdirSync(dirname(config), { recursive: true });
+	const payload = JSON.parse(readFileSync(new URL('../../config/ledgers.json', import.meta.url), 'utf8'));
+	for (const family of payload.families) {
+		for (const entry of family.ledgers) {
+			entry.publish_to_data_explorer = ['host-fingerprint', 'summary-quality-evals'].includes(entry.name);
+		}
+	}
+	writeFileSync(registry, JSON.stringify(payload));
 	writeFileSync(config, JSON.stringify({ ledger: { published: ['host-fingerprint', 'summary-quality-evals'] } }));
-	expect(publishedLedgers(config)).toEqual(['host-fingerprint', 'summary-quality-evals']);
+	expect(publishedLedgers(config, registry)).toEqual(['host-fingerprint', 'summary-quality-evals']);
+	writeFileSync(config, JSON.stringify({ ledger: { published: ['summary-quality-evals', 'host-fingerprint'] } }));
+	expect(publishedLedgers(config, registry)).toEqual(['host-fingerprint', 'summary-quality-evals']);
+	for (const published of [[], ['host-fingerprint'], ['host-fingerprint', 'summary-quality-evals', 'seen'], ['host-fingerprint', 'host-fingerprint']]) {
+		writeFileSync(config, JSON.stringify({ ledger: { published } }));
+		expect(() => publishedLedgers(config, registry)).toThrow(/disagrees/);
+	}
 	writeFileSync(config, JSON.stringify({ ledger: {} }));
-	expect(publishedLedgers(config)).toEqual([]);
+	expect(() => publishedLedgers(config, registry)).toThrow(/not a list/);
 	writeFileSync(config, JSON.stringify({ ledger: { published: ['../summary-quality-evals'] } }));
-	expect(() => publishedLedgers(config)).toThrow('which is not a ledger name');
+	expect(() => publishedLedgers(config, registry)).toThrow('which is not a ledger name');
+	for (const family of payload.families) {
+		for (const entry of family.ledgers) entry.publish_to_data_explorer = false;
+	}
+	writeFileSync(registry, JSON.stringify(payload));
+	writeFileSync(config, JSON.stringify({ ledger: { published: [] } }));
+	expect(publishedLedgers(config, registry)).toEqual([]);
 });
 
 test('raw days after the newest packed day are listed through the newest raw day, with sizes', () => {
