@@ -3,11 +3,12 @@ import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CONTRACT_VERSION, FeedIngestDispatchSchema } from "@idhazh/common-contracts";
+import { deriveCandidateId } from "@idhazh/common-contracts";
 import { partitionArticles, persistDispatches } from "../src/partition-article-shards/shard-packer";
 import { resolvePartitionRequest } from "../src/partition-article-shards/partition-input";
 import { readCurrentSelections } from "../src/partition-article-shards/read-editorial-selection";
 import { fixtureInput, readWritten, registration, settings, writer } from "./partition-fixtures";
+import { DispatchContract } from "../src/metrics/audit-contracts";
 
 test("uneven real curated selections have exact greedy assignments and lower spread than round robin", async () => {
   const root = await mkdtemp(join(tmpdir(), "partition-uneven-"));
@@ -35,9 +36,10 @@ test("uneven real curated selections have exact greedy assignments and lower spr
     const stored = await persistDispatches(packed, {
       outputRoot: root, writerContext: writer(input.fixture.run_id, 1, 5),
       ledgerSettings: settings, registration: registration("dispatches"), date: input.fixture.date,
+      correlation_id: input.fixture.correlation_id,
     });
     const history = await readWritten(root, "dispatches", input.fixture.date,
-      { schema: FeedIngestDispatchSchema, schemaVersion: CONTRACT_VERSION }, stored);
+      DispatchContract, stored);
     expect(history.rows.map(held => held.row)).toEqual(packed.dispatches);
     expect(history.rows.every(held => held.identity.shard === 5)).toBe(true);
     for (const row of packed.dispatches) {
@@ -77,6 +79,7 @@ test("equal work, fewer articles, empty selection and none keep exact selected i
     expect(await persistDispatches(result, {
       outputRoot: root, writerContext: writer(empty.fixture.run_id), ledgerSettings: settings,
       registration: registration("dispatches"), date: empty.fixture.date,
+      correlation_id: empty.fixture.correlation_id,
     })).toEqual({ status: "empty", files: [] });
   } finally { await rm(root, { recursive: true, force: true }); }
 });
@@ -107,7 +110,6 @@ test("missing content and changed source, policy, labels, context or ranks are r
     expect(() => partitionArticles({ ...base, candidates: [...base.candidates, ...base.candidates] })).toThrow("Repeated");
     expect(() => partitionArticles({ ...base, selections: [...base.selections, ...base.selections] })).toThrow("distinct");
     const changed = [
-      { policy: { ...base.selections[0]!.policy, max_age_hours: 2 } },
       { source: { ...base.selections[0]!.source, title: "Different snapshot" } },
       { labels: { ...base.selections[0]!.labels, origin: "different", matcher_version: "different" } },
       { correlation_id: "another-correlation" },
@@ -123,6 +125,48 @@ test("missing content and changed source, policy, labels, context or ranks are r
       context: input.context, writer: writer(input.fixture.run_id), outputRoot: root,
     })).rejects.toThrow("write result");
     expect(base).toEqual(snapshot);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("dispatch retains harvest content and later selection dates and policies independently", async () => {
+  const root = await mkdtemp(join(tmpdir(), "partition-cross-stage-"));
+  try {
+    const input = await fixtureInput(root, { count: 1 });
+    const current = input.candidates[0]!;
+    const earlierRun = "2026-10-20-699";
+    const content = {
+      ...current,
+      run_id: earlierRun,
+      candidate_id: deriveCandidateId(earlierRun, current.source_id, current.entry_ordinal),
+      date: "2026-10-20",
+      correlation_id: "harvest-correlation",
+      fetched_at: "2026-10-20T23:55:00Z",
+      policy: { ...current.policy, max_age_hours: 24 },
+    };
+    const selection = {
+      ...input.curation.rows[0]!,
+      candidate_id: content.candidate_id,
+      policy: { ...input.curation.rows[0]!.policy, max_age_hours: 12 },
+    };
+    const result = partitionArticles({
+      selections: [selection], candidates: [content], context: input.context,
+      settings: input.planning.config.partition,
+    });
+    const dispatch = result.dispatches[0];
+    if (dispatch === undefined) throw new Error("Expected a dispatch for the selected article");
+    expect(dispatch.content).toMatchObject({
+      date: "2026-10-20", correlation_id: "harvest-correlation", policy: { max_age_hours: 24 },
+    });
+    expect(dispatch.selection).toMatchObject({
+      date: input.context.date, correlation_id: input.context.correlation_id, policy: { max_age_hours: 12 },
+    });
+    const stored = await persistDispatches(result, {
+      outputRoot: root, writerContext: writer(input.fixture.run_id), ledgerSettings: settings,
+      registration: registration("dispatches"), date: input.fixture.date,
+      correlation_id: input.fixture.correlation_id,
+    });
+    const native = await readWritten(root, "dispatches", input.fixture.date, DispatchContract, stored);
+    expect(native.rows[0]!.row).toEqual(dispatch);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

@@ -43,11 +43,18 @@ RETIRED_OPTION_RECORD = "a-run-that-pinned-a-retired-option.json"
 
 @pytest.mark.parametrize("path", fixture_paths(), ids=fixture_id)
 def test_fixture_round_trips_byte_identically(path: Path) -> None:
-    """Serialize, validate, deserialize, re-serialize - same bytes."""
+    """Keep current bytes unchanged and migrated bytes stable on the next read."""
     text = read_text(path)
-    once = load(path).to_json()
-    assert once == text
-    twice = BY_STEM[path.parent.name].from_json(once).to_json()
+    original = json.loads(text)
+    contract = BY_STEM[path.parent.name]
+    record = load(path)
+    once = record.to_json()
+    if record.version == original["version"]:
+        assert once == text
+    else:
+        assert original["version"] < record.version
+        assert record.version == contract.schema_version()
+    twice = contract.from_json(once).to_json()
     assert twice == once
 
 

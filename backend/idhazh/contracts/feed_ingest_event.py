@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, ClassVar, Literal, Self
+from typing import Annotated, Any, ClassVar, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
@@ -97,12 +97,17 @@ class FeedIngestEvent(Contract):
     __schema_stem__: ClassVar[str] = "feed-ingest-event"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-22",
+            change="Carry measured timing basis, timestamp and signed age in decisions.",
+            why="Event consumers must see the same evidence retained by assessment rows.",
+        ),
+        ChangelogEntry(
             version="2026-10-20",
             change="Declare typed feed-ingest audit event payloads.",
             why="Stage observations need a replayable contract without article text.",
         ),
     )
-    version: Literal["2026-10-20"] = "2026-10-20"
+    version: Literal["2026-10-22"] = "2026-10-22"
 
     event_id: Sha256
     correlation_id: NonEmpty
@@ -120,6 +125,13 @@ class FeedIngestEvent(Contract):
     step_elapsed_ms: Count
     policy: PolicyIdentity
     payload: EventPayload
+
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_previous_version(cls, value: Any) -> Any:
+        if isinstance(value, dict) and value.get("version") == "2026-10-20":
+            return {**value, "version": "2026-10-22"}
+        return value
 
     @model_validator(mode="after")
     def validate_event(self) -> Self:

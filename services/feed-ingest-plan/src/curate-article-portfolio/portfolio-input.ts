@@ -84,13 +84,13 @@ export function validatePortfolioArticles(
       if (freshness.age_hours > policy.triage.max_age_hours) throw new Error("Screened article exceeds its effective age limit");
     }
     if (freshness.timing_source === "unknown") {
-      if (freshness.age_hours !== null || freshness.effective_published_at !== null || freshness.recency_bonus !== 0) {
+      if (freshness.age_hours !== null || freshness.timing_at !== null || freshness.recency_bonus !== 0) {
         throw new Error("Unknown screening timing carries no inferred recency");
       }
     } else {
-      TimestampSchema.parse(freshness.effective_published_at);
+      TimestampSchema.parse(freshness.timing_at);
       if (freshness.age_hours === null) throw new Error("Known screening timing requires measured age");
-      const age = (Date.parse(observedAt) - Date.parse(freshness.effective_published_at!)) / millisecondsPerHour;
+      const age = (Date.parse(observedAt) - Date.parse(freshness.timing_at!)) / millisecondsPerHour;
       const recency = policy.triage.recency_weight * 0.5 ** (Math.max(0, age) / policy.triage.recency_half_life_hours);
       if (freshness.age_hours !== age || freshness.recency_bonus !== recency) {
         throw new Error("Screened freshness does not match the fixed observation clock");

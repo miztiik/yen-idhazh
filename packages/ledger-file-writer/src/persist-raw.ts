@@ -40,7 +40,7 @@ export async function persistRawLedger<T extends object>(
   });
   const groups = new Map<string, Record<string, unknown>[]>();
   for (const row of validated) {
-    const day = Object.hasOwn(row, "date") ? row.date : input.period.covers;
+    const day = input.partition_date ?? (Object.hasOwn(row, "date") ? row.date : input.period.covers);
     const covers = DateStampSchema.parse(day);
     const unit = context.writerContext;
     const generatedUnitId = createUnitId({

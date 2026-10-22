@@ -25,7 +25,7 @@ function assess(input: {
   const extraction = observation.extraction === "success" && candidate !== null;
   const failed = observation.extraction === "failed" || observation.extraction === "empty";
   const suitability = candidate !== null && observation.paywall !== null;
-  const published = freshness?.timing_source === "published_at";
+  const measured = freshness !== null && freshness.timing_source !== "unknown";
   return ArticleAssessmentRecordSchema.parse({
     date: context.date, correlation_id: context.correlation_id,
     candidate_id: observation.candidate_id, source_id: source.source_id, source,
@@ -37,10 +37,10 @@ function assess(input: {
     url_key: candidate?.url_key ?? rejection?.url_key ?? null,
     stage, decision: rejection === null ? "admitted" : "rejected",
     reason: rejection?.drop_reason ?? null, observed_at: context.now, policy,
-    effective_published_at: published ? freshness.effective_published_at : null,
-    publication_clock: published ? "published_at" : "unavailable",
-    age_hours: published ? Math.max(0, freshness.age_hours!) : null,
-    max_age_hours: published ? policy.max_age_hours : null,
+    timing_at: measured ? freshness.timing_at : null,
+    timing_basis: measured ? freshness.timing_source : "unavailable",
+    age_hours: measured ? freshness.age_hours : null,
+    max_age_hours: measured ? policy.max_age_hours : null,
     extracted_word_count: extraction ? candidate!.word_count : null,
     source_form: source.form,
     extraction_outcome: extraction ? "success" : failed ? "failed"

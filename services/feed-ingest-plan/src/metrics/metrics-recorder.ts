@@ -4,7 +4,7 @@ import { z } from "zod";
 import {
   ArticleAssessmentRecordSchema, CONTRACT_VERSION, DiversityMetricRowSchema,
   LedgerCompletionEvidenceSchema, WriterIdentitySchema, CandidateRejectionRecordSchema,
-  EditorialSelectionRowSchema, FeedIngestDispatchSchema, SourceRunRecordSchema,
+  EditorialSelectionRowSchema,
   RunIdSchema, NonEmptySchema, Sha256Schema, FeedMetricsConfigSchema,
 } from "@idhazh/common-contracts";
 import type { LedgerCompletionEvidence, WriterIdentity, RowIdentity } from "@idhazh/common-contracts";
@@ -28,6 +28,7 @@ import { calculatePublicationMetrics } from "./publication-metrics";
 import { DigestEventItemSchema, RecordedEventPairSchema } from "./publication-evidence";
 import type { RecordedEventPair } from "./publication-evidence";
 import { selectCompleteAttempt } from "../read-ledger-history/complete-attempt";
+import { ArticleAssessmentContract, DiversityMetricContract, DispatchContract, SourceRunContract } from "./audit-contracts";
 
 const RegistrationSchema = z.strictObject({
   name: z.enum(["article-assessments", "diversity", "source-runs"]), family: z.literal("feed-ingest-plan"),
@@ -122,14 +123,14 @@ export async function recordPlanningMetrics(
     schema: EditorialSelectionRowSchema, schemaVersion: CONTRACT_VERSION,
   }, result.evidence.curation.rows, inputs, result);
   const dispatches = await readWritten(result.files.dispatches, "dispatches", {
-    schema: FeedIngestDispatchSchema, schemaVersion: CONTRACT_VERSION,
+    ...DispatchContract,
   }, result.evidence.partition.dispatches, inputs, result);
   const common = {
     outputRoot: inputs.outputRoot, writerContext: result.context.writer,
     ledgerSettings: batch.settings, period: { tier: "raw" as const, covers: result.context.date },
   };
-  const assessmentContract = { schema: ArticleAssessmentRecordSchema, schemaVersion: CONTRACT_VERSION };
-  const diversityContract = { schema: DiversityMetricRowSchema, schemaVersion: CONTRACT_VERSION };
+  const assessmentContract = ArticleAssessmentContract;
+  const diversityContract = DiversityMetricContract;
   const assessments = await persistLedger({
     ...common, ledger: "article-assessments", registryEntry: batch.registrations.assessments,
     rowContract: assessmentContract, rows: batch.assessments,
@@ -147,7 +148,7 @@ export async function recordPlanningMetrics(
   });
   const completionEvidence = [assessmentReceipt, diversityReceipt, selections, dispatches, rejections];
   const sourceRows = completePlanningSources(batch.sources, completionEvidence);
-  const sourceContract = { schema: SourceRunRecordSchema, schemaVersion: CONTRACT_VERSION };
+  const sourceContract = SourceRunContract;
   const sourceRuns = await persistLedger({
     ...common, ledger: "source-runs", registryEntry: batch.registrations.source_runs,
     rowContract: sourceContract, rows: sourceRows,
@@ -194,7 +195,7 @@ export type PlanningMetricsResult = Awaited<ReturnType<typeof recordPlanningMetr
 
 export type PublicationRecorderInput = Readonly<{
   run_id: string; correlation_id: string; as_of: string; through?: string;
-  config_sha256: string; config: Parameters<typeof FeedMetricsConfigSchema.parse>[0];
+  config_sha256: string; config: z.input<typeof FeedMetricsConfigSchema>;
   outputRoot: string; writer: WriterIdentity;
   ledgerSettings: z.infer<typeof SettingsSchema>;
   registrations: Readonly<{ diversity: LedgerRegistration; sources: LedgerRegistration }>;
@@ -209,9 +210,6 @@ export async function recordPublicationMetrics(input: PublicationRecorderInput) 
   Sha256Schema.parse(input.config_sha256);
   const asOf = UtcInstantSchema.parse(input.as_of);
   const config = FeedMetricsConfigSchema.parse(input.config);
-  for (const k of config.top_source_counts) {
-    if (k !== 1 && k !== 5 && k !== 10) throw new Error(`metrics.top_source_counts.${k}: unsupported top_k`);
-  }
   const writer = WriterIdentitySchema.parse(input.writer);
   if (writer.run_id !== run || writer.shard !== 0) throw new Error("Publication observer requires its named unsharded run writer");
   if (!input.outputRoot || input.outputRoot.includes("\0")) throw new Error("Invalid publication metric output root");
@@ -254,7 +252,6 @@ export async function recordPublicationMetrics(input: PublicationRecorderInput) 
   let sourceRows: ReturnType<typeof completePublicationObservations> = [];
   if (proven === undefined || proven === null) sourceReason = "No reproducible original complete source attempt";
   else if (input.correlation_id !== proven.correlation_id) throw new Error("Observer correlation differs from its complete source attempt");
-  else if (proven.date !== asOf.slice(0, 10)) sourceReason = "The source observation contract cannot record this following-day observation without backdating";
   else if (outcome === undefined || outcome.availability !== "available") sourceReason = "No complete publication observation for the recorded run";
   else {
     if (writer.attempt !== proven.attempt) throw new Error("Observer writer attempt differs from its proven source attempt");
@@ -264,17 +261,17 @@ export async function recordPublicationMetrics(input: PublicationRecorderInput) 
     outputRoot: input.outputRoot, writerContext: writer, ledgerSettings: settings,
     period: { tier: "raw" as const, covers: asOf.slice(0, 10) },
   };
-  const diversityContract = { schema: DiversityMetricRowSchema, schemaVersion: CONTRACT_VERSION };
+  const diversityContract = DiversityMetricContract;
   const diversity = await persistLedger({
     ...common, ledger: "diversity", registryEntry: diversityEntry, rowContract: diversityContract, rows: metrics.rows,
   });
   await verifyLedgerWrite(diversity, "diversity", diversityContract, metrics.rows, input.outputRoot, writer);
   const sources = sourceReason !== null ? null : await persistLedger({
-    ...common, ledger: "source-runs", registryEntry: sourceEntry,
-    rowContract: { schema: SourceRunRecordSchema, schemaVersion: CONTRACT_VERSION }, rows: sourceRows,
+    ...common, ledger: "source-runs", partition_date: asOf.slice(0, 10), registryEntry: sourceEntry,
+    rowContract: SourceRunContract, rows: sourceRows,
   });
   if (sources !== null) await verifyLedgerWrite(sources, "source-runs",
-    { schema: SourceRunRecordSchema, schemaVersion: CONTRACT_VERSION }, sourceRows, input.outputRoot, writer);
+    SourceRunContract, sourceRows, input.outputRoot, writer);
   return {
     status: "publication_metrics_recorded_audit_pending" as const, audited_complete: false as const,
     files: { diversity, sources }, rows: metrics.rows, source_observations: sourceRows,

@@ -32,6 +32,6 @@ export function sealDispatches(
   return persistDispatches(partition, {
     outputRoot: inputs.outputRoot, writerContext: context.writer,
     ledgerSettings: inputs.ledgerSettings, registration: inputs.registrations.dispatches,
-    date: context.date,
+    date: context.date, correlation_id: context.correlation_id,
   });
 }

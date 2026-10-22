@@ -1,6 +1,6 @@
 # Feed planning diversity readings
 
-**Last Updated**: 2026-10-21
+**Last Updated**: 2026-10-22
 
 Which population and denominator does each available feed planning reading use?
 
@@ -33,9 +33,11 @@ active-source snapshot size, including active sources with no items.
   A uniform distribution across four sources reads four sources; a nonempty
   monopoly reads one source. An empty population reads zero sources.
 - Top-source concentration sorts selected primary-source counts and divides the
-  sum of the configured largest counts by the total selected articles. Supported
-  persisted counts are 1, 5 and 10. Each ratio retains its integer numerator and
-  denominator; ratios are never averaged.
+  sum of the configured largest counts by the total selected articles. Every
+  strict positive configured count is persisted, even when it is not 1, 5 or 10.
+  If `k` exceeds the available sources, all source counts contribute; a
+  nonempty population therefore has a concentration of 1. Each ratio retains
+  its integer numerator and denominator; ratios are never averaged.
 - Selected-source Gini measures inequality over every active source, including
   sources with zero selected articles. It is the sum of all ordered pairwise
   absolute count differences divided by twice the source count and total item

@@ -1,6 +1,7 @@
 /** Which diversity reading or missing-evidence reason was recorded? */
 import { z } from "zod";
-import { CountSchema, DateStampSchema, FiniteSchema, NonEmptySchema, PositiveCountSchema, RunIdSchema, Sha256Schema, SlugSchema, TimestampSchema, VersionSchema, reject } from "./primitives";
+import { CountSchema, DateStampSchema, FiniteSchema, NonEmptySchema, PositiveCountSchema, RunIdSchema, Sha256Schema, SlugSchema, TimestampSchema, reject } from "./primitives";
+import { FEED_INGEST_AUDIT_VERSION } from "../version";
 
 export const DiversityMetricSchema = z.enum([
   "active_source_coverage", "selection_coverage", "effective_number_of_sources",
@@ -8,7 +9,7 @@ export const DiversityMetricSchema = z.enum([
   "lost_diversity_by_stage", "event_repetition_rate", "source_event_overlap", "novel_source_contribution",
 ]);
 export const DiversityMetricRowSchema = z.strictObject({
-  version: VersionSchema, date: DateStampSchema, correlation_id: NonEmptySchema, run_id: RunIdSchema,
+  version: z.literal(FEED_INGEST_AUDIT_VERSION).default(FEED_INGEST_AUDIT_VERSION), date: DateStampSchema, correlation_id: NonEmptySchema, run_id: RunIdSchema,
   metric: DiversityMetricSchema, basis: z.enum(["eligible", "selected", "published", "leads", "stage"]),
   as_of: TimestampSchema, window_start: DateStampSchema.nullable(), window_end: DateStampSchema.nullable(),
   dimension: z.enum(["source", "source_kind", "event_cluster"]).nullable(),
@@ -22,7 +23,7 @@ export const DiversityMetricRowSchema = z.strictObject({
   algorithm_version: NonEmptySchema, config_sha256: Sha256Schema,
   availability: z.enum(["available", "unavailable"]),
   unavailable_reason: z.enum(["empty_denominator", "incomplete_history", "missing_publication", "missing_event_evidence"]).nullable(),
-  top_k: z.literal([1, 5, 10]).nullable().default(null),
+  top_k: PositiveCountSchema.nullable().default(null),
 }).superRefine((value, ctx) => {
   if (value.date !== value.as_of.slice(0, 10)) reject(ctx, "date must match the UTC as_of day");
   if ((value.window_start === null) !== (value.window_end === null)) reject(ctx, "window boundaries are recorded together");

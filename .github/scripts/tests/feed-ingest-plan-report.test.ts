@@ -3,14 +3,52 @@ import { test, expect } from "bun:test";
 import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { FeedIngestEventSchema } from "../../../packages/common-contracts/src/index";
+import { FEED_INGEST_AUDIT_VERSION, readFeedIngestEvent } from "../../../packages/common-contracts/src/index";
 import { formatPlannerReport, writePlannerReport } from "../feed-ingest-plan-report";
 
 async function fixture() {
-  return FeedIngestEventSchema.array().parse(
-    await Bun.file(new URL("../../../tests/fixtures/feed-ingest-plan/report-events.json", import.meta.url)).json(),
-  );
+  const rows: unknown[] = await Bun.file(
+    new URL("../../../tests/fixtures/feed-ingest-plan/report-events.json", import.meta.url),
+  ).json();
+  return rows.map(readFeedIngestEvent);
 }
+
+test("replays recorded legacy logs and nested assessment evidence without inventing missing facts", async () => {
+  const raw: unknown[] = await Bun.file(
+    new URL("../../../tests/fixtures/feed-ingest-plan/report-events.json", import.meta.url),
+  ).json();
+  expect(raw.every(row => typeof row === "object" && row !== null && "version" in row
+    && row.version === "2026-10-20")).toBe(true);
+  expect(formatPlannerReport(raw)).toEqual(formatPlannerReport(await fixture()));
+  const legacy = await Bun.file(
+    new URL("../../../tests/fixtures/contracts/feed-ingest-event/one-observation.json", import.meta.url),
+  ).json();
+  const before = structuredClone(legacy);
+  const current = readFeedIngestEvent(legacy);
+  expect(legacy).toEqual(before);
+  expect(current.version).toBe(FEED_INGEST_AUDIT_VERSION);
+  if (current.payload.kind !== "candidate_decision") throw new Error("Expected a recorded candidate decision");
+  expect(current.payload.assessment).toMatchObject({
+    version: FEED_INGEST_AUDIT_VERSION, timing_basis: "unavailable", timing_at: null, age_hours: null,
+  });
+  expect(formatPlannerReport([legacy])).toEqual(formatPlannerReport([current]));
+  const known = structuredClone(legacy);
+  known.payload.assessment.publication_clock = "published_at";
+  known.payload.assessment.effective_published_at = "2026-10-20T07:00:00Z";
+  known.payload.assessment.age_hours = 1;
+  known.payload.assessment.max_age_hours = 48;
+  const measured = readFeedIngestEvent(known);
+  if (measured.payload.kind !== "candidate_decision") throw new Error("Expected a measured candidate decision");
+  expect(measured.payload.assessment).toMatchObject({
+    timing_basis: "published_at", timing_at: "2026-10-20T07:00:00Z", age_hours: 1, max_age_hours: 48,
+  });
+  const missing = structuredClone(legacy);
+  delete missing.payload.assessment.effective_published_at;
+  expect(() => formatPlannerReport([missing])).toThrow();
+  expect(() => formatPlannerReport([{ ...legacy, headers: { authorization: "private" } }])).toThrow();
+  expect(() => formatPlannerReport([{ ...legacy, candidate_id: "a".repeat(64) }])).toThrow();
+  expect(() => formatPlannerReport([{ ...legacy, version: "1999-01-01" }])).toThrow();
+});
 
 test("reports explicit empty outcomes without certifying durable audit or publication", async () => {
   const events = await fixture();

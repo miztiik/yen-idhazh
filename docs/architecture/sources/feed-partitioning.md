@@ -1,6 +1,6 @@
 # How selected articles receive worker assignments
 
-**Last Updated**: 2026-10-21
+**Last Updated**: 2026-10-22
 
 How does the isolated feed planner allocate exactly the articles that editorial
 curation selected, without fetching content again or changing its ratings?
@@ -22,11 +22,11 @@ It never creates a title or article text from a selection row. Initial
 construction does not require dispatch or source-run completion records:
 those records do not exist yet.
 
-Capture one UTC clock and pass the same requested freshness override to
-harvesting and screening. Existing records whose selection day or effective
-policy differs from the original candidate remain a named validation failure.
-The partitioner does not alter either record to satisfy the dispatch schema.
-The independent-input limitation is described in
+Selection retains its own decision day and effective policy. Harvested content
+retains its fetch day, correlation and original policy. Dispatch requires their
+candidate, source snapshot, URL identity and labels to agree, but does not
+rewrite or equate those stage-specific facts. The same-day, same-policy path
+continues to work. The earlier independent-input limitation is resolved in
 [feed-curation.md](feed-curation.md).
 
 ## Allocation and persistence
@@ -46,7 +46,8 @@ partitioning does not rescore it. `round-robin` assigns successive editorial
 ranks to successive workers. `none` assigns every article to worker zero.
 Empty workers remain present in the returned work totals.
 
-Each dispatch retains the exact selection, rank and original candidate.
+Each dispatch retains the exact selection, rank and original candidate,
+including their separate stage dates and policies.
 Its nested `PartitionAssignment` records the strategy, worker number and
 effective worker count. `persistDispatches` uses the public ledger writer and
 registered Parquet settings. Worker assignment never changes the writer's

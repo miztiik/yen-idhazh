@@ -32,6 +32,15 @@ export type NamedDayInput<T extends object> = Readonly<{
 function missing(error: unknown): boolean {
   return error instanceof Error && "code" in error && error.code === "ENOENT";
 }
+function sourceRunPartitionDay(row: object): string | undefined {
+  if (!("date" in row) || typeof row.date !== "string"
+    || !("run_id" in row) || typeof row.run_id !== "string"
+    || !("observed_at" in row) || typeof row.observed_at !== "string"
+    || !("observation_phase" in row)) return undefined;
+  if (row.observation_phase === "plan_complete") return row.run_id.slice(0, 10);
+  if (row.observation_phase === "publication_complete") return row.observed_at.slice(0, 10);
+  return undefined;
+}
 async function readIndex(path: string): Promise<unknown | undefined> {
   try {
     return JSON.parse(await readFile(path, "utf8")) as unknown;
@@ -70,6 +79,15 @@ export async function readLedgerDay<T extends object>(input: NamedDayInput<T>): 
     ledger, day, status, tier, files, notices,
     rows: files.flatMap(file => file.rows.filter(held => held.identity.covers === day)),
   });
+  const verifySourcePartition = (files: readonly ReadLedgerFile<T>[]) => {
+    if (ledger !== "source-runs") return;
+    for (const file of files) for (const held of file.rows) {
+      if (held.identity.covers !== day) continue;
+      const partitionDay = sourceRunPartitionDay(held.row);
+      if (partitionDay === undefined) throw new Error("Source-run row lacks its run or observation partition basis");
+      if (held.identity.covers !== partitionDay) throw new Error("Source-run partition differs from its observation phase");
+    }
+  };
   if (expired) {
     notices.push("period-expired");
     return result("missing", "yearly");
@@ -106,6 +124,7 @@ export async function readLedgerDay<T extends object>(input: NamedDayInput<T>): 
       throw new Error("Indexed compact file belongs to another period");
     }
     if (file.bytes !== entry.bytes || file.rows.length !== entry.rows) throw new Error("Compact index row count or byte size differs from its file");
+    verifySourcePartition([file]);
     const held = result("rows", period, [file]);
     return { ...held, status: held.rows.length === 0 ? "empty" : "rows" };
   }
@@ -143,6 +162,7 @@ export async function readLedgerDay<T extends object>(input: NamedDayInput<T>): 
     if (files.some(held => held.envelope.file_id === file.envelope.file_id)) throw new Error("Raw input repeats a file identifier");
     files.push(file);
   }
+  verifySourcePartition(files);
   files.sort((left, right) => left.envelope.written_at_ms - right.envelope.written_at_ms
     || (left.envelope.file_id < right.envelope.file_id ? -1 : left.envelope.file_id > right.envelope.file_id ? 1 : 0));
   return result(files.some(file => file.rows.length > 0) ? "rows" : "empty", "raw", files);

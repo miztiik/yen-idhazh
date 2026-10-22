@@ -10,12 +10,7 @@ import { requireSame } from "./stage-membership";
 import { harvestPolicy } from "../harvest-feeds/load-harvest-inputs";
 
 export function preflightMeasurements(result: FeedPlanResult, inputs: PlanInputs) {
-  const config = FeedIngestConfigSchema.parse(result.evidence.harvest.config);
-  for (const count of config.metrics.top_source_counts) {
-    if (count !== 1 && count !== 5 && count !== 10) {
-      throw new Error(`metrics.top_source_counts.${count}: top_k cannot retain this configured concentration measurement`);
-    }
-  }
+  FeedIngestConfigSchema.parse(result.evidence.harvest.config);
   const maxFutureHours = FiniteSchema.min(0).parse(inputs.clock_config.collect.max_future_hours);
   const seen = indexSeenEvidence(result.evidence.seen.evidence);
   const overrides = result.request.freshness_hours === undefined ? {} : { freshness_hours: result.request.freshness_hours };
@@ -25,12 +20,6 @@ export function preflightMeasurements(result: FeedPlanResult, inputs: PlanInputs
     // Rejected candidates do not retain timing. Replay the same pure measurement on its original inputs.
     const measured = calculateFreshness(candidate, seen.get(candidate.url_key), result.context.now, maxFutureHours, policy);
     const field = `candidate.${candidate.candidate_id}`;
-    if (measured.timing_source === "first_seen") {
-      throw new Error(`${field}.publication_clock: first_seen timestamp and age cannot be retained by the assessment contract`);
-    }
-    if (measured.age_hours !== null && measured.age_hours < 0) {
-      throw new Error(`${field}.age_hours: signed negative publication age cannot be retained by the assessment contract`);
-    }
     const retained = result.evidence.screening.admitted.find(article => article.candidate.candidate_id === candidate.candidate_id);
     if (retained !== undefined) requireSame(retained.freshness, measured, `${field}.freshness`);
     timing.set(candidate.candidate_id, measured);
@@ -65,9 +54,9 @@ export function translateArticleAssessments(result: FeedPlanResult, inputs: Plan
     if (row.stage !== "harvest-feeds") {
       const measured = timing.get(row.candidate_id);
       if (measured === undefined) throw new Error(`candidate.${row.candidate_id}.freshness: original measurement is missing`);
-      requireSame([row.publication_clock, row.effective_published_at, row.age_hours],
+      requireSame([row.timing_basis, row.timing_at, row.age_hours],
         [measured.timing_source === "unknown" ? "unavailable" : measured.timing_source,
-          measured.effective_published_at, measured.age_hours], `candidate.${row.candidate_id}.timing`);
+          measured.timing_at, measured.age_hours], `candidate.${row.candidate_id}.timing`);
       requireSame(row.max_age_hours, measured.age_hours === null ? null : policy.max_age_hours, `candidate.${row.candidate_id}.max_age_hours`);
     }
     if (row.stage === "curate-article-portfolio") {

@@ -82,24 +82,24 @@ test("real CLI process refuses disabled or invalid requests without Python or ne
   }
 }, 30000);
 
-test("the awaited entrypoint refuses unsupported audit values before any audit write or summary", async () => {
+test("the awaited entrypoint records positive configured counts, signed ages and first sight", async () => {
   for (const mode of ["top_k", "negative_age", "first_seen"] as const) {
     const recorded = await recordedPlan(mode === "first_seen"
       ? [source({ url: "https://news.example/article-failures.xml" })] : undefined);
     const printed: unknown[] = [];
     try {
-      if (mode === "top_k") recorded.inputs.harvest.config.metrics.top_source_counts = [1, 2, 5];
+      if (mode === "top_k") recorded.inputs.harvest.config.metrics.top_source_counts = [1, 3, 5];
       if (mode === "negative_age") recorded.runtime.clock = () => new Date("2026-10-21T09:00:00Z");
       if (mode === "first_seen") {
         recorded.inputs.clock_config.collect.seen_window_days = 0;
         recorded.inputs.settings.inputs.seen_days = [{ day: "2026-10-21", raw_files: [] }];
       }
-      await expect(main(["--cli", "--partition-strategy=none"], {
+      await main(["--cli", "--partition-strategy=none"], {
         inputs: recorded.inputs, runtime: recorded.runtime, output: value => { printed.push(value); },
-      })).rejects.toThrow(mode === "top_k" ? "top_k" : mode === "negative_age" ? "signed negative" : "first_seen");
-      expect(printed).toEqual([]);
+      });
+      expect(printed).toHaveLength(1);
       for (const ledger of ["article-assessments", "diversity", "source-runs"]) {
-        expect(existsSync(join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan", ledger))).toBe(false);
+        expect(existsSync(join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan", ledger))).toBe(true);
       }
       expect(recorded.events.some(event => event.stage === "seal-article-ledger")).toBe(true);
     } finally { await recorded.close(); }

@@ -5,6 +5,10 @@ import type { z } from "zod";
 export type LedgerRowContract<T extends object> = {
   schema: z.ZodType<T>;
   schemaVersion: string;
+  legacyVersions?: Readonly<Record<string, {
+    schema: z.ZodType<object>;
+    migrate: (row: object) => T;
+  }>>;
 };
 
 export type LedgerRegistration = {
@@ -40,7 +44,7 @@ export type LedgerWriteContext<T extends object> = {
 };
 
 export type PersistLedgerInput<T extends object> = LedgerWriteContext<T> & (
-  | { period: Extract<LedgerPeriod, { tier: "raw" }>; rows: readonly T[] }
+  | { period: Extract<LedgerPeriod, { tier: "raw" }>; partition_date?: string; rows: readonly T[] }
   | { period: Extract<LedgerPeriod, { tier: "compact" }>; rows: readonly StoredLedgerRow<T>[] }
 );
 

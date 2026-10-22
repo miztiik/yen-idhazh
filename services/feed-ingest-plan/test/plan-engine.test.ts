@@ -4,13 +4,14 @@ import { mkdir, stat, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import {
-  CONTRACT_VERSION, FeedIngestDispatchSchema, FeedIngestEventSchema,
+  FeedIngestEventSchema,
   deriveCandidateId, deriveUrlKey,
 } from "@idhazh/common-contracts";
 import { persistLedger } from "@idhazh/ledger-file-writer";
 import { runFeedPlan, summarizePlan } from "../src/run-feed-plan";
 import { loadPlanInputs } from "../src/load-plan-inputs";
 import { readLedgerParquet } from "../src/read-ledger-history/read-parquet";
+import { DispatchContract } from "../src/metrics/audit-contracts";
 import { readSeenEvidence, requiredSeenDays } from "../src/read-ledger-history/read-seen-evidence";
 import { SeenRowSchema } from "../src/screen-article-candidates/seen-evidence";
 import { recordedPlan } from "./plan-recordings";
@@ -118,9 +119,7 @@ test("real composition shares one clock and override and reads native dispatches
     const rows = [];
     for (const file of result.files.dispatches.files) {
       expect(file.path).not.toMatch(/^[A-Za-z]:|\\/);
-      const native = await readLedgerParquet(join(recorded.inputs.outputRoot, file.path), "dispatches", {
-        schema: FeedIngestDispatchSchema, schemaVersion: CONTRACT_VERSION,
-      });
+      const native = await readLedgerParquet(join(recorded.inputs.outputRoot, file.path), "dispatches", DispatchContract);
       rows.push(...native.rows.map(held => held.row));
       expect(native.envelope.identity.shard).toBe(0);
       expect(native.envelope.identity.git_sha).toBe(recorded.runtime.git_sha);
@@ -191,9 +190,10 @@ test("named native first sight wins for undated articles; arbitrary empty histor
     const assessment = result.events.flatMap(event => event.payload.kind === "candidate_decision"
       && event.stage === "screen-article-candidates" && event.payload.assessment.url_key === seen.url_key
       ? [event.payload.assessment] : [])[0]!;
-    expect(assessment.publication_clock).toBe("unavailable");
-    expect(assessment.effective_published_at).toBeNull();
-    expect(assessment.age_hours).toBeNull();
+    const expectedAge = (Date.parse("2026-10-21T23:59:59Z") - Date.parse(seen.first_seen_at)) / 3_600_000;
+    expect(assessment.timing_basis).toBe("first_seen");
+    expect(assessment.timing_at).toBe(seen.first_seen_at);
+    expect(assessment.age_hours).toBe(expectedAge);
     const freshUnknown = result.evidence.screening.admitted.filter(article => article.candidate.published_at === null);
     for (const article of freshUnknown) expect(article.freshness).toMatchObject({ timing_source: "unknown", recency_bonus: 0 });
   } finally { await recorded.close(); }
@@ -299,7 +299,7 @@ test("complete mixed native window creates real first sight; the next run retain
     });
     expect(native.rows.map(row => row.row)).toContainEqual(created);
     expect(result.evidence.screening.admitted.find(article => article.candidate.url_key === key)!.freshness)
-      .toMatchObject({ timing_source: "first_seen", age_hours: 0, effective_published_at: created.first_seen_at });
+      .toMatchObject({ timing_source: "first_seen", age_hours: 0, timing_at: created.first_seen_at });
     recorded.inputs.settings.inputs.seen_days[2]!.raw_files = result.files.seen.files.map(file =>
       window.local(join(recorded.inputs.outputRoot, file.path)));
     recorded.runtime.run_number = "701";
@@ -308,7 +308,7 @@ test("complete mixed native window creates real first sight; the next run retain
     expect(repeated.evidence.seen.new_rows).toEqual([]);
     expect(repeated.files.seen).toEqual({ status: "empty", files: [] });
     expect(repeated.evidence.screening.admitted.find(article => article.candidate.url_key === key)!.freshness)
-      .toMatchObject({ timing_source: "first_seen", age_hours: 1, effective_published_at: created.first_seen_at });
+      .toMatchObject({ timing_source: "first_seen", age_hours: 1, timing_at: created.first_seen_at });
   } finally { await recorded.close(); }
 }, 30000);
 

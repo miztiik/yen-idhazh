@@ -4,13 +4,14 @@ import { z } from "zod";
 import { FeedIngestCandidateSchema } from "./candidate.schema";
 import { EditorialSelectionRowSchema } from "./editorial-selection.schema";
 import { PartitionAssignmentSchema } from "./partition.schema";
-import { VersionSchema, reject } from "./primitives";
+import { reject } from "./primitives";
+import { FEED_INGEST_AUDIT_VERSION } from "../version";
 
 export const FeedIngestDispatchSchema = z.strictObject({
-  version: VersionSchema, content: FeedIngestCandidateSchema,
+  version: z.literal(FEED_INGEST_AUDIT_VERSION).default(FEED_INGEST_AUDIT_VERSION), content: FeedIngestCandidateSchema,
   selection: EditorialSelectionRowSchema, partition: PartitionAssignmentSchema,
 }).superRefine((value, ctx) => {
-  for (const field of ["date", "correlation_id", "candidate_id", "source_id", "vertical", "source", "canonical_url", "url_key", "labels", "policy"] as const) {
+  for (const field of ["candidate_id", "source_id", "vertical", "source", "canonical_url", "url_key", "labels"] as const) {
     if (!isDeepStrictEqual(value.content[field], value.selection[field])) reject(ctx, `dispatch content and selection disagree on ${field}`, ["selection", field]);
   }
 });

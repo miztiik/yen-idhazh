@@ -186,8 +186,8 @@ def make_assessment() -> dict[str, Any]:
         "reason": None,
         "observed_at": "2026-10-20T08:00:00Z",
         "policy": make_policy_identity(),
-        "effective_published_at": None,
-        "publication_clock": "unavailable",
+        "timing_at": None,
+        "timing_basis": "unavailable",
         "age_hours": None,
         "max_age_hours": None,
         "extracted_word_count": None,
@@ -276,8 +276,8 @@ def test_named_canonical_observations_round_trip() -> None:
     )
     for contract, stem in contracts:
         record = contract.model_validate(load_observation(stem))
-        raw = FIXTURE_FILES[stem].read_text(encoding="utf-8")
-        assert canonical_json(record.model_dump(mode="json")) == raw
+        assert record.version == contract.schema_version()
+        assert contract.model_validate_json(canonical_json(record.model_dump(mode="json"))) == record
 
 
 def test_source_observation_distinguishes_unavailable_from_known_zero() -> None:
