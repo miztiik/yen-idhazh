@@ -1,12 +1,14 @@
 /** Which typed observation crosses a planning stage boundary? */
 import { z } from "zod";
 import { isDeepStrictEqual } from "node:util";
-import { ArticleAssessmentRecordSchema } from "./article-assessment.schema";
+import { ArticleAssessmentRecordSchema, PreviousArticleAssessmentSchema } from "./article-assessment.schema";
 import { ArticleLabelsSchema, PolicyIdentitySchema, ScoreEvidenceSchema, SourceSnapshotSchema } from "./source.schema";
 import { DropReasonSchema } from "./rejection.schema";
 import { FetchStatusSchema, ParseStatusSchema } from "./source-run.schema";
 import { CountSchema, PlanningStageSchema, PositiveCountSchema, RunIdSchema, Sha256Schema, SlugSchema, TimestampSchema, reject } from "./primitives";
 import { FEED_INGEST_EVENT_VERSION } from "../version";
+import { HARVEST_DIAGNOSTICS_VERSION } from "../version";
+import { HarvestDiagnosticsSchema } from "./harvest-diagnostics.schema";
 
 export const FeedOutcomePayloadSchema = z.strictObject({
   kind: z.literal("feed_outcome"), source: SourceSnapshotSchema,
@@ -14,6 +16,7 @@ export const FeedOutcomePayloadSchema = z.strictObject({
   parsed_count: CountSchema.nullable(), harvested_count: CountSchema.nullable(),
   fetch_duration_ms: CountSchema.nullable(), parse_duration_ms: CountSchema.nullable(),
   rejection_reason: DropReasonSchema.nullable(),
+  diagnostics: HarvestDiagnosticsSchema.nullable().default(null),
 });
 export const CandidateDecisionPayloadSchema = z.strictObject({
   kind: z.literal("candidate_decision"), assessment: ArticleAssessmentRecordSchema,
@@ -69,6 +72,9 @@ export const FeedIngestEventSchema = z.strictObject({
   $id: "feed-ingest-event", version: FEED_INGEST_EVENT_VERSION,
   changelog: [{
     version: FEED_INGEST_EVENT_VERSION,
+    change: "Retain measured fetch and extraction diagnostics on feed and article decisions.",
+  }, {
+    version: "2026-10-22T12:20",
     change: "Require UUID event and correlation identities with typed decision evidence.",
   }],
 });
@@ -79,6 +85,23 @@ export type CandidateDecisionPayload = z.infer<typeof CandidateDecisionPayloadSc
 export type PortfolioChoicePayload = z.infer<typeof PortfolioChoicePayloadSchema>;
 export type StageCompletionPayload = z.infer<typeof StageCompletionPayloadSchema>;
 
+const PreviousEventSchema = z.strictObject({
+  ...FeedIngestEventSchema.shape,
+  version: z.literal("2026-10-22T12:20"),
+  payload: z.discriminatedUnion("kind", [
+    FeedOutcomePayloadSchema.omit({ diagnostics: true }),
+    CandidateDecisionPayloadSchema.extend({ assessment: PreviousArticleAssessmentSchema }),
+    PortfolioChoicePayloadSchema, StageCompletionPayloadSchema,
+  ]),
+});
+
 export function readFeedIngestEvent(input: unknown): FeedIngestEvent {
+  if (input && typeof input === "object" && "version" in input && input.version === "2026-10-22T12:20") {
+    const previous = PreviousEventSchema.parse(input);
+    const payload = previous.payload.kind === "candidate_decision" ? {
+      ...previous.payload, assessment: { ...previous.payload.assessment, version: HARVEST_DIAGNOSTICS_VERSION },
+    } : previous.payload;
+    return FeedIngestEventSchema.parse({ ...previous, payload, version: FEED_INGEST_EVENT_VERSION });
+  }
   return FeedIngestEventSchema.parse(input);
 }

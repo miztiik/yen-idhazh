@@ -104,7 +104,7 @@ and unsharded editorial selections.
 Their models live in `backend/idhazh/contracts/feed_ingest_*.py`.
 These declarations do not enable a producer, register a ledger, or change the
 production planner.
-Planner events are independently stamped `2026-10-22T12:20` in their TypeScript
+Planner events are independently stamped `2026-10-22T18:15` in their TypeScript
 schema. Native tests cover current fixture validation, UUID versions, typed
 payloads, forbidden article text, identity propagation and event ordering.
 
@@ -130,6 +130,14 @@ logical proof, never reconstructed evidence. The native reader verifies each
 old file against its original stored schema before migration.
 The encoding and old compact-only limitation are defined in
 [feed planning audit recording](../sources/feed-ingest-audit.md#compaction-safe-attempt-proof).
+
+Rejections, article assessments and source-run rejection vocabularies advance
+to `2026-10-22T18:15` with
+[shared fetch and extraction diagnostics](../sources/feed-failure-diagnostics.md).
+Old diagnostic measurements stay null. Physical and logical digests retain
+the old schema's exact fields before migration; a new measured diagnostic
+cannot be dropped to satisfy an old logical commitment. The existing native
+event fixture now verifies migration from `2026-10-22T12:20`.
 
 Candidates keep source, original vertical, assigned desk, lenses, content event
 types, event cluster, and entities separate. Null labels mean unknown;

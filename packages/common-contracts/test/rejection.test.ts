@@ -10,6 +10,7 @@ import {
   PolicyIdentitySchema, REASON_STAGES, REQUIRED_DETAILS, RejectionDetailsSchema,
   SourceRunRecordSchema, SourceSnapshotSchema, StageCompletionPayloadSchema,
   WriterIdentitySchema, deriveCandidateId, deriveUrlKey, validateEnvelopeContainer,
+  readFeedIngestEvent, HarvestDiagnosticsSchema, HARVEST_DIAGNOSTICS_VERSION,
 } from "../src/index";
 import { runtimeSchemas, schemas } from "./schema-binding";
 
@@ -157,6 +158,10 @@ describe("rejection evidence", () => {
       http_status: 503, timeout_ms: 200, words_found: 3, words_required: 100,
       age_hours: 60, max_age_hours: 48, observed_value: 1, limit: 2,
       matched_url_key: digest, history_window_days: 7,
+      diagnostics: HarvestDiagnosticsSchema.parse({
+        extraction_failure: "missing-document-root", failure_code: "unknown",
+        stopped_stage: "extract", detail: "missing-document-root", fetch_ms: 1, extract_ms: 1,
+      }),
     });
     for (const [reason, stages] of Object.entries(REASON_STAGES)) {
       const feedOnly = ["SOURCE_INACTIVE", "FEED_PARSE_FAILED", "FEED_EMPTY"].includes(reason);
@@ -180,6 +185,11 @@ describe("rejection evidence", () => {
       { ...row, rejected_at: "2026-10-20T12:00:00+00:00" },
       { ...row, date: "2026-10-19" }, { ...row, url_key: digest },
     ]) expect(CandidateRejectionRecordSchema.safeParse(changed).success).toBe(false);
+    for (const diagnostics of [
+      { http_status: 600 }, { fetch_ms: -1 }, { extract_ms: 1.5 },
+      { error_code: "https://private.example/token" }, { detail: "untrusted page instructions" },
+      { warnings: ["malformed-json-ld", "malformed-json-ld"] },
+    ]) expect(HarvestDiagnosticsSchema.safeParse(diagnostics).success).toBe(false);
   });
 });
 
@@ -294,17 +304,26 @@ describe("planning audit contracts", () => {
     expect(FeedIngestEventSchema.safeParse({ ...row, correlation_id: row.event_id }).success).toBe(false);
   });
 
-  test("validates the current event fixture with its sole native declaration", async () => {
+  test("migrates the historical event fixture with its sole native declaration", async () => {
     const fixture = await Bun.file(new URL(
       "../../../tests/fixtures/contracts/feed-ingest-event/one-observation.json", import.meta.url,
     )).json();
-    const record = FeedIngestEventSchema.parse(fixture);
-    expect(JSON.parse(JSON.stringify(record))).toEqual(fixture);
+    const record = readFeedIngestEvent(fixture);
+    expect(record.payload.kind).toBe("candidate_decision");
+    if (record.payload.kind !== "candidate_decision") throw new Error("Fixture must carry an article assessment");
+    expect(record.payload.assessment.diagnostics).toBeNull();
+    expect(record.payload.assessment).toEqual({
+      ...fixture.payload.assessment, version: HARVEST_DIAGNOSTICS_VERSION, diagnostics: null,
+    });
+    expect(readFeedIngestEvent(JSON.parse(JSON.stringify(record)))).toEqual(record);
     const schema = z.toJSONSchema(FeedIngestEventSchema, { io: "input" });
     expect(schema.$id).toBe("feed-ingest-event");
     expect(schema.version).toBe(record.version);
     expect(schema.changelog).toEqual([{
       version: record.version,
+      change: "Retain measured fetch and extraction diagnostics on feed and article decisions.",
+    }, {
+      version: fixture.version,
       change: "Require UUID event and correlation identities with typed decision evidence.",
     }]);
     expect(schema.additionalProperties).toBe(false);

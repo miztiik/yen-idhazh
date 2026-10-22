@@ -43,11 +43,14 @@ export async function harvestFeeds(
   const feeds = await mapPool(inputs.sources, inputs.config.harvest.concurrency, async configured => {
     const source = sourceSnapshot(inputs, configured);
     context.progress?.("FEED_FETCH_STARTED", { source_id: source.source_id });
+    const started = performance.now();
     const result = await readFeed(source, fetcher, context, inputs.config.harvest.fetch_timeout_ms);
     context.progress?.("FEED_FETCH_COMPLETED", {
       source_id: source.source_id, fetch_status: result.outcome.fetch_status,
       parse_status: result.outcome.parse_status, output_count: result.entries.length,
       drop_reason: result.outcome.rejection_reason,
+      diagnostics: result.outcome.diagnostics,
+      duration_ms: Math.round(performance.now() - started),
     });
     const offered: OfferedArticle[] = [];
     if (result.entries.length) {
@@ -59,11 +62,14 @@ export async function harvestFeeds(
   const articles = await mapPool(feeds.flatMap(feed => feed.offered), inputs.config.harvest.concurrency,
     async offered => {
       context.progress?.("ARTICLE_HARVEST_STARTED", { source_id: offered.source.source_id });
+      const started = performance.now();
       const result = await harvestArticle(offered, inputs, fetcher, context);
       context.progress?.("ARTICLE_HARVEST_COMPLETED", {
         source_id: offered.source.source_id, candidate_id: result.observation.candidate_id,
         output_count: result.candidate === null ? 0 : 1, drop_reason: result.rejection?.drop_reason ?? null,
         extraction_outcome: result.observation.extraction,
+        diagnostics: result.observation.diagnostics,
+        duration_ms: Math.round(performance.now() - started),
       });
       return result;
     });

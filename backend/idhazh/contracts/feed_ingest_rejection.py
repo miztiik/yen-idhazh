@@ -24,6 +24,7 @@ from idhazh.contracts.feed_ingest_candidate import (
     Positive,
     PositiveCount,
 )
+from idhazh.contracts.feed_ingest_diagnostics import HarvestDiagnostics
 
 RejectionStage = Literal[
     "harvest-feeds",
@@ -37,6 +38,8 @@ class DropReason(StrEnum):
     FETCH_FAILED = "FETCH_FAILED"
     FETCH_FAILED_HTTP = "FETCH_FAILED_HTTP"
     FETCH_TIMEOUT = "FETCH_TIMEOUT"
+    EXTRACT_FAILED = "EXTRACT_FAILED"
+    EXTRACT_EMPTY = "EXTRACT_EMPTY"
     PAYWALL_OR_BLOCKED = "PAYWALL_OR_BLOCKED"
     FEED_PARSE_FAILED = "FEED_PARSE_FAILED"
     FEED_EMPTY = "FEED_EMPTY"
@@ -65,6 +68,8 @@ REASON_STAGES: dict[DropReason, tuple[RejectionStage, ...]] = {
             DropReason.FETCH_FAILED,
             DropReason.FETCH_FAILED_HTTP,
             DropReason.FETCH_TIMEOUT,
+            DropReason.EXTRACT_FAILED,
+            DropReason.EXTRACT_EMPTY,
             DropReason.FEED_PARSE_FAILED,
             DropReason.FEED_EMPTY,
             DropReason.MISSING_REQUIRED_FIELDS,
@@ -100,11 +105,14 @@ class RejectionDetails(Model):
     limit: Finite | None = None
     matched_url_key: Sha256 | None = None
     history_window_days: PositiveCount | None = None
+    diagnostics: HarvestDiagnostics | None = None
 
 
 REQUIRED_DETAILS: dict[DropReason, tuple[str, ...]] = {
     DropReason.FETCH_FAILED_HTTP: ("http_status",),
     DropReason.FETCH_TIMEOUT: ("timeout_ms",),
+    DropReason.EXTRACT_FAILED: ("diagnostics",),
+    DropReason.EXTRACT_EMPTY: ("diagnostics",),
     DropReason.STUB_CONTENT: ("words_found", "words_required"),
     DropReason.STALE_MAX_AGE_EXCEEDED: ("age_hours", "max_age_hours"),
     DropReason.STALE_HALF_LIFE_DECAY: ("observed_value", "limit"),
@@ -131,6 +139,11 @@ class CandidateRejectionRecord(Contract):
     __schema_stem__: ClassVar[str] = "feed-ingest-rejection"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-22T18:15",
+            change="Preserve typed fetch and extraction diagnostics and operation timings.",
+            why="A terminal reason must not erase the operation that actually failed.",
+        ),
+        ChangelogEntry(
             version="2026-10-22",
             change="Allow measured publication-age refusal before article download.",
             why="Expired feed entries need no page extraction to establish their age.",
@@ -141,7 +154,7 @@ class CandidateRejectionRecord(Contract):
             why="Every deciding stage retains typed reasons and observations.",
         ),
     )
-    version: Literal["2026-10-22"] = "2026-10-22"
+    version: Literal["2026-10-22T18:15"] = "2026-10-22T18:15"
     date: DateStamp
     correlation_id: NonEmpty
     source_id: Slug
@@ -160,8 +173,8 @@ class CandidateRejectionRecord(Contract):
     @model_validator(mode="before")
     @classmethod
     def migrate_previous_version(cls, value: Any) -> Any:
-        if isinstance(value, dict) and value.get("version") == "2026-10-20":
-            return {**value, "version": "2026-10-22"}
+        if isinstance(value, dict) and value.get("version") in {"2026-10-20", "2026-10-22"}:
+            return {**value, "version": "2026-10-22T18:15"}
         return value
 
     @model_validator(mode="after")
@@ -173,7 +186,19 @@ class CandidateRejectionRecord(Contract):
             value = getattr(self, name)
             if not article and value is not None:
                 raise ValueError(f"feed rejection requires null {name}")
-            if article and self.drop_reason != DropReason.MISSING_REQUIRED_FIELDS and value is None:
+            missing_title = name == "title" and self.drop_reason in {
+                DropReason.FETCH_FAILED,
+                DropReason.FETCH_FAILED_HTTP,
+                DropReason.FETCH_TIMEOUT,
+                DropReason.EXTRACT_FAILED,
+                DropReason.EXTRACT_EMPTY,
+            }
+            if (
+                article
+                and self.drop_reason != DropReason.MISSING_REQUIRED_FIELDS
+                and value is None
+                and not missing_title
+            ):
                 raise ValueError(f"article rejection requires {name}")
         if self.canonical_url is not None and self.url_key is not None:
             if self.url_key != derive_url_key(self.canonical_url):
@@ -193,6 +218,8 @@ class CandidateRejectionRecord(Contract):
             raise ValueError("feed failures belong to harvest-feeds")
         if not article and self.drop_reason == DropReason.MISSING_REQUIRED_FIELDS:
             raise ValueError("missing article fields require an article subject")
+        if not article and self.drop_reason in {DropReason.EXTRACT_FAILED, DropReason.EXTRACT_EMPTY}:
+            raise ValueError("extraction failures require an article subject")
         for name in REQUIRED_DETAILS.get(self.drop_reason, ()):
             if getattr(self.details, name) is None:
                 raise ValueError(f"{self.drop_reason} requires details.{name}")

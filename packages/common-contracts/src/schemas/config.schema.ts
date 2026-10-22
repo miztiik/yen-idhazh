@@ -49,7 +49,7 @@ export const FeedSealConfigSchema = z.strictObject({
   compression: z.enum(["snappy", "zstd", "none"]),
 });
 export const FeedWorkflowReportingConfigSchema = z.strictObject({
-  enabled: z.boolean().default(false).describe(
+  enabled: z.boolean().default(true).describe(
     "External reporting only. Remove this key, adapter, tests, and workflow invocation together when development reporting is no longer needed.",
   ),
   removal_condition: NonEmptySchema,
