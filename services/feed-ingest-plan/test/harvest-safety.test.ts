@@ -4,6 +4,7 @@ import { sanitizeText, SANITIZER_VERSION } from "../src/harvest-feeds/sanitize-t
 import { isPublicAddress, validateTargetName } from "../src/harvest-feeds/safe-target";
 import { createPermittedFetcher, crawlerProduct, parseRobots, robotsPermits } from "../src/harvest-feeds/robots-policy";
 import { mapPool } from "../src/harvest-feeds/harvest-pool";
+import { fetchDiagnostics } from "../src/harvest-feeds/fetch-diagnostics";
 import { RecordedTransport, inputs, readRecordings, readSafety, source } from "./harvest-recordings";
 
 test("recorded sanitizer vectors match sanitizer-3, keep prose and are idempotent", async () => {
@@ -46,8 +47,16 @@ test("denied or unknown permission never requests the target; robots cache is pe
   const transport = new RecordedTransport(await readRecordings());
   const boundary = { transport, resolve: transport.resolve };
   const fetcher = createPermittedFetcher(loaded.config.harvest, loaded.extraction, boundary);
-  expect((await fetcher.fetch("https://denied.example/story")).failure).toBe("robots-denied");
-  expect((await fetcher.fetch("https://unknown.example/story")).failure).toBe("robots-unknown");
+  const denied = fetchDiagnostics(await fetcher.fetch("https://denied.example/story"), 0);
+  expect(denied).toMatchObject({
+    fetch_failure: "robots-denied", failure_code: "robots_denied", robots: "denied",
+    http_status: null, robots_http_status: 200, robots_failure: null,
+  });
+  const unknown = fetchDiagnostics(await fetcher.fetch("https://unknown.example/story"), 0);
+  expect(unknown).toMatchObject({
+    fetch_failure: "robots-unknown", failure_code: "robots_unreachable", robots: "unknown",
+    http_status: null, robots_http_status: 503, robots_failure: "http",
+  });
   expect((await fetcher.fetch("https://NEWS.EXAMPLE:443/denied")).failure).toBe("robots-denied");
   expect((await fetcher.fetch("https://news.example/denied/again")).failure).toBe("robots-denied");
   expect(transport.requests.map(request => request.url.href)).toEqual([
@@ -63,10 +72,10 @@ test("redirects establish safe destination and robots permission before requesti
   const loaded = await inputs();
   const transport = new RecordedTransport(await readRecordings());
   const fetcher = createPermittedFetcher(loaded.config.harvest, loaded.extraction, { transport, resolve: transport.resolve });
-  expect((await fetcher.fetch("https://news.example/unsafe-redirect")).failure).toBe("unsafe-target");
+  expect(await fetcher.fetch("https://news.example/unsafe-redirect")).toMatchObject({ failure: "unsafe-target", http_status: 302 });
   expect((await fetcher.fetch("https://news.example/denied-redirect")).failure).toBe("robots-denied");
   expect((await fetcher.fetch("https://news.example/safe-redirect")).http_status).toBe(200);
-  expect((await fetcher.fetch("https://news.example/loop")).failure).toBe("redirect-loop");
+  expect(await fetcher.fetch("https://news.example/loop")).toMatchObject({ failure: "redirect-loop", http_status: 302 });
   expect(transport.requests.some(request => request.url.hostname === "127.0.0.1")).toBe(false);
   expect(transport.requests.some(request => request.url.href === "https://denied.example/story")).toBe(false);
 });
@@ -75,12 +84,29 @@ test("permanent statuses do not retry; transient statuses use existing retry con
   const loaded = await inputs([source()], { extraction: { max_retries: 1 } });
   const transport = new RecordedTransport(await readRecordings());
   const fetcher = createPermittedFetcher(loaded.config.harvest, loaded.extraction, { transport, resolve: transport.resolve });
-  expect((await fetcher.fetch("https://news.example/not-found")).http_status).toBe(404);
+  expect(fetchDiagnostics(await fetcher.fetch("https://news.example/not-found"), 0)).toMatchObject({
+    http_status: 404, fetch_failure: "http", failure_code: "http_client_error",
+  });
   expect((await fetcher.fetch("https://news.example/retry")).http_status).toBe(200);
   expect(transport.requests.filter(request => request.url.pathname === "/not-found")).toHaveLength(1);
   expect(transport.requests.filter(request => request.url.pathname === "/retry")).toHaveLength(2);
-  expect((await fetcher.fetch("https://missing.example/story")).failure).toBe("dns");
-  expect((await fetcher.fetch("https://news.example/network-error")).failure).toBe("network");
+  expect(fetchDiagnostics(await fetcher.fetch("https://missing.example/story"), 0)).toMatchObject({
+    fetch_failure: "dns", error_code: "ENOTFOUND", failure_code: "network_error",
+  });
+  expect(fetchDiagnostics(await fetcher.fetch("https://news.example/network-error"), 0)).toMatchObject({
+    fetch_failure: "network", error_code: "ECONNRESET", failure_code: "network_error",
+  });
+  expect(fetchDiagnostics(await fetcher.fetch("https://news.example/error"), 0)).toMatchObject({
+    http_status: 503, failure_code: "http_server_error",
+  });
+  // Replay the existing rate-limit protocol recording as the target response too.
+  const safety = await readSafety();
+  const limited = safety.robots_responses.find(response => response.status === 429);
+  if (!limited) throw new Error("Expected the recorded rate-limit response");
+  transport.recordings.responses["https://news.example/error"] = [limited];
+  expect(fetchDiagnostics(await fetcher.fetch("https://news.example/error"), 0)).toMatchObject({
+    http_status: 429, failure_code: "http_rate_limited",
+  });
 });
 
 test("pool concurrency changes with configuration and results retain offered order", async () => {
@@ -109,6 +135,11 @@ test("recorded robots HTTP and transport outcomes apply the absence-versus-unkno
     const fetcher = createPermittedFetcher(loaded.config.harvest, loaded.extraction, { transport, resolve: transport.resolve });
     const result = await fetcher.fetch("https://news.example/second");
     expect(result.failure, JSON.stringify(recording)).toBe(recording.expected);
+    if (result.robots === "unknown") {
+      expect(result.robots_http_status).toBe(recording.status ?? null);
+      expect(result.http_status).toBeNull();
+      expect(result.robots_failure).not.toBeNull();
+    }
     expect(transport.requests.some(request => request.url.pathname === "/second")).toBe(recording.expected === null);
   }
 });

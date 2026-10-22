@@ -42,13 +42,16 @@ candidate or rejection, plus its `observation`. `HarvestObservationSchema`,
 `HarvestArticleResultSchema` and their types are public exports.
 
 An observation has `candidate_id`, `http_status`, `robots`, `fetch_failure`,
-`paywall`, `paywall_evidence`, `extraction` and `observed_at`.
+`paywall`, `paywall_evidence`, `extraction`, `observed_at` and `diagnostics`.
 HTTP status is the actual target response, or null when no target responded.
 Paywall is a boolean only after HTML was read, otherwise null. Its evidence
 names publisher JSON-LD, a configured marker, no match, or not observed.
 Robots is allowed, denied, unknown, or null before permission was established.
 Extraction is success, empty, failed, or not attempted. The observation is
 transient serializable data, not an added persisted candidate field.
+The shared [failure diagnostics](feed-failure-diagnostics.md) retain exact
+fetch causes, extraction causes, safe error codes, warnings and measured
+operation times through rejections, assessments and structured events.
 
 Build a screening observation record by selecting the successful `articles`
 and indexing their complete observations by `candidate_id`. Rejected entries
@@ -172,7 +175,8 @@ It removes machinery, not ordinary English instructions. There is no model
 call, prompt construction, shell execution or page-derived filename here.
 Missing document roots and DOM recursion overflow produce a typed extraction
 failure and rejection without aborting sibling articles. Empty content remains
-a distinct empty result. Unexpected programming failures still surface.
+a distinct `EXTRACT_EMPTY` rejection; typed extractor errors use
+`EXTRACT_FAILED`, never `FETCH_FAILED`. Unexpected programming failures still surface.
 
 ## Dependencies and cost
 

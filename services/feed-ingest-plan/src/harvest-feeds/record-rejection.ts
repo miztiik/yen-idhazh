@@ -2,21 +2,22 @@
 import {
   CandidateRejectionRecordSchema, RejectionDetailsSchema, CandidateRejectionContract,
 } from "@idhazh/common-contracts";
-import type { CandidateRejectionRecord, DropReason, RejectionDetails, SourceSnapshot } from "@idhazh/common-contracts";
+import type { CandidateRejectionRecord, DropReason, HarvestDiagnostics, RejectionDetails, SourceSnapshot } from "@idhazh/common-contracts";
 import { persistLedger } from "@idhazh/ledger-file-writer";
 import type { HarvestContext, RejectionDestination } from "./harvest-types";
 import { utcTimestamp } from "./harvest-types";
 import type { FetchResult } from "./robots-policy";
 
-export function fetchRejection(result: FetchResult, timeout_ms: number): {
+export function fetchRejection(result: FetchResult, timeout_ms: number, diagnostics: HarvestDiagnostics): {
   reason: DropReason; details: Partial<RejectionDetails>;
 } {
-  if (result.failure === "timeout") return { reason: "FETCH_TIMEOUT", details: { timeout_ms } };
+  const details = { http_status: result.http_status, diagnostics };
+  if (result.failure === "timeout") return { reason: "FETCH_TIMEOUT", details: { ...details, timeout_ms } };
   if (result.failure === "http") {
     if (result.http_status === null) throw new Error("HTTP rejection requires an observed status");
-    return { reason: "FETCH_FAILED_HTTP", details: { http_status: result.http_status } };
+    return { reason: "FETCH_FAILED_HTTP", details };
   }
-  return { reason: "FETCH_FAILED", details: {} };
+  return { reason: "FETCH_FAILED", details };
 }
 
 export function recordRejection(

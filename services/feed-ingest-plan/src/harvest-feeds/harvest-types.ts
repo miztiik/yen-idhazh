@@ -3,16 +3,14 @@ import { z } from "zod";
 import {
   CandidateRejectionRecordSchema, FeedIngestCandidateSchema,
   Sha256Schema, SourceSnapshotSchema, TimestampSchema,
+  FetchFailureSchema, HarvestDiagnosticsSchema,
 } from "@idhazh/common-contracts";
 import type { FeedIngestConfig, FeedOutcomePayload, PolicyIdentity, WriterIdentity } from "@idhazh/common-contracts";
 import type { LedgerRegistration, LedgerSettings, PersistLedgerResult } from "@idhazh/ledger-file-writer";
 import type { HarvestInputs } from "./load-harvest-inputs";
 import type { ProgressDetails, ProgressEventType } from "../logging/progress-logger";
 
-export const FetchFailureSchema = z.enum([
-  "http", "timeout", "unsafe-target", "dns", "network", "robots-denied",
-  "robots-unknown", "body-too-large", "redirect-loop",
-]);
+export { FetchFailureSchema } from "@idhazh/common-contracts";
 export type FetchFailure = z.infer<typeof FetchFailureSchema>;
 export const HarvestObservationSchema = z.strictObject({
   candidate_id: Sha256Schema,
@@ -23,6 +21,7 @@ export const HarvestObservationSchema = z.strictObject({
   paywall_evidence: z.enum(["json-ld", "configured-marker", "none", "not-observed"]),
   extraction: z.enum(["success", "empty", "failed", "not-attempted"]),
   observed_at: TimestampSchema,
+  diagnostics: HarvestDiagnosticsSchema.nullable().default(null),
   preflight_freshness: z.strictObject({
     timing_at: TimestampSchema, timing_source: z.literal("published_at"),
     age_hours: z.number().finite().positive(), recency_bonus: z.number().finite().nonnegative(),

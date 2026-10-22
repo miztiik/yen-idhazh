@@ -28,6 +28,9 @@ if (Bun.argv.includes("--emit-schemas")) {
     expect(config.workflow_reporting.enabled).toBe(false);
     expect(configs.FeedWorkflowReportingConfigSchema.parse({
       removal_condition: config.workflow_reporting.removal_condition,
+    }).enabled).toBe(true);
+    expect(configs.FeedWorkflowReportingConfigSchema.parse({
+      ...config.workflow_reporting, enabled: false,
     }).enabled).toBe(false);
   });
 

@@ -150,7 +150,7 @@ test("plan completion observed after midnight stays in its original run-day part
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test("recorded 2026-10-20 audit rows migrate through native Parquet without invented evidence", async () => {
+test("recorded audit rows migrate through native Parquet without invented evidence", async () => {
   const root = await mkdtemp(join(tmpdir(), "history-legacy-contracts-"));
   const day = "2026-10-20";
   const run = `${day}-1`;
@@ -172,21 +172,40 @@ test("recorded 2026-10-20 audit rows migrate through native Parquet without inve
       root, day, run, "dispatches",
       "../../../tests/fixtures/contracts/feed-ingest-dispatch/one-article.json",
       legacyAuditSchemas.Dispatch, DispatchContract));
+    migrated.set("rejections", await migrateAuditFixture(
+      root, day, run, "rejections",
+      "../../../tests/fixtures/contracts/feed-ingest-rejection/empty-feed.json",
+      CandidateRejectionContract.legacyVersions[CONTRACT_VERSION].schema, CandidateRejectionContract));
     expect(migrated.get("article-assessments")).toMatchObject({
-      timing_basis: "unavailable", timing_at: null, age_hours: null, max_age_hours: null,
+      timing_basis: "unavailable", timing_at: null, age_hours: null, max_age_hours: null, diagnostics: null,
     });
     expect(migrated.get("diversity")).toMatchObject({ top_k: null });
     expect(migrated.get("source-runs")).toMatchObject({ date: day, run_id: run });
-    const previousSource = SourceRunContract.legacyVersions!["2026-10-22"]!;
     const originalSource = await Bun.file(new URL(
       "../../../tests/fixtures/contracts/feed-ingest-source-run/one-observation.json", import.meta.url,
     )).json();
-    const previousRow = previousSource.schema.parse({ ...originalSource, version: "2026-10-22" });
-    const previousFile = await writeRows(root, "source-runs", day, previousSource.schema,
-      [previousRow], writer(run), "2026-10-22");
-    const sourceHistory = await readWritten(root, "source-runs", day, SourceRunContract, previousFile);
-    expect(sourceHistory.rows[0]!.row).toMatchObject({ version: SourceRunContract.schemaVersion });
-    expect(sourceHistory.rows[0]!.row.completion_evidence?.every(entry => entry.logical === null)).toBe(true);
+    for (const version of ["2026-10-22", "2026-10-22T10:05"]) {
+      const previousSource = SourceRunContract.legacyVersions![version]!;
+      const previousRow = previousSource.schema.parse({ ...originalSource, version });
+      const previousFile = await writeRows(root, "source-runs", day, previousSource.schema,
+        [previousRow], writer(run), version);
+      const sourceHistory = await readWritten(root, "source-runs", day, SourceRunContract, previousFile);
+      expect(sourceHistory.rows[0]!.row).toMatchObject({ version: SourceRunContract.schemaVersion });
+      expect(sourceHistory.rows[0]!.row.completion_evidence?.every(entry => entry.logical === null)).toBe(true);
+    }
+    const { diagnostics: _diagnostics, ...previousAssessment } = ArticleAssessmentRecordSchema.parse(migrated.get("article-assessments"));
+    const assessmentSchema = ArticleAssessmentContract.legacyVersions["2026-10-22"].schema;
+    const assessmentFile = await writeRows(root, "article-assessments", day, assessmentSchema,
+      [{ ...previousAssessment, version: "2026-10-22" }], writer(run), "2026-10-22");
+    const assessmentHistory = await readWritten(root, "article-assessments", day, ArticleAssessmentContract, assessmentFile);
+    expect(assessmentHistory.rows[0]!.row.diagnostics).toBeNull();
+    const previousRejection = CandidateRejectionContract.schema.parse(migrated.get("rejections"));
+    const { diagnostics: _rejectionDiagnostics, ...details } = previousRejection.details;
+    const rejectionSchema = CandidateRejectionContract.legacyVersions["2026-10-22"].schema;
+    const rejectionFile = await writeRows(root, "rejections", day, rejectionSchema,
+      [{ ...previousRejection, details, version: "2026-10-22" }], writer(run), "2026-10-22");
+    const rejectionHistory = await readWritten(root, "rejections", day, CandidateRejectionContract, rejectionFile);
+    expect(rejectionHistory.rows[0]!.row.details.diagnostics).toBeNull();
     expect(migrated.get("dispatches")).toHaveProperty("content");
   } finally { await rm(root, { recursive: true, force: true }); }
 });

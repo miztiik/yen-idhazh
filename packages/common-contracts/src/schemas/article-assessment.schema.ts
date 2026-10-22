@@ -3,11 +3,13 @@ import { z } from "zod";
 import { ArticleLabelsSchema, PolicyIdentitySchema, ScoreEvidenceSchema, SourceFormSchema, SourceSnapshotSchema } from "./source.schema";
 import { DropReasonSchema, REASON_STAGES } from "./rejection.schema";
 import { CountSchema, DateStampSchema, FiniteSchema, NonEmptySchema, PlanningStageSchema, PositiveCountSchema, PositiveSchema, Sha256Schema, SlugSchema, TimestampSchema, UrlSchema, deriveUrlKey, reject } from "./primitives";
-import { FEED_INGEST_AUDIT_VERSION } from "../version";
+import { CONTRACT_VERSION, FEED_INGEST_AUDIT_VERSION, HARVEST_DIAGNOSTICS_VERSION } from "../version";
+import { HarvestDiagnosticsSchema } from "./harvest-diagnostics.schema";
 
 export const VerdictStatusSchema = z.enum(["not_assessed", "assessed"]);
 export const ArticleAssessmentRecordSchema = z.strictObject({
-  version: z.literal(FEED_INGEST_AUDIT_VERSION).default(FEED_INGEST_AUDIT_VERSION), date: DateStampSchema, correlation_id: NonEmptySchema,
+  version: z.literal(HARVEST_DIAGNOSTICS_VERSION).default(HARVEST_DIAGNOSTICS_VERSION), date: DateStampSchema, correlation_id: NonEmptySchema,
+  diagnostics: HarvestDiagnosticsSchema.nullable().default(null),
   candidate_id: Sha256Schema, source_id: SlugSchema, source: SourceSnapshotSchema, labels: ArticleLabelsSchema,
   canonical_url: UrlSchema.nullable(), url_key: Sha256Schema.nullable(),
   stage: PlanningStageSchema, decision: z.enum(["admitted", "rejected", "selected"]),
@@ -58,7 +60,12 @@ export const ArticleAssessmentRecordSchema = z.strictObject({
 });
 export type ArticleAssessmentRecord = z.infer<typeof ArticleAssessmentRecordSchema>;
 
-const { timing_at: _timingAt, timing_basis: _timingBasis, ...legacyFields } = ArticleAssessmentRecordSchema.shape;
+const { diagnostics: _diagnostics, ...previousFields } = ArticleAssessmentRecordSchema.shape;
+export const PreviousArticleAssessmentSchema = z.strictObject({
+  ...previousFields, version: z.literal("2026-10-22"),
+  reason: DropReasonSchema.exclude(["EXTRACT_FAILED", "EXTRACT_EMPTY"]).nullable(),
+});
+const { timing_at: _timingAt, timing_basis: _timingBasis, ...legacyFields } = PreviousArticleAssessmentSchema.shape;
 export const LegacyArticleAssessmentSchema = z.strictObject({
   ...legacyFields,
   version: z.literal("2026-10-20"),
@@ -70,7 +77,21 @@ export const LegacyArticleAssessmentSchema = z.strictObject({
 export function migrateArticleAssessment(row: object): ArticleAssessmentRecord {
   const { effective_published_at, publication_clock, ...rest } = LegacyArticleAssessmentSchema.parse(row);
   return ArticleAssessmentRecordSchema.parse({
-    ...rest, version: FEED_INGEST_AUDIT_VERSION,
+    ...rest, version: HARVEST_DIAGNOSTICS_VERSION,
     timing_at: effective_published_at, timing_basis: publication_clock,
   });
 }
+
+export const ArticleAssessmentContract = {
+  schema: ArticleAssessmentRecordSchema,
+  schemaVersion: HARVEST_DIAGNOSTICS_VERSION,
+  legacyVersions: {
+    [CONTRACT_VERSION]: { schema: LegacyArticleAssessmentSchema, migrate: migrateArticleAssessment },
+    [FEED_INGEST_AUDIT_VERSION]: {
+      schema: PreviousArticleAssessmentSchema,
+      migrate: (row: object): ArticleAssessmentRecord => ArticleAssessmentRecordSchema.parse({
+        ...PreviousArticleAssessmentSchema.parse(row), version: HARVEST_DIAGNOSTICS_VERSION,
+      }),
+    },
+  },
+};

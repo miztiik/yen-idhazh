@@ -12,10 +12,16 @@ export const EVENT_NAMESPACE = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
 
 export function writeAuditEvent(event: FeedIngestEvent): void {
   const eventType = `${event.stage}_${event.audit_event_type}`.replaceAll("-", "_").toUpperCase();
+  const payload = event.payload;
+  const diagnostics = payload.kind === "feed_outcome" ? payload.diagnostics
+    : payload.kind === "candidate_decision" && event.stage === "harvest-feeds" ? payload.assessment.diagnostics : null;
+  const durationMs = payload.kind === "stage_completion" ? event.step_elapsed_ms
+    : diagnostics?.fetch_ms === null || diagnostics === null ? null
+    : diagnostics.fetch_ms + (payload.kind === "feed_outcome" ? payload.parse_duration_ms ?? 0 : diagnostics.extract_ms ?? 0);
   writeJsonLine({
     timestamp: new Date().toISOString(), level: "INFO", message: `Pipeline Event: ${eventType}`,
     eventId: `evt_${event.event_id}`, eventType, correlationId: event.correlation_id,
-    durationMs: event.step_elapsed_ms, audit: event,
+    durationMs, stepElapsedMs: event.step_elapsed_ms, audit: event,
   });
 }
 

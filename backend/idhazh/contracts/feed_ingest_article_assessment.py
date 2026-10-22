@@ -24,6 +24,7 @@ from idhazh.contracts.feed_ingest_candidate import (
     ScoreEvidence,
     SourceSnapshot,
 )
+from idhazh.contracts.feed_ingest_diagnostics import HarvestDiagnostics
 from idhazh.contracts.feed_ingest_rejection import REASON_STAGES, DropReason
 from idhazh.contracts.sources import SourceForm
 
@@ -39,6 +40,11 @@ class ArticleAssessmentRecord(Contract):
     __schema_stem__: ClassVar[str] = "feed-ingest-article-assessment"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-22T18:15",
+            change="Retain the original fetch and extraction diagnostics at each decision.",
+            why="Later decisions must not erase observed transport and extraction evidence.",
+        ),
+        ChangelogEntry(
             version="2026-10-22",
             change="Preserve signed age and the measured timing basis and instant.",
             why="First sight and tolerated future publication times are distinct evidence.",
@@ -49,7 +55,8 @@ class ArticleAssessmentRecord(Contract):
             why="Audit rows keep measured quality separate from source and portfolio effects.",
         ),
     )
-    version: Literal["2026-10-22"] = "2026-10-22"
+    version: Literal["2026-10-22T18:15"] = "2026-10-22T18:15"
+    diagnostics: HarvestDiagnostics | None = None
 
     date: DateStamp
     correlation_id: NonEmpty
@@ -97,6 +104,8 @@ class ArticleAssessmentRecord(Contract):
     @model_validator(mode="before")
     @classmethod
     def migrate_previous_timing(cls, value: Any) -> Any:
+        if isinstance(value, dict) and value.get("version") == "2026-10-22":
+            return {**value, "version": "2026-10-22T18:15"}
         if not isinstance(value, dict) or value.get("version") != "2026-10-20":
             return value
         migrated = dict(value)
@@ -104,7 +113,7 @@ class ArticleAssessmentRecord(Contract):
             raise ValueError("legacy timing requires its recorded timestamp and clock")
         migrated["timing_at"] = migrated.pop("effective_published_at")
         migrated["timing_basis"] = migrated.pop("publication_clock")
-        migrated["version"] = "2026-10-22"
+        migrated["version"] = "2026-10-22T18:15"
         return migrated
 
     @model_validator(mode="after")

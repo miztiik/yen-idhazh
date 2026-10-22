@@ -180,7 +180,7 @@ class FeedSealConfig(Model):
 
 class FeedWorkflowReportingConfig(Model):
     enabled: bool = Field(
-        default=False,
+        default=True,
         strict=True,
         description=(
             "External reporting only. Remove this key, adapter, tests, and workflow invocation "
