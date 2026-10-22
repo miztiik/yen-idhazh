@@ -192,7 +192,8 @@ test('the registry files the fitted line under the judge folder the reader opens
 	const entry = judge?.ledgers.find((ledger) => ledger.name === 'fitted-thresholds');
 
 	expect(entry).toEqual({
-		name: 'fitted-thresholds', grain: 'raw-and-compact', prefix: [...FITTED], stem: null, suffix: null
+		name: 'fitted-thresholds', grain: 'raw-and-compact', prefix: [...FITTED],
+		publish_to_data_explorer: false, stem: null, suffix: null
 	});
 	expect(ledgerFolder('fitted-thresholds')).toBe(FITTED.join('/'));
 });

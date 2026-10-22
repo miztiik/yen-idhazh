@@ -139,9 +139,9 @@ test('a file over its ceiling fails, a file at its ceiling does not, and a direc
 
 test('with the ledgers served from another host, no key under state/ is weighed and every other key is', () => {
 	const build = aBuildTree({ 'config/ledgers.json': '{}' });
-	const ceilings = { 'config/ledgers.json': 3400, 'state/compact/seen/index/': 2200 };
+	const ceilings = { 'config/ledgers.json': 3600, 'state/compact/seen/index/': 2200 };
 	expect(weighPayloads(build, ceilings, ['seen'], 'https://ledgers.example.org', onDisk)).toEqual({
-		weighed: [{ key: 'config/ledgers.json', path: 'config/ledgers.json', bytes: 2, ceiling: 3400 }],
+		weighed: [{ key: 'config/ledgers.json', path: 'config/ledgers.json', bytes: 2, ceiling: 3600 }],
 		over: [],
 		namesNothing: [],
 		notWeighed: [
