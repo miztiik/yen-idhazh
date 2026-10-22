@@ -71,6 +71,7 @@ test("offers exactly four manual controls, read-only access and a separate optio
   expect(plan.run).toContain("parseCliRequest(args)");
   expect(plan.run).toContain("const server = servePlan(");
   expect(plan.run).toContain('await fetch(new URL("/api/2026-10-20/plan", server.url)');
+  expect(plan.run).toContain("timeout: false");
   expect(plan.run).toContain("await server.stop(true)");
   expect(plan.run).toContain('appendFileSync(join(artifactRoot, "audit-events.jsonl")');
   expect(plan.run).toContain('appendFileSync(join(artifactRoot, "progress.jsonl")');

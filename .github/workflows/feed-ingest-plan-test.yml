@@ -242,6 +242,8 @@ jobs:
               }
               const response = await fetch(new URL("/api/2026-10-20/plan", server.url), {
                 method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(request),
+                // The independent step deadline supervises planning, not the client's five-minute idle timer.
+                timeout: false,
               });
               progress("HTTP_RESPONSE_RECEIVED", { http_status: response.status });
               if (!response.ok) throw new Error(`workflow: HTTP planning failed (${response.status}): ${await response.text()}`);

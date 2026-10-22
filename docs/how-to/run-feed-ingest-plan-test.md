@@ -140,6 +140,11 @@ prints the same observations, and uploads partial evidence even on failure or
 cancellation. The completed `events.json` remains the report input.
 GitHub independently stops this step after ten minutes; this limit supervises
 the runtime even if its own event loop stops servicing deadline timers.
+The loopback planning `fetch` disables Bun's separate five-minute socket-idle
+timer. Planning returns one final JSON response, so an active server can
+legitimately send no response bytes while it works. The independent ten-minute
+step deadline remains the supervisor; server receive limits and article fetch
+deadlines are unchanged. The health request keeps its ordinary client timeout.
 The configured six-second fetch deadline still applies to each request.
 The selected article limit is not a fetch limit: all configured feeds and
 their offered entries remain in scope before curation chooses the portfolio.
