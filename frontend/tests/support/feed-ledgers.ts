@@ -106,7 +106,7 @@ export function stageFeedLedgers(source: string, target: string) {
 	mkdirSync(build, { recursive: true });
 	mkdirSync(join(build, '..', 'config'), { recursive: true });
 	copyFileSync(resolve('..', 'config', 'ledgers.json'), join(build, '..', 'config', 'ledgers.json'));
-	execFileSync(process.execPath, [resolve('scripts', 'copy-visuals.mjs')], {
+	execFileSync(process.execPath, [resolve('scripts', 'stage-publication.mjs')], {
 		cwd: build, encoding: 'utf8',
 		env: { ...process.env, STATE_ROOT: source, DIGEST_ROOT: join(build, 'public', 'digest') }
 	});

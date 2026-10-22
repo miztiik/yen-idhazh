@@ -7,7 +7,7 @@
  * baking an empty list. A static folder with no `state/raw/` names no day.
  *
  * The read opens named config files, but only lists raw listing names, not their contents.
- * It reads what the last `copy-visuals.mjs` run staged,
+ * It reads what the last `stage-publication.mjs` run staged,
  * and that run empties `static/state/` first: one named registry prefix for
  * each ledger `ledger.published` names, each holding at most `max(console.window_presets)` days.
  */

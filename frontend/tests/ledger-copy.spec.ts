@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { cpSync, copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, copyFileSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,12 +11,13 @@ import { sliceFromDisk } from '../src/lib/server/ledger-disk';
 import { buildFeedLedgers, FEED_LEDGERS, stageFeedLedgers } from './support/feed-ledgers';
 import { ledgerFolders } from '../scripts/ledger-prefixes.mjs';
 import { ledgerFolder } from '../src/lib/data/slice-reader';
+import { projectDay } from '../src/lib/payload/project';
 
 /**
  * Which files of `state/` the build copies for a published ledger, and when it stops.
  *
  * `scripts/published-ledgers.mjs` reads each published ledger's three indexes and
- * lists what they name; `copy-visuals.mjs` stages that list. Each case below
+ * lists what they name; `stage-publication.mjs` stages that list. Each case below
  * writes a small state tree holding one fault, or one stage of a ledger's life,
  * and reads the answer, so none of them needs a site build.
  */
@@ -71,6 +72,49 @@ test('Row16 ORACLE: nested Python-contract Parquet is staged whole and flat host
 		columns: ['cores'], from: '2026-10-20', to: '2026-10-20'
 	});
 	expect(host).toMatchObject({ state: 'ok', rows: [{ cores: 4 }] });
+
+	const build = join(site, '..', 'publication-build', 'frontend');
+	const publicRoot = join(build, 'public');
+	const day = 'digest/2026/10/20/digest.json';
+	const payload = readFileSync(join(process.cwd(), '..', 'tests', 'fixtures', 'contracts', 'digest-day', 'two-runs.json'), 'utf8');
+	mkdirSync(dirname(join(publicRoot, day)), { recursive: true });
+	writeFileSync(join(publicRoot, day), payload);
+	writeFileSync(join(publicRoot, 'publication.json'), JSON.stringify({
+		version: '2026-10-20', changelog: [], dates: ['2026-10-20'],
+		entries: [{ root: 'public', path: day }]
+	}));
+	execFileSync(process.execPath, [
+		fileURLToPath(new URL('../scripts/stage-publication.mjs', import.meta.url))
+	], { cwd: build, env: {
+		...process.env, STATE_ROOT: source, DIGEST_ROOT: join(publicRoot, 'digest')
+	} });
+	const staticRoot = join(build, 'static');
+	const expected = new Map([
+		[day, Buffer.from(projectDay(payload))],
+		['config/ledgers.json', readFileSync(join(process.cwd(), '..', 'config', 'ledgers.json'))],
+		...copy.files.map((file): [string, Buffer] => [
+			`state/${file}`, copy.indexes[file] === undefined
+				? readFileSync(join(source, file))
+				: Buffer.from(copy.indexes[file])
+		])
+	]);
+	const paths = readdirSync(staticRoot, { recursive: true, withFileTypes: true })
+		.filter((entry) => entry.isFile())
+		.map((entry) => join(entry.parentPath, entry.name).slice(staticRoot.length + 1).replaceAll('\\', '/'))
+		.sort();
+	expect(paths).toEqual([...expected.keys()].sort());
+	for (const [file, bytes] of expected) {
+		const actual = readFileSync(join(staticRoot, file));
+		if (/^state\/raw\/.+\/index\/\d{4}-\d{2}-\d{2}\.json$/.test(file)) {
+			const { listed_at: actualInstant, ...actualListing } = JSON.parse(actual.toString());
+			const { listed_at: expectedInstant, ...expectedListing } = JSON.parse(bytes.toString());
+			expect(actualInstant).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+			expect(expectedInstant).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+			expect(actualListing).toEqual(expectedListing);
+		} else {
+			expect(actual, file).toEqual(bytes);
+		}
+	}
 });
 
 test('all six feed ledgers are explicitly published at the browser registry prefixes', () => {
@@ -138,7 +182,7 @@ test('the real staging script names the nested ledger, not its family, when a da
 	const frontend = test.info().outputPath('frontend');
 	mkdirSync(frontend, { recursive: true });
 	const output = execFileSync(process.execPath, [
-		fileURLToPath(new URL('../scripts/copy-visuals.mjs', import.meta.url))
+		fileURLToPath(new URL('../scripts/stage-publication.mjs', import.meta.url))
 	], { cwd: frontend, encoding: 'utf8', env: {
 		...process.env, STATE_ROOT: source, DIGEST_ROOT: join(frontend, 'public', 'digest')
 	} });

@@ -188,7 +188,7 @@ would have cost the reader a question to protect a sentence.
 `payload_ceilings_bytes` entry is rejected because there is no instrument that
 can hold it.
 `payload_ceilings_bytes` keys resolve against the build directory and
-`frontend/public/source-health.json` never reaches it - `copy-visuals.mjs` stages
+`frontend/public/source-health.json` never reaches it - `stage-publication.mjs` stages
 seven named console directories and that file is in none of them - so the key
 would match nothing and `bundle-gate.mjs` fails a key that matches nothing.
 `page_weight.ceilings_bytes` is not a fallback: every console route left it on
