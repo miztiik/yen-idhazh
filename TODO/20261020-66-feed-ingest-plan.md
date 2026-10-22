@@ -365,7 +365,7 @@ fresh CI and a successful isolated run before merge or plan closure.
 
 ## 4. Row #1 - Shared contracts, schemas, and identity types
 
-- **Scope:** Declare persisted rows and typed stage/audit events in Python first, bind the small TypeScript copies to those contracts, and add reader support for the proposed TypeScript writer provenance before any TypeScript writer emits files.
+- **Scope:** Declare shared persisted ledger rows in Python first and bind their TypeScript copies. Declare planner audit events only in the authoritative TypeScript schema, per section 0. Add reader support for the proposed TypeScript writer provenance before any TypeScript writer emits files.
 - **Files touched:**
   - `backend/idhazh/contracts/file_envelope.py`
   - `backend/idhazh/contracts/feed_ingest_candidate.py`
@@ -375,7 +375,6 @@ fresh CI and a successful isolated run before merge or plan closure.
   - `backend/idhazh/contracts/feed_ingest_article_assessment.py`
   - `backend/idhazh/contracts/feed_ingest_diversity.py`
   - `backend/idhazh/contracts/feed_ingest_editorial_selection.py`
-  - `backend/idhazh/contracts/feed_ingest_event.py`
   - `backend/idhazh/contracts/__init__.py`
   - `backend/tests/contracts/test_feed_ingest_contracts.py`
   - `backend/tests/ledger/test_typescript_writer.py`
