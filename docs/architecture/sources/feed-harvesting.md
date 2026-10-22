@@ -18,6 +18,11 @@ are explicit inputs; loading does not search directories.
 inputs, writer identity, correlation identity and rejection destination.
 `boundary` supplies the transport and address resolver for recorded replay;
 ordinary callers omit it to use Undici and the operating system resolver.
+The transport imports the installed `undici/index.js` entry explicitly.
+Bun's bare `undici` shim lacks the real dispatcher's connector and close
+lifecycle. Using the pinned package preserves validated socket DNS and lets
+every request close its dispatcher. An offline test opens and closes that
+actual dispatcher without a socket; the isolated workflow exercises live I/O.
 The destination takes the registered rejection prefix and ledger settings,
 not a second path policy. Rejections are actual Parquet through
 `@idhazh/ledger-file-writer`. A failed write rejects the operation. A paused

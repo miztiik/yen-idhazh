@@ -13,11 +13,21 @@ import { harvestFeeds, loadHarvestInputs } from "@idhazh/feed-ingest-plan/harves
 import { parseFeed } from "../src/harvest-feeds/feed-client";
 import { extractArticle } from "../src/harvest-feeds/dom-extractor";
 import { canonicalizeUrl } from "../src/harvest-feeds/url-cleaner";
+import { createPinnedDispatcher } from "../src/harvest-feeds/transport";
 import {
   RecordedTransport, context, destination, inputs, readRecordings, source,
 } from "./harvest-recordings";
 
 let wasmInitialization: ReturnType<typeof initializeWasm> | undefined;
+
+test("the live transport owns a real closable pinned dispatcher without opening a connection", async () => {
+  expect(() => createPinnedDispatcher([])).toThrow("no address");
+  const dispatcher = createPinnedDispatcher([{ address: "93.184.216.34", family: 4 }]);
+  expect(typeof dispatcher.dispatch).toBe("function");
+  expect(dispatcher.closed).toBe(false);
+  await dispatcher.close();
+  expect(dispatcher.closed).toBe(true);
+});
 
 test("RSS and prefixed Atom retain every category, author, ordinal and UTC timestamp", async () => {
   const recordings = await readRecordings();
