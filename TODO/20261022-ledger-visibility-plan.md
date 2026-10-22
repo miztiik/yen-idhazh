@@ -40,7 +40,7 @@
 
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| C1 | 1 | Complete the publication-staging rename | - | A | PENDING | - | - | - |
+| C1 | 1 | Complete the publication-staging rename | - | A | DONE | ledger-staging-rename | - | Ledger staging rename |
 | C2 | 2 | Declare explorer consent and the validated catalog | 1 | B | PENDING | - | - | - |
 | C3 | 3 | Bind every frontend ledger path to its catalog | 2 | C | PENDING | - | - | - |
 | C4 | 4 | Read compact repository data directly in the explorer | 3 | D | PENDING | - | - | - |

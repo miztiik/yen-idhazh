@@ -228,7 +228,7 @@ what rots: the one that named `digest.json` was written before `run.json` existe
 `run.json` walked straight through it. `retention.image_months` is 13, so nothing prunes
 before 2027 either way.
 
-**`frontend/scripts/copy-visuals.mjs` stages by the same rule.** It selected by image suffix
+**`frontend/scripts/stage-publication.mjs` stages by the same rule.** It selected by image suffix
 and now selects a per-item `.json`, because the file the browser fetches has to be in the
 bundle. `visuals.asset_base_url` still switches both halves together - where a visual is asked
 for and whether it also ships cannot disagree.

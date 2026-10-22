@@ -1875,7 +1875,7 @@ and robots checks. Row #15 is delivered for review; this worker does not merge.
   - `frontend/scripts/ledger-prefixes.mjs`
   - `frontend/scripts/payload-ceilings.mjs`
   - `frontend/scripts/raw-listed-through.mjs`
-  - `frontend/scripts/copy-visuals.mjs`
+  - `frontend/scripts/stage-publication.mjs`
   - `frontend/src/lib/data/slice-reader.ts`
   - `frontend/tests/ledger-copy.spec.ts`
   - `frontend/tests/raw-listed-through.spec.ts`
