@@ -11,6 +11,20 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ### Owner correction - TypeScript-only development and verification
 
+Owner approval, 2026-10-22: @kumarsnaveen_microsoft approved delivery of
+Table A repairs A1-A7 from the review conversation, with tests and owning
+docs updated and green changes landed on remote main. This authorizes
+compatible Python contract edits, matching TypeScript changes, read-side
+migrations where needed, and compaction-safe logical completion proof.
+It covers configurable positive source counts, first-seen timing, signed
+age, later observation instants, separate harvest and selection contexts,
+and compatibility support. It supersedes the earlier hold on these
+contract decisions, not the restrictions on local Python execution,
+new Python tests or Python dependencies in the isolated workflow.
+Deliver in two phases: timing/count/context compatibility, then logical
+completion proof through compaction. Preserve old readable records without
+inventing missing evidence.
+
 Owner ruling, 2026-10-21: the remaining Plan 66 implementation introduces no
 Python tests, invokes no Python from TypeScript tests or development commands,
 and installs no Python packages in the isolated workflow created by this plan.
