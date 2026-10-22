@@ -159,7 +159,7 @@ test("one listener coordinates concurrent real requests and retains only its dur
   const receipts: { day: string; files: readonly PersistedLedgerFile[] }[] = [];
   let clocks = 0;
   try {
-    recorded.inputs.clock_config.collect.seen_window_days = 0;
+    recorded.inputs.clock_config.collect.seen_window_days = 1;
     recorded.inputs.settings.inputs.seen_days = [{ day: "2026-10-21", raw_files: [] }];
     delete recorded.runtime.run_number;
     recorded.runtime.clock = () => new Date(`2026-10-21T12:0${clocks++}:00Z`);
@@ -174,6 +174,9 @@ test("one listener coordinates concurrent real requests and retains only its dur
     expect(clocks).toBe(2);
     expect(first).not.toHaveProperty("issues");
     expect(second).not.toHaveProperty("issues");
+    expect(first.first_sight.absence_proof).toBe("unavailable");
+    expect(first.first_sight.created_count).toBeGreaterThan(0);
+    expect(second.first_sight.created_count).toBe(0);
     expect(receipts).toHaveLength(1);
     const file = await readLedgerParquet(join(recorded.inputs.outputRoot, receipts[0]!.files[0]!.path), "seen", {
       schema: SeenRowSchema, schemaVersion: "2026-08-31",
@@ -257,7 +260,12 @@ test("a listener keeps first-seen evidence stable across UTC midnight", async ()
     const second = await after.json();
     expect(recorded.transport.requests.length).toBeGreaterThan(fetched);
     expect(second).not.toHaveProperty("issues");
-    expect(receipts).toHaveLength(1);
+    expect(receipts).toHaveLength(2);
+    expect(receipts[1]!.day).toBe("2026-10-22");
+    const newlySeen = await readLedgerParquet(join(recorded.inputs.outputRoot, receipts[1]!.files[0]!.path), "seen", {
+      schema: SeenRowSchema, schemaVersion: "2026-08-31",
+    });
+    expect(newlySeen.rows.every(row => row.row.first_seen_at === "2026-10-22T00:00:01Z")).toBe(true);
     const settled = await readLedgerParquet(join(recorded.inputs.outputRoot, receipts[0]!.files[0]!.path), "seen", {
       schema: SeenRowSchema, schemaVersion: "2026-08-31",
     });
@@ -278,11 +286,6 @@ test("a listener keeps first-seen evidence stable across UTC midnight", async ()
       settled.rows.map(row => row.row.first_seen_at));
     expect(retained.rows.every(row => row.row.first_seen_at === "2026-10-21T23:59:59Z")).toBe(true);
     expect(receipts[1]!.day).toBe("2026-10-22");
-    const newlySeen = await readLedgerParquet(join(recorded.inputs.outputRoot, receipts[1]!.files[0]!.path), "seen", {
-      schema: SeenRowSchema, schemaVersion: "2026-08-31",
-    });
-    expect(newlySeen.rows.every(row => row.row.first_seen_at === "2026-10-22T00:00:01Z")).toBe(true);
-
     const requests = recorded.transport.requests.length;
     recorded.inputs.settings.inputs.seen_days = [authored[0]!, authored[0]!, authored[1]!];
     expect((await post()).status).toBe(500);

@@ -184,7 +184,9 @@ test("named native first sight wins for undated articles; arbitrary empty histor
     recorded.inputs.settings.inputs.seen_files = stored.files.map(file =>
       relative(recorded.directory, join(recorded.inputs.outputRoot, file.path)).replaceAll("\\", "/"));
     const result = await runFeedPlan({}, recorded.inputs, recorded.runtime);
-    expect(result.evidence.seen.evidence).toEqual({ availability: "available", rows: [seen] });
+    expect(result.evidence.seen.evidence.availability).toBe("available");
+    if (result.evidence.seen.evidence.availability !== "available") throw new Error("Seen history became unavailable");
+    expect(result.evidence.seen.evidence.rows).toContainEqual(seen);
     expect(result.evidence.seen.global_absence).toBe("unavailable");
     const undated = result.evidence.screening.rejections.filter(row => row.url_key === seen.url_key);
     expect(undated.length).toBeGreaterThan(0);
@@ -314,24 +316,41 @@ test("complete mixed native window creates real first sight; the next run retain
   } finally { await recorded.close(); }
 }, 30000);
 
-test("one missing or lost window day prevents new first sight but keeps the earliest real existing row", async () => {
+test("missing or lost window days stay unavailable while current first sight preserves the earliest real row", async () => {
   const recorded = await recordedPlan([source({ url: "https://news.example/article-failures.xml" })]);
   try {
     const window = await seenWindow(recorded, "https://news.example/second");
     recorded.inputs.settings.inputs.seen_days[1] = { day: "2026-10-20" };
     let result = await runFeedPlan({}, recorded.inputs, recorded.runtime);
     expect(result.evidence.seen.absence_proof).toBe("unavailable");
-    expect(result.evidence.seen.new_rows).toEqual([]);
     expect(result.evidence.seen.window!.days[1]!.status).toBe("missing");
     expect(result.evidence.seen.evidence.availability === "available"
-      && result.evidence.seen.evidence.rows[0]!.first_seen_at).toBe("2026-10-19T10:00:00Z");
-    expect(result.evidence.screening.rejections.some(row => row.drop_reason === "STALE_MAX_AGE_EXCEEDED")).toBe(true);
+      && result.evidence.seen.evidence.rows.find(row =>
+        row.url_key === deriveUrlKey("https://news.example/second"))!.first_seen_at)
+      .toBe("2026-10-19T10:00:00Z");
+    const firstSight = result.evidence.seen.new_rows[0];
+    if (firstSight === undefined) throw new Error("Missing current first-sight row");
+    expect(firstSight).toMatchObject({
+      first_seen_at: "2026-10-21T12:00:00Z", first_seen_run: "2026-10-21-700",
+    });
+    expect(result.files.seen.status).toBe("written");
+    const native = await readLedgerParquet(join(recorded.inputs.outputRoot, result.files.seen.files[0]!.path), "seen", {
+      schema: SeenRowSchema, schemaVersion: "2026-08-31",
+    });
+    expect(native.rows.map(row => row.row)).toContainEqual(firstSight);
+    expect(result.evidence.screening.rejections.some(row =>
+      row.url_key === deriveUrlKey("https://news.example/second")
+      && row.drop_reason === "STALE_MAX_AGE_EXCEEDED")).toBe(true);
     await writeFile(window.index, JSON.stringify({
       version: "2026-10-07", ledger: "seen", period: "daily",
       entries: [...window.entries, { covers: "2026-10-20", state: "lost", rows: 0, bytes: 0 }],
     }));
     recorded.inputs.settings.inputs.seen_days[1] = {
       day: "2026-10-20", indexes: { daily: window.local(window.index) },
+    };
+    recorded.inputs.settings.inputs.seen_days[2] = {
+      day: "2026-10-21", raw_files: result.files.seen.files.map(file =>
+        window.local(join(recorded.inputs.outputRoot, file.path))),
     };
     recorded.runtime.run_number = "702";
     result = await runFeedPlan({}, recorded.inputs, recorded.runtime);
@@ -346,6 +365,8 @@ test("window bounds, ordering and duplicate current-day inputs fail before fetch
   const recorded = await recordedPlan();
   try {
     recorded.inputs.clock_config.collect.seen_window_days = 2;
+    expect(requiredSeenDays("2026-10-21T12:00:00Z", recorded.inputs.clock_config.collect.seen_window_days))
+      .toEqual(["2026-10-19", "2026-10-20", "2026-10-21"]);
     for (const days of [
       [{ day: "2026-10-22", raw_files: [] }],
       [{ day: "2026-10-18", raw_files: [] }],

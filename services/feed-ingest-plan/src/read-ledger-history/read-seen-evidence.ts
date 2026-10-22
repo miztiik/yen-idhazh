@@ -136,15 +136,13 @@ export async function rememberFirstSight(
   const rows = seen.evidence.availability === "available" ? seen.evidence.rows : [];
   const known = new Set(rows.map(row => row.url_key));
   const newRows: SeenRow[] = [];
-  if (seen.absence_proof === "within_configured_window") {
-    for (const candidate of candidates) {
-      if (known.has(candidate.url_key)) continue;
-      known.add(candidate.url_key);
-      newRows.push(SeenRowSchema.parse({
-        version: seenSchemaVersion, url_key: candidate.url_key,
-        first_seen_at: context.now, first_seen_run: context.run_id,
-      }));
-    }
+  for (const candidate of candidates) {
+    if (known.has(candidate.url_key)) continue;
+    known.add(candidate.url_key);
+    newRows.push(SeenRowSchema.parse({
+      version: seenSchemaVersion, url_key: candidate.url_key,
+      first_seen_at: context.now, first_seen_run: context.run_id,
+    }));
   }
   const sealing = await persistLedger({
     ...destination, ledger: "seen", rowContract: seenContract, writerContext: context.writer,
