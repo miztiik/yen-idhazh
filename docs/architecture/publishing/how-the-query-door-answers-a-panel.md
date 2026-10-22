@@ -292,7 +292,7 @@ The site holds the ledgers `ledger.published` in `config/idhazh.json` names:
 `item-health`, `published`, `seen` and `summary-quality-evals`. It holds nothing
 else of `state/`. The build copies each ledger's three indexes, trimmed to the widest
 console span, and every compact file those trimmed indexes name, to the path each
-has under `state/`: `frontend/scripts/copy-visuals.mjs` stages them into
+has under `state/`: `frontend/scripts/stage-publication.mjs` stages them into
 `frontend/static/state/`, which git ignores, and the bundler carries them into
 the site. A published data file is byte for byte the ledger itself, so it cannot
 say anything `state/` does not. The trimmed indexes are new files for the staged

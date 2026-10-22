@@ -314,7 +314,7 @@ test('the model-absent build runs for asset dependencies, unknown inputs and eve
 	for (const path of [
 		'frontend/src/lib/assist/loader.ts', 'frontend/src/routes/archive/+page.svelte',
 		'frontend/src/lib/server/payload.ts', 'frontend/src/routes/+layout.svelte',
-		'frontend/scripts/copy-visuals.mjs', 'frontend/svelte.config.js',
+		'frontend/scripts/stage-publication.mjs', 'frontend/svelte.config.js',
 		'frontend/static/assist/model.json', 'frontend/package.json', 'config/idhazh.json',
 		'backend/idhazh/contracts/app_config.py', 'unknown-area/module.ts',
 		'unresolved-change-base', 'full-ci-run'

@@ -2,7 +2,7 @@
 
 `frontend/public/digest/<YYYY>/<MM>/<DD>/digest.json` is the committed day and
 it is read from disk at build time. This is the other file: the projection
-`frontend/scripts/copy-visuals.mjs` stages into `frontend/static/digest/`, which
+`frontend/scripts/stage-publication.mjs` stages into `frontend/static/digest/`, which
 the published site serves at `<base>/digest/<YYYY>/<MM>/<DD>/digest.json` and a
 browser fetches over the network.
 

@@ -47,7 +47,7 @@ export const DIGEST_ROOT = process.env.DIGEST_ROOT
  * site out of fixture runs, and a fixture must never be able to reach the real
  * ledger. Read at build time only. Of everything under `state/`, the site
  * serves only the compact files of the ledgers `ledger.published` names, which
- * `scripts/copy-visuals.mjs` copies from this same root.
+ * `scripts/stage-publication.mjs` copies from this same root.
  */
 export const STATE_ROOT = process.env.STATE_ROOT
 	? resolve(process.env.STATE_ROOT)
@@ -60,7 +60,7 @@ export const TELEMETRY_ROOT = process.env.TELEMETRY_ROOT
 /** Where the month indexes are read from.
  *
  * Derived from the digest root rather than given a switch of its own, because
- * an index is a projection of exactly those days. `scripts/copy-visuals.mjs`
+ * an index is a projection of exactly those days. `scripts/stage-publication.mjs`
  * derives the staging source the same way, so a canary build cannot end up
  * listing the real archive's stories.
  */
