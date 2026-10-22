@@ -340,6 +340,19 @@ immediate durable progress, the owner-directed UUID convention and actual
 HTTP-listener verification. These changes need exact-candidate review,
 fresh CI and a successful isolated run before merge or plan closure.
 
+HTTP verification checkpoint, 2026-10-22 13:48 UTC: reviewed candidate
+`622543ee821e9f0bb7df37e2d8926425f5da372b` passed all five CI jobs in
+run 39784001447. It removes the Python event model under the owner's ruling,
+uses current UUID events, and starts the actual HTTP listener in the workflow.
+Isolated run 39785121783 reached that listener but exceeded the added
+10-minute diagnostic deadline. Its retained artifact contains 9,685 progress
+records: all 156 feeds finished, offering 11,654 entries, and 3,963 article
+extractions completed before termination. This run was active, not frozen.
+The deadline is not a user requirement or the platform job limit. Bounded
+network-versus-extraction timing is pending before any runtime change or
+rerun; no fetch cap, selection-cap reinterpretation or full acceptance is
+authorized by these partial results.
+
 ### Table D - Status Reckoner
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
