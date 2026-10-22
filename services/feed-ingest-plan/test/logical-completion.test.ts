@@ -118,7 +118,10 @@ test("recorded rejection commitments retain their original schema stamp after mi
     expect(rows.length).toBeGreaterThan(0);
     const original = rows.map(held => {
       const current = CandidateRejectionContract.schema.parse(held.row);
-      const { diagnostics: _diagnostics, ...details } = current.details;
+      const {
+        diagnostics: _diagnostics, published_on: _publishedOn, failure_code: _failureCode,
+        matched_url_marker: _matchedUrlMarker, ...details
+      } = current.details;
       return { ...held, row: { ...current, details, version: CONTRACT_VERSION } };
     });
     const migrated = original.map(held => ({

@@ -120,8 +120,8 @@ screening; skipped or failed writes fail the run. Missing days remain missing
 in the per-day report; they are not relabelled empty and do not support an
 absence claim. `absence_proof` is available only when every required day has
 usable evidence. Unreadable named files and corrupt evidence still fail the
-run. Undated candidates without settled evidence retain unknown timing and no
-invented recency bonus.
+run. Undated candidates without settled or current first-sight evidence retain
+unknown timing and no invented recency bonus.
 
 Owner ruling (kumarsnaveen, 2026-10-22): match the Python first-sight behavior
 without inventing older evidence. A missing day cannot prevent recording that
