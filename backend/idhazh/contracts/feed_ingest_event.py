@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, ClassVar, Literal, Self
 
-from pydantic import Field, StrictInt, UUID4, UUID5, model_validator
+from pydantic import UUID4, UUID5, Field, StrictInt, model_validator
 
 from idhazh.contracts.base import (
     ChangelogEntry,
