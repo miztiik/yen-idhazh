@@ -102,6 +102,9 @@ The `2026-10-22` audit rows accept their `2026-10-20` predecessors through
 read-side migrations in the native Python models and the bounded TypeScript
 Parquet reader. A prior unknown timing remains unknown; the migration does not
 infer a first-seen instant or change a source row's original run date.
+The existing fixture round-trip check keeps same-version payloads byte-identical.
+When reading advances an old version, it requires the current version and
+identical serialized bytes on the next read, leaving the old fixture unchanged.
 
 Candidates keep source, original vertical, assigned desk, lenses, content event
 types, event cluster, and entities separate. Null labels mean unknown;
