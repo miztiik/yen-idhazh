@@ -6,7 +6,7 @@ import { UtcInstantSchema } from "./seen-evidence";
 const MILLISECONDS_PER_HOUR = 60 * 60 * 1000;
 
 export type FreshnessEvidence = {
-  effective_published_at: string | null;
+  timing_at: string | null;
   timing_source: "published_at" | "first_seen" | "unknown";
   age_hours: number | null;
   recency_bonus: number;
@@ -25,7 +25,7 @@ export function calculateFreshness(
   const effective = trusted ? published : seen?.first_seen_at ?? null;
   const age = effective === null ? null : (clock - Date.parse(effective)) / MILLISECONDS_PER_HOUR;
   return {
-    effective_published_at: effective,
+    timing_at: effective,
     timing_source: trusted ? "published_at" : effective === null ? "unknown" : "first_seen",
     age_hours: age,
     recency_bonus: age === null ? 0 : policy.triage.recency_weight *

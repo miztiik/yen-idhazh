@@ -1,5 +1,5 @@
 /** What did each configured source actually contribute before publication exists? */
-import { DropReasonCountSchema, FiniteSchema, PositiveCountSchema, SourceRunRecordSchema } from "@idhazh/common-contracts";
+import { DropReasonCountSchema, FEED_INGEST_AUDIT_VERSION, FiniteSchema, PositiveCountSchema, SourceRunRecordSchema } from "@idhazh/common-contracts";
 import type { DropReasonCount, SourceRunRecord, LedgerCompletionEvidence } from "@idhazh/common-contracts";
 import type { FeedPlanResult } from "../run-feed-plan";
 import type { StageMembership } from "./stage-membership";
@@ -63,7 +63,7 @@ export function completePlanningSources(
     throw new Error("Planning completion requires one recorded outcome per configured source");
   }
   return summaries.map(row => SourceRunRecordSchema.parse({
-    ...row, observation_phase: "plan_complete", expected_source_count: summaries.length,
+    ...row, version: FEED_INGEST_AUDIT_VERSION, observation_phase: "plan_complete", expected_source_count: summaries.length,
     completion_evidence: evidence,
   }));
 }

@@ -1,6 +1,6 @@
 # Feed planning audit recording
 
-**Last Updated**: 2026-10-21
+**Last Updated**: 2026-10-22
 
 Which observations can the isolated feed planner record without claiming that
 an incomplete attempt is complete?
@@ -22,13 +22,13 @@ exact first-sight evidence consumed by screening, the captured UTC instant,
 the same future-time tolerance, and the resolved freshness override.
 It compares this result with retained timing wherever the stage retained it.
 
-The existing assessment contract cannot represent a `first_seen` clock or a
-signed negative publication age. The diversity contract admits only top-source
-counts of 1, 5 and 10. Any such unrepresentable observation or configured count
-refuses the whole request before either audit ledger is written. The error names
-the field, candidate where applicable, and the measurement that would be lost.
-Originally unknown timing remains unknown; it is not a fetch time or proof that
-the article was first seen now.
+Assessments store the measured timing basis and timestamp. `first_seen` remains
+distinct from publication and fetch time, and a future publication within the
+configured tolerance keeps its signed negative age. Ranking may floor that age
+at zero for the recency bonus; the audit evidence does not. Unknown timing
+remains unknown and carries no timestamp or age. Concentration rows store each
+configured positive `top_k`; if `k` exceeds the available sources, the reading
+uses all of them.
 
 ## What is checked and written
 
@@ -48,7 +48,7 @@ Only after all five required ledgers pass native verification are complete sourc
 records derived from them and written to `source-runs`.
 
 Assessments retain measured extraction, attribution, suitability checks and
-representable timing. No semantic evaluation is inferred from length, a byline
+the exact timing consumed by screening. No semantic evaluation is inferred from length, a byline
 or source tier. Unperformed semantic verdicts stay `not_assessed` with null
 values and evaluator versions. Portfolio scores come from actual stage
 assessments and choice records. The returned evidence also retains the separate
@@ -95,9 +95,10 @@ publication observer; tests do not manufacture the completion marker.
 The base `FeedPlanResult` is unchanged. The runner and workflow owners decide
 when their caller statuses can expose this specific complete attempt.
 
-Unsupported timing or concentration values still refuse the whole batch before
-audit writes. New raw-file verification does not restore original membership
-after historical packing. Neither limitation cancels valid current raw proof.
+Invalid timing, non-finite measurements and invalid concentration counts refuse
+the whole batch before audit writes. New raw-file verification does not restore
+original membership after historical packing. Neither limitation cancels valid
+current raw proof.
 
 ## Publication evidence reader
 
@@ -153,9 +154,14 @@ The source writer attempt must equal the original proven attempt so its native
 identity agrees with the source record. Both checks precede every observer write.
 Existing planning file commitments remain unchanged. Missing or packed original
 planning proof cannot become new completion proof, but it does not erase
-independently proven publication membership. A following-day observation cannot
-fit the source contract's same-day `observed_at`: its source write stays explicitly
-unavailable instead of backdating. Publication metrics can still be recorded.
+independently proven publication membership. A plan-complete record stays in
+its original run-day partition even if its observation instant falls after
+midnight. A later publication observation is filed under its actual UTC
+observation day while `date` and `run_id` keep the original planning day and
+run. The raw ledger writer's explicit `partition_date` selects that observation
+partition without changing the row's original run date. The native reader
+checks the partition against the record's observation phase; it never backdates
+the observation.
 Packed indexes reporting discarded files make publication history missing even
 when the index does not name this exact day as lost.
 
@@ -168,11 +174,16 @@ complete records. It first proves the five existing ledger commitments, then
 writes and verifies current raw source completion. No completion event or caller
 status is changed by this recorder.
 
-Full audit completion remains open. It requires decisions on exact first-sight
-and signed-age representation, the mismatch between authored top-source counts
-and their persisted vocabulary, and verification of original completion evidence
-after raw files have been packed. This increment neither changes those contracts
-nor declares a replacement success condition.
+The current audit contract version is `2026-10-22`. TypeScript readers migrate
+named `2026-10-20` rows through their recorded old schemas; the Python source
+contracts also migrate those rows without supplying missing timing facts.
+Workflow verification uses these same current and legacy row contracts.
+The optional report reader migrates old event envelopes and their nested
+assessment fields before enforcing current event identity and policy checks.
+Full audit completion remains open because original completion-file membership
+cannot generally be reconstructed after raw files have been packed. That
+historical proof question is Phase 2; these changes do not define a substitute
+success condition.
 
 ## See also
 

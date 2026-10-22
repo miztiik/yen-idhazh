@@ -1,6 +1,6 @@
 # Run the isolated feed planner checks
 
-**Last Updated**: 2026-10-21
+**Last Updated**: 2026-10-22
 
 How do you check the TypeScript planner without changing daily publication?
 Use `.github/workflows/feed-ingest-plan-test.yml`. It starts only by manual
@@ -28,10 +28,9 @@ A disabled runner, missing input,
 invalid request or damaged file also fails; none becomes a successful empty
 plan. Green adapter tests do not certify hosted execution or audit completion.
 
-The recorder refuses unsupported publication timing, negative article ages
-or configured concentration counts outside the current contract before
-writing either measurement ledger. These failures produce no successful
-summary. The packed-history reader also
+The recorder preserves first-seen timing, signed article ages and every
+positive configured concentration count. Invalid or missing evidence still
+fails before measurement writes. The packed-history reader
 cannot prove an original raw file's ordered-row commitment from aggregate
 compact counts. These are explicit missing capabilities, not completed checks.
 See [partition evidence](../architecture/sources/feed-partitioning.md).
@@ -78,12 +77,15 @@ The cross-package native verifier lives with the workflow adapters at
 package. The contracts package must check and test after only its own frozen
 dependency installation, before any writer or service dependency exists.
 
-The native verifier writes the bounded recorded dispatch fixture through the
+The native verifier writes current and unchanged legacy dispatch fixtures through the
 public ledger writer, then uses the real Parquet/WASM and Arrow reader. It
 checks native list and struct columns, envelope and row identities, row
 validation, ordered content digests, and recorded candidate, URL and UUID
 values. It also compares the existing canonical-byte compatibility vector,
 including Unicode, lists, nulls and floating-point values.
+Current output reads use the shared current audit contracts and their legacy
+read migrations. Reporting also replays recorded old events, including nested
+assessment timing, without supplying facts absent from those events.
 
 Actual planner integration tests replay recorded HTTP and DNS responses
 through harvesting, screening, curation and partitioning. They read the

@@ -102,11 +102,11 @@ export async function readWritten<T extends object>(
 }
 export async function writeRows<T extends object>(
   root: string, ledger: string, day: string, schema: LedgerRowContract<T>["schema"],
-  rows: readonly T[], identity: WriterIdentity,
+  rows: readonly T[], identity: WriterIdentity, schemaVersion: string = CONTRACT_VERSION,
 ) {
   return persistLedger({
     ledger, outputRoot: root, writerContext: identity, registryEntry: registration(ledger),
-    ledgerSettings: settings, rowContract: { schema, schemaVersion: CONTRACT_VERSION },
+    ledgerSettings: settings, rowContract: { schema, schemaVersion },
     period: { tier: "raw", covers: day }, rows,
   });
 }

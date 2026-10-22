@@ -1,6 +1,6 @@
 # Running the isolated feed planner
 
-**Last Updated**: 2026-10-21
+**Last Updated**: 2026-10-22
 
 How does an operator request one feed plan through the same API and CLI?
 This tool runs during development or a build. The static site never depends
@@ -185,26 +185,22 @@ under `feed-ingest-plan`, with `raw-and-compact` grain and the registered
 `["feed-ingest-plan", "source-runs"]` prefix. Invalid registration fails loading;
 exposing it does not write a source record or change audit-pending status.
 
-The recorder preflights the whole attempt before any audit write. First-sight
-timing, signed negative publication ages and unsupported `top_k` concentration
-counts fail explicitly, as do missing or invalid native input files. No
-observation is skipped or rewritten to fit the persisted assessment contract.
-The API returns an error with HTTP 500, and the standalone CLI exits with
-code 1 without printing a summary. Required native write or readback failures
-also throw; earlier durable files may remain but no completion is reported.
+The recorder preflights the whole attempt before any audit write. It preserves
+first-sight timing, signed negative publication ages and every configured
+positive `top_k`. Missing or invalid native input files still fail explicitly.
+The API returns an error with HTTP 500, and the standalone CLI exits with code 1
+without printing a summary. Required native write or readback failures also
+throw; earlier durable files may remain but no completion is reported.
 Source-run persistence or native completion verification failures also prevent
 any successful summary. No flag or success-shaped fallback bypasses the
 required recorder or its exact-attempt selector.
 
-Known integration limits remain explicit. Packed files cannot prove the
-original completion-file ordered hashes after raw deletion with the current
-contract. Assessment payloads cannot preserve a first-sight clock or signed
-future age, although transient timing retains both. Audit top-count settings
-allow values the persisted metric vocabulary cannot represent. Independently
-harvested older content with a later freshness override or decision day still
-meets the documented dispatch date/policy conflict; the live runner avoids
-that mismatch by consistent inputs, never mutation. These require approved
-contract decisions, not fabricated evidence.
+Packed files cannot prove the original completion-file ordered hashes after raw
+deletion with the current contract. Older harvested content can retain its
+original date and policy in a dispatch while selection keeps its later decision
+date and effective policy. The shared article, source, URL and label identities
+remain required. A publication observation is written under its actual UTC
+observation day while the source row keeps its original run date and ID.
 
 ## Dependencies and verification
 
@@ -229,8 +225,9 @@ or change the shipped 180-word setting.
 The real API/awaited-CLI parity test reads assessment, diversity and source
 output through the native reader, compares actual hashes and rows, and runs
 the real history reader and attempt selector against every named output file.
-Entry tests also prove whole-audit refusal for unsupported timing or counts
-and no successful output on a required source write failure.
+Entry tests also prove native readback of first-sight timing, signed ages,
+arbitrary positive concentration counts and later source observations, plus no
+successful output on a required source write failure.
 
 ## Design rationale
 

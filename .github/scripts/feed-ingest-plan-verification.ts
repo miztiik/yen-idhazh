@@ -4,14 +4,17 @@ import { tmpdir } from "node:os";
 import { isDeepStrictEqual } from "node:util";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import {
-  ArticleAssessmentRecordSchema, CandidateRejectionRecordSchema, CONTRACT_VERSION, DateStampSchema,
-  DiversityMetricRowSchema, FeedIngestDispatchSchema, LedgerCompletionEvidenceSchema,
-  PositiveCountSchema, Sha256Schema, SourceRunRecordSchema, deriveCandidateId, deriveUrlKey,
+  CandidateRejectionRecordSchema, CONTRACT_VERSION, DateStampSchema,
+  FeedIngestDispatchSchema, LedgerCompletionEvidenceSchema,
+  PositiveCountSchema, Sha256Schema, deriveCandidateId, deriveUrlKey,
 } from "../../packages/common-contracts/src/index";
 import { createFileId, createUnitId, digestRows, persistLedger } from "../../packages/ledger-file-writer/src/index";
 import type { LedgerRegistration, LogicalField, PersistLedgerResult } from "../../packages/ledger-file-writer/src/index";
 import { readLedgerParquet } from "../../services/feed-ingest-plan/src/read-ledger-history/read-parquet";
 import type { summarizePlan } from "../../services/feed-ingest-plan/src/run-feed-plan";
+import {
+  ArticleAssessmentContract, DiversityMetricContract, DispatchContract, SourceRunContract, legacyAuditSchemas,
+} from "../../services/feed-ingest-plan/src/metrics/audit-contracts";
 
 export function validateLedgerFilePath(
   path: string, fileId: string, covers: string, registration: LedgerRegistration,
@@ -61,14 +64,14 @@ export async function verifyParquetFiles(
       throw new Error(`${ledger}.files.path escapes its output root`);
     }
     const actual = ledger === "dispatches"
-      ? await readLedgerParquet(actualPath, ledger, { schema: FeedIngestDispatchSchema, schemaVersion: CONTRACT_VERSION })
+      ? await readLedgerParquet(actualPath, ledger, DispatchContract)
       : ledger === "rejections"
         ? await readLedgerParquet(actualPath, ledger, { schema: CandidateRejectionRecordSchema, schemaVersion: CONTRACT_VERSION })
         : ledger === "article-assessments"
-          ? await readLedgerParquet(actualPath, ledger, { schema: ArticleAssessmentRecordSchema, schemaVersion: CONTRACT_VERSION })
+          ? await readLedgerParquet(actualPath, ledger, ArticleAssessmentContract)
           : ledger === "diversity"
-            ? await readLedgerParquet(actualPath, ledger, { schema: DiversityMetricRowSchema, schemaVersion: CONTRACT_VERSION })
-            : await readLedgerParquet(actualPath, ledger, { schema: SourceRunRecordSchema, schemaVersion: CONTRACT_VERSION });
+            ? await readLedgerParquet(actualPath, ledger, DiversityMetricContract)
+            : await readLedgerParquet(actualPath, ledger, SourceRunContract);
     if (actual.envelope.tier !== "raw" || actual.envelope.file_id !== file.file_id
       || actual.envelope.unit_id !== file.unit_id || actual.envelope.covers !== file.covers
       || actual.envelope.content_sha256 !== file.content_sha256 || actual.rows.length !== file.row_count) {
@@ -182,7 +185,7 @@ export async function verifyRecordedCompatibility() {
       lifecycle_status: "active", prefix: ["feed-ingest-plan", "dispatches"],
     };
     const written = await persistLedger({
-      ledger: "dispatches", rowContract: { schema: FeedIngestDispatchSchema, schemaVersion: CONTRACT_VERSION },
+      ledger: "dispatches", rowContract: DispatchContract,
       rows: [fixture], outputRoot: root, period: { tier: "raw", covers: fixture.content.date },
       writerContext: { run_id: fixture.content.run_id, attempt: 1, job: null,
         pipeline_name: "plan", task_name: "seal-article-ledger", shard: 0,
@@ -193,12 +196,26 @@ export async function verifyRecordedCompatibility() {
     const checked = await verifyParquetFiles(root, "dispatches", written, registration);
     const file = checked.files[0];
     if (file === undefined) throw new Error("recorded fixture dispatch file is absent");
-    const actual = await readLedgerParquet(join(root, ...file.path.split("/")), "dispatches",
-      { schema: FeedIngestDispatchSchema, schemaVersion: CONTRACT_VERSION });
+    const actual = await readLedgerParquet(join(root, ...file.path.split("/")), "dispatches", DispatchContract);
     if (!isDeepStrictEqual(actual.rows[0]?.row, fixture)) {
       throw new Error("recorded fixture dispatch rows differ after native Parquet readback");
     }
-    return { status: "verified" as const, canonical_content_sha256: reading, row_count: checked.row_count };
+    const legacy = legacyAuditSchemas.Dispatch.parse(JSON.parse(await readFile(
+      new URL("../../tests/fixtures/contracts/feed-ingest-dispatch/one-article.json", import.meta.url), "utf8",
+    )));
+    const legacyWritten = await persistLedger({
+      ledger: "dispatches", rowContract: { schema: legacyAuditSchemas.Dispatch, schemaVersion: CONTRACT_VERSION },
+      rows: [legacy], outputRoot: root, period: { tier: "raw", covers: legacy.content.date },
+      writerContext: { run_id: legacy.content.run_id, attempt: 1, job: null,
+        pipeline_name: "plan", task_name: "seal-article-ledger", shard: 0,
+        producer: "tests.verify-legacy-parquet", git_sha: "a".repeat(40) },
+      registryEntry: registration,
+      ledgerSettings: { format: "parquet", compression_raw: "snappy", compression_compact: "zstd" },
+    });
+    const legacyChecked = await verifyParquetFiles(root, "dispatches", legacyWritten, registration,
+      [FeedIngestDispatchSchema.parse({ ...legacy, version: DispatchContract.schemaVersion })]);
+    return { status: "verified" as const, canonical_content_sha256: reading,
+      row_count: checked.row_count, legacy_row_count: legacyChecked.row_count };
   } finally {
     await rm(root, { recursive: true, force: true });
   }

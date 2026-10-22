@@ -52,6 +52,8 @@ jobs:
             /.github/workflows/feed-ingest-plan-test.yml
             /tests/fixtures/feed-ingest-plan/
             /tests/fixtures/ledger-file-writer/
+            /tests/fixtures/contracts/feed-ingest-dispatch/one-article.json
+            /tests/fixtures/contracts/feed-ingest-event/one-observation.json
             /docs/how-to/run-feed-ingest-plan-test.md
 
       - uses: oven-sh/setup-bun@v2

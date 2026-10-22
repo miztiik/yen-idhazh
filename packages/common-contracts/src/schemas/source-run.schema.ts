@@ -2,7 +2,8 @@
 import { z } from "zod";
 import { LifecycleStatusSchema, SourceSnapshotSchema } from "./source.schema";
 import { DropReasonSchema } from "./rejection.schema";
-import { CountSchema, DateStampSchema, FiniteSchema, NonEmptySchema, PositiveCountSchema, RejectionStageSchema, RunIdSchema, Sha256Schema, SlugSchema, TimestampSchema, VersionSchema, reject } from "./primitives";
+import { CountSchema, DateStampSchema, FiniteSchema, NonEmptySchema, PositiveCountSchema, RejectionStageSchema, RunIdSchema, Sha256Schema, SlugSchema, TimestampSchema, reject } from "./primitives";
+import { FEED_INGEST_AUDIT_VERSION } from "../version";
 
 export const FetchStatusSchema = z.enum(["not_requested", "success", "http_failure", "network_failure", "timeout"]);
 export const ParseStatusSchema = z.enum(["not_attempted", "success", "empty", "failure"]);
@@ -24,7 +25,7 @@ export const LedgerCompletionEvidenceSchema = z.strictObject({
   if (new Set(value.files.map(file => file.file_id)).size !== value.files.length) reject(ctx, "ledger file identities must be distinct");
 });
 export const SourceRunRecordSchema = z.strictObject({
-  version: VersionSchema, date: DateStampSchema, correlation_id: NonEmptySchema,
+  version: z.literal(FEED_INGEST_AUDIT_VERSION).default(FEED_INGEST_AUDIT_VERSION), date: DateStampSchema, correlation_id: NonEmptySchema,
   run_id: RunIdSchema, attempt: PositiveCountSchema, source_id: SlugSchema,
   source: SourceSnapshotSchema, status: LifecycleStatusSchema,
   fetch_status: FetchStatusSchema, parse_status: ParseStatusSchema,
@@ -43,7 +44,7 @@ export const SourceRunRecordSchema = z.strictObject({
 }).superRefine((value, ctx) => {
   if (value.source_id !== value.source.source_id) reject(ctx, "source_id must match the recorded source snapshot");
   if (value.status !== value.source.status) reject(ctx, "status must match the recorded source lifecycle");
-  if (value.date !== value.observed_at.slice(0, 10)) reject(ctx, "date must match the UTC observation day");
+  if (value.date !== value.run_id.slice(0, 10)) reject(ctx, "date must match the original run UTC day");
   if (value.fetch_status === "not_requested") {
     if (value.fetch_duration_ms !== null) reject(ctx, "an unrequested fetch has no fetch duration");
   } else if (value.fetch_duration_ms === null) reject(ctx, "an attempted fetch records its duration");

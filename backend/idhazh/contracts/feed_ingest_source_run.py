@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, ClassVar, Literal, Self
+from typing import Annotated, Any, ClassVar, Literal, Self
 from uuid import UUID
 
 from pydantic import Field, StrictInt, field_validator, model_validator
@@ -80,12 +80,17 @@ class SourceRunRecord(Contract):
     __schema_stem__: ClassVar[str] = "feed-ingest-source-run"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-22",
+            change="Keep run date separate from the actual observation instant.",
+            why="A later publication observation must retain its original run identity.",
+        ),
+        ChangelogEntry(
             version="2026-10-20",
             change="Declare source-run observations and completion evidence.",
             why="A complete attempt must remain distinguishable from partial retries.",
         ),
     )
-    version: Literal["2026-10-20"] = "2026-10-20"
+    version: Literal["2026-10-22"] = "2026-10-22"
 
     date: DateStamp
     correlation_id: str = Field(min_length=1)
@@ -120,14 +125,21 @@ class SourceRunRecord(Contract):
     expected_source_count: Count | None = None
     completion_evidence: list[LedgerCompletionEvidence] | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_previous_version(cls, value: Any) -> Any:
+        if isinstance(value, dict) and value.get("version") == "2026-10-20":
+            return {**value, "version": "2026-10-22"}
+        return value
+
     @model_validator(mode="after")
     def validate_observation(self) -> Self:
         if self.source_id != self.source.source_id:
             raise ValueError("source_id must match the recorded source snapshot")
         if self.status != self.source.status:
             raise ValueError("status must match the recorded source lifecycle")
-        if self.date != self.observed_at[:10]:
-            raise ValueError("date must match the UTC observation day")
+        if self.date != self.run_id[:10]:
+            raise ValueError("date must match the original run UTC day")
         if self.fetch_status == "not_requested":
             if self.fetch_duration_ms is not None:
                 raise ValueError("an unrequested fetch has no fetch duration")

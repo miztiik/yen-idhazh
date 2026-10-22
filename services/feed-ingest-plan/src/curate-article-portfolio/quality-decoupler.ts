@@ -1,5 +1,5 @@
 /** Which measured article components contribute before set-dependent penalties? */
-import { ArticleAssessmentRecordSchema } from "@idhazh/common-contracts";
+import { ArticleAssessmentRecordSchema, FEED_INGEST_AUDIT_VERSION } from "@idhazh/common-contracts";
 import type { PortfolioArticle } from "./portfolio-input";
 
 export function measureArticle(article: PortfolioArticle) {
@@ -22,23 +22,23 @@ export function measureArticle(article: PortfolioArticle) {
 
 export function recordAssessment(article: PortfolioArticle, observedAt: string) {
   const { candidate, policy, freshness, evidence } = article;
-  const published = freshness.timing_source === "published_at";
+  const measured = freshness.timing_source !== "unknown";
   const observedExtraction = article.observation?.extraction;
   const extraction = observedExtraction === "success";
   const failedExtraction = observedExtraction === "failed" || observedExtraction === "empty";
   const suitability = article.observation?.paywall !== null && article.observation !== null;
   const { mmr_weights, ...curate } = policy.curate;
   return ArticleAssessmentRecordSchema.parse({
-    version: candidate.version, date: observedAt.slice(0, 10),
+    version: FEED_INGEST_AUDIT_VERSION, date: observedAt.slice(0, 10),
     correlation_id: candidate.correlation_id, candidate_id: candidate.candidate_id,
     source_id: candidate.source_id, source: candidate.source, labels: candidate.labels,
     canonical_url: candidate.canonical_url, url_key: candidate.url_key,
     stage: "curate-article-portfolio", decision: "selected", reason: null, observed_at: observedAt,
     policy: { ...candidate.policy, ...policy.triage, ...curate, ...mmr_weights },
-    effective_published_at: published ? freshness.effective_published_at : null,
-    publication_clock: published ? "published_at" : "unavailable",
-    age_hours: published ? Math.max(0, freshness.age_hours!) : null,
-    max_age_hours: published ? policy.triage.max_age_hours : null,
+    timing_at: measured ? freshness.timing_at : null,
+    timing_basis: measured ? freshness.timing_source : "unavailable",
+    age_hours: measured ? freshness.age_hours : null,
+    max_age_hours: measured ? policy.triage.max_age_hours : null,
     extracted_word_count: extraction ? candidate.word_count : null, source_form: candidate.source.form,
     extraction_outcome: extraction ? "success" : failedExtraction ? "failed"
       : observedExtraction === "not-attempted" ? "not_attempted" : "unavailable",

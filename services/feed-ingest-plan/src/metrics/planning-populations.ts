@@ -1,8 +1,8 @@
 /** Which complete recorded planning attempt supplies one day's measured populations? */
 import { isDeepStrictEqual } from "node:util";
 import {
-  ArticleAssessmentRecordSchema, CONTRACT_VERSION, CandidateRejectionRecordSchema, DiversityMetricRowSchema,
-  EditorialSelectionRowSchema, FeedIngestDispatchSchema, SourceRunRecordSchema,
+  ArticleAssessmentRecordSchema, CONTRACT_VERSION, CandidateRejectionRecordSchema,
+  EditorialSelectionRowSchema,
 } from "@idhazh/common-contracts";
 import type { LedgerRowContract } from "@idhazh/ledger-file-writer";
 import type { SourceRunRecord } from "@idhazh/common-contracts";
@@ -11,6 +11,9 @@ import type { AttemptFinding, AttemptHistory, ProvenAttempt } from "../read-ledg
 import { readLedgerDay } from "../read-ledger-history/read-period";
 import type { NamedDayInput } from "../read-ledger-history/read-period";
 import { uniqueRecorded } from "./fingerprint-dedup";
+import {
+  ArticleAssessmentContract, DiversityMetricContract, DispatchContract, SourceRunContract,
+} from "./audit-contracts";
 
 export type PopulationItem = Readonly<{ candidate_id: string; source_id: string; source_kind: string; url_key: string | null }>;
 export type PlanningStage = "input" | "freshness" | "deduplication" | "normalization" | "selection";
@@ -32,13 +35,13 @@ export type NamedPlanningHistory = Readonly<{
 export async function readPlanningHistory(input: NamedPlanningHistory): Promise<AttemptHistory> {
   const sources = await readLedgerDay({
     ...input.sources, ledger: "source-runs",
-    contract: { schema: SourceRunRecordSchema, schemaVersion: CONTRACT_VERSION },
+    contract: SourceRunContract,
   });
   const schemas: Record<CompletionLedger, LedgerRowContract<object>> = {
-    "article-assessments": { schema: ArticleAssessmentRecordSchema, schemaVersion: CONTRACT_VERSION },
-    diversity: { schema: DiversityMetricRowSchema, schemaVersion: CONTRACT_VERSION },
+    "article-assessments": ArticleAssessmentContract,
+    diversity: DiversityMetricContract,
     "editorial-selections": { schema: EditorialSelectionRowSchema, schemaVersion: CONTRACT_VERSION },
-    dispatches: { schema: FeedIngestDispatchSchema, schemaVersion: CONTRACT_VERSION },
+    dispatches: DispatchContract,
     rejections: { schema: CandidateRejectionRecordSchema, schemaVersion: CONTRACT_VERSION },
   };
   const read = async (ledger: CompletionLedger) => {
@@ -144,7 +147,8 @@ export function settlePlanningDay(history: AttemptHistory): PlanningDay {
   const runs: PlanningPopulation[] = [];
   const findings: AttemptFinding[] = [];
   let missing = false;
-  for (const run of new Set(history.sources.rows.map(held => held.row.run_id))) {
+  for (const run of new Set(history.sources.rows.filter(held => held.row.observation_phase === "plan_complete")
+    .map(held => held.row.run_id))) {
     const resolution = selectCompleteAttempt(history, run);
     findings.push(...resolution.findings);
     if (resolution.selected === null) missing = true;

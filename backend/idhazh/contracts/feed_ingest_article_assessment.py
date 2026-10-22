@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, ClassVar, Literal, Self
+from typing import Annotated, Any, ClassVar, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
@@ -29,7 +29,7 @@ from idhazh.contracts.sources import SourceForm
 
 Count = Annotated[StrictInt, Field(ge=0)]
 PositiveCount = Annotated[StrictInt, Field(gt=0)]
-FiniteNonNegative = Annotated[float, Field(ge=0, allow_inf_nan=False)]
+Finite = Annotated[float, Field(allow_inf_nan=False)]
 PositiveFinite = Annotated[float, Field(gt=0, allow_inf_nan=False)]
 
 
@@ -39,12 +39,17 @@ class ArticleAssessmentRecord(Contract):
     __schema_stem__: ClassVar[str] = "feed-ingest-article-assessment"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-22",
+            change="Preserve signed age and the measured timing basis and instant.",
+            why="First sight and tolerated future publication times are distinct evidence.",
+        ),
+        ChangelogEntry(
             version="2026-10-20",
             change="Declare stage-specific article assessment evidence.",
             why="Audit rows keep measured quality separate from source and portfolio effects.",
         ),
     )
-    version: Literal["2026-10-20"] = "2026-10-20"
+    version: Literal["2026-10-22"] = "2026-10-22"
 
     date: DateStamp
     correlation_id: NonEmpty
@@ -60,9 +65,9 @@ class ArticleAssessmentRecord(Contract):
     observed_at: Timestamp
     policy: PolicyIdentity
 
-    effective_published_at: Timestamp | None
-    publication_clock: Literal["published_at", "fetched_at", "unavailable"]
-    age_hours: FiniteNonNegative | None
+    timing_at: Timestamp | None
+    timing_basis: Literal["published_at", "first_seen", "fetched_at", "unavailable"]
+    age_hours: Finite | None
     max_age_hours: PositiveFinite | None
 
     extracted_word_count: Count | None
@@ -89,6 +94,19 @@ class ArticleAssessmentRecord(Contract):
     score_evidence: ScoreEvidence | None
     score_evidence_status: Literal["not_assessed", "assessed"]
 
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_previous_timing(cls, value: Any) -> Any:
+        if not isinstance(value, dict) or value.get("version") != "2026-10-20":
+            return value
+        migrated = dict(value)
+        if "effective_published_at" not in migrated or "publication_clock" not in migrated:
+            raise ValueError("legacy timing requires its recorded timestamp and clock")
+        migrated["timing_at"] = migrated.pop("effective_published_at")
+        migrated["timing_basis"] = migrated.pop("publication_clock")
+        migrated["version"] = "2026-10-22"
+        return migrated
+
     @model_validator(mode="after")
     def validate_evidence(self) -> Self:
         if self.source_id != self.source.source_id:
@@ -103,11 +121,11 @@ class ArticleAssessmentRecord(Contract):
             raise ValueError("only rejected decisions carry a rejection reason")
         if self.reason is not None and self.stage not in REASON_STAGES[self.reason]:
             raise ValueError("rejection reason is not valid for the recorded stage")
-        if self.publication_clock == "unavailable":
-            if self.effective_published_at is not None or self.age_hours is not None:
-                raise ValueError("unavailable publication timing carries no timestamp or age")
-        elif self.effective_published_at is None or self.age_hours is None:
-            raise ValueError("available publication timing carries its timestamp and age")
+        if self.timing_basis == "unavailable":
+            if self.timing_at is not None or self.age_hours is not None:
+                raise ValueError("unavailable timing carries no timestamp or age")
+        elif self.timing_at is None or self.age_hours is None:
+            raise ValueError("available timing carries its measured timestamp and age")
         if (self.age_hours is None) != (self.max_age_hours is None):
             raise ValueError("age and its effective cutoff are recorded together")
         if self.extraction_outcome == "success":

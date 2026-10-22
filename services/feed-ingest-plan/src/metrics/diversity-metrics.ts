@@ -1,5 +1,7 @@
 /** Which source diversity readings are supported by this run's recorded memberships? */
-import { CONTRACT_VERSION, DiversityMetricRowSchema, FeedMetricsConfigSchema } from "@idhazh/common-contracts";
+import {
+  CONTRACT_VERSION, FEED_INGEST_AUDIT_VERSION, DiversityMetricRowSchema, FeedMetricsConfigSchema,
+} from "@idhazh/common-contracts";
 import type { DiversityMetricRow, FeedIngestCandidate } from "@idhazh/common-contracts";
 import type { FeedPlanResult } from "../run-feed-plan";
 import type { StageMembership } from "./stage-membership";
@@ -38,7 +40,7 @@ export function measuredRatio(numerator: number, denominator: number, field: str
 }
 
 export function topSourceShare(counts: readonly number[], count: number) {
-  if (count !== 1 && count !== 5 && count !== 10) throw new Error(`metrics.top_source_counts.${count}: top_k cannot retain this measurement`);
+  if (!Number.isSafeInteger(count) || count < 1) throw new Error(`metrics.top_source_counts.${count}: top_k must be a positive safe integer`);
   const total = validateCounts(counts);
   const numerator = counts.toSorted((a, b) => b - a).slice(0, count).reduce((sum, value) => sum + value, 0);
   return { numerator, denominator: total, value: measuredRatio(numerator, total, "top_source_concentration") };
@@ -58,7 +60,7 @@ export function createMetricTemplate(
   configSha256: string, sourceCount: number | null,
 ): DiversityMetricRow {
   return {
-    version: CONTRACT_VERSION, date: context.date, correlation_id: context.correlation_id, run_id: context.run_id,
+    version: FEED_INGEST_AUDIT_VERSION, date: context.date, correlation_id: context.correlation_id, run_id: context.run_id,
     metric: "effective_number_of_sources", basis: "selected", as_of: context.now,
     window_start: null, window_end: null, dimension: "source", stage: null, window_days: null,
     dimension_value: null, value: null, unit: "sources", before_value: null, after_value: null,
@@ -98,7 +100,6 @@ export function calculateDiversityMetrics(result: FeedPlanResult, membership: St
   record({ value: effectiveSources(selectedCounts), item_count: membership.selected.length });
   record({ metric: "source_gini", unit: "ratio", value: sourceGini(selectedCounts), item_count: membership.selected.length });
   for (const count of new Set(config.top_source_counts)) {
-    if (count !== 1 && count !== 5 && count !== 10) throw new Error(`metrics.top_source_counts.${count}: unsupported top_k`);
     record({ metric: "top_source_concentration", unit: "ratio", top_k: count,
       ...topSourceShare(selectedCounts, count), item_count: membership.selected.length });
   }
@@ -140,7 +141,6 @@ export function calculateDiversityMetrics(result: FeedPlanResult, membership: St
     });
   }
   for (const count of new Set(config.top_source_counts)) {
-    if (count !== 1 && count !== 5 && count !== 10) throw new Error("top_k: unsupported configured count");
     record({ metric: "top_source_concentration", basis: "published", unit: "ratio", top_k: count, unavailable_reason: "missing_publication" });
   }
   for (const window of new Set(config.overlap_windows_days)) {

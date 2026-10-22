@@ -2,18 +2,19 @@
 import { z } from "zod";
 import { ArticleLabelsSchema, PolicyIdentitySchema, ScoreEvidenceSchema, SourceFormSchema, SourceSnapshotSchema } from "./source.schema";
 import { DropReasonSchema, REASON_STAGES } from "./rejection.schema";
-import { CountSchema, DateStampSchema, NonEmptySchema, NonNegativeSchema, PlanningStageSchema, PositiveCountSchema, PositiveSchema, Sha256Schema, SlugSchema, TimestampSchema, UrlSchema, VersionSchema, deriveUrlKey, reject } from "./primitives";
+import { CountSchema, DateStampSchema, FiniteSchema, NonEmptySchema, PlanningStageSchema, PositiveCountSchema, PositiveSchema, Sha256Schema, SlugSchema, TimestampSchema, UrlSchema, deriveUrlKey, reject } from "./primitives";
+import { FEED_INGEST_AUDIT_VERSION } from "../version";
 
 export const VerdictStatusSchema = z.enum(["not_assessed", "assessed"]);
 export const ArticleAssessmentRecordSchema = z.strictObject({
-  version: VersionSchema, date: DateStampSchema, correlation_id: NonEmptySchema,
+  version: z.literal(FEED_INGEST_AUDIT_VERSION).default(FEED_INGEST_AUDIT_VERSION), date: DateStampSchema, correlation_id: NonEmptySchema,
   candidate_id: Sha256Schema, source_id: SlugSchema, source: SourceSnapshotSchema, labels: ArticleLabelsSchema,
   canonical_url: UrlSchema.nullable(), url_key: Sha256Schema.nullable(),
   stage: PlanningStageSchema, decision: z.enum(["admitted", "rejected", "selected"]),
   reason: DropReasonSchema.nullable(), observed_at: TimestampSchema, policy: PolicyIdentitySchema,
-  effective_published_at: TimestampSchema.nullable(),
-  publication_clock: z.enum(["published_at", "fetched_at", "unavailable"]),
-  age_hours: NonNegativeSchema.nullable(), max_age_hours: PositiveSchema.nullable(),
+  timing_at: TimestampSchema.nullable(),
+  timing_basis: z.enum(["published_at", "first_seen", "fetched_at", "unavailable"]),
+  age_hours: FiniteSchema.nullable(), max_age_hours: PositiveSchema.nullable(),
   extracted_word_count: CountSchema.nullable(), source_form: SourceFormSchema,
   extraction_outcome: z.enum(["success", "failed", "not_attempted", "unavailable"]),
   word_threshold: PositiveCountSchema.nullable(), author_present: z.boolean().nullable(),
@@ -32,9 +33,9 @@ export const ArticleAssessmentRecordSchema = z.strictObject({
   if (value.canonical_url !== null && value.url_key !== deriveUrlKey(value.canonical_url)) reject(ctx, "url_key must match canonical_url");
   if ((value.decision === "rejected") !== (value.reason !== null)) reject(ctx, "only rejected decisions carry a rejection reason");
   if (value.reason !== null && !(REASON_STAGES[value.reason] as readonly string[]).includes(value.stage)) reject(ctx, "rejection reason is not valid for the recorded stage");
-  if (value.publication_clock === "unavailable") {
-    if (value.effective_published_at !== null || value.age_hours !== null) reject(ctx, "unavailable publication timing carries no timestamp or age");
-  } else if (value.effective_published_at === null || value.age_hours === null) reject(ctx, "available publication timing carries its timestamp and age");
+  if (value.timing_basis === "unavailable") {
+    if (value.timing_at !== null || value.age_hours !== null) reject(ctx, "unavailable timing carries no timestamp or age");
+  } else if (value.timing_at === null || value.age_hours === null) reject(ctx, "available timing carries its measured timestamp and age");
   if ((value.age_hours === null) !== (value.max_age_hours === null)) reject(ctx, "age and its effective cutoff are recorded together");
   if (value.extraction_outcome === "success") {
     if (value.extracted_word_count === null || value.word_threshold === null) reject(ctx, "successful extraction records count and threshold");
@@ -56,3 +57,20 @@ export const ArticleAssessmentRecordSchema = z.strictObject({
   if ((value.score_evidence_status === "assessed") !== (value.score_evidence !== null)) reject(ctx, "score evidence must match its availability status");
 });
 export type ArticleAssessmentRecord = z.infer<typeof ArticleAssessmentRecordSchema>;
+
+const { timing_at: _timingAt, timing_basis: _timingBasis, ...legacyFields } = ArticleAssessmentRecordSchema.shape;
+export const LegacyArticleAssessmentSchema = z.strictObject({
+  ...legacyFields,
+  version: z.literal("2026-10-20"),
+  effective_published_at: TimestampSchema.nullable(),
+  publication_clock: z.enum(["published_at", "fetched_at", "unavailable"]),
+  age_hours: FiniteSchema.min(0).nullable(),
+});
+
+export function migrateArticleAssessment(row: object): ArticleAssessmentRecord {
+  const { effective_published_at, publication_clock, ...rest } = LegacyArticleAssessmentSchema.parse(row);
+  return ArticleAssessmentRecordSchema.parse({
+    ...rest, version: FEED_INGEST_AUDIT_VERSION,
+    timing_at: effective_published_at, timing_basis: publication_clock,
+  });
+}

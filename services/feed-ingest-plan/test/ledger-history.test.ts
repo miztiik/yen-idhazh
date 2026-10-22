@@ -6,11 +6,11 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import {
   ArticleAssessmentRecordSchema, CandidateRejectionRecordSchema, CONTRACT_VERSION,
-  DiversityMetricRowSchema, EditorialSelectionRowSchema, FeedIngestDispatchSchema, SourceRunRecordSchema,
+  EditorialSelectionRowSchema, SourceRunRecordSchema,
 } from "@idhazh/common-contracts";
 import type { LedgerCompletionEvidence } from "@idhazh/common-contracts";
 import { appendIdentityColumns, describeObjectSchema, digestRows, persistLedger } from "@idhazh/ledger-file-writer";
-import type { PersistLedgerResult, StoredLedgerRow } from "@idhazh/ledger-file-writer";
+import type { LedgerRowContract, PersistLedgerResult, StoredLedgerRow } from "@idhazh/ledger-file-writer";
 import { Int64, tableFromIPC, vectorFromArray } from "apache-arrow";
 import initializeParquet, { Table as WasmTable, WriterPropertiesBuilder, readMetadata, readParquet, writeParquet } from "parquet-wasm/esm";
 import { tableToIPC } from "apache-arrow";
@@ -21,6 +21,9 @@ import type { AttemptHistory } from "../src/read-ledger-history/complete-attempt
 import { readHistoricalSelections } from "../src/partition-article-shards/read-editorial-selection";
 import { partitionArticles, persistDispatches } from "../src/partition-article-shards/shard-packer";
 import { fixtureInput, readWritten, registration, settings, writer, writeRows } from "./partition-fixtures";
+import {
+  ArticleAssessmentContract, DiversityMetricContract, DispatchContract, SourceRunContract, legacyAuditSchemas,
+} from "../src/metrics/audit-contracts";
 
 const selectionContract = { schema: EditorialSelectionRowSchema, schemaVersion: CONTRACT_VERSION };
 beforeAll(async () => { await initializeParquet(); });
@@ -31,7 +34,7 @@ function evidence(ledger: LedgerCompletionEvidence["ledger"], written: PersistLe
     files: written.files.map(({ file_id, content_sha256, row_count }) => ({ file_id, content_sha256, row_count })),
   };
 }
-async function completeHistory(root: string) {
+async function completeHistory(root: string, observedAt?: string) {
   const input = await fixtureInput(root, { count: 1 });
   const packed = partitionArticles({
     selections: input.curation.rows, candidates: input.candidates,
@@ -40,9 +43,11 @@ async function completeHistory(root: string) {
   const dispatch = await persistDispatches(packed, {
     outputRoot: root, writerContext: writer(input.fixture.run_id), ledgerSettings: settings,
     registration: registration("dispatches"), date: input.fixture.date,
+    correlation_id: input.fixture.correlation_id,
   });
   const assessments = await writeRows(root, "article-assessments", input.fixture.date,
-    ArticleAssessmentRecordSchema, input.curation.assessments, writer(input.fixture.run_id));
+    ArticleAssessmentRecordSchema, input.curation.assessments, writer(input.fixture.run_id),
+    ArticleAssessmentContract.schemaVersion);
   const empty: PersistLedgerResult = { status: "empty", files: [] };
   const completion = [
     evidence("editorial-selections", input.persisted.selections), evidence("dispatches", dispatch),
@@ -56,19 +61,19 @@ async function completeHistory(root: string) {
     published_count: null, lead_count: null, drop_reasons: [], fetch_duration_ms: 1, parse_duration_ms: 1,
     last_failure_at: null, last_failure_reason: null, history_success_fraction: null,
     history_success_attempts: null, history_window_days: null, observation_phase: "plan_complete",
-    observed_at: input.fixture.observed_at, expected_source_count: 1,
+    observed_at: observedAt ?? input.fixture.observed_at, expected_source_count: 1,
     completion_evidence: zero ? completion.map(item => ({ ...item, row_count: 0, files: [] })) : completion,
   });
   const sourceWritten = await writeRows(root, "source-runs", input.fixture.date,
-    SourceRunRecordSchema, [source()], writer(input.fixture.run_id));
+    SourceRunRecordSchema, [source()], writer(input.fixture.run_id), SourceRunContract.schemaVersion);
   const sources = await readWritten(root, "source-runs", input.fixture.date,
-    { schema: SourceRunRecordSchema, schemaVersion: CONTRACT_VERSION }, sourceWritten);
+    SourceRunContract, sourceWritten);
   const ledgers: AttemptHistory["ledgers"] = {
     "editorial-selections": await readWritten(root, "editorial-selections", input.fixture.date, selectionContract, input.persisted.selections),
-    dispatches: await readWritten(root, "dispatches", input.fixture.date, { schema: FeedIngestDispatchSchema, schemaVersion: CONTRACT_VERSION }, dispatch),
-    "article-assessments": await readWritten(root, "article-assessments", input.fixture.date, { schema: ArticleAssessmentRecordSchema, schemaVersion: CONTRACT_VERSION }, assessments),
+    dispatches: await readWritten(root, "dispatches", input.fixture.date, DispatchContract, dispatch),
+    "article-assessments": await readWritten(root, "article-assessments", input.fixture.date, ArticleAssessmentContract, assessments),
     rejections: await readWritten(root, "rejections", input.fixture.date, { schema: CandidateRejectionRecordSchema, schemaVersion: CONTRACT_VERSION }, empty),
-    diversity: await readWritten(root, "diversity", input.fixture.date, { schema: DiversityMetricRowSchema, schemaVersion: CONTRACT_VERSION }, empty),
+    diversity: await readWritten(root, "diversity", input.fixture.date, DiversityMetricContract, empty),
   };
   return { input, source, sourceWritten, history: { sources, ledgers }, packed };
 }
@@ -95,6 +100,19 @@ async function compactSelections(
   return { path, indexPath, index };
 }
 
+async function migrateAuditFixture<TLegacy extends object, TCurrent extends object>(
+  root: string, day: string, run: string, ledger: Parameters<typeof readLedgerDay>[0]["ledger"], path: string,
+  legacySchema: LedgerRowContract<TLegacy>["schema"], currentContract: LedgerRowContract<TCurrent>,
+): Promise<TCurrent> {
+  const input: unknown = await Bun.file(new URL(path, import.meta.url)).json();
+  const row = legacySchema.parse(input);
+  const written = await writeRows(root, ledger, day, legacySchema, [row], writer(run), "2026-10-20");
+  const loaded = await readWritten(root, ledger, day, currentContract, written);
+  expect(loaded.rows).toHaveLength(1);
+  expect(loaded.rows[0]!.row).toMatchObject({ version: "2026-10-22" });
+  return loaded.rows[0]!.row;
+}
+
 test("native raw and daily reads preserve original writer identity instead of the compactor identity", async () => {
   const root = await mkdtemp(join(tmpdir(), "history-periods-"));
   try {
@@ -108,12 +126,57 @@ test("native raw and daily reads preserve original writer identity instead of th
       ledger: "editorial-selections", day: input.fixture.date, contract: selectionContract,
       indexes: { daily: compact.indexPath }, rawFiles: input.persisted.selections.files.map(file => join(root, file.path)),
     });
+
     expect(current.tier).toBe("daily");
     expect(current.rows).toEqual([original]);
     expect(current.files[0]!.envelope.identity.attempt).toBe(9);
     expect(current.rows[0]!.identity.attempt).toBe(1);
     expect(current.rows[0]!.identity.shard).toBe(0);
     expect(current.rows[0]!.identity.unit_id).toBe(original.identity.unit_id);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("plan completion observed after midnight stays in its original run-day partition", async () => {
+  const root = await mkdtemp(join(tmpdir(), "history-late-plan-observation-"));
+  try {
+    const { input, history } = await completeHistory(root, "2026-10-22T00:00:00Z");
+    expect(history.sources.rows).toHaveLength(1);
+    expect(history.sources.rows[0]!.identity.covers).toBe(input.fixture.date);
+    expect(history.sources.rows[0]!.row).toMatchObject({
+      date: input.fixture.date, run_id: input.fixture.run_id, observed_at: "2026-10-22T00:00:00Z",
+      observation_phase: "plan_complete",
+    });
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("recorded 2026-10-20 audit rows migrate through native Parquet without invented evidence", async () => {
+  const root = await mkdtemp(join(tmpdir(), "history-legacy-contracts-"));
+  const day = "2026-10-20";
+  const run = `${day}-1`;
+  try {
+    const migrated = new Map<string, object>();
+    migrated.set("article-assessments", await migrateAuditFixture(
+      root, day, run, "article-assessments",
+      "../../../tests/fixtures/contracts/feed-ingest-article-assessment/one-observation.json",
+      legacyAuditSchemas.ArticleAssessment, ArticleAssessmentContract));
+    migrated.set("diversity", await migrateAuditFixture(
+      root, day, run, "diversity",
+      "../../../tests/fixtures/contracts/feed-ingest-diversity/one-observation.json",
+      legacyAuditSchemas.DiversityMetric, DiversityMetricContract));
+    migrated.set("source-runs", await migrateAuditFixture(
+      root, day, run, "source-runs",
+      "../../../tests/fixtures/contracts/feed-ingest-source-run/one-observation.json",
+      legacyAuditSchemas.SourceRun, SourceRunContract));
+    migrated.set("dispatches", await migrateAuditFixture(
+      root, day, run, "dispatches",
+      "../../../tests/fixtures/contracts/feed-ingest-dispatch/one-article.json",
+      legacyAuditSchemas.Dispatch, DispatchContract));
+    expect(migrated.get("article-assessments")).toMatchObject({
+      timing_basis: "unavailable", timing_at: null, age_hours: null, max_age_hours: null,
+    });
+    expect(migrated.get("diversity")).toMatchObject({ top_k: null });
+    expect(migrated.get("source-runs")).toMatchObject({ date: day, run_id: run });
+    expect(migrated.get("dispatches")).toHaveProperty("content");
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -213,8 +276,8 @@ test("native digest tampering, wrong ledger, schema, index counts and raw identi
     const file = input.persisted.selections.files[0]!;
     const path = join(root, file.path);
     const raw = await readLedgerParquet(path, "editorial-selections", selectionContract);
-    await expect(readLedgerParquet(path, "dispatches", selectionContract)).rejects.toThrow("ledger or row schema");
-    await expect(readLedgerParquet(path, "editorial-selections", { ...selectionContract, schemaVersion: "2026-10-19" })).rejects.toThrow("ledger or row schema");
+    await expect(readLedgerParquet(path, "dispatches", selectionContract)).rejects.toThrow("Parquet ledger");
+    await expect(readLedgerParquet(path, "editorial-selections", { ...selectionContract, schemaVersion: "2026-10-19" })).rejects.toThrow("Parquet row schema version");
     const compact = await compactSelections(root, input, raw.rows, "daily");
     await writeFile(compact.indexPath, JSON.stringify({ ...compact.index, entries: [{ ...compact.index.entries[0], rows: 2 }] }));
     await expect(readLedgerDay({ ledger: "editorial-selections", day: input.fixture.date, contract: selectionContract,
@@ -257,16 +320,17 @@ test("complete original files beat a newer partial retry and replay exact origin
     expect(complete.selected?.attempt).toBe(1);
     expect(readHistoricalSelections(complete.selected!).map(article => article.content)).toEqual(packed.dispatches.map(row => row.content));
     const partial = await writeRows(root, "source-runs", input.fixture.date, SourceRunRecordSchema,
-      [{ ...source(2), expected_source_count: 2 }], writer(input.fixture.run_id, 2));
+      [{ ...source(2), expected_source_count: 2 }], writer(input.fixture.run_id, 2), SourceRunContract.schemaVersion);
     const sources = await readWritten(root, "source-runs", input.fixture.date,
-      { schema: SourceRunRecordSchema, schemaVersion: CONTRACT_VERSION },
+      SourceRunContract,
       { status: "written", files: [...sourceWritten.files, ...partial.files] });
     const resolution = selectCompleteAttempt({ ...history, sources });
     expect(resolution.selected?.attempt).toBe(1);
     expect(resolution.findings.find(finding => finding.attempt === 2)?.status).toBe("incomplete");
-    const zero = await writeRows(root, "source-runs", input.fixture.date, SourceRunRecordSchema, [source(3, true)], writer(input.fixture.run_id, 3));
+    const zero = await writeRows(root, "source-runs", input.fixture.date, SourceRunRecordSchema,
+      [source(3, true)], writer(input.fixture.run_id, 3), SourceRunContract.schemaVersion);
     const zeroSources = await readWritten(root, "source-runs", input.fixture.date,
-      { schema: SourceRunRecordSchema, schemaVersion: CONTRACT_VERSION },
+      SourceRunContract,
       { status: "written", files: [...sourceWritten.files, ...partial.files, ...zero.files] });
     const empty = selectCompleteAttempt({ ...history, sources: zeroSources });
     expect(empty.selected?.attempt).toBe(3);

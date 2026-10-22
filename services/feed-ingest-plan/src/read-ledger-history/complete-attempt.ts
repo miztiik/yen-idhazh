@@ -26,7 +26,9 @@ export function selectCompleteAttempt(history: AttemptHistory, runId?: string): 
   const groups = new Map<string, StoredLedgerRow<SourceRunRecord>[]>();
   for (const held of history.sources.rows) {
     const row = SourceRunRecordSchema.parse(held.row);
-    if (row.date !== history.sources.day || held.identity.covers !== row.date
+    const observationDay = row.observed_at.slice(0, 10);
+    if (row.date !== row.run_id.slice(0, 10)
+      || held.identity.covers !== (row.observation_phase === "plan_complete" ? row.date : observationDay)
       || held.identity.ledger !== "source-runs" || held.identity.run_id !== row.run_id
       || held.identity.attempt !== row.attempt) throw new Error("Source completion row differs from its original identity");
     if (row.observation_phase !== "plan_complete" || (runId !== undefined && row.run_id !== runId)) continue;
@@ -86,9 +88,9 @@ export function selectCompleteAttempt(history: AttemptHistory, runId?: string): 
         }
         if (file.rows.some(held => {
           const row = held.row as Record<string, unknown>;
-          const content = row.content;
-          const correlation = typeof content === "object" && content !== null && "correlation_id" in content
-            ? content.correlation_id : row.correlation_id;
+          const selection = row.selection;
+          const correlation = typeof selection === "object" && selection !== null && "correlation_id" in selection
+            ? selection.correlation_id : row.correlation_id;
           return held.identity.run_id !== first.run_id || held.identity.attempt !== first.attempt
             || held.identity.covers !== first.date || correlation !== first.correlation_id;
         })) {

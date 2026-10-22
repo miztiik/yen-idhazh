@@ -118,8 +118,8 @@ function assessment(day: string, categories: string[] | null) {
     reason: null,
     observed_at: observedAt,
     policy: policy(),
-    effective_published_at: observedAt,
-    publication_clock: "published_at",
+    timing_at: observedAt,
+    timing_basis: "published_at",
     age_hours: -0.0,
     max_age_hours: 1e20,
     extracted_word_count: 180,
@@ -652,7 +652,7 @@ describe("ledger Parquet readback", () => {
       expect(dispatch.partition.worker_assignment).not.toBe(writerContext.shard);
       const raw = await persistLedger({
         ledger: "dispatches",
-        rowContract: { schema: FeedIngestDispatchSchema, schemaVersion: "2026-10-20" },
+        rowContract: { schema: FeedIngestDispatchSchema, schemaVersion: "2026-10-22" },
         rows: [dispatch],
         outputRoot: root,
         period: { tier: "raw", covers: dispatch.content.date },

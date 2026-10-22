@@ -40,7 +40,7 @@ def test_declared_contract(module: str, name: str) -> None:
         pytest.fail(f"Missing feed planning contract: {name}")
     contract = getattr(loaded, name)
     assert contract in idhazh.contracts.CONTRACTS
-    assert contract.schema_version() == "2026-10-20"
+    assert contract.schema_version() == contract.model_fields["version"].default
     assert contract.json_schema()["additionalProperties"] is False
 
 

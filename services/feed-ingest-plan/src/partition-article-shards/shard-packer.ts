@@ -1,5 +1,5 @@
 /** Which configured allocation becomes a validated dispatch without changing editorial choices? */
-import { CONTRACT_VERSION, FeedIngestDispatchSchema } from "@idhazh/common-contracts";
+import { FeedIngestDispatchSchema } from "@idhazh/common-contracts";
 import type { FeedIngestCandidate, EditorialSelectionRow, WriterIdentity } from "@idhazh/common-contracts";
 import { persistLedger } from "@idhazh/ledger-file-writer";
 import type { LedgerRegistration, LedgerSettings } from "@idhazh/ledger-file-writer";
@@ -9,6 +9,7 @@ import { preparePartitionInput, resolvePartitionRequest } from "./partition-inpu
 import type { PartitionRequest } from "./partition-input";
 import { assignBinPack } from "./bin-pack";
 import { assignRoundRobin } from "./round-robin";
+import { DispatchContract } from "../metrics/audit-contracts";
 
 export function partitionArticles(input: Readonly<{
   selections: readonly EditorialSelectionRow[];
@@ -39,19 +40,22 @@ export async function persistDispatches(
   result: ReturnType<typeof partitionArticles>,
   context: Readonly<{
     outputRoot: string; writerContext: WriterIdentity; ledgerSettings: LedgerSettings;
-    registration: LedgerRegistration; date: string;
+    registration: LedgerRegistration; date: string; correlation_id: string;
   }>,
 ) {
   if (context.registration.name !== "dispatches" || context.ledgerSettings.format !== "parquet") {
     throw new Error("Dispatch persistence requires its registered Parquet ledger");
   }
-  if (result.dispatches.some(row => row.content.run_id !== context.writerContext.run_id
-    || row.content.date !== context.date)) throw new Error("Dispatch writer differs from the planning context");
+  if (context.writerContext.run_id.slice(0, 10) !== context.date
+    || result.dispatches.some(row => row.selection.date !== context.date
+      || row.selection.correlation_id !== context.correlation_id)) {
+    throw new Error("Dispatch writer differs from the selection planning context");
+  }
   const stored = await persistLedger({
     ledger: "dispatches", registryEntry: context.registration, outputRoot: context.outputRoot,
     writerContext: context.writerContext, ledgerSettings: context.ledgerSettings,
     period: { tier: "raw", covers: context.date },
-    rowContract: { schema: FeedIngestDispatchSchema, schemaVersion: CONTRACT_VERSION },
+    rowContract: DispatchContract,
     rows: result.dispatches,
   });
   if (stored.status === "skipped") throw new Error("Dispatch ledger is unavailable");

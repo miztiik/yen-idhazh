@@ -1,6 +1,6 @@
 /** Which source and stage outcomes can validated planner events actually prove? */
 import { appendFile, readFile } from "node:fs/promises";
-import { FeedIngestConfigSchema, FeedIngestEventSchema } from "../../packages/common-contracts/src/index";
+import { FeedIngestConfigSchema, readFeedIngestEvent } from "../../packages/common-contracts/src/index";
 import type { FeedIngestEvent } from "../../packages/common-contracts/src/index";
 
 export type PlannerReport = Readonly<{ annotations: readonly string[]; summary: string }>;
@@ -19,7 +19,8 @@ function escapeMarkdown(value: string): string {
 }
 
 function validateEvents(input: unknown): FeedIngestEvent[] {
-  const events = FeedIngestEventSchema.array().parse(input);
+  if (!Array.isArray(input)) throw new Error("events must be an array");
+  const events = input.map(readFeedIngestEvent);
   const first = events[0];
   const identities = new Set<string>();
   let sequence = -1;
