@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { groupColumns } from '../src/lib/console/explorer/column-groups';
+import { configuredCatalog } from '../src/lib/data/configured-catalog';
 
 /**
  * How the column rail groups names under their ledger. The page names a
@@ -9,7 +10,7 @@ import { groupColumns } from '../src/lib/console/explorer/column-groups';
  */
 
 test('a ledger\'s columns group under it in the order they came, shown without the prefix', () => {
-	expect(groupColumns([
+	expect(groupColumns(configuredCatalog, [
 		{ name: 'item-health.version', type: 'VARCHAR' },
 		{ name: 'item-health.source_words_before_cap', type: 'BIGINT' },
 		{ name: 'published.covers', type: 'DATE' },
@@ -27,7 +28,7 @@ test('a ledger\'s columns group under it in the order they came, shown without t
 });
 
 test('an answer\'s columns stand in one group with no ledger, names whole', () => {
-	expect(groupColumns([
+	expect(groupColumns(configuredCatalog, [
 		{ name: 'stage', type: 'VARCHAR' },
 		{ name: 'count_star()', type: 'BIGINT' },
 		{ name: 'not-a-ledger.x', type: 'DOUBLE' },
@@ -43,7 +44,7 @@ test('an answer\'s columns stand in one group with no ledger, names whole', () =
 });
 
 test('only neighbours share a group, and nothing is sorted', () => {
-	const groups = groupColumns([
+	const groups = groupColumns(configuredCatalog, [
 		{ name: 'seen.b', type: 'VARCHAR' },
 		{ name: 'answer', type: 'VARCHAR' },
 		{ name: 'seen.a', type: 'VARCHAR' }
@@ -53,5 +54,5 @@ test('only neighbours share a group, and nothing is sorted', () => {
 		[null, ['answer']],
 		['seen', ['a']]
 	]);
-	expect(groupColumns([])).toEqual([]);
+	expect(groupColumns(configuredCatalog, [])).toEqual([]);
 });

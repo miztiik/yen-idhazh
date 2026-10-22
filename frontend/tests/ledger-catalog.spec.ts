@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { configuredCatalog } from '../src/lib/data/configured-catalog';
 import { consentedSelection, parseLedgerCatalog } from '../src/lib/data/ledger-catalog';
+import { setAsideSentence } from '../src/lib/console/recording';
+import { dataPath, indexPath, ledgerFolder, rawDataPath, rawIndexPath } from '../src/lib/data/slice-reader';
 
 function registry() {
 	return JSON.parse(readFileSync(new URL('../../config/ledgers.json', import.meta.url), 'utf8'));
@@ -44,7 +46,25 @@ test('a safe new runtime name resolves from the supplied catalog without a compi
 		name: 'new-records', grain: 'raw-and-compact', prefix: ['feed-ingest-plan', 'new-records'],
 		publish_to_data_explorer: false
 	});
-	expect(parseLedgerCatalog(payload).require('new-records').prefix).toBe('feed-ingest-plan/new-records');
+	const catalog = parseLedgerCatalog(payload);
+	expect(catalog.require('new-records').prefix).toBe('feed-ingest-plan/new-records');
+	expect(ledgerFolder(catalog, 'new-records')).toBe('feed-ingest-plan/new-records');
+	expect(indexPath(catalog, 'new-records', 'daily')).toBe('compact/feed-ingest-plan/new-records/index/daily.json');
+	expect(dataPath(catalog, 'new-records', 'daily', '2026-10-22')).toBe('compact/feed-ingest-plan/new-records/daily/2026/10/22.parquet');
+	expect(rawIndexPath(catalog, 'new-records', '2026-10-22')).toBe('raw/feed-ingest-plan/new-records/index/2026-10-22.json');
+	expect(rawDataPath(catalog, 'new-records', '2026-10-22', 'part.parquet')).toBe('raw/feed-ingest-plan/new-records/2026/10/22/part.parquet');
+	expect(() => ledgerFolder(configuredCatalog, 'new-records')).toThrow(/does not register/);
+	expect(setAsideSentence('new-records', 'new-records', { '2026-10-22': 1 }, 'this answer', catalog))
+		.toContain('state/raw/feed-ingest-plan/new-records/set-aside/');
+});
+
+test('every configured compact ledger keeps its registered path layout', () => {
+	for (const entry of configuredCatalog.entries) {
+		const folder = entry.prefix;
+		expect(ledgerFolder(configuredCatalog, entry.name)).toBe(folder);
+		expect(indexPath(configuredCatalog, entry.name, 'daily')).toBe(`compact/${folder}/index/daily.json`);
+		expect(dataPath(configuredCatalog, entry.name, 'yearly', '2026')).toBe(`compact/${folder}/yearly/2026/2026.parquet`);
+	}
 });
 
 const invalidConsent = [undefined, null, 0, 1, 'true', 'false', [], {}];

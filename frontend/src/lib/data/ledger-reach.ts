@@ -44,7 +44,7 @@ import type { CompactEntry, IndexReading, Period } from './compact-index';
 import type { PageKeeper } from './page-keeper';
 import { firstNamed, newestHeld, newestNamed, type HeldPeriod } from './slice';
 import { explainRefusal, faultLine, LOG_PREFIX, readIndexFrom } from './slice-reader';
-import { LEDGER_NAMES, SliceRequestError, type DateStamp, type LedgerFault, type LedgerName } from './slice-shapes';
+import { SliceRequestError, type DateStamp, type LedgerFault, type LedgerName } from './slice-shapes';
 
 /** How far a ledger reaches, or which of three nothings it is. */
 export type LedgerReach =
@@ -66,7 +66,7 @@ function entriesOf(reading: IndexReading | null): CompactEntry[] {
 
 /** The oldest and the newest day `ledger` holds, from its three indexes as the page keeps them. */
 export async function readReach(keeper: PageKeeper, ledger: LedgerName): Promise<LedgerReach> {
-	if (!(LEDGER_NAMES as readonly string[]).includes(ledger)) {
+	if (keeper.catalog.get(ledger) === undefined) {
 		throw new SliceRequestError(`${JSON.stringify(ledger)} is not a ledger the console may query`);
 	}
 	const [daily, monthly, yearly] = await Promise.all([
@@ -75,7 +75,7 @@ export async function readReach(keeper: PageKeeper, ledger: LedgerName): Promise
 		readIndexFrom(keeper, ledger, 'yearly')
 	]);
 	if (daily === null) {
-		keeper.warn(faultLine(ledger, { fault: 'not-packed' }));
+		keeper.warn(faultLine(keeper.catalog, ledger, { fault: 'not-packed' }));
 		return { state: 'missing', fault: 'not-packed' };
 	}
 	if ('refused' in daily) {
@@ -89,7 +89,7 @@ export async function readReach(keeper: PageKeeper, ledger: LedgerName): Promise
 	let fault: Extract<LedgerFault, 'index-missing'> | null = null;
 	for (const [period, reading] of coarser) {
 		if (reading !== null) continue;
-		keeper.warn(faultLine(ledger, { fault: 'index-missing', period }));
+		keeper.warn(faultLine(keeper.catalog, ledger, { fault: 'index-missing', period }));
 		fault = 'index-missing';
 	}
 	const days = daily.index.entries;

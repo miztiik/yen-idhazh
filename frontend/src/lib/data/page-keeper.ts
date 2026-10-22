@@ -50,6 +50,7 @@
  */
 
 import type { OpenedAddress, QueryEngine } from './slice-query';
+import type { LedgerCatalog } from './ledger-catalog';
 
 /** Where the door's bytes come from, given a path under the state root.
  *  `null` means there is no such file; anything else that goes wrong is thrown. */
@@ -95,6 +96,8 @@ export type Holding =
 
 /** What one page keeps, and the three things a caller asks of it. */
 export interface PageKeeper {
+	/** The immutable ledger registry this page reads. */
+	readonly catalog: LedgerCatalog;
 	/** An index: its bytes, or `null` when there is no such file. Rejects when the fetch threw. */
 	index(path: string): Promise<Uint8Array | null>;
 	/** Has the engine hold every file in `files`, fetching and registering only
@@ -121,7 +124,7 @@ function forget<T>(held: Map<string, T>, key: string, value: T): void {
 }
 
 /** A keeper that reads through `source` and registers with the engine `openEngine` starts. */
-export function pageKeeper(source: ByteSource, openEngine: EngineOpener): PageKeeper {
+export function pageKeeper(source: ByteSource, openEngine: EngineOpener, catalog: LedgerCatalog): PageKeeper {
 	const indexes = new Map<string, Promise<Uint8Array | null>>();
 	/** Data files in flight, files that were not there, and bytes waiting for the engine. */
 	const arrivals = new Map<string, Promise<Arrival>>();
@@ -307,5 +310,5 @@ export function pageKeeper(source: ByteSource, openEngine: EngineOpener): PageKe
 		console.warn(line);
 	}
 
-	return { index, hold, release, heldBytes, warn };
+	return { catalog, index, hold, release, heldBytes, warn };
 }

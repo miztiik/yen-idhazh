@@ -8,13 +8,14 @@
  */
 
 // Relative, not `$lib`: the logic suite imports this module in plain Node.
+import type { LedgerCatalog } from '../../data/ledger-catalog';
 import type { LedgerName, SpanGap } from '../../data/slice-shapes';
 import { noRecordSentence, setAsideSentence } from '../recording';
 
 /** One paragraph under an answer: which ledger, which state, and the sentence. */
 export type GapLine = { kind: 'lost' | 'set-aside'; ledger: LedgerName; text: string };
 
-export function gapLines(gaps: readonly SpanGap[]): GapLine[] {
+export function gapLines(catalog: LedgerCatalog, gaps: readonly SpanGap[]): GapLine[] {
 	return gaps.flatMap((gap) => {
 		const lines: GapLine[] = [];
 		if (gap.lostDays.length > 0) {
@@ -24,7 +25,7 @@ export function gapLines(gaps: readonly SpanGap[]): GapLine[] {
 				text: noRecordSentence(`${gap.ledger} record`, gap.lostDays, (them) => `nothing from ${them} is in this answer`)
 			});
 		}
-		const setAside = setAsideSentence(gap.ledger, gap.ledger, gap.setAside, 'this answer');
+		const setAside = setAsideSentence(gap.ledger, gap.ledger, gap.setAside, 'this answer', catalog);
 		if (setAside !== null) lines.push({ kind: 'set-aside', ledger: gap.ledger, text: setAside });
 		return lines;
 	});

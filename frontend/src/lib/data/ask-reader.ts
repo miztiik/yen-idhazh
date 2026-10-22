@@ -20,7 +20,6 @@ import { readRawDayIndex } from './raw-day-index';
 import { siteMayHaveTrimmed } from './site-window';
 import { checkStatement, statementKind } from './statement';
 import {
-	LEDGER_NAMES,
 	type AskOptions,
 	type AskResult,
 	type Column,
@@ -130,6 +129,7 @@ function earlier(a: DateStamp | null, b: DateStamp | null): DateStamp | null {
  *  wholly inside them is read whole. The site opens a year file by address and fetches every
  *  other file; the page alone reads the archive's host, so every archive file is fetched. */
 function addCompactPlanned(
+	catalog: PageKeeper['catalog'],
 	files: readonly ChosenFile[],
 	ledger: LedgerName,
 	keeper: 'site' | 'archive',
@@ -142,7 +142,7 @@ function addCompactPlanned(
 			const to = covered.last < until ? covered.last : until;
 			const whole = file.firstDay === covered.first && to === covered.last;
 			return {
-				file: wanted(file.period, ledger, file, keeper === 'site' && RANGED_PERIODS.has(file.period)),
+				file: wanted(catalog, file.period, ledger, file, keeper === 'site' && RANGED_PERIODS.has(file.period)),
 				meta: { ledger, day: file.firstDay },
 				keeper,
 				window: whole ? null : { from: file.firstDay, to }
@@ -150,9 +150,9 @@ function addCompactPlanned(
 		});
 }
 
-function wanted(period: Period, ledger: LedgerName, file: ChosenFile, byRange = RANGED_PERIODS.has(period)): WantedFile {
+function wanted(catalog: PageKeeper['catalog'], period: Period, ledger: LedgerName, file: ChosenFile, byRange = RANGED_PERIODS.has(period)): WantedFile {
 	return {
-		path: dataPath(ledger, period, file.entry.covers),
+		path: dataPath(catalog, ledger, period, file.entry.covers),
 		version: dataVersion(file.entry),
 		bytes: file.entry.bytes,
 		byRange
@@ -166,7 +166,7 @@ async function rawListing(
 ): Promise<{ files: WantedFile[]; metas: FileMeta[] } | AskResult> {
 	let bytes: Uint8Array | null;
 	try {
-		bytes = await keeper.index(rawIndexPath(ledger, day));
+		bytes = await keeper.index(rawIndexPath(keeper.catalog, ledger, day));
 	} catch {
 		return { state: 'unreachable', ledger, at: day, fault: 'index-missing' };
 	}
@@ -186,7 +186,7 @@ async function rawListing(
 
 	return {
 		files: read.index.files.map((file, at) => ({
-			path: rawDataPath(ledger, day, file),
+			path: rawDataPath(keeper.catalog, ledger, day, file),
 			version: `${read.index.bytes[at]}`,
 			bytes: read.index.bytes[at] ?? 0,
 			byRange: false
@@ -223,7 +223,7 @@ async function compactIndexes(
 	} else if (read.failed === 'daily') {
 		return { state: 'missing', ledger };
 	} else {
-		keeper.warn(faultLine(ledger, { fault: 'index-missing', period: read.failed }));
+		keeper.warn(faultLine(keeper.catalog, ledger, { fault: 'index-missing', period: read.failed }));
 	}
 	return { state: 'unreachable', ledger, at: from, fault: 'index-missing' };
 }
@@ -280,7 +280,7 @@ export async function viewSource(
 	}
 	const newest = newestFile(indexes.daily, indexes.monthly, indexes.yearly);
 	if (newest === null) return { files: [], metas: [] };
-	return { files: [wanted(newest.period, ledger, newest)], metas: [{ ledger, day: newest.firstDay }] };
+	return { files: [wanted(keeper.catalog, newest.period, ledger, newest)], metas: [{ ledger, day: newest.firstDay }] };
 }
 
 /** One selected ledger's part of a question. `archiveAnswers` is false once the archive could not
@@ -312,7 +312,7 @@ async function planLedger(
 	/** One keeper's packed files for its part of the span, and what that part is missing.
 	 *  The archive's part comes first, so the lost days stay in order. */
 	const take = (choice: CompactChoice, held: 'site' | 'archive', until: DateStamp): void => {
-		files.push(...addCompactPlanned(choice.chosen, ledger, held, until));
+		files.push(...addCompactPlanned(keeper.catalog, choice.chosen, ledger, held, until));
 		lostDays.push(...choice.lostDays);
 		Object.assign(setAside, choice.setAside);
 	};
@@ -426,7 +426,7 @@ async function plan(
 		return { state: 'quiet', columns: [], read: { files: 0, bytes: 0, alreadyHeld: 0, ms: 0 }, cut: [], unanswered: [], gaps: [] };
 	}
 	for (const ledger of chosen) {
-		if (!(LEDGER_NAMES as readonly string[]).includes(ledger)) return { state: 'missing', ledger };
+		if (keeper.catalog.get(ledger) === undefined) return { state: 'missing', ledger };
 	}
 	return planOf(await Promise.all(chosen.map((ledger) => planLedger(keeper, archive, ledger, from, to, rawListed))), from, to);
 }
@@ -498,13 +498,14 @@ export function viewStatement(ledger: LedgerName, sources: readonly HeldSource[]
 }
 
 async function prepareViews(
+	keeper: PageKeeper,
 	engine: QueryEngine,
 	plans: readonly LedgerPlan[],
 	heldSources: readonly HeldSource[][]
 ): Promise<void> {
 	const selected = new Set(plans.map((one) => one.ledger));
-	for (const ledger of LEDGER_NAMES) {
-		if (!selected.has(ledger)) await engine.rows(`DROP VIEW IF EXISTS ${quoteIdent(ledger)}`, []);
+	for (const entry of keeper.catalog.entries) {
+		if (!selected.has(entry.name)) await engine.rows(`DROP VIEW IF EXISTS ${quoteIdent(entry.name)}`, []);
 	}
 	for (const [at, one] of plans.entries()) {
 		await engine.rows(viewStatement(one.ledger, heldSources[at] ?? [], one.files.length === 0), []);
@@ -663,7 +664,7 @@ async function answerHeld(
 			if (name === undefined) throw new Error('planned file was not held');
 			return { name, window: plannedFile.window };
 		}));
-		await prepareViews(site.engine, planned.ledgers, sources);
+		await prepareViews(keeper, site.engine, planned.ledgers, sources);
 		const columns = await describe(site.engine, sql);
 		const answer = await runRows(site.engine, sql, opts.maxRows, columns);
 		const read = sumCost(held.map((group) => readCost(group.files.map((one) => one.file), group.holding.fetched, started)), started);

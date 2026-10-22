@@ -94,7 +94,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'refused-runs.ts', 'run-axis.ts', 'TailTrendPanel.svelte'
 	],
 	'src/lib/data': [
-		'ask-reader.ts', 'compact-index.ts', 'engine.ts', 'fetched-bytes.ts', 'host-fingerprint.ts', 'ledger-columns.ts',
+		'ask-reader.ts', 'compact-index.ts', 'configured-catalog.ts', 'engine.ts', 'fetched-bytes.ts', 'host-fingerprint.ts', 'ledger-catalog.ts', 'ledger-columns.ts',
 		'ledger-reach.ts', 'ledger.ts', 'page-keeper.ts', 'raw-day-index.ts', 'read-session.ts', 'site-window.ts',
 		'slice-query.ts', 'slice-reader.ts', 'slice-shapes.ts', 'slice.ts', 'statement.ts'
 	],

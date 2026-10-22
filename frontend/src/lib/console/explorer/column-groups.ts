@@ -8,20 +8,21 @@
  */
 
 // Relative, not `$lib`: the logic suite imports this module in plain Node.
-import { LEDGER_NAMES, type Column, type LedgerName } from '../../data/slice-shapes';
+import type { LedgerCatalog } from '../../data/ledger-catalog';
+import type { Column, LedgerName } from '../../data/slice-shapes';
 
 export type RailColumn = Column & { shown: string };
 export type ColumnGroup = { ledger: LedgerName | null; columns: RailColumn[] };
 
-function ledgerOf(name: string): LedgerName | null {
+function ledgerOf(catalog: LedgerCatalog, name: string): LedgerName | null {
 	const prefix = name.slice(0, Math.max(0, name.indexOf('.')));
-	return (LEDGER_NAMES as readonly string[]).includes(prefix) ? (prefix as LedgerName) : null;
+	return catalog.get(prefix) === undefined ? null : prefix;
 }
 
-export function groupColumns(columns: readonly Column[]): ColumnGroup[] {
+export function groupColumns(catalog: LedgerCatalog, columns: readonly Column[]): ColumnGroup[] {
 	const groups: ColumnGroup[] = [];
 	for (const column of columns) {
-		const ledger = ledgerOf(column.name);
+		const ledger = ledgerOf(catalog, column.name);
 		const shown = ledger === null ? column.name : column.name.slice(ledger.length + 1);
 		const last = groups.at(-1);
 		if (last !== undefined && last.ledger === ledger) last.columns.push({ ...column, shown });

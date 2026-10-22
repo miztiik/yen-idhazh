@@ -14,6 +14,7 @@
 import { browserEngine } from '../../../src/lib/data/engine';
 import { fetchedBytes } from '../../../src/lib/data/fetched-bytes';
 import { pageKeeper, type PageKeeper } from '../../../src/lib/data/page-keeper';
+import { configuredCatalog } from '../../../src/lib/data/configured-catalog';
 import { readSlice } from '../../../src/lib/data/slice-reader';
 import type { LedgerName, SliceOptions, SliceResult } from '../../../src/lib/data/slice-shapes';
 
@@ -47,7 +48,8 @@ function keeperFor(root: string, choice: RangeChoice): PageKeeper {
 	if (held !== undefined) return held;
 	const made = pageKeeper(
 		fetchedBytes(`/${root}`, (url, init) => fetch(url, init)),
-		() => browserEngine(REPOSITORY)
+		() => browserEngine(REPOSITORY),
+		configuredCatalog
 	);
 	const byRange = choice === 'every-file';
 	const kept: PageKeeper =

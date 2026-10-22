@@ -11,6 +11,7 @@ import { sliceFromDisk } from '../src/lib/server/ledger-disk';
 import { buildFeedLedgers, FEED_LEDGERS, stageFeedLedgers } from './support/feed-ledgers';
 import { ledgerFolders } from '../scripts/ledger-prefixes.mjs';
 import { ledgerFolder } from '../src/lib/data/slice-reader';
+import { configuredCatalog } from '../src/lib/data/configured-catalog';
 import { projectDay } from '../src/lib/payload/project';
 
 /**
@@ -123,9 +124,23 @@ test('all six feed ledgers are explicitly published at the browser registry pref
 	for (const ledger of FEED_LEDGERS) {
 		expect(names).toContain(ledger);
 		expect(folders[ledger]).toBe(`feed-ingest-plan/${ledger}`);
-		expect(ledgerFolder(ledger)).toBe(folders[ledger]);
+		expect(ledgerFolder(configuredCatalog, ledger)).toBe(folders[ledger]);
 	}
 	expect(folders['host-fingerprint']).toBe('host-fingerprint');
+});
+
+test('the disk reader resolves a nested registry prefix when reading a packed ledger', async () => {
+	const source = test.info().outputPath('nested-ledger-source');
+	const site = test.info().outputPath('nested-ledger-site');
+	await buildFeedLedgers(source);
+	stageFeedLedgers(source, site);
+	const read = await sliceFromDisk(site, 'dispatches', {
+		columns: ['covers'], from: '2026-10-19', to: '2026-10-20'
+	});
+	expect(read).toMatchObject({
+		state: 'ok',
+		rows: [{ covers: '2026-10-19' }, { covers: '2026-10-20' }]
+	});
 });
 
 test('registry prefixes reject unsafe segments, unknown names and ambiguous mappings before path use', () => {

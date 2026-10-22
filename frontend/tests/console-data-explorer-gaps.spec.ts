@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { gapLines } from '../src/lib/console/explorer/gaps';
+import { configuredCatalog } from '../src/lib/data/configured-catalog';
 
 /**
  * What a data-explorer answer says about the days and files its ledgers are
@@ -10,7 +11,7 @@ import { gapLines } from '../src/lib/console/explorer/gaps';
 
 test('each ledger says what it is missing, lost days first, in the order the ledgers were chosen', () => {
 	expect(
-		gapLines([
+		gapLines(configuredCatalog, [
 			{ ledger: 'item-health', lostDays: ['2026-08-18', '2026-08-19'], setAside: { '2026-08-20': 2 } },
 			{ ledger: 'published', lostDays: [], setAside: { '2026-08': 1 } }
 		])
@@ -34,6 +35,6 @@ test('each ledger says what it is missing, lost days first, in the order the led
 });
 
 test('an answer whose ledgers miss nothing says nothing', () => {
-	expect(gapLines([])).toEqual([]);
-	expect(gapLines([{ ledger: 'seen', lostDays: [], setAside: {} }])).toEqual([]);
+	expect(gapLines(configuredCatalog, [])).toEqual([]);
+	expect(gapLines(configuredCatalog, [{ ledger: 'host-fingerprint', lostDays: [], setAside: {} }])).toEqual([]);
 });

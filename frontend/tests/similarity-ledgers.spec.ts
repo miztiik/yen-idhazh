@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ledgerFolder } from '../src/lib/data/slice-reader';
+import { configuredCatalog } from '../src/lib/data/configured-catalog';
 import { FITTED_LINE_COLUMNS, fittedLines, type FittedLine } from '../src/lib/server/content-similarity-judge';
 import { backendPython } from './support/backend-python';
 import { buildLedger, everyDay, quietDays } from './support/ledger-lifecycle';
@@ -195,5 +196,5 @@ test('the registry files the fitted line under the judge folder the reader opens
 		name: 'fitted-thresholds', grain: 'raw-and-compact', prefix: [...FITTED],
 		publish_to_data_explorer: false, stem: null, suffix: null
 	});
-	expect(ledgerFolder('fitted-thresholds')).toBe(FITTED.join('/'));
+	expect(ledgerFolder(configuredCatalog, 'fitted-thresholds')).toBe(FITTED.join('/'));
 });

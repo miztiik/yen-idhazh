@@ -26,6 +26,7 @@ import { join } from 'node:path';
 // Relative, not `$lib`: the logic suite imports this module in plain Node, where
 // no Vite alias exists to resolve one.
 import { nodeEngine } from '../data/engine';
+import { configuredCatalog } from '../data/configured-catalog';
 import { readReach, type LedgerReach } from '../data/ledger-reach';
 import { pageKeeper, type ByteSource } from '../data/page-keeper';
 import { readSlice } from '../data/slice-reader';
@@ -39,7 +40,7 @@ const locate = (specifier: string): string => resolver.resolve(specifier);
 
 /** A fresh page keeper over a state root, for one call and no longer. */
 function diskKeeper(stateDir: string) {
-	return pageKeeper(diskBytes(stateDir), () => nodeEngine(locate, engineExtensionRepository()));
+	return pageKeeper(diskBytes(stateDir), () => nodeEngine(locate, engineExtensionRepository()), configuredCatalog);
 }
 
 /** A byte source over a state root on disk. A file that is not there is absent. */

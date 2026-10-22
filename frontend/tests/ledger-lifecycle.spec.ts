@@ -11,6 +11,7 @@ import { fetchedBytes, type Fetcher } from '../src/lib/data/fetched-bytes';
 import { readColumns } from '../src/lib/data/ledger-columns';
 import { readReach } from '../src/lib/data/ledger-reach';
 import { pageKeeper, type PageKeeper } from '../src/lib/data/page-keeper';
+import { configuredCatalog } from '../src/lib/data/configured-catalog';
 import { daysBetween } from '../src/lib/data/slice';
 import { readSlice } from '../src/lib/data/slice-reader';
 import type { AskOptions, AskResult, Column, SliceOptions } from '../src/lib/data/slice-shapes';
@@ -37,7 +38,7 @@ const locate = (specifier: string): string => resolver.resolve(specifier);
 
 /** A page that has read nothing yet, reading from `prefix` through `fetcher`. */
 function aPage(fetcher: Fetcher, prefix = SITE): PageKeeper {
-	return pageKeeper(fetchedBytes(prefix, fetcher), () => nodeEngine(locate, engineExtensionRepository()));
+	return pageKeeper(fetchedBytes(prefix, fetcher), () => nodeEngine(locate, engineExtensionRepository()), configuredCatalog);
 }
 
 /** A host that does not answer, as a blocked or unreachable one does not: every request throws,
