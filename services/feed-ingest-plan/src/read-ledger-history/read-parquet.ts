@@ -5,19 +5,26 @@ import { DataType, tableFromIPC } from "apache-arrow";
 import type { Field } from "apache-arrow";
 import initializeParquet, { readMetadata, readParquet } from "parquet-wasm/esm";
 import {
-  FileEnvelopeSchema, FOOTER_METADATA_KEYS, OPTIONAL_FOOTER_METADATA_KEYS, RowIdentitySchema, validateEnvelopeContainer,
+  FileEnvelopeSchema, FOOTER_METADATA_KEYS, OPTIONAL_FOOTER_METADATA_KEYS, RowIdentitySchema, SchemaVersionSchema,
+  validateEnvelopeContainer,
 } from "@idhazh/common-contracts";
 import type { FileEnvelope, RowIdentity } from "@idhazh/common-contracts";
 import {
   appendIdentityColumns, createFileId, createUnitId, describeObjectSchema, digestRows,
 } from "@idhazh/ledger-file-writer";
 import type { LedgerRowContract, LogicalField, LogicalType, StoredLedgerRow } from "@idhazh/ledger-file-writer";
+import type { z } from "zod";
 
 let initialization: ReturnType<typeof initializeParquet> | undefined;
 export type ReadLedgerFile<T extends object> = Readonly<{
   envelope: FileEnvelope;
   rows: readonly StoredLedgerRow<T>[];
   bytes: number;
+}>;
+export type LedgerRowProjectionContract<T extends object> = Readonly<{
+  schema: z.ZodType<T>;
+  schemaVersion: string;
+  projectedFields: readonly string[];
 }>;
 
 function normalize(value: unknown): unknown {
@@ -56,6 +63,29 @@ function checkFields(fields: readonly Field[], expected: readonly LogicalField[]
     checkType(field, column.type);
   }
 }
+function logicalField(field: Field): LogicalField {
+  const type = field.type;
+  let logical: LogicalType;
+  if (DataType.isStruct(type)) {
+    logical = { kind: "struct", nullable: field.nullable, fields: type.children.map(logicalField) };
+  } else if (DataType.isList(type)) {
+    const child = type.children[0];
+    if (child === undefined) throw new Error(`Arrow list has no item field at ${field.name}`);
+    const item = logicalField(child);
+    logical = { kind: "list", nullable: field.nullable, itemType: item.type, itemNullable: child.nullable };
+  } else if (DataType.isUtf8(type)) {
+    logical = { kind: "scalar", scalar: "string", nullable: field.nullable };
+  } else if (DataType.isInt(type) && type.bitWidth === 64 && type.isSigned) {
+    logical = { kind: "scalar", scalar: "int64", nullable: field.nullable };
+  } else if (DataType.isFloat(type) && type.precision === 2) {
+    logical = { kind: "scalar", scalar: "float64", nullable: field.nullable };
+  } else if (DataType.isBool(type)) {
+    logical = { kind: "scalar", scalar: "bool", nullable: field.nullable };
+  } else {
+    throw new Error(`Unsupported Arrow type at ${field.name}`);
+  }
+  return { name: field.name, type: logical, nullable: field.nullable };
+}
 function readEnvelope(metadata: Map<unknown, unknown>): FileEnvelope {
   const values = new Map<string, string>();
   for (const [key, value] of metadata) {
@@ -90,7 +120,7 @@ function readEnvelope(metadata: Map<unknown, unknown>): FileEnvelope {
   }), "parquet");
 }
 export async function readLedgerParquet<T extends object>(
-  path: string, ledger: RowIdentity["ledger"], contract: LedgerRowContract<T>,
+  path: string, ledger: RowIdentity["ledger"], contract: LedgerRowContract<T> | LedgerRowProjectionContract<T>,
 ): Promise<ReadLedgerFile<T>> {
   initialization ??= initializeParquet();
   await initialization;
@@ -107,9 +137,14 @@ export async function readLedgerParquet<T extends object>(
   if (envelope.ledger !== ledger) {
     throw new Error("Parquet ledger differs from the requested contract");
   }
-  const legacy = envelope.row_schema_version === contract.schemaVersion
-    ? undefined : contract.legacyVersions?.[envelope.row_schema_version];
-  if (envelope.row_schema_version !== contract.schemaVersion && legacy === undefined) {
+  const projectionContract = "projectedFields" in contract ? contract : undefined;
+  const legacy = projectionContract !== undefined || envelope.row_schema_version === contract.schemaVersion
+    ? undefined : "legacyVersions" in contract ? contract.legacyVersions?.[envelope.row_schema_version] : undefined;
+  if (projectionContract !== undefined) {
+    if (SchemaVersionSchema.parse(envelope.row_schema_version) > projectionContract.schemaVersion) {
+      throw new Error("Parquet projection schema is newer than its declared fields");
+    }
+  } else if (envelope.row_schema_version !== contract.schemaVersion && legacy === undefined) {
     throw new Error("Parquet row schema version differs from the requested contract");
   }
   const storedSchema = legacy?.schema ?? contract.schema;
@@ -125,8 +160,23 @@ export async function readLedgerParquet<T extends object>(
     throw new Error("Raw filename differs from its envelope file identifier");
   }
   const table = tableFromIPC(readParquet(bytes).intoIPCStream());
-  const columns = appendIdentityColumns(describeObjectSchema(storedSchema).fields, envelope.version);
-  checkFields(table.schema.fields, columns);
+  const columns = projectionContract !== undefined ? table.schema.fields.map(logicalField)
+    : appendIdentityColumns(describeObjectSchema(storedSchema).fields, envelope.version);
+  if (projectionContract === undefined) checkFields(table.schema.fields, columns);
+  else {
+    const described = describeObjectSchema(projectionContract.schema).fields;
+    const actual = new Map(table.schema.fields.map(field => [field.name, field]));
+    for (const identity of appendIdentityColumns([], envelope.version)) {
+      const field = actual.get(identity.name);
+      if (field === undefined) throw new Error(`Missing Arrow identity column ${identity.name}`);
+      checkType(field, identity.type);
+    }
+    for (const projected of described) {
+      const field = actual.get(projected.name);
+      if (field === undefined) throw new Error(`Missing Arrow projection column ${projected.name}`);
+      checkType(field, projected.type);
+    }
+  }
   const records = table.toArray().map(value => {
     const record = normalize(value);
     if (typeof record !== "object" || record === null || Array.isArray(record)) throw new Error("Stored row is not an object");
@@ -148,8 +198,15 @@ export async function readLedgerParquet<T extends object>(
       || identity.task_name !== writer.task_name || identity.shard !== writer.shard)) {
       throw new Error("Raw row identity differs from its writer envelope");
     }
-    const storedRow = storedSchema.parse(Object.fromEntries(rowFields.map(key => [key, record[key]])));
-    const row = contract.schema.parse(legacy === undefined ? storedRow : legacy.migrate(storedRow));
+    const storedRow = projectionContract === undefined
+      ? storedSchema.parse(Object.fromEntries(rowFields.map(key => [key, record[key]]))) : undefined;
+    const projectedRow = projectionContract !== undefined
+      ? Object.fromEntries(projectionContract.projectedFields.map(key => [key, record[key]]))
+      : storedRow;
+    if (projectedRow === undefined) throw new Error("Ledger projection did not produce a row");
+    if (projectionContract === undefined && storedRow === undefined) throw new Error("Stored ledger row was not parsed");
+    const row = projectionContract !== undefined ? projectionContract.schema.parse(projectedRow)
+      : contract.schema.parse(legacy === undefined ? storedRow : legacy.migrate(storedRow!));
     return { identity, row };
   });
   return { envelope, rows, bytes: bytes.byteLength };

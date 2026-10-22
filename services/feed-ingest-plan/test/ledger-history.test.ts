@@ -200,7 +200,15 @@ test("recorded audit rows migrate through native Parquet without invented eviden
     const assessmentHistory = await readWritten(root, "article-assessments", day, ArticleAssessmentContract, assessmentFile);
     expect(assessmentHistory.rows[0]!.row.diagnostics).toBeNull();
     const previousRejection = CandidateRejectionContract.schema.parse(migrated.get("rejections"));
-    const { diagnostics: _rejectionDiagnostics, ...details } = previousRejection.details;
+    if (previousRejection.drop_reason === "EXTRACT_FAILED" || previousRejection.drop_reason === "EXTRACT_EMPTY"
+      || previousRejection.drop_reason === "ALREADY_PUBLISHED" || previousRejection.drop_reason === "SETTLED_FAILURE"
+      || previousRejection.drop_reason === "BLOCKED_URL_MARKER") {
+      throw new Error("Legacy rejection fixture has a current-only reason");
+    }
+    const {
+      diagnostics: _rejectionDiagnostics, published_on: _publishedOn, failure_code: _failureCode,
+      matched_url_marker: _matchedUrlMarker, ...details
+    } = previousRejection.details;
     const rejectionSchema = CandidateRejectionContract.legacyVersions["2026-10-22"].schema;
     const rejectionFile = await writeRows(root, "rejections", day, rejectionSchema,
       [{ ...previousRejection, details, version: "2026-10-22" }], writer(run), "2026-10-22");

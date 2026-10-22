@@ -106,7 +106,7 @@ jobs:
           import { requiredSeenDays } from "./services/feed-ingest-plan/src/read-ledger-history/read-seen-evidence";
           import { CompactIndexSchema, RawDayIndexSchema } from "./packages/common-contracts/src/index";
           import type { CompactIndex, FeedIngestEvent, RawDayIndex } from "./packages/common-contracts/src/index";
-          import { createExecutionOutputs, createSeenDayInputs, historyDays, resolveHistoryInventory, sparseCheckoutPath, writeGitHubOutputs } from "./.github/scripts/feed-ingest-plan-outputs";
+          import { completeHistoryDayInputs, createExecutionOutputs, createSeenDayInputs, historyDays, resolveHistoryInventory, sparseCheckoutPath, writeGitHubOutputs } from "./.github/scripts/feed-ingest-plan-outputs";
           import { verifyLedgerReceipt, verifyParquetFiles, verifyPlanningCompletion } from "./.github/scripts/feed-ingest-plan-verification";
 
           const root = process.cwd();
@@ -127,16 +127,15 @@ jobs:
             const days = historyDays(now,
               inputs.harvest.config.metrics.rolling_window_days, inputs.harvest.config.metrics.overlap_windows_days);
             const required = requiredSeenDays(now, inputs.clock_config.collect.seen_window_days);
-            const authored = inputs.settings.inputs.seen_days;
-            if (authored.some((input, index) => !required.includes(input.day)
-              || (index > 0 && input.day <= authored[index - 1]!.day))) {
-              throw new Error("seen_days must name distinct ascending days inside the configured UTC window");
-            }
-            const seen = new Map(authored.map(input => [input.day, input]));
-            for (const input of createSeenDayInputs(inputs.registrations.seen.prefix, required)) {
-              if (!seen.has(input.day)) seen.set(input.day, input);
-            }
-            const seen_days = [...seen.values()].sort((left, right) => left.day.localeCompare(right.day));
+            const seen_days = completeHistoryDayInputs(inputs.registrations.seen.prefix, required,
+              inputs.settings.inputs.seen_days, "seen_days");
+            const published_days = completeHistoryDayInputs(inputs.registrations.published.prefix,
+              requiredSeenDays(now, inputs.clock_config.collect.published_window_days),
+              inputs.settings.inputs.published_days, "published_days");
+            const settledRequired = inputs.clock_config.collect.settled_failure_codes.length === 0
+              ? [] : requiredSeenDays(now, 0);
+            const settled_failure_days = completeHistoryDayInputs(inputs.registrations.item_health.prefix,
+              settledRequired, inputs.settings.inputs.settled_failure_days, "settled_failure_days");
             const registry: { families: { ledgers: { name: string; prefix: string[] }[] }[] } =
               await Bun.file(inputs.settings.inputs.registrations).json();
             const ledgers = ["source-runs", "article-assessments", "diversity", "editorial-selections", "dispatches", "rejections"] as const;
@@ -207,6 +206,20 @@ jobs:
                 ...(input.raw_files === undefined ? {} : { rawFiles: input.raw_files }),
               });
             }
+            async function stageConfiguredDays(
+              ledger: CompactIndex["ledger"], prefix: readonly string[], days: readonly (typeof seen_days)[number][],
+            ) {
+              for (const input of days) {
+                await stageHistory(ledger, prefix, [input.day], {
+                  ...(input.indexes === undefined ? {} : { indexes: Object.fromEntries(
+                    Object.entries(input.indexes).filter((entry): entry is [string, string] => entry[1] !== undefined)) }),
+                  ...(input.raw_index === undefined ? {} : { rawIndexes: { [input.day]: input.raw_index } }),
+                  ...(input.raw_files === undefined ? {} : { rawFiles: input.raw_files }),
+                });
+              }
+            }
+            await stageConfiguredDays("published", inputs.registrations.published.prefix, published_days);
+            await stageConfiguredDays("item-health", inputs.registrations.item_health.prefix, settled_failure_days);
             for (const path of inputs.settings.inputs.seen_files) inventory.add(path);
             const sparse = Bun.spawn(["git", "sparse-checkout", "add", "--skip-checks", ...[...inventory].map(sparseCheckoutPath)],
               { stdout: "inherit", stderr: "inherit" });
@@ -219,7 +232,7 @@ jobs:
               throw new Error("workflow: runner directory, output path, run identity and attempt are required");
             }
             const settings = ServiceSettingsSchema.parse({ ...inputs.settings, enabled: true,
-              inputs: { ...inputs.settings.inputs, seen_days },
+              inputs: { ...inputs.settings.inputs, seen_days, published_days, settled_failure_days },
               run: { ...inputs.settings.run, attempt: Number(GITHUB_RUN_ATTEMPT) } });
             const artifactRoot = join(RUNNER_TEMP, "feed-ingest-plan");
             await mkdir(artifactRoot, { recursive: true });

@@ -88,6 +88,11 @@ export async function harvestFeeds(
   }));
   return {
     inputs, config: inputs.config, articles, feed_outcomes, rejections, rejection_files,
+    first_sight_candidates: articles.flatMap(article => {
+      if (article.rejection?.drop_reason === "BLOCKED_URL_MARKER") return [];
+      const url_key = article.candidate?.url_key ?? article.rejection?.url_key;
+      return url_key === null || url_key === undefined ? [] : [{ url_key }];
+    }),
     candidates: articles.flatMap(article => article.candidate ? [article.candidate] : []),
   };
 }

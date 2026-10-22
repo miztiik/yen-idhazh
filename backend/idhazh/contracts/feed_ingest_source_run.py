@@ -93,6 +93,11 @@ class SourceRunRecord(Contract):
     __schema_stem__: ClassVar[str] = "feed-ingest-source-run"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-22T20:30",
+            change="Count configured planner exclusions by their typed terminal reason.",
+            why="Source audit counts must include each pre-fetch refusal accurately.",
+        ),
+        ChangelogEntry(
             version="2026-10-22T18:15",
             change="Count extraction errors and empty extraction separately from fetch errors.",
             why="Source failure counts must retain the operation that failed.",
@@ -109,11 +114,11 @@ class SourceRunRecord(Contract):
         ),
         ChangelogEntry(
             version="2026-10-20",
-            change="Declare source-run observations and completion evidence.",
-            why="A complete attempt must remain distinguishable from partial retries.",
+            change="Earlier changes are available in git history.",
+            why="The contract changelog keeps only its four newest changes.",
         ),
     )
-    version: Literal["2026-10-22T18:15"] = "2026-10-22T18:15"
+    version: Literal["2026-10-22T20:30"] = "2026-10-22T20:30"
 
     date: DateStamp
     correlation_id: str = Field(min_length=1)
@@ -152,9 +157,23 @@ class SourceRunRecord(Contract):
     @classmethod
     def migrate_previous_version(cls, value: Any) -> Any:
         if isinstance(value, dict) and value.get("version") in {
-            "2026-10-20", "2026-10-22", "2026-10-22T10:05"
+            "2026-10-20", "2026-10-22", "2026-10-22T10:05", "2026-10-22T18:15"
         }:
-            return {**value, "version": "2026-10-22T18:15"}
+            legacy_reasons = {"ALREADY_PUBLISHED", "SETTLED_FAILURE", "BLOCKED_URL_MARKER"}
+            drop_reasons = value.get("drop_reasons", [])
+            uses_new_reason = value.get("last_failure_reason") in legacy_reasons or (
+                isinstance(drop_reasons, list)
+                and any(
+                    isinstance(item, dict) and item.get("reason") in legacy_reasons
+                    for item in drop_reasons
+                )
+            )
+            if uses_new_reason:
+                raise ValueError(
+                    "planner exclusions require the declared source-run "
+                    "contract version"
+                )
+            return {**value, "version": "2026-10-22T20:30"}
         return value
 
     @model_validator(mode="after")

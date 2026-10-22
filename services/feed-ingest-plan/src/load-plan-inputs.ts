@@ -1,7 +1,7 @@
 /** Which named authored files supply one validated planner invocation? */
 import { resolve } from "node:path";
 import { z } from "zod";
-import { NonNegativeSchema } from "@idhazh/common-contracts";
+import { ItemHealthFailureCodeSchema, NonNegativeSchema, NonEmptySchema } from "@idhazh/common-contracts";
 import { readHarvestInputs } from "./harvest-feeds/load-harvest-inputs";
 import { ServiceSettingsSchema } from "./config/service-settings";
 
@@ -21,7 +21,12 @@ const RegistrySchema = z.object({
 });
 const ExtractionSettingsSchema = z.object({
   ledger: LedgerSettingsSchema,
-  collect: z.object({ max_future_hours: NonNegativeSchema, seen_window_days: z.int().nonnegative() }),
+  collect: z.object({
+    max_future_hours: NonNegativeSchema, seen_window_days: z.int().nonnegative(),
+    published_window_days: z.int().nonnegative(),
+    settled_failure_codes: z.array(ItemHealthFailureCodeSchema),
+    blocked_url_markers: z.array(NonEmptySchema),
+  }),
 });
 
 export async function loadPlanInputs(root: string, settingsPath = "config/feed-ingest-plan-service.json") {
@@ -49,6 +54,7 @@ export async function loadPlanInputs(root: string, settingsPath = "config/feed-i
     dispatches: registration("dispatches"),
     seen: registration("seen"), assessments: registration("article-assessments"),
     diversity: registration("diversity"),
+    published: registration("published"), item_health: registration("item-health"),
     source_runs: z.object({
       name: z.literal("source-runs"), family: z.literal("feed-ingest-plan"),
       grain: z.literal("raw-and-compact"), lifecycle_status: z.literal("active"),

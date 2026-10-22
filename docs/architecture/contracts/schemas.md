@@ -104,7 +104,7 @@ and unsharded editorial selections.
 Their models live in `backend/idhazh/contracts/feed_ingest_*.py`.
 These declarations do not enable a producer, register a ledger, or change the
 production planner.
-Planner events are independently stamped `2026-10-22T18:15` in their TypeScript
+Planner events are independently stamped `2026-10-22T20:30` in their TypeScript
 schema. Native tests cover current fixture validation, UUID versions, typed
 payloads, forbidden article text, identity propagation and event ordering.
 
@@ -132,12 +132,14 @@ The encoding and old compact-only limitation are defined in
 [feed planning audit recording](../sources/feed-ingest-audit.md#compaction-safe-attempt-proof).
 
 Rejections, article assessments and source-run rejection vocabularies advance
-to `2026-10-22T18:15` with
-[shared fetch and extraction diagnostics](../sources/feed-failure-diagnostics.md).
-Old diagnostic measurements stay null. Physical and logical digests retain
-the old schema's exact fields before migration; a new measured diagnostic
-cannot be dropped to satisfy an old logical commitment. The existing native
-event fixture now verifies migration from `2026-10-22T12:20`.
+to `2026-10-22T20:30` for
+[shared fetch and extraction diagnostics](../sources/feed-failure-diagnostics.md)
+and the three pre-fetch planner refusals. Existing rejection, assessment,
+source-run and event versions remain readable. Old rows cannot claim the new
+reasons under an earlier version. Physical and logical digests retain the old
+schema's exact fields before migration; new evidence is not stripped to satisfy
+an old logical commitment. The existing native event fixture verifies migration
+from `2026-10-22T12:20`.
 
 Candidates keep source, original vertical, assigned desk, lenses, content event
 types, event cluster, and entities separate. Null labels mean unknown;
@@ -594,6 +596,12 @@ Owner ruling, kumarsnaveen, 2026-10-22: remove the Python planner event model
 and its comparison checks because no Python production reader consumes it.
 The TypeScript producer and readers use one Zod declaration directly.
 Keep shared ledger declarations where Python actually reads the records.
+
+Owner ruling, kumarsnaveen, 2026-10-22: the shared stored rejection,
+assessment and source-run contracts add distinct already-published,
+same-day-settled-failure and configured-blocked-marker reasons. Their
+readers preserve old versions and reject those reasons on old stamps; Python
+changes are limited to declarations and contract-level compatibility.
 
 **The generated layer went on 2026-09-23, and the hand copy plus two tests replaced it.** Until that date `python -m idhazh.contracts.export` wrote 66 JSON Schemas and 66 TypeScript modules, and CI regenerated both and failed on any diff. What it bought was real - a Python model, a JSON Schema and a TypeScript interface cannot be kept in step by hand, and the failure is always the same one: two of the three agree and the third was edited in a hurry. What it cost was the reviewer's attention: one commit in ten touched those two trees, so about one review in ten opened on 1,573,101 bytes of regenerated diff, and six names in two frontend modules were the whole of what any of it served. Sixty-one of the sixty-six schemas were read by nothing but the gate that checked they had been generated. The replacement is narrower and says the same thing: the copy is small, it is hand-written, and three named tests fail when it falls behind. Authority: Fowler.
 

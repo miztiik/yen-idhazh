@@ -63,11 +63,34 @@ export function reconcileStageMembership(result: FeedPlanResult) {
     articles.add(item.candidate_id);
     requireSame(article.observation.candidate_id, item.candidate_id, "harvest.observation.candidate_id");
     const earlyStale = article.rejection?.drop_reason === "STALE_MAX_AGE_EXCEEDED";
+    const earlyExclusion = article.rejection !== null && [
+      "ALREADY_PUBLISHED", "SETTLED_FAILURE", "BLOCKED_URL_MARKER",
+    ].includes(article.rejection.drop_reason);
     requireSame(article.observation.preflight_freshness !== undefined, earlyStale, "harvest.preflight_freshness");
-    if (earlyStale) requireSame([
+    if (earlyStale || earlyExclusion) requireSame([
       article.observation.extraction, article.observation.http_status, article.observation.robots,
       article.observation.paywall, article.observation.paywall_evidence, article.observation.fetch_failure,
     ], ["not-attempted", null, null, null, "not-observed", null], "harvest.preflight_observation");
+    const rejection = article.rejection;
+    if (earlyExclusion && (rejection?.url_key === null || rejection?.canonical_url === null)) {
+      throw new Error("harvest.exclusion: URL identity is required");
+    }
+    if (rejection?.drop_reason === "ALREADY_PUBLISHED") {
+      requireSame([rejection.url_key, rejection.details.matched_url_key, rejection.details.published_on,
+        rejection.details.history_window_days],
+      [rejection.url_key, rejection.url_key, result.evidence.exclusions.published_on.get(rejection.url_key!),
+        result.evidence.exclusions.published_window_days],
+      `harvest.${item.candidate_id}.published_exclusion`);
+    } else if (rejection?.drop_reason === "SETTLED_FAILURE") {
+      requireSame([rejection.url_key, rejection.details.matched_url_key, rejection.details.failure_code],
+        [rejection.url_key, rejection.url_key, result.evidence.exclusions.settled_failure_codes.get(rejection.url_key!)],
+        `harvest.${item.candidate_id}.settled_failure_exclusion`);
+    } else if (rejection?.drop_reason === "BLOCKED_URL_MARKER") {
+      const marker = result.evidence.exclusions.blocked_url_markers.find(value =>
+        rejection.canonical_url?.toLowerCase().includes(value.toLowerCase()));
+      requireSame([rejection.url_key, rejection.details.matched_url_key, rejection.details.matched_url_marker],
+        [item.url_key, item.url_key, marker], `harvest.${item.candidate_id}.blocked_marker_exclusion`);
+    }
     if (article.candidate !== null) requireSame(article.candidate, candidates.get(item.candidate_id), "harvest.article");
     else if (!harvest.rejections.some(row => isDeepStrictEqual(row, article.rejection))) {
       throw new Error("harvest.articles: terminal rejection is missing");
@@ -221,7 +244,14 @@ export function reconcileStageMembership(result: FeedPlanResult) {
     }));
   return {
     sources, harvested: harvest.candidates,
-    freshness_input: [...harvest.candidates, ...earlyStale],
+    freshness_input: [...harvest.candidates, ...earlyStale, ...harvest.articles
+      .filter(article => article.rejection !== null && [
+        "ALREADY_PUBLISHED", "SETTLED_FAILURE", "BLOCKED_URL_MARKER",
+      ].includes(article.rejection.drop_reason))
+      .map(article => ({
+        candidate_id: article.observation.candidate_id,
+        source_id: article.rejection!.source_id,
+      }))],
     freshness: harvest.candidates.filter(candidate => !stale.has(candidate.candidate_id)),
     eligible, representatives, normalized, selected, rejections,
     carrier_groups: curation.carriers.groups, normalization: curation.normalization,

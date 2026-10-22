@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { CompactIndexSchema, RawDayIndexSchema } from "../../../packages/common-contracts/src/index";
-import { createSeenDayInputs, historyDays, historyIndexPaths, resolveHistoryInventory, sparseCheckoutPath } from "../feed-ingest-plan-outputs";
+import { completeHistoryDayInputs, createSeenDayInputs, historyDays, historyIndexPaths, resolveHistoryInventory, sparseCheckoutPath } from "../feed-ingest-plan-outputs";
 import { requiredSeenDays } from "../../../services/feed-ingest-plan/src/read-ledger-history/read-seen-evidence";
 import { utcTimestamp } from "../../../services/feed-ingest-plan/src/harvest-feeds/harvest-types";
 
@@ -85,7 +85,9 @@ test("offers four manual controls and commits only genuine planner and host file
   expect(plan.run).toContain('verifyParquetFiles(join(artifactRoot, "state"), "source-runs"');
   expect(plan.run).toContain('await verifyPlanningCompletion(join(artifactRoot, "state"), summary)');
   expect(plan.run!.indexOf("await verifyPlanningCompletion(")).toBeLessThan(plan.run!.indexOf("await writeGitHubOutputs("));
-  expect(plan.run).toContain("inputs: { ...inputs.settings.inputs, seen_days }");
+  expect(plan.run).toContain("stageConfiguredDays(\"published\"");
+  expect(plan.run).toContain("stageConfiguredDays(\"item-health\"");
+  expect(plan.run).toContain("inputs: { ...inputs.settings.inputs, seen_days, published_days, settled_failure_days }");
   expect(plan.run).not.toContain("feed-ingest-plan-report");
   const reporting = steps.find(step => step.name === "Optional GitHub report")!;
   expect(reporting.if).toContain("workflow_reporting == 'true'");
@@ -133,12 +135,17 @@ test("derives UTC windows and stages indexed compact files before considering ra
   const seenDays = requiredSeenDays("2026-01-01T00:00:00Z", 90);
   expect(seenDays).toHaveLength(91);
   expect([seenDays[0], seenDays.at(-1)]).toEqual(["2025-10-03", "2026-01-01"]);
+  expect(completeHistoryDayInputs(["seen"], requiredSeenDays("2026-01-01T00:00:00Z", 2), [], "seen_days"))
+    .toHaveLength(3);
   expect(createSeenDayInputs(["seen"], ["2026-01-01"])).toEqual([{
     day: "2026-01-01",
     indexes: { yearly: "state/compact/seen/index/yearly.json", monthly: "state/compact/seen/index/monthly.json",
       daily: "state/compact/seen/index/daily.json" },
     raw_index: "state/raw/seen/2026/01/01/index.json",
   }]);
+  expect(completeHistoryDayInputs(["published"], ["2026-01-01"], [], "published_days")).toEqual(
+    createSeenDayInputs(["published"], ["2026-01-01"]),
+  );
   expect(sparseCheckoutPath("state/raw/seen/[literal]*?.json")).toBe("/state/raw/seen/\\[literal\\]\\*\\?.json");
   expect(() => sparseCheckoutPath("state/raw/seen/a\nstate/")).toThrow("control");
   expect(historyIndexPaths(["feed-ingest-plan", "dispatches"], days)).toContain(
@@ -245,7 +252,7 @@ test("runs the native compatibility verifier in a named-input copy with no backe
       "schemas/ledger-index.schema", "schemas/partition.schema", "schemas/policy.schema",
       "schemas/primitives", "schemas/rejection.schema", "schemas/source-run.schema",
       "schemas/source.schema", "schemas/telemetry.schema", "schemas/host-fingerprint.schema",
-      "schemas/harvest-diagnostics.schema",
+      "schemas/harvest-diagnostics.schema", "schemas/item-health-failure.schema",
     ].map(name => `packages/common-contracts/src/${name}.ts`);
     const writer = [
       "atomic-file", "index", "ledger-paths", "ledger-types", "persist-compact", "persist-ledger",
