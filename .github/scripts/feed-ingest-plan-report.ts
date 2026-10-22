@@ -63,7 +63,7 @@ export function formatPlannerReport(input: unknown): PlannerReport {
     }
   }
   const summary = [
-    "# Feed ingest test evidence",
+    "# Feed ingest plan report",
     "",
     first === undefined ? "No events supplied. Source and stage evidence is unavailable."
       : `Run: ${escapeMarkdown(first.run_id)}. Attempt: ${first.attempt}. First observation: ${escapeMarkdown(first.occurred_at)} (UTC).`,
