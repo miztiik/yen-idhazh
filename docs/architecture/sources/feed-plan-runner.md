@@ -30,7 +30,7 @@ Table A
 | Id | Control | Meaning |
 | --- | --- | --- |
 | A1 | `freshness_hours` | Optional positive finite number. Replaces each effective vertical age cutoff, not its ranking half-life. |
-| A2 | `article_limit` | Optional positive integer. Replaces the configured run cap; omission uses that cap. A configured null means no extra cap. |
+| A2 | `article_limit` | Optional positive integer. Replaces the configured run cap; omission uses the configured 100 articles. A configured null means no extra cap. |
 | A3 | `shards` | Optional positive integer within configured partition bounds. Omission uses the configured default. Strategy `none` requires omission or one and resolves to one worker. |
 | A4 | `partition_strategy` | Optional `bin-pack`, `round-robin` or `none`; omission uses the configured strategy. |
 

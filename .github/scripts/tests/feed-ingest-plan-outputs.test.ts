@@ -11,7 +11,8 @@ import { recordedPlan } from "../../../services/feed-ingest-plan/test/plan-recor
 import { source } from "../../../services/feed-ingest-plan/test/harvest-recordings";
 import { verifyLedgerReceipt, verifyParquetFiles, verifyPlanningCompletion, verifyRecordedCompatibility } from "../feed-ingest-plan-verification";
 import { createExecutionOutputs, createSeenDayInputs, writeGitHubOutputs } from "../feed-ingest-plan-outputs";
-import { writePlannerReport } from "../feed-ingest-plan-report";
+import { formatExecutionReport, writePlannerReport } from "../feed-ingest-plan-report";
+import type { ProgressRecord } from "../../../services/feed-ingest-plan/src/logging/progress-logger";
 import { readSeenEvidence, requiredSeenDays } from "../../../services/feed-ingest-plan/src/read-ledger-history/read-seen-evidence";
 import { utcTimestamp } from "../../../services/feed-ingest-plan/src/harvest-feeds/harvest-types";
 import { main } from "../../../services/feed-ingest-plan/src/index";
@@ -132,12 +133,24 @@ test("generated publication evidence joins actual main output and writes native 
 test("actual CLI planning proof and all native files survive both real report modes, never complete audit", async () => {
   const fixture = await recordedPlan();
   try {
+    const progress: ProgressRecord[] = [];
     const summary = await main(["--cli", "--partition-strategy=none"], {
-      inputs: fixture.inputs, runtime: fixture.runtime, output: () => {},
+      inputs: fixture.inputs, runtime: { ...fixture.runtime, progress: record => progress.push(record) }, output: () => {},
     });
     if (!("files" in summary) || summary.metrics === undefined) throw new Error("Actual CLI omitted metric evidence");
     const metrics = summary.metrics;
     const outputs = createExecutionOutputs(summary, fixture.inputs.registrations);
+    const hostFixture = await Bun.file(new URL("../../../tests/fixtures/ledger-file-writer/host-fingerprint-row.json", import.meta.url)).json();
+    const executionSummary = formatExecutionReport({
+      response: summary, host: { row: hostFixture }, progress, historyStagingMs: null,
+    });
+    expect(executionSummary).toContain(`| F1 | Hardware fingerprint | ${hostFixture.fingerprint ?? "Unavailable"} |`);
+    expect(executionSummary).toContain(`requested limit ${summary.request.article_limit}`);
+    expect(executionSummary).toContain("Screened eligible does not mean previously unpublished");
+    const unavailable = formatExecutionReport({ response: summary, host: null, progress: [], historyStagingMs: null });
+    expect(unavailable).toContain("| F1 | Hardware fingerprint | Unavailable |");
+    expect(unavailable).toContain("| C9 | Article harvest operations | Unavailable |");
+    expect(unavailable).toContain("| C10 | Extraction outcomes | Unavailable |");
     expect(outputs.metrics_status).toBe("assessment_diversity_recorded_audit_pending");
     expect(outputs.audited_complete).toBe("false");
     expect(outputs.planning_complete).toBe("true");
@@ -156,6 +169,8 @@ test("actual CLI planning proof and all native files survive both real report mo
       .toThrow("audited_complete");
     const files = [...new Set([...Object.values(summary.files), ...Object.values(metrics.files)]
       .flatMap(result => result?.files.map(file => file.path) ?? []))];
+    expect(JSON.parse(outputs.current_run_files!)).toEqual(expect.arrayContaining(files));
+    expect(JSON.parse(outputs.current_run_files!)).toHaveLength(files.length);
     const original = await Promise.all(files.map(path => readFile(join(fixture.inputs.outputRoot, ...path.split("/")))));
     const summaryPath = join(fixture.directory, "actual-main-report.md");
     const annotations: string[] = [];
@@ -163,7 +178,7 @@ test("actual CLI planning proof and all native files survive both real report mo
     const seenPaths = summary.files.seen.files.map(file => file.path);
     const seenBefore = await readSeenEvidence(fixture.inputs.outputRoot, seenPaths);
     for (const enabled of [false, true]) {
-      await writePlannerReport({ enabled, events: fixture.events, summaryPath, annotate: line => annotations.push(line) });
+      await writePlannerReport({ enabled, events: fixture.events, summaryPath, executionSummary, annotate: line => annotations.push(line) });
       if (enabled) {
         expect(annotations.length).toBeGreaterThan(0);
         expect((await readFile(summaryPath, "utf8")).length).toBeGreaterThan(0);

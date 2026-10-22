@@ -54,14 +54,14 @@ async function workflow() {
   return { text, parsed, steps: parsed.jobs["isolated-plan"].steps };
 }
 
-test("offers exactly four manual controls, read-only access and a separate optional report", async () => {
+test("offers four manual controls and commits only genuine planner and host files", async () => {
   const { parsed, steps } = await workflow();
   expect(Object.keys(parsed.on)).toEqual(["workflow_dispatch"]);
   const inputs = parsed.on.workflow_dispatch.inputs;
   expect(Object.keys(inputs)).toEqual(["freshness_hours", "article_limit", "shards", "partition_strategy"]);
   expect(inputs.freshness_hours?.default).toBe("24");
   for (const field of ["article_limit", "shards", "partition_strategy"]) expect(inputs[field]?.default).toBe("");
-  expect(parsed.permissions).toEqual({ contents: "read" });
+  expect(parsed.permissions).toEqual({ contents: "write" });
   const plan = steps.find(step => step.id === "plan")!;
   expect(plan.env).toEqual({
     FRESHNESS_HOURS: "${{ inputs.freshness_hours }}", ARTICLE_LIMIT: "${{ inputs.article_limit }}",
@@ -102,10 +102,25 @@ test("offers exactly four manual controls, read-only access and a separate optio
   expect(completion.run).toContain('process.env.PLANNING_COMPLETE !== "true"');
   expect(completion.run).toContain('process.env.AUDIT_SCOPE !== "generated_fixture"');
   expect(steps.find(step => step.id === "audit_fixture")!.run).toContain("await verifyFullAuditFixture(");
+  const host = steps.find(step => step.id === "host")!;
+  expect(host.run).toContain("await persistFingerprint(");
+  expect(host.run).toContain('producer: "telemetry.silicon"');
+  expect(host.run).toContain('pipeline_name: "feed-ingest-plan", task_name: "isolated-plan"');
+  expect(steps.find(step => step.name === "Install declared TypeScript dependencies")!.run)
+    .toContain("bun install --frozen-lockfile --cwd services/host-fingerprints");
+  const commit = steps.find(step => step.name === "Commit exact live planner and host files")!;
+  expect(commit.if).toContain("steps.audit_fixture.outputs.scope == 'generated_fixture'");
+  expect(commit.env).toEqual({
+    CURRENT_RUN_FILES: "${{ steps.plan.outputs.current_run_files }}", HOST_FILES: "${{ steps.host.outputs.host_files }}",
+  });
+  expect(commit.run).toContain("paths: [...paths(CURRENT_RUN_FILES), ...paths(HOST_FILES)]");
+  expect(commit.run).not.toContain("generated-full-audit");
+  expect(steps.indexOf(commit)).toBeLessThan(steps.indexOf(steps.find(step => step.name === "Preserve isolated test evidence")!));
   const runs = steps.flatMap(step => step.run === undefined ? [] : [step.run]).join("\n");
   expect(runs).not.toMatch(/\b(python|pip|pytest|uv)\b|git\s+(commit|push)|\beval\s*\(/i);
   const checkout = steps.find(step => step.uses?.startsWith("actions/checkout@"))!;
   expect(checkout.with?.["sparse-checkout-cone-mode"]).toBe(false);
+  expect(checkout.with?.["persist-credentials"]).toBe(true);
   expect(checkout.with?.["sparse-checkout"]).toContain("/packages/common-contracts/");
   expect(checkout.with?.["sparse-checkout"]).not.toContain("/backend/");
 });
@@ -191,20 +206,25 @@ test("rejects hostile dispatch strings before any input load or network request"
 
 test("strict-checks adapters, tests and the actual inline program in one compiler invocation", async () => {
   const { steps } = await workflow();
-  const script = steps.find(step => step.id === "plan")!.run!;
-  const code = script.slice(script.indexOf("\n") + 1, script.lastIndexOf("\nTS"));
   const directory = await mkdtemp(join(root, ".row12-typecheck-"));
   try {
-    const generated = join(directory, "workflow.ts");
-    await writeFile(generated, code.replaceAll('from "./', 'from "../'), "utf8");
+    const generated: string[] = [];
+    for (const [index, step] of steps.entries()) {
+      if (!step.run?.startsWith("bun run - <<'TS'")) continue;
+      const script = step.run;
+      const code = script.slice(script.indexOf("\n") + 1, script.lastIndexOf("\nTS"));
+      const path = join(directory, `workflow-${index}.ts`);
+      await writeFile(path, code.replaceAll('from "./', 'from "../'), "utf8");
+      generated.push(path);
+    }
     const service = join(root, "services", "feed-ingest-plan");
     const child = Bun.spawn([
       "bun", "run", "tsc", "--noEmit", "--target", "ESNext", "--module", "ESNext",
       "--moduleResolution", "Bundler", "--strict", "--noUncheckedIndexedAccess",
       "--exactOptionalPropertyTypes", "--noFallthroughCasesInSwitch", "--noUnusedLocals",
       "--noUnusedParameters", "--verbatimModuleSyntax", "--skipLibCheck",
-      "--types", "bun", "--typeRoots", join(service, "node_modules", "@types"), generated,
-      ...["feed-ingest-plan-outputs.ts", "feed-ingest-plan-report.ts", "feed-ingest-plan-verification.ts", "feed-ingest-plan-audit-fixture.ts",
+      "--types", "bun", "--typeRoots", join(service, "node_modules", "@types"), ...generated,
+      ...["feed-ingest-plan-outputs.ts", "feed-ingest-plan-report.ts", "feed-ingest-plan-commit.ts", "feed-ingest-plan-verification.ts", "feed-ingest-plan-audit-fixture.ts",
         "tests/feed-ingest-plan-outputs.test.ts", "tests/feed-ingest-plan-report.test.ts",
         "tests/feed-ingest-plan-workflow.test.ts"].map(path => join(root, ".github", "scripts", ...path.split("/"))),
     ], { cwd: service, stdout: "pipe", stderr: "pipe" });

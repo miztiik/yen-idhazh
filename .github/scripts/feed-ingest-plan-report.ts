@@ -1,7 +1,8 @@
 /** Which source and stage outcomes can validated planner events actually prove? */
 import { appendFile, readFile } from "node:fs/promises";
-import { FeedIngestConfigSchema, readFeedIngestEvent } from "../../packages/common-contracts/src/index";
+import { FeedIngestConfigSchema, HostFingerprintRowSchema, SourceRunRecordSchema, readFeedIngestEvent } from "../../packages/common-contracts/src/index";
 import type { FeedIngestEvent } from "../../packages/common-contracts/src/index";
+import { join } from "node:path";
 
 export type PlannerReport = Readonly<{ annotations: readonly string[]; summary: string }>;
 
@@ -54,7 +55,7 @@ export function formatPlannerReport(input: unknown): PlannerReport {
       )}`);
       sourceRows.push(`| A${sourceRows.length + 1} | ${escapeMarkdown(payload.source.source_id)} | ${escapeMarkdown(payload.source.title)} | ${escapeMarkdown(outcome)} | ${payload.parsed_count ?? "Unavailable"} | ${payload.harvested_count ?? "Unavailable"} | ${payload.rejection_reason ?? "None recorded"} |`);
     } else if (payload.kind === "stage_completion") {
-      stageRows.push(`| B${stageRows.length + 1} | ${escapeMarkdown(payload.stage)} | ${payload.input_count} | ${payload.output_count} | ${payload.terminal_rejection_count} | ${event.step_elapsed_ms} |`);
+      stageRows.push(`| B${stageRows.length + 1} | ${escapeMarkdown(payload.stage)} | ${payload.input_count} | ${payload.output_count} | ${payload.terminal_rejection_count} | ${(event.step_elapsed_ms / 1000).toFixed(3)} |`);
     } else if (payload.kind === "candidate_decision") {
       const assessment = payload.assessment;
       const key = `${assessment.stage}: ${assessment.decision} / ${assessment.reason ?? "no rejection reason"}`;
@@ -78,7 +79,7 @@ export function formatPlannerReport(input: unknown): PlannerReport {
     "",
     "## Table B - Observed stage completions",
     "",
-    "| Id | Stage | Input count | Output count | Terminal rejections | Step time (ms) |",
+    "| Id | Stage | Input count | Output count | Terminal rejections | Step time (seconds) |",
     "| --- | --- | --- | --- | --- | --- |",
     ...stageRows,
     ...(stageRows.length === 0 ? ["", "Stage completion evidence unavailable."] : []),
@@ -94,15 +95,119 @@ export function formatPlannerReport(input: unknown): PlannerReport {
   return { annotations, summary };
 }
 
+function object(value: unknown): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("Expected report evidence object");
+  return value as Record<string, unknown>;
+}
+
+export function formatExecutionReport(input: Readonly<{
+  response: unknown; host: unknown; progress: readonly unknown[]; historyStagingMs: unknown;
+}>): string {
+  const response = object(input.response);
+  if (!Array.isArray(response.source_records)) throw new Error("Report requires actual source records");
+  const sources = response.source_records.map(row => SourceRunRecordSchema.parse(row));
+  const host = input.host === null ? null : HostFingerprintRowSchema.parse(object(input.host).row);
+  const request = object(response.request);
+  const limit = request.article_limit;
+  if (limit !== null && (typeof limit !== "number" || !Number.isSafeInteger(limit) || limit <= 0)) {
+    throw new Error("Report requires the resolved requested article limit");
+  }
+  const sum = (key: "parsed_count" | "harvested_count" | "fresh_count" | "duplicate_count" | "eligible_count" | "normalized_count" | "selected_count") => {
+    const measured = sources.filter(source => source[key] !== null);
+    return `${measured.reduce((total, source) => total + source[key]!, 0)} articles; ${measured.length}/${sources.length} sources measured`;
+  };
+  const progress = input.progress.map(object);
+  for (const entry of progress) {
+    if (typeof entry.eventType !== "string" || typeof entry.elapsedMs !== "number"
+      || !Number.isFinite(entry.elapsedMs) || entry.elapsedMs < 0) throw new Error("Invalid progress timing evidence");
+  }
+  function duration(start: string, end: string): string {
+    const first = progress.find(entry => entry.eventType === start);
+    const last = progress.findLast(entry => entry.eventType === end);
+    if (first === undefined || last === undefined) return "Unavailable";
+    const milliseconds = Number(last.elapsedMs) - Number(first.elapsedMs);
+    if (milliseconds < 0) throw new Error("Progress timing endpoints are reversed");
+    return `${(milliseconds / 1000).toFixed(3)} seconds`;
+  }
+  const drops = new Map<string, number>();
+  for (const source of sources) for (const drop of source.drop_reasons) {
+    const key = `${drop.subject} / ${drop.stage} / ${drop.reason}`;
+    drops.set(key, (drops.get(key) ?? 0) + drop.count);
+  }
+  const observedEntries = sources.reduce((total, source) => total + (source.parsed_count ?? 0), 0);
+  const feedAttempts = sources.filter(source => source.fetch_status !== "not_requested").length;
+  const feedFailures = sources.filter(source => !["success", "not_requested"].includes(source.fetch_status)).length;
+  const articleStarts = progress.filter(entry => entry.eventType === "ARTICLE_HARVEST_STARTED").length;
+  const articleEnds = progress.filter(entry => entry.eventType === "ARTICLE_HARVEST_COMPLETED");
+  const extraction = (outcome: string) => articleEnds.filter(entry => entry.extraction_outcome === outcome).length;
+  const staging = typeof input.historyStagingMs === "number" && Number.isFinite(input.historyStagingMs) && input.historyStagingMs >= 0
+    ? `${(input.historyStagingMs / 1000).toFixed(3)} seconds` : "Unavailable";
+  return [
+    "## Table C - Live yield",
+    "",
+    "| Id | Observation | Recorded result |",
+    "| --- | --- | --- |",
+    `| C1 | Offered feed entries | ${sum("parsed_count")} |`,
+    `| C2 | Fresh entries | ${sum("fresh_count")} |`,
+    `| C3 | Harvested candidates | ${sum("harvested_count")} |`,
+    `| C4 | Duplicates | ${sum("duplicate_count")} |`,
+    `| C5 | Screened eligible | ${sum("eligible_count")} |`,
+    `| C6 | Normalized candidates | ${sum("normalized_count")} |`,
+    `| C7 | Selected; requested limit ${limit ?? "uncapped"} | ${sum("selected_count")} |`,
+    `| C8 | Feed fetch failures | ${feedFailures}/${feedAttempts} attempted feeds |`,
+    `| C9 | Article harvest operations | ${progress.length === 0 ? "Unavailable" : `${articleEnds.length}/${articleStarts} started operations completed; not a page-request count`} |`,
+    `| C10 | Extraction outcomes | ${progress.length === 0 ? "Unavailable" : `${extraction("success")} success; ${extraction("empty")} empty; ${extraction("failed")} failed; ${extraction("not-attempted")} not attempted; denominator ${articleEnds.length} completed operations`} |`,
+    "| C11 | Refused before fetching / actual page requests | Unavailable until shared operation diagnostics are supplied |",
+    "",
+    "Page-request counts and operation durations are unavailable unless recorded by the actual operation. Progress event gaps are not operation durations. Screened eligible does not mean previously unpublished.",
+    "",
+    "## Table D - Refusals",
+    "",
+    "| Id | Subject / stage / reason | Count and denominator |",
+    "| --- | --- | --- |",
+    ...[...drops].map(([reason, count], index) => `| D${index + 1} | ${escapeMarkdown(reason)} | ${count}/${reason.startsWith("feed /") ? feedAttempts : observedEntries} ${reason.startsWith("feed /") ? "attempted feeds" : "observed parsed entries"} |`),
+    ...(drops.size === 0 ? ["No recorded refusals."] : []),
+    "",
+    "Article reasons use observed parsed entries, not all feeds. Failed feed parses have no known entry count. Early refusals occur before article fetching; later refusals must not be subtracted again.",
+    "",
+    "## Table E - Measured elapsed time",
+    "",
+    "| Id | Work | Elapsed time |",
+    "| --- | --- | --- |",
+    `| E1 | Named history staging and input loading | ${staging} |`,
+    `| E2 | Planner history read | ${duration("HISTORY_READ_STARTED", "HISTORY_READ_COMPLETED")} |`,
+    `| E3 | Planning stages | ${duration("PIPELINE_STARTED", "PLANNING_STAGES_COMPLETED")} |`,
+    `| E4 | Audit recording | ${duration("AUDIT_RECORDING_STARTED", "AUDIT_RECORDING_COMPLETED")} |`,
+    `| E5 | HTTP listener through response | ${duration("HTTP_LISTENER_STARTED", "HTTP_RESPONSE_RECEIVED")} |`,
+    `| E6 | Job start through host observation | ${host?.job_seconds === null || host === null ? "Unavailable" : `${host.job_seconds} seconds`} |`,
+    "",
+    "Elapsed intervals overlap; do not add them. The job observation excludes the later report, commit and artifact upload.",
+    "",
+    "## Table F - Actual host",
+    "",
+    "| Id | Observation | Recorded result |",
+    "| --- | --- | --- |",
+    `| F1 | Hardware fingerprint | ${host?.fingerprint ?? "Unavailable"} |`,
+    `| F2 | CPU | ${escapeMarkdown(host?.cpu_model ?? "Unavailable")} |`,
+    `| F3 | Logical / allowed processors | ${host?.cpu_logical_processors ?? "Unavailable"} / ${host?.cpu_allowed_processors ?? "Unavailable"} |`,
+    `| F4 | CPU quota | ${host?.cpu_quota_state === "finite" ? `${host.cpu_quota_cores} cores` : host?.cpu_quota_state ?? "Unavailable"} |`,
+    `| F5 | L3 cache | ${host?.l3_cache_bytes === null || host === null ? "Unavailable" : `${host.l3_cache_bytes} bytes`} |`,
+    `| F6 | Pipeline / task | ${escapeMarkdown(host?.pipeline_name ?? "Unavailable")} / ${escapeMarkdown(host?.task_name ?? "Unavailable")} |`,
+    "",
+    `Planning completion: ${response.planning_complete === true ? "verified" : "unavailable"}. Publication audit completion: ${response.audited_complete === true ? "verified" : "pending"}. Git commit status is reported by the separate exact-file commit step.`,
+    "",
+  ].join("\n");
+}
+
 export async function writePlannerReport(input: Readonly<{
-  enabled: boolean; events: unknown; summaryPath?: string; annotate: (line: string) => void;
+  enabled: boolean; events: unknown; summaryPath?: string; annotate: (line: string) => void; executionSummary?: string;
 }>): Promise<void> {
   if (!input.enabled) return;
   const report = formatPlannerReport(input.events);
   if (input.summaryPath === undefined || input.summaryPath.length === 0) {
     throw new Error("GITHUB_STEP_SUMMARY is required when workflow reporting is enabled");
   }
-  await appendFile(input.summaryPath, report.summary, "utf8");
+  await appendFile(input.summaryPath, report.summary + (input.executionSummary ?? ""), "utf8");
   for (const line of report.annotations) input.annotate(line);
 }
 
@@ -113,10 +218,18 @@ if (import.meta.main) {
   if (config.workflow_reporting.enabled) {
     const eventsPath = process.argv[3];
     if (eventsPath === undefined) throw new Error("events path is required when workflow reporting is enabled");
+    const directory = process.argv[4];
+    const executionSummary = directory === undefined ? undefined : formatExecutionReport({
+      response: await Bun.file(join(directory, "response.json")).json(),
+      host: await Bun.file(join(directory, "host.json")).exists() ? await Bun.file(join(directory, "host.json")).json() : null,
+      progress: (await readFile(join(directory, "progress.jsonl"), "utf8")).trim().split("\n").filter(Boolean).map(line => JSON.parse(line)),
+      historyStagingMs: await Bun.file(join(directory, "history-staging-ms.json")).json(),
+    });
     await writePlannerReport({
       enabled: true, events: JSON.parse(await readFile(eventsPath, "utf8")),
       ...(process.env.GITHUB_STEP_SUMMARY === undefined ? {} : { summaryPath: process.env.GITHUB_STEP_SUMMARY }),
       annotate: line => console.log(line),
+      ...(executionSummary === undefined ? {} : { executionSummary }),
     });
   }
 }

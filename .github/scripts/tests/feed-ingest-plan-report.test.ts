@@ -57,7 +57,7 @@ test("reports explicit empty outcomes without certifying durable audit or public
   const before = JSON.stringify(events);
   const report = formatPlannerReport(events);
   expect(report.summary).toContain("| A1 | recorded&#45;source | Recorded RSS source | success / empty | 0 | 0 | FEED_EMPTY |");
-  expect(report.summary).toContain("| B1 | harvest&#45;feeds | 1 | 0 | 1 | 12 |");
+  expect(report.summary).toContain("| B1 | harvest&#45;feeds | 1 | 0 | 1 | 0.012 |");
   expect(report.summary).toContain("**Audit completion: unavailable.**");
   expect(report.annotations).toHaveLength(1);
   expect(JSON.stringify(events)).toBe(before);

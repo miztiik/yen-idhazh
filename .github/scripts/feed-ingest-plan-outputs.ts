@@ -126,6 +126,7 @@ export function createExecutionOutputs(summary: PlanSummary, registrations: Regi
     matrix: JSON.stringify({ include: Array.from({ length: count }, (_, worker_assignment) => ({ worker_assignment })) }),
     dispatch_files: JSON.stringify(dispatches), rejection_files: JSON.stringify(rejections),
     selection_files: JSON.stringify(selections), seen_files: JSON.stringify(seen),
+    current_run_files: JSON.stringify(all),
     first_sight_absence_proof: summary.first_sight.absence_proof,
     ...metrics,
   };
