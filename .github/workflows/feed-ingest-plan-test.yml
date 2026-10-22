@@ -25,16 +25,19 @@ on:
         type: string
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   isolated-plan:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
+      - name: Retain job start observation
+        run: echo "PLANNER_JOB_STARTED_MS=$(date -u +%s%3N)" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v6
         with:
-          persist-credentials: false
+          persist-credentials: true
           sparse-checkout-cone-mode: false
           sparse-checkout: |
             /config/
@@ -44,6 +47,7 @@ jobs:
             /services/host-fingerprints/
             /services/host-probes/
             /.github/scripts/feed-ingest-plan-outputs.ts
+            /.github/scripts/feed-ingest-plan-commit.ts
             /.github/scripts/feed-ingest-plan-report.ts
             /.github/scripts/feed-ingest-plan-verification.ts
             /.github/scripts/feed-ingest-plan-audit-fixture.ts
@@ -66,6 +70,7 @@ jobs:
           bun install --frozen-lockfile --cwd packages/common-contracts
           bun install --frozen-lockfile --cwd packages/ledger-file-writer
           bun install --frozen-lockfile --cwd services/feed-ingest-plan
+          bun install --frozen-lockfile --cwd services/host-fingerprints
 
       - name: Check isolated adapters and native compatibility
         run: |
@@ -106,6 +111,7 @@ jobs:
 
           const root = process.cwd();
           try {
+            const historyStarted = performance.now();
             const args = ["--cli"];
             for (const [field, flag] of [
               ["FRESHNESS_HOURS", "--freshness-hours"], ["ARTICLE_LIMIT", "--article-limit"],
@@ -217,6 +223,7 @@ jobs:
               run: { ...inputs.settings.run, attempt: Number(GITHUB_RUN_ATTEMPT) } });
             const artifactRoot = join(RUNNER_TEMP, "feed-ingest-plan");
             await mkdir(artifactRoot, { recursive: true });
+            await writeFile(join(artifactRoot, "history-staging-ms.json"), JSON.stringify(performance.now() - historyStarted));
             const events: FeedIngestEvent[] = [];
             const correlation_id = randomUUID();
             const writeProgress = (event: ProgressRecord) => {
@@ -256,6 +263,7 @@ jobs:
               throw new Error("workflow: HTTP planner did not return actual assessment/diversity recording evidence");
             }
             await writeFile(join(artifactRoot, "events.json"), JSON.stringify(events));
+            await writeFile(join(artifactRoot, "response.json"), JSON.stringify(summary));
             await verifyParquetFiles(join(artifactRoot, "state"), "dispatches", summary.files.dispatches, inputs.registrations.dispatches);
             for (const files of [summary.files.harvest_rejections, summary.files.screening_rejections, summary.files.curation_rejections]) {
               await verifyParquetFiles(join(artifactRoot, "state"), "rejections", files, inputs.registrations.rejections);
@@ -295,10 +303,68 @@ jobs:
           });
           TS
 
+      - name: Record actual workflow host
+        id: host
+        if: ${{ !cancelled() && steps.plan.outputs.planning_complete == 'true' }}
+        run: |
+          bun run - <<'TS'
+          import { writeFile } from "node:fs/promises";
+          import { join } from "node:path";
+          import { loadConfig, loadSettings } from "./services/host-fingerprints/src/config";
+          import { persistFingerprint } from "./services/host-fingerprints/src/persist-fingerprint";
+          import { writeGitHubOutputs } from "./.github/scripts/feed-ingest-plan-outputs";
+          const { RUNNER_TEMP, GITHUB_OUTPUT, GITHUB_RUN_ATTEMPT, PLANNER_JOB_STARTED_MS } = process.env;
+          if (!RUNNER_TEMP || !GITHUB_OUTPUT || !GITHUB_RUN_ATTEMPT || !PLANNER_JOB_STARTED_MS) throw new Error("Host capture requires job identity and start observation");
+          const root = join(RUNNER_TEMP, "feed-ingest-plan");
+          const summary = await Bun.file(join(root, "response.json")).json();
+          const git = Bun.spawn(["git", "rev-parse", "HEAD"], { stdout: "pipe", stderr: "inherit" });
+          const git_sha = (await new Response(git.stdout).text()).trim();
+          if (await git.exited !== 0) throw new Error("Host capture cannot resolve executed revision");
+          const started = Number(PLANNER_JOB_STARTED_MS);
+          if (!Number.isSafeInteger(started) || started > Date.now()) throw new Error("Invalid job start observation");
+          const writer = { run_id: summary.run_id, attempt: Number(GITHUB_RUN_ATTEMPT), job: null,
+            pipeline_name: "feed-ingest-plan", task_name: "isolated-plan", shard: 0,
+            producer: "telemetry.silicon", git_sha };
+          const host = await persistFingerprint({
+            date: summary.date, job_seconds: Math.floor((Date.now() - started) / 1000), writer,
+          }, await loadConfig(), await loadSettings(), { outputRoot: join(root, "state") });
+          await writeFile(join(root, "host.json"), JSON.stringify({ ...host, writer }));
+          if (host.status !== "written") throw new Error("Host collection is disabled; required actual host evidence is unavailable");
+          await writeGitHubOutputs(GITHUB_OUTPUT, { host_files: JSON.stringify(host.files.map(file => file.path)) });
+          TS
+
       - name: Optional GitHub report
         if: ${{ !cancelled() && steps.plan.outputs.workflow_reporting == 'true' }}
         continue-on-error: true
-        run: bun run .github/scripts/feed-ingest-plan-report.ts config/feed-ingest-plan.json "$RUNNER_TEMP/feed-ingest-plan/events.json"
+        run: bun run .github/scripts/feed-ingest-plan-report.ts config/feed-ingest-plan.json "$RUNNER_TEMP/feed-ingest-plan/events.json" "$RUNNER_TEMP/feed-ingest-plan"
+
+      - name: Commit exact live planner and host files
+        if: ${{ success() && steps.plan.outputs.planning_complete == 'true' && steps.audit_fixture.outputs.audited_complete == 'true' && steps.audit_fixture.outputs.scope == 'generated_fixture' }}
+        env:
+          CURRENT_RUN_FILES: ${{ steps.plan.outputs.current_run_files }}
+          HOST_FILES: ${{ steps.host.outputs.host_files }}
+        run: |
+          bun run - <<'TS'
+          import { join } from "node:path";
+          import { writeFile } from "node:fs/promises";
+          import { commitPlannerFiles } from "./.github/scripts/feed-ingest-plan-commit";
+          const { RUNNER_TEMP, CURRENT_RUN_FILES, HOST_FILES } = process.env;
+          if (!RUNNER_TEMP || !CURRENT_RUN_FILES || !HOST_FILES) throw new Error("Commit requires exact completed live planner and host outputs");
+          function paths(value: string): string[] {
+            const parsed: unknown = JSON.parse(value);
+            if (!Array.isArray(parsed) || parsed.some(path => typeof path !== "string")) throw new Error("Invalid exact output list");
+            return parsed;
+          }
+          const root = join(RUNNER_TEMP, "feed-ingest-plan");
+          const result = await commitPlannerFiles({
+            repository: process.cwd(), stateRoot: join(root, "state"),
+            paths: [...paths(CURRENT_RUN_FILES), ...paths(HOST_FILES)],
+            message: "Record live feed planner and host observations",
+            retry: await Bun.file("config/push-retry.json").json(),
+          });
+          await writeFile(join(root, "commit-result.json"), JSON.stringify(result));
+          console.log(JSON.stringify(result));
+          TS
 
       - name: Preserve isolated test evidence
         if: ${{ always() }}

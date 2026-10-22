@@ -22,10 +22,10 @@ if (Bun.argv.includes("--emit-schemas")) {
       min_words_article: 180, min_words_abstract: 60, blocked_http_statuses: [401, 403, 429],
       max_age_hours: 24, recency_half_life_hours: 18, recency_weight: 0.6,
     });
-    expect(config.curate.article_limit).toBeNull();
+    expect(config.curate.article_limit).toBe(100);
     expect(config.curate.mmr_weights.lambda_source_kind).toBe(0.05);
     expect(config.vertical_overrides).toEqual({});
-    expect(config.workflow_reporting.enabled).toBe(false);
+    expect(config.workflow_reporting.enabled).toBe(true);
     expect(configs.FeedWorkflowReportingConfigSchema.parse({
       removal_condition: config.workflow_reporting.removal_condition,
     }).enabled).toBe(true);
