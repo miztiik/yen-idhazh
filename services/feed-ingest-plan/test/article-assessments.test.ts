@@ -15,6 +15,8 @@ test("real publication timing and separate article/set scores survive translatio
     expect(rows.length).toBe(result.evidence.harvest.articles.length
       + result.evidence.harvest.candidates.length + result.evidence.screening.admitted.length);
     for (const row of rows) {
+      const original = result.evidence.harvest.articles.find(article => article.observation.candidate_id === row.candidate_id)!;
+      expect(row.diagnostics).toEqual(original.observation.diagnostics);
       expect(row.informative_verdict_status).toBe("not_assessed");
       expect(row.informative_verdict).toBeNull();
       expect(row.informative_evaluator_version).toBeNull();
@@ -43,6 +45,13 @@ test("originally unmeasured timing remains unknown, not fetched_at or invented f
   try {
     const result = await runFeedPlan({ partition_strategy: "none" }, recorded.inputs, recorded.runtime);
     const rows = translateArticleAssessments(result, recorded.inputs);
+    const rootless = rows.find(row => row.reason === "EXTRACT_FAILED")!;
+    expect(rootless.diagnostics).toMatchObject({
+      stopped_stage: "extract", extraction_failure: "missing-document-root", http_status: 200,
+    });
+    expect(rows.find(row => row.reason === "FETCH_FAILED_HTTP")?.diagnostics).toMatchObject({
+      stopped_stage: "fetch", http_status: 404, failure_code: "http_client_error", extract_ms: null,
+    });
     const undated = result.evidence.harvest.candidates.filter(candidate => candidate.published_at === null);
     expect(undated.length).toBeGreaterThan(0);
     for (const candidate of undated) {

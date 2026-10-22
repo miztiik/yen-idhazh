@@ -70,7 +70,8 @@ export async function screenArticleCandidates(
         source_id: candidate.source_id, feed_url: candidate.source.feed_url, subject: "article",
         candidate_id: candidate.candidate_id, url_key: candidate.url_key, canonical_url: candidate.canonical_url,
         title: candidate.title, categories: candidate.categories, stage: "screen-article-candidates",
-        ...rejection, rejected_at: run.now,
+        ...rejection, details: { ...rejection.details, diagnostics: observation?.diagnostics ?? null },
+        rejected_at: run.now,
       }));
     }
   }

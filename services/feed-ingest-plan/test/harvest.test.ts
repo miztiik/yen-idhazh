@@ -123,6 +123,13 @@ test("public harvest returns validated full text, provenance and actual observat
     expect(result.articles[0]?.observation).toMatchObject({
       http_status: 200, robots: "allowed", paywall: false, paywall_evidence: "none", extraction: "success",
     });
+    expect(result.articles[0]?.observation.diagnostics).toMatchObject({
+      http_status: 200, robots: "allowed", fetch_failure: null,
+      extraction_failure: null, failure_code: null, stopped_stage: null, warnings: [],
+    });
+    expect(result.articles[0]?.observation.diagnostics?.fetch_ms).toBeGreaterThanOrEqual(0);
+    expect(result.articles[0]?.observation.diagnostics?.extract_ms).toBeGreaterThanOrEqual(0);
+    expect(result.articles[1]?.observation.diagnostics).toBeNull();
     const requests = transport.requests.map(request => request.url.href);
     expect(requests.filter(url => url.endsWith("/robots.txt"))).toHaveLength(2);
     expect(requests.some(url => /private.js|style.css|meta-data|frame/.test(url))).toBe(false);
@@ -169,6 +176,21 @@ test("inactive, empty, malformed, HTTP, timeout and address failures are distinc
     ]);
     expect(result.rejections[3]?.details.http_status).toBe(404);
     expect(result.rejections[4]?.details.timeout_ms).toBe(loaded.config.harvest.fetch_timeout_ms);
+    expect(result.rejections[3]?.details.diagnostics).toMatchObject({
+      http_status: 404, fetch_failure: "http", failure_code: "http_client_error", stopped_stage: "fetch", extract_ms: null,
+    });
+    expect(result.rejections[4]?.details.diagnostics).toMatchObject({
+      http_status: null, fetch_failure: "timeout", failure_code: "network_error", stopped_stage: "fetch", extract_ms: null,
+    });
+    expect(result.rejections[5]?.details.diagnostics).toMatchObject({
+      fetch_failure: "unsafe-target", failure_code: "blocked_address", stopped_stage: "fetch",
+    });
+    for (const outcome of result.feed_outcomes) {
+      const rejection = result.rejections.find(row => row.source_id === outcome.source.source_id);
+      if (!rejection) throw new Error("Each failed feed must retain its rejection evidence");
+      expect(outcome.diagnostics).toEqual(rejection.details.diagnostics);
+      expect(outcome.diagnostics?.fetch_ms ?? null).toBe(outcome.fetch_duration_ms);
+    }
     expect(result.feed_outcomes.map(outcome => outcome.fetch_status)).toEqual([
       "not_requested", "success", "success", "http_failure", "timeout", "network_failure",
     ]);
@@ -211,9 +233,16 @@ test("rootless extraction, empty content and article request failures do not kil
     expect(result.articles).toHaveLength(9);
     expect(result.candidates.map(candidate => candidate.entry_ordinal)).toEqual([4, 5, 6, 7]);
     expect(result.articles[0]?.observation).toMatchObject({ http_status: 200, extraction: "failed", paywall: null });
-    expect(result.articles[0]?.rejection?.drop_reason).toBe("FETCH_FAILED");
+    expect(result.articles[0]?.rejection?.drop_reason).toBe("EXTRACT_FAILED");
+    expect(result.articles[0]?.observation.diagnostics).toMatchObject({
+      extraction_failure: "missing-document-root", failure_code: "unknown", stopped_stage: "extract",
+      detail: "missing-document-root", http_status: 200, fetch_failure: null,
+    });
     expect(result.articles[1]?.observation.extraction).toBe("empty");
-    expect(result.articles[1]?.rejection?.drop_reason).toBe("MISSING_REQUIRED_FIELDS");
+    expect(result.articles[1]?.rejection?.drop_reason).toBe("EXTRACT_EMPTY");
+    expect(result.articles[1]?.observation.diagnostics).toMatchObject({
+      extraction_failure: "empty-content", failure_code: "no_text", stopped_stage: "extract",
+    });
     expect(result.articles[2]?.rejection?.details.http_status).toBe(404);
     expect(result.articles[3]?.rejection?.details.timeout_ms).toBe(loaded.config.harvest.fetch_timeout_ms);
     expect(result.articles[4]?.candidate?.title).toBe("Measured progress and public evidence");
@@ -221,6 +250,13 @@ test("rootless extraction, empty content and article request failures do not kil
     expect(result.articles[7]?.candidate?.published_at).toBeNull();
     expect(result.articles[8]?.rejection?.title).toBeNull();
     expect(result.articles[8]?.rejection?.drop_reason).toBe("MISSING_REQUIRED_FIELDS");
+    expect(result.articles[8]?.observation.diagnostics).toMatchObject({
+      extraction_failure: "missing-title", failure_code: "no_title", stopped_stage: "extract",
+    });
+    for (const article of result.articles) {
+      if (article.rejection !== null) expect(article.rejection.details.diagnostics).toEqual(article.observation.diagnostics);
+      if (article.observation.extraction !== "not-attempted") expect(article.observation.diagnostics?.extract_ms).toBeGreaterThanOrEqual(0);
+    }
     expect(result.feed_outcomes[0]).toMatchObject({ parsed_count: 9, harvested_count: 4 });
     const file = result.rejection_files.files[0];
     if (!file) throw new Error("article failures did not produce their Parquet file");

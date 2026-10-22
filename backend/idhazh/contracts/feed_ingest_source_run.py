@@ -93,6 +93,11 @@ class SourceRunRecord(Contract):
     __schema_stem__: ClassVar[str] = "feed-ingest-source-run"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-22T18:15",
+            change="Count extraction errors and empty extraction separately from fetch errors.",
+            why="Source failure counts must retain the operation that failed.",
+        ),
+        ChangelogEntry(
             version="2026-10-22T10:05",
             change="Commit unique attempt records independently of storage files.",
             why="Verified planning evidence must survive compaction without inventing old proof.",
@@ -108,7 +113,7 @@ class SourceRunRecord(Contract):
             why="A complete attempt must remain distinguishable from partial retries.",
         ),
     )
-    version: Literal["2026-10-22T10:05"] = "2026-10-22T10:05"
+    version: Literal["2026-10-22T18:15"] = "2026-10-22T18:15"
 
     date: DateStamp
     correlation_id: str = Field(min_length=1)
@@ -146,8 +151,10 @@ class SourceRunRecord(Contract):
     @model_validator(mode="before")
     @classmethod
     def migrate_previous_version(cls, value: Any) -> Any:
-        if isinstance(value, dict) and value.get("version") in {"2026-10-20", "2026-10-22"}:
-            return {**value, "version": "2026-10-22T10:05"}
+        if isinstance(value, dict) and value.get("version") in {
+            "2026-10-20", "2026-10-22", "2026-10-22T10:05"
+        }:
+            return {**value, "version": "2026-10-22T18:15"}
         return value
 
     @model_validator(mode="after")

@@ -116,7 +116,11 @@ test("recorded rejection commitments retain their original schema stamp after mi
     const selected = selectCompleteAttempt(history).selected!;
     const rows = history.ledgers.rejections.rows;
     expect(rows.length).toBeGreaterThan(0);
-    const original = rows.map(held => ({ ...held, row: { ...held.row, version: CONTRACT_VERSION } }));
+    const original = rows.map(held => {
+      const current = CandidateRejectionContract.schema.parse(held.row);
+      const { diagnostics: _diagnostics, ...details } = current.details;
+      return { ...held, row: { ...current, details, version: CONTRACT_VERSION } };
+    });
     const migrated = original.map(held => ({
       ...held, row: CandidateRejectionContract.legacyVersions[CONTRACT_VERSION].migrate(held.row),
     }));
@@ -133,5 +137,14 @@ test("recorded rejection commitments retain their original schema stamp after mi
     expect(commitLogicalRecords("rejections", [...migrated].reverse(), selected, CONTRACT_VERSION).commitment).toEqual(oldProof);
     expect(oldProof).not.toEqual(commitLogicalRecords("rejections", migrated, selected).commitment);
     expect(() => commitLogicalRecords("rejections", migrated, selected, "2026-10-19")).toThrow("unsupported");
+    expect(commitLogicalRecords("rejections", migrated, selected, "2026-10-22").commitment.row_schema_version).toBe("2026-10-22");
+    const assessments = history.ledgers["article-assessments"].rows;
+    expect(() => commitLogicalRecords("article-assessments", assessments, selected, "2026-10-22"))
+      .toThrow("cannot omit measured diagnostics");
+    const historicalAssessments = assessments.map(held => ({
+      ...held, row: { ...ArticleAssessmentContract.schema.parse(held.row), diagnostics: null },
+    }));
+    expect(commitLogicalRecords("article-assessments", historicalAssessments, selected, "2026-10-22")
+      .commitment.row_schema_version).toBe("2026-10-22");
   } finally { await fixture.close(); }
 });

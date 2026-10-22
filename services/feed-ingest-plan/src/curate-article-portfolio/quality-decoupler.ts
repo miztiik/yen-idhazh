@@ -1,5 +1,5 @@
 /** Which measured article components contribute before set-dependent penalties? */
-import { ArticleAssessmentRecordSchema, FEED_INGEST_AUDIT_VERSION } from "@idhazh/common-contracts";
+import { ArticleAssessmentRecordSchema } from "@idhazh/common-contracts";
 import type { PortfolioArticle } from "./portfolio-input";
 
 export function measureArticle(article: PortfolioArticle) {
@@ -29,7 +29,7 @@ export function recordAssessment(article: PortfolioArticle, observedAt: string) 
   const suitability = article.observation?.paywall !== null && article.observation !== null;
   const { mmr_weights, ...curate } = policy.curate;
   return ArticleAssessmentRecordSchema.parse({
-    version: FEED_INGEST_AUDIT_VERSION, date: observedAt.slice(0, 10),
+    date: observedAt.slice(0, 10), diagnostics: article.observation?.diagnostics ?? null,
     correlation_id: candidate.correlation_id, candidate_id: candidate.candidate_id,
     source_id: candidate.source_id, source: candidate.source, labels: candidate.labels,
     canonical_url: candidate.canonical_url, url_key: candidate.url_key,

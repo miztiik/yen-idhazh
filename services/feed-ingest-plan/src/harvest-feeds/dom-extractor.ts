@@ -2,10 +2,11 @@
 import { parseHTML } from "linkedom";
 import Defuddle from "defuddle";
 import type { HarvestObservation } from "./harvest-types";
+import type { HarvestDiagnostics } from "@idhazh/common-contracts";
 import { sanitizeText } from "./sanitize-text";
 
 export class ArticleExtractionError extends Error {
-  constructor(reason: "missing-document-root" | "dom-depth-exceeded") { super(reason); }
+  constructor(readonly reason: "missing-document-root" | "dom-depth-exceeded") { super(reason); }
 }
 
 export function cleanText(raw: string): string {
@@ -23,28 +24,34 @@ function declaresPaywall(value: unknown): boolean {
 
 function paywallEvidence(document: Document, html: string, markers: readonly string[]): {
   paywall: HarvestObservation["paywall"]; paywall_evidence: HarvestObservation["paywall_evidence"];
+  warnings: HarvestDiagnostics["warnings"];
 } {
+  let declared = false;
+  let malformed = false;
   for (const script of document.querySelectorAll('script[type="application/ld+json"]')) {
     let payload: unknown;
     try { payload = JSON.parse(script.textContent ?? ""); }
     catch (error) {
-      if (error instanceof SyntaxError) continue;
+      if (error instanceof SyntaxError) { malformed = true; continue; }
       throw error;
     }
-    if (declaresPaywall(payload)) return { paywall: true, paywall_evidence: "json-ld" };
+    if (declaresPaywall(payload)) declared = true;
   }
+  const warnings: HarvestDiagnostics["warnings"] = malformed ? ["malformed-json-ld"] : [];
+  if (declared) return { paywall: true, paywall_evidence: "json-ld", warnings };
   const normalized = html.replace(/\s+/gu, " ").toLowerCase();
   const compact = html.replace(/\s+/gu, "").toLowerCase();
   if (markers.some(marker => normalized.includes(marker.toLowerCase()) || compact.includes(marker.toLowerCase()))) {
-    return { paywall: true, paywall_evidence: "configured-marker" };
+    return { paywall: true, paywall_evidence: "configured-marker", warnings };
   }
-  return { paywall: false, paywall_evidence: "none" };
+  return { paywall: false, paywall_evidence: "none", warnings };
 }
 
 export function extractArticle(html: string, configuredUrl: string, markers: readonly string[]) {
   if (!html.trim()) return {
     article_text: "", word_count: 0, author: null, page_title: null,
     paywall: false, paywall_evidence: "none" as const,
+    warnings: [] as HarvestDiagnostics["warnings"],
   };
   try { return extractDocument(html, configuredUrl, markers); }
   catch (error) {

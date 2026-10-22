@@ -142,7 +142,11 @@ UUIDv5 event identities and one UUIDv4 run correlation follow
 [the shared identity contract](../contracts/identity.md).
 Typed `FeedIngestEvent` evidence is included under `audit` in its live log;
 the workflow also appends the exact record to its audit JSONL file immediately.
-Elapsed and step durations are measured in milliseconds.
+Elapsed and operation durations are measured in milliseconds. Live
+`durationMs` is null without an explicit operation measurement, never the gap
+since another event. Audit stage elapsed time is exposed as `stepElapsedMs`.
+The [failure diagnostic contract](feed-failure-diagnostics.md) defines the
+shared feed/article evidence, operation clocks and attributable warnings.
 Full article text is not put in decision logs.
 Feed outcomes, actual harvest/screening/curation decisions, marginal choices
 from curation's trace and stage counts retain their existing typed contracts.

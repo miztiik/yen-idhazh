@@ -7,7 +7,7 @@ import { tableFromIPC } from "apache-arrow";
 import initializeWasm, { readMetadata, readParquet } from "parquet-wasm/esm";
 import { z } from "zod";
 import {
-  CandidateRejectionRecordSchema, DropReasonSchema, FeedIngestCandidateSchema,
+  CandidateRejectionRecordSchema, DropReasonSchema, FeedIngestCandidateSchema, HarvestDiagnosticsSchema,
   RowIdentitySchema, SourceFormSchema, WriterIdentitySchema, deriveCandidateId,
 } from "@idhazh/common-contracts";
 import { loadPlanningConfig } from "../src/config/resolve-policy";
@@ -84,6 +84,7 @@ async function withLedger(action: (ledger: RejectionLedgerContext, data: Awaited
 
 test("recorded word, blocking, precedence and exact freshness boundaries", async () => {
   await withLedger(async (ledger, { input, candidate, cases, seen, observation }) => {
+    const diagnostics = HarvestDiagnosticsSchema.parse({ http_status: 200, fetch_ms: 17, extract_ms: 3 });
     for (const entry of cases) {
       const words = candidate.article_text.split(/\s+/u).slice(0, entry.words ?? candidate.word_count);
       const offered = FeedIngestCandidateSchema.parse({
@@ -96,12 +97,14 @@ test("recorded word, blocking, precedence and exact freshness boundaries", async
         ...input, candidates: [offered],
         observations: { [offered.candidate_id]: {
           ...observation,
+          diagnostics,
           http_status: entry.status === undefined ? 200 : entry.status, paywall: entry.paywall ?? false,
         } },
         seen: entry.seen === undefined ? input.seen : { availability: "available", rows: [seen[entry.seen]] },
       }, ledger);
       expect(result.rejections[0]?.drop_reason ?? null, entry.name).toBe(entry.reason);
       expect(result.admitted.length + result.rejections.length, entry.name).toBe(1);
+      if (entry.reason !== null) expect(result.rejections[0]?.details.diagnostics, entry.name).toEqual(diagnostics);
       if (entry.details) expect(result.rejections[0]?.details, entry.name).toMatchObject(entry.details);
       if (entry.age !== undefined) expect(result.admitted[0]?.freshness.age_hours, entry.name).toBe(entry.age);
       if (entry.clock !== undefined) expect(result.admitted[0]?.freshness.timing_source, entry.name).toBe(entry.clock);
