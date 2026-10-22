@@ -218,7 +218,10 @@ class CandidateRejectionRecord(Contract):
             raise ValueError("feed failures belong to harvest-feeds")
         if not article and self.drop_reason == DropReason.MISSING_REQUIRED_FIELDS:
             raise ValueError("missing article fields require an article subject")
-        if not article and self.drop_reason in {DropReason.EXTRACT_FAILED, DropReason.EXTRACT_EMPTY}:
+        if not article and self.drop_reason in {
+            DropReason.EXTRACT_FAILED,
+            DropReason.EXTRACT_EMPTY,
+        }:
             raise ValueError("extraction failures require an article subject")
         for name in REQUIRED_DETAILS.get(self.drop_reason, ()):
             if getattr(self.details, name) is None:
