@@ -269,16 +269,23 @@ guarded squash merge. The last merge is
 `b60c1283c2b6a91bded06394234e3fe729e4c1a7`; its reviewed workflow candidate
 `d1d1827e822c0b2d9c1824f31a034b8669ce8d6c` passed CI run 39688288511.
 
+Repair checkpoint, 2026-10-22 08:27 UTC: owner-approved Phase 1 landed in
+PR #1627 as `2fb5af470cc00adb2cb478db5e2099f3214b1fbc`. Reviewed candidate
+`27627763616c578d67f093549a27ca026592a550` passed all five CI jobs in run
+39747135353. Assessments now retain first-seen timing and signed age;
+concentration metrics accept positive configured counts; source observations
+retain their original run day and actual observation instant; dispatches
+preserve separate harvest and selection contexts. Old payload readers and
+owning documentation were updated.
+
 Implementation delivery is not full plan acceptance. Rows #10 through #14
-remain open for the contract decisions recorded below: first-seen clocks,
-signed article age, configurable top-source counts, next-day observations,
-original completion proof after compaction, and separate harvest and selection
-dates. Supported current planning has native completion proof. Full audit
-completion and a successful isolated full-audit workflow are not claimed;
-the separate full-audit gate still refuses incomplete audit evidence.
-The owner decision request offered a separate compatible contract-repair
-phase or an explicit scope reduction. The owner was unavailable and selected
-neither, so neither a Python exception nor a scope reduction is authorized.
+remain open for completion proof after compaction and truthful full-audit
+completion through the runner and isolated workflow. Supported current
+planning has native completion proof; a successful isolated full-audit run is
+not claimed. Phase 2 workspace initialization failed when local disk filled.
+The owner requested resumption on 2026-10-22; safe checkout recovery is pending
+before source work resumes. The contract-repair approval in section 0 remains
+in force, with no scope reduction.
 
 ### Table D - Status Reckoner
 
