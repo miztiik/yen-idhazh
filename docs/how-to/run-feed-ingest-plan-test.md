@@ -4,8 +4,9 @@
 
 How do you check the TypeScript planner without changing daily publication?
 Use `.github/workflows/feed-ingest-plan-test.yml`. It starts only by manual
-dispatch, has read-only repository access, and never commits or publishes
-its output. The production digest workflow is unchanged.
+dispatch and commits genuine completed planner and host Parquet files to main.
+This is a Git data commit, not site publication. The production digest workflow
+is unchanged.
 
 ## Current readiness
 
@@ -55,7 +56,7 @@ the shared request validator; strings never become shell code.
 | Id | Control | Meaning |
 | --- | --- | --- |
 | A1 | `freshness_hours` | Positive finite maximum article age; default 24 hours. Overrides this run's age cutoff, not the ranking half-life. |
-| A2 | `article_limit` | Optional positive integer; blank uses the configured selection limit. |
+| A2 | `article_limit` | Optional positive integer; blank uses the configured 100-article selection limit. |
 | A3 | `shards` | Optional positive worker count; blank uses configuration. |
 | A4 | `partition_strategy` | `bin-pack`, `round-robin` or `none`; blank uses configuration. |
 
@@ -118,6 +119,9 @@ and requires identical bytes and digests after each call. Independent runs
 cannot have identical source-file digests: source records retain measured
 fetch/parse durations and commitments to newly generated file identities.
 Those values are verified unchanged, never removed or normalized to pass.
+The same applies to newly recorded per-article diagnostic timings: independent
+runs need not have equal commitments. Reporting must preserve each run's own
+bytes, selected identities and recorded proof.
 
 One generated publication fixture writes native published rows from the actual
 CLI's selected dispatch identities, plus a matching digest and settled health
@@ -187,20 +191,57 @@ worker matrix entries and registered identity-derived relative paths.
 It writes `GITHUB_OUTPUT` using noncolliding multiline delimiters and cannot
 claim audited success without a recorder.
 
-The optional artifact upload preserves generated evidence without committing
-it. Article text can be present in dispatch Parquet files, as declared by
-their existing contract. Treat artifacts as test evidence, never publication.
-No upload is proof that a plan is complete.
+The always-run artifact upload preserves partial evidence and completed files
+even when committing fails. Article text can be present in dispatch Parquet
+files, as declared by their existing contract. No upload proves a complete plan.
+
+After both the genuine planning check and the separate generated full-audit
+gate pass, the workflow invokes the existing host collector and commits only
+the explicit current-run file list plus its returned host file list. The
+generated full-audit directory is never included. The main commit contains:
+`state/raw/feed-ingest-plan/{editorial-selections,dispatches,rejections,article-assessments,source-runs,diversity}/YYYY/MM/DD/UUID.parquet`,
+any returned `state/raw/seen/YYYY/MM/DD/UUID.parquet`, and
+`state/raw/host-fingerprint/YYYY/MM/DD/UUID.parquet`.
+Empty ledgers have no file. Read the exact returned paths, not directory scans.
+
+`contents: write` and checkout credentials permit the normal push. The
+[committing rule](../architecture/publishing/committing.md#design-rationale)
+records the owner-directed Bun exception: a separate Git index builds a
+candidate on fetched main without moving the checkout, index or sparse
+patterns. A rejected push retries the same immutable bytes against fresh main
+under `config/push-retry.json`; it does not rerun planning. A conflicting UUID
+file or exhausted deadline fails visibly and leaves artifacts intact. There is
+no inventory, site, deletion or production worker update.
 
 ## Optional GitHub report
 
 `workflow_reporting.enabled` in `config/feed-ingest-plan.json` defaults to
-false. When false, the report adapter writes no annotations or summary. It
+true. When false, the report adapter writes no annotations or summary. It
 does not control the required execution outputs, ledger writes or events.
 
 When enabled, the separate adapter validates the existing typed event array
 and formats source outcomes, observed stage counts and candidate-decision
-counts. It labels missing evidence and incomplete audit explicitly. It
+counts. The live response supplies existing source-run counts for offered,
+fresh, harvested, duplicate, screened eligible, normalized and selected entries,
+with the resolved requested limit. Feed failures are separate. Per-reason
+counts name their denominators; feed decisions use every configured source,
+including inactive sources that were not fetched. Fetch failures separately
+use attempted feeds. Unknown feed entry counts remain unknown.
+Recorded progress supplies completed operation outcomes and paired elapsed
+intervals for history, planning, audit and HTTP. Event gaps are not summed as
+operation time. Shared `HarvestDiagnosticsSchema` validates the actual operation
+diagnostics. Article completion records distinguish refusals before a fetch,
+measured permitted fetches, target responses and measured extractions. A
+permitted fetch includes DNS, robots, retries and redirects, so it is not an
+outbound HTTP request count. Fetch and extraction times are summed work across
+measured operations, not elapsed wall time. Diagnostic rows retain exact HTTP
+statuses, robots results, typed causes, safe error tokens and warnings, with
+explicit recorded-operation denominators. Missing historical diagnostics stay
+unavailable. Intervals overlap and must not be added. The host row supplies
+actual hardware identity and elapsed job observation. Screened eligible does
+not mean previously unpublished. Source run, attempt and correlation identities
+must match the response. Host run and recorded writer attempt must also match;
+mixed-run evidence is refused. It labels missing evidence and incomplete audit explicitly. It
 escapes source titles for Markdown and workflow-command data for annotations.
 It omits source URLs, headers, full event dumps and article text.
 
@@ -211,6 +252,10 @@ Remove the reporting key, adapter, its tests and its workflow invocation
 together when development reporting is no longer needed. The
 [policy contract](../architecture/sources/feed-ingest-policies.md) owns this
 flag and its default.
+
+The reporting default changed to true at the owner's request for a readable
+yield, timing and hardware summary (kumarsnaveen, 2026-10-22). The existing
+configuration control and removal condition remain in place.
 
 ## See also
 

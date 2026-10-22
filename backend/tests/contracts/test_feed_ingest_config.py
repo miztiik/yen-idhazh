@@ -99,8 +99,8 @@ def test_python_authored_config_and_config_only_vertical_extension() -> None:
     assert config.triage.min_words_abstract == 60
     assert config.triage.max_age_hours == 24
     assert config.triage.recency_half_life_hours == 18
-    assert not config.workflow_reporting.enabled
-    assert config.curate.article_limit is None
+    assert config.workflow_reporting.enabled
+    assert config.curate.article_limit == 100
 
     taxonomy_payload["verticals"].append(dict(taxonomy_payload["verticals"][0], id="oceans"))
     payload["vertical_overrides"] = {

@@ -63,7 +63,7 @@ order, and exploration share apply to the whole selection. A null article limit
 means no additional run-wide cap. Partition settings, storage prefixes and
 compression, and metrics windows are not candidate policies.
 
-`workflow_reporting.enabled` defaults to false and controls only the external
+`workflow_reporting.enabled` defaults to true and controls only the external
 reporting adapter. It must not disable planning, events, metrics, or ledger
 writes. Its removal condition is recorded beside the key in configuration and
 on its Python and TypeScript declarations: remove the key, adapter, tests, and

@@ -46,6 +46,16 @@ operator console, not on the news-reading pages.
 recorder or leave host telemetry out. Existing historical readings and recovery
 backups are not rewritten.
 
+The manual feed planner workflow installs the existing Bun fingerprint
+service and invokes `persistFingerprint` after live planning and the separate
+generated audit gate. The producer remains `telemetry.silicon`; the caller is
+pipeline `feed-ingest-plan`, task `isolated-plan`, shard 0. Its `job_seconds`
+measures the first workflow step through the host observation, not the later
+report, commit or upload. The readable workflow summary includes the recorded
+hardware fingerprint, CPU model, visible/allowed processors, quota and L3.
+Missing hardware remains unavailable. The exact returned host UUID Parquet
+path joins the genuine planner files in the append-only main commit.
+
 Whole-instrument off and memory-only off are different controls. Their exact
 configuration, overrides and effects are in [Controls and precedence](#controls-and-precedence).
 

@@ -15,7 +15,7 @@
     "recency_weight": 0.6
   },
   "curate": {
-    "article_limit": null,
+    "article_limit": 100,
     "source_authority_weight": 1.0,
     "base_source_allowance": 3,
     "bonus_uncovered_event_cluster": 1,
@@ -55,7 +55,7 @@
     "compression": "snappy"
   },
   "workflow_reporting": {
-    "enabled": false,
+    "enabled": true,
     "removal_condition": "Delete enabled, this adapter, its tests, and its workflow invocation together when development reporting is no longer needed."
   },
   "metrics": {

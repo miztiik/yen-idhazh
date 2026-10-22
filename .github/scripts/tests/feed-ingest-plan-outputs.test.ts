@@ -11,7 +11,8 @@ import { recordedPlan } from "../../../services/feed-ingest-plan/test/plan-recor
 import { source } from "../../../services/feed-ingest-plan/test/harvest-recordings";
 import { verifyLedgerReceipt, verifyParquetFiles, verifyPlanningCompletion, verifyRecordedCompatibility } from "../feed-ingest-plan-verification";
 import { createExecutionOutputs, createSeenDayInputs, writeGitHubOutputs } from "../feed-ingest-plan-outputs";
-import { writePlannerReport } from "../feed-ingest-plan-report";
+import { formatExecutionReport, writePlannerReport } from "../feed-ingest-plan-report";
+import type { ProgressRecord } from "../../../services/feed-ingest-plan/src/logging/progress-logger";
 import { readSeenEvidence, requiredSeenDays } from "../../../services/feed-ingest-plan/src/read-ledger-history/read-seen-evidence";
 import { utcTimestamp } from "../../../services/feed-ingest-plan/src/harvest-feeds/harvest-types";
 import { main } from "../../../services/feed-ingest-plan/src/index";
@@ -130,14 +131,54 @@ test("generated publication evidence joins actual main output and writes native 
 });
 
 test("actual CLI planning proof and all native files survive both real report modes, never complete audit", async () => {
-  const fixture = await recordedPlan();
+  const fixture = await recordedPlan([source(), source({ id: "inactive-news", status: "draft" })]);
   try {
+    const progress: ProgressRecord[] = [];
     const summary = await main(["--cli", "--partition-strategy=none"], {
-      inputs: fixture.inputs, runtime: fixture.runtime, output: () => {},
+      inputs: fixture.inputs, runtime: { ...fixture.runtime, progress: record => progress.push(record) }, output: () => {},
     });
     if (!("files" in summary) || summary.metrics === undefined) throw new Error("Actual CLI omitted metric evidence");
     const metrics = summary.metrics;
     const outputs = createExecutionOutputs(summary, fixture.inputs.registrations);
+    const hostFixture = await Bun.file(new URL("../../../tests/fixtures/ledger-file-writer/host-fingerprint-row.json", import.meta.url)).json();
+    const host = {
+      row: { ...hostFixture, date: summary.date, run_id: summary.run_id },
+      writer: { run_id: summary.run_id, attempt: summary.planning_completion!.attempt, job: hostFixture.job,
+        pipeline_name: hostFixture.pipeline_name, task_name: hostFixture.task_name, shard: hostFixture.shard,
+        producer: "telemetry.silicon", git_sha: fixture.runtime.git_sha },
+    };
+    const executionSummary = formatExecutionReport({
+      response: summary, host, progress, historyStagingMs: null,
+    });
+    expect(executionSummary).toContain("SOURCE&#95;INACTIVE | 1/2 configured sources");
+    for (const response of [
+      { ...summary, correlation_id: "another-correlation" },
+      { ...summary, planning_completion: { ...summary.planning_completion!, attempt: summary.planning_completion!.attempt + 1 } },
+    ]) expect(() => formatExecutionReport({ response, host, progress, historyStagingMs: null })).toThrow("source evidence");
+    for (const mixedHost of [
+      { ...host, row: { ...host.row, run_id: `${summary.date}-999` } },
+      { ...host, writer: { ...host.writer, attempt: host.writer.attempt + 1 } },
+    ]) expect(() => formatExecutionReport({ response: summary, host: mixedHost, progress, historyStagingMs: null })).toThrow("host evidence");
+    expect(executionSummary).toContain(`| F1 | Hardware fingerprint | ${hostFixture.fingerprint ?? "Unavailable"} |`);
+    expect(executionSummary).toContain(`requested limit ${summary.request.article_limit}`);
+    expect(executionSummary).toContain("Screened eligible does not mean previously unpublished");
+    const completedArticles = progress.filter(entry => entry.eventType === "ARTICLE_HARVEST_COMPLETED");
+    const fetches = completedArticles.filter(entry => entry.diagnostics?.fetch_ms !== null && entry.diagnostics?.fetch_ms !== undefined);
+    const extracts = completedArticles.filter(entry => entry.diagnostics?.extract_ms !== null && entry.diagnostics?.extract_ms !== undefined);
+    expect(executionSummary).toContain(`| C11 | Refused before permitted fetching | 1/${completedArticles.length}`);
+    expect(executionSummary).toContain(`| C12 | Permitted article fetch operations | ${fetches.length}/${completedArticles.length}`);
+    expect(executionSummary).toContain(`| C13 | Extraction operations | ${extracts.length}/${fetches.length}`);
+    expect(executionSummary).toContain(`${(fetches.reduce((sum, entry) => sum + entry.diagnostics!.fetch_ms!, 0) / 1000).toFixed(3)} seconds summed over ${fetches.length}`);
+    expect(executionSummary).toContain("http&#95;status / 200");
+    expect(() => formatExecutionReport({
+      response: summary, host, historyStagingMs: null,
+      progress: progress.map((entry, index) => index === 0 ? { ...entry, diagnostics: { error_code: "unsafe arbitrary prose" } } : entry),
+    })).toThrow();
+    const unavailable = formatExecutionReport({ response: summary, host: null, progress: [], historyStagingMs: null });
+    expect(unavailable).toContain("| F1 | Hardware fingerprint | Unavailable |");
+    expect(unavailable).toContain("| C9 | Article harvest operations | Unavailable |");
+    expect(unavailable).toContain("| C10 | Extraction outcomes | Unavailable |");
+    expect(unavailable).toContain("| C11 | Refused before permitted fetching | Unavailable |");
     expect(outputs.metrics_status).toBe("assessment_diversity_recorded_audit_pending");
     expect(outputs.audited_complete).toBe("false");
     expect(outputs.planning_complete).toBe("true");
@@ -156,6 +197,8 @@ test("actual CLI planning proof and all native files survive both real report mo
       .toThrow("audited_complete");
     const files = [...new Set([...Object.values(summary.files), ...Object.values(metrics.files)]
       .flatMap(result => result?.files.map(file => file.path) ?? []))];
+    expect(JSON.parse(outputs.current_run_files!)).toEqual(expect.arrayContaining(files));
+    expect(JSON.parse(outputs.current_run_files!)).toHaveLength(files.length);
     const original = await Promise.all(files.map(path => readFile(join(fixture.inputs.outputRoot, ...path.split("/")))));
     const summaryPath = join(fixture.directory, "actual-main-report.md");
     const annotations: string[] = [];
@@ -163,7 +206,7 @@ test("actual CLI planning proof and all native files survive both real report mo
     const seenPaths = summary.files.seen.files.map(file => file.path);
     const seenBefore = await readSeenEvidence(fixture.inputs.outputRoot, seenPaths);
     for (const enabled of [false, true]) {
-      await writePlannerReport({ enabled, events: fixture.events, summaryPath, annotate: line => annotations.push(line) });
+      await writePlannerReport({ enabled, events: fixture.events, summaryPath, executionSummary, annotate: line => annotations.push(line) });
       if (enabled) {
         expect(annotations.length).toBeGreaterThan(0);
         expect((await readFile(summaryPath, "utf8")).length).toBeGreaterThan(0);
@@ -371,18 +414,20 @@ test("report configuration cannot change real-run ledger commitments", async () 
     if (!("files" in first) || !("files" in second) || first.metrics === undefined || second.metrics === undefined) {
       throw new Error("Actual CLI omitted metric evidence");
     }
-    for (const name of ["dispatches", "selections", "harvest_rejections", "screening_rejections", "curation_rejections", "seen"] as const) {
-      expect(second.files[name].files.map(file => file.content_sha256)).toEqual(
-        first.files[name].files.map(file => file.content_sha256),
-      );
-    }
-    for (const key of ["assessments", "diversity"] as const) {
-      expect(second.metrics.files[key].files.map(file => file.content_sha256)).toEqual(
-        first.metrics.files[key].files.map(file => file.content_sha256),
-      );
-    }
+    expect(second.selected_candidate_ids).toEqual(first.selected_candidate_ids);
+    expect(second.assignments).toEqual(first.assignments);
     for (const [summary, fixture] of [[first, disabled], [second, enabled]] as const) {
       if (summary.files.source_runs === undefined || summary.source_records === null) throw new Error("Source proof absent");
+      const paths = [...Object.values(summary.files), ...Object.values(summary.metrics!.files)]
+        .flatMap(result => result?.files.map(file => file.path) ?? []);
+      const before = await Promise.all(paths.map(path => readFile(join(fixture.inputs.outputRoot, ...path.split("/")))));
+      await writePlannerReport({
+        enabled: fixture.inputs.harvest.config.workflow_reporting.enabled, events: fixture.events,
+        summaryPath: join(fixture.directory, "configured-report.md"), annotate: () => {},
+      });
+      for (const [index, path] of paths.entries()) {
+        expect(await readFile(join(fixture.inputs.outputRoot, ...path.split("/")))).toEqual(before[index]!);
+      }
       await verifyParquetFiles(fixture.inputs.outputRoot, "source-runs", summary.files.source_runs,
         fixture.inputs.registrations.source_runs, summary.source_records);
       await verifyPlanningCompletion(fixture.inputs.outputRoot, summary);

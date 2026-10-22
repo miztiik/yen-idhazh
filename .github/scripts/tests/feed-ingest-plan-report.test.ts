@@ -3,7 +3,7 @@ import { test, expect } from "bun:test";
 import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { FEED_INGEST_AUDIT_VERSION, FEED_INGEST_EVENT_VERSION, readFeedIngestEvent } from "../../../packages/common-contracts/src/index";
+import { HARVEST_DIAGNOSTICS_VERSION, FEED_INGEST_EVENT_VERSION, readFeedIngestEvent } from "../../../packages/common-contracts/src/index";
 import { formatPlannerReport, writePlannerReport } from "../feed-ingest-plan-report";
 
 async function fixture() {
@@ -17,8 +17,7 @@ test("reads current UUID events and refuses undeclared identities without invent
   const raw: unknown[] = await Bun.file(
     new URL("../../../tests/fixtures/feed-ingest-plan/report-events.json", import.meta.url),
   ).json();
-  expect(raw.every(row => typeof row === "object" && row !== null && "version" in row
-    && row.version === FEED_INGEST_EVENT_VERSION)).toBe(true);
+  expect(raw.map(readFeedIngestEvent).every(row => row.version === FEED_INGEST_EVENT_VERSION)).toBe(true);
   expect(formatPlannerReport(raw)).toEqual(formatPlannerReport(await fixture()));
   const recorded = await Bun.file(
     new URL("../../../tests/fixtures/contracts/feed-ingest-event/one-observation.json", import.meta.url),
@@ -29,7 +28,7 @@ test("reads current UUID events and refuses undeclared identities without invent
   expect(current.version).toBe(FEED_INGEST_EVENT_VERSION);
   if (current.payload.kind !== "candidate_decision") throw new Error("Expected a recorded candidate decision");
   expect(current.payload.assessment).toMatchObject({
-    version: FEED_INGEST_AUDIT_VERSION, timing_basis: "unavailable", timing_at: null, age_hours: null,
+    version: HARVEST_DIAGNOSTICS_VERSION, timing_basis: "unavailable", timing_at: null, age_hours: null, diagnostics: null,
   });
   expect(formatPlannerReport([recorded])).toEqual(formatPlannerReport([current]));
   const known = structuredClone(recorded);
@@ -57,7 +56,7 @@ test("reports explicit empty outcomes without certifying durable audit or public
   const before = JSON.stringify(events);
   const report = formatPlannerReport(events);
   expect(report.summary).toContain("| A1 | recorded&#45;source | Recorded RSS source | success / empty | 0 | 0 | FEED_EMPTY |");
-  expect(report.summary).toContain("| B1 | harvest&#45;feeds | 1 | 0 | 1 | 12 |");
+  expect(report.summary).toContain("| B1 | harvest&#45;feeds | 1 | 0 | 1 | 0.012 |");
   expect(report.summary).toContain("**Audit completion: unavailable.**");
   expect(report.annotations).toHaveLength(1);
   expect(JSON.stringify(events)).toBe(before);
