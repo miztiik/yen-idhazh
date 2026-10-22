@@ -132,9 +132,11 @@ durable write-before-screening behavior.
 
 One Hono app serializes planning requests and retains only its actual durable
 seen-file receipts as additional per-day observations, even if a later stage
-fails. It validates receipts, rejects a backwards run clock and prunes receipts
-outside the configured window. A fresh process needs refreshed caller-provided
-inventories; this is not a repository scan or cross-process locking mechanism.
+fails. Receipt paths are relative to the configured output root, where the
+files were written; they are not rebuilt relative to the checkout. It validates
+receipts, rejects a backwards run clock and prunes receipts outside the
+configured window. A fresh process needs refreshed caller-provided inventories;
+this is not a repository scan or cross-process locking mechanism.
 After successful stage composition, that listener remembers which named day inputs it
 accepted. As UTC advances, it omits unchanged accepted inputs older than the
 new window without changing the authored inventory. New or changed invalid
