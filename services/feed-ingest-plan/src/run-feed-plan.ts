@@ -14,7 +14,7 @@ import { createStageLogger, resolveRunPolicy, writeJsonLine } from "./logging/st
 import { harvestAssessments, screeningAssessments } from "./logging/stage-assessments";
 import { prepareDispatches, sealDispatches } from "./seal-article-ledger/plan-sealer";
 import type { PlanInputs } from "./load-plan-inputs";
-import type { PlanningMetricsResult } from "./metrics/metrics-recorder";
+import type { PlanningMetricsResult, PublicationMetricsResult, PublicationRecorderInput } from "./metrics/metrics-recorder";
 
 export type PlanRuntime = {
   git_sha: string;
@@ -26,6 +26,7 @@ export type PlanRuntime = {
   opportunity?: OpportunityEvidence;
   seen_receipts?: readonly OwnSeenReceipt[];
   on_seen_persisted?: (receipt: { day: string; files: readonly PersistedLedgerFile[] }) => void;
+  observe_publication?: (plan: FeedPlanResult, metrics: PlanningMetricsResult) => Promise<PublicationRecorderInput>;
 };
 
 export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: PlanRuntime) {
@@ -149,14 +150,20 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   };
 }
 export type FeedPlanResult = Awaited<ReturnType<typeof runFeedPlan>>;
-export type RecordedFeedPlanResult = FeedPlanResult & { metrics: PlanningMetricsResult };
+export type RecordedFeedPlanResult = FeedPlanResult & { metrics: PlanningMetricsResult; publication?: PublicationMetricsResult };
 
-export function summarizePlan(result: FeedPlanResult & { metrics?: PlanningMetricsResult }) {
+export function summarizePlan(result: FeedPlanResult & { metrics?: PlanningMetricsResult; publication?: PublicationMetricsResult }) {
   const planningCompletion = result.metrics?.planning_completion ?? null;
   const planningComplete = planningCompletion?.status === "complete";
+  const publication = result.publication ?? null;
+  const auditedComplete = planningComplete && publication?.audited_complete === true;
+  if (publication !== null && (publication.run_id !== result.context.run_id
+    || publication.attempt !== result.context.writer.attempt || publication.correlation_id !== result.context.correlation_id)) {
+    throw new Error("Publication audit differs from this planning attempt");
+  }
   return {
-    status: planningComplete ? "planning_complete_audit_pending" as const : result.status,
-    planning_complete: planningComplete, audited_complete: false,
+    status: auditedComplete ? "audit_complete" as const : planningComplete ? "planning_complete_audit_pending" as const : result.status,
+    planning_complete: planningComplete, audited_complete: auditedComplete, publication,
     planning_completion: planningCompletion,
     source_records: result.metrics?.source_records ?? null,
     run_id: result.context.run_id, correlation_id: result.context.correlation_id,
@@ -176,8 +183,8 @@ export function summarizePlan(result: FeedPlanResult & { metrics?: PlanningMetri
       created_count: result.evidence.seen.new_rows.length,
     },
     audit: {
-      status: result.metrics === undefined ? "unavailable" : "assessment_diversity_recorded_audit_pending",
-      reason: planningComplete
+      status: auditedComplete ? "complete" : result.metrics === undefined ? "unavailable" : "assessment_diversity_recorded_audit_pending",
+      reason: auditedComplete ? null : planningComplete
         ? "Current planning is verified; publication and complete historical audit remain outside this result"
         : "Current planning completion has not been verified",
     },

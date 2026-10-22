@@ -1,9 +1,10 @@
-/** Which recorded planning attempt has reproducible original raw-file completion proof? */
+/** Which recorded planning attempt has reproducible completion proof across storage tiers? */
 import { isDeepStrictEqual } from "node:util";
 import { CompletionLedgerSchema, SourceRunRecordSchema } from "@idhazh/common-contracts";
 import type { SourceRunRecord } from "@idhazh/common-contracts";
 import type { StoredLedgerRow } from "@idhazh/ledger-file-writer";
 import type { LedgerDay } from "./read-period";
+import { commitLogicalRecords } from "./logical-records";
 
 type CompletionLedger = typeof CompletionLedgerSchema.options[number];
 export type AttemptHistory = Readonly<{
@@ -73,6 +74,19 @@ export function selectCompleteAttempt(history: AttemptHistory, runId?: string): 
         reason ??= `${evidence.ledger}: required history is ${day.status}`;
         continue;
       }
+      if (evidence.logical !== null) {
+        const members = day.rows.filter(held => held.identity.run_id === first.run_id && held.identity.attempt === first.attempt);
+        try {
+          const logical = commitLogicalRecords(evidence.ledger, members, first);
+          if (!isDeepStrictEqual(logical.commitment, evidence.logical)) {
+            reason ??= `${evidence.ledger}: logical record commitment differs from verified attempt rows`;
+          } else rows[evidence.ledger].push(...logical.rows);
+        } catch (error) {
+          if (!(error instanceof Error)) throw error;
+          reason ??= error.message;
+        }
+        continue;
+      }
       for (const commitment of evidence.files) {
         const file = day.files.find(file => file.envelope.tier === "raw" && file.envelope.file_id === commitment.file_id);
         if (file === undefined) {
@@ -114,7 +128,8 @@ export function selectCompleteAttempt(history: AttemptHistory, runId?: string): 
     }
     selected ??= {
       status: "complete", date: first.date, run_id: first.run_id, attempt: first.attempt,
-      correlation_id: first.correlation_id, sources: [...sources.values()], rows,
+      correlation_id: first.correlation_id,
+      sources: [...sources.values()].sort((left, right) => left.source_id.localeCompare(right.source_id)), rows,
     };
   }
   return { selected, findings };

@@ -8,6 +8,7 @@ import {
   LegacyArticleAssessmentSchema,
   migrateArticleAssessment,
   SourceRunRecordSchema,
+  LedgerCompletionEvidenceSchema, SOURCE_RUN_VERSION,
 } from "@idhazh/common-contracts";
 import type {
   ArticleAssessmentRecord,
@@ -32,8 +33,13 @@ const { version: _sourceVersion, ...sourceRunFields } = SourceRunRecordSchema.sh
 const LegacySourceRunSchema = z.strictObject({
   ...sourceRunFields,
   version: previousVersion,
+  completion_evidence: z.array(z.strictObject({
+    ledger: LedgerCompletionEvidenceSchema.shape.ledger,
+    row_count: LedgerCompletionEvidenceSchema.shape.row_count,
+    files: LedgerCompletionEvidenceSchema.shape.files,
+  })).nullable().default(null),
 });
-type LegacySourceRun = z.infer<typeof LegacySourceRunSchema>;
+const PreviousSourceRunSchema = LegacySourceRunSchema.extend({ version: z.literal("2026-10-22") });
 
 const { version: _dispatchVersion, ...dispatchFields } = FeedIngestDispatchSchema.shape;
 const LegacyDispatchSchema = z.strictObject({
@@ -48,8 +54,7 @@ function migrateDiversity(row: object): DiversityMetricRow {
 }
 
 function migrateSourceRun(row: object): SourceRunRecord {
-  const old = LegacySourceRunSchema.parse(row) as LegacySourceRun;
-  return SourceRunRecordSchema.parse({ ...old, version: FEED_INGEST_AUDIT_VERSION });
+  return SourceRunRecordSchema.parse({ ...row, version: SOURCE_RUN_VERSION });
 }
 
 function migrateDispatch(row: object): FeedIngestDispatch {
@@ -69,8 +74,11 @@ export const DiversityMetricContract: LedgerRowContract<DiversityMetricRow> = {
 };
 export const SourceRunContract: LedgerRowContract<SourceRunRecord> = {
   schema: SourceRunRecordSchema,
-  schemaVersion: FEED_INGEST_AUDIT_VERSION,
-  legacyVersions: { [PREVIOUS_VERSION]: { schema: LegacySourceRunSchema, migrate: migrateSourceRun } },
+  schemaVersion: SOURCE_RUN_VERSION,
+  legacyVersions: {
+    [PREVIOUS_VERSION]: { schema: LegacySourceRunSchema, migrate: migrateSourceRun },
+    "2026-10-22": { schema: PreviousSourceRunSchema, migrate: migrateSourceRun },
+  },
 };
 export const DispatchContract: LedgerRowContract<FeedIngestDispatch> = {
   schema: FeedIngestDispatchSchema,

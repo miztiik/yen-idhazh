@@ -331,8 +331,11 @@ def _settle_planning_rows[C: Contract](
             incumbent = kept.get(record)
             if incumbent is None:
                 kept[record] = held
-            else:
-                _say_what_was_dropped(record, incumbent.row, held.row)
+            elif (
+                incumbent.identity.covers != held.identity.covers
+                or incumbent.row.to_json() != held.row.to_json()
+            ):
+                raise ValueError(f"conflicting duplicate planning record: {record}")
     return list(kept.values())
 
 

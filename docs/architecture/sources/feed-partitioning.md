@@ -79,22 +79,26 @@ keep each original run, attempt and unit; the compactor's identity is only in
 the envelope. Neither reader settles away older attempts.
 
 `selectCompleteAttempt` requires source outcomes for the expected source count
-and checks each required ledger commitment against its verified original raw
-file, including digest and count. Within a run, a newer incomplete retry does
+and checks each required ledger commitment against verified attempt rows.
+New receipts carry the deterministic logical proof defined in
+[audit recording](feed-ingest-audit.md#compaction-safe-attempt-proof);
+old receipts still require their original raw files, including digest and count.
+Within a run, a newer incomplete retry does
 not displace a proven older attempt. An explicitly completed zero-selection
 attempt is valid evidence, not a missing selection file. Historical full text
 comes from that attempt's recorded dispatches. `readHistoricalSelections`
 checks their exact selection identity and rank correspondence before preparing
 the original content for allocation.
 
-**Packed history cannot generally prove an original raw-file commitment.**
+**Old packed history cannot prove an original raw-file commitment.**
 Compact rows lack the original raw-file membership and row order, and packing
 can remove duplicate occurrences. A compact file's own verified digest and
 aggregate counts do not repair that loss. The attempt result is explicitly
 `unverifiable` when referenced original files are unavailable, never verified
 replay. If original files were retained, the caller can supply that named raw
-evidence independently. Completing packed replay needs an owner-approved
-persisted-contract decision; this implementation changes no stored meaning.
+evidence independently. New logical commitments survive actual daily, monthly
+and yearly packing without depending on original file boundaries or order.
+They never manufacture retrospective proof for older packed history.
 
 ## Design rationale
 
@@ -109,9 +113,13 @@ Historical proof remains strict because trusting recorded hashes without
 reproducing them would make incomplete history look complete.
 
 The bounded tests use real current curation, native raw and compact writes,
-hand-computable work totals and recorded index contract fields. All new checks
-are TypeScript-only, with no network or backend process. Native readback is
-not a claim that the current Python reader was executed.
+hand-computable work totals and recorded index contract fields.
+The isolated TypeScript checks need no network or backend process.
+Separately, the existing contract-tier
+`test_zero_completion_evidence_survives_without_erasing_an_earlier_complete_attempt`
+case runs the real Bun producer, actual gardener daily/monthly/yearly tasks,
+then the independent Bun selector. The main CI gate owns that cross-language
+check; native packing tests alone do not certify the Python compactor.
 
 ## See also
 

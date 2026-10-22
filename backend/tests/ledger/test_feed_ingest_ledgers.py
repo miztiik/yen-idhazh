@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
+import json
+import shutil
+import subprocess
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
+from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 from gardener.tasks._task import run_declared
 
 from idhazh import config, ledger
 from idhazh.contracts.base import Contract, ServerJob
+from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.feed_ingest_article_assessment import ArticleAssessmentRecord
 from idhazh.contracts.feed_ingest_candidate import derive_candidate_id
 from idhazh.contracts.feed_ingest_dispatch import FeedIngestDispatch
@@ -251,15 +256,69 @@ def test_zero_completion_evidence_survives_without_erasing_an_earlier_complete_a
         model=FeedIngestDispatch,
     )
     assert sorted(held.identity.attempt for held in stored) == [1, 1, 2]
+    # The native producer and reader bracket the actual production compactor.
+    bun = shutil.which("bun")
+    assert bun, "Install the declared TypeScript planner dependencies before this CI case"
+    generated = tmp_path / "native-attempts"
+    driver = REPO_ROOT / "services" / "feed-ingest-plan" / "test" / "compaction-recording.ts"
+    subprocess.run(
+        [bun, str(driver), "produce", str(generated)], check=True, cwd=REPO_ROOT, timeout=120
+    )
+    native = json.loads((generated / "attempts.json").read_text(encoding="utf-8"))
+    assert native["keys"] == {
+        name: list(ledger.door_key(LedgerName(name))) for name, _, _ in PLANNING_LEDGERS
+    }
+    for tier, today in (
+        ("daily", date(2026, 10, 23)),
+        ("monthly", date(2026, 11, 3)),
+        ("yearly", date(2027, 3, 15)),
+    ):
+        for name, _, _ in PLANNING_LEDGERS:
+            task = f"compact-feed-ingest-plan-{name}"
+            declaration = config.load_gardener().tasks[task]
+            tuned = declaration.model_copy(update={
+                "max_periods_per_run": 400, "daily_keep_days": 1, "monthly_keep_days": 33,
+            })
+            # A wake closes years before months before days; later wakes consume their indexes.
+            for _wake in range(3):
+                run_declared(task, tuned, generated, today=today, first_year="2026")
+        subprocess.run(
+            [bun, str(driver), "verify", str(generated), tier],
+            check=True, cwd=REPO_ROOT, timeout=120,
+        )
 
 
 def test_planning_keys_are_trusted_and_never_applied_to_another_ledger(tmp_path: Path) -> None:
     which = LedgerName.FEED_INGEST_PLAN_DISPATCHES
+    state = tmp_path / "state"
     row = _row(FeedIngestDispatch, "feed-ingest-dispatch/one-article.json", attempt=1)
     ledger.persist(
-        tmp_path, [row], ledger=which, covers="2026-10-20", identity=_identity(1),
+        state, [row], ledger=which, covers="2026-10-20", identity=_identity(1),
         fmt=Format.PARQUET,
     )
-    files = _raw(tmp_path, which, FeedIngestDispatch)
+    files = _raw(state, which, FeedIngestDispatch)
     with pytest.raises(ValueError, match="declared key"):
         ledger.settle_rows(files, ("content.__class__",))
+    original = files[0][0]
+    assert isinstance(original.row, FeedIngestDispatch)
+    changed = original.row.model_copy(update={
+        "content": original.row.content.model_copy(update={"title": "Different title"}),
+    })
+    conflict = replace(original, row=changed)
+    with pytest.raises(ValueError, match="conflicting duplicate"):
+        ledger.settle_rows([*files, [conflict]], ledger.door_key(which))
+    ledger.persist(
+        state, [changed], ledger=which, covers="2026-10-20", identity=_identity(1),
+        fmt=Format.PARQUET,
+    )
+    before = {held.path: held.path.read_bytes() for held in ledger.read_day_files(
+        state, which, "2026-10-20"
+    )}
+    task = "compact-feed-ingest-plan-dispatches"
+    refused = run_declared(
+        task, config.load_gardener().tasks[task], tmp_path,
+        today=date(2026, 10, 22), first_year="2026",
+    )
+    assert refused.stopped_because is StopReason.FAILED
+    assert all(path.read_bytes() == data for path, data in before.items())
+    assert not ledger.compact_path(state, which, Period.DAILY, "2026-10-20").exists()

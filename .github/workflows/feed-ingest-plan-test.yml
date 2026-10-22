@@ -46,6 +46,7 @@ jobs:
             /.github/scripts/feed-ingest-plan-outputs.ts
             /.github/scripts/feed-ingest-plan-report.ts
             /.github/scripts/feed-ingest-plan-verification.ts
+            /.github/scripts/feed-ingest-plan-audit-fixture.ts
             /.github/scripts/tests/feed-ingest-plan-outputs.test.ts
             /.github/scripts/tests/feed-ingest-plan-report.test.ts
             /.github/scripts/tests/feed-ingest-plan-workflow.test.ts
@@ -204,7 +205,7 @@ jobs:
             if (!RUNNER_TEMP || !GITHUB_OUTPUT || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT) {
               throw new Error("workflow: runner directory, output path, run identity and attempt are required");
             }
-            const settings = ServiceSettingsSchema.parse({ ...inputs.settings,
+            const settings = ServiceSettingsSchema.parse({ ...inputs.settings, enabled: true,
               inputs: { ...inputs.settings.inputs, seen_days },
               run: { ...inputs.settings.run, attempt: Number(GITHUB_RUN_ATTEMPT) } });
             const artifactRoot = join(RUNNER_TEMP, "feed-ingest-plan");
@@ -244,6 +245,21 @@ jobs:
           }
           TS
 
+      - name: Verify full audit on generated publication fixtures
+        id: audit_fixture
+        run: |
+          bun run - <<'TS'
+          import { join } from "node:path";
+          import { verifyFullAuditFixture } from "./.github/scripts/feed-ingest-plan-audit-fixture";
+          import { writeGitHubOutputs } from "./.github/scripts/feed-ingest-plan-outputs";
+          const { RUNNER_TEMP, GITHUB_OUTPUT } = process.env;
+          if (!RUNNER_TEMP || !GITHUB_OUTPUT) throw new Error("Fixture output directory and workflow output are required");
+          const result = await verifyFullAuditFixture(join(RUNNER_TEMP, "feed-ingest-plan", "generated-full-audit"));
+          await writeGitHubOutputs(GITHUB_OUTPUT, {
+            audited_complete: String(result.audited_complete), scope: result.scope,
+          });
+          TS
+
       - name: Optional GitHub report
         if: ${{ !cancelled() && steps.plan.outputs.workflow_reporting == 'true' }}
         continue-on-error: true
@@ -260,11 +276,14 @@ jobs:
       - name: Require genuine audited completion
         if: ${{ !cancelled() }}
         env:
-          AUDITED_COMPLETE: ${{ steps.plan.outputs.audited_complete }}
+          PLANNING_COMPLETE: ${{ steps.plan.outputs.planning_complete }}
+          AUDITED_COMPLETE: ${{ steps.audit_fixture.outputs.audited_complete }}
+          AUDIT_SCOPE: ${{ steps.audit_fixture.outputs.scope }}
         run: |
           bun run - <<'TS'
-          if (process.env.AUDITED_COMPLETE !== "true") {
-            console.error("Audit completion is unavailable. Preserved files are test evidence, not a complete audited plan or publication.");
+          if (process.env.PLANNING_COMPLETE !== "true" || process.env.AUDITED_COMPLETE !== "true"
+            || process.env.AUDIT_SCOPE !== "generated_fixture") {
+            console.error("Live planning proof or generated full-audit proof is unavailable. No production publication is claimed.");
             process.exitCode = 2;
           }
           TS

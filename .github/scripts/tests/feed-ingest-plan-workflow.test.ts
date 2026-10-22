@@ -86,6 +86,14 @@ test("offers exactly four manual controls, read-only access and a separate optio
   const completion = steps.find(step => step.name === "Require genuine audited completion")!;
   expect(completion.run).toContain('process.env.AUDITED_COMPLETE !== "true"');
   expect(completion.run).toContain("process.exitCode = 2");
+  expect(completion.env).toEqual({
+    PLANNING_COMPLETE: "${{ steps.plan.outputs.planning_complete }}",
+    AUDITED_COMPLETE: "${{ steps.audit_fixture.outputs.audited_complete }}",
+    AUDIT_SCOPE: "${{ steps.audit_fixture.outputs.scope }}",
+  });
+  expect(completion.run).toContain('process.env.PLANNING_COMPLETE !== "true"');
+  expect(completion.run).toContain('process.env.AUDIT_SCOPE !== "generated_fixture"');
+  expect(steps.find(step => step.id === "audit_fixture")!.run).toContain("await verifyFullAuditFixture(");
   const runs = steps.flatMap(step => step.run === undefined ? [] : [step.run]).join("\n");
   expect(runs).not.toMatch(/\b(python|pip|pytest|uv)\b|git\s+(commit|push)|\beval\s*\(/i);
   const checkout = steps.find(step => step.uses?.startsWith("actions/checkout@"))!;
@@ -188,7 +196,7 @@ test("strict-checks adapters, tests and the actual inline program in one compile
       "--exactOptionalPropertyTypes", "--noFallthroughCasesInSwitch", "--noUnusedLocals",
       "--noUnusedParameters", "--verbatimModuleSyntax", "--skipLibCheck",
       "--types", "bun", "--typeRoots", join(service, "node_modules", "@types"), generated,
-      ...["feed-ingest-plan-outputs.ts", "feed-ingest-plan-report.ts", "feed-ingest-plan-verification.ts",
+      ...["feed-ingest-plan-outputs.ts", "feed-ingest-plan-report.ts", "feed-ingest-plan-verification.ts", "feed-ingest-plan-audit-fixture.ts",
         "tests/feed-ingest-plan-outputs.test.ts", "tests/feed-ingest-plan-report.test.ts",
         "tests/feed-ingest-plan-workflow.test.ts"].map(path => join(root, ".github", "scripts", ...path.split("/"))),
     ], { cwd: service, stdout: "pipe", stderr: "pipe" });

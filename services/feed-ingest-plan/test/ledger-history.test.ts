@@ -32,6 +32,7 @@ function evidence(ledger: LedgerCompletionEvidence["ledger"], written: PersistLe
   return {
     ledger, row_count: written.files.reduce((count, file) => count + file.row_count, 0),
     files: written.files.map(({ file_id, content_sha256, row_count }) => ({ file_id, content_sha256, row_count })),
+    logical: null,
   };
 }
 async function completeHistory(root: string, observedAt?: string) {
@@ -109,7 +110,7 @@ async function migrateAuditFixture<TLegacy extends object, TCurrent extends obje
   const written = await writeRows(root, ledger, day, legacySchema, [row], writer(run), "2026-10-20");
   const loaded = await readWritten(root, ledger, day, currentContract, written);
   expect(loaded.rows).toHaveLength(1);
-  expect(loaded.rows[0]!.row).toMatchObject({ version: "2026-10-22" });
+  expect(loaded.rows[0]!.row).toMatchObject({ version: currentContract.schemaVersion });
   return loaded.rows[0]!.row;
 }
 
@@ -176,6 +177,16 @@ test("recorded 2026-10-20 audit rows migrate through native Parquet without inve
     });
     expect(migrated.get("diversity")).toMatchObject({ top_k: null });
     expect(migrated.get("source-runs")).toMatchObject({ date: day, run_id: run });
+    const previousSource = SourceRunContract.legacyVersions!["2026-10-22"]!;
+    const originalSource = await Bun.file(new URL(
+      "../../../tests/fixtures/contracts/feed-ingest-source-run/one-observation.json", import.meta.url,
+    )).json();
+    const previousRow = previousSource.schema.parse({ ...originalSource, version: "2026-10-22" });
+    const previousFile = await writeRows(root, "source-runs", day, previousSource.schema,
+      [previousRow], writer(run), "2026-10-22");
+    const sourceHistory = await readWritten(root, "source-runs", day, SourceRunContract, previousFile);
+    expect(sourceHistory.rows[0]!.row).toMatchObject({ version: SourceRunContract.schemaVersion });
+    expect(sourceHistory.rows[0]!.row.completion_evidence?.every(entry => entry.logical === null)).toBe(true);
     expect(migrated.get("dispatches")).toHaveProperty("content");
   } finally { await rm(root, { recursive: true, force: true }); }
 });

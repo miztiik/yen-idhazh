@@ -106,6 +106,13 @@ The existing fixture round-trip check keeps same-version payloads byte-identical
 When reading advances an old version, it requires the current version and
 identical serialized bytes on the next read, leaving the old fixture unchanged.
 
+Source-run revision `2026-10-22T10:05` adds nullable logical record commitments
+beside physical file receipts. Both prior source stamps migrate with null
+logical proof, never reconstructed evidence. The native reader verifies each
+old file against its original stored schema before migration.
+The encoding and old compact-only limitation are defined in
+[feed planning audit recording](../sources/feed-ingest-audit.md#compaction-safe-attempt-proof).
+
 Candidates keep source, original vertical, assigned desk, lenses, content event
 types, event cluster, and entities separate. Null labels mean unknown;
 empty lists mean assessed and empty. Known labels record their matcher and

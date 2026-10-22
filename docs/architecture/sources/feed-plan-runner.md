@@ -123,10 +123,10 @@ days stay missing until the caller supplies their evidence; planning continues
 with available observations but cannot create new first sight without the
 complete window.
 These first-sight writes remain durable if subsequent required audit recording
-refuses their timing. The current assessment contract cannot retain first-sight
-timing, so an API or CLI run that consumes it fails explicitly after stage
-persistence, before either audit ledger is written. The listener still keeps
-the actual receipt; a retry cannot reset first sight to bypass that refusal.
+refuses their timing. The assessment contract retains actual first-sight timing.
+Invalid audit evidence can still refuse a run after stage persistence.
+The listener keeps the actual receipt; a retry cannot reset first sight
+to bypass that refusal.
 The returned evidence and API/CLI `first_sight` summary identify the window,
 per-day status, own receipts, created count and limited absence proof.
 
@@ -167,9 +167,10 @@ standalone CLI exits with code 0: the requested planning work succeeded.
 `planning_completion` names its verified date, run, attempt, correlation,
 source count and five ledger commitments. The recorder's narrower
 `metrics.status` and `audit.status` remain
-`assessment_diversity_recorded_audit_pending`; `audited_complete` stays false.
+`assessment_diversity_recorded_audit_pending`; `audited_complete` stays false when no complete publication observation is supplied.
 This result does not certify publication, rolling history or a full audit.
-The workflow's separate full-audit gate can still exit with code 2.
+The workflow separately requires full-audit test evidence as well as live
+planning proof; it never calls the live plan published.
 `main(args, {inputs, runtime, output})` returns the same summary to an awaited
 caller; only the standalone process sets its exit code. A base stage result
 without recorder proof remains `planning_complete: false` with its original
@@ -195,12 +196,35 @@ Source-run persistence or native completion verification failures also prevent
 any successful summary. No flag or success-shaped fallback bypasses the
 required recorder or its exact-attempt selector.
 
-Packed files cannot prove the original completion-file ordered hashes after raw
-deletion with the current contract. Older harvested content can retain its
+New source receipts contain deterministic logical membership proof that
+survives daily, monthly and yearly compaction. Old raw-only receipts still need
+their original files; migration cannot fabricate lost proof.
+See [audit recording](feed-ingest-audit.md#compaction-safe-attempt-proof).
+Older harvested content can retain its
 original date and policy in a dispatch while selection keeps its later decision
 date and effective policy. The shared article, source, URL and label identities
 remain required. A publication observation is written under its actual UTC
 observation day while the source row keeps its original run date and ID.
+
+## Optional publication observation
+
+An embedding operator can install `runtime.observe_publication(plan, metrics)`.
+After required planning recording, `recordFeedPlan` awaits this callback for a
+`PublicationRecorderInput`, checks run, correlation and attempt, and invokes the
+real publication recorder. API and awaited CLI share this path; request fields
+and standalone CLI controls do not add paths or publication claims.
+Without the callback, health reports full completion unavailable and planning
+still returns its proven pending result. With it, health reports capability,
+not completion of any particular run.
+
+Only complete publication, closed history and measured metric evidence can
+produce summary `status: audit_complete`, `audited_complete: true` and
+`audit.status: complete`. The summary retains the real observer result under
+`publication`. Missing evidence remains pending with its reasons.
+The criteria and independent native verifier are owned by
+[audit recording](feed-ingest-audit.md#full-audit-completion).
+Installing a callback does not enable the committed default-off service or
+invoke production publishing.
 
 ## Dependencies and verification
 

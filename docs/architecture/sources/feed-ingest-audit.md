@@ -10,8 +10,8 @@ an incomplete attempt is complete?
 `services/feed-ingest-plan/src/metrics/metrics-recorder.ts` exports
 `recordPlanningMetrics(result, inputs, registrations)`. Its inputs are the
 actual `FeedPlanResult`, the `PlanInputs` used by that run, and the registered
-`article-assessments`, `diversity` and `source-runs` destinations. The runner owns integration;
-the recorder does not change the API or CLI's completion status.
+`article-assessments`, `diversity` and `source-runs` destinations. The runner owns integration
+and exposes planning completion separately from full audit completion.
 When the third argument is omitted, it uses `inputs.registrations`.
 
 The recorder first checks every configured concentration count and every
@@ -68,8 +68,9 @@ The result retains status `assessment_diversity_recorded_audit_pending` and
 successfully verified current raw attempt lacks completion evidence.
 `planning_completion.status` is `complete` only after that exact attempt settles
 through the existing completion selector. Each receipt is an existing
-`LedgerCompletionEvidence`: ledger name, row count, and file IDs, content
-digests and file row counts. A zero-row assessment write returns an explicit
+`LedgerCompletionEvidence`: ledger name, physical row count, file IDs, content
+digests, file row counts and a logical attempt commitment.
+A zero-row assessment write returns an explicit
 zero count and empty file list. No empty file is invented. A skipped write,
 failed write or failed readback throws. Files already written before a later
 failure remain incomplete-attempt artifacts; they do not establish completion.
@@ -92,13 +93,46 @@ The result includes `files.source_runs`, `source_records`, all five receipts and
 `planning_completion`, containing the verified run, attempt, correlation, source
 count and file commitments. This supplies the real producer input for the
 publication observer; tests do not manufacture the completion marker.
-The base `FeedPlanResult` is unchanged. The runner and workflow owners decide
-when their caller statuses can expose this specific complete attempt.
+The base `FeedPlanResult` is unchanged. API and CLI summaries expose this
+specific complete attempt as planning completion, not publication completion.
 
 Invalid timing, non-finite measurements and invalid concentration counts refuse
-the whole batch before audit writes. New raw-file verification does not restore
-original membership after historical packing. Neither limitation cancels valid
-current raw proof.
+the whole batch before audit writes.
+
+## Compaction-safe attempt proof
+
+Source-run revision `2026-10-22T10:05` adds an optional `logical` commitment to
+each receipt. Its protocol version is `2026-10-22`. It records the ledger-row
+schema version, unique row count and SHA-256 of one canonical record set.
+The original physical file receipts remain independently checked.
+
+Each logical row must have the original ledger, decision-day partition, run,
+attempt and correlation. Dispatch content may retain its earlier fetch date;
+its selection still names the decision day. The business keys are the
+production settlement keys in `backend/idhazh/ledger/keys.py`, held in step
+by the existing cross-language contract case. Diversity identity includes
+`unit`, so count and ratio readings cannot replace one another.
+
+Identical rows under one business key count once. Different rows under that
+key refuse completion and compaction; input order never chooses a winner.
+Rows use the shared Python-compatible canonical row digest, including declared
+integer and floating-point types. Serialized JSON key arrays sort lexically.
+The commitment hashes a newline-terminated JSON header array containing
+protocol version, ledger, row schema version, decision day, run, attempt and
+correlation, followed by one newline-terminated `[serialized_key, row_digest]`
+array per unique key. Storage file, unit and compactor identities are not
+logical membership.
+
+The selector recomputes that commitment over all verified rows of the exact
+attempt. Missing, extra, changed, cross-attempt or conflicting rows cannot
+complete it. Explicit zero-row sets also have a commitment. Raw, daily,
+monthly and yearly files keep their separate envelope, identity, index and
+ordered-content checks. The producer verifies all five writes before writing
+the source completion batch last.
+
+Older source revisions migrate with `logical: null`. They still prove
+completion from original raw files. If those files are gone, compact-only old
+history remains unverifiable. Migration never invents historical membership.
 
 ## Publication evidence reader
 
@@ -114,7 +148,7 @@ from the digest. Terminal health records with conflicting unsettled values are
 refused. A recorded other run can exclude an unrelated missing item from a
 known-zero run; a legacy item with no recorded owner cannot.
 
-These readers and the bounded history arithmetic do not seal an audit.
+These readers alone do not seal an audit.
 `completePublicationObservations` accepts only already-complete, settled source
 records and actual reconciled publication evidence. It never turns the planning
 recorder's pending internal source summaries into completion records.
@@ -142,8 +176,7 @@ The full proposed diversity batch and any source observations validate before
 writes. Actual files are written through `persistLedger` and read back natively,
 including writer identities, digests, row counts and ordered rows.
 The result returns those files, readings, source observations, history coverage
-and unavailable explanations with `publication_metrics_recorded_audit_pending`
-and `audited_complete: false`.
+and unavailable explanations. It computes full completion only after readback.
 
 An original complete source attempt and a reconciled named run can produce
 `publication_complete` source observations with actual publication/lead counts.
@@ -152,8 +185,8 @@ articles; failed workers may leave a subset, but unrelated URLs, another carrier
 or publications after zero selections cannot complete the observation.
 The source writer attempt must equal the original proven attempt so its native
 identity agrees with the source record. Both checks precede every observer write.
-Existing planning file commitments remain unchanged. Missing or packed original
-planning proof cannot become new completion proof, but it does not erase
+Existing planning commitments remain unchanged. Missing original proof without
+a reproducible logical commitment cannot become new completion proof, but it does not erase
 independently proven publication membership. A plan-complete record stays in
 its original run-day partition even if its observation instant falls after
 midnight. A later publication observation is filed under its actual UTC
@@ -165,25 +198,49 @@ the observation.
 Packed indexes reporting discarded files make publication history missing even
 when the index does not name this exact day as lost.
 
+## Full audit completion
+
+`audit_complete` and `audited_complete: true` require all of these facts:
+the exact original planning attempt is proven; its selected URL and primary
+source agree with publication; observer attempt, correlation and configuration
+hash agree with that attempt; every configured publication-history day is
+available and closed before the observation day; every named planning-history
+day is complete or explicitly empty; and the verified nonempty metric batch
+has no unavailable reason except a measured empty denominator.
+Missing event similarity evidence, publication, history or original proof keeps
+`publication_metrics_recorded_audit_pending` and reports reasons. A measured
+zero-selection attempt can complete without inventing articles or empty files.
+
+`verifyPublicationMetrics` independently rereads the named planning, publication
+and observer files and recomputes the readings and completion. It checks the
+reported identity, coverage, unavailable reasons, receipts, observation-day
+partition and actual native rows without rewriting files.
+The runner's optional operator callback supplies these named observations;
+no API request can select a path or declare its own completion.
+The isolated workflow proves full completion on generated test publication,
+separate from its actual live planning result. Neither invokes a production
+publisher or claims that the live plan was published.
+
 ## Design rationale
 
 The existing source-run contract has only complete planning and publication
 observations. Writing a pending observation under either name would change its
 meaning. The recorder therefore never converts pending internal summaries directly into
 complete records. It first proves the five existing ledger commitments, then
-writes and verifies current raw source completion. No completion event or caller
-status is changed by this recorder.
+writes and verifies source completion.
 
-The current audit contract version is `2026-10-22`. TypeScript readers migrate
+The audit contract version is `2026-10-22`, with source-run revision
+`2026-10-22T10:05`. TypeScript readers migrate
 named `2026-10-20` rows through their recorded old schemas; the Python source
 contracts also migrate those rows without supplying missing timing facts.
 Workflow verification uses these same current and legacy row contracts.
 The optional report reader migrates old event envelopes and their nested
 assessment fields before enforcing current event identity and policy checks.
-Full audit completion remains open because original completion-file membership
-cannot generally be reconstructed after raw files have been packed. That
-historical proof question is Phase 2; these changes do not define a substitute
-success condition.
+Logical proof preserves the facts the raw-file receipt alone loses during
+packing. Keeping both distinguishes record membership from physical file
+integrity. Requiring complete named evidence permits truthful full audit
+completion without treating generated test publication as production output.
+The service stays default-off pending a separate owner approval for use.
 
 ## See also
 

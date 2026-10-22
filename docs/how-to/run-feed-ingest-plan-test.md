@@ -9,10 +9,12 @@ its output. The production digest workflow is unchanged.
 
 ## Current readiness
 
-**A complete audited run is not available.** The runner's service flag remains
+**Full completion is available when all required evidence is supplied.**
+The runner's service flag remains
 off in `config/feed-ingest-plan-service.json`. Its removal condition requires
 the actual audit writes and complete-attempt verification to be integrated
-and approved. This workflow does not bypass that flag.
+and approved. The workflow explicitly enables only its isolated invocation;
+it does not change the committed default or approve production use.
 
 The actual CLI entrypoint runs the stages and records article assessments,
 diversity measurements and source completion records. A verified current raw
@@ -22,17 +24,21 @@ separate planning recorder. It reads the returned source records and all five
 required ledger file sets through the original completion selector before
 exposing per-run planning completion.
 
-The last workflow step still refuses an unaudited result with exit code 2.
-Per-run planning completion is not full-audit or publication acceptance.
+The last workflow step requires both independently verified live planning
+completion and a labelled `generated_fixture` full-audit result. That fixture
+runs the real observer against generated publication and complete named history,
+then independently reads its actual native output. Either missing proof exits
+with code 2. Live planning alone cannot pass; test publication is never labelled
+as publication of the live plan.
 A disabled runner, missing input,
 invalid request or damaged file also fails; none becomes a successful empty
 plan. Green adapter tests do not certify hosted execution or audit completion.
 
 The recorder preserves first-seen timing, signed article ages and every
 positive configured concentration count. Invalid or missing evidence still
-fails before measurement writes. The packed-history reader
-cannot prove an original raw file's ordered-row commitment from aggregate
-compact counts. These are explicit missing capabilities, not completed checks.
+fails before measurement writes. New logical receipts survive actual daily,
+monthly and yearly compaction. Old receipts without logical proof still need
+their original raw files and remain unverifiable if those files are gone.
 See [partition evidence](../architecture/sources/feed-partitioning.md).
 
 ## Manual controls
@@ -93,9 +99,7 @@ generated dispatch files, distinguish missing files from explicit empty
 results, and invoke the actual CLI to record assessment and diversity files.
 Native readback verifies both ledgers; their file identities, row counts and
 content digests must match the returned receipts. Missing files or mismatched
-receipts fail verification. Actual CLI runs with reporting off and on must
-produce the same deterministic stage and measurement ledger digests; each
-run's complete source files are independently read and proved.
+receipts fail verification. The actual CLI's complete source files are independently read and proved.
 
 The full-file reporting check uses one actual result. It reads every stage,
 measurement and source file before and after disabled and enabled reporting,
@@ -109,11 +113,23 @@ CLI's selected dispatch identities, plus a matching digest and settled health
 evidence. The real publication observer reads those files and the actual
 producer's source completion files, then writes independently verified native
 diversity and source-observation files. This fixture proves the observer
-boundary, not production publication or a complete historical window.
-No test makes a
+boundary. A second complete fixture includes every configured history day,
+explicit known-empty days and recorded event evidence. It must compute full
+completion and pass `verifyPublicationMetrics` after actual observer readback.
+API and CLI tests also require pending results when planning, publication,
+events or closed history are missing, and complete measured empty portfolios.
+This is test evidence, never production publication.
+No isolated test makes a
 network request or starts Python. These checks do not claim that the Python
 reader ran, that live feeds are reachable, or that a hosted job meets a speed
 target.
+
+Main repository CI separately extends the existing contract-tier case
+`backend/tests/ledger/test_feed_ingest_ledgers.py::test_zero_completion_evidence_survives_without_erasing_an_earlier_complete_attempt`.
+It runs the real Bun producer, actual gardener daily/monthly/yearly jobs, then
+the independent Bun selector. Subprocesses have fixed timeouts and missing Bun
+fails rather than skips. This case is not part of the Python-free isolated
+workflow. [Gate commands](run-the-gates.md) own its installation and test cost.
 
 ## Inputs and isolated evidence
 
