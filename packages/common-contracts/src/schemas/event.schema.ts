@@ -65,6 +65,12 @@ export const FeedIngestEventSchema = z.strictObject({
       if (value.stage !== payload.stage) reject(ctx, "stage completion payload must match the event stage");
       break;
   }
+}).meta({
+  $id: "feed-ingest-event", version: FEED_INGEST_EVENT_VERSION,
+  changelog: [{
+    version: FEED_INGEST_EVENT_VERSION,
+    change: "Require UUID event and correlation identities with typed decision evidence.",
+  }],
 });
 export type FeedIngestEvent = z.infer<typeof FeedIngestEventSchema>;
 export type EventPayload = z.infer<typeof EventPayloadSchema>;

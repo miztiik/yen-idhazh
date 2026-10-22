@@ -20,6 +20,13 @@ To change a persisted shape you edit the Pydantic model. Where the frontend copi
 
 **A contract produces its own schema.** `Contract.json_schema()` is `model_json_schema()` plus this project's canonicalisation - the `$id`, the `$schema` dialect, the version stamp and the changelog. A reader outside Python is handed one when it asks.
 
+The planner-only event stream is the named exception in `CLAUDE.md` Guardrail #3.
+Its sole authority is `packages/common-contracts/src/schemas/event.schema.ts`;
+Zod validates the event and produces its JSON Schema, version and changelog
+metadata on demand. Python does not consume these events. There is no Python
+event model or cross-language event comparison. Shared ledger payloads still
+have their Pydantic declarations and binding tests.
+
 ## Recursive ledger types
 
 Source classification uses open string kind identifiers and positive integer
@@ -79,8 +86,8 @@ hold both vocabularies to the Python enums, including their order.
 
 ## What holds the copy in step
 
-Feed planning carries strict hand-written Zod copies in
-`packages/common-contracts/src/schemas/`. Python remains the authority.
+Shared feed-planning ledger contracts carry strict hand-written Zod copies in
+`packages/common-contracts/src/schemas/`. Python remains their authority.
 `backend/tests/contracts/test_feed_ingest_contracts.py` compares the actual
 runtime schemas recursively: fields, nested types, required keys, nullability,
 defaults, and vocabularies. The package's tests exercise rejection evidence and
@@ -89,14 +96,17 @@ The CI backend gate installs the locked package and runs these checks before
 pytest, which executes the Python-to-Zod bindings. It does not skip a binding
 when Bun or the package is absent.
 
-The eight feed planning contracts are stamped `2026-10-20`, except the four
-audit contracts and typed audit events, which are stamped `2026-10-22` after
+The seven shared feed planning contracts are stamped `2026-10-20`, except the
+audit contracts, which are stamped `2026-10-22` after
 their stored meanings changed: harvested content, dispatches, terminal
 rejections, source-run observations, article assessments, diversity readings,
-unsharded editorial selections, and typed audit events.
+and unsharded editorial selections.
 Their models live in `backend/idhazh/contracts/feed_ingest_*.py`.
 These declarations do not enable a producer, register a ledger, or change the
 production planner.
+Planner events are independently stamped `2026-10-22T12:20` in their TypeScript
+schema. Native tests cover current fixture validation, UUID versions, typed
+payloads, forbidden article text, identity propagation and event ordering.
 
 The `2026-10-22` audit rows accept their `2026-10-20` predecessors through
 read-side migrations in the native Python models and the bounded TypeScript
@@ -163,12 +173,16 @@ Two values are required. `server["--ctx-size"]` is refused by name at configurat
 
 A JSON Schema is a good interchange format and a poor authoring format: it cannot express a cross-field invariant readably, it has no place to put a validator, and nobody catches a typo in it at edit time. A Pydantic model is typed at authoring time, carries its invariants as code, and is directly usable by the producer that writes the payload. Generating downward from it means the validation the backend enforces and the types the frontend trusts cannot disagree.
 
+The same reason applies to the planner's Zod event model: its TypeScript
+producer and consumers use that model directly, not a generated file.
+
 ## Layout
 
 | Path | Holds |
 | --- | --- |
 | `backend/idhazh/contracts/base.py` | The shared string types, the canonical serializer, and the two base models: `Model` for a nested shape and `Contract` for a top-level persisted document. `Contract` owns the `version` date-stamp, the `changelog` tuple, the invariant that `version` equals the newest changelog entry, the stable stem, and `json_schema()`. |
-| `backend/idhazh/contracts/__init__.py` | `CONTRACTS`, the registry of every top-level persisted document. What a check over all of them iterates. |
+| `backend/idhazh/contracts/__init__.py` | `CONTRACTS`, the registry of Python-owned top-level persisted documents. What a check over those models iterates. |
+| `packages/common-contracts/src/schemas/event.schema.ts` | The planner-only event contract, its native validation, version and changelog metadata. |
 | `backend/idhazh/contracts/<name>.py` | One module per persisted shape. |
 | `frontend/src/lib/console/machine/host-types.ts` | The hand copy of `HostFingerprintRow`, `ServerJob` and `WatchedFlag`, and the arrays the vocabulary tests bind. |
 | `frontend/src/lib/server/ledger-rows.ts` | `ITEM_HEALTH_COLUMNS` and `FEED_HEALTH_COLUMNS`, the column names of `ItemHealthRow` and `FeedHealthRow` a console route asks the door for. |
@@ -559,6 +573,11 @@ The whole-day count lives in `digest.json`: `items.length` and
 an earlier run's plan look larger than it was.
 
 ## Design rationale
+
+Owner ruling, kumarsnaveen, 2026-10-22: remove the Python planner event model
+and its comparison checks because no Python production reader consumes it.
+The TypeScript producer and readers use one Zod declaration directly.
+Keep shared ledger declarations where Python actually reads the records.
 
 **The generated layer went on 2026-09-23, and the hand copy plus two tests replaced it.** Until that date `python -m idhazh.contracts.export` wrote 66 JSON Schemas and 66 TypeScript modules, and CI regenerated both and failed on any diff. What it bought was real - a Python model, a JSON Schema and a TypeScript interface cannot be kept in step by hand, and the failure is always the same one: two of the three agree and the third was edited in a hurry. What it cost was the reviewer's attention: one commit in ten touched those two trees, so about one review in ten opened on 1,573,101 bytes of regenerated diff, and six names in two frontend modules were the whole of what any of it served. Sixty-one of the sixty-six schemas were read by nothing but the gate that checked they had been generated. The replacement is narrower and says the same thing: the copy is small, it is hand-written, and three named tests fail when it falls behind. Authority: Fowler.
 

@@ -23,7 +23,6 @@ CONTRACT_NAMES = (
     ("feed_ingest_article_assessment", "ArticleAssessmentRecord"),
     ("feed_ingest_diversity", "DiversityMetricRow"),
     ("feed_ingest_editorial_selection", "EditorialSelectionRow"),
-    ("feed_ingest_event", "FeedIngestEvent"),
 )
 
 
@@ -42,19 +41,6 @@ def test_declared_contract(module: str, name: str) -> None:
     assert contract in idhazh.contracts.CONTRACTS
     assert contract.schema_version() == contract.model_fields["version"].default
     assert contract.json_schema()["additionalProperties"] is False
-    if name == "FeedIngestEvent":
-        payload = json.loads(
-            read_text(CONTRACT_FIXTURES_DIR / "feed-ingest-event" / "one-observation.json")
-        )
-        event = contract.model_validate(payload)
-        assert event.event_id.version == 5
-        assert event.correlation_id.version == 4
-        for field, invalid in (
-            ("event_id", "a" * 64),
-            ("correlation_id", "2026-10-20-1"),
-        ):
-            with pytest.raises(ValidationError):
-                contract.model_validate(payload | {field: invalid})
 
 
 def test_typescript_provenance_is_declared() -> None:

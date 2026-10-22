@@ -74,6 +74,8 @@ Python (`backend/idhazh/ledger/filenames.py`) is the identity authority. The reu
 ## 4. Telemetry Event Identity (`event_id`)
 
 `FeedIngestEvent.event_id` is UUIDv5. The live `eventId` is `evt_<event_id>`.
+The planner-only event is declared and validated by the
+[TypeScript event contract](schemas.md#one-source-of-truth-and-nothing-generated-from-it).
 This uses the existing pipeline logger's DNS namespace,
 `6ba7b810-9dad-11d1-80b4-00c04fd430c8`, and the same SHA-1 UUIDv5 algorithm.
 The planner's audit name is `audit\n{correlation_id}\n{sequence}`; its live

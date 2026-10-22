@@ -40,6 +40,9 @@ terminal losses, not an extra term in the input/output equation. Carrier
 membership is retained separately from the unique selected primary source.
 Current event revision `2026-10-22T12:20` requires UUIDv5 `event_id` and
 UUIDv4 `correlation_id`, following [the identity contract](../contracts/identity.md).
+Its sole declaration and validation are in the TypeScript Zod event schema;
+no Python event model is required or imported. Shared ledger rows retain their
+separate Python declarations.
 The same run correlation is retained by every dependent row and summary.
 Live progress is separate from decision evidence: it reports work immediately
 and cannot establish audit completion. The workflow appends each actual audit

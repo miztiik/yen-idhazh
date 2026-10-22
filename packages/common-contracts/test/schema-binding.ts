@@ -1,15 +1,15 @@
 /** Which actual input JSON schemas must stay aligned with their Python models? */
 import { z } from "zod";
 import {
-  ArticleAssessmentRecordSchema, ArticleLabelsSchema, CandidateDecisionPayloadSchema,
+  ArticleAssessmentRecordSchema, ArticleLabelsSchema,
   CandidateRejectionRecordSchema, CompletedFileSchema, DiversityMetricRowSchema,
   DropReasonCountSchema, EditorialSelectionRowSchema, FeedIngestCandidateSchema,
-  FeedIngestDispatchSchema, FeedIngestEventSchema, FeedOutcomePayloadSchema,
+  FeedIngestDispatchSchema,
   FileEnvelopeSchema, FOOTER_METADATA_KEYS, OPTIONAL_FOOTER_METADATA_KEYS,
   LedgerCompletionEvidenceSchema, PartitionAssignmentSchema,
-  PenaltyEvidenceSchema, PolicyIdentitySchema, PortfolioChoicePayloadSchema,
+  PenaltyEvidenceSchema, PolicyIdentitySchema,
   RejectionDetailsSchema, RowIdentitySchema, ROW_IDENTITY_COLUMN_VERSIONS, ScoreEvidenceSchema, SourceRunRecordSchema,
-  SourceSnapshotSchema, StageCompletionPayloadSchema, WriterIdentitySchema,
+  SourceSnapshotSchema, WriterIdentitySchema,
 } from "../src/index";
 
 export const runtimeSchemas = {
@@ -23,9 +23,6 @@ export const runtimeSchemas = {
   DropReasonCount: DropReasonCountSchema, CompletedFile: CompletedFileSchema,
   LedgerCompletionEvidence: LedgerCompletionEvidenceSchema, SourceRunRecord: SourceRunRecordSchema,
   ArticleAssessmentRecord: ArticleAssessmentRecordSchema, DiversityMetricRow: DiversityMetricRowSchema,
-  FeedOutcomePayload: FeedOutcomePayloadSchema, CandidateDecisionPayload: CandidateDecisionPayloadSchema,
-  PortfolioChoicePayload: PortfolioChoicePayloadSchema, StageCompletionPayload: StageCompletionPayloadSchema,
-  FeedIngestEvent: FeedIngestEventSchema,
 } satisfies Record<string, z.ZodType>;
 
 export const schemas = Object.fromEntries(
