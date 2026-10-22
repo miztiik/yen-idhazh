@@ -1,7 +1,7 @@
 /** Which unique records belong to one attempt, regardless of file layout or order? */
 import { createHash } from "node:crypto";
 import {
-  ArticleAssessmentRecordSchema, CandidateRejectionContract, CONTRACT_VERSION,
+  ArticleAssessmentContract, CandidateRejectionContract, CONTRACT_VERSION,
   DiversityMetricRowSchema, EditorialSelectionRowSchema, FEED_INGEST_AUDIT_VERSION,
   FeedIngestDispatchSchema, LogicalLedgerCommitmentSchema,
 } from "@idhazh/common-contracts";
@@ -24,7 +24,7 @@ const contracts: Record<Ledger, LedgerRowContract<object>> = {
   dispatches: { schema: FeedIngestDispatchSchema, schemaVersion: FEED_INGEST_AUDIT_VERSION },
   "editorial-selections": { schema: EditorialSelectionRowSchema, schemaVersion: CONTRACT_VERSION },
   rejections: CandidateRejectionContract,
-  "article-assessments": { schema: ArticleAssessmentRecordSchema, schemaVersion: FEED_INGEST_AUDIT_VERSION },
+  "article-assessments": ArticleAssessmentContract,
   diversity: { schema: DiversityMetricRowSchema, schemaVersion: FEED_INGEST_AUDIT_VERSION },
 };
 export type AttemptIdentity = Readonly<{ date: string; run_id: string; attempt: number; correlation_id: string }>;
@@ -41,10 +41,11 @@ export function commitLogicalRecords(
   schemaVersion = contracts[ledger].schemaVersion,
 ) {
   const contract = contracts[ledger];
-  if (schemaVersion !== contract.schemaVersion && !(ledger === "rejections" && schemaVersion === CONTRACT_VERSION)) {
+  const legacy = schemaVersion === contract.schemaVersion ? undefined : contract.legacyVersions?.[schemaVersion];
+  if (schemaVersion !== contract.schemaVersion && legacy === undefined) {
     throw new Error(`${ledger}: unsupported logical record schema version ${schemaVersion}`);
   }
-  const fields = describeObjectSchema(contract.schema).fields;
+  const fields = describeObjectSchema(legacy?.schema ?? contract.schema).fields;
   const unique = new Map<string, { held: StoredLedgerRow<object>; digest: string }>();
   for (const held of input) {
     const identity = held.identity;
@@ -59,12 +60,31 @@ export function commitLogicalRecords(
       throw new Error(`${ledger}: logical record belongs to another correlation or date`);
     }
     const key = JSON.stringify(PLANNING_RECORD_KEYS[ledger].map(path => at(row, path)));
-    // The older proof committed the older stamp; migration must not rewrite that evidence.
-    const encoded = ledger === "rejections" ? { ...row, version: schemaVersion } : row;
+    const encoded = legacy === undefined ? row : legacy.schema.parse(encodeHistoricalRecord(ledger, row, schemaVersion));
     const digest = digestRows([encoded as Record<string, unknown>], fields);
     const previous = unique.get(key);
     if (previous !== undefined && previous.digest !== digest) throw new Error(`${ledger}: conflicting duplicate logical record ${key}`);
     unique.set(key, previous ?? { held: { identity, row }, digest });
+  }
+
+  function encodeHistoricalRecord(ledger: Ledger, row: object, version: string): object {
+    if (ledger === "rejections") {
+      const current = CandidateRejectionContract.schema.parse(row);
+      const { diagnostics, ...details } = current.details;
+      if (diagnostics !== null) throw new Error("Historical rejection proof cannot omit measured diagnostics");
+      return { ...current, version, details };
+    }
+    if (ledger === "article-assessments") {
+      const { diagnostics, ...current } = ArticleAssessmentContract.schema.parse(row);
+      if (diagnostics !== null) throw new Error("Historical assessment proof cannot omit measured diagnostics");
+      if (version === CONTRACT_VERSION) {
+        const { timing_at, timing_basis, ...original } = current;
+        if (timing_basis === "first_seen") throw new Error("Historical assessment proof cannot represent first sight");
+        return { ...original, version, effective_published_at: timing_at, publication_clock: timing_basis };
+      }
+      return { ...current, version };
+    }
+    throw new Error(`${ledger}: historical logical record encoding is not declared`);
   }
   const ordered = [...unique].sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0);
   // A protocol encoding: header then key/digest pairs, one JSON array per line.

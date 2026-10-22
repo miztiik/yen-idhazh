@@ -8,6 +8,11 @@ import type { ResolvedAddress } from "./safe-target";
 export class BodyLimitError extends Error {
   constructor(readonly http_status: number) { super("response exceeds extract.max_body_bytes"); }
 }
+export class ResponseReadError extends Error {
+  constructor(readonly http_status: number, cause: unknown) {
+    super("response body could not be read", { cause });
+  }
+}
 export type TransportResponse = {
   status: number;
   body: string;
@@ -58,9 +63,12 @@ export const networkTransport: HarvestTransport = {
       });
       const location = response.headers.location;
       if (Array.isArray(location)) throw new Error("response has multiple redirect locations");
+      let body: string;
+      try { body = await readResponseBody(response.body, response.statusCode, max_body_bytes); }
+      catch (error) { throw new ResponseReadError(response.statusCode, error); }
       return {
         status: response.statusCode,
-        body: await readResponseBody(response.body, response.statusCode, max_body_bytes),
+        body,
         location: location ?? null,
       };
     } finally {

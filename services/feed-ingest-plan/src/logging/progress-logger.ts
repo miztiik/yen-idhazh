@@ -1,11 +1,13 @@
 /** Report live work without replacing the persisted audit event identity. */
 import { createUuidV5 } from "@idhazh/ledger-file-writer";
 import { EVENT_NAMESPACE, writeJsonLine } from "./structured-logger";
+import type { HarvestDiagnostics } from "@idhazh/common-contracts";
 
 export type ProgressEventType =
   | "PIPELINE_STARTED" | "HISTORY_READ_STARTED" | "HISTORY_READ_COMPLETED"
   | "FEED_DISCOVERY_STARTED" | "FEED_FETCH_STARTED" | "FEED_FETCH_COMPLETED"
   | "ARTICLE_HARVEST_STARTED" | "ARTICLE_HARVEST_COMPLETED"
+  | "ARTICLE_EXTRACTION_WARNING"
   | "FEED_REJECTED" | "ARTICLE_REJECTED"
   | "STAGE_COMPLETED" | "PLANNING_STAGES_COMPLETED"
   | "AUDIT_RECORDING_STARTED" | "AUDIT_RECORDING_COMPLETED"
@@ -16,27 +18,29 @@ export type ProgressDetails = {
   input_count?: number; output_count?: number; rejection_count?: number;
   fetch_status?: string; parse_status?: string; drop_reason?: string | null;
   http_status?: number;
+  diagnostics?: HarvestDiagnostics | null;
+  duration_ms?: number;
   extraction_outcome?: "success" | "empty" | "failed" | "not-attempted";
 };
 export type ProgressRecord = ProgressDetails & {
-  timestamp: string; level: "INFO"; message: string; eventId: string;
-  eventType: ProgressEventType; correlationId: string; durationMs: number; elapsedMs: number;
+  timestamp: string; level: "INFO" | "WARN"; message: string; eventId: string;
+  eventType: ProgressEventType; correlationId: string; durationMs: number | null; elapsedMs: number;
 };
 
 export function createProgressLogger(
   correlationId: string, write: (record: ProgressRecord) => void = writeJsonLine,
 ) {
   const started = performance.now();
-  let previous = started;
   let sequence = 0;
   return (eventType: ProgressEventType, details: ProgressDetails = {}) => {
     const measured = performance.now();
+    const { duration_ms, ...evidence } = details;
     const record: ProgressRecord = {
-      timestamp: new Date().toISOString(), level: "INFO", message: `Pipeline Event: ${eventType}`,
+      timestamp: new Date().toISOString(), level: eventType === "ARTICLE_EXTRACTION_WARNING" ? "WARN" : "INFO",
+      message: `Pipeline Event: ${eventType}`,
       eventId: `evt_${createUuidV5(EVENT_NAMESPACE, `progress\n${correlationId}\n${eventType}\n${sequence++}`)}`, eventType, correlationId,
-      durationMs: Math.round(measured - previous), elapsedMs: Math.round(measured - started), ...details,
+      durationMs: duration_ms ?? null, elapsedMs: Math.round(measured - started), ...evidence,
     };
-    previous = measured;
     write(record);
   };
 }

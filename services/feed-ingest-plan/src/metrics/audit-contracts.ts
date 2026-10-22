@@ -1,17 +1,14 @@
 /** Which prior audit rows can be read without inventing evidence? */
 import { z } from "zod";
 import {
-  ArticleAssessmentRecordSchema,
   DiversityMetricRowSchema,
   FEED_INGEST_AUDIT_VERSION,
   FeedIngestDispatchSchema,
   LegacyArticleAssessmentSchema,
-  migrateArticleAssessment,
   SourceRunRecordSchema,
   LedgerCompletionEvidenceSchema, SOURCE_RUN_VERSION,
 } from "@idhazh/common-contracts";
 import type {
-  ArticleAssessmentRecord,
   DiversityMetricRow,
   FeedIngestDispatch,
   SourceRunRecord,
@@ -40,6 +37,9 @@ const LegacySourceRunSchema = z.strictObject({
   })).nullable().default(null),
 });
 const PreviousSourceRunSchema = LegacySourceRunSchema.extend({ version: z.literal("2026-10-22") });
+const PreviousLogicalSourceRunSchema = z.strictObject({
+  ...sourceRunFields, version: z.literal("2026-10-22T10:05"),
+});
 
 const { version: _dispatchVersion, ...dispatchFields } = FeedIngestDispatchSchema.shape;
 const LegacyDispatchSchema = z.strictObject({
@@ -62,11 +62,7 @@ function migrateDispatch(row: object): FeedIngestDispatch {
   return FeedIngestDispatchSchema.parse({ ...old, version: FEED_INGEST_AUDIT_VERSION });
 }
 
-export const ArticleAssessmentContract: LedgerRowContract<ArticleAssessmentRecord> = {
-  schema: ArticleAssessmentRecordSchema,
-  schemaVersion: FEED_INGEST_AUDIT_VERSION,
-  legacyVersions: { [PREVIOUS_VERSION]: { schema: LegacyArticleAssessmentSchema, migrate: migrateArticleAssessment } },
-};
+export { ArticleAssessmentContract } from "@idhazh/common-contracts";
 export const DiversityMetricContract: LedgerRowContract<DiversityMetricRow> = {
   schema: DiversityMetricRowSchema,
   schemaVersion: FEED_INGEST_AUDIT_VERSION,
@@ -78,6 +74,7 @@ export const SourceRunContract: LedgerRowContract<SourceRunRecord> = {
   legacyVersions: {
     [PREVIOUS_VERSION]: { schema: LegacySourceRunSchema, migrate: migrateSourceRun },
     "2026-10-22": { schema: PreviousSourceRunSchema, migrate: migrateSourceRun },
+    "2026-10-22T10:05": { schema: PreviousLogicalSourceRunSchema, migrate: migrateSourceRun },
   },
 };
 export const DispatchContract: LedgerRowContract<FeedIngestDispatch> = {

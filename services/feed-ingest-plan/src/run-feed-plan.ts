@@ -80,6 +80,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     log: record => progress(record.subject === "feed" ? "FEED_REJECTED" : "ARTICLE_REJECTED", {
       source_id: record.source_id, ...(record.candidate_id === null ? {} : { candidate_id: record.candidate_id }),
       drop_reason: record.drop_reason,
+      diagnostics: record.details.diagnostics,
     }),
   }, {
     outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.rejections,

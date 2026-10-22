@@ -1,10 +1,12 @@
 /** Why did a feed or candidate receive a terminal rejection? */
 import { z } from "zod";
 import { CountSchema, DateStampSchema, FiniteSchema, NonEmptySchema, NonNegativeSchema, PositiveCountSchema, PositiveSchema, RejectionStageSchema, Sha256Schema, SlugSchema, TimestampSchema, UrlSchema, checkUrlIdentity, reject } from "./primitives";
-import { CONTRACT_VERSION, FEED_INGEST_AUDIT_VERSION } from "../version";
+import { CONTRACT_VERSION, FEED_INGEST_AUDIT_VERSION, HARVEST_DIAGNOSTICS_VERSION } from "../version";
+import { HarvestDiagnosticsSchema } from "./harvest-diagnostics.schema";
 
 export const DropReasonSchema = z.enum([
   "SOURCE_INACTIVE", "FETCH_FAILED", "FETCH_FAILED_HTTP", "FETCH_TIMEOUT",
+  "EXTRACT_FAILED", "EXTRACT_EMPTY",
   "PAYWALL_OR_BLOCKED", "FEED_PARSE_FAILED", "FEED_EMPTY", "MISSING_REQUIRED_FIELDS",
   "CATEGORY_EXCLUDED", "STUB_CONTENT", "STALE_MAX_AGE_EXCEEDED", "STALE_HALF_LIFE_DECAY",
   "DUPLICATE_CANONICAL_URL", "EVENT_CLUSTER_SIMILARITY", "SOURCE_QUOTA_EXCEEDED",
@@ -24,10 +26,12 @@ export const RejectionDetailsSchema = z.strictObject({
   limit: FiniteSchema.nullable().default(null),
   matched_url_key: Sha256Schema.nullable().default(null),
   history_window_days: PositiveCountSchema.nullable().default(null),
+  diagnostics: HarvestDiagnosticsSchema.nullable().default(null),
 });
 export const REASON_STAGES: Readonly<Record<DropReason, readonly RejectionStage[]>> = {
   SOURCE_INACTIVE: ["harvest-feeds"], FETCH_FAILED: ["harvest-feeds"],
   FETCH_FAILED_HTTP: ["harvest-feeds"], FETCH_TIMEOUT: ["harvest-feeds"],
+  EXTRACT_FAILED: ["harvest-feeds"], EXTRACT_EMPTY: ["harvest-feeds"],
   FEED_PARSE_FAILED: ["harvest-feeds"], FEED_EMPTY: ["harvest-feeds"],
   MISSING_REQUIRED_FIELDS: ["harvest-feeds"],
   PAYWALL_OR_BLOCKED: ["screen-article-candidates"], CATEGORY_EXCLUDED: ["screen-article-candidates"],
@@ -42,6 +46,7 @@ export const REASON_STAGES: Readonly<Record<DropReason, readonly RejectionStage[
 };
 export const REQUIRED_DETAILS: Readonly<Partial<Record<DropReason, readonly (keyof z.infer<typeof RejectionDetailsSchema>)[]>>> = {
   FETCH_FAILED_HTTP: ["http_status"], FETCH_TIMEOUT: ["timeout_ms"],
+  EXTRACT_FAILED: ["diagnostics"], EXTRACT_EMPTY: ["diagnostics"],
   STUB_CONTENT: ["words_found", "words_required"],
   STALE_MAX_AGE_EXCEEDED: ["age_hours", "max_age_hours"],
   STALE_HALF_LIFE_DECAY: ["observed_value", "limit"],
@@ -56,7 +61,7 @@ export const REQUIRED_DETAILS: Readonly<Partial<Record<DropReason, readonly (key
   PUBLICATION_BUDGET_EXCEEDED: ["observed_value", "limit"],
 };
 export const CandidateRejectionRecordSchema = z.strictObject({
-  version: z.literal(FEED_INGEST_AUDIT_VERSION).default(FEED_INGEST_AUDIT_VERSION), date: DateStampSchema, correlation_id: NonEmptySchema,
+  version: z.literal(HARVEST_DIAGNOSTICS_VERSION).default(HARVEST_DIAGNOSTICS_VERSION), date: DateStampSchema, correlation_id: NonEmptySchema,
   source_id: SlugSchema, feed_url: UrlSchema, subject: z.enum(["feed", "article"]),
   candidate_id: Sha256Schema.nullable(), url_key: Sha256Schema.nullable(),
   canonical_url: UrlSchema.nullable(), title: z.string().nullable(), categories: z.array(z.string()),
@@ -67,7 +72,10 @@ export const CandidateRejectionRecordSchema = z.strictObject({
   if (article !== (value.candidate_id !== null)) reject(ctx, "candidate_id is required only for an article");
   for (const field of ["url_key", "canonical_url", "title"] as const) {
     if (!article && value[field] !== null) reject(ctx, `feed rejection requires null ${field}`, [field]);
-    if (article && value.drop_reason !== "MISSING_REQUIRED_FIELDS" && value[field] === null) reject(ctx, `article rejection requires ${field}`, [field]);
+    const missingTitle = field === "title" && [
+      "FETCH_FAILED", "FETCH_FAILED_HTTP", "FETCH_TIMEOUT", "EXTRACT_FAILED", "EXTRACT_EMPTY",
+    ].includes(value.drop_reason);
+    if (article && value.drop_reason !== "MISSING_REQUIRED_FIELDS" && value[field] === null && !missingTitle) reject(ctx, `article rejection requires ${field}`, [field]);
   }
   if (value.canonical_url !== null && value.url_key !== null) checkUrlIdentity({ canonical_url: value.canonical_url, url_key: value.url_key }, ctx);
   if (value.date !== value.rejected_at.slice(0, 10)) reject(ctx, "date must match the UTC rejection day");
@@ -75,6 +83,7 @@ export const CandidateRejectionRecordSchema = z.strictObject({
   if (article && ["SOURCE_INACTIVE", "FEED_PARSE_FAILED", "FEED_EMPTY"].includes(value.drop_reason)) reject(ctx, "drop_reason requires a feed subject");
   if (!article && value.stage !== "harvest-feeds") reject(ctx, "feed failures belong to harvest-feeds");
   if (!article && value.drop_reason === "MISSING_REQUIRED_FIELDS") reject(ctx, "missing article fields require an article subject");
+  if (!article && ["EXTRACT_FAILED", "EXTRACT_EMPTY"].includes(value.drop_reason)) reject(ctx, "extraction failures require an article subject");
   for (const field of REQUIRED_DETAILS[value.drop_reason] ?? []) {
     if (value.details[field] === null) reject(ctx, `${value.drop_reason} requires details.${field}`, ["details", field]);
   }
@@ -82,16 +91,26 @@ export const CandidateRejectionRecordSchema = z.strictObject({
 export type CandidateRejectionRecord = z.infer<typeof CandidateRejectionRecordSchema>;
 export type RejectionDetails = z.infer<typeof RejectionDetailsSchema>;
 
+const { diagnostics: _diagnostics, ...previousDetails } = RejectionDetailsSchema.shape;
 const PreviousRejectionSchema = z.strictObject({
   ...CandidateRejectionRecordSchema.shape, version: z.literal(CONTRACT_VERSION),
+  details: z.strictObject(previousDetails),
+  drop_reason: DropReasonSchema.exclude(["EXTRACT_FAILED", "EXTRACT_EMPTY"]),
 });
+const PriorHarvestRejectionSchema = PreviousRejectionSchema.extend({ version: z.literal(FEED_INGEST_AUDIT_VERSION) });
 export const CandidateRejectionContract = {
-  schema: CandidateRejectionRecordSchema, schemaVersion: FEED_INGEST_AUDIT_VERSION,
+  schema: CandidateRejectionRecordSchema, schemaVersion: HARVEST_DIAGNOSTICS_VERSION,
   legacyVersions: {
     [CONTRACT_VERSION]: {
       schema: PreviousRejectionSchema,
       migrate: (row: object): CandidateRejectionRecord => CandidateRejectionRecordSchema.parse({
-        ...PreviousRejectionSchema.parse(row), version: FEED_INGEST_AUDIT_VERSION,
+        ...PreviousRejectionSchema.parse(row), version: HARVEST_DIAGNOSTICS_VERSION,
+      }),
+    },
+    [FEED_INGEST_AUDIT_VERSION]: {
+      schema: PriorHarvestRejectionSchema,
+      migrate: (row: object): CandidateRejectionRecord => CandidateRejectionRecordSchema.parse({
+        ...PriorHarvestRejectionSchema.parse(row), version: HARVEST_DIAGNOSTICS_VERSION,
       }),
     },
   },

@@ -1,5 +1,6 @@
 /** Turn one original feed entry into a validated candidate or one terminal rejection. */
 import { FeedIngestCandidateSchema, deriveCandidateId } from "@idhazh/common-contracts";
+import type { HarvestDiagnostics } from "@idhazh/common-contracts";
 import type { HarvestContext, OfferedArticle, HarvestArticleResult } from "./harvest-types";
 import { HarvestArticleResultSchema, utcTimestamp } from "./harvest-types";
 import type { HarvestInputs } from "./load-harvest-inputs";
@@ -9,6 +10,7 @@ import { canonicalizeUrl } from "./url-cleaner";
 import { fetchRejection, recordRejection } from "./record-rejection";
 import { calculateFreshness } from "../screen-article-candidates/freshness-decay";
 import { resolvePolicy } from "../config/resolve-policy";
+import { fetchDiagnostics } from "./fetch-diagnostics";
 
 // Existing discovery/extraction headline bounds, not editorial selection thresholds.
 const FEED_TITLE_MAX_CHARS = 500;
@@ -33,6 +35,7 @@ export async function harvestArticle(
     candidate_id, http_status: null, robots: null, fetch_failure: null,
     paywall: null, paywall_evidence: "not-observed", extraction: "not-attempted",
     observed_at: utcTimestamp(context.clock),
+    diagnostics: null,
   } satisfies HarvestArticleResult["observation"];
   if (!identity || !entry.link) {
     return HarvestArticleResultSchema.parse({
@@ -53,39 +56,64 @@ export async function harvestArticle(
       });
     }
   }
+  const fetchStarted = performance.now();
   const fetched = await fetcher.fetch(entry.link);
+  let diagnostics = fetchDiagnostics(fetched, Math.round(performance.now() - fetchStarted));
   const fetched_at = utcTimestamp(context.clock);
   const fetchedObservation = {
     ...observation, http_status: fetched.http_status, robots: fetched.robots,
     fetch_failure: fetched.failure, observed_at: fetched_at,
+    diagnostics,
   };
   if (fetched.body === null) {
-    const failure = fetchRejection(fetched, inputs.config.harvest.fetch_timeout_ms);
+    const failure = fetchRejection(fetched, inputs.config.harvest.fetch_timeout_ms, diagnostics);
     return HarvestArticleResultSchema.parse({
       candidate: null,
-      rejection: recordRejection(source, context, article.title ? failure.reason : "MISSING_REQUIRED_FIELDS", failure.details, article),
+      rejection: recordRejection(source, context, failure.reason, failure.details, article),
       observation: fetchedObservation,
     });
   }
   let extracted: ReturnType<typeof extractArticle>;
+  const extractStarted = performance.now();
   try { extracted = extractArticle(fetched.body, entry.link, inputs.extraction.paywall_markers); }
   catch (error) {
     if (!(error instanceof ArticleExtractionError)) throw error;
+    diagnostics = {
+      ...diagnostics, extract_ms: Math.round(performance.now() - extractStarted),
+      extraction_failure: error.reason, failure_code: "unknown", stopped_stage: "extract", detail: error.reason,
+    };
     return HarvestArticleResultSchema.parse({
       candidate: null,
-      rejection: recordRejection(source, context, article.title ? "FETCH_FAILED" : "MISSING_REQUIRED_FIELDS", {}, article),
-      observation: { ...fetchedObservation, extraction: "failed" },
+      rejection: recordRejection(source, context, "EXTRACT_FAILED", {
+        http_status: fetched.http_status, diagnostics,
+      }, article),
+      observation: { ...fetchedObservation, extraction: "failed", diagnostics },
     });
   }
+  const extract_ms = Math.round(performance.now() - extractStarted);
   const pageTitle = extracted.page_title && [...extracted.page_title].length <= PAGE_TITLE_MAX_CHARS ? extracted.page_title : null;
   article.title ??= pageTitle;
   const extraction = extracted.article_text ? "success" : "empty";
+  const extraction_failure = !extracted.article_text ? "empty-content" : !article.title ? "missing-title" : null;
+  diagnostics = {
+    ...diagnostics, extract_ms,
+    extraction_failure, failure_code: extraction_failure === "empty-content" ? "no_text"
+      : extraction_failure === "missing-title" ? "no_title" : null,
+    stopped_stage: extraction_failure === null ? null : "extract", detail: extraction_failure,
+    warnings: extracted.warnings,
+  } satisfies HarvestDiagnostics;
+  if (diagnostics.warnings.length) context.progress?.("ARTICLE_EXTRACTION_WARNING", {
+    source_id: source.source_id, candidate_id, diagnostics,
+  });
   const completeObservation = {
     ...fetchedObservation, paywall: extracted.paywall, paywall_evidence: extracted.paywall_evidence, extraction,
+    diagnostics,
   };
   if (!article.title || !extracted.article_text) {
     return HarvestArticleResultSchema.parse({
-      candidate: null, rejection: recordRejection(source, context, "MISSING_REQUIRED_FIELDS", {}, article),
+      candidate: null, rejection: recordRejection(source, context, extracted.article_text ? "MISSING_REQUIRED_FIELDS" : "EXTRACT_EMPTY", {
+        http_status: fetched.http_status, diagnostics,
+      }, article),
       observation: completeObservation,
     });
   }

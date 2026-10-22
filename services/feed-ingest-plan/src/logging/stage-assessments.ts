@@ -58,6 +58,7 @@ function assess(input: {
     informative_evaluator_version: null, suitability_verdict_status: "not_assessed",
     suitability_verdict: null, suitability_evaluator_version: null,
     score_evidence: null, score_evidence_status: "not_assessed",
+    diagnostics: observation.diagnostics,
   });
 }
 

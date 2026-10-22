@@ -34,6 +34,7 @@ export function translateArticleAssessments(result: FeedPlanResult, inputs: Plan
     const row = ArticleAssessmentRecordSchema.parse(event.payload.assessment);
     const original = result.evidence.harvest.articles.find(article => article.observation.candidate_id === row.candidate_id);
     if (original === undefined) throw new Error(`candidate.${row.candidate_id}: original harvest observation is missing`);
+    requireSame(row.diagnostics, original.observation.diagnostics, `candidate.${row.candidate_id}.diagnostics`);
     const candidate = original.candidate;
     const overrides = result.request.freshness_hours === undefined ? {} : { freshness_hours: result.request.freshness_hours };
     const policy = harvestPolicy(result.evidence.harvest.inputs, row.source.vertical, overrides);
