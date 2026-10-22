@@ -5,6 +5,7 @@ import { join, relative } from "node:path";
 import { describePlanError, PlanError } from "./plan-request";
 import { healthRoute } from "./routes/health.route";
 import { planRoute } from "./routes/plan.route";
+import type { PlanningBindings } from "./routes/plan.route";
 import { writeJsonLine } from "../logging/structured-logger";
 import type { PlanInputs } from "../load-plan-inputs";
 import { runFeedPlan } from "../run-feed-plan";
@@ -18,7 +19,7 @@ import { recordFeedPlan } from "../record-feed-plan";
 const apiPrefix = "/api/2026-10-20";
 
 export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime) {
-  const app = new Hono();
+  const app = new Hono<{ Bindings: PlanningBindings }>();
   const ownFiles = new Map<string, Set<string>>();
   for (const receipt of runtime.seen_receipts ?? []) {
     if (ownFiles.has(receipt.day) || new Set(receipt.files).size !== receipt.files.length) {
@@ -97,6 +98,11 @@ export function servePlan(inputs: PlanInputs, runtime: PlanRuntime) {
     hostname: inputs.settings.listener.hostname,
     port: inputs.settings.listener.port,
     idleTimeout: inputs.settings.listener.idle_timeout_seconds,
-    fetch: app.fetch,
+    fetch(request, server) {
+      return app.fetch(request, {
+        // Keep the receive timeout until the bounded body and controls validate.
+        beginPlanning: () => server.timeout(request, 0),
+      });
+    },
   });
 }

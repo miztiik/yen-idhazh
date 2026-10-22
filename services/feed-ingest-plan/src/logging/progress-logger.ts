@@ -9,11 +9,13 @@ export type ProgressEventType =
   | "FEED_REJECTED" | "ARTICLE_REJECTED"
   | "STAGE_COMPLETED" | "PLANNING_STAGES_COMPLETED"
   | "AUDIT_RECORDING_STARTED" | "AUDIT_RECORDING_COMPLETED"
-  | "PUBLICATION_OBSERVATION_STARTED" | "PUBLICATION_OBSERVATION_COMPLETED";
+  | "PUBLICATION_OBSERVATION_STARTED" | "PUBLICATION_OBSERVATION_COMPLETED"
+  | "HTTP_LISTENER_STARTED" | "HTTP_RESPONSE_RECEIVED" | "HTTP_LISTENER_STOPPED";
 export type ProgressDetails = {
   source_id?: string; candidate_id?: string; stage?: string;
   input_count?: number; output_count?: number; rejection_count?: number;
   fetch_status?: string; parse_status?: string; drop_reason?: string | null;
+  http_status?: number;
 };
 export type ProgressRecord = ProgressDetails & {
   timestamp: string; level: "INFO"; message: string; eventId: string;

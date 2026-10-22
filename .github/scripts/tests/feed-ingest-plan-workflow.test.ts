@@ -69,7 +69,14 @@ test("offers exactly four manual controls, read-only access and a separate optio
   });
   expect(plan.run).not.toContain("${{");
   expect(plan.run).toContain("parseCliRequest(args)");
-  expect(plan.run).toContain("await main(args,");
+  expect(plan.run).toContain("const server = servePlan(");
+  expect(plan.run).toContain('await fetch(new URL("/api/2026-10-20/plan", server.url)');
+  expect(plan.run).toContain("await server.stop(true)");
+  expect(plan.run).toContain('appendFileSync(join(artifactRoot, "audit-events.jsonl")');
+  expect(plan.run).toContain('appendFileSync(join(artifactRoot, "progress.jsonl")');
+  expect(plan.run).not.toContain("await main(");
+  expect(plan.run).not.toContain("app.request(");
+  expect(steps.find(step => step.name === "Preserve isolated test evidence")!.if).toBe("${{ always() }}");
   expect(plan.run).not.toContain("recordPlanningMetrics(");
   expect(plan.run).toContain("verifyParquetFiles(");
   expect(plan.run).toContain("summary.metrics.files[key]");
@@ -222,7 +229,7 @@ test("runs the native compatibility verifier in a named-input copy with no backe
       "atomic-file", "index", "ledger-paths", "ledger-types", "persist-compact", "persist-ledger",
       "persist-raw", "registration", "render-ledger-file", "row-identity", "row-schema",
       "parquet/arrow-builder", "parquet/envelope-footer", "parquet/row-digest",
-      "parquet/wasm-serializer", "uuid/file-id", "uuid/unit-id",
+      "parquet/wasm-serializer", "uuid/file-id", "uuid/unit-id", "uuid/name-id",
     ].map(name => `packages/ledger-file-writer/src/${name}.ts`);
     const named = [
       ...common, ...writer, "packages/common-contracts/package.json", "packages/ledger-file-writer/package.json",

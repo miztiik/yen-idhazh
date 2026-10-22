@@ -16,10 +16,14 @@ the actual audit writes and complete-attempt verification to be integrated
 and approved. The workflow explicitly enables only its isolated invocation;
 it does not change the committed default or approve production use.
 
-The actual CLI entrypoint runs the stages and records article assessments,
+The workflow starts the actual HTTP listener, verifies its health through
+loopback HTTP and posts the validated request to its planning route. It does
+not substitute a CLI call or an in-process router call. The listener is stopped
+in `finally`; CLI capability remains available outside this acceptance run.
+The server runs the stages and records article assessments,
 diversity measurements and source completion records. A verified current raw
 attempt can report `planning_complete: true` separately from
-`audited_complete: false`. The workflow calls that entrypoint once, not a
+`audited_complete: false`. The workflow calls that route once, not a
 separate planning recorder. It reads the returned source records and all five
 required ledger file sets through the original completion selector before
 exposing per-run planning completion.
@@ -89,14 +93,16 @@ checks native list and struct columns, envelope and row identities, row
 validation, ordered content digests, and recorded candidate, URL and UUID
 values. It also compares the existing canonical-byte compatibility vector,
 including Unicode, lists, nulls and floating-point values.
-Current output reads use the shared current audit contracts and their legacy
-read migrations. Reporting also replays recorded old events, including nested
-assessment timing, without supplying facts absent from those events.
+Physical ledger reads preserve the stored layout and digest before any declared
+row migration. Current planner events use the current UUID contract only;
+reporting validates it without a TypeScript legacy event branch.
 The fixed `legacy-seen-day.parquet` fixture retains actual Python-written
 pre-generic-task storage. Its original envelope controls which identity columns
 exist and whether `job` is nullable. The native reader verifies its original
 digest before filling the absent optional task fields. This is separate from
 row-schema migration; a newer row declaration cannot add columns to old bytes.
+The `legacy_row_count` and `legacy_seen_row_count` output values count fixed
+compatibility fixture rows; they do not trigger a repository-wide scan.
 
 Actual planner integration tests replay recorded HTTP and DNS responses
 through harvesting, screening, curation and partitioning. They read the
@@ -128,6 +134,15 @@ No isolated test makes a
 network request or starts Python. These checks do not claim that the Python
 reader ran, that live feeds are reachable, or that a hosted job meets a speed
 target.
+
+The live HTTP step appends `progress.jsonl` and `audit-events.jsonl` during work,
+prints the same observations, and uploads partial evidence even on failure or
+cancellation. The completed `events.json` remains the report input.
+GitHub independently stops this step after ten minutes; this limit supervises
+the runtime even if its own event loop stops servicing deadline timers.
+The configured six-second fetch deadline still applies to each request.
+The selected article limit is not a fetch limit: all configured feeds and
+their offered entries remain in scope before curation chooses the portfolio.
 
 Main repository CI separately extends the existing contract-tier case
 `backend/tests/ledger/test_feed_ingest_ledgers.py::test_zero_completion_evidence_survives_without_erasing_an_earlier_complete_attempt`.
