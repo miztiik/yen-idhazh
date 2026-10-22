@@ -22,7 +22,7 @@ from utilities.runtime_sweep import _cleanup_owned_processes, _termination_signa
 @pytest.fixture
 def owned_processes() -> Iterator[list[subprocess.Popen[bytes]]]:
     processes = [
-        subprocess.Popen([sys.executable, "-B", "-c", "import time; time.sleep(60)"])
+        subprocess.Popen([sys.executable, "-B", "-c", "import time; time.sleep(5)"])
         for _ in range(3)
     ]
     try:
@@ -31,7 +31,7 @@ def owned_processes() -> Iterator[list[subprocess.Popen[bytes]]]:
         for process in processes:
             if process.poll() is None:
                 process.kill()
-            process.wait(timeout=5)
+            process.wait(timeout=0.2)
 
 
 def _handlers() -> tuple[object, object]:
@@ -83,7 +83,7 @@ def test_cancellation_during_acquisition_registers_the_child_before_unwinding() 
             try:
                 with _termination_signals(defer=True):
                     process = subprocess.Popen(
-                        [sys.executable, "-B", "-c", "import time; time.sleep(60)"]
+                        [sys.executable, "-B", "-c", "import time; time.sleep(5)"]
                     )
                     signal.raise_signal(signal.SIGTERM)
                     workers.append(process)
