@@ -1,6 +1,6 @@
 # Plan 66 - Feed ingest plan engine
 
-**Last Updated**: 2026-10-20
+**Last Updated**: 2026-10-21
 **Level**: 5 (source-kind/tier and persisted-contract migration requires owner approval before execution; the later planner implementation follows the approved contracts)
 
 Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0.
@@ -10,6 +10,20 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 ## 0. Operating contract
 
 ### Owner correction - TypeScript-only development and verification
+
+Owner approval, 2026-10-22: @kumarsnaveen_microsoft approved delivery of
+Table A repairs A1-A7 from the review conversation, with tests and owning
+docs updated and green changes landed on remote main. This authorizes
+compatible Python contract edits, matching TypeScript changes, read-side
+migrations where needed, and compaction-safe logical completion proof.
+It covers configurable positive source counts, first-seen timing, signed
+age, later observation instants, separate harvest and selection contexts,
+and compatibility support. It supersedes the earlier hold on these
+contract decisions, not the restrictions on local Python execution,
+new Python tests or Python dependencies in the isolated workflow.
+Deliver in two phases: timing/count/context compatibility, then logical
+completion proof through compaction. Preserve old readable records without
+inventing missing evidence.
 
 Owner ruling, 2026-10-21: the remaining Plan 66 implementation introduces no
 Python tests, invokes no Python from TypeScript tests or development commands,
@@ -246,6 +260,26 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 
 ## 3. Status Reckoner
 
+Delivery checkpoint, 2026-10-21 22:46 UTC: all implementation PRs are merged
+into main. The final dependency landings were writer #1614, host #1615,
+harvesting #1618, screening #1616, curation #1617, partitioning #1619,
+runner #1620 (including audit #1621 and observer #1624), and workflow #1622.
+Each main-target candidate passed all five repository CI checks before its
+guarded squash merge. The last merge is
+`b60c1283c2b6a91bded06394234e3fe729e4c1a7`; its reviewed workflow candidate
+`d1d1827e822c0b2d9c1824f31a034b8669ce8d6c` passed CI run 39688288511.
+
+Implementation delivery is not full plan acceptance. Rows #10 through #14
+remain open for the contract decisions recorded below: first-seen clocks,
+signed article age, configurable top-source counts, next-day observations,
+original completion proof after compaction, and separate harvest and selection
+dates. Supported current planning has native completion proof. Full audit
+completion and a successful isolated full-audit workflow are not claimed;
+the separate full-audit gate still refuses incomplete audit evidence.
+The owner decision request offered a separate compatible contract-repair
+phase or an explicit scope reduction. The owner was unavailable and selected
+neither, so neither a Python exception nor a scope reduction is authorized.
+
 ### Table D - Status Reckoner
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
@@ -253,15 +287,15 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 | 1 | Shared contracts, schemas, and identity types | 15 | A | DONE | supreme-train (plan-66-row-1) | - | 4729606a-ce50-4812-a45f-f4ac7314311b |
 | 2 | Ledger registration and gardener compaction configuration | 1 | A | DONE | crispy-spoon (plan-66-row-2) | - | 6f739fa3-8ef9-40a7-830d-e1cc57927a46 |
 | 3 | Dedicated feed ingest plan configuration file | 1 | A | DONE | vigilant-lamp (plan-66-row-3) | - | d8340612-ab74-49e7-99ac-19d9ce30e427 |
-| 4 | Host hardware and environment identity service | 6 | B | IN-FLIGHT | curly-parakeet | - | bd6fe115-c522-4078-bb9f-e7c0e5eceb60 |
+| 4 | Host hardware and environment identity service | 6 | B | IN-FLIGHT | plan-66-host-fingerprint-service | - | bd6fe115-c522-4078-bb9f-e7c0e5eceb60 |
 | 5 | Host CPU and memory profiling service | 1 | B | DONE | congenial-parakeet (plan-66-row-5) | - | c8de7d9d-dd55-4123-87fe-66095cc2aed5 |
-| 6 | Reusable TypeScript ledger file writer | 1, 2, 16 | B | IN-FLIGHT | fictional-tribble | - | c1194122-86e6-45b4-85e9-e1bb61dbdca6 |
-| 7 | RSS/Atom feed harvest and DOM text extraction | 3, 6 | B | IN-FLIGHT | redesigned-doodle | - | da505804-6ce7-4f03-aa0b-25bab323ba53 |
-| 8 | Candidate triage screening with Parquet rejection ledger | 6, 7 | C | IN-FLIGHT | scaling-memory | - | d50de7c8-1c6a-4074-a390-25a077ae0ba8 |
-| 9 | Set-aware editorial portfolio curation | 8 | D | IN-FLIGHT | bookish-carnival | - | 34c330c1-9d30-4222-8fa6-4e28e58a165e |
-| 10 | Contextual bin-packing partitioner with feature flag | 9 | E | IN-FLIGHT | Session `86a9018f-dadb-4181-b82c-ca7fe9347116` builds on tested harvest foundation; integrates tested curation before final checks; historical completion proof remains unresolved below | - | - |
-| 11 | Core plan engine entrypoint, dual-mode runner, and sealing | 6, 10 | F | IN-FLIGHT | plan-66-api-cli-runner | - | ec780a10-5ab0-4ad7-a4e1-c36db811fbd7 |
-| 12 | Isolated CI test workflow and verification suite | 4, 5, 11, 14 | G | IN-FLIGHT | isolated workflow child | - | 31c9fcf0-3abc-41ff-a70e-624a4b419ee0 |
+| 6 | Reusable TypeScript ledger file writer | 1, 2, 16 | B | DONE | fictional-tribble | - | c1194122-86e6-45b4-85e9-e1bb61dbdca6 |
+| 7 | RSS/Atom feed harvest and DOM text extraction | 3, 6 | B | DONE | redesigned-doodle (feed-harvest-engine) | - | da505804-6ce7-4f03-aa0b-25bab323ba53 |
+| 8 | Candidate triage screening with Parquet rejection ledger | 6, 7 | C | DONE | plan-66-candidate-screening | - | d50de7c8-1c6a-4074-a390-25a077ae0ba8 |
+| 9 | Set-aware editorial portfolio curation | 8 | D | DONE | plan-66-portfolio-curation | - | 34c330c1-9d30-4222-8fa6-4e28e58a165e |
+| 10 | Contextual bin-packing partitioner with feature flag | 9 | E | IN-FLIGHT | plan-66-article-partitioning; current construction and raw replay tested; packed completion proof unresolved | - | bdd46d9e-08a5-466f-b37a-c8b4adeef51c |
+| 11 | Core plan engine entrypoint, dual-mode runner, and sealing | 6, 10 | F | IN-FLIGHT | plan-66-api-cli-runner; real stages, bounded first sight and required assessment/diversity recording integrated; audited completion remains unavailable | - | 2c361133-cae1-461b-a1fd-74ba90daefaf |
+| 12 | Isolated CI test workflow and verification suite | 4, 5, 11, 14 | G | IN-FLIGHT | plan-66-isolated-workflow; actual CLI planning completion independently proved from native source rows and five ledger sets; generated publication observer and all-file report preservation checked; full-audit gate retained pending final acceptance | - | 382b4193-6a4b-45a6-92c9-9a4005ec9385 |
 | 13 | Phase 2 publication reconciliation and rolling diversity metrics | 12, 14 | H | IN-FLIGHT | publication observer child; independent history/publication modules first; shared metrics wait for Row 14 handoff | - | 79cc9244-f9d2-4223-905f-69fa0221f706 |
 | 14 | Phase 1 source-run audit and three-axis evidence | 11 | G | IN-FLIGHT | audit recorder child | - | f197c411-a156-460a-a772-f5205c11be1d |
 | 15 | Config-driven source registries and compatible readers | - | A | DONE | fluffy-adventure (feed-registry-migration) | - | f7f18c64-813b-4a13-b421-1cd67b951db6 |
@@ -692,23 +726,36 @@ the existing host-service scope, not new persisted fields or a new algorithm.
   - `packages/ledger-file-writer/src/parquet/wasm-serializer.ts`
   - `packages/ledger-file-writer/src/parquet/envelope-footer.ts`
   - `packages/ledger-file-writer/src/parquet/row-digest.ts`
+  - `packages/ledger-file-writer/src/ledger-types.ts`
+  - `packages/ledger-file-writer/src/row-schema.ts`
+  - `packages/ledger-file-writer/src/registration.ts`
+  - `packages/ledger-file-writer/src/row-identity.ts`
+  - `packages/ledger-file-writer/src/ledger-paths.ts`
+  - `packages/ledger-file-writer/src/atomic-file.ts`
+  - `packages/ledger-file-writer/src/render-ledger-file.ts`
+  - `packages/ledger-file-writer/src/persist-raw.ts`
+  - `packages/ledger-file-writer/src/persist-compact.ts`
   - `packages/ledger-file-writer/src/persist-ledger.ts`
   - `packages/ledger-file-writer/test/uuid.test.ts`
   - `packages/ledger-file-writer/test/parquet-parity.test.ts`
   - `packages/ledger-file-writer/test/persist-ledger.test.ts`
+  - `tests/fixtures/ledger-file-writer/host-fingerprint-row.json`
+  - `tests/fixtures/ledger-file-writer/feed-ingest-dispatch-row.json`
+  - `tests/fixtures/ledger-file-writer/dispatch-arrow-schema.json`
+  - `.github/workflows/ci.yml` (named TypeScript package checks and tests)
   - `docs/architecture/contracts/identity.md`
   - `docs/architecture/contracts/persistence.md`
-- **Acceptance gates:** Local: inspect the shared selector without launching Python-backed groups, run strict TypeScript checks and package tests with real Parquet readback against bounded recorded compatibility fixtures. CI executes the named Bun checks and tests. Exercise two distinct registered ledger contracts through the same public interface, including raw and compact writes, zero rows, nullable/list fields, invalid rows, and an interrupted write.
+- **Acceptance gates:** Local: inspect the shared selector without launching Python-backed groups, run strict TypeScript checks and package tests with real Parquet readback against bounded recorded compatibility fixtures. CI executes the named Bun checks and tests. Exercise two distinct registered ledger contracts through the same public interface, including raw and compact writes, zero rows, nullable/list fields, invalid rows, and an interrupted write. Compare the nested dispatch Parquet schema against `tests/fixtures/ledger-file-writer/dispatch-arrow-schema.json`, an independently recorded list of native column types and nullability, including nested/list children and identity columns. The host-fingerprint case narrows to writer-identity collision fields and does not claim full hardware-row validation or retention; that coverage belongs to Row #4.
 - **Oracle:** TypeScript reads the actual Parquet footer, validates its envelope and native columns, reconstructs stored rows, and recomputes their canonical digest. Recorded fixtures independently pin schema, canonical bytes and identifiers to the existing contract. This does not execute the Python reader, prove speed or require byte-identical output from different Parquet engines.
 - **Preflight correction:** The identity page currently names a TypeScript implementation under `packages/common-contracts/src/identity/` that does not exist. The writer owns the new implementation. Correct that page's namespace and hash-bit descriptions against `backend/idhazh/ledger/filenames.py`; do not change the Python identity algorithm. The package lock and bounded recorded fixtures support the declared package and compatibility checks.
 
 Canonical-byte preflight: sorted `JSON.stringify` is not Python's row
-serialization. A fixed local comparison produced Python numbers `1.0`,
+serialization. A fixed comparison produced Python numbers `1.0`,
 `1e-07`, `1e+20`, and `-0.0`, while Node produced `1`, `1e-7`,
 `100000000000000000000`, and `0`. Python also escapes non-ASCII text.
-Use the declared scalar types and actual stored rows to reproduce the Python
-bytes. Include these values, Unicode, nested lists, and nulls in the existing
-parity test; do not change Python's digest or reject valid floats to pass it.
+Use the declared scalar types and actual stored rows to reproduce those bytes.
+Include these values, Unicode, nested lists, and nulls in the canonical-byte
+vector; do not change the Python digest rules or reject valid floats to pass it.
 
 Identity-page preflight also found two unrelated identities described as one:
 the older `.github/scripts/ai-pipeline.ts` event helper returns an `evt_`
@@ -725,9 +772,9 @@ and correlation IDs are not undeclared file-envelope metadata.
 | 1 | Evaluate `apache-arrow` + `parquet-wasm` for Parquet writing; use the configured ledger compression rather than a caller-specific constant. Beneficiary: every TypeScript ledger producer. Record install size, loaded WASM memory, and runner time before dependency adoption. | Plan proposal; persistence.md |
 | 2 | Match Python `filenames.py` for UUIDv5 unit identity and UUIDv8 file identity, including generic pipeline/task context. | identity.md; filenames.py |
 | 3 | Write separate UTF-8 key-value entries matching `FileEnvelope.as_metadata`, not one JSON object. Preserve renamed metadata keys, optional-key omission, and zero-padded attempt/shard strings. Read row count from the Parquet footer, not an extra envelope key. | file_envelope.py; persistence.md |
-| 4 | Hash the stored rows, including stamped identity cells, in file order using the exact canonical JSON-lines bytes from `json_lines.rows_bytes`: sorted object keys, ASCII escaping, compact separators, and one LF per row. It is neither a hash of Parquet bytes nor an unspecified raw-row hash. Test Unicode, nested values, floats, and nullable cells against Python serialization. | persist.py; json_lines.py |
+| 4 | Hash the stored rows, including stamped identity cells, in file order using the exact canonical JSON-lines bytes from `json_lines.rows_bytes`: sorted object keys, ASCII escaping, compact separators, and one LF per row. It is neither a hash of Parquet bytes nor an unspecified raw-row hash. Test Unicode, nested values, floats, and nullable cells against the recorded canonical-byte vector. | persist.py; json_lines.py |
 | 5 | Accept ledger, row contract, rows, output root, UTC coverage period, writer context, and ledger settings. Derive paths and identifiers inside the package. Keep feed selection, HTTP serving, and GitHub reporting outside it. Use temporary-file-plus-rename writes. | Owner selection: shared package; persistence.md |
-| 6 | Validation checks row and envelope contracts before writing. Interoperability tests additionally check the Parquet encoding. Neither check encrypts, signs, or makes a file tamper-proof. | Clarification of the package contract |
+| 6 | Validation checks row and envelope contracts before writing. TypeScript tests read actual Parquet through WASM and Arrow, then check the footer and typed columns against bounded compatibility fixtures. The owner override prevents executing Python from this package's test and CI paths, so these checks do not claim current Python reader execution. Neither check encrypts, signs, or makes a file tamper-proof. | Clarification of the package contract; owner override |
 | 7 | Raw writes stamp row identity; compact writes preserve original row identity and record the compactor only in the envelope. Accept tier, period, and source-file count under the existing persistence rules; do not embed a compaction schedule or retention policy in the package. | persistence.md |
 
 ### Rejected alternatives
@@ -760,6 +807,7 @@ and correlation IDs are not undeclared file-envelope metadata.
   - `services/feed-ingest-plan/bun.lock`
   - `services/feed-ingest-plan/test/harvest.test.ts`
   - `services/feed-ingest-plan/test/harvest-safety.test.ts`
+  - `services/feed-ingest-plan/test/harvest-recordings.ts`
   - `tests/fixtures/feed-ingest-plan/harvest-rss.xml`
   - `tests/fixtures/feed-ingest-plan/harvest-atom.xml`
   - `tests/fixtures/feed-ingest-plan/harvest-article.html`
