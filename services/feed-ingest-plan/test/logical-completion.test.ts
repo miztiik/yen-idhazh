@@ -2,38 +2,22 @@
 import { expect, test } from "bun:test";
 import { mkdir, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { CONTRACT_VERSION, CandidateRejectionRecordSchema, EditorialSelectionRowSchema } from "@idhazh/common-contracts";
+import { CONTRACT_VERSION, CandidateRejectionContract, EditorialSelectionRowSchema } from "@idhazh/common-contracts";
 import { persistLedger } from "@idhazh/ledger-file-writer";
 import type { LedgerRowContract, StoredLedgerRow } from "@idhazh/ledger-file-writer";
 import { main } from "../src/index";
 import { readPlanningHistory } from "../src/metrics/planning-populations";
-import type { NamedPlanningHistory } from "../src/metrics/planning-populations";
 import { ArticleAssessmentContract, DiversityMetricContract, DispatchContract, SourceRunContract } from "../src/metrics/audit-contracts";
 import { commitLogicalRecords } from "../src/read-ledger-history/logical-records";
 import { selectCompleteAttempt } from "../src/read-ledger-history/complete-attempt";
 import type { AttemptHistory } from "../src/read-ledger-history/complete-attempt";
-import { recordedPlan } from "./plan-recordings";
+import { recordedPlan, namedPlanningFiles } from "./plan-recordings";
 import { source } from "./harvest-recordings";
-
-export function namedPlanningFiles(summary: Exclude<Awaited<ReturnType<typeof main>>, { stop: () => void }>, root: string): NamedPlanningHistory {
-  if (!("files" in summary) || summary.metrics === undefined || summary.files.source_runs === undefined) throw new Error("Missing actual planner files");
-  const named = (files: readonly { files: readonly { path: string }[] }[]) => ({
-    day: summary.date, rawFiles: files.flatMap(result => result.files.map(file => join(root, ...file.path.split("/")))),
-  });
-  return {
-    sources: named([summary.files.source_runs]),
-    ledgers: {
-      "article-assessments": named([summary.metrics.files.assessments]), diversity: named([summary.metrics.files.diversity]),
-      "editorial-selections": named([summary.files.selections]), dispatches: named([summary.files.dispatches]),
-      rejections: named([summary.files.harvest_rejections, summary.files.screening_rejections, summary.files.curation_rejections]),
-    },
-  };
-}
 
 const contracts: Record<keyof AttemptHistory["ledgers"] | "source-runs", LedgerRowContract<object>> = {
   "article-assessments": ArticleAssessmentContract, diversity: DiversityMetricContract,
   "editorial-selections": { schema: EditorialSelectionRowSchema, schemaVersion: CONTRACT_VERSION },
-  dispatches: DispatchContract, rejections: { schema: CandidateRejectionRecordSchema, schemaVersion: CONTRACT_VERSION },
+  dispatches: DispatchContract, rejections: CandidateRejectionContract,
   "source-runs": SourceRunContract,
 };
 test("logical proof survives native daily, monthly and yearly files with no original raw files", async () => {
@@ -122,3 +106,32 @@ test("canonical membership dedupes identical records and refuses missing, extra,
     expect(selectCompleteAttempt({ ...history, ledgers: { ...history.ledgers, [ledger]: { ...day, status: "missing", rows: [] } } }).selected).toBeNull();
   } finally { await fixture.close(); }
 }, 30000);
+
+test("recorded rejection commitments retain their original schema stamp after migration", async () => {
+  const fixture = await recordedPlan();
+  try {
+    const summary = await main(["--cli"], { inputs: fixture.inputs, runtime: fixture.runtime, output: () => {} });
+    if (!("files" in summary)) throw new Error("Missing summary");
+    const history = await readPlanningHistory(namedPlanningFiles(summary, fixture.inputs.outputRoot));
+    const selected = selectCompleteAttempt(history).selected!;
+    const rows = history.ledgers.rejections.rows;
+    expect(rows.length).toBeGreaterThan(0);
+    const original = rows.map(held => ({ ...held, row: { ...held.row, version: CONTRACT_VERSION } }));
+    const migrated = original.map(held => ({
+      ...held, row: CandidateRejectionContract.legacyVersions[CONTRACT_VERSION].migrate(held.row),
+    }));
+    const oldProof = commitLogicalRecords("rejections", migrated, selected, CONTRACT_VERSION).commitment;
+    const sources = history.sources.rows.map(held => {
+      if (held.row.completion_evidence === null) throw new Error("Missing recorded completion");
+      return {
+        ...held, row: { ...held.row, completion_evidence: held.row.completion_evidence.map(evidence =>
+          evidence.ledger === "rejections" ? { ...evidence, logical: oldProof } : evidence) },
+      };
+    });
+    const oldHistory = { ...history, sources: { ...history.sources, rows: sources } };
+    expect(selectCompleteAttempt(oldHistory).selected?.run_id).toBe(selected.run_id);
+    expect(commitLogicalRecords("rejections", [...migrated].reverse(), selected, CONTRACT_VERSION).commitment).toEqual(oldProof);
+    expect(oldProof).not.toEqual(commitLogicalRecords("rejections", migrated, selected).commitment);
+    expect(() => commitLogicalRecords("rejections", migrated, selected, "2026-10-19")).toThrow("unsupported");
+  } finally { await fixture.close(); }
+});

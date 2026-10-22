@@ -73,7 +73,7 @@ export function harvestAssessments(input: {
     if (source === undefined) throw new Error("Harvest article has no configured source snapshot");
     return assess({
       ...article, source, policy: harvestPolicy(input.harvest.inputs, source.vertical, input.overrides),
-      context: input.context, stage: "harvest-feeds", freshness: null,
+      context: input.context, stage: "harvest-feeds", freshness: article.observation.preflight_freshness ?? null,
       evidence: input.evidence?.get(article.observation.candidate_id),
     });
   });

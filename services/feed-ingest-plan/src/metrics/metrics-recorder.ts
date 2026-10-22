@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { z } from "zod";
 import {
   ArticleAssessmentRecordSchema, CONTRACT_VERSION, DiversityMetricRowSchema,
-  LedgerCompletionEvidenceSchema, WriterIdentitySchema, CandidateRejectionRecordSchema,
+  LedgerCompletionEvidenceSchema, WriterIdentitySchema, CandidateRejectionContract,
   EditorialSelectionRowSchema,
   RunIdSchema, NonEmptySchema, Sha256Schema, FeedMetricsConfigSchema,
 } from "@idhazh/common-contracts";
@@ -124,7 +124,7 @@ export async function recordPlanningMetrics(
 ) {
   const batch = preparePlanningMetrics(result, inputs, registrations);
   // Named input files are verified before creating either audit ledger.
-  const rejectionContract = { schema: CandidateRejectionRecordSchema, schemaVersion: CONTRACT_VERSION };
+  const rejectionContract = CandidateRejectionContract;
   await readWritten(result.files.harvest_rejections, "rejections", rejectionContract, result.evidence.harvest.rejections, inputs, result);
   await readWritten(result.files.screening_rejections, "rejections", rejectionContract, result.evidence.screening.rejections, inputs, result);
   await readWritten(result.files.curation_rejections, "rejections", rejectionContract, result.evidence.curation.rejections, inputs, result);

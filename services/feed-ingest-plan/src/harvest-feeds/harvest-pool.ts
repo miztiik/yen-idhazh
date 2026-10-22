@@ -1,5 +1,5 @@
 /** Route configured sources and their original entries through the bounded harvest stages. */
-import { FeedOutcomePayloadSchema, WriterIdentitySchema, NonEmptySchema, PositiveCountSchema } from "@idhazh/common-contracts";
+import { FeedOutcomePayloadSchema, WriterIdentitySchema, NonEmptySchema, PositiveCountSchema, NonNegativeSchema } from "@idhazh/common-contracts";
 import type { HarvestContext, HarvestResult, OfferedArticle, RejectionDestination } from "./harvest-types";
 import type { HarvestInputs } from "./load-harvest-inputs";
 import { harvestPolicy, sourceSnapshot } from "./load-harvest-inputs";
@@ -37,6 +37,7 @@ export async function harvestFeeds(
 ): Promise<HarvestResult> {
   WriterIdentitySchema.parse(context.writer);
   NonEmptySchema.parse(context.correlation_id);
+  NonNegativeSchema.parse(context.max_future_hours);
   context.progress?.("FEED_DISCOVERY_STARTED", { input_count: inputs.sources.length });
   const fetcher = createPermittedFetcher(inputs.config.harvest, inputs.extraction, boundary);
   const feeds = await mapPool(inputs.sources, inputs.config.harvest.concurrency, async configured => {

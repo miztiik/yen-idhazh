@@ -30,6 +30,15 @@ remains unknown and carries no timestamp or age. Concentration rows store each
 configured positive `top_k`; if `k` exceeds the available sources, the reading
 uses all of them.
 
+Expired entries can now stop before page download under
+[the harvesting rule](feed-harvesting.md#design-rationale). Their harvest
+assessment retains actual publication timing, age and cutoff, with extraction
+`not_attempted` and null word, attribution and suitability evidence. Before
+writing, the recorder recomputes that age with the captured run clock and the
+same policy, checks the early terminal rejection, and refuses missing timing
+or invented extraction measurements. Parsed counts still include these entries;
+successful harvested counts do not.
+
 ## What is checked and written
 
 Stage reconciliation checks the retained source snapshots, candidate identities,
@@ -142,6 +151,12 @@ the source completion batch last.
 Older source revisions migrate with `logical: null`. They still prove
 completion from original raw files. If those files are gone, compact-only old
 history remains unverifiable. Migration never invents historical membership.
+
+Rejection version `2026-10-22` permits the early harvest-stage age reason.
+The reader verifies original `2026-10-20` physical bytes before changing only
+the in-memory version stamp. An earlier logical receipt is recomputed with
+its recorded rejection-row stamp, not today's stamp. This preserves original
+evidence through packing; no old file or receipt is rewritten.
 
 ## Publication evidence reader
 

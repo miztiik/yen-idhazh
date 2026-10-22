@@ -23,6 +23,10 @@ export const HarvestObservationSchema = z.strictObject({
   paywall_evidence: z.enum(["json-ld", "configured-marker", "none", "not-observed"]),
   extraction: z.enum(["success", "empty", "failed", "not-attempted"]),
   observed_at: TimestampSchema,
+  preflight_freshness: z.strictObject({
+    timing_at: TimestampSchema, timing_source: z.literal("published_at"),
+    age_hours: z.number().finite().positive(), recency_bonus: z.number().finite().nonnegative(),
+  }).optional(),
 });
 export type HarvestObservation = z.infer<typeof HarvestObservationSchema>;
 export const HarvestArticleResultSchema = z.strictObject({
@@ -55,6 +59,7 @@ export type OfferedArticle = {
 export type HarvestContext = {
   writer: WriterIdentity;
   correlation_id: string;
+  max_future_hours: number;
   overrides?: { freshness_hours?: number };
   clock?: () => Date;
   log?: (record: z.infer<typeof CandidateRejectionRecordSchema>) => void;

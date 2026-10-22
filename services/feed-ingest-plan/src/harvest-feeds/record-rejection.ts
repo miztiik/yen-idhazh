@@ -1,6 +1,6 @@
 /** Validate one harvest rejection and persist the run's rows through the shared writer. */
 import {
-  CandidateRejectionRecordSchema, RejectionDetailsSchema, CONTRACT_VERSION,
+  CandidateRejectionRecordSchema, RejectionDetailsSchema, CandidateRejectionContract,
 } from "@idhazh/common-contracts";
 import type { CandidateRejectionRecord, DropReason, RejectionDetails, SourceSnapshot } from "@idhazh/common-contracts";
 import { persistLedger } from "@idhazh/ledger-file-writer";
@@ -47,7 +47,7 @@ export async function persistHarvestRejections(
   if (destination.ledgerSettings.format !== "parquet") throw new Error("harvest rejections require Parquet");
   const result = await persistLedger({
     ledger: "rejections",
-    rowContract: { schema: CandidateRejectionRecordSchema, schemaVersion: CONTRACT_VERSION },
+    rowContract: CandidateRejectionContract,
     rows, ...destination, writerContext: context.writer,
     period: { tier: "raw", covers: context.writer.run_id.slice(0, 10) },
   });

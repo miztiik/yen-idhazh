@@ -5,7 +5,7 @@ import { isDeepStrictEqual } from "node:util";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  CandidateRejectionRecordSchema, CONTRACT_VERSION, DateStampSchema,
+  CandidateRejectionContract, CONTRACT_VERSION, DateStampSchema,
   FeedIngestDispatchSchema, LedgerCompletionEvidenceSchema,
   PositiveCountSchema, Sha256Schema, deriveCandidateId, deriveUrlKey,
 } from "../../packages/common-contracts/src/index";
@@ -68,7 +68,7 @@ export async function verifyParquetFiles(
     const actual = ledger === "dispatches"
       ? await readLedgerParquet(actualPath, ledger, DispatchContract)
       : ledger === "rejections"
-        ? await readLedgerParquet(actualPath, ledger, { schema: CandidateRejectionRecordSchema, schemaVersion: CONTRACT_VERSION })
+        ? await readLedgerParquet(actualPath, ledger, CandidateRejectionContract)
         : ledger === "article-assessments"
           ? await readLedgerParquet(actualPath, ledger, ArticleAssessmentContract)
           : ledger === "diversity"

@@ -69,6 +69,9 @@ state root. Paths crossing a process boundary remain relative and
 POSIX-separated. The four API controls never choose a file path or fetch URL.
 The effective article cap is resolved before harvesting, and its actual
 configuration fingerprint is carried by candidates and selections.
+The article limit controls final selection only; it never limits feed entries
+or page requests. [Known expired entries](feed-harvesting.md#design-rationale)
+stop before page download using the same captured clock and freshness override.
 
 Publisher, parent-domain, operational and primary-document evidence is
 explicit and nullable. Nothing derives a masthead from a feed title, a story

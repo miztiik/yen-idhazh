@@ -116,6 +116,14 @@ The existing fixture round-trip check keeps same-version payloads byte-identical
 When reading advances an old version, it requires the current version and
 identical serialized bytes on the next read, leaving the old fixture unchanged.
 
+Terminal rejection version `2026-10-22` adds harvest-stage
+`STALE_MAX_AGE_EXCEEDED` with measured age and cutoff. Its `2026-10-20`
+read migration changes only the stamp; original physical digests and recorded
+logical-proof stamps remain independently verifiable. The precedence and
+unperformed checks are defined in
+[harvesting](../sources/feed-harvesting.md#design-rationale), not inferred from
+a missing page.
+
 Source-run revision `2026-10-22T10:05` adds nullable logical record commitments
 beside physical file receipts. Both prior source stamps migrate with null
 logical proof, never reconstructed evidence. The native reader verifies each

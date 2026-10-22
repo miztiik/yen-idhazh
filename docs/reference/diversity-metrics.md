@@ -49,10 +49,15 @@ active-source snapshot size, including active sources with no items.
   Lost diversity records the count before, the count after, and before minus
   after. A negative difference means diversity increased, not an invalid sample.
 
-The input stage uses harvested instances. Freshness compares harvested instances
+The input stage uses successfully harvested instances plus entries rejected
+for known publication age before page download. Freshness compares that input
 with those not rejected by the actual freshness rule, including candidates with
 unknown timing that the policy accepts. It does not rename paywall, category or
-substance losses as age losses. Deduplication compares actual screened eligible
+substance losses as age losses. An early age refusal contributes exactly one
+freshness loss and no later screening, duplicate or selection loss.
+Successful harvested counts still exclude those unextracted entries.
+Historical reconstruction uses the same assessment membership.
+Deduplication compares actual screened eligible
 instances with carrier representatives. Normalization compares those
 representatives with the actual source-allowance survivors. Selection compares
 those survivors with the selected unique articles. Each comparison uses its own

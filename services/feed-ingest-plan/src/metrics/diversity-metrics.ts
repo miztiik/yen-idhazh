@@ -46,7 +46,7 @@ export function topSourceShare(counts: readonly number[], count: number) {
   return { numerator, denominator: total, value: measuredRatio(numerator, total, "top_source_concentration") };
 }
 
-function sourceCounts(items: readonly FeedIngestCandidate[], active: readonly string[]): number[] {
+function sourceCounts(items: readonly Pick<FeedIngestCandidate, "candidate_id" | "source_id">[], active: readonly string[]): number[] {
   const counts = new Map(active.map(id => [id, 0]));
   for (const item of items) {
     if (!counts.has(item.source_id)) throw new Error(`candidate.${item.candidate_id}.source_id: not an active source in this run`);
@@ -116,8 +116,8 @@ export function calculateDiversityMetrics(result: FeedPlanResult, membership: St
     }
   }
   const stages = [
-    ["input", membership.harvested, membership.harvested],
-    ["freshness", membership.harvested, membership.freshness],
+    ["input", membership.freshness_input, membership.freshness_input],
+    ["freshness", membership.freshness_input, membership.freshness],
     ["deduplication", membership.eligible, membership.representatives],
     ["normalization", membership.representatives, membership.normalized],
     ["selection", membership.normalized, membership.selected],

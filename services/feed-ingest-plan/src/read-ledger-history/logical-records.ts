@@ -1,7 +1,7 @@
 /** Which unique records belong to one attempt, regardless of file layout or order? */
 import { createHash } from "node:crypto";
 import {
-  ArticleAssessmentRecordSchema, CandidateRejectionRecordSchema, CONTRACT_VERSION,
+  ArticleAssessmentRecordSchema, CandidateRejectionContract, CONTRACT_VERSION,
   DiversityMetricRowSchema, EditorialSelectionRowSchema, FEED_INGEST_AUDIT_VERSION,
   FeedIngestDispatchSchema, LogicalLedgerCommitmentSchema,
 } from "@idhazh/common-contracts";
@@ -23,7 +23,7 @@ export const PLANNING_RECORD_KEYS = {
 const contracts: Record<Ledger, LedgerRowContract<object>> = {
   dispatches: { schema: FeedIngestDispatchSchema, schemaVersion: FEED_INGEST_AUDIT_VERSION },
   "editorial-selections": { schema: EditorialSelectionRowSchema, schemaVersion: CONTRACT_VERSION },
-  rejections: { schema: CandidateRejectionRecordSchema, schemaVersion: CONTRACT_VERSION },
+  rejections: CandidateRejectionContract,
   "article-assessments": { schema: ArticleAssessmentRecordSchema, schemaVersion: FEED_INGEST_AUDIT_VERSION },
   diversity: { schema: DiversityMetricRowSchema, schemaVersion: FEED_INGEST_AUDIT_VERSION },
 };
@@ -38,8 +38,12 @@ function at(row: object, path: string): unknown {
 }
 export function commitLogicalRecords(
   ledger: Ledger, input: readonly StoredLedgerRow<object>[], attempt: AttemptIdentity,
+  schemaVersion = contracts[ledger].schemaVersion,
 ) {
   const contract = contracts[ledger];
+  if (schemaVersion !== contract.schemaVersion && !(ledger === "rejections" && schemaVersion === CONTRACT_VERSION)) {
+    throw new Error(`${ledger}: unsupported logical record schema version ${schemaVersion}`);
+  }
   const fields = describeObjectSchema(contract.schema).fields;
   const unique = new Map<string, { held: StoredLedgerRow<object>; digest: string }>();
   for (const held of input) {
@@ -55,7 +59,9 @@ export function commitLogicalRecords(
       throw new Error(`${ledger}: logical record belongs to another correlation or date`);
     }
     const key = JSON.stringify(PLANNING_RECORD_KEYS[ledger].map(path => at(row, path)));
-    const digest = digestRows([row as Record<string, unknown>], fields);
+    // The older proof committed the older stamp; migration must not rewrite that evidence.
+    const encoded = ledger === "rejections" ? { ...row, version: schemaVersion } : row;
+    const digest = digestRows([encoded as Record<string, unknown>], fields);
     const previous = unique.get(key);
     if (previous !== undefined && previous.digest !== digest) throw new Error(`${ledger}: conflicting duplicate logical record ${key}`);
     unique.set(key, previous ?? { held: { identity, row }, digest });
@@ -63,12 +69,12 @@ export function commitLogicalRecords(
   const ordered = [...unique].sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0);
   // A protocol encoding: header then key/digest pairs, one JSON array per line.
   const hash = createHash("sha256").update(`${JSON.stringify([
-    "2026-10-22", ledger, contract.schemaVersion, attempt.date, attempt.run_id, attempt.attempt, attempt.correlation_id,
+    "2026-10-22", ledger, schemaVersion, attempt.date, attempt.run_id, attempt.attempt, attempt.correlation_id,
   ])}\n`);
   for (const [key, { digest }] of ordered) hash.update(`${JSON.stringify([key, digest])}\n`);
   return {
     commitment: LogicalLedgerCommitmentSchema.parse({
-      version: "2026-10-22", row_schema_version: contract.schemaVersion,
+      version: "2026-10-22", row_schema_version: schemaVersion,
       row_count: ordered.length, content_sha256: hash.digest("hex"),
     }),
     rows: ordered.map(([, value]) => value.held),

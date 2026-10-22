@@ -75,6 +75,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   logger.startStep();
   const harvest = await harvestFeeds(harvestInputs, {
     writer: context.writer, correlation_id: context.correlation_id,
+    max_future_hours: inputs.clock_config.collect.max_future_hours,
     overrides, clock: () => new Date(context.now), progress,
     log: record => progress(record.subject === "feed" ? "FEED_REJECTED" : "ARTICLE_REJECTED", {
       source_id: record.source_id, ...(record.candidate_id === null ? {} : { candidate_id: record.candidate_id }),

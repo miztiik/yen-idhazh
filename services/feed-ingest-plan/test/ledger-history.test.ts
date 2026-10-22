@@ -5,7 +5,7 @@ import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import {
-  ArticleAssessmentRecordSchema, CandidateRejectionRecordSchema, CONTRACT_VERSION,
+  ArticleAssessmentRecordSchema, CandidateRejectionContract, CONTRACT_VERSION,
   EditorialSelectionRowSchema, SourceRunRecordSchema,
 } from "@idhazh/common-contracts";
 import type { LedgerCompletionEvidence } from "@idhazh/common-contracts";
@@ -73,7 +73,7 @@ async function completeHistory(root: string, observedAt?: string) {
     "editorial-selections": await readWritten(root, "editorial-selections", input.fixture.date, selectionContract, input.persisted.selections),
     dispatches: await readWritten(root, "dispatches", input.fixture.date, DispatchContract, dispatch),
     "article-assessments": await readWritten(root, "article-assessments", input.fixture.date, ArticleAssessmentContract, assessments),
-    rejections: await readWritten(root, "rejections", input.fixture.date, { schema: CandidateRejectionRecordSchema, schemaVersion: CONTRACT_VERSION }, empty),
+    rejections: await readWritten(root, "rejections", input.fixture.date, CandidateRejectionContract, empty),
     diversity: await readWritten(root, "diversity", input.fixture.date, DiversityMetricContract, empty),
   };
   return { input, source, sourceWritten, history: { sources, ledgers }, packed };

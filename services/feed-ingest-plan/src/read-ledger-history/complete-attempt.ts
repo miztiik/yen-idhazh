@@ -77,7 +77,7 @@ export function selectCompleteAttempt(history: AttemptHistory, runId?: string): 
       if (evidence.logical !== null) {
         const members = day.rows.filter(held => held.identity.run_id === first.run_id && held.identity.attempt === first.attempt);
         try {
-          const logical = commitLogicalRecords(evidence.ledger, members, first);
+          const logical = commitLogicalRecords(evidence.ledger, members, first, evidence.logical.row_schema_version);
           if (!isDeepStrictEqual(logical.commitment, evidence.logical)) {
             reason ??= `${evidence.ledger}: logical record commitment differs from verified attempt rows`;
           } else rows[evidence.ledger].push(...logical.rows);

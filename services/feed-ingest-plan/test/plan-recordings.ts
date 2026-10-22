@@ -8,6 +8,23 @@ import { RecordedTransport, inputs, readRecordings, source } from "./harvest-rec
 import type { ConfiguredSource } from "../src/harvest-feeds/load-harvest-inputs";
 import type { FeedIngestEvent } from "@idhazh/common-contracts";
 import type { PlanRuntime } from "../src/run-feed-plan";
+import type { summarizePlan } from "../src/run-feed-plan";
+import type { NamedPlanningHistory } from "../src/metrics/planning-populations";
+
+export function namedPlanningFiles(summary: ReturnType<typeof summarizePlan>, root: string): NamedPlanningHistory {
+  if (summary.metrics === undefined || summary.files.source_runs === undefined) throw new Error("Missing actual planner files");
+  const named = (files: readonly { files: readonly { path: string }[] }[]) => ({
+    day: summary.date, rawFiles: files.flatMap(result => result.files.map(file => join(root, ...file.path.split("/")))),
+  });
+  return {
+    sources: named([summary.files.source_runs]),
+    ledgers: {
+      "article-assessments": named([summary.metrics.files.assessments]), diversity: named([summary.metrics.files.diversity]),
+      "editorial-selections": named([summary.files.selections]), dispatches: named([summary.files.dispatches]),
+      rejections: named([summary.files.harvest_rejections, summary.files.screening_rejections, summary.files.curation_rejections]),
+    },
+  };
+}
 
 export async function recordedPlan(sources: ConfiguredSource[] = [source()]) {
   const root = fileURLToPath(new URL("../../../", import.meta.url));

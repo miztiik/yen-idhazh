@@ -1,6 +1,6 @@
 # Isolated feed harvesting
 
-**Last Updated**: 2026-10-21
+**Last Updated**: 2026-10-22
 
 How the TypeScript planner turns configured RSS/Atom entries into sanitized
 article candidates and records refusals. This path is separate from production
@@ -15,7 +15,8 @@ taxonomy, sources and extraction settings before starting a run. File paths
 are explicit inputs; loading does not search directories.
 
 `harvestFeeds(inputs, context, destination, boundary?)` takes the validated
-inputs, writer identity, correlation identity and rejection destination.
+inputs, writer identity, correlation identity, configured future-date tolerance
+and rejection destination.
 `boundary` supplies the transport and address resolver for recorded replay;
 ordinary callers omit it to use Undici and the operating system resolver.
 The transport imports the installed `undici/index.js` request API explicitly.
@@ -106,6 +107,31 @@ including Atom `term` attributes. Absence is an empty array. Invalid XML or an
 unrecognized feed is a parse rejection, not an empty feed. Entry dates are
 normalized to UTC, with the feed's declared date as a fallback. No declared
 date means null.
+
+Before requesting an article page, a dated entry with a usable title and URL
+uses the same publication-age calculation and effective vertical cutoff as
+screening. A run freshness override applies here too. An age strictly greater
+than that cutoff produces `STALE_MAX_AGE_EXCEEDED` at `harvest-feeds`, without
+requesting its page or robots file. The original ordinal, candidate identity,
+source, URL, publication instant, age and cutoff remain available as evidence.
+The transient observation carries `preflight_freshness`; extraction is not
+attempted and HTTP, robots, paywall, words and attribution remain unobserved.
+An exact-boundary entry is not rejected early.
+
+Missing dates and dates beyond the configured future tolerance keep the
+existing later first-sight or unknown-timing path. Harvesting invents no first
+sight. A missing title keeps the existing page-title recovery path, because
+a normal article rejection requires its title. Successful `harvested_count`
+counts actual extracted candidates, not early refusals.
+
+## Design rationale
+
+Owner ruling (kumarsnaveen, 2026-10-22): reject already-expired entries before
+page download. This deliberately makes age the first terminal reason for
+those entries, before page failure, paywall, category or substance checks.
+Those checks did not run and receive no invented measurements. The configured
+age policy is unchanged; this is not a fetch cap, a new seen-URL exclusion or
+a change to the final selection limit. No extraction worker pool is added.
 
 ## Request and extraction controls
 

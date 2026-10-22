@@ -13,7 +13,7 @@ export type FreshnessEvidence = {
 };
 
 export function calculateFreshness(
-  candidate: FeedIngestCandidate,
+  candidate: Pick<FeedIngestCandidate, "published_at">,
   seen: SeenRow | undefined,
   now: string,
   maxFutureHours: number,
