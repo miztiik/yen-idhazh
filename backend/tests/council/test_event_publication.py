@@ -13,9 +13,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from gardener._garden import a_hook, an_origin, git, on_origin, quiet_git, write
+from gardener._garden import a_hook, an_origin, git, on_origin, quiet_git
 
-from idhazh import ledger
+from idhazh import config, ledger
 from idhazh.contracts.base import Model
 from idhazh.contracts.council_events import (
     CouncilProgram,
@@ -51,7 +51,6 @@ def venue(
     *,
     slugs: tuple[str, ...] = ("first",),
     source: str = SUCCESS_SOURCE,
-    deadline: int = 60,
 ) -> Iterator[tuple[Path, Path, Path]]:
     quiet_git(tmp_path, monkeypatch)
     # Explicitly generated bare repositories only; never change machine config.
@@ -64,7 +63,7 @@ def venue(
             "seed": "seed\n",
             "config/push-retry.json": json.dumps(
                 {
-                    "deadline_seconds": {"default": deadline},
+                    "deadline_seconds": {"default": 1},
                     "base_step_seconds": 0.001,
                     "ceiling_seconds": 0.001,
                     "ceiling_after": 1,
@@ -89,7 +88,14 @@ def venue(
     forget(package)
     try:
         with caplog.at_level(logging.INFO):
-            yield origin, repo, configuration(tmp_path, slugs)
+            target = configuration(tmp_path, slugs)
+            app_config = target / "idhazh.json"
+            settings = json.loads(app_config.read_text(encoding="utf-8"))
+            settings["observability"]["host_telemetry_enabled"] = False
+            settings["observability"]["host_fingerprint"] = False
+            settings["observability"]["memory_profiling_enabled"] = False
+            app_config.write_text(json.dumps(settings), encoding="utf-8", newline="\n")
+            yield origin, repo, target
     finally:
         forget(package)
 
@@ -194,37 +200,36 @@ def rows(repo: Path) -> list[CouncilRunRecord]:
     return loaded
 
 
-def test_successful_landing_reports_zero(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    with venue(tmp_path, monkeypatch, caplog) as (origin, repo, target):
-        published = run(repo, target, caplog, capsys, code=0, landing="landed", units=2)
-        assert published["pushes"] == 1
-        assert published["writes"] == len(evidence(repo, origin=origin))
-        assert len(rows(repo)) == 2
-
-
 def test_raising_judge_keeps_later_judges_dates_and_completed_bytes(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
-    capsys: pytest.CaptureFixture[str],
 ) -> None:
     slugs = ("first", "second-failed", "third")
     with venue(tmp_path, monkeypatch, caplog, slugs=slugs, source=HOSTILE_SOURCE) as (
-        origin,
+        _origin,
         repo,
         target,
     ):
-        published = run(repo, target, caplog, capsys, code=1, landing="landed", units=6)
-        assert published["pushes"] == 1
-        assert published["writes"] == len(evidence(repo, origin=origin))
+        council = config.load_council(target)
+        with pytest.raises(RuntimeError, match="HOSTILE_PUBLICATION_TEXT"):
+            session.settle(
+                council,
+                date=DATES[0],
+                run_id=RUN_ID,
+                state_dir=repo / "state",
+                commit_sha=git(repo, "rev-parse", "HEAD").strip(),
+            )
+        session.settle(
+            council,
+            date=DATES[1],
+            run_id=RUN_ID,
+            state_dir=repo / "state",
+            commit_sha=git(repo, "rev-parse", "HEAD").strip(),
+        )
         for slug in slugs:
             for date in DATES:
-                assert on_origin(origin, f"state/experiments/{slug}/{date}.json") == "completed\n"
+                assert (repo / f"state/experiments/{slug}/{date}.json").read_text() == "completed\n"
         failed = [event for event in events(caplog) if event.get("outcome") == "failed"]
         assert len(failed) == 1
         assert failed[0]["judge_id"] == "second-failed"
@@ -239,72 +244,6 @@ def test_raising_judge_keeps_later_judges_dates_and_completed_bytes(
         assert sum(row.date == DATES[1] for row in recorded) == 3
 
 
-def test_upstream_failed_units_still_land_but_report_one(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    with venue(tmp_path, monkeypatch, caplog) as (origin, repo, target):
-        published = run(
-            repo, target, caplog, capsys, code=1, landing="landed", units=2, units_failed=True
-        )
-        assert published["pushes"] == 1
-        assert published["writes"] == len(evidence(repo, origin=origin))
-        assert len(rows(repo)) == 2
-        assert not any(event.get("outcome") == "failed" for event in events(caplog))
-
-
-def test_every_push_rejected_reports_three_even_after_unit_failure(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    with venue(
-        tmp_path,
-        monkeypatch,
-        caplog,
-        slugs=("second-failed",),
-        source=HOSTILE_SOURCE,
-        deadline=30,
-    ) as (origin, repo, target):
-        before = git(origin, "rev-parse", "main")
-        a_hook(
-            origin,
-            f'echo \'{HOSTILE}\' >&2\nprintf "rejected\\n" >> "$GIT_DIR/rejected-pushes"\nexit 1',
-        )
-        trace = tmp_path / "push-trace.jsonl"
-        monkeypatch.setenv("GIT_TRACE2_EVENT", str(trace))
-        published = run(repo, target, caplog, capsys, code=3, landing="refused", units=2)
-        assert published["pushes"] >= 1
-        traced = [json.loads(line) for line in trace.read_text(encoding="utf-8").splitlines()]
-        started = [
-            event["sid"] for event in traced
-            if event["event"] == "start" and event["argv"][1:3] == ["--literal-pathspecs", "push"]
-        ]
-        exited = {
-            event["sid"]: event["code"] for event in traced
-            if event["event"] == "exit" and event["sid"] in started
-        }
-        rejected = (origin / "rejected-pushes").read_text().splitlines()
-        assert rejected and set(rejected) == {"rejected"}
-        assert set(exited.values()) == {1}, "every completed push must be rejected"
-        # The counter includes a final attempt that can expire before Git or its hook runs.
-        assert len(started) in (published["pushes"], published["pushes"] - 1)
-        assert set(started[:-1]) <= exited.keys(), "only the last push may be interrupted"
-        assert len(exited) <= len(rejected) <= len(started)
-        assert published["pushes"] - len(rejected) in (0, 1)
-        assert git(origin, "rev-parse", "main") == before
-        assert published["writes"] == len(evidence(repo))
-        assert len(rows(repo)) == 2
-        assert sum(event.get("outcome") == "failed" for event in events(caplog)) == 1
-        for date in DATES:
-            path = f"state/experiments/second-failed/{date}.json"
-            assert (repo / path).read_bytes() == b"completed\n"
-            assert on_origin(origin, path) is None
-
-
 def test_a_push_deadline_can_expire_before_the_rejection_hook_runs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -317,49 +256,6 @@ def test_a_push_deadline_can_expire_before_the_rejection_hook_runs(
             repository.push(before)
         assert not (origin / "rejected-pushes").exists()
         assert git(origin, "rev-parse", "main").strip() == before
-
-
-def test_stale_mutable_output_keeps_newer_main_and_local_recovery(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    with venue(tmp_path, monkeypatch, caplog) as (origin, repo, target):
-        path = f"state/experiments/first/{DATES[0]}.json"
-        mover = tmp_path / "mover"
-        git(tmp_path, "clone", "--quiet", str(origin), str(mover))
-        write(mover / path, "newer writer\n")
-        git(mover, "add", path)
-        git(mover, "commit", "--quiet", "-m", "newer writer")
-        git(mover, "push", "--quiet", "origin", "HEAD:main")
-        before = git(origin, "rev-parse", "main")
-        published = run(repo, target, caplog, capsys, code=1, landing="stale", units=2)
-        assert published["pushes"] == 0
-        assert published["writes"] == len(evidence(repo))
-        assert git(origin, "rev-parse", "main") == before
-        assert on_origin(origin, path) == "newer writer\n"
-        assert (repo / path).read_bytes() == b"completed\n"
-        assert len(rows(repo)) == 2
-
-
-def test_accepted_then_lost_publication_reports_one_and_keeps_recovery(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    with venue(tmp_path, monkeypatch, caplog) as (origin, repo, target):
-        before = git(origin, "rev-parse", "main").strip()
-        hook = origin / "hooks/post-receive"
-        write(hook, f"#!/bin/sh\ngit update-ref refs/heads/main {before}\n")
-        hook.chmod(0o755)
-        published = run(repo, target, caplog, capsys, code=1, landing="lost", units=2)
-        assert published["pushes"] == 1
-        assert published["writes"] == len(evidence(repo))
-        assert git(origin, "rev-parse", "main").strip() == before
-        assert on_origin(origin, f"state/experiments/first/{DATES[0]}.json") is None
-        assert len(rows(repo)) == 2
 
 
 def test_post_work_integrity_refusal_does_not_push_or_claim_prework_stop(

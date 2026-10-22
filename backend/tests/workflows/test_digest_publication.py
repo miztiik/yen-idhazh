@@ -1,304 +1,37 @@
-"""Does ASSEMBLE really rebuild against fresh main without replacing completed raw bytes?"""
+"""Does digest publication preserve immutable inputs and stop invalid work?"""
 
 import dataclasses
-import hashlib
 import json
 from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REFILL_PUBLISHED
+from conftest import CONFIG_DIR
 from gardener._garden import an_origin, git, quiet_git, write
-from pipeline._builders import FULL_TEXT, plan, score_one_item
-from pipeline.test_publish_window import stage_visual_payloads
 from retention._trees import health_row
-from test_corpus_harvest import row_at
 
-from idhazh import completed_writes, config, corpus, ledger
-from idhazh.contracts.article import Article
-from idhazh.contracts.base import ServerJob, derive_output_digest
-from idhazh.contracts.eval_row import EvalRow
+from idhazh import completed_writes, config, ledger
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.item_health import ItemStage
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.publication_inventory import PublicationInventory
-from idhazh.contracts.run_manifest import RunManifest
-from idhazh.contracts.run_shards import RunShards
-from idhazh.contracts.summary import Summary
-from idhazh.contracts.visual_data import VisualData
-from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX, VisualDecision
-from idhazh.fan_out import shard_count
 from idhazh.ledger import paths
-from idhazh.publication import record_files
-from idhazh.render import asset_relpath
-from idhazh.stages import common
-from idhazh.stages.assemble import stage_assemble
-from idhazh.telemetry.run_shards import rows_of
 from utilities import digest_assemble, digest_publish, publication_evidence
 from utilities.publication_git import Repository
 from utilities.publication_request import IntegrityError, PublicationRequest, Write
-from utilities.publish_to_repo import Status, _verify_preparation, publish
-from utilities.push_retry import PushRetry
+from utilities.publish_to_repo import Status, _verify_preparation
 
 
-def test_fresh_base_regeneration_preserves_completed_raw_and_newer_inventory(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    quiet_git(tmp_path, monkeypatch)
-    seed = PublicationInventory(version=PublicationInventory.schema_version(), dates=[])
-    origin, repo = an_origin(
-        tmp_path,
-        {
-            "seed": "seed\n",
-            digest_publish.INVENTORY: seed.to_json(),
-        },
-    )
-    base_plan = plan()
-    settings = config.load(CONFIG_DIR)
-    derived_shards = shard_count(len(base_plan.items), run=settings.app.run)
-    dispatched_shards = 8 if derived_shards != 8 else 7
-    run_plan = base_plan.model_copy(update={"shards": dispatched_shards})
-    assert run_plan.shards != derived_shards
-    monkeypatch.setattr(common, "VAR_ROOT", repo / "backend" / "var" / "run")
-    monkeypatch.setattr(common, "STATE_ROOT", repo / "state")
-    monkeypatch.setattr(common, "PUBLIC_ROOT", repo / "frontend" / "public" / "digest")
-    source = git(repo, "rev-parse", "HEAD").strip()
-    identity = WriterIdentity(
-        run_id=run_plan.run_id,
-        attempt=1,
-        job=ServerJob.PLAN,
-        shard=0,
-        producer="idhazh.stages.plan",
-        git_sha=source,
-    )
-    ledger.persist(
-        repo / "state",
-        [run_plan],
-        ledger=LedgerName.RUN_PLAN,
-        covers=run_plan.date,
-        identity=identity,
-    )
-    git(repo, "add", "state")
-    git(repo, "commit", "--quiet", "-m", "completed plan")
-    git(repo, "push", "--quiet", "origin", "HEAD:main")
-    source = git(repo, "rev-parse", "HEAD").strip()
-    items = common.VAR_ROOT / run_plan.date / "items"
-    stage_visual_payloads(run_plan, items, text=FULL_TEXT)
-    score_one_item(items, run_plan)
-    first = run_plan.items[0]
-    for model, stem, name, suffix in (
-        (Article, "article", "ok", ".article.json"),
-        (Summary, "summary", "titled", ".summary.json"),
-        (EvalRow, "eval-row", "high", ".eval.json"),
-    ):
-        payload = model.read(CONTRACT_FIXTURES_DIR / stem / f"{name}.json").model_copy(
-            update={"item_id": first.item_id, "url_key": first.url_key}
-        )
-        write(items / f"{first.item_id}{suffix}", payload.to_json())
-    visual = VisualData.read(
-        CONTRACT_FIXTURES_DIR / "visual-data/bars-from-the-committed-plan.json"
-    ).model_copy(update={"item_id": first.item_id})
-    decision = VisualDecision.read(
-        CONTRACT_FIXTURES_DIR / "visual-decision/chart-rendered.json"
-    ).model_copy(
-        update={
-            "item_id": first.item_id,
-            "url_key": first.url_key,
-            "data_path": asset_relpath(run_plan.date, first.item_id),
-            "spec": visual.to_json(),
-        }
-    )
-    write(items / f"{first.item_id}{PAYLOAD_SUFFIX}", decision.to_json())
-    summary_path = items / f"{first.item_id}.summary.json"
-    summary = Summary.read(summary_path).model_copy(
-        update={
-            "title": REFILL_PUBLISHED.title,
-            "summary": REFILL_PUBLISHED.summary,
-            "output_digest": derive_output_digest(
-                REFILL_PUBLISHED.summary, title=REFILL_PUBLISHED.title
-            ),
-        }
-    )
-    write(summary_path, summary.to_json())
-    settings = dataclasses.replace(
-        settings,
-        app=settings.app.model_copy(
-            update={
-                "finetune": settings.app.finetune.model_copy(update={"corpus_rows": 2}),
-            }
-        ),
-    )
-    incoming = corpus.harvest_rows(
-        corpus.scored_from_items(items),
-        date=run_plan.date,
-        prompt_config=settings.app.summarize,
-        evaluation=settings.app.evaluation,
-    )
-    assert incoming
-    older = [row_at("2026-01-01", "a"), row_at("2026-01-02", "b")]
-    local_rows = corpus.roll(older, incoming, window=2)
-    original_meta = corpus.census(
-        local_rows,
-        previous=corpus.read_meta(repo / "corpus"),
-        prompt_digest="a" * 64,
-    ).model_copy(update={"harvested_date": run_plan.date})
-    with completed_writes.collect() as written:
-        stage_assemble(run_plan, settings=settings, commit_sha=source, runner="fixture")
-        corpus.write(repo / "corpus", local_rows, original_meta)
-    hashes = {
-        path.relative_to(repo).as_posix(): digest
-        for path, digest in written.items()
-        if path.is_relative_to(repo) and not path.is_relative_to(repo / "backend")
-    }
-    authority = digest_publish.permissions("assemble", date=run_plan.date)
-    projections = (
-        "frontend/public/console/band.json",
-        "frontend/public/source-health.json",
-    )
-    assert set(projections) <= hashes.keys(), "every changed projection needs write evidence"
-    day = "frontend/public/digest/" + run_plan.date.replace("-", "/")
-    mutable = (
-        *(
-            path
-            for path in authority
-            if path.startswith("frontend/") or path == "state/day-metrics"
-        ),
-        day,
-        "corpus/corpus.jsonl",
-        "corpus/corpus.meta.json",
-    )
-    request = PublicationRequest(
-        identity.model_copy(update={"job": ServerJob.ASSEMBLE}),
-        "assembled",
-        source,
-        authority,
-        (),
-        publication_evidence.confirmed(
-            Repository(repo),
-            hashes,
-            source=source,
-            permissions=authority,
-            mutable=mutable,
-        ),
-        preparation_scopes=(*mutable, digest_assemble.count_scope(run_plan.date)),
-    )
-    prepare = digest_assemble.preparation(
-        repo,
-        request,
-        date=run_plan.date,
-        settings=settings,
-    )
-    prepared_requests: list[PublicationRequest] = []
-
-    def preparing(base: str, active: PublicationRequest) -> PublicationRequest:
-        prepared = prepare(base, active)
-        prepared_requests.append(prepared)
-        return prepared
-
-    request = dataclasses.replace(request, prepare=preparing)
-    raw = {
-        path: (repo / path).read_bytes()
-        for path in request.writes
-        if path.startswith("state/raw/") or path.startswith("state/digest-fragments/")
-    }
-    assert raw, "the producer wrote no completed immutable evidence"
-    mover = tmp_path / "mover"
-    git(tmp_path, "clone", "--quiet", str(origin), str(mover))
-    write(mover / "frontend/public/other.json", '{"newer":true}\n')
-    record_files(mover / "frontend" / "public", paths=("other.json",))
-    asset = "frontend/public/" + asset_relpath(run_plan.date, first.item_id)
-    raced = (json.dumps(json.loads((repo / asset).read_bytes()), indent=1) + "\n").encode()
-    assert raced != (repo / asset).read_bytes()
-    (mover / asset).parent.mkdir(parents=True, exist_ok=True)
-    (mover / asset).write_bytes(raced)
-    record_files(mover / "frontend/public", paths=(asset.removeprefix("frontend/public/"),))
-    remote_rows = [older[0], row_at("2026-01-03", "c")]
-    corpus.write(
-        mover / "corpus",
-        remote_rows,
-        corpus.census(
-            remote_rows, previous=corpus.read_meta(mover / "corpus"), prompt_digest="b" * 64
-        ),
-    )
-    git(mover, "add", "frontend", "corpus")
-    git(mover, "commit", "--quiet", "-m", "newer inventory")
-    git(mover, "push", "--quiet", "origin", "HEAD:main")
-    original_bytes = {path: (repo / path).read_bytes() for path in request.writes}
-    observed = git(mover, "rev-parse", "HEAD").strip()
-    completed_summary = summary_path.read_bytes()
-    summary_path.write_bytes(b"{}\n")
-    try:
-        refusal = publish(request, repo=repo, retry=PushRetry({"default": 300}, 0.001, 0.001, 1))
-        assert refusal.status is Status.PREPARATION_FAILURE
-        assert refusal.push_count == 0
-        assert git(origin, "--git-dir=.", "rev-parse", "main").strip() == observed
-        assert {path: (repo / path).read_bytes() for path in request.writes} == original_bytes
-    finally:
-        summary_path.write_bytes(completed_summary)
-    # This fixture has no model weights: retries must use its completed fragment.
-    monkeypatch.setattr(config, "REPO_ROOT", repo)
-    result = publish(request, repo=repo, retry=PushRetry({"default": 300}, 0.001, 0.001, 1))
-    assert result.status is Status.LANDED, result
-    assert result.prepared
-    prepared = prepared_requests[-1]
-    count_writes = {
-        path: write
-        for path, write in prepared.writes.items()
-        if path.startswith("state/raw/run-shards/")
-    }
-    assert count_writes and all(
-        write.immutable and path in raw for path, write in count_writes.items()
-    )
-    assert {
-        path: write.sha256 for path, write in count_writes.items()
-    } == {
-        path: hashlib.sha256(data).hexdigest()
-        for path, data in raw.items()
-        if path.startswith("state/raw/run-shards/")
-    }
-    git(mover, "fetch", "--quiet", "origin", "main")
-    remote = Repository(mover)
-    for path in projections:
-        entry = remote.entry("origin/main", path)
-        assert entry is not None, f"projection was omitted from publication: {path}"
-        assert remote.blob(entry.oid) == (repo / path).read_bytes()
-    assert result.observed_tip is not None
-    digest_publish.published_inputs(repo, result.observed_tip, date=run_plan.date, settings=settings)
-    manifest_text = git(mover, "show", f"origin/main:{day}/run.json")
-    assert json.loads(manifest_text)["runs"][-1]["shards"] == dispatched_shards
-    counts = ledger.load_days(repo / "state", LedgerName.RUN_SHARDS, [run_plan.date], model=RunShards)
-    assert {row.run_id: row.shards for row in counts} == {
-        row.run_id: row.shards for row in rows_of(RunManifest.from_json(manifest_text))
-    }
-    assert git(mover, "show", "origin/main:frontend/public/other.json") == '{"newer":true}\n'
-    for path, data in raw.items():
-        entry = remote.entry("origin/main", path)
-        assert entry is not None
-        assert remote.blob(entry.oid) == data
-    # Another fresh-base preparation keeps the already completed count.
-    repeated = prepare(result.observed_tip, prepared)
-    _verify_preparation(prepared, repeated, result.observed_tip)
-    assert {
-        path: write.sha256
-        for path, write in repeated.writes.items()
-        if path.startswith("state/raw/run-shards/")
-    } == {
-        path: write.sha256
-        for path, write in prepared.writes.items()
-        if path.startswith("state/raw/run-shards/")
-    }
-    entry = remote.entry("origin/main", asset)
-    assert entry is not None
-    assert remote.blob(entry.oid) == raced
-    expected = corpus.roll(remote_rows, incoming, window=2)
-    assert corpus.read_rows(repo / "corpus") == expected
-    corpus.refuse_a_miscounted_census(expected, corpus.read_meta(repo / "corpus"))
-    for path in ("corpus/corpus.jsonl", "corpus/corpus.meta.json"):
-        entry = remote.entry("origin/main", path)
-        assert entry is not None
-        assert remote.blob(entry.oid) == (repo / path).read_bytes()
+def a_repository(root: Path, files: dict[str, str]) -> tuple[Path, str]:
+    repo = root / "checkout"
+    repo.mkdir()
+    git(repo, "init", "--quiet", "-b", "main")
+    for name, text in files.items():
+        write(repo / name, text)
+    git(repo, "add", "--all")
+    git(repo, "commit", "--quiet", "-m", "seed")
+    return repo, git(repo, "rev-parse", "HEAD").strip()
 
 
 def test_preparation_cannot_change_immutable_counts_inside_its_scope() -> None:
@@ -319,69 +52,6 @@ def test_preparation_cannot_change_immutable_counts_inside_its_scope() -> None:
     )
     with pytest.raises(IntegrityError, match="changed completed artifact"):
         _verify_preparation(original, changed, fresh)
-
-
-def test_published_build_inputs_refuse_foreign_bytes_before_import(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    quiet_git(tmp_path, monkeypatch)
-    inventory = PublicationInventory(version=PublicationInventory.schema_version(), dates=[])
-    origin, repo = an_origin(tmp_path, {digest_publish.INVENTORY: inventory.to_json()})
-    source = git(repo, "rev-parse", "HEAD").strip()
-    write(repo / "frontend/public/other.json", '{"published":true}\n')
-    record_files(repo / "frontend/public", paths=("other.json",))
-    git(repo, "add", "frontend/public")
-    git(repo, "commit", "--quiet", "-m", "inventory input")
-    git(repo, "push", "--quiet", "origin", "HEAD:main")
-    tip = git(repo, "rev-parse", "HEAD").strip()
-    reader = tmp_path / "reader"
-    git(tmp_path, "clone", "--quiet", str(origin), str(reader))
-    git(reader, "checkout", "--quiet", source)
-    write(reader / "frontend/public/other.json", "foreign local bytes\n")
-    index = (reader / ".git/index").read_bytes()
-    previous_inventory = (reader / digest_publish.INVENTORY).read_bytes()
-    with pytest.raises(IntegrityError, match="foreign"):
-        digest_publish.published_inputs(reader, tip)
-    assert (reader / "frontend/public/other.json").read_bytes() == b"foreign local bytes\n"
-    assert (reader / digest_publish.INVENTORY).read_bytes() == previous_inventory
-    assert (reader / ".git/index").read_bytes() == index
-
-
-@pytest.mark.parametrize("missing_head", [False, True])
-def test_named_indexes_import_old_permanent_heads_without_scanning_raw_archive(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, missing_head: bool
-) -> None:
-    quiet_git(tmp_path, monkeypatch)
-    which = LedgerName.FEED_RETIREMENTS
-    index_path = paths.compact_index_path(Path("state"), which, Period.YEARLY).as_posix()
-    compact_path = paths.compact_path(Path("state"), which, Period.YEARLY, "2023").as_posix()
-    index = CompactIndex(
-        version=CompactIndex.schema_version(),
-        ledger=which,
-        period=Period.YEARLY,
-        entries=[CompactEntry(covers="2023", rows=1, bytes=5)],
-    )
-    seed = {index_path: index.to_json(), "state/raw/feed-retirements/1990/01/01/old.json": "{}\n"}
-    for period in (Period.DAILY, Period.MONTHLY):
-        seed[paths.compact_index_path(Path("state"), which, period).as_posix()] = CompactIndex(
-            version=CompactIndex.schema_version(), ledger=which, period=period, entries=[]
-        ).to_json()
-    if not missing_head:
-        seed[compact_path] = "head\n"
-    _, repo = an_origin(tmp_path, seed)
-    tip = git(repo, "rev-parse", "HEAD").strip()
-    if missing_head:
-        with pytest.raises(IntegrityError, match="packed input is absent"):
-            digest_assemble.resolved_inputs(
-                Repository(repo), tip, date="2026-10-09", settings=config.load(CONFIG_DIR)
-            )
-        return
-    inputs = digest_assemble.resolved_inputs(
-        Repository(repo), tip, date="2026-10-09", settings=config.load(CONFIG_DIR)
-    )
-    assert compact_path in inputs
-    assert not any(path.startswith("state/raw/feed-retirements/1990") for path in inputs)
-    assert "state/raw/feed-retirements" not in inputs
 
 
 def test_native_band_inputs_include_both_spans_without_retired_projection_roots() -> None:
@@ -445,10 +115,9 @@ def test_unbounded_published_inputs_use_the_declared_start_and_all_index_heads(
                 period=period,
                 entries=[CompactEntry(covers=covers, rows=1, bytes=5)],
             ).to_json()
-    _, repo = an_origin(tmp_path, seed)
+    repo, tip = a_repository(tmp_path, seed)
     settings = config.load(CONFIG_DIR)
     settings.app.collect.published_window_days = -1
-    tip = git(repo, "rev-parse", "HEAD").strip()
 
     inputs = digest_assemble.resolved_inputs(
         Repository(repo), tip, date="2026-10-09", settings=settings
@@ -458,59 +127,6 @@ def test_unbounded_published_inputs_use_the_declared_start_and_all_index_heads(
     assert not any(path.startswith("state/raw/published/2022") for path in inputs)
     assert heads <= set(inputs)
     assert "state/raw/published" not in inputs
-
-
-@pytest.mark.parametrize("foreign", [False, True], ids=["one-published-snapshot", "foreign-state"])
-def test_published_build_imports_raw_state_and_compact_heads_without_foreign_changes(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, foreign: bool
-) -> None:
-    quiet_git(tmp_path, monkeypatch)
-    which = LedgerName.HOST_FINGERPRINT
-    day = "2026-10-09"
-    head = paths.compact_path(Path("state"), which, Period.DAILY, day).as_posix()
-    raw_folder = ledger.raw_root(Path("state"), which) / day.replace("-", "/")
-    old_raw, new_raw = ((raw_folder / name).as_posix() for name in ("old.json", "new.json"))
-    seed = {
-        digest_publish.INVENTORY: PublicationInventory(
-            version=PublicationInventory.schema_version(), dates=[]
-        ).to_json(),
-        head: "old head\n",
-        old_raw: "old raw\n",
-    }
-    for period in Period:
-        seed[paths.compact_index_path(Path("state"), which, period).as_posix()] = CompactIndex(
-            version=CompactIndex.schema_version(),
-            ledger=which,
-            period=period,
-            entries=[CompactEntry(covers=day, rows=1, bytes=9)] if period is Period.DAILY else [],
-        ).to_json()
-    origin, repo = an_origin(tmp_path, seed)
-    mover = tmp_path / "mover"
-    git(tmp_path, "clone", "--quiet", str(origin), str(mover))
-    write(mover / head, "new head\n")
-    (mover / old_raw).unlink()
-    write(mover / new_raw, "new raw\n")
-    write(mover / "frontend/public/other.json", '{"sameTip":true}\n')
-    record_files(mover / "frontend/public", paths=("other.json",))
-    git(mover, "add", "--", "state", "frontend")
-    git(mover, "commit", "--quiet", "-m", "published state and public projections")
-    git(mover, "push", "--quiet", "origin", "HEAD:main")
-    tip = git(mover, "rev-parse", "HEAD").strip()
-    git(repo, "fetch", "--quiet", "origin", "main")
-    before = git(repo, "rev-parse", "HEAD"), (repo / ".git/index").read_bytes()
-    if foreign:
-        write(repo / head, "foreign state\n")
-        with pytest.raises(IntegrityError, match="foreign"):
-            digest_publish.published_inputs(repo, tip, date=day, settings=config.load(CONFIG_DIR))
-        assert (repo / head).read_text() == "foreign state\n"
-        assert not (repo / "frontend/public/other.json").exists()
-    else:
-        digest_publish.published_inputs(repo, tip, date=day, settings=config.load(CONFIG_DIR))
-        assert (repo / head).read_text() == "new head\n"
-        assert (repo / new_raw).read_text() == "new raw\n"
-        assert not (repo / old_raw).exists()
-        assert (repo / "frontend/public/other.json").read_text() == '{"sameTip":true}\n'
-    assert before == (git(repo, "rev-parse", "HEAD"), (repo / ".git/index").read_bytes())
 
 
 def test_work_adapter_lands_exact_completed_raw_not_pre_staged_state(

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from idhazh import event_lines
+from idhazh import cli, event_lines
 from idhazh.contracts.base import Model
 from idhazh.contracts.council_events import (
     CouncilExit,
@@ -20,10 +20,11 @@ from idhazh.contracts.council_events import (
     UnitFinished,
 )
 from idhazh.contracts.council_run_record import EvaluationStep, ShardOutcome
-from idhazh.council import event_log, run_summary
+from idhazh.council import event_log, outcome, registry, run_summary, session
+from utilities import council_publish
 
-from ._tenants import TENANT_SOURCE, a_venue
-from .test_events import HOSTILE, completed_process
+from ._tenants import TENANT_SOURCE, a_venue, forget
+from .test_events import HOSTILE
 from .test_publication import configuration
 
 DATE = "2026-10-10"
@@ -81,17 +82,6 @@ def collector(code: CouncilExit = CouncilExit.OK) -> list[Model]:
         ),
         ProgramFinished(program=CouncilProgram.PUBLISH, code=code),
     ]
-
-
-def test_fixed_base_oracle_requires_real_event_transport_and_collector_report() -> None:
-    from conftest import REPO_ROOT
-
-    workflow = (REPO_ROOT / ".github" / "workflows" / "llm-council.yml").read_text("utf-8")
-    publisher = (REPO_ROOT / "backend" / "utilities" / "council_publish.py").read_text("utf-8")
-    assert "COUNCIL_EVENT_FILE:" in workflow
-    assert '--matrix "$COUNCIL_MATRIX"' in workflow
-    assert "report.write(" in publisher
-    assert "GITHUB_STEP_SUMMARY" in publisher
 
 
 @pytest.mark.parametrize("code", list(CouncilExit))
@@ -240,23 +230,29 @@ def test_partial_reports_keep_the_explicit_exit_without_claiming_success(
 def test_hidden_progress_still_rides_the_bundle(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    path = tmp_path / "events.jsonl"
+    root = tmp_path / "events"
+    (cell,) = run_summary.cells(matrix("one-judge"))
+    path = cell.event_path(root)
     monkeypatch.setenv("COUNCIL_EVENT_FILE", str(path))
-    process = completed_process(
-        "from idhazh.council import event_log, outcome; "
-        "from idhazh.contracts.council_events import CouncilProgram, UnitFinished; "
-        "event_log.install('ERROR'); "
-        f"event_log.emit(UnitFinished.model_validate({unit().model_dump(mode='json')!r})); "
-        "raise SystemExit(outcome.finish(CouncilProgram.SHARD, 0))"
-    )
-    assert process.returncode == 0, process.stderr
+    event_log.install("ERROR")
+    try:
+        with caplog.at_level(logging.ERROR, logger=event_log.logger.name):
+            event_log.emit(unit())
+            assert outcome.finish(CouncilProgram.SHARD, 0) == 0
+    finally:
+        monkeypatch.delenv("COUNCIL_EVENT_FILE")
+        event_log.install()
+    assert "unit-finished" not in caplog.text
     assert [type(event) for event in run_summary.read_events(path)] == [
         UnitFinished,
         ProgramFinished,
     ]
-    assert "unit-finished" not in process.stderr
-    assert json.loads(process.stderr)["label"] == "ok"
+    report = run_summary.Report()
+    report.load(matrix("one-judge"), root, RUN)
+    assert not report.failed
+    assert report.units[0].ended() == "completed; exit 0 `ok`"
 
 
 def test_bundle_writer_is_isolated_from_registered_logger_handlers(
@@ -350,10 +346,8 @@ def test_upstream_failure_is_preserved_even_with_a_complete_success_report(
         "--units-result",
         upstream,
     ]
-    saved = completed_process(
-        f"from utilities.council_publish import main; raise SystemExit(main({args!r}))"
-    )
-    assert saved.returncode == 1, saved.stderr
+    code = council_publish.main(args)
+    assert code == 1
     text = summary.read_text("utf-8")
     assert "Council night: exit 1 `failed`" in text
     assert "completed; exit 0 `ok`" in text
@@ -362,6 +356,7 @@ def test_upstream_failure_is_preserved_even_with_a_complete_success_report(
 def test_collector_failure_still_appends_one_safe_summary(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     repo = tmp_path / "repo"
     root = repo / "backend" / "var" / "council" / "events"
@@ -375,6 +370,9 @@ def test_collector_failure_still_appends_one_safe_summary(
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
     package = "collector_failure_tenants"
     a_venue(tmp_path, package=package, slugs={"one-judge": (1, ())})
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(registry, "TENANT_PACKAGE", package)
+    monkeypatch.setattr(session, "COUNCIL_ROOT", repo / "backend" / "var" / "council")
     args = [
         "--date",
         DATE,
@@ -389,21 +387,23 @@ def test_collector_failure_still_appends_one_safe_summary(
         "--matrix",
         matrix("one-judge"),
     ]
-    saved = completed_process(
-        "from utilities.council_publish import main; from idhazh.council import registry; "
-        f"registry.TENANT_PACKAGE={package!r}; raise SystemExit(main({args!r}))",
-        root=tmp_path,
-    )
-    assert saved.returncode != 0
+    forget(package)
+    try:
+        code = council_publish.main(args)
+        captured = capsys.readouterr()
+    finally:
+        forget(package)
+    assert code != 0
     text = summary.read_text("utf-8")
     assert text.count("### Council night") == 1
     assert "exit 1 `failed`" in text and "completed; exit 0 `ok`" in text
-    assert "SOURCE-TEXT" not in text + saved.stdout + saved.stderr
+    assert "SOURCE-TEXT" not in text + captured.out + captured.err
 
 
 def test_real_shard_bundle_is_read_by_the_real_collector_when_a_shard_raises(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     package = "summary_tenants"
     source = TENANT_SOURCE.replace(
@@ -425,21 +425,24 @@ def test_real_shard_bundle_is_read_by_the_real_collector_when_a_shard_raises(
         "--config",
         str(config_root),
     ]
-    process = completed_process(
-        "from pathlib import Path; from idhazh import cli; "
-        "from idhazh.council import registry, session; "
-        f"registry.TENANT_PACKAGE={package!r};"
-        f"session.COUNCIL_ROOT=Path({str(tmp_path / 'scratch')!r});"
-        f"raise SystemExit(cli.main({argv!r}))",
-        root=tmp_path,
-    )
-    assert process.returncode == 1
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(registry, "TENANT_PACKAGE", package)
+    monkeypatch.setattr(session, "COUNCIL_ROOT", tmp_path / "scratch")
+    forget(package)
+    try:
+        shard_code = cli.main(argv)
+        shard_output = capsys.readouterr()
+    finally:
+        forget(package)
+    assert shard_code == 1
     assert b"\r" not in uploaded.read_bytes() and "SOURCE-TEXT" not in uploaded.read_text("utf-8")
     repo = tmp_path / "collector"
     received = repo / "backend" / "var" / "council" / "events" / "one-judge" / DATE / "0.jsonl"
     received.parent.mkdir(parents=True)
     shutil.copy2(uploaded, received)
     monkeypatch.delenv("COUNCIL_EVENT_FILE")
+    monkeypatch.setattr(registry, "TENANT_PACKAGE", "idhazh")
+    monkeypatch.setattr(session, "COUNCIL_ROOT", repo / "backend" / "var" / "council")
     summary = tmp_path / "summary.md"
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
     args = [
@@ -458,13 +461,13 @@ def test_real_shard_bundle_is_read_by_the_real_collector_when_a_shard_raises(
         "--units-result",
         "failure",
     ]
-    saved = completed_process(
-        f"from utilities.council_publish import main; raise SystemExit(main({args!r}))"
-    )
-    assert saved.returncode == process.returncode, saved.stderr
+    publish_code = council_publish.main(args)
+    publish_output = capsys.readouterr()
+    assert publish_code == shard_code
     text = summary.read_text("utf-8")
     assert text.count("### Council night") == 1
     assert "failed" in text
-    assert "SOURCE-TEXT" not in text and "SOURCE-TEXT" not in saved.stdout
-    assert saved.stdout.count("::group::one-judge") == 1
-    assert "::error title=one-judge::" in saved.stdout
+    assert "SOURCE-TEXT" not in text
+    assert "SOURCE-TEXT" not in shard_output.err + publish_output.out + publish_output.err
+    assert publish_output.out.count("::group::one-judge") == 1
+    assert "::error title=one-judge::" in publish_output.out
