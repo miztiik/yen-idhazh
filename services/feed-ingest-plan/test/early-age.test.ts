@@ -4,7 +4,7 @@ import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  ArticleAssessmentRecordSchema, CandidateRejectionContract, CONTRACT_VERSION,
+  ArticleAssessmentRecordSchema, CandidateRejectionContract,
   deriveCandidateId, deriveUrlKey,
 } from "@idhazh/common-contracts";
 import { persistLedger } from "@idhazh/ledger-file-writer";
@@ -12,7 +12,7 @@ import { harvestFeeds } from "../src/harvest-feeds/harvest-pool";
 import { readLedgerParquet } from "../src/read-ledger-history/read-parquet";
 import { readExclusionEvidence } from "../src/read-ledger-history/read-exclusion-evidence";
 import { ItemHealthFailureProjectionContract, ItemHealthFailureProjectionSchema } from "../src/read-ledger-history/item-health-failure";
-import { PublishedRowSchema } from "../src/metrics/publication-evidence";
+import { PUBLISHED_ROW_SCHEMA_VERSION, PublishedRowSchema } from "../src/metrics/publication-evidence";
 import { loadPlanInputs } from "../src/load-plan-inputs";
 import { derivePlanningPopulation, readPlanningHistory } from "../src/metrics/planning-populations";
 import { selectCompleteAttempt } from "../src/read-ledger-history/complete-attempt";
@@ -59,10 +59,10 @@ test("preflight uses the configured age override, strict boundary and future tol
     const published = await persistLedger({
       ledger: "published", registryEntry: planner.registrations.published, outputRoot: root,
       ledgerSettings: planner.ledgerSettings,
-      rowContract: { schema: PublishedRowSchema, schemaVersion: CONTRACT_VERSION },
+      rowContract: { schema: PublishedRowSchema, schemaVersion: PUBLISHED_ROW_SCHEMA_VERSION },
       period: { tier: "raw", covers: "2026-10-21" }, writerContext: run.writer,
       rows: [PublishedRowSchema.parse({
-        version: CONTRACT_VERSION, url_key: deriveUrlKey(publishedUrl),
+        version: PUBLISHED_ROW_SCHEMA_VERSION, url_key: deriveUrlKey(publishedUrl),
         published_on: "2026-10-21", item_id: "published-01",
       })],
     });
@@ -118,6 +118,9 @@ test("preflight uses the configured age override, strict boundary and future tol
     });
     expect(result.candidates.map(row => row.entry_ordinal)).toEqual([1, 2, 3, 4, 5]);
     expect(result.candidates.every(row => row.candidate_id === deriveCandidateId(run.writer.run_id, row.source_id, row.entry_ordinal))).toBe(true);
+    expect(result.first_sight_candidates.map(row => row.url_key)).toContain(deriveUrlKey(publishedUrl));
+    expect(result.first_sight_candidates.map(row => row.url_key)).toContain(deriveUrlKey(settledUrl));
+    expect(result.first_sight_candidates.map(row => row.url_key)).not.toContain(deriveUrlKey("https://news.example/blocked"));
     expect(result.feed_outcomes[0]).toMatchObject({ parsed_count: 9, harvested_count: 5 });
     const written = result.rejection_files.files[0]!;
     const persisted = (await readLedgerParquet(join(root, written.path), "rejections", CandidateRejectionContract)).rows;

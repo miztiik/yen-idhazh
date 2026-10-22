@@ -109,9 +109,16 @@ class ArticleAssessmentRecord(Contract):
     @model_validator(mode="before")
     @classmethod
     def migrate_previous_timing(cls, value: Any) -> Any:
-        if isinstance(value, dict) and value.get("version") in {"2026-10-22", "2026-10-22T18:15"}:
-            if value.get("reason") in {"ALREADY_PUBLISHED", "SETTLED_FAILURE", "BLOCKED_URL_MARKER"}:
-                raise ValueError("planner exclusions require the declared exclusion contract version")
+        if isinstance(value, dict) and value.get("version") in {
+            "2026-10-22", "2026-10-22T18:15"
+        }:
+            if value.get("reason") in {
+                "ALREADY_PUBLISHED", "SETTLED_FAILURE", "BLOCKED_URL_MARKER"
+            }:
+                raise ValueError(
+                    "planner exclusions require the declared exclusion "
+                    "contract version"
+                )
             return {**value, "version": "2026-10-22T20:30"}
         if not isinstance(value, dict) or value.get("version") != "2026-10-20":
             return value

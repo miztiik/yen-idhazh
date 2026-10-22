@@ -9,6 +9,7 @@ import { UtcInstantSchema } from "../screen-article-candidates/seen-evidence";
 // Read copies of contracts/seen.py, item_health.py and digest_day.py.
 // Projections strip unrelated columns; they are not contracts for writing those payloads.
 export const ItemIdSchema = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*-(?:[0-9]{2,}|[0-9a-hjkmnp-tv-z]{16})$/);
+export const PUBLISHED_ROW_SCHEMA_VERSION = "2026-09-12T18:40" as const;
 export const PublishedRowSchema = z.object({
   version: SchemaVersionSchema, url_key: Sha256Schema,
   published_on: DateStampSchema, item_id: ItemIdSchema,

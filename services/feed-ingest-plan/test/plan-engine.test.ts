@@ -338,6 +338,9 @@ test("missing or lost window days stay unavailable while current first sight pre
       schema: SeenRowSchema, schemaVersion: "2026-08-31",
     });
     expect(native.rows.map(row => row.row)).toContainEqual(firstSight);
+    expect(result.evidence.seen.new_rows.map(row => row.url_key)).toContain(
+      deriveUrlKey("https://news.example/not-found"),
+    );
     expect(result.evidence.screening.rejections.some(row =>
       row.url_key === deriveUrlKey("https://news.example/second")
       && row.drop_reason === "STALE_MAX_AGE_EXCEEDED")).toBe(true);

@@ -161,11 +161,18 @@ class SourceRunRecord(Contract):
         }:
             legacy_reasons = {"ALREADY_PUBLISHED", "SETTLED_FAILURE", "BLOCKED_URL_MARKER"}
             drop_reasons = value.get("drop_reasons", [])
-            if (value.get("last_failure_reason") in legacy_reasons
-                or (isinstance(drop_reasons, list) and any(
-                    isinstance(item, dict) and item.get("reason") in legacy_reasons for item in drop_reasons
-                ))):
-                raise ValueError("planner exclusions require the declared source-run contract version")
+            uses_new_reason = value.get("last_failure_reason") in legacy_reasons or (
+                isinstance(drop_reasons, list)
+                and any(
+                    isinstance(item, dict) and item.get("reason") in legacy_reasons
+                    for item in drop_reasons
+                )
+            )
+            if uses_new_reason:
+                raise ValueError(
+                    "planner exclusions require the declared source-run "
+                    "contract version"
+                )
             return {**value, "version": "2026-10-22T20:30"}
         return value
 

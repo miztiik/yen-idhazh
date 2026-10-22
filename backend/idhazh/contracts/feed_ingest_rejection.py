@@ -24,8 +24,8 @@ from idhazh.contracts.feed_ingest_candidate import (
     Positive,
     PositiveCount,
 )
-from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.feed_ingest_diagnostics import HarvestDiagnostics
+from idhazh.contracts.item_health import FailureCode
 
 RejectionStage = Literal[
     "harvest-feeds",
@@ -197,7 +197,10 @@ class CandidateRejectionRecord(Contract):
             if value.get("drop_reason") in {
                 "ALREADY_PUBLISHED", "SETTLED_FAILURE", "BLOCKED_URL_MARKER"
             }:
-                raise ValueError("planner exclusions require the declared exclusion contract version")
+                raise ValueError(
+                    "planner exclusions require the declared exclusion "
+                    "contract version"
+                )
             return {**value, "version": "2026-10-22T20:30"}
         return value
 

@@ -130,7 +130,7 @@ export async function readSeenEvidence(
 export type SettledSeenEvidence = Awaited<ReturnType<typeof readSeenEvidence>>;
 
 export async function rememberFirstSight(
-  seen: SettledSeenEvidence, candidates: readonly FeedIngestCandidate[], context: RunContext,
+  seen: SettledSeenEvidence, candidates: readonly Pick<FeedIngestCandidate, "url_key">[], context: RunContext,
   destination: { outputRoot: string; registryEntry: LedgerRegistration; ledgerSettings: LedgerSettings },
 ) {
   const rows = seen.evidence.availability === "available" ? seen.evidence.rows : [];

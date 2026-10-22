@@ -1,13 +1,12 @@
 /** Generate a bounded publication fixture from one real recorded planner attempt. */
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { CONTRACT_VERSION } from "@idhazh/common-contracts";
 import { persistLedger } from "@idhazh/ledger-file-writer";
 import type { PersistLedgerResult } from "@idhazh/ledger-file-writer";
 import type { FeedPlanResult } from "../src/run-feed-plan";
 import type { PlanInputs } from "../src/load-plan-inputs";
 import type { PlanningMetricsResult, PublicationRecorderInput } from "../src/metrics/metrics-recorder";
-import { DigestPublicationSchema, PublishedRowSchema } from "../src/metrics/publication-evidence";
+import { DigestPublicationSchema, PUBLISHED_ROW_SCHEMA_VERSION, PublishedRowSchema } from "../src/metrics/publication-evidence";
 import { requiredHistoryDays, shiftUtcDay } from "../src/metrics/history-window";
 
 export async function generatePublicationInput(
@@ -32,10 +31,10 @@ export async function generatePublicationInput(
     registryEntry: { name: "published", family: "published", grain: "raw-and-compact",
       lifecycle_status: "active", prefix: ["published"] },
     writerContext: plan.context.writer, ledgerSettings: inputs.ledgerSettings,
-    rowContract: { schema: PublishedRowSchema, schemaVersion: CONTRACT_VERSION },
+    rowContract: { schema: PublishedRowSchema, schemaVersion: PUBLISHED_ROW_SCHEMA_VERSION },
     period: { tier: "raw", covers: date },
     rows: plan.evidence.partition.dispatches.map(({ content }, index) => PublishedRowSchema.parse({
-      version: CONTRACT_VERSION, published_on: date, item_id: digest.items[index]!.item_id, url_key: content.url_key,
+      version: PUBLISHED_ROW_SCHEMA_VERSION, published_on: date, item_id: digest.items[index]!.item_id, url_key: content.url_key,
     })),
   });
   const paths = (day: string, files: readonly PersistLedgerResult[], outputRoot = inputs.outputRoot) => ({
@@ -60,7 +59,7 @@ export async function generatePublicationInput(
         "editorial-selections": empty, dispatches: empty, rejections: empty } };
     }),
     publication_days: days.map(day => ({
-      published: { ...paths(day, day === date ? [published] : [], root), schema_version: CONTRACT_VERSION },
+      published: { ...paths(day, day === date ? [published] : [], root), schema_version: PUBLISHED_ROW_SCHEMA_VERSION },
       digest_path: day === date ? digestPath : null,
       health: { day, status: day === date && digest.items.length > 0 ? "rows" : "empty",
         rows: day !== date ? [] : digest.items.map((item, index) => ({

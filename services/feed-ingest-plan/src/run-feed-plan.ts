@@ -101,7 +101,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.rejections,
     ledgerSettings: inputs.ledgerSettings,
   }, runtime.boundary);
-  const seen = await rememberFirstSight(history, harvest.candidates, context, {
+  const seen = await rememberFirstSight(history, harvest.first_sight_candidates, context, {
     outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.seen, ledgerSettings: inputs.ledgerSettings,
   });
   if (seen.sealing.files.length > 0) runtime.on_seen_persisted?.({ day: context.date, files: seen.sealing.files });

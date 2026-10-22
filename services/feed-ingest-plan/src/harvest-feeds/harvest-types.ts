@@ -79,6 +79,7 @@ export type HarvestResult = {
   inputs: HarvestInputs;
   config: FeedIngestConfig;
   articles: HarvestArticleResult[];
+  first_sight_candidates: { url_key: string }[];
   feed_outcomes: FeedOutcomePayload[];
   candidates: z.infer<typeof FeedIngestCandidateSchema>[];
   rejections: z.infer<typeof CandidateRejectionRecordSchema>[];

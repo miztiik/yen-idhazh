@@ -104,16 +104,24 @@ the lookback. Its current value is 90, meaning 90 preceding UTC days plus the
 current day, with both bounds included, as in
 [existing freshness rules](freshness.md).
 
+Published history uses its native `PublishedRow` stamp,
+`2026-09-12T18:40`, not the planner package version. Its bounded reader checks
+the file digest and projects the fields it uses, so compatible older rows keep
+working without being rewritten or assigned a new stamp.
+
 The reader folds the actual rows from named history inputs and keeps the
-earliest recorded first sight for each URL. After harvesting, each candidate
-URL absent from those available rows gets a new existing-format SeenRow at the
-captured run clock and identity, even if another required day is missing or
-lost. The native writer must persist it before screening; skipped or failed
-writes fail the run. Missing days remain missing in the per-day report; they
-are not relabelled empty and do not support an absence claim. `absence_proof`
-is available only when every required day has usable evidence. Unreadable
-named files and corrupt evidence still fail the run. Undated candidates without
-settled evidence retain unknown timing and no invented recency bonus.
+earliest recorded first sight for each URL. First-sight candidates come from
+valid feed links after blocked-marker filtering and before article-page fetch.
+An absent URL gets a new existing-format SeenRow at the captured run clock and
+identity even if later rejected as published, settled, stale, or unable to
+fetch, and even if another required day is missing or lost. Blocked-marker
+links do not get a sighting. The native writer must persist it before
+screening; skipped or failed writes fail the run. Missing days remain missing
+in the per-day report; they are not relabelled empty and do not support an
+absence claim. `absence_proof` is available only when every required day has
+usable evidence. Unreadable named files and corrupt evidence still fail the
+run. Undated candidates without settled evidence retain unknown timing and no
+invented recency bonus.
 
 Owner ruling (kumarsnaveen, 2026-10-22): match the Python first-sight behavior
 without inventing older evidence. A missing day cannot prevent recording that

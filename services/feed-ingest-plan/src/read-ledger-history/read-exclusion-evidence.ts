@@ -1,12 +1,12 @@
 /** Which named published and settled-failure rows exclude an article before page fetch? */
 import { resolve } from "node:path";
-import { CONTRACT_VERSION, ItemHealthFailureCodeSchema } from "@idhazh/common-contracts";
+import { ItemHealthFailureCodeSchema } from "@idhazh/common-contracts";
 import type { ItemHealthFailureCode } from "@idhazh/common-contracts";
-import { PublishedRowSchema } from "../metrics/publication-evidence";
 import type { PublishedRow } from "../metrics/publication-evidence";
 import { readLedgerDay } from "./read-period";
 import { ItemHealthFailureProjectionContract } from "./item-health-failure";
 import type { ItemHealthFailureProjection } from "./item-health-failure";
+import { PublishedRowProjectionContract } from "./published-row";
 import { SeenDayInputSchema } from "../config/service-settings";
 import type { SeenDayInput } from "../config/service-settings";
 import type { LedgerRegistration } from "@idhazh/ledger-file-writer";
@@ -14,8 +14,6 @@ import { requiredSeenDays } from "./read-seen-evidence";
 import { UtcInstantSchema } from "../screen-article-candidates/seen-evidence";
 import type { LedgerDay } from "./read-period";
 import type { ReadLedgerFile } from "./read-parquet";
-
-const publishedContract = { schema: PublishedRowSchema, schemaVersion: CONTRACT_VERSION };
 
 function defaultInput(prefix: readonly string[], day: string): SeenDayInput {
   const base = prefix.join("/");
@@ -88,7 +86,7 @@ export async function readExclusionEvidence(input: {
   const publishedHeld = await Promise.all(publishedNamed.map(async ({ input: day }) => ({
     input: day,
     held: await readLedgerDay({
-      ...folderInputs(input.root, day), ledger: "published", day: day.day, contract: publishedContract,
+      ...folderInputs(input.root, day), ledger: "published", day: day.day, contract: PublishedRowProjectionContract,
       fileCache: publishedFileCache,
     }),
   })));
