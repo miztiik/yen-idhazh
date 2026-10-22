@@ -18,8 +18,8 @@ test("live progress uses the documented UUID envelope before buffered audit and 
     expect(progress[0]!.eventType).toBe("PIPELINE_STARTED");
     const types = progress.map(event => event.eventType);
     expect(types).toContain("FEED_DISCOVERY_STARTED");
-    expect(types.indexOf("FEED_FETCH_COMPLETED")).toBeLessThan(types.indexOf("ARTICLE_EXTRACTION_STARTED"));
-    expect(types).toContain("ARTICLE_EXTRACTION_COMPLETED");
+    expect(types.indexOf("FEED_FETCH_COMPLETED")).toBeLessThan(types.indexOf("ARTICLE_HARVEST_STARTED"));
+    expect(types).toContain("ARTICLE_HARVEST_COMPLETED");
     expect(types.at(-1)).toBe("PLANNING_STAGES_COMPLETED");
     expect(new Set(progress.map(event => event.eventId)).size).toBe(progress.length);
     for (const event of progress) {

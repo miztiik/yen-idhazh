@@ -5,7 +5,7 @@ import { EVENT_NAMESPACE, writeJsonLine } from "./structured-logger";
 export type ProgressEventType =
   | "PIPELINE_STARTED" | "HISTORY_READ_STARTED" | "HISTORY_READ_COMPLETED"
   | "FEED_DISCOVERY_STARTED" | "FEED_FETCH_STARTED" | "FEED_FETCH_COMPLETED"
-  | "ARTICLE_EXTRACTION_STARTED" | "ARTICLE_EXTRACTION_COMPLETED"
+  | "ARTICLE_HARVEST_STARTED" | "ARTICLE_HARVEST_COMPLETED"
   | "FEED_REJECTED" | "ARTICLE_REJECTED"
   | "STAGE_COMPLETED" | "PLANNING_STAGES_COMPLETED"
   | "AUDIT_RECORDING_STARTED" | "AUDIT_RECORDING_COMPLETED"
@@ -16,6 +16,7 @@ export type ProgressDetails = {
   input_count?: number; output_count?: number; rejection_count?: number;
   fetch_status?: string; parse_status?: string; drop_reason?: string | null;
   http_status?: number;
+  extraction_outcome?: "success" | "empty" | "failed" | "not-attempted";
 };
 export type ProgressRecord = ProgressDetails & {
   timestamp: string; level: "INFO"; message: string; eventId: string;

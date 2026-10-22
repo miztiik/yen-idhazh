@@ -103,7 +103,9 @@ URL is the request input; a page's links, canonical tags and scripts never
 supply a new request target.
 
 Feed categories include repeated, namespace-qualified and nested text values,
-including Atom `term` attributes. Absence is an empty array. Invalid XML or an
+including Atom `term` attributes. Empty or whitespace-only labels contain no
+category and are removed at parsing; real labels and repeats remain unchanged.
+Absence is an empty array. Invalid XML or an
 unrecognized feed is a parse rejection, not an empty feed. Entry dates are
 normalized to UTC, with the feed's declared date as a fallback. No declared
 date means null.
@@ -132,6 +134,11 @@ those entries, before page failure, paywall, category or substance checks.
 Those checks did not run and receive no invented measurements. The configured
 age policy is unchanged; this is not a fetch cap, a new seen-URL exclusion or
 a change to the final selection limit. No extraction worker pool is added.
+
+Article progress names harvesting, not extraction: `ARTICLE_HARVEST_COMPLETED`
+includes the actual `extraction_outcome`. An early age refusal reports
+`not-attempted`; a successful page extraction reports `success`. Offered-entry
+counts must not be presented as page downloads.
 
 ## Request and extraction controls
 

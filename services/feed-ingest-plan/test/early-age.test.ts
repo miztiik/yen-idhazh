@@ -2,7 +2,7 @@
 import { expect, test } from "bun:test";
 import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { CandidateRejectionContract, deriveCandidateId } from "@idhazh/common-contracts";
+import { ArticleAssessmentRecordSchema, CandidateRejectionContract, deriveCandidateId } from "@idhazh/common-contracts";
 import { harvestFeeds } from "../src/harvest-feeds/harvest-pool";
 import { readLedgerParquet } from "../src/read-ledger-history/read-parquet";
 import { derivePlanningPopulation, readPlanningHistory } from "../src/metrics/planning-populations";
@@ -14,6 +14,7 @@ import { recordedPlan, namedPlanningFiles } from "./plan-recordings";
 import { context, destination, inputs, readRecordings, RecordedTransport, source } from "./harvest-recordings";
 import { tmpdir } from "node:os";
 import { mkdtemp } from "node:fs/promises";
+import type { ProgressRecord } from "../src/logging/progress-logger";
 
 function feed(items: { title?: string; path: string; date: string | null }[]) {
   return `<rss version="2.0"><channel><title>Recorded age decisions</title>${items.map(item =>
@@ -63,6 +64,8 @@ test("preflight uses the configured age override, strict boundary and future tol
 test("real planning records early losses once and reproduces freshness loss from native history", async () => {
   const fixture = await recordedPlan([source(), source({ id: "current", url: "https://atom.example/feed.xml" })]);
   try {
+    const progress: ProgressRecord[] = [];
+    fixture.runtime.progress = event => { progress.push(event); };
     fixture.transport.recordings.bodies.rss = feed([
       { title: "Expired first", path: "stale-one", date: "2026-10-19T10:00:00Z" },
       { title: "Expired second", path: "stale-two", date: "2026-10-19T11:00:00Z" },
@@ -73,6 +76,10 @@ test("real planning records early losses once and reproduces freshness loss from
     expect(summary.planning_complete).toBe(true);
     expect(summary.audited_complete).toBe(false);
     expect(summary.first_sight.created_count).toBe(0);
+    const refused = progress.filter(event => event.eventType === "ARTICLE_HARVEST_COMPLETED"
+      && event.drop_reason === "STALE_MAX_AGE_EXCEEDED");
+    expect(refused).toHaveLength(2);
+    expect(refused.every(event => event.extraction_outcome === "not-attempted")).toBe(true);
     expect(fixture.transport.requests.some(request => request.url.pathname.startsWith("/stale-"))).toBe(false);
     const history = await readPlanningHistory(namedPlanningFiles(summary, fixture.inputs.outputRoot));
     const attempt = selectCompleteAttempt(history).selected;
@@ -92,6 +99,28 @@ test("real planning records early losses once and reproduces freshness loss from
     const loss = attempt.rows.diversity.map(row => row.row).find(row =>
       "metric" in row && row.metric === "lost_diversity_by_stage" && "stage" in row && row.stage === "freshness");
     expect(loss).toMatchObject({ before_value: 2, after_value: 1, value: 1, item_count: 2 });
+  } finally { await fixture.close(); }
+});
+
+test("empty RSS and Atom category labels never become invalid audit measurements", async () => {
+  const fixture = await recordedPlan([source(), source({ id: "atom", url: "https://atom.example/feed.xml" })]);
+  try {
+    fixture.transport.recordings.bodies.rss = feed([
+      { title: "Current", path: "second", date: "2026-10-21T12:00:00Z" },
+    ]).replace("</item>", "<category/><category>  </category><category>Science</category></item>");
+    fixture.transport.recordings.bodies.atom = fixture.transport.recordings.bodies.atom.replace(
+      "<entry>", '<entry><category term=" "/><category term=""/>',
+    );
+    const summary = await main(["--cli"], { inputs: fixture.inputs, runtime: fixture.runtime, output: () => {} });
+    if (!("planning_complete" in summary)) throw new Error("Expected actual planning");
+    expect(summary.planning_complete).toBe(true);
+    const history = await readPlanningHistory(namedPlanningFiles(summary, fixture.inputs.outputRoot));
+    const attempt = selectCompleteAttempt(history).selected!;
+    expect(attempt).not.toBeNull();
+    const categories = attempt.rows["article-assessments"].map(held => ArticleAssessmentRecordSchema.parse(held.row))
+      .flatMap(row => row.categories === null ? [] : [row.categories]);
+    expect(categories).toContainEqual(["Science"]);
+    expect(categories.every(values => Array.isArray(values) && values.every(value => typeof value === "string" && value.length > 0))).toBe(true);
   } finally { await fixture.close(); }
 });
 

@@ -58,11 +58,12 @@ export async function harvestFeeds(
   });
   const articles = await mapPool(feeds.flatMap(feed => feed.offered), inputs.config.harvest.concurrency,
     async offered => {
-      context.progress?.("ARTICLE_EXTRACTION_STARTED", { source_id: offered.source.source_id });
+      context.progress?.("ARTICLE_HARVEST_STARTED", { source_id: offered.source.source_id });
       const result = await harvestArticle(offered, inputs, fetcher, context);
-      context.progress?.("ARTICLE_EXTRACTION_COMPLETED", {
+      context.progress?.("ARTICLE_HARVEST_COMPLETED", {
         source_id: offered.source.source_id, candidate_id: result.observation.candidate_id,
         output_count: result.candidate === null ? 0 : 1, drop_reason: result.rejection?.drop_reason ?? null,
+        extraction_outcome: result.observation.extraction,
       });
       return result;
     });
