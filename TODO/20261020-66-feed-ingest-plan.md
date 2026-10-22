@@ -37,6 +37,16 @@ validation and event tests in TypeScript. This exception applies to planner
 events, not shared ledger payloads that Python reads or compacts, and
 supersedes the Python-first event-model requirements below.
 
+Owner selection, 2026-10-22: reject entries with valid publication dates
+already beyond the resolved age cutoff before downloading their pages.
+Reuse the existing clock and age policy; do not introduce a fetch cap or
+reinterpret the final article selection cap. Age refusal now precedes page
+content checks for these entries, so update terminal-reason priority,
+stage counts and per-entry audit evidence explicitly. Missing and
+excessively future-dated entries retain their existing date rules; no
+first-seen date is invented for an unfetched entry. The owner selected this
+work-count correction alone, not an extraction worker pool.
+
 Owner approval, 2026-10-22: @kumarsnaveen_microsoft approved delivery of
 Table A repairs A1-A7 from the review conversation, with tests and owning
 docs updated and green changes landed on remote main. This authorizes
