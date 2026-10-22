@@ -14,13 +14,14 @@ import { readReach } from '../src/lib/data/ledger-reach';
 import { pageKeeper, type ByteSource, type EngineOpener, type PageKeeper, type WantedFile } from '../src/lib/data/page-keeper';
 import { daysBetween, filesFor, namesFile, newestFile, newestNamed } from '../src/lib/data/slice';
 import { cellOf, SliceValueError, statementFor } from '../src/lib/data/slice-query';
-import { dataPath, indexPath, rawIndexPath, readSlice } from '../src/lib/data/slice-reader';
+import { dataPath as catalogDataPath, indexPath as catalogIndexPath, rawIndexPath as catalogRawIndexPath, readSlice } from '../src/lib/data/slice-reader';
 import { checkedRequest, LEDGER_FAULTS, SliceRequestError, type LedgerName, type SliceOptions, type SliceResult } from '../src/lib/data/slice-shapes';
 import { engineExtensionRepository, explorerConfig } from '../src/lib/server/config';
 import { diskBytes, reachFromDisk, sliceFromDisk } from '../src/lib/server/ledger-disk';
 import { buildFeedLedgers, FEED_LEDGERS, stageFeedLedgers } from './support/feed-ledgers';
 import { rawListedThrough } from '../scripts/raw-listed-through.mjs';
 import { readColumns } from '../src/lib/data/ledger-columns';
+import { configuredCatalog } from '../src/lib/data/configured-catalog';
 
 /**
  * THE ORACLE for the query door: a request is answered through exactly the
@@ -58,6 +59,9 @@ const FIXTURE = path.resolve(here, '..', '..', 'tests', 'fixtures', 'ledger-door
 const STATE = path.join(FIXTURE, 'state');
 const YEAR_STATE = path.join(FIXTURE, 'year-state');
 const LEDGER = 'host-fingerprint' as const;
+const indexPath = (ledger: LedgerName, period: Period): string => catalogIndexPath(configuredCatalog, ledger, period);
+const dataPath = (ledger: LedgerName, period: Period, covers: string): string => catalogDataPath(configuredCatalog, ledger, period, covers);
+const rawIndexPath = (ledger: LedgerName, day: Parameters<typeof catalogRawIndexPath>[2]): string => catalogRawIndexPath(configuredCatalog, ledger, day);
 const PREFIX = 'https://pages.test/yen-idhazh';
 const ARCHIVE_PREFIX = 'https://archive.test/yen-idhazh';
 const DAILY_INDEX = indexPath(LEDGER, 'daily');
@@ -168,7 +172,7 @@ function counted(): CountedEngine {
 /** A page that has read nothing yet: a keeper over recorded responses, as
  *  `ledger.ts` makes one over `fetch`. */
 function freshPage(fetcher: Fetcher, engine: CountedEngine = counted(), prefix = PREFIX): PageKeeper {
-	return pageKeeper(fetchedBytes(prefix, fetcher), engine.open);
+	return pageKeeper(fetchedBytes(prefix, fetcher), engine.open, configuredCatalog);
 }
 
 /** Every console warning `work` prints, and its result. */
@@ -711,7 +715,8 @@ test.describe('the four states, before the engine is needed', () => {
 		const { result, warned } = await warnings(() =>
 			readSlice(
 				pageKeeper(fetchedBytes(PREFIX, fetcher), () =>
-					Promise.reject(new Error('this browser has no WebAssembly exception handling'))
+					Promise.reject(new Error('this browser has no WebAssembly exception handling')),
+					configuredCatalog
 				),
 				LEDGER,
 				ask('2026-09-01', '2026-09-02')
@@ -1448,7 +1453,7 @@ test.describe('an empty monthly.json or yearly.json is a gap the design expects:
 				index: async (relative) => noted(relative, await disk.index(relative)),
 				data: async (relative, version) => noted(relative, await disk.data(relative, version))
 			};
-			const page = pageKeeper(counting, counted().open);
+			const page = pageKeeper(counting, counted().open, configuredCatalog);
 			const { result: drawn } = await warnings(() => readSlice(page, LEDGER, ask('2026-08-30', '2026-09-02')));
 			const { result: reach } = await warnings(() => readReach(page, LEDGER));
 			expect([drawn.state, reach.state]).toEqual(['ok', 'ok']);

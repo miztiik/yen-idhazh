@@ -8,7 +8,7 @@
 		ledgers: readonly RegistryLedger[];
 		selected: string[];
 		published: string[];
-		through?: Record<string, string>;
+		through?: Readonly<Partial<Record<string, string>>>;
 		spanFrom?: string;
 		filter?: string;
 		onToggle: (name: string) => void;
@@ -72,10 +72,11 @@
 	<label class="filter">Filter <input value={filter} oninput={(event) => onFilter(event.currentTarget.value)} /></label>
 	<div class="ledger-options" bind:this={options} onscroll={scrolled}>
 		{#each shown as ledger (ledger.name)}
+			{@const ledgerThrough = through[ledger.name]}
 			<label class="ledger" data-ledger-name={ledger.name} data-published={published.includes(ledger.name) ? 'yes' : 'no'} data-chosen={selected.includes(ledger.name) ? 'yes' : 'no'}>
 				<input type="checkbox" checked={selected.includes(ledger.name)} onchange={() => onToggle(ledger.name)} />
 				<span>{ledger.name}</span>
-				<small class:late={through[ledger.name] !== undefined && spanFrom !== '' && through[ledger.name] < spanFrom}>{published.includes(ledger.name) ? `${ledger.grain}${through[ledger.name] ? ` - through ${shortDate(through[ledger.name])}` : ''}` : `not on this site - ${ledger.grain}`}</small>
+				<small class:late={ledgerThrough !== undefined && spanFrom !== '' && ledgerThrough < spanFrom}>{published.includes(ledger.name) ? `${ledger.grain}${ledgerThrough ? ` - through ${shortDate(ledgerThrough)}` : ''}` : `not on this site - ${ledger.grain}`}</small>
 			</label>
 		{/each}
 	</div>

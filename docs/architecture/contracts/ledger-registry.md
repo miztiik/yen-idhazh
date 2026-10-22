@@ -59,8 +59,13 @@ bridge, not the build's authority: publication derives its selection from
 consent and refuses any set disagreement or duplicate in the old list.
 Remove this bridge after its remaining consumers move to the catalog.
 The initial conversion preserves exact membership, not a fixed member count.
-The compiled path readers still keep their existing vocabulary until their
-separate catalog migration; no storage path or data source changes here.
+The frontend query door now uses the parsed catalog for membership and paths.
+`LedgerName` is a string there; a page keeper holds the immutable catalog used
+to validate names and compose paths. Ordinary panels and disk reads use the
+configured catalog, while the Data explorer binds a reader to the catalog it
+fetches for its source. Pure path helpers take that catalog explicitly. This
+removes duplicate frontend name and folder lists without changing stored paths
+or which source answers a request.
 
 Four builders locate the files of a ledger the door does not file - one JSON file, JSON files named by a stamp, one JSON file a day, or one folder a day - in two pairs:
 
@@ -204,7 +209,7 @@ into an active family unchanged. See [judge status](../publishing/llm-council.md
 - **Lifecycle.**
   - A family in `config/ledgers.json` with `lifecycle_status` `active`, a one-line `description` and the UTC day it is `onboarded`, holding the ledger's entry: grain `raw-and-compact`, explicit `publish_to_data_explorer` consent, and the `prefix` it files under inside `state/raw/` and `state/compact/`, which starts with the family's name and ends with the ledger's own value. A ledger that joins a family adds only its entry to that family's `ledgers`, and the family's status covers it from its first row. During the migration bridge, the consented set and `ledger.published` must agree exactly.
   - Its `LedgerName` member in `backend/idhazh/contracts/ledger_name.py`, spelled from its value and its family ([One typed name for one ledger](#one-typed-name-for-one-ledger)).
-  - Its value in `LEDGER_NAMES` in `frontend/src/lib/data/slice-shapes.ts`, which `test_every_ledger_the_door_may_query_is_a_ledger` holds equal to the registry. A ledger whose prefix nests it inside its family's folder also adds that folder to `LEDGER_FOLDERS` in the same file, which `backend/tests/contracts/test_frontend_vocabularies.py` holds equal to the nested prefixes.
+  - Its value in `config/ledgers.json`, which the frontend catalog validates before a reader can use it. Do not add a second frontend name or folder list; `ledger-catalog.spec.ts` covers catalog membership and prefix-based path composition.
 - **Write and read.**
   - Its key and row contract in `_DOOR_SHAPES` in `backend/idhazh/ledger/keys.py`, and a preference in `_PREFERENCES` where two of its repeated rows can disagree. A preference stays in code because it is a callable, and a callable is not JSON. A row contract the council's verbs would otherwise import - a judge's - goes in `_JUDGE_DOOR_SHAPES` in the same file instead, which imports it only when its ledger is first asked about. So the council's import closure does not grow, and a judge deleted from the tree leaves every council verb running.
   - A writer that files its rows through `ledger.persist` and hands it a `WriterIdentity` (`backend/idhazh/contracts/file_envelope.py`): the run, attempt, job, shard, producer and commit. The ledger names every file from that identity ([persistence.md](persistence.md#the-door)), so a writer never builds a file name.
@@ -357,7 +362,7 @@ CLAUDE.md section 11 does not apply to this file. It is a config file this proje
 
 **`Grain` is transitional and its declaring line says so.** [../../concepts/telemetry-intent.md](../../concepts/telemetry-intent.md) requires every tree under `state/` to reach one pattern, and `raw-and-compact` is that pattern. The other four grains are what that page has not yet removed: one JSON file (`flat`), JSON files named by a stamp (`stamp`), one JSON file a day (`day`) and one folder a day (`tree`). None of them holds CSV. They are recorded because all four really are on disk: the registry is an honest map of today.
 
-`test_every_ledger_the_door_may_query_is_a_ledger` holds `LEDGER_NAMES` in `frontend/src/lib/data/slice-shapes.ts` equal to this registry, so a new registry member joins the browser door vocabulary in the same change.
+The frontend's query-door readers accept a name only when their bound catalog registers it. The configured catalog serves ordinary panels and disk reads; the Data explorer uses its fetched catalog. A new registry entry therefore needs no compiled frontend name or folder list.
 
 **Planning attempts settle together, not file by file.** A partial retry can
 contain fewer articles than the previous complete attempt. Discarding older

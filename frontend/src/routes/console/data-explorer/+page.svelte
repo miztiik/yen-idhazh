@@ -1,7 +1,7 @@
 
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
-	import { ask, askColumns, askCost, startAfresh, type AskResult, type Column, type DateStamp, type FetchCost, type LedgerName, type Row, type SpanCost, type SpanGap } from '$lib/data/ledger';
+	import { createLedgerReader, type AskResult, type Column, type DateStamp, type FetchCost, type LedgerName, type LedgerReader, type Row, type SpanCost, type SpanGap } from '$lib/data/ledger';
 	import Panel from '$lib/components/Panel.svelte';
 	import ChoiceTiles from '$lib/components/ChoiceTiles.svelte';
 	import WindowControl from '$lib/components/WindowControl.svelte';
@@ -29,7 +29,7 @@
 	import { fetchRegistry, type LedgerRegistry } from '$lib/console/explorer/registry';
 	import { consentedSelection, offersExample } from '$lib/data/ledger-catalog';
 	import type { ExplorerExample } from '$lib/server/config';
-	import { isDay, LEDGER_NAMES, type CutDays, type UnansweredDays } from '$lib/data/slice-shapes';
+	import { isDay, type CutDays, type UnansweredDays } from '$lib/data/slice-shapes';
 	import Icon from '$lib/icons/Icon.svelte';
 
 	let { data } = $props();
@@ -43,6 +43,7 @@
 	let toDay = $state('');
 	let ready = $state(false);
 	let registry = $state<LedgerRegistry | null>(null);
+	let reader: LedgerReader | null = null;
 	let registryError = $state<string | null>(null);
 	let filter = $state('');
 	let selected = $state<LedgerName[]>([]);
@@ -210,6 +211,10 @@
 		const empty = emptyLedgerLines();
 		return `${statusSentence({ state: 'idle', files: cost.files, bytes: cost.bytes, ledgers: selected.length, readFrom: cost.readFrom, readTo: cost.readTo, firstRun: lastMs === null })}${empty ? ` ${empty}` : ''}`;
 	}
+	function explorerGapLines(gaps: readonly SpanGap[]) {
+		const catalog = registry;
+		return catalog === null ? [] : gapLines(catalog, gaps);
+	}
 	function siteFromText(): string {
 		const span = runSpan;
 		if (result === null || (result.state !== 'ok' && result.state !== 'quiet') || span === null) return '';
@@ -228,20 +233,11 @@
 			void tick().then(() => document.getElementById(`explorer-tab-${activeResultTab}`)?.focus());
 		}
 	}
-	// The path readers still use their compiled vocabulary until the next migration.
-	function readableLedger(name: string): name is LedgerName {
-		return LEDGER_NAMES.some((candidate) => candidate === name);
-	}
 	function selectConsented(names: readonly string[]) {
 		if (registry === null) return;
 		const selection = consentedSelection(registry, names);
-		selected = selection.names.filter(readableLedger);
-		const unsupported = selection.names.filter((name) => !readableLedger(name));
-		const notice = [
-			selection.notice,
-			unsupported.length === 0 ? null : `This site's path readers do not support these registered ledgers yet: ${unsupported.join(', ')}.`
-		].filter(Boolean).join(' ');
-		if (notice) keepNotice = notice;
+		selected = selection.names;
+		if (selection.notice) keepNotice = selection.notice;
 	}
 	function toggle(name: string) {
 		selectConsented(selected.some((one) => one === name) ? selected.filter((one) => one !== name) : [...selected, name]);
@@ -274,29 +270,21 @@
 		fromDay = addDays(toDay, 1 - days);
 		void updateCostAndColumns();
 	}
-	/** Read the ledger registry, and on Refresh drop every index this page has read first. On
-	 *  open nothing is dropped: the pass a restored selection started is already reading them. */
-	async function refreshRegistry(afresh = false) {
+	/** Read the ledger registry, and on Refresh drop every index this page has read first. */
+	async function refreshRegistry(afresh = false, update = true) {
 		refreshing = true;
 		registryError = null;
 		try {
-			if (afresh) await startAfresh();
-
-			registry = await fetchRegistry();
-			const hadSelection = selected.length > 0;
+			if (afresh) await reader?.startAfresh();
+			const catalog = await fetchRegistry();
+			registry = catalog;
+			reader = createLedgerReader(catalog);
 			selectConsented(selected);
-			if (!hadSelection && !afresh) {
-				const first = examples[0];
-				if (first !== undefined) {
-					selectConsented(first.ledgers);
-					setWindow(presets.includes(first.days) ? first.days : windowDays);
-					sql = first.sql;
-				}
-			}
-			await updateCostAndColumns();
+			if (update) await updateCostAndColumns();
 		} catch (error) {
 			registryError = error instanceof Error ? error.message : String(error);
 			registry = null;
+			reader = null;
 			ledgerColumns = [];
 		} finally {
 			refreshing = false;
@@ -305,11 +293,12 @@
 
 	function parseLedgerList(value: unknown): LedgerName[] | null {
 		if (!Array.isArray(value)) return null;
-		const allowed = new Set<string>(LEDGER_NAMES);
+		const catalog = registry;
+		if (catalog === null) return null;
 		const names: LedgerName[] = [];
 		for (const item of value) {
-			if (typeof item !== 'string' || !allowed.has(item)) return null;
-			names.push(item as LedgerName);
+			if (typeof item !== 'string' || catalog.get(item) === undefined) return null;
+			names.push(item);
 		}
 		return names;
 	}
@@ -479,13 +468,15 @@
 			ledgerColumns = [];
 			return;
 		}
+		const currentReader = reader;
+		if (currentReader === null) return;
 		costing = true;
 		try {
 			const nextSpan = span();
-			cost = await askCost(picked, nextSpan.from, nextSpan.to);
+			cost = await currentReader.askCost(picked, nextSpan.from, nextSpan.to);
 			const described: Column[] = [];
 			for (const ledger of picked) {
-				for (const column of await askColumns(ledger, config.max_fetch_bytes)) described.push({ name: `${ledger}.${column.name}`, type: column.type });
+				for (const column of await currentReader.askColumns(ledger, config.max_fetch_bytes)) described.push({ name: `${ledger}.${column.name}`, type: column.type });
 			}
 			ledgerColumns = described;
 		} finally {
@@ -494,7 +485,8 @@
 	}
 
 	async function run() {
-		if (!canRun) return;
+		const currentReader = reader;
+		if (!canRun || currentReader === null) return;
 		running = true;
 		// What this run asks, read once as it starts: the question, the ledgers and the span may change
 		// while the answer is on its way, and the answer, the link and History all belong to what was asked.
@@ -503,7 +495,7 @@
 		lastRead = null;
 		const started = performance.now();
 		try {
-			const answer = await ask({ ledgers: asked.ledgers, from: asked.span.from, to: asked.span.to, sql: asked.statement, maxChars: config.query_max_chars, maxRows: config.max_rows, maxFetchBytes: config.max_fetch_bytes });
+			const answer = await currentReader.ask({ ledgers: asked.ledgers, from: asked.span.from, to: asked.span.to, sql: asked.statement, maxChars: config.query_max_chars, maxRows: config.max_rows, maxFetchBytes: config.max_fetch_bytes });
 			lastMs = Math.round(performance.now() - started);
 			// The window goes with its answer, so the lines under the answer change only on a run.
 			runSpan = asked.span;
@@ -558,22 +550,34 @@
 		});
 		if (answerRegion !== null) answerObserver?.observe(answerRegion);
 		void (async () => {
+			await refreshRegistry(false, false);
 			savedQuestions = readStored<KeptQuestion>(SAVED_KEY, validStoredSaved);
 			recentRuns = readStored<RecentRun>(HISTORY_KEY, validStoredRun);
 			if (location.search) {
-				const parsed = await parseExplorerAddress(location.search, { ledgerNames: LEDGER_NAMES, windowPresets: presets, defaultDays: data.console.default_window_days, today: todayUtc(), reachDays: config.reach_days });
-				if (parsed.ledgers.length > 0) selected = [...parsed.ledgers];
+				const catalog = registry;
+				const parsed = await parseExplorerAddress(location.search, {
+					ledgerNames: catalog?.entries.map((entry) => entry.name) ?? [],
+					windowPresets: presets, defaultDays: data.console.default_window_days, today: todayUtc(), reachDays: config.reach_days
+				});
+				if (parsed.ledgers.length > 0) selectConsented(parsed.ledgers);
 				if (parsed.from !== null && parsed.end !== null) setSpan(parsed.from, parsed.end);
 				else setWindow(parsed.days);
 				sql = parsed.statement;
 				linkNotices = [...parsed.notices, ...(parsed.statement ? ['This question came from a link. Read it before you press Run.'] : [])];
 			} else if (recentRuns[0] !== undefined) {
-				selected = [...recentRuns[0].ledgers];
+				selectConsented(recentRuns[0].ledgers);
 				if (recentRuns[0].from !== undefined && recentRuns[0].end !== undefined) setSpan(recentRuns[0].from, recentRuns[0].end);
 				else setWindow(recentRuns[0].days);
 				sql = recentRuns[0].statement;
+			} else {
+				const first = examples[0];
+				if (first !== undefined) {
+					selectConsented(first.ledgers);
+					setWindow(presets.includes(first.days) ? first.days : windowDays);
+					sql = first.sql;
+				}
 			}
-			await refreshRegistry();
+			await updateCostAndColumns();
 			initializing = false;
 		})();
 		return () => {
@@ -645,7 +649,7 @@
 			</div>
 			<details data-workbench-region="columns" class="rail-region" bind:open={columnsOpen}>
 				<summary>{columnLabel} ({ledgerColumns.length})</summary>
-				<ColumnList columns={ledgerColumns} label={columnLabel} />
+				{#if registry}<ColumnList columns={ledgerColumns} label={columnLabel} catalog={registry} />{/if}
 			</details>
 		</div>
 	</div>
@@ -667,7 +671,7 @@
 {/snippet}
 
 {#snippet gapNotes(gaps: readonly SpanGap[])}
-	{#each gapLines(gaps) as line (`${line.ledger} ${line.kind}`)}
+	{#each explorerGapLines(gaps) as line (`${line.ledger} ${line.kind}`)}
 		<p class="gap-note" data-explorer-gap={line.kind} data-ledger={line.ledger}>{line.text}</p>
 	{/each}
 {/snippet}
@@ -698,7 +702,7 @@
 			{:else if result === null}
 				<div class="answer-state" data-explorer-idle>{explorerIdleSentence()}</div>
 			{:else if result.state === 'ok'}
-				<AnswerTable columns={result.columns} rows={result.rows as Row[]} capped={result.capped} maxRows={config.max_rows} pageSize={config.row_page} cellMaxCh={config.cell_max_ch} barSpreadShare={config.bar_spread_share} spanText={describeDaysRead(result.readFrom, result.readTo)} siteFromText={siteFromText()} unansweredText={result.unanswered.length > 0 ? explorerUnansweredNote(result.unanswered) : ''} gapLines={gapLines(result.gaps)} onOrderChange={(rows) => (orderedRows = rows)} />
+				<AnswerTable columns={result.columns} rows={result.rows as Row[]} capped={result.capped} maxRows={config.max_rows} pageSize={config.row_page} cellMaxCh={config.cell_max_ch} barSpreadShare={config.bar_spread_share} spanText={describeDaysRead(result.readFrom, result.readTo)} siteFromText={siteFromText()} unansweredText={result.unanswered.length > 0 ? explorerUnansweredNote(result.unanswered) : ''} gapLines={explorerGapLines(result.gaps)} onOrderChange={(rows) => (orderedRows = rows)} />
 			{:else if result.state === 'quiet'}
 				<div class="answer-state" data-state="quiet">{explorerQuietSentence()}{#if runSpan}{@render startNotes(result.cut, result.unanswered, runSpan.to)}{/if}{@render gapNotes(result.gaps)}</div>
 			{:else if result.state === 'missing'}

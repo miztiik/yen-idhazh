@@ -74,10 +74,9 @@ import { COMPACT_INDEX_STAMP, readIndex, type CompactEntry, type IndexReading, t
 import type { FileShortfall, PageKeeper, WantedFile } from './page-keeper';
 import { filesFor, firstNamed, newestNamed, type ChosenFile } from './slice';
 import { rowsFor } from './slice-query';
+import type { LedgerCatalog } from './ledger-catalog';
 import {
 	checkedRequest,
-	LEDGER_FOLDERS,
-	LEDGER_NAMES,
 	SliceRequestError,
 	type DateStamp,
 	type LedgerFault,
@@ -87,38 +86,36 @@ import {
 	type SliceResult
 } from './slice-shapes';
 
-/** The folder a ledger's files sit in under `raw/` and `compact/`: its family's
- *  folder and its own where `LEDGER_FOLDERS` names one, else its own name. */
-export function ledgerFolder(ledger: LedgerName): string {
-	const folders: Partial<Record<LedgerName, string>> = LEDGER_FOLDERS;
-	return folders[ledger] ?? ledger;
+/** The registered prefix where one ledger's files sit under `raw/` and `compact/`. */
+export function ledgerFolder(catalog: LedgerCatalog, ledger: LedgerName): string {
+	return catalog.require(ledger).prefix;
 }
 
 /** Where one ledger's index for one period sits under the state root. */
-export function indexPath(ledger: LedgerName, period: Period): string {
-	return `compact/${ledgerFolder(ledger)}/index/${period}.json`;
+export function indexPath(catalog: LedgerCatalog, ledger: LedgerName, period: Period): string {
+	return `compact/${ledgerFolder(catalog, ledger)}/index/${period}.json`;
 }
 
 /** Where one raw day listing sits under the state root. */
-export function rawIndexPath(ledger: LedgerName, day: DateStamp): string {
-	return `raw/${ledgerFolder(ledger)}/index/${day}.json`;
+export function rawIndexPath(catalog: LedgerCatalog, ledger: LedgerName, day: DateStamp): string {
+	return `raw/${ledgerFolder(catalog, ledger)}/index/${day}.json`;
 }
 
 /** Where one raw writer file sits under the state root. */
-export function rawDataPath(ledger: LedgerName, day: DateStamp, name: string): string {
+export function rawDataPath(catalog: LedgerCatalog, ledger: LedgerName, day: DateStamp, name: string): string {
 	const [year, month, date] = day.split('-');
-	return `raw/${ledgerFolder(ledger)}/${year}/${month}/${date}/${name}`;
+	return `raw/${ledgerFolder(catalog, ledger)}/${year}/${month}/${date}/${name}`;
 }
 
 /** Where one compact file sits under the state root, named for what it covers. */
-export function dataPath(ledger: LedgerName, period: Period, covers: string): string {
+export function dataPath(catalog: LedgerCatalog, ledger: LedgerName, period: Period, covers: string): string {
 	const [year, month, day] = covers.split('-');
 	const named: Record<Period, string> = {
 		daily: `daily/${year}/${month}/${day}`,
 		monthly: `monthly/${year}/${month}`,
 		yearly: `yearly/${year}/${year}`
 	};
-	return `compact/${ledgerFolder(ledger)}/${named[period]}.parquet`;
+	return `compact/${ledgerFolder(catalog, ledger)}/${named[period]}.parquet`;
 }
 
 /** The version a data file is asked for under. A file is written once, so its
@@ -150,28 +147,28 @@ export type FaultMet =
  *  the committed one, so an operator can open it, and the line names no span,
  *  so every panel that meets one fault on
  *  a page prints the same line. */
-export function faultLine(ledger: LedgerName, met: FaultMet): string {
+export function faultLine(catalog: LedgerCatalog, ledger: LedgerName, met: FaultMet): string {
 	const line = (path: string, words: string): string => `${LOG_PREFIX} ${met.fault} ${ledger} state/${path}: ${words}`;
 	if (met.fault === 'not-packed') {
 		return line(
-			indexPath(ledger, 'daily'),
+			indexPath(catalog, ledger, 'daily'),
 			'This record is not packed yet.'
 		);
 	}
 	if (met.fault === 'index-missing') {
 		return line(
-			indexPath(ledger, met.period),
+			indexPath(catalog, ledger, met.period),
 			`it is not there, though daily.json is. Run the upkeep again to write it; it lists nothing until a ${UNIT[met.period]} is packed.`
 		);
 	}
 	if (met.fault === 'file-missing') {
 		return line(
-			dataPath(ledger, met.period, met.covers),
+			dataPath(catalog, ledger, met.period, met.covers),
 			`${met.period}.json names it; it is not there. Reload; if it stays, re-pack that ${UNIT[met.period]}.`
 		);
 	}
 	return line(
-		indexPath(ledger, 'daily'),
+		indexPath(catalog, ledger, 'daily'),
 		`no index names ${met.day}, a day between packed days. ` +
 			'Re-pack that day from raw files; if they are gone, try git history.'
 	);
@@ -186,7 +183,7 @@ function reason(error: unknown): string {
 export async function readIndexFrom(keeper: PageKeeper, ledger: LedgerName, period: Period): Promise<IndexReading | null> {
 	let bytes: Uint8Array | null;
 	try {
-		bytes = await keeper.index(indexPath(ledger, period));
+		bytes = await keeper.index(indexPath(keeper.catalog, ledger, period));
 	} catch (error) {
 		return { refused: { reason: 'unreadable', detail: `it could not be fetched (${reason(error)})` } };
 	}
@@ -224,7 +221,7 @@ export function explainShortfall(
 /** Answer one request: the four states above, or a `SliceRequestError` for a
  *  request the door refuses before it fetches anything. */
 export async function readSlice(keeper: PageKeeper, ledger: LedgerName, options: SliceOptions): Promise<SliceResult> {
-	if (!(LEDGER_NAMES as readonly string[]).includes(ledger)) {
+	if (keeper.catalog.get(ledger) === undefined) {
 		throw new SliceRequestError(`${JSON.stringify(ledger)} is not a ledger the console may query`);
 	}
 	const request = checkedRequest(options);
@@ -233,13 +230,13 @@ export async function readSlice(keeper: PageKeeper, ledger: LedgerName, options:
 		return { state: 'unreachable', rows: [], at, fault: null };
 	};
 	const faulted = (at: DateStamp, met: Exclude<FaultMet, { fault: 'not-packed' }>): SliceResult => {
-		keeper.warn(faultLine(ledger, met));
+		keeper.warn(faultLine(keeper.catalog, ledger, met));
 		return { state: 'unreachable', rows: [], at, fault: met.fault };
 	};
 
 	const daily = await readIndexFrom(keeper, ledger, 'daily');
 	if (daily === null) {
-		keeper.warn(faultLine(ledger, { fault: 'not-packed' }));
+		keeper.warn(faultLine(keeper.catalog, ledger, { fault: 'not-packed' }));
 		return { state: 'missing', rows: [], fault: 'not-packed' };
 	}
 	if ('refused' in daily) return unreachable(request.from, explainRefusal('daily', daily.refused));
@@ -276,7 +273,7 @@ export async function readSlice(keeper: PageKeeper, ledger: LedgerName, options:
 	if (holding.length === 0) return { state: 'quiet', rows: [], first, through, lostDays, setAside };
 
 	const wanted: WantedFile[] = holding.map((file) => ({
-		path: dataPath(ledger, file.period, file.entry.covers),
+		path: dataPath(keeper.catalog, ledger, file.period, file.entry.covers),
 		version: dataVersion(file.entry),
 		bytes: file.entry.bytes,
 		byRange: RANGED_PERIODS.has(file.period)

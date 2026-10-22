@@ -29,6 +29,8 @@
  */
 
 import type { LedgerFault, LedgerName, SetAsideFiles } from '../data/ledger';
+import { configuredCatalog } from '../data/configured-catalog';
+import type { LedgerCatalog } from '../data/ledger-catalog';
 import { coveredDays, type HeldPeriod } from '../data/slice';
 import { ledgerFolder } from '../data/slice-reader';
 import { dayMonth, MONTHS, shortDate } from '../format';
@@ -438,8 +440,8 @@ export function noRecordSentence(
 
 /** Where a person reads the files a ledger's packing set aside: the packing
  * moves a file it cannot read there and never deletes it, and no step reads it. */
-function setAsideFolder(ledger: LedgerName): string {
-	return `state/raw/${ledgerFolder(ledger)}/set-aside/`;
+function setAsideFolder(catalog: LedgerCatalog, ledger: LedgerName): string {
+	return `state/raw/${ledgerFolder(catalog, ledger)}/set-aside/`;
 }
 
 /** Files a ledger's packing set aside unread, and where a person reads them; null when none were.
@@ -454,7 +456,8 @@ export function setAsideSentence(
 	subject: string,
 	ledger: LedgerName,
 	setAside: SetAsideFiles,
-	missingFrom: string
+	missingFrom: string,
+	catalog: LedgerCatalog = configuredCatalog
 ): string | null {
 	const files = Object.values(setAside).reduce((total, count) => total + count, 0);
 	if (files === 0) return null;
@@ -462,7 +465,7 @@ export function setAsideSentence(
 	return (
 		`${files} ${subject} ${one ? 'file was' : 'files were'} set aside unread when this data was packed, ` +
 		`so ${missingFrom} may be missing ${one ? 'its' : 'their'} rows. ` +
-		`${one ? 'It waits' : 'They wait'} in ${setAsideFolder(ledger)} for a person to read.`
+		`${one ? 'It waits' : 'They wait'} in ${setAsideFolder(catalog, ledger)} for a person to read.`
 	);
 }
 

@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test';
 
 import { decodeQuestion, encodeQuestion, explorerAddress, parseExplorerAddress, requestTargetBytes } from '../src/lib/console/explorer/address';
-import { LEDGER_NAMES, type LedgerName } from '../src/lib/data/slice-shapes';
+import { configuredCatalog } from '../src/lib/data/configured-catalog';
+import type { LedgerName } from '../src/lib/data/slice-shapes';
 import { explorerConfig } from '../src/lib/server/config';
 
 const BASE_PATH = '/yen-idhazh/console/data-explorer/';
@@ -11,6 +12,7 @@ const WINDOW_PRESETS = [1, 7, 14, 30, 90] as const;
 const TODAY = '2026-10-04';
 const CUSTOM_FROM = '2026-04-05';
 const CUSTOM_END = '2026-04-12';
+const LEDGER_NAMES = configuredCatalog.entries.map((entry) => entry.name);
 const PARSE_OPTIONS = { ledgerNames: LEDGER_NAMES, windowPresets: WINDOW_PRESETS, defaultDays: 14, today: TODAY, reachDays: 365 };
 
 function printableAscii(seed: number, length: number): string {

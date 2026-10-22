@@ -32,6 +32,7 @@ import { COMPACT_INDEX_STAMP, type CompactEntry, type Period } from '../../src/l
 import { nodeEngine } from '../../src/lib/data/engine';
 import type { Fetcher } from '../../src/lib/data/fetched-bytes';
 import { ledgerFolder } from '../../src/lib/data/slice-reader';
+import { configuredCatalog } from '../../src/lib/data/configured-catalog';
 import type { DateStamp, LedgerName } from '../../src/lib/data/slice-shapes';
 import { engineExtensionRepository, ledgerArchiveBaseUrl } from '../../src/lib/server/config';
 
@@ -152,7 +153,7 @@ export async function buildLedger(root: string, built: BuiltLedger): Promise<voi
 		named.set(covers, day);
 	}
 	const ascending = [...named.keys()].sort();
-	const ledgerRoot = path.join(root, 'compact', ...ledgerFolder(built.ledger).split('/'));
+	const ledgerRoot = path.join(root, 'compact', ...ledgerFolder(configuredCatalog, built.ledger).split('/'));
 	const daily: CompactEntry[] = [];
 	const monthly: CompactEntry[] = [];
 	for (const covers of ascending) {
@@ -208,7 +209,7 @@ export interface BuiltRowsDay {
  *  it under, and its own cells, typed by their values; then the three indexes, naming every day
  *  and no month or year. */
 export async function buildRows(root: string, ledger: LedgerName, days: readonly BuiltRowsDay[]): Promise<void> {
-	const ledgerRoot = path.join(root, 'compact', ...ledgerFolder(ledger).split('/'));
+	const ledgerRoot = path.join(root, 'compact', ...ledgerFolder(configuredCatalog, ledger).split('/'));
 	const engine = await nodeEngine((specifier) => resolver.resolve(specifier), engineExtensionRepository());
 	const daily: CompactEntry[] = [];
 	for (const day of [...days].sort((left, right) => left.covers.localeCompare(right.covers))) {

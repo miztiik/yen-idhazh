@@ -1,10 +1,11 @@
 
 <script lang="ts">
 	import type { Column } from '$lib/data/ledger';
+	import type { LedgerCatalog } from '$lib/data/ledger-catalog';
 	import ColumnType from '$lib/console/explorer/ColumnType.svelte';
 	import { groupColumns } from '$lib/console/explorer/column-groups';
-	let { columns, label }: { columns: readonly Column[]; label: string } = $props();
-	const groups = $derived(groupColumns(columns));
+	let { columns, label, catalog }: { columns: readonly Column[]; label: string; catalog: LedgerCatalog } = $props();
+	const groups = $derived(groupColumns(catalog, columns));
 </script>
 
 <div class="column-list" data-explorer-columns>
