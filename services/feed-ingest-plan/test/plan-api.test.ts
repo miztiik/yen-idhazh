@@ -6,8 +6,9 @@ import { loadPlanInputs } from "../src/load-plan-inputs";
 import { RecordedTransport, readRecordings } from "./harvest-recordings";
 import { recordedPlan } from "./plan-recordings";
 import { main } from "../src/index";
-import { mkdir, unlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 import type { PersistedLedgerFile } from "@idhazh/ledger-file-writer";
 import { readLedgerParquet } from "../src/read-ledger-history/read-parquet";
 import { SeenRowSchema } from "../src/screen-article-candidates/seen-evidence";
@@ -154,11 +155,13 @@ test("a required source write failure returns an API error, not proven planning 
   } finally { await recorded.close(); }
 }, 30000);
 
-test("one listener coordinates concurrent real requests and retains only its durable seen receipts", async () => {
+test("one listener retains durable seen receipts from an output root outside the checkout", async () => {
   const recorded = await recordedPlan([source({ url: "https://news.example/article-failures.xml" })]);
+  const outputRoot = await mkdtemp(join(tmpdir(), "planner-output-root-"));
   const receipts: { day: string; files: readonly PersistedLedgerFile[] }[] = [];
   let clocks = 0;
   try {
+    recorded.inputs.outputRoot = outputRoot;
     recorded.inputs.clock_config.collect.seen_window_days = 1;
     recorded.inputs.settings.inputs.seen_days = [{ day: "2026-10-21", raw_files: [] }];
     delete recorded.runtime.run_number;
@@ -193,7 +196,9 @@ test("one listener coordinates concurrent real requests and retains only its dur
     recorded.runtime.clock = () => new Date(Number.NaN);
     expect((await post()).status).toBe(500);
     expect(recorded.transport.requests).toHaveLength(fetched);
-  } finally { await recorded.close(); }
+  } finally {
+    await Promise.all([recorded.close(), rm(outputRoot, { recursive: true, force: true })]);
+  }
 }, 30000);
 
 test("a later dispatch failure does not lose already durable first sight from this listener", async () => {

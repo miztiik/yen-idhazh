@@ -1,7 +1,6 @@
 /** Route the versioned operator API and apply configured request limits. */
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
-import { join, relative } from "node:path";
 import { describePlanError, PlanError } from "./plan-request";
 import { healthRoute } from "./routes/health.route";
 import { planRoute } from "./routes/plan.route";
@@ -57,9 +56,7 @@ export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime) {
         seen_receipts: [...ownFiles].map(([day, files]) => ({ day, files: [...files] })),
         on_seen_persisted: receipt => {
           const paths = ownFiles.get(receipt.day) ?? new Set<string>();
-          for (const file of receipt.files) paths.add(RelativePathSchema.parse(
-            relative(inputs.root, join(inputs.outputRoot, file.path)).replaceAll("\\", "/"),
-          ));
+          for (const file of receipt.files) paths.add(RelativePathSchema.parse(file.path));
           ownFiles.set(receipt.day, paths);
           runtime.on_seen_persisted?.(receipt);
         },

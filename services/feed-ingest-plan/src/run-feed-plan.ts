@@ -71,6 +71,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   const history = await readSeenEvidence(inputs.root, inputs.settings.inputs.seen_files, {
     now: context.now, lookback_days: inputs.clock_config.collect.seen_window_days,
     days: inputs.settings.inputs.seen_days,
+    receipt_root: inputs.outputRoot,
     ...(runtime.seen_receipts === undefined ? {} : { own_receipts: runtime.seen_receipts }),
   });
   const exclusionEvidence = {

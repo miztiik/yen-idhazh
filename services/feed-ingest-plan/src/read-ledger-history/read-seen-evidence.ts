@@ -58,6 +58,7 @@ export async function readSeenEvidence(
   window?: {
     now: string; lookback_days: number; days: readonly SeenDayInput[];
     own_receipts?: readonly OwnSeenReceipt[];
+    receipt_root?: string;
   },
 ) {
   files.forEach(file => RelativePathSchema.parse(file));
@@ -80,7 +81,7 @@ export async function readSeenEvidence(
     resolve(root, file), "seen", seenContract,
   )));
   const own = await Promise.all(ownReceipts.flatMap(receipt => receipt.files.map(async path => {
-    const file = await readLedgerParquet(resolve(root, path), "seen", seenContract);
+    const file = await readLedgerParquet(resolve(window?.receipt_root ?? root, path), "seen", seenContract);
     if (file.envelope.tier !== "raw" || file.envelope.covers !== receipt.day) {
       throw new Error("own seen receipt does not match its actual raw file day");
     }
