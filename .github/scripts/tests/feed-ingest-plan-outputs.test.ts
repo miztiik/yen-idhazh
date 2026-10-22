@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises"
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
-import { CONTRACT_VERSION, FeedIngestDispatchSchema, RawDayIndexSchema } from "../../../packages/common-contracts/src/index";
+import { FeedIngestDispatchSchema, RawDayIndexSchema } from "../../../packages/common-contracts/src/index";
 import { persistLedger } from "../../../packages/ledger-file-writer/src/index";
 import { runFeedPlan, summarizePlan } from "../../../services/feed-ingest-plan/src/run-feed-plan";
 import { recordedPlan } from "../../../services/feed-ingest-plan/test/plan-recordings";
@@ -18,7 +18,7 @@ import { utcTimestamp } from "../../../services/feed-ingest-plan/src/harvest-fee
 import { main } from "../../../services/feed-ingest-plan/src/index";
 import { recordPublicationMetrics } from "../../../services/feed-ingest-plan/src/metrics/metrics-recorder";
 import {
-  DigestPublicationSchema, PublishedRowSchema,
+  DigestPublicationSchema, PUBLISHED_ROW_SCHEMA_VERSION, PublishedRowSchema,
 } from "../../../services/feed-ingest-plan/src/metrics/publication-evidence";
 import { readLedgerParquet } from "../../../services/feed-ingest-plan/src/read-ledger-history/read-parquet";
 import { DispatchContract } from "../../../services/feed-ingest-plan/src/metrics/audit-contracts";
@@ -75,9 +75,9 @@ test("generated publication evidence joins actual main output and writes native 
         lifecycle_status: "active", prefix: ["published"] },
       writerContext: writer, ledgerSettings: fixture.inputs.ledgerSettings,
       period: { tier: "raw", covers: summary.date },
-      rowContract: { schema: PublishedRowSchema, schemaVersion: CONTRACT_VERSION },
+      rowContract: { schema: PublishedRowSchema, schemaVersion: PUBLISHED_ROW_SCHEMA_VERSION },
       rows: dispatches.rows.map(({ row }, index) => PublishedRowSchema.parse({
-        version: CONTRACT_VERSION, item_id: digest.items[index]!.item_id,
+        version: PUBLISHED_ROW_SCHEMA_VERSION, item_id: digest.items[index]!.item_id,
         published_on: summary.date, url_key: row.content.url_key,
       })),
     });
@@ -96,9 +96,9 @@ test("generated publication evidence joins actual main output and writes native 
       ledgerSettings: fixture.inputs.ledgerSettings,
       registrations: { diversity: fixture.inputs.registrations.diversity, sources: fixture.inputs.registrations.source_runs },
       publication_days: [
-        { published: { ...empty, schema_version: CONTRACT_VERSION },
+        { published: { ...empty, schema_version: PUBLISHED_ROW_SCHEMA_VERSION },
           health: { day: prior, status: "empty", rows: [] }, digest_path: null },
-        { published: { ...named([published]), schema_version: CONTRACT_VERSION }, digest_path: digestPath,
+        { published: { ...named([published]), schema_version: PUBLISHED_ROW_SCHEMA_VERSION }, digest_path: digestPath,
           health: { day: summary.date, status: "rows", rows: dispatches.rows.map(({ row }, index) => ({
             date: summary.date, run_id: summary.run_id, item_id: digest.items[index]!.item_id,
             url_key: row.content.url_key, source_id: row.selection.source_id, stage: "publish", outcome: "ok",
@@ -461,13 +461,15 @@ test("forwards named-day proof to the actual runner and returns its real first-s
     const actual = await readSeenEvidence(fixture.inputs.outputRoot, files);
     expect(actual.evidence.availability).toBe("available");
     if (actual.evidence.availability !== "available") throw new Error("Actual first-sight file was not readable");
-    expect(actual.evidence.rows).toEqual([...result.evidence.seen.new_rows].sort((a, b) => a.url_key.localeCompare(b.url_key)));
+    expect(actual.evidence.rows).toEqual(
+      [...result.evidence.seen.new_rows].sort((a, b) => a.url_key.localeCompare(b.url_key)),
+    );
   } finally {
     await fixture.close();
   }
 });
 
-test("a missing named raw index stays unavailable and cannot manufacture new first sight", async () => {
+test("a missing named raw index stays missing while an actual current sighting is recorded", async () => {
   const fixture = await recordedPlan();
   try {
     fixture.inputs.clock_config.collect.seen_window_days = 0;
@@ -477,8 +479,17 @@ test("a missing named raw index stays unavailable and cannot manufacture new fir
     const result = await runFeedPlan({ article_limit: 1 }, fixture.inputs, fixture.runtime);
     expect(result.evidence.seen.absence_proof).toBe("unavailable");
     expect(result.evidence.seen.window?.days[0]?.status).toBe("missing");
-    expect(result.files.seen).toEqual({ status: "empty", files: [] });
-    expect(createExecutionOutputs(summarizePlan(result), fixture.inputs.registrations).seen_files).toBe("[]");
+    expect(result.evidence.seen.new_rows.length).toBeGreaterThan(0);
+    expect(result.files.seen.status).toBe("written");
+    const files = result.files.seen.files.map(file => file.path);
+    expect(JSON.parse(createExecutionOutputs(summarizePlan(result), fixture.inputs.registrations).seen_files!))
+      .toEqual(files);
+    const actual = await readSeenEvidence(fixture.inputs.outputRoot, files);
+    expect(actual.evidence.availability).toBe("available");
+    if (actual.evidence.availability !== "available") throw new Error("Actual first-sight file was not readable");
+    expect(actual.evidence.rows).toEqual(
+      [...result.evidence.seen.new_rows].sort((a, b) => a.url_key.localeCompare(b.url_key)),
+    );
   } finally {
     await fixture.close();
   }
