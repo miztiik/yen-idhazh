@@ -26,7 +26,8 @@
 	import { size, statusSentence } from '$lib/console/explorer/status';
 	import { explorerAddress, parseExplorerAddress, LINK_TOO_LONG_NOTICE } from '$lib/console/explorer/address';
 	import { keepRecentRun, keepSavedQuestion, forgetSavedQuestion, suggestedSaveName, type KeptQuestion, type RecentRun } from '$lib/console/explorer/keep';
-	import { fetchRegistry, flattenRegistry, type LedgerRegistry, type RegistryLedger } from '$lib/console/explorer/registry';
+	import { fetchRegistry, type LedgerRegistry } from '$lib/console/explorer/registry';
+	import { consentedSelection, offersExample } from '$lib/data/ledger-catalog';
 	import type { ExplorerExample } from '$lib/server/config';
 	import { isDay, LEDGER_NAMES, type CutDays, type UnansweredDays } from '$lib/data/slice-shapes';
 	import Icon from '$lib/icons/Icon.svelte';
@@ -41,7 +42,7 @@
 	let fromDay = $state('');
 	let toDay = $state('');
 	let ready = $state(false);
-	let registry = $state<LedgerRegistry>({ families: [] });
+	let registry = $state<LedgerRegistry | null>(null);
 	let registryError = $state<string | null>(null);
 	let filter = $state('');
 	let selected = $state<LedgerName[]>([]);
@@ -84,8 +85,13 @@
 	let saveButton = $state<HTMLButtonElement | null>(null);
 	let answerOffscreen = $state(false);
 
-	const ledgers = $derived<RegistryLedger[]>(flattenRegistry(registry));
-	const selectedPublished = $derived(selected.filter((name) => published.includes(name)));
+	const ledgers = $derived((registry?.entries ?? []).filter((ledger) => ledger.publish_to_data_explorer));
+	const enabled = $derived(ledgers.map((ledger) => ledger.name));
+	const examples = $derived.by(() => {
+		const catalog = registry;
+		return catalog === null ? [] : config.examples.filter((example) => offersExample(catalog, example));
+	});
+	const selectedPublished = $derived(selected.filter((name) => enabled.includes(name)));
 	const columnLabel = $derived('Ledger columns');
 	const answerRows = $derived(result !== null && result.state === 'ok' ? (result.rows as Row[]) : []);
 	const answerColumns = $derived(result !== null && result.state === 'ok' ? result.columns : []);
@@ -102,7 +108,7 @@
 	// Whether a question may run now. The Run button and Ctrl+Enter both read this one answer, so
 	// no way in starts a run before the page has read its ledgers, during another run, or with no
 	// ledger or no statement.
-	const canRun = $derived(!initializing && !running && selected.length > 0 && sql.trim() !== '');
+	const canRun = $derived(!initializing && !refreshing && registryError === null && !running && selected.length > 0 && selected.every((name) => enabled.includes(name)) && sql.trim() !== '');
 	const answerLink = $derived(result !== null && !running && answerOffscreen ? '#data-explorer-rows' : '');
 	const shapeBounds = $derived({
 		chartMinRows: config.chart_min_rows,
@@ -222,12 +228,27 @@
 			void tick().then(() => document.getElementById(`explorer-tab-${activeResultTab}`)?.focus());
 		}
 	}
-	function toggle(name: LedgerName) {
-		selected = selected.includes(name) ? selected.filter((one) => one !== name) : [...selected, name];
+	// The path readers still use their compiled vocabulary until the next migration.
+	function readableLedger(name: string): name is LedgerName {
+		return LEDGER_NAMES.some((candidate) => candidate === name);
+	}
+	function selectConsented(names: readonly string[]) {
+		if (registry === null) return;
+		const selection = consentedSelection(registry, names);
+		selected = selection.names.filter(readableLedger);
+		const unsupported = selection.names.filter((name) => !readableLedger(name));
+		const notice = [
+			selection.notice,
+			unsupported.length === 0 ? null : `This site's path readers do not support these registered ledgers yet: ${unsupported.join(', ')}.`
+		].filter(Boolean).join(' ');
+		if (notice) keepNotice = notice;
+	}
+	function toggle(name: string) {
+		selectConsented(selected.some((one) => one === name) ? selected.filter((one) => one !== name) : [...selected, name]);
 		void updateCostAndColumns();
 	}
 	function pick(example: ExplorerExample) {
-		selected = example.ledgers.filter((name): name is LedgerName => ledgers.some((ledger) => ledger.name === name));
+		selectConsented(example.ledgers);
 		const days = presets.includes(example.days) ? example.days : windowDays;
 		windowDays = days;
 		toDay = todayUtc();
@@ -236,13 +257,13 @@
 		void updateCostAndColumns();
 	}
 	function pickSaved(question: KeptQuestion) {
-		selected = question.ledgers.filter((name): name is LedgerName => ledgers.some((ledger) => ledger.name === name));
+		selectConsented(question.ledgers);
 		if (question.from !== undefined && question.end !== undefined) setSpan(question.from, question.end);
 		else setWindow(presets.includes(question.days) ? question.days : windowDays);
 		sql = question.statement;
 	}
 	function pickRun(run: RecentRun) {
-		selected = run.ledgers.filter((name): name is LedgerName => ledgers.some((ledger) => ledger.name === name));
+		selectConsented(run.ledgers);
 		if (run.from !== undefined && run.end !== undefined) setSpan(run.from, run.end);
 		else setWindow(presets.includes(run.days) ? run.days : windowDays);
 		sql = run.statement;
@@ -262,10 +283,12 @@
 			if (afresh) await startAfresh();
 
 			registry = await fetchRegistry();
-			if (selected.length === 0) {
-				const first = config.examples.find((example) => example.ledgers.every((ledger) => published.includes(ledger)));
+			const hadSelection = selected.length > 0;
+			selectConsented(selected);
+			if (!hadSelection && !afresh) {
+				const first = examples[0];
 				if (first !== undefined) {
-					selected = first.ledgers.filter((name): name is LedgerName => ledgers.some((ledger) => ledger.name === name));
+					selectConsented(first.ledgers);
 					setWindow(presets.includes(first.days) ? first.days : windowDays);
 					sql = first.sql;
 				}
@@ -273,6 +296,8 @@
 			await updateCostAndColumns();
 		} catch (error) {
 			registryError = error instanceof Error ? error.message : String(error);
+			registry = null;
+			ledgerColumns = [];
 		} finally {
 			refreshing = false;
 		}
@@ -569,7 +594,7 @@
 <Panel id="data-explorer-ask" title="Your question">
 	<div class="question-panel">
 		<div data-workbench-region="questions">
-			<QuestionStrip examples={config.examples} {published} saved={savedQuestions} shown={config.strip_shown} onPick={pick} onPickSaved={pickSaved} onForget={forget} />
+			<QuestionStrip {examples} published={enabled} saved={savedQuestions} shown={config.strip_shown} onPick={pick} onPickSaved={pickSaved} onForget={forget} />
 			<div class="question-links">
 				<HistoryList runs={recentRuns} onPick={pickRun} />
 				<a class="how-to" href={`${data.docsBase}/blob/main/docs/how-to/query-a-ledger-from-the-console.md`}><Icon id="docs" /> Read the Data explorer how-to</a>

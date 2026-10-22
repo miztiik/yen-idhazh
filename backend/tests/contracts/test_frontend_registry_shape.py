@@ -1,21 +1,28 @@
+"""Hold the pure frontend parser's accepted fields to the native registry models."""
 
 import re
 from pathlib import Path
 
-from idhazh.contracts.ledgers import LedgerEntry, LedgerFamily
+import pytest
 
-ROOT = Path(__file__).resolve().parents[3]
-REGISTRY_TS = ROOT / "frontend" / "src" / "lib" / "console" / "explorer" / "registry.ts"
+from idhazh.contracts.ledgers import LedgerEntry, LedgerFamily, LedgersConfig
 
+pytestmark = pytest.mark.contract
 
-def fields_from_type(source: str, name: str) -> set[str]:
-    match = re.search(rf"export type {name} = \{{(?P<body>.*?)\}};", source, re.S)
-    assert match is not None, f"{name} is not declared"
-    return set(re.findall(r"^\s*([a-z_]+):", match.group("body"), re.M))
+CATALOG = (
+    Path(__file__).resolve().parents[3]
+    / "frontend" / "src" / "lib" / "data" / "ledger-catalog.ts"
+)
 
 
 def test_frontend_registry_copy_matches_backend_contract() -> None:
-    source = REGISTRY_TS.read_text(encoding="utf-8")
-    assert fields_from_type(source, "RegistryFamily") == set(LedgerFamily.model_fields)
-    assert fields_from_type(source, "RegistryLedger") == {"name", "grain"}
-    assert {"name", "grain"}.issubset(LedgerEntry.model_fields)
+    source = CATALOG.read_text(encoding="utf-8")
+    fields = {
+        "LEDGER_CONFIG_FIELDS": set(LedgersConfig.model_fields),
+        "LEDGER_FAMILY_FIELDS": set(LedgerFamily.model_fields),
+        "LEDGER_ENTRY_FIELDS": set(LedgerEntry.model_fields),
+    }
+    for name, expected in fields.items():
+        found = re.search(rf"export const {name} = \[(.*?)\] as const;", source, re.S)
+        assert found is not None, f"{name} is not declared"
+        assert set(re.findall(r"'([^']*)'", found[1])) == expected

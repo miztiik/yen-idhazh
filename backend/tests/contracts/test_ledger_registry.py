@@ -226,6 +226,53 @@ def test_the_committed_registry_names_every_ledger_exactly_once() -> None:
     assert len(entries) == len(LedgerName)
 
 
+def test_explorer_consent_preserves_exact_publication_membership() -> None:
+    config = LedgersConfig.model_validate(a_registry())
+    published = json.loads((REPO_ROOT / "config" / "idhazh.json").read_text(encoding="utf-8"))[
+        "ledger"
+    ]["published"]
+    consented = {
+        held.name.value
+        for family in config.families
+        for held in family.ledgers
+        if held.publish_to_data_explorer
+    }
+    assert consented == set(published)
+
+
+@pytest.mark.parametrize("value", [None, 0, 1, "true", "false", [], {}])
+def test_explorer_consent_refuses_non_boolean_values(value: Any) -> None:
+    payload = a_registry()
+    payload["families"][0]["ledgers"][0]["publish_to_data_explorer"] = value
+    with pytest.raises(ValidationError, match="publish_to_data_explorer"):
+        LedgersConfig.model_validate(payload)
+
+
+def test_explorer_consent_has_no_default() -> None:
+    payload = a_registry()
+    del payload["families"][0]["ledgers"][0]["publish_to_data_explorer"]
+    with pytest.raises(ValidationError, match="publish_to_data_explorer"):
+        LedgersConfig.model_validate(payload)
+
+
+def test_explorer_consent_refuses_non_compact_grains() -> None:
+    payload = a_registry()
+    for family in payload["families"]:
+        for entry in family["ledgers"]:
+            if entry["grain"] != Grain.RAW_AND_COMPACT:
+                entry["publish_to_data_explorer"] = True
+    with pytest.raises(ValidationError, match="not raw-and-compact"):
+        LedgersConfig.model_validate(payload)
+
+
+@pytest.mark.parametrize("status", ["paused", "retired"])
+def test_explorer_consent_is_independent_of_family_lifecycle(status: str) -> None:
+    payload = a_registry()
+    payload["families"][0]["lifecycle_status"] = status
+    held = LedgersConfig.model_validate(payload).families[0].ledgers[0]
+    assert held.publish_to_data_explorer is True
+
+
 def test_a_ledger_with_no_entry_stops_the_build_naming_it() -> None:
     """The refusal that replaces the hand-coded set, proved able to fire.
 

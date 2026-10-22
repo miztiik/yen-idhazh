@@ -21,7 +21,7 @@ import pytest
 from conftest import REPO_ROOT, read_text
 
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.ledgers import Grain
+from idhazh.contracts.ledgers import LEDGER_SEGMENT_PATTERN, Grain, LedgerLifecycleStatus
 from idhazh.contracts.machine_panels import WatchedFlag
 from idhazh.ledger import paths
 
@@ -31,6 +31,7 @@ READER: Final[Path] = (
     REPO_ROOT / "frontend" / "src" / "lib" / "console" / "machine" / "host-types.ts"
 )
 SLICE_SHAPES: Final[Path] = REPO_ROOT / "frontend" / "src" / "lib" / "data" / "slice-shapes.ts"
+CATALOG: Final[Path] = REPO_ROOT / "frontend" / "src" / "lib" / "data" / "ledger-catalog.ts"
 
 #: The two enums, by the name the frontend gives each one.
 VOCABULARIES: Final[dict[str, tuple[str, ...]]] = {
@@ -72,3 +73,12 @@ def test_the_frontend_ledger_folders_hold_the_registry_s_nested_door_prefixes() 
         f"LEDGER_FOLDERS in {SLICE_SHAPES.name} has drifted from the nested door prefixes "
         "in config/ledgers.json. Change both, or neither."
     )
+
+
+def test_frontend_catalog_vocabularies_match_registry_contract() -> None:
+    source = read_text(CATALOG)
+    assert members(source, "LEDGER_GRAINS") == tuple(member.value for member in Grain)
+    assert members(source, "LEDGER_LIFECYCLE_STATUSES") == tuple(
+        member.value for member in LedgerLifecycleStatus
+    )
+    assert f"export const LEDGER_SEGMENT_PATTERN = '{LEDGER_SEGMENT_PATTERN}';" in source

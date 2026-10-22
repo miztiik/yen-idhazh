@@ -2,22 +2,21 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 	import Icon from '$lib/icons/Icon.svelte';
-	import type { LedgerName } from '$lib/data/ledger';
 	import type { RegistryLedger } from './registry';
 	import { shortDate } from '$lib/format';
 	let { ledgers, selected, published, through = {}, spanFrom = '', filter = '', onToggle, onFilter, onRefresh, refreshing = false }: {
-		ledgers: RegistryLedger[];
-		selected: LedgerName[];
+		ledgers: readonly RegistryLedger[];
+		selected: string[];
 		published: string[];
 		through?: Record<string, string>;
 		spanFrom?: string;
 		filter?: string;
-		onToggle: (name: LedgerName) => void;
+		onToggle: (name: string) => void;
 		onFilter: (value: string) => void;
 		onRefresh: () => void;
 		refreshing?: boolean;
 	} = $props();
-	const shown = $derived(ledgers.filter((ledger) => ledger.name.includes(filter.toLowerCase())));
+	const shown = $derived(ledgers.filter((ledger) => ledger.publish_to_data_explorer && ledger.name.includes(filter.toLowerCase())));
 	let options = $state<HTMLDivElement | null>(null);
 	// The list keeps the first chosen ledger in view until the reader scrolls it, or presses or
 	// types anywhere on the page. One move when the page opened was not enough: a row's second

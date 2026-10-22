@@ -1,6 +1,6 @@
 # What the Data explorer keeps and shares
 
-**Last Updated**: 2026-10-09
+**Last Updated**: 2026-10-22
 
 Which state the Data explorer reads from the site, keeps in this browser and carries in a shared address.
 
@@ -13,14 +13,22 @@ owns their visible arrangement.
 
 The route renders only in the browser. It uses the common `404.html` fallback,
 with `prerender = false` and `ssr = false`; it has no separate generated HTML
-file. Build-time configuration supplies knobs and the published-ledger list,
-not ledger rows. The browser fetches the registry, indexes and chosen files.
+file. Build-time configuration supplies knobs and the staged-publication list,
+not ledger rows. The browser fetches and validates the registry, indexes and
+chosen files. The registry's [explicit consent](../contracts/ledger-registry.md#explorer-consent-and-its-runtime-catalog)
+controls which ledgers the explorer offers and selects; it does not establish
+whether data is available.
 
 The page queries only the selected ledgers and UTC days. Refresh releases the
 page's cached indexes and files through `startAfresh()`, then fetches the registry
 again. It does not run the question. The
 [written-question reader](how-the-query-door-answers-a-written-question.md)
 owns file selection, limits and archive behavior.
+
+Refresh removes selections whose consent has been disabled or whose entry has
+gone, and names them in a notice. It does not silently substitute an example
+when the whole selection is removed. A registry that fails validation reports
+its error and prevents Run rather than retaining an actionable stale catalog.
 
 ## Browser questions
 
@@ -29,8 +37,8 @@ queries or shared server state. The configured saved-question and history caps
 bound each list. If storage fails, the page says so and does not present Save or
 History as working.
 
-Examples come from `console.explorer_examples`. An example whose ledgers are not
-published is not offered. Choosing an example or saved question replaces the
+Examples come from `console.explorer_examples`. An example is offered only when
+every ledger it names has consent in the validated registry. Choosing an example or saved question replaces the
 SQL, ledger selection and span without running it. You can clear the loaded SQL
 in the editor, but that does not restore the previous question or its settings.
 

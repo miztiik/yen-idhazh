@@ -1,6 +1,6 @@
 # The ledger registry
 
-**Last Updated**: 2026-10-21
+**Last Updated**: 2026-10-22
 
 A ledger is a committed file or folder under `state/` that one run writes so that a later run can read it. A ledger exists in code only when it is registered, and registering it takes two edits. The first is one member of `LedgerName`, the ledger's one name in code. The second is one entry in `config/ledgers.json`, which puts the ledger in a family - one top-level folder under `state/` - and says where its files sit. When the code loads, it checks that the two edits agree, and the build stops if they do not.
 
@@ -22,7 +22,45 @@ It sits at the bottom of the contract graph rather than inside `backend/idhazh/l
 
 A **family** is one top-level folder under `state/`. `content-similarity-judge` is one family holding seven ledgers; most families hold one ledger of the same name. A family carries what is decided for the folder as a whole: its `name`, its `lifecycle_status`, a one-line `description` of what it holds, the UTC day it was `onboarded`, and its `ledgers`.
 
-A **ledger entry** names one registered storage address. Each carries five things: its `name`, its `grain`, the `prefix` of directories it sits under inside `state/`, and - for a ledger that is a single file - the `stem` and `suffix` that name it. A dated ledger carries no stem, because its period names it. A day directory carries no suffix, because it is a directory. The prefix keeps the whole nest, the family's folder included, so an address is read off the ledger alone. A ledger that goes through the door carries neither stem nor suffix, and its prefix is the path inside each root ([A ledger under the two roots](#a-ledger-under-the-two-roots)).
+A **ledger entry** names one registered storage address. It carries its `name`,
+`grain`, directory `prefix`, explicit `publish_to_data_explorer` consent, and
+the `stem` and `suffix` needed by file grains. A dated ledger carries no stem
+because its period names it. A day directory carries no suffix. The prefix
+keeps the family's folder and the whole nest. A ledger under both storage roots
+carries neither stem nor suffix ([A ledger under the two roots](#a-ledger-under-the-two-roots)).
+
+### Explorer consent and its runtime catalog
+
+Every entry must declare `publish_to_data_explorer` as `true` or `false`.
+There is no default, and strings or numbers are refused. True permits offering
+and selecting the ledger in the Data explorer; false permits neither. Only
+`raw-and-compact` entries can opt in. Consent does not promise that files exist,
+and a paused or retired family can retain consent for its recorded history.
+This is a publication choice, not secrecy: the repository is public.
+
+`frontend/src/lib/data/ledger-catalog.ts` validates the grouped JSON and derives
+an immutable flat lookup. Entries keep their checked, relative POSIX prefix;
+families retain their metadata and grouped entries. `get(name)` returns an
+entry or no match; `require(name)` refuses an unknown name. Neither guesses a
+folder. Name and prefix segments use lowercase words separated by hyphens.
+The parser checks required metadata, real UTC onboarding dates, grain and
+lifecycle vocabularies, duplicate names, family agreement, grain fields and
+overlapping compact prefixes before exposing the lookup.
+
+The browser registry adapter and Node staging code share this pure parser.
+`configured-catalog.ts` imports the named committed JSON with a JSON import
+attribute, with no browser or server-only dependency. The backend field-set
+test is `test_frontend_registry_shape.py`; the vocabulary and segment-grammar
+test is `test_frontend_vocabularies.py`. Bounded catalog mutations and native
+Node imports are covered by `ledger-catalog.spec.ts`.
+
+During migration, `ledger.published` in `config/idhazh.json` remains a checked
+bridge, not the build's authority: publication derives its selection from
+consent and refuses any set disagreement or duplicate in the old list.
+Remove this bridge after its remaining consumers move to the catalog.
+The initial conversion preserves exact membership, not a fixed member count.
+The compiled path readers still keep their existing vocabulary until their
+separate catalog migration; no storage path or data source changes here.
 
 Four builders locate the files of a ledger the door does not file - one JSON file, JSON files named by a stamp, one JSON file a day, or one folder a day - in two pairs:
 
@@ -164,7 +202,7 @@ into an active family unchanged. See [judge status](../publishing/llm-council.md
 **What a new ledger owes.** A new ledger files through the ledger door from its first row. It owes every edit below, each in the file named beside it, and the change that adds the ledger makes all of them. The check at load time, or the test named beside an edit, refuses the change while one is missing.
 
 - **Lifecycle.**
-  - A family in `config/ledgers.json` with `lifecycle_status` `active`, a one-line `description` and the UTC day it is `onboarded`, holding the ledger's entry: grain `raw-and-compact`, and the `prefix` it files under inside `state/raw/` and `state/compact/`, which starts with the family's name and ends with the ledger's own value. A ledger that joins a family adds only its entry to that family's `ledgers`, and the family's status covers it from its first row.
+  - A family in `config/ledgers.json` with `lifecycle_status` `active`, a one-line `description` and the UTC day it is `onboarded`, holding the ledger's entry: grain `raw-and-compact`, explicit `publish_to_data_explorer` consent, and the `prefix` it files under inside `state/raw/` and `state/compact/`, which starts with the family's name and ends with the ledger's own value. A ledger that joins a family adds only its entry to that family's `ledgers`, and the family's status covers it from its first row. During the migration bridge, the consented set and `ledger.published` must agree exactly.
   - Its `LedgerName` member in `backend/idhazh/contracts/ledger_name.py`, spelled from its value and its family ([One typed name for one ledger](#one-typed-name-for-one-ledger)).
   - Its value in `LEDGER_NAMES` in `frontend/src/lib/data/slice-shapes.ts`, which `test_every_ledger_the_door_may_query_is_a_ledger` holds equal to the registry. A ledger whose prefix nests it inside its family's folder also adds that folder to `LEDGER_FOLDERS` in the same file, which `backend/tests/contracts/test_frontend_vocabularies.py` holds equal to the nested prefixes.
 - **Write and read.**
@@ -294,6 +332,12 @@ A glob over `state/` was the other candidate and it fails twice. Its cost rises 
 The config carries where each ledger lives and each family's lifecycle status. It does not carry how the ledger's rows settle: a dedup key is a tuple and a preference is a callable, and a callable is not JSON. Merging the two into one table was considered and rejected - it re-couples two questions that change for different reasons, which is why `paths.py` imports nothing that answers the second one.
 
 **A lifecycle status belongs to a family, and an address to a ledger.** Owner decision, 2026-09-27. A status is a decision about a whole folder: pausing the similarity judge means none of its seven ledgers is written, and a status stored on each ledger made that seven edits that could disagree with each other. An address is a fact about one row shape - which folder, which grain, which file name - and two ledgers in one family still file differently. So the status is written once per folder, and the prefix keeps the whole nest so no builder has to ask the family anything.
+
+**Flatten only the runtime lookup.** A browser or build script needs one checked
+address per name, not a second authored registry. Deriving the lookup preserves
+one family-wide lifecycle decision. Consent belongs to an entry because
+registration protects storage, while publication is a separate choice; neither
+family status nor the presence of files can safely stand in for that choice.
 
 **The last three folders joined the registry rather than keep their own names.** `traces`, `day-metrics` and `digest-fragments` were built by their owning modules from directory constants, and the state cleanup of the day protected them from a list typed into the sweep beside the registry. That list was a second place to forget a folder, and each constant was a second spelling of where a ledger lives - the two defects the registry exists to remove. Each is now a one-ledger family, its owner composes its paths from the registry, and the one file name an owner minted, a digest fragment's, is minted inside the package like every other name under `state/`. None of them moved: each builder lands on the bytes it built before, and a test holds it.
 
