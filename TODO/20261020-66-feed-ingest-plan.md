@@ -321,6 +321,17 @@ proof; it neither publishes production content nor treats fixtures as live
 publication. The committed service remains default-off. The contract-repair
 approval in section 0 remains in force, with no scope reduction.
 
+Owner review hold, 2026-10-22 12:36 UTC: CI run 39771665611 passed all five
+jobs at `4ab3b1b3c875a0ff608f9dd0b70fecee8662d41d`, but isolated run
+39772640624 was cancelled at the owner's request after 31 minutes without
+useful progress. The runtime buffered typed events until planning returned.
+A bounded diagnostic reproduced the transport failure: the old fetch adapter
+required external termination on 21 of 24 named targets; the supported
+request API completed all 24. The child is implementing that repair,
+immediate durable progress, the owner-directed UUID convention and actual
+HTTP-listener verification. These changes need exact-candidate review,
+fresh CI and a successful isolated run before merge or plan closure.
+
 ### Table D - Status Reckoner
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
