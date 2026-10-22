@@ -322,13 +322,13 @@ jobs:
           if (await git.exited !== 0) throw new Error("Host capture cannot resolve executed revision");
           const started = Number(PLANNER_JOB_STARTED_MS);
           if (!Number.isSafeInteger(started) || started > Date.now()) throw new Error("Invalid job start observation");
+          const writer = { run_id: summary.run_id, attempt: Number(GITHUB_RUN_ATTEMPT), job: null,
+            pipeline_name: "feed-ingest-plan", task_name: "isolated-plan", shard: 0,
+            producer: "telemetry.silicon", git_sha };
           const host = await persistFingerprint({
-            date: summary.date, job_seconds: Math.floor((Date.now() - started) / 1000),
-            writer: { run_id: summary.run_id, attempt: Number(GITHUB_RUN_ATTEMPT), job: null,
-              pipeline_name: "feed-ingest-plan", task_name: "isolated-plan", shard: 0,
-              producer: "telemetry.silicon", git_sha },
+            date: summary.date, job_seconds: Math.floor((Date.now() - started) / 1000), writer,
           }, await loadConfig(), await loadSettings(), { outputRoot: join(root, "state") });
-          await writeFile(join(root, "host.json"), JSON.stringify(host));
+          await writeFile(join(root, "host.json"), JSON.stringify({ ...host, writer }));
           if (host.status !== "written") throw new Error("Host collection is disabled; required actual host evidence is unavailable");
           await writeGitHubOutputs(GITHUB_OUTPUT, { host_files: JSON.stringify(host.files.map(file => file.path)) });
           TS

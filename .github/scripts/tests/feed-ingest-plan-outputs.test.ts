@@ -131,7 +131,7 @@ test("generated publication evidence joins actual main output and writes native 
 });
 
 test("actual CLI planning proof and all native files survive both real report modes, never complete audit", async () => {
-  const fixture = await recordedPlan();
+  const fixture = await recordedPlan([source(), source({ id: "inactive-news", status: "draft" })]);
   try {
     const progress: ProgressRecord[] = [];
     const summary = await main(["--cli", "--partition-strategy=none"], {
@@ -141,9 +141,24 @@ test("actual CLI planning proof and all native files survive both real report mo
     const metrics = summary.metrics;
     const outputs = createExecutionOutputs(summary, fixture.inputs.registrations);
     const hostFixture = await Bun.file(new URL("../../../tests/fixtures/ledger-file-writer/host-fingerprint-row.json", import.meta.url)).json();
+    const host = {
+      row: { ...hostFixture, date: summary.date, run_id: summary.run_id },
+      writer: { run_id: summary.run_id, attempt: summary.planning_completion!.attempt, job: hostFixture.job,
+        pipeline_name: hostFixture.pipeline_name, task_name: hostFixture.task_name, shard: hostFixture.shard,
+        producer: "telemetry.silicon", git_sha: fixture.runtime.git_sha },
+    };
     const executionSummary = formatExecutionReport({
-      response: summary, host: { row: hostFixture }, progress, historyStagingMs: null,
+      response: summary, host, progress, historyStagingMs: null,
     });
+    expect(executionSummary).toContain("SOURCE&#95;INACTIVE | 1/2 configured sources");
+    for (const response of [
+      { ...summary, correlation_id: "another-correlation" },
+      { ...summary, planning_completion: { ...summary.planning_completion!, attempt: summary.planning_completion!.attempt + 1 } },
+    ]) expect(() => formatExecutionReport({ response, host, progress, historyStagingMs: null })).toThrow("source evidence");
+    for (const mixedHost of [
+      { ...host, row: { ...host.row, run_id: `${summary.date}-999` } },
+      { ...host, writer: { ...host.writer, attempt: host.writer.attempt + 1 } },
+    ]) expect(() => formatExecutionReport({ response: summary, host: mixedHost, progress, historyStagingMs: null })).toThrow("host evidence");
     expect(executionSummary).toContain(`| F1 | Hardware fingerprint | ${hostFixture.fingerprint ?? "Unavailable"} |`);
     expect(executionSummary).toContain(`requested limit ${summary.request.article_limit}`);
     expect(executionSummary).toContain("Screened eligible does not mean previously unpublished");

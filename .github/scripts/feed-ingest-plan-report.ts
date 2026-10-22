@@ -1,6 +1,6 @@
 /** Which source and stage outcomes can validated planner events actually prove? */
 import { appendFile, readFile } from "node:fs/promises";
-import { FeedIngestConfigSchema, HostFingerprintRowSchema, SourceRunRecordSchema, readFeedIngestEvent } from "../../packages/common-contracts/src/index";
+import { FeedIngestConfigSchema, HostFingerprintRowSchema, RunIdSchema, SourceRunRecordSchema, WriterIdentitySchema, readFeedIngestEvent } from "../../packages/common-contracts/src/index";
 import type { FeedIngestEvent } from "../../packages/common-contracts/src/index";
 import { join } from "node:path";
 
@@ -104,9 +104,25 @@ export function formatExecutionReport(input: Readonly<{
   response: unknown; host: unknown; progress: readonly unknown[]; historyStagingMs: unknown;
 }>): string {
   const response = object(input.response);
+  const runId = RunIdSchema.parse(response.run_id);
+  const completion = object(response.planning_completion);
+  if (typeof completion.attempt !== "number" || !Number.isSafeInteger(completion.attempt) || completion.attempt < 1
+    || typeof response.correlation_id !== "string" || response.correlation_id.length === 0) {
+    throw new Error("Report requires the completed planning attempt identity");
+  }
   if (!Array.isArray(response.source_records)) throw new Error("Report requires actual source records");
   const sources = response.source_records.map(row => SourceRunRecordSchema.parse(row));
   const host = input.host === null ? null : HostFingerprintRowSchema.parse(object(input.host).row);
+  if (sources.some(source => source.run_id !== runId || source.attempt !== completion.attempt
+    || source.correlation_id !== response.correlation_id)) throw new Error("Report source evidence differs from the planning attempt");
+  if (host !== null) {
+    const writer = WriterIdentitySchema.parse(object(input.host).writer);
+    if (writer.run_id !== runId || writer.attempt !== completion.attempt || writer.producer !== "telemetry.silicon"
+      || host.run_id !== writer.run_id || host.date !== response.date
+      || host.pipeline_name !== writer.pipeline_name || host.task_name !== writer.task_name || host.shard !== writer.shard) {
+      throw new Error("Report host evidence differs from the planning attempt");
+    }
+  }
   const request = object(response.request);
   const limit = request.article_limit;
   if (limit !== null && (typeof limit !== "number" || !Number.isSafeInteger(limit) || limit <= 0)) {
@@ -120,6 +136,7 @@ export function formatExecutionReport(input: Readonly<{
   for (const entry of progress) {
     if (typeof entry.eventType !== "string" || typeof entry.elapsedMs !== "number"
       || !Number.isFinite(entry.elapsedMs) || entry.elapsedMs < 0) throw new Error("Invalid progress timing evidence");
+    if (entry.correlationId !== response.correlation_id) throw new Error("Report progress evidence differs from the planning attempt");
   }
   function duration(start: string, end: string): string {
     const first = progress.find(entry => entry.eventType === start);
@@ -165,10 +182,10 @@ export function formatExecutionReport(input: Readonly<{
     "",
     "| Id | Subject / stage / reason | Count and denominator |",
     "| --- | --- | --- |",
-    ...[...drops].map(([reason, count], index) => `| D${index + 1} | ${escapeMarkdown(reason)} | ${count}/${reason.startsWith("feed /") ? feedAttempts : observedEntries} ${reason.startsWith("feed /") ? "attempted feeds" : "observed parsed entries"} |`),
+    ...[...drops].map(([reason, count], index) => `| D${index + 1} | ${escapeMarkdown(reason)} | ${count}/${reason.startsWith("feed /") ? sources.length : observedEntries} ${reason.startsWith("feed /") ? "configured sources" : "observed parsed entries"} |`),
     ...(drops.size === 0 ? ["No recorded refusals."] : []),
     "",
-    "Article reasons use observed parsed entries, not all feeds. Failed feed parses have no known entry count. Early refusals occur before article fetching; later refusals must not be subtracted again.",
+    "Feed decisions use all configured sources, including inactive sources that were not fetched. Article reasons use observed parsed entries, not all feeds. Failed feed parses have no known entry count. Early refusals occur before article fetching; later refusals must not be subtracted again.",
     "",
     "## Table E - Measured elapsed time",
     "",

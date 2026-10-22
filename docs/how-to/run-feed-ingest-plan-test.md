@@ -221,12 +221,16 @@ and formats source outcomes, observed stage counts and candidate-decision
 counts. The live response supplies existing source-run counts for offered,
 fresh, harvested, duplicate, screened eligible, normalized and selected entries,
 with the resolved requested limit. Feed failures are separate. Per-reason
-counts name their denominators; unknown feed entry counts remain unknown.
+counts name their denominators; feed decisions use every configured source,
+including inactive sources that were not fetched. Fetch failures separately
+use attempted feeds. Unknown feed entry counts remain unknown.
 Recorded progress supplies completed operation outcomes and paired elapsed
 intervals for history, planning, audit and HTTP. Event gaps are not summed as
 operation time. Intervals overlap and must not be added. The host row supplies
 actual hardware identity and elapsed job observation. Screened eligible does
-not mean previously unpublished. It labels missing evidence and incomplete audit explicitly. It
+not mean previously unpublished. Source run, attempt and correlation identities
+must match the response. Host run and recorded writer attempt must also match;
+mixed-run evidence is refused. It labels missing evidence and incomplete audit explicitly. It
 escapes source titles for Markdown and workflow-command data for annotations.
 It omits source URLs, headers, full event dumps and article text.
 
