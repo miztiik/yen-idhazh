@@ -3,7 +3,8 @@ import { z } from "zod";
 import { LifecycleStatusSchema, SourceSnapshotSchema } from "./source.schema";
 import { DropReasonSchema } from "./rejection.schema";
 import { CountSchema, DateStampSchema, FiniteSchema, NonEmptySchema, PositiveCountSchema, RejectionStageSchema, RunIdSchema, Sha256Schema, SlugSchema, TimestampSchema, reject } from "./primitives";
-import { FEED_INGEST_AUDIT_VERSION } from "../version";
+import { SOURCE_RUN_VERSION } from "../version";
+import { SchemaVersionSchema } from "./primitives";
 
 export const FetchStatusSchema = z.enum(["not_requested", "success", "http_failure", "network_failure", "timeout"]);
 export const ParseStatusSchema = z.enum(["not_attempted", "success", "empty", "failure"]);
@@ -17,15 +18,21 @@ export const CompletedFileSchema = z.strictObject({
   if (value.file_id[14] !== "8") reject(ctx, "file_id must be a version 8 UUID");
 });
 export const CompletionLedgerSchema = z.enum(["article-assessments", "diversity", "editorial-selections", "dispatches", "rejections"]);
+export const LogicalLedgerCommitmentSchema = z.strictObject({
+  version: z.literal("2026-10-22").default("2026-10-22"),
+  row_schema_version: SchemaVersionSchema, row_count: CountSchema, content_sha256: Sha256Schema,
+});
 export const LedgerCompletionEvidenceSchema = z.strictObject({
   ledger: CompletionLedgerSchema, row_count: CountSchema, files: z.array(CompletedFileSchema),
+  logical: LogicalLedgerCommitmentSchema.nullable().default(null),
 }).superRefine((value, ctx) => {
   if (value.files.reduce((total, file) => total + file.row_count, 0) !== value.row_count) reject(ctx, "ledger row_count must equal the sum of its file row counts");
   if ((value.row_count === 0) !== (value.files.length === 0)) reject(ctx, "an empty ledger has no files; a nonempty ledger has file evidence");
   if (new Set(value.files.map(file => file.file_id)).size !== value.files.length) reject(ctx, "ledger file identities must be distinct");
+  if (value.logical !== null && value.logical.row_count > value.row_count) reject(ctx, "unique logical rows cannot exceed written rows");
 });
 export const SourceRunRecordSchema = z.strictObject({
-  version: z.literal(FEED_INGEST_AUDIT_VERSION).default(FEED_INGEST_AUDIT_VERSION), date: DateStampSchema, correlation_id: NonEmptySchema,
+  version: z.literal(SOURCE_RUN_VERSION).default(SOURCE_RUN_VERSION), date: DateStampSchema, correlation_id: NonEmptySchema,
   run_id: RunIdSchema, attempt: PositiveCountSchema, source_id: SlugSchema,
   source: SourceSnapshotSchema, status: LifecycleStatusSchema,
   fetch_status: FetchStatusSchema, parse_status: ParseStatusSchema,

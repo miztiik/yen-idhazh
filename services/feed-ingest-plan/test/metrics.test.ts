@@ -129,7 +129,7 @@ test("known-empty article input yields explicit empty assessment evidence, not a
     const batch = preparePlanningMetrics(result, recorded.inputs, entries);
     const audit = await recordPlanningMetrics(result, recorded.inputs, entries);
     expect(audit.files.assessments).toEqual({ status: "empty", files: [] });
-    expect(audit.receipts.assessments).toEqual({ ledger: "article-assessments", row_count: 0, files: [] });
+    expect(audit.receipts.assessments).toMatchObject({ ledger: "article-assessments", row_count: 0, files: [], logical: { row_count: 0 } });
     expect(batch.diversity.find(row => row.metric === "effective_number_of_sources" && row.basis === "selected")).toMatchObject({
       value: 0, availability: "available",
     });
@@ -333,15 +333,15 @@ async function observedPublication(hasPublication = true) {
   } catch (error) { await recorded.close(); throw error; }
 }
 
-test("actual native publication writes all per-run readings and real source observations without sealing the audit", async () => {
+test("actual native publication completes the audit with a closed complete evidence window", async () => {
   const fixture = await observedPublication();
   try {
     const written = await recordPublicationMetrics({
       ...fixture.input, as_of: "2026-10-22T00:00:00Z", through: fixture.result.context.date,
       config: { ...fixture.input.config, top_source_counts: [3] },
     });
-    expect(written.status).toBe("publication_metrics_recorded_audit_pending");
-    expect(written.audited_complete).toBe(false);
+    expect(written.status).toBe("audit_complete");
+    expect(written.audited_complete).toBe(true);
     expect(written.receipts.diversity.row_count).toBe(written.rows.length);
     expect(written.receipts.diversity.files).toEqual(written.files.diversity.files.map(
       ({ file_id, content_sha256, row_count }) => ({ file_id, content_sha256, row_count })));
@@ -360,7 +360,7 @@ test("actual native publication writes all per-run readings and real source obse
     expect(written.source_observations).toHaveLength(4);
     expect(written.source_observations.reduce((sum, source) => sum + source.published_count!, 0)).toBe(2);
     expect(written.source_observations.reduce((sum, source) => sum + source.lead_count!, 0)).toBe(1);
-    expect(written.source_observations[0]!.source.kind).toBe("reporting");
+    expect(written.source_observations.find(row => row.source_id === fixture.result.evidence.harvest.inputs.sources[0]!.id)!.source.kind).toBe("reporting");
     const [nativeMetrics, nativeSources] = await Promise.all([
       readLedgerParquet(join(fixture.input.outputRoot, written.files.diversity.files[0]!.path), "diversity",
         DiversityMetricContract),

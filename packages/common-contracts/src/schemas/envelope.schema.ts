@@ -21,6 +21,10 @@ export const FOOTER_METADATA_KEYS = [
   "writer", "writer_version", "compression", "built_from",
 ] as const;
 export const OPTIONAL_FOOTER_METADATA_KEYS = ["job", "period", "built_from", "pipeline_name", "task_name"] as const;
+// Stored identity columns begin at these envelope revisions, as in RowIdentity.__column_versions__.
+export const ROW_IDENTITY_COLUMN_VERSIONS: Readonly<Record<string, string>> = {
+  pipeline_name: "2026-10-12", task_name: "2026-10-12",
+};
 const JobSchema = z.union([ServerJobSchema, JobNameSchema, z.null()]);
 const IdentityFields = {
   run_id: RunIdSchema, attempt: PositiveCountSchema, job: JobSchema,

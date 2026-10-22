@@ -99,6 +99,7 @@ export async function inputs(sources: ConfiguredSource[] = [source()], overrides
 
 export function context(log: HarvestContext["log"] = () => {}): HarvestContext {
   return {
+    max_future_hours: 6,
     writer: {
       run_id: "2026-10-21-700", attempt: 2, job: null, pipeline_name: "feed-ingest-plan",
       task_name: "harvest-feeds", shard: 0, producer: "tests.harvest", git_sha: "a".repeat(40),

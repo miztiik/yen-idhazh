@@ -1,11 +1,13 @@
 /** Which single captured UTC instant and writer identity belong to this run? */
 import { WriterIdentitySchema } from "@idhazh/common-contracts";
 import { randomUUID } from "node:crypto";
+import { z } from "zod";
 import type { ServiceSettings } from "./config/service-settings";
 
 export function resolveRunContext(
   settings: ServiceSettings, gitSha: string, now: Date,
   runNumber = BigInt(`0x${randomUUID().replaceAll("-", "")}`).toString(),
+  correlationId: string = randomUUID(),
 ) {
   if (!Number.isFinite(now.getTime())) throw new Error("run.now must be a valid UTC instant");
   const occurred_at = now.toISOString().replace(/\.\d{3}Z$/, "Z");
@@ -16,7 +18,7 @@ export function resolveRunContext(
     task_name: "plan", shard: 0, producer: settings.run.producer, git_sha: gitSha,
   });
   return {
-    now: occurred_at, date, run_id, correlation_id: `${run_id}-${writer.attempt}`,
+    now: occurred_at, date, run_id, correlation_id: z.uuid({ version: "v4" }).parse(correlationId),
     writer,
   };
 }

@@ -13,11 +13,40 @@ import { harvestFeeds, loadHarvestInputs } from "@idhazh/feed-ingest-plan/harves
 import { parseFeed } from "../src/harvest-feeds/feed-client";
 import { extractArticle } from "../src/harvest-feeds/dom-extractor";
 import { canonicalizeUrl } from "../src/harvest-feeds/url-cleaner";
+import { createPinnedDispatcher, readResponseBody } from "../src/harvest-feeds/transport";
+import { addAbortSignal, PassThrough, Readable } from "node:stream";
+import { createGunzip, gzipSync } from "node:zlib";
 import {
   RecordedTransport, context, destination, inputs, readRecordings, source,
 } from "./harvest-recordings";
 
 let wasmInitialization: ReturnType<typeof initializeWasm> | undefined;
+
+test("the live transport owns a real closable pinned dispatcher without opening a connection", async () => {
+  expect(() => createPinnedDispatcher([])).toThrow("no address");
+  const dispatcher = createPinnedDispatcher([{ address: "93.184.216.34", family: 4 }]);
+  expect(typeof dispatcher.dispatch).toBe("function");
+  expect(dispatcher.closed).toBe(false);
+  await dispatcher.close();
+  expect(dispatcher.closed).toBe(true);
+});
+
+test("real response streams enforce decoded byte limits and release an aborted body", async () => {
+  const recording = await readRecordings();
+  const body = recording.bodies.article;
+  const decoded = Readable.from([gzipSync(body)]).pipe(createGunzip());
+  expect(await readResponseBody(decoded, 200, Buffer.byteLength(body))).toBe(body);
+  const oversized = Readable.from([Buffer.from(body)]);
+  await expect(readResponseBody(oversized, 200, Buffer.byteLength(body) - 1))
+    .rejects.toThrow("max_body_bytes");
+  expect(oversized.destroyed).toBe(true);
+  const controller = new AbortController();
+  const pending = addAbortSignal(controller.signal, new PassThrough());
+  const reading = readResponseBody(pending, 200, 100);
+  controller.abort();
+  await expect(reading).rejects.toMatchObject({ code: "ABORT_ERR" });
+  expect(pending.destroyed).toBe(true);
+});
 
 test("RSS and prefixed Atom retain every category, author, ordinal and UTC timestamp", async () => {
   const recordings = await readRecordings();

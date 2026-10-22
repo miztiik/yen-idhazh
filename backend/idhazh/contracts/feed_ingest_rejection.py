@@ -1,7 +1,7 @@
 """Why was one feed or offered article refused at its deciding stage?"""
 
 from enum import StrEnum
-from typing import ClassVar, Literal, Self
+from typing import Any, ClassVar, Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -75,9 +75,10 @@ REASON_STAGES: dict[DropReason, tuple[RejectionStage, ...]] = {
             DropReason.PAYWALL_OR_BLOCKED,
             DropReason.CATEGORY_EXCLUDED,
             DropReason.STUB_CONTENT,
-            DropReason.STALE_MAX_AGE_EXCEEDED,
             DropReason.STALE_HALF_LIFE_DECAY,
         }
+        else ("harvest-feeds", "screen-article-candidates")
+        if reason == DropReason.STALE_MAX_AGE_EXCEEDED
         else ("screen-article-candidates", "curate-article-portfolio")
         if reason in {DropReason.DUPLICATE_CANONICAL_URL, DropReason.ROLLING_HISTORY_REPEAT}
         else ("curate-article-portfolio",)
@@ -130,12 +131,17 @@ class CandidateRejectionRecord(Contract):
     __schema_stem__: ClassVar[str] = "feed-ingest-rejection"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-22",
+            change="Allow measured publication-age refusal before article download.",
+            why="Expired feed entries need no page extraction to establish their age.",
+        ),
+        ChangelogEntry(
             version="2026-10-20",
             change="Declare terminal feed and article rejections.",
             why="Every deciding stage retains typed reasons and observations.",
         ),
     )
-    version: Literal["2026-10-20"] = "2026-10-20"
+    version: Literal["2026-10-22"] = "2026-10-22"
     date: DateStamp
     correlation_id: NonEmpty
     source_id: Slug
@@ -150,6 +156,13 @@ class CandidateRejectionRecord(Contract):
     drop_reason: DropReason
     details: RejectionDetails
     rejected_at: Timestamp
+
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_previous_version(cls, value: Any) -> Any:
+        if isinstance(value, dict) and value.get("version") == "2026-10-20":
+            return {**value, "version": "2026-10-22"}
+        return value
 
     @model_validator(mode="after")
     def validate_rejection(self) -> Self:

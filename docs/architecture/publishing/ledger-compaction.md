@@ -1,6 +1,6 @@
 # Ledger compaction
 
-**Last Updated**: 2026-10-10
+**Last Updated**: 2026-10-22
 
 How a ledger's daily, monthly and yearly files are packed and dropped. The
 gardener runs a compaction like any other task; how a wake runs its tasks and
@@ -197,6 +197,15 @@ Days go in order, each on its own. For each one the pass reads every raw file of
 the day and settles the rows: one file's rows per work unit - the last file of
 its highest attempt - then the first row of each key. It writes the day's day
 file and no raw listing.
+The six feed-planning ledgers instead retain each original run and attempt,
+then deduplicate by their declared business key. Identical records count once;
+conflicting records refuse the day before set-aside actions, writes, indexes
+or source deletion. A reopened month applies the same refusal before changes.
+Ordinary monthly and yearly packing preserves settled lower-tier rows.
+The diversity key includes measurement unit, keeping count and ratio rows
+distinct. New completion receipts commit logical record membership independent
+of file boundaries; their encoding and old raw-only limitation are defined in
+[feed planning audit recording](../sources/feed-ingest-audit.md#compaction-safe-attempt-proof).
 After all stages decide their files, the pass writes each final index once,
 in yearly, monthly, daily order, then deletes source files. Monthly absorption
 and new days share one final daily index. Index bytes grow linearly with the

@@ -38,6 +38,26 @@ export function translateArticleAssessments(result: FeedPlanResult, inputs: Plan
     const overrides = result.request.freshness_hours === undefined ? {} : { freshness_hours: result.request.freshness_hours };
     const policy = harvestPolicy(result.evidence.harvest.inputs, row.source.vertical, overrides);
     requireSame(row.policy, policy, `candidate.${row.candidate_id}.policy`);
+    if (original.observation.preflight_freshness !== undefined) {
+      const measured = original.observation.preflight_freshness;
+      requireSame(measured, calculateFreshness(
+        { published_at: measured.timing_at }, undefined, result.context.now,
+        inputs.clock_config.collect.max_future_hours,
+        resolvePolicy(result.evidence.harvest.inputs, row.source.vertical, overrides),
+      ), `candidate.${row.candidate_id}.preflight_clock`);
+      requireSame([row.stage, row.reason, row.extraction_outcome, row.timing_basis, row.timing_at,
+        row.age_hours, row.max_age_hours],
+      ["harvest-feeds", "STALE_MAX_AGE_EXCEEDED", "not_attempted", "published_at", measured.timing_at,
+        measured.age_hours, policy.max_age_hours], `candidate.${row.candidate_id}.preflight`);
+      requireSame([original.rejection?.details.age_hours, original.rejection?.details.max_age_hours],
+        [measured.age_hours, policy.max_age_hours], `candidate.${row.candidate_id}.preflight_rejection`);
+      if (measured.age_hours <= policy.max_age_hours) throw new Error(`candidate.${row.candidate_id}.preflight: publication has not expired`);
+      requireSame([
+        row.extracted_word_count, row.word_threshold, row.author_present, row.publisher_identity,
+        row.attribution_status, row.paywall, row.categories, row.required_fields_present, row.suitability_status,
+      ], [null, null, null, null, "unavailable", null, null, null, "unavailable"],
+      `candidate.${row.candidate_id}.preflight_unperformed`);
+    }
     if (candidate !== null) {
       requireSame([row.source, row.canonical_url, row.url_key, row.labels, row.author_present],
         [candidate.source, candidate.canonical_url, candidate.url_key, candidate.labels, candidate.author !== null],

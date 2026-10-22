@@ -21,6 +21,25 @@ import {
 } from "../../../services/feed-ingest-plan/src/metrics/publication-evidence";
 import { readLedgerParquet } from "../../../services/feed-ingest-plan/src/read-ledger-history/read-parquet";
 import { DispatchContract } from "../../../services/feed-ingest-plan/src/metrics/audit-contracts";
+import { generatePublicationInput } from "../../../services/feed-ingest-plan/test/full-audit-recording";
+import { verifyFullAuditFixture } from "../feed-ingest-plan-audit-fixture";
+
+test("full-audit outputs require actual completed observer evidence and remain explicitly generated fixtures", async () => {
+  const fixture = await recordedPlan();
+  try {
+    const summary = await main(["--cli"], {
+      inputs: fixture.inputs, output: () => {},
+      runtime: { ...fixture.runtime, observe_publication: (plan, metrics) =>
+        generatePublicationInput(plan, metrics, fixture.inputs, join(fixture.directory, "publication")) },
+    });
+    if (!("files" in summary)) throw new Error("Missing summary");
+    expect(createExecutionOutputs(summary, fixture.inputs.registrations).audited_complete).toBe("true");
+    expect(() => createExecutionOutputs({ ...summary, publication: null }, fixture.inputs.registrations)).toThrow("audited_complete");
+    expect(await verifyFullAuditFixture(join(fixture.directory, "workflow-generated-audit"))).toMatchObject({
+      scope: "generated_fixture", audited_complete: true, attempt: 1,
+    });
+  } finally { await fixture.close(); }
+}, 30000);
 
 test("generated publication evidence joins actual main output and writes native observer files, not production publication", async () => {
   const fixture = await recordedPlan();
@@ -174,7 +193,7 @@ test("actual CLI planning proof and all native files survive both real report mo
     }
     expect(() => createExecutionOutputs({ ...summary, metrics: {
       ...metrics, receipts: { ...metrics.receipts, assessments: {
-        ...metrics.receipts.assessments, files: [], row_count: 0,
+        ...metrics.receipts.assessments, files: [], row_count: 0, logical: null,
       } },
     } }, fixture.inputs.registrations)).toThrow("receipt");
     const file = summary.metrics.files.diversity.files[0]!;

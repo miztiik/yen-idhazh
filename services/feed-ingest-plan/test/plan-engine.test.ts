@@ -147,8 +147,9 @@ test("freshness equality is admitted; a smaller override really rejects; empty i
     expect(boundary.evidence.screening.admitted).toHaveLength(2);
     const rejected = await runFeedPlan({ freshness_hours: 12 }, stale.inputs, stale.runtime);
     expect(rejected.evidence.screening.admitted).toHaveLength(0);
-    expect(rejected.evidence.screening.rejections.map(row => row.drop_reason))
+    expect(rejected.evidence.harvest.rejections.filter(row => row.drop_reason === "STALE_MAX_AGE_EXCEEDED").map(row => row.drop_reason))
       .toEqual(["STALE_MAX_AGE_EXCEEDED", "STALE_MAX_AGE_EXCEEDED"]);
+    expect(rejected.evidence.screening.rejections).toEqual([]);
     expect(rejected.files.dispatches).toEqual({ status: "empty", files: [] });
     const noArticles = await runFeedPlan({}, empty.inputs, empty.runtime);
     expect(noArticles.evidence.partition.dispatches).toEqual([]);

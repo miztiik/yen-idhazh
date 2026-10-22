@@ -13,6 +13,7 @@ from idhazh.contracts.base import (
     DateStamp,
     Model,
     RunId,
+    SchemaVersion,
     Sha256,
     Slug,
     Timestamp,
@@ -50,6 +51,15 @@ class CompletedFile(Model):
         return value
 
 
+class LogicalLedgerCommitment(Model):
+    """An ordered unique record set, independent of its storage files."""
+
+    version: Literal["2026-10-22"] = "2026-10-22"
+    row_schema_version: SchemaVersion
+    row_count: Count
+    content_sha256: Sha256
+
+
 class LedgerCompletionEvidence(Model):
     """Durable output evidence, including known-empty ledgers."""
 
@@ -62,6 +72,7 @@ class LedgerCompletionEvidence(Model):
     ]
     row_count: Count
     files: list[CompletedFile]
+    logical: LogicalLedgerCommitment | None = None
 
     @model_validator(mode="after")
     def validate_file_counts(self) -> Self:
@@ -71,6 +82,8 @@ class LedgerCompletionEvidence(Model):
             raise ValueError("an empty ledger has no files; a nonempty ledger has file evidence")
         if len({file.file_id for file in self.files}) != len(self.files):
             raise ValueError("ledger file identities must be distinct")
+        if self.logical is not None and self.logical.row_count > self.row_count:
+            raise ValueError("unique logical rows cannot exceed written rows")
         return self
 
 
@@ -79,6 +92,11 @@ class SourceRunRecord(Contract):
 
     __schema_stem__: ClassVar[str] = "feed-ingest-source-run"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-22T10:05",
+            change="Commit unique attempt records independently of storage files.",
+            why="Verified planning evidence must survive compaction without inventing old proof.",
+        ),
         ChangelogEntry(
             version="2026-10-22",
             change="Keep run date separate from the actual observation instant.",
@@ -90,7 +108,7 @@ class SourceRunRecord(Contract):
             why="A complete attempt must remain distinguishable from partial retries.",
         ),
     )
-    version: Literal["2026-10-22"] = "2026-10-22"
+    version: Literal["2026-10-22T10:05"] = "2026-10-22T10:05"
 
     date: DateStamp
     correlation_id: str = Field(min_length=1)
@@ -128,8 +146,8 @@ class SourceRunRecord(Contract):
     @model_validator(mode="before")
     @classmethod
     def migrate_previous_version(cls, value: Any) -> Any:
-        if isinstance(value, dict) and value.get("version") == "2026-10-20":
-            return {**value, "version": "2026-10-22"}
+        if isinstance(value, dict) and value.get("version") in {"2026-10-20", "2026-10-22"}:
+            return {**value, "version": "2026-10-22T10:05"}
         return value
 
     @model_validator(mode="after")

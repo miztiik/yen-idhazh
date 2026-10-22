@@ -3,7 +3,7 @@
   "version": "2026.10.20",
   "private": true,
   "type": "module",
-  "description": "Hand-written Python contract copies. Zod supplies strict runtime validation; TypeScript and Bun types add development-only install cost, with no browser bundle.",
+  "description": "Shared Python ledger contract copies and the authoritative planner event contract. Zod supplies strict runtime validation; TypeScript and Bun types add development-only install cost, with no browser bundle.",
   "exports": "./src/index.ts",
   "scripts": {
     "check": "tsc --noEmit",

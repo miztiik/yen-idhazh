@@ -1,7 +1,7 @@
 /** Which complete recorded planning attempt supplies one day's measured populations? */
 import { isDeepStrictEqual } from "node:util";
 import {
-  ArticleAssessmentRecordSchema, CONTRACT_VERSION, CandidateRejectionRecordSchema,
+  ArticleAssessmentRecordSchema, CONTRACT_VERSION, CandidateRejectionRecordSchema, CandidateRejectionContract,
   EditorialSelectionRowSchema,
 } from "@idhazh/common-contracts";
 import type { LedgerRowContract } from "@idhazh/ledger-file-writer";
@@ -42,7 +42,7 @@ export async function readPlanningHistory(input: NamedPlanningHistory): Promise<
     diversity: DiversityMetricContract,
     "editorial-selections": { schema: EditorialSelectionRowSchema, schemaVersion: CONTRACT_VERSION },
     dispatches: DispatchContract,
-    rejections: { schema: CandidateRejectionRecordSchema, schemaVersion: CONTRACT_VERSION },
+    rejections: CandidateRejectionContract,
   };
   const read = async (ledger: CompletionLedger) => {
     const named = input.ledgers[ledger];
@@ -84,6 +84,7 @@ export function derivePlanningPopulation(attempt: ProvenAttempt): PlanningPopula
     throw new Error("Historical terminal article loss has no assessment");
   }
   const harvest = assessments.filter(row => row.stage === "harvest-feeds" && row.decision === "admitted");
+  const earlyStale = assessments.filter(row => row.stage === "harvest-feeds" && row.reason === "STALE_MAX_AGE_EXCEEDED");
   const screen = assessments.filter(row => row.stage === "screen-article-candidates");
   const curated = assessments.filter(row => row.stage === "curate-article-portfolio");
   const ids = (rows: typeof assessments) => new Set(rows.map(row => row.candidate_id));
@@ -109,14 +110,14 @@ export function derivePlanningPopulation(attempt: ProvenAttempt): PlanningPopula
   const selected = curated.filter(row => row.decision === "selected").map(item);
   if (new Set(selected.map(row => row.url_key)).size !== selected.length) throw new Error("Historical selected primary articles are not unique");
   const stages = {
-    input: harvest.map(item), freshness: harvest.filter(row => !stale.has(row.candidate_id)).map(item),
+    input: [...harvest, ...earlyStale].map(item), freshness: harvest.filter(row => !stale.has(row.candidate_id)).map(item),
     deduplication: eligible.filter(row => !duplicate.has(row.candidate_id)).map(item),
     normalization: eligible.filter(row => !duplicate.has(row.candidate_id) && !normalizedOut.has(row.candidate_id)).map(item),
     selection: selected,
   };
   for (const source of attempt.sources) {
     for (const [field, members] of [
-      ["harvested_count", stages.input], ["fresh_count", stages.freshness], ["eligible_count", eligible.map(item)],
+      ["harvested_count", harvest.map(item)], ["fresh_count", stages.freshness], ["eligible_count", eligible.map(item)],
       ["normalized_count", stages.normalization], ["selected_count", selected],
     ] as const) {
       if ((source[field] === null && field !== "harvested_count")

@@ -127,7 +127,8 @@ function diversity() {
 }
 function event() {
   return FeedIngestEventSchema.parse({
-    event_id: digest, correlation_id: "correlation", run_id: run, attempt: 1,
+    event_id: "01504bcb-60d1-5d4d-b92f-d6f0abee2022",
+    correlation_id: "7cef34e3-dd9f-40ce-9a56-4d01ff5115cc", run_id: run, attempt: 1,
     sequence: 0, occurred_at: at, stage: "harvest-feeds", audit_event_type: "stage_completion",
     source_id: null, candidate_id: null, elapsed_ms: 1, step_elapsed_ms: 1, policy,
     payload: { kind: "stage_completion", stage: "harvest-feeds", input_count: 0,
@@ -285,6 +286,28 @@ describe("planning audit contracts", () => {
     expect(FeedIngestEventSchema.safeParse({ ...row, candidate_id: digest }).success).toBe(false);
     expect(FeedIngestEventSchema.safeParse({ ...row, stage: "seal-article-ledger" }).success).toBe(false);
     expect(StageCompletionPayloadSchema.safeParse({ ...row.payload, article_text: "Do not log" }).success).toBe(false);
+    expect(FeedIngestEventSchema.safeParse({ ...row, payload: { ...row.payload, kind: "unregistered_observation" } }).success).toBe(false);
+    expect(FeedIngestEventSchema.safeParse({ ...row, payload: { ...row.payload, article_text: "Do not log" } }).success).toBe(false);
+    expect(FeedIngestEventSchema.safeParse({ ...row, event_id: digest }).success).toBe(false);
+    expect(FeedIngestEventSchema.safeParse({ ...row, correlation_id: run }).success).toBe(false);
+    expect(FeedIngestEventSchema.safeParse({ ...row, event_id: row.correlation_id }).success).toBe(false);
+    expect(FeedIngestEventSchema.safeParse({ ...row, correlation_id: row.event_id }).success).toBe(false);
+  });
+
+  test("validates the current event fixture with its sole native declaration", async () => {
+    const fixture = await Bun.file(new URL(
+      "../../../tests/fixtures/contracts/feed-ingest-event/one-observation.json", import.meta.url,
+    )).json();
+    const record = FeedIngestEventSchema.parse(fixture);
+    expect(JSON.parse(JSON.stringify(record))).toEqual(fixture);
+    const schema = z.toJSONSchema(FeedIngestEventSchema, { io: "input" });
+    expect(schema.$id).toBe("feed-ingest-event");
+    expect(schema.version).toBe(record.version);
+    expect(schema.changelog).toEqual([{
+      version: record.version,
+      change: "Require UUID event and correlation identities with typed decision evidence.",
+    }]);
+    expect(schema.additionalProperties).toBe(false);
   });
 
   test("exports the actual runtime input JSON schemas, including nested strict objects", () => {

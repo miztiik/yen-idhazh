@@ -13,6 +13,7 @@ export type {
 export { createFileId } from "./uuid/file-id";
 export type { FileIdentity } from "./uuid/file-id";
 export { createUnitId } from "./uuid/unit-id";
+export { createUuidV5 } from "./uuid/name-id";
 export type { UnitIdentity } from "./uuid/unit-id";
 export { digestRows } from "./parquet/row-digest";
 export type { LogicalField, LogicalType } from "./parquet/row-digest";

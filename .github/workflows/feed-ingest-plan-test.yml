@@ -46,6 +46,7 @@ jobs:
             /.github/scripts/feed-ingest-plan-outputs.ts
             /.github/scripts/feed-ingest-plan-report.ts
             /.github/scripts/feed-ingest-plan-verification.ts
+            /.github/scripts/feed-ingest-plan-audit-fixture.ts
             /.github/scripts/tests/feed-ingest-plan-outputs.test.ts
             /.github/scripts/tests/feed-ingest-plan-report.test.ts
             /.github/scripts/tests/feed-ingest-plan-workflow.test.ts
@@ -74,8 +75,9 @@ jobs:
           bun test ./.github/scripts/tests/feed-ingest-plan-report.test.ts ./.github/scripts/tests/feed-ingest-plan-outputs.test.ts ./.github/scripts/tests/feed-ingest-plan-workflow.test.ts --timeout 30000
           bun run .github/scripts/feed-ingest-plan-verification.ts
 
-      - name: Read named history and run the real planner
+      - name: Read named history and call the real HTTP planner
         id: plan
+        timeout-minutes: 10
         env:
           FRESHNESS_HOURS: ${{ inputs.freshness_hours }}
           ARTICLE_LIMIT: ${{ inputs.article_limit }}
@@ -84,10 +86,16 @@ jobs:
         run: |
           bun run - <<'TS'
           import { mkdir, writeFile } from "node:fs/promises";
+          import { appendFileSync } from "node:fs";
+          import { randomUUID } from "node:crypto";
           import { join } from "node:path";
           import { loadPlanInputs } from "./services/feed-ingest-plan/src/load-plan-inputs";
           import { parseCliRequest, describePlanError } from "./services/feed-ingest-plan/src/api/plan-request";
-          import { main } from "./services/feed-ingest-plan/src/index";
+          import { servePlan } from "./services/feed-ingest-plan/src/api/server";
+          import { summarizePlan } from "./services/feed-ingest-plan/src/run-feed-plan";
+          import { writeAuditEvent } from "./services/feed-ingest-plan/src/logging/structured-logger";
+          import { createProgressLogger } from "./services/feed-ingest-plan/src/logging/progress-logger";
+          import type { ProgressRecord } from "./services/feed-ingest-plan/src/logging/progress-logger";
           import { utcTimestamp } from "./services/feed-ingest-plan/src/harvest-feeds/harvest-types";
           import { ServiceSettingsSchema } from "./services/feed-ingest-plan/src/config/service-settings";
           import { requiredSeenDays } from "./services/feed-ingest-plan/src/read-ledger-history/read-seen-evidence";
@@ -106,7 +114,7 @@ jobs:
               const value = process.env[field];
               if (value !== undefined && value.trim() !== "") args.push(`${flag}=${value}`);
             }
-            parseCliRequest(args);
+            const { request } = parseCliRequest(args);
             const inputs = await loadPlanInputs(root);
             const captured = new Date();
             const now = utcTimestamp(() => captured);
@@ -204,20 +212,48 @@ jobs:
             if (!RUNNER_TEMP || !GITHUB_OUTPUT || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT) {
               throw new Error("workflow: runner directory, output path, run identity and attempt are required");
             }
-            const settings = ServiceSettingsSchema.parse({ ...inputs.settings,
+            const settings = ServiceSettingsSchema.parse({ ...inputs.settings, enabled: true,
               inputs: { ...inputs.settings.inputs, seen_days },
               run: { ...inputs.settings.run, attempt: Number(GITHUB_RUN_ATTEMPT) } });
             const artifactRoot = join(RUNNER_TEMP, "feed-ingest-plan");
             await mkdir(artifactRoot, { recursive: true });
             const events: FeedIngestEvent[] = [];
-            const summary = await main(args, {
-              inputs: { ...inputs, settings, outputRoot: join(artifactRoot, "state") },
-              runtime: { git_sha, clock: () => captured, run_number: GITHUB_RUN_ID,
-                log: event => { events.push(event); } },
-              output: () => {},
+            const correlation_id = randomUUID();
+            const writeProgress = (event: ProgressRecord) => {
+              appendFileSync(join(artifactRoot, "progress.jsonl"), `${JSON.stringify(event)}\n`);
+              console.error(JSON.stringify(event));
+            };
+            const progress = createProgressLogger(correlation_id, writeProgress);
+            const server = servePlan({ ...inputs, settings, outputRoot: join(artifactRoot, "state") }, {
+              git_sha, clock: () => captured, run_number: GITHUB_RUN_ID, correlation_id,
+              log: event => {
+                events.push(event);
+                appendFileSync(join(artifactRoot, "audit-events.jsonl"), `${JSON.stringify(event)}\n`);
+                writeAuditEvent(event);
+              },
+              progress: writeProgress,
             });
+            progress("HTTP_LISTENER_STARTED");
+            let summary: ReturnType<typeof summarizePlan>;
+            try {
+              const health = await fetch(new URL("/api/2026-10-20/health", server.url));
+              if (!health.ok || (await health.json()).planner_enabled !== true) {
+                throw new Error("workflow: actual HTTP listener is not enabled and healthy");
+              }
+              const response = await fetch(new URL("/api/2026-10-20/plan", server.url), {
+                method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(request),
+                // The independent step deadline supervises planning, not the client's five-minute idle timer.
+                timeout: false,
+              });
+              progress("HTTP_RESPONSE_RECEIVED", { http_status: response.status });
+              if (!response.ok) throw new Error(`workflow: HTTP planning failed (${response.status}): ${await response.text()}`);
+              summary = await response.json();
+            } finally {
+              await server.stop(true);
+              progress("HTTP_LISTENER_STOPPED");
+            }
             if (!("files" in summary) || summary.metrics === undefined) {
-              throw new Error("workflow: CLI did not return actual assessment/diversity recording evidence");
+              throw new Error("workflow: HTTP planner did not return actual assessment/diversity recording evidence");
             }
             await writeFile(join(artifactRoot, "events.json"), JSON.stringify(events));
             await verifyParquetFiles(join(artifactRoot, "state"), "dispatches", summary.files.dispatches, inputs.registrations.dispatches);
@@ -244,13 +280,28 @@ jobs:
           }
           TS
 
+      - name: Verify full audit on generated publication fixtures
+        id: audit_fixture
+        run: |
+          bun run - <<'TS'
+          import { join } from "node:path";
+          import { verifyFullAuditFixture } from "./.github/scripts/feed-ingest-plan-audit-fixture";
+          import { writeGitHubOutputs } from "./.github/scripts/feed-ingest-plan-outputs";
+          const { RUNNER_TEMP, GITHUB_OUTPUT } = process.env;
+          if (!RUNNER_TEMP || !GITHUB_OUTPUT) throw new Error("Fixture output directory and workflow output are required");
+          const result = await verifyFullAuditFixture(join(RUNNER_TEMP, "feed-ingest-plan", "generated-full-audit"));
+          await writeGitHubOutputs(GITHUB_OUTPUT, {
+            audited_complete: String(result.audited_complete), scope: result.scope,
+          });
+          TS
+
       - name: Optional GitHub report
         if: ${{ !cancelled() && steps.plan.outputs.workflow_reporting == 'true' }}
         continue-on-error: true
         run: bun run .github/scripts/feed-ingest-plan-report.ts config/feed-ingest-plan.json "$RUNNER_TEMP/feed-ingest-plan/events.json"
 
       - name: Preserve isolated test evidence
-        if: ${{ !cancelled() }}
+        if: ${{ always() }}
         uses: actions/upload-artifact@v7
         with:
           name: feed-ingest-plan-evidence
@@ -260,11 +311,14 @@ jobs:
       - name: Require genuine audited completion
         if: ${{ !cancelled() }}
         env:
-          AUDITED_COMPLETE: ${{ steps.plan.outputs.audited_complete }}
+          PLANNING_COMPLETE: ${{ steps.plan.outputs.planning_complete }}
+          AUDITED_COMPLETE: ${{ steps.audit_fixture.outputs.audited_complete }}
+          AUDIT_SCOPE: ${{ steps.audit_fixture.outputs.scope }}
         run: |
           bun run - <<'TS'
-          if (process.env.AUDITED_COMPLETE !== "true") {
-            console.error("Audit completion is unavailable. Preserved files are test evidence, not a complete audited plan or publication.");
+          if (process.env.PLANNING_COMPLETE !== "true" || process.env.AUDITED_COMPLETE !== "true"
+            || process.env.AUDIT_SCOPE !== "generated_fixture") {
+            console.error("Live planning proof or generated full-audit proof is unavailable. No production publication is claimed.");
             process.exitCode = 2;
           }
           TS

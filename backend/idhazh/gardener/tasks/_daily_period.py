@@ -204,6 +204,10 @@ def _take[C: Contract](
         kept = [tree.load(existing, model=model)] if existing is not None and raw.taken else []
     except ValueError as refusal:
         return tree.refuse(_STEP, day, fault=GardenerFault.PACKED_FILE_UNREADABLE, failure=refusal)
+    try:
+        settled = ledger.settle_rows([*kept, *(rows for _path, rows in raw.taken)], key)
+    except ValueError as refusal:
+        return tree.refuse(_STEP, day, failure=refusal)
     for path in raw.unreadable:
         tree.set_aside(path)
     set_aside = (0 if entry is None else entry.set_aside) + len(raw.unreadable)
@@ -211,7 +215,7 @@ def _take[C: Contract](
         _record(
             tree,
             day,
-            ledger.settle_rows([*kept, *(rows for _path, rows in raw.taken)], key),
+            settled,
             existing,
             model=model,
             identity=identity,

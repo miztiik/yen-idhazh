@@ -208,7 +208,7 @@ FEED_INGEST_REJECTION_KEY: Final = ("date", "source_id", "subject", "candidate_i
 FEED_INGEST_SOURCE_RUN_KEY: Final = ("date", "source_id", "observation_phase")
 FEED_INGEST_ASSESSMENT_KEY: Final = ("date", "candidate_id", "stage")
 FEED_INGEST_DIVERSITY_KEY: Final = (
-    "date", "metric", "basis", "dimension", "dimension_value", "stage",
+    "date", "metric", "basis", "unit", "dimension", "dimension_value", "stage",
     "window_days", "window_start", "window_end", "top_k",
 )
 

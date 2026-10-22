@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { z } from "zod";
 import {
   ArticleAssessmentRecordSchema, CONTRACT_VERSION, DiversityMetricRowSchema,
-  LedgerCompletionEvidenceSchema, WriterIdentitySchema, CandidateRejectionRecordSchema,
+  LedgerCompletionEvidenceSchema, WriterIdentitySchema, CandidateRejectionContract,
   EditorialSelectionRowSchema,
   RunIdSchema, NonEmptySchema, Sha256Schema, FeedMetricsConfigSchema,
 } from "@idhazh/common-contracts";
@@ -29,6 +29,8 @@ import { DigestEventItemSchema, RecordedEventPairSchema } from "./publication-ev
 import type { RecordedEventPair } from "./publication-evidence";
 import { selectCompleteAttempt } from "../read-ledger-history/complete-attempt";
 import { ArticleAssessmentContract, DiversityMetricContract, DispatchContract, SourceRunContract } from "./audit-contracts";
+import { commitLogicalRecords } from "../read-ledger-history/logical-records";
+import { resolveAuditCompletion } from "./audit-completion";
 
 const RegistrationSchema = z.strictObject({
   name: z.enum(["article-assessments", "diversity", "source-runs"]), family: z.literal("feed-ingest-plan"),
@@ -55,27 +57,34 @@ async function readWritten<T extends object>(
   written: PersistLedgerResult, ledger: LedgerCompletionEvidence["ledger"],
   contract: LedgerRowContract<T>, expected: readonly T[], inputs: PlanInputs, result: FeedPlanResult,
 ): Promise<LedgerCompletionEvidence> {
-  await verifyLedgerWrite(written, ledger, contract, expected, inputs.outputRoot, result.context.writer);
+  const rows = await verifyLedgerWrite(written, ledger, contract, expected, inputs.outputRoot, result.context.writer);
   return LedgerCompletionEvidenceSchema.parse({
     ledger, row_count: expected.length,
     files: written.files.map(({ file_id, content_sha256, row_count }) => ({ file_id, content_sha256, row_count })),
+    logical: commitLogicalRecords(ledger, rows, {
+      ...result.context, attempt: result.context.writer.attempt,
+    }).commitment,
   });
 }
 async function verifyLedgerWrite<T extends object>(
   written: PersistLedgerResult, ledger: RowIdentity["ledger"], contract: LedgerRowContract<T>,
   expected: readonly T[], outputRoot: string, writer: WriterIdentity,
-): Promise<void> {
+) {
   if (written.status === "skipped") throw new Error(`audit.${ledger}: required write was skipped`);
   if ((expected.length === 0) !== (written.status === "empty")) throw new Error(`audit.${ledger}: write status differs from expected rows`);
   const actual: T[] = [];
+  const stored = [];
   for (const file of written.files) {
     const loaded = await readLedgerParquet(resolve(outputRoot, ...file.path.split("/")), ledger, contract);
     requireSame(loaded.envelope.identity, writer, `audit.${ledger}.writer`);
+    requireSame([loaded.envelope.tier, loaded.envelope.covers], ["raw", file.covers], `audit.${ledger}.period`);
     requireSame([loaded.envelope.file_id, loaded.envelope.content_sha256, loaded.rows.length],
       [file.file_id, file.content_sha256, file.row_count], `audit.${ledger}.receipt`);
     actual.push(...loaded.rows.map(item => item.row));
+    stored.push(...loaded.rows);
   }
   requireSame(actual, expected, `audit.${ledger}.readback`);
+  return stored;
 }
 
 export function preparePlanningMetrics(
@@ -115,10 +124,10 @@ export async function recordPlanningMetrics(
 ) {
   const batch = preparePlanningMetrics(result, inputs, registrations);
   // Named input files are verified before creating either audit ledger.
-  const rejectionContract = { schema: CandidateRejectionRecordSchema, schemaVersion: CONTRACT_VERSION };
-  const harvestRejections = await readWritten(result.files.harvest_rejections, "rejections", rejectionContract, result.evidence.harvest.rejections, inputs, result);
-  const screeningRejections = await readWritten(result.files.screening_rejections, "rejections", rejectionContract, result.evidence.screening.rejections, inputs, result);
-  const curationRejections = await readWritten(result.files.curation_rejections, "rejections", rejectionContract, result.evidence.curation.rejections, inputs, result);
+  const rejectionContract = CandidateRejectionContract;
+  await readWritten(result.files.harvest_rejections, "rejections", rejectionContract, result.evidence.harvest.rejections, inputs, result);
+  await readWritten(result.files.screening_rejections, "rejections", rejectionContract, result.evidence.screening.rejections, inputs, result);
+  await readWritten(result.files.curation_rejections, "rejections", rejectionContract, result.evidence.curation.rejections, inputs, result);
   const selections = await readWritten(result.files.selections, "editorial-selections", {
     schema: EditorialSelectionRowSchema, schemaVersion: CONTRACT_VERSION,
   }, result.evidence.curation.rows, inputs, result);
@@ -141,11 +150,12 @@ export async function recordPlanningMetrics(
     rowContract: diversityContract, rows: batch.diversity,
   });
   const diversityReceipt = await readWritten(diversity, "diversity", diversityContract, batch.diversity, inputs, result);
-  const rejectionReceipts = [harvestRejections, screeningRejections, curationRejections];
-  const rejections = LedgerCompletionEvidenceSchema.parse({
-    ledger: "rejections", row_count: rejectionReceipts.reduce((sum, receipt) => sum + receipt.row_count, 0),
-    files: rejectionReceipts.flatMap(receipt => receipt.files),
-  });
+  const rejectionResults = [result.files.harvest_rejections, result.files.screening_rejections, result.files.curation_rejections];
+  const rejectionFiles = rejectionResults.flatMap(result => result.files);
+  const rejections = await readWritten(rejectionFiles.length === 0 ? { status: "empty", files: [] }
+    : { status: "written", files: rejectionFiles }, "rejections", rejectionContract, [
+    ...result.evidence.harvest.rejections, ...result.evidence.screening.rejections, ...result.evidence.curation.rejections,
+  ], inputs, result);
   const completionEvidence = [assessmentReceipt, diversityReceipt, selections, dispatches, rejections];
   const sourceRows = completePlanningSources(batch.sources, completionEvidence);
   const sourceContract = SourceRunContract;
@@ -204,7 +214,7 @@ export type PublicationRecorderInput = Readonly<{
   event_pairs?: readonly RecordedEventPair[];
 }>;
 
-export async function recordPublicationMetrics(input: PublicationRecorderInput) {
+async function preparePublicationMetrics(input: PublicationRecorderInput) {
   const run = RunIdSchema.parse(input.run_id);
   NonEmptySchema.parse(input.correlation_id);
   Sha256Schema.parse(input.config_sha256);
@@ -255,8 +265,19 @@ export async function recordPublicationMetrics(input: PublicationRecorderInput) 
   else if (outcome === undefined || outcome.availability !== "available") sourceReason = "No complete publication observation for the recorded run";
   else {
     if (writer.attempt !== proven.attempt) throw new Error("Observer writer attempt differs from its proven source attempt");
+    for (const held of proven.rows.diversity) {
+      if (DiversityMetricRowSchema.parse(held.row).config_sha256 !== input.config_sha256) {
+        throw new Error("Observer configuration identity differs from its proven source attempt");
+      }
+    }
     sourceRows = completePublicationObservations(proven.sources, outcome, asOf);
   }
+  return { run, asOf, writer, settings, diversityEntry, sourceEntry, metrics, sourceRows, sourceReason, history, planning, proven };
+}
+
+export async function recordPublicationMetrics(input: PublicationRecorderInput) {
+  const { run, asOf, writer, settings, diversityEntry, sourceEntry, metrics, sourceRows, sourceReason, history, planning, proven } =
+    await preparePublicationMetrics(input);
   const common = {
     outputRoot: input.outputRoot, writerContext: writer, ledgerSettings: settings,
     period: { tier: "raw" as const, covers: asOf.slice(0, 10) },
@@ -272,8 +293,14 @@ export async function recordPublicationMetrics(input: PublicationRecorderInput) 
   });
   if (sources !== null) await verifyLedgerWrite(sources, "source-runs",
     SourceRunContract, sourceRows, input.outputRoot, writer);
+  const completion = resolveAuditCompletion({
+    source_reason: sourceReason, history, planning, rows: metrics.rows,
+  });
   return {
-    status: "publication_metrics_recorded_audit_pending" as const, audited_complete: false as const,
+    status: completion.status === "complete" ? "audit_complete" as const : "publication_metrics_recorded_audit_pending" as const,
+    audited_complete: completion.status === "complete", audit_completion: completion,
+    run_id: run, attempt: proven?.attempt ?? null, correlation_id: input.correlation_id,
+    observed_at: asOf, config_sha256: input.config_sha256,
     files: { diversity, sources }, rows: metrics.rows, source_observations: sourceRows,
     receipts: { diversity: LedgerCompletionEvidenceSchema.parse({
       ledger: "diversity", row_count: metrics.rows.length,
@@ -285,3 +312,35 @@ export async function recordPublicationMetrics(input: PublicationRecorderInput) 
   };
 }
 export type PublicationMetricsResult = Awaited<ReturnType<typeof recordPublicationMetrics>>;
+
+export async function verifyPublicationMetrics(input: PublicationRecorderInput, recorded: PublicationMetricsResult) {
+  const prepared = await preparePublicationMetrics(input);
+  const { run, asOf, writer, metrics, sourceRows, sourceReason, history, planning, proven } = prepared;
+  const completion = resolveAuditCompletion({ source_reason: sourceReason, history, planning, rows: metrics.rows });
+  requireSame(recorded.audit_completion, completion, "audit.publication.completion");
+  requireSame(recorded.audited_complete, completion.status === "complete", "audit.publication.audited_complete");
+  requireSame(recorded.status, completion.status === "complete" ? "audit_complete" : "publication_metrics_recorded_audit_pending", "audit.publication.status");
+  requireSame([recorded.run_id, recorded.attempt, recorded.correlation_id, recorded.observed_at, recorded.config_sha256],
+    [run, proven?.attempt ?? null, input.correlation_id, asOf, input.config_sha256], "audit.publication.identity");
+  requireSame(recorded.rows, metrics.rows, "audit.publication.metrics");
+  requireSame(recorded.source_observations, sourceRows, "audit.publication.sources");
+  requireSame(recorded.history, {
+    start: history.start, end: history.end, coverage_days: history.coverage_days, required_days: history.required_days,
+  }, "audit.publication.history");
+  requireSame(recorded.unavailable, { stage_losses: metrics.unavailable, source_observations: sourceReason,
+    planning_attempts: planning.flatMap(day => day.findings) }, "audit.publication.unavailable");
+  requireSame(recorded.receipts.diversity, LedgerCompletionEvidenceSchema.parse({
+    ledger: "diversity", row_count: metrics.rows.length,
+    files: recorded.files.diversity.files.map(({ file_id, content_sha256, row_count }) => ({ file_id, content_sha256, row_count })),
+  }), "audit.publication.receipt");
+  const observationDay = asOf.slice(0, 10);
+  for (const file of [...recorded.files.diversity.files, ...(recorded.files.sources?.files ?? [])]) {
+    requireSame(file.covers, observationDay, "audit.publication.partition");
+  }
+  await verifyLedgerWrite(recorded.files.diversity, "diversity", DiversityMetricContract, metrics.rows, input.outputRoot, writer);
+  if (sourceReason === null) {
+    if (recorded.files.sources === null) throw new Error("audit.publication: missing required source files");
+    await verifyLedgerWrite(recorded.files.sources, "source-runs", SourceRunContract, sourceRows, input.outputRoot, writer);
+  } else if (recorded.files.sources !== null) throw new Error("audit.publication: unsupported source completion files");
+  return completion;
+}

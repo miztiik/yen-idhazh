@@ -69,10 +69,10 @@ test("screening and normalization counts derive from actual memberships, not agg
     const membership = reconcileStageMembership(result);
     const [summary] = deriveSourceRunSummaries(result, membership);
     expect(summary).toMatchObject({
-      harvested_count: 2, fresh_count: 0, eligible_count: 0, normalized_count: 0, selected_count: 0,
+      harvested_count: 0, fresh_count: 0, eligible_count: 0, normalized_count: 0, selected_count: 0,
     });
     expect(summary!.drop_reasons).toContainEqual({
-      subject: "article", stage: "screen-article-candidates", reason: "STALE_MAX_AGE_EXCEEDED", count: 2,
+      subject: "article", stage: "harvest-feeds", reason: "STALE_MAX_AGE_EXCEEDED", count: 2,
     });
     const completion = result.events.find(event => event.payload.kind === "stage_completion"
       && event.stage === "screen-article-candidates")!;
