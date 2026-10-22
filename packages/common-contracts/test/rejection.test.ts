@@ -102,8 +102,8 @@ function assessment() {
     date: day, correlation_id: "correlation", candidate_id: candidate().candidate_id,
     source_id: source.source_id, source, labels, canonical_url: null, url_key: null,
     stage: "harvest-feeds", decision: "rejected", reason: "MISSING_REQUIRED_FIELDS",
-    observed_at: at, policy, effective_published_at: null,
-    publication_clock: "unavailable", age_hours: null, max_age_hours: null,
+    observed_at: at, policy, timing_at: null,
+    timing_basis: "unavailable", age_hours: null, max_age_hours: null,
     extracted_word_count: null, source_form: "article", extraction_outcome: "not_attempted",
     word_threshold: null, author_present: null, publisher_identity: null,
     attribution_status: "unavailable", paywall: null, categories: null,
@@ -193,12 +193,18 @@ describe("content and writer identity", () => {
     expect(FeedIngestCandidateSchema.safeParse({ ...candidate(), vertical: "other" }).success).toBe(false);
   });
 
-  test("retains unknown label evidence and compares nested dispatch identity structurally", () => {
+  test("retains independent stage context but enforces shared dispatch identity", () => {
     expect(ArticleLabelsSchema.safeParse({ ...labels, lenses: [] }).success).toBe(false);
     expect(PenaltyEvidenceSchema.safeParse({ available: false, value: 0 }).success).toBe(false);
     const row = { content: candidate(), selection: selection(), partition: { strategy: "none", worker_assignment: 0, dispatch_count: 1 } };
     expect(FeedIngestDispatchSchema.safeParse(row).success).toBe(true);
-    expect(FeedIngestDispatchSchema.safeParse({ ...row, selection: { ...row.selection, correlation_id: "other" } }).success).toBe(false);
+    expect(FeedIngestDispatchSchema.safeParse({ ...row, selection: {
+      ...row.selection, date: "2026-10-21", correlation_id: "other",
+      policy: { ...row.selection.policy, max_age_hours: 24 },
+    } }).success).toBe(true);
+    expect(FeedIngestDispatchSchema.safeParse({ ...row, selection: { ...row.selection, candidate_id: "c".repeat(64) } }).success).toBe(false);
+    expect(FeedIngestDispatchSchema.safeParse({ ...row, selection: { ...row.selection, source_id: "other" } }).success).toBe(false);
+    expect(FeedIngestDispatchSchema.safeParse({ ...row, selection: { ...row.selection, labels: { ...row.selection.labels, assigned_desk: "other" } } }).success).toBe(false);
     expect(PartitionAssignmentSchema.safeParse({ strategy: "none", worker_assignment: 0, dispatch_count: 2 }).success).toBe(false);
     expect(PartitionAssignmentSchema.safeParse({ strategy: "round-robin", worker_assignment: 2, dispatch_count: 2 }).success).toBe(false);
   });
@@ -263,7 +269,7 @@ describe("planning audit contracts", () => {
     const row = assessment();
     expect(ArticleAssessmentRecordSchema.safeParse({ ...row, informative_verdict_status: "assessed" }).success).toBe(false);
     expect(ArticleAssessmentRecordSchema.safeParse({ ...row, score_evidence_status: "assessed" }).success).toBe(false);
-    expect(ArticleAssessmentRecordSchema.safeParse({ ...row, publication_clock: "fetched_at" }).success).toBe(false);
+    expect(ArticleAssessmentRecordSchema.safeParse({ ...row, timing_basis: "fetched_at" }).success).toBe(false);
     expect(ArticleAssessmentRecordSchema.safeParse({ ...row, suitability_status: "available" }).success).toBe(false);
     const metric = diversity();
     expect(DiversityMetricRowSchema.safeParse({ ...metric, availability: "available" }).success).toBe(false);

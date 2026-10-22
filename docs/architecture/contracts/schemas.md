@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-10-21
+**Last Updated**: 2026-10-22
 
 The persisted-shape subsystem: where the models live, how a schema is obtained from one, the small hand copy the frontend carries, and the tests that stop the two drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -89,12 +89,19 @@ The CI backend gate installs the locked package and runs these checks before
 pytest, which executes the Python-to-Zod bindings. It does not skip a binding
 when Bun or the package is absent.
 
-The eight feed planning contracts are stamped `2026-10-20`: harvested content,
-dispatches, terminal rejections, source-run observations, article assessments,
-diversity readings, unsharded editorial selections, and typed audit events.
+The eight feed planning contracts are stamped `2026-10-20`, except the four
+audit contracts and typed audit events, which are stamped `2026-10-22` after
+their stored meanings changed: harvested content, dispatches, terminal
+rejections, source-run observations, article assessments, diversity readings,
+unsharded editorial selections, and typed audit events.
 Their models live in `backend/idhazh/contracts/feed_ingest_*.py`.
 These declarations do not enable a producer, register a ledger, or change the
 production planner.
+
+The `2026-10-22` audit rows accept their `2026-10-20` predecessors through
+read-side migrations in the native Python models and the bounded TypeScript
+Parquet reader. A prior unknown timing remains unknown; the migration does not
+infer a first-seen instant or change a source row's original run date.
 
 Candidates keep source, original vertical, assigned desk, lenses, content event
 types, event cluster, and entities separate. Null labels mean unknown;

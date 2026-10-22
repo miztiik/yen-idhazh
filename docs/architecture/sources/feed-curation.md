@@ -1,6 +1,6 @@
 # Selecting an editorial portfolio
 
-**Last Updated**: 2026-10-21
+**Last Updated**: 2026-10-22
 
 This page owns how the isolated TypeScript planner chooses articles from one
 screened run. Production digest planning is unchanged.
@@ -39,10 +39,9 @@ evidence. The current assessment contract has no first-seen clock, so its
 publication fields remain unavailable for that case, never relabelled fetched
 time. Harvest observations supply extraction and paywall outcomes when present;
 their absence does not become a claimed successful observation.
-An admitted near-future publication retains screening's signed age in transient
-evidence; the nonnegative persisted age is zero, matching recency's age floor.
-The persisted assessment therefore does not retain the exact signed age;
-only the returned timing observation does.
+Assessments retain the measured timing basis, timestamp and signed age. Ranking
+may floor a near-future age at zero for its recency bonus; it does not change
+the stored evidence.
 
 ## Opportunity before selection
 
@@ -167,35 +166,17 @@ case reads actual Parquet through WASM and Arrow and checks recorded identity,
 schema and row expectations. It does not invoke a Python reader, access the
 network or use mocks.
 
-## Unresolved dispatch contract conflict
+## Harvest and selection evidence
 
-The current dispatch validator requires the content and selection to have
-identical dates and policies. Harvested content records its actual fetch day
-and original policy. Selection records the decision day and the policy that
-actually applied, including a screening run override. Both records validate
-individually, but an override differing from the recorded harvest policy or a
-decision after the fetch day's UTC midnight cannot pass that equality rule.
+Harvested content retains the fetch day, correlation and policy that governed
+its original screening. A later selection retains its own decision day,
+correlation and effective policy. Dispatch does not rewrite either record to
+make those facts equal. It requires the shared candidate and source identities,
+canonical URL, and labels to match.
 
-This does not block live run overrides supplied consistently. The harvest stage
-accepts the same run override and an injected clock. A runner can capture one
-UTC instant and pass the same policy override through harvest and screening,
-then use that clock for curation. Those records retain equal dates and policies.
-The conflict concerns a later override applied to previously harvested content,
-or stages composed with clocks on different UTC days.
-
-The real screening-to-curation-to-dispatch regression proves the ordinary
-same-day, unchanged-policy case succeeds. It also proves that a freshness
-override differing from harvest fails specifically on policy equality and an overnight decision
-fails specifically on date equality. These are documented contract failures,
-not successful end-to-end delivery for those inputs.
-
-Do not replace the original fetched time or policy, copy old policy into
-selection evidence, or reject otherwise valid screened candidates to hide
-this mismatch. Resolving it requires an owner-approved persisted-contract
-change. The proposed correction retains identity, source and label agreement
-while allowing independently recorded fetch/decision days and
-harvest/effective policies. The partitioner cannot claim support for the two
-conflicting cases until that decision and its contract checks land.
+The native dispatch regression covers both a later selection day and a changed
+freshness policy, then reads the persisted Parquet back through the current
+contract. Same-day, unchanged-policy runs retain their existing behavior.
 
 ## Design rationale
 

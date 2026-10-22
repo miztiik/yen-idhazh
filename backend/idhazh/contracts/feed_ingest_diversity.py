@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, ClassVar, Literal, Self
+from typing import Annotated, Any, ClassVar, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
@@ -27,12 +27,17 @@ class DiversityMetricRow(Contract):
     __schema_stem__: ClassVar[str] = "feed-ingest-diversity"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-22",
+            change="Accept every positive configured top-source count.",
+            why="A persisted reading must retain the operator's configured k.",
+        ),
+        ChangelogEntry(
             version="2026-10-20",
             change="Declare diversity readings with explicit availability and basis.",
             why="Unavailable history and publication evidence must not look like zero.",
         ),
     )
-    version: Literal["2026-10-20"] = "2026-10-20"
+    version: Literal["2026-10-22"] = "2026-10-22"
 
     date: DateStamp
     correlation_id: str = Field(min_length=1)
@@ -84,7 +89,14 @@ class DiversityMetricRow(Contract):
         "missing_publication",
         "missing_event_evidence",
     ] | None
-    top_k: Literal[1, 5, 10] | None = None
+    top_k: PositiveCount | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_previous_version(cls, value: Any) -> Any:
+        if isinstance(value, dict) and value.get("version") == "2026-10-20":
+            return {**value, "version": "2026-10-22"}
+        return value
 
     @model_validator(mode="after")
     def validate_reading(self) -> Self:

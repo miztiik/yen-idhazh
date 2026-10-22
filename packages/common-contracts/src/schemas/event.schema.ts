@@ -5,7 +5,8 @@ import { ArticleAssessmentRecordSchema } from "./article-assessment.schema";
 import { ArticleLabelsSchema, PolicyIdentitySchema, ScoreEvidenceSchema, SourceSnapshotSchema } from "./source.schema";
 import { DropReasonSchema } from "./rejection.schema";
 import { FetchStatusSchema, ParseStatusSchema } from "./source-run.schema";
-import { CountSchema, NonEmptySchema, PlanningStageSchema, PositiveCountSchema, RunIdSchema, Sha256Schema, SlugSchema, TimestampSchema, VersionSchema, reject } from "./primitives";
+import { CountSchema, NonEmptySchema, PlanningStageSchema, PositiveCountSchema, RunIdSchema, Sha256Schema, SlugSchema, TimestampSchema, reject } from "./primitives";
+import { FEED_INGEST_AUDIT_VERSION } from "../version";
 
 export const FeedOutcomePayloadSchema = z.strictObject({
   kind: z.literal("feed_outcome"), source: SourceSnapshotSchema,
@@ -35,7 +36,7 @@ export const EventPayloadSchema = z.discriminatedUnion("kind", [
   PortfolioChoicePayloadSchema, StageCompletionPayloadSchema,
 ]);
 export const FeedIngestEventSchema = z.strictObject({
-  version: VersionSchema, event_id: Sha256Schema, correlation_id: NonEmptySchema,
+  version: z.literal(FEED_INGEST_AUDIT_VERSION).default(FEED_INGEST_AUDIT_VERSION), event_id: Sha256Schema, correlation_id: NonEmptySchema,
   run_id: RunIdSchema, attempt: PositiveCountSchema, sequence: CountSchema,
   occurred_at: TimestampSchema, stage: PlanningStageSchema, audit_event_type: AuditEventTypeSchema,
   source_id: SlugSchema.nullable(), candidate_id: Sha256Schema.nullable(),

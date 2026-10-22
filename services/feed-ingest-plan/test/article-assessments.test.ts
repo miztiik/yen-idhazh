@@ -22,8 +22,8 @@ test("real publication timing and separate article/set scores survive translatio
       expect(row.suitability_verdict).toBeNull();
       if (row.stage !== "harvest-feeds") {
         const measured = result.evidence.screening.admitted.find(article => article.candidate.candidate_id === row.candidate_id)!;
-        expect(row.publication_clock).toBe("published_at");
-        expect(row.effective_published_at).toBe(measured.freshness.effective_published_at);
+        expect(row.timing_basis).toBe("published_at");
+        expect(row.timing_at).toBe(measured.freshness.timing_at);
         expect(row.age_hours).toBe(measured.freshness.age_hours);
         expect(row.max_age_hours).toBe(measured.policy.triage.max_age_hours);
       }
@@ -47,8 +47,8 @@ test("originally unmeasured timing remains unknown, not fetched_at or invented f
     expect(undated.length).toBeGreaterThan(0);
     for (const candidate of undated) {
       for (const row of rows.filter(row => row.candidate_id === candidate.candidate_id)) {
-        expect(row.publication_clock).toBe("unavailable");
-        expect(row.effective_published_at).toBeNull();
+        expect(row.timing_basis).toBe("unavailable");
+        expect(row.timing_at).toBeNull();
         expect(row.age_hours).toBeNull();
         expect(row.max_age_hours).toBeNull();
       }
@@ -56,7 +56,7 @@ test("originally unmeasured timing remains unknown, not fetched_at or invented f
   } finally { await recorded.close(); }
 }, 30000);
 
-test("preflight includes rejected candidates and never trusts the event's clamped negative age", async () => {
+test("preflight and translated assessments preserve signed ages for rejected candidates", async () => {
   const recorded = await recordedPlan();
   recorded.runtime.clock = () => new Date("2026-10-21T09:00:00Z");
   recorded.inputs.harvest.config.triage.min_words_article = 10000;
@@ -65,7 +65,9 @@ test("preflight includes rejected candidates and never trusts the event's clampe
     expect(result.evidence.screening.admitted).toHaveLength(0);
     expect(result.evidence.screening.rejections).toHaveLength(2);
     const first = result.evidence.harvest.candidates[0]!;
-    expect(() => preflightMeasurements(result, recorded.inputs)).toThrow(`candidate.${first.candidate_id}.age_hours`);
-    expect(() => translateArticleAssessments(result, recorded.inputs)).toThrow("signed negative");
+    expect(preflightMeasurements(result, recorded.inputs).get(first.candidate_id)?.age_hours).toBe(-0.25);
+    const rows = translateArticleAssessments(result, recorded.inputs);
+    expect(rows.filter(row => row.candidate_id === first.candidate_id)
+      .some(row => row.age_hours === -0.25 && row.timing_basis === "published_at")).toBe(true);
   } finally { await recorded.close(); }
 }, 30000);

@@ -71,6 +71,7 @@ export function validateLedgerInput<T extends object>(
 ): ValidatedLedgerWrite<T> {
   validateRegistration(input.ledger, input.registryEntry);
   validatePeriod(input.period);
+  if ("partition_date" in input && input.partition_date !== undefined) DateStampSchema.parse(input.partition_date);
   const ledger = LedgerNameSchema.parse(input.ledger);
   const writerContext = WriterIdentitySchema.parse(input.writerContext);
   if (!/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2})?)?$/.test(input.rowContract.schemaVersion)) {

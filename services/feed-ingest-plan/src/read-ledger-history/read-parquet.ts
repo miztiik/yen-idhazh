@@ -104,9 +104,15 @@ export async function readLedgerParquet<T extends object>(
     fileMetadata.free();
     metadata.free();
   }
-  if (envelope.ledger !== ledger || envelope.row_schema_version !== contract.schemaVersion) {
-    throw new Error("Parquet ledger or row schema version differs from the requested contract");
+  if (envelope.ledger !== ledger) {
+    throw new Error("Parquet ledger differs from the requested contract");
   }
+  const legacy = envelope.row_schema_version === contract.schemaVersion
+    ? undefined : contract.legacyVersions?.[envelope.row_schema_version];
+  if (envelope.row_schema_version !== contract.schemaVersion && legacy === undefined) {
+    throw new Error("Parquet row schema version differs from the requested contract");
+  }
+  const storedSchema = legacy?.schema ?? contract.schema;
   const writer = envelope.identity;
   const unit = createUnitId({
     ledger, covers: envelope.covers, runId: writer.run_id, job: writer.job,
@@ -119,7 +125,7 @@ export async function readLedgerParquet<T extends object>(
     throw new Error("Raw filename differs from its envelope file identifier");
   }
   const table = tableFromIPC(readParquet(bytes).intoIPCStream());
-  const columns = appendIdentityColumns(describeObjectSchema(contract.schema).fields);
+  const columns = appendIdentityColumns(describeObjectSchema(storedSchema).fields);
   checkFields(table.schema.fields, columns);
   const records = table.toArray().map(value => {
     const record = normalize(value);
@@ -127,7 +133,7 @@ export async function readLedgerParquet<T extends object>(
     return record as Record<string, unknown>;
   });
   if (digestRows(records, columns) !== envelope.content_sha256) throw new Error("Parquet content digest differs from its rows");
-  const rowFields = Object.keys(describeObjectSchema(contract.schema).root.properties as Record<string, unknown>);
+  const rowFields = Object.keys(describeObjectSchema(storedSchema).root.properties as Record<string, unknown>);
   const rows = records.map(record => {
     const identity = RowIdentitySchema.parse(Object.fromEntries(
       Object.keys(RowIdentitySchema.shape).map(key => [key, record[key]]),
@@ -142,7 +148,8 @@ export async function readLedgerParquet<T extends object>(
       || identity.task_name !== writer.task_name || identity.shard !== writer.shard)) {
       throw new Error("Raw row identity differs from its writer envelope");
     }
-    const row = contract.schema.parse(Object.fromEntries(rowFields.map(key => [key, record[key]])));
+    const storedRow = storedSchema.parse(Object.fromEntries(rowFields.map(key => [key, record[key]])));
+    const row = contract.schema.parse(legacy === undefined ? storedRow : legacy.migrate(storedRow));
     return { identity, row };
   });
   return { envelope, rows, bytes: bytes.byteLength };

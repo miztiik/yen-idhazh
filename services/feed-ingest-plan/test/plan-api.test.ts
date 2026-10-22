@@ -12,10 +12,12 @@ import type { PersistedLedgerFile } from "@idhazh/ledger-file-writer";
 import { readLedgerParquet } from "../src/read-ledger-history/read-parquet";
 import { SeenRowSchema } from "../src/screen-article-candidates/seen-evidence";
 import { source } from "./harvest-recordings";
-import { ArticleAssessmentRecordSchema, CONTRACT_VERSION, DiversityMetricRowSchema, SourceRunRecordSchema } from "@idhazh/common-contracts";
 import { existsSync } from "node:fs";
 import { readPlanningHistory } from "../src/metrics/planning-populations";
 import { selectCompleteAttempt } from "../src/read-ledger-history/complete-attempt";
+import {
+  ArticleAssessmentContract, DiversityMetricContract, SourceRunContract,
+} from "../src/metrics/audit-contracts";
 
 test("health is explicit; disabled, malformed, oversized and unknown controls cannot fetch", async () => {
   const inputs = await loadPlanInputs(fileURLToPath(new URL("../../../", import.meta.url)));
@@ -94,20 +96,14 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
       const metrics = summary.metrics!;
       const assessment = metrics.files.assessments.files[0]!;
       const diversity = metrics.files.diversity.files[0]!;
-      const assessed = await readLedgerParquet(join(recorded.inputs.outputRoot, assessment.path), "article-assessments", {
-        schema: ArticleAssessmentRecordSchema, schemaVersion: CONTRACT_VERSION,
-      });
-      const measured = await readLedgerParquet(join(recorded.inputs.outputRoot, diversity.path), "diversity", {
-        schema: DiversityMetricRowSchema, schemaVersion: CONTRACT_VERSION,
-      });
+      const assessed = await readLedgerParquet(join(recorded.inputs.outputRoot, assessment.path), "article-assessments", ArticleAssessmentContract);
+      const measured = await readLedgerParquet(join(recorded.inputs.outputRoot, diversity.path), "diversity", DiversityMetricContract);
       expect(assessed.rows.length).toBe(metrics.receipts.assessments.row_count);
       expect(measured.rows.length).toBe(metrics.receipts.diversity.row_count);
       expect(metrics.receipts.assessments.files[0]!.content_sha256).toBe(assessed.envelope.content_sha256);
       expect(metrics.receipts.diversity.files[0]!.content_sha256).toBe(measured.envelope.content_sha256);
       const sourceFile = summary.files.source_runs!.files[0]!;
-      const sources = await readLedgerParquet(join(recorded.inputs.outputRoot, sourceFile.path), "source-runs", {
-        schema: SourceRunRecordSchema, schemaVersion: CONTRACT_VERSION,
-      });
+      const sources = await readLedgerParquet(join(recorded.inputs.outputRoot, sourceFile.path), "source-runs", SourceRunContract);
       expect(sources.rows.map(row => row.row)).toEqual(summary.source_records!);
       expect(sources.envelope.content_sha256).toBe(sourceFile.content_sha256);
       const paths = (files: readonly { path: string }[]) => ({
@@ -174,20 +170,18 @@ test("one listener coordinates concurrent real requests and retains only its dur
     });
     const responses = await Promise.all([post(), post()]);
     const [first, second] = await Promise.all(responses.map(response => response.json()));
-    expect(responses.map(response => response.status)).toEqual([500, 500]);
+    expect(responses.map(response => response.status)).toEqual([200, 200]);
     expect(clocks).toBe(2);
-    expect(first.issues[0].message).toContain("first_seen");
-    expect(second.issues[0].message).toContain("first_seen");
-    expect(first).not.toHaveProperty("audited_complete");
-    expect(second).not.toHaveProperty("metrics");
+    expect(first).not.toHaveProperty("issues");
+    expect(second).not.toHaveProperty("issues");
     expect(receipts).toHaveLength(1);
     const file = await readLedgerParquet(join(recorded.inputs.outputRoot, receipts[0]!.files[0]!.path), "seen", {
       schema: SeenRowSchema, schemaVersion: "2026-08-31",
     });
     expect(file.rows.every(row => row.row.first_seen_at === "2026-10-21T12:00:00Z")).toBe(true);
     expect(new Set(file.rows.map(row => row.row.first_seen_run)).size).toBe(1);
-    expect(existsSync(join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan", "article-assessments"))).toBe(false);
-    expect(existsSync(join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan", "diversity"))).toBe(false);
+    expect(existsSync(join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan", "article-assessments"))).toBe(true);
+    expect(existsSync(join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan", "diversity"))).toBe(true);
     const fetched = recorded.transport.requests.length;
     recorded.runtime.clock = () => new Date("2026-10-21T11:59:59Z");
     const backwards = await post();
@@ -222,8 +216,8 @@ test("a later dispatch failure does not lose already durable first sight from th
     expect(receipts).toHaveLength(1);
     await unlink(blocked);
     const retried = await post();
-    expect(retried.status).toBe(500);
-    expect((await retried.json()).issues[0].message).toContain("first_seen");
+    expect(retried.status).toBe(200);
+    expect(await retried.json()).not.toHaveProperty("issues");
     expect(receipts).toHaveLength(1);
     const native = await readLedgerParquet(join(recorded.inputs.outputRoot, receipts[0]!.files[0]!.path), "seen", {
       schema: SeenRowSchema, schemaVersion: "2026-08-31",
@@ -232,7 +226,7 @@ test("a later dispatch failure does not lose already durable first sight from th
   } finally { await recorded.close(); }
 }, 30000);
 
-test("a listener ages accepted history at UTC midnight without inventing new-day evidence", async () => {
+test("a listener keeps first-seen evidence stable across UTC midnight", async () => {
   const recorded = await recordedPlan([source({ url: "https://news.example/article-failures.xml" })]);
   const receipts: { day: string; files: readonly PersistedLedgerFile[] }[] = [];
   try {
@@ -250,19 +244,19 @@ test("a listener ages accepted history at UTC midnight without inventing new-day
       method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
     });
     const before = await post();
-    expect(before.status).toBe(500);
+    expect(before.status).toBe(200);
     const first = await before.json();
-    expect(first.issues[0].message).toContain("first_seen");
+    expect(first).not.toHaveProperty("issues");
     expect(receipts).toHaveLength(1);
 
     recorded.runtime.clock = () => new Date("2026-10-22T00:00:01Z");
     recorded.inputs.harvest.sources.push(source({ id: "new-feed" }));
     const fetched = recorded.transport.requests.length;
     const after = await post();
-    expect(after.status).toBe(500);
+    expect(after.status).toBe(200);
     const second = await after.json();
     expect(recorded.transport.requests.length).toBeGreaterThan(fetched);
-    expect(second.issues[0].message).toContain("first_seen");
+    expect(second).not.toHaveProperty("issues");
     expect(receipts).toHaveLength(1);
     const settled = await readLedgerParquet(join(recorded.inputs.outputRoot, receipts[0]!.files[0]!.path), "seen", {
       schema: SeenRowSchema, schemaVersion: "2026-08-31",
@@ -274,15 +268,20 @@ test("a listener ages accepted history at UTC midnight without inventing new-day
       ...authored, { day: "2026-10-22", raw_files: [] },
     ];
     const supplied = await post();
-    expect(supplied.status).toBe(500);
-    const third = await supplied.json();
-    expect(third.issues[0].message).toContain("first_seen");
+    expect(supplied.status).toBe(200);
+    expect(await supplied.json()).not.toHaveProperty("issues");
     expect(receipts).toHaveLength(2);
+    const retained = await readLedgerParquet(join(recorded.inputs.outputRoot, receipts[0]!.files[0]!.path), "seen", {
+      schema: SeenRowSchema, schemaVersion: "2026-08-31",
+    });
+    expect(retained.rows.map(row => row.row.first_seen_at)).toEqual(
+      settled.rows.map(row => row.row.first_seen_at));
+    expect(retained.rows.every(row => row.row.first_seen_at === "2026-10-21T23:59:59Z")).toBe(true);
+    expect(receipts[1]!.day).toBe("2026-10-22");
     const newlySeen = await readLedgerParquet(join(recorded.inputs.outputRoot, receipts[1]!.files[0]!.path), "seen", {
       schema: SeenRowSchema, schemaVersion: "2026-08-31",
     });
-    const previous = new Set(settled.rows.map(row => row.row.url_key));
-    expect(newlySeen.rows.every(row => !previous.has(row.row.url_key))).toBe(true);
+    expect(newlySeen.rows.every(row => row.row.first_seen_at === "2026-10-22T00:00:01Z")).toBe(true);
 
     const requests = recorded.transport.requests.length;
     recorded.inputs.settings.inputs.seen_days = [authored[0]!, authored[0]!, authored[1]!];

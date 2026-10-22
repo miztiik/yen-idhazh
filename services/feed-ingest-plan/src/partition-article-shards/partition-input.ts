@@ -41,8 +41,6 @@ export function preparePartitionInput(
   const contentById = new Map<string, FeedIngestCandidate>();
   for (const value of candidates) {
     const candidate = FeedIngestCandidateSchema.parse(value);
-    if (candidate.run_id !== context.run_id || candidate.date !== context.date
-      || candidate.correlation_id !== context.correlation_id) throw new Error("Candidate belongs to another planning context");
     if (contentById.has(candidate.candidate_id)) throw new Error("Repeated candidate identity in partition input");
     contentById.set(candidate.candidate_id, candidate);
   }

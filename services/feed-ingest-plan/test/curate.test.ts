@@ -95,7 +95,7 @@ function article(spec: CandidateCase, fixture: Fixture, planning: PlanningConfig
   return {
     candidate, policy, observation: null, seen_availability: "unavailable",
     freshness: {
-      effective_published_at: spec.published_at, timing_source: "published_at", age_hours: age,
+      timing_at: spec.published_at, timing_source: "published_at", age_hours: age,
       recency_bonus: policy.triage.recency_weight * 0.5 ** (Math.max(0, age) / policy.triage.recency_half_life_hours),
     }, evidence,
   };
@@ -345,18 +345,23 @@ test("all-pairs figure veto prevents A-B-C chaining despite a shared recorded cl
   }
 });
 
-test("unknown timing stays unknown; first-seen is never presented as fetched publication", async () => {
+test("unknown timing stays unknown; first-seen keeps its own basis and timestamp", async () => {
   const { fixture, planning } = await inputs();
   const original = article(fixture.candidates[0]!, fixture, planning);
+  const firstSeenAt = "2026-10-20T11:00:00Z";
+  const ageHours = (Date.parse(fixture.observed_at) - Date.parse(firstSeenAt)) / 3_600_000;
+  const policy = resolvePolicy(planning, original.candidate.vertical);
   for (const timing of ["first_seen", "unknown"] as const) {
     const changed: PortfolioArticle = {
       ...original,
-      freshness: timing === "first_seen" ? { ...original.freshness, timing_source: timing }
-        : { effective_published_at: null, timing_source: timing, age_hours: null, recency_bonus: 0 },
+      freshness: timing === "first_seen" ? {
+        ...original.freshness, timing_source: timing, timing_at: firstSeenAt, age_hours: ageHours,
+        recency_bonus: policy.triage.recency_weight * 0.5 ** (Math.max(0, ageHours) / policy.triage.recency_half_life_hours),
+      } : { timing_at: null, timing_source: timing, age_hours: null, recency_bonus: 0 },
     };
     const result = curateArticles({ articles: [changed], planning, observed_at: fixture.observed_at, opportunity: noOpportunity });
-    expect(result.assessments[0]!.publication_clock).toBe("unavailable");
-    expect(result.assessments[0]!.effective_published_at).toBeNull();
+    expect(result.assessments[0]!.timing_basis).toBe(timing === "first_seen" ? "first_seen" : "unavailable");
+    expect(result.assessments[0]!.timing_at).toBe(timing === "first_seen" ? firstSeenAt : null);
     expect(result.quality[0]!.article.timing.timing_source).toBe(timing);
   }
 });
@@ -367,8 +372,8 @@ test("admitted future timing preserves its signed observation and floors only th
   const result = curateArticles({ articles: [future], planning, observed_at: fixture.observed_at, opportunity: noOpportunity });
   expect(result.quality[0]!.article.timing.age_hours).toBe(-1);
   expect(result.quality[0]!.components.recency).toBe(1);
-  expect(result.assessments[0]!.age_hours).toBe(0);
-  expect(result.assessments[0]!.effective_published_at).toBe("2026-10-21T13:00:00Z");
+  expect(result.assessments[0]!.age_hours).toBe(-1);
+  expect(result.assessments[0]!.timing_at).toBe("2026-10-21T13:00:00Z");
 });
 
 test("operational history, length, byline and kind never become model verdicts or a quality product", async () => {
@@ -457,7 +462,7 @@ test("real screening results compose into exact curation without losing harveste
   }
 }, 30_000);
 
-test("real screening and curation expose dispatch contract conflicts without rewriting provenance", async () => {
+test("real screening and curation retain independent stage dates and policies in dispatch", async () => {
   const { screenArticleCandidates } = await import("../src/screen-article-candidates/triage-gates");
   const { fixture, planning } = await inputs();
   const root = await mkdtemp(join(tmpdir(), "portfolio-dispatch-contract-"));
@@ -465,9 +470,9 @@ test("real screening and curation expose dispatch contract conflicts without rew
     const original = article(fixture.candidates[0]!, fixture, planning);
     const context = await persistenceContext(root, fixture);
     for (const scenario of [
-      { name: "baseline", observedAt: fixture.observed_at, overrides: {}, conflict: null },
-      { name: "run override", observedAt: fixture.observed_at, overrides: { freshness_hours: 6 }, conflict: "policy" },
-      { name: "UTC midnight crossing", observedAt: "2026-10-22T00:00:00Z", overrides: {}, conflict: "date" },
+      { name: "baseline", observedAt: fixture.observed_at, overrides: {} },
+      { name: "run override", observedAt: fixture.observed_at, overrides: { freshness_hours: 6 } },
+      { name: "UTC midnight crossing", observedAt: "2026-10-22T00:00:00Z", overrides: {} },
     ] as const) {
       const screened = await screenArticleCandidates({
         candidates: [original.candidate], observations: {},
@@ -497,12 +502,13 @@ test("real screening and curation expose dispatch contract conflicts without rew
         content, selection,
         partition: { strategy: "none", worker_assignment: 0, dispatch_count: 1 },
       });
-      if (scenario.conflict === null) expect(dispatch.success).toBe(true);
-      else {
-        expect(dispatch.success, `${scenario.name}: unresolved persisted contract conflict`).toBe(false);
-        if (dispatch.success) throw new Error("Expected the documented dispatch contract conflict");
-        expect(dispatch.error.issues.map(issue => issue.path)).toEqual([["selection", scenario.conflict]]);
-      }
+      expect(dispatch.success, scenario.name).toBe(true);
+      if (!dispatch.success) throw new Error("Expected independent stage context to form a valid dispatch");
+      expect(dispatch.data.content.date).toBe(original.candidate.date);
+      expect(dispatch.data.content.policy.max_age_hours).toBe(original.candidate.policy.max_age_hours);
+      expect(dispatch.data.selection.date).toBe(scenario.observedAt.slice(0, 10));
+      expect(dispatch.data.selection.policy.max_age_hours)
+        .toBe(scenario.overrides.freshness_hours ?? planning.config.triage.max_age_hours);
     }
   } finally {
     await rm(root, { recursive: true, force: true });

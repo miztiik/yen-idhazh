@@ -3,13 +3,17 @@ import { expect, test } from "bun:test";
 import { mkdir, readdir, stat, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
-import { ArticleAssessmentRecordSchema, CONTRACT_VERSION, DiversityMetricRowSchema, SourceRunRecordSchema, deriveUrlKey } from "@idhazh/common-contracts";
+import {
+  ArticleAssessmentRecordSchema, CONTRACT_VERSION, DiversityMetricRowSchema,
+  deriveUrlKey,
+} from "@idhazh/common-contracts";
 import { persistLedger } from "@idhazh/ledger-file-writer";
 import type { PersistLedgerResult } from "@idhazh/ledger-file-writer";
 import { runFeedPlan } from "../src/run-feed-plan";
 import { recordPlanningMetrics, preparePlanningMetrics, recordPublicationMetrics } from "../src/metrics/metrics-recorder";
 import type { PublicationRecorderInput } from "../src/metrics/metrics-recorder";
 import { effectiveSources, measuredRatio, sourceGini, topSourceShare, validateCounts } from "../src/metrics/diversity-metrics";
+import { readLedgerDay } from "../src/read-ledger-history/read-period";
 import { readLedgerParquet } from "../src/read-ledger-history/read-parquet";
 import { SeenRowSchema } from "../src/screen-article-candidates/seen-evidence";
 import { recordedPlan } from "./plan-recordings";
@@ -20,6 +24,9 @@ import { registration } from "./partition-fixtures";
 import { readPlanningHistory, settlePlanningDay } from "../src/metrics/planning-populations";
 import { recordedPairKey } from "../src/metrics/fingerprint-dedup";
 import { loadHarvestInputs } from "../src/harvest-feeds/load-harvest-inputs";
+import {
+  ArticleAssessmentContract, DiversityMetricContract, SourceRunContract,
+} from "../src/metrics/audit-contracts";
 
 async function auditFiles(output: string) {
   const directory = join(output, "raw", "feed-ingest-plan");
@@ -43,7 +50,8 @@ test("hand-computable distributions preserve zeros, signed loss and exact concen
     expect(() => validateCounts([invalid], "samples")).toThrow("samples");
   }
   expect(() => measuredRatio(2, 1, "coverage")).toThrow("coverage.numerator");
-  expect(() => topSourceShare([1], 2)).toThrow("top_source_counts.2");
+  expect(topSourceShare([1], 2)).toEqual({ numerator: 1, denominator: 1, value: 1 });
+  expect(topSourceShare([8, 1], 3)).toEqual({ numerator: 9, denominator: 9, value: 1 });
 });
 
 test("real harvest through partition seals representable raw source completion only after all five verified ledgers", async () => {
@@ -70,7 +78,8 @@ test("real harvest through partition seals representable raw source completion o
       expect(files.length).toBe(1);
       const file = files[0]!;
       const loaded = await readLedgerParquet(join(recorded.inputs.outputRoot, file.path), ledger, {
-        schema, schemaVersion: CONTRACT_VERSION,
+        schema, schemaVersion: key === "assessments"
+          ? ArticleAssessmentContract.schemaVersion : DiversityMetricContract.schemaVersion,
       });
       expect(loaded.rows.map(item => item.row)).toEqual([...expected]);
       expect(loaded.envelope.content_sha256).toBe(file.content_sha256);
@@ -105,7 +114,7 @@ test("real harvest through partition seals representable raw source completion o
       ...result.files.harvest_rejections.files, ...result.files.screening_rejections.files, ...result.files.curation_rejections.files,
     ].map(({ file_id, content_sha256, row_count }) => ({ file_id, content_sha256, row_count })));
     const sources = await readLedgerParquet(join(recorded.inputs.outputRoot, audit.files.source_runs.files[0]!.path),
-      "source-runs", { schema: SourceRunRecordSchema, schemaVersion: CONTRACT_VERSION });
+      "source-runs", SourceRunContract);
     expect(sources.rows.map(row => row.row)).toEqual(audit.source_records);
     expect(audit.source_records.every(row => row.observation_phase === "plan_complete" && row.published_count === null && row.lead_count === null)).toBe(true);
     expect(result.events.some(event => JSON.stringify(event).includes("plan_complete"))).toBe(false);
@@ -131,27 +140,31 @@ test("known-empty article input yields explicit empty assessment evidence, not a
   } finally { await recorded.close(); }
 }, 30000);
 
-test("one unsupported count or negative age refuses the whole batch before any audit file and preserves inputs", async () => {
+test("configured concentration counts and signed future ages survive native audit writes", async () => {
   for (const mode of ["top_k", "negative"] as const) {
     const recorded = await recordedPlan();
-    if (mode === "top_k") recorded.inputs.harvest.config.metrics.top_source_counts = [1, 2, 5];
+    if (mode === "top_k") recorded.inputs.harvest.config.metrics.top_source_counts = [1, 3, 5];
     else recorded.runtime.clock = () => new Date("2026-10-21T09:00:00Z");
     try {
       const result = await runFeedPlan({ partition_strategy: "none" }, recorded.inputs, recorded.runtime);
-      const before = structuredClone(result);
-      const entries = recorded.inputs.registrations;
-      const beforeInputs = structuredClone(recorded.inputs);
-      const beforeEntries = structuredClone(entries);
-      await expect(recordPlanningMetrics(result, recorded.inputs, entries)).rejects.toThrow(mode === "top_k" ? "top_source_counts.2" : "age_hours");
-      expect(result).toEqual(before);
-      expect(recorded.inputs).toEqual(beforeInputs);
-      expect(entries).toEqual(beforeEntries);
-      expect(await auditFiles(recorded.inputs.outputRoot)).toEqual([]);
+      const audit = await recordPlanningMetrics(result, recorded.inputs);
+      const file = audit.files.assessments.files[0]!;
+      const assessments = await readLedgerParquet(
+        join(recorded.inputs.outputRoot, file.path), "article-assessments", ArticleAssessmentContract,
+      );
+      if (mode === "top_k") {
+        const diversityFile = audit.files.diversity.files[0]!;
+        const diversity = await readLedgerParquet(join(recorded.inputs.outputRoot, diversityFile.path),
+          "diversity", DiversityMetricContract);
+        expect(diversity.rows.some(held => held.row.metric === "top_source_concentration" && held.row.top_k === 3)).toBe(true);
+      } else {
+        expect(assessments.rows.some(held => held.row.age_hours !== null && held.row.age_hours < 0)).toBe(true);
+      }
     } finally { await recorded.close(); }
   }
 }, 30000);
 
-test("actual settled first sight for an undated rejected candidate refuses the entire recording", async () => {
+test("actual settled first sight for an undated rejected candidate is saved without changing its basis", async () => {
   const recorded = await recordedPlan([source({ url: "https://news.example/article-failures.xml" })]);
   try {
     const entries = recorded.inputs.registrations;
@@ -171,14 +184,19 @@ test("actual settled first sight for an undated rejected candidate refuses the e
     expect(result.evidence.screening.rejections.some(row => row.drop_reason === "STALE_MAX_AGE_EXCEEDED")).toBe(true);
     const before = structuredClone(result);
     const beforeInputs = structuredClone(recorded.inputs);
-    await expect(recordPlanningMetrics(result, recorded.inputs, entries)).rejects.toThrow("first_seen timestamp and age");
+    const audit = await recordPlanningMetrics(result, recorded.inputs, entries);
+    const file = audit.files.assessments.files[0]!;
+    const saved = await readLedgerParquet(join(recorded.inputs.outputRoot, file.path),
+      "article-assessments", ArticleAssessmentContract);
+    expect(saved.rows.some(held => held.row.timing_basis === "first_seen"
+      && held.row.timing_at === "2026-10-20T10:00:00Z")).toBe(true);
     expect(result).toEqual(before);
     expect(recorded.inputs).toEqual(beforeInputs);
-    expect(await auditFiles(recorded.inputs.outputRoot)).toEqual([]);
+    expect(audit.audited_complete).toBe(false);
   } finally { await recorded.close(); }
 }, 30000);
 
-test("new first sight from the runner's complete bounded window is preflighted after its real write", async () => {
+test("new first sight from the runner's complete bounded window is saved and read back natively", async () => {
   const recorded = await recordedPlan([source({ url: "https://news.example/article-failures.xml" })]);
   try {
     recorded.inputs.clock_config.collect.seen_window_days = 0;
@@ -188,8 +206,12 @@ test("new first sight from the runner's complete bounded window is preflighted a
     expect(result.evidence.seen.new_rows.length).toBeGreaterThan(0);
     expect(result.files.seen.status).toBe("written");
     expect(result.evidence.screening.admitted.some(article => article.freshness.timing_source === "first_seen")).toBe(true);
-    await expect(recordPlanningMetrics(result, recorded.inputs)).rejects.toThrow("publication_clock");
-    expect(await auditFiles(recorded.inputs.outputRoot)).toEqual([]);
+    const audit = await recordPlanningMetrics(result, recorded.inputs);
+    const file = audit.files.assessments.files[0]!;
+    const saved = await readLedgerParquet(join(recorded.inputs.outputRoot, file.path),
+      "article-assessments", ArticleAssessmentContract);
+    expect(saved.rows.some(held => held.row.timing_basis === "first_seen"
+      && held.row.timing_at === result.evidence.seen.new_rows[0]!.first_seen_at)).toBe(true);
     expect(result.evidence.seen.evidence.availability).toBe("available");
   } finally { await recorded.close(); }
 }, 30000);
@@ -314,7 +336,10 @@ async function observedPublication(hasPublication = true) {
 test("actual native publication writes all per-run readings and real source observations without sealing the audit", async () => {
   const fixture = await observedPublication();
   try {
-    const written = await recordPublicationMetrics(fixture.input);
+    const written = await recordPublicationMetrics({
+      ...fixture.input, as_of: "2026-10-22T00:00:00Z", through: fixture.result.context.date,
+      config: { ...fixture.input.config, top_source_counts: [3] },
+    });
     expect(written.status).toBe("publication_metrics_recorded_audit_pending");
     expect(written.audited_complete).toBe(false);
     expect(written.receipts.diversity.row_count).toBe(written.rows.length);
@@ -328,7 +353,7 @@ test("actual native publication writes all per-run readings and real source obse
     expect(metric("effective_number_of_sources", "eligible").value).toBeCloseTo(2, 12);
     expect(metric("effective_number_of_sources", "published")).toMatchObject({ value: 1, item_count: 2 });
     expect(metric("source_gini", "published").value).toBeCloseTo(2 / 3, 12);
-    expect(metric("top_source_concentration", "published")).toMatchObject({ value: 1, numerator: 2, denominator: 2 });
+    expect(metric("top_source_concentration", "published")).toMatchObject({ top_k: 3, value: 1, numerator: 2, denominator: 2 });
     expect(rows.find(row => row.metric === "source_kind_distribution" && row.basis === "published" && row.dimension_value === "vendor" && row.unit === "count")!.value).toBe(2);
     expect(rows.find(row => row.metric === "lost_diversity_by_stage" && row.stage === "deduplication")!.value).toBeCloseTo(1, 12);
     expect(rows.find(row => row.metric === "lost_diversity_by_stage" && row.stage === "lead_selection")!.value).toBe(0);
@@ -338,18 +363,38 @@ test("actual native publication writes all per-run readings and real source obse
     expect(written.source_observations[0]!.source.kind).toBe("reporting");
     const [nativeMetrics, nativeSources] = await Promise.all([
       readLedgerParquet(join(fixture.input.outputRoot, written.files.diversity.files[0]!.path), "diversity",
-        { schema: DiversityMetricRowSchema, schemaVersion: CONTRACT_VERSION }),
+        DiversityMetricContract),
       readLedgerParquet(join(fixture.input.outputRoot, written.files.sources!.files[0]!.path), "source-runs",
-        { schema: SourceRunRecordSchema, schemaVersion: CONTRACT_VERSION }),
+        SourceRunContract),
     ]);
     expect(nativeMetrics.rows.map(held => held.row)).toEqual(written.rows);
     expect(nativeSources.rows.map(held => held.row)).toEqual(written.source_observations);
-    const withPublication = await readPlanningHistory({ ...fixture.planning, sources: {
-      ...fixture.planning.sources, rawFiles: [...fixture.planning.sources.rawFiles,
-        ...written.files.sources!.files.map(file => join(fixture.input.outputRoot, file.path))],
-    } });
-    expect(settlePlanningDay(withPublication).runs).toHaveLength(1);
-    expect(written.rows.filter(row => row.window_start !== null && row.basis === "published").every(row => row.availability === "unavailable")).toBe(true);
+    expect(nativeSources.rows.every(held => held.identity.covers === "2026-10-22")).toBe(true);
+    const observerDay = await readLedgerDay({
+      ledger: "source-runs", day: "2026-10-22", contract: SourceRunContract,
+      rawFiles: written.files.sources!.files.map(file => join(fixture.input.outputRoot, file.path)),
+    });
+    expect(observerDay.rows.map(held => held.row)).toEqual(written.source_observations);
+    expect(observerDay.rows.every(held => held.row.date === fixture.result.context.date
+      && held.row.observed_at === "2026-10-22T00:00:00Z"
+      && held.identity.covers === "2026-10-22")).toBe(true);
+    const backdated = await persistLedger({
+      ledger: "source-runs", outputRoot: fixture.input.outputRoot,
+      registryEntry: registration("source-runs"),
+      writerContext: { ...fixture.input.writer, producer: "tests.wrong-source-day" },
+      ledgerSettings: fixture.input.ledgerSettings,
+      period: { tier: "raw", covers: "2026-10-21" }, partition_date: "2026-10-21",
+      rowContract: SourceRunContract, rows: written.source_observations,
+    });
+    if (backdated.status !== "written") throw new Error("Expected the malformed partition fixture to be written");
+    await expect(readLedgerDay({
+      ledger: "source-runs", day: "2026-10-21", contract: SourceRunContract,
+      rawFiles: backdated.files.map(file => join(fixture.input.outputRoot, file.path)),
+    })).rejects.toThrow("Source-run partition differs from its observation phase");
+    expect(settlePlanningDay(await readPlanningHistory(fixture.planning)).runs).toHaveLength(1);
+    const rollingPublishedRows = written.rows.filter(row => row.window_start !== null && row.basis === "published");
+    expect(rollingPublishedRows.length).toBeGreaterThan(0);
+    expect(rollingPublishedRows.every(row => row.availability === "available")).toBe(true);
   } finally { await fixture.recorded.close(); }
 }, 30000);
 
@@ -366,17 +411,7 @@ test("an actual recorded zero-publication run completes zero source observations
     expect(written.rows.find(row => row.window_start === null && row.stage === "publication" && row.metric === "lost_diversity_by_stage")).toMatchObject({
       value: 1, before_value: 1, after_value: 0,
     });
-    const complete = await recordPublicationMetrics({
-      ...fixture.input, as_of: "2026-10-22T00:00:00Z", through: "2026-10-21",
-      writer: { ...fixture.input.writer, attempt: fixture.input.writer.attempt + 1 },
-    });
-    expect(complete.rows.find(row => row.window_start !== null && row.metric === "novel_source_contribution" && row.unit === "count")).toMatchObject({
-      availability: "available", value: 0, numerator: 0, denominator: 0,
-    });
-    expect(complete.rows.find(row => row.window_start !== null && row.metric === "novel_source_contribution" && row.unit === "ratio")).toMatchObject({
-      availability: "unavailable", value: null, unavailable_reason: "empty_denominator",
-    });
-    expect(complete.files.sources).toBeNull();
+    expect(written.files.sources).not.toBeNull();
   } finally { await fixture.recorded.close(); }
 }, 30000);
 
@@ -439,7 +474,7 @@ test("a real obstructed source write cannot return the completed five-ledger att
   } finally { await recorded.close(); }
 }, 30000);
 
-test("a completed bounded window recomputes every metric from sets and never backdates source observations", async () => {
+test("a completed bounded window writes later source observations without changing the original run day", async () => {
   const fixture = await observedPublication();
   try {
     const written = await recordPublicationMetrics({ ...fixture.input, as_of: "2026-10-22T00:00:00Z", through: "2026-10-21" });
@@ -450,18 +485,22 @@ test("a completed bounded window recomputes every metric from sets and never bac
     expect(rolling.find(row => row.metric === "novel_source_contribution" && row.unit === "count")!.value).toBe(2);
     expect(rolling.find(row => row.metric === "novel_source_contribution" && row.unit === "ratio")!.value).toBe(1);
     expect(rolling.find(row => row.metric === "source_event_overlap" && row.dimension === "source" && row.unit === "ratio")!.value).toBe(0);
-    expect(written.source_observations).toEqual([]);
-    expect(written.files.sources).toBeNull();
-    expect(written.unavailable.source_observations).toContain("without backdating");
+    expect(written.source_observations).toHaveLength(4);
+    expect(written.source_observations.every(row => row.date === fixture.result.context.date
+      && row.run_id === fixture.result.context.run_id && row.observed_at === "2026-10-22T00:00:00Z")).toBe(true);
+    expect(written.files.sources).not.toBeNull();
+    expect(written.unavailable.source_observations).toBeNull();
   } finally { await fixture.recorded.close(); }
 }, 30000);
 
 test("native public boundary refuses foreign source attribution and does not measure an omitted member as a complete day", async () => {
   const fixture = await observedPublication();
   try {
-    await expect(recordPublicationMetrics({ ...fixture.input,
+    const configured = await recordPublicationMetrics({ ...fixture.input,
+      outputRoot: join(fixture.recorded.directory, "configured-top-k"),
       config: { ...fixture.result.evidence.harvest.config.metrics, top_source_counts: [2] },
-    })).rejects.toThrow("unsupported top_k");
+    });
+    expect(configured.rows.some(row => row.metric === "top_source_concentration" && row.top_k === 2)).toBe(true);
     await expect(recordPublicationMetrics({ ...fixture.input,
       writer: { ...fixture.input.writer, attempt: fixture.input.writer.attempt + 1 },
     })).rejects.toThrow("writer attempt");

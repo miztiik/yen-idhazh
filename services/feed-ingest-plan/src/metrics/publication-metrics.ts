@@ -111,7 +111,6 @@ export function calculatePublicationMetrics(input: PublicationMetricInput) {
         record({ metric: "source_gini", basis, unit: "ratio", value: giniReason === null ? sourceGini(counts) : null,
           item_count: giniReason === null ? items.length : null }, giniReason);
         for (const k of new Set(config.top_source_counts)) {
-          if (k !== 1 && k !== 5 && k !== 10) throw new Error(`metrics.top_source_counts.${k}: unsupported top_k`);
           record({ metric: "top_source_concentration", basis, unit: "ratio", top_k: k,
             ...(reason === null ? topSourceShare(counts, k) : {}),
             item_count: reason === null ? items.length : null }, reason);

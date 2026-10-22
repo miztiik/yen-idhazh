@@ -1,15 +1,14 @@
 /** Which validated current or proven historical selections retain their original article content? */
 import { isDeepStrictEqual } from "node:util";
 import { join } from "node:path";
-import {
-  CONTRACT_VERSION, EditorialSelectionRowSchema, FeedIngestDispatchSchema,
-} from "@idhazh/common-contracts";
+import { CONTRACT_VERSION, EditorialSelectionRowSchema } from "@idhazh/common-contracts";
 import type { FeedIngestCandidate, WriterIdentity } from "@idhazh/common-contracts";
 import type { PersistLedgerResult } from "@idhazh/ledger-file-writer";
 import type { CurationResult } from "../curate-article-portfolio/editorial-selection";
 import { readLedgerParquet } from "../read-ledger-history/read-parquet";
 import type { ProvenAttempt } from "../read-ledger-history/complete-attempt";
 import { preparePartitionInput } from "./partition-input";
+import { DispatchContract } from "../metrics/audit-contracts";
 
 export async function readCurrentSelections(input: Readonly<{
   curation: Pick<CurationResult, "rows" | "selected">;
@@ -47,7 +46,7 @@ export async function readCurrentSelections(input: Readonly<{
 
 export function readHistoricalSelections(attempt: ProvenAttempt) {
   const selections = attempt.rows["editorial-selections"].map(held => EditorialSelectionRowSchema.parse(held.row));
-  const dispatches = attempt.rows.dispatches.map(held => FeedIngestDispatchSchema.parse(held.row));
+  const dispatches = attempt.rows.dispatches.map(held => DispatchContract.schema.parse(held.row));
   if (selections.length !== dispatches.length) throw new Error("Historical selections and dispatches differ in count");
   const byId = new Map(dispatches.map(dispatch => [dispatch.selection.candidate_id, dispatch]));
   if (byId.size !== dispatches.length || selections.some(selection =>
