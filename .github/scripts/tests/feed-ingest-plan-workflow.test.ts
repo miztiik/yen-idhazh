@@ -5,7 +5,12 @@ import { copyFile, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { CompactIndexSchema, RawDayIndexSchema } from "../../../packages/common-contracts/src/index";
+import { CompactIndexSchema, RawDayIndexSchema, FeedHealthContract, PUBLICATION_INVENTORY_VERSION } from "../../../packages/common-contracts/src/index";
+import { persistLedger } from "../../../packages/ledger-file-writer/src/index";
+import { stageFeedHistory } from "../feed-ingest-plan-feed-history";
+import { selectHealthDays } from "../../../services/feed-ingest-plan/src/read-ledger-history/select-health-days";
+import { readLedgerParquet } from "../../../services/feed-ingest-plan/src/read-ledger-history/read-parquet";
+import { verifyHealthOrderCompaction } from "../../../services/feed-ingest-plan/test/health-order-recording";
 import { completeHistoryDayInputs, createSeenDayInputs, historyDays, historyIndexPaths, resolveHistoryInventory, sparseCheckoutPath } from "../feed-ingest-plan-outputs";
 import { requiredSeenDays } from "../../../services/feed-ingest-plan/src/read-ledger-history/read-seen-evidence";
 import { utcTimestamp } from "../../../services/feed-ingest-plan/src/harvest-feeds/harvest-types";
@@ -93,7 +98,7 @@ test("offers four manual controls and commits only genuine planner and host file
   expect(httpProof).toContain("return resolveAddresses(hostname)");
   expect(httpProof).toContain('post("fetch", "fetch", fetchRequest)');
   expect(httpProof).toContain('post("parse", "parse", parseRequest)');
-  expect(httpProof).toContain("replay.response_json !== original.response_json");
+  expect(httpProof).toContain("requireExactReplay(original.private_response_bytes, replay.private_response_bytes)");
   expect(httpProof).toContain("beforeRestart !== afterChecks");
   expect(httpProof).toContain("requireOffline(parsed)");
   expect(httpProof).toContain("requireOffline(replay)");
@@ -114,7 +119,7 @@ test("offers four manual controls and commits only genuine planner and host file
   expect(plan.run!.indexOf("await verifyPlanningCompletion(")).toBeLessThan(plan.run!.indexOf("await writeGitHubOutputs("));
   expect(plan.run).toContain("stageConfiguredDays(\"published\"");
   expect(plan.run).toContain("stageConfiguredDays(\"item-health\"");
-  expect(plan.run).toContain("inputs: { ...inputs.settings.inputs, seen_days, published_days, settled_failure_days }");
+  expect(plan.run).toContain("inputs: { ...inputs.settings.inputs, seen_days, published_days, settled_failure_days, feed_health_days }");
   expect(plan.run).not.toContain("feed-ingest-plan-report");
   const reporting = steps.find(step => step.name === "Optional GitHub report")!;
   expect(reporting.if).toContain("workflow_reporting == 'true'");
@@ -161,7 +166,8 @@ test("offers four manual controls and commits only genuine planner and host file
     .toBe("${{ runner.temp }}/feed-ingest-plan/");
 });
 
-test("derives UTC windows and stages indexed compact files before considering raw evidence", () => {
+test("derives UTC windows and stages indexed compact files before considering raw evidence", async () => {
+  await verifyHealthOrderCompaction();
   const days = historyDays("2026-01-01T00:00:00Z", 1, [1]);
   expect(days).toEqual(["2026-01-01", "2025-12-31"]);
   expect(historyDays(utcTimestamp(() => new Date("2026-01-01T00:00:00.999Z")), 1, [1])).toEqual(days);
@@ -216,6 +222,90 @@ test("derives UTC windows and stages indexed compact files before considering ra
   expect(() => historyIndexPaths([".."], days)).toThrow("prefix");
   expect(() => resolveHistoryInventory({ ledger: "dispatches", prefix: ["dispatches"], days,
     compact: [], raw: [{ ...raw, content_sha256: "a".repeat(64) }] })).toThrow("content_sha256");
+  const directory = await mkdtemp(join(tmpdir(), "native-feed-history-"));
+  try {
+    const fixture = FeedHealthContract.schema.parse(await Bun.file(join(root,
+      "tests", "fixtures", "feed-ingest-plan", "feed-health-row.json")).json());
+    const registration = {
+      name: "feed-health", family: "feed-health", grain: "raw-and-compact" as const,
+      lifecycle_status: "active" as const, prefix: ["feed-health"],
+    };
+    const entries: { root: "state"; path: string; bytes: number; items: number }[] = [];
+    for (const day of ["2024-01-01", "2026-01-01"]) {
+      const writerContext = {
+        run_id: `${day}-1`, attempt: 1, job: "plan" as const, shard: 0,
+        pipeline_name: null, task_name: null, producer: "tests.native-history", git_sha: "a".repeat(40),
+      };
+      const written = await persistLedger({
+        ledger: "feed-health", registryEntry: registration, outputRoot: join(directory, "state"),
+        ledgerSettings: { format: "parquet", compression_raw: "snappy", compression_compact: "snappy" },
+        writerContext, rowContract: FeedHealthContract, period: { tier: "raw", covers: day },
+        rows: [{ ...fixture, date: day, run_id: writerContext.run_id, checked_at: `${day}T00:00:00Z` }],
+      });
+      for (const file of written.files) entries.push({
+        root: "state", path: file.path, bytes: (await stat(join(directory, "state", file.path))).size, items: 1,
+      });
+      if (day === "2024-01-01") {
+        const original = await readLedgerParquet(join(directory, "state", written.files[0]!.path), "feed-health", FeedHealthContract);
+        const compact = await persistLedger({
+          ledger: "feed-health", registryEntry: registration, outputRoot: join(directory, "state"),
+          ledgerSettings: { format: "parquet", compression_raw: "snappy", compression_compact: "snappy" },
+          writerContext: { ...writerContext, producer: "tests.compactor" }, rowContract: FeedHealthContract,
+          period: { tier: "compact", period: "daily", covers: day, builtFrom: 1 }, rows: original.rows,
+        });
+        const file = compact.files[0]!;
+        const index = join(directory, "state", "compact", "feed-health", "index", "daily.json");
+        await mkdir(dirname(index), { recursive: true });
+        await writeFile(index, JSON.stringify({
+          version: "2026-10-07", ledger: "feed-health", period: "daily",
+          entries: [{ covers: day, state: "packed", rows: 1, bytes: (await stat(join(directory, "state", file.path))).size }],
+        }));
+      }
+    }
+    await mkdir(join(directory, "frontend", "public"), { recursive: true });
+    await writeFile(join(directory, "frontend", "public", "publication.json"), JSON.stringify({
+      version: PUBLICATION_INVENTORY_VERSION, entries: entries.sort((a, b) => a.path.localeCompare(b.path)),
+    }));
+    const stage = () => stageFeedHistory({
+      ledger: "feed-health", prefix: ["feed-health"], now: "2026-01-01T00:00:00Z",
+      health_window_days: 2, authored: [],
+      read: async path => {
+        const file = Bun.file(join(directory, ...path.split("/")));
+        return await file.exists() ? file.json() : undefined;
+      },
+    });
+    const staged = await stage();
+    expect(staged.files).toContain("state/compact/feed-health/daily/2024/01/01.parquet");
+    expect(staged.files).not.toContain(`state/${entries.find(entry => entry.path.includes("2024/01/01"))!.path}`);
+    const recorded = await selectHealthDays(directory, registration,
+      staged.inputs, 2);
+    expect(recorded.map(day => day.day)).toEqual(["2024-01-01", "2026-01-01"]);
+    expect(staged.inputs.find(day => day.day === "2025-12-31")?.raw_files).toBeUndefined();
+    expect(staged.inventory_complete).toBe(false);
+    const original = await readLedgerParquet(join(directory, "state", "compact", "feed-health", "daily",
+      "2024", "01", "01.parquet"), "feed-health", FeedHealthContract);
+    const monthly = await persistLedger({
+      ledger: "feed-health", registryEntry: registration, outputRoot: join(directory, "state"),
+      ledgerSettings: { format: "parquet", compression_raw: "snappy", compression_compact: "snappy" },
+      writerContext: { ...original.envelope.identity, producer: "tests.monthly-history" },
+      rowContract: FeedHealthContract, period: { tier: "compact", period: "monthly", covers: "2024-01", builtFrom: 1 },
+      rows: original.rows,
+    });
+    await writeFile(join(directory, "state", "compact", "feed-health", "index", "monthly.json"), JSON.stringify({
+      version: "2026-10-07", ledger: "feed-health", period: "monthly",
+      entries: [{ covers: "2024-01", state: "packed", rows: 1,
+        bytes: (await stat(join(directory, "state", monthly.files[0]!.path))).size }],
+    }));
+    const representedMonth = await stage();
+    const representedSelection = await selectHealthDays(directory, registration,
+      representedMonth.inputs, 2);
+    expect(representedSelection.map(day => day.day)).toEqual(["2024-01-31", "2026-01-01"]);
+    await writeFile(join(directory, "state", "compact", "feed-health", "index", "daily.json"), JSON.stringify({
+      version: "2026-10-07", ledger: "feed-health", period: "daily",
+      entries: [{ covers: "2026-02-31", state: "packed", rows: 1, bytes: 10 }],
+    }));
+    await expect(stage()).rejects.toThrow("calendar day");
+  } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
 test("rejects hostile dispatch strings before any input load or network request", async () => {
@@ -265,7 +355,7 @@ test("strict-checks adapters, tests and the actual inline program in one compile
       "--exactOptionalPropertyTypes", "--noFallthroughCasesInSwitch", "--noUnusedLocals",
       "--noUnusedParameters", "--verbatimModuleSyntax", "--skipLibCheck",
       "--types", "bun", "--typeRoots", join(service, "node_modules", "@types"), ...generated,
-      ...["feed-ingest-plan-outputs.ts", "feed-ingest-plan-report.ts", "feed-ingest-plan-commit.ts", "feed-ingest-plan-verification.ts", "feed-ingest-plan-audit-fixture.ts",
+      ...["feed-ingest-plan-outputs.ts", "feed-ingest-plan-feed-history.ts", "feed-ingest-plan-report.ts", "feed-ingest-plan-commit.ts", "feed-ingest-plan-verification.ts", "feed-ingest-plan-audit-fixture.ts",
         "feed-ingest-plan-http-proof.ts",
         "tests/feed-ingest-plan-outputs.test.ts", "tests/feed-ingest-plan-report.test.ts",
         "tests/feed-ingest-plan-workflow.test.ts"].map(path => join(root, ".github", "scripts", ...path.split("/"))),
@@ -287,8 +377,9 @@ test("runs the native compatibility verifier in a named-input copy with no backe
       "schemas/ledger-index.schema", "schemas/partition.schema", "schemas/policy.schema",
       "schemas/primitives", "schemas/rejection.schema", "schemas/source-run.schema",
       "schemas/source.schema", "schemas/telemetry.schema", "schemas/host-fingerprint.schema",
-      "schemas/harvest-diagnostics.schema", "schemas/item-health-failure.schema",
-      "schemas/planner-operation.schema",
+      "schemas/harvest-diagnostics.schema", "schemas/item-health-failure.schema", "schemas/feed-health.schema",
+      "schemas/planner-operation.schema", "schemas/recorded-instant.schema", "observation-order",
+      "schemas/publication-input.schema",
       "schemas/planning-observations.schema",
     ].map(name => `packages/common-contracts/src/${name}.ts`);
     const writer = [

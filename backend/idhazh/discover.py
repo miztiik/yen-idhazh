@@ -24,6 +24,7 @@ from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import FeedHealthRow, supersedes
 from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceTier
+from idhazh.health_order import availability_evidence
 from idhazh.sanitize import sanitize
 
 #: Bumped when canonicalisation or title handling changes, because either moves
@@ -295,7 +296,7 @@ def settled(history: Iterable[FeedHealthRow]) -> list[FeedHealthRow]:
     return list(kept.values())
 
 
-def streak(rows: list[FeedHealthRow]) -> int:
+def streak(rows: list[FeedHealthRow]) -> int | None:
     """Failures in a row, ending at the newest read. `rows` are oldest run first.
 
     Four kinds of evidence and three effects, which is the whole availability
@@ -314,14 +315,7 @@ def streak(rows: list[FeedHealthRow]) -> int:
 
     `streak` in `frontend/src/lib/feed-health.ts` is this loop in TypeScript.
     """
-    strikes = 0
-    for row in reversed(rows):
-        if row.preserves:
-            continue
-        if not row.failing:
-            break
-        strikes += 1
-    return strikes
+    return availability_evidence(rows).strikes
 
 
 def resting(history: Iterable[FeedHealthRow], *, after_failures: int) -> frozenset[str]:
@@ -344,17 +338,11 @@ def resting(history: Iterable[FeedHealthRow], *, after_failures: int) -> frozens
     by_feed: dict[str, list[FeedHealthRow]] = {}
     for row in settled(history):
         by_feed.setdefault(row.feed_id, []).append(row)
-    return frozenset(feed_id for feed_id, rows in by_feed.items() if _rests(rows, after_failures))
+    return frozenset(
+        feed_id for feed_id, rows in by_feed.items() if _rests(rows, after_failures) is True
+    )
 
 
-def _rests(rows: list[FeedHealthRow], after_failures: int) -> bool:
+def _rests(rows: list[FeedHealthRow], after_failures: int) -> bool | None:
     """`rows` are oldest run first, which is the order `load_health` returns."""
-    skips = 0
-    for row in reversed(rows):
-        if row.attempted:
-            break
-        skips += 1
-    if skips >= after_failures:
-        return False
-
-    return streak(rows) >= after_failures
+    return availability_evidence(rows, after_failures=after_failures).resting

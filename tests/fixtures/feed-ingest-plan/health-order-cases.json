@@ -1,0 +1,18 @@
+{
+  "threshold": 1,
+  "run_suffixes": [
+    "300000000000000000000000000000000000000",
+    "100000000000000000000000000000000000000"
+  ],
+  "cases": [
+    {"id":"precise","times":[".100Z",".200Z"],"kinds":["permanent","skipped"],"statuses":[404,null],"expected":"eligible"},
+    {"id":"legacy","times":["Z","Z"],"kinds":["permanent","skipped"],"statuses":[404,null],"expected":"unknown"},
+    {"id":"frozen","times":[".100Z",".100Z"],"kinds":["permanent","skipped"],"statuses":[404,null],"expected":"unknown"},
+    {"id":"mixed","times":["Z",".100Z"],"kinds":["permanent","skipped"],"statuses":[404,null],"expected":"unknown"},
+    {"id":"same-effect","times":["Z","Z"],"kinds":["permanent","permanent"],"statuses":[404,404],"expected":"resting"},
+    {"id":"gone-certain","times":[".100Z",".100Z"],"kinds":["permanent","permanent"],"statuses":[410,410],"expected":"resting","python_expected":"retired"},
+    {"id":"gone-uncertain","times":[".100Z",".100Z"],"kinds":["permanent","ok"],"statuses":[410,200],"expected":"unknown"},
+    {"id":"recovered","times":[".100Z",".200Z"],"kinds":["permanent","ok"],"statuses":[410,200],"expected":"eligible"},
+    {"id":"known-retired","times":["Z","Z"],"kinds":["permanent","skipped"],"statuses":[404,null],"expected":"retired"}
+  ]
+}

@@ -95,7 +95,7 @@ export function preparePlanningMetrics(
   const original = loadHarvestInputs({
     config: { ...inputs.harvest.config, curate: { ...inputs.harvest.config.curate, article_limit: result.request.article_limit } },
     taxonomy: { ...inputs.harvest.taxonomy, ...inputs.harvest.registry },
-    sources: { feeds: inputs.harvest.sources, salience: inputs.harvest.salience },
+    sources: { feeds: inputs.harvest.sources, retired: inputs.harvest.retired_sources, salience: inputs.harvest.salience },
     ...(inputs.harvest.watchlist === null ? {} : { watchlist: inputs.harvest.watchlist }),
     extraction: { ...inputs.harvest.extraction_settings, extract: inputs.harvest.extraction },
   });

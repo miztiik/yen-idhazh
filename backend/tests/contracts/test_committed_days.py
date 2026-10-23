@@ -182,7 +182,7 @@ def test_the_gate_defaults_to_the_one_committed_tree(
     assert main(["check-publication", "--day", BUILT_DATE, "--state-root", str(tmp_path)]) == 0
 
 
-def test_a_committed_day_reads_an_absent_ranking_field_as_unknown() -> None:
+def test_a_day_written_before_the_ranking_fields_reads_them_as_unknown() -> None:
     """The read-side migration (`CLAUDE.md` section 11).
 
     A day written before the five fields existed omits them, and every one must
@@ -201,7 +201,7 @@ def test_a_committed_day_reads_an_absent_ranking_field_as_unknown() -> None:
             assert getattr(item, name) is None, f"{item.item_id}: {name} invented"
 
 
-def test_every_committed_day_revalidates_with_no_shortfall_counts() -> None:
+def test_a_desk_written_before_the_shortfall_counts_reads_each_as_unknown() -> None:
     """The read-side migration for the desk shortfall (`CLAUDE.md` section 11).
 
     Every day published before 2026-09-02 carries a desk as three keys - id,

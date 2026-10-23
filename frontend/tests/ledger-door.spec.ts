@@ -76,6 +76,14 @@ test('native SQL discovery, not saved hints, selects consented compact dependenc
 	const question = questionReader(() => keeper, engine.open);
 	const options = { ledgers: ['not-a-selection'], from: '2026-09-01', to: '2026-09-01', sql: '', maxChars: 2000, maxRows: 10, maxFetchBytes: 100_000_000, maxFiles: 128 };
 	try {
+		const clockExample = explorerConfig().examples.find((example) => example.id === 'feeds-gone-quiet')!;
+		const clocks = ['2026-10-23T00:45:05Z', '2026-10-23T00:45:05.123Z'];
+		const measured = await (await engine.open()).rows(
+			`WITH "feed-health" AS (SELECT 'clock-fixture' AS feed_id, 'transient' AS outcome, checked_at FROM (VALUES (?), (?)) t(checked_at))
+			 SELECT epoch_ms(latest_recorded_lower_bound_utc) AS lower_bound_ms FROM (${clockExample.sql}) measured`,
+			clocks
+		);
+		expect(String(measured[0]?.lower_bound_ms)).toBe(String(Date.parse(clocks[1]!)));
 		for (const [sql, rows] of [
 			['WITH x AS (SELECT * FROM "host-fingerprint") SELECT count(*) AS rows FROM x a JOIN (SELECT * FROM "HOST-FINGERPRINT") b ON true', '9'],
 			['SELECT count(*) AS rows FROM "host-fingerprint" h -- FROM nonexistent', '3'],

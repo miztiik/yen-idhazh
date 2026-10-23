@@ -447,7 +447,7 @@ def health(*outcomes: str, feed_id: str = "trade-press", items: int = 3) -> list
             run_id=f"2026-08-23-{n}",
             date="2026-08-23",
             feed_id=feed_id,
-            checked_at="2026-08-23T06:00:00Z",
+            checked_at=f"2026-08-23T06:00:{n:02d}Z",
             outcome=FetchOutcome(outcome),
             items=items if outcome == "ok" else 0,
         )
@@ -521,7 +521,7 @@ def only(outcome: str, *, items: int = 0, robots: RobotsOutcome | None = None) -
         run_id="2026-08-23-9",
         date="2026-08-23",
         feed_id="trade-press",
-        checked_at="2026-08-23T06:00:00Z",
+        checked_at="2026-08-23T06:01:00Z",
         outcome=FetchOutcome(outcome),
         items=items,
         robots_outcome=robots,
@@ -574,7 +574,7 @@ def test_a_refusal_never_launders_a_record() -> None:
 
 
 def account(
-    run: int, outcome: str, *, items: int = 0, at: str = "06:00:00", feed_id: str = "trade-press"
+    run: int, outcome: str, *, items: int = 0, at: str | None = None, feed_id: str = "trade-press"
 ) -> FeedHealthRow:
     """One attempt's account of one run's read of one feed."""
     return FeedHealthRow(
@@ -582,7 +582,7 @@ def account(
         run_id=f"2026-08-23-{run}",
         date="2026-08-23",
         feed_id=feed_id,
-        checked_at=f"2026-08-23T{at}Z",
+        checked_at=f"2026-08-23T{at or f'06:00:{run:02d}'}Z",
         outcome=FetchOutcome(outcome),
         items=items,
     )

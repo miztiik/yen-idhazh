@@ -7,6 +7,9 @@ import { PlanError } from "./plan-request";
 import { PlannerOperationSchema, RequestIdSchema } from "./operation-contracts";
 import type { PlannerOperation } from "./operation-contracts";
 
+type RequestIdentity = Pick<PlannerOperation, "request_id" | "operation" | "input_sha256" | "config_sha256">;
+export type PreparedOperation = Readonly<RequestIdentity & { capture: () => PlannerOperation }>;
+
 export function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -38,7 +41,7 @@ export async function openOperationStore(outputRoot: string) {
     const checked = PlannerOperationSchema.parse(value);
     write.run(checked.request_id, JSON.stringify(checked));
   }
-  function readRequest(proposed: PlannerOperation) {
+  function readRequest(proposed: RequestIdentity) {
     const previous = get(proposed.request_id);
     if (previous && (previous.operation !== proposed.operation
       || previous.input_sha256 !== proposed.input_sha256 || previous.config_sha256 !== proposed.config_sha256)) {
@@ -47,7 +50,7 @@ export async function openOperationStore(outputRoot: string) {
     return previous;
   }
   async function execute(
-    proposed: PlannerOperation,
+    proposed: PlannerOperation | PreparedOperation,
     work: (record: PlannerOperation) => Promise<Pick<PlannerOperation, "response_json" | "artifact">>,
   ): Promise<PlannerOperation> {
     try { database.exec("BEGIN IMMEDIATE"); }
@@ -63,7 +66,12 @@ export async function openOperationStore(outputRoot: string) {
       if (previous?.operation === "plan") {
         throw new PlanError("REQUEST_INCOMPLETE", "Interrupted plan requires inspection of its recorded run before a new request", "request_id");
       }
-      const record = previous ?? proposed;
+      const record = previous ?? ("capture" in proposed ? proposed.capture() : proposed);
+      for (const field of ["request_id", "operation", "input_sha256", "config_sha256"] as const) {
+        if (record[field] !== proposed[field]) {
+          throw new PlanError("INVALID_RUN_CONTEXT", "Captured request differs from its prepared input", field);
+        }
+      }
       // Commit identity first; another process may win the next lock, but only its owner can do work.
       put(record);
       database.exec("COMMIT");

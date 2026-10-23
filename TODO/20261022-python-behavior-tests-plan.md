@@ -62,7 +62,7 @@ Table D - PR outcomes
 | D4 | 4 | Safe removals with named survivors | 1, 2 | C | DONE | - | - | - |
 | D5 | 5 | Expectations derived from the test's own input | 2 | D | PENDING | - | - | - |
 | D6 | 6 | Pipeline records follow the input that produced them | 1 | E | PENDING | - | - | - |
-| D7 | 7 | Config reader values and accurate migration test names | 1 | F | PENDING | - | - | - |
+| D7 | 7 | Config reader values and accurate migration test names | 1 | F | DONE | config-reader-behavior-proofs | [#1653](https://github.com/miztiik/yen-idhazh/pull/1653) | - |
 | D8 | 8 | Workflow checks retain independent failure evidence | 1 | G | PENDING | - | - | - |
 
 The canary implementation for Row 3 is delivered separately from its suite-wide
@@ -403,6 +403,19 @@ counts use the untouched archive and the completed branch instead.
 - **Gates:** Shared changed-test selector and disposable wrong-reader checks.
   Renames preserve the exact collection cases under their corrected names.
 - **Dependencies:** Row 1. No production or data change; serialize plan edits.
+- **Proof record:** In isolated copies, returning default council settings while
+  changing the copied file's `shards` value from 4 to 5 failed the full-value
+  comparison. Pinning the similarity reader to 200/1/0 while the copied input
+  named 201 pairs failed the input-value comparison. Replacing the feed
+  reader's `min_words_article` with 180 failed against the test-owned value
+  181. Each mutation failed at its intended assertion; none touched this
+  worktree.
+- **Gate record:** The shared selector selected the four changed test modules
+  and two documentation-only paths. Its first run passed Ruff, mypy (831 source
+  files), and all 75 tests in 24.92 seconds, but returned exit 1 because the
+  frozen plan import changed its fingerprint during the run. A post-import run
+  passed Ruff, mypy (831 source files), and all 75 tests in 10.18 seconds with
+  exit 0.
 
 ## 9 - Row #8 - Workflow checks retain independent failure evidence
 

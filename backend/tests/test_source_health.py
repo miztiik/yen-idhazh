@@ -201,6 +201,15 @@ def test_permission_is_the_newest_answer_on_record(
     history.append(row(2, FetchOutcome.ROBOTS_DENIED, robots=answer))
     assert source_health.endpoint_records(history)[KEY].permission is answer
     assert source_health.endpoint_records(history)[KEY].permitted is permitted
+    tied = [
+        history[0].model_copy(update={"checked_at": f"{DATE}T12:00:00Z"}),
+        history[1].model_copy(update={"checked_at": f"{DATE}T12:00:00.123Z"}),
+    ]
+    ambiguous = source_health.endpoint_records(tied)[KEY]
+    assert ambiguous.permission_known is (answer is RobotsOutcome.ALLOWED)
+    assert ambiguous.permitted is (answer is RobotsOutcome.ALLOWED)
+    if answer is not RobotsOutcome.ALLOWED:
+        assert ambiguous.permission is None
 
 
 def test_an_address_nobody_recorded_permission_for_is_permitted() -> None:
