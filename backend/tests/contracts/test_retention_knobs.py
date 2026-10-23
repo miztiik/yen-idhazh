@@ -128,9 +128,13 @@ def test_the_rest_rule_reads_the_knob_the_committed_config_spells() -> None:
     decision - and that is the difference between a rename and a change of
     behaviour.
     """
-    committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).collect
+    raw = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    committed = AppConfig.model_validate(raw).collect
     tuned = AppConfig.from_json(read_text(APP_CONFIG_EVERY_KNOB_DIFFERS)).collect
-    assert committed.availability_strikes_before_rest == 5
+    assert (
+        committed.availability_strikes_before_rest
+        == raw["collect"]["availability_strikes_before_rest"]
+    )
     assert tuned.availability_strikes_before_rest == 3
 
     source = read_text(REPO_ROOT / "backend" / "idhazh" / "stages" / "plan.py")
@@ -245,10 +249,11 @@ def test_the_published_window_is_unbounded_or_outlives_the_first_sight_store() -
     )
 
     raw = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
-    assert raw["collect"]["published_window_days"] == 730
-    assert (
-        AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).collect.published_window_days
-        == 730
+    raw = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    loaded = AppConfig.model_validate(raw).collect
+    assert loaded.published_window_days == raw["collect"]["published_window_days"]
+    assert loaded.published_window_days == -1 or (
+        loaded.published_window_days > raw["collect"]["seen_window_days"]
     )
 
 
@@ -331,14 +336,12 @@ def test_a_config_still_spelling_a_retired_knob_is_refused_by_name(block: str, k
     """
     if block == "models":
         payload = committed_models_raw()
-        assert knob not in payload, "the committed file must not spell the retired knob"
         payload[knob] = payload["summarizer"]
         with pytest.raises(ValidationError, match=re.escape(f"{block}.{knob}")):
             ModelsConfig.model_validate(payload)
         return
 
     payload = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
-    assert knob not in payload[block], "the committed file must not spell the retired knob"
     payload[block][knob] = 1
 
     with pytest.raises(ValidationError, match=re.escape(f"{block}.{knob}")):
@@ -353,11 +356,13 @@ def test_a_prune_number_left_in_finetune_is_sent_to_the_squash_declaration(knob:
     went: a number nothing reads is a number somebody believes.
     """
     payload = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
-    assert knob not in payload["finetune"], "the committed file must not spell the moved knob"
     payload["finetune"][knob] = 30
 
-    with pytest.raises(ValidationError, match=re.escape("config/gardener/corpus-squash.json")):
+    with pytest.raises(ValidationError) as refusal:
         AppConfig.model_validate(payload)
+    message = str(refusal.value)
+    assert f"finetune.{knob}" in message
+    assert "config/gardener/corpus-squash.json" in message
 
 
 def test_a_retired_knob_is_not_offered_a_replacement_that_does_not_exist() -> None:

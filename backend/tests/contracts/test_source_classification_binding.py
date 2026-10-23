@@ -6,7 +6,7 @@ import json
 import re
 import subprocess
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any, get_args, get_origin
 
 import pytest
 from conftest import CONTRACT_FIXTURES_DIR, REPO_ROOT
@@ -96,6 +96,21 @@ def test_frontend_kind_definition_fields_match_python() -> None:
         "counts_as_reporting": "boolean",
         "requires_reporting_for_lead": "boolean",
     }
+    for name, field in SourceKindDefinition.model_fields.items():
+        annotation = field.annotation
+        if annotation is bool:
+            expected = "boolean"
+        elif type(None) in get_args(annotation):
+            non_null = next(arg for arg in get_args(annotation) if arg is not type(None))
+            if get_origin(non_null) is Annotated:
+                non_null = get_args(non_null)[0]
+            assert non_null is str, f"no TypeScript binding for {name}: {annotation}"
+            expected = "string | null"
+        elif isinstance(annotation, type) and issubclass(annotation, str):
+            expected = "string"
+        else:
+            pytest.fail(f"no TypeScript binding for {name}: {annotation}")
+        assert fields[name] == expected, f"{name} has a different type in TypeScript"
 
 
 def test_frontend_kind_vocabulary_comes_from_the_same_registry() -> None:
@@ -189,7 +204,7 @@ def test_config_only_extension_reaches_plan_publication_and_frontend(tmp_path: P
         ("default-kind", "default_source_kind"),
         ("default-tier", "default_entity_tier"),
         ("nonfinite-weight", "finite"),
-        ("invalid-property", "extra"),
+        ("invalid-property", "invented_rule"),
         ("inactive-kind", "independent-review"),
         ("conflicting-legacy-weight", "conflicts"),
     ],
@@ -237,19 +252,28 @@ def test_configured_defaults_apply_only_to_authored_config(tmp_path: Path) -> No
     write(root, "taxonomy.json", taxonomy)
     sources = read(root, "sources.json")
     sources["feeds"][0].pop("kind")
+    sources["feeds"][1]["kind"] = "reporting"
     write(root, "sources.json", sources)
     watchlist = read(root, "watchlist.json")
     watchlist["entities"][0]["feeds"] = [
         {
-            "id": "entity-review",
-            "title": "Entity review",
+            "id": "entity-review-default",
+            "title": "Entity review default",
             "url": "https://example.test/feed",
-        }
+        },
+        {
+            "id": "entity-review-explicit",
+            "title": "Entity review explicit",
+            "url": "https://example.test/second-feed",
+            "tier": 2,
+        },
     ]
     write(root, "watchlist.json", watchlist)
     settings = load(root)
     assert settings.sources.feeds[0].kind == "independent-review"
+    assert settings.sources.feeds[1].kind == "reporting"
     assert settings.watchlist.entities[0].feeds[0].tier == 4
+    assert settings.watchlist.entities[0].feeds[1].tier == 2
     historical = Taxonomy.from_json(
         (CONTRACT_FIXTURES_DIR / "taxonomy/with-tombstones.json").read_text(encoding="utf-8")
     )
