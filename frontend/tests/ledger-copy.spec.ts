@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ledgerCopy, publishedLedgers } from '../scripts/published-ledgers.mjs';
-import { siteKeepsFrom, siteMayHaveTrimmed } from '../src/lib/data/site-window';
+import { siteKeepsFrom } from '../src/lib/data/site-window';
 import { daysBetween } from '../src/lib/data/slice';
 import { backendPython } from './support/backend-python';
 import { sliceFromDisk } from '../src/lib/server/ledger-disk';
@@ -330,15 +330,14 @@ function quietDays(ledger: string, first: string, last: string): string {
 	return `${JSON.stringify({ entries, ledger, period: 'daily', version: '2026-10-04' }, null, 2)}\n`;
 }
 
-test('a 90-day copy keeps the entries that overlap 18 Mar to 15 Jun 2030, and the rule says when older days may be the archive\'s', () => {
+test('a 90-day copy keeps entries overlapping 18 Mar to 15 Jun 2030', () => {
 	// Each root is a ledger whose newest day is 15 Jun 2030. Every expected value is written out.
 	expect(siteKeepsFrom('2030-06-15', 90)).toBe('2030-03-18');
 	const roots = [
-		{ name: 'began-120-days-before', months: [], days: ['2030-02-15', '2030-06-15'], keptMonths: [], keptDays: ['2030-03-18', '2030-06-15', 90], siteFirst: '2030-03-18', mayHaveTrimmed: true },
-		{ name: 'began-30-days-before', months: [], days: ['2030-05-16', '2030-06-15'], keptMonths: [], keptDays: ['2030-05-16', '2030-06-15', 31], siteFirst: '2030-05-16', mayHaveTrimmed: false },
-		{ name: 'closed-months', months: ['2030-02', '2030-03'], days: ['2030-04-01', '2030-06-15'], keptMonths: ['2030-03'], keptDays: ['2030-04-01', '2030-06-15', 76], siteFirst: '2030-03-01', mayHaveTrimmed: true },
-		// Nothing was dropped, but the site alone cannot tell: one needless archive read.
-		{ name: 'began-on-the-first-kept-day', months: [], days: ['2030-03-18', '2030-06-15'], keptMonths: [], keptDays: ['2030-03-18', '2030-06-15', 90], siteFirst: '2030-03-18', mayHaveTrimmed: true }
+		{ name: 'began-120-days-before', months: [], days: ['2030-02-15', '2030-06-15'], keptMonths: [], keptDays: ['2030-03-18', '2030-06-15', 90] },
+		{ name: 'began-30-days-before', months: [], days: ['2030-05-16', '2030-06-15'], keptMonths: [], keptDays: ['2030-05-16', '2030-06-15', 31] },
+		{ name: 'closed-months', months: ['2030-02', '2030-03'], days: ['2030-04-01', '2030-06-15'], keptMonths: ['2030-03'], keptDays: ['2030-04-01', '2030-06-15', 76] },
+		{ name: 'began-on-the-first-kept-day', months: [], days: ['2030-03-18', '2030-06-15'], keptMonths: [], keptDays: ['2030-03-18', '2030-06-15', 90] }
 	] as const;
 	for (const root of roots) {
 		const tree: Record<string, string> = {
@@ -353,7 +352,7 @@ test('a 90-day copy keeps the entries that overlap 18 Mar to 15 Jun 2030, and th
 		const days = coversIn(copy.indexes['compact/item-health/index/daily.json']);
 		expect([days[0], days.at(-1), days.length], root.name).toEqual(root.keptDays);
 		expect(coversIn(copy.indexes['compact/item-health/index/monthly.json']), root.name).toEqual(root.keptMonths);
-		expect(siteMayHaveTrimmed(root.siteFirst, '2030-06-15', 90), root.name).toBe(root.mayHaveTrimmed);
+
 	}
 });
 
@@ -430,8 +429,6 @@ interface Stage {
 	kept: Record<Period, Entry[]>;
 	/** Every data file and raw listing staged; the three indexes always are. */
 	staged: string[];
-	siteFirst: string;
-	mayHaveTrimmed: boolean;
 }
 
 const STAGES: Stage[] = [
@@ -444,8 +441,7 @@ const STAGES: Stage[] = [
 		newest: '2026-10-15',
 		kept: { daily: quiet('2026-10-01', '2026-10-15'), monthly: [packed('2026-09', 0)], yearly: [] },
 		staged: ['compact/item-health/monthly/2026/09.parquet'],
-		siteFirst: '2026-09-01',
-		mayHaveTrimmed: false
+
 	},
 	{
 		// It began on 12 Aug 2026. Its month entry covers August from the 1st.
@@ -455,8 +451,7 @@ const STAGES: Stage[] = [
 		newest: '2026-10-01',
 		kept: { daily: quiet('2026-09-01', '2026-10-01'), monthly: [packed('2026-08', 3)], yearly: [] },
 		staged: ['compact/item-health/monthly/2026/08.parquet'],
-		siteFirst: '2026-08-01',
-		mayHaveTrimmed: false
+
 	},
 	{
 		// It began on 12 Aug 2026, so nothing was dropped. Its year entry covers 2026 from
@@ -468,8 +463,7 @@ const STAGES: Stage[] = [
 		newest: '2027-03-05',
 		kept: { daily: quiet('2027-02-01', '2027-03-05'), monthly: [empty('2027-01')], yearly: [packed('2026', 4)] },
 		staged: ['compact/item-health/yearly/2026/2026.parquet'],
-		siteFirst: '2026-01-01',
-		mayHaveTrimmed: true
+
 	},
 	{
 		stage: 'a ledger whose writer paused and resumed',
@@ -492,8 +486,7 @@ const STAGES: Stage[] = [
 			'compact/item-health/daily/2026/09/09.parquet',
 			'compact/item-health/daily/2026/09/10.parquet'
 		],
-		siteFirst: '2026-09-01',
-		mayHaveTrimmed: false
+
 	},
 	{
 		// Its writer stopped on 5 Aug 2026 and its quiet days went on to 10 Jan 2027. The copy
@@ -510,8 +503,7 @@ const STAGES: Stage[] = [
 		newest: '2027-01-10',
 		kept: { daily: quiet('2026-12-01', '2027-01-10'), monthly: [empty('2026-10'), empty('2026-11')], yearly: [] },
 		staged: [],
-		siteFirst: '2026-10-01',
-		mayHaveTrimmed: true
+
 	},
 	{
 		// Packing stopped after 2 Sep 2026 while the writer went on. The copy counts back from
@@ -531,8 +523,7 @@ const STAGES: Stage[] = [
 			'raw/item-health/index/2026-09-04.json',
 			'raw/item-health/index/2026-09-05.json'
 		],
-		siteFirst: '2026-09-01',
-		mayHaveTrimmed: false
+
 	},
 	{
 		// A lost day and a month's lost days and set-aside count stay on their entries, and a
@@ -555,13 +546,12 @@ const STAGES: Stage[] = [
 			'compact/item-health/daily/2026/10/03.parquet',
 			'compact/item-health/monthly/2026/09.parquet'
 		],
-		siteFirst: '2026-09-01',
-		mayHaveTrimmed: false
+
 	}
 ];
 
 for (const each of STAGES) {
-	test(`${each.stage}: the copy keeps what its indexes record, and the trim rule says ${each.mayHaveTrimmed ? 'yes' : 'no'}`, () => {
+	test(`${each.stage}: the copy keeps what its indexes record`, () => {
 		const tree = aLedgerHolding('item-health', each.indexes);
 		for (const day of each.raw) tree[`raw/item-health/${day}/${RAW_FILE}`] = 'PAR1';
 		const copy = ledgerCopy(aStateTree(tree), ['item-health'], 'state', 90);
@@ -573,7 +563,7 @@ for (const each of STAGES) {
 			const index = JSON.parse(copy.indexes[`compact/item-health/index/${period}.json`]);
 			expect(index.entries, period).toEqual(each.kept[period]);
 		}
-		expect(siteMayHaveTrimmed(each.siteFirst, each.newest, 90)).toBe(each.mayHaveTrimmed);
+
 	});
 }
 

@@ -28,7 +28,7 @@ from conftest import REPO_ROOT, read_text
 
 from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.ledger_fault import LedgerFault
-from idhazh.contracts.ledger_index import CompactIndex, EntryState, RawDayIndex
+from idhazh.contracts.ledger_index import CompactIndex, EntryState
 from idhazh.ledger.keys import DATE_CELL
 
 pytestmark = pytest.mark.contract
@@ -158,16 +158,6 @@ def test_every_ledger_the_door_may_query_is_a_ledger() -> None:
     assert "export type LedgerName = string;" in source
     assert "LEDGER_NAMES" not in source
     assert "LEDGER_FOLDERS" not in source
-
-
-def test_the_raw_day_index_copy_names_the_contract_fields_and_requires_bytes() -> None:
-    """The browser copy requires bytes because the site build fills them before it stages a listing."""
-    copy = DOOR / "raw-day-index.ts"
-    fields = copied_cells(read_text(copy), "RawDayIndex")
-    schema = contract_cells(RawDayIndex.json_schema())
-    assert fields["bytes"] == "bytes: number[]"
-    assert set(fields) == set(schema)
-    assert constant(read_text(copy), "RAW_DAY_INDEX_STAMP", copy) == RawDayIndex.schema_version()
 
 
 def test_the_door_filters_days_on_the_ledger_s_own_date_cell() -> None:

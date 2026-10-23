@@ -1,12 +1,12 @@
 
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
-	import { createLedgerReader, type AskResult, type Column, type DateStamp, type FetchCost, type LedgerName, type LedgerReader, type Row, type SpanCost, type SpanGap } from '$lib/data/ledger';
+	import { createLedgerReader, explorerBaseUrl, type AskResult, type Column, type DateStamp, type FetchCost, type LedgerName, type LedgerReader, type Row, type SpanCost, type SpanGap } from '$lib/data/ledger';
 	import Panel from '$lib/components/Panel.svelte';
 	import ChoiceTiles from '$lib/components/ChoiceTiles.svelte';
 	import WindowControl from '$lib/components/WindowControl.svelte';
 	import Notice from '$lib/components/Notice.svelte';
-	import { explorerIdleSentence, explorerMissingSentence, explorerQuietSentence, explorerUnansweredNote, explorerUnreachableSentence, refusedSentence } from '$lib/console/waiting';
+	import { explorerIdleSentence, explorerMissingSentence, explorerQuietSentence, explorerUnreachableSentence, refusedSentence } from '$lib/console/waiting';
 	import { shortDate } from '$lib/format';
 	import QuestionStrip from '$lib/console/explorer/QuestionStrip.svelte';
 	import LedgerList from '$lib/console/explorer/LedgerList.svelte';
@@ -29,12 +29,12 @@
 	import { fetchRegistry, type LedgerRegistry } from '$lib/console/explorer/registry';
 	import { consentedSelection, offersExample } from '$lib/data/ledger-catalog';
 	import type { ExplorerExample } from '$lib/server/config';
-	import { isDay, type CutDays, type UnansweredDays } from '$lib/data/slice-shapes';
+	import { isDay, type CutDays } from '$lib/data/slice-shapes';
+	import { preflight } from '$lib/data/ask-reader';
 	import Icon from '$lib/icons/Icon.svelte';
 
 	let { data } = $props();
 
-	const published = $derived(data.publishedLedgers as string[]);
 	const config = $derived(data.explorer);
 	const presets = $derived(data.console.window_presets);
 	// svelte-ignore state_referenced_locally
@@ -44,6 +44,8 @@
 	let ready = $state(false);
 	let registry = $state<LedgerRegistry | null>(null);
 	let reader: LedgerReader | null = null;
+	let session = 0;
+	let pricing = 0;
 	let registryError = $state<string | null>(null);
 	let filter = $state('');
 	let selected = $state<LedgerName[]>([]);
@@ -52,7 +54,7 @@
 	let initializing = $state(true);
 	let running = $state(false);
 	let refreshing = $state(false);
-	let cost = $state<SpanCost>({ files: 0, bytes: 0, readFrom: null, readTo: null, unpackedDays: [], cut: [], through: {} });
+	let cost = $state<SpanCost>({ files: 0, bytes: 0, readFrom: null, readTo: null, cut: [], through: {} });
 	let lastMs = $state<number | null>(null);
 	let lastRead = $state<FetchCost | null>(null);
 	let result = $state<AskResult | null>(null);
@@ -206,8 +208,13 @@
 			return statusSentence({ state: 'quiet', ms: lastMs, read: lastRead });
 		}
 		if (result?.state === 'refused') return statusSentence({ state: 'refused' });
-		if (result?.state === 'missing') return statusSentence({ state: 'missing', ledger: result.ledger, published: published.includes(result.ledger) });
+		if (result?.state === 'missing') return statusSentence({ state: 'missing', ledger: result.ledger });
 		if (result?.state === 'unreachable') return statusSentence({ state: result.fault === 'engine' ? 'unreachable-engine' : 'unreachable-files' });
+		if (cost.failure?.state === 'missing') return explorerMissingSentence(cost.failure.ledger);
+		if (cost.failure?.state === 'refused') return refusedSentence(cost.failure.because);
+		if (cost.failure?.state === 'unreachable') return explorerUnreachableSentence(cost.failure.ledger, cost.failure.at, cost.failure.fault);
+		const refusal = preflight(cost, config.max_files, config.max_fetch_bytes);
+		if (refusal !== null) return refusedSentence(refusal);
 		const empty = emptyLedgerLines();
 		return `${statusSentence({ state: 'idle', files: cost.files, bytes: cost.bytes, ledgers: selected.length, readFrom: cost.readFrom, readTo: cost.readTo, firstRun: lastMs === null })}${empty ? ` ${empty}` : ''}`;
 	}
@@ -272,22 +279,36 @@
 	}
 	/** Read the ledger registry, and on Refresh drop every index this page has read first. */
 	async function refreshRegistry(afresh = false, update = true) {
+		const refreshingSession = ++session;
+		++pricing;
 		refreshing = true;
 		registryError = null;
+		const oldReader = reader;
+		reader = null;
+		registry = null;
+		result = null;
+		lastRead = null;
+		ledgerColumns = [];
+		running = false;
+		costing = false;
+		cost = { files: 0, bytes: 0, readFrom: null, readTo: null, cut: [], through: {} };
 		try {
-			if (afresh) await reader?.startAfresh();
-			const catalog = await fetchRegistry();
+			if (afresh) await oldReader?.startAfresh();
+			const prefix = explorerBaseUrl();
+			const catalog = await fetchRegistry(fetch, prefix);
+			if (refreshingSession !== session) return;
 			registry = catalog;
-			reader = createLedgerReader(catalog);
+			reader = createLedgerReader(catalog, prefix);
 			selectConsented(selected);
 			if (update) await updateCostAndColumns();
 		} catch (error) {
+			if (refreshingSession !== session) return;
 			registryError = error instanceof Error ? error.message : String(error);
 			registry = null;
 			reader = null;
 			ledgerColumns = [];
 		} finally {
-			refreshing = false;
+			if (refreshingSession === session) refreshing = false;
 		}
 	}
 
@@ -462,9 +483,12 @@
 
 	async function updateCostAndColumns() {
 		if (!ready) return;
+		const price = ++pricing;
+		const readingSession = session;
 		const picked = selectedPublished;
 		if (picked.length === 0) {
-			cost = { files: 0, bytes: 0, readFrom: null, readTo: null, unpackedDays: [], cut: [], through: {} };
+			costing = false;
+			cost = { files: 0, bytes: 0, readFrom: null, readTo: null, cut: [], through: {} };
 			ledgerColumns = [];
 			return;
 		}
@@ -473,14 +497,14 @@
 		costing = true;
 		try {
 			const nextSpan = span();
-			cost = await currentReader.askCost(picked, nextSpan.from, nextSpan.to);
-			const described: Column[] = [];
-			for (const ledger of picked) {
-				for (const column of await currentReader.askColumns(ledger, config.max_fetch_bytes)) described.push({ name: `${ledger}.${column.name}`, type: column.type });
-			}
+			const nextCost = await currentReader.askCost(picked, nextSpan.from, nextSpan.to);
+			if (price !== pricing || readingSession !== session) return;
+			cost = nextCost;
+			const described = await currentReader.askColumns(picked, nextSpan.from, nextSpan.to, config.max_fetch_bytes, config.max_files);
+			if (price !== pricing || readingSession !== session) return;
 			ledgerColumns = described;
 		} finally {
-			costing = false;
+			if (price === pricing && readingSession === session) costing = false;
 		}
 	}
 
@@ -488,14 +512,17 @@
 		const currentReader = reader;
 		if (!canRun || currentReader === null) return;
 		running = true;
+		const readingSession = session;
 		// What this run asks, read once as it starts: the question, the ledgers and the span may change
 		// while the answer is on its way, and the answer, the link and History all belong to what was asked.
 		const asked = { statement: sql, ledgers: [...selected], days: windowDays, span: span(), custom: presetSpan === null };
 		await replaceAddress();
+		if (readingSession !== session) return;
 		lastRead = null;
 		const started = performance.now();
 		try {
-			const answer = await currentReader.ask({ ledgers: asked.ledgers, from: asked.span.from, to: asked.span.to, sql: asked.statement, maxChars: config.query_max_chars, maxRows: config.max_rows, maxFetchBytes: config.max_fetch_bytes });
+			const answer = await currentReader.ask({ ledgers: asked.ledgers, from: asked.span.from, to: asked.span.to, sql: asked.statement, maxChars: config.query_max_chars, maxRows: config.max_rows, maxFetchBytes: config.max_fetch_bytes, maxFiles: config.max_files });
+			if (readingSession !== session) return;
 			lastMs = Math.round(performance.now() - started);
 			// The window goes with its answer, so the lines under the answer change only on a run.
 			runSpan = asked.span;
@@ -520,7 +547,7 @@
 			recentRuns = [...keepRecentRun(recentRuns, nextRun, config.history_max)];
 			writeStored(HISTORY_KEY, recentRuns);
 		} finally {
-			running = false;
+			if (readingSession === session) running = false;
 		}
 	}
 
@@ -607,7 +634,7 @@
 		<div class="question-grid" class:wide>
 			<details data-workbench-region="ledgers" class="rail-region" bind:open={ledgersOpen}>
 				<summary>Ledgers: {selected.length}</summary>
-				<LedgerList ledgers={ledgers} selected={selected} {published} through={cost.through} spanFrom={fromDay} {filter} onToggle={toggle} onFilter={(value) => (filter = value)} onRefresh={() => refreshRegistry(true)} {refreshing} />
+				<LedgerList ledgers={ledgers} selected={selected} through={cost.through} spanFrom={fromDay} {filter} onToggle={toggle} onFilter={(value) => (filter = value)} onRefresh={() => refreshRegistry(true)} {refreshing} />
 			</details>
 			<div class="editor-stack">
 				{#if registryError}<p class="state warn">{registryError}</p>{/if}
@@ -678,8 +705,8 @@
 
 <!-- Where an answer starts when its window began earlier: grey for each ledger whose earlier days
      are not on this site, amber for days the repository could not give it. -->
-{#snippet startNotes(cut: readonly CutDays[], unanswered: readonly UnansweredDays[], lastDay: DateStamp)}
-	{#each cut as one (one.ledger)}{' '}{describeCutDays(one, lastDay)}{/each}{#if unanswered.length > 0}{' '}<span class="warn" data-explorer-unanswered>{explorerUnansweredNote(unanswered)}</span>{/if}
+{#snippet startNotes(cut: readonly CutDays[], lastDay: DateStamp)}
+	{#each cut as one (one.ledger)}{' '}{describeCutDays(one, lastDay)}{/each}
 {/snippet}
 
 <div class="result-region" data-workbench-region="answer">
@@ -702,11 +729,11 @@
 			{:else if result === null}
 				<div class="answer-state" data-explorer-idle>{explorerIdleSentence()}</div>
 			{:else if result.state === 'ok'}
-				<AnswerTable columns={result.columns} rows={result.rows as Row[]} capped={result.capped} maxRows={config.max_rows} pageSize={config.row_page} cellMaxCh={config.cell_max_ch} barSpreadShare={config.bar_spread_share} spanText={describeDaysRead(result.readFrom, result.readTo)} siteFromText={siteFromText()} unansweredText={result.unanswered.length > 0 ? explorerUnansweredNote(result.unanswered) : ''} gapLines={explorerGapLines(result.gaps)} onOrderChange={(rows) => (orderedRows = rows)} />
+				<AnswerTable columns={result.columns} rows={result.rows as Row[]} capped={result.capped} maxRows={config.max_rows} pageSize={config.row_page} cellMaxCh={config.cell_max_ch} barSpreadShare={config.bar_spread_share} spanText={describeDaysRead(result.readFrom, result.readTo)} siteFromText={siteFromText()} gapLines={explorerGapLines(result.gaps)} onOrderChange={(rows) => (orderedRows = rows)} />
 			{:else if result.state === 'quiet'}
-				<div class="answer-state" data-state="quiet">{explorerQuietSentence()}{#if runSpan}{@render startNotes(result.cut, result.unanswered, runSpan.to)}{/if}{@render gapNotes(result.gaps)}</div>
+				<div class="answer-state" data-state="quiet">{explorerQuietSentence()}{#if runSpan}{@render startNotes(result.cut, runSpan.to)}{/if}{@render gapNotes(result.gaps)}</div>
 			{:else if result.state === 'missing'}
-				<div class="answer-state" data-state="missing">{explorerMissingSentence(result.ledger, published.includes(result.ledger))}</div>
+				<div class="answer-state" data-state="missing">{explorerMissingSentence(result.ledger)}</div>
 			{:else if result.state === 'unreachable'}
 				<div class="answer-state warn" data-state="unreachable">{explorerUnreachableSentence(result.ledger, result.at, result.fault)}</div>
 			{:else if result.state === 'refused'}
@@ -748,7 +775,7 @@
 		{:else if result.state === 'refused'}
 			<div class="answer-state" data-state="refused">The question did not run, so nothing to draw.</div>
 		{:else if result.state !== 'ok'}
-			<div class="answer-state" class:warn={result.state === 'unreachable'} data-state={result.state}>{result.state === 'missing' ? explorerMissingSentence(result.ledger, published.includes(result.ledger)) : result.state === 'unreachable' ? 'The data could not be fetched, so nothing to draw.' : 'The answer did not arrive, so nothing to draw.'}</div>
+			<div class="answer-state" class:warn={result.state === 'unreachable'} data-state={result.state}>{result.state === 'missing' ? explorerMissingSentence(result.ledger) : result.state === 'unreachable' ? 'The data could not be fetched, so nothing to draw.' : 'The answer did not arrive, so nothing to draw.'}</div>
 		{/if}
 	{/key}
 {/snippet}

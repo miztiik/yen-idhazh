@@ -29,7 +29,6 @@ export type ExplorerStatusInput = {
 	ms?: number | null;
 	read?: FetchCost | null;
 	ledger?: string;
-	published?: boolean;
 	through?: string;
 	linkNotices?: readonly string[];
 	notice?: string | null;
@@ -56,7 +55,7 @@ export function statusSentence(input: ExplorerStatusInput): string {
 		case 'link':
 			return input.linkNotices?.join(' ') ?? '';
 		case 'costing':
-			return 'Choosing a ledger fetches one day of it to list its columns.';
+			return 'Checking compact files and query limits before listing columns.';
 		case 'running-fetch':
 			return `Fetching ${plural(input.files ?? 0, 'file')}, ${size(input.bytes ?? 0)}.`;
 		case 'running-query':
@@ -68,7 +67,7 @@ export function statusSentence(input: ExplorerStatusInput): string {
 		case 'refused':
 			return 'Did not run. The reason is where the answer would be.';
 		case 'missing':
-			return `Did not run. ${explorerMissingSentence(input.ledger ?? 'This ledger', input.published ?? false, false)}`;
+			return `Did not run. ${explorerMissingSentence(input.ledger ?? 'This ledger')}`;
 		case 'unreachable-engine':
 			return 'Did not run. The query engine did not start.';
 		case 'unreachable-files':

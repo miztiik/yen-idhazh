@@ -67,8 +67,9 @@ class LedgerConfig(Model):
     archive_base_url: str = Field(
         default="",
         description=(
-            "The public https prefix for packed ledger files older than this site carries. "
-            "Empty means the site only; a non-empty value joins the page's connect-src "
+            "The public https prefix for the explorer's current registry and compact files. "
+            "Empty intentionally selects site fixtures; a non-empty value is the sole source, "
+            "joins the page's connect-src "
             "origins and is fetched by the page, never handed to the engine."
         ),
     )

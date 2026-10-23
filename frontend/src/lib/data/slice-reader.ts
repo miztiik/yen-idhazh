@@ -96,17 +96,6 @@ export function indexPath(catalog: LedgerCatalog, ledger: LedgerName, period: Pe
 	return `compact/${ledgerFolder(catalog, ledger)}/index/${period}.json`;
 }
 
-/** Where one raw day listing sits under the state root. */
-export function rawIndexPath(catalog: LedgerCatalog, ledger: LedgerName, day: DateStamp): string {
-	return `raw/${ledgerFolder(catalog, ledger)}/index/${day}.json`;
-}
-
-/** Where one raw writer file sits under the state root. */
-export function rawDataPath(catalog: LedgerCatalog, ledger: LedgerName, day: DateStamp, name: string): string {
-	const [year, month, date] = day.split('-');
-	return `raw/${ledgerFolder(catalog, ledger)}/${year}/${month}/${date}/${name}`;
-}
-
 /** Where one compact file sits under the state root, named for what it covers. */
 export function dataPath(catalog: LedgerCatalog, ledger: LedgerName, period: Period, covers: string): string {
 	const [year, month, day] = covers.split('-');

@@ -11,12 +11,17 @@ import { expect, test } from '@playwright/test';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { assistConfig, consoleConfig, mergeLayers, routeConsoles, routeConsolesFrom } from '../src/lib/server/config';
+import { assistConfig, consoleConfig, explorerConfig, mergeLayers, routeConsoles, routeConsolesFrom } from '../src/lib/server/config';
 import ts from 'typescript';
 import { runInNewContext } from 'node:vm';
 import { BAND_UNREAD, type RouteId } from '../src/lib/console/band';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+test('the explorer receives the configured positive file limit', () => {
+	const appearance = JSON.parse(readFileSync(join(REPO, 'config', 'appearance.json'), 'utf8'));
+	expect(explorerConfig().max_files).toBe(appearance.console.explorer_max_files);
+});
 
 function routeFiles(): Record<string, { panel_groups: { id: string; title: string; panels: string[] }[]; judged: string[]; knobs: Record<string, number> }> {
 	return Object.fromEntries(BAND_UNREAD.routes.map(({ id }) => [id, {

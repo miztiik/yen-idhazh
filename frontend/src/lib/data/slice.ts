@@ -184,18 +184,3 @@ export function filesFor(
 	}
 	return { files: [...chosen.values()], lostDays, setAside };
 }
-
-/** The days after the newest packed day that the staged site listed for a ledger. */
-export function writerDaysFor(
-	from: DateStamp,
-	to: DateStamp,
-	newestPacked: DateStamp | null,
-	listedThrough: DateStamp | null
-): DateStamp[] {
-	if (listedThrough === null) return [];
-	if (newestPacked !== null && to <= newestPacked) return [];
-	const start = newestPacked === null || from > newestPacked ? from : daysBetween(newestPacked, to)[1] ?? to;
-	if (start > to || start > listedThrough) return [];
-	const end = to < listedThrough ? to : listedThrough;
-	return daysBetween(start, end);
-}
