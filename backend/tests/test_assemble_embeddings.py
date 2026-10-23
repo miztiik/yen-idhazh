@@ -6,9 +6,9 @@ vector for every item it published, not only for the last run's. Each run
 encodes the items it summarized, so a block that replaced its predecessor left
 the committed 2026-08-24 day with 145 vectors for 731 items.
 
-It also holds the encoder alarm: the committed label vectors,
-what refuses a stale one, and the two assertions that say an alarm shipped
-rather than a second classifier.
+It also holds the encoder alarm: the label-vector file format, what refuses a
+stale or damaged file, and the two assertions that say an alarm shipped rather
+than a second classifier.
 
 Integration tier (CLAUDE.md section 13). Real payloads on disk, the committed
 encoder, and the assemble stage as the pipeline runs it. No mocks, no network.
@@ -41,7 +41,7 @@ from idhazh.contracts.digest_day import DigestDay, DigestEmbeddings
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.summary import Summary
-from idhazh.contracts.taxonomy import LifecycleStatus, Taxonomy
+from idhazh.contracts.taxonomy import Taxonomy
 from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, Embedder, to_base64
 from idhazh.stages import common
 from idhazh.stages.assemble import stage_assemble
@@ -298,12 +298,6 @@ def canary_payloads(target: Path) -> tuple[str, DigestDay, RunManifest]:
     return build_canary_day.DATE, day, build_canary_day.manifest(target, len(day.items))
 
 
-def committed_vectors() -> assemble.TaxonomyVectors:
-    vectors = assemble.read_taxonomy_vectors(REPO_ROOT, TAXONOMY)
-    assert vectors is not None, "config/taxonomy-vectors.bin is committed"
-    return vectors
-
-
 def built_vectors(*sources: list[float]) -> assemble.TaxonomyVectors:
     """Label vectors this test made up, laid out by the real packer.
 
@@ -333,34 +327,53 @@ def rooted(target: Path, payload: bytes) -> Path:
     return target
 
 
-class TestTheCommittedLabelVectors:
-    def test_the_file_holds_one_vector_for_every_label_the_vocabulary_offers(self) -> None:
-        """Eleven today: five active verticals and six active lenses.
+def packed_today(*sources: list[float]) -> bytes:
+    """The file the packer writes for these vectors, under today's vocabulary and encoder."""
+    digest = assemble.taxonomy_digest(assemble.label_vector_texts(TAXONOMY))
+    return assemble.pack_taxonomy_vectors(list(sources), digest=digest)
 
-        A retired entry is offered to no prompt and is not encoded here either,
-        which is why the retired lens does not make it twelve.
+
+def bounded_vocabulary() -> Taxonomy:
+    """The bounded fixture: active labels, one retired lens and one draft desk."""
+    return Taxonomy.from_json(read_text(FIXTURES_DIR / "taxonomy" / "definitions-a.json"))
+
+
+def digest_of(taxonomy: Taxonomy) -> str:
+    return assemble.taxonomy_digest(assemble.label_vector_texts(taxonomy))
+
+
+def with_lens(taxonomy: Taxonomy, lens_id: str, **fields: object) -> Taxonomy:
+    """`taxonomy` with the named fields of one lens replaced, validated again rather than copied."""
+    payload = taxonomy.model_dump(mode="json")
+    payload["lenses"] = [
+        lens | fields if lens["id"] == lens_id else lens for lens in payload["lenses"]
+    ]
+    return Taxonomy.model_validate(payload)
+
+
+class TestTheLabelVectorCodec:
+    """The label-vector file format, proved on vectors this test generates.
+
+    The run reads the committed file and refuses a stale or damaged one by name
+    (`assemble.read_taxonomy_vectors`). These cases prove the format on input
+    this test builds, so they hold for any vocabulary and any rebuild of the file.
+    """
+
+    def test_the_layout_is_a_header_then_the_encoder_reference_then_one_vector_per_label(
+        self,
+    ) -> None:
+        """A file with no room for label ids is what makes the nearest-label pick unbuildable.
+
+        The byte count is derived from the format constants and the three
+        vectors chosen here, not from how many labels the vocabulary offers.
         """
-        vectors = committed_vectors()
-        offered = [
-            entry
-            for group in (TAXONOMY.verticals, TAXONOMY.lenses)
-            for entry in group
-            if entry.status is LifecycleStatus.ACTIVE
-        ]
+        sources = [[0.5] * DIMENSIONS, [-0.25] * DIMENSIONS, [0.0] * DIMENSIONS]
+        packed = packed_today(*sources)
+        head = assemble._VECTORS_HEADER_BYTES
+        reference = embed.ENCODER_REF.encode("ascii")
 
-        assert len(vectors.vectors) == len(offered)
-        assert vectors.dimensions == DIMENSIONS
-        assert vectors.encoder_ref == embed.ENCODER_REF
-        assert all(len(one) == DIMENSIONS for one in vectors.vectors)
-
-    def test_the_vectors_are_the_committed_file_minus_its_header(self) -> None:
-        """One int8 vector a label, no padding, and a header that names both rulers."""
-        raw = (REPO_ROOT / assemble.TAXONOMY_VECTORS_RELPATH).read_bytes()
-        vectors = committed_vectors()
-        body = len(vectors.vectors) * DIMENSIONS
-
-        assert body == 4224, "eleven labels at 384 int8 dimensions"
-        assert len(raw) - body == assemble._VECTORS_HEADER_BYTES + len(embed.ENCODER_REF)
+        assert packed[head : head + len(reference)] == reference
+        assert len(packed) == head + len(reference) + len(sources) * DIMENSIONS
 
     def test_the_encoder_reference_the_contract_accepts_is_the_one_the_encoder_declares(
         self,
@@ -375,22 +388,6 @@ class TestTheCommittedLabelVectors:
         )
 
         assert block.encoder_ref == embed.ENCODER_REF
-
-    def test_the_file_carries_no_label_id_a_reader_could_pick_from(self) -> None:
-        """The nearest-label pick this row refuses is unbuildable from the committed bytes.
-
-        Not a style point. A file carrying the ids is one short edit away from
-        being a classifier, and this assertion is what makes that edit visible.
-        """
-        raw = (REPO_ROOT / assemble.TAXONOMY_VECTORS_RELPATH).read_bytes()
-        ids = [
-            entry.id
-            for group in (TAXONOMY.verticals, TAXONOMY.lenses)
-            for entry in group
-            if entry.status is LifecycleStatus.ACTIVE
-        ]
-
-        assert not any(one.encode("ascii") in raw for one in ids)
 
     def test_a_round_trip_through_the_file_format_keeps_every_byte(self, tmp_path: Path) -> None:
         """Packed and read back, the vectors are the ones that went in."""
@@ -422,32 +419,28 @@ class TestTheStaleFileRefusal:
     def test_the_oracle_a_file_built_from_another_vocabulary_is_refused_by_name(
         self, tmp_path: Path
     ) -> None:
-        """Driven from the committed fixture, whose header names a vocabulary we do not have."""
-        root = rooted(tmp_path, STALE_VECTORS.read_bytes())
+        """Driven from the recorded stale file, after checking it is stale and not damaged.
 
-        with pytest.raises(ValueError) as raised:
-            assemble.read_taxonomy_vectors(root, TAXONOMY)
-
-        assert "taxonomy-vectors.bin" in str(raised.value)
-        assert "build_taxonomy_vectors.py" in str(raised.value)
-
-    def test_the_fixture_is_stale_rather_than_corrupt(self) -> None:
-        """A well-formed file whose header digest is another vocabulary's.
-
-        A fixture that failed for being malformed would pass the test above
-        while proving nothing about the check this row exists for.
+        A damaged file would raise the same error, so the well-formedness checks
+        sit here as the precondition. They are what says the refusal below is the
+        vocabulary check and not an earlier one.
         """
         raw = STALE_VECTORS.read_bytes()
         head = assemble._VECTORS_HEADER_BYTES
         magic, dimensions, count, digest, length = struct.unpack(
             assemble._VECTORS_HEADER, raw[:head]
         )
-
         assert magic == assemble._VECTORS_MAGIC
         assert dimensions == DIMENSIONS
         assert len(raw) - head - length == count * dimensions
         assert raw[head : head + length].decode("ascii") == embed.ENCODER_REF
         assert digest.hex() != assemble.taxonomy_digest(assemble.label_vector_texts(TAXONOMY))
+
+        with pytest.raises(ValueError) as raised:
+            assemble.read_taxonomy_vectors(rooted(tmp_path, raw), TAXONOMY)
+
+        assert "taxonomy-vectors.bin" in str(raised.value)
+        assert "build_taxonomy_vectors.py" in str(raised.value)
 
     def test_a_file_built_by_other_weights_is_refused_by_name(self, tmp_path: Path) -> None:
         """The vocabulary is not the only ruler. Move the weights and the cosine collapses."""
@@ -466,33 +459,77 @@ class TestTheStaleFileRefusal:
         assert "taxonomy-vectors.bin" in str(raised.value)
         assert "2026-01-01" in str(raised.value)
 
-    def test_retiring_a_lens_moves_the_digest(self) -> None:
-        """The digest has to see a vocabulary change, or the refusal never fires."""
-        payload = TAXONOMY.model_dump(mode="json")
-        payload["lenses"] = [
-            lens | {"status": "retired", "retired_on": "2026-09-13"}
-            if lens["id"] == "chips"
-            else lens
-            for lens in payload["lenses"]
-        ]
-        narrowed = Taxonomy.model_validate(payload)
+class TestTheVocabularyDigest:
+    """What moves the digest, and so what makes a stored file stale.
 
-        assert assemble.taxonomy_digest(
-            assemble.label_vector_texts(narrowed)
-        ) != assemble.taxonomy_digest(assemble.label_vector_texts(TAXONOMY))
+    Driven from the bounded vocabulary fixture rather than the committed one, so
+    the rules do not move when a label is added or retired.
+    """
+
+    def test_an_active_label_text_change_moves_the_digest(self) -> None:
+        """The digest has to see a change that would move a vector, or the refusal never fires."""
+        edited = with_lens(
+            bounded_vocabulary(), "chips", definition="The story turns on chip designs."
+        )
+
+        assert digest_of(edited) != digest_of(bounded_vocabulary())
+
+    def test_retiring_an_active_label_moves_the_digest(self) -> None:
+        retired = with_lens(
+            bounded_vocabulary(), "chips", status="retired", retired_on="2026-09-13"
+        )
+
+        assert digest_of(retired) != digest_of(bounded_vocabulary())
 
     def test_editing_a_retired_entry_leaves_the_digest_alone(self) -> None:
         """A change that cannot move a vector must not fail a build."""
-        payload = TAXONOMY.model_dump(mode="json")
-        payload["lenses"] = [
-            lens | {"display_name": "Something else"} if lens["status"] == "retired" else lens
-            for lens in payload["lenses"]
-        ]
-        edited = Taxonomy.model_validate(payload)
+        edited = with_lens(bounded_vocabulary(), "ai-roi", display_name="Something else")
 
-        assert assemble.taxonomy_digest(
-            assemble.label_vector_texts(edited)
-        ) == assemble.taxonomy_digest(assemble.label_vector_texts(TAXONOMY))
+        assert digest_of(edited) == digest_of(bounded_vocabulary())
+
+
+class TestTheDamagedFileRefusal:
+    """A file cut short or misframed is refused by name, never read as a shorter file.
+
+    Each case starts from a file the packer writes under today's vocabulary and
+    encoder, so every check before the damaged one passes and the refusal that
+    fires is the one the test names.
+    """
+
+    def test_a_file_shorter_than_its_header_is_refused_by_name(self, tmp_path: Path) -> None:
+        root = rooted(tmp_path, packed_today([0.5] * DIMENSIONS)[:10])
+
+        with pytest.raises(ValueError, match="too short to carry a header"):
+            assemble.read_taxonomy_vectors(root, TAXONOMY)
+
+    def test_a_file_without_the_marker_is_refused_by_name(self, tmp_path: Path) -> None:
+        packed = packed_today([0.5] * DIMENSIONS)
+        root = rooted(tmp_path, b"NOTAMARK" + packed[8:])
+
+        with pytest.raises(ValueError, match="label-vector marker"):
+            assemble.read_taxonomy_vectors(root, TAXONOMY)
+
+    def test_a_body_cut_short_is_refused_by_its_count(self, tmp_path: Path) -> None:
+        packed = packed_today([0.5] * DIMENSIONS, [-0.25] * DIMENSIONS)
+        root = rooted(tmp_path, packed[:-1])
+
+        with pytest.raises(ValueError, match="claims 2 vectors"):
+            assemble.read_taxonomy_vectors(root, TAXONOMY)
+
+    def test_a_file_of_another_width_is_refused_by_name(self, tmp_path: Path) -> None:
+        reference = embed.ENCODER_REF.encode("ascii")
+        header = struct.pack(
+            assemble._VECTORS_HEADER,
+            assemble._VECTORS_MAGIC,
+            DIMENSIONS + 1,
+            1,
+            bytes.fromhex(assemble.taxonomy_digest(assemble.label_vector_texts(TAXONOMY))),
+            len(reference),
+        )
+        root = rooted(tmp_path, header + reference + bytes(DIMENSIONS + 1))
+
+        with pytest.raises(ValueError, match="this build reads"):
+            assemble.read_taxonomy_vectors(root, TAXONOMY)
 
 
 class TestTheAlarmCostsTheRunNothing:
@@ -512,7 +549,7 @@ class TestTheAlarmCostsTheRunNothing:
         date, day, manifest = canary_payloads(tmp_path / "digest")
         assert day.embeddings is not None, "the canary day encodes its items"
         before = len(day.to_json().encode("utf-8"))
-        vectors = committed_vectors()
+        vectors = built_vectors([0.5] * DIMENSIONS, [-0.25] * DIMENSIONS)
         counter = Counter(monkeypatch)
 
         written = day_metrics.publish(
@@ -546,7 +583,7 @@ class TestTheAlarmCostsTheRunNothing:
             date=date,
             day=day,
             manifest=manifest,
-            taxonomy_vectors=committed_vectors(),
+            taxonomy_vectors=built_vectors([0.5] * DIMENSIONS, [-0.25] * DIMENSIONS),
         )
         record = json.loads(written.read_text(encoding="utf-8"))
         drawn = json.dumps(record["label_similarity"])
@@ -567,10 +604,9 @@ class TestTheAlarmCostsTheRunNothing:
             date=date,
             day=day,
             manifest=manifest,
-            taxonomy_vectors=committed_vectors(),
+            taxonomy_vectors=built_vectors([0.5] * DIMENSIONS, [-0.25] * DIMENSIONS),
         )
         block = json.loads(written.read_text(encoding="utf-8"))["label_similarity"]
-
         assert block["taxonomy_digest"] == assemble.taxonomy_digest(
             assemble.label_vector_texts(TAXONOMY)
         )
@@ -589,7 +625,7 @@ class TestTheAlarmCostsTheRunNothing:
             date=date,
             day=day.model_copy(update={"embeddings": None}),
             manifest=manifest,
-            taxonomy_vectors=committed_vectors(),
+            taxonomy_vectors=built_vectors([0.5] * DIMENSIONS, [-0.25] * DIMENSIONS),
         )
 
         assert json.loads(written.read_text(encoding="utf-8"))["label_similarity"] is None
@@ -624,7 +660,7 @@ class TestTheAlarmCostsTheRunNothing:
             date=date,
             day=day,
             manifest=manifest,
-            taxonomy_vectors=committed_vectors(),
+            taxonomy_vectors=built_vectors([0.5] * DIMENSIONS, [-0.25] * DIMENSIONS),
         )
         record = json.loads(written.read_text(encoding="utf-8"))
         assert record.pop("label_similarity") is not None
