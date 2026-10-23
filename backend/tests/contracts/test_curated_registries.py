@@ -1,16 +1,17 @@
-"""What layout does a hand-curated config keep, and what stops the next edit drifting off it?"""
+"""Does a hand-curated registry still read back with the keys and values its contract declares?
+
+Its layout is the curator's own choice and is not checked here. The writer's
+layout is checked by `test_record_layouts.py` and `test_json_serialization.py`.
+"""
 
 from __future__ import annotations
 
-import difflib
 import json
-from typing import Any
 
 import pytest
 from conftest import CONFIG_DIR, read_text
 
-from idhazh.contracts import canonical_json
-from idhazh.contracts.base import Contract, records_json
+from idhazh.contracts.base import Contract
 from idhazh.contracts.sources import Sources
 from idhazh.contracts.taxonomy import Taxonomy
 from idhazh.contracts.watchlist import Watchlist
@@ -28,68 +29,16 @@ CURATED: dict[str, type[Contract]] = {
 }
 
 
-def first_difference(committed: str, rewritten: str) -> str:
-    lines = difflib.unified_diff(
-        committed.splitlines(), rewritten.splitlines(), "on disk", "as the writer would", n=0
-    )
-    return "\n".join(list(lines)[:12])
-
-
 @pytest.mark.parametrize("name", sorted(CURATED), ids=lambda n: n)
 def test_a_curated_registry_survives_a_read_and_a_rewrite(name: str) -> None:
-    """A hand-edited config re-serializes to the bytes on disk.
+    """A hand-edited config holds exactly the keys and values its contract writes.
 
-    This is what holds the layout still. Without it a curator's next edit
-    arrives buried in a whole-file reshuffle and the diff stops showing what
-    changed - and there is nothing to notice the drift, because every layout
-    parses to the same payload.
+    Every field is present even at its default, and no key is unknown: the
+    contract refuses unknown keys on read. Whitespace is not compared, so a
+    curator may reflow a record without breaking this test.
     """
     text = read_text(CONFIG_DIR / name)
     rewritten = CURATED[name].from_json(text).to_json()
-    assert rewritten == text, (
-        f"config/{name} is not written the way the contract writes it. Keys are "
-        f"sorted, every field is spelled out even at its default, and each record "
-        f"sits on one line:\n{first_difference(text, rewritten)}"
+    assert json.loads(rewritten) == json.loads(text), (
+        f"config/{name} does not hold the keys and values its contract writes"
     )
-
-
-@pytest.mark.parametrize("name", sorted(CURATED), ids=lambda n: n)
-def test_a_curated_registry_holds_one_record_a_line(name: str) -> None:
-    """Which layout, said in the file's own bytes.
-
-    The round trip above passes against any layout the writer is consistent
-    about, so on its own it would not notice the day the writer went back to a
-    field a line. This reads the committed text and counts.
-    """
-    text = read_text(CONFIG_DIR / name)
-    payload: dict[str, Any] = json.loads(text)
-    expected = [
-        record
-        for _, value in sorted(payload.items())
-        if isinstance(value, list) and value and all(isinstance(item, dict) for item in value)
-        for record in value
-    ]
-    assert expected, f"config/{name} holds no records, so this proves nothing"
-
-    found = [
-        json.loads(line.strip().rstrip(","))
-        for line in text.splitlines()
-        if line.startswith("    {")
-    ]
-    assert found == expected, f"config/{name} does not hold one record a line"
-
-
-def test_a_payload_with_no_record_list_is_written_exactly_as_canonical_json() -> None:
-    """The writer is `canonical_json` plus one rule. This is everything but the rule.
-
-    Sorted keys, two-space indent, ASCII, one trailing newline - all of it
-    unchanged, so the three properties the one serialization buys are intact.
-    """
-    payload = {"b": {"d": [1, 2], "c": None}, "a": [[1], []], "e": "x"}
-    assert records_json(payload) == canonical_json(payload)
-
-
-def test_a_list_of_objects_is_written_one_object_a_line() -> None:
-    """And this is the rule. The space after a colon is the only one a record keeps."""
-    text = records_json({"feeds": [{"b": 1, "a": 2}, {"a": 3, "b": 4}]})
-    assert text == '{\n  "feeds": [\n    {"a": 2,"b": 1},\n    {"a": 3,"b": 4}\n  ]\n}\n'
