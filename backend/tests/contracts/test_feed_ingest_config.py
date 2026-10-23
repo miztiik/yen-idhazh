@@ -91,16 +91,23 @@ def config_payload() -> dict[str, Any]:
 
 def test_python_authored_config_and_config_only_vertical_extension() -> None:
     payload = config_payload()
+    payload["triage"].update({
+        "min_words_article": 181,
+        "min_words_abstract": 61,
+        "max_age_hours": 25,
+        "recency_half_life_hours": 19,
+    })
+    payload["curate"]["article_limit"] = 101
     taxonomy_payload = json.loads(read_text(REPO_ROOT / "config" / "taxonomy.json"))
     taxonomy = feed_ingest.PlanningTaxonomy.model_validate(taxonomy_payload)
     config = feed_ingest.FeedIngestConfig.model_validate(payload)
     config.validate_verticals(taxonomy)
-    assert config.triage.min_words_article == 180
-    assert config.triage.min_words_abstract == 60
-    assert config.triage.max_age_hours == 24
-    assert config.triage.recency_half_life_hours == 18
+    assert config.triage.min_words_article == payload["triage"]["min_words_article"]
+    assert config.triage.min_words_abstract == payload["triage"]["min_words_abstract"]
+    assert config.triage.max_age_hours == payload["triage"]["max_age_hours"]
+    assert config.triage.recency_half_life_hours == payload["triage"]["recency_half_life_hours"]
     assert config.workflow_reporting.enabled
-    assert config.curate.article_limit == 100
+    assert config.curate.article_limit == payload["curate"]["article_limit"]
 
     taxonomy_payload["verticals"].append(dict(taxonomy_payload["verticals"][0], id="oceans"))
     payload["vertical_overrides"] = {
