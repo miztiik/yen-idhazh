@@ -13,7 +13,7 @@ Table A - Scope and execution
 | A2 | Status | Execution authorized by kumarsnaveen on 2026-10-23. The owner also authorized the structural follow-on work needed to complete the original suite-wide intent. |
 | A3 | Hard scope - in | Review the Python suite against Table C; replace blanket fixture-format checks; remove proven duplicate data checks; preserve reader, writer, migration, identity, failure-handling and safety behavior. |
 | A4 | Chosen strategy | Semantic reader/writer checks plus focused tests where exact bytes have a consumer. Fowler ruled this construction on 2026-10-22; the owner set the behavior-focused intent. |
-| A5 | Contract impact | No persisted shape, version stamp, migration, serializer, digest algorithm, production validation rule, configuration knob or dependency changes. Session review reports are not a new application artifact. |
+| A5 | Contract impact | No persisted shape, version stamp, migration, serializer, digest algorithm, production validation rule or dependency changes. Exception: Row 9 removes the unused `collect.watchlist_max_entities` configuration knob and its test-only entry cap, authorized by kumarsnaveen on 2026-10-23. Named config fixtures lose only that setting; historical retention and source-weight evidence stays intact. Session review reports are not a new application artifact. |
 | A6 | Evidence baseline | Investigated against `0d2268015334e4028448b1f564a76ce51fd69968`. Recheck changed targets against current `origin/main` before dispatch. The earlier chat's keyword counts and deletion percentages are not verified findings or targets. |
 | A7 | Inventory method | Before the first implementation edit, collect the suite once with `python -m pytest --collect-only -n 0 -q -o addopts="" backend/tests`. Keep the result and base commit in the session report. Record collected parameter cases separately from test functions; collection does not certify a passing test run. |
 | A8 | Review record | For each candidate, record its full pytest identifier, asserted behavior, input source, primary Table C category, secondary categories, proposed action, remaining test, and concrete broken-code edit that remaining test detects. Unrelated behavior tests get a separate primary category. Primary counts must partition the collected list; secondary counts may overlap and must say so. Read assertions and called helpers; names and keywords only find candidates. |
@@ -59,11 +59,12 @@ Table D - PR outcomes
 | D1 | 1 | Semantic contracts and focused byte guarantees | - | A | DONE | - | - | - |
 | D2 | 2 | Vector tests independent of the current asset | - | A | DONE | - | - | - |
 | D3 | 3 | Finish the behavior review and remove proven fixture-only checks | 1, 2 | B | IN-FLIGHT | - | - | - |
-| D4 | 4 | Safe removals with named survivors | 1, 2 | C | DONE | - | - | - |
-| D5 | 5 | Expectations derived from the test's own input | 2 | D | PENDING | - | - | - |
-| D6 | 6 | Pipeline records follow the input that produced them | 1 | E | PENDING | - | - | - |
+| D4 | 4 | Safe removals with named survivors | 1, 2 | C | DONE | - | [#1652](https://github.com/miztiik/yen-idhazh/pull/1652), merged at `75a4e12af6ad40f79691afba41b20ce71414c2e6` | - |
+| D5 | 5 | Expectations derived from the test's own input | 2 | D | DONE | input-based-vector-expectations | #1654 | - |
+| D6 | 6 | Pipeline records follow the input that produced them | 1 | E | DONE | input-based-pipeline-records | [#1655](https://github.com/miztiik/yen-idhazh/pull/1655), merged at `6bb8dfea19613c116142131550c97fead234747d` | - |
 | D7 | 7 | Config reader values and accurate migration test names | 1 | F | DONE | config-reader-behavior-proofs | [#1653](https://github.com/miztiik/yen-idhazh/pull/1653) | - |
-| D8 | 8 | Workflow checks retain independent failure evidence | 1 | G | PENDING | - | - | - |
+| D8 | 8 | Workflow checks retain independent failure evidence | 1 | G | IN-FLIGHT | workflow-behavior-proofs | [#1656](https://github.com/miztiik/yen-idhazh/pull/1656) | - |
+| D9 | 9 | Remove the unused watchlist entry limit | 1 | H | IN-FLIGHT | remove-unused-watchlist-limit | - | - |
 
 The canary implementation for Row 3 is delivered separately from its suite-wide
 review obligation. Rows 5 and 6 carry additional changes found by that review.
@@ -296,8 +297,8 @@ counts use the untouched archive and the completed branch instead.
 - **Files touched:** `backend/tests/test_backfill_vectors.py`,
   `backend/tests/test_corpus_harvest.py`, `backend/tests/test_canary_packing.py`.
 - **Reference checks:** The review names six backfill cases, the census recount
-  case and the council-record packing case. Recheck each identifier against the
-  branch before editing; the reports predate the merged vector-codec changes.
+  case and the council-record packing case. Each identifier was rechecked
+  against this branch before editing.
 - **Changes and acceptance proof:**
   - `TestWhichItemsEarnAVector::test_readable_items_all_earn_one`: expected ids
     come from the supplied day's items; dropping a readable item must fail.
@@ -310,15 +311,48 @@ counts use the untouched archive and the completed branch instead.
     come from the supplied day, while independently chosen stale vector values
     must be replaced; topping up the stale block must fail.
   - `TestTheBackfill::test_a_repaired_day_takes_its_month_index_with_it`:
-    the index month comes from the supplied day; leaving it stale must fail.
+    the index month comes from the supplied day, and its known-date path stays
+    an independent `2026-08.json` naming check; leaving it stale must fail.
   - `test_the_census_is_recounted_from_the_window_never_incremented`:
-    model ids/counts come from the window's input rows; incrementing the prior
-    census instead of recounting must fail.
+    expected model, vertical and date values come from the scored input row,
+    not rows read back from the implementation. A deliberately inflated prior
+    model count proves recounting; incrementing instead must fail.
   - `test_published_council_records_keep_completed_and_failed_steps`:
     read-back records equal the filed records, including both outcomes; dropping
-    the failed step or changing an outcome must fail.
+    the failed step or changing an outcome must fail. Keep the explicit
+    `("failed", "raised")` and `("completed", None)` expectations and the
+    independently supplied start time; whole-record equality alone only proves
+    packing preserves what the fixture writer supplied.
 - **Gates:** Shared changed-test selector and the directly selected checks it
   names. Run fault checks in disposable copies, not in the working implementation.
+- **KEEP:** The stale vector remains independently chosen as `vector(0.25)`;
+  the repaired vector must differ from it. The known-date month-index path and
+  the canary outcome, fault and start-time expectations remain independent
+  checks. Removing these expectations adds no input-derived coverage.
+- **Negative proofs (2026-10-23):** In a disposable archive, each listed
+  production mutation failed the named test at the shown assertion. The archive
+  imported its own `backend/idhazh`; the real local encoder and tokenizer were
+  included for backfill proofs.
+  1. `test_readable_items_all_earn_one` - omit the first readable id;
+     `assert earns_a_vector(payload, embedder()) == {item.item_id for item in payload.items}`.
+  2. `test_an_item_the_encoder_cannot_read_earns_nothing` - include every item;
+     `assert earns_a_vector(payload, embedder()) == expected`.
+  3. `test_an_item_that_earns_nothing_gets_nothing` - treat every item as earned;
+     `assert set(repaired.embeddings.vectors) == expected`.
+  4. `test_a_surplus_vector_is_dropped` - accept a superset of earned ids;
+     `assert set(repaired.embeddings.vectors) == expected`.
+  5. `test_a_wrong_day_is_re_encoded_whole` - merge stale vectors into the new
+     block; `assert repaired.embeddings.vectors[stale_id] != stale`.
+  6. `test_a_repaired_day_takes_its_month_index_with_it` - skip rebuilding the
+     month index; `assert index_path.is_file()`.
+  7. `test_the_census_is_recounted_from_the_window_never_incremented` - start
+     counts from previous metadata; `assert recounted.models == expected_models`.
+  8. `test_published_council_records_keep_completed_and_failed_steps` - drop
+     failed rows; `assert packed == filed`.
+- **Selector (2026-10-23):** `npm run test:changed` from `frontend/` selected
+  exactly the three files in this row and reused completed run `d51d38cfefb4`
+  with exit 0: ruff passed, mypy reported no issues in 831 source files, and
+  70 pytest cases passed. `git diff --check` passed.
 - **Dependencies:** Row 2's generated vector tests. Row 4 and this row touch no
   common application/test file; serialize edits to this shared plan.
 
@@ -333,9 +367,10 @@ counts use the untouched archive and the completed branch instead.
   `test_two_calls.py`, `test_work_health_payload.py`, `test_work_order.py`,
   `test_work_records.py` in the same directory.
 - **Reference checks:** Use the full identifiers in the group-5 review report.
-  Its 30 rewrite proposals are a queue, not permission to remove a guarantee.
-  Read the bodies and helpers before each edit and record every KEEP as well as
-  every applied change.
+  Its 30 rewrite proposals contain 26 pipeline cases and four council cases.
+  Only the pipeline cases belong to this row. All 35 pipeline candidates and
+  their helpers were read: 24 were rewritten and 11 retained. All 116 test
+  identifiers remain; none were added, removed, renamed or skipped.
 - **Changes and acceptance proof:**
   - Reconcile persisted item ids/counts with the exact plan supplied to the work
     stage. A dropped or extra item, changed recorded cell, or changed writer order
@@ -352,6 +387,37 @@ counts use the untouched archive and the completed branch instead.
     fixture values.
 - **Gates:** Shared changed-test selector; disposable broken-code checks for each
   distinct preserved behavior. Record full changed and surviving identifiers.
+- **KEEP:** The paused-family literal checks the exact ledger/family protocol
+  identity and skip record. Replacing it with whatever config currently names
+  could hide incorrect lifecycle wiring. The fresh-clone check retains its
+  positive safety ceiling and usable feeds/taxonomy; loading alone is weaker.
+  Recorded config digest inventories, historical item/run links, raw manifest
+  keys, publication inventory setup, unchanged writes and independent arithmetic
+  remain unchanged. The chosen two-item work-record input stays explicit; unlike
+  the removed five-item census constants, it is not copied from fixture size.
+- **Negative proofs (2026-10-23):** A disposable copy of main `3e4935c1f` plus
+  these eleven edited test modules imported its own production package. Each
+  of 25 named production faults caused its intended test failures: 28 failed
+  executions cover all 24 rewritten identifiers, with no collection errors.
+  Faults cover lost/invented rows, changed cells and writer order, fragment
+  clock/id ordering and recovered failures, lost headings and metadata,
+  truncation/ranking propagation, raw shard totals, desk counts, run identity,
+  null feed floors, later-run counts, trace parents, cut-reply recovery, band
+  and original-position ordering, and capture-directory placement.
+  Full identifiers, exact edits and output links are recorded in the phase's
+  external `row6-proof-report.json` and `row6-negative-results.json`.
+  All copied test hashes matched, all mutated production files were restored,
+  and the disposable copy was removed after verification.
+- **Selector (2026-10-23):** From `frontend/`,
+  `npm run test:changed -- --python <absolute-python-executable>` selected
+  exactly these eleven modules. Whitespace and ruff passed; mypy reported no issues
+  in 834 source files; all 116 pytest tests passed with zero skips.
+  Record: `backend/var/checks/7afab1b065bc5c0bee7ce2e70fbd1efee601a2592015dee79fbf4f544ad3eb8c.json`.
+  No production, config, data, frontend or dependency change was made.
+- **Plan integration:** The coordinator released the serialized edit slot on
+  2026-10-23. Its correction selects Row 7's frozen full plan as the base,
+  imports only D5/Row5 from Row 5 commit `d13c8f3`, and then adds D6/Row6.
+  Other delivered rows and the open D3 review are preserved.
 - **Dependencies:** Row 1's byte/value ownership. No production, persisted format,
   configuration or frontend change. Serialize edits to this shared plan.
 
@@ -437,10 +503,62 @@ counts use the untouched archive and the completed branch instead.
     between `SUBSTITUTED_DATE` and `SUBSTITUTED_DAY_DIR`, plus unused imports.
     `test_triggers.py::test_a_dispatched_date_becomes_the_day_it_names` already
     executes that date expansion. A wrong workflow day expression still fails.
-- **Gates:** Shared changed-test selector and disposable checker/publication
-  faults. Record the real-run survivor outcome without claiming a skipped case
-  ran. No workflow, production, config, data or frontend edits.
+- **Gates:** The shared `npm run test:changed` selector chose only the backend
+  group and these four files. Whitespace and Ruff passed; mypy found no issues
+  in 834 source files; all 15 tests passed. The real two-checkout publication
+  test passed. Record:
+  `backend/var/checks/5f792818acfe47502019e73501c37bf6d2b22656e984c8fc455c125efb59e731.json`.
+- **Negative proofs:** Disposable checker variants that missed used modules,
+  missed import bindings, dropped input references or scanned declarations as
+  references each failed the new constructed test. Missing-day and reversed
+  publication-date lists both failed the input-derived newest-first comparison.
+- **Delivery:** Commit `bbea48bbd3e05f9075e360f225a1003dad1721f6` is in open PR
+  [#1656](https://github.com/miztiik/yen-idhazh/pull/1656). The Row 8
+  implementation is delivered for review; it is not merged. The separate
+  suite-wide review obligation in Row 3 remains open. No workflow, production,
+  config, data, frontend or dependency changes.
 - **Dependencies:** Row 1. Serialize edits to this shared plan.
+
+## 10 - Row #9 - Remove the unused watchlist entry limit
+
+- **Scope:** Remove `collect.watchlist_max_entities`, not enforce it at runtime.
+  Owner ruling, kumarsnaveen, 2026-10-23: "A2: Remove the entry limit".
+  This explicitly extends Table A row A5; the cap had only a test consumer.
+- **Files touched:** `backend/idhazh/contracts/knobs/collect.py`,
+  `config/idhazh.json`, `backend/tests/contracts/test_watchlist.py`,
+  `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`,
+  `tests/fixtures/gardener/pre-yearly-retention/config/idhazh.json`,
+  and `docs/concepts/config.md`.
+- **Changes and acceptance proof:** Remove the declaration and the key from
+  named authored inputs. Replace the committed-list cap assertion with bounded
+  generated lists above the old limit, through the real watchlist validator,
+  alias-term reader and serialized readback. Refuse the removed key by name
+  through both the collect block and aggregate config reader. Keep entity
+  kinds, alias matching, retired-entry exclusion and identity validation.
+  Preserve the historical fixture's retention and legacy tier-weight fields.
+- **Gates:** Inspect the shared changed-test selector; run focused config,
+  schema, historical acceptance, binding, matching and gardener coverage under
+  the shared gate lock, plus Ruff and mypy. In disposable copies, confirm the
+  removed-key proof fails against the base, and a reintroduced entry-count
+  restriction fails the generated-list proof. No mocks or network tests.
+- **Dependencies:** Row 1. No persisted-payload version or migration is needed
+  for repository-authored config. Serialize edits to this shared plan.
+- **Proof record:** Against base `ce1813d34104d11e66d9846d37bf5ce5a588601c`,
+  `test_the_removed_entry_limit_is_refused_by_name` fails because the old
+  setting is accepted. In a disposable copy, adding a 30-entry bound to
+  `Watchlist.entities` fails both
+  `test_authored_entries_are_not_limited_by_count[31]` and `[61]` at the real
+  validator. The temporary copy was removed. The removed case is
+  `test_the_watchlist_stays_inside_its_configured_cap`; the watchlist module
+  moves from five collected cases to seven.
+- **Gate record:** The shared selector selects full coverage for shared config
+  inputs. Focused local checks passed Ruff, mypy (834 source files), 156
+  app/appearance config cases, and 409 schema, historical acceptance, binding,
+  tag, rank and named historical-gardener-consumer cases. The initial invocation
+  named a nonexistent config test and ran no cases; a later overly broad
+  gardener-directory run was stopped and replaced with its sole changed-fixture
+  consumer. Neither is counted as a pass. Full-suite CI remains required before
+  merge.
 
 ## See also
 
