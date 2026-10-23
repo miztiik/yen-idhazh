@@ -101,8 +101,7 @@
       "institution": 1.0,
       "trade_press": 0.6
     },
-    "watchlist_bonus": 0.5,
-    "watchlist_max_entities": 30
+    "watchlist_bonus": 0.5
   },
   "console": {
     "default_window_days": 14,
