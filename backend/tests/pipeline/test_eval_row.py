@@ -27,15 +27,49 @@ from ._builders import (
 
 
 def test_a_row_carries_everything_needed_to_read_it_years_later() -> None:
-    built = row()
-    assert built.source_url.startswith("http")
-    assert built.title
-    assert built.date == "2026-08-21"
-    assert built.scorer_version
+    run_plan = plan()
+    planned = run_plan.items[0].model_copy(
+        update={
+            "canonical_url": "https://example.org/recorded-story",
+            "title": "The source headline chosen for this run",
+        }
+    )
+    scorer_version = "behavior-test-scorer"
+    built = to_eval_row(
+        item=planned,
+        article=article(),
+        summary=summary(),
+        full_text=FULL_TEXT,
+        premise=FULL_TEXT,
+        hhem=0.91,
+        hhem_full=0.89,
+        config=EvaluationConfig(),
+        date=run_plan.date,
+        run_id=run_plan.run_id,
+        scorer_version=scorer_version,
+        scored_at=f"{run_plan.date}T06:18:02Z",
+    )
+    assert built.source_url == planned.canonical_url
+    assert built.title == planned.title
+    assert built.date == run_plan.date
+    assert built.scorer_version == scorer_version
 
 
 def test_the_truncation_gap_is_computed_not_asserted() -> None:
-    built = row()
+    built = to_eval_row(
+        item=plan().items[0],
+        article=article().model_copy(update={"truncated": False}),
+        summary=summary(),
+        full_text=FULL_TEXT,
+        premise=FULL_TEXT,
+        hhem=0.91,
+        hhem_full=0.89,
+        config=EvaluationConfig(),
+        date="2026-08-21",
+        run_id="2026-08-21-1",
+        scorer_version="v",
+        scored_at="2026-08-21T06:18:02Z",
+    )
     assert built.hhem_delta == pytest.approx(0.02)
     assert not built.truncation_flagged
 
@@ -49,7 +83,7 @@ def test_a_wide_gap_does_not_flag_an_article_nobody_cut() -> None:
     """
     built = to_eval_row(
         item=plan().items[0],
-        article=article(),
+        article=article().model_copy(update={"truncated": False}),
         summary=summary(),
         full_text=FULL_TEXT,
         premise=FULL_TEXT,
@@ -62,7 +96,6 @@ def test_a_wide_gap_does_not_flag_an_article_nobody_cut() -> None:
         scored_at="2026-08-21T06:18:02Z",
     )
 
-    assert not article().truncated
     assert built.hhem_delta == pytest.approx(0.33)
     assert not built.truncation_flagged
 
