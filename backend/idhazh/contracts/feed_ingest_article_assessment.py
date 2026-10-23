@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any, ClassVar, Literal, Self
+from typing import Annotated, Any, ClassVar, Literal, Self, get_args
 
 from pydantic import Field, StrictInt, model_validator
 
@@ -24,7 +24,7 @@ from idhazh.contracts.feed_ingest_candidate import (
     ScoreEvidence,
     SourceSnapshot,
 )
-from idhazh.contracts.feed_ingest_diagnostics import HarvestDiagnostics
+from idhazh.contracts.feed_ingest_diagnostics import ExtractionSignal, HarvestDiagnostics
 from idhazh.contracts.feed_ingest_rejection import REASON_STAGES, DropReason
 from idhazh.contracts.sources import SourceForm
 
@@ -39,6 +39,11 @@ class ArticleAssessmentRecord(Contract):
 
     __schema_stem__: ClassVar[str] = "feed-ingest-article-assessment"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-23",
+            change="Retain measured extraction quality and implementation fingerprints.",
+            why="Later decisions preserve original signals without inventing worker readings.",
+        ),
         ChangelogEntry(
             version="2026-10-22T20:30",
             change="Record configured pre-fetch exclusion decisions without page measurements.",
@@ -56,11 +61,11 @@ class ArticleAssessmentRecord(Contract):
         ),
         ChangelogEntry(
             version="2026-10-20",
-            change="Declare stage-specific article assessment evidence.",
-            why="Audit rows keep measured quality separate from source and portfolio effects.",
+            change="Earlier changes are in this file's git history.",
+            why="Git retains the original declaration.",
         ),
     )
-    version: Literal["2026-10-22T20:30"] = "2026-10-22T20:30"
+    version: Literal["2026-10-23"] = "2026-10-23"
     diagnostics: HarvestDiagnostics | None = None
 
     date: DateStamp
@@ -110,16 +115,28 @@ class ArticleAssessmentRecord(Contract):
     @classmethod
     def migrate_previous_timing(cls, value: Any) -> Any:
         if isinstance(value, dict) and value.get("version") in {
-            "2026-10-22", "2026-10-22T18:15"
+            "2026-10-20", "2026-10-22", "2026-10-22T18:15", "2026-10-22T20:30"
         }:
-            if value.get("reason") in {
+            diagnostics = value.get("diagnostics")
+            if isinstance(diagnostics, dict) and (
+                "quality" in diagnostics
+                or diagnostics.get("failure_code") in get_args(ExtractionSignal)
+                or diagnostics.get("detail") in get_args(ExtractionSignal)
+            ):
+                raise ValueError(
+                    "extraction quality requires the declared quality contract version"
+                )
+        if isinstance(value, dict) and value.get("version") in {
+            "2026-10-22", "2026-10-22T18:15", "2026-10-22T20:30"
+        }:
+            if value.get("version") != "2026-10-22T20:30" and value.get("reason") in {
                 "ALREADY_PUBLISHED", "SETTLED_FAILURE", "BLOCKED_URL_MARKER"
             }:
                 raise ValueError(
                     "planner exclusions require the declared exclusion "
                     "contract version"
                 )
-            return {**value, "version": "2026-10-22T20:30"}
+            return {**value, "version": "2026-10-23"}
         if not isinstance(value, dict) or value.get("version") != "2026-10-20":
             return value
         migrated = dict(value)
@@ -127,7 +144,7 @@ class ArticleAssessmentRecord(Contract):
             raise ValueError("legacy timing requires its recorded timestamp and clock")
         migrated["timing_at"] = migrated.pop("effective_published_at")
         migrated["timing_basis"] = migrated.pop("publication_clock")
-        migrated["version"] = "2026-10-22T20:30"
+        migrated["version"] = "2026-10-23"
         return migrated
 
     @model_validator(mode="after")

@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  FEED_INGEST_EVENT_VERSION, PLANNER_EXCLUSIONS_VERSION, readFeedIngestEvent,
+  FEED_INGEST_EVENT_VERSION, EXTRACTION_QUALITY_VERSION, readFeedIngestEvent,
 } from "../../../packages/common-contracts/src/index";
 import { formatPlannerReport, writePlannerReport } from "../feed-ingest-plan-report";
 
@@ -30,7 +30,7 @@ test("reads current UUID events and refuses undeclared identities without invent
   expect(current.version).toBe(FEED_INGEST_EVENT_VERSION);
   if (current.payload.kind !== "candidate_decision") throw new Error("Expected a recorded candidate decision");
   expect(current.payload.assessment).toMatchObject({
-    version: PLANNER_EXCLUSIONS_VERSION, timing_basis: "unavailable", timing_at: null, age_hours: null, diagnostics: null,
+    version: EXTRACTION_QUALITY_VERSION, timing_basis: "unavailable", timing_at: null, age_hours: null, diagnostics: null,
   });
   expect(formatPlannerReport([recorded])).toEqual(formatPlannerReport([current]));
   const known = structuredClone(recorded);
