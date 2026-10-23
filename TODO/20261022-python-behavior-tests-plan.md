@@ -673,56 +673,80 @@ counts use the untouched archive and the completed branch instead.
     `definitions-a` taxonomy to prove a published retired lens still reads
     while its tombstone stops new matching.
   - Require the compact-index decoded model to equal the object written, not
-    only to serialize to stable text. Bind TypeScript field types to Python
-    annotations, require an invalid property name in the refusal, and test
-    omitted defaults beside separately authored source kind and entity tier
-    values.
-- **Gates:** Run the shared changed-test selector over the seven modules with
-  Ruff and mypy. In disposable archive copies, fault each preserved behavior
-  and record its full failing pytest identifier below. No production, config,
-  committed data, persisted shape, emitted-byte or frontend change.
+    only to serialize to stable text. Compare TypeScript field types with the
+    live Python JSON Schema using the TypeScript compiler API, require an
+    invalid property name in the refusal, and test omitted defaults beside
+    separately authored source kind and entity tier values.
+- **Gates:** Run the shared changed-test selector over the seven backend
+  modules and the frontend type-binding logic test, with Ruff and mypy.
+  In disposable archive copies, fault each preserved behavior and record its
+  full failing pytest or frontend test identifier below. The frontend change
+  adds only a contract test and selector inventory entry; no production,
+  config, committed data, persisted shape, emitted-byte or acceptance change.
 - **Dependencies:** Row 1. Serialize edits to this shared plan.
-- **Proof record:** In a disposable archive copy:
-  - Hard-coding the rest caller, aliasing the authored published window to the
-    first-sight field, truncating the prune successor path, and normalizing
-    model-file bytes each fail their corresponding test. A stale
-    `declared_for` in the named inactive model file fails
-    `test_every_model_file_loads_and_not_only_the_one_the_pointer_names`.
-    Repointing the stale teacher to the wrong destination fails
-    `test_the_teacher_names_the_slot_the_model_file_declares`.
-  - Reversing registry family order fails
-    `test_explorer_catalog_derives_eligible_names_from_registry_order`.
-    Tying consent to active lifecycle fails
-    `test_explorer_consent_is_independent_of_family_lifecycle[paused]`.
-    Removing the flat stem or requiring a tree suffix fails a constructed
-    grain case, including
-    `test_a_grain_accepts_its_path_fields_and_refuses_the_other_shapes[tree-None-None]`.
-  - Removing active-definition validation fails the constructed vertical,
-    lens and event cases:
-    `test_an_offered_entry_without_a_definition_is_refused[verticals]`,
-    `[lenses]` and `[events]`. Omitting an active event or admitting a draft
-    fails `test_a_draft_or_retired_entry_reaches_no_prompt`.
-    Making retired lenses matchable fails
-    `test_a_published_item_carrying_a_retired_lens_still_reads`.
-  - Omitting the compact entry state from a stable writer, with an empty entry
-    in the disposable input, passes the text-idempotence assertion but fails
-    the object-equality assertion in
-    `test_a_compact_index_writes_one_entry_a_line_and_reads_back_what_it_wrote`.
-    Changing a TypeScript boolean field to string fails
-    `test_frontend_kind_definition_fields_match_python`. Accepting unknown
-    properties fails
-    `test_invalid_registry_refuses_loading_by_name[invalid-property-invented_rule]`.
-    Overwriting the authored kind or tier with its configured default fails
-    `test_configured_defaults_apply_only_to_authored_config`.
-  - Ignoring removed-key migration and allowing unknown fields fails the
-    six `test_a_config_still_spelling_a_retired_knob_is_refused_by_name` cases.
-    No temporary fault changed this worktree.
-- **Gate record:** Pending final shared-selector result after merging the
-  current `origin/main` into this phase.
+- **Proof record:** Disposable archive faults each failed the named case; no
+  temporary fault changed this worktree.
+  - Hard-coding the plan caller failed
+    `backend/tests/contracts/test_retention_knobs.py::test_the_rest_rule_reads_the_knob_the_committed_config_spells`.
+    Aliasing the published window to the first-sight field failed
+    `backend/tests/contracts/test_retention_knobs.py::test_the_published_window_is_unbounded_or_outlives_the_first_sight_store`.
+    Truncating the prune successor path failed both
+    `backend/tests/contracts/test_retention_knobs.py::test_a_prune_number_left_in_finetune_is_sent_to_the_squash_declaration[prune_every_days]`
+    and
+    `backend/tests/contracts/test_retention_knobs.py::test_a_prune_number_left_in_finetune_is_sent_to_the_squash_declaration[prune_keep_days]`.
+    Replacing the named retired-key refusal with a generic error failed all
+    six cases of
+    `backend/tests/contracts/test_retention_knobs.py::test_a_config_still_spelling_a_retired_knob_is_refused_by_name`:
+    `[models-visual_planner]`,
+    `backend/tests/contracts/test_retention_knobs.py::test_a_config_still_spelling_a_retired_knob_is_refused_by_name[models-route]`,
+    `backend/tests/contracts/test_retention_knobs.py::test_a_config_still_spelling_a_retired_knob_is_refused_by_name[run-two_calls_per_item]`,
+    `backend/tests/contracts/test_retention_knobs.py::test_a_config_still_spelling_a_retired_knob_is_refused_by_name[run-visual_planner_budget_minutes]`,
+    `backend/tests/contracts/test_retention_knobs.py::test_a_config_still_spelling_a_retired_knob_is_refused_by_name[run-route_budget_minutes]`
+    and
+    `backend/tests/contracts/test_retention_knobs.py::test_a_config_still_spelling_a_retired_knob_is_refused_by_name[finetune-student]`.
+  - Normalizing model-file bytes failed
+    `backend/tests/contracts/test_model_registry.py::test_the_model_file_bytes_are_digested_with_the_rest_of_the_config`.
+    A stale pairing in an inactive named model file failed
+    `backend/tests/contracts/test_model_registry.py::test_every_model_file_loads_and_not_only_the_one_the_pointer_names`.
+    Repointing the stale teacher to the wrong destination failed
+    `backend/tests/contracts/test_model_registry.py::test_the_teacher_names_the_slot_the_model_file_declares`.
+  - Reversing registry family order failed
+    `backend/tests/contracts/test_ledger_registry.py::test_explorer_catalog_derives_eligible_names_from_registry_order`.
+    Tying explicit consent to family status failed both
+    `backend/tests/contracts/test_ledger_registry.py::test_explorer_consent_is_independent_of_family_lifecycle[paused]`
+    and
+    `backend/tests/contracts/test_ledger_registry.py::test_explorer_consent_is_independent_of_family_lifecycle[retired]`.
+    Removing the flat stem failed
+    `backend/tests/contracts/test_ledger_registry.py::test_a_grain_accepts_its_path_fields_and_refuses_the_other_shapes[flat-score-distribution-.json]`;
+    requiring a tree suffix failed the same test's
+    `[tree-None-None]` case.
+  - Removing active-definition validation failed all three constructed cases
+    `backend/tests/contracts/test_taxonomy_and_prompts.py::test_an_offered_entry_without_a_definition_is_refused[verticals]`,
+    `backend/tests/contracts/test_taxonomy_and_prompts.py::test_an_offered_entry_without_a_definition_is_refused[lenses]`
+    and
+    `backend/tests/contracts/test_taxonomy_and_prompts.py::test_an_offered_entry_without_a_definition_is_refused[events]`.
+    Omitting an active event and admitting a draft
+    each failed
+    `backend/tests/contracts/test_taxonomy_and_prompts.py::test_a_draft_or_retired_entry_reaches_no_prompt`.
+    Making a retired lens matchable failed
+    `backend/tests/contracts/test_sources_and_marks.py::test_a_published_item_carrying_a_retired_lens_still_reads`.
+  -   Omitting compact-index state from a stable writer, with an empty entry in
+  the disposable input, passed text idempotence but failed object equality in
+  `backend/tests/contracts/test_ledger_index.py::test_a_compact_index_writes_one_entry_a_line_and_reads_back_what_it_wrote`.
+  The TypeScript binding now parses the interface with the compiler API and
+  compares it with the live Python JSON Schema; its post-change fault proof
+  is pending. Accepting unknown properties failed
+  `backend/tests/contracts/test_source_classification_binding.py::test_invalid_registry_refuses_loading_by_name[invalid-property-invented_rule]`.
+  Overwriting the authored source kind and entity tier each failed
+  `backend/tests/contracts/test_source_classification_binding.py::test_configured_defaults_apply_only_to_authored_config`.
+- **Gate record:** Pending the final shared-selector run and post-change
+  TypeScript binding fault proof. The earlier 226-case backend-only record
+  predates this frontend test and does not certify the current change.
 - **Plan integration:** The serialized slot is released. Row 5 and Row 9
   delivery receipts, Row 10's verified head and the exact owner ruling in A5
   are retained. D3 remains open; Row 10 is not a dependency.
-- **Delivery:** Pending phase commit and pull request.
+- **Delivery:** Test and plan changes are committed in `62968e83a`; the
+  current-main merge is `6a2179890`. The phase pull request is pending.
 
 ## See also
 
