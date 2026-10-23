@@ -52,6 +52,7 @@ jobs:
             /.github/scripts/feed-ingest-plan-report.ts
             /.github/scripts/feed-ingest-plan-verification.ts
             /.github/scripts/feed-ingest-plan-audit-fixture.ts
+            /.github/scripts/feed-ingest-plan-http-proof.ts
             /.github/scripts/tests/feed-ingest-plan-outputs.test.ts
             /.github/scripts/tests/feed-ingest-plan-report.test.ts
             /.github/scripts/tests/feed-ingest-plan-workflow.test.ts
@@ -113,6 +114,7 @@ jobs:
           import type { CompactIndex, FeedIngestEvent, RawDayIndex } from "./packages/common-contracts/src/index";
           import { completeHistoryDayInputs, createExecutionOutputs, createSeenDayInputs, historyDays, resolveHistoryInventory, sparseCheckoutPath, writeGitHubOutputs } from "./.github/scripts/feed-ingest-plan-outputs";
           import { verifyLedgerReceipt, verifyParquetFiles, verifyPlanningCompletion } from "./.github/scripts/feed-ingest-plan-verification";
+          import { verifyLiveDocumentHttp } from "./.github/scripts/feed-ingest-plan-http-proof";
 
           const root = process.cwd();
           try {
@@ -279,8 +281,10 @@ jobs:
             await mkdir(artifactRoot, { recursive: true });
             await writeFile(join(artifactRoot, "history-staging-ms.json"), JSON.stringify(performance.now() - historyStarted));
             const events: FeedIngestEvent[] = [];
+            const progressRecords: ProgressRecord[] = [];
             const correlation_id = randomUUID();
             const writeProgress = (event: ProgressRecord) => {
+              progressRecords.push(event);
               appendFileSync(join(artifactRoot, "progress.jsonl"), `${JSON.stringify(event)}\n`);
               console.error(JSON.stringify(event));
             };
@@ -338,6 +342,10 @@ jobs:
               ...createExecutionOutputs(summary, inputs.registrations),
               workflow_reporting: String(inputs.harvest.config.workflow_reporting.enabled),
             });
+            await verifyLiveDocumentHttp({ ...inputs, settings }, {
+              git_sha, clock: () => captured, run_number: GITHUB_RUN_ID,
+            }, progressRecords, RUNNER_TEMP, artifactRoot);
+            await writeGitHubOutputs(GITHUB_OUTPUT, { stage_api_complete: "true" });
           } catch (error) {
             console.error(JSON.stringify(describePlanError(error, root)));
             process.exitCode = 1;
@@ -395,7 +403,7 @@ jobs:
         run: bun run .github/scripts/feed-ingest-plan-report.ts config/feed-ingest-plan.json "$RUNNER_TEMP/feed-ingest-plan/events.json" "$RUNNER_TEMP/feed-ingest-plan"
 
       - name: Commit exact live planner and host files
-        if: ${{ success() && steps.plan.outputs.planning_complete == 'true' && steps.audit_fixture.outputs.audited_complete == 'true' && steps.audit_fixture.outputs.scope == 'generated_fixture' }}
+        if: ${{ success() && steps.plan.outputs.planning_complete == 'true' && steps.plan.outputs.stage_api_complete == 'true' && steps.audit_fixture.outputs.audited_complete == 'true' && steps.audit_fixture.outputs.scope == 'generated_fixture' }}
         env:
           CURRENT_RUN_FILES: ${{ steps.plan.outputs.current_run_files }}
           HOST_FILES: ${{ steps.host.outputs.host_files }}
@@ -434,13 +442,14 @@ jobs:
         if: ${{ !cancelled() }}
         env:
           PLANNING_COMPLETE: ${{ steps.plan.outputs.planning_complete }}
+          STAGE_API_COMPLETE: ${{ steps.plan.outputs.stage_api_complete }}
           AUDITED_COMPLETE: ${{ steps.audit_fixture.outputs.audited_complete }}
           AUDIT_SCOPE: ${{ steps.audit_fixture.outputs.scope }}
         run: |
           bun run - <<'TS'
           if (process.env.PLANNING_COMPLETE !== "true" || process.env.AUDITED_COMPLETE !== "true"
-            || process.env.AUDIT_SCOPE !== "generated_fixture") {
-            console.error("Live planning proof or generated full-audit proof is unavailable. No production publication is claimed.");
+            || process.env.STAGE_API_COMPLETE !== "true" || process.env.AUDIT_SCOPE !== "generated_fixture") {
+            console.error("Live planning, separate feed fetch/parse/replay or generated full-audit proof is unavailable. No production publication is claimed.");
             process.exitCode = 2;
           }
           TS

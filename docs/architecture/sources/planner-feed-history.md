@@ -52,12 +52,15 @@ without an age cutoff. A missing day stays missing, not known empty. Fewer
 recorded health days than requested report unavailable coverage; observations
 that do exist remain usable and keep their actual counts.
 
-Full discovery must consume the same native raw and compact files, their
-indexes, and the existing publication inventory and exact producer receipts.
+Full discovery uses the same native raw and compact files and their indexes.
+Existing publication-inventory entries and exact producer receipts can name
+files already recorded there. Reading existing feed-health entries does not
+authorize adding retirement entries or changing the publisher. Those producer
+and inventory-role decisions still require owner approval.
 No parallel history file or second authority is required. The coordinated
-inventory-selector follow-up must prove which native inputs it covers while
-preserving missing evidence. This increment does not claim complete external
-inventory discovery or full feed-history parity.
+inventory-selector follow-up must prove which permitted native inputs it
+covers while preserving missing evidence. This increment does not claim
+complete external inventory discovery or full feed-history parity.
 
 One listener also retains its own exact durable native file receipts between
 requests, including writes completed before a later stage fails. Their paths

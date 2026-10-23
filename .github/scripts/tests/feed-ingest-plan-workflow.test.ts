@@ -87,6 +87,23 @@ test("offers four manual controls and commits only genuine planner and host file
   expect(plan.run).toContain('await fetch(new URL("/api/2026-10-20/plan", server.url)');
   expect(plan.run).toContain("timeout: false");
   expect(plan.run).toContain("await server.stop(true)");
+  expect(plan.run).toContain("await verifyLiveDocumentHttp({ ...inputs, settings }");
+  expect(plan.run).toContain('await writeGitHubOutputs(GITHUB_OUTPUT, { stage_api_complete: "true" })');
+  expect(plan.run!.indexOf("await verifyPlanningCompletion(")).toBeLessThan(plan.run!.indexOf("await verifyLiveDocumentHttp("));
+  const httpProof = await readFile(join(root, ".github", "scripts", "feed-ingest-plan-http-proof.ts"), "utf8");
+  expect(httpProof).toContain('mkdtemp(join(runnerTemp, "feed-stage-api-private-"))');
+  expect(httpProof).toContain("const apiInputs = { ...inputs, outputRoot }");
+  expect(httpProof).toContain("return networkTransport.request(request)");
+  expect(httpProof).toContain("return resolveAddresses(hostname)");
+  expect(httpProof).toContain('post("fetch", "fetch", fetchRequest)');
+  expect(httpProof).toContain('post("parse", "parse", parseRequest)');
+  expect(httpProof).toContain("replay.response_json !== original.response_json");
+  expect(httpProof).toContain("beforeRestart !== afterChecks");
+  expect(httpProof).toContain("requireOffline(parsed)");
+  expect(httpProof).toContain("requireOffline(replay)");
+  expect(httpProof).toContain('post("changed_config_conflict", "fetch", fetchRequest)');
+  expect(httpProof).toContain('join(artifactRoot, "stage-api-proof.json")');
+  expect(httpProof).not.toContain("app.request(");
   expect(plan.run).toContain('appendFileSync(join(artifactRoot, "audit-events.jsonl")');
   expect(plan.run).toContain('appendFileSync(join(artifactRoot, "progress.jsonl")');
   expect(plan.run).not.toContain("await main(");
@@ -112,10 +129,12 @@ test("offers four manual controls and commits only genuine planner and host file
   expect(completion.run).toContain("process.exitCode = 2");
   expect(completion.env).toEqual({
     PLANNING_COMPLETE: "${{ steps.plan.outputs.planning_complete }}",
+    STAGE_API_COMPLETE: "${{ steps.plan.outputs.stage_api_complete }}",
     AUDITED_COMPLETE: "${{ steps.audit_fixture.outputs.audited_complete }}",
     AUDIT_SCOPE: "${{ steps.audit_fixture.outputs.scope }}",
   });
   expect(completion.run).toContain('process.env.PLANNING_COMPLETE !== "true"');
+  expect(completion.run).toContain('process.env.STAGE_API_COMPLETE !== "true"');
   expect(completion.run).toContain('process.env.AUDIT_SCOPE !== "generated_fixture"');
   expect(steps.find(step => step.id === "audit_fixture")!.run).toContain("await verifyFullAuditFixture(");
   const host = steps.find(step => step.id === "host")!;
@@ -126,6 +145,7 @@ test("offers four manual controls and commits only genuine planner and host file
     .toContain("bun install --frozen-lockfile --cwd services/host-fingerprints");
   const commit = steps.find(step => step.name === "Commit exact live planner and host files")!;
   expect(commit.if).toContain("steps.audit_fixture.outputs.scope == 'generated_fixture'");
+  expect(commit.if).toContain("steps.plan.outputs.stage_api_complete == 'true'");
   expect(commit.env).toEqual({
     CURRENT_RUN_FILES: "${{ steps.plan.outputs.current_run_files }}", HOST_FILES: "${{ steps.host.outputs.host_files }}",
   });
@@ -139,7 +159,10 @@ test("offers four manual controls and commits only genuine planner and host file
   expect(checkout.with?.["sparse-checkout-cone-mode"]).toBe(false);
   expect(checkout.with?.["persist-credentials"]).toBe(true);
   expect(checkout.with?.["sparse-checkout"]).toContain("/packages/common-contracts/");
+  expect(checkout.with?.["sparse-checkout"]).toContain("/.github/scripts/feed-ingest-plan-http-proof.ts");
   expect(checkout.with?.["sparse-checkout"]).not.toContain("/backend/");
+  expect(steps.find(step => step.name === "Preserve isolated test evidence")!.with?.path)
+    .toBe("${{ runner.temp }}/feed-ingest-plan/");
 });
 
 test("derives UTC windows and stages indexed compact files before considering raw evidence", async () => {
@@ -330,6 +353,7 @@ test("strict-checks adapters, tests and the actual inline program in one compile
       "--noUnusedParameters", "--verbatimModuleSyntax", "--skipLibCheck",
       "--types", "bun", "--typeRoots", join(service, "node_modules", "@types"), ...generated,
       ...["feed-ingest-plan-outputs.ts", "feed-ingest-plan-feed-history.ts", "feed-ingest-plan-report.ts", "feed-ingest-plan-commit.ts", "feed-ingest-plan-verification.ts", "feed-ingest-plan-audit-fixture.ts",
+        "feed-ingest-plan-http-proof.ts",
         "tests/feed-ingest-plan-outputs.test.ts", "tests/feed-ingest-plan-report.test.ts",
         "tests/feed-ingest-plan-workflow.test.ts"].map(path => join(root, ".github", "scripts", ...path.split("/"))),
     ], { cwd: service, stdout: "pipe", stderr: "pipe" });
