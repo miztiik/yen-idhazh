@@ -1,7 +1,7 @@
 /** Which typed observation crosses a planning stage boundary? */
 import { z } from "zod";
 import { isDeepStrictEqual } from "node:util";
-import { ArticleAssessmentRecordSchema, PreviousArticleAssessmentSchema, PreviousDiagnosticArticleAssessmentSchema, PreviousExclusionArticleAssessmentSchema } from "./article-assessment.schema";
+import { ArticleAssessmentContract, ArticleAssessmentRecordSchema, PreviousArticleAssessmentSchema, PreviousDiagnosticArticleAssessmentSchema, PreviousExclusionArticleAssessmentSchema } from "./article-assessment.schema";
 import { ArticleLabelsSchema, PolicyIdentitySchema, ScoreEvidenceSchema, SourceSnapshotSchema } from "./source.schema";
 import {
   DropReasonSchema, PreviousDiagnosticDropReasonSchema, PreviousPreDiagnosticsDropReasonSchema,
@@ -129,21 +129,21 @@ export function readFeedIngestEvent(input: unknown): FeedIngestEvent {
   if (input && typeof input === "object" && "version" in input && input.version === "2026-10-22T12:20") {
     const previous = PreviousEventSchema.parse(input);
     const payload = previous.payload.kind === "candidate_decision" ? {
-      ...previous.payload, assessment: { ...previous.payload.assessment, version: FEED_INGEST_EVENT_VERSION },
+      ...previous.payload, assessment: { ...previous.payload.assessment, version: ArticleAssessmentContract.schemaVersion },
     } : previous.payload;
     return FeedIngestEventSchema.parse({ ...previous, payload, version: FEED_INGEST_EVENT_VERSION });
   }
   if (input && typeof input === "object" && "version" in input && input.version === HARVEST_DIAGNOSTICS_VERSION) {
     const previous = PreviousDiagnosticEventSchema.parse(input);
     const payload = previous.payload.kind === "candidate_decision" ? {
-      ...previous.payload, assessment: { ...previous.payload.assessment, version: FEED_INGEST_EVENT_VERSION },
+      ...previous.payload, assessment: { ...previous.payload.assessment, version: ArticleAssessmentContract.schemaVersion },
     } : previous.payload;
     return FeedIngestEventSchema.parse({ ...previous, payload, version: FEED_INGEST_EVENT_VERSION });
   }
   if (input && typeof input === "object" && "version" in input && input.version === PLANNER_EXCLUSIONS_VERSION) {
     const previous = PreviousExclusionEventSchema.parse(input);
     const payload = previous.payload.kind === "candidate_decision" ? {
-      ...previous.payload, assessment: { ...previous.payload.assessment, version: FEED_INGEST_EVENT_VERSION },
+      ...previous.payload, assessment: { ...previous.payload.assessment, version: ArticleAssessmentContract.schemaVersion },
     } : previous.payload;
     return FeedIngestEventSchema.parse({ ...previous, payload, version: FEED_INGEST_EVENT_VERSION });
   }

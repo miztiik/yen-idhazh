@@ -14,6 +14,7 @@ import {
   FetchAttemptSchema, OPERATION_VERSION,
   EXTRACTION_QUALITY_VERSION,
   PreviousHarvestDiagnosticsSchema,
+  ArticleAssessmentContract,
 } from "../src/index";
 import { runtimeSchemas, schemas } from "./schema-binding";
 
@@ -320,6 +321,7 @@ describe("planning audit contracts", () => {
     expect(record.payload.kind).toBe("candidate_decision");
     if (record.payload.kind !== "candidate_decision") throw new Error("Fixture must carry an article assessment");
     expect(record.payload.assessment.diagnostics).toBeNull();
+    expect(record.payload.assessment.version).toBe(ArticleAssessmentContract.schemaVersion);
     expect(record.payload.assessment).toEqual({
       ...fixture.payload.assessment, version: EXTRACTION_QUALITY_VERSION, diagnostics: null,
     });
@@ -335,6 +337,7 @@ describe("planning audit contracts", () => {
     const migrated = readFeedIngestEvent(prior);
     if (migrated.payload.kind !== "candidate_decision") throw new Error("Fixture must retain its assessment");
     expect(migrated.payload.assessment.diagnostics).toMatchObject({ extract_ms: 2, quality: null });
+    expect(migrated.payload.assessment.version).toBe(ArticleAssessmentContract.schemaVersion);
     expect(() => readFeedIngestEvent({
       ...prior, payload: { ...prior.payload, assessment: {
         ...prior.payload.assessment, diagnostics: { ...prior.payload.assessment.diagnostics, quality: null },
