@@ -123,7 +123,9 @@ class ArticleAssessmentRecord(Contract):
                 or diagnostics.get("failure_code") in get_args(ExtractionSignal)
                 or diagnostics.get("detail") in get_args(ExtractionSignal)
             ):
-                raise ValueError("extraction quality requires the declared quality contract version")
+                raise ValueError(
+                    "extraction quality requires the declared quality contract version"
+                )
         if isinstance(value, dict) and value.get("version") in {
             "2026-10-22", "2026-10-22T18:15", "2026-10-22T20:30"
         }:

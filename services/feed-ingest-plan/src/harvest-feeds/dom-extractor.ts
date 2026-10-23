@@ -21,8 +21,10 @@ export function cleanText(raw: string): string {
 function declaresPaywall(value: unknown): boolean {
   if (Array.isArray(value)) return value.some(declaresPaywall);
   if (!value || typeof value !== "object") return false;
-  if ("isAccessibleForFree" in value &&
-    (value.isAccessibleForFree === false || String(value.isAccessibleForFree).toLowerCase() === "false")) return true;
+  if ("isAccessibleForFree" in value) {
+    const access = value.isAccessibleForFree;
+    if (access === false || (typeof access === "string" && access.trim().toLowerCase() === "false")) return true;
+  }
   return Object.values(value).some(declaresPaywall);
 }
 

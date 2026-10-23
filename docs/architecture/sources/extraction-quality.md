@@ -86,6 +86,10 @@ verification. Their readers add null quality only after validating the
 historical record. No word count, quality verdict or implementation version
 is reconstructed for historical rows. Files on disk are not restamped.
 Candidate, dispatch and source-run shapes do not change.
+Logical completion proofs also use their exact original schema: diagnostic-era
+proofs retain every measured diagnostic cell, and exclusion-era proofs retain
+their exclusion details. Only absent, null quality is removed for those stamps.
+A non-null newer measurement cannot be encoded as an older proof.
 
 ## Design rationale
 

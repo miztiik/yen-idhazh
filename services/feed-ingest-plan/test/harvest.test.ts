@@ -332,6 +332,19 @@ test("real inert DOM extraction retains prose and author but never calls a page 
   expect(malformed.warnings).toEqual(["malformed-json-ld"]);
   expect(malformed.quality?.corroborated_word_count).toBeNull();
   expect(malformed.quality?.source_word_count).toBe(extracted.word_count);
+  const invalidAccess = extractArticle(withMetadata(JSON.stringify({ "@graph": [
+    { isAccessibleForFree: { toString: "" } },
+    { "@type": "NewsArticle", articleBody: firstParagraph },
+  ] })), "https://news.example/story", witnessControls);
+  expect(invalidAccess.paywall).toBe(false);
+  expect(invalidAccess.quality?.corroborated_word_count).toBe(witnessWords);
+  expect(invalidAccess.warnings).toEqual([]);
+  for (const access of [false, "false", " FALSE "]) {
+    const accessPage = extractArticle(withMetadata(JSON.stringify({ isAccessibleForFree: access })),
+      "https://news.example/story", controls);
+    expect(accessPage.paywall).toBe(true);
+    expect(accessPage.quality).toBeNull();
+  }
   const lineHeavy = `${extracted.article_text}\n${extracted.page_title!.split(/\s+/u).join("\n")}`;
   const shapeControls = { ...controls, prose_sentence_min: 1,
     prose_line_count_min: 1, prose_line_ratio_min: 0 };
@@ -393,6 +406,20 @@ test("rootless extraction, empty content and article request failures do not kil
       extraction_failure: "missing-title", failure_code: "no_title", stopped_stage: "extract",
     });
     expect(result.articles[8]?.observation.diagnostics?.quality?.source_word_count).toBeGreaterThan(0);
+    const malformedRecording = await readRecordings();
+    const recordedBody = result.candidates[0]!.article_text;
+    malformedRecording.bodies.article = malformedRecording.bodies.article.replace("</head>",
+      `<script type="application/ld+json">${JSON.stringify({ "@graph": [
+        { isAccessibleForFree: { toString: "" } },
+        { "@type": "NewsArticle", articleBody: recordedBody },
+      ] })}</script></head>`);
+    const metadataTransport = new RecordedTransport(malformedRecording);
+    const metadataResult = await harvestFeeds(loaded, context(), destination(join(root, "metadata")), {
+      transport: metadataTransport, resolve: metadataTransport.resolve,
+    });
+    expect(metadataResult.candidates.map(candidate => candidate.entry_ordinal)).toEqual([4, 5, 6, 7]);
+    expect(metadataResult.articles[4]?.observation.diagnostics?.quality?.corroborated_word_count).toBe(
+      recordedBody.split(/\s+/u).length);
     for (const article of result.articles) {
       if (article.rejection !== null) expect(article.rejection.details.diagnostics).toEqual(article.observation.diagnostics);
       if (article.observation.extraction !== "not-attempted") expect(article.observation.diagnostics?.extract_ms).toBeGreaterThanOrEqual(0);

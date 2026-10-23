@@ -206,7 +206,9 @@ class CandidateRejectionRecord(Contract):
                 or diagnostics.get("failure_code") in get_args(ExtractionSignal)
                 or diagnostics.get("detail") in get_args(ExtractionSignal)
             ):
-                raise ValueError("extraction quality requires the declared quality contract version")
+                raise ValueError(
+                    "extraction quality requires the declared quality contract version"
+                )
             if value.get("version") != "2026-10-22T20:30" and value.get("drop_reason") in {
                 "ALREADY_PUBLISHED", "SETTLED_FAILURE", "BLOCKED_URL_MARKER"
             }:
