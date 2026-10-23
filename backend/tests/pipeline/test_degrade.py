@@ -125,17 +125,26 @@ def test_a_feed_that_named_nothing_publishes_under_the_page_s_own_headline(
     changed is the page, which is the whole point: the headline was in the bytes
     the fetch returned all along, and the item was refused beside it.
     """
+    headline = "The council approves a new reservoir after the public review"
+
+    def headed_page(url: str) -> FetchResult:
+        captured = captured_article_fetch(url)
+        page = _HEADLINES.sub("", captured.body.decode("utf-8"))
+        page = page.replace("<article>", f"<article><h1>{headline}</h1>")
+        return replace(captured, body=page.encode("utf-8"))
+
     run_plan, items, _ = _work_stage(
         tmp_path,
         monkeypatch,
         replies=(LABEL_REPLY.read_bytes(), SUMMARIZE_AND_PLAN_REPLY.read_bytes()),
         run_plan=headless_plan(),
+        fetcher=headed_page,
     )
 
     for planned in run_plan.items[:2]:
         article = Article.from_json(read_text(items / f"{planned.item_id}.article.json"))
         assert article.status is ArticleStatus.OK, planned.item_id
-        assert article.title == "Example Grid orders four small modular reactors"
+        assert article.title == headline
         assert article.title_source is TitleSource.PAGE, planned.item_id
 
 

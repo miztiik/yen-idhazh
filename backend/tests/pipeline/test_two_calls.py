@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any, Final
 
@@ -406,9 +407,13 @@ class TestAReplyTheBudgetCutKeepsItsSummary:
             for item in run_plan.items
         ]
         assert written, "the stage summarized nothing, so this asserts nothing"
+        content = json.loads(read_text(CUT_IN_THE_PLAN_REPLY))["choices"][0]["message"]["content"]
+        summary_field = re.search(r'"summary"\s*:\s*', content)
+        assert summary_field is not None, "the recorded reply must contain its summary"
+        expected_summary, _ = json.JSONDecoder().raw_decode(content[summary_field.end():])
         for summary in written:
             assert summary.status is SummaryStatus.OK
-            assert summary.summary and "34 percent" in summary.summary
+            assert summary.summary == expected_summary["summary"]
         for item in run_plan.items:
             decision = VisualDecision.from_json(read_text(items / f"{item.item_id}{PAYLOAD_SUFFIX}"))
             assert decision.kind is VisualKind.NONE
