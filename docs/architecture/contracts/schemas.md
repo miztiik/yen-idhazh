@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-10-22
+**Last Updated**: 2026-10-23
 
 The persisted-shape subsystem: where the models live, how a schema is obtained from one, the small hand copy the frontend carries, and the tests that stop the two drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -167,7 +167,7 @@ Named tests in `backend/tests/contracts/`, each proving a specific binding.
 | `test_frontend_field_set.py` | the hand-written `HostFingerprintRow` names exactly the columns the Pydantic one declares, in the same order, with the same TypeScript type for each. Types are computed from `json_schema()` by a narrow mapper that refuses a node kind it has not met, so a field with an unfamiliar shape fails rather than passes |
 | `test_frontend_vocabularies.py` | `SERVER_JOB` and `WATCHED_FLAG` hold exactly their Python enums' members, in order |
 | `test_frontend_console_lists.py` | eight console lists still name what their contracts declare - the eval panel's column map, the census row's and the feed record's column lists in `ledger-rows.ts`, the settings vocabulary, the doubt reasons, the bandwidth margin, the prompt-reuse column grammar, and the routes the strip draws: `RouteId` and `ROUTE_IDS` in `band.ts` name `RouteId`'s members in the order the band producer's `ROUTES` writes them |
-| `test_frontend_index_shapes.py` | the query door's `CompactEntry` and `CompactIndex` copy each field with the contract's type in its order, by the same kind of narrow mapper; `COMPACT_INDEX_STAMP` is `CompactIndex.schema_version()`; `COMPACT_PERIODS` is `Period`; `ENTRY_STATES` is `EntryState`; every ledger the door may query is a `LedgerName`; the `RawDayIndex` copy in `raw-day-index.ts` names the contract's fields, requires `bytes`, and carries `RawDayIndex.schema_version()` as `RAW_DAY_INDEX_STAMP`; the cell it filters days on is the ledger's own date cell; and `LEDGER_FAULTS` in `slice-shapes.ts` names `LedgerFault`'s members in order |
+| `test_frontend_index_shapes.py` | the query door's `CompactEntry` and `CompactIndex` copy each field with the contract's type in its order, by the same kind of narrow mapper; `COMPACT_INDEX_STAMP` is `CompactIndex.schema_version()`; `COMPACT_PERIODS` is `Period`; `ENTRY_STATES` is `EntryState`; every ledger the door may query is a `LedgerName`; and `LEDGER_FAULTS` in `slice-shapes.ts` names `LedgerFault`'s members in order |
 | `test_frontend_recorded_line.py` | the two keys `RECORD_KEYS` in `recorded-line.ts` reads from each record of a day's `run.json` - the line a build grouped the day at, and when it finished - are keys `RunRecord` writes, holding a number and text. A renamed key would otherwise send the Judgement page back to the worked-out line with no error |
 | `test_chart_evidence_binding.py` | `ChartEvidence` in `frontend/src/lib/chart-evidence.ts` has the shared model's exact fields and numeric/null types; the visual decision, run manifest and public run-day embed the same model, and the existing manifest reader exposes it |
 
@@ -620,14 +620,11 @@ Making `version` a date-stamp rather than an integer is a small choice with a sp
 | Keep the generator for the six names the frontend uses | A generator that runs over one contract is a generator, with its command, its gate and its regenerated diff. Six names are a copy and three tests. | Fowler |
 | Delete only the 61 schemas nothing imports | The count is a fact about one day. The next contract adds a sixty-seventh and the generator still runs in full. | Fowler |
 
-`RawDayIndex` also has a frontend hand copy in
-`frontend/src/lib/data/raw-day-index.ts`. The Python field `bytes` is optional so
-older compaction listings still validate; the frontend copy requires it because
-the site build fills it before a browser can price writer files. The build is
-now the only writer of the shape, for staged-site listings; the compaction no
-longer writes one. `backend/tests/contracts/test_raw_day_listing_fixture.py`
-holds an older compaction listing to the shape and its digest rule, and `frontend/tests/ledger-copy.spec.ts` holds the build's listing,
-sizes and non-parquet refusal.
+`RawDayIndex` remains a Python contract for the preserved historical listing
+fixture. `backend/tests/contracts/test_raw_day_listing_fixture.py` checks that
+fixture's legacy shape and digest. The compact-only explorer has no frontend
+`RawDayIndex` copy, and the site build no longer writes or stages raw-day
+listings.
 
 ## See also
 

@@ -1,6 +1,6 @@
 # Plan 66 - Feed ingest plan engine
 
-**Last Updated**: 2026-10-22
+**Last Updated**: 2026-10-23
 **Level**: 5 (source-kind/tier and persisted-contract migration requires owner approval before execution; the later planner implementation follows the approved contracts)
 
 Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0.
@@ -608,7 +608,7 @@ export type CandidateRejectionRecord =
 | 1 | Enroll each ledger declared in Table I, Table L, and Table P under family `feed-ingest-plan`; register its row contract, settlement key, prefix, and compaction task before writing. Use `source-runs`, `article-assessments`, `diversity`, and `editorial-selections` as the new suffixes beneath the family prefix. | Owner requested the complete audit and managed retention; persistence.md |
 | 2 | Store rejections as Parquet files under `state/raw/feed-ingest-plan/rejections/` with `FileEnvelope` footers | Plan proposal |
 | 3 | Add the new ledger-name members and row/settlement bindings, and enroll every compaction declaration in config/idhazh_gardener.json's explicit task_names list. A declaration file alone does not schedule a task. Use each full ledger prefix with slashes replaced by hyphens for the compaction name. | Verified ledger registry, keys.py, and gardener task manifest |
-| 4 | Add every new ledger to staging.py REGISTRY and the frontend LEDGER_NAMES/LEDGER_FOLDERS bindings. Name the planned TypeScript writer explicitly, with no production digest commit labels while the isolated workflow is its only caller. Registry vocabulary/path bindings land here; public delivery lands in Row #16 before writers. | ledger-registry.md onboarding; existing finite staging table |
+| 4 | Add every new ledger to staging.py REGISTRY. Name the planned TypeScript writer explicitly, with no production digest commit labels while the isolated workflow is its only caller. The frontend derives names and prefixes from config/ledgers.json through ledger-catalog.ts; do not add per-ledger LEDGER_NAMES or LEDGER_FOLDERS lists. Public consent and delivery are covered by the row titled "Public data-explorer enrollment and nested ledger delivery." | ledger-registry.md onboarding; existing finite staging table |
 | 5 | Enroll the tasks in the named gardener retention test inventory and use the approved live chain: compact_after_days 1, daily_keep_days 45, monthly_keep_days 93, monthly_window forever, yearly_keep_months 36, yearly_prune_enable true. Follow the existing dry-run-to-live approval rule; do not invent a separate retention policy for planner text or audit rows. | ledger-registry.md onboarding; owner-approved retention chain |
 | 6 | Feed-ingest settlement preserves each original run/attempt and deduplicates rows only within that attempt by its declared business key; trusted dotted paths may name nested fields. Existing ledgers retain their current settlement. Table J selects the complete attempt later: an incomplete newer attempt cannot erase an older complete attempt, while an explicitly recorded complete empty attempt supersedes it. Test raw settlement and real compact/read/repack cycles. UUID contract fields use their JSON string representation in Arrow, so the reader validates their version after loading. | Table G candidate identity; reader-before-writer settlement contract; Pydantic JSON serialization |
 
@@ -1868,19 +1868,24 @@ and robots checks. Row #15 is delivered for review; this worker does not merge.
 
 ## 19. Row #16 - Public data-explorer enrollment and nested ledger delivery
 
-- **Scope:** Publish every feed-ingest-plan ledger's actual columns for `console/data-explorer` and correct nested-family path resolution before the TypeScript writers land, without changing the existing explorer design or adding a runtime backend.
+- **Scope:** Give every feed-ingest-plan ledger the explicit registry consent needed to offer and query its actual columns in `console/data-explorer`, with correct nested-family paths. Keep the delivered compact-only reader, existing panel delivery and no-runtime-backend design. The feed-ingest-plan ledgers named elsewhere in this plan remain in scope; this correction does not drop a ledger or its columns.
 - **Files touched:**
+  - `config/ledgers.json`
   - `config/idhazh.json`
   - `frontend/scripts/published-ledgers.mjs`
   - `frontend/scripts/ledger-prefixes.mjs`
   - `frontend/scripts/payload-ceilings.mjs`
-  - `frontend/scripts/raw-listed-through.mjs`
   - `frontend/scripts/stage-publication.mjs`
+  - `frontend/src/lib/data/ledger-catalog.ts`
+  - `frontend/src/lib/data/configured-catalog.ts`
+  - `frontend/src/lib/data/ledger.ts`
+  - `frontend/src/lib/data/ask-reader.ts`
   - `frontend/src/lib/data/slice-reader.ts`
+  - `frontend/src/lib/data/fetched-bytes.ts`
   - `frontend/tests/ledger-copy.spec.ts`
-  - `frontend/tests/raw-listed-through.spec.ts`
+  - `frontend/tests/ledger-catalog.spec.ts`
   - `frontend/tests/ledger-door.spec.ts`
-  - `frontend/tests/console-data-explorer.spec.ts`
+  - `frontend/tests/ledger-lifecycle.spec.ts`
   - `frontend/tests/console-data-explorer-still.spec.ts`
   - `frontend/tests/support/feed-ledgers.ts`
   - `frontend/tests/payload-ceilings.spec.ts`
@@ -1888,27 +1893,18 @@ and robots checks. Row #15 is delivered for review; this worker does not merge.
   - `.github/workflows/ci.yml`
   - `docs/architecture/publishing/how-the-query-door-answers-a-written-question.md`
   - `docs/architecture/publishing/how-the-query-door-answers-a-panel.md`
-- **Acceptance gates:** Local: shared selector, generated-state flat/nested ledger-copy fixtures, focused query-door tests, and one representative explorer journey, not a browser case per ledger. CI: full suite and site-size gate. Verify allowlist enrollment for all new ledger names, correct raw/daily/monthly/yearly/index paths, missing versus known-empty data, and raw-listing coverage after compaction. Use fixtures and the real build/query path, not mocks or external network.
-- **Oracle:** A generated nested feed-ingest-plan ledger is staged under its registered prefix, fetched and queried through the real door with its typed columns intact; a flat host-fingerprint fixture still resolves unchanged. This proves enrollment/path/query compatibility, not the eventual site size or live-run query latency.
+- **Acceptance gates:** Local: shared selector, generated-state flat/nested compact-copy and direct-reader fixtures, focused query-door tests, and the existing representative explorer journey, not a browser case per ledger. CI: full suite and site-size gate. Verify explicit registry consent for every feed-ingest-plan ledger, nested prefixes, compact index and named-file paths, missing versus known-empty data, and the configured file, byte and date limits. Use fixtures and the real build/query path, not mocks or external network.
+- **Oracle:** A generated nested feed-ingest-plan ledger is fetched from the configured repository and queried through the real door with its typed columns intact; a flat host-fingerprint fixture still resolves unchanged. The site continues to stage consented compact files for ordinary panels, while no raw listing or raw writer file enters the site. This proves enrollment/path/query compatibility, not the eventual site size or live-run query latency.
 
-Preflight correction: the raw-listing reader has its own named test module,
-`frontend/tests/raw-listed-through.spec.ts`. Keep its flat-ledger and
-copied-module default-path checks, and add nested-prefix coverage there rather
-than leaving this direct reader outside the row's checks. Any test that copies
-the module must copy its named configuration dependencies too.
-
-Execution scope correction: `console-data-explorer.spec.ts` now checks only
-chrome selection in the logic tier. Its existing real query/chart journey is
-`console-data-explorer-still.spec.ts`; extend that journey rather than adding a
-second browser case. `ledger-prefixes.mjs` owns shared registry-prefix
-validation, and `support/feed-ledgers.ts` generates and stages bounded real
-Python-contract fixtures for the copy, door and browser checks.
-
-CI scope correction: the six published ledgers need payload ceilings at their
-registered nested index paths. Keep the existing longest-index bound check,
-using the shared registry and compaction-task name builders rather than flat
-names. The bundle gate uses `ledgerFolders` for absent-ledger checks as well;
-a ledger with compact or raw files but no compact index still fails.
+Delivery correction, 2026-10-23: `config/ledgers.json` is the sole registry
+and consent source. The frontend catalog derives names and prefixes from it;
+there is no second published-ledger list or hand-written name/folder array. The
+Data explorer reads compact indexes and their named files from
+`ledger.archive_base_url`; an explicitly empty address selects site fixtures,
+and a repository error does not fall back to a site copy. The site build keeps
+the compact copy used by ordinary panels, but it does not stage raw files or
+raw-day listings. Refresh obtains newly packed data without rebuilding the
+site.
 
 The coordinator approved these coupled supporting paths on 2026-10-21:
 `backend/tests/contracts/test_page_ceilings.py`,
@@ -1924,17 +1920,17 @@ published bytes, dependency group, mock or substitute journey.
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Add dispatches, rejections, source-runs, article-assessments, diversity, and editorial-selections to ledger.published using their registered ledger names, not their folder strings. Host-fingerprint is already published. The public registry list and the published allowlist are distinct controls; appearing in the list alone does not make a ledger queryable. | Owner requested all ledgers in console/data-explorer; verified route/build wiring |
-| 2 | Resolve build-side source paths, published target paths, compact indexes, and raw listings from the committed registry prefix. Correct published-ledgers.mjs's flat compact/<ledger> assumption and raw-listed-through.mjs's first-level-only traversal; align these with Row #2's browser LEDGER_FOLDERS bindings and slice-reader resolution. Reject invalid prefixes at the trusted config boundary; fetched source/article text never supplies a path. | Verified nested-family delivery gaps; CLAUDE.md Guardrails #11 and #12 |
+| 1 | Give dispatches, rejections, source-runs, article-assessments, diversity, editorial-selections, and the already registered host-fingerprint their explicit `publish_to_data_explorer` consent in `config/ledgers.json`. The consent controls explorer membership and compact site copies; no second publication list exists. | Owner requested all feed ledgers in console/data-explorer; verified registry and route wiring |
+| 2 | Resolve compact source and site-copy paths from the committed registry prefix. The frontend catalog validates the prefix once and supplies it to both readers; invalid registry data fails at that boundary. The explorer reads compact indexes and named files only, never raw files or directory listings, and fetched text never supplies a path. | Verified nested-family delivery; CLAUDE.md Guardrails #11 and #12 |
 | 3 | Publication copies actual Parquet bytes and exposes all stored columns, including full article text in dispatches. The repository is already public; this is not a new disclosure approval gate and does not authorize silently removing text or substituting an undeclared projection. | Owner's full-ledger intent; verified public repository and byte-copy behavior |
-| 4 | Retain the existing configured site publication window and explorer limits: explorer_max_fetch_bytes is currently 67,108,864 bytes (64 MiB), reach_days is 365, and the published window follows the widest console preset (current defaults include 90 days). A reach setting does not promise that every historical day is staged. Measure real staged bytes and bounded queries when data exists; if the configured limit or the 1 GB site boundary prevents the intended delivery, stop and surface the measured cost and a concrete alternative. Do not guess performance, silently truncate columns, drop a ledger, or broaden limits without review. | Existing delivery controls; CLAUDE.md Guardrails #2, #10 and #12 |
+| 4 | Keep the configured explorer date reach, file and byte limits. The ordinary-panel site copy follows the widest console preset; that static window does not limit direct repository reads. A configured reach does not promise every historical day is packed. Measure real site-copy bytes and bounded queries when data exists; if a configured limit or the 1 GB site boundary prevents delivery, surface the measured cost and a concrete alternative. Do not guess performance, truncate columns, drop a ledger or broaden limits without review. | Existing delivery controls; CLAUDE.md Guardrails #2, #10 and #12 |
 | 5 | Land this reader/delivery support before Row #6's writers. Keep the existing explorer route and query interaction; no per-ledger bespoke page, second query engine, or production workflow cutover. | Reader-before-writer compatibility; bounded owner request |
 
 ### Rejected alternatives
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| 1 | Assume config/ledgers.json registration publishes the data | The registry can list a ledger absent from ledger.published, and flat build paths cannot find nested compact files | Explicit allowlist enrollment and prefix-aware site staging are required to query it | Verified explorer/build wiring |
+| 1 | Assume registration alone grants explorer consent | The ledger would not be offered, and a duplicate frontend list could drift from the registry | Set `publish_to_data_explorer` on the registered ledger; the validated catalog supplies its name and prefix to the direct reader and compact site copy | Verified registry and reader behavior |
 | 2 | Publish only metadata without declaring another shape | Hides real columns despite the all-ledger request and creates an undeclared consumer contract | Owner-approved projection contract, producer, enrollment, retention, and tests; not needed for the current request | Owner's full-ledger intent; Guardrail #3 |
 
 ---

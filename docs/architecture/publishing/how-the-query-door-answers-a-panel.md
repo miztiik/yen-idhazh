@@ -1,6 +1,6 @@
 # How the query door answers a panel
 
-**Last Updated**: 2026-10-21
+**Last Updated**: 2026-10-23
 
 The query door is the one module a console panel calls to read a committed
 ledger: `slice()` for rows and `ledgerReach()` for how far a ledger reaches, both
@@ -54,7 +54,7 @@ of four nothings without inspecting an error:
 first day, or the ledger's first day when the span starts before it. The days
 before a ledger began are outside the ledger, not missing from it, so the door
 cuts them and names the day it answered from, as the Data explorer does
-([its cut](how-the-query-door-answers-a-written-question.md#archive-tier)). The
+([its cut](how-the-query-door-answers-a-written-question.md#compact-selection-and-failure)). The
 span's end stays where it was asked to end, so no caller clamps its span to a
 ledger's first day.
 
@@ -83,9 +83,9 @@ The prefix is the ledger's `prefix` list in the committed
 `config/ledgers.json`, joined with `/`. The validated frontend catalog checks
 each segment before exposing the entry and refuses unknown names or ambiguous
 prefixes. The pure path helpers take that catalog explicitly and use the same
-prefix for compact files, indexes and raw listings. Ordinary panel and disk
-readers use the configured catalog; the Data explorer binds its reader to the
-catalog fetched for its source. Thus `dispatches` resolves under
+prefix for compact files and indexes. The browser does not read raw listings.
+Ordinary panel and disk readers use the configured catalog; the Data explorer
+binds its reader to the catalog fetched for its source. Thus `dispatches` resolves under
 `state/compact/feed-ingest-plan/dispatches/`, while `host-fingerprint` keeps
 `state/compact/host-fingerprint/`. Missing-file build warnings name the ledger,
 not its family's folder.

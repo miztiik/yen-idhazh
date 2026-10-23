@@ -1,6 +1,6 @@
 # The summary-quality judge as a pipeline of replaceable scorers: intent and contracts
 
-**Last Updated**: 2026-10-12
+**Last Updated**: 2026-10-23
 
 **Author**: Fowler (architecture), 2026-10-12, plan 65 Q68. **Status**: design for plan 65.2. The owner ruled T1, U1 and V1 on 2026-10-12 (plan 65, Table Q, Q69 to Q71), and named the unified judge summary-fidelity-judge, with the drift judge renamed summary-drift-judge (Q72); "the drift judge" below is summary-drift-judge; everything else here is proposed until 65.2 is approved. In this record "source" means a feed or publisher only; a summary is checked against its article. "Estimate" marks an estimate.
 **Ids**: Q61, QQ28, P15, X8.4 cite plan 65 (`TODO/20261011-65-summary-fidelity-judge-plan.md`), as "plan 65 B2" where a row here could be meant; "research Q5" cites `TODO/20261012-unsupervised-summary-improvement-research-record.md`. Code paths are repository paths.
@@ -275,7 +275,13 @@ Table P - contract: the metrics record other judges read
 | P7 | verdicts_counted, recorded_changes, points_docked | false leaves flagged null (fail closed); changes named (Q61); row #41's count kept |
 | P8 | Key | run_id, date, source_id, feed_id, model_id, metric, instrument_id |
 
-**Every new ledger owes** `ledger-registry.md`'s list: family, `LedgerName`, `LEDGER_NAMES`, `_JUDGE_DOOR_SHAPES` (loaded on first use: the council's import closure does not grow), `REGISTRY` and a live-retention compaction. The flat assignment file joins the named JSON ledgers outside the door and asks `accepts_new_rows`.
+**Every new ledger owes** `ledger-registry.md`'s list: family, `LedgerName`,
+an entry in `config/ledgers.json`, `_JUDGE_DOOR_SHAPES` (loaded on first use:
+the council's import closure does not grow), `REGISTRY` and a live-retention
+compaction. The frontend catalog derives names and paths from that registry;
+do not add per-ledger `LEDGER_NAMES` or `LEDGER_FOLDERS` lists. The flat
+assignment file joins the named JSON ledgers outside the door and asks
+`accepts_new_rows`.
 
 ## 6. Runtimes
 

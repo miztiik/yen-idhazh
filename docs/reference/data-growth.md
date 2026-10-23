@@ -1,6 +1,6 @@
 # Data Growth
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-10-23
 
 What this repository requires of work whose cost rises as the archive grows,
 where each family of that work is heading, and the shortcuts that look like an
@@ -77,21 +77,18 @@ a cached reader's compatibility without saying so is not.
 
 ## Current bounded walks
 
-The site build stages raw-day listings for the query door after each published
-ledger's newest packed day. For each published ledger it checks at most
-`max(console.window_presets)` UTC-day directories under
-`state/raw/<ledger>/<YYYY>/<MM>/<DD>/`, starting on the day after the ledger's
-newest packed day. It reads the names and sizes in directories inside that
-fixed window, writes `RawDayIndex` listings into the staged site only, and copies
-only the parquet writer files those listings name.
+Ordinary console panels use the consented compact files staged from `state/`.
+The Data explorer reads the committed registry and selected compact indexes and
+their named files from `ledger.archive_base_url`; an explicitly empty address
+selects site fixtures. It never reads raw files or falls back to a site copy
+after a repository error. New raw rows become available to the explorer after
+compaction, and Refresh fetches that current packed state without a site rebuild.
 
-The cost scales with the number of published ledgers times the widest console
-preset. It does not scale with how long the repository has been running, because
-a ledger that has not packed for longer than the widest preset still gets only
-that many directory checks. The widest preset is the right bound because no
-console query can ask the site for more days than that without using the archive
-reader, which reads packed files from the repository instead of raw writer files
-from the site.
+The explorer reads only the selected ledgers and the files their indexes name.
+Its configured date reach, candidate-file limit and fetch-byte ceiling bound a
+question. The site copy remains bounded by the widest console window, anchored
+on each ledger's newest packed day. Neither path walks raw-day directories or
+stages raw writer files.
 
 | Concern | The rule | What retires the old path |
 | --- | --- | --- |

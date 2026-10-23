@@ -1,6 +1,6 @@
 # Known defects
 
-**Last Updated**: 2026-10-13
+**Last Updated**: 2026-10-23
 
 **The open defects have named owners below.** Five of them need evidence or a ruling before any code
 is worth writing; the rest are known fixes
@@ -257,36 +257,14 @@ models or their selection policy.
 
 Verified against main on 2026-10-10 while retiring the completed read-cost plan.
 
-## 70 - The raw-listing test does not check the value included in the built site (OPEN)
+## 70 - The raw-listing test does not check the value included in the built site (CLOSED 2026-10-23)
 
-**The test's title promises a build check, but its assertions read only staged
-files.** In `frontend/tests/published-ledgers.spec.ts`, the test
-`raw-day listings are complete, bounded and become the baked listed-through value`
-calls `rawListedThrough(STATIC)` and compares it with days found by reading the
-staged listings again. It does not read `__RAW_LISTED_THROUGH__` from the built
-page. The production binding in `frontend/vite.config.ts` instead calls
-`rawListedThrough()` with no argument.
-
-**The production path is fixed; the integration check is still missing.**
-PR #1427 made the default path relative to the script and added generated-tree
-tests of that default. Those tests do not prove that the build passes the
-result to the page. A future edit that supplies another folder or an empty
-object in `vite.config.ts` can leave the published-listing test green while
-the page reads no raw day. This is a test gap, not evidence of a current
-incorrect build. Confirmed by reading the named test, script and build binding;
-no application test was rerun for this documentation change.
-
-**The receiving work is one bounded integration check.** Build a generated
-state root with two selected ledgers and two named raw days per ledger. Assert
-written-out newest days from the value the real build supplies to the browser,
-not from another listing read. Include a raw-day query with written-out rows.
-Keep the existing default-path unit cases. No test reads the committed archive
-or reaches the network.
-
-**Acceptance:** the generated case passes with the production binding and
-fails when that binding supplies `{}` or the wrong staged folder. It must
-exercise the actual built page, including its raw-day selection. Do not merely
-rename the existing test or compare two readers of the same files.
+The raw-day site path this finding described was removed when the explorer
+moved to direct compact reads from the configured repository. The site no
+longer stages raw-day listings or supplies a baked listed-through value, so
+there is no production binding for the proposed integration test to exercise.
+The remaining `RawDayIndex` fixture is historical input to backend contract
+tests, not site data. No follow-up test is required for the retired path.
 
 This receives the unfinished test finding from PR #1427, reported in plan 62
 row L46 and deferred by its Table B, B7. The finding is preserved here before
@@ -731,12 +709,12 @@ Found by plan 60's row 7 (#1286), whose checks went red three times with three
 different tests, and filed on 2026-10-04. The two later failures were added on
 2026-10-06.
 
-## 55 - The query-door page names a deleted test, so nothing may hold the rule it states (OPEN)
+## 55 - The query-door page names a deleted test, so nothing may hold the rule it states (CLOSED 2026-10-23)
 
-**The page that says how the query door answers a panel names a test that is
-gone.**
+At filing, the page that says how the query door answers a panel named a test
+that was gone.
 [how-the-query-door-answers-a-panel.md](../docs/architecture/publishing/how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)
-says that `backend/tests/contracts/test_published_ledgers_cover_the_panels.py`
+said that `backend/tests/contracts/test_published_ledgers_cover_the_panels.py`
 holds the two sides together: every ledger a panel names in a `slice()` or
 `ledgerReach()` call is in `ledger.published` in `config/idhazh.json`. #1228
 deleted that file on 2026-10-03, when the contract tests stopped reading trees
@@ -746,27 +724,31 @@ its parser. Its description names
 stays, but #1201 had deleted that check three hours before. Neither test is on
 `main`, and no test there names `cover_the_panels` or calls `ledgerReach(`.
 
-**Doing nothing costs a broken panel that no check catches.** A panel that asks
+At filing, doing nothing risked a broken panel that no check caught. A panel that asks
 the door for a ledger the site does not hold gets a 404 on that ledger's index,
-and that 404 is the only sign that the ledger was left out. The tests that read
-`ledger.published` today, such as `backend/tests/contracts/test_page_ceilings.py`
-and `frontend/tests/published-ledgers.spec.ts`, check other things: each
-published ledger's page-weight key, and what the build copies.
+and that 404 was the only sign that the ledger was left out. At filing, the
+tests around `ledger.published`, such as
+`backend/tests/contracts/test_page_ceilings.py` and
+`frontend/tests/published-ledgers.spec.ts`, checked other things: each
+published ledger's page-weight key, and what the build copied.
 
-**The next move is a worker's.** Find which test, if any, holds the rule now.
-If one does, the page names it instead, Level 0. If none does, restore a
-bounded test that reads only named config and never scans the frontend tree,
-Level 2.
+At filing, the next move was to find which test held the rule or restore a
+bounded test that reads only named config and never scans the frontend tree.
 
-On 2026-10-08 the page stopped naming the deleted test, and says instead that
-no test checks the rule. A search of `backend/tests/contracts/` on `origin/main`
-at 702b00be7 found none that does. The rule holds today: the one panel that
+On 2026-10-08 the page stopped naming the deleted test, and said instead that
+no test checked the rule. A search of `backend/tests/contracts/` on `origin/main`
+at 702b00be7 found none that did. At that point, the one panel that
 asks the door, `frontend/src/lib/console/machine/PlatformMixPanel.svelte`, asks
-it for `host-fingerprint`, which is published. The bounded test is still the
+it for `host-fingerprint`, which was published. The bounded test was still the
 next move.
 
 Found by Fowler's review of plan 60 on 2026-10-04 (item 17), and filed the same
 day.
+
+Closed 2026-10-23: `backend/tests/contracts/test_panel_queries.py` reads its
+fixed list of console query modules and checks that every declared query uses
+an explorer-consented registry entry and its actual row columns. This holds
+the panel-to-ledger rule without scanning a growing frontend tree.
 
 ## 54 - The first squash that rewrites history may not fit in its 30-minute job (OPEN)
 

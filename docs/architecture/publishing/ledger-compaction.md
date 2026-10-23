@@ -1,6 +1,6 @@
 # Ledger compaction
 
-**Last Updated**: 2026-10-22
+**Last Updated**: 2026-10-23
 
 How a ledger's daily, monthly and yearly files are packed and dropped. The
 gardener runs a compaction like any other task; how a wake runs its tasks and
@@ -786,6 +786,11 @@ in seven ledgers were deleted from `state/` by hand. The code that found, read
 or deleted a listing in `state/` was deleted with them. No check refuses a new
 one: no code writes a listing there, and nothing reads one. The person's
 ruling, 2026-10-04.
+
+**2026-10-23: the site no longer stages raw-day listings.** The Data explorer
+reads the compact indexes and files they name from the configured repository;
+ordinary panels still use their staged compact copies. See
+[Data explorer state](data-explorer-state.md).
 
 **2026-09-28: the monthly window counts from the month's absorption.** A month
 file goes when the month `monthly_window` later is absorbed, so the period holds

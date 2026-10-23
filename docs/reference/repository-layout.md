@@ -1,6 +1,6 @@
 # Repository Layout
 
-**Last Updated**: 2026-10-14
+**Last Updated**: 2026-10-23
 
 Every top-level directory, what it holds, who writes it, and whether a reader
 ever sees it. Read this before adding a directory, or when deciding where a new
@@ -36,7 +36,7 @@ question, and the four answers do not mix.
 | `.github/scripts/` | Small programs called by workflows, including the runner fingerprint collector | a person | no |
 | `.github/agents/` | The seven persona advisors (`CLAUDE.md` section 14) | a person | no |
 | `.claude/skills/` | Claude Code skill wrappers that point at `docs/`, so one procedure is not written twice | a person | no |
-| `state/` | The append-only ledgers one run leaves for the next. Ledger-door data files under `state/raw/<prefix>/` and `state/compact/<prefix>/`; a family ledger's prefix includes its family folder. Similarity-judge ledgers live under `content-similarity-judge/` ([persistence](../architecture/contracts/persistence.md)). A ledger with multiple writers gives each writer its own day file. `state/content-similarity-judge/` holds the judge's score record and archive; `state/raw/council-run-records/` holds council step records later packed under `state/compact/council-run-records/` | a run, in CI | the explorer may read compact data from the configured repository; the site copies only compact files whose registry entry enables explorer consent ([panel delivery](../architecture/publishing/how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)) |
+| `state/` | The append-only ledgers one run leaves for the next. Ledger-door data files under `state/raw/<prefix>/` and `state/compact/<prefix>/`; a family ledger's prefix includes its family folder. Similarity-judge ledgers live under `content-similarity-judge/` ([persistence](../architecture/contracts/persistence.md)). A ledger with multiple writers gives each writer its own day file. `state/content-similarity-judge/` holds the judge's score record and archive; `state/raw/council-run-records/` holds council step records later packed under `state/compact/council-run-records/` | a run, in CI | the Data explorer may read compact data from the configured repository; ordinary panels use compact files staged for ledgers with registry consent ([panel delivery](../architecture/publishing/how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)) |
 | `state/raw/<ledger>/set-aside/` | Each file a compaction could not read, moved under its old path below `state/` - a raw file, or a day or month file that could not be read when its period closed - and counted in its period's `set_aside`. No gardener step names the folder, so nothing reads a file there again or deletes it; a person reads it when the console shows a non-zero count ([../architecture/publishing/ledger-compaction.md](../architecture/publishing/ledger-compaction.md#a-file-that-cannot-be-read)) | the gardener's compaction, in CI | **never**: the site copies only `state/compact/` |
 | `state/raw/traces/pipeline-tests/<id>/` | The bench and `Model validation` write trial spans here as JSONL. These are not ledger-door parquet files. This tier-first sibling of production's `state/traces/` keeps the trial's 90-day, report-only retention separate from production's 7-day retention ([../architecture/contracts/persistence.md](../architecture/contracts/persistence.md#design-rationale)) | a dispatch, in CI | **never** |
 | `state/raw/pipeline-tests/<id>/<ledger>/`, `state/compact/pipeline-tests/<id>/<ledger>/` | A pipeline test case's own ledgers - item-health, host-fingerprint, candidate-models among them - file through the same tier-first `raw`/`compact` builders production ledgers use, with the test case's bench and case name spliced in ahead of the ledger's own folder (`backend/idhazh/ledger/paths.py::overlay_registry`). Compaction declarations in `config/gardener/compact-trial-*.json` own these folders | a dispatch, in CI | **never** |
@@ -122,8 +122,9 @@ of two rolls is a file holding rows the roll already threw out. It is not under
 window has to survive a fresh checkout.
 
 The Pages workflow uploads `frontend/build` and nothing else, so `state/` cannot
-reach a reader even by accident. The console reads it at build time and bakes
-the numbers into the page ([../concepts/pipeline-loop.md](../concepts/pipeline-loop.md)).
+reach a reader even by accident. Ordinary panels use their staged compact
+copies; the Data explorer may read compact files from the configured repository
+in the browser ([../architecture/publishing/how-the-query-door-answers-a-written-question.md](../architecture/publishing/how-the-query-door-answers-a-written-question.md)).
 
 **Nothing sits between the two halves any more.** `schemas/` did until
 2026-09-23: 66 generated JSON Schemas, top-level because neither half owned
