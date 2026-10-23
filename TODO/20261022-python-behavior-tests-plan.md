@@ -65,7 +65,7 @@ Table D - PR outcomes
 | D7 | 7 | Config reader values and accurate migration test names | 1 | F | DONE | config-reader-behavior-proofs | [#1653](https://github.com/miztiik/yen-idhazh/pull/1653) | - |
 | D8 | 8 | Workflow checks retain independent failure evidence | 1 | G | DONE | workflow-behavior-proofs | [#1656](https://github.com/miztiik/yen-idhazh/pull/1656), merged at `43bdd37d671275af2f904590f7ca69498cc74a91` | - |
 | D9 | 9 | Remove the unused watchlist entry limit | 1 | H | IN-FLIGHT | remove-unused-watchlist-limit | [#1657](https://github.com/miztiik/yen-idhazh/pull/1657) | - |
-| D10 | 10 | Independent historical reader proofs | 1 | I | IN-FLIGHT | independent-historical-reader-proofs | - | - |
+| D10 | 10 | Independent historical reader proofs | 1 | I | IN-FLIGHT | independent-historical-reader-proofs | [#1659](https://github.com/miztiik/yen-idhazh/pull/1659) | - |
 
 The canary implementation for Row 3 is delivered separately from its suite-wide
 review obligation. Rows 5 and 6 carry additional changes found by that review.
@@ -634,6 +634,9 @@ counts use the untouched archive and the completed branch instead.
   Row 9's frozen full successor as the input. All prior row text and the exact
   owner ruling in A5 remain; D3 and D9 remain open. Row 8's later merge receipt
   is recorded above. Plan-only integration does not repeat unchanged gates.
+- **Delivery:** Implementation commit `90c58a26c` is in open PR
+  [#1659](https://github.com/miztiik/yen-idhazh/pull/1659). This phase is
+  delivered for review, not merged. The suite-wide Row 3 review remains open.
 
 ## See also
 
