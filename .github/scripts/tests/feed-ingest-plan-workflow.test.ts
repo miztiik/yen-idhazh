@@ -5,8 +5,9 @@ import { copyFile, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { CompactIndexSchema, RawDayIndexSchema, FeedHealthContract, PUBLICATION_INVENTORY_VERSION } from "../../../packages/common-contracts/src/index";
+import { CompactIndexSchema, RawDayIndexSchema, FeedHealthContract, FeedIngestConfigSchema, PUBLICATION_INVENTORY_VERSION } from "../../../packages/common-contracts/src/index";
 import { persistLedger } from "../../../packages/ledger-file-writer/src/index";
+import { PlanRequestSchema } from "../../../services/feed-ingest-plan/src/api/plan-request";
 import { stageFeedHistory } from "../feed-ingest-plan-feed-history";
 import { selectHealthDays } from "../../../services/feed-ingest-plan/src/read-ledger-history/select-health-days";
 import { readLedgerParquet } from "../../../services/feed-ingest-plan/src/read-ledger-history/read-parquet";
@@ -17,7 +18,7 @@ import { utcTimestamp } from "../../../services/feed-ingest-plan/src/harvest-fee
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 type Workflow = {
-  on: { workflow_dispatch: { inputs: Record<string, { default: string; type: string }> } };
+  on: { workflow_dispatch: { inputs: Record<string, { default: string; type: string; required: boolean; options?: string[] }> } };
   permissions: Record<string, string>;
   jobs: { "isolated-plan": { steps: {
     id?: string; name?: string; run?: string; uses?: string;
@@ -34,7 +35,12 @@ function assertWorkflow(value: unknown): asserts value is Workflow {
   const inputs = record(record(record(workflow.on).workflow_dispatch).inputs);
   for (const input of Object.values(inputs)) {
     const fields = record(input);
-    if (typeof fields.default !== "string" || typeof fields.type !== "string") throw new Error("Invalid dispatch input");
+    if (typeof fields.default !== "string" || typeof fields.type !== "string" || typeof fields.required !== "boolean") {
+      throw new Error("Invalid dispatch input");
+    }
+    if (fields.options !== undefined && (!Array.isArray(fields.options) || fields.options.some(value => typeof value !== "string"))) {
+      throw new Error("Invalid dispatch choices");
+    }
   }
   if (Object.values(record(workflow.permissions)).some(value => typeof value !== "string")) throw new Error("Invalid permissions");
   const steps = record(record(workflow.jobs)["isolated-plan"]).steps;
@@ -74,8 +80,18 @@ test("offers four manual controls and commits only genuine planner and host file
   expect(Object.keys(parsed.on)).toEqual(["workflow_dispatch"]);
   const inputs = parsed.on.workflow_dispatch.inputs;
   expect(Object.keys(inputs)).toEqual(["freshness_hours", "article_limit", "shards", "partition_strategy"]);
-  expect(inputs.freshness_hours?.default).toBe("24");
-  for (const field of ["article_limit", "shards", "partition_strategy"]) expect(inputs[field]?.default).toBe("");
+  const config = FeedIngestConfigSchema.parse(JSON.parse(await readFile(join(root, "config", "feed-ingest-plan.json"), "utf8")));
+  for (const [field, value] of Object.entries({
+    freshness_hours: config.triage.max_age_hours, article_limit: config.curate.article_limit ?? "",
+    shards: config.partition.default_shards, partition_strategy: config.partition.default_strategy,
+  })) {
+    expect(inputs[field]?.default, `${field} form default must match config/feed-ingest-plan.json`).toBe(String(value));
+  }
+  for (const field of ["freshness_hours", "article_limit", "shards"]) expect(inputs[field]?.type).toBe("string");
+  expect(inputs.freshness_hours?.required).toBe(true);
+  for (const field of ["article_limit", "shards", "partition_strategy"]) expect(inputs[field]?.required).toBe(false);
+  expect(inputs.partition_strategy?.type).toBe("choice");
+  expect(inputs.partition_strategy?.options).toEqual(PlanRequestSchema.shape.partition_strategy.unwrap().options);
   expect(parsed.permissions).toEqual({ contents: "write" });
   const plan = steps.find(step => step.id === "plan")!;
   expect(plan.env).toEqual({

@@ -67,6 +67,16 @@ def _modules_used(tree: ast.Module) -> set[str]:
     }
 
 
+def test_module_check_helpers_find_used_modules_and_bound_imports() -> None:
+    missing_import = ast.parse("hashlib.sha256(b'data')")
+    imported = ast.parse("import hashlib\nhashlib.sha256(b'data')")
+
+    assert _modules_used(missing_import) == {"hashlib"}
+    assert "hashlib" not in _bound_names(missing_import)
+    assert _modules_used(imported) == {"hashlib"}
+    assert "hashlib" in _bound_names(imported)
+
+
 def test_every_inline_program_imports_the_modules_it_uses() -> None:
     checked = 0
 
