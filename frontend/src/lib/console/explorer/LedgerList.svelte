@@ -1,104 +1,87 @@
-
 <script lang="ts">
 	import { tick } from 'svelte';
 	import Icon from '$lib/icons/Icon.svelte';
 	import type { RegistryLedger } from './registry';
-	import { shortDate } from '$lib/format';
-	let { ledgers, selected, through = {}, spanFrom = '', filter = '', onToggle, onFilter, onRefresh, refreshing = false }: {
+	import type { LocalTable } from '$lib/data/local-tables';
+	let { ledgers, browsed, imports, filter = '', onBrowse, onFilter, onRefresh, onImport, onRemove, busy = false, refreshing = false }: {
 		ledgers: readonly RegistryLedger[];
-		selected: string[];
-		through?: Readonly<Partial<Record<string, string>>>;
-		spanFrom?: string;
+		browsed: string;
+		imports: readonly LocalTable[];
 		filter?: string;
-		onToggle: (name: string) => void;
+		onBrowse: (name: string) => void;
 		onFilter: (value: string) => void;
 		onRefresh: () => void;
+		onImport: (file: File) => void;
+		onRemove: (alias: string) => void;
+		busy?: boolean;
 		refreshing?: boolean;
 	} = $props();
 	const shown = $derived(ledgers.filter((ledger) => ledger.publish_to_data_explorer && ledger.name.includes(filter.toLowerCase())));
 	let options = $state<HTMLDivElement | null>(null);
-	// The list keeps the first chosen ledger in view until the reader scrolls it, or presses or
-	// types anywhere on the page. One move when the page opened was not enough: a row's second
-	// line arrives with the cost reading, after the move, and the taller row fell partly out of
-	// view again.
-	let following = true;
-	let movedTo: number | null = null;
-
 	$effect(() => {
-		selected;
-		shown;
-		through;
-		if (selected.length === 0) return;
+		browsed;
+		imports.length;
 		void tick().then(() => {
-			if (!following || options === null) return;
-			const chosen = options.querySelector<HTMLElement>('[data-chosen="yes"]');
-			if (chosen === null) return;
-			const box = options.getBoundingClientRect();
-			if (box.height === 0) return;
-			const rect = chosen.getBoundingClientRect();
-			if (rect.top < box.top) options.scrollTop -= box.top - rect.top;
-			else if (rect.bottom > box.bottom) options.scrollTop += rect.bottom - box.bottom;
-			movedTo = options.scrollTop;
+			const row = options?.querySelector<HTMLElement>('[aria-pressed="true"]');
+			if (options === null || row == null) return;
+			const list = options.getBoundingClientRect();
+			const box = row.getBoundingClientRect();
+			if (box.top < list.top) options.scrollTop -= list.top - box.top;
+			else if (box.bottom > list.bottom) options.scrollTop += box.bottom - list.bottom;
 		});
 	});
-
-	// Any press or key on the page is the reader at work - a tick, a typed question, Run - so the
-	// list stops following there, and no move can follow anything the reader did.
-	$effect(() => {
-		const stop = () => {
-			following = false;
-		};
-		document.addEventListener('pointerdown', stop, { capture: true });
-		document.addEventListener('keydown', stop, { capture: true });
-		return () => {
-			document.removeEventListener('pointerdown', stop, { capture: true });
-			document.removeEventListener('keydown', stop, { capture: true });
-		};
-	});
-
-	/** A scroll this list did not make is the reader's, by wheel, touch or scroll bar. */
-	function scrolled() {
-		if (options !== null && options.scrollTop !== movedTo) following = false;
-	}
 </script>
 
 <div class="ledger-list">
 	<div class="rail-head">
-		<h3><Icon id="ledgers" /> Ledgers</h3>
-		<button type="button" onclick={onRefresh} disabled={refreshing}><Icon id="list-refresh" /> {refreshing ? 'Refreshing' : 'Refresh'}</button>
+		<h3><Icon id="ledgers" /> Tables</h3>
+		<button type="button" onclick={onRefresh} disabled={refreshing || busy}><Icon id="list-refresh" /> {refreshing ? 'Refreshing' : 'Refresh'}</button>
 	</div>
-	<label class="filter">Filter <input value={filter} oninput={(event) => onFilter(event.currentTarget.value)} /></label>
-	<p class="packing-note">Newest data waits for packing. Refresh reads current compact files; Run asks the question.</p>
-	<div class="ledger-options" bind:this={options} onscroll={scrolled}>
+	<label class="import-file"><span>Import Parquet</span>
+		<input class="sr-only" type="file" accept=".parquet" disabled={busy || refreshing} onchange={(event) => { const file = event.currentTarget.files?.[0]; if (file) onImport(file); event.currentTarget.value = ''; }} />
+		<small>No upload. Refresh clears local files.</small>
+	</label>
+	<label class="filter">Find a ledger <input value={filter} oninput={(event) => onFilter(event.currentTarget.value)} /></label>
+	<p>Browse columns here. SQL decides which tables to read.</p>
+	<div class="ledger-options" bind:this={options}>
+		{#if imports.length > 0}
+			<h3>Local files</h3>
+			{#each imports as table (table.alias)}
+				<div class="local-row">
+					<button type="button" class="table-name" aria-pressed={browsed === table.alias} onclick={() => onBrowse(table.alias)}><span>{table.alias}</span><small>{table.filename}</small></button>
+					<button type="button" class="remove" aria-label={`Remove ${table.alias}`} disabled={busy} onclick={() => onRemove(table.alias)}>Remove</button>
+				</div>
+			{/each}
+			<h3>Repository ledgers</h3>
+		{/if}
 		{#each shown as ledger (ledger.name)}
-			{@const ledgerThrough = through[ledger.name]}
-			<label class="ledger" data-ledger-name={ledger.name} data-chosen={selected.includes(ledger.name) ? 'yes' : 'no'}>
-				<input type="checkbox" checked={selected.includes(ledger.name)} onchange={() => onToggle(ledger.name)} />
-				<span>{ledger.name}</span>
-				<small class:late={ledgerThrough !== undefined && spanFrom !== '' && ledgerThrough < spanFrom}>{ledger.grain}{ledgerThrough ? ` - packed through ${shortDate(ledgerThrough)}` : ' - availability not established'}</small>
-			</label>
+			<button type="button" class="table-name" data-ledger-name={ledger.name} aria-pressed={browsed === ledger.name} onclick={() => onBrowse(ledger.name)}>{ledger.name}</button>
 		{/each}
+		{#if shown.length === 0}<p>No matching ledgers.</p>{/if}
 	</div>
 </div>
 
 <style>
-	/* Head, filter, then the rows, which take what is left and scroll once the rail gives the list a height. */
-	.ledger-list { display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); gap: var(--space-3); }
-	.packing-note { margin: 0; color: var(--color-text-secondary); font-size: var(--text-xs); }
+	.ledger-list { display: grid; grid-template-rows: auto auto auto auto minmax(0, 1fr); gap: var(--space-2); min-block-size: 0; block-size: 100%; overflow: hidden; }
 	.rail-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
 	h3 { margin: 0; display: inline-flex; align-items: center; gap: var(--space-1); color: var(--color-text-tertiary); font-size: var(--text-xs); font-weight: 600; letter-spacing: var(--tracking-label); text-transform: uppercase; }
-	button { border: 1px solid var(--color-rule); border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-text); padding: var(--space-1) var(--space-2); }
-	.filter { display: grid; gap: var(--space-1); font-size: var(--text-xs); color: var(--color-text-secondary); }
-	.filter input { border: 1px solid var(--color-rule); border-radius: var(--radius-md); background: var(--color-bg); color: var(--color-text); padding: var(--space-2); }
-	/* Block flow, as the column list is: in a grid with a height of its own, each row shrank to its
-	   floor and a name on two lines printed over the row below. */
-	.ledger-options { max-block-size: 100%; overflow: auto; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: var(--color-rule-strong) transparent; padding-inline-end: var(--space-1); }
-	.ledger { min-block-size: var(--workbench-control); display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 var(--space-2); align-items: center; padding-inline: var(--space-3); border-inline-start: 3px solid transparent; background: var(--color-surface); cursor: pointer; font-family: var(--font-data); font-size: var(--text-xs); line-height: var(--leading-xs); }
-	.ledger input { margin: 0; }
-	.ledger small { grid-column: 2; color: var(--color-text-tertiary); }
-	.ledger[data-chosen='yes'] { border-inline-start-color: var(--color-accent); background: var(--tint-accent); }
-	.ledger[data-chosen='yes'] span { font-weight: 600; }
-	.ledger[data-chosen='yes'] small { color: var(--color-text-secondary); }
-	/* Last, at the same weight as the rule above: a late date warns about a ledger you are about to query. */
-	.ledger small.late { color: var(--color-text); }
+	button { border: 1px solid var(--color-rule); border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-text); padding: var(--space-1) var(--space-2); cursor: pointer; }
+	button:focus-visible, input:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+	button:disabled { cursor: default; color: var(--color-text-tertiary); }
+	.filter, .import-file { display: grid; gap: var(--space-1); font-size: var(--text-xs); color: var(--color-text-secondary); }
+	.import-file { cursor: pointer; }
+	.import-file span { justify-self: start; padding: var(--space-1) var(--space-2); border: 1px solid var(--color-rule); border-radius: var(--radius-md); color: var(--color-text); }
+	.import-file:focus-within span { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+	.import-file:has(input:disabled) { cursor: default; }
+	.import-file:has(input:disabled) span { color: var(--color-text-tertiary); }
+	input { min-inline-size: 0; max-inline-size: 100%; border: 1px solid var(--color-rule); border-radius: var(--radius-md); background: var(--color-bg); color: var(--color-text); padding: var(--space-2); }
+	p { margin: 0; color: var(--color-text-secondary); font-size: var(--text-xs); line-height: var(--leading-xs); }
+	.ledger-options { min-block-size: 0; overflow: auto; scrollbar-width: thin; }
+	.ledger-options h3 { padding: var(--space-2) var(--space-3); }
+	.table-name { inline-size: 100%; min-block-size: var(--workbench-control); display: grid; text-align: start; padding: var(--space-2) var(--space-3); border: 0; border-radius: 0; border-inline-start: 1px solid transparent; font-family: var(--font-data); font-size: var(--text-sm); line-height: var(--leading-sm); overflow-wrap: anywhere; }
+	.table-name:hover { background: var(--color-bg); }
+	.table-name[aria-pressed='true'] { border-inline-start-color: var(--color-accent); background: var(--tint-accent); font-weight: 600; }
+	.local-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+	small { color: var(--color-text-secondary); font-size: var(--text-xs); font-weight: 400; font-family: var(--font-reading); }
+	.remove { font-size: var(--text-xs); }
 </style>

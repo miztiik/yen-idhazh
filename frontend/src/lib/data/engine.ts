@@ -128,6 +128,7 @@ async function startInBrowser(repository: string): Promise<QueryEngine> {
 		const connection = await db.connect();
 		for (const statement of repositorySetting(repository)) await connection.query(statement);
 		return {
+			tableNames: (sql) => connection.getTableNames(sql),
 			async register(bytes) {
 				const name = mintName();
 				await db.registerFileBuffer(name, bytes);
@@ -184,6 +185,7 @@ async function startInNode(locate: (specifier: string) => string, repository: st
 	const connection = db.connect();
 	for (const statement of repositorySetting(repository)) connection.query(statement);
 	return {
+		async tableNames(sql) { return connection.getTableNames(sql); },
 		async register(bytes) {
 			const name = mintName();
 			db.registerFileBuffer(name, bytes);

@@ -20,7 +20,8 @@ chosen files. The registry's [explicit consent](../contracts/ledger-registry.md#
 controls which ledgers the explorer offers and selects; it does not establish
 whether data is available.
 
-The page queries only the selected ledgers and UTC days. Each ledger's
+The SQL names the repository ledgers and local tables to query. UTC dates bound
+only repository rows. Each ledger's
 packed-through day comes from its compact indexes, not the current date; newer
 raw rows wait for compaction. The written-question reader owns the configured
 date reach, file and byte limits, and explicit repository errors. Refresh
@@ -32,10 +33,12 @@ Parquet after Refresh. It does not run the question. The
 owns compact selection, limits and explicit source failures. No repository error
 switches to a staged site copy. Newest data waits for packing.
 
-Refresh removes selections whose consent has been disabled or whose entry has
-gone, and names them in a notice. It does not silently substitute an example
-when the whole selection is removed. A registry that fails validation reports
-its error and prevents Run rather than retaining an actionable stale catalog.
+Refresh drops every local import and names that removal in a notice. Import
+the files again before running SQL that names them. Page disposal also releases
+the files and views. It removes old browsing hints whose consent or entry has
+gone, without silently substituting an example. A failed registry reports its
+error and leaves an empty repository catalog: local-only questions and
+expressions still run, but SQL naming unavailable repository tables fails.
 
 ## Browser questions
 
@@ -46,23 +49,28 @@ History as working.
 
 Examples come from `console.explorer_examples`. An example is offered only when
 every ledger it names has consent in the validated registry. Choosing an example or saved question replaces the
-SQL, ledger selection and span without running it. You can clear the loaded SQL
+SQL, table-browsing hint and span without running it. You can clear the loaded SQL
 in the editor, but that does not restore the previous question or its settings.
 
 The [date and reopening rules](../../how-to/query-a-ledger-from-the-console.md#share-or-keep-a-question)
 apply equally to saved questions and History. Chart and column choices stay in
-runtime memory; they are not part of a saved question or link.
+runtime memory; they are not part of a saved question or link. Local file
+handles, schemas and bytes are never written to browser storage or a shared
+address. A saved local question retains only SQL and the existing question
+fields. Reopening it reports a missing table until its file is imported again;
+it never creates placeholder rows.
 
 ## Shared addresses
 
 An address is editor state, never an instruction to execute a query. The
-`ledgers` parameter names a checked selection, `days` names a preset, and `from`
+`ledgers` parameter retains an older browsing hint, `days` names a preset, and `from`
 with `end` names custom UTC dates. `q` holds compressed SQL. These are query
 parameters, not a fragment.
 
 Unknown ledger names, unsupported presets, invalid dates and unreadable
 compressed questions produce notices. Opening the address fills the editor and
-waits for Run. A question too long for the measured link limit can still be
+waits for Run. SQL dependencies always take precedence over the legacy ledger
+hint, including when it disagrees. A question too long for the measured link limit can still be
 saved or run: its link carries only ledgers and dates, and the page provides
 Copy question separately.
 

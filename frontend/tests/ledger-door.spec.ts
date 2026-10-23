@@ -22,6 +22,7 @@ import { buildFeedLedgers, FEED_LEDGERS, stageFeedLedgers } from './support/feed
 import { readColumns } from '../src/lib/data/ledger-columns';
 import { configuredCatalog } from '../src/lib/data/configured-catalog';
 import { buildLedger } from './support/ledger-lifecycle';
+import { questionReader } from '../src/lib/data/question-reader';
 
 /**
  * THE ORACLE for the query door: a request is answered through exactly the
@@ -67,6 +68,107 @@ const MONTHLY_INDEX = indexPath(LEDGER, 'monthly');
 const YEARLY_INDEX = indexPath(LEDGER, 'yearly');
 const resolver = createRequire(import.meta.url);
 const locate = (specifier: string): string => resolver.resolve(specifier);
+
+test('native SQL discovery, not saved hints, selects consented compact dependencies', async () => {
+	const response = recorded();
+	const engine = counted();
+	const keeper = pageKeeper(compactBytes(PREFIX, response.fetcher), engine.open, configuredCatalog);
+	const question = questionReader(() => keeper, engine.open);
+	const options = { ledgers: ['not-a-selection'], from: '2026-09-01', to: '2026-09-01', sql: '', maxChars: 2000, maxRows: 10, maxFetchBytes: 100_000_000, maxFiles: 128 };
+	try {
+		for (const [sql, rows] of [
+			['WITH x AS (SELECT * FROM "host-fingerprint") SELECT count(*) AS rows FROM x a JOIN (SELECT * FROM "HOST-FINGERPRINT") b ON true', '9'],
+			['SELECT count(*) AS rows FROM "host-fingerprint" h -- FROM nonexistent', '3'],
+			['SELECT count(*) AS rows FROM "host-fingerprint" WHERE \'FROM nonexistent\' IS NOT NULL', '3']
+		]) {
+			expect(await question.ask({ ...options, sql })).toMatchObject({ state: 'ok', rows: [{ rows }] });
+		}
+		expect(await question.ask({ ...options, sql: "SELECT 'FROM unknown' AS text" })).toMatchObject({ state: 'ok', rows: [{ text: 'FROM unknown' }] });
+		const before = response.asked.length;
+		expect(await question.ask({ ...options, sql: 'SELECT * FROM "no-such-ledger"' })).toMatchObject({ state: 'refused', because: { kind: 'engine-error', message: expect.stringContaining('import its local Parquet file again') } });
+		expect(response.asked.length).toBe(before);
+		for (const sql of [
+			'SELECT * FROM other."host-fingerprint"',
+			'WITH x AS (SELECT * FROM other."host-fingerprint") SELECT * FROM x',
+			'DESCRIBE SELECT * FROM other."host-fingerprint"',
+			'SUMMARIZE SELECT * FROM other."host-fingerprint"',
+			'EXPLAIN (FORMAT JSON) SELECT * FROM other."host-fingerprint"'
+		]) {
+			expect(await question.ask({ ...options, sql })).toMatchObject({ state: 'refused', because: { message: expect.stringContaining('unavailable schema') } });
+			expect(response.asked.length).toBe(before);
+		}
+		for (const sql of ['DESCRIBE SELECT 1 AS n', 'SUMMARIZE SELECT 1 AS n', 'EXPLAIN SELECT 1 AS n', 'EXPLAIN /* select ignored */ ANALYZE SELECT 1 AS n']) {
+			expect(await question.ask({ ...options, sql })).toMatchObject({ state: 'ok' });
+		}
+		expect(await (await engine.open()).rows("SELECT table_name FROM information_schema.views WHERE table_name = 'host-fingerprint'", [])).toEqual([]);
+	} finally { question.close(); await keeper.release(); }
+});
+
+test('SQL dependency validation refuses every disabled reference before any index or Parquet read', async () => {
+	const raw = JSON.parse(readFileSync(path.resolve('..', 'config', 'ledgers.json'), 'utf8'));
+	for (const family of raw.families) for (const entry of family.ledgers) if (entry.name === LEDGER) entry.publish_to_data_explorer = false;
+	const response = recorded();
+	const engine = counted();
+	const keeper = pageKeeper(compactBytes(PREFIX, response.fetcher), engine.open, parseLedgerCatalog(raw));
+	const question = questionReader(() => keeper, engine.open);
+	const opts = { ledgers: [], from: '2026-09-01', to: '2026-09-01', sql: 'WITH x AS (SELECT * FROM "host-fingerprint") SELECT * FROM x CROSS JOIN published', maxChars: 1000, maxRows: 10, maxFetchBytes: 100_000, maxFiles: 128 };
+	expect(await question.ask(opts)).toMatchObject({ state: 'refused', because: { message: expect.stringContaining('not enabled') } });
+	expect(response.asked).toEqual([]);
+	question.close();
+	await keeper.release();
+});
+
+test('local Parquet has real columns and values without ledger metadata, and leaves no engine files or views', async () => {
+	const bytes = new Uint8Array(readFileSync(path.resolve('..', 'tests', 'fixtures', 'parquet', 'local-sales.parquet')));
+	const file = new File([bytes], 'not an engine path; "sales".parquet');
+	const engine = counted();
+	const response = recorded();
+	const keeper = pageKeeper(compactBytes(PREFIX, response.fetcher), engine.open, parseLedgerCatalog({ families: [] }));
+	const question = questionReader(() => keeper, engine.open);
+	const opts = { ledgers: ['published'], from: '2026-09-01', to: '2026-09-01', sql: 'SELECT * FROM local_1 ORDER BY units', maxChars: 1000, maxRows: 10, maxFetchBytes: bytes.length * 2, maxFiles: 2 };
+	try {
+		await expect(question.importFile(file, bytes.length - 1, 2)).rejects.toThrow('at most');
+		await expect(question.importFile(new File(['not parquet'], 'bad.parquet'), bytes.length * 2, 2)).rejects.toThrow('PAR1');
+		await expect(question.importFile(new File(['PAR1brokenPAR1'], 'broken.parquet'), bytes.length * 2, 2)).rejects.toThrow();
+		const table = await question.importFile(file, bytes.length * 2, 2);
+		expect(table).toMatchObject({ alias: 'local_1', filename: file.name, columns: [{ name: 'product', type: 'VARCHAR' }, { name: 'units', type: 'BIGINT' }, { name: 'note', type: 'VARCHAR' }] });
+		await expect(question.importFile(file, bytes.length * 2, 1)).rejects.toThrow('limit is 1');
+		await expect(question.importFile(file, bytes.length, 2)).rejects.toThrow('at most');
+		expect(await question.cost(opts)).toMatchObject({ files: 1, bytes: bytes.length, ledgers: [], locals: ['local_1'], readFrom: null, readTo: null });
+		expect(await question.ask({ ...opts, maxFetchBytes: bytes.length - 1 })).toMatchObject({ state: 'refused', because: { kind: 'over-ceiling' } });
+		expect(await question.ask(opts)).toMatchObject({ state: 'ok', rows: [{ product: 'tea', units: '2', note: '<script>not executable</script>' }, { product: 'coffee', units: '3', note: null }] });
+		expect(await question.ask({ ...opts, sql: 'WITH sales AS (SELECT * FROM "local_1") SELECT sum(a.units) AS units FROM sales a JOIN local_1 b ON a.product = b.product' })).toMatchObject({ state: 'ok', rows: [{ units: '5' }] });
+		expect(response.asked).toEqual([]);
+		expect(engine.registered.every((name) => name.startsWith('door/'))).toBe(true);
+		expect([...engine.dropped].sort()).toEqual([...engine.registered].sort());
+		const db = await engine.open();
+		expect(await db.rows("SELECT table_name FROM information_schema.views WHERE table_name = 'local_1'", [])).toEqual([]);
+		const sibling = questionReader(() => keeper, engine.open);
+		expect(await sibling.ask(opts)).toMatchObject({ state: 'refused', because: { message: expect.stringContaining('not available') } });
+		await question.removeFile(table.alias);
+		expect(question.localTables()).toEqual([]);
+		expect(await question.ask(opts)).toMatchObject({ state: 'refused', because: { message: expect.stringContaining('not available') } });
+		expect((await question.importFile(file, bytes.length, 1)).alias).toBe('local_2');
+		question.close();
+		expect(question.localTables()).toEqual([]);
+		await expect(question.importFile(file, bytes.length, 1)).rejects.toThrow('session ended');
+	} finally { question.close(); await keeper.release(); }
+});
+
+test('SQL joins local and compact tables under combined preflight, without filtering local rows by ledger dates', async () => {
+	const bytes = new Uint8Array(readFileSync(path.resolve('..', 'tests', 'fixtures', 'parquet', 'local-sales.parquet')));
+	const engine = counted();
+	const response = recorded();
+	const keeper = pageKeeper(compactBytes(PREFIX, response.fetcher), engine.open, configuredCatalog);
+	const question = questionReader(() => keeper, engine.open);
+	const opts = { ledgers: [], from: '2026-09-01', to: '2026-09-01', sql: 'SELECT sum(l.units) AS units FROM local_1 l CROSS JOIN "host-fingerprint" h', maxChars: 1000, maxRows: 10, maxFetchBytes: 100_000_000, maxFiles: 1 };
+	try {
+		await question.importFile(new File([bytes], 'sales.parquet'), opts.maxFetchBytes, opts.maxFiles);
+		expect(await question.ask(opts)).toMatchObject({ state: 'refused', because: { kind: 'too-many-files' } });
+		expect(response.asked.filter((one) => one.path.endsWith('.parquet'))).toEqual([]);
+		expect(await question.ask({ ...opts, maxFiles: 128 })).toMatchObject({ state: 'ok', rows: [{ units: '15' }] });
+	} finally { question.close(); await keeper.release(); }
+});
 
 test('compact index absence, partial sets, malformed data and identity failures remain distinct', async () => {
 	const opts = { ledgers: [LEDGER], from: '2026-09-01', to: '2026-09-01', sql: 'SELECT * FROM "host-fingerprint"', maxChars: 1000, maxRows: 10, maxFetchBytes: 100_000_000, maxFiles: 128 };
@@ -256,6 +358,7 @@ function counted(): CountedEngine {
 		if (tracking !== null) return tracking;
 		const engine = await nodeEngine(locate, engineExtensionRepository());
 		tracking = {
+			tableNames: (sql) => engine.tableNames(sql),
 			async register(bytes) {
 				const moved = structuredClone(bytes, { transfer: [bytes.buffer as ArrayBuffer] });
 				const name = await engine.register(moved);

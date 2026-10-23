@@ -48,6 +48,7 @@ export interface OpenedAddress {
 /** The engine, as the door needs it: bytes in, a name out, and rows out of a
  *  statement over names. */
 export interface QueryEngine {
+	tableNames(sql: string): Promise<string[]>;
 	/** Hands `bytes` to the engine and answers the name it now reads them under,
 	 *  which the engine mints. A browser's engine takes the buffer and leaves
 	 *  `bytes` empty, so a caller hands one buffer over once. */

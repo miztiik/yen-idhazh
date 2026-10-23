@@ -303,13 +303,13 @@ The Data explorer page is the exception to the console rule that translates ledg
 
 A whole number groups its digits from five digits up, so `2026` stays `2026`, and one longer than fifteen digits prints its exact digits. A decimal prints at most three places, and a non-zero one under 0.001 in e-notation. A date prints as the engine prints it, `2026-10-02`, with every digit of a year past 9999 and ` (BC)` after a year before 1, and a timestamp as `2026-10-02 08:24:32`, with milliseconds only when they are not zero. True/false prints `true` or `false`, a blob prints its size as `{n} bytes`, and a list or a struct prints its JSON text in the data font. Anything else prints the engine's text, and a NULL prints `null`. Numbers stand right-aligned. The first press on a column's name sorts a number or a day high to low and anything else A to Z, with NULLs last both ways. In a number column `inf` sorts above every number and `-inf` below every number, and `nan` and `-nan` name no number, so they sort with the NULLs. A day sorts by the UTC instant that its text names, to the nanosecond, whatever the browser's time zone is. A timestamp with no zone is UTC, and a timestamp with a zone moves to UTC by the offset that it prints. Text that names no instant, such as `infinity`, sorts with the NULLs. Only a number column draws in-cell bars, so text that holds digits draws none.
 
-## The Data explorer colours a type by its family, and marks a chosen ledger
+## The Data explorer colours a type by its family, and marks the browsed table
 
 Every column type the page prints, in the column rail and under each header of the answer table, is in the data font at `--text-xs` and in the colour of its family. Text and numbers wear `--type-text` and `--type-number`, which are the editor's string and number colours, so one kind of value has one colour everywhere on the page. Dates, timestamps, times and intervals wear `--type-time`, and true/false wears `--type-truth`. A list, a struct, a blob and a type no rule knows stay in the tertiary text colour. Whole numbers and decimals share a colour, as `42` and `3.14` do in the editor. The type is always printed in words, so the colour is a second signal and the page has no legend. The family comes from `classifyType()` (above), and `typeColour()` in `frontend/src/lib/console/explorer/type-colour.ts` maps it to a token: the label is painted with exactly that token, and a list of times takes the tertiary colour, because it is a list. In the answer header only the type word takes the colour; the note about the bars after it stays tertiary.
 
 The column rail prints each ledger's name once, as a heading that stays at the top of the list while that ledger's rows scroll, and each row prints only the column's own name. The full `ledger.column` name stays in the row's text for a screen reader and in its `title` for a hover. Rows are ordinary block flow with a 24 px minimum height: a long name or a long type wraps, the row grows, and nothing is cut short. A type that does not fit beside its name moves to its own line at the end of the row.
 
-A chosen ledger's row in the ledger rail has the `--tint-accent` ground, a 3 px `--color-accent` edge at its start, its name at weight 600 and its second line in the secondary text colour. Every row carries the edge, transparent until chosen, so choosing a ledger moves nothing. A ledger that is not on this site is one text colour step quieter, never dimmed with opacity.
+A browsed table's row has the `--tint-accent` ground, a hairline `--color-accent` start edge and its name at weight 600. Every row reserves that edge, so browsing moves nothing. Names use `--text-sm` and `--leading-sm`, not the former extra-small size. A native button and `aria-pressed` expose which table's columns are shown. There are no query-selection checkboxes or repetitive availability subtitles. The column rail offers the quoted SQL name and a separate copy action; browsing changes neither SQL nor its dependencies.
 
 ## An axis title and a column header take one form
 
@@ -502,14 +502,12 @@ prefix filled each row's first line with the same text; cut with an ellipsis,
 the name would lose the end that tells two columns apart. The heading says the
 ledger once, and wrapping keeps every character on screen.
 
-**The chosen ledger.** Before this, a chosen ledger differed from the others only
-by its checkbox. `--tint-accent` is already the console's chosen ground - a
-picked choice tile and a selected ranked row use it - and a 3 px edge, reserved
-on every item and coloured on the chosen one, is how the console's route tabs
-mark the open tab. `--color-mark` was not used:
-it means a word your filter matched, and this rail has a filter. On every tinted
-ground the tertiary colour reads under 4.5:1, so a chosen row's second line
-steps up to secondary.
+**The browsed table.** SQL owns query dependencies, so a checkbox would falsely
+suggest that browsing selects query inputs. The existing accent tint marks
+only the table whose columns are shown. Its hairline is reserved on every
+row and its larger name uses the existing type scale. `--color-mark` still
+means a filter match, not browsing state. Local filenames use secondary text
+and stay separate from the safe SQL alias.
 
 **No opacity on an unpublished ledger.** Opacity 0.72 put the second line of an
 unpublished ledger at 3.08:1 in dark and 2.90:1 in light, under the 4.5:1 that
