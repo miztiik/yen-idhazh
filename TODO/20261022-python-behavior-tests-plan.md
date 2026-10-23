@@ -67,6 +67,7 @@ Table D - PR outcomes
 | D9 | 9 | Remove the unused watchlist entry limit | 1 | H | DONE | remove-unused-watchlist-limit | [#1657](https://github.com/miztiik/yen-idhazh/pull/1657), merged at `f479997fec70f4f57b13a6d3a649b5d92a4fd5f7` | - |
 | D10 | 10 | Independent historical reader proofs | 1 | I | IN-FLIGHT | independent-historical-reader-proofs | [#1659](https://github.com/miztiik/yen-idhazh/pull/1659) | - |
 | D11 | 11 | Contract tests prove authored and constructed behavior | 1 | J | IN-FLIGHT | config-refusal-selection-proofs | - | - |
+| D12 | 12 | Explicit controls and measurement behavior | 1 | K | IN-FLIGHT | explicit-control-behavior-proofs | [#1661](https://github.com/miztiik/yen-idhazh/pull/1661) | - |
 
 The canary implementation for Row 3 is delivered separately from its suite-wide
 review obligation. Rows 5 and 6 carry additional changes found by that review.
@@ -747,6 +748,80 @@ counts use the untouched archive and the completed branch instead.
   are retained. D3 remains open; Row 10 is not a dependency.
 - **Delivery:** Test and plan changes are committed in `62968e83a`; the
   current-main merge is `6a2179890`. The phase pull request is pending.
+
+## 13 - Row #12 - Explicit controls and measurement behavior
+
+- **Scope:** Nine test modules choose their own control inputs and check
+  independent values. Preserve actual collection, ledger bytes, failure
+  reporting, timing arithmetic, fresh-clone defaults and policy bounds.
+- **Files:** `test_host_telemetry_control.py`, `test_job_machine.py`,
+  `test_ledger_families.py`, `test_memory_profiling_control.py`,
+  `test_memory_sampler.py`, `test_item_records.py`, `test_labels.py`,
+  `test_measure_budgets.py`, `test_reference_dataset.py` under `backend/tests/`.
+  Also `silicon.py` and `task_telemetry.py` under
+  `backend/idhazh/telemetry/`, and `docs/reference/host-metrics.md`.
+- **Explicit inputs:** Host and memory controls use copied test settings.
+  Inherit/on/off resolves independently to false/true/false against a disabled
+  copied memory default. The labelling sitting writes its own operator roster
+  while preserving the committed-ledger byte check. Supplied registry entries
+  each determine the expected name, lifecycle and UTC onboarding date.
+- **Independent values:** Choose `Q5_K_S` and expect `q5_k_s`; calculate the
+  rendered-prompt and extracted-text digests with hashlib. Count each supplied
+  label bucket independently of the production selector. Identify the supplied
+  short source row by URL. Parse real calendar stamps, allowing the documented
+  minute/second same-day suffix. Require serialized measurement spread `0.0`
+  and the actual imported `TokenizerMeasured` instance.
+- **Actual refusal:** A copied model config changes both `sha256` and
+  `declared_for`; the real stale-check command must exit 1. Preserve swapped
+  digest/site evidence. A real unsupported urllib scheme reaches the transport
+  error handler without a socket; require exit 2, stderr, empty stdout and no
+  requested reading/page file.
+- **Structural acquisition:** Coordinator consulted Fowler and authorized
+  forwarding existing keyword-only `ask_placement=True` through
+  `task_telemetry.record` and `silicon.file_machine_row` into `read_row`, never
+  the elapsed-time writer. Production defaults are unchanged. Tests pass false,
+  retain actual local collection and ledger writes, and restore a scoped
+  `sys.setprofile` guard that refuses entry to the actual placement reader.
+  Either missing forwarding hop fails before external metadata access.
+- **Preserved evidence:** Keep count six, domain counts `[2, 4]`, labelling
+  policy limits six and ten, attempt 2 against environment attempt 9, 60-second
+  arithmetic, work-failure and instrumentation diagnostics. Remove only the
+  truthy-digest loop, committed-roster nonemptiness, current-tree measurement
+  freshness premise and source-text spelling of the imported record type.
+  Named digest survivors are
+  `test_a_successful_extraction_keeps_its_paragraph_break_and_its_provenance`
+  and `test_the_saved_text_is_the_whole_article_and_keeps_its_paragraphs`.
+- **Failure proofs:** 22 minimal disposable production faults each fail at the
+  intended assertion, with unchanged and restored controls passing; original
+  source hashes verified. Fourteen controlled cases also pass when copied
+  committed host/fingerprint/memory defaults are disabled and the roster is
+  empty. No mock, added skip, changed acceptance rule or configuration knob.
+- **Collection:** Exact base `3d6d4b9f6a4ea4e7681576531963e27f11e64332` and
+  final implementation each collect 7,218 cases. No function or parameter case
+  is removed. Two renames: `test_the_committed_config_names_a_labeller` becomes
+  `test_the_committed_labelling_knobs_hold_their_documented_values`, and
+  `test_read_refuses_rather_than_guessing_when_no_server_answers` becomes
+  `test_read_refuses_without_output_when_tokenizer_transport_fails`.
+- **Gates:** Shared selector expands to full backend. Lint passes; mypy passes
+  on 834 source files. Local pytest: 4 failed, 7,207 passed, 7 existing skips.
+  Both sparse-publication Git-safety failures and the absent Windows hardware
+  fingerprint reproduce on the exact unchanged base. The fourth failure still
+  lacks a Bun local package after two frozen restore attempts fail with EPERM.
+  No Git safety setting, manifest or lockfile changes. Final helper tests:
+  15 passed and 2 existing POSIX skips; final helper type checks pass. Linux CI
+  must establish complete-suite success on the merge candidate.
+- **Separate finding:** Existing `date.today()` in `measure_budgets.py` is not
+  changed. Keep both cold-start measurement tests: stored spread is zero, while
+  one repeat makes comparison unavailable. Keep recorded loopback integration.
+- **Plan integration:** Row 11 released the serialized slot at
+  `26ac9f90cda08456c1f861c26285a2129924804c`. Its frozen plan is preserved
+  exactly before this section is added, without importing its implementation.
+  Current main was merged without rewriting history. Plan-only integration
+  does not repeat unchanged application gates. D3 remains open.
+- **Delivery:** Implementation `32c85d883` is delivered in open PR
+  [#1661](https://github.com/miztiik/yen-idhazh/pull/1661), not merged by this
+  worker. D12 remains IN-FLIGHT pending required Linux CI and merge.
+- **Dependencies:** Row 1. Shared-plan editing remains serialized.
 
 ## See also
 
