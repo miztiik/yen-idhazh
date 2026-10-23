@@ -261,12 +261,61 @@ def test_candidate_identity_precedes_article_validation() -> None:
 
 def test_dispatch_keeps_selection_and_content_identity() -> None:
     from idhazh.contracts.feed_ingest_dispatch import FeedIngestDispatch
+    from idhazh.contracts.feed_ingest_planning_observations import PlanningObservations
 
     payload = json.loads(
         read_text(CONTRACT_FIXTURES_DIR / "feed-ingest-dispatch" / "one-article.json")
     )
     row = FeedIngestDispatch.model_validate(payload)
     assert row.partition.dispatch_count == 1
+    for partial_feed in (False, True):
+        observations = {
+            "feed_headline": None,
+            "best_weighted_lens": None,
+            "watchlist_match": None,
+            "salience": [
+                {
+                    "feed_id": "voter",
+                    "available": not partial_feed,
+                    "voted": True,
+                    "unavailable_reason": "invalid-vote-address" if partial_feed else None,
+                },
+                {
+                    "feed_id": "missing",
+                    "available": False,
+                    "voted": None,
+                    "unavailable_reason": "feed-parse-failed",
+                },
+            ],
+            "salience_available": False,
+            "on_front_page": True,
+            "salience_unavailable_reason": "salience-feed-unavailable",
+        }
+        partial = PlanningObservations.model_validate(observations)
+        assert partial.on_front_page is True
+        assert partial.salience_available is False
+        current = row.model_dump(mode="json")
+        current["content"]["planning_observations"] = observations
+        assert FeedIngestDispatch.model_validate(current).content.planning_observations == partial
+        for missing_positive in (None, False):
+            with pytest.raises(ValidationError, match="preserve positive votes"):
+                PlanningObservations.model_validate(
+                    observations | {"on_front_page": missing_positive}
+                )
+        with pytest.raises(ValidationError, match="cannot prove an absent vote"):
+            PlanningObservations.model_validate(
+                observations
+                | {
+                    "salience": [
+                        {
+                            "feed_id": "voter",
+                            "available": False,
+                            "voted": False,
+                            "unavailable_reason": "invalid-vote-address",
+                        }
+                    ]
+                }
+            )
     payload["selection"]["candidate_id"] = "a" * 64
     with pytest.raises(ValidationError, match="candidate_id"):
         FeedIngestDispatch.model_validate(payload)

@@ -3,11 +3,12 @@ import { createHash } from "node:crypto";
 import {
   ArticleAssessmentContract, CandidateRejectionContract, CONTRACT_VERSION,
   DiversityMetricRowSchema, EditorialSelectionRowSchema, FEED_INGEST_AUDIT_VERSION,
-  FeedIngestDispatchSchema, LogicalLedgerCommitmentSchema,
+  LogicalLedgerCommitmentSchema,
 } from "@idhazh/common-contracts";
 import type { LedgerCompletionEvidence } from "@idhazh/common-contracts";
 import { describeObjectSchema, digestRows } from "@idhazh/ledger-file-writer";
 import type { LedgerRowContract, StoredLedgerRow } from "@idhazh/ledger-file-writer";
+import { DispatchContract } from "../metrics/audit-contracts";
 import { encodeHistoricalRecord } from "./encode-historical-record";
 
 type Ledger = LedgerCompletionEvidence["ledger"];
@@ -22,7 +23,7 @@ export const PLANNING_RECORD_KEYS = {
     "window_days", "window_start", "window_end", "top_k"],
 } as const;
 const contracts: Record<Ledger, LedgerRowContract<object>> = {
-  dispatches: { schema: FeedIngestDispatchSchema, schemaVersion: FEED_INGEST_AUDIT_VERSION },
+  dispatches: DispatchContract,
   "editorial-selections": { schema: EditorialSelectionRowSchema, schemaVersion: CONTRACT_VERSION },
   rejections: CandidateRejectionContract,
   "article-assessments": ArticleAssessmentContract,

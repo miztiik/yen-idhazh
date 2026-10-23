@@ -12,6 +12,7 @@ import {
   WriterIdentitySchema, deriveCandidateId, deriveUrlKey, validateEnvelopeContainer,
   readFeedIngestEvent, HarvestDiagnosticsSchema, HARVEST_DIAGNOSTICS_VERSION, PLANNER_EXCLUSIONS_VERSION,
   FetchAttemptSchema, OPERATION_VERSION, PLANNER_OPERATION_VERSION, RecordedInstantSchema, TimestampSchema,
+  PLANNING_OBSERVATIONS_VERSION,
   EXTRACTION_QUALITY_VERSION,
   PreviousHarvestDiagnosticsSchema,
   ArticleAssessmentContract,
@@ -384,7 +385,7 @@ describe("planning audit contracts", () => {
       expect(schemas[name]?.additionalProperties).toBe(false);
     }
     const version = schemas.FeedIngestCandidate?.properties?.version;
-    expect(version).toMatchObject({ const: "2026-10-20", default: "2026-10-20" });
+    expect(version).toMatchObject({ const: PLANNING_OBSERVATIONS_VERSION, default: PLANNING_OBSERVATIONS_VERSION });
     expect(schemas.FeedIngestCandidate?.required).not.toContain("version");
     for (const [name, path] of [
       ["FetchedDocument", "fetched-document/refused.json"],

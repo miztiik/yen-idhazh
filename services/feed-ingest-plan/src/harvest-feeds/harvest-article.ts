@@ -13,6 +13,9 @@ import { resolvePolicy } from "../config/resolve-policy";
 import { fetchDiagnostics } from "./fetch-diagnostics";
 import { parseDocument } from "./parse-document";
 import { emitDocumentObservations } from "./document-observation";
+import { matchHeadline } from "./headline-matches";
+import { observeSalience } from "./salience-votes";
+import type { SalienceReading } from "./salience-votes";
 
 // Existing discovery/extraction headline bounds, not editorial selection thresholds.
 const FEED_TITLE_MAX_CHARS = 500;
@@ -20,6 +23,7 @@ const PAGE_TITLE_MAX_CHARS = 200;
 
 export async function harvestArticle(
   offered: OfferedArticle, inputs: HarvestInputs, fetcher: PermittedFetcher, context: HarvestContext,
+  salience: readonly SalienceReading[] = [],
 ): Promise<HarvestArticleResult> {
   const { source, entry, policy } = offered;
   const candidate_id = deriveCandidateId(context.writer.run_id, source.source_id, entry.entry_ordinal);
@@ -33,6 +37,7 @@ export async function harvestArticle(
     title: entry.title ? [...entry.title].slice(0, FEED_TITLE_MAX_CHARS).join("").trim() : null,
     categories: entry.categories,
   };
+  const headline = matchHeadline(article.title, inputs);
   const observation = {
     candidate_id, http_status: null, robots: null, fetch_failure: null,
     paywall: null, paywall_evidence: "not-observed", extraction: "not-attempted",
@@ -180,9 +185,11 @@ export async function harvestArticle(
       title: article.title, categories: article.categories,
       article_text: extracted.article_text, word_count: extracted.word_count,
       author: extracted.author ?? entry.author, published_at: entry.published_at,
-      labels: {
-        assigned_desk: null, lenses: null, event_types: null, event_cluster_id: null,
-        entities: null, origin: null, matcher_version: null,
+      labels: headline.labels,
+      planning_observations: {
+        feed_headline: headline.feed_headline, best_weighted_lens: headline.best_weighted_lens,
+        watchlist_match: headline.watchlist_match,
+        ...observeSalience(identity.url_key, inputs.salience, salience),
       },
       policy,
     }),

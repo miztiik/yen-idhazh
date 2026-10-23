@@ -18,7 +18,7 @@ import { EXTRACTOR_VERSION, SANITIZER_FINGERPRINT } from "../src/harvest-feeds/e
 import { measureExtractionQuality } from "../src/harvest-feeds/extraction-quality";
 import { z } from "zod";
 import { ExtractionQualitySchema } from "@idhazh/common-contracts";
-import { canonicalizeUrl } from "../src/harvest-feeds/url-cleaner";
+import { canonicalizeUrl, InvalidArticleUrlError } from "../src/harvest-feeds/url-cleaner";
 import { createPinnedDispatcher, readResponseBody } from "../src/harvest-feeds/transport";
 import { addAbortSignal, PassThrough, Readable } from "node:stream";
 import { createGunzip, gzipSync } from "node:zlib";
@@ -26,6 +26,9 @@ import {
   RecordedTransport, context, destination, inputs, readRecordings, source,
 } from "./harvest-recordings";
 import type { ProgressDetails } from "../src/logging/progress-logger";
+import { matchHeadline } from "../src/harvest-feeds/headline-matches";
+import { observeSalience } from "../src/harvest-feeds/salience-votes";
+import { PlanningObservationsSchema } from "@idhazh/common-contracts";
 
 let wasmInitialization: ReturnType<typeof initializeWasm> | undefined;
 
@@ -108,7 +111,25 @@ test("public harvest returns validated full text, provenance and actual observat
     const loaded = await inputs([
       source(), source({ id: "recorded-atom", url: "https://atom.example/feed.xml", kind: "research", tier: 1, form: "abstract" }),
       source({ id: "retired-source", status: "retired", retired_on: "2026-10-20" }),
-    ]);
+    ], {
+      lenses: [
+        { id: "alpha", keywords: ["PUBLIC/EVIDENCE"], weight: 0.2, status: "active", retired_on: null },
+        { id: "zeta", keywords: ["public-evidence"], weight: 0.2, status: "draft", retired_on: null },
+        { id: "zero", keywords: ["measured progress"], weight: 0, status: "active", retired_on: null },
+        { id: "body-only", keywords: ["electricity"], weight: 10, status: "active", retired_on: null },
+        { id: "retired", keywords: ["public evidence"], weight: 20, status: "retired", retired_on: "2026-10-20" },
+      ],
+      entities: [
+        { id: "watched", aliases: ["MEASURED-PROGRESS"], status: "draft", retired_on: null },
+        { id: "body-only", aliases: ["electricity"], status: "active", retired_on: null },
+        { id: "evidence", aliases: [], status: "active", retired_on: null },
+      ],
+      salience: [
+        { id: "front-page", title: "Optional votes", url: "https://news.example/feed.xml", status: "active", retired_on: null },
+        { id: "partial-votes", title: "Partial votes", url: "https://news.example/salience-mixed.xml", status: "active", retired_on: null },
+        { id: "failed-votes", title: "Failed optional feed", url: "https://news.example/malformed.xml", status: "active", retired_on: null },
+      ],
+    });
     const logged: unknown[] = [];
     const runContext = context(record => logged.push(record));
     const observations = collectDocumentObservations(runContext);
@@ -135,9 +156,72 @@ test("public harvest returns validated full text, provenance and actual observat
     expect(first.word_count).toBe(first.article_text.split(/\s+/u).length);
     expect(first.word_count).toBeGreaterThan(100);
     expect(first.labels).toEqual({
-      assigned_desk: null, lenses: null, event_types: null, event_cluster_id: null,
-      entities: null, origin: null, matcher_version: null,
+      assigned_desk: null, lenses: ["alpha", "zero", "zeta"], event_types: null, event_cluster_id: null,
+      entities: ["watched"], origin: "sanitized-feed-headline", matcher_version: "headline-ascii-whole-phrase-v1",
     });
+    expect(first.planning_observations).toMatchObject({
+      feed_headline: first.title, best_weighted_lens: { id: "zeta", weight: 0.2 }, watchlist_match: true,
+      salience_available: false, on_front_page: true, salience_unavailable_reason: "salience-feed-unavailable",
+      salience: [
+        { feed_id: "front-page", available: true, voted: true, unavailable_reason: null },
+        { feed_id: "partial-votes", available: false, voted: true, unavailable_reason: "invalid-vote-address" },
+        { feed_id: "failed-votes", available: false, voted: null, unavailable_reason: "feed-parse-failed" },
+      ],
+    });
+    expect(result.candidates[1]?.planning_observations?.salience[1]).toEqual({
+      feed_id: "partial-votes", available: false, voted: true, unavailable_reason: "invalid-vote-address",
+    });
+    expect(result.candidates[2]?.planning_observations).toMatchObject({
+      salience_available: false, on_front_page: null,
+      salience: [
+        { feed_id: "front-page", available: true, voted: false, unavailable_reason: null },
+        { feed_id: "partial-votes", available: false, voted: null, unavailable_reason: "invalid-vote-address" },
+        { feed_id: "failed-votes", available: false, voted: null, unavailable_reason: "feed-parse-failed" },
+      ],
+    });
+    expect(result.salience[1]).toEqual({
+      feed_id: "partial-votes", available: false, unavailable_reason: "invalid-vote-address",
+    });
+    expect(transport.requests.some(request => request.url.pathname === "/never-discovered")).toBe(false);
+    expect(result.feed_outcomes).toHaveLength(3);
+    expect(transport.requests.filter(request => request.url.href === "https://news.example/feed.xml")).toHaveLength(1);
+    const changed = loadHarvestInputs({
+      config: loaded.config, extraction: loaded.extraction_settings,
+      taxonomy: { ...loaded.registry, lenses: loaded.registry.lenses!.map(lens =>
+        lens.id === "alpha" ? { ...lens, weight: 0.3 } : lens) },
+      sources: { feeds: loaded.sources, salience: loaded.salience },
+      watchlist: { entities: loaded.watchlist!.entities.map(entity => ({ ...entity, aliases: ["absent phrase"] })) },
+    });
+    expect(matchHeadline(first.title, changed)).toMatchObject({
+      labels: { lenses: first.labels.lenses, entities: [] },
+      best_weighted_lens: { id: "alpha", weight: 0.3 }, watchlist_match: false,
+    });
+    expect(changed.config_sha256).not.toBe(loaded.config_sha256);
+    expect(matchHeadline("said remains chair AI/ROI", await inputs([], {
+      lenses: [{ id: "short-word", keywords: ["ai"], weight: 0, status: "active", retired_on: null }],
+    })).labels.lenses).toEqual(["short-word"]);
+    expect(matchHeadline("said remains chair", await inputs([], {
+      lenses: [{ id: "short-word", keywords: ["ai"], weight: 0, status: "active", retired_on: null }],
+    })).labels.lenses).toEqual([]);
+    for (const configured of [null, []]) {
+      expect(observeSalience(first.url_key, configured, [])).toMatchObject({
+        salience_available: false, on_front_page: null,
+        salience_unavailable_reason: configured === null ? "salience-not-configured" : "no-salience-feeds",
+      });
+    }
+    const complete = observeSalience(result.candidates[2]!.url_key, loaded.salience!.slice(0, 1), [{
+      feed_id: "front-page", url_keys: new Set([first.url_key]), unavailable_reason: null,
+    }]);
+    expect(complete).toMatchObject({
+      salience_available: true, on_front_page: false, salience_unavailable_reason: null,
+    });
+    expect(first.planning_observations).toEqual(PlanningObservationsSchema.parse(first.planning_observations));
+    for (const on_front_page of [null, false]) expect(PlanningObservationsSchema.safeParse({
+      ...first.planning_observations, on_front_page,
+    }).success).toBe(false);
+    expect(PlanningObservationsSchema.safeParse({
+      ...first.planning_observations, salience_available: false, salience_unavailable_reason: "failed", on_front_page: false,
+    }).success).toBe(false);
     expect(first.policy.config_sha256).toBe(loaded.config_sha256);
     expect(first.date).toBe("2026-10-21");
     expect(first.fetched_at).toBe("2026-10-21T23:59:59Z");
@@ -205,12 +289,25 @@ test("inactive, empty, malformed, HTTP, timeout and address failures are distinc
       source({ id: "http", url: "https://news.example/not-found" }),
       source({ id: "timeout", url: "https://news.example/timeout" }),
       source({ id: "inward", url: "https://inward.example/feed.xml" }),
-    ]);
+    ], { salience: [
+      { id: "vote-empty", title: "Empty", url: "https://news.example/empty.xml", status: "active", retired_on: null },
+      { id: "vote-malformed", title: "Malformed", url: "https://news.example/malformed.xml", status: "active", retired_on: null },
+      { id: "vote-denied", title: "Denied", url: "https://denied.example/feed.xml", status: "active", retired_on: null },
+      { id: "vote-unsafe", title: "Unsafe", url: "https://inward.example/feed.xml", status: "active", retired_on: null },
+      { id: "vote-draft", title: "Draft", url: "https://news.example/feed.xml", status: "draft", retired_on: null },
+    ] });
     const runContext = context();
     const observations = collectDocumentObservations(runContext);
     const result = await harvestFeeds(loaded, runContext, destination(root), { transport, resolve: transport.resolve });
     expectFeedParseObservations(observations, loaded.sources, ["empty", "malformed"]);
     expect(result.candidates).toEqual([]);
+    expect(result.salience).toEqual([
+      { feed_id: "vote-empty", available: true, unavailable_reason: null },
+      { feed_id: "vote-malformed", available: false, unavailable_reason: "feed-parse-failed" },
+      { feed_id: "vote-denied", available: false, unavailable_reason: "robots-denied" },
+      { feed_id: "vote-unsafe", available: false, unavailable_reason: "unsafe-target" },
+      { feed_id: "vote-draft", available: false, unavailable_reason: "source-inactive" },
+    ]);
     expect(result.rejections.map(row => row.drop_reason)).toEqual([
       "SOURCE_INACTIVE", "FEED_EMPTY", "FEED_PARSE_FAILED", "FETCH_FAILED_HTTP", "FETCH_TIMEOUT", "FETCH_FAILED",
     ]);
@@ -374,16 +471,34 @@ test("URL identity uses discovery sorting, tracking removal and shared hashing",
   expect(result.canonical_url).toBe("https://news.example/a?a=1&a=2&b=2");
   expect(result.url_key).toBe(deriveUrlKey(result.canonical_url));
   expect(canonicalizeUrl("https://news.example/a/../caf\u00e9/").canonical_url).toBe("https://news.example/a/../caf\u00e9");
+  for (const address of ["not-a-url", "https://[invalid-host/", "https://news.example/a?x=%20"]) {
+    expect(() => canonicalizeUrl(address)).toThrow(InvalidArticleUrlError);
+  }
+  expect(() => Reflect.apply(canonicalizeUrl, undefined, [null])).toThrow(TypeError);
 });
 
 test("rootless extraction, empty content and article request failures do not kill valid siblings", async () => {
   const root = await mkdtemp(join(tmpdir(), "harvest-article-failures-"));
   try {
     const transport = new RecordedTransport(await readRecordings());
-    const loaded = await inputs([source({ url: "https://news.example/article-failures.xml" })]);
+    const loaded = await inputs([source({ url: "https://news.example/article-failures.xml" })], { salience: [
+      { id: "optional-atom", title: "Votes only", url: "https://atom.example/feed.xml", status: "active", retired_on: null },
+      { id: "optional-failed", title: "Unavailable votes", url: "https://news.example/malformed.xml", status: "active", retired_on: null },
+    ] });
     const result = await harvestFeeds(loaded, context(), destination(root), { transport, resolve: transport.resolve });
     expect(result.articles).toHaveLength(9);
     expect(result.candidates.map(candidate => candidate.entry_ordinal)).toEqual([4, 5, 6, 7]);
+    expect(result.feed_outcomes).toHaveLength(1);
+    expect(result.candidates.every(candidate => candidate.source_id === "recorded-news")).toBe(true);
+    expect(transport.requests.some(request => request.url.hostname === "atom.example"
+      && !["/robots.txt", "/feed.xml"].includes(request.url.pathname))).toBe(false);
+    for (const candidate of result.candidates) expect(candidate.planning_observations).toMatchObject({
+      salience_available: false, on_front_page: null, salience_unavailable_reason: "salience-feed-unavailable",
+      salience: [
+        { feed_id: "optional-atom", available: true, voted: false, unavailable_reason: null },
+        { feed_id: "optional-failed", available: false, voted: null, unavailable_reason: "feed-parse-failed" },
+      ],
+    });
     expect(result.articles[0]?.observation).toMatchObject({ http_status: 200, extraction: "failed", paywall: null });
     expect(result.articles[0]?.rejection?.drop_reason).toBe("EXTRACT_FAILED");
     expect(result.articles[0]?.observation.diagnostics).toMatchObject({
@@ -398,6 +513,8 @@ test("rootless extraction, empty content and article request failures do not kil
     expect(result.articles[2]?.rejection?.details.http_status).toBe(404);
     expect(result.articles[3]?.rejection?.details.timeout_ms).toBe(loaded.config.harvest.fetch_timeout_ms);
     expect(result.articles[4]?.candidate?.title).toBe("Measured progress and public evidence");
+    expect(result.articles[4]?.candidate?.labels).toMatchObject({ lenses: null, entities: null, origin: null });
+    expect(result.articles[4]?.candidate?.planning_observations).toMatchObject({ feed_headline: null, watchlist_match: null });
     expect(result.articles[6]?.observation).toMatchObject({ paywall: true, paywall_evidence: "json-ld" });
     expect(result.articles[7]?.candidate?.published_at).toBeNull();
     expect(result.articles[8]?.rejection?.title).toBeNull();
@@ -469,6 +586,7 @@ test("report settings remain available without changing the planning fingerprint
   const baseline = await inputs();
   const load = (config: typeof baseline.config) => loadHarvestInputs({
     config, taxonomy: baseline.registry,
+    watchlist: baseline.watchlist,
     sources: { feeds: baseline.sources }, extraction: baseline.extraction_settings,
   });
   const enabled = load({

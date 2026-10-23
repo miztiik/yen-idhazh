@@ -379,6 +379,7 @@ test("runs the native compatibility verifier in a named-input copy with no backe
       "schemas/harvest-diagnostics.schema", "schemas/item-health-failure.schema", "schemas/feed-health.schema",
       "schemas/planner-operation.schema", "schemas/recorded-instant.schema", "observation-order",
       "schemas/publication-input.schema",
+      "schemas/planning-observations.schema",
     ].map(name => `packages/common-contracts/src/${name}.ts`);
     const writer = [
       "atomic-file", "index", "ledger-paths", "ledger-types", "persist-compact", "persist-ledger",
