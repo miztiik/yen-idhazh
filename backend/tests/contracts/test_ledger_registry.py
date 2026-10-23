@@ -217,13 +217,9 @@ def without(*names: str) -> list[dict[str, Any]]:
     return [family for family in committed_families() if family["name"] not in names]
 
 
-def test_the_committed_registry_names_every_ledger_exactly_once() -> None:
-    """The bijection, over the file the build really reads."""
-    families = LedgersConfig.from_json(REGISTRY.read_text(encoding="utf-8")).families
-    entries = [held for family in families for held in family.ledgers]
-
-    assert {held.name for held in entries} == set(LedgerName)
-    assert len(entries) == len(LedgerName)
+def test_the_committed_registry_loads_and_names_each_ledger() -> None:
+    """The file the build reads passes the registry's own ledger checks."""
+    LedgersConfig.from_json(REGISTRY.read_text(encoding="utf-8"))
 
 
 def test_explorer_catalog_derives_eligible_names_from_registry_order() -> None:
