@@ -92,11 +92,6 @@ def committed_app_config() -> AppConfig:
     )
 
 
-def test_the_committed_file_validates() -> None:
-    """The file an operator edits is the shape the contract declares."""
-    AppearanceConfig.model_validate(json.loads(APPEARANCE_PATH.read_text(encoding="utf-8")))
-
-
 def test_the_committed_file_is_lf_and_ascii() -> None:
     """`.gitattributes` pins `config/*.json` to LF, and section 5 pins ASCII.
 

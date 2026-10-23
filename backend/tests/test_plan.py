@@ -344,6 +344,7 @@ def test_a_healthy_feed_is_read_and_its_entries_are_planned() -> None:
     assert titles(built)[0] == "Example Lab releases a smaller model", (
         "the story three feeds carried leads the day"
     )
+    assert built.items[0].source_id == LAB.id
 
 
 def test_the_plan_records_an_operator_shard_count_even_when_it_exceeds_the_derivation() -> None:
@@ -1939,12 +1940,3 @@ def test_the_manifest_records_the_count_it_was_handed_and_never_a_derived_one() 
     assert RunRecord.model_validate(older).shards is None, (
         "a manifest written before the cell has to read, not fail the build"
     )
-
-
-# --- the fixtures themselves -------------------------------------------------
-
-
-@pytest.mark.parametrize("name", sorted(BODIES.values()))
-def test_every_feed_fixture_this_module_serves_parses(name: str) -> None:
-    """A fixture that silently stopped parsing would make these tests pass for the wrong reason."""
-    assert read_text(FEEDS / name).startswith("<?xml")

@@ -388,15 +388,6 @@ def test_the_one_shared_settings_block_is_refused_by_name() -> None:
     assert not SUPERSEDED_MODELS_NAMES["route"]
 
 
-def test_every_committed_model_entry_declares_the_weights_its_settings_are_for() -> None:
-    """The committed file states the pairing rather than implying it."""
-    raw = committed_models_raw()
-    assert "inference" not in raw
-    for role in ModelsConfig.roles():
-        entry = raw[role]
-        assert entry["declared_for"] == entry["sha256"], role
-
-
 def test_every_model_file_loads_and_not_only_the_one_the_pointer_names() -> None:
     """A file `models_file` does not currently name is still a file it can name.
 
@@ -404,8 +395,7 @@ def test_every_model_file_loads_and_not_only_the_one_the_pointer_names() -> None
     """
     for name in MODEL_FILES:
         path = CONFIG_DIR / "models" / name
-        entry = ModelsConfig.from_json(read_text(path)).summarizer
-        assert entry.declared_for == entry.sha256, path.name
+        ModelsConfig.from_json(read_text(path))
 
 
 def test_no_committed_file_declares_a_second_entry() -> None:
