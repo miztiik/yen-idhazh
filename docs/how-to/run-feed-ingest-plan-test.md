@@ -157,8 +157,8 @@ The same checks then run with `kind: article`. Its operator URL comes only
 from a current-run sealed dispatch, read by its exact receipt filename through
 the native Parquet reader and current dispatch contract. The earlier original
 completion selector verifies the actual dispatch and selection ledgers.
-The proof rechecks dispatch receipt hashes, selected membership, run, UTC day
-and correlation, then requires nonempty extracted content and an active
+The proof rechecks dispatch receipt hashes, selected membership, run, completed
+attempt, UTC day and correlation, then requires nonempty extracted content and an active
 configured source. It does not follow a new feed link or a page canonical tag.
 Both document pairs retain the actual plan's run and correlation.
 The check verifies the same article, source, run and correlation, distinct
@@ -206,6 +206,8 @@ the job; none is silently skipped.
 
 An unavailable article records `NO_READABLE_SELECTED_ARTICLE`; a live article
 without readable admitted extraction records `HTML_EXTRACTION_UNAVAILABLE`.
+This includes known null quality, a paywall or an empty body. Malformed
+metadata remains a validation failure, not an unavailable reading.
 Other bounded reasons distinguish an unavailable feed, invalid completion,
 dispatch membership mismatch, failed checks and private cleanup failure.
 The actual quality flags, short-abstract exemption and native signal precedence

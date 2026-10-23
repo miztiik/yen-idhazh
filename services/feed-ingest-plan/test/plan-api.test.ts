@@ -24,7 +24,7 @@ import { openOperationStore } from "../src/api/operation-store";
 import { proposedOperation } from "../src/api/document-operations";
 import { FetchRequestSchema } from "../src/api/operation-contracts";
 import { parseDocument } from "../src/harvest-feeds/parse-document";
-import { redactProofResponse, requireExactReplay, selectVerifiedArticle } from "../../../.github/scripts/feed-ingest-plan-http-proof";
+import { redactProofResponse, requireExactReplay, requireReadableArticle, selectVerifiedArticle } from "../../../.github/scripts/feed-ingest-plan-http-proof";
 
 test("health is explicit; disabled, malformed, oversized and unknown controls cannot fetch", async () => {
   const inputs = await loadPlanInputs(fileURLToPath(new URL("../../../", import.meta.url)));
@@ -118,6 +118,11 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     await expect(selectVerifiedArticle(cli.inputs, {
       ...cliResult, correlation_id: randomUUID(),
     }, cli.inputs.outputRoot)).rejects.toThrow("INVALID_PLANNING_COMPLETION");
+    await expect(selectVerifiedArticle(cli.inputs, {
+      ...cliResult, planning_completion: {
+        ...cliResult.planning_completion!, attempt: cliResult.planning_completion!.attempt + 1,
+      },
+    }, cli.inputs.outputRoot)).rejects.toThrow("DISPATCH_MEMBERSHIP_MISMATCH");
     expect(printed).toEqual([cliResult]);
     for (const field of ["run_id", "correlation_id", "date", "observed_at", "request",
       "strategy", "dispatch_count", "selected_candidate_ids", "assignments", "audit", "status"] as const) {
@@ -212,6 +217,20 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
       source_word_count: parsed.parsed.word_count, word_count: parsed.parsed.word_count,
       token_count: null, truncated: null, boilerplate: null,
     });
+    expect(() => requireReadableArticle(shared)).not.toThrow();
+    for (const unavailable of [
+      { ...shared, quality: null },
+      { ...shared, paywall: true, quality: null },
+      { ...shared, article_text: "", word_count: 0, quality: null },
+    ]) expect(() => requireReadableArticle(unavailable)).toThrow("HTML_EXTRACTION_UNAVAILABLE");
+    for (const invalid of [
+      { ...shared, quality: {} },
+      { ...shared, paywall: true, quality: {} },
+      { ...shared, article_text: null, quality: null },
+    ]) {
+      expect(() => requireReadableArticle(invalid)).toThrow();
+      expect(() => requireReadableArticle(invalid)).not.toThrow("HTML_EXTRACTION_UNAVAILABLE");
+    }
     expect(parsed.observation).toMatchObject({
       article_id: fetched.article_id, correlation_id, run_id: fetched.observation.run_id,
       caused_by_event_id: fetched.observation.event_id, operation: "parse",

@@ -99,6 +99,16 @@ export function redactProofResponse(endpoint: "fetch" | "parse", kind: "feed" | 
 export function requireExactReplay(original: Uint8Array, replay: Uint8Array) {
   if (!Buffer.from(original).equals(replay)) throw new Error("Restart replay changed exact private response bytes");
 }
+export function requireReadableArticle(value: unknown) {
+  const article = record(value);
+  if (typeof article.paywall !== "boolean" || typeof article.article_text !== "string") {
+    throw new Error("Invalid article extraction metadata");
+  }
+  const quality = article.quality === null ? null : ExtractionQualitySchema.parse(article.quality);
+  if (article.paywall || !article.article_text.trim() || quality === null || quality.rejected || quality.word_count === 0) {
+    throw new ProofUnavailable("HTML_EXTRACTION_UNAVAILABLE");
+  }
+}
 
 export async function selectVerifiedArticle(inputs: PlanInputs, summary: ReturnType<typeof summarizePlan>, stateRoot: string) {
   if (!summary.planning_complete || summary.planning_completion?.status !== "complete"
@@ -120,6 +130,7 @@ export async function selectVerifiedArticle(inputs: PlanInputs, summary: ReturnT
     for (const { row: dispatch, identity } of native.rows) {
       const { content, selection } = dispatch;
       if (content.run_id !== summary.run_id || identity.run_id !== summary.run_id
+        || identity.attempt !== summary.planning_completion.attempt
         || content.correlation_id !== summary.correlation_id || selection.correlation_id !== summary.correlation_id
         || content.date !== summary.date || selection.date !== summary.date
         || !candidates.delete(content.candidate_id)) throw new ProofUnavailable("DISPATCH_MEMBERSHIP_MISMATCH");
@@ -304,12 +315,7 @@ export async function verifyLiveDocumentHttp(
         || result.observation.caused_by_event_id !== receipt.observation.event_id
         || eventIds.has(result.observation.event_id)) throw new Error("Parse result or causal identity differs");
       if (target.kind === "article") {
-        const article = record(result.parsed);
-        const quality = ExtractionQualitySchema.parse(article.quality);
-        if (article.paywall !== false || quality.rejected || quality.word_count === 0
-          || typeof article.article_text !== "string" || !article.article_text.trim()) {
-          throw new ProofUnavailable("HTML_EXTRACTION_UNAVAILABLE");
-        }
+        requireReadableArticle(result.parsed);
       }
       const beforeRestart = journalDigest(parseRequest.request_id);
       proof.stage = "restart";
