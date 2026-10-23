@@ -81,15 +81,19 @@ export function source(patch: Partial<ConfiguredSource> = {}): ConfiguredSource 
 
 export async function inputs(sources: ConfiguredSource[] = [source()], overrides: {
   harvest?: Record<string, unknown>; extraction?: Record<string, unknown>;
+  lenses?: unknown; entities?: unknown; salience?: unknown;
 } = {}) {
-  const [config, taxonomy, extraction] = await Promise.all([
+  const [config, taxonomy, extraction, watchlist] = await Promise.all([
     Bun.file(new URL("config/feed-ingest-plan.json", root)).json(),
     Bun.file(new URL("config/taxonomy.json", root)).json(),
     Bun.file(new URL("config/idhazh.json", root)).json(),
+    Bun.file(new URL("config/watchlist.json", root)).json(),
   ]);
   return loadHarvestInputs({
     config: { ...config, harvest: { ...config.harvest, concurrency: 2, fetch_timeout_ms: 200, ...overrides.harvest } },
-    taxonomy, sources: { feeds: sources },
+    taxonomy: { ...taxonomy, ...(overrides.lenses === undefined ? {} : { lenses: overrides.lenses }) },
+    watchlist: { ...watchlist, ...(overrides.entities === undefined ? {} : { entities: overrides.entities }) },
+    sources: { feeds: sources, ...(overrides.salience === undefined ? {} : { salience: overrides.salience }) },
     extraction: {
       ...extraction,
       extract: { ...extraction.extract, max_retries: 0, backoff_initial_seconds: 0, ...overrides.extraction },

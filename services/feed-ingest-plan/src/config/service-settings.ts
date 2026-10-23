@@ -31,6 +31,7 @@ export const ServiceSettingsSchema = z.strictObject({
   }),
   inputs: z.strictObject({
     planning: RelativePathSchema, taxonomy: RelativePathSchema, sources: RelativePathSchema,
+    watchlist: RelativePathSchema,
     extraction: RelativePathSchema, registrations: RelativePathSchema,
     output_root: RelativePathSchema, seen_files: z.array(RelativePathSchema),
     seen_days: z.array(SeenDayInputSchema).default([]),

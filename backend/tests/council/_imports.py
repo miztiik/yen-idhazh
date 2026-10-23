@@ -30,6 +30,7 @@ MODULE_NAMES = (
     "idhazh.contracts.feed_ingest_dispatch",
     "idhazh.contracts.feed_ingest_diversity",
     "idhazh.contracts.feed_ingest_editorial_selection",
+    "idhazh.contracts.feed_ingest_planning_observations",
     "idhazh.contracts.feed_ingest_rejection",
     "idhazh.contracts.feed_ingest_source_run",
     "idhazh.contracts.feed_retirement",

@@ -1,6 +1,6 @@
 # Feed ingest planning policies
 
-**Last Updated**: 2026-10-21
+**Last Updated**: 2026-10-23
 
 Which settings does the isolated feed planner apply to a candidate?
 The operator edits `config/feed-ingest-plan.json`. This does not change the
@@ -51,8 +51,81 @@ Source kind has only a configurable diversity penalty, initially at most
 A desk is where a story is published, not the feed's vertical. The existing
 desk floor, ceiling, and placement settings remain independent. An unknown desk
 stays unknown. Lens matcher weights, event matching, event-cluster grouping, and
-entity/watchlist rules also retain their existing owners. Resolving a policy
-does not invent these labels or implement their later scoring consumers.
+entity/watchlist rules retain their existing owners. Resolving a policy does
+not invent labels.
+
+## Headline observations and their consumers
+
+The native harvest reads the named `config/taxonomy.json`,
+`config/watchlist.json`, and `config/sources.json` files that the operator
+curates. The service settings name the watchlist file explicitly. Its input
+fingerprint includes the validated aliases, lens terms and weights, lifecycle
+states, and optional salience feeds. An alias or weight edit changes the next
+run without a source edit.
+
+The original sanitized feed headline, not the fetched article body or a
+fallback page title, supplies planning lens and entity matches. The matcher
+uses the existing Python `tag.py` rule: lowercase ASCII words, punctuation
+converted to spaces, and whole-phrase matching. Only explicit curated terms
+match; ids and display names supply no aliases. Retired entries do not match;
+draft entries retain the Python deterministic match rule. All matched ids are
+sorted and retained. The strongest positive-weight lens is recorded separately,
+with the larger lens id winning an equal-weight tie, as in `stages/plan.py`.
+
+Known headline matches fill `candidate.labels.lenses` and `entities`, with
+`sanitized-feed-headline` origin and a matcher version. No match is a known
+empty list. No original headline or no supplied vocabulary is unknown, not a
+negative observation. Assigned desk, event types and event cluster remain
+unknown; a headline match is not a later full-article tag or classifier verdict.
+Publisher, parent domain, operational history, primary evidence and prior
+coverage also remain unknown unless their existing evidence owner supplies them.
+
+These lists now reach the existing MMR lens and entity repetition penalties.
+MMR selects the next article after subtracting configured overlap penalties.
+Its formula, coefficients, source allowances, quotas and caps are unchanged.
+Replacing unknown lists with real matching lists can change selection order:
+an article repeating a previously selected headline theme or entity can lose
+to a different article under the same coefficients. The existing recorded
+harvest/portfolio cases prove this change while keeping recency and authority
+components identical. Zero coefficients still disable that influence.
+
+Optional salience feeds use the same per-run permitted fetcher and response
+cache as article sources. DNS, address, redirect, robots, timeout and body
+limits remain in that fetcher. Parsed links are canonicalized only as vote
+identities, never requested, used as paths, or admitted as new candidates.
+Their readings do not add article-source outcomes, rejection rows, or sources
+to an audit denominator.
+
+Each existing candidate records per-feed votes and input completeness. A failed,
+inactive, unconfigured, or unobserved input carries a reason; it cannot prove
+that a vote is absent. A successfully parsed empty feed is a measured negative.
+An invalid link records `invalid-vote-address` and makes that feed incomplete,
+but does not discard its valid sibling votes. Only typed feed-parse and URL
+refusals become input failures; unexpected internal errors propagate.
+
+One observed positive vote proves `on_front_page: true` even when another feed
+fails or a sibling link is invalid. False requires every configured input to be
+complete and no positive vote. Otherwise the result is null. The separate
+`salience_available` and per-feed `available` fields mean complete input
+coverage, not whether a positive vote is known; failure reasons remain present
+beside a proven positive result.
+
+Candidate and dispatch contracts independently advance to `2026-10-23`.
+Old candidates migrate with null planning observations; old dispatches retain
+their separate selection version and migrate their nested content. Historical
+logical proofs encode the original candidate and dispatch stamps and omit
+only the absent new observations. They refuse to discard a measured new
+observation. Existing diagnostic and exclusion fields are not changed.
+
+The API/CLI summary exposes these observations and names their actual
+consumer. Selected dispatches retain them beside the full article. There is
+**no native salience-vote, watchlist-bonus, or lens-weight-bonus consumer**.
+The best weighted lens and votes are audit evidence only, not extra score
+terms. This is real headline input wiring, not full Python ranking parity.
+Python's base ranking and the approved native recency-plus-authority formula
+remain different. The smallest further change needs an owner decision naming
+the intended vote consumer; do not add a bonus or repurpose primary evidence
+or coverage to consume it.
 
 ## Global-only settings
 

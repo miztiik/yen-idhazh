@@ -25,11 +25,25 @@ const SourceConfigSchema = LifecycleSchema.safeExtend({
   id: SlugSchema, url: ConfiguredUrlSchema, title: NonEmptySchema, vertical: SlugSchema,
   kind: SlugSchema, tier: PositiveCountSchema, form: SourceFormSchema, weight: WeightSchema,
 });
-const SourcesSchema = z.object({ feeds: z.array(SourceConfigSchema) });
+const SalienceConfigSchema = LifecycleSchema.safeExtend({
+  id: SlugSchema, url: ConfiguredUrlSchema, title: NonEmptySchema,
+});
+const SourcesSchema = z.object({
+  feeds: z.array(SourceConfigSchema), salience: z.array(SalienceConfigSchema).nullable().default(null),
+});
+const WatchlistSchema = z.object({
+  entities: z.array(LifecycleSchema.safeExtend({
+    id: SlugSchema, aliases: z.array(z.string()).default([]),
+  })),
+});
 const RegistrySchema = z.object({
   verticals: z.array(z.object({ id: SlugSchema })),
   source_kinds: z.array(LifecycleSchema.safeExtend({ id: SlugSchema })),
   source_tiers: z.array(LifecycleSchema.safeExtend({ id: PositiveCountSchema, weight: WeightSchema })),
+  lenses: z.array(LifecycleSchema.safeExtend({
+    id: SlugSchema, keywords: z.array(z.string().min(2).regex(/^[A-Za-z0-9][A-Za-z0-9 '/&.-]*$/)).default([]),
+    weight: z.number().finite().nonnegative().default(0),
+  })).optional(),
 });
 const ExtractionSchema = z.object({
   extract: ExtractionControlsSchema,
@@ -46,17 +60,20 @@ export type ConfiguredSource = z.infer<typeof SourceConfigSchema>;
 export type HarvestInputs = ReturnType<typeof loadHarvestInputs>;
 
 export function loadHarvestInputs(raw: {
-  config: unknown; taxonomy: unknown; sources: unknown; extraction: unknown;
+  config: unknown; taxonomy: unknown; sources: unknown; extraction: unknown; watchlist?: unknown;
 }) {
   const planning = loadPlanningConfig(raw.config, raw.taxonomy);
   const registry = RegistrySchema.parse(raw.taxonomy);
-  const sources = SourcesSchema.parse(raw.sources).feeds;
+  const { feeds: sources, salience } = SourcesSchema.parse(raw.sources);
+  const watchlist = raw.watchlist === undefined ? null : WatchlistSchema.parse(raw.watchlist);
   const extraction_settings = ExtractionSchema.parse(raw.extraction);
   const extraction = extraction_settings.extract;
   for (const [name, ids] of [
-    ["source", sources.map(source => source.id)],
+    ["source", [...sources, ...salience ?? []].map(source => source.id)],
     ["source kind", registry.source_kinds.map(kind => kind.id)],
     ["source tier", registry.source_tiers.map(tier => tier.id)],
+    ["lens", (registry.lenses ?? []).map(lens => lens.id)],
+    ["entity", (watchlist?.entities ?? []).map(entity => entity.id)],
   ] as const) {
     if (new Set<string | number>(ids).size !== ids.length) throw new Error(`${name} ids must be distinct`);
   }
@@ -80,21 +97,22 @@ export function loadHarvestInputs(raw: {
   // This digest covers every validated input that can change harvested content or provenance.
   const { workflow_reporting, ...contentConfig } = planning.config;
   const snapshot = {
-    config: contentConfig, registry, sources, extraction,
+    config: contentConfig, registry, sources, salience, watchlist, extraction,
     extractor_version: EXTRACTOR_VERSION, sanitizer_version: SANITIZER_FINGERPRINT,
   };
   const config_sha256 = createHash("sha256").update(JSON.stringify(snapshot)).digest("hex");
-  return { ...planning, registry, sources, extraction, extraction_settings, config_sha256 };
+  return { ...planning, registry, sources, salience, watchlist, extraction, extraction_settings, config_sha256 };
 }
 
 export async function readHarvestInputs(paths: {
-  config: string; taxonomy: string; sources: string; extraction: string;
+  config: string; taxonomy: string; sources: string; extraction: string; watchlist: string;
 }): Promise<HarvestInputs> {
-  const [config, taxonomy, sources, extraction] = await Promise.all([
+  const [config, taxonomy, sources, extraction, watchlist] = await Promise.all([
     Bun.file(paths.config).json(), Bun.file(paths.taxonomy).json(),
     Bun.file(paths.sources).json(), Bun.file(paths.extraction).json(),
+    Bun.file(paths.watchlist).json(),
   ]);
-  return loadHarvestInputs({ config, taxonomy, sources, extraction });
+  return loadHarvestInputs({ config, taxonomy, sources, extraction, watchlist });
 }
 
 export function sourceSnapshot(inputs: HarvestInputs, source: ConfiguredSource): SourceSnapshot {

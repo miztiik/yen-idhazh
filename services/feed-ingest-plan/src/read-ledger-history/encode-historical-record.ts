@@ -2,6 +2,7 @@
 import {
   ArticleAssessmentContract, CandidateRejectionContract, CONTRACT_VERSION,
   FEED_INGEST_AUDIT_VERSION, HARVEST_DIAGNOSTICS_VERSION, PLANNER_EXCLUSIONS_VERSION,
+  FeedIngestDispatchSchema,
 } from "@idhazh/common-contracts";
 import type { HarvestDiagnostics, LedgerCompletionEvidence } from "@idhazh/common-contracts";
 
@@ -22,6 +23,12 @@ function encodeDiagnostics(diagnostics: HarvestDiagnostics | null, version: stri
 export function encodeHistoricalRecord(
   ledger: LedgerCompletionEvidence["ledger"], row: object, version: string,
 ): object {
+  if (ledger === "dispatches") {
+    const current = FeedIngestDispatchSchema.parse(row);
+    const { planning_observations, ...content } = current.content;
+    if (planning_observations !== null) throw new Error("Historical dispatch proof cannot omit planning observations");
+    return { ...current, version, content: { ...content, version: CONTRACT_VERSION } };
+  }
   if (ledger === "rejections") {
     const current = CandidateRejectionContract.schema.parse(row);
     const { diagnostics, published_on, failure_code, matched_url_marker, ...previous } = current.details;

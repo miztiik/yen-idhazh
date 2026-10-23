@@ -7,10 +7,23 @@ const trackingKeys = new Set([
   "msclkid", "ref", "referrer", "s", "src",
 ]);
 
+export class InvalidArticleUrlError extends Error {}
+
+function validateUrl(value: string): string {
+  const parsed = UrlSchema.safeParse(value);
+  if (!parsed.success) throw new InvalidArticleUrlError("invalid article address", { cause: parsed.error });
+  return parsed.data;
+}
+
 export function canonicalizeUrl(raw: string): { canonical_url: string; url_key: string } {
-  const original = UrlSchema.parse(raw.trim().replace(/^https?:/i, scheme => scheme.toLowerCase()));
-  const url = new URL(original);
-  if (url.username || url.password) throw new Error("article address must not contain credentials");
+  const original = validateUrl(raw.trim().replace(/^https?:/i, scheme => scheme.toLowerCase()));
+  let url: URL;
+  try { url = new URL(original); }
+  catch (error) {
+    if (!(error instanceof TypeError) || !("code" in error) || error.code !== "ERR_INVALID_URL") throw error;
+    throw new InvalidArticleUrlError("invalid article address", { cause: error });
+  }
+  if (url.username || url.password) throw new InvalidArticleUrlError("article address must not contain credentials");
   url.hostname = url.hostname.replace(/^www\./, "");
   url.hash = "";
   // URL validates the authority; discovery preserves the offered path's spelling.
@@ -20,6 +33,6 @@ export function canonicalizeUrl(raw: string): { canonical_url: string; url_key: 
     .sort(([keyA, valueA], [keyB, valueB]) => keyA < keyB ? -1 : keyA > keyB ? 1 : valueA < valueB ? -1 : valueA > valueB ? 1 : 0);
   // Python discovery deliberately preserves decoded query text rather than URLSearchParams encoding.
   const query = kept.map(([key, value]) => `${key}=${value}`).join("&");
-  const canonical_url = UrlSchema.parse(`${url.protocol}//${url.host}${path}${query ? `?${query}` : ""}`);
+  const canonical_url = validateUrl(`${url.protocol}//${url.host}${path}${query ? `?${query}` : ""}`);
   return { canonical_url, url_key: deriveUrlKey(canonical_url) };
 }

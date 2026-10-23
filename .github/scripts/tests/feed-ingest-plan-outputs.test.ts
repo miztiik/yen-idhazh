@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises"
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
-import { FeedIngestDispatchSchema, RawDayIndexSchema } from "../../../packages/common-contracts/src/index";
+import { readFeedIngestDispatch, RawDayIndexSchema } from "../../../packages/common-contracts/src/index";
 import { persistLedger } from "../../../packages/ledger-file-writer/src/index";
 import { runFeedPlan, summarizePlan } from "../../../services/feed-ingest-plan/src/run-feed-plan";
 import { recordedPlan } from "../../../services/feed-ingest-plan/test/plan-recordings";
@@ -303,7 +303,7 @@ test("uses actual selected identities, worker count and real files without a rep
 test("refuses mismatched counts, damaged bytes and missing actual files", async () => {
   const root = await mkdtemp(join(tmpdir(), "feed-native-files-"));
   try {
-    const row = FeedIngestDispatchSchema.parse(await Bun.file(
+    const row = readFeedIngestDispatch(await Bun.file(
       new URL("../../../tests/fixtures/ledger-file-writer/feed-ingest-dispatch-row.json", import.meta.url),
     ).json());
     const registration = { name: "dispatches", family: "feed-ingest-plan", grain: "raw-and-compact" as const,

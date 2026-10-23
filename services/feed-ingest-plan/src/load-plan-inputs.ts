@@ -36,6 +36,7 @@ export async function loadPlanInputs(root: string, settingsPath = "config/feed-i
     readHarvestInputs({
       config: resolve(root, paths.planning), taxonomy: resolve(root, paths.taxonomy),
       sources: resolve(root, paths.sources), extraction: resolve(root, paths.extraction),
+      watchlist: resolve(root, paths.watchlist),
     }),
     Bun.file(resolve(root, paths.extraction)).json().then(value => ExtractionSettingsSchema.parse(value)),
     Bun.file(resolve(root, paths.registrations)).json().then(value => RegistrySchema.parse(value)),

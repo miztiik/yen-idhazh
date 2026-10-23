@@ -3,6 +3,7 @@ export * from "./version";
 export * from "./schemas/primitives";
 export * from "./schemas/source.schema";
 export * from "./schemas/candidate.schema";
+export * from "./schemas/planning-observations.schema";
 export * from "./schemas/dispatch.schema";
 export * from "./schemas/envelope.schema";
 export * from "./schemas/rejection.schema";
