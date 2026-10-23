@@ -57,6 +57,8 @@ Event IDs derive from correlation, request key, operation and attempt sequence,
 not response text. Replaying a completed request returns the same IDs.
 `/plan` emits the same document and attempt observations in live progress;
 its existing audit and progress IDs retain their own separate namespaces.
+Each actual feed parse emits exactly one parse observation, including empty
+and malformed feeds. A refused fetch does not claim a parse attempt.
 All recorded instant strings use UTC with `Z`.
 
 ## Durable replay and interrupted requests

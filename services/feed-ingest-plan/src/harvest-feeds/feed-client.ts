@@ -48,9 +48,7 @@ export async function readFeed(
   let entries: FeedEntry[];
   try { entries = await parseDocument("feed", response.body, source.feed_url, []); }
   catch {
-    emitDocumentObservations(context, identity, key, "parse", fetched.event_id, utcTimestamp(context.clock));
     outcome.parse_duration_ms = Math.round(performance.now() - parseStarted);
-    emitDocumentObservations(context, identity, key, "parse", fetched.event_id, utcTimestamp(context.clock));
     outcome.parse_status = "failure";
     outcome.rejection_reason = "FEED_PARSE_FAILED";
     outcome.diagnostics = { ...outcome.diagnostics, stopped_stage: "parse", failure_code: "unknown", detail: "malformed-feed" };
@@ -59,6 +57,8 @@ export async function readFeed(
         http_status: response.http_status, diagnostics: outcome.diagnostics,
       }), outcome: FeedOutcomePayloadSchema.parse(outcome),
     };
+  } finally {
+    emitDocumentObservations(context, identity, key, "parse", fetched.event_id, utcTimestamp(context.clock));
   }
   outcome.parse_duration_ms = Math.round(performance.now() - parseStarted);
   outcome.parse_status = entries.length ? "success" : "empty";
