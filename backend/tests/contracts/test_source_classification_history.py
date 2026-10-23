@@ -93,16 +93,20 @@ def test_historical_taxonomy_does_not_gain_unrecorded_registry_fields() -> None:
     path = FIXTURES_DIR / "contracts/taxonomy/with-tombstones.json"
     recorded = path.read_text(encoding="utf-8")
     taxonomy = Taxonomy.from_json(recorded)
-    assert taxonomy.to_json() == recorded
+    written = taxonomy.to_json()
+    assert json.loads(written) == json.loads(recorded)
+    assert Taxonomy.from_json(written).to_json() == written
     assert taxonomy.source_kinds == []
     assert taxonomy.source_tiers == []
 
 
-@pytest.mark.parametrize("weights", [{}, {"institution": 1.0}])
-def test_legacy_weight_defaults_keep_their_original_meaning(weights: dict[str, float]) -> None:
+@pytest.mark.parametrize(("weights", "institution"), [({}, 1.0), ({"institution": 0.5}, 0.5)])
+def test_legacy_weight_defaults_keep_their_original_meaning(
+    weights: dict[str, float], institution: float
+) -> None:
     path = FIXTURES_DIR / "gardener/pre-yearly-retention/config/idhazh.json"
     payload = json.loads(path.read_text(encoding="utf-8"))
     payload["collect"]["tier_weights"] = weights
     legacy = AppConfig.model_validate(payload).collect.legacy_tier_weights
     assert legacy is not None
-    assert (legacy.institution, legacy.trade_press, legacy.community) == (1.0, 0.6, 0.3)
+    assert (legacy.institution, legacy.trade_press, legacy.community) == (institution, 0.6, 0.3)

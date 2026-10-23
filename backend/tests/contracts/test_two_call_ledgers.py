@@ -173,9 +173,40 @@ def test_a_shard_written_under_the_retired_headings_still_reads() -> None:
     assert row.label_kind is not None and row.summary_kind is not None
 
     retired = row.csv_row()
-    for old, new in RETIRED_CELLS.items():
+    historical_headings = {
+        "call_1_kind": "label_kind",
+        "call_1_prefill_ms": "label_prefill_ms",
+        "call_1_decode_ms": "label_decode_ms",
+        "call_1_input_tokens": "label_input_tokens",
+        "call_1_output_tokens": "label_output_tokens",
+        "call_1_cached_tokens": "label_cached_tokens",
+        "call_2_kind": "summary_kind",
+        "call_2_prefill_ms": "summary_prefill_ms",
+        "call_2_decode_ms": "summary_decode_ms",
+        "call_2_input_tokens": "summary_input_tokens",
+        "call_2_output_tokens": "summary_output_tokens",
+        "call_2_cached_tokens": "summary_cached_tokens",
+        "job": "machine_job",
+        "shard": "machine_shard",
+    }
+    for old, new in historical_headings.items():
         retired[old] = retired.pop(new)
-    assert not set(retired) & set(RETIRED_CELLS.values())
+    assert not set(retired) & {
+        "label_kind",
+        "label_prefill_ms",
+        "label_decode_ms",
+        "label_input_tokens",
+        "label_output_tokens",
+        "label_cached_tokens",
+        "summary_kind",
+        "summary_prefill_ms",
+        "summary_decode_ms",
+        "summary_input_tokens",
+        "summary_output_tokens",
+        "summary_cached_tokens",
+        "machine_job",
+        "machine_shard",
+    }
 
     assert ItemHealthRow.from_csv_row(retired) == row
 
