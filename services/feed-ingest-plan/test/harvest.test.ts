@@ -18,7 +18,7 @@ import { EXTRACTOR_VERSION, SANITIZER_FINGERPRINT } from "../src/harvest-feeds/e
 import { measureExtractionQuality } from "../src/harvest-feeds/extraction-quality";
 import { z } from "zod";
 import { ExtractionQualitySchema } from "@idhazh/common-contracts";
-import { canonicalizeUrl } from "../src/harvest-feeds/url-cleaner";
+import { canonicalizeUrl, InvalidArticleUrlError } from "../src/harvest-feeds/url-cleaner";
 import { createPinnedDispatcher, readResponseBody } from "../src/harvest-feeds/transport";
 import { addAbortSignal, PassThrough, Readable } from "node:stream";
 import { createGunzip, gzipSync } from "node:zlib";
@@ -124,7 +124,11 @@ test("public harvest returns validated full text, provenance and actual observat
         { id: "body-only", aliases: ["electricity"], status: "active", retired_on: null },
         { id: "evidence", aliases: [], status: "active", retired_on: null },
       ],
-      salience: [{ id: "front-page", title: "Optional votes", url: "https://news.example/feed.xml", status: "active", retired_on: null }],
+      salience: [
+        { id: "front-page", title: "Optional votes", url: "https://news.example/feed.xml", status: "active", retired_on: null },
+        { id: "partial-votes", title: "Partial votes", url: "https://news.example/salience-mixed.xml", status: "active", retired_on: null },
+        { id: "failed-votes", title: "Failed optional feed", url: "https://news.example/malformed.xml", status: "active", retired_on: null },
+      ],
     });
     const logged: unknown[] = [];
     const runContext = context(record => logged.push(record));
@@ -157,10 +161,28 @@ test("public harvest returns validated full text, provenance and actual observat
     });
     expect(first.planning_observations).toMatchObject({
       feed_headline: first.title, best_weighted_lens: { id: "zeta", weight: 0.2 }, watchlist_match: true,
-      salience_available: true, on_front_page: true, salience_unavailable_reason: null,
-      salience: [{ feed_id: "front-page", available: true, voted: true, unavailable_reason: null }],
+      salience_available: false, on_front_page: true, salience_unavailable_reason: "salience-feed-unavailable",
+      salience: [
+        { feed_id: "front-page", available: true, voted: true, unavailable_reason: null },
+        { feed_id: "partial-votes", available: false, voted: true, unavailable_reason: "invalid-vote-address" },
+        { feed_id: "failed-votes", available: false, voted: null, unavailable_reason: "feed-parse-failed" },
+      ],
     });
-    expect(result.candidates[2]?.planning_observations?.on_front_page).toBe(false);
+    expect(result.candidates[1]?.planning_observations?.salience[1]).toEqual({
+      feed_id: "partial-votes", available: false, voted: true, unavailable_reason: "invalid-vote-address",
+    });
+    expect(result.candidates[2]?.planning_observations).toMatchObject({
+      salience_available: false, on_front_page: null,
+      salience: [
+        { feed_id: "front-page", available: true, voted: false, unavailable_reason: null },
+        { feed_id: "partial-votes", available: false, voted: null, unavailable_reason: "invalid-vote-address" },
+        { feed_id: "failed-votes", available: false, voted: null, unavailable_reason: "feed-parse-failed" },
+      ],
+    });
+    expect(result.salience[1]).toEqual({
+      feed_id: "partial-votes", available: false, unavailable_reason: "invalid-vote-address",
+    });
+    expect(transport.requests.some(request => request.url.pathname === "/never-discovered")).toBe(false);
     expect(result.feed_outcomes).toHaveLength(3);
     expect(transport.requests.filter(request => request.url.href === "https://news.example/feed.xml")).toHaveLength(1);
     const changed = loadHarvestInputs({
@@ -187,6 +209,16 @@ test("public harvest returns validated full text, provenance and actual observat
         salience_unavailable_reason: configured === null ? "salience-not-configured" : "no-salience-feeds",
       });
     }
+    const complete = observeSalience(result.candidates[2]!.url_key, loaded.salience!.slice(0, 1), [{
+      feed_id: "front-page", url_keys: new Set([first.url_key]), unavailable_reason: null,
+    }]);
+    expect(complete).toMatchObject({
+      salience_available: true, on_front_page: false, salience_unavailable_reason: null,
+    });
+    expect(first.planning_observations).toEqual(PlanningObservationsSchema.parse(first.planning_observations));
+    for (const on_front_page of [null, false]) expect(PlanningObservationsSchema.safeParse({
+      ...first.planning_observations, on_front_page,
+    }).success).toBe(false);
     expect(PlanningObservationsSchema.safeParse({
       ...first.planning_observations, salience_available: false, salience_unavailable_reason: "failed", on_front_page: false,
     }).success).toBe(false);
@@ -439,6 +471,10 @@ test("URL identity uses discovery sorting, tracking removal and shared hashing",
   expect(result.canonical_url).toBe("https://news.example/a?a=1&a=2&b=2");
   expect(result.url_key).toBe(deriveUrlKey(result.canonical_url));
   expect(canonicalizeUrl("https://news.example/a/../caf\u00e9/").canonical_url).toBe("https://news.example/a/../caf\u00e9");
+  for (const address of ["not-a-url", "https://[invalid-host/", "https://news.example/a?x=%20"]) {
+    expect(() => canonicalizeUrl(address)).toThrow(InvalidArticleUrlError);
+  }
+  expect(() => Reflect.apply(canonicalizeUrl, undefined, [null])).toThrow(TypeError);
 });
 
 test("rootless extraction, empty content and article request failures do not kill valid siblings", async () => {

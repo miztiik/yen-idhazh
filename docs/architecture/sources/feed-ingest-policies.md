@@ -96,12 +96,19 @@ identities, never requested, used as paths, or admitted as new candidates.
 Their readings do not add article-source outcomes, rejection rows, or sources
 to an audit denominator.
 
-Each existing candidate records per-feed votes and availability. A failed,
-inactive, unconfigured, or unobserved optional input carries a reason and a
-null vote, not a false vote. A successfully parsed empty feed is a measured
-negative. The combined front-page observation is known only when every
-configured feed was read successfully. Partial successful votes remain visible
-beside failed readings without claiming complete coverage.
+Each existing candidate records per-feed votes and input completeness. A failed,
+inactive, unconfigured, or unobserved input carries a reason; it cannot prove
+that a vote is absent. A successfully parsed empty feed is a measured negative.
+An invalid link records `invalid-vote-address` and makes that feed incomplete,
+but does not discard its valid sibling votes. Only typed feed-parse and URL
+refusals become input failures; unexpected internal errors propagate.
+
+One observed positive vote proves `on_front_page: true` even when another feed
+fails or a sibling link is invalid. False requires every configured input to be
+complete and no positive vote. Otherwise the result is null. The separate
+`salience_available` and per-feed `available` fields mean complete input
+coverage, not whether a positive vote is known; failure reasons remain present
+beside a proven positive result.
 
 Candidate and dispatch contracts independently advance to `2026-10-23`.
 Old candidates migrate with null planning observations; old dispatches retain

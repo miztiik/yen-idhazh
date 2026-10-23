@@ -168,7 +168,7 @@ class FeedIngestCandidate(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-10-23",
-            change="Retain headline matches and optional salience observations.",
+            change="Retain headline matches and partial optional salience observations.",
             why="Planning evidence stays separate from later article classification.",
         ),
         ChangelogEntry(

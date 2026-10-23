@@ -3,7 +3,8 @@ import type { PlanningObservations } from "@idhazh/common-contracts";
 import type { HarvestInputs } from "./load-harvest-inputs";
 import type { PermittedFetcher } from "./robots-policy";
 import { parseDocument } from "./parse-document";
-import { canonicalizeUrl } from "./url-cleaner";
+import { FeedParseError } from "./parse-feed";
+import { canonicalizeUrl, InvalidArticleUrlError } from "./url-cleaner";
 
 export type SalienceReading = Readonly<{
   feed_id: string; url_keys: ReadonlySet<string> | null; unavailable_reason: string | null;
@@ -18,31 +19,41 @@ export async function readSalienceFeed(
   };
   let entries;
   try { entries = await parseDocument("feed", result.body, feed.url); }
-  catch { return { feed_id: feed.id, url_keys: null, unavailable_reason: "feed-parse-failed" }; }
+  catch (error) {
+    if (!(error instanceof FeedParseError)) throw error;
+    return { feed_id: feed.id, url_keys: null, unavailable_reason: "feed-parse-failed" };
+  }
   const url_keys = new Set<string>();
+  let unavailable_reason: string | null = null;
   for (const entry of entries) {
     if (entry.link === null) continue;
     try { url_keys.add(canonicalizeUrl(entry.link).url_key); }
-    catch { return { feed_id: feed.id, url_keys: null, unavailable_reason: "invalid-vote-address" }; }
+    catch (error) {
+      if (!(error instanceof InvalidArticleUrlError)) throw error;
+      unavailable_reason = "invalid-vote-address";
+    }
   }
-  return { feed_id: feed.id, url_keys, unavailable_reason: null };
+  return { feed_id: feed.id, url_keys, unavailable_reason };
 }
 
 export function observeSalience(
   urlKey: string, configured: HarvestInputs["salience"], readings: readonly SalienceReading[],
 ): Pick<PlanningObservations, "salience" | "salience_available" | "on_front_page" | "salience_unavailable_reason"> {
-  const salience = readings.map(reading => ({
-    feed_id: reading.feed_id, available: reading.url_keys !== null,
-    voted: reading.url_keys === null ? null : reading.url_keys.has(urlKey),
-    unavailable_reason: reading.unavailable_reason,
-  }));
+  const salience = readings.map(reading => {
+    const available = reading.url_keys !== null && reading.unavailable_reason === null;
+    return {
+      feed_id: reading.feed_id, available,
+      voted: reading.url_keys?.has(urlKey) ? true : available ? false : null,
+      unavailable_reason: reading.unavailable_reason,
+    };
+  });
   const reason = configured === null ? "salience-not-configured"
     : !configured.length ? "no-salience-feeds"
     : readings.length !== configured.length ? "salience-not-observed"
     : salience.some(feed => !feed.available) ? "salience-feed-unavailable" : null;
   return {
     salience, salience_available: reason === null,
-    on_front_page: reason === null ? salience.some(feed => feed.voted) : null,
+    on_front_page: salience.some(feed => feed.voted === true) ? true : reason === null ? false : null,
     salience_unavailable_reason: reason,
   };
 }

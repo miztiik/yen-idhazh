@@ -21,14 +21,16 @@ class SalienceFeedObservation(Model):
     """Whether one configured voting feed named this existing candidate."""
 
     feed_id: Slug
-    available: bool
+    available: bool = Field(description="Complete voting input, independent of a known positive vote.")
     voted: bool | None
     unavailable_reason: NonEmpty | None
 
     @model_validator(mode="after")
     def validate_availability(self) -> Self:
-        if self.available != (self.voted is not None):
+        if self.available and self.voted is None:
             raise ValueError("available salience requires a measured vote")
+        if not self.available and self.voted is False:
+            raise ValueError("incomplete salience cannot prove an absent vote")
         if self.available != (self.unavailable_reason is None):
             raise ValueError("unavailable salience requires a reason")
         return self
@@ -41,21 +43,24 @@ class PlanningObservations(Model):
     best_weighted_lens: WeightedLensObservation | None
     watchlist_match: bool | None
     salience: list[SalienceFeedObservation]
-    salience_available: bool
+    salience_available: bool = Field(description="All configured voting inputs are complete.")
     on_front_page: bool | None
     salience_unavailable_reason: NonEmpty | None
 
     @model_validator(mode="after")
     def validate_availability(self) -> Self:
-        if self.salience_available != (self.on_front_page is not None):
-            raise ValueError("available salience requires a measured front-page observation")
         if self.salience_available != (self.salience_unavailable_reason is None):
             raise ValueError("unavailable salience requires a reason")
         if self.salience_available:
             if not self.salience or not all(feed.available for feed in self.salience):
                 raise ValueError("salience requires every configured feed to be available")
-            if self.on_front_page != any(feed.voted for feed in self.salience):
-                raise ValueError("front-page observation must match measured votes")
+        expected: bool | None = None
+        if any(feed.voted is True for feed in self.salience):
+            expected = True
+        elif self.salience_available:
+            expected = False
+        if self.on_front_page is not expected:
+            raise ValueError("front-page observation must preserve positive votes and unknown absence")
         if len({feed.feed_id for feed in self.salience}) != len(self.salience):
             raise ValueError("salience feed ids must be distinct")
         if self.feed_headline is None and (

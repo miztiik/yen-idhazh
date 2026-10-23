@@ -98,7 +98,7 @@ export async function harvestFeeds(
   return {
     inputs, config: inputs.config, articles, feed_outcomes, rejections, rejection_files,
     salience: salience.map(reading => ({
-      feed_id: reading.feed_id, available: reading.url_keys !== null,
+      feed_id: reading.feed_id, available: reading.url_keys !== null && reading.unavailable_reason === null,
       unavailable_reason: reading.unavailable_reason,
     })),
     first_sight_candidates: articles.flatMap(article => {
