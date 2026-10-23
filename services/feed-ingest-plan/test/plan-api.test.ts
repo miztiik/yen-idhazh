@@ -233,6 +233,15 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     const parallel = await Promise.all([post("fetch", concurrentRequest), post("fetch", concurrentRequest)]);
     expect(parallel.map(response => response.status).sort()).toEqual([200, 409]);
     expect(api.transport.requests.length - concurrentCount).toBe(2);
+    const winner = await parallel.find(response => response.status === 200)!.json();
+    const completedCount = api.transport.requests.length;
+    const completed = await Promise.all([
+      post("fetch", concurrentRequest, createPlanApp(api.inputs, api.runtime)),
+      post("fetch", concurrentRequest, createPlanApp(api.inputs, api.runtime)),
+    ]);
+    expect(completed.map(response => response.status)).toEqual([200, 200]);
+    expect(await Promise.all(completed.map(response => response.json()))).toEqual([winner, winner]);
+    expect(api.transport.requests).toHaveLength(completedCount);
     const failedFetchRequest = { ...fetchRequest, request_id: randomUUID(), url: "https://news.example/not-found" };
     const failedFetch = await (await post("fetch", failedFetchRequest)).json();
     expect(failedFetch.failure).toBe("http");

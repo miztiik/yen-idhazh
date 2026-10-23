@@ -79,6 +79,9 @@ The test command allows the embedded strict TypeScript compiler up to 30
 seconds per test; this is not a planner speed requirement. One invocation
 checks the adapters, tests and actual inline program together, without a
 second adapter compilation. The workflow also runs strict package checks.
+The existing main CI gates job runs these exact three selectors and the
+native verifier after its package checks. A normal planner-suite pass alone
+cannot replace that adapter and workflow preflight.
 Use the [shared selector](run-the-gates.md) with `--list` to inspect broader
 coverage. Do not execute a selection that adds Python for these isolated
 checks. Repository-wide CI remains separate and authoritative at merge.

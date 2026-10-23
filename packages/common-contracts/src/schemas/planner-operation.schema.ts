@@ -3,11 +3,14 @@ import { z } from "zod";
 import { CountSchema, NonEmptySchema, RunIdSchema, Sha256Schema, SlugSchema, TimestampSchema, UrlSchema } from "./primitives";
 import { FetchFailureSchema } from "./harvest-diagnostics.schema";
 
-export const OPERATION_VERSION = "2026-10-23";
+export const OPERATION_VERSION = "2026-10-23T09:22";
+const OperationVersionSchema = z.enum(["2026-10-23", OPERATION_VERSION]).default(OPERATION_VERSION);
 export const RequestIdSchema = z.uuid({ version: "v4" });
 export const FetchAttemptSchema = z.strictObject({
   phase: z.enum(["validation", "robots", "target"]), sequence: CountSchema, retry: CountSchema,
-  duration_ms: CountSchema, http_status: z.int().min(100).max(599).nullable(),
+  duration_ms: CountSchema, backoff_ms: CountSchema.nullable().default(null),
+  retry_total_ms: CountSchema.nullable().default(null),
+  http_status: z.int().min(100).max(599).nullable(),
   failure: FetchFailureSchema.nullable(),
   error_code: z.string().max(64).regex(/^[A-Z][A-Z0-9_]*$/).nullable(),
 });
@@ -19,7 +22,7 @@ export const PlannerObservationSchema = z.strictObject({
   operation: z.enum(["fetch", "parse", "attempt"]),
 });
 export const FetchedDocumentSchema = z.strictObject({
-  version: z.literal(OPERATION_VERSION).default(OPERATION_VERSION),
+  version: OperationVersionSchema,
   kind: z.enum(["feed", "article"]), canonical_url: UrlSchema, article_id: Sha256Schema, source_id: SlugSchema,
   body: z.string().nullable(), http_status: z.int().min(100).max(599).nullable(),
   failure: FetchFailureSchema.nullable(), robots: z.enum(["allowed", "denied", "unknown"]).nullable(),
@@ -41,10 +44,13 @@ export const FetchedDocumentSchema = z.strictObject({
   }
 }).meta({
   version: OPERATION_VERSION,
-  changelog: [{ version: OPERATION_VERSION, change: "Declare durable fetched documents and causal observations." }],
+  changelog: [
+    { version: OPERATION_VERSION, change: "Record actual retry waits and elapsed retry time." },
+    { version: "2026-10-23", change: "Declare durable fetched documents and causal observations." },
+  ],
 });
 export const PlannerOperationSchema = z.strictObject({
-  version: z.literal(OPERATION_VERSION).default(OPERATION_VERSION),
+  version: OperationVersionSchema,
   request_id: RequestIdSchema, operation: z.enum(["fetch", "parse", "plan"]),
   input_sha256: Sha256Schema, config_sha256: Sha256Schema, run_id: RunIdSchema,
   correlation_id: RequestIdSchema, created_at: TimestampSchema, state: z.enum(["started", "complete"]),
@@ -63,7 +69,10 @@ export const PlannerOperationSchema = z.strictObject({
   }
 }).meta({
   version: OPERATION_VERSION,
-  changelog: [{ version: OPERATION_VERSION, change: "Declare durable keyed operator request replay." }],
+  changelog: [
+    { version: OPERATION_VERSION, change: "Retain measured retry waits on fetched artifacts." },
+    { version: "2026-10-23", change: "Declare durable keyed operator request replay." },
+  ],
 });
 export type PlannerOperation = z.infer<typeof PlannerOperationSchema>;
 export type FetchedDocument = z.infer<typeof FetchedDocumentSchema>;

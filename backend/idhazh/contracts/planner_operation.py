@@ -29,6 +29,8 @@ class FetchAttempt(Model):
     sequence: Count
     retry: Count
     duration_ms: Count
+    backoff_ms: Count | None = None
+    retry_total_ms: Count | None = None
     http_status: HttpStatus | None
     failure: FetchFailure | None
     error_code: ErrorCode | None
@@ -50,9 +52,14 @@ class PlannerObservation(Model):
 class FetchedDocument(Contract):
     """Private fetch bytes and measured evidence, never a caller-selected path."""
 
-    version: Literal["2026-10-23"] = "2026-10-23"
+    version: Literal["2026-10-23", "2026-10-23T09:22"] = "2026-10-23T09:22"
     __schema_stem__: ClassVar[str] = "fetched-document"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-23T09:22",
+            change="Record actual retry waits and elapsed retry time.",
+            why="Retry evidence includes measured waiting rather than configured delay alone.",
+        ),
         ChangelogEntry(
             version="2026-10-23",
             change="Declare durable fetched documents and causal observations.",
@@ -95,9 +102,14 @@ class FetchedDocument(Contract):
 class PlannerOperation(Contract):
     """One keyed request holds its captured identity and exact completed response."""
 
-    version: Literal["2026-10-23"] = "2026-10-23"
+    version: Literal["2026-10-23", "2026-10-23T09:22"] = "2026-10-23T09:22"
     __schema_stem__: ClassVar[str] = "planner-operation"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-23T09:22",
+            change="Retain measured retry waits on fetched artifacts.",
+            why="Earlier records retain unavailable wait measurements without invented values.",
+        ),
         ChangelogEntry(
             version="2026-10-23",
             change="Declare durable keyed operator request replay.",

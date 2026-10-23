@@ -81,7 +81,7 @@ test("redirects establish safe destination and robots permission before requesti
 });
 
 test("permanent statuses do not retry; transient statuses use existing retry controls", async () => {
-  const loaded = await inputs([source()], { extraction: { max_retries: 1 } });
+  const loaded = await inputs([source()], { extraction: { max_retries: 1, backoff_initial_seconds: 0.01 } });
   const transport = new RecordedTransport(await readRecordings());
   const fetcher = createPermittedFetcher(loaded.config.harvest, loaded.extraction, { transport, resolve: transport.resolve });
   expect(fetchDiagnostics(await fetcher.fetch("https://news.example/not-found"), 0)).toMatchObject({
@@ -105,7 +105,7 @@ test("permanent statuses do not retry; transient statuses use existing retry con
   replay.responses["https://news.example/network-error"] = [{ error: "ECONNRESET" }, success];
   const retryTransport = new RecordedTransport(replay);
   const retryFetcher = createPermittedFetcher(
-    { ...loaded.config.harvest, fetch_timeout_ms: 50 }, loaded.extraction,
+    loaded.config.harvest, loaded.extraction,
     { transport: retryTransport, resolve: retryTransport.resolve },
   );
   const recovered = await retryFetcher.fetch("https://news.example/timeout");
@@ -113,6 +113,15 @@ test("permanent statuses do not retry; transient statuses use existing retry con
   expect(recovered.attempts!.filter(attempt => attempt.phase === "target").map(attempt => ({
     retry: attempt.retry, failure: attempt.failure,
   }))).toEqual([{ retry: 0, failure: "timeout" }, { retry: 1, failure: null }]);
+  const targetAttempts = recovered.attempts!.filter(attempt => attempt.phase === "target");
+  expect(targetAttempts[0]!.backoff_ms).toBeGreaterThan(0);
+  expect(targetAttempts[0]!.retry_total_ms).toBe(0);
+  const waited = targetAttempts[0]!.backoff_ms;
+  if (waited === null) throw new Error("Current fetch must measure its actual backoff");
+  expect(targetAttempts[1]!.retry_total_ms).toBeGreaterThanOrEqual(
+    targetAttempts[0]!.duration_ms + waited - 1,
+  );
+  expect(targetAttempts[1]!.backoff_ms).toBe(0);
   expect((await retryFetcher.fetch("https://news.example/network-error")).http_status).toBe(200);
   let resolutions = 0;
   const dnsRetry = createPermittedFetcher(loaded.config.harvest, loaded.extraction, {

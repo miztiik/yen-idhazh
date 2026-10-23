@@ -105,6 +105,7 @@ export function createPermittedFetcher(
     signal: AbortSignal, phase: FetchAttempt["phase"], attempts: FetchAttempt[],
     execute: (signal: AbortSignal) => Promise<T>, status: (value: T) => number | null,
   ): Promise<{ value: T | null; failure: FetchFailure | null; http_status: number | null; error_code: string | null }> {
+    const loopStarted = performance.now();
     let result: { value: T | null; failure: FetchFailure | null; http_status: number | null; error_code: string | null } = {
       value: null, failure: "network", http_status: null, error_code: null,
     };
@@ -125,17 +126,21 @@ export function createPermittedFetcher(
           error_code: transportErrorCode(error),
         };
       } finally { clearTimeout(timer); }
-      attempts.push({
+      const evidence: FetchAttempt = {
         phase, sequence: attempts.length, retry: attempt, duration_ms: Math.round(performance.now() - started),
+        backoff_ms: 0, retry_total_ms: attempt === 0 ? 0 : Math.round(started - loopStarted),
         http_status: result.http_status, failure: result.failure, error_code: result.error_code,
-      });
+      };
+      attempts.push(evidence);
       if (result.value !== null && (result.http_status === null || !retryableStatus.has(result.http_status))) return result;
       if (result.failure !== null && !["dns", "network", "timeout", "http"].includes(result.failure)) return result;
       if (signal.aborted) return { ...result, value: null, failure: "timeout" };
       if (attempt < controls.max_retries) {
+        const waiting = performance.now();
         try {
           await pause(controls.backoff_initial_seconds * 1000 * controls.backoff_multiplier ** attempt, signal);
         } catch (error) { return { ...result, value: null, failure: transportFailure(error, signal) }; }
+        finally { evidence.backoff_ms = Math.round(performance.now() - waiting); }
       }
     }
     return result;

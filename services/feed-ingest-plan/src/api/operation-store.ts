@@ -38,6 +38,14 @@ export async function openOperationStore(outputRoot: string) {
     const checked = PlannerOperationSchema.parse(value);
     write.run(checked.request_id, JSON.stringify(checked));
   }
+  function readRequest(proposed: PlannerOperation) {
+    const previous = get(proposed.request_id);
+    if (previous && (previous.operation !== proposed.operation
+      || previous.input_sha256 !== proposed.input_sha256 || previous.config_sha256 !== proposed.config_sha256)) {
+      throw new PlanError("REQUEST_CONFLICT", "Request key was already used with different input or configuration", "request_id");
+    }
+    return previous;
+  }
   async function execute(
     proposed: PlannerOperation,
     work: (record: PlannerOperation) => Promise<Pick<PlannerOperation, "response_json" | "artifact">>,
@@ -46,11 +54,7 @@ export async function openOperationStore(outputRoot: string) {
     catch (error) { refuseBusy(error); }
     let committed = false;
     try {
-      const previous = get(proposed.request_id);
-      if (previous && (previous.operation !== proposed.operation
-        || previous.input_sha256 !== proposed.input_sha256 || previous.config_sha256 !== proposed.config_sha256)) {
-        throw new PlanError("REQUEST_CONFLICT", "Request key was already used with different input or configuration", "request_id");
-      }
+      const previous = readRequest(proposed);
       if (previous?.state === "complete") {
         database.exec("COMMIT");
         committed = true;
@@ -65,8 +69,16 @@ export async function openOperationStore(outputRoot: string) {
       database.exec("COMMIT");
       try { database.exec("BEGIN IMMEDIATE"); }
       catch (error) { refuseBusy(error); }
-      const result = await work(record);
-      const complete = PlannerOperationSchema.parse({ ...record, ...result, state: "complete" });
+      // A competing process may have completed the request while this connection released its first lock.
+      const current = readRequest(proposed);
+      if (current === null) throw new PlanError("REQUEST_INCOMPLETE", "Captured request disappeared before work", "request_id");
+      if (current.state === "complete") {
+        database.exec("COMMIT");
+        committed = true;
+        return current;
+      }
+      const result = await work(current);
+      const complete = PlannerOperationSchema.parse({ ...current, ...result, state: "complete" });
       put(complete);
       database.exec("COMMIT");
       committed = true;

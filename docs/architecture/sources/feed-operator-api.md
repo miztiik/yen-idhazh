@@ -65,7 +65,9 @@ The operator APIs write `planner-operations.sqlite` under `outputRoot`, the
 same operator-configured root that holds native planner output.
 Pydantic's `PlannerOperation` and `FetchedDocument` declarations own the
 stored records; small Zod copies are bound by the existing native contract
-comparison. They are new dated contracts, so no older shape needs migration.
+comparison. Original date-only receipts remain readable with their original
+version and exact response bytes. Missing retry wait measurements read as
+null, not zero; new receipts carry the dated compatible revision.
 The SQLite table and fixed filename are storage protocol constants.
 
 The indexed request key is global across fetch, parse and keyed plans.
@@ -83,6 +85,9 @@ restart without fetching, parsing or writing more ledgers. One write
 transaction owns work at a time across processes. Concurrent callers receive
 HTTP 409 `REQUEST_BUSY` and retry the same key; they do not start duplicate
 work. SQLite recovers an interrupted transaction on reopen.
+After the captured-identity commit, the next write lock re-reads and validates
+the request before doing work. If another process completed it between locks,
+the second caller returns that completed response instead of repeating work.
 
 A fetch or parse interrupted before its final commit resumes with its original
 captured identity. An external fetch can therefore occur again after a crash,

@@ -89,6 +89,14 @@ backoff sum. Retries do not reset it. With current defaults this is 31
 seconds for one operation: four six-second attempts plus seven seconds of
 backoff, not an unlimited wait. Completed attempt records include phase,
 sequence, retry index, actual duration, HTTP status and safe error code.
+`backoff_ms` measures the actual wait after that attempt, including a wait
+cut short by the operation deadline. `retry_total_ms` measures all elapsed
+time before that attempt in its particular DNS, robots or target read.
+It includes failed attempt work and actual waits, not just configured delays.
+The first attempt has zero retry time. These are per-read retry measurements,
+not an invented sum of whole-run elapsed time.
+Older attempt records without those measurements read as null, never as a
+claim that their waits took zero time.
 
 Source snapshots retain source ID, feed URL, title, vertical, kind, tier,
 form, lifecycle status, source weight and the applied registry tier weight.
