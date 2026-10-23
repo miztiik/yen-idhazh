@@ -129,7 +129,12 @@ export function resolveFeedInventory(input: FeedInventoryInput): FeedInventory {
       addRaw(path);
     }
   }
-  const days = new Set(raw.keys());
+  const matchPeriod = (day: string) => periods.flatMap(period => {
+    const covers = period === "yearly" ? day.slice(0, 4) : period === "monthly" ? day.slice(0, 7) : day;
+    const entry = compact.get(period)?.entries.find(entry => entry.covers === covers);
+    return entry === undefined ? [] : [{ period, entry }];
+  })[0];
+  const days = new Set<string>();
   for (const index of compact.values()) {
     for (const entry of index.entries) {
       // Python held_days includes every calendar day of a nonempty packed period.
@@ -138,17 +143,20 @@ export function resolveFeedInventory(input: FeedInventoryInput): FeedInventory {
       }
     }
   }
+  const receiptDays = new Set([...receiptWrites.values()].map(write => write.day));
+  for (const day of raw.keys()) {
+    if (matchPeriod(day) === undefined || receiptDays.has(day)) days.add(day);
+    else if (!days.has(day)) {
+      notices.push(`feed-inventory:covered-raw-day-unconfirmed:${input.ledger}:${day}`);
+    }
+  }
   const heldDays = [...days].sort();
   const selected = input.ledger === "feed-health"
     ? heldDays.slice(-input.health_window_days) : heldDays;
   const files = new Set(Object.values(indexes));
   const inputs: SeenDayInput[] = [];
   for (const day of selected) {
-    const match = periods.flatMap(period => {
-      const covers = period === "yearly" ? day.slice(0, 4) : period === "monthly" ? day.slice(0, 7) : day;
-      const entry = compact.get(period)?.entries.find(entry => entry.covers === covers);
-      return entry === undefined ? [] : [{ period, entry }];
-    })[0];
+    const match = matchPeriod(day);
     if (match !== undefined) {
       if (match.entry.state === "packed") files.add(compactPath(compactRoot, match.period, match.entry.covers));
       inputs.push({ day, indexes });

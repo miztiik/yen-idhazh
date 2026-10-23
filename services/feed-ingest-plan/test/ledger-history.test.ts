@@ -320,12 +320,21 @@ test("named empty, lost, expired and missing periods never fall through to lefto
         compact: { daily: { version: "2026-10-07", ledger: "feed-health", period: "daily",
           entries: [{ covers: input.fixture.date, rows: 0, bytes: 0, state }] } },
       });
-      expect(discovery.inputs).toEqual([{ day: input.fixture.date, indexes: {
-        yearly: "state/compact/feed-health/index/yearly.json",
-        monthly: "state/compact/feed-health/index/monthly.json",
-        daily: "state/compact/feed-health/index/daily.json",
-      } }]);
+      expect(discovery.inputs).toEqual([]);
       expect(discovery.files).not.toContain(`state/${nativeRaw}`);
+      expect(discovery.notices).toContain(`feed-inventory:covered-raw-day-unconfirmed:feed-health:${input.fixture.date}`);
+      const identity = writer(input.fixture.run_id);
+      const confirmed = resolveFeedInventory({
+        ledger: "feed-health", prefix: ["feed-health"], health_window_days: 31,
+        inventory: undefined,
+        compact: { daily: { version: "2026-10-07", ledger: "feed-health", period: "daily",
+          entries: [{ covers: input.fixture.date, rows: 0, bytes: 0, state }] } },
+        receipts: [{ identity, value: { version: "2026-10-09", identity,
+          writes: { [`state/${nativeRaw}`]: "a".repeat(64) } } }],
+      });
+      expect(confirmed.inputs.map(day => day.day)).toEqual([input.fixture.date]);
+      expect(confirmed.inputs[0]!.raw_files).toBeUndefined();
+      expect(confirmed.files).not.toContain(`state/${nativeRaw}`);
     }
     const absent = resolveFeedInventory({
       ledger: "feed-retirements", prefix: ["feed-retirements"], health_window_days: 31,

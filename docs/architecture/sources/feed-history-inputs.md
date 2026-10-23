@@ -42,6 +42,10 @@ serves the day. An `empty` or `lost` entry also serves its period and must
 not fall through to leftover raw files. The publication inventory can retain
 raw names after compaction has removed their files. Those names are not
 fetched when a compact index already serves their dates.
+An old raw name behind an empty compact period is not proof that its raw
+directory still exists. It receives an unconfirmed-day notice rather than
+inventing another recorded health day. An exact current receipt can establish
+that a raw date still exists; compact precedence still decides its rows.
 
 Python's health-day selection is more specific than "days with a row".
 `ledger_files.held_days` includes raw-folder dates and nonempty daily entries.

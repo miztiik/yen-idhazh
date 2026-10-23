@@ -159,12 +159,15 @@ def test_typescript_envelope_fields_and_footer_keys(typescript_schemas: dict[str
     assert normalized_shape(projections["PublicationEntry"], projections["PublicationEntry"]) == (
         normalized_shape(entry, entry)
     )
-    for contract, names in (
+    for publication_contract, names in (
         (PublicationInventory, {"version", "entries"}),
         (PublicationReceipt, {"version", "identity", "writes"}),
     ):
-        native = contract.json_schema()
-        projected = projections[contract.__name__]
+        native = publication_contract.json_schema()
+        projected = projections[publication_contract.__name__]
+        assert typescript_schemas["__publication_input_versions"][publication_contract.__name__] == (
+            publication_contract.schema_version()
+        )
         assert set(projected["properties"]) == names
         for name in names:
             ours, theirs = native["properties"][name], projected["properties"][name]

@@ -12,6 +12,7 @@ import {
   SourceSnapshotSchema, WriterIdentitySchema,
   FetchedDocumentSchema, PlannerOperationSchema,
   PublicationEntryInputSchema, PublicationInventoryInputSchema, PublicationReceiptInputSchema,
+  PUBLICATION_INVENTORY_VERSION, PUBLICATION_RECEIPT_VERSION,
 } from "../src/index";
 
 export const runtimeSchemas = {
@@ -45,4 +46,7 @@ if (import.meta.main) process.stdout.write(`${JSON.stringify({
   ...schemas, __footer_keys: footerKeys, __optional_footer_keys: optionalFooterKeys,
   __row_identity_column_versions: ROW_IDENTITY_COLUMN_VERSIONS,
   __publication_inputs: publicationInputSchemas,
+  __publication_input_versions: {
+    PublicationInventory: PUBLICATION_INVENTORY_VERSION, PublicationReceipt: PUBLICATION_RECEIPT_VERSION,
+  },
 })}\n`);
