@@ -6,8 +6,9 @@ import type { FetchFailure } from "./harvest-types";
 import type { ExtractionControls } from "./load-harvest-inputs";
 import { BodyLimitError, ResponseReadError, networkTransport } from "./transport";
 import type { HarvestTransport, TransportResponse } from "./transport";
-import { UnsafeTargetError, resolveAddresses, validateTarget } from "./safe-target";
+import { UnsafeTargetError, resolveAddresses, validateTarget, validateTargetName } from "./safe-target";
 import type { ResolveAddresses } from "./safe-target";
+import type { FetchAttempt } from "../api/operation-contracts";
 
 export type FetchResult = {
   body: string | null;
@@ -17,6 +18,7 @@ export type FetchResult = {
   error_code?: string | null;
   robots_failure?: FetchFailure | null;
   robots_http_status?: number | null;
+  attempts?: FetchAttempt[];
 };
 type RawResult = { response: TransportResponse | null; failure: FetchFailure | null; http_status: number | null; error_code?: string | null };
 type RobotDocument = ReturnType<typeof robotsParser> | null;
@@ -99,32 +101,52 @@ export function createPermittedFetcher(
     return response;
   }
 
-  async function read(raw: string, signal: AbortSignal): Promise<RawResult> {
-    let result: RawResult = { response: null, failure: "network", http_status: null };
+  async function retry<T>(
+    signal: AbortSignal, phase: FetchAttempt["phase"], attempts: FetchAttempt[],
+    execute: (signal: AbortSignal) => Promise<T>, status: (value: T) => number | null,
+  ): Promise<{ value: T | null; failure: FetchFailure | null; http_status: number | null; error_code: string | null }> {
+    let result: { value: T | null; failure: FetchFailure | null; http_status: number | null; error_code: string | null } = {
+      value: null, failure: "network", http_status: null, error_code: null,
+    };
     for (let attempt = 0; attempt <= controls.max_retries; attempt++) {
+      if (signal.aborted) return { ...result, value: null, failure: "timeout" };
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(new DOMException("attempt deadline exceeded", "TimeoutError")), config.fetch_timeout_ms);
+      const attemptSignal = AbortSignal.any([signal, controller.signal]);
+      const started = performance.now();
       try {
-        const response = await requestOnce(raw, signal);
-        result = { response, failure: null, http_status: response.status };
-        if (!retryableStatus.has(response.status)) return result;
+        const value = await execute(attemptSignal);
+        const http_status = status(value);
+        result = { value, failure: http_status !== null && http_status >= 400 ? "http" : null, http_status, error_code: null };
       } catch (error) {
-        const failure = transportFailure(error, signal);
         result = {
-          response: null, failure,
-          http_status: error instanceof BodyLimitError || error instanceof ResponseReadError ? error.http_status : result.http_status,
+          value: null, failure: transportFailure(error, attemptSignal),
+          http_status: error instanceof BodyLimitError || error instanceof ResponseReadError ? error.http_status : null,
           error_code: transportErrorCode(error),
         };
-        if (["timeout", "unsafe-target", "body-too-large"].includes(failure)) return result;
-      }
+      } finally { clearTimeout(timer); }
+      attempts.push({
+        phase, sequence: attempts.length, retry: attempt, duration_ms: Math.round(performance.now() - started),
+        http_status: result.http_status, failure: result.failure, error_code: result.error_code,
+      });
+      if (result.value !== null && (result.http_status === null || !retryableStatus.has(result.http_status))) return result;
+      if (result.failure !== null && !["dns", "network", "timeout", "http"].includes(result.failure)) return result;
+      if (signal.aborted) return { ...result, value: null, failure: "timeout" };
       if (attempt < controls.max_retries) {
         try {
           await pause(controls.backoff_initial_seconds * 1000 * controls.backoff_multiplier ** attempt, signal);
-        } catch (error) { return { ...result, response: null, failure: transportFailure(error, signal) }; }
+        } catch (error) { return { ...result, value: null, failure: transportFailure(error, signal) }; }
       }
     }
     return result;
   }
 
-  async function readRobots(origin: string, signal: AbortSignal): Promise<RobotResult> {
+  async function read(raw: string, signal: AbortSignal, phase: "robots" | "target", attempts: FetchAttempt[]): Promise<RawResult> {
+    const result = await retry(signal, phase, attempts, current => requestOnce(raw, current), value => value.status);
+    return { response: result.value, failure: result.failure, http_status: result.http_status, error_code: result.error_code };
+  }
+
+  async function readRobots(origin: string, signal: AbortSignal, attempts: FetchAttempt[]): Promise<RobotResult> {
     let target = `${origin}/robots.txt`;
     let observedStatus: number | null = null;
     const visited = new Set<string>();
@@ -133,7 +155,7 @@ export function createPermittedFetcher(
         document: null, failure: signal.aborted ? "timeout" : "redirect-loop", http_status: observedStatus,
       };
       visited.add(target);
-      const result = await read(target, signal);
+      const result = await read(target, signal, "robots", attempts);
       const { response } = result;
       if (!response) return { ...result, document: null, http_status: result.http_status ?? observedStatus };
       observedStatus = response.status;
@@ -148,21 +170,24 @@ export function createPermittedFetcher(
     }
   }
 
-  async function fetchTarget(raw: string, signal: AbortSignal): Promise<FetchResult> {
+  async function fetchTarget(raw: string, signal: AbortSignal, attempts: FetchAttempt[]): Promise<FetchResult> {
     let target = raw;
     let observedStatus: number | null = null;
     const visited = new Set<string>();
     for (;;) {
       let url: URL;
-      try { ({ url } = await validateTarget(target, resolve, signal)); }
-      catch (error) {
-        return { body: null, http_status: observedStatus, failure: transportFailure(error, signal), robots: null, error_code: transportErrorCode(error) };
-      }
+      // Syntax is refused without retries; transient initial DNS failures use the same retry policy.
+      try { url = validateTargetName(target); }
+      catch (error) { return { body: null, http_status: observedStatus, failure: transportFailure(error, signal), robots: null }; }
+      const validated = await retry(signal, "validation", attempts, current => validateTarget(target, resolve, current), () => null);
+      if (!validated.value) return {
+        body: null, http_status: observedStatus, failure: validated.failure, robots: null, error_code: validated.error_code,
+      };
       if (visited.has(url.href)) return { body: null, http_status: observedStatus, failure: "redirect-loop", robots: null };
       visited.add(url.href);
       let document = documents.get(url.origin);
       if (!document) {
-        document = readRobots(url.origin, signal);
+        document = readRobots(url.origin, signal, attempts);
         documents.set(url.origin, document);
       }
       const robotResult = await document;
@@ -177,7 +202,7 @@ export function createPermittedFetcher(
           robots: permission, ...robotEvidence, error_code: robotResult.error_code ?? null,
         };
       }
-      const result = await read(url.href, signal);
+      const result = await read(url.href, signal, "target", attempts);
       if (!result.response) return {
         body: null, http_status: result.http_status ?? observedStatus, failure: result.failure, robots: permission,
         ...robotEvidence, error_code: result.error_code ?? null,
@@ -200,9 +225,13 @@ export function createPermittedFetcher(
   }
   async function fetch(raw: string): Promise<FetchResult> {
     const controller = new AbortController();
-    // Keep the deadline active even while DNS or a recorded I/O boundary is pending.
-    const timer = setTimeout(() => controller.abort(new DOMException("harvest deadline exceeded", "TimeoutError")), config.fetch_timeout_ms);
-    try { return await fetchTarget(raw, controller.signal); }
+    const attempts: FetchAttempt[] = [];
+    // One operation budget includes all configured attempts and backoff, shared by DNS, robots and redirects.
+    const backoff = Array.from({ length: controls.max_retries }, (_, retry) =>
+      controls.backoff_initial_seconds * 1000 * controls.backoff_multiplier ** retry).reduce((sum, value) => sum + value, 0);
+    const deadline = config.fetch_timeout_ms * (controls.max_retries + 1) + backoff;
+    const timer = setTimeout(() => controller.abort(new DOMException("harvest deadline exceeded", "TimeoutError")), deadline);
+    try { return { ...await fetchTarget(raw, controller.signal, attempts), attempts }; }
     finally { clearTimeout(timer); }
   }
   return { fetch };

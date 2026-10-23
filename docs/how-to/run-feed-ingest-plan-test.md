@@ -149,7 +149,9 @@ timer. Planning returns one final JSON response, so an active server can
 legitimately send no response bytes while it works. The independent ten-minute
 step deadline remains the supervisor; server receive limits and article fetch
 deadlines are unchanged. The health request keeps its ordinary client timeout.
-The configured six-second fetch deadline still applies to each request.
+The configured six-second deadline still applies to each fetch attempt;
+the [shared whole-operation retry budget](../architecture/sources/feed-harvesting.md#inputs-and-identity)
+also bounds DNS, robots, redirects and backoff together.
 The selected article limit is not a fetch limit: all configured feeds and
 their offered entries remain in scope before curation chooses the portfolio.
 

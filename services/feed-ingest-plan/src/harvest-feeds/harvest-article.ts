@@ -11,6 +11,8 @@ import { fetchRejection, recordRejection } from "./record-rejection";
 import { calculateFreshness } from "../screen-article-candidates/freshness-decay";
 import { resolvePolicy } from "../config/resolve-policy";
 import { fetchDiagnostics } from "./fetch-diagnostics";
+import { parseDocument } from "./parse-document";
+import { emitDocumentObservations } from "./document-observation";
 
 // Existing discovery/extraction headline bounds, not editorial selection thresholds.
 const FEED_TITLE_MAX_CHARS = 500;
@@ -91,6 +93,11 @@ export async function harvestArticle(
   }
   const fetchStarted = performance.now();
   const fetched = await fetcher.fetch(entry.link);
+  const eventIdentity = {
+    run_id: context.writer.run_id, correlation_id: context.correlation_id,
+    article_id: identity.url_key, source_id: source.source_id,
+  };
+  const fetchedEvent = emitDocumentObservations(context, eventIdentity, candidate_id, "fetch", null, utcTimestamp(context.clock), fetched.attempts);
   let diagnostics = fetchDiagnostics(fetched, Math.round(performance.now() - fetchStarted));
   const fetched_at = utcTimestamp(context.clock);
   const fetchedObservation = {
@@ -108,9 +115,10 @@ export async function harvestArticle(
   }
   let extracted: ReturnType<typeof extractArticle>;
   const extractStarted = performance.now();
-  try { extracted = extractArticle(fetched.body, entry.link, inputs.extraction.paywall_markers); }
+  try { extracted = await parseDocument("article", fetched.body, entry.link, inputs.extraction.paywall_markers); }
   catch (error) {
     if (!(error instanceof ArticleExtractionError)) throw error;
+    emitDocumentObservations(context, eventIdentity, candidate_id, "parse", fetchedEvent.event_id, utcTimestamp(context.clock));
     diagnostics = {
       ...diagnostics, extract_ms: Math.round(performance.now() - extractStarted),
       extraction_failure: error.reason, failure_code: "unknown", stopped_stage: "extract", detail: error.reason,
@@ -124,6 +132,7 @@ export async function harvestArticle(
     });
   }
   const extract_ms = Math.round(performance.now() - extractStarted);
+  emitDocumentObservations(context, eventIdentity, candidate_id, "parse", fetchedEvent.event_id, utcTimestamp(context.clock));
   const pageTitle = extracted.page_title && [...extracted.page_title].length <= PAGE_TITLE_MAX_CHARS ? extracted.page_title : null;
   article.title ??= pageTitle;
   const extraction = extracted.article_text ? "success" : "empty";

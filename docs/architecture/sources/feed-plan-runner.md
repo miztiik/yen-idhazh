@@ -25,6 +25,11 @@ The request-size limit also applies to a chunked body.
 and whether audited completion is available. It does not start a run.
 `POST /api/2026-10-20/plan` accepts only these controls:
 
+[Separate fetch and parse requests](feed-operator-api.md) expose those real
+stages with durable identity-checked receipts and request replay. `/plan`
+also accepts an optional `Idempotency-Key` header; the linked page defines
+restart, conflict and retention behavior.
+
 Table A
 
 | Id | Control | Meaning |

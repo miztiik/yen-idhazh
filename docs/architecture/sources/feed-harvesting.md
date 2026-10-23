@@ -79,6 +79,17 @@ The loader reads the fields it computes on from `config/feed-ingest-plan.json`,
 planner configuration. Byte limits, retries, backoff and paywall markers come
 from the existing extraction configuration.
 
+Each attempt uses `harvest.fetch_timeout_ms`. Transient DNS, transport and
+timeout failures retry, as do HTTP 408, 425, 429, 500, 502, 503 and 504.
+Unsafe targets, oversized bodies, robots denials and permanent statuses do
+not retry. DNS validation before robots uses the same retry controls.
+The whole permitted fetch, including DNS, robots, redirects and backoff,
+has one deadline: `(max_retries + 1) * fetch_timeout_ms` plus the configured
+backoff sum. Retries do not reset it. With current defaults this is 31
+seconds for one operation: four six-second attempts plus seven seconds of
+backoff, not an unlimited wait. Completed attempt records include phase,
+sequence, retry index, actual duration, HTTP status and safe error code.
+
 Source snapshots retain source ID, feed URL, title, vertical, kind, tier,
 form, lifecycle status, source weight and the applied registry tier weight.
 The returned source input also retains `retired_on`. Inactive sources receive

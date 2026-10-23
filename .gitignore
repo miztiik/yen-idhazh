@@ -55,6 +55,11 @@ backend/bin/
 # rows under state/ - never the intermediates.
 backend/var/
 
+# Private operator request replay and raw fetched bytes; never publish or commit.
+state/planner-operations.sqlite
+state/planner-operations.sqlite-wal
+state/planner-operations.sqlite-shm
+
 # Exact-byte local copies of saved encoder artifacts, not authored dataset labels.
 corpus/story-dataset-1/vector-evidence/
 corpus/story-dataset-1/state.sqlite3*
