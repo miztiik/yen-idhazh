@@ -63,7 +63,7 @@ Table D - PR outcomes
 | D5 | 5 | Expectations derived from the test's own input | 2 | D | DONE | input-based-vector-expectations | #1654 | - |
 | D6 | 6 | Pipeline records follow the input that produced them | 1 | E | DONE | input-based-pipeline-records | [#1655](https://github.com/miztiik/yen-idhazh/pull/1655), merged at `6bb8dfea19613c116142131550c97fead234747d` | - |
 | D7 | 7 | Config reader values and accurate migration test names | 1 | F | DONE | config-reader-behavior-proofs | [#1653](https://github.com/miztiik/yen-idhazh/pull/1653) | - |
-| D8 | 8 | Workflow checks retain independent failure evidence | 1 | G | IN-FLIGHT | workflow-behavior-proofs | [#1656](https://github.com/miztiik/yen-idhazh/pull/1656) | - |
+| D8 | 8 | Workflow checks retain independent failure evidence | 1 | G | DONE | workflow-behavior-proofs | [#1656](https://github.com/miztiik/yen-idhazh/pull/1656), merged at `43bdd37d671275af2f904590f7ca69498cc74a91` | - |
 | D9 | 9 | Remove the unused watchlist entry limit | 1 | H | IN-FLIGHT | remove-unused-watchlist-limit | [#1657](https://github.com/miztiik/yen-idhazh/pull/1657) | - |
 
 The canary implementation for Row 3 is delivered separately from its suite-wide
@@ -189,13 +189,17 @@ Table J - Rejected alternatives
   the lab feed, and use the two named config-file survivors for the file proof.
   The first proposed feed proof passed before that change. The constructed
   retired-knob refusal never reads the committed file and is not its proof.
+- **Config-bound correction:** The coordinator cancelled brief item 5(b) after
+  the body-level group-2 review. Keep the per-file `declared_for` equality:
+  the active-model refusal does not check inactive files. This retains a
+  guarantee rather than silently treating the constructed swap as its proof.
 - **Base:** `9893c08d7174fb489a34209d91c6d7f9598df5d0`, current
   `origin/main` when work started.
 - **Dependencies:** Rows 1 and 2 supply the completed prerequisites. Row 3's
   unfinished suite-wide review is not a prerequisite and remains open.
 - **Reference search:** The retention module has other tests and stays. The
-  model-loading test keeps loading every named model file; only the duplicate
-  pairing assertion and its unused binding go. The registry's committed-file
+  model-loading test keeps loading every named model file and checking its
+  declared pairing. The registry's committed-file
   validation moves into `test_the_committed_registry_loads_and_names_each_ledger`.
 - **Acceptance:** Run the shared selector, all seven changed test modules with
   `pytest -n 0`, root ruff and mypy. Compare collected identifiers before and
@@ -210,8 +214,8 @@ Table K - Removals and surviving proofs
 | K2 | `test_plan.py::test_every_feed_fixture_this_module_serves_parses` | `test_a_healthy_feed_is_read_and_its_entries_are_planned`, strengthened under the approved correction to require a planned item from the lab feed | Replace `tests/fixtures/feeds/lab-blog.xml` with non-XML in the copy; the corrected survivor must fail. |
 | K3 | `test_appearance_config.py::test_the_committed_file_validates` | `contracts/test_app_config.py::test_config_file_validates[appearance.json]` | Rename one appearance contract field in the copy; the survivor must fail validation. |
 | K4 | The explicit set and count assertions in `contracts/test_ledger_registry.py::test_the_committed_registry_names_every_ledger_exactly_once` | `test_a_ledger_with_no_entry_stops_the_build_naming_it`, `test_a_ledger_named_twice_stops_the_build_naming_it`, `test_an_entry_for_no_ledger_is_refused_by_the_name_it_carries`, `test_a_ledger_listed_in_two_families_stops_the_build_naming_both`; committed-file loading stays in its own named test | Remove the split-family refusal branch in the copy; the split-family survivor must fail. |
-| K5 | `contracts/test_model_registry.py::test_every_committed_model_entry_declares_the_weights_its_settings_are_for` | `test_a_model_swap_can_no_longer_inherit_settings_nothing_declared_for_it` | Remove the `declared_for` refusal in the copy; the survivor must fail. |
-| K6 | Only the `declared_for` assertion in `contracts/test_model_registry.py::test_every_model_file_loads_and_not_only_the_one_the_pointer_names` | The same model-swap survivor; named-file loading stays | The same removed refusal must fail the model-swap survivor. |
+| K5 | `contracts/test_model_registry.py::test_every_committed_model_entry_declares_the_weights_its_settings_are_for` | `test_a_model_swap_can_no_longer_inherit_settings_nothing_declared_for_it` and the unchanged every-model-file pairing check | Remove the `declared_for` refusal in the copy; the swap survivor must fail. The per-file assertion retains committed pairing coverage. |
+| K6 | KEEP the `declared_for` assertion in `contracts/test_model_registry.py::test_every_model_file_loads_and_not_only_the_one_the_pointer_names`; brief item 5(b) is cancelled | This is the only check of an inactive model file's pairing; the active swap does not cover it | Change only an inactive model's `declared_for` in the copy; the retained per-file check must fail. |
 | K7 | `contracts/test_retention_knobs.py::test_the_committed_config_no_longer_emits_a_removed_name` | `contracts/test_retired_knobs.py::test_a_config_still_carrying_a_removed_knob_is_refused_by_name`, `contracts/test_app_config.py::test_config_file_validates[idhazh.json]`, `test_the_config_file_names_every_knob_it_owns[idhazh.json]` | Add a removed knob to the copied config and run the named survivors. |
 | K8 | `contracts/test_app_config.py::test_the_committed_reject_ceiling_leaves_the_brief_gate_a_live_band` and only the committed-file assertion in `test_no_judges_own_measurement_reaches_the_shared_config_contract` | `test_a_reject_ceiling_under_the_brief_gate_is_refused` and `test_config_file_validates[idhazh.json]` | Remove the reject-ceiling refusal in the copy; the boundary survivor must fail. Config loading remains independently covered. |
 
@@ -263,7 +267,8 @@ restored from the archive after its check.
 4. Removed split-family refusal: the split-family survivor failed because
    the remaining duplicate refusal did not name both families.
 5. Removed model pairing refusal: the model-swap survivor failed because
-   `ValueError` was not raised. This covers both model pairing removals.
+   `ValueError` was not raised. It proves the active refusal only. The separate
+   per-file equality stays to cover inactive model files.
 6. Added `collect.quarantine_after_failures`: both
    `test_config_file_validates[idhazh.json]` and
    `test_the_config_file_names_every_knob_it_owns[idhazh.json]` failed naming
@@ -273,6 +278,11 @@ restored from the archive after its check.
 7. Removed reject-ceiling refusal: the boundary survivor failed because
    `ValidationError` was not raised. The removed config-loading assertion
    remains covered by `test_config_file_validates[idhazh.json]`.
+8. Inactive-model pairing: the retained every-model-file test passed unchanged
+   input, then failed when only `declared_for` in
+   `config/models/gemma-4-e4b-qat-no-draft.json` changed to a different digest.
+   The assertion named that inactive file, confirming why brief item 5(b)
+   must not remove it.
 
 This row does not close the full suite review. Row 3 delivered only its canary
 changes; review groups 2, 6, 7 and 8 still need assertion-level classification.
@@ -284,8 +294,8 @@ An untouched archive of the recorded base collected 7,237 parameter cases
 across 4,882 test functions. This branch collected 7,221 cases across 4,876
 functions: 16 fewer cases and six fewer functions. The identifier comparison
 contains only five nonparameterized deletions, the eleven cases of the deleted feed
-prefix function, and the committed-registry test's rename. The two partial
-assertion removals and the strengthened feed consumer preserve their identifiers.
+prefix function, and the committed-registry test's rename. The partial assertion removal and the strengthened feed consumer preserve
+their identifiers. The inactive-model pairing assertion stays unchanged.
 The first checkout collection overlapped the edits and was discarded; these
 counts use the untouched archive and the completed branch instead.
 
@@ -512,9 +522,10 @@ counts use the untouched archive and the completed branch instead.
   missed import bindings, dropped input references or scanned declarations as
   references each failed the new constructed test. Missing-day and reversed
   publication-date lists both failed the input-derived newest-first comparison.
-- **Delivery:** Commit `bbea48bbd3e05f9075e360f225a1003dad1721f6` is in open PR
-  [#1656](https://github.com/miztiik/yen-idhazh/pull/1656). The Row 8
-  implementation is delivered for review; it is not merged. The separate
+- **Delivery:** Commit `bbea48bbd3e05f9075e360f225a1003dad1721f6` was delivered in
+  [#1656](https://github.com/miztiik/yen-idhazh/pull/1656), merged at
+  `43bdd37d671275af2f904590f7ca69498cc74a91` after exact-head required CI passed.
+  The separate
   suite-wide review obligation in Row 3 remains open. No workflow, production,
   config, data, frontend or dependency changes.
 - **Dependencies:** Row 1. Serialize edits to this shared plan.

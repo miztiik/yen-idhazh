@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,7 @@ from conftest import CONFIG_DIR
 
 from idhazh import config
 from idhazh.contracts.article import Article
+from idhazh.contracts.knobs.summarize import SummaryBand
 from idhazh.stages.work import _FetchedWorkItem, _summarize_band_sort_key
 from idhazh.telemetry.record import Flags, ItemRecorder
 
@@ -21,7 +23,19 @@ from ._builders import (
 
 def test_work_items_sort_by_summarize_band_and_keep_in_band_order() -> None:
     """Band order groups identical system prompts without changing item identity."""
-    settings = config.load(CONFIG_DIR)
+    base_settings = config.load(CONFIG_DIR)
+    settings = replace(
+        base_settings,
+        app=base_settings.app.model_copy(update={
+            "summarize": base_settings.app.summarize.model_copy(update={
+                "bands": [
+                    SummaryBand(min_source_words=0, target_words_min=20, target_words_max=40),
+                    SummaryBand(min_source_words=400, target_words_min=50, target_words_max=70),
+                    SummaryBand(min_source_words=1200, target_words_min=80, target_words_max=110),
+                ]
+            })
+        }),
+    )
     items = plan().items
     base = article()
 
@@ -46,9 +60,12 @@ def test_work_items_sort_by_summarize_band_and_keep_in_band_order() -> None:
         _FetchedWorkItem(items[3], sized(100), "", 0, 0, 0.0, 3, quiet()),
     ]
 
-    ordered = sorted(candidates, key=lambda candidate: _summarize_band_sort_key(candidate, settings))
+    arrival = candidates[::-1]
+    ordered = sorted(arrival, key=lambda candidate: _summarize_band_sort_key(candidate, settings))
 
-    assert [candidate.item.item_id for candidate in ordered] == ["ai-02", "ai-04", "ai-03", "ai-01"]
+    assert [candidate.item.item_id for candidate in ordered] == [
+        candidates[index].item.item_id for index in (1, 3, 2, 0)
+    ]
 
 
 def test_a_fresh_clone_loads_its_committed_config() -> None:
