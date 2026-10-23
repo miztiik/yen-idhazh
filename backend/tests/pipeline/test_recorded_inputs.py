@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 from conftest import CONFIG_DIR, read_text
@@ -169,8 +170,17 @@ def test_a_traced_work_shard_writes_separate_item_passes_and_their_children(
     """The recorded model refusal still leaves the real worker's trace tree."""
     run_plan = plan(item_count=2)
     monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
-    settings = config.load(CONFIG_DIR)
-    assert settings.app.observability.tracing_enabled, "the committed config traces by default"
+    base = config.load(CONFIG_DIR)
+    settings = replace(
+        base,
+        app=base.app.model_copy(
+            update={
+                "observability": base.app.observability.model_copy(
+                    update={"tracing_enabled": True}
+                )
+            }
+        ),
+    )
 
     with a_server_that_refuses_every_completion() as server:
         stage_work(

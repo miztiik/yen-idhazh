@@ -11,8 +11,8 @@ captured pages and recorded replies - no network and nothing mocked
 Sibling question, sibling module: `test_work_records.py` asks what a shard SAYS
 while it runs. This one asks what SURVIVES it.
 
-The day every test here is driven from is the fixture plan's, so the volume is
-five items and the cost does not move when the archive grows (Guardrail #12).
+Every test uses the bounded fixture plan, so the cost does not move when the
+archive grows (Guardrail #12).
 """
 
 from __future__ import annotations
@@ -44,9 +44,6 @@ from ._builders import (
 )
 from .test_degrade import headless_page_fetch, headless_plan
 
-#: The fixture plan's size. Named once so a sixth item moves one line.
-PLANNED_ITEMS: Final = 5
-
 LABEL_REPLY: Final = FIXTURES_DIR / "completions" / "label" / "labelled.json"
 
 SUMMARIZE_AND_PLAN_REPLY: Final = (
@@ -70,6 +67,7 @@ def worked(
         run_plan=headless_plan() if degraded else None,
         server_pid=server_pid,
     )
+    assert run_plan.items, "an empty plan would exercise no item recording"
     return run_plan, items_dir
 
 
@@ -107,14 +105,13 @@ def test_every_item_the_shard_closed_left_its_row_on_disk(
 ) -> None:
     """One row an item, and no row for an item the plan never named.
 
-    The bijection is the assertion. A file for four of five items is a shard
+    The bijection is the assertion. A file for only some planned items is a shard
     that measured an item and dropped it, which is the defect this payload
-    exists to end, and a sixth file is a row about an item nobody planned.
+    exists to end, and an extra file is a row about an item nobody planned.
     """
     run_plan, items_dir = worked(tmp_path, monkeypatch)
 
     assert set(rows(items_dir)) == {item.item_id for item in run_plan.items}
-    assert len(run_plan.items) == PLANNED_ITEMS
 
 
 def test_the_file_is_the_row_the_shard_reported_cell_for_cell(
@@ -128,12 +125,15 @@ def test_the_file_is_the_row_the_shard_reported_cell_for_cell(
     handful a caller happens to use.
     """
     caplog.set_level(logging.INFO, logger="idhazh")
-    _, items_dir = worked(tmp_path, monkeypatch)
+    run_plan, items_dir = worked(tmp_path, monkeypatch)
 
     written = rows(items_dir)
     reported = closed(caplog)
 
-    assert len(reported) == PLANNED_ITEMS
+    assert len(reported) == len(run_plan.items)
+    assert {record["item_id"] for record in reported} == set(written) == {
+        item.item_id for item in run_plan.items
+    }
     for record in reported:
         said = ItemHealthRow.model_validate(
             {column: record[column] for column in ItemHealthRow.csv_columns()}
