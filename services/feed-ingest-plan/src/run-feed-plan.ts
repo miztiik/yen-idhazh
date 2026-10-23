@@ -264,11 +264,10 @@ export function summarizePlan(result: FeedPlanResult & { metrics?: PlanningMetri
       blocked_url_marker: result.evidence.harvest.rejections.filter(row => row.drop_reason === "BLOCKED_URL_MARKER").length,
       history: result.evidence.exclusions.history,
     },
-<<<<<<< HEAD
     feed_history: {
       ...result.evidence.feed_history.history,
       daily_publication: result.evidence.daily_publication.history,
-=======
+    },
     editorial_inputs: {
       headline_consumer: "existing_mmr_lens_entity_penalties",
       bonus_consumer: null,
@@ -278,7 +277,6 @@ export function summarizePlan(result: FeedPlanResult & { metrics?: PlanningMetri
         candidate_id: candidate.candidate_id, url_key: candidate.url_key, labels: candidate.labels,
         planning_observations: candidate.planning_observations,
       })),
->>>>>>> origin/main
     },
     audit: {
       status: auditedComplete ? "complete" : result.metrics === undefined ? "unavailable" : "assessment_diversity_recorded_audit_pending",

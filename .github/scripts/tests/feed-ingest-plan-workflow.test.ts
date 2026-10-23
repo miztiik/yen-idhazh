@@ -1,11 +1,11 @@
 /** Does the isolated workflow preserve its manual, bounded and TypeScript-only execution boundary? */
 import { expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { CompactIndexSchema, RawDayIndexSchema, FeedHealthContract } from "../../../packages/common-contracts/src/index";
+import { CompactIndexSchema, RawDayIndexSchema, FeedHealthContract, PUBLICATION_INVENTORY_VERSION } from "../../../packages/common-contracts/src/index";
 import { persistLedger } from "../../../packages/ledger-file-writer/src/index";
 import { stageFeedHistory } from "../feed-ingest-plan-feed-history";
 import { selectHealthDays } from "../../../services/feed-ingest-plan/src/read-ledger-history/select-health-days";
@@ -230,6 +230,7 @@ test("derives UTC windows and stages indexed compact files before considering ra
       name: "feed-health", family: "feed-health", grain: "raw-and-compact" as const,
       lifecycle_status: "active" as const, prefix: ["feed-health"],
     };
+    const entries: { root: "state"; path: string; bytes: number; items: number }[] = [];
     for (const day of ["2024-01-01", "2026-01-01"]) {
       const writerContext = {
         run_id: `${day}-1`, attempt: 1, job: "plan" as const, shard: 0,
@@ -240,6 +241,9 @@ test("derives UTC windows and stages indexed compact files before considering ra
         ledgerSettings: { format: "parquet", compression_raw: "snappy", compression_compact: "snappy" },
         writerContext, rowContract: FeedHealthContract, period: { tier: "raw", covers: day },
         rows: [{ ...fixture, date: day, run_id: writerContext.run_id, checked_at: `${day}T00:00:00Z` }],
+      });
+      for (const file of written.files) entries.push({
+        root: "state", path: file.path, bytes: (await stat(join(directory, "state", file.path))).size, items: 1,
       });
       if (day === "2024-01-01") {
         const original = await readLedgerParquet(join(directory, "state", written.files[0]!.path), "feed-health", FeedHealthContract);
@@ -258,26 +262,23 @@ test("derives UTC windows and stages indexed compact files before considering ra
         }));
       }
     }
+    await mkdir(join(directory, "frontend", "public"), { recursive: true });
+    await writeFile(join(directory, "frontend", "public", "publication.json"), JSON.stringify({
+      version: PUBLICATION_INVENTORY_VERSION, entries: entries.sort((a, b) => a.path.localeCompare(b.path)),
+    }));
     const stage = () => stageFeedHistory({
       ledger: "feed-health", prefix: ["feed-health"], now: "2026-01-01T00:00:00Z",
-      raw_discovery_days: 1, authored: [],
+      health_window_days: 2, authored: [],
       read: async path => {
         const file = Bun.file(join(directory, ...path.split("/")));
         return await file.exists() ? file.json() : undefined;
       },
-      listRawDay: async path => {
-        try {
-          return (await readdir(join(directory, ...path.split("/")))).map(name => `${path}/${name}`);
-        } catch (error) {
-          if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined;
-          throw error;
-        }
-      },
     });
     const staged = await stage();
     expect(staged.files).toContain("state/compact/feed-health/daily/2024/01/01.parquet");
+    expect(staged.files).not.toContain(`state/${entries.find(entry => entry.path.includes("2024/01/01"))!.path}`);
     const recorded = await selectHealthDays(directory, registration,
-      staged.inputs.filter(day => staged.represented_days.includes(day.day)), 2);
+      staged.inputs, 2);
     expect(recorded.map(day => day.day)).toEqual(["2024-01-01", "2026-01-01"]);
     expect(staged.inputs.find(day => day.day === "2025-12-31")?.raw_files).toBeUndefined();
     expect(staged.inventory_complete).toBe(false);
@@ -297,13 +298,13 @@ test("derives UTC windows and stages indexed compact files before considering ra
     }));
     const representedMonth = await stage();
     const representedSelection = await selectHealthDays(directory, registration,
-      representedMonth.inputs.filter(day => representedMonth.represented_days.includes(day.day)), 2);
+      representedMonth.inputs, 2);
     expect(representedSelection.map(day => day.day)).toEqual(["2024-01-31", "2026-01-01"]);
     await writeFile(join(directory, "state", "compact", "feed-health", "index", "daily.json"), JSON.stringify({
       version: "2026-10-07", ledger: "feed-health", period: "daily",
       entries: [{ covers: "2026-02-31", state: "packed", rows: 1, bytes: 10 }],
     }));
-    await expect(stage()).rejects.toThrow("calendar period");
+    await expect(stage()).rejects.toThrow("calendar day");
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 

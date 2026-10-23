@@ -108,7 +108,6 @@ jobs:
           import { ServiceSettingsSchema } from "./services/feed-ingest-plan/src/config/service-settings";
           import { requiredSeenDays } from "./services/feed-ingest-plan/src/read-ledger-history/read-seen-evidence";
           import { HEALTH_RECORDED_DAYS } from "./services/feed-ingest-plan/src/read-ledger-history/read-feed-history";
-          import { selectHealthDays } from "./services/feed-ingest-plan/src/read-ledger-history/select-health-days";
           import { stageFeedHistory } from "./.github/scripts/feed-ingest-plan-feed-history";
           import { CompactIndexSchema, RawDayIndexSchema } from "./packages/common-contracts/src/index";
           import type { CompactIndex, FeedIngestEvent, RawDayIndex } from "./packages/common-contracts/src/index";
@@ -169,25 +168,6 @@ jobs:
               if (await held.exited !== 0) throw new Error(`history: failed to read named file ${path}`);
               return JSON.parse(text);
             }
-            async function listRawDay(directory: string): Promise<string[] | undefined> {
-              const object = `HEAD:${directory}`;
-              const probe = Bun.spawn(["git", "cat-file", "--batch-check"], { stdin: "pipe", stdout: "pipe", stderr: "pipe" });
-              probe.stdin.write(`${object}\n`);
-              probe.stdin.end();
-              const [check] = await Promise.all([new Response(probe.stdout).text(), new Response(probe.stderr).text()]);
-              if (await probe.exited !== 0) throw new Error("Feed history cannot inspect its named UTC day");
-              if (check.trim() === `${object} missing`) return undefined;
-              if (!/^[a-f0-9]+ tree \d+\s*$/.test(check)) throw new Error("Feed history raw day is not a tree");
-              const listing = Bun.spawn(["git", "ls-tree", "-z", object], { stdout: "pipe", stderr: "pipe" });
-              const [text] = await Promise.all([new Response(listing.stdout).text(), new Response(listing.stderr).text()]);
-              if (await listing.exited !== 0) throw new Error("Feed history cannot list its named UTC day");
-              return text.split("\0").filter(Boolean).flatMap(entry => {
-                const match = /^100644 blob [a-f0-9]+\t([0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.parquet)$/.exec(entry);
-                if (match !== null) return [`${directory}/${match[1]}`];
-                if (/^100644 blob [a-f0-9]+\tindex\.json$/.test(entry)) return [];
-                throw new Error("Feed history UTC day contains an unexpected entry");
-              });
-            }
             async function stageHistory(ledger: CompactIndex["ledger"], prefix: readonly string[], days: readonly string[],
               options: { indexes?: Partial<Record<CompactIndex["period"], string>>;
                 rawIndexes?: Record<string, string>; rawFiles?: readonly string[] } = {}) {
@@ -245,21 +225,19 @@ jobs:
             }
             await stageConfiguredDays("published", inputs.registrations.published.prefix, published_days);
             await stageConfiguredDays("item-health", inputs.registrations.item_health.prefix, settled_failure_days);
-            const healthPolicy = await Bun.file("config/gardener/compact-feed-health.json").json();
-            if (!Number.isSafeInteger(healthPolicy.daily_keep_days) || healthPolicy.daily_keep_days < 0) throw new Error("Feed history raw discovery requires daily_keep_days");
             const feedInventory = await stageFeedHistory({
               ledger: "feed-health", prefix: inputs.registrations.feed_health.prefix, now,
-              raw_discovery_days: healthPolicy.daily_keep_days,
-              authored: inputs.settings.inputs.feed_health_days, read: readCommitted, listRawDay,
+              health_window_days: Math.max(HEALTH_RECORDED_DAYS, inputs.clock_config.collect.reliability_window_days),
+              authored: inputs.settings.inputs.feed_health_days, read: readCommitted,
             });
+            console.error(JSON.stringify({ event: "feed_health_inventory", inventory_complete: feedInventory.inventory_complete,
+              notices: feedInventory.notices, represented_days: feedInventory.represented_days }));
             for (const path of feedInventory.files) inventory.add(path);
             for (const path of inputs.settings.inputs.seen_files) inventory.add(path);
             const sparse = Bun.spawn(["git", "sparse-checkout", "add", "--skip-checks", ...[...inventory].map(sparseCheckoutPath)],
               { stdout: "inherit", stderr: "inherit" });
             if (await sparse.exited !== 0) throw new Error("history: named sparse checkout failed");
-            const feed_health_days = await selectHealthDays(root, inputs.registrations.feed_health,
-              feedInventory.inputs.filter(day => feedInventory.represented_days.includes(day.day)),
-              Math.max(HEALTH_RECORDED_DAYS, inputs.clock_config.collect.reliability_window_days));
+            const feed_health_days = feedInventory.inputs;
             const git = Bun.spawn(["git", "rev-parse", "HEAD"], { stdout: "pipe", stderr: "inherit" });
             const git_sha = (await new Response(git.stdout).text()).trim();
             if (await git.exited !== 0) throw new Error("git_sha: cannot resolve the checkout commit");

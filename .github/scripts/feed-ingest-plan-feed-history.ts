@@ -1,86 +1,68 @@
-/** Which named native files supply health and permanent retirement observations to the isolated run? */
-import { COMPACT_INDEX_VERSION, CompactIndexSchema, DateStampSchema, RawDayIndexSchema } from "../../packages/common-contracts/src/index";
+/** Which existing native inventory and explicit day inputs supply feed-health history? */
+import { CompactIndexSchema, RawDayIndexSchema } from "../../packages/common-contracts/src/index";
 import type { CompactIndex } from "../../packages/common-contracts/src/index";
 import { SeenDayInputSchema } from "../../services/feed-ingest-plan/src/config/service-settings";
 import type { SeenDayInput } from "../../services/feed-ingest-plan/src/config/service-settings";
+import { resolveHealthInventory } from "../../services/feed-ingest-plan/src/read-ledger-history/read-health-inventory";
 import { createSeenDayInputs, resolveHistoryInventory } from "./feed-ingest-plan-outputs";
-import { requiredSeenDays } from "../../services/feed-ingest-plan/src/read-ledger-history/read-seen-evidence";
-
-function compactDays(index: CompactIndex): string[] {
-  return index.entries.filter(entry => entry.rows > 0).flatMap(entry => {
-    const first = `${entry.covers}${index.period === "yearly" ? "-01-01" : index.period === "monthly" ? "-01" : ""}`;
-    const start = new Date(`${first}T00:00:00Z`);
-    if (start.toISOString().slice(0, 10) !== first) throw new Error("Feed history compact cover is not a UTC calendar period");
-    const end = new Date(start);
-    if (index.period === "yearly") end.setUTCFullYear(end.getUTCFullYear() + 1);
-    else if (index.period === "monthly") end.setUTCMonth(end.getUTCMonth() + 1);
-    else end.setUTCDate(end.getUTCDate() + 1);
-    const days: string[] = [];
-    for (const instant = new Date(start); instant < end; instant.setUTCDate(instant.getUTCDate() + 1)) {
-      days.push(instant.toISOString().slice(0, 10));
-    }
-    return days;
-  });
-}
 
 export async function stageFeedHistory(input: {
   ledger: "feed-health"; prefix: readonly string[];
-  now: string; raw_discovery_days: number; authored: readonly SeenDayInput[];
+  now: string; health_window_days: number; authored: readonly SeenDayInput[];
   read: (path: string) => Promise<unknown | undefined>;
-  listRawDay: (directory: string) => Promise<readonly string[] | undefined>;
 }) {
   const defaults = createSeenDayInputs(input.prefix, [input.now.slice(0, 10)])[0]!;
-  const compact: CompactIndex[] = [];
-  for (const [period, path] of Object.entries(defaults.indexes)) {
-    const value = await input.read(path);
-    if (value === undefined) continue;
-    const index = CompactIndexSchema.parse(value);
-    if (index.period !== period || index.ledger !== input.ledger || index.version > COMPACT_INDEX_VERSION) {
-      throw new Error("Feed history compact index differs from its named ledger, period or supported version");
-    }
-    compact.push(index);
+  const compact: Partial<Record<CompactIndex["period"], CompactIndex>> = {};
+  for (const period of ["yearly", "monthly", "daily"] as const) {
+    const value = await input.read(defaults.indexes[period]);
+    if (value !== undefined) compact[period] = CompactIndexSchema.parse(value);
   }
+  const native = resolveHealthInventory({
+    ledger: input.ledger, prefix: input.prefix,
+    inventory: await input.read("frontend/public/publication.json"),
+    compact, health_window_days: input.health_window_days,
+  });
   const authored = input.authored.map(day => SeenDayInputSchema.parse(day));
   if (authored.some((day, index) => day.day > input.now.slice(0, 10)
     || (index > 0 && day.day <= authored[index - 1]!.day))) {
     throw new Error("Feed history authored inputs must be distinct ascending days no later than the run");
   }
-  const days = [...new Set([
-    ...compact.flatMap(compactDays).filter(day => day <= input.now.slice(0, 10)),
-    ...requiredSeenDays(input.now, input.raw_discovery_days), ...authored.map(day => day.day),
-  ])].sort();
-  const inventory = new Set<string>();
-  const inputs: SeenDayInput[] = [];
-  const represented = new Set(compact.flatMap(compactDays).filter(day => day <= input.now.slice(0, 10)));
-  for (const day of days) {
-    DateStampSchema.parse(day);
-    const named: SeenDayInput = authored.find(input => input.day === day) ?? createSeenDayInputs(input.prefix, [day])[0]!;
-    const rawPath = named.raw_index;
-    const rawValue = rawPath === undefined ? undefined : await input.read(rawPath);
-    const raw = rawValue === undefined ? [] : [RawDayIndexSchema.parse(rawValue)];
-    const indexed = compact.some(index => index.entries.some(entry =>
-      day === entry.covers || day.startsWith(`${entry.covers}-`)));
-    let rawFiles: readonly string[] | undefined = named.raw_files;
-    // Only a named UTC day is listed. A missing raw directory is not invented as an empty ledger day.
-    if (rawFiles === undefined && raw.length === 0 && !indexed) {
-      rawFiles = await input.listRawDay(`state/raw/${input.prefix.join("/")}/${day.replaceAll("-", "/")}`);
-    }
-    const resolved = rawFiles === undefined ? named : {
-      day, indexes: named.indexes, raw_files: [...rawFiles],
-    };
-    inputs.push(SeenDayInputSchema.parse(resolved));
-    if ((rawFiles?.length ?? 0) > 0 || raw.some(index => index.files.length > 0)) represented.add(day);
-    for (const path of resolveHistoryInventory({
-      ledger: input.ledger, prefix: input.prefix, days: [day], compact, raw,
-      ...(named.indexes === undefined ? {} : { indexes: Object.fromEntries(Object.entries(named.indexes)
-        .filter((entry): entry is [string, string] => entry[1] !== undefined)) }),
-      ...(rawPath === undefined ? {} : { rawIndexes: { [day]: rawPath } }),
-    })) inventory.add(path);
-    for (const path of rawFiles ?? []) inventory.add(path);
+  const inputs = new Map(native.inputs.map(day => [day.day, day]));
+  const files = new Set(native.files);
+  const notices = [...native.notices];
+  // A single named current-day index supplements inventory; it never becomes a directory census.
+  const supplemental: SeenDayInput[] = authored.some(day => day.day === defaults.day) ? authored : [...authored, defaults];
+  for (const named of supplemental) {
     if (named.indexes !== undefined && Object.entries(named.indexes).some(([period, path]) =>
       path !== defaults.indexes[period as keyof typeof defaults.indexes])) {
-      throw new Error("Feed history discovery requires the registered native compact index paths");
+      throw new Error("Feed history requires the registered native compact index paths");
     }
+    const covered = Object.values(compact).some(index => index.entries.some(entry =>
+      named.day === entry.covers || named.day.startsWith(`${entry.covers}-`)));
+    if (covered) continue;
+    const value = named.raw_index === undefined ? undefined : await input.read(named.raw_index);
+    const raw = value === undefined ? [] : [RawDayIndexSchema.parse(value)];
+    for (const path of resolveHistoryInventory({
+      ledger: input.ledger, prefix: input.prefix, days: [named.day],
+      compact: Object.values(compact), raw,
+      ...(named.raw_index === undefined ? {} : { rawIndexes: { [named.day]: named.raw_index } }),
+    })) files.add(path);
+    if ((named.raw_files?.length ?? 0) === 0 && !raw.some(index => index.files.length > 0)) {
+      if (!inputs.has(named.day)) notices.push(`feed-inventory:supplement-unavailable:${input.ledger}:${named.day}`);
+      continue;
+    }
+    const previous = inputs.get(named.day);
+    const rawFiles = named.raw_files === undefined ? undefined
+      : [...new Set([...(previous?.raw_files ?? []), ...named.raw_files])].sort();
+    inputs.set(named.day, SeenDayInputSchema.parse({
+      ...named, indexes: defaults.indexes, ...(rawFiles === undefined ? {} : { raw_files: rawFiles }),
+    }));
+    for (const path of rawFiles ?? []) files.add(path);
   }
-  return { inputs, files: [...inventory], represented_days: [...represented].sort(), inventory_complete: false as const };
+  const selected = [...inputs.values()].sort((a, b) => a.day.localeCompare(b.day)).slice(-input.health_window_days);
+  if (selected.some(day => day.day > input.now.slice(0, 10))) throw new Error("Feed history inventory exceeds the captured UTC day");
+  return {
+    inputs: selected, files: [...files].sort(),
+    represented_days: selected.map(day => day.day), inventory_complete: false as const, notices,
+  };
 }
