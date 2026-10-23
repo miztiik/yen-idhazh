@@ -140,7 +140,6 @@ def test_typescript_field_types_defaults_and_vocabularies(
 def test_typescript_envelope_fields_and_footer_keys(typescript_schemas: dict[str, Any]) -> None:
     from idhazh.contracts import file_envelope
     from idhazh.contracts.publication_inventory import PublicationEntry, PublicationInventory
-    from idhazh.contracts.publication_receipt import PublicationReceipt
 
     for contract in (
         file_envelope.FileEnvelope,
@@ -161,31 +160,19 @@ def test_typescript_envelope_fields_and_footer_keys(typescript_schemas: dict[str
     assert normalized_shape(projections["PublicationEntry"], projections["PublicationEntry"]) == (
         normalized_shape(entry, entry)
     )
-    for publication_contract, names in (
-        (PublicationInventory, {"version", "entries"}),
-        (PublicationReceipt, {"version", "identity", "writes"}),
-    ):
-        native = publication_contract.json_schema()
-        projected = projections[publication_contract.__name__]
-        assert typescript_schemas["__publication_input_versions"][publication_contract.__name__] == (
-            publication_contract.schema_version()
+    native = PublicationInventory.json_schema()
+    projected = projections["PublicationInventory"]
+    assert typescript_schemas["__publication_input_versions"]["PublicationInventory"] == (
+        PublicationInventory.schema_version()
+    )
+    assert set(projected["properties"]) == {"version", "entries"}
+    for name in projected["properties"]:
+        ours, theirs = native["properties"][name], projected["properties"][name]
+        assert normalized_shape(
+            {key: value for key, value in theirs.items() if key != "default"}, projected
+        ) == normalized_shape(
+            {key: value for key, value in ours.items() if key != "default"}, native
         )
-        assert set(projected["properties"]) == names
-        for name in names:
-            ours, theirs = native["properties"][name], projected["properties"][name]
-            if name == "writes":
-                assert theirs["type"] == ours["type"] == "object"
-                pattern = theirs["propertyNames"]["pattern"].replace(r"\/", "/")
-                assert set(ours["patternProperties"]) == {pattern}
-                assert normalized_shape(theirs["additionalProperties"], projected) == (
-                    normalized_shape(ours["patternProperties"][pattern], native)
-                )
-            else:
-                assert normalized_shape(
-                    {key: value for key, value in theirs.items() if key != "default"}, projected
-                ) == normalized_shape(
-                    {key: value for key, value in ours.items() if key != "default"}, native
-                )
 
 
 def rejection_payload() -> dict[str, Any]:

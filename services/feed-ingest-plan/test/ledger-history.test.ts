@@ -15,9 +15,9 @@ import type { LedgerRowContract, PersistLedgerResult, StoredLedgerRow } from "@i
 import { Int64, tableFromIPC, vectorFromArray } from "apache-arrow";
 import initializeParquet, { Table as WasmTable, WriterPropertiesBuilder, readMetadata, readParquet, writeParquet } from "parquet-wasm/esm";
 import { tableToIPC } from "apache-arrow";
-import { readLedgerParquet, readLedgerParquetBytes } from "../src/read-ledger-history/read-parquet";
+import { readLedgerParquet } from "../src/read-ledger-history/read-parquet";
 import { readLedgerDay } from "../src/read-ledger-history/read-period";
-import { resolveFeedInventory } from "../src/read-ledger-history/read-feed-inventory";
+import { resolveHealthInventory } from "../src/read-ledger-history/read-health-inventory";
 import { selectCompleteAttempt } from "../src/read-ledger-history/complete-attempt";
 import type { AttemptHistory } from "../src/read-ledger-history/complete-attempt";
 import { readHistoricalSelections } from "../src/partition-article-shards/read-editorial-selection";
@@ -124,13 +124,6 @@ test("native raw and daily reads preserve original writer identity instead of th
     expect(raw.tier).toBe("raw");
     expect(raw.rows).toHaveLength(1);
     const original = raw.rows[0]!;
-    const rawPath = join(root, input.persisted.selections.files[0]!.path);
-    const exactBytes = await readFile(rawPath);
-    const parsedBytes = await readLedgerParquetBytes(
-      exactBytes, join(root, "not-on-disk", basename(rawPath)), "editorial-selections", selectionContract,
-    );
-    expect(parsedBytes.rows).toEqual(raw.rows);
-    expect(parsedBytes.envelope).toEqual(raw.files[0]!.envelope);
     const compact = await compactSelections(root, input, raw.rows, "daily");
     const current = await readLedgerDay({
       ledger: "editorial-selections", day: input.fixture.date, contract: selectionContract,
@@ -279,7 +272,7 @@ test("native monthly and yearly precedence reads only the requested day's origin
     const rawName = basename(input.persisted.selections.files[0]!.path);
     const stale = `raw/feed-health/2025/01/01/${rawName}`;
     const recent = `raw/feed-health/2026/02/12/${rawName}`;
-    const discovery = resolveFeedInventory({
+    const discovery = resolveHealthInventory({
       ledger: "feed-health", prefix: ["feed-health"], health_window_days: 31,
       inventory: { version: "2026-10-03T13:33", entries: [stale, recent].map(path => ({
         root: "state", path, bytes: 1, items: 0,
@@ -301,14 +294,13 @@ test("native monthly and yearly precedence reads only the requested day's origin
     expect(discovery.files).toContain(`state/${recent}`);
     expect(discovery.files).not.toContain(`state/${stale}`);
     expect(discovery.inventory_complete).toBe(false);
-    const older = resolveFeedInventory({
-      ledger: "feed-retirements", prefix: ["feed-retirements"], health_window_days: 1,
-      inventory: { version: "2026-10-03T13:33", entries: [] },
-      compact: { yearly: { version: "2026-10-07", ledger: "feed-retirements", period: "yearly",
-        entries: [{ covers: "2020", rows: 1, bytes: 1 }] } },
-    });
-    expect(older.inputs).toHaveLength(366);
-    expect(older.files).toContain("state/compact/feed-retirements/yearly/2020/2020.parquet");
+    for (const inventory of [
+      { version: "2099-01-01", entries: [] },
+      { version: "2026-10-03T13:33", entries: [{ root: "state", path: "../escaped.parquet", bytes: 1, items: 0 }] },
+      { version: "2026-10-03T13:33", entries: [{ root: "state", path: "raw/feed-health/2026/02/12/not-a-uuid.parquet", bytes: 1, items: 0 }] },
+    ]) expect(() => resolveHealthInventory({
+      ledger: "feed-health", prefix: ["feed-health"], health_window_days: 31, inventory, compact: {},
+    })).toThrow();
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -341,7 +333,7 @@ test("named empty, lost, expired and missing periods never fall through to lefto
       indexes: { yearly: expired }, rawFiles: input.persisted.selections.files.map(file => join(root, file.path)) })).status).toBe("missing");
     const nativeRaw = `raw/feed-health/${input.fixture.date.replaceAll("-", "/")}/${basename(input.persisted.selections.files[0]!.path)}`;
     for (const state of ["empty", "lost"] as const) {
-      const discovery = resolveFeedInventory({
+      const discovery = resolveHealthInventory({
         ledger: "feed-health", prefix: ["feed-health"], health_window_days: 31,
         inventory: { version: "2026-10-03T13:33",
           entries: [{ root: "state", path: nativeRaw, bytes: 1, items: 0 }] },
@@ -351,27 +343,14 @@ test("named empty, lost, expired and missing periods never fall through to lefto
       expect(discovery.inputs).toEqual([]);
       expect(discovery.files).not.toContain(`state/${nativeRaw}`);
       expect(discovery.notices).toContain(`feed-inventory:covered-raw-day-unconfirmed:feed-health:${input.fixture.date}`);
-      const identity = writer(input.fixture.run_id);
-      const confirmed = resolveFeedInventory({
-        ledger: "feed-health", prefix: ["feed-health"], health_window_days: 31,
-        inventory: undefined,
-        compact: { daily: { version: "2026-10-07", ledger: "feed-health", period: "daily",
-          entries: [{ covers: input.fixture.date, rows: 0, bytes: 0, state }] } },
-        receipts: [{ identity, value: { version: "2026-10-09", identity,
-          writes: { [`state/${nativeRaw}`]: "a".repeat(64) } } }],
-      });
-      expect(confirmed.inputs.map(day => day.day)).toEqual([input.fixture.date]);
-      expect(confirmed.inputs[0]!.raw_files).toBeUndefined();
-      expect(confirmed.files).not.toContain(`state/${nativeRaw}`);
     }
-    const absent = resolveFeedInventory({
-      ledger: "feed-retirements", prefix: ["feed-retirements"], health_window_days: 31,
-      inventory: undefined, compact: {},
+    const absent = resolveHealthInventory({
+      ledger: "feed-health", prefix: ["feed-health"], health_window_days: 31, inventory: undefined, compact: {},
     });
     expect(absent.inputs).toEqual([]);
     expect(absent.inventory_complete).toBe(false);
-    expect(absent.notices).toContain("feed-inventory:publication-inventory-missing:feed-retirements");
-    expect(absent.notices).toContain("feed-inventory:raw-census-unproven:feed-retirements");
+    expect(absent.notices).toContain("feed-inventory:publication-inventory-missing:feed-health");
+    expect(absent.notices).toContain("feed-inventory:raw-census-unproven:feed-health");
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -388,19 +367,6 @@ test("one named raw listing verifies its ordered filename digest, sizes and miss
       bytes: [(await stat(path)).size], listed_at: input.fixture.observed_at,
     };
     const read = () => readLedgerDay({ ledger: "editorial-selections", day: input.fixture.date, contract: selectionContract, rawIndex: indexPath });
-    const nativePath = `state/raw/feed-health/${input.fixture.date.replaceAll("-", "/")}/${basename(path)}`;
-    const identity = writer(input.fixture.run_id);
-    const receipt = { version: "2026-10-09", identity,
-      writes: { [nativePath]: createHash("sha256").update(await readFile(path)).digest("hex") } };
-    const discover = (value: unknown = receipt) => resolveFeedInventory({
-      ledger: "feed-health", prefix: ["feed-health"], health_window_days: 31,
-      inventory: undefined, compact: {}, receipts: [{ value, identity }],
-    });
-    expect(discover().inputs[0]!.raw_files).toEqual([nativePath]);
-    expect(discover().receipt_writes[0]).toMatchObject({ path: nativePath, identity });
-    expect(() => discover({ ...receipt, identity: { ...identity, attempt: 2 } })).toThrow("another invocation");
-    expect(() => discover({ ...receipt, writes: { "../escaped.parquet": "a".repeat(64) } })).toThrow();
-    expect(() => discover({ ...receipt, version: "2099-01-01" })).toThrow("version");
     await writeFile(indexPath, JSON.stringify(index));
     expect((await read()).rows).toHaveLength(1);
     await writeFile(indexPath, JSON.stringify({ ...index, content_sha256: "0".repeat(64) }));

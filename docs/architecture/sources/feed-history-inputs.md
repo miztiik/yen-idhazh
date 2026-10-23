@@ -1,38 +1,28 @@
-# Discovering native feed history
+# Discovering native feed-health inputs
 
 **Last Updated**: 2026-10-23
 
-How does the TypeScript planner find the same health and retirement files
-that Python reads, without copying their rows into another state file?
+How does the TypeScript planner find existing health observations without
+scanning directories or copying rows into another state file?
 
 ## One history, named inputs
 
-The recorded history stays in `state/raw/feed-health/`,
-`state/raw/feed-retirements/` and their `state/compact/` counterparts.
-Both readers use the original native rows, versions and writer identities.
-There is no separate current-history snapshot.
+Health observations stay in `state/raw/feed-health/` and
+`state/compact/feed-health/`. Readers retain original native rows, versions
+and writer identities. There is no separate current-history snapshot.
 
-`resolveFeedInventory` reads the existing `PublicationInventory` document,
-`frontend/public/publication.json`, and the three existing `CompactIndex`
-documents for each ledger. The Python plan stage records exact health file
-paths in that publication inventory after the native ledger writer returns.
-The TypeScript reader uses its `root: state` entries as file names, not as
-copies of health or retirement records. The small TypeScript publication
+`resolveHealthInventory` reads the existing `PublicationInventory`
+document, `frontend/public/publication.json`, and native `CompactIndex`
+documents. The Python plan stage records exact health file paths in that
+publication inventory after the native ledger writer returns. Those entries
+name files, not copies of health records. The small TypeScript publication
 projections are checked against the Python declarations in the existing
 contract binding test.
 
-A caller may also supply exact native `PublicationReceipt` documents and
-their expected execution identities. Receipt paths must be relative native
-UUID file paths. Conflicting hashes or another invocation's identity refuse
-discovery. `verifyFeedReceiptWrites` then checks the actual whole-file hashes,
-native Parquet schema, content digest, UTC partition and executed identities
-against the same captured bytes before those files can be used. The receipt's
-whole-file hash is not the row-content hash in the Parquet footer.
-
-Inputs are one named publication inventory, six named compact indexes and
-the caller's exact receipt list. No directory or Git history walk discovers
-additional days. The result contains exact native file names and ordinary
-named-day reader inputs; it writes no inventory, receipt or history file.
+Inputs are the existing publication inventory and three health compact
+indexes. The result contains native file names and ordinary named-day reader
+inputs. No file glob, directory enumeration, new index,
+inventory write, receipt write or publisher change is part of discovery.
 
 ## Native selection and precedence
 
@@ -44,8 +34,8 @@ raw names after compaction has removed their files. Those names are not
 fetched when a compact index already serves their dates.
 An old raw name behind an empty compact period is not proof that its raw
 directory still exists. It receives an unconfirmed-day notice rather than
-inventing another recorded health day. An exact current receipt can establish
-that a raw date still exists; compact precedence still decides its rows.
+inventing another recorded health day. Same-listener current health receipts
+remain the existing caller's responsibility, not another discovery store.
 
 Python's health-day selection is more specific than "days with a row".
 `ledger_files.held_days` includes raw-folder dates and nonempty daily entries.
@@ -57,41 +47,33 @@ dates. The lifecycle reader needs 31 selected dates, or the configured
 reliability window when that is wider. A gap in raw dates does not become a
 new empty day.
 
-Retirement discovery has no date cutoff. Every retained indexed period and
-every named unabsorbed raw retirement file remains eligible. The reader does
-not change native retention: if the gardener has expired a period, discovery
-cannot restore its rows or describe them as still present.
-
 ## Completeness remains explicit
 
 A publication entry proves that a named file was recorded. It does not prove
-that every writer of that day registered its files, and an exact receipt
-proves only that invocation's writes. Missing inventory, missing compact
-indexes and expired years produce named notices. Discovery therefore returns
-`inventory_complete: false`; an empty result is not proof that no endpoint
-was ever retired.
-
-The shared native retirement writer does not currently register its returned
-file paths in the publication inventory. Both plan-time HTTP 410 decisions
-and assemble-time low-yield decisions use that writer. Completing discovery
-needs a source that proves which retained raw retirement files exist.
-Whether the publication inventory should list those paths, and how their
-publication retry would preserve them, remains an owner decision. This
-read-only consumer adds no registration and treats neither an empty file
-list nor that proposal as retirement-absence proof.
+that every writer of that day registered its files. Missing inventory,
+missing compact indexes, lost days and expired years produce named notices. Discovery
+therefore retains `inventory_complete: false`; an empty result is not proof
+that a feed has no older observations. A future-dated observation is an
+input error, not a reason to invent or shorten recorded history.
 
 ## Design rationale
 
-Keep discovery and recorded facts separate. Existing file inventories can
-name the original rows without creating another authoritative version of
-their history. Compact indexes decide which tier serves a date, so stale raw
-names do not require a broad scan or a guessed calendar window.
+Owner ruling (kumarsnaveen_microsoft, 2026-10-23): permanent retirement
+authority for the TypeScript planner is the existing source registry,
+`config/sources.json`, through `status: retired` and `retired_on`. It is not
+the native retirement ledger. Retirement-file discovery, scanning, another
+index or row store, and a new publication-inventory purpose are withdrawn.
+This does not delete or rewrite historical Python ledger files.
+
+Keep discovery and recorded facts separate. Compact indexes decide which
+tier serves a date, so a stale raw file already served by compaction is not
+read twice. Health discovery remains bounded by its existing named inputs.
 Changing the health-day counting policy requires a separate owner decision;
 input discovery must not silently change what the existing reader selects.
 
 ## See also
 
-- [Feed harvesting](feed-harvesting.md) - lifecycle decisions before requests.
+- [Feed harvesting](feed-harvesting.md) - source-registry lifecycle before requests.
 - [Planner runner](feed-plan-runner.md) - API composition and named evidence.
 - [Ledger compaction](../publishing/ledger-compaction.md) - native index and tier rules.
 - [Publication](../publishing/committing.md) - exact writes and fresh-main recovery.

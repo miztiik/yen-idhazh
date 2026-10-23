@@ -1,31 +1,24 @@
-/** Which existing native files serve the feed-history days Python would select? */
+/** Which existing native files serve the newest represented feed-health dates? */
 import {
   COMPACT_INDEX_VERSION, CompactIndexSchema, DateStampSchema, FileIdNameSchema,
-  NativeRelativePathSchema, PublicationInventoryInputSchema, PublicationReceiptInputSchema,
-  WriterIdentitySchema,
+  NativeRelativePathSchema, PublicationInventoryInputSchema,
 } from "@idhazh/common-contracts";
-import type { CompactIndex, WriterIdentity } from "@idhazh/common-contracts";
+import type { CompactIndex } from "@idhazh/common-contracts";
 import type { SeenDayInput } from "../config/service-settings";
 
-type FeedLedger = "feed-health" | "feed-retirements";
 type Period = CompactIndex["period"];
-export type FeedReceiptWrite = Readonly<{
-  path: string; sha256: string; day: string; identity: WriterIdentity;
-}>;
-export type FeedInventory = Readonly<{
+export type HealthInventory = Readonly<{
   inputs: SeenDayInput[];
   files: string[];
-  receipt_writes: FeedReceiptWrite[];
   inventory_complete: false;
   notices: string[];
 }>;
-export type FeedInventoryInput = Readonly<{
-  ledger: FeedLedger;
+export type HealthInventoryInput = Readonly<{
+  ledger: "feed-health";
   prefix: readonly string[];
   inventory: unknown;
   compact: Readonly<Partial<Record<Period, unknown>>>;
   health_window_days: number;
-  receipts?: readonly Readonly<{ value: unknown; identity: WriterIdentity }>[];
 }>;
 const periods = ["yearly", "monthly", "daily"] as const;
 
@@ -60,15 +53,11 @@ function readRawDay(path: string, root: string): string | undefined {
   if (!path.endsWith(".parquet")) throw new Error("feed inventory: native JSON rows require a JSON reader");
   return day;
 }
-function matchesWriter(left: WriterIdentity, right: WriterIdentity): boolean {
-  return (Object.keys(WriterIdentitySchema.shape) as (keyof WriterIdentity)[])
-    .every(key => left[key] === right[key]);
-}
 function buildCompactPath(root: string, period: Period, covers: string): string {
   return `${root}/${period}/${period === "yearly" ? `${covers}/${covers}` : covers.replaceAll("-", "/")}.parquet`;
 }
 
-export function resolveFeedInventory(input: FeedInventoryInput): FeedInventory {
+export function resolveHealthInventory(input: HealthInventoryInput): HealthInventory {
   if (!Number.isSafeInteger(input.health_window_days) || input.health_window_days < 1) {
     throw new Error("feed inventory: health_window_days must be a positive recorded-day count");
   }
@@ -113,22 +102,6 @@ export function resolveFeedInventory(input: FeedInventoryInput): FeedInventory {
       if (entry.root === "state") addRaw(`state/${entry.path}`);
     }
   }
-  const receiptWrites = new Map<string, FeedReceiptWrite>();
-  for (const supplied of input.receipts ?? []) {
-    const receipt = PublicationReceiptInputSchema.parse(supplied.value);
-    const expected = WriterIdentitySchema.parse(supplied.identity);
-    if (!matchesWriter(receipt.identity, expected)) throw new Error("feed inventory: receipt belongs to another invocation");
-    for (const [path, sha256] of Object.entries(receipt.writes)) {
-      const day = readRawDay(path, rawRoot);
-      if (day === undefined) continue;
-      const previous = receiptWrites.get(path);
-      if (previous !== undefined && previous.sha256 !== sha256) {
-        throw new Error("feed inventory: conflicting exact receipts name the same native file");
-      }
-      receiptWrites.set(path, { path, sha256, day, identity: receipt.identity });
-      addRaw(path);
-    }
-  }
   const matchPeriod = (day: string) => periods.flatMap(period => {
     const covers = period === "yearly" ? day.slice(0, 4) : period === "monthly" ? day.slice(0, 7) : day;
     const entry = compact.get(period)?.entries.find(entry => entry.covers === covers);
@@ -138,26 +111,27 @@ export function resolveFeedInventory(input: FeedInventoryInput): FeedInventory {
   for (const index of compact.values()) {
     for (const entry of index.entries) {
       // Python held_days includes every calendar day of a nonempty packed period.
-      if (input.ledger === "feed-retirements" || entry.rows > 0) {
+      if (entry.rows > 0) {
         for (const day of listCalendarDays(entry.covers)) days.add(day);
       }
     }
   }
-  const receiptDays = new Set([...receiptWrites.values()].map(write => write.day));
   for (const day of raw.keys()) {
-    if (matchPeriod(day) === undefined || receiptDays.has(day)) days.add(day);
+    if (matchPeriod(day) === undefined) days.add(day);
     else if (!days.has(day)) {
       notices.push(`feed-inventory:covered-raw-day-unconfirmed:${input.ledger}:${day}`);
     }
   }
   const heldDays = [...days].sort();
-  const selected = input.ledger === "feed-health"
-    ? heldDays.slice(-input.health_window_days) : heldDays;
+  const selected = heldDays.slice(-input.health_window_days);
   const files = new Set(Object.values(indexes));
   const inputs: SeenDayInput[] = [];
   for (const day of selected) {
     const match = matchPeriod(day);
     if (match !== undefined) {
+      if (match.entry.state === "lost" || match.entry.lost_days.includes(day)) {
+        notices.push(`feed-inventory:day-lost:${input.ledger}:${day}`);
+      }
       if (match.entry.state === "packed") files.add(buildCompactPath(compactRoot, match.period, match.entry.covers));
       inputs.push({ day, indexes });
     } else {
@@ -169,7 +143,7 @@ export function resolveFeedInventory(input: FeedInventoryInput): FeedInventory {
   }
   notices.push(`feed-inventory:raw-census-unproven:${input.ledger}`);
   return {
-    inputs, files: [...files].sort(), receipt_writes: [...receiptWrites.values()],
+    inputs, files: [...files].sort(),
     inventory_complete: false, notices,
   };
 }
