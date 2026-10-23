@@ -9,6 +9,7 @@ import type { FeedIngestConfig, FeedOutcomePayload, ItemHealthFailureCode, Polic
 import type { LedgerRegistration, LedgerSettings, PersistLedgerResult } from "@idhazh/ledger-file-writer";
 import type { HarvestInputs } from "./load-harvest-inputs";
 import type { ProgressDetails, ProgressEventType } from "../logging/progress-logger";
+import type { SourceHistoryEvidence } from "../read-ledger-history/read-feed-history";
 
 export { FetchFailureSchema } from "@idhazh/common-contracts";
 export type FetchFailure = z.infer<typeof FetchFailureSchema>;
@@ -59,6 +60,7 @@ export type HarvestContext = {
   writer: WriterIdentity;
   correlation_id: string;
   max_future_hours: number;
+  feed_history?: ReadonlyMap<string, SourceHistoryEvidence>;
   exclusions?: {
     published_window_days: number;
     published_on: ReadonlyMap<string, string>;

@@ -3,6 +3,8 @@ import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { chronological, failing, feedDays, resting, settled, streak, type FeedEvent, type FeedRead } from '../src/lib/feed-health';
+import { sourceHealth } from '../src/lib/console/voices/source-health';
+import type { SourceHealthView } from '../src/lib/server/payload';
 const repo = resolve(process.cwd(), '..');
 const QUARANTINE_AFTER = (JSON.parse(readFileSync(join(repo, 'config', 'idhazh.json'), 'utf8')) as {
     collect: {
@@ -53,6 +55,28 @@ test.describe('the quarantine rule, without a browser', () => {
             }))
         ];
         expect(resting(served, QUARANTINE_AFTER)).toBe(false);
+        const failure = { ...at(9), checkedAt: '2026-08-30T12:00:00.100Z', outcome: 'transient', items: 0 };
+        const skip = { ...at(1), checkedAt: '2026-08-30T12:00:00.100Z', outcome: 'skipped', items: 0 };
+        expect(resting([failure, skip], 1)).toBeNull();
+        expect(resting([skip, failure], 1)).toBeNull();
+        expect(resting([failure, { ...skip, checkedAt: '2026-08-30T12:00:00.101Z' }], 1)).toBe(false);
+        expect(resting([{ ...failure, checkedAt: '2026-08-30T12:00:00Z' }, skip], 1)).toBeNull();
+        expect(streak([failure, skip])).toBe(1);
+        const view: SourceHealthView = {
+            generated_at: failure.checkedAt.slice(0, 19) + 'Z', run_id: failure.runId,
+            headline_sentence: 'Observation order is not known.', reliability_floor: 0,
+            reliability_window_days: 1, min_complete_days: 1, complete_dates: 0,
+            yield_readable: false, first_date: null, last_date: null,
+            sources: [{
+                source_id: 'recorded-feed', title: 'Recorded feed', vertical: 'ai',
+                permission: 'allowed', availability: 'unavailable', retired: false,
+                retired_on: null, opportunities: 0, publications: 0, source_failures: 0,
+                reliability: 0, reliability_reads: 1,
+            }],
+        };
+        expect(sourceHealth(view, 1)?.withheld).toBe(0);
+        view.sources[0]!.permission = 'unavailable';
+        expect(sourceHealth(view, 1)?.withheld).toBe(1);
     });
     test('an answer that carried nothing is a failure, and a polite refusal is not', () => {
         const empty: FeedRead = { date: '2026-08-01', runId: 'r1', outcome: 'ok', items: 0 };
@@ -92,8 +116,9 @@ const EVIDENCE: {
 function at(run: number): {
     date: string;
     runId: string;
+    checkedAt: string;
 } {
-    return { date: '2026-08-30', runId: `2026-08-30-${run}` };
+    return { date: '2026-08-30', runId: `2026-08-30-${run}`, checkedAt: `2026-08-30T12:00:${String(run).padStart(2, '0')}Z` };
 }
 test.describe('the evidence table, without a browser', () => {
     const twoStrikes: FeedRead[] = [

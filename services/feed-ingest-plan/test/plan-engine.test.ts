@@ -6,6 +6,7 @@ import { dirname, join, relative } from "node:path";
 import {
   FeedIngestEventSchema,
   deriveCandidateId, deriveUrlKey,
+  FeedHealthContract,
 } from "@idhazh/common-contracts";
 import { persistLedger } from "@idhazh/ledger-file-writer";
 import { runFeedPlan, summarizePlan } from "../src/run-feed-plan";
@@ -16,6 +17,10 @@ import { readSeenEvidence, requiredSeenDays } from "../src/read-ledger-history/r
 import { SeenRowSchema } from "../src/screen-article-candidates/seen-evidence";
 import { recordedPlan } from "./plan-recordings";
 import { source } from "./harvest-recordings";
+import { endpointKey, readFeedHistory } from "../src/read-ledger-history/read-feed-history";
+import { loadHarvestInputs, sourceSnapshot } from "../src/harvest-feeds/load-harvest-inputs";
+import { readDailyPublication, DailyPublicationSchema, DailyPublicationContract } from "../src/read-ledger-history/read-daily-publication";
+import { ItemHealthFailureProjectionContract } from "../src/read-ledger-history/item-health-failure";
 
 async function seenWindow(recorded: Awaited<ReturnType<typeof recordedPlan>>, knownUrl: string) {
   recorded.inputs.clock_config.collect.seen_window_days = 2;
@@ -135,6 +140,161 @@ test("real composition shares one clock and override and reads native dispatches
     });
     expect(recorded.inputs.harvest.config.curate.article_limit).toBe(configuredLimit);
     expect(recorded.inputs.harvest.config.triage.max_age_hours).toBe(24);
+    const nativeHealth = await readLedgerParquet(
+      join(recorded.inputs.outputRoot, result.files.feed_health.files[0]!.path), "feed-health", FeedHealthContract,
+    );
+    expect(nativeHealth.envelope.row_schema_version).toBe(FeedHealthContract.schemaVersion);
+    expect(nativeHealth.rows.find(held => held.row.feed_id === "resting-news")!.row).toMatchObject({
+      outcome: "skipped", target_attempted: false, detail: "source inactive",
+    });
+    expect(nativeHealth.rows.find(held => held.row.feed_id === "empty-news")!.row).toMatchObject({
+      outcome: "ok", items: 0, target_attempted: true,
+    });
+    expect(nativeHealth.rows.find(held => held.row.feed_id === "recorded-news")!.row.items).toBe(2);
+    const historyFixture = FeedHealthContract.schema.parse(await Bun.file(new URL(
+      "../../../tests/fixtures/feed-ingest-plan/feed-health-row.json", import.meta.url,
+    )).json());
+    const parity = await recordedPlan([
+      source({ id: "sleeping" }), source({ id: "gone", url: "https://news.example/gone.xml" }),
+      source({ id: "configured-retired", url: "https://news.example/retired.xml", status: "retired", retired_on: "2026-10-20" }),
+      source({ id: "edited" }), source({ id: "inactive", status: "draft" }),
+    ]);
+    try {
+      parity.runtime.clock = () => new Date("2026-10-24T00:00:00Z");
+      parity.inputs.harvest = loadHarvestInputs({
+        config: parity.inputs.harvest.config,
+        taxonomy: { ...parity.inputs.harvest.taxonomy, ...parity.inputs.harvest.registry },
+        sources: {
+          feeds: parity.inputs.harvest.sources,
+          retired: [source({ id: "curated-history-only", status: "retired", retired_on: "2026-10-20",
+            vertical: "old-desk", kind: "old-kind", url: "https://news.example/curated-retired.xml" })],
+        },
+        extraction: { ...parity.inputs.harvest.extraction_settings, extract: parity.inputs.harvest.extraction },
+      });
+      const policy = parity.inputs.clock_config.collect;
+      const threshold = policy.availability_strikes_before_rest;
+      const day = "2026-10-23";
+      const snapshot = (id: string) => sourceSnapshot(parity.inputs.harvest,
+        parity.inputs.harvest.sources.find(source => source.id === id)!);
+      const healthRows = Array.from({ length: threshold }, (_, index) =>
+        ["sleeping", "gone"].map(id => FeedHealthContract.schema.parse({
+          ...historyFixture, run_id: `${day}-${index + 1}`, feed_id: id,
+          checked_at: `${day}T01:00:0${index}Z`,
+          outcome: "permanent", status: id === "gone" ? 410 : 404, items: 0,
+          endpoint_key: endpointKey(snapshot(id).feed_url),
+        }))).flat();
+      // A repeated result in one run must not become a second availability strike.
+      healthRows.push(healthRows[0]!);
+      const nativeWriter = {
+        run_id: `${day}-99`, attempt: 1, job: "plan" as const, shard: 0,
+        pipeline_name: null, task_name: null, producer: "tests.feed-history", git_sha: "a".repeat(40),
+      };
+      const writeHealth = async (rows: typeof healthRows, attempt = 1) => ({
+        files: (await Promise.all([...new Set(rows.map(row => row.run_id))].map(run_id => persistLedger({
+          ledger: "feed-health", registryEntry: parity.inputs.registrations.feed_health,
+          outputRoot: parity.inputs.outputRoot, ledgerSettings: parity.inputs.ledgerSettings,
+          writerContext: { ...nativeWriter, run_id, attempt }, period: { tier: "raw", covers: day },
+          rowContract: FeedHealthContract, rows: rows.filter(row => row.run_id === run_id),
+        })))).flatMap(result => result.files),
+      });
+      const health = await writeHealth(healthRows);
+      const local = (files: readonly { path: string }[]) => files.map(file =>
+        relative(parity.directory, join(parity.inputs.outputRoot, file.path)).replaceAll("\\", "/"));
+      parity.inputs.settings.inputs.feed_health_days = [{ day, raw_files: local(health.files) }];
+      const held = await runFeedPlan({}, parity.inputs, parity.runtime);
+      for (const id of ["sleeping", "gone"]) {
+        expect(held.evidence.harvest.feed_outcomes.find(row => row.source.source_id === id)).toMatchObject({
+          fetch_status: "not_requested", parse_status: "not_attempted", rejection_reason: null,
+          history: { lifecycle: "resting" },
+        });
+      }
+      expect(parity.transport.requests.some(request => ["/gone.xml", "/retired.xml"].includes(request.url.pathname))).toBe(false);
+      expect(held.evidence.harvest.feed_outcomes).toHaveLength(parity.inputs.harvest.sources.length);
+      expect(held.evidence.harvest.feed_outcomes.some(row => row.source.source_id === "curated-history-only")).toBe(false);
+      expect(held.evidence.harvest.feed_outcomes.find(row => row.source.source_id === "configured-retired")!.rejection_reason)
+        .toBe("SOURCE_INACTIVE");
+      expect(held.files).not.toHaveProperty("feed_retirements");
+      expect(parity.inputs.registrations).not.toHaveProperty("feed_retirements");
+      expect(held.evidence.harvest.feed_outcomes.find(row => row.source.source_id === "edited")!.fetch_status).toBe("success");
+      expect(held.evidence.harvest.feed_outcomes.find(row => row.source.source_id === "inactive")!.rejection_reason).toBe("SOURCE_INACTIVE");
+      expect(held.evidence.feed_history.sources.get("sleeping")!.strikes).toBe(threshold);
+      expect(held.evidence.feed_history.sources.get("sleeping")!.reliability).toMatchObject({
+        success_fraction: 0, attempted: threshold, productive: 0, production_factor: policy.reliability_floor,
+      });
+      expect(held.evidence.feed_history.history.health.availability).toBe("unavailable");
+      expect(held.evidence.feed_history.sources.get("gone")!.lifecycle).toBe("resting");
+      const healthAfter = await readLedgerParquet(join(parity.inputs.outputRoot, held.files.feed_health.files[0]!.path),
+        "feed-health", FeedHealthContract);
+      expect(healthAfter.rows.filter(({ row }) => row.outcome === "skipped").every(({ row }) =>
+        row.target_attempted === false)).toBe(true);
+      const read = (health_days = parity.inputs.settings.inputs.feed_health_days) => readFeedHistory({
+        root: parity.directory, now: held.context.now, run_id: held.context.run_id,
+        sources: parity.inputs.harvest.sources.map(source => sourceSnapshot(parity.inputs.harvest, source)),
+        policy, health: parity.inputs.registrations.feed_health, health_days,
+      });
+      const sleepOnly = healthRows.filter(row => row.feed_id === "sleeping");
+      const skips = Array.from({ length: threshold }, (_, index) => FeedHealthContract.schema.parse({
+        ...sleepOnly[0]!, run_id: `${day}-${100 + index}`, outcome: "skipped", status: null, items: 0,
+        target_attempted: false, checked_at: `${day}T02:00:0${index}Z`,
+      }));
+      const rested = await writeHealth([...sleepOnly, ...skips], 2);
+      const resumed = await read([{ day, raw_files: [...local(health.files), ...local(rested.files)] }]);
+      expect(resumed.sources.get("sleeping")).toMatchObject({
+        lifecycle: "eligible", strikes: threshold, rested_runs: threshold, reliability: { attempted: threshold },
+      });
+      const permission = await writeHealth([FeedHealthContract.schema.parse({
+        ...sleepOnly[0]!, run_id: `${day}-1000`, outcome: "robots_denied", status: null, items: 0,
+        robots_outcome: "denied", target_attempted: false, checked_at: `${day}T03:00:00Z`,
+      })]);
+      const refused = await read([{ day, raw_files: [...local(health.files), ...local(permission.files)] }]);
+      expect(refused.sources.get("sleeping")).toMatchObject({
+        lifecycle: "resting", strikes: threshold, reliability: { attempted: threshold },
+      });
+      const recovery = await writeHealth([FeedHealthContract.schema.parse({
+        ...healthRows.find(row => row.feed_id === "gone")!, run_id: `${day}-1000`, outcome: "ok",
+        items: 1, status: 200, checked_at: `${day}T03:00:00Z`,
+      })]);
+      const recovered = await read([{ day, raw_files: [...local(health.files), ...local(recovery.files)] }]);
+      expect(recovered.sources.get("gone")).toMatchObject({ lifecycle: "eligible", strikes: 0 });
+      const unkeyed = await writeHealth(healthRows.filter(row => row.feed_id === "gone")
+        .map(row => ({ ...row, endpoint_key: null })), 3);
+      expect((await read([{ day, raw_files: local(unkeyed.files) }])).sources.get("gone")).toMatchObject({
+        lifecycle: "resting",
+      });
+      const daily = await persistLedger({
+        ledger: "item-health", registryEntry: parity.inputs.registrations.item_health,
+        outputRoot: parity.inputs.outputRoot, ledgerSettings: parity.inputs.ledgerSettings,
+        writerContext: { ...nativeWriter, run_id: `${held.context.date}-99` },
+        period: { tier: "raw", covers: held.context.date },
+        rowContract: { schema: DailyPublicationSchema, schemaVersion: DailyPublicationContract.schemaVersion },
+        rows: [
+          { date: held.context.date, url_key: deriveUrlKey("https://news.example/story"), source_id: "sleeping", outcome: "ok" },
+          { date: held.context.date, url_key: deriveUrlKey("https://news.example/story"), source_id: "sleeping", outcome: "ok" },
+          { date: held.context.date, url_key: deriveUrlKey("https://news.example/failed"), source_id: "sleeping", outcome: "failed" },
+        ],
+      });
+      const published = await readDailyPublication({
+        root: parity.directory, day: held.context.date, registration: parity.inputs.registrations.item_health,
+        days: [{ day: held.context.date, raw_files: local(daily.files) }],
+      });
+      expect(published.counts.get("sleeping")).toBe(1);
+      expect(published.history.availability).toBe("available");
+      expect(DailyPublicationContract.schemaVersion).toBe("2026-10-20");
+      expect(ItemHealthFailureProjectionContract.schemaVersion).toBe(DailyPublicationContract.schemaVersion);
+      const future = await persistLedger({
+        ledger: "item-health", registryEntry: parity.inputs.registrations.item_health,
+        outputRoot: parity.inputs.outputRoot, ledgerSettings: parity.inputs.ledgerSettings,
+        writerContext: { ...nativeWriter, run_id: `${held.context.date}-100`, producer: "tests.newer-item-health" },
+        period: { tier: "raw", covers: held.context.date },
+        rowContract: { schema: DailyPublicationSchema, schemaVersion: "2026-10-21" },
+        rows: [{ date: held.context.date, url_key: deriveUrlKey("https://news.example/newer"),
+          source_id: "sleeping", outcome: "ok" }],
+      });
+      await expect(readDailyPublication({
+        root: parity.directory, day: held.context.date, registration: parity.inputs.registrations.item_health,
+        days: [{ day: held.context.date, raw_files: local(future.files) }],
+      })).rejects.toThrow("newer than its declared fields");
+    } finally { await parity.close(); }
   } finally { await recorded.close(); }
 }, 30000);
 

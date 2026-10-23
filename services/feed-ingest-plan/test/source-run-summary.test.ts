@@ -43,9 +43,10 @@ test("real stage membership includes inactive, empty, failed and carrier sources
       expect(summary).not.toHaveProperty("completion_evidence");
       expect(summary.published_count).toBeNull();
       expect(summary.lead_count).toBeNull();
-      expect(summary.history_success_fraction).toBeNull();
-      expect(summary.history_success_attempts).toBeNull();
-      expect(summary.history_window_days).toBeNull();
+      const measured = result.evidence.feed_history.sources.get(summary.source_id)!.reliability;
+      expect(summary.history_success_fraction).toBe(measured?.success_fraction ?? null);
+      expect(summary.history_success_attempts).toBe(measured?.attempted ?? null);
+      expect(summary.history_window_days).toBe(measured?.window_days ?? null);
       expect(summary.source.kind).toBe(result.evidence.harvest.feed_outcomes.find(row =>
         row.source.source_id === summary.source_id)!.source.kind);
     }
@@ -95,7 +96,8 @@ test("recorded operational evidence keeps its attempts and window separate from 
     const result = await runFeedPlan({ partition_strategy: "none" }, recorded.inputs, recorded.runtime);
     const [summary] = deriveSourceRunSummaries(result, reconcileStageMembership(result));
     expect(summary).toMatchObject({
-      history_success_fraction: 0.5, history_success_attempts: 4, history_window_days: 7,
+      history_success_fraction: 1, history_success_attempts: 1,
+      history_window_days: recorded.inputs.clock_config.collect.reliability_window_days,
     });
     for (const measurement of result.evidence.curation.quality) {
       expect(measurement.operational).toEqual({ success_fraction: 0.5, attempted: 4, window_days: 7 });

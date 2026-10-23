@@ -16,13 +16,22 @@
  */
 
 import { plural, shortDate } from './format';
+import { availabilityEvidence, definitelyAfter, latestObservations, observationGroups } from '../../../packages/common-contracts/src/observation-order';
 
 /** What this module needs off a feed-health row, and nothing more. */
 export interface FeedRead {
 	date: string;
 	runId: string;
+	checkedAt?: string;
 	outcome: string;
 	items: number;
+}
+
+function observations<T extends FeedRead>(rows: readonly T[]) {
+	return rows.map(row => ({
+		date: row.date, run_id: row.runId, checked_at: row.checkedAt,
+		outcome: row.outcome, items: row.items, original: row
+	}));
 }
 
 /** The same set as `FAILING_OUTCOMES` in the contract. A robots refusal is not
@@ -73,7 +82,12 @@ export function skipped(row: FeedRead): boolean {
  * leaves the newest read as whichever row the shard happened to carry last.
  */
 export function chronological<T extends FeedRead>(rows: readonly T[]): T[] {
-	return [...rows].sort((a, b) => a.date.localeCompare(b.date) || a.runId.localeCompare(b.runId));
+	return observationGroups(observations(rows)).flat().map(item => item.original);
+}
+
+export function latestFeedEvent<T extends FeedRead>(rows: readonly T[]): T | null {
+	const group = latestObservations(observations(rows));
+	return group?.length === 1 ? group[0].original : null;
 }
 
 /** Failures in a row, ending at the newest read. `rows` are oldest run first.
@@ -90,15 +104,8 @@ export function chronological<T extends FeedRead>(rows: readonly T[]): T[] {
  *
  * This is `discover.streak` and it has to stay that loop.
  */
-export function streak(rows: readonly FeedRead[]): number {
-	let strikes = 0;
-	for (let index = rows.length - 1; index >= 0; index -= 1) {
-		const row = rows[index];
-		if (preserves(row)) continue;
-		if (!failing(row)) break;
-		strikes += 1;
-	}
-	return strikes;
+export function streak(rows: readonly FeedRead[]): number | null {
+	return availabilityEvidence(observations(rows)).strikes;
 }
 
 /** Is the pipeline resting this feed right now? The same rule as `_rests`.
@@ -108,14 +115,8 @@ export function streak(rows: readonly FeedRead[]): number {
  * counters read the one knob, because there is only one question here - how
  * much evidence is enough.
  */
-export function resting(rows: readonly FeedRead[], after: number): boolean {
-	let skips = 0;
-	for (let index = rows.length - 1; index >= 0; index -= 1) {
-		if (!skipped(rows[index])) break;
-		skips += 1;
-	}
-	if (skips >= after) return false;
-	return streak(rows) >= after;
+export function resting(rows: readonly FeedRead[], after: number): boolean | null {
+	return availabilityEvidence(observations(rows), after).resting;
 }
 
 /** One read, and which feed made it. */
@@ -137,7 +138,8 @@ export interface FeedEvent extends FeedRecord {
  */
 function supersedes(later: FeedEvent, kept: FeedEvent): boolean {
 	if (answered(later) !== answered(kept)) return answered(later);
-	return later.checkedAt > kept.checkedAt;
+	if (!later.checkedAt || !kept.checkedAt) return false;
+	return definitelyAfter(later.checkedAt, kept.checkedAt);
 }
 
 /** One result per feed per run, in the order the rows arrived.

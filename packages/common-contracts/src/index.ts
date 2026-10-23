@@ -20,4 +20,8 @@ export * from "./schemas/policy.schema";
 export * from "./schemas/config.schema";
 export * from "./schemas/ledger-index.schema";
 export * from "./schemas/host-fingerprint.schema";
+export * from "./schemas/feed-health.schema";
+export * from "./schemas/recorded-instant.schema";
+export * from "./observation-order";
 export * from "./schemas/planner-operation.schema";
+export * from "./schemas/publication-input.schema";

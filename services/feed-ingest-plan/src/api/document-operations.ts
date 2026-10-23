@@ -14,6 +14,7 @@ import { PlanError } from "./plan-request";
 import { FetchRequestSchema, FetchedDocumentSchema, ParseRequestSchema, PlannerOperationSchema } from "./operation-contracts";
 import type { FetchedDocument, PlannerOperation } from "./operation-contracts";
 import { openOperationStore, sha256 } from "./operation-store";
+import type { PreparedOperation } from "./operation-store";
 
 export function operationConfigFingerprint(inputs: PlanInputs, runtime: PlanRuntime) {
   return sha256(JSON.stringify({
@@ -27,12 +28,26 @@ export function proposedOperation(
 ) {
   const now = runtime.clock?.() ?? new Date();
   const context = resolveRunContext(inputs.settings, runtime.git_sha, now,
-    runtime.run_number ?? BigInt(`0x${correlation_id.replaceAll("-", "")}`).toString(), correlation_id);
+    runtime.run_number ?? BigInt(`0x${correlation_id.replaceAll("-", "")}`).toString(), correlation_id, runtime.captured_at);
   return PlannerOperationSchema.parse({
     request_id, operation, input_sha256: sha256(JSON.stringify(request)),
     config_sha256: operationConfigFingerprint(inputs, runtime), run_id: context.run_id,
-    correlation_id, created_at: context.now, state: "started", response_json: null, artifact: null,
+    correlation_id, created_at: context.captured_at, state: "started", response_json: null, artifact: null,
   });
+}
+
+export function prepareOperation(
+  operation: PlannerOperation["operation"], request_id: string, request: unknown,
+  correlation_id: string, inputs: PlanInputs, runtime: PlanRuntime, runId?: string,
+): PreparedOperation {
+  return {
+    request_id, operation, input_sha256: sha256(JSON.stringify(request)),
+    config_sha256: operationConfigFingerprint(inputs, runtime),
+    capture: () => {
+      const record = proposedOperation(operation, request_id, request, correlation_id, inputs, runtime);
+      return runId === undefined ? record : { ...record, run_id: runId };
+    },
+  };
 }
 function checkArtifact(record: PlannerOperation, inputs: PlanInputs): FetchedDocument {
   const artifact = FetchedDocumentSchema.parse(record.artifact);
@@ -53,13 +68,14 @@ export async function executeDocumentOperation(
 ) {
   const request = operation === "fetch" ? FetchRequestSchema.parse(raw) : ParseRequestSchema.parse(raw);
   if (!inputs.settings.enabled) throw new PlanError("PLANNER_DISABLED", "Planner is disabled by service settings", "enabled");
-  const proposed = proposedOperation(operation, request.request_id, request, request.correlation_id, inputs, runtime);
   const store = await openOperationStore(inputs.outputRoot);
   try {
+    let runId: string | undefined;
     if ("fetch_request_id" in request) {
       const fetched = store.get(request.fetch_request_id);
-      if (fetched !== null) proposed.run_id = fetched.run_id;
+      if (fetched !== null) runId = fetched.run_id;
     }
+    const proposed = prepareOperation(operation, request.request_id, request, request.correlation_id, inputs, runtime, runId);
     return (await store.execute(proposed, async record => {
       if ("source_id" in request) {
         const source = inputs.harvest.sources.find(source => source.id === request.source_id);

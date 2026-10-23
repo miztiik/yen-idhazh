@@ -29,8 +29,10 @@ export function deriveSourceRunSummaries(result: FeedPlanResult, membership: Sta
     const lastFailure = failures.toSorted((a, b) => b.rejected_at.localeCompare(a.rejected_at))[0];
     const operational = evidence.curation.input.filter(article => article.candidate.source_id === id)
       .map(article => article.evidence.operational);
-    const history = operational[0] ?? null;
-    for (const measured of operational) requireSame(measured, history, `source.${id}.operational_history`);
+    const supplied = operational[0] ?? null;
+    for (const measured of operational) requireSame(measured, supplied, `source.${id}.operational_history`);
+    const native = evidence.feed_history.sources.get(id)?.reliability ?? null;
+    const history = native ?? supplied;
     if (history !== null) {
       FiniteSchema.min(0).max(1).parse(history.success_fraction);
       PositiveCountSchema.parse(history.attempted);

@@ -15,12 +15,14 @@ import { RelativePathSchema } from "../config/service-settings";
 import { recordFeedPlan } from "../record-feed-plan";
 import { documentRoute } from "./routes/document.route";
 import type { CapturedPlanIdentity } from "./plan-operation";
+import { retainFeedReceipts } from "./feed-history-receipts";
 
 // Calendar-versioned HTTP protocol paths are not runtime planning controls.
 const apiPrefix = "/api/2026-10-20";
 
 export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime) {
   const app = new Hono<{ Bindings: PlanningBindings }>();
+  const feedReceipts = retainFeedReceipts(inputs, runtime.feed_history_receipts);
   const ownFiles = new Map<string, Set<string>>();
   for (const receipt of runtime.seen_receipts ?? []) {
     if (ownFiles.has(receipt.day) || new Set(receipt.files).size !== receipt.files.length) {
@@ -56,6 +58,11 @@ export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime) {
       }, {
         ...runtime, ...captured, clock: () => now,
         seen_receipts: [...ownFiles].map(([day, files]) => ({ day, files: [...files] })),
+        feed_history_receipts: feedReceipts.read(),
+        on_feed_history_persisted: receipt => {
+          feedReceipts.remember(receipt);
+          runtime.on_feed_history_persisted?.(receipt);
+        },
         on_seen_persisted: receipt => {
           const paths = ownFiles.get(receipt.day) ?? new Set<string>();
           for (const file of receipt.files) paths.add(RelativePathSchema.parse(file.path));

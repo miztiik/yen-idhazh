@@ -777,8 +777,8 @@ export interface SourceHealthRow {
 	source_id: string;
 	title: string;
 	vertical: string;
-	permission: 'allowed' | 'denied' | 'unreachable' | 'unrecorded';
-	availability: 'answering' | 'failing' | 'resting' | 'never_asked';
+	permission: 'allowed' | 'denied' | 'unreachable' | 'unrecorded' | 'unavailable';
+	availability: 'answering' | 'failing' | 'resting' | 'never_asked' | 'unavailable';
 	retired: boolean;
 	retired_on: string | null;
 	opportunities: number;

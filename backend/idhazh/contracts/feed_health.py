@@ -25,7 +25,7 @@ import hashlib
 from enum import StrEnum
 from typing import Any, ClassVar, Self
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from idhazh.contracts.base import (
     ChangelogEntry,
@@ -36,6 +36,7 @@ from idhazh.contracts.base import (
     Slug,
     Timestamp,
 )
+from idhazh.contracts.recorded_instant import RecordedInstant, definitely_after
 
 
 def derive_endpoint_key(feed_url: str) -> str:
@@ -119,6 +120,11 @@ class FeedHealthRow(Contract):
     __schema_stem__: ClassVar[str] = "feed-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-23T18:50",
+            change="checked_at retains supplied millisecond precision beside legacy whole seconds.",
+            why="Observation order must survive compaction without using a file clock.",
+        ),
+        ChangelogEntry(
             version="2026-09-02T20:00",
             change="endpoint_key, robots_outcome, robots_checked_at and robots_status added.",
             why="The record said what a feed answered and not which address was asked.",
@@ -138,7 +144,7 @@ class FeedHealthRow(Contract):
     run_id: RunId
     date: DateStamp
     feed_id: Slug
-    checked_at: Timestamp
+    checked_at: RecordedInstant
     outcome: FetchOutcome
     status: int | None = Field(
         default=None,
@@ -198,6 +204,12 @@ class FeedHealthRow(Contract):
             "as every other boolean cell under state/ is."
         ),
     )
+
+    @model_validator(mode="after")
+    def _precision_matches_the_declared_shape(self) -> Self:
+        if "." in self.checked_at and self.version < "2026-10-23T18:50":
+            raise ValueError("legacy feed health records use whole-second checked_at")
+        return self
 
     @property
     def attempted(self) -> bool:
@@ -294,4 +306,4 @@ def supersedes(later: FeedHealthRow, kept: FeedHealthRow) -> bool:
     """
     if later.answered != kept.answered:
         return later.answered
-    return later.checked_at > kept.checked_at
+    return definitely_after(later.checked_at, kept.checked_at)
