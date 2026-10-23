@@ -59,7 +59,7 @@ Table D - PR outcomes
 | D1 | 1 | Semantic contracts and focused byte guarantees | - | A | DONE | - | - | - |
 | D2 | 2 | Vector tests independent of the current asset | - | A | DONE | - | - | - |
 | D3 | 3 | Finish the behavior review and remove proven fixture-only checks | 1, 2 | B | PENDING | - | - | - |
-| D5 | 5 | Expectations derived from the test's own input | 2 | D | DONE | input-based-vector-expectations | pending | - |
+| D5 | 5 | Expectations derived from the test's own input | 2 | D | DONE | input-based-vector-expectations | #1654 | - |
 
 ## 2 - Row #1 - Semantic contracts and focused byte guarantees
 
