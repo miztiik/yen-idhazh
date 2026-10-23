@@ -309,6 +309,7 @@ from masquerading as a fully audited plan while the audit contract is unsettled.
 ## See also
 
 - [Harvesting](feed-harvesting.md)
+- [Native health inputs](feed-history-inputs.md)
 - [Screening](feed-screening.md)
 - [Curation](feed-curation.md)
 - [Partitioning](feed-partitioning.md)

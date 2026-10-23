@@ -11,6 +11,7 @@ import {
   RejectionDetailsSchema, RowIdentitySchema, ROW_IDENTITY_COLUMN_VERSIONS, ScoreEvidenceSchema, SourceRunRecordSchema,
   SourceSnapshotSchema, WriterIdentitySchema, FeedHealthRowSchema,
   FetchedDocumentSchema, PlannerOperationSchema,
+  PublicationEntryInputSchema, PublicationInventoryInputSchema, PUBLICATION_INVENTORY_VERSION,
   ExtractionQualitySchema,
 } from "../src/index";
 
@@ -37,8 +38,16 @@ export default schemas;
 
 export const footerKeys = FOOTER_METADATA_KEYS;
 export const optionalFooterKeys = OPTIONAL_FOOTER_METADATA_KEYS;
+export const publicationInputSchemas = {
+  PublicationEntry: z.toJSONSchema(PublicationEntryInputSchema, { io: "input" }),
+  PublicationInventory: z.toJSONSchema(PublicationInventoryInputSchema, { io: "input" }),
+};
 
 if (import.meta.main) process.stdout.write(`${JSON.stringify({
   ...schemas, __footer_keys: footerKeys, __optional_footer_keys: optionalFooterKeys,
   __row_identity_column_versions: ROW_IDENTITY_COLUMN_VERSIONS,
+  __publication_inputs: publicationInputSchemas,
+  __publication_input_versions: {
+    PublicationInventory: PUBLICATION_INVENTORY_VERSION,
+  },
 })}\n`);

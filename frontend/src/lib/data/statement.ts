@@ -8,7 +8,7 @@ import type { AskRefusal } from './slice-shapes';
 
 const READ_ONLY = new Set(['SELECT', 'WITH', 'DESCRIBE', 'SUMMARIZE', 'EXPLAIN']);
 
-type Scan = { statements: number; firstWord: string; sql: string };
+type Scan = { statements: number; firstWord: string; sql: string; bodySql: string };
 
 const TRAILING_SEMICOLON = /;\s*(?:(?:--[^\n]*)|(?:\/\*[\s\S]*?\*\/)|\s)*$/;
 
@@ -19,6 +19,7 @@ function scan(sql: string): Scan {
 	let statements = 0;
 	let firstWord = '';
 	let current = '';
+	let bodySql = sql;
 	for (let at = 0; at < sql.length; at += 1) {
 		const char = sql[at] ?? '';
 		const next = sql[at + 1] ?? '';
@@ -63,9 +64,13 @@ function scan(sql: string): Scan {
 			current += char;
 			continue;
 		}
-		if (/[A-Za-z]/.test(char) && firstWord === '') {
+		if (/[A-Za-z]/.test(char) && (at === 0 || !/[A-Za-z0-9_]/.test(sql[at - 1]))) {
 			const found = /^[A-Za-z_][A-Za-z0-9_]*/.exec(sql.slice(at));
-			if (found) firstWord = found[0].toUpperCase();
+			if (found) {
+				const word = found[0].toUpperCase();
+				if (firstWord === '') firstWord = word;
+				else if (firstWord === 'EXPLAIN' && bodySql === sql && READ_ONLY.has(word) && word !== 'EXPLAIN') bodySql = sql.slice(at);
+			}
 		}
 		if (char === ';') {
 			if (current.trim() !== '') statements += 1;
@@ -75,7 +80,7 @@ function scan(sql: string): Scan {
 		current += char;
 	}
 	if (current.trim() !== '') statements += 1;
-	return { statements, firstWord, sql: sql.trim().replace(TRAILING_SEMICOLON, '') };
+	return { statements, firstWord, sql: sql.trim().replace(TRAILING_SEMICOLON, ''), bodySql };
 }
 
 export function checkStatement(sql: string, maxChars: number): { sql: string; refusal: AskRefusal | null } {
@@ -88,4 +93,8 @@ export function checkStatement(sql: string, maxChars: number): { sql: string; re
 
 export function statementKind(sql: string): string {
 	return scan(sql).firstWord;
+}
+
+export function discoveryStatement(sql: string): string {
+	return scan(sql).bodySql;
 }

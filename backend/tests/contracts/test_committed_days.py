@@ -57,9 +57,9 @@ def a_day_longer_than_the_seed(seed: int) -> dict[str, Any]:
     a day nobody chose (`CLAUDE.md` section 13).
 
     The template is the committed contract fixture, so the payload is the shape
-    the pipeline writes down to the last optional field - `test_contracts.py`
-    holds that file to a byte-identical round trip through `DigestDay`, which a
-    dict composed here would drift from. Only the length is built.
+    the pipeline writes down to the last optional field - `test_schema_drift.py`
+    holds that file to a round trip that keeps every value through `DigestDay`,
+    which a dict composed here would drift from. Only the length is built.
     """
     template: dict[str, Any] = json.loads(
         read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json")

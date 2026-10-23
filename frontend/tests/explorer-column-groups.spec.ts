@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { groupColumns } from '../src/lib/console/explorer/column-groups';
 import { configuredCatalog } from '../src/lib/data/configured-catalog';
+import { parseLedgerCatalog } from '../src/lib/data/ledger-catalog';
 
 /**
  * How the column rail groups names under their ledger. The page names a
@@ -55,4 +56,14 @@ test('only neighbours share a group, and nothing is sorted', () => {
 		['seen', ['a']]
 	]);
 	expect(groupColumns(configuredCatalog, [])).toEqual([]);
+});
+
+test('local columns have no registry and keep dots that resemble ledger prefixes', () => {
+	expect(groupColumns(parseLedgerCatalog({ families: [] }), [
+		{ name: 'published.note', type: 'VARCHAR' },
+		{ name: 'odd."name', type: 'BIGINT' }
+	])).toEqual([{ ledger: null, columns: [
+		{ name: 'published.note', type: 'VARCHAR', shown: 'published.note' },
+		{ name: 'odd."name', type: 'BIGINT', shown: 'odd."name' }
+	] }]);
 });

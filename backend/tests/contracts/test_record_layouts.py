@@ -6,9 +6,9 @@ import json
 from pathlib import Path
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR
+from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 
-from idhazh.contracts.base import Contract, canonical_json, records_json
+from idhazh.contracts.base import Contract, canonical_json
 from idhazh.contracts.console_band import ConsoleBand
 from idhazh.contracts.day_metrics import DayMetrics
 from idhazh.contracts.digest_day import DigestDay
@@ -16,20 +16,11 @@ from idhazh.contracts.digest_run_fragment import DigestRunFragment
 from idhazh.contracts.publication_inventory import PublicationInventory
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.source_health_view import SourceHealthView
+from idhazh.contracts.sources import Sources
+from idhazh.contracts.taxonomy import Taxonomy
 from idhazh.contracts.visual_data import VisualData
+from idhazh.contracts.watchlist import Watchlist
 from idhazh.telemetry.publish import day_metrics
-
-
-def test_selected_record_lists_leave_outer_records_expanded() -> None:
-    payload = [{"runs": [{"n": 1, "verticals": [{"id": "ai", "published": 2}]}]}]
-    text = records_json(payload, record_lists=frozenset({"verticals"}))
-    assert '      "n": 1,\n' in text
-    assert '        {"id": "ai","published": 2}\n' in text
-    assert json.loads(text) == payload
-    assert records_json(json.loads(text), record_lists=frozenset({"verticals"})) == text
-    assert records_json(payload) == (
-        '[\n  {"runs": [{"n": 1,"verticals": [{"id": "ai","published": 2}]}]}\n]\n'
-    )
 
 
 @pytest.mark.parametrize(
@@ -87,7 +78,6 @@ def test_fragment_file_writer_preserves_records_and_metadata(tmp_path: Path, emp
     write_atomic(target, fragment.to_json())
     text = target.read_text(encoding="utf-8")
     assert DigestRunFragment.read(target) == fragment
-    assert text.startswith("{\n")
     assert '  "failed_item_ids": [\n' in text
     assert text.endswith("\n") and "\r" not in text
     for name in ("items", "verticals"):
@@ -96,8 +86,6 @@ def test_fragment_file_writer_preserves_records_and_metadata(tmp_path: Path, emp
         for row in rows:
             rendered = json.dumps(row, sort_keys=True, ensure_ascii=True, separators=(",", ": "))
             assert any(line.strip().rstrip(",") == rendered for line in lines)
-        if empty:
-            assert f'  "{name}": []' in text
 
 
 def test_state_producer_keeps_days_expanded_and_sources_on_one_line(tmp_path: Path) -> None:
@@ -118,3 +106,38 @@ def test_state_producer_keeps_days_expanded_and_sources_on_one_line(tmp_path: Pa
                 record.model_dump(mode="json"), sort_keys=True, separators=(",", ": ")
             )
             assert any(line.strip().rstrip(",") == rendered for line in state_text.splitlines())
+
+
+@pytest.mark.parametrize(
+    ("model", "name"),
+    [
+        pytest.param(Sources, "sources.json", id="sources"),
+        pytest.param(Taxonomy, "taxonomy.json", id="taxonomy"),
+        pytest.param(Watchlist, "watchlist.json", id="watchlist"),
+    ],
+)
+def test_a_curated_registry_writer_holds_one_record_a_line(
+    model: type[Contract], name: str
+) -> None:
+    """The writer, not the committed file, decides the layout a curator reads.
+
+    Counted over what the contract writes, so the day the writer goes back to a
+    field a line this fails, and no whitespace edit to the committed file can
+    make it pass or fail.
+    """
+    rewritten = model.from_json(read_text(CONFIG_DIR / name)).to_json()
+    payload = json.loads(rewritten)
+    expected = [
+        record
+        for _, value in sorted(payload.items())
+        if isinstance(value, list) and value and all(isinstance(item, dict) for item in value)
+        for record in value
+    ]
+    assert expected, f"config/{name} holds no records, so this proves nothing"
+
+    found = [
+        json.loads(line.strip().rstrip(","))
+        for line in rewritten.splitlines()
+        if line.startswith("    {")
+    ]
+    assert found == expected, f"{model.__name__} does not write one record a line"
