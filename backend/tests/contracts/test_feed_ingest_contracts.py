@@ -23,6 +23,8 @@ CONTRACT_NAMES = (
     ("feed_ingest_article_assessment", "ArticleAssessmentRecord"),
     ("feed_ingest_diversity", "DiversityMetricRow"),
     ("feed_ingest_editorial_selection", "EditorialSelectionRow"),
+    ("planner_operation", "FetchedDocument"),
+    ("planner_operation", "PlannerOperation"),
 )
 
 

@@ -172,6 +172,12 @@ jobs:
           bun run check
           bun run test
 
+      - name: Isolated planner workflow preflight
+        if: needs.scope.outputs.code == 'true'
+        run: |
+          bun test ./.github/scripts/tests/feed-ingest-plan-report.test.ts ./.github/scripts/tests/feed-ingest-plan-outputs.test.ts ./.github/scripts/tests/feed-ingest-plan-workflow.test.ts --timeout 30000
+          bun run .github/scripts/feed-ingest-plan-verification.ts
+
       - name: Tests, including the five injection canaries
         if: needs.scope.outputs.code == 'true'
         run: >-

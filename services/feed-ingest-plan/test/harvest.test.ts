@@ -19,8 +19,37 @@ import { createGunzip, gzipSync } from "node:zlib";
 import {
   RecordedTransport, context, destination, inputs, readRecordings, source,
 } from "./harvest-recordings";
+import type { ProgressDetails } from "../src/logging/progress-logger";
 
 let wasmInitialization: ReturnType<typeof initializeWasm> | undefined;
+
+type DocumentObservation = NonNullable<ProgressDetails["document_observation"]>;
+function collectDocumentObservations(runContext: ReturnType<typeof context>) {
+  const observations: DocumentObservation[] = [];
+  runContext.progress = (_event, details) => {
+    if (details?.document_observation) observations.push(details.document_observation);
+  };
+  return observations;
+}
+function expectFeedParseObservations(
+  observations: readonly DocumentObservation[], sources: readonly { id: string; url: string }[],
+  parsedSources: readonly string[],
+) {
+  const feeds = observations.filter(observation => sources.some(source =>
+    source.id === observation.source_id && canonicalizeUrl(source.url).url_key === observation.article_id));
+  expect(new Set(feeds.map(observation => observation.event_id)).size).toBe(feeds.length);
+  const parsed = feeds.filter(observation => observation.operation === "parse");
+  expect(parsed.map(observation => observation.source_id).sort()).toEqual([...parsedSources].sort());
+  for (const observation of parsed) {
+    const fetched = feeds.find(event => event.operation === "fetch" && event.event_id === observation.caused_by_event_id);
+    if (!fetched) throw new Error("Every actual feed parse must name its causing fetch");
+    expect(observation.event_id).not.toBe(fetched.event_id);
+    expect(observation).toMatchObject({
+      article_id: fetched.article_id, source_id: fetched.source_id,
+      run_id: fetched.run_id, correlation_id: fetched.correlation_id,
+    });
+  }
+}
 
 test("the live transport owns a real closable pinned dispatcher without opening a connection", async () => {
   expect(() => createPinnedDispatcher([])).toThrow("no address");
@@ -76,7 +105,9 @@ test("public harvest returns validated full text, provenance and actual observat
     ]);
     const logged: unknown[] = [];
     const runContext = context(record => logged.push(record));
+    const observations = collectDocumentObservations(runContext);
     const result = await harvestFeeds(loaded, runContext, destination(root), { transport, resolve: transport.resolve });
+    expectFeedParseObservations(observations, loaded.sources, ["recorded-news", "recorded-atom"]);
     expect(result.candidates).toHaveLength(4);
     expect(result.rejections.map(row => row.drop_reason)).toEqual(["SOURCE_INACTIVE", "MISSING_REQUIRED_FIELDS"]);
     expect(logged).toEqual(result.rejections);
@@ -169,7 +200,10 @@ test("inactive, empty, malformed, HTTP, timeout and address failures are distinc
       source({ id: "timeout", url: "https://news.example/timeout" }),
       source({ id: "inward", url: "https://inward.example/feed.xml" }),
     ]);
-    const result = await harvestFeeds(loaded, context(), destination(root), { transport, resolve: transport.resolve });
+    const runContext = context();
+    const observations = collectDocumentObservations(runContext);
+    const result = await harvestFeeds(loaded, runContext, destination(root), { transport, resolve: transport.resolve });
+    expectFeedParseObservations(observations, loaded.sources, ["empty", "malformed"]);
     expect(result.candidates).toEqual([]);
     expect(result.rejections.map(row => row.drop_reason)).toEqual([
       "SOURCE_INACTIVE", "FEED_EMPTY", "FEED_PARSE_FAILED", "FETCH_FAILED_HTTP", "FETCH_TIMEOUT", "FETCH_FAILED",

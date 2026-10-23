@@ -70,6 +70,7 @@ from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.machine_panels import MachinePanels
 from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
 from idhazh.contracts.pipeline_tests import PipelineTestsConfig
+from idhazh.contracts.planner_operation import FetchedDocument, PlannerOperation
 from idhazh.contracts.publication_inventory import PublicationInventory
 from idhazh.contracts.publication_receipt import PublicationReceipt
 from idhazh.contracts.qualification import (
@@ -138,6 +139,8 @@ from idhazh.contracts.watchlist import EdgarPolicy, EntityDef, EntityFeed, Watch
 #: persisted documents has nothing to do with it (Guardrail #3, owner ruling
 #: 2026-09-21).
 CONTRACTS: Final[tuple[type[Contract], ...]] = (
+    FetchedDocument,
+    PlannerOperation,
     ArticleAssessmentRecord,
     CandidateRejectionRecord,
     DiversityMetricRow,
@@ -246,6 +249,7 @@ __all__ = [
     "FeedDef",
     "FeedIngestCandidate",
     "FeedIngestDispatch",
+    "FetchedDocument",
     "FileEnvelope",
     "LedgerName",
     "LensDef",
@@ -256,6 +260,7 @@ __all__ = [
     "ModelUse",
     "PipelineInputs",
     "PlannedItem",
+    "PlannerOperation",
     "PublicationInventory",
     "RawDayIndex",
     "RunManifest",

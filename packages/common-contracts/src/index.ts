@@ -19,3 +19,4 @@ export * from "./schemas/policy.schema";
 export * from "./schemas/config.schema";
 export * from "./schemas/ledger-index.schema";
 export * from "./schemas/host-fingerprint.schema";
+export * from "./schemas/planner-operation.schema";

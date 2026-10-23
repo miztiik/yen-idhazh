@@ -81,7 +81,7 @@ test("redirects establish safe destination and robots permission before requesti
 });
 
 test("permanent statuses do not retry; transient statuses use existing retry controls", async () => {
-  const loaded = await inputs([source()], { extraction: { max_retries: 1 } });
+  const loaded = await inputs([source()], { extraction: { max_retries: 1, backoff_initial_seconds: 0.01 } });
   const transport = new RecordedTransport(await readRecordings());
   const fetcher = createPermittedFetcher(loaded.config.harvest, loaded.extraction, { transport, resolve: transport.resolve });
   expect(fetchDiagnostics(await fetcher.fetch("https://news.example/not-found"), 0)).toMatchObject({
@@ -99,6 +99,54 @@ test("permanent statuses do not retry; transient statuses use existing retry con
   expect(fetchDiagnostics(await fetcher.fetch("https://news.example/error"), 0)).toMatchObject({
     http_status: 503, failure_code: "http_server_error",
   });
+  const replay = await readRecordings();
+  const success = replay.responses["https://news.example/second"]![0]!;
+  replay.responses["https://news.example/timeout"] = [{ error: "timeout" }, success];
+  replay.responses["https://news.example/network-error"] = [{ error: "ECONNRESET" }, success];
+  const retryTransport = new RecordedTransport(replay);
+  const retryFetcher = createPermittedFetcher(
+    loaded.config.harvest, loaded.extraction,
+    { transport: retryTransport, resolve: retryTransport.resolve },
+  );
+  const recovered = await retryFetcher.fetch("https://news.example/timeout");
+  expect(recovered.http_status).toBe(200);
+  expect(recovered.attempts!.filter(attempt => attempt.phase === "target").map(attempt => ({
+    retry: attempt.retry, failure: attempt.failure,
+  }))).toEqual([{ retry: 0, failure: "timeout" }, { retry: 1, failure: null }]);
+  const targetAttempts = recovered.attempts!.filter(attempt => attempt.phase === "target");
+  expect(targetAttempts[0]!.backoff_ms).toBeGreaterThan(0);
+  expect(targetAttempts[0]!.retry_total_ms).toBe(0);
+  const waited = targetAttempts[0]!.backoff_ms;
+  if (waited === null) throw new Error("Current fetch must measure its actual backoff");
+  expect(targetAttempts[1]!.retry_total_ms).toBeGreaterThanOrEqual(
+    targetAttempts[0]!.duration_ms + waited - 1,
+  );
+  expect(targetAttempts[1]!.backoff_ms).toBe(0);
+  expect((await retryFetcher.fetch("https://news.example/network-error")).http_status).toBe(200);
+  let resolutions = 0;
+  const dnsRetry = createPermittedFetcher(loaded.config.harvest, loaded.extraction, {
+    transport: retryTransport,
+    resolve: async hostname => {
+      if (resolutions++ === 0) throw Object.assign(new Error("recorded transient DNS"), { code: "EAI_AGAIN" });
+      return retryTransport.resolve(hostname);
+    },
+  });
+  const dnsRecovered = await dnsRetry.fetch("https://news.example/second");
+  expect(dnsRecovered.http_status).toBe(200);
+  expect(dnsRecovered.attempts!.slice(0, 2).map(attempt => ({
+    phase: attempt.phase, retry: attempt.retry, failure: attempt.failure,
+  }))).toEqual([
+    { phase: "validation", retry: 0, failure: "dns" },
+    { phase: "validation", retry: 1, failure: null },
+  ]);
+  const timeoutTransport = new RecordedTransport(await readRecordings());
+  const exhausted = await createPermittedFetcher(
+    { ...loaded.config.harvest, fetch_timeout_ms: 30 }, loaded.extraction,
+    { transport: timeoutTransport, resolve: timeoutTransport.resolve },
+  ).fetch("https://news.example/timeout");
+  expect(exhausted.failure).toBe("timeout");
+  expect(timeoutTransport.requests.filter(request => request.url.pathname === "/timeout").length).toBeLessThanOrEqual(2);
+  expect(exhausted.attempts!.every((attempt, index) => attempt.sequence === index && attempt.duration_ms >= 0)).toBe(true);
   // Replay the existing rate-limit protocol recording as the target response too.
   const safety = await readSafety();
   const limited = safety.robots_responses.find(response => response.status === 429);
