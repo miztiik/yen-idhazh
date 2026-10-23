@@ -53,6 +53,9 @@ Readers use only these saved logical values. They never infer chronology from
 UUID magnitude, list arrival, original file-write time, compactor time or an
 own-listener sequence. Stable identifiers may order presentation inside a tied
 set, but they do not make an order-sensitive lifecycle decision true.
+The feed-query example compares parsed UTC values, not mixed-precision text.
+Its latest recorded lower bound is the greatest interval start, not proof of
+which overlapping check happened last. It never rewrites the saved strings.
 
 Availability counts are bounded over all orders admitted by the intervals.
 An exact failure/skip count is returned only when its bounds agree. Rest is

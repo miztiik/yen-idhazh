@@ -8,9 +8,8 @@ from typing import Annotated, Final
 
 from pydantic import AfterValidator, StringConstraints
 
-RECORDED_INSTANT_PATTERN: Final = (
-    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$"
-)
+from idhazh.contracts.base import RECORDED_INSTANT_PATTERN
+
 _EPOCH: Final = datetime(1970, 1, 1, tzinfo=UTC)
 _MILLISECONDS_PER_SECOND: Final = 1000
 _SECONDS_PER_DAY: Final = 86400
