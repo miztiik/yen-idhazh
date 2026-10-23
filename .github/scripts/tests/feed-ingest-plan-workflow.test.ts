@@ -98,7 +98,7 @@ test("offers four manual controls and commits only genuine planner and host file
   expect(httpProof).toContain("return resolveAddresses(hostname)");
   expect(httpProof).toContain('post("fetch", "fetch", fetchRequest)');
   expect(httpProof).toContain('post("parse", "parse", parseRequest)');
-  expect(httpProof).toContain("replay.response_json !== original.response_json");
+  expect(httpProof).toContain("requireExactReplay(original.private_response_bytes, replay.private_response_bytes)");
   expect(httpProof).toContain("beforeRestart !== afterChecks");
   expect(httpProof).toContain("requireOffline(parsed)");
   expect(httpProof).toContain("requireOffline(replay)");

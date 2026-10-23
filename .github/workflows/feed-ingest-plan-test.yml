@@ -314,7 +314,7 @@ jobs:
             });
             await verifyLiveDocumentHttp({ ...inputs, settings }, {
               git_sha, clock: () => captured, run_number: GITHUB_RUN_ID,
-            }, progressRecords, RUNNER_TEMP, artifactRoot);
+            }, progressRecords, RUNNER_TEMP, artifactRoot, summary);
             await writeGitHubOutputs(GITHUB_OUTPUT, { stage_api_complete: "true" });
           } catch (error) {
             console.error(JSON.stringify(describePlanError(error, root)));
@@ -419,7 +419,7 @@ jobs:
           bun run - <<'TS'
           if (process.env.PLANNING_COMPLETE !== "true" || process.env.AUDITED_COMPLETE !== "true"
             || process.env.STAGE_API_COMPLETE !== "true" || process.env.AUDIT_SCOPE !== "generated_fixture") {
-            console.error("Live planning, separate feed fetch/parse/replay or generated full-audit proof is unavailable. No production publication is claimed.");
+            console.error("Live planning, separate feed and selected HTML fetch/parse/replay or generated full-audit proof is unavailable. No production publication is claimed.");
             process.exitCode = 2;
           }
           TS
