@@ -19,6 +19,10 @@ import { selectCompleteAttempt } from "../src/read-ledger-history/complete-attem
 import {
   ArticleAssessmentContract, DiversityMetricContract, SourceRunContract,
 } from "../src/metrics/audit-contracts";
+import { randomUUID } from "node:crypto";
+import { openOperationStore } from "../src/api/operation-store";
+import { proposedOperation } from "../src/api/document-operations";
+import { FetchRequestSchema } from "../src/api/operation-contracts";
 
 test("health is explicit; disabled, malformed, oversized and unknown controls cannot fetch", async () => {
   const inputs = await loadPlanInputs(fileURLToPath(new URL("../../../", import.meta.url)));
@@ -55,6 +59,20 @@ test("health is explicit; disabled, malformed, oversized and unknown controls ca
   expect((await oversized.json()).code).toBe("BODY_TOO_LARGE");
   expect((await app.request("/api/old/health")).status).toBe(404);
   expect(transport.requests).toHaveLength(0);
+  for (const route of ["fetch", "parse"]) {
+    expect((await app.request(`/api/2026-10-20/${route}`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: "{",
+    })).status).toBe(400);
+    expect((await app.request(`/api/2026-10-20/${route}`, {
+      method: "POST", body: " ".repeat(inputs.settings.listener.max_body_bytes + 1),
+    })).status).toBe(413);
+  }
+  const disabledFetch = await app.request("/api/2026-10-20/fetch", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ request_id: randomUUID(), correlation_id: randomUUID(), source_id: "recorded-news", kind: "feed" }),
+  });
+  expect(disabledFetch.status).toBe(503);
+  expect(transport.requests).toHaveLength(0);
 });
 
 test("actual API and awaited CLI compose the same recorded plan and disclose the same audit limit", async () => {
@@ -62,12 +80,22 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
   const cli = await recordedPlan();
   try {
     const app = createPlanApp(api.inputs, api.runtime);
+    const key = randomUUID();
     const response = await app.request("/api/2026-10-20/plan", {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": key },
       body: JSON.stringify({ freshness_hours: 18, article_limit: 1, partition_strategy: "none" }),
     });
     expect(response.status).toBe(200);
     const apiResult = await response.json();
+    const requestCount = api.transport.requests.length;
+    const restarted = createPlanApp(api.inputs, api.runtime);
+    const replayed = await restarted.request("/api/2026-10-20/plan", {
+      method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": key },
+      body: JSON.stringify({ freshness_hours: 18, article_limit: 1, partition_strategy: "none" }),
+    });
+    expect(replayed.status).toBe(200);
+    expect(await replayed.json()).toEqual(apiResult);
+    expect(api.transport.requests).toHaveLength(requestCount);
     const printed: unknown[] = [];
     const cliResult = await main([
       "--cli", "--freshness-hours", "18", "--article-limit=1", "--partition-strategy", "none",
@@ -132,6 +160,94 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
       expect(selected.sources).toEqual(summary.source_records!);
       expect(summary.planning_completion!.completion_evidence).toHaveLength(5);
     }
+    const post = (route: string, value: unknown, app = restarted) => app.request(`/api/2026-10-20/${route}`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(value),
+    });
+    const correlation_id = randomUUID();
+    const fetchRequest = {
+      request_id: randomUUID(), correlation_id, source_id: "recorded-news",
+      kind: "article", url: "https://news.example/second",
+    };
+    const fetchedResponse = await post("fetch", fetchRequest);
+    expect(fetchedResponse.status).toBe(200);
+    const fetched = await fetchedResponse.json();
+    expect(fetched).not.toHaveProperty("body");
+    expect(fetched.observation.operation).toBe("fetch");
+    expect(fetched.article_id).toBe(fetched.observation.article_id);
+    expect(fetched.attempts.length).toBeGreaterThan(0);
+    expect(fetched.attempt_observations.every((event: { caused_by_event_id: string; event_id: string }) =>
+      event.caused_by_event_id === fetched.observation.event_id && event.event_id !== fetched.observation.event_id)).toBe(true);
+    const afterFetch = api.transport.requests.length;
+    const newApp = createPlanApp(api.inputs, api.runtime);
+    expect(await (await post("fetch", fetchRequest, newApp)).json()).toEqual(fetched);
+    expect(api.transport.requests).toHaveLength(afterFetch);
+    const parseRequest = {
+      request_id: randomUUID(), fetch_request_id: fetchRequest.request_id,
+      article_id: fetched.article_id, correlation_id,
+    };
+    const parsedResponse = await post("parse", parseRequest, newApp);
+    expect(parsedResponse.status).toBe(200);
+    const parsed = await parsedResponse.json();
+    expect(parsed.failure).toBeNull();
+    expect(parsed.parsed.article_text.length).toBeGreaterThan(0);
+    expect(parsed.observation).toMatchObject({
+      article_id: fetched.article_id, correlation_id, run_id: fetched.observation.run_id,
+      caused_by_event_id: fetched.observation.event_id, operation: "parse",
+    });
+    expect(parsed.observation.event_id).not.toBe(fetched.observation.event_id);
+    expect(await (await post("parse", parseRequest, createPlanApp(api.inputs, api.runtime))).json()).toEqual(parsed);
+    expect(api.transport.requests).toHaveLength(afterFetch);
+    for (const changed of [
+      { ...fetchRequest, url: "https://news.example/not-found" },
+      { ...fetchRequest, correlation_id: randomUUID() },
+    ]) expect((await post("fetch", changed)).status).toBe(409);
+    expect((await post("parse", { ...parseRequest, article_id: "a".repeat(64) })).status).toBe(409);
+    expect((await post("parse", { ...parseRequest, request_id: randomUUID(), article_id: "a".repeat(64) })).status).toBe(400);
+    expect((await post("parse", { ...parseRequest, request_id: randomUUID(), fetch_request_id: randomUUID() })).status).toBe(404);
+    expect((await post("parse", { ...parseRequest, request_id: randomUUID(), path: "../secret" })).status).toBe(400);
+    expect((await post("fetch", { ...fetchRequest, request_id: randomUUID(), url: "http://127.0.0.1/private" })).status).toBe(400);
+    const original = api.inputs.harvest.config_sha256;
+    api.inputs.harvest.config_sha256 = "b".repeat(64);
+    expect((await post("fetch", fetchRequest)).status).toBe(409);
+    expect((await post("parse", { ...parseRequest, request_id: randomUUID() })).status).toBe(409);
+    api.inputs.harvest.config_sha256 = original;
+    const feedRequest = { request_id: randomUUID(), correlation_id, source_id: "recorded-news", kind: "feed" };
+    const feed = await (await post("fetch", feedRequest)).json();
+    const entries = await (await post("parse", {
+      request_id: randomUUID(), fetch_request_id: feedRequest.request_id, article_id: feed.article_id, correlation_id,
+    })).json();
+    expect(entries.parsed.length).toBeGreaterThan(0);
+    expect(api.transport.requests.length).toBeGreaterThan(afterFetch);
+    // A committed start with no response represents a process that stopped before completion.
+    const interrupted = FetchRequestSchema.parse({ ...fetchRequest, request_id: randomUUID() });
+    const store = await openOperationStore(api.inputs.outputRoot);
+    try {
+      await expect(store.execute(proposedOperation("fetch", interrupted.request_id, interrupted,
+        correlation_id, api.inputs, api.runtime), async () => { throw new Error("interrupted"); })).rejects.toThrow("interrupted");
+    } finally { store.close(); }
+    const resumed = await post("fetch", interrupted, createPlanApp(api.inputs, api.runtime));
+    expect(resumed.status).toBe(200);
+    expect((await resumed.json()).observation.correlation_id).toBe(correlation_id);
+    const concurrentRequest = { ...fetchRequest, request_id: randomUUID() };
+    const concurrentCount = api.transport.requests.length;
+    const parallel = await Promise.all([post("fetch", concurrentRequest), post("fetch", concurrentRequest)]);
+    expect(parallel.map(response => response.status).sort()).toEqual([200, 409]);
+    expect(api.transport.requests.length - concurrentCount).toBe(2);
+    const winner = await parallel.find(response => response.status === 200)!.json();
+    const completedCount = api.transport.requests.length;
+    const completed = await Promise.all([
+      post("fetch", concurrentRequest, createPlanApp(api.inputs, api.runtime)),
+      post("fetch", concurrentRequest, createPlanApp(api.inputs, api.runtime)),
+    ]);
+    expect(completed.map(response => response.status)).toEqual([200, 200]);
+    expect(await Promise.all(completed.map(response => response.json()))).toEqual([winner, winner]);
+    expect(api.transport.requests).toHaveLength(completedCount);
+    const failedFetchRequest = { ...fetchRequest, request_id: randomUUID(), url: "https://news.example/not-found" };
+    const failedFetch = await (await post("fetch", failedFetchRequest)).json();
+    expect(failedFetch.failure).toBe("http");
+    expect((await post("parse", {
+      ...parseRequest, request_id: randomUUID(), fetch_request_id: failedFetchRequest.request_id, article_id: failedFetch.article_id,
+    })).status).toBe(409);
   } finally { await Promise.all([api.close(), cli.close()]); }
 }, 30000);
 
@@ -142,8 +258,9 @@ test("a required source write failure returns an API error, not proven planning 
     await mkdir(raw, { recursive: true });
     await writeFile(join(raw, "source-runs"), "A file cannot hold source records.");
     const app = createPlanApp(recorded.inputs, recorded.runtime);
+    const requestKey = randomUUID();
     const response = await app.request("/api/2026-10-20/plan", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+      method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": requestKey }, body: "{}",
     });
     expect(response.status).toBe(500);
     const failed = await response.json();
@@ -152,6 +269,13 @@ test("a required source write failure returns an API error, not proven planning 
     expect(failed).not.toHaveProperty("planning_completion");
     expect(existsSync(join(raw, "article-assessments"))).toBe(true);
     expect(existsSync(join(raw, "diversity"))).toBe(true);
+    const requests = recorded.transport.requests.length;
+    const stopped = await createPlanApp(recorded.inputs, recorded.runtime).request("/api/2026-10-20/plan", {
+      method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": requestKey }, body: "{}",
+    });
+    expect(stopped.status).toBe(409);
+    expect((await stopped.json()).code).toBe("REQUEST_INCOMPLETE");
+    expect(recorded.transport.requests).toHaveLength(requests);
   } finally { await recorded.close(); }
 }, 30000);
 

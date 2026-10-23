@@ -2,12 +2,16 @@
 import { createUuidV5 } from "@idhazh/ledger-file-writer";
 import { EVENT_NAMESPACE, writeJsonLine } from "./structured-logger";
 import type { HarvestDiagnostics } from "@idhazh/common-contracts";
+import type { FetchAttempt } from "../api/operation-contracts";
+import type { z } from "zod";
+import type { PlannerObservationSchema } from "../api/operation-contracts";
 
 export type ProgressEventType =
   | "PIPELINE_STARTED" | "HISTORY_READ_STARTED" | "HISTORY_READ_COMPLETED"
   | "FEED_DISCOVERY_STARTED" | "FEED_FETCH_STARTED" | "FEED_FETCH_COMPLETED"
   | "ARTICLE_HARVEST_STARTED" | "ARTICLE_HARVEST_COMPLETED"
   | "ARTICLE_EXTRACTION_WARNING"
+  | "DOCUMENT_FETCHED" | "DOCUMENT_PARSED" | "FETCH_ATTEMPT_COMPLETED"
   | "FEED_REJECTED" | "ARTICLE_REJECTED"
   | "STAGE_COMPLETED" | "PLANNING_STAGES_COMPLETED"
   | "AUDIT_RECORDING_STARTED" | "AUDIT_RECORDING_COMPLETED"
@@ -21,6 +25,8 @@ export type ProgressDetails = {
   diagnostics?: HarvestDiagnostics | null;
   duration_ms?: number;
   extraction_outcome?: "success" | "empty" | "failed" | "not-attempted";
+  document_observation?: z.infer<typeof PlannerObservationSchema>;
+  fetch_attempt?: FetchAttempt;
 };
 export type ProgressRecord = ProgressDetails & {
   timestamp: string; level: "INFO" | "WARN"; message: string; eventId: string;

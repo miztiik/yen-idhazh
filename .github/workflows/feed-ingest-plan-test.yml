@@ -56,6 +56,7 @@ jobs:
             /.github/scripts/tests/feed-ingest-plan-report.test.ts
             /.github/scripts/tests/feed-ingest-plan-workflow.test.ts
             /.github/workflows/feed-ingest-plan-test.yml
+            /.github/workflows/ci.yml
             /tests/fixtures/feed-ingest-plan/
             /tests/fixtures/ledger-file-writer/
             /tests/fixtures/contracts/feed-ingest-dispatch/one-article.json

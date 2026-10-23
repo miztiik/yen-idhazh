@@ -11,6 +11,7 @@ import {
   SourceRunRecordSchema, SourceSnapshotSchema, StageCompletionPayloadSchema,
   WriterIdentitySchema, deriveCandidateId, deriveUrlKey, validateEnvelopeContainer,
   readFeedIngestEvent, HarvestDiagnosticsSchema, HARVEST_DIAGNOSTICS_VERSION, PLANNER_EXCLUSIONS_VERSION,
+  FetchAttemptSchema, OPERATION_VERSION,
 } from "../src/index";
 import { runtimeSchemas, schemas } from "./schema-binding";
 
@@ -352,7 +353,7 @@ describe("planning audit contracts", () => {
     expect(migratedFeed.version).toBe(record.version);
   });
 
-  test("exports the actual runtime input JSON schemas, including nested strict objects", () => {
+  test("exports the actual runtime input JSON schemas, including nested strict objects", async () => {
     expect(Object.keys(schemas)).toHaveLength(Object.keys(runtimeSchemas).length);
     for (const [name, schema] of Object.entries(runtimeSchemas)) {
       expect(schemas[name]).toEqual(z.toJSONSchema(schema, { io: "input" }));
@@ -361,5 +362,21 @@ describe("planning audit contracts", () => {
     const version = schemas.FeedIngestCandidate?.properties?.version;
     expect(version).toMatchObject({ const: "2026-10-20", default: "2026-10-20" });
     expect(schemas.FeedIngestCandidate?.required).not.toContain("version");
+    for (const [name, path] of [
+      ["FetchedDocument", "fetched-document/refused.json"],
+      ["PlannerOperation", "planner-operation/started.json"],
+    ] as const) {
+      const original = await Bun.file(new URL(
+        `../../../tests/fixtures/contracts/${path}`, import.meta.url,
+      )).json();
+      expect(runtimeSchemas[name].parse(original).version).toBe("2026-10-23");
+      expect(runtimeSchemas[name].parse({ ...original, version: undefined }).version).toBe(OPERATION_VERSION);
+    }
+    const earlierAttempt = FetchAttemptSchema.parse({
+      phase: "target", sequence: 0, retry: 0, duration_ms: 0,
+      http_status: 404, failure: "http", error_code: null,
+    });
+    expect(earlierAttempt.backoff_ms).toBeNull();
+    expect(earlierAttempt.retry_total_ms).toBeNull();
   });
 });

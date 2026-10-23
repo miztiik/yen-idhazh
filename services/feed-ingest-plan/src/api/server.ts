@@ -13,6 +13,8 @@ import type { PlanRequest } from "./plan-request";
 import { parseSeenDays, requiredSeenDays } from "../read-ledger-history/read-seen-evidence";
 import { RelativePathSchema } from "../config/service-settings";
 import { recordFeedPlan } from "../record-feed-plan";
+import { documentRoute } from "./routes/document.route";
+import type { CapturedPlanIdentity } from "./plan-operation";
 
 // Calendar-versioned HTTP protocol paths are not runtime planning controls.
 const apiPrefix = "/api/2026-10-20";
@@ -29,9 +31,9 @@ export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime) {
   const acceptedDays = new Map<string, string>();
   let lastRunAt: number | undefined;
   let ready = Promise.resolve();
-  const execute = (request: PlanRequest) => {
+  const execute = (request: PlanRequest, captured?: CapturedPlanIdentity) => {
     const result = ready.then(async () => {
-      const now = runtime.clock?.() ?? new Date();
+      const now = (captured?.clock ?? runtime.clock)?.() ?? new Date();
       if (!Number.isFinite(now.getTime())) {
         throw new PlanError("INVALID_RUN_CONTEXT", "listener run clock must be a valid UTC instant", "now");
       }
@@ -52,7 +54,7 @@ export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime) {
           ...inputs.settings, inputs: { ...inputs.settings.inputs, seen_days: seenDays },
         },
       }, {
-        ...runtime, clock: () => now,
+        ...runtime, ...captured, clock: () => now,
         seen_receipts: [...ownFiles].map(([day, files]) => ({ day, files: [...files] })),
         on_seen_persisted: receipt => {
           const paths = ownFiles.get(receipt.day) ?? new Set<string>();
@@ -70,20 +72,23 @@ export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime) {
     ready = result.then(() => undefined, () => undefined);
     return result;
   };
-  app.use(`${apiPrefix}/plan`, bodyLimit({
+  app.use(`${apiPrefix}/*`, bodyLimit({
     maxSize: inputs.settings.listener.max_body_bytes,
     onError: c => c.json({
       code: "BODY_TOO_LARGE", issues: [{ field: "body", message: "body exceeds configured max_body_bytes" }],
     }, 413),
   }));
   app.route(apiPrefix, healthRoute(inputs, runtime.observe_publication !== undefined));
-  app.route(apiPrefix, planRoute(execute));
+  app.route(apiPrefix, planRoute(execute, inputs, runtime));
+  app.route(apiPrefix, documentRoute(inputs, runtime));
   app.notFound(c => c.json({ code: "NOT_FOUND", issues: [{ field: "route", message: "Unknown API route" }] }, 404));
   app.onError((error, c) => {
     const failure = describePlanError(error, inputs.root);
     writeJsonLine({ event: "planner_error", ...failure });
     const status = failure.code === "PLANNER_DISABLED" ? 503
-      : failure.code === "INVALID_INPUT" || failure.code === "INVALID_REQUEST" ? 400 : 500;
+      : failure.code === "INVALID_INPUT" || failure.code === "INVALID_REQUEST" ? 400
+      : ["REQUEST_BUSY", "REQUEST_CONFLICT", "REQUEST_INCOMPLETE", "FETCH_UNAVAILABLE"].includes(failure.code) ? 409
+      : failure.code === "ARTIFACT_NOT_FOUND" ? 404 : 500;
     return c.json(failure, status);
   });
   return app;

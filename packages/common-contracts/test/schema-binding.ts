@@ -10,6 +10,7 @@ import {
   PenaltyEvidenceSchema, PolicyIdentitySchema,
   RejectionDetailsSchema, RowIdentitySchema, ROW_IDENTITY_COLUMN_VERSIONS, ScoreEvidenceSchema, SourceRunRecordSchema,
   SourceSnapshotSchema, WriterIdentitySchema, FeedHealthRowSchema, FeedRetirementRowSchema,
+  FetchedDocumentSchema, PlannerOperationSchema,
 } from "../src/index";
 
 export const runtimeSchemas = {
@@ -24,6 +25,7 @@ export const runtimeSchemas = {
   LedgerCompletionEvidence: LedgerCompletionEvidenceSchema, SourceRunRecord: SourceRunRecordSchema,
   ArticleAssessmentRecord: ArticleAssessmentRecordSchema, DiversityMetricRow: DiversityMetricRowSchema,
   FeedHealthRow: FeedHealthRowSchema, FeedRetirementRow: FeedRetirementRowSchema,
+  FetchedDocument: FetchedDocumentSchema, PlannerOperation: PlannerOperationSchema,
 } satisfies Record<string, z.ZodType>;
 
 export const schemas = Object.fromEntries(
