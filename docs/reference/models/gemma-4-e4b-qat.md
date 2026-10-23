@@ -1,21 +1,17 @@
 # Gemma-4-E4B-it-qat-UD-Q4_K_XL
 
 **Last Updated**: 2026-09-21
-**Status: evaluated.** It has been benched and it has never served a published
-item. `evaluated` is one of three words a dossier's status line may hold -
-`evaluated`, `incumbent`, `superseded` - and this line is the only place this
-model's lifecycle is written ([models.md](../models.md)).
 
-One model, one page. Every figure below is a reading of **these weights**, it is
-the only reading of that quantity in force, and it carries the hardware that took
-it, the date and the spread. Nothing here was re-derived and nothing was rounded:
-each figure is the one the instrument recorded, moved rather than restated.
+One model, one page. Every figure below is a reading of **these weights**. It
+carries the hardware that took it, the date and the spread. Nothing here was
+re-derived and nothing was rounded: each figure is the one the instrument
+recorded, moved rather than restated.
 
-**Where a quantity depends on which runner GitHub gave the job, the reading in
-force is the spread across machines rather than one number.** That is still one
-reading of one quantity - the quantity is what these weights do on the fleet we
-actually get, and a single figure would answer a question nobody can ask, since
-nothing selects the machine ([the processor
+**Where a quantity depends on which runner GitHub gave the job, read the spread
+across machines rather than one number.** That is still one reading of one
+quantity - the quantity is what these weights do on the fleet we actually get,
+and a single figure would answer a question nobody can ask, since nothing
+selects the machine ([the processor
 lottery](../benchmarks/the-processor-lottery.md), owner ruling 2026-09-15).
 
 **This page says how fast, and it does not say how good.** The bench reads
@@ -213,7 +209,7 @@ worth](../benchmarks/what-the-draft-head-is-worth.md).
 - **The licence row.** Gemma ships under its own terms rather than an SPDX
   identifier, and nobody has read them against this project's use yet.
 - **The tokenizer cost.** Tokens a word decides how much article fits the window,
-  and it belongs to this tokenizer rather than to the incumbent's.
+  and it belongs to this tokenizer rather than to another model's.
 
 ## The records behind this page
 
