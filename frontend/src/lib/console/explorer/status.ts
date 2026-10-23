@@ -55,7 +55,7 @@ export function statusSentence(input: ExplorerStatusInput): string {
 		case 'link':
 			return input.linkNotices?.join(' ') ?? '';
 		case 'costing':
-			return 'Checking compact files and query limits before listing columns.';
+			return 'Checking SQL tables and query limits.';
 		case 'running-fetch':
 			return `Fetching ${plural(input.files ?? 0, 'file')}, ${size(input.bytes ?? 0)}.`;
 		case 'running-query':

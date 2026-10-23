@@ -43,6 +43,12 @@ test('a reader loads real ledgers, queries them, and draws the answer', async ({
 			'max(d.content.article_text) AS text FROM dispatches d CROSS JOIN "host-fingerprint" h ' +
 			'GROUP BY d.covers ORDER BY d.covers'
 	);
+	await expect(page.locator('[data-ledger-name] input[type="checkbox"]')).toHaveCount(0);
+	await expect(page.locator('[data-workbench-region="ledgers"]')).not.toContainText('availability not established');
+	const statement = await page.locator('#explorer-sql').inputValue();
+	await page.locator('[data-ledger-name="published"]').click();
+	await expect(page.locator('#explorer-sql')).toHaveValue(statement);
+	await expect(page.locator('[data-explorer-columns]')).toContainText('"published"');
 	await runExplorer(page);
 	await expectAnswer(page, 'table');
 	expect(await tableRows(page)).toEqual([
@@ -73,6 +79,7 @@ test('a reader loads real ledgers, queries them, and draws the answer', async ({
 		name: 'runtime-report', prefix: ['feed-ingest-plan', 'runtime-report'], grain: 'raw-and-compact',
 		publish_to_data_explorer: true, stem: null, suffix: null
 	});
+
 	writeFileSync(registryPath, JSON.stringify(registry));
 	await buildLedger(source, {
 		ledger: 'runtime-report', catalog: parseLedgerCatalog(registry),
@@ -90,4 +97,44 @@ test('a reader loads real ledgers, queries them, and draws the answer', async ({
 	await page.screenshot({ path: test.info().outputPath('compact-workbench.png') });
 	expect(requests.filter((url) => /\/state\/raw\/|api\.github\.com|\/contents\//.test(url))).toEqual([]);
 	expect(requests.filter((url) => url === `${origin}/config/ledgers.json`)).toHaveLength(2);
+});
+
+/** The File API is a distinct boundary: real bytes enter this tab, not a remote source. */
+test('local Parquet stays on the page, works without a registry and is forgotten on Refresh', async ({ page, context }) => {
+	const origin = ledgerArchiveBaseUrl();
+	await context.route(`${origin}/**`, (route) => route.fulfill({ status: 503, body: 'Recorded unavailable registry' }));
+	const requests: { url: string; method: string }[] = [];
+	page.on('request', (request) => requests.push({ url: request.url(), method: request.method() }));
+	await page.clock.setFixedTime(`${PINNED}T12:00:00Z`);
+	await page.setViewportSize({ width: 1280, height: 900 });
+	await page.goto('/console/data-explorer/');
+	await expect(page.getByText('Local files and questions without repository tables still work.', { exact: false })).toBeVisible();
+	const picker = page.getByLabel('Import Parquet');
+	await picker.setInputFiles(resolve('..', 'tests', 'fixtures', 'parquet', 'local-sales.parquet'));
+	await expect(page.locator('[data-explorer-columns]')).toContainText('"local_1"');
+	await expect(page.locator('[data-explorer-columns]')).toContainText('units');
+	await page.locator('#explorer-sql').fill('SELECT product, units, note FROM "local_1" ORDER BY units');
+	await runExplorer(page);
+	await expectAnswer(page, 'table');
+	expect(await tableRows(page)).toEqual([['tea', '2', '<script>not executable</script>'], ['coffee', '3', 'null']]);
+	await expect(page.locator('[data-explorer-answer] script')).toHaveCount(0);
+	await page.screenshot({ path: test.info().outputPath('local-workbench.png') });
+	await page.getByRole('button', { name: 'Save', exact: true }).click();
+	await page.locator('.editor-actions input').fill('Local sales');
+	await page.getByRole('button', { name: 'Keep', exact: true }).click();
+	await page.getByRole('button', { name: 'Remove local_1' }).click();
+	await runExplorer(page);
+	await expectAnswer(page, 'refused');
+	await expect(page.locator('[data-state="refused"]').first()).toContainText('import its local Parquet file again');
+	await picker.setInputFiles(resolve('..', 'tests', 'fixtures', 'parquet', 'local-sales.parquet'));
+	await expect(page.getByRole('button', { name: 'Remove local_2' })).toBeVisible();
+	await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'Remove local_2' })).toHaveCount(0);
+	await expect(page.locator('[data-explorer-answer]')).toHaveCount(0);
+	await page.locator('#explorer-sql').fill('SELECT 42 AS answer');
+	await runExplorer(page);
+	await expectAnswer(page, 'table');
+	expect(await tableRows(page)).toEqual([['42']]);
+	expect(requests.filter((request) => request.method !== 'GET')).toEqual([]);
+	expect(requests.filter((request) => request.url.startsWith(origin) && !request.url.includes('config/ledgers.json'))).toEqual([]);
 });

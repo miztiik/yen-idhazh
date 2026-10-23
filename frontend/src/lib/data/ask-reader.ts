@@ -191,7 +191,12 @@ export function explainMissedFile(file: WantedFile, shortfall: FileShortfall): s
 export async function readAsk(keeper: PageKeeper, opts: AskOptions): Promise<AskResult> {
 	const checked = checkStatement(opts.sql, opts.maxChars);
 	if (checked.refusal !== null) return { state: 'refused', because: checked.refusal };
-	return serial(async () => {
+	return serial(() => readPreparedAsk(keeper, { ...opts, sql: checked.sql }));
+}
+
+/** The caller owns the engine queue and any local views for the whole question. */
+export async function readPreparedAsk(keeper: PageKeeper, opts: AskOptions, executeWithoutRows = false): Promise<AskResult> {
+	const checked = { sql: opts.sql };
 		const started = Date.now();
 		const planned = await planQuestion(keeper, opts.ledgers, opts.from, opts.to);
 		if ('state' in planned) return planned;
@@ -199,7 +204,7 @@ export async function readAsk(keeper: PageKeeper, opts: AskOptions): Promise<Ask
 		if (refusal !== null) return { state: 'refused', because: refusal };
 		const gaps: SpanGap[] = planned.ledgers.filter((one) => one.lostDays.length > 0 || Object.keys(one.setAside).length > 0).map((one) => ({ ledger: one.ledger, lostDays: one.lostDays, setAside: one.setAside }));
 		const named = { cut: planned.cost.cut, gaps };
-		if (planned.ledgers.every((one) => one.files.length === 0)) {
+		if (!executeWithoutRows && planned.ledgers.every((one) => one.files.length === 0)) {
 			return { state: 'quiet', columns: [], read: { files: 0, bytes: 0, alreadyHeld: 0, ms: Date.now() - started }, ...named };
 		}
 		const sourceless = planned.ledgers.find((one) => one.files.length === 0 && one.emptySource.length === 0);
@@ -240,5 +245,4 @@ export async function readAsk(keeper: PageKeeper, opts: AskOptions): Promise<Ask
 		} catch (error) {
 			return { state: 'refused', because: { kind: 'engine-error', message: error instanceof Error ? error.message : String(error) } };
 		} finally { await holding.done(); }
-	});
 }

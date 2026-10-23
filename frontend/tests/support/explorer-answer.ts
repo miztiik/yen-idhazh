@@ -72,12 +72,9 @@ export async function chooseExplorerQuestion(page: Page, ledgers: readonly Ledge
 		}
 	};
 	await ensureLedgersOpen();
-	while (await page.locator('[data-ledger-name] input:checked').count() > 0) {
-		await page.locator('[data-ledger-name] input:checked').first().click();
-	}
 	await ensureLedgersOpen();
 	for (const ledger of ledgers) {
-		await page.locator(`[data-ledger-name="${ledger}"] input`).check();
+		await page.locator(`[data-ledger-name="${ledger}"]`).click();
 	}
 	await page.locator('#explorer-sql').fill(sql);
 	if (ledgers.length > 0 && waitForColumns) {
