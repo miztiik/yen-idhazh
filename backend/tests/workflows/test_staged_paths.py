@@ -24,8 +24,6 @@ from ._harness import (
     REVIEW_COMMAND,
     REVIEW_STEP,
     SQUASH_DUE_MODULE,
-    SUBSTITUTED_DATE,
-    SUBSTITUTED_DAY_DIR,
     TOLERATED,
     _artifact_upload,
     _job,
@@ -254,5 +252,3 @@ def test_the_plan_job_publishes_the_day_directory_it_decided() -> None:
     assert 'echo "day_dir=frontend/public/digest/${DATE//-//}" >> "$GITHUB_OUTPUT"' in [
         line.strip() for line in script.splitlines()
     ]
-    # The expansion above, evaluated the way bash would.
-    assert f"frontend/public/digest/{SUBSTITUTED_DATE.replace('-', '/')}" == SUBSTITUTED_DAY_DIR

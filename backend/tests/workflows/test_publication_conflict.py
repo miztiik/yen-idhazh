@@ -198,7 +198,7 @@ def test_two_checkouts_keep_both_real_publication_updates(
     }
     public_entries = [entry for entry in inventory.entries if entry.root == "public"]
     assert {entry.path for entry in public_entries} == expected_paths
-    assert inventory.dates == ["2026-08-22", "2026-08-21"]
+    assert inventory.dates == sorted((fixture.date, second_day.date), reverse=True)
     assert inventory.total_items == len(fixture.items) + len(second_day.items)
     assert inventory.total_items > 0
     assert inventory.total_bytes == sum(entry.bytes for entry in public_entries)
