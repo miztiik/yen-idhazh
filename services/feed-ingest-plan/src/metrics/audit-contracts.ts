@@ -8,6 +8,7 @@ import {
   LegacyArticleAssessmentSchema,
   SourceRunRecordSchema,
   LedgerCompletionEvidenceSchema, SOURCE_RUN_VERSION,
+  PLANNING_OBSERVATIONS_VERSION, PreviousFeedIngestDispatchSchema, readFeedIngestDispatch,
 } from "@idhazh/common-contracts";
 import type {
   DiversityMetricRow,
@@ -53,12 +54,8 @@ const PreviousLogicalSourceRunSchema = z.strictObject({
   ...previousSourceRunFields, version: z.literal("2026-10-22T10:05"),
 });
 
-const { version: _dispatchVersion, ...dispatchFields } = FeedIngestDispatchSchema.shape;
-const LegacyDispatchSchema = z.strictObject({
-  ...dispatchFields,
-  version: previousVersion,
-});
-type LegacyDispatch = z.infer<typeof LegacyDispatchSchema>;
+const LegacyDispatchSchema = PreviousFeedIngestDispatchSchema.extend({ version: previousVersion });
+const PreviousDispatchSchema = PreviousFeedIngestDispatchSchema.extend({ version: z.literal(FEED_INGEST_AUDIT_VERSION) });
 
 function migrateDiversity(row: object): DiversityMetricRow {
   const old = LegacyDiversityMetricSchema.parse(row) as LegacyDiversityMetric;
@@ -70,8 +67,7 @@ function migrateSourceRun(row: object): SourceRunRecord {
 }
 
 function migrateDispatch(row: object): FeedIngestDispatch {
-  const old = LegacyDispatchSchema.parse(row) as LegacyDispatch;
-  return FeedIngestDispatchSchema.parse({ ...old, version: FEED_INGEST_AUDIT_VERSION });
+  return readFeedIngestDispatch(row);
 }
 
 export { ArticleAssessmentContract } from "@idhazh/common-contracts";
@@ -92,8 +88,11 @@ export const SourceRunContract: LedgerRowContract<SourceRunRecord> = {
 };
 export const DispatchContract: LedgerRowContract<FeedIngestDispatch> = {
   schema: FeedIngestDispatchSchema,
-  schemaVersion: FEED_INGEST_AUDIT_VERSION,
-  legacyVersions: { [PREVIOUS_VERSION]: { schema: LegacyDispatchSchema, migrate: migrateDispatch } },
+  schemaVersion: PLANNING_OBSERVATIONS_VERSION,
+  legacyVersions: {
+    [PREVIOUS_VERSION]: { schema: LegacyDispatchSchema, migrate: migrateDispatch },
+    [FEED_INGEST_AUDIT_VERSION]: { schema: PreviousDispatchSchema, migrate: migrateDispatch },
+  },
 };
 
 export const legacyAuditSchemas = {

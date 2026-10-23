@@ -8,6 +8,7 @@ import {
 import type { LedgerCompletionEvidence } from "@idhazh/common-contracts";
 import { describeObjectSchema, digestRows } from "@idhazh/ledger-file-writer";
 import type { LedgerRowContract, StoredLedgerRow } from "@idhazh/ledger-file-writer";
+import { DispatchContract } from "../metrics/audit-contracts";
 
 type Ledger = LedgerCompletionEvidence["ledger"];
 // These are the production settlement keys in backend/idhazh/ledger/keys.py.
@@ -21,7 +22,7 @@ export const PLANNING_RECORD_KEYS = {
     "window_days", "window_start", "window_end", "top_k"],
 } as const;
 const contracts: Record<Ledger, LedgerRowContract<object>> = {
-  dispatches: { schema: FeedIngestDispatchSchema, schemaVersion: FEED_INGEST_AUDIT_VERSION },
+  dispatches: DispatchContract,
   "editorial-selections": { schema: EditorialSelectionRowSchema, schemaVersion: CONTRACT_VERSION },
   rejections: CandidateRejectionContract,
   "article-assessments": ArticleAssessmentContract,
@@ -68,6 +69,12 @@ export function commitLogicalRecords(
   }
 
   function encodeHistoricalRecord(ledger: Ledger, row: object, version: string): object {
+    if (ledger === "dispatches") {
+      const current = FeedIngestDispatchSchema.parse(row);
+      const { planning_observations, ...content } = current.content;
+      if (planning_observations !== null) throw new Error("Historical dispatch proof cannot omit planning observations");
+      return { ...current, version, content: { ...content, version: CONTRACT_VERSION } };
+    }
     if (ledger === "rejections") {
       const current = CandidateRejectionContract.schema.parse(row);
       const {

@@ -19,6 +19,9 @@ import { compareStory } from "../src/curate-article-portfolio/story-evidence";
 import type { StoryComparison } from "../src/curate-article-portfolio/story-evidence";
 import { groupCarriers } from "../src/curate-article-portfolio/carrier-cluster";
 import { HarvestObservationSchema } from "../src/harvest-feeds/harvest-types";
+import { recordedPlan } from "./plan-recordings";
+import { inputs as harvestInputs, source } from "./harvest-recordings";
+import { runFeedPlan, summarizePlan } from "../src/run-feed-plan";
 
 type CandidateCase = {
   name: string; source: string; ordinal: number; vertical: string; kind: string;
@@ -207,6 +210,54 @@ test("known-empty labels differ from unavailable labels and overlap is counted o
   unknown[0]!.desk = null;
   const changed = run(planning, fixture, unknown);
   expect(changed.trace[1]!.evaluated.find(row => row.candidate_id === final.candidate_id)!.scores.desk.available).toBe(false);
+  const sources = [source(), source({ id: "recorded-atom", url: "https://atom.example/feed.xml" })];
+  const recorded = await recordedPlan(sources);
+  try {
+    recorded.inputs.harvest = await harvestInputs(sources, {
+      lenses: [{ id: "headline-theme", keywords: ["entry"], weight: 0.9, status: "active", retired_on: null }],
+      entities: [{ id: "watched-subject", aliases: ["entry"], status: "active", retired_on: null }],
+      salience: [{ id: "unavailable-vote", title: "Failed optional feed", url: "https://news.example/malformed.xml", status: "active", retired_on: null }],
+    });
+    const config = recorded.inputs.harvest.config;
+    config.triage.min_words_article = 100;
+    config.curate.base_source_allowance = 10;
+    config.curate.exploration_slot_share = 0;
+    config.curate.soft_caps.max_source_share = 1;
+    config.curate.soft_caps.min_distinct_sources = 1;
+    for (const key of Object.keys(config.curate.mmr_weights) as (keyof typeof config.curate.mmr_weights)[]) {
+      config.curate.mmr_weights[key] = key === "lambda_lens" || key === "lambda_entity" ? 1 : 0;
+    }
+    const wired = await runFeedPlan({ article_limit: 2 }, recorded.inputs, recorded.runtime);
+    const curation = wired.evidence.curation;
+    const unavailable = curateArticles({
+      articles: curation.input.map(article => ({
+        ...article, candidate: { ...article.candidate, labels: {
+          ...article.candidate.labels, lenses: null, entities: null, origin: null, matcher_version: null,
+        } },
+      })),
+      planning: wired.evidence.harvest.inputs, observed_at: wired.context.now,
+      opportunity: curation.opportunity,
+    });
+    expect(curation.rows[0]!.candidate_id).toBe(unavailable.rows[0]!.candidate_id);
+    expect(curation.rows[1]!.candidate_id).not.toBe(unavailable.rows[1]!.candidate_id);
+    expect(curation.selected[1]!.candidate.title).toBe("Measured progress & public evidence");
+    expect(curation.quality.map(row => row.components)).toEqual(unavailable.quality.map(row => row.components));
+    const displaced = curation.trace[1]!.evaluated.find(row => row.candidate_id === unavailable.rows[1]!.candidate_id)!;
+    expect(displaced.scores.lens).toEqual({ available: true, value: 1 });
+    expect(displaced.scores.entity).toEqual({ available: true, value: 1 });
+    for (const candidate of wired.evidence.harvest.candidates) {
+      expect(candidate.planning_observations).toMatchObject({
+        salience_available: false, on_front_page: null, salience_unavailable_reason: "salience-feed-unavailable",
+        salience: [{ feed_id: "unavailable-vote", available: false, voted: null, unavailable_reason: "feed-parse-failed" }],
+      });
+    }
+    expect(summarizePlan(wired).editorial_inputs).toMatchObject({
+      headline_consumer: "existing_mmr_lens_entity_penalties", bonus_consumer: null,
+      unavailable_consumers: ["salience_vote", "watchlist_bonus", "lens_weight_bonus"],
+    });
+    expect(wired.evidence.partition.dispatches[0]!.content.planning_observations)
+      .toEqual(curation.selected[0]!.candidate.planning_observations);
+  } finally { await recorded.close(); }
 });
 
 test("kind relabel changes no allowance, viability, or authority; zero disables its influence", async () => {

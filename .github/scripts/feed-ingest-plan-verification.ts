@@ -6,7 +6,7 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   CandidateRejectionContract, CONTRACT_VERSION, DateStampSchema,
-  FeedIngestDispatchSchema, LedgerCompletionEvidenceSchema,
+  readFeedIngestDispatch, LedgerCompletionEvidenceSchema,
   PositiveCountSchema, Sha256Schema, deriveCandidateId, deriveUrlKey,
 } from "../../packages/common-contracts/src/index";
 import { createFileId, createUnitId, digestRows, persistLedger } from "../../packages/ledger-file-writer/src/index";
@@ -151,7 +151,7 @@ export async function verifyRecordedCompatibility() {
     || legacySeen.rows.some(({ identity }) => identity.job === null || identity.pipeline_name !== null || identity.task_name !== null)) {
     throw new Error("Recorded legacy seen identities differ from their stored envelope");
   }
-  const fixture = FeedIngestDispatchSchema.parse(JSON.parse(await readFile(
+  const fixture = readFeedIngestDispatch(JSON.parse(await readFile(
     new URL("../../tests/fixtures/ledger-file-writer/feed-ingest-dispatch-row.json", import.meta.url), "utf8",
   )));
   if (deriveCandidateId(fixture.content.run_id, fixture.content.source_id, fixture.content.entry_ordinal) !== fixture.content.candidate_id
@@ -223,7 +223,7 @@ export async function verifyRecordedCompatibility() {
       ledgerSettings: { format: "parquet", compression_raw: "snappy", compression_compact: "zstd" },
     });
     const legacyChecked = await verifyParquetFiles(root, "dispatches", legacyWritten, registration,
-      [FeedIngestDispatchSchema.parse({ ...legacy, version: DispatchContract.schemaVersion })]);
+      [readFeedIngestDispatch(legacy)]);
     return { status: "verified" as const, canonical_content_sha256: reading,
       row_count: checked.row_count, legacy_row_count: legacyChecked.row_count,
       legacy_seen_row_count: legacySeen.rows.length };

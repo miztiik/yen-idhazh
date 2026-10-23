@@ -48,7 +48,7 @@ export function curateArticles(input: Readonly<{
     const candidate = article.candidate;
     const choice = choices.get(candidate.candidate_id)!;
     return EditorialSelectionRowSchema.parse({
-      version: candidate.version, date: input.observed_at.slice(0, 10),
+      date: input.observed_at.slice(0, 10),
       correlation_id: candidate.correlation_id, candidate_id: candidate.candidate_id,
       source_id: candidate.source_id, vertical: candidate.vertical, source: candidate.source,
       canonical_url: candidate.canonical_url, url_key: candidate.url_key,

@@ -50,7 +50,9 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   const harvestInputs = loadHarvestInputs({
     config: { ...inputs.harvest.config, curate: { ...inputs.harvest.config.curate, article_limit: request.article_limit } },
     taxonomy: { ...inputs.harvest.taxonomy, ...inputs.harvest.registry },
-    sources: { feeds: inputs.harvest.sources }, extraction: { extract: inputs.harvest.extraction },
+    sources: { feeds: inputs.harvest.sources, salience: inputs.harvest.salience },
+    ...(inputs.harvest.watchlist === null ? {} : { watchlist: inputs.harvest.watchlist }),
+    extraction: { extract: inputs.harvest.extraction },
   });
   const overrides = request.freshness_hours === undefined ? {} : { freshness_hours: request.freshness_hours };
   const fallbackPolicy = resolveRunPolicy(harvestInputs, request.freshness_hours);
@@ -221,6 +223,16 @@ export function summarizePlan(result: FeedPlanResult & { metrics?: PlanningMetri
       settled_failure: result.evidence.harvest.rejections.filter(row => row.drop_reason === "SETTLED_FAILURE").length,
       blocked_url_marker: result.evidence.harvest.rejections.filter(row => row.drop_reason === "BLOCKED_URL_MARKER").length,
       history: result.evidence.exclusions.history,
+    },
+    editorial_inputs: {
+      headline_consumer: "existing_mmr_lens_entity_penalties",
+      bonus_consumer: null,
+      unavailable_consumers: ["salience_vote", "watchlist_bonus", "lens_weight_bonus"],
+      salience: result.evidence.harvest.salience,
+      candidates: result.evidence.harvest.candidates.map(candidate => ({
+        candidate_id: candidate.candidate_id, url_key: candidate.url_key, labels: candidate.labels,
+        planning_observations: candidate.planning_observations,
+      })),
     },
     audit: {
       status: auditedComplete ? "complete" : result.metrics === undefined ? "unavailable" : "assessment_diversity_recorded_audit_pending",
