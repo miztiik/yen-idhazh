@@ -201,6 +201,35 @@ test("recorded rejection commitments retain their original schema stamp after mi
     }));
     expect(commitLogicalRecords("article-assessments", historicalAssessments, selected, "2026-10-22")
       .commitment.row_schema_version).toBe("2026-10-22");
+    for (const version of ["2026-10-20", "2026-10-22"]) {
+      const legacy = DispatchContract.legacyVersions![version]!;
+      const dispatches = history.ledgers.dispatches.rows.map(held => {
+        const current = DispatchContract.schema.parse(held.row);
+        const { planning_observations: _observations, ...content } = current.content;
+        const original = legacy.schema.parse({
+          ...current, version, content: { ...content, version: CONTRACT_VERSION },
+        });
+        return { ...held, row: original };
+      });
+      const migratedDispatches = dispatches.map(held => ({ ...held, row: legacy.migrate(held.row) }));
+      const proof = commitLogicalRecords("dispatches", migratedDispatches, selected, version).commitment;
+      const fields = describeObjectSchema(legacy.schema).fields;
+      const records = dispatches.map(held => {
+        const row = held.row as { content: { date: string; candidate_id: string } };
+        return [
+          JSON.stringify([row.content.date, row.content.candidate_id]),
+          digestRows([held.row as Record<string, unknown>], fields),
+        ];
+      }).sort(([a], [b]) => a! < b! ? -1 : a! > b! ? 1 : 0);
+      const expected = createHash("sha256").update(`${JSON.stringify([
+        "2026-10-22", "dispatches", version, selected.date, selected.run_id, selected.attempt, selected.correlation_id,
+      ])}\n`);
+      for (const record of records) expected.update(`${JSON.stringify(record)}\n`);
+      expect(proof.content_sha256).toBe(expected.digest("hex"));
+      expect(proof.row_schema_version).toBe(version);
+      expect(() => commitLogicalRecords("dispatches", history.ledgers.dispatches.rows, selected, version))
+        .toThrow("cannot omit planning observations");
+    }
     expect(() => commitLogicalRecords("article-assessments", assessments, selected, PLANNER_EXCLUSIONS_VERSION))
       .toThrow("cannot omit measured extraction quality");
   } finally { await fixture.close(); }

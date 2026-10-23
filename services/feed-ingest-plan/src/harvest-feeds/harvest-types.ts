@@ -81,6 +81,7 @@ export type HarvestResult = {
   articles: HarvestArticleResult[];
   first_sight_candidates: { url_key: string }[];
   feed_outcomes: FeedOutcomePayload[];
+  salience: { feed_id: string; available: boolean; unavailable_reason: string | null }[];
   candidates: z.infer<typeof FeedIngestCandidateSchema>[];
   rejections: z.infer<typeof CandidateRejectionRecordSchema>[];
   rejection_files: PersistLedgerResult;

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from typing import Annotated, ClassVar, Literal, Self
+from typing import Annotated, Any, ClassVar, Literal, Self
 
 from pydantic import Field, StrictInt, StringConstraints, model_validator
 
@@ -19,6 +19,7 @@ from idhazh.contracts.base import (
     Url,
     derive_url_key,
 )
+from idhazh.contracts.feed_ingest_planning_observations import PlanningObservations
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceKind, SourceTier
 
@@ -166,12 +167,17 @@ class FeedIngestCandidate(Contract):
     __schema_stem__: ClassVar[str] = "feed-ingest-candidate"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-23",
+            change="Retain headline matches and partial optional salience observations.",
+            why="Planning evidence stays separate from later article classification.",
+        ),
+        ChangelogEntry(
             version="2026-10-20",
             change="Declare harvested candidates and label evidence.",
             why="Stage boundaries retain content and independent evidence.",
         ),
     )
-    version: Literal["2026-10-20"] = "2026-10-20"
+    version: Literal["2026-10-23"] = "2026-10-23"
     date: DateStamp
     correlation_id: NonEmpty
     run_id: RunId
@@ -191,6 +197,14 @@ class FeedIngestCandidate(Contract):
     fetched_at: Timestamp
     labels: ArticleLabels
     policy: PolicyIdentity
+    planning_observations: PlanningObservations | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_previous_version(cls, value: Any) -> Any:
+        if isinstance(value, dict) and value.get("version") == "2026-10-20":
+            return {**value, "version": "2026-10-23"}
+        return value
 
     @model_validator(mode="after")
     def validate_identity(self) -> Self:

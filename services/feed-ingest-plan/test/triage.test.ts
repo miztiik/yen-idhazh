@@ -9,6 +9,7 @@ import { z } from "zod";
 import {
   CandidateRejectionRecordSchema, DropReasonSchema, FeedIngestCandidateSchema, HarvestDiagnosticsSchema,
   RowIdentitySchema, SourceFormSchema, WriterIdentitySchema, deriveCandidateId,
+  readFeedIngestCandidate,
 } from "@idhazh/common-contracts";
 import { loadPlanningConfig } from "../src/config/resolve-policy";
 import { harvestFeeds, HarvestObservationSchema } from "@idhazh/feed-ingest-plan/harvest-feeds";
@@ -34,7 +35,7 @@ const CaseSchema = z.object({
 async function inputs() {
   const fixture = await Bun.file(fixtureUrl).json();
   const seenFixture = await Bun.file(seenUrl).json();
-  const candidate = FeedIngestCandidateSchema.parse(fixture.candidate);
+  const candidate = readFeedIngestCandidate(fixture.candidate);
   expect(candidate.word_count).toBe(candidate.article_text.trim().split(/\s+/u).length);
   const planning = loadPlanningConfig(
     await Bun.file(new URL("../../../config/feed-ingest-plan.json", import.meta.url)).json(),

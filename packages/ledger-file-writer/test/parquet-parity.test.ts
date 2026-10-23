@@ -12,6 +12,7 @@ import {
   FOOTER_METADATA_KEYS,
   OPTIONAL_FOOTER_METADATA_KEYS,
   FeedIngestDispatchSchema,
+  readFeedIngestDispatch, PLANNING_OBSERVATIONS_VERSION,
   RowIdentitySchema,
   WriterIdentitySchema,
   validateEnvelopeContainer,
@@ -646,13 +647,13 @@ describe("ledger Parquet readback", () => {
 
   test("writes a real dispatch with worker assignment distinct from writer shard", async () => {
     await withOutputRoot(async (root) => {
-      const dispatch = FeedIngestDispatchSchema.parse(
+      const dispatch = readFeedIngestDispatch(
         await readLedgerFixture("feed-ingest-dispatch-row.json"),
       );
       expect(dispatch.partition.worker_assignment).not.toBe(writerContext.shard);
       const raw = await persistLedger({
         ledger: "dispatches",
-        rowContract: { schema: FeedIngestDispatchSchema, schemaVersion: "2026-10-22" },
+        rowContract: { schema: FeedIngestDispatchSchema, schemaVersion: PLANNING_OBSERVATIONS_VERSION },
         rows: [dispatch],
         outputRoot: root,
         period: { tier: "raw", covers: dispatch.content.date },
@@ -671,7 +672,10 @@ describe("ledger Parquet readback", () => {
         version: z.string(),
         columns: z.array(z.tuple([z.string(), z.string(), z.boolean()])),
       }).parse(await readLedgerFixture("dispatch-arrow-schema.json"));
-      expect(readback.files[0]?.nativeColumns).toEqual(recordedSchema.columns);
+      const columns = readback.files[0]!.nativeColumns;
+      expect(columns.filter(([name]) => !name.startsWith("content.planning_observations"))).toEqual(recordedSchema.columns);
+      expect(columns).toContainEqual(["content.planning_observations", "Struct", true]);
+      expect(columns).toContainEqual(["content.planning_observations.salience[].voted", "Bool", true]);
       expect(readback.files[0]?.identity.shard).toBe(writerContext.shard);
       expect(readback.files[0]?.rows[0]?.partition).toEqual(dispatch.partition);
       expect(readback.files[0]?.rows[0]?.content).toEqual(dispatch.content);

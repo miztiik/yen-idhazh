@@ -244,7 +244,7 @@ test("named input loader works from a generated configuration root without any b
     const configDirectory = join(recorded.directory, "config");
     await mkdir(configDirectory);
     const originalRoot = new URL("../../../", import.meta.url);
-    const named = ["planning", "taxonomy", "sources", "extraction", "registrations"] as const;
+    const named = ["planning", "taxonomy", "sources", "extraction", "registrations", "watchlist"] as const;
     for (const field of named) {
       await writeFile(join(recorded.directory, paths[field]), await Bun.file(new URL(paths[field], originalRoot)).text());
     }
