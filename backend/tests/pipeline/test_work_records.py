@@ -22,6 +22,7 @@ from conftest import FIXTURES_DIR
 from pytest import LogCaptureFixture, MonkeyPatch
 
 from idhazh.contracts.item_health import ItemHealthRow
+from idhazh.contracts.run_plan import RunPlan
 from idhazh.fetch import FetchResult, FetchTimings
 
 from ._builders import _work_stage, captured_article_fetch, plan
@@ -73,10 +74,10 @@ def run_a_shard(
     caplog: LogCaptureFixture,
     *,
     item_count: int = 1,
-) -> None:
+) -> RunPlan:
     """One real work stage, with its log captured."""
     caplog.set_level(logging.INFO, logger="idhazh")
-    _work_stage(
+    run_plan, _, _ = _work_stage(
         tmp_path,
         monkeypatch,
         replies=(
@@ -85,6 +86,7 @@ def run_a_shard(
         ),
         run_plan=plan(item_count=item_count),
     )
+    return run_plan
 
 
 def test_every_item_says_it_started_before_anything_can_kill_it(
@@ -343,9 +345,9 @@ def test_the_captures_land_beside_the_items_and_never_inside_them(
     lands in decides who ends up holding that text, and an article body is never
     republished to a reader.
     """
-    run_a_shard(tmp_path, monkeypatch, caplog)
+    run_plan = run_a_shard(tmp_path, monkeypatch, caplog)
 
-    run_dir = tmp_path / "run" / "2026-08-21"
+    run_dir = tmp_path / "run" / run_plan.date
     captured = sorted(path.name for path in (run_dir / "captures").glob("*.json"))
 
     assert captured
