@@ -9,7 +9,6 @@ from typing import Any
 import pytest
 from conftest import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 
-from idhazh.contracts import canonical_json
 from idhazh.contracts.article import Article
 from idhazh.contracts.digest_day import DigestDay, DigestItem
 from idhazh.contracts.digest_view import DigestView
@@ -266,8 +265,3 @@ def test_a_story_no_feed_carried_cannot_be_published() -> None:
     payload["items"][0]["carried_by"] = 0
     with pytest.raises(ValueError, match="greater than or equal to 1"):
         DigestDay.model_validate(payload)
-
-
-def test_canonical_json_is_sorted_and_newline_terminated() -> None:
-    text = canonical_json({"b": 1, "a": 2})
-    assert text == '{\n  "a": 2,\n  "b": 1\n}\n'

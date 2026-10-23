@@ -56,7 +56,7 @@ Table D - PR outcomes
 
 | ID | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| D1 | 1 | Semantic contracts and focused byte guarantees | - | A | PENDING | - | - | - |
+| D1 | 1 | Semantic contracts and focused byte guarantees | - | A | DONE | - | - | - |
 | D2 | 2 | Vector tests independent of the current asset | - | A | PENDING | - | - | - |
 | D3 | 3 | Finish the behavior review and remove proven fixture-only checks | 1, 2 | B | PENDING | - | - | - |
 
@@ -70,6 +70,7 @@ Table D - PR outcomes
   - `backend/tests/contracts/test_curated_registries.py`
   - `backend/tests/contracts/test_record_layouts.py`
   - `backend/tests/test_visual_validator.py`
+  - `backend/tests/contracts/test_committed_days.py` - docstring only. Added 2026-10-23, before dispatch: it named a `test_contracts.py` that does not exist and a byte-identical round trip that this row retires (reference search: no other hit outside the listed files).
   - `docs/architecture/contracts/schemas.md`
   - `TODO/20260828-band-calibration-handover.md`
   - `TODO/20260910-23-article-classification-plan.md`
