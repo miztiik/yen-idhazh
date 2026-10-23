@@ -9,6 +9,7 @@ import { readReach, type LedgerReach } from './ledger-reach';
 import { pageKeeper, type PageKeeper } from './page-keeper';
 import { renewReadSession } from './read-session';
 import { readSlice } from './slice-reader';
+import { questionReader } from './question-reader';
 import type { LedgerCatalog } from './ledger-catalog';
 import type { QueryEngine } from './slice-query';
 import type { AskOptions, AskResult, Column, DateStamp, LedgerName, SliceOptions, SliceResult, SpanCost } from './slice-shapes';
@@ -25,6 +26,7 @@ export function explorerBaseUrl(): string {
 }
 
 export interface LedgerReader {
+	question: ReturnType<typeof questionReader>;
 	slice(ledger: LedgerName, options: SliceOptions): Promise<SliceResult>;
 	ledgerReach(ledger: LedgerName): Promise<LedgerReach>;
 	ask(options: AskOptions): Promise<AskResult>;
@@ -57,7 +59,9 @@ export function createLedgerReader(catalog: LedgerCatalog, compactPrefix = explo
 		compact ??= pageKeeper(compactBytes(compactPrefix, (url, init) => fetch(url, init)), openEngine, catalog);
 		return compact;
 	}
+	const question = questionReader(compactKeeper, openEngine);
 	return {
+		question,
 		slice: (ledger, options) => readSlice(keeper(), ledger, options),
 		ledgerReach: (ledger) => readReach(keeper(), ledger),
 		ask: (options) => readAsk(compactKeeper(), options),
@@ -65,6 +69,7 @@ export function createLedgerReader(catalog: LedgerCatalog, compactPrefix = explo
 		askColumns: (ledgers, from, to, maxFetchBytes, maxFiles) => readColumns(compactKeeper(), ledgers, from, to, maxFetchBytes, maxFiles),
 		startAfresh() {
 			closed = true;
+			question.close();
 			renewReadSession();
 			return serial(async () => {
 				if (engine !== null) await dropOwnedViews(await engine);

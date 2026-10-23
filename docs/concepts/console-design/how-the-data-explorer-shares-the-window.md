@@ -1,6 +1,6 @@
 # How the Data explorer shares the window
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-23
 
 Where each region of the Data explorer stands, how much of the window it takes, and what holds still while an operator uses it. The words, states and colours on the page are ruled by [../console-design.md](../console-design.md).
 
@@ -30,9 +30,20 @@ From 640 px the question strip is one line beside the History and how-to links. 
 
 The Data explorer is a workbench. Pressing Run, copying text, saving a question, opening History, sorting a column, or switching between Table and Chart changes only the content inside a region. The question row, ledger rail, editor, status bar, column rail and result region keep their boxes. On the Chart tab, choosing a chart or a column changes only the pills' words, the drawing and the foot's text: the strip, both tabs, every tile, every slot and pill, the drawing's box and the foot keep theirs, and a pill's list floats over the drawing, so opening it moves nothing. The foot keeps the room of the last answer while a run is busy and after a run that brings no answer, so a Run moves the drawing's bottom edge at most once, when an answer that can give another number of notes arrives.
 
-Long content scrolls inside the region that owns it. The SQL editor shows at least a set number of lines, the status bar reserves readout lines, and notices float over the page instead of entering the document flow. No region takes its size from its content, so a long question, a long note or a thousand rows never move the regions around them. The column rail always shows the selected ledgers' columns; a run does not change it. The answer's own columns stay visible in the answer table's typed header.
+Long content scrolls inside the region that owns it. The SQL editor shows at least a set number of lines, the status bar reserves readout lines, and notices float over the page instead of entering the document flow. No region takes its size from its content, so a long question, a long note or a thousand rows never move the regions around them. The column rail shows the one browsed table's columns; a run does not change it. The answer's own columns stay visible in the answer table's typed header.
 
 ## Design rationale
+
+**Browse a table, query through SQL.** Owner-directed, 2026-10-23. Ledger rows
+are native buttons, not mandatory checkboxes. Names use the existing data face
+and small-text size with matching leading, larger than the former extra-small
+type. The pressed row marks only whose columns are shown. Repetitive grain and
+unknown-availability subtitles are removed; failures stay in the action and
+error surfaces. The column rail shows a selectable quoted table name and a
+separate copy action. Local aliases occupy their own group, with the filename
+as provenance and a separate Remove button. Refresh explicitly discards them.
+This retains the existing workbench and tokens, without a second query-selection
+state. Susan advised the interaction and type choice.
 
 **The Data explorer takes the whole window** (owner, 2026-10-05; the layout is
 Jony's). It is a tool an operator works in, so the room a screen has is room

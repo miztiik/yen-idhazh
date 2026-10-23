@@ -173,6 +173,9 @@ export type FetchCost = { files: number; bytes: number; alreadyHeld: number; ms:
 
 /** What a span will cost before it is paid, and how far each selected ledger reaches. */
 export type SpanCost = {
+	/** SQL dependencies in the page-only question reader, never saved or shared. */
+	ledgers?: readonly string[];
+	locals?: readonly string[];
 	files: number;
 	bytes: number;
 	/** Inclusive UTC bounds estimated for the answer, or null when no ledger reads a day. */
