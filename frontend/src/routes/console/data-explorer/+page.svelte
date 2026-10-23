@@ -28,6 +28,8 @@
 	import { keepRecentRun, keepSavedQuestion, forgetSavedQuestion, suggestedSaveName, type KeptQuestion, type RecentRun } from '$lib/console/explorer/keep';
 	import { fetchRegistry, type LedgerRegistry } from '$lib/console/explorer/registry';
 	import { consentedSelection, offersExample } from '$lib/data/ledger-catalog';
+	import { parseLedgerCatalog } from '$lib/data/ledger-catalog';
+	import type { LocalTable } from '$lib/data/local-tables';
 	import type { ExplorerExample } from '$lib/server/config';
 	import { isDay, type CutDays } from '$lib/data/slice-shapes';
 	import { preflight } from '$lib/data/ask-reader';
@@ -46,9 +48,16 @@
 	let reader: LedgerReader | null = null;
 	let session = 0;
 	let pricing = 0;
+	let describing = 0;
 	let registryError = $state<string | null>(null);
 	let filter = $state('');
 	let selected = $state<LedgerName[]>([]);
+	let browsed = $state('');
+	let imports = $state<LocalTable[]>([]);
+	let importing = $state(false);
+	let localAnswer = $state(false);
+	let mixedAnswer = $state(false);
+	let answeredSql = $state('');
 	let sql = $state('SELECT count(*) AS rows FROM "published"');
 	let costing = $state(false);
 	let initializing = $state(true);
@@ -94,8 +103,8 @@
 		const catalog = registry;
 		return catalog === null ? [] : config.examples.filter((example) => offersExample(catalog, example));
 	});
-	const selectedPublished = $derived(selected.filter((name) => enabled.includes(name)));
-	const columnLabel = $derived('Ledger columns');
+	const emptyCatalog = parseLedgerCatalog({ families: [] });
+	const columnLabel = $derived('Table columns');
 	const answerRows = $derived(result !== null && result.state === 'ok' ? (result.rows as Row[]) : []);
 	const answerColumns = $derived(result !== null && result.state === 'ok' ? result.columns : []);
 	const noticeText = $derived([keepNotice, copyNotice, !storageWorks && !storageNoticeDismissed ? 'This browser keeps nothing.' : ''].filter(Boolean).join(' '));
@@ -108,10 +117,8 @@
 	const editorLines = $derived(config.editor_lines_shown[wide ? 1 : 0]);
 	const statusText = $derived(statusLine());
 	const statusTone = $derived(result?.state === 'unreachable' ? 'warn' : 'neutral');
-	// Whether a question may run now. The Run button and Ctrl+Enter both read this one answer, so
-	// no way in starts a run before the page has read its ledgers, during another run, or with no
-	// ledger or no statement.
-	const canRun = $derived(!initializing && !refreshing && registryError === null && !running && selected.length > 0 && selected.every((name) => enabled.includes(name)) && sql.trim() !== '');
+	// Repository availability does not prevent a local-only question.
+	const canRun = $derived(!initializing && !refreshing && !importing && !running && sql.trim() !== '');
 	const answerLink = $derived(result !== null && !running && answerOffscreen ? '#data-explorer-rows' : '');
 	const shapeBounds = $derived({
 		chartMinRows: config.chart_min_rows,
@@ -166,7 +173,7 @@
 		fromDay = clampedFrom;
 		toDay = clampedTo;
 		windowDays = spanDays();
-		void updateCostAndColumns();
+		void updateCost();
 	}
 	function changeFrom(input: HTMLInputElement) {
 		const next = input.value > toDay ? toDay : input.value;
@@ -187,7 +194,7 @@
 	}
 
 	function emptyLedgerLines(): string {
-		const lines = selected
+		const lines = (cost.ledgers ?? [])
 			.map((ledger) => ({ ledger, through: cost.through[ledger] }))
 			.filter((entry): entry is { ledger: LedgerName; through: string } => entry.through !== undefined && fromDay !== '' && entry.through < fromDay)
 			.map((entry) => `Nothing in ${entry.ledger} after ${shortDate(entry.through)}.`);
@@ -195,28 +202,35 @@
 	}
 
 	function statusLine(): string {
+		const currentAnswer = sql === answeredSql;
 		if (keepNotice !== null) return statusSentence({ state: 'notice', notice: keepNotice });
 		if (linkNotices.length > 0) return statusSentence({ state: 'link', linkNotices });
-		if (running) {
-			return statusSentence(lastRead === null ? { state: 'running-fetch', files: cost.files, bytes: cost.bytes } : { state: 'running-query' });
-		}
+		if (importing) return 'Inspecting the local Parquet file. Nothing is uploaded.';
+		if (running) return 'Preparing the SQL tables and running the question.';
 		if (costing) return statusSentence({ state: 'costing' });
-		if (result?.state === 'ok' && lastRead !== null) {
+		if (currentAnswer && result?.state === 'ok' && lastRead !== null) {
 			return statusSentence({ state: 'answered', ms: lastMs, read: lastRead });
 		}
-		if (result?.state === 'quiet' && lastRead !== null) {
+		if (currentAnswer && result?.state === 'quiet' && lastRead !== null) {
 			return statusSentence({ state: 'quiet', ms: lastMs, read: lastRead });
 		}
-		if (result?.state === 'refused') return statusSentence({ state: 'refused' });
-		if (result?.state === 'missing') return statusSentence({ state: 'missing', ledger: result.ledger });
-		if (result?.state === 'unreachable') return statusSentence({ state: result.fault === 'engine' ? 'unreachable-engine' : 'unreachable-files' });
+		if (currentAnswer && result?.state === 'refused') return statusSentence({ state: 'refused' });
+		if (currentAnswer && result?.state === 'missing') return statusSentence({ state: 'missing', ledger: result.ledger });
+		if (currentAnswer && result?.state === 'unreachable') return statusSentence({ state: result.fault === 'engine' ? 'unreachable-engine' : 'unreachable-files' });
 		if (cost.failure?.state === 'missing') return explorerMissingSentence(cost.failure.ledger);
 		if (cost.failure?.state === 'refused') return refusedSentence(cost.failure.because);
 		if (cost.failure?.state === 'unreachable') return explorerUnreachableSentence(cost.failure.ledger, cost.failure.at, cost.failure.fault);
 		const refusal = preflight(cost, config.max_files, config.max_fetch_bytes);
 		if (refusal !== null) return refusedSentence(refusal);
+		const locals = imports.filter((table) => cost.locals?.includes(table.alias));
+		const localBytes = locals.reduce((sum, table) => sum + table.bytes, 0);
+		if ((cost.ledgers?.length ?? 0) === 0) {
+			return locals.length > 0
+				? `Run will read ${locals.length} local ${locals.length === 1 ? 'table' : 'tables'}, ${size(localBytes)}. Ledger dates do not filter local rows.`
+				: 'Run will evaluate this question without reading tables.';
+		}
 		const empty = emptyLedgerLines();
-		return `${statusSentence({ state: 'idle', files: cost.files, bytes: cost.bytes, ledgers: selected.length, readFrom: cost.readFrom, readTo: cost.readTo, firstRun: lastMs === null })}${empty ? ` ${empty}` : ''}`;
+		return `${statusSentence({ state: 'idle', files: cost.files - locals.length, bytes: cost.bytes - localBytes, ledgers: cost.ledgers?.length ?? 0, readFrom: cost.readFrom, readTo: cost.readTo })}${locals.length ? ` Also reads ${locals.length} local ${locals.length === 1 ? 'table' : 'tables'}, ${size(localBytes)}, without date filtering.` : ''}${empty ? ` ${empty}` : ''}`;
 	}
 	function explorerGapLines(gaps: readonly SpanGap[]) {
 		const catalog = registry;
@@ -244,11 +258,49 @@
 		if (registry === null) return;
 		const selection = consentedSelection(registry, names);
 		selected = selection.names;
+		browsed = selection.names[0] ?? '';
+		void describeColumns();
 		if (selection.notice) keepNotice = selection.notice;
 	}
-	function toggle(name: string) {
-		selectConsented(selected.some((one) => one === name) ? selected.filter((one) => one !== name) : [...selected, name]);
-		void updateCostAndColumns();
+	function browse(name: string) {
+		browsed = name;
+		void describeColumns();
+	}
+	async function importFile(file: File) {
+		const currentReader = reader;
+		if (currentReader === null || importing) return;
+		const readingSession = session;
+		importing = true;
+		try {
+			const table = await currentReader.question.importFile(file, config.max_fetch_bytes, config.max_files);
+			if (readingSession !== session) return;
+			imports = currentReader.question.localTables();
+			browse(table.alias);
+			void updateCost();
+			copyNotice = `Imported as "${table.alias}". Use this table name in SQL. The file stays on this page.`;
+		} catch (error) {
+			console.warn('Data explorer local import:', error);
+			if (readingSession === session) keepNotice = `Import failed: ${error instanceof Error ? error.message : String(error)}`;
+		} finally { if (readingSession === session) importing = false; }
+	}
+	async function removeFile(alias: string) {
+		const currentReader = reader;
+		if (currentReader === null || importing || running) return;
+		const readingSession = session;
+		importing = true;
+		try {
+			await currentReader.question.removeFile(alias);
+			if (readingSession !== session) return;
+			imports = currentReader.question.localTables();
+			if (browsed === alias) browsed = '';
+			void describeColumns();
+			result = null;
+			lastRead = null;
+			void updateCost();
+		} catch (error) {
+			console.warn('Data explorer local removal:', error);
+			if (readingSession === session) keepNotice = `Remove failed: ${String(error)}`;
+		} finally { if (readingSession === session) importing = false; }
 	}
 	function pick(example: ExplorerExample) {
 		selectConsented(example.ledgers);
@@ -257,28 +309,31 @@
 		toDay = todayUtc();
 		fromDay = addDays(toDay, 1 - days);
 		sql = example.sql;
-		void updateCostAndColumns();
+		void updateCost();
 	}
 	function pickSaved(question: KeptQuestion) {
 		selectConsented(question.ledgers);
 		if (question.from !== undefined && question.end !== undefined) setSpan(question.from, question.end);
 		else setWindow(presets.includes(question.days) ? question.days : windowDays);
 		sql = question.statement;
+		void updateCost();
 	}
 	function pickRun(run: RecentRun) {
 		selectConsented(run.ledgers);
 		if (run.from !== undefined && run.end !== undefined) setSpan(run.from, run.end);
 		else setWindow(presets.includes(run.days) ? run.days : windowDays);
 		sql = run.statement;
+		void updateCost();
 	}
 	function setWindow(days: number) {
 		windowDays = days;
 		toDay = todayUtc();
 		fromDay = addDays(toDay, 1 - days);
-		void updateCostAndColumns();
+		void updateCost();
 	}
 	/** Read the ledger registry, and on Refresh drop every index this page has read first. */
 	async function refreshRegistry(afresh = false, update = true) {
+		if (afresh && imports.length > 0) keepNotice = 'Refresh removed local tables. Import their files again before running SQL that names them.';
 		const refreshingSession = ++session;
 		++pricing;
 		refreshing = true;
@@ -286,6 +341,8 @@
 		const oldReader = reader;
 		reader = null;
 		registry = null;
+		imports = [];
+		importing = false;
 		result = null;
 		lastRead = null;
 		ledgerColumns = [];
@@ -300,13 +357,14 @@
 			registry = catalog;
 			reader = createLedgerReader(catalog, prefix);
 			selectConsented(selected);
-			if (update) await updateCostAndColumns();
+			if (update) await updateCost();
 		} catch (error) {
 			if (refreshingSession !== session) return;
 			registryError = error instanceof Error ? error.message : String(error);
 			registry = null;
-			reader = null;
+			reader = createLedgerReader(emptyCatalog, explorerBaseUrl());
 			ledgerColumns = [];
+			if (update) await updateCost();
 		} finally {
 			if (refreshingSession === session) refreshing = false;
 		}
@@ -314,11 +372,9 @@
 
 	function parseLedgerList(value: unknown): LedgerName[] | null {
 		if (!Array.isArray(value)) return null;
-		const catalog = registry;
-		if (catalog === null) return null;
 		const names: LedgerName[] = [];
 		for (const item of value) {
-			if (typeof item !== 'string' || catalog.get(item) === undefined) return null;
+			if (typeof item !== 'string') return null;
 			names.push(item);
 		}
 		return names;
@@ -481,31 +537,35 @@
 		writeStored(SAVED_KEY, savedQuestions);
 	}
 
-	async function updateCostAndColumns() {
+	async function updateCost() {
 		if (!ready) return;
 		const price = ++pricing;
 		const readingSession = session;
-		const picked = selectedPublished;
-		if (picked.length === 0) {
-			costing = false;
-			cost = { files: 0, bytes: 0, readFrom: null, readTo: null, cut: [], through: {} };
-			ledgerColumns = [];
-			return;
-		}
 		const currentReader = reader;
 		if (currentReader === null) return;
 		costing = true;
 		try {
-			const nextSpan = span();
-			const nextCost = await currentReader.askCost(picked, nextSpan.from, nextSpan.to);
+			const nextCost = await currentReader.question.cost(questionOptions(sql));
 			if (price !== pricing || readingSession !== session) return;
 			cost = nextCost;
-			const described = await currentReader.askColumns(picked, nextSpan.from, nextSpan.to, config.max_fetch_bytes, config.max_files);
-			if (price !== pricing || readingSession !== session) return;
-			ledgerColumns = described;
 		} finally {
 			if (price === pricing && readingSession === session) costing = false;
 		}
+	}
+	async function describeColumns() {
+		const version = ++describing;
+		const readingSession = session;
+		const currentReader = reader;
+		const table = browsed;
+		ledgerColumns = [];
+		if (currentReader === null) return;
+		const local = imports.find((one) => one.alias === table);
+		const columns = local !== undefined ? [...local.columns] : registry?.get(table)?.publish_to_data_explorer
+			? await currentReader.askColumns([table], fromDay, toDay, config.max_fetch_bytes, config.max_files) : [];
+		if (readingSession === session && version === describing) ledgerColumns = columns;
+	}
+	function questionOptions(statement: string) {
+		return { ledgers: [], from: fromDay, to: toDay, sql: statement, maxChars: config.query_max_chars, maxRows: config.max_rows, maxFetchBytes: config.max_fetch_bytes, maxFiles: config.max_files };
 	}
 
 	async function run() {
@@ -521,12 +581,15 @@
 		lastRead = null;
 		const started = performance.now();
 		try {
-			const answer = await currentReader.ask({ ledgers: asked.ledgers, from: asked.span.from, to: asked.span.to, sql: asked.statement, maxChars: config.query_max_chars, maxRows: config.max_rows, maxFetchBytes: config.max_fetch_bytes, maxFiles: config.max_files });
+			const answer = await currentReader.question.ask({ ...questionOptions(asked.statement), from: asked.span.from, to: asked.span.to });
 			if (readingSession !== session) return;
 			lastMs = Math.round(performance.now() - started);
 			// The window goes with its answer, so the lines under the answer change only on a run.
 			runSpan = asked.span;
 			result = answer;
+			answeredSql = asked.statement;
+			localAnswer = currentReader.question.lastScope().ledgers.length === 0;
+			mixedAnswer = currentReader.question.lastScope().locals.length > 0 && !localAnswer;
 			if (answer.state === 'ok') chartNoteCount = countChartNotes(answer.columns, answer.rows as Row[], shapeBounds, answer.capped);
 			else if (answer.state === 'quiet') chartNoteCount = 0;
 			if ((answer.state === 'ok' || answer.state === 'quiet') && 'read' in answer) {
@@ -578,6 +641,7 @@
 		if (answerRegion !== null) answerObserver?.observe(answerRegion);
 		void (async () => {
 			await refreshRegistry(false, false);
+			if (!ready) return;
 			savedQuestions = readStored<KeptQuestion>(SAVED_KEY, validStoredSaved);
 			recentRuns = readStored<RecentRun>(HISTORY_KEY, validStoredRun);
 			if (location.search) {
@@ -604,10 +668,16 @@
 					sql = first.sql;
 				}
 			}
-			await updateCostAndColumns();
+			await updateCost();
 			initializing = false;
 		})();
 		return () => {
+			ready = false;
+			++session;
+			++pricing;
+			const previousReader = reader;
+			reader = null;
+			void previousReader?.startAfresh().catch((error) => console.warn('Data explorer cleanup:', error));
 			query.removeEventListener('change', sync);
 			removeEventListener('resize', sync);
 			answerObserver?.disconnect();
@@ -633,11 +703,11 @@
 		</div>
 		<div class="question-grid" class:wide>
 			<details data-workbench-region="ledgers" class="rail-region" bind:open={ledgersOpen}>
-				<summary>Ledgers: {selected.length}</summary>
-				<LedgerList ledgers={ledgers} selected={selected} through={cost.through} spanFrom={fromDay} {filter} onToggle={toggle} onFilter={(value) => (filter = value)} onRefresh={() => refreshRegistry(true)} {refreshing} />
+				<summary>Tables: {ledgers.length + imports.length}</summary>
+				<LedgerList ledgers={ledgers} {browsed} {imports} {filter} onBrowse={browse} onFilter={(value) => (filter = value)} onRefresh={() => refreshRegistry(true)} onImport={importFile} onRemove={removeFile} busy={importing || running} {refreshing} />
 			</details>
 			<div class="editor-stack">
-				{#if registryError}<p class="state warn">{registryError}</p>{/if}
+				{#if registryError}<p class="state warn">{registryError} Local files and questions without repository tables still work. Refresh to retry the registry.</p>{/if}
 				<div data-workbench-region="editor">
 					<div class="editor-head">
 						<label for="explorer-sql"><Icon id="query-editor" /> DuckDB SQL</label>
@@ -649,6 +719,7 @@
 							onChange={setWindow}
 						/>
 						<div class="date-fields">
+							<span class="date-scope">Ledger dates only</span>
 							<label>From (UTC)<input type="date" value={fromDay} min={minReachDay()} max={toDay < todayUtc() ? toDay : todayUtc()} oninput={(event) => changeFrom(event.currentTarget)} onchange={(event) => changeFrom(event.currentTarget)} /></label>
 							<label>To (UTC)<input type="date" value={toDay} min={fromDay > minReachDay() ? fromDay : minReachDay()} max={todayUtc()} oninput={(event) => changeTo(event.currentTarget)} onchange={(event) => changeTo(event.currentTarget)} /></label>
 						</div>
@@ -670,13 +741,13 @@
 							</button>
 						</div>
 					</div>
-					<QueryEditor value={sql} maxChars={config.query_max_chars} lines={editorLines} onInput={(value) => { sql = value; if (linkNotices.some((notice) => notice.includes('came from a link'))) linkNotices = []; }} onRun={run} />
+					<QueryEditor value={sql} maxChars={config.query_max_chars} lines={editorLines} onInput={(value) => { sql = value; if (linkNotices.some((notice) => notice.includes('came from a link'))) linkNotices = []; void updateCost(); }} onRun={run} />
 				</div>
 				<RunStatus text={statusText} lines={readoutLines} tone={statusTone} href={answerLink} files={lastRead?.files ?? cost.files} bytes={lastRead?.bytes ?? cost.bytes} />
 			</div>
 			<details data-workbench-region="columns" class="rail-region" bind:open={columnsOpen}>
 				<summary>{columnLabel} ({ledgerColumns.length})</summary>
-				{#if registry}<ColumnList columns={ledgerColumns} label={columnLabel} catalog={registry} />{/if}
+				<ColumnList columns={ledgerColumns} label={columnLabel} catalog={imports.some((table) => table.alias === browsed) ? emptyCatalog : registry ?? emptyCatalog} table={browsed} onMessage={(message) => copyNotice = message} />
 			</details>
 		</div>
 	</div>
@@ -729,7 +800,7 @@
 			{:else if result === null}
 				<div class="answer-state" data-explorer-idle>{explorerIdleSentence()}</div>
 			{:else if result.state === 'ok'}
-				<AnswerTable columns={result.columns} rows={result.rows as Row[]} capped={result.capped} maxRows={config.max_rows} pageSize={config.row_page} cellMaxCh={config.cell_max_ch} barSpreadShare={config.bar_spread_share} spanText={describeDaysRead(result.readFrom, result.readTo)} siteFromText={siteFromText()} gapLines={explorerGapLines(result.gaps)} onOrderChange={(rows) => (orderedRows = rows)} />
+				<AnswerTable columns={result.columns} rows={result.rows as Row[]} capped={result.capped} maxRows={config.max_rows} pageSize={config.row_page} cellMaxCh={config.cell_max_ch} barSpreadShare={config.bar_spread_share} spanText={localAnswer ? 'Local files or expressions; ledger dates do not filter local rows.' : `${describeDaysRead(result.readFrom, result.readTo)}${mixedAnswer ? ' Local rows are not date-filtered.' : ''}`} siteFromText={siteFromText()} gapLines={explorerGapLines(result.gaps)} onOrderChange={(rows) => (orderedRows = rows)} />
 			{:else if result.state === 'quiet'}
 				<div class="answer-state" data-state="quiet">{explorerQuietSentence()}{#if runSpan}{@render startNotes(result.cut, runSpan.to)}{/if}{@render gapNotes(result.gaps)}</div>
 			{:else if result.state === 'missing'}

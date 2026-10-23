@@ -20,12 +20,32 @@ Days before a ledger's first compact period are cut from that ledger's answer an
 ## Ask a question
 
 1. Open `/console/data-explorer/`.
-2. Choose one or more ledgers.
-3. Choose `From (UTC)` and `To (UTC)`. The inputs accept the reader's UTC day and the 364 UTC days before it by default.
-4. Write one read-only DuckDB statement. Use the selected ledger names as quoted table names, for example `"host-fingerprint"`.
+2. Click a table to browse its columns. Copy its quoted SQL name from the column rail. Browsing does not select data or change SQL.
+3. Choose `From (UTC)` and `To (UTC)` for repository ledgers only. The inputs accept the reader's UTC day and the 364 UTC days before it by default.
+4. Write one read-only DuckDB statement. SQL decides which tables to read; no checkboxes are needed. Use quoted table names, for example `"host-fingerprint"`. Joins, aliases and common table expressions work.
 5. Press Run, at the right end of the editor's heading line beside Save and Copy link, or press Ctrl+Enter in the editor.
 
 The page never runs a question from a link by itself. A shared link fills the editor and waits for Run.
+
+## Import local Parquet
+
+Choose `Import Parquet` in the table rail. The page inspects the real file and
+shows a safe table alias, such as `"local_1"`, and its columns. Query that alias
+directly, or join it to a repository ledger. The original filename is shown
+only as a label. A local file needs no registry entry or date columns. The
+ledger date controls never filter local rows; write a SQL filter if needed.
+
+Nothing is uploaded or sent to a model. Imports stay in this page's memory,
+not in saved questions, links, the repository or persistent browser storage.
+`Remove` releases a table without changing SQL or deleting the disk file.
+Refresh removes all imports and clears the answer; import those files again
+before reusing their aliases. Leaving the page also releases them.
+Local questions still work if the remote registry fails.
+
+The configured file and byte limits also bound imports. Invalid, corrupt,
+unreadable or oversized files report a failure rather than creating a table.
+Run checks the combined referenced local and repository files before fetching
+repository Parquet.
 
 ## What a result means
 
@@ -49,7 +69,10 @@ the next question.
 
 Copy link stores the chosen ledgers, the custom dates and the compressed question when the link fits `console.explorer_link_max_bytes`, the measured request-target limit. A longer link carries the ledgers and the days only, and `Copy question` appears beside Copy link. A preset span that ends today keeps `days`; a custom span uses `from` and `end`.
 
-Save keeps the question in this browser. A question saved before custom dates existed opens ending on the reader's UTC day.
+Save keeps the question in this browser, but never local files. Reopen a local
+question and import its file again before Run. Old ledger lists in questions
+and links are browsing hints only; SQL determines the actual dependencies.
+A question saved before custom dates existed opens ending on the reader's UTC day.
 
 Saved questions and History keep exact dates only for a custom span. A preset
 span reopens ending on the current UTC day. A custom span marks no day tile;
