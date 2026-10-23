@@ -102,6 +102,7 @@ def verify_health_order_compaction(root: Path) -> None:
         for _ in range(3):
             run_task(
                 "compact-feed-health", root, today=today, dry_run=False,
+                max_periods_per_run=(today - date.fromisoformat(day)).days + 1,
                 daily_keep_days=31, monthly_keep_days=63,
                 monthly_window={"unit": "forever"}, yearly_prune_enable=False,
             )
