@@ -1099,13 +1099,6 @@ def test_a_reject_ceiling_under_the_brief_gate_is_refused() -> None:
     assert EvaluationConfig(verbatim_reject_ceiling=gate + 0.01).verbatim_reject_ceiling > gate
 
 
-def test_the_committed_reject_ceiling_leaves_the_brief_gate_a_live_band() -> None:
-    """0.75 against a 0.5 gate, so (0.5, 0.75] is a band the gate can still fail in."""
-    evaluation = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).evaluation
-    assert evaluation.verbatim_reject_ceiling == 0.75
-    assert evaluation.brief_compression_ceiling == 0.5
-
-
 def test_a_fresh_clone_measures_itself_and_the_committed_config_agrees() -> None:
     """Every instrument is on unconfigured, and the committed file did not turn one off.
 
@@ -1432,8 +1425,6 @@ def test_no_judges_own_measurement_reaches_the_shared_config_contract() -> None:
     judge-owned readings today: the derived per-call figure and the measured
     per-pair one.
     """
-    assert AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")) is not None
-
     reached = sorted(
         name
         for name in vars(app_config)

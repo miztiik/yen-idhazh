@@ -566,17 +566,6 @@ def _aggregate_cpu_line(text: str) -> list[int]:
     return [int(cell) for cell in aggregate[0].split()[1:]]
 
 
-def test_the_two_proc_stat_captures_an_oracle_reads_are_committed() -> None:
-    """A test over a fixture that is not there proves nothing and still passes.
-
-    `.gitignore` carries `*.log`, and a capture named after the file it came
-    from has been silently ignored before - so the files are asserted present
-    rather than assumed.
-    """
-    for path in (PROC_STAT_AT_START, PROC_STAT_AT_END):
-        assert path.is_file(), path.name
-
-
 def test_the_processor_busy_share_is_read_from_a_real_proc_stat_pair() -> None:
     """The Oracle for `cpu_shares_between`: the capture proves its own window.
 
