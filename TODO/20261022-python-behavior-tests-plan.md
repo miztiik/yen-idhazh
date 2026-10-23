@@ -60,11 +60,11 @@ Table D - PR outcomes
 | D2 | 2 | Vector tests independent of the current asset | - | A | DONE | - | - | - |
 | D3 | 3 | Finish the behavior review and remove proven fixture-only checks | 1, 2 | B | IN-FLIGHT | - | - | - |
 | D4 | 4 | Safe removals with named survivors | 1, 2 | C | DONE | - | [#1652](https://github.com/miztiik/yen-idhazh/pull/1652), merged at `75a4e12af6ad40f79691afba41b20ce71414c2e6` | - |
-| D5 | 5 | Expectations derived from the test's own input | 2 | D | DONE | input-based-vector-expectations | #1654 | - |
+| D5 | 5 | Expectations derived from the test's own input | 2 | D | DONE | input-based-vector-expectations | [#1654](https://github.com/miztiik/yen-idhazh/pull/1654), merged at `3073686d6d28f824f53e8b45a88caddf2691932a` | - |
 | D6 | 6 | Pipeline records follow the input that produced them | 1 | E | DONE | input-based-pipeline-records | [#1655](https://github.com/miztiik/yen-idhazh/pull/1655), merged at `6bb8dfea19613c116142131550c97fead234747d` | - |
 | D7 | 7 | Config reader values and accurate migration test names | 1 | F | DONE | config-reader-behavior-proofs | [#1653](https://github.com/miztiik/yen-idhazh/pull/1653) | - |
 | D8 | 8 | Workflow checks retain independent failure evidence | 1 | G | DONE | workflow-behavior-proofs | [#1656](https://github.com/miztiik/yen-idhazh/pull/1656), merged at `43bdd37d671275af2f904590f7ca69498cc74a91` | - |
-| D9 | 9 | Remove the unused watchlist entry limit | 1 | H | IN-FLIGHT | remove-unused-watchlist-limit | [#1657](https://github.com/miztiik/yen-idhazh/pull/1657) | - |
+| D9 | 9 | Remove the unused watchlist entry limit | 1 | H | DONE | remove-unused-watchlist-limit | [#1657](https://github.com/miztiik/yen-idhazh/pull/1657), merged at `f479997fec70f4f57b13a6d3a649b5d92a4fd5f7` | - |
 | D10 | 10 | Independent historical reader proofs | 1 | I | IN-FLIGHT | independent-historical-reader-proofs | [#1659](https://github.com/miztiik/yen-idhazh/pull/1659) | - |
 
 The canary implementation for Row 3 is delivered separately from its suite-wide
@@ -632,8 +632,8 @@ counts use the untouched archive and the completed branch instead.
   taxonomy fixture change still passes. All disposable copies were removed.
 - **Plan integration:** The coordinator released the serialized slot and named
   Row 9's frozen full successor as the input. All prior row text and the exact
-  owner ruling in A5 remain; D3 and D9 remain open. Row 8's later merge receipt
-  is recorded above. Plan-only integration does not repeat unchanged gates.
+  owner ruling in A5 remain; D3 remains open. Rows 5, 8 and 9 have their verified
+  merge receipts above. Plan-only integration does not repeat unchanged gates.
 - **Delivery:** Implementation commit `90c58a26c` is in open PR
   [#1659](https://github.com/miztiik/yen-idhazh/pull/1659). This phase is
   delivered for review, not merged. The suite-wide Row 3 review remains open.

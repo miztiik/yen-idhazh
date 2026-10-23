@@ -1,6 +1,6 @@
 # Config
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-10-23
 
 Where tunable behaviour lives, and the rule that separates a knob from an identifier. Config-driven with sane defaults is a project principle ([principles.md](principles.md), Guardrail #6): a fresh clone runs on the defaults, and no threshold, cap or source list is hardcoded in code.
 
@@ -10,7 +10,9 @@ This page holds the rules every config file obeys. What one individual knob does
 
 `config/` holds **human-edited, schema-validated tunable knobs**. Both sides read it: `backend/` at build time, and `frontend/` wherever a published surface needs one. Every config file conforms to a typed model in `backend/idhazh/contracts/` before the logic that reads it exists, and to the schema generated from it ([../architecture/contracts/schemas.md](../architecture/contracts/schemas.md)). A config file that fails its schema fails the build (`CLAUDE.md` section 1a).
 
-Config is a **persisted contract like any other**: it is version-stamped and changelogged, and a breaking change ships with its read-side migration in the same commit (`CLAUDE.md` section 11). A knob is not exempt from the contract discipline just because a human types it.
+An authored config file is not a recorded pipeline payload. The
+[authored-input update rule](#removing-a-config-field-updates-its-authored-inputs)
+explains what changes together when a setting is removed.
 
 ### The file names every knob it owns, and a default is a floor rather than a hiding place
 
@@ -109,11 +111,15 @@ The lesson generalises past this file: **a config entry that declares a thing mu
 
 The same day found the third shape of the same failure, and it is the worst of them: **a knob that is read, but always against an empty input.** `collect.watchlist_bonus` was read on every planned item and added to the score under `if watchlist_hit`, and it could never fire, because `watchlist_hit` was tested against a `watchlist_keys` the caller hardcoded to the empty set. Nothing here was dead code and nothing was unread config, and the term still never moved a number. A test asserting "the bonus lifts the score" passed the whole time, because the test supplied the flag itself. Fixed 2026-08-26: `config/watchlist.json` carries 30 entities and the flag comes from their aliases. The test now pins each term's **size** against its knob rather than only its direction, which is the check that would have caught it.
 
-### Removing a config field is breaking, and its migration is the file
+### Removing a config field updates its authored inputs
 
-Deleting a key is a breaking schema change like any other, so it ships a changelog entry and a version stamp (`CLAUDE.md` section 11).
+Repository-authored configuration does not need a persisted-payload version,
+changelog or read-side migration (`CLAUDE.md` section 11).
 
-The read-side migration is unusual and worth stating once: **for a config contract, the migration is the config edit in the same commit.** No run writes these files - a person does - so there is no back catalogue of old payloads to upgrade. There is one file per contract, and `extra="forbid"` fails loudly and by name if a stale key survives. A migration function would have nothing to migrate.
+Remove the key from its declaration and named authored inputs in the same
+commit. `extra="forbid"` still refuses a stale key by name. When a fixture
+preserves an older guarantee, keep the fields that provide that evidence;
+unrelated settings can follow the current config reader.
 
 ## Build-time config versus shipped config
 
@@ -130,7 +136,15 @@ constant. Owner ruling, 2026-09-28.
 
 ## Design rationale
 
-Keeping tunables in schema-validated files rather than in code exists so that tuning the system never requires reading it, and so that a change of threshold is a reviewable one-line diff with a date on it rather than an archaeological dig. Treating config as a versioned contract - rather than as "just a JSON file" - is what stops a silently-renamed key from failing a run at 6 a.m. on a Sunday. Authority: Fowler ([../../.github/agents/fowler.agent.md](../../.github/agents/fowler.agent.md)).
+**No watchlist entry limit.** Owner ruling, kumarsnaveen, 2026-10-23:
+remove `collect.watchlist_max_entities`. Only a test read it; no runtime
+consumer limited the registry. The list grows through entries a person authors
+in `config/watchlist.json`, without a separate count setting. Entity kinds,
+alias matching, retired-entry exclusion and identity validation stay unchanged.
+The pre-yearly-retention config fixture loses only this unrelated setting;
+its recorded retention declarations and legacy source weights stay intact.
+
+Keeping tunables in schema-validated files rather than in code exists so that tuning the system never requires reading it, and so that a change of threshold is a reviewable one-line diff with a date on it rather than an archaeological dig. Validating config and changing its declaration and authored inputs together stops a silently-renamed key from failing a run at 6 a.m. on a Sunday. Authority: Fowler ([../../.github/agents/fowler.agent.md](../../.github/agents/fowler.agent.md)).
 
 Excluding the runner's ceilings is the less obvious half. They look exactly like knobs and are not: a configurable job timeout invites someone to raise it rather than fix the batch size, which is precisely the reasoning Guardrail #2 exists to prevent. Authority: Carmack.
 

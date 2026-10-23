@@ -89,8 +89,7 @@
     "source_yield_alarm_min_decisions": 20,
     "source_yield_alarm_point": 0.4,
     "source_yield_min_complete_days": 45,
-    "watchlist_bonus": 0.75,
-    "watchlist_max_entities": 24
+    "watchlist_bonus": 0.75
   },
   "console": {
     "absent_hatch_degrees": 30,

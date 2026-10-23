@@ -9,6 +9,7 @@ import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.watchlist import EntityKind, Watchlist
 
 pytestmark = pytest.mark.contract
@@ -21,10 +22,32 @@ def watchlist_payload() -> dict[str, Any]:
     return payload
 
 
-def test_the_watchlist_stays_inside_its_configured_cap() -> None:
-    config = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
-    watchlist = Watchlist.from_json(read_text(CONFIG_DIR / "watchlist.json"))
-    assert len(watchlist.entities) <= config.collect.watchlist_max_entities
+def test_the_removed_entry_limit_is_refused_by_name() -> None:
+    payload = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    payload["collect"]["watchlist_max_entities"] = 30
+    with pytest.raises(ValueError, match="watchlist_max_entities"):
+        AppConfig.model_validate(payload)
+    with pytest.raises(ValueError, match="watchlist_max_entities"):
+        CollectConfig.model_validate(payload["collect"])
+
+
+@pytest.mark.parametrize("entity_count", [31, 61])
+def test_authored_entries_are_not_limited_by_count(entity_count: int) -> None:
+    payload = watchlist_payload()
+    payload["entities"] = [
+        {
+            "id": f"subject-{index}",
+            "display_name": f"Subject {index}",
+            "kind": "subject",
+            "aliases": [f"Subject alias {index}"],
+        }
+        for index in range(entity_count)
+    ]
+    watchlist = Watchlist.model_validate(payload)
+    expected = {entity["id"]: entity["aliases"] for entity in payload["entities"]}
+    assert len(watchlist.entities) == entity_count
+    assert watchlist.entity_terms() == expected
+    assert Watchlist.from_json(watchlist.to_json()).entity_terms() == expected
 
 
 def test_a_subject_needs_neither_a_filer_id_nor_a_feed() -> None:
