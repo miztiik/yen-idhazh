@@ -1,6 +1,6 @@
 # Python tests that prove behavior
 
-**Last Updated**: 2026-10-22
+**Last Updated**: 2026-10-23
 **Level**: 3 - change test coverage across reader and writer boundaries without changing production behavior.
 
 ## 0 - Operating contract
@@ -10,7 +10,7 @@ Table A - Scope and execution
 | ID | Field | Value |
 | --- | --- | --- |
 | A1 | Intent | Python tests catch broken implementation behavior, not changes to the quality or formatting of current output data. |
-| A2 | Status | Authoring only. Committing this plan does not authorize its implementation. |
+| A2 | Status | Execution authorized by kumarsnaveen on 2026-10-23. The owner also authorized the structural follow-on work needed to complete the original suite-wide intent. |
 | A3 | Hard scope - in | Review the Python suite against Table C; replace blanket fixture-format checks; remove proven duplicate data checks; preserve reader, writer, migration, identity, failure-handling and safety behavior. |
 | A4 | Chosen strategy | Semantic reader/writer checks plus focused tests where exact bytes have a consumer. Fowler ruled this construction on 2026-10-22; the owner set the behavior-focused intent. |
 | A5 | Contract impact | No persisted shape, version stamp, migration, serializer, digest algorithm, production validation rule, configuration knob or dependency changes. Session review reports are not a new application artifact. |
@@ -20,7 +20,7 @@ Table A - Scope and execution
 | A9 | Deletion rule | A deleted check either has a named surviving behavior proof or asserts only incidental fixture/data content with no dependent behavior. Preserve input conditions needed to make a surviving test meaningful. An uncertain case stays until its responsibility is resolved. |
 | A10 | Existing work | Do not adopt, restore or commit unrelated working-tree edits. In particular, re-read the main-branch versions of `test_feed_ingest_audit.py` and `test_source_classification_history.py` rather than treating local deletions as approved cleanup. |
 | A11 | ESCALATE triggers | 1. A proposed change alters a persisted shape, emitted bytes, digest meaning, historical acceptance or the trust boundary: Level 5, pause for the owner. 2. A production validator or publication rule would be weakened or a new runtime check is needed: surface the scope change. 3. A needed consumer proof requires changing the published surface: revise the scope before implementation. 4. Evidence conflicts with an owner decision or an advisor conflict remains unresolved: pause under the execution contract. |
-| A12 | Execution | Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes. |
+| A12 | Execution | Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. |
 
 Table B - Work excluded from this plan
 
@@ -59,6 +59,7 @@ Table D - PR outcomes
 | D1 | 1 | Semantic contracts and focused byte guarantees | - | A | DONE | - | - | - |
 | D2 | 2 | Vector tests independent of the current asset | - | A | DONE | - | - | - |
 | D3 | 3 | Finish the behavior review and remove proven fixture-only checks | 1, 2 | B | PENDING | - | - | - |
+| D5 | 5 | Expectations derived from the test's own input | 2 | D | DONE | input-based-vector-expectations | pending | - |
 
 ## 2 - Row #1 - Semantic contracts and focused byte guarantees
 
@@ -166,6 +167,73 @@ Table J - Rejected alternatives
 | J2 | Delete everything mentioning quality, missing data, totals or drift | Those terms also describe validation, selection and failure-handling implementations. | Specific lost reader, safety and correctness guarantees, each requiring owner approval. | Fowler; directly inspected counterexamples. |
 | J3 | Move every data assertion into a new producer check or scheduled suite | Many checks are already enforced, or concern only a test fixture; relocating all of them preserves the redundancy. | Extra runtime reads and another maintenance surface; a genuine uncovered production invariant must be priced separately. | Existing producer ownership and the contract-impact boundary. |
 | J4 | Treat fewer tests as proof of faster CI | Collected count does not measure runtime and shared-runner noise can dominate. | Paired runs on identified hardware if a later implementation decision actually needs a speed measurement. | Existing measurement policy. |
+
+## 6 - Row #5 - Expectations derived from the test's own input
+
+- **Scope:** Replace fixture-derived identities, counts and dates with expectations
+  from the input handed to the implementation. Keep independent vector values,
+  stale-input refusals and completed/failed-step outcomes.
+- **Files touched:** `backend/tests/test_backfill_vectors.py`,
+  `backend/tests/test_corpus_harvest.py`, `backend/tests/test_canary_packing.py`.
+- **Reference checks:** The review names six backfill cases, the census recount
+  case and the council-record packing case. Each identifier was rechecked
+  against this branch before editing.
+- **Changes and acceptance proof:**
+  - `TestWhichItemsEarnAVector::test_readable_items_all_earn_one`: expected ids
+    come from the supplied day's items; dropping a readable item must fail.
+  - `TestWhichItemsEarnAVector::test_an_item_the_encoder_cannot_read_earns_nothing`:
+    expected ids exclude the item the test made unreadable; including it must fail.
+  - `TestTheBackfill::test_an_item_that_earns_nothing_gets_nothing` and
+    `test_a_surplus_vector_is_dropped`: the written ids exclude the unreadable
+    item and retain the others; keeping its vector must fail both checks.
+  - `TestTheBackfill::test_a_wrong_day_is_re_encoded_whole`: expected ids/count
+    come from the supplied day, while independently chosen stale vector values
+    must be replaced; topping up the stale block must fail.
+  - `TestTheBackfill::test_a_repaired_day_takes_its_month_index_with_it`:
+    the index month comes from the supplied day, and its known-date path stays
+    an independent `2026-08.json` naming check; leaving it stale must fail.
+  - `test_the_census_is_recounted_from_the_window_never_incremented`:
+    expected model, vertical and date values come from the scored input row,
+    not rows read back from the implementation. A deliberately inflated prior
+    model count proves recounting; incrementing instead must fail.
+  - `test_published_council_records_keep_completed_and_failed_steps`:
+    read-back records equal the filed records, including both outcomes; dropping
+    the failed step or changing an outcome must fail. Keep the explicit
+    `("failed", "raised")` and `("completed", None)` expectations and the
+    independently supplied start time; whole-record equality alone only proves
+    packing preserves what the fixture writer supplied.
+- **Gates:** Shared changed-test selector and the directly selected checks it
+  names. Run fault checks in disposable copies, not in the working implementation.
+- **KEEP:** The stale vector remains independently chosen as `vector(0.25)`;
+  the repaired vector must differ from it. The known-date month-index path and
+  the canary outcome, fault and start-time expectations remain independent
+  checks. Removing these expectations adds no input-derived coverage.
+- **Negative proofs (2026-10-23):** In a disposable archive, each listed
+  production mutation failed the named test at the shown assertion. The archive
+  imported its own `backend/idhazh`; the real local encoder and tokenizer were
+  included for backfill proofs.
+  1. `test_readable_items_all_earn_one` - omit the first readable id;
+     `assert earns_a_vector(payload, embedder()) == {item.item_id for item in payload.items}`.
+  2. `test_an_item_the_encoder_cannot_read_earns_nothing` - include every item;
+     `assert earns_a_vector(payload, embedder()) == expected`.
+  3. `test_an_item_that_earns_nothing_gets_nothing` - treat every item as earned;
+     `assert set(repaired.embeddings.vectors) == expected`.
+  4. `test_a_surplus_vector_is_dropped` - accept a superset of earned ids;
+     `assert set(repaired.embeddings.vectors) == expected`.
+  5. `test_a_wrong_day_is_re_encoded_whole` - merge stale vectors into the new
+     block; `assert repaired.embeddings.vectors[stale_id] != stale`.
+  6. `test_a_repaired_day_takes_its_month_index_with_it` - skip rebuilding the
+     month index; `assert index_path.is_file()`.
+  7. `test_the_census_is_recounted_from_the_window_never_incremented` - start
+     counts from previous metadata; `assert recounted.models == expected_models`.
+  8. `test_published_council_records_keep_completed_and_failed_steps` - drop
+     failed rows; `assert packed == filed`.
+- **Selector (2026-10-23):** `npm run test:changed` from `frontend/` selected
+  exactly the three files in this row and reused completed run `d51d38cfefb4`
+  with exit 0: ruff passed, mypy reported no issues in 831 source files, and
+  70 pytest cases passed. `git diff --check` passed.
+- **Dependencies:** Row 2's generated vector tests. Row 4 and this row touch no
+  common application/test file; serialize edits to this shared plan.
 
 ## See also
 

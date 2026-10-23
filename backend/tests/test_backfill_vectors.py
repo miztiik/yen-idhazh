@@ -62,11 +62,12 @@ def with_block(embeddings: DigestEmbeddings | None) -> DigestDay:
 
 
 def with_one_unreadable_item(embeddings: DigestEmbeddings | None) -> DigestDay:
-    """The same day, with `ai-02` written in a script the encoder cannot read."""
+    """The same day, with one of its items written in a script the encoder cannot read."""
     base = with_block(embeddings)
+    unreadable_id = base.items[-1].item_id
     items = [
         item.model_copy(update={"title": UNREADABLE, "summary": UNREADABLE})
-        if item.item_id == "ai-02"
+        if item.item_id == unreadable_id
         else item
         for item in base.items
     ]
@@ -144,14 +145,14 @@ class TestWhichDaysAreInScope:
 
 class TestWhichItemsEarnAVector:
     def test_readable_items_all_earn_one(self) -> None:
-        assert earns_a_vector(day(), embedder()) == {"ai-01", "energy-01", "ai-02"}
+        payload = day()
+        assert earns_a_vector(payload, embedder()) == {item.item_id for item in payload.items}
 
     def test_an_item_the_encoder_cannot_read_earns_nothing(self) -> None:
         """A vector about characters rather than a story is one no query retrieves."""
-        assert earns_a_vector(with_one_unreadable_item(None), embedder()) == {
-            "ai-01",
-            "energy-01",
-        }
+        payload = with_one_unreadable_item(None)
+        expected = {item.item_id for item in payload.items if item.title != UNREADABLE}
+        assert earns_a_vector(payload, embedder()) == expected
 
 
 class TestWhichDaysAreWrong:
@@ -220,25 +221,29 @@ class TestTheBackfill:
 
     def test_an_item_that_earns_nothing_gets_nothing(self, tmp_path: Path) -> None:
         needs_encoder()
-        path = write_day(tmp_path, with_one_unreadable_item(block({})))
+        payload = with_one_unreadable_item(block({}))
+        expected = {item.item_id for item in payload.items if item.title != UNREADABLE}
+        path = write_day(tmp_path, payload)
 
         backfill(tmp_path, "2026-08-22", embedder())
 
         repaired = DigestDay.from_json(path.read_text(encoding="utf-8"))
         assert repaired.embeddings is not None
-        assert set(repaired.embeddings.vectors) == {"ai-01", "energy-01"}
+        assert set(repaired.embeddings.vectors) == expected
 
     def test_a_surplus_vector_is_dropped(self, tmp_path: Path) -> None:
         """A day that embedded everything loses the vector no query could retrieve."""
         needs_encoder()
         every = block({item.item_id: vector(0.25) for item in day().items})
-        path = write_day(tmp_path, with_one_unreadable_item(every))
+        payload = with_one_unreadable_item(every)
+        expected = {item.item_id for item in payload.items if item.title != UNREADABLE}
+        path = write_day(tmp_path, payload)
 
         backfill(tmp_path, "2026-08-22", embedder())
 
         repaired = DigestDay.from_json(path.read_text(encoding="utf-8"))
         assert repaired.embeddings is not None
-        assert "ai-02" not in repaired.embeddings.vectors
+        assert set(repaired.embeddings.vectors) == expected
 
     def test_a_wrong_day_is_re_encoded_whole(self, tmp_path: Path) -> None:
         """One block, one arithmetic.
@@ -250,14 +255,18 @@ class TestTheBackfill:
         """
         needs_encoder()
         stale = vector(0.25)
-        path = write_day(tmp_path, with_block(block({"ai-01": stale})))
+        payload = with_block(block({}))
+        stale_id = payload.items[0].item_id
+        stale_payload = payload.model_copy(update={"embeddings": block({stale_id: stale})})
+        path = write_day(tmp_path, stale_payload)
 
         backfill(tmp_path, "2026-08-22", embedder())
 
         repaired = DigestDay.from_json(path.read_text(encoding="utf-8"))
         assert repaired.embeddings is not None
-        assert repaired.embeddings.vectors["ai-01"] != stale
-        assert len(repaired.embeddings.vectors) == 3
+        assert set(repaired.embeddings.vectors) == {item.item_id for item in payload.items}
+        assert repaired.embeddings.vectors[stale_id] != stale
+        assert len(repaired.embeddings.vectors) == len(payload.items)
 
     def test_running_it_again_changes_nothing(self, tmp_path: Path) -> None:
         needs_encoder()
@@ -274,16 +283,22 @@ class TestTheBackfill:
     def test_a_repaired_day_takes_its_month_index_with_it(self, tmp_path: Path) -> None:
         """A shard left naming the old vectors would rank against bytes the day dropped."""
         needs_encoder()
-        write_day(tmp_path, with_block(block({})))
+        payload = with_block(block({}))
+        write_day(tmp_path, payload)
 
         backfill(tmp_path, "2026-08-22", embedder())
 
+        month = payload.date[:7]
+        index_path = tmp_path / "assist" / "index" / f"{month}.json"
+        known_date_index_path = tmp_path / "assist" / "index" / "2026-08.json"
+        vectors_path = tmp_path / "assist" / "index" / f"{month}.bin"
+        assert index_path == known_date_index_path
+        assert index_path.is_file()
+        assert vectors_path.is_file()
         built = SearchIndex.from_json(
-            (tmp_path / "assist" / "index" / "2026-08.json").read_text(encoding="utf-8")
+            index_path.read_text(encoding="utf-8")
         )
-        assert built.vector_bytes == (
-            tmp_path / "assist" / "index" / "2026-08.bin"
-        ).stat().st_size
+        assert built.vector_bytes == vectors_path.stat().st_size
         assert built.vector_bytes > 0
 
     def test_the_live_day_is_left_alone(self, tmp_path: Path) -> None:
