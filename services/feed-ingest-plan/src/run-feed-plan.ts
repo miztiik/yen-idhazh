@@ -12,6 +12,7 @@ import { readExclusionEvidence } from "./read-ledger-history/read-exclusion-evid
 import { readFeedHistory, observeFeedReliability } from "./read-ledger-history/read-feed-history";
 import { readDailyPublication } from "./read-ledger-history/read-daily-publication";
 import { recordFeedHealth } from "./read-ledger-history/record-feed-health";
+import type { OwnFeedReceipt, FeedWriteReceipt } from "./read-ledger-history/own-feed-receipts";
 import type { OwnSeenReceipt } from "./read-ledger-history/read-seen-evidence";
 import { resolvePlanRequest, PlanError } from "./api/plan-request";
 import { createStageLogger, resolveRunPolicy, writeAuditEvent } from "./logging/structured-logger";
@@ -33,6 +34,8 @@ export type PlanRuntime = {
   evidence?: ReadonlyMap<string, ArticleEvidence>;
   opportunity?: OpportunityEvidence;
   seen_receipts?: readonly OwnSeenReceipt[];
+  feed_history_receipts?: readonly OwnFeedReceipt[];
+  on_feed_history_persisted?: (receipt: FeedWriteReceipt) => void;
   on_seen_persisted?: (receipt: { day: string; files: readonly PersistedLedgerFile[] }) => void;
   observe_publication?: (plan: FeedPlanResult, metrics: PlanningMetricsResult) => Promise<PublicationRecorderInput>;
 };
@@ -97,6 +100,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     health: inputs.registrations.feed_health, retirements: inputs.registrations.feed_retirements,
     health_days: inputs.settings.inputs.feed_health_days,
     retirement_days: inputs.settings.inputs.feed_retirement_days,
+    own_receipts: runtime.feed_history_receipts ?? [], receipt_root: inputs.outputRoot,
   });
   const dailyPublication = await readDailyPublication({
     root: inputs.root, day: context.date, registration: inputs.registrations.item_health,
@@ -123,6 +127,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     outcomes: harvest.feed_outcomes, articles: harvest.articles, history: feedHistory, now: context.now,
     writer: context.writer, outputRoot: inputs.outputRoot, settings: inputs.ledgerSettings,
     health: inputs.registrations.feed_health, retirements: inputs.registrations.feed_retirements,
+    ...(runtime.on_feed_history_persisted === undefined ? {} : { on_persisted: runtime.on_feed_history_persisted }),
   });
   observeFeedReliability(feedHistory, feedFiles.rows, inputs.clock_config.collect);
   const seen = await rememberFirstSight(history, harvest.first_sight_candidates, context, {

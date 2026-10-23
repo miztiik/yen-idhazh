@@ -19,7 +19,8 @@ import { recordedPlan } from "./plan-recordings";
 import { source } from "./harvest-recordings";
 import { endpointKey, readFeedHistory } from "../src/read-ledger-history/read-feed-history";
 import { sourceSnapshot } from "../src/harvest-feeds/load-harvest-inputs";
-import { readDailyPublication, DailyPublicationSchema } from "../src/read-ledger-history/read-daily-publication";
+import { readDailyPublication, DailyPublicationSchema, DailyPublicationContract } from "../src/read-ledger-history/read-daily-publication";
+import { ItemHealthFailureProjectionContract } from "../src/read-ledger-history/item-health-failure";
 
 async function seenWindow(recorded: Awaited<ReturnType<typeof recordedPlan>>, knownUrl: string) {
   recorded.inputs.clock_config.collect.seen_window_days = 2;
@@ -190,10 +191,11 @@ test("real composition shares one clock and override and reads native dispatches
         ledger: "feed-retirements", registryEntry: parity.inputs.registrations.feed_retirements,
         outputRoot: parity.inputs.outputRoot, ledgerSettings: parity.inputs.ledgerSettings,
         writerContext: nativeWriter, period: { tier: "raw", covers: day }, rowContract: FeedRetirementContract,
-        rows: ["renamed-gone", "edited"].map(id => FeedRetirementContract.schema.parse({
+        rows: ["renamed-gone", "edited", "renamed-gone"].map((id, index) => FeedRetirementContract.schema.parse({
           feed_id: id === "renamed-gone" ? "old-name" : id,
           endpoint_key: endpointKey(id === "edited" ? "https://news.example/old.xml" : snapshot(id).feed_url),
-          retired_on: day, decided_by_run: `${day}-99`, cause: "http_410", evidence_run_ids: [`${day}-1`],
+          retired_on: day, decided_by_run: `${day}-99`, cause: index === 2 ? "low_yield" : "http_410",
+          evidence_run_ids: index === 2 ? [] : [`${day}-1`], evidence_dates: index === 2 ? [day] : [],
         })),
       });
       const local = (files: readonly { path: string }[]) => files.map(file =>
@@ -211,6 +213,7 @@ test("real composition shares one clock and override and reads native dispatches
       expect(held.evidence.harvest.feed_outcomes.find(row => row.source.source_id === "edited")!.fetch_status).toBe("success");
       expect(held.evidence.harvest.feed_outcomes.find(row => row.source.source_id === "inactive")!.rejection_reason).toBe("SOURCE_INACTIVE");
       expect(held.evidence.feed_history.sources.get("sleeping")!.strikes).toBe(threshold);
+      expect(held.evidence.feed_history.sources.get("renamed-gone")!.retirement_cause).toBe("http_410");
       expect(held.evidence.feed_history.sources.get("sleeping")!.reliability).toMatchObject({
         success_fraction: 0, attempted: threshold, productive: 0, production_factor: policy.reliability_floor,
       });
@@ -265,7 +268,7 @@ test("real composition shares one clock and override and reads native dispatches
         outputRoot: parity.inputs.outputRoot, ledgerSettings: parity.inputs.ledgerSettings,
         writerContext: { ...nativeWriter, run_id: `${held.context.date}-99` },
         period: { tier: "raw", covers: held.context.date },
-        rowContract: { schema: DailyPublicationSchema, schemaVersion: "2026-10-20" },
+        rowContract: { schema: DailyPublicationSchema, schemaVersion: DailyPublicationContract.schemaVersion },
         rows: [
           { date: held.context.date, url_key: deriveUrlKey("https://news.example/story"), source_id: "sleeping", outcome: "ok" },
           { date: held.context.date, url_key: deriveUrlKey("https://news.example/story"), source_id: "sleeping", outcome: "ok" },
@@ -278,6 +281,21 @@ test("real composition shares one clock and override and reads native dispatches
       });
       expect(published.counts.get("sleeping")).toBe(1);
       expect(published.history.availability).toBe("available");
+      expect(DailyPublicationContract.schemaVersion).toBe("2026-10-20");
+      expect(ItemHealthFailureProjectionContract.schemaVersion).toBe(DailyPublicationContract.schemaVersion);
+      const future = await persistLedger({
+        ledger: "item-health", registryEntry: parity.inputs.registrations.item_health,
+        outputRoot: parity.inputs.outputRoot, ledgerSettings: parity.inputs.ledgerSettings,
+        writerContext: { ...nativeWriter, run_id: `${held.context.date}-100`, producer: "tests.newer-item-health" },
+        period: { tier: "raw", covers: held.context.date },
+        rowContract: { schema: DailyPublicationSchema, schemaVersion: "2026-10-21" },
+        rows: [{ date: held.context.date, url_key: deriveUrlKey("https://news.example/newer"),
+          source_id: "sleeping", outcome: "ok" }],
+      });
+      await expect(readDailyPublication({
+        root: parity.directory, day: held.context.date, registration: parity.inputs.registrations.item_health,
+        days: [{ day: held.context.date, raw_files: local(future.files) }],
+      })).rejects.toThrow("newer than its declared fields");
     } finally { await parity.close(); }
   } finally { await recorded.close(); }
 }, 30000);

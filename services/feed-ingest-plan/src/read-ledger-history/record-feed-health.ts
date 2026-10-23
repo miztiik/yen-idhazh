@@ -6,11 +6,13 @@ import { FeedHealthContract, FeedRetirementContract } from "@idhazh/common-contr
 import type { FeedHistory } from "./read-feed-history";
 import { retryableStatus } from "../harvest-feeds/robots-policy";
 import type { HarvestResult } from "../harvest-feeds/harvest-types";
+import type { FeedWriteReceipt } from "./own-feed-receipts";
 
 export async function recordFeedHealth(input: {
   outcomes: readonly FeedOutcomePayload[]; articles: HarvestResult["articles"]; history: FeedHistory; now: string;
   writer: WriterIdentity; outputRoot: string; settings: LedgerSettings;
   health: LedgerRegistration; retirements: LedgerRegistration;
+  on_persisted?: (receipt: FeedWriteReceipt) => void;
 }) {
   const rows = input.outcomes.map(outcome => {
     const history = input.history.sources.get(outcome.source.source_id);
@@ -56,6 +58,13 @@ export async function recordFeedHealth(input: {
     return result;
   };
   const retirements = await write("feed-retirements", input.retirements, FeedRetirementContract, input.history.new_retirements);
+  if (retirements.files.length > 0) input.on_persisted?.({
+    ledger: "feed-retirements", day: input.now.slice(0, 10), files: retirements.files,
+    endpoint_keys: input.history.new_retirements.map(row => row.endpoint_key),
+  });
   const health = await write("feed-health", input.health, FeedHealthContract, rows);
+  if (health.files.length > 0) input.on_persisted?.({
+    ledger: "feed-health", day: input.now.slice(0, 10), files: health.files,
+  });
   return { health, retirements, rows };
 }

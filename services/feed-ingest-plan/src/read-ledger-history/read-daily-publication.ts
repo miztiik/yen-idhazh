@@ -1,16 +1,17 @@
 /** How many distinct URLs did each source put in the digest on this UTC day? */
 import { z } from "zod";
-import { CONTRACT_VERSION, DateStampSchema, Sha256Schema, SlugSchema } from "@idhazh/common-contracts";
+import { DateStampSchema, Sha256Schema, SlugSchema } from "@idhazh/common-contracts";
 import type { LedgerRegistration } from "@idhazh/ledger-file-writer";
 import type { SeenDayInput } from "../config/service-settings";
 import { defaultDayInput, historyCoverage, latestNativeRows, readNamedDays } from "./named-days";
+import { ITEM_HEALTH_ROW_SCHEMA_VERSION } from "./item-health-version";
 
 // Projection of contracts/item_health.py; successful item outcomes are the native day-count authority.
 export const DailyPublicationSchema = z.strictObject({
   date: DateStampSchema, url_key: Sha256Schema, source_id: SlugSchema, outcome: z.enum(["ok", "failed"]),
 });
 export const DailyPublicationContract = {
-  schema: DailyPublicationSchema, schemaVersion: CONTRACT_VERSION,
+  schema: DailyPublicationSchema, schemaVersion: ITEM_HEALTH_ROW_SCHEMA_VERSION,
   projectedFields: ["date", "url_key", "source_id", "outcome"],
 };
 export async function readDailyPublication(input: {

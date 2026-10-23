@@ -233,7 +233,7 @@ test("derives UTC windows and stages indexed compact files before considering ra
         }));
       }
     }
-    const staged = await stageFeedHistory({
+    const stage = () => stageFeedHistory({
       ledger: "feed-health", prefix: ["feed-health"], now: "2026-01-01T00:00:00Z",
       raw_discovery_days: 1, authored: [],
       read: async path => {
@@ -249,11 +249,36 @@ test("derives UTC windows and stages indexed compact files before considering ra
         }
       },
     });
+    const staged = await stage();
     expect(staged.files).toContain("state/compact/feed-health/daily/2024/01/01.parquet");
-    const recorded = await selectHealthDays(directory, registration, staged.inputs, 2);
+    const recorded = await selectHealthDays(directory, registration,
+      staged.inputs.filter(day => staged.represented_days.includes(day.day)), 2);
     expect(recorded.map(day => day.day)).toEqual(["2024-01-01", "2026-01-01"]);
     expect(staged.inputs.find(day => day.day === "2025-12-31")?.raw_files).toBeUndefined();
     expect(staged.inventory_complete).toBe(false);
+    const original = await readLedgerParquet(join(directory, "state", "compact", "feed-health", "daily",
+      "2024", "01", "01.parquet"), "feed-health", FeedHealthContract);
+    const monthly = await persistLedger({
+      ledger: "feed-health", registryEntry: registration, outputRoot: join(directory, "state"),
+      ledgerSettings: { format: "parquet", compression_raw: "snappy", compression_compact: "snappy" },
+      writerContext: { ...original.envelope.identity, producer: "tests.monthly-history" },
+      rowContract: FeedHealthContract, period: { tier: "compact", period: "monthly", covers: "2024-01", builtFrom: 1 },
+      rows: original.rows,
+    });
+    await writeFile(join(directory, "state", "compact", "feed-health", "index", "monthly.json"), JSON.stringify({
+      version: "2026-10-07", ledger: "feed-health", period: "monthly",
+      entries: [{ covers: "2024-01", state: "packed", rows: 1,
+        bytes: (await stat(join(directory, "state", monthly.files[0]!.path))).size }],
+    }));
+    const representedMonth = await stage();
+    const representedSelection = await selectHealthDays(directory, registration,
+      representedMonth.inputs.filter(day => representedMonth.represented_days.includes(day.day)), 2);
+    expect(representedSelection.map(day => day.day)).toEqual(["2024-01-31", "2026-01-01"]);
+    await writeFile(join(directory, "state", "compact", "feed-health", "index", "daily.json"), JSON.stringify({
+      version: "2026-10-07", ledger: "feed-health", period: "daily",
+      entries: [{ covers: "2026-02-31", state: "packed", rows: 1, bytes: 10 }],
+    }));
+    await expect(stage()).rejects.toThrow("calendar period");
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 

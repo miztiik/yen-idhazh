@@ -7,6 +7,8 @@ import { FeedHealthContract, FeedRetirementContract } from "@idhazh/common-contr
 import type { FeedHealthRow, FeedRetirementRow } from "@idhazh/common-contracts";
 import type { SeenDayInput } from "../config/service-settings";
 import { readNamedDays, historyCoverage, latestNativeRows } from "./named-days";
+import { readOwnFeedReceipts } from "./own-feed-receipts";
+import type { OwnFeedReceipt } from "./own-feed-receipts";
 
 // Matches ledger.rows.HEALTH_WINDOW_DAYS: the native availability reader's fixed cover.
 export const HEALTH_RECORDED_DAYS = 31;
@@ -29,8 +31,11 @@ export type SourceHistoryEvidence = Readonly<{
 export const endpointKey = (url: string) => createHash("sha256").update(url, "utf8").digest("hex");
 const answered = (row: FeedHealthRow) => row.outcome === "ok" && row.items > 0;
 const preserves = (row: FeedHealthRow) => row.outcome === "skipped" || row.outcome === "robots_denied";
+const observationKey = (row: FeedHealthRow) => JSON.stringify([row.run_id, row.feed_id, row.checked_at]);
 
-function settleFeedHealth(rows: readonly FeedHealthRow[]): FeedHealthRow[] {
+function settleFeedHealth(
+  rows: readonly FeedHealthRow[], originalWrites: ReadonlyMap<string, number> = new Map(),
+): FeedHealthRow[] {
   const settled = new Map<string, FeedHealthRow>();
   for (const row of rows) {
     const key = `${row.run_id}:${row.feed_id}`;
@@ -42,7 +47,10 @@ function settleFeedHealth(rows: readonly FeedHealthRow[]): FeedHealthRow[] {
   return [...settled.values()].sort((a, b) => {
     const runA = BigInt(a.run_id.split("-").at(-1)!);
     const runB = BigInt(b.run_id.split("-").at(-1)!);
-    return a.date.localeCompare(b.date) || (runA < runB ? -1 : runA > runB ? 1 : 0);
+    return a.date.localeCompare(b.date) || a.checked_at.localeCompare(b.checked_at)
+      || ((originalWrites.get(observationKey(a)) ?? Date.parse(a.checked_at))
+        - (originalWrites.get(observationKey(b)) ?? Date.parse(b.checked_at)))
+      || (runA < runB ? -1 : runA > runB ? 1 : 0);
   });
 }
 
@@ -64,6 +72,7 @@ export async function readFeedHistory(input: {
   root: string; now: string; run_id: string; sources: readonly SourceSnapshot[]; policy: FeedHistoryPolicy;
   health: LedgerRegistration; retirements: LedgerRegistration;
   health_days: readonly SeenDayInput[]; retirement_days: readonly SeenDayInput[];
+  own_receipts?: readonly OwnFeedReceipt[]; receipt_root?: string;
 }) {
   const policy = FeedHistoryPolicySchema.parse(input.policy);
   const maxDays = Math.max(HEALTH_RECORDED_DAYS, policy.reliability_window_days);
@@ -73,18 +82,47 @@ export async function readFeedHistory(input: {
   }
   const healthDays = await readNamedDays(input.root, input.health, input.health_days, FeedHealthContract);
   const retirementDays = await readNamedDays(input.root, input.retirements, input.retirement_days, FeedRetirementContract);
+  const own = await readOwnFeedReceipts(input.receipt_root ?? input.root, input.own_receipts ?? [], input.now, input);
   for (const day of healthDays) for (const { row } of day.rows) {
     if (row.date !== day.day || row.checked_at > input.now) throw new Error("Feed health differs from its named UTC day or run clock");
   }
   for (const day of retirementDays) for (const { row } of day.rows) {
     if (row.retired_on !== day.day) throw new Error("Feed retirement differs from its named UTC day");
   }
-  const rows = settleFeedHealth(latestNativeRows(healthDays.flatMap(day => [...day.rows])));
-  const recent = rows.filter(row => input.health_days.slice(-HEALTH_RECORDED_DAYS).some(day => day.day === row.date));
+  const ownHealth = own.filter(item => item.receipt.ledger === "feed-health")
+    .flatMap(item => item.files.flatMap(file => file.rows.map(held => ({
+      identity: held.identity, row: FeedHealthContract.schema.parse(held.row),
+    }))));
+  const ownRetirements = own.filter(item => item.receipt.ledger === "feed-retirements")
+    .flatMap(item => item.files.flatMap(file => file.rows.map(held => ({
+      identity: held.identity, row: FeedRetirementContract.schema.parse(held.row),
+    }))));
+  for (const { row } of ownHealth) {
+    if (row.checked_at > input.now) throw new Error("Own feed health exceeds the captured UTC clock");
+  }
+  const originalWrites = new Map<string, number>();
+  const healthFiles = [
+    ...healthDays.flatMap(day => [...day.files]),
+    ...own.filter(item => item.receipt.ledger === "feed-health").flatMap(item => item.files),
+  ];
+  for (const file of healthFiles) {
+    if (file.envelope.tier !== "raw") continue;
+    for (const { row: raw } of file.rows) {
+      const row = FeedHealthContract.schema.parse(raw);
+      const key = observationKey(row);
+      originalWrites.set(key, Math.max(originalWrites.get(key) ?? 0, file.envelope.written_at_ms));
+    }
+  }
+  const rows = settleFeedHealth(latestNativeRows([...healthDays.flatMap(day => [...day.rows]), ...ownHealth]), originalWrites);
+  const representedDays = [...new Set([...input.health_days.map(day => day.day), ...ownHealth.map(({ row }) => row.date)])].sort();
+  const recent = rows.filter(row => representedDays.slice(-HEALTH_RECORDED_DAYS).includes(row.date));
   const reliabilityDays = healthDays.slice(-policy.reliability_window_days);
   const reliabilityCoverage = historyCoverage(reliabilityDays);
-  const retired = new Map(latestNativeRows(retirementDays.flatMap(day => [...day.rows]))
-    .toSorted((a, b) => b.retired_on.localeCompare(a.retired_on)).map(row => [row.endpoint_key, row.cause]));
+  const retired = new Map<string, FeedRetirementRow["cause"]>();
+  for (const row of latestNativeRows([...retirementDays.flatMap(day => [...day.rows]), ...ownRetirements])
+    .toSorted((a, b) => a.retired_on.localeCompare(b.retired_on))) {
+    if (!retired.has(row.endpoint_key)) retired.set(row.endpoint_key, row.cause);
+  }
   const newRetirements: FeedRetirementRow[] = [];
   const sources = new Map<string, SourceHistoryEvidence>();
   for (const source of input.sources) {
@@ -114,7 +152,7 @@ export async function readFeedHistory(input: {
         evidence_run_ids: gone, evidence_dates: [],
       }));
     }
-    const reliability = measuredReliability(rows, reliabilityDays.map(day => day.day), source.source_id, policy);
+    const reliability = measuredReliability(rows, representedDays.slice(-policy.reliability_window_days), source.source_id, policy);
     sources.set(source.source_id, {
       endpoint_key: key, lifecycle: retired.has(key) ? "retired"
         : strikes >= policy.availability_strikes_before_rest && rested < policy.availability_strikes_before_rest ? "resting" : "eligible",
@@ -123,17 +161,24 @@ export async function readFeedHistory(input: {
     });
   }
   return {
-    sources, new_retirements: newRetirements, rows,
+    sources, new_retirements: newRetirements, rows, represented_days: representedDays,
     history: {
+      own_receipts: own.map(({ receipt, files }) => ({
+        ...receipt, evidence: files.map(file => ({
+          file_id: file.envelope.file_id, content_sha256: file.envelope.content_sha256, row_count: file.rows.length,
+        })),
+      })),
       health: {
         ...historyCoverage(healthDays), required_recorded_days: HEALTH_RECORDED_DAYS,
-        availability: healthDays.filter(day => day.rows.length > 0).length >= HEALTH_RECORDED_DAYS
+        represented_days: representedDays.slice(-HEALTH_RECORDED_DAYS),
+        availability: healthDays.length >= HEALTH_RECORDED_DAYS
           ? historyCoverage(healthDays).availability : "unavailable" as const,
       },
       retirements: historyCoverage(retirementDays),
       reliability: {
         ...reliabilityCoverage, required_recorded_days: policy.reliability_window_days,
-        availability: reliabilityDays.filter(day => day.rows.length > 0).length >= policy.reliability_window_days
+        represented_days: representedDays.slice(-policy.reliability_window_days),
+        availability: reliabilityDays.length >= policy.reliability_window_days
           ? reliabilityCoverage.availability : "unavailable" as const,
       },
     },
@@ -146,7 +191,9 @@ export function observeFeedReliability(history: FeedHistory, current: readonly F
   const rows = settleFeedHealth([
     ...history.rows.filter(row => !currentKeys.has(`${row.run_id}:${row.feed_id}`)), ...current,
   ]);
-  const days = [...new Set(rows.map(row => row.date))].sort().slice(-policy.reliability_window_days);
+  const days = [...new Set([...history.represented_days, ...current.map(row => row.date)])].sort()
+    .slice(-policy.reliability_window_days);
+  history.history.reliability.represented_days = days;
   for (const [source, evidence] of history.sources) history.sources.set(source, {
     ...evidence, reliability: measuredReliability(rows, days, source, policy),
   });

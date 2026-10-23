@@ -7,16 +7,17 @@ import { createSeenDayInputs, resolveHistoryInventory } from "./feed-ingest-plan
 import { requiredSeenDays } from "../../services/feed-ingest-plan/src/read-ledger-history/read-seen-evidence";
 
 function compactDays(index: CompactIndex): string[] {
-  return index.entries.flatMap(entry => {
+  return index.entries.filter(entry => entry.rows > 0).flatMap(entry => {
     const first = `${entry.covers}${index.period === "yearly" ? "-01-01" : index.period === "monthly" ? "-01" : ""}`;
     const start = new Date(`${first}T00:00:00Z`);
+    if (start.toISOString().slice(0, 10) !== first) throw new Error("Feed history compact cover is not a UTC calendar period");
     const end = new Date(start);
     if (index.period === "yearly") end.setUTCFullYear(end.getUTCFullYear() + 1);
     else if (index.period === "monthly") end.setUTCMonth(end.getUTCMonth() + 1);
     else end.setUTCDate(end.getUTCDate() + 1);
     const days: string[] = [];
-    for (let instant = start.getTime(); instant < end.getTime(); instant += 86_400_000) {
-      days.push(new Date(instant).toISOString().slice(0, 10));
+    for (const instant = new Date(start); instant < end; instant.setUTCDate(instant.getUTCDate() + 1)) {
+      days.push(instant.toISOString().slice(0, 10));
     }
     return days;
   });
@@ -50,6 +51,7 @@ export async function stageFeedHistory(input: {
   ])].sort();
   const inventory = new Set<string>();
   const inputs: SeenDayInput[] = [];
+  const represented = new Set(compact.flatMap(compactDays).filter(day => day <= input.now.slice(0, 10)));
   for (const day of days) {
     DateStampSchema.parse(day);
     const named: SeenDayInput = authored.find(input => input.day === day) ?? createSeenDayInputs(input.prefix, [day])[0]!;
@@ -67,6 +69,7 @@ export async function stageFeedHistory(input: {
       day, indexes: named.indexes, raw_files: [...rawFiles],
     };
     inputs.push(SeenDayInputSchema.parse(resolved));
+    if ((rawFiles?.length ?? 0) > 0 || raw.some(index => index.files.length > 0)) represented.add(day);
     for (const path of resolveHistoryInventory({
       ledger: input.ledger, prefix: input.prefix, days: [day], compact, raw,
       ...(named.indexes === undefined ? {} : { indexes: Object.fromEntries(Object.entries(named.indexes)
@@ -79,5 +82,5 @@ export async function stageFeedHistory(input: {
       throw new Error("Feed history discovery requires the registered native compact index paths");
     }
   }
-  return { inputs, files: [...inventory], inventory_complete: false as const };
+  return { inputs, files: [...inventory], represented_days: [...represented].sort(), inventory_complete: false as const };
 }

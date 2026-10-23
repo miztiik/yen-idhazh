@@ -17,18 +17,33 @@ precedence over monthly, daily and raw files. A shared file cache prevents
 reading a month or year again for each named day. Higher attempts replace
 earlier attempts of the same native work unit.
 
-Health uses the newest 31 **recorded days**, not 31 calendar days. Reliability
-uses the newest `collect.reliability_window_days` recorded days. A gap between
-two recorded days does not shorten either record. Duplicate feed/run results
-settle with the native preference: a read carrying usable links wins; otherwise
-the later check wins. Run numbers sort numerically.
+Health uses the newest 31 **native represented days**. Reliability uses the
+newest `collect.reliability_window_days` represented days. This matches
+`ledger_files.held_days`: a raw day holding files or a nonempty daily index
+contributes its day; a nonempty monthly or yearly index contributes every
+calendar day of that period, including days whose read returns no rows.
+It is neither a trailing calendar cutoff nor a filter keeping only row-bearing
+days. Duplicate feed/run results settle with the native preference: a read
+carrying usable links wins; otherwise the later check wins.
+
+Within a native day, the TypeScript reader orders runs by the recorded UTC
+check time. Exact raw files supply their original millisecond write time when checks have the same
+second; it never substitutes a compactor's write clock. Without that original
+raw clock, the recorded second is the only time key. Numeric execution is the
+final deterministic tie-break when the time keys agree.
+This fixes repeated listener requests whose random numeric run IDs are not
+chronological. Existing Python `load_health` still orders by numeric execution
+alone; its runtime is unchanged here. Mixed-producer ordering in that reader,
+and unrecoverable same-second order in compacted records with opaque IDs,
+remain explicit compatibility gaps rather than a claim of full parity.
 
 The isolated workflow stages the three registered compact indexes and their
 named files. It also checks individual raw UTC-day directories within
 `daily_keep_days` from each ledger's existing gardener config. This is a
 discovery bound, not a health window or retirement expiry. Explicit authored
-older inputs remain included. The reader selects actual recorded health days
-after staging, rather than counting absent calendar days as recorded ones.
+older inputs remain included. The selector uses raw presence and native compact
+cover metadata before slicing its day count; it does not infer represented
+days from row presence after reading.
 
 Neither this discovery method nor an arbitrary supplied list proves that it
 contains every old, unindexed raw file. The result therefore reports
@@ -37,11 +52,21 @@ without an age cutoff. A missing day stays missing, not known empty. Fewer
 recorded health days than requested report unavailable coverage; observations
 that do exist remain usable and keep their actual counts.
 
-Full current-state discovery still needs one authoritative, seeded snapshot
-maintained from real production writes. Its follow-up must use reviewed named
-legacy files, preserve missing coverage, and combine new observations with
-fresh main on each publication retry. This increment does not claim that
-integration or complete feed-history parity.
+Full discovery must consume the same native raw and compact files, their
+indexes, and the existing publication inventory and exact producer receipts.
+No parallel history file or second authority is required. The coordinated
+inventory-selector follow-up must prove which native inputs it covers while
+preserving missing evidence. This increment does not claim complete external
+inventory discovery or full feed-history parity.
+
+One listener also retains its own exact durable native file receipts between
+requests, including writes completed before a later stage fails. Their paths
+are relative to the actual configured output root, not the checkout; readback
+rejects traversal, escaping links, wrong ledgers, days and native identities.
+Health receipts retain the newest configured count of recorded days, including
+calendar gaps. Retirement receipts retain state for current configured
+endpoints without a time expiry. No directory scan is used for this readback.
+Receipts are observations, not proof that an unavailable external day was empty.
 
 ## Feed decisions and native writes
 
@@ -92,6 +117,8 @@ known-empty day supports zero; unavailable coverage exposes only an observed
 lower bound, not a claim of zero publications. This is distinct from the
 current planning attempt's `SourceRunRecord.published_count`, which remains
 null until a publication observer supplies its result.
+Both native item-health projections pin their independent supported stamp,
+`2026-10-20`; a planner contract or event revision cannot silently widen it.
 
 Feed events carry this evidence through the existing stage payload and its
 versioned reader. The API/CLI summary includes coverage and native file

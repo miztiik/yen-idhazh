@@ -1,4 +1,4 @@
-/** Which newest named days actually contain recorded feed-health rows? */
+/** Which newest native represented days belong in one health read? */
 import type { LedgerRegistration } from "@idhazh/ledger-file-writer";
 import type { SeenDayInput } from "../config/service-settings";
 import { FeedHealthContract } from "@idhazh/common-contracts";
@@ -13,8 +13,8 @@ export async function selectHealthDays(
   const fileCache = new Map<string, Promise<ReadLedgerFile<FeedHealthRow>>>();
   const recorded: SeenDayInput[] = [];
   for (const input of inputs.toReversed()) {
-    const [held] = await readNamedDays(root, registration, [input], FeedHealthContract, fileCache);
-    if (held!.rows.length > 0) recorded.push(input);
+    await readNamedDays(root, registration, [input], FeedHealthContract, fileCache);
+    recorded.push(input);
     if (recorded.length === count) break;
   }
   return recorded.reverse();

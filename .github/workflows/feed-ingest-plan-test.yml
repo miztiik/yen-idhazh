@@ -243,7 +243,7 @@ jobs:
             }
             await stageConfiguredDays("published", inputs.registrations.published.prefix, published_days);
             await stageConfiguredDays("item-health", inputs.registrations.item_health.prefix, settled_failure_days);
-            const feedInventories = [];
+            const feedInventories: Awaited<ReturnType<typeof stageFeedHistory>>[] = [];
             for (const [ledger, registration, authored] of [
               ["feed-health", inputs.registrations.feed_health, inputs.settings.inputs.feed_health_days],
               ["feed-retirements", inputs.registrations.feed_retirements, inputs.settings.inputs.feed_retirement_days],
@@ -262,7 +262,8 @@ jobs:
               { stdout: "inherit", stderr: "inherit" });
             if (await sparse.exited !== 0) throw new Error("history: named sparse checkout failed");
             const feed_health_days = await selectHealthDays(root, inputs.registrations.feed_health,
-              feedInventories[0]!.inputs, Math.max(HEALTH_RECORDED_DAYS, inputs.clock_config.collect.reliability_window_days));
+              feedInventories[0]!.inputs.filter(day => feedInventories[0]!.represented_days.includes(day.day)),
+              Math.max(HEALTH_RECORDED_DAYS, inputs.clock_config.collect.reliability_window_days));
             const feed_retirement_days = feedInventories[1]!.inputs;
             const git = Bun.spawn(["git", "rev-parse", "HEAD"], { stdout: "pipe", stderr: "inherit" });
             const git_sha = (await new Response(git.stdout).text()).trim();

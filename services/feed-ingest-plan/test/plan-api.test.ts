@@ -23,6 +23,7 @@ import { randomUUID } from "node:crypto";
 import { openOperationStore } from "../src/api/operation-store";
 import { proposedOperation } from "../src/api/document-operations";
 import { FetchRequestSchema } from "../src/api/operation-contracts";
+import type { FeedWriteReceipt } from "../src/read-ledger-history/own-feed-receipts";
 
 test("health is explicit; disabled, malformed, oversized and unknown controls cannot fetch", async () => {
   const inputs = await loadPlanInputs(fileURLToPath(new URL("../../../", import.meta.url)));
@@ -59,6 +60,10 @@ test("health is explicit; disabled, malformed, oversized and unknown controls ca
   expect((await oversized.json()).code).toBe("BODY_TOO_LARGE");
   expect((await app.request("/api/old/health")).status).toBe(404);
   expect(transport.requests).toHaveLength(0);
+  expect(() => createPlanApp(inputs, {
+    git_sha: "a".repeat(40),
+    feed_history_receipts: [{ ledger: "feed-health", day: "2026-10-21", files: ["../outside.parquet"] }],
+  })).toThrow("relative POSIX");
   for (const route of ["fetch", "parse"]) {
     expect((await app.request(`/api/2026-10-20/${route}`, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: "{",
@@ -280,17 +285,25 @@ test("a required source write failure returns an API error, not proven planning 
 }, 30000);
 
 test("one listener retains durable seen receipts from an output root outside the checkout", async () => {
-  const recorded = await recordedPlan([source({ url: "https://news.example/article-failures.xml" })]);
+  const recorded = await recordedPlan([
+    source({ url: "https://news.example/article-failures.xml" }),
+    source({ id: "rest-cycle", url: "https://news.example/empty.xml" }),
+    source({ id: "retire-cycle", url: "https://news.example/gone.xml" }),
+  ]);
   const outputRoot = await mkdtemp(join(tmpdir(), "planner-output-root-"));
   const receipts: { day: string; files: readonly PersistedLedgerFile[] }[] = [];
+  const feedReceipts: FeedWriteReceipt[] = [];
   let clocks = 0;
   try {
     recorded.inputs.outputRoot = outputRoot;
     recorded.inputs.clock_config.collect.seen_window_days = 1;
+    recorded.inputs.clock_config.collect.availability_strikes_before_rest = 1;
+    recorded.inputs.clock_config.collect.feed_http_410_runs_before_retirement = 1;
     recorded.inputs.settings.inputs.seen_days = [{ day: "2026-10-21", raw_files: [] }];
     delete recorded.runtime.run_number;
-    recorded.runtime.clock = () => new Date(`2026-10-21T12:0${clocks++}:00Z`);
+    recorded.runtime.clock = () => new Date(`2026-10-21T12:00:00.${String(clocks++).padStart(3, "0")}Z`);
     recorded.runtime.on_seen_persisted = receipt => { receipts.push(receipt); };
+    recorded.runtime.on_feed_history_persisted = receipt => { feedReceipts.push(receipt); };
     const app = createPlanApp(recorded.inputs, recorded.runtime);
     const post = () => app.request("/api/2026-10-20/plan", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
@@ -304,6 +317,18 @@ test("one listener retains durable seen receipts from an output root outside the
     expect(first.first_sight.absence_proof).toBe("unavailable");
     expect(first.first_sight.created_count).toBeGreaterThan(0);
     expect(second.first_sight.created_count).toBe(0);
+    expect(second.source_records.find((row: { source_id: string }) => row.source_id === "rest-cycle").fetch_status).toBe("not_requested");
+    expect(second.source_records.find((row: { source_id: string }) => row.source_id === "retire-cycle").fetch_status).toBe("not_requested");
+    expect(second.feed_history.own_receipts.filter((receipt: { ledger: string }) => receipt.ledger === "feed-health")).toHaveLength(1);
+    const thirdResponse = await post();
+    expect(thirdResponse.status).toBe(200);
+    const third = await thirdResponse.json();
+    expect(third.source_records.find((row: { source_id: string }) => row.source_id === "rest-cycle").fetch_status).toBe("success");
+    expect(third.source_records.find((row: { source_id: string }) => row.source_id === "retire-cycle").fetch_status).toBe("not_requested");
+    expect(third.feed_history.own_receipts.filter((receipt: { ledger: string }) => receipt.ledger === "feed-retirements")).toHaveLength(1);
+    expect(recorded.transport.requests.filter(request => request.url.pathname === "/gone.xml")).toHaveLength(1);
+    expect(recorded.transport.requests.filter(request => request.url.pathname === "/empty.xml")).toHaveLength(2);
+    expect(feedReceipts.flatMap(receipt => receipt.files).every(file => !file.path.includes("\\") && !file.path.includes(":"))).toBe(true);
     expect(receipts).toHaveLength(1);
     const file = await readLedgerParquet(join(recorded.inputs.outputRoot, receipts[0]!.files[0]!.path), "seen", {
       schema: SeenRowSchema, schemaVersion: "2026-08-31",
@@ -326,15 +351,23 @@ test("one listener retains durable seen receipts from an output root outside the
 }, 30000);
 
 test("a later dispatch failure does not lose already durable first sight from this listener", async () => {
-  const recorded = await recordedPlan([source({ url: "https://news.example/article-failures.xml" })]);
+  const recorded = await recordedPlan([
+    source({ url: "https://news.example/article-failures.xml" }),
+    source({ id: "rest-cycle", url: "https://news.example/empty.xml" }),
+    source({ id: "retire-cycle", url: "https://news.example/gone.xml" }),
+  ]);
   const receipts: { day: string; files: readonly PersistedLedgerFile[] }[] = [];
+  const feedReceipts: FeedWriteReceipt[] = [];
   let clocks = 0;
   try {
     recorded.inputs.clock_config.collect.seen_window_days = 0;
+    recorded.inputs.clock_config.collect.availability_strikes_before_rest = 1;
+    recorded.inputs.clock_config.collect.feed_http_410_runs_before_retirement = 1;
     recorded.inputs.settings.inputs.seen_days = [{ day: "2026-10-21", raw_files: [] }];
     delete recorded.runtime.run_number;
     recorded.runtime.clock = () => new Date(`2026-10-21T12:0${clocks++}:00Z`);
     recorded.runtime.on_seen_persisted = receipt => { receipts.push(receipt); };
+    recorded.runtime.on_feed_history_persisted = receipt => { feedReceipts.push(receipt); };
     const blocked = join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan", "dispatches");
     await mkdir(join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan"), { recursive: true });
     await writeFile(blocked, "A file cannot hold dispatches.");
@@ -346,10 +379,17 @@ test("a later dispatch failure does not lose already durable first sight from th
     expect(failed.status).toBe(500);
     expect((await failed.json()).code).toBe("PLAN_FAILED");
     expect(receipts).toHaveLength(1);
+    const failedAgain = await post();
+    expect(failedAgain.status).toBe(500);
+    expect(feedReceipts.filter(receipt => receipt.ledger === "feed-retirements")).toHaveLength(1);
     await unlink(blocked);
     const retried = await post();
     expect(retried.status).toBe(200);
-    expect(await retried.json()).not.toHaveProperty("issues");
+    const recovered = await retried.json();
+    expect(recovered).not.toHaveProperty("issues");
+    expect(recovered.feed_history.own_receipts.filter((receipt: { ledger: string }) => receipt.ledger === "feed-retirements")).toHaveLength(1);
+    expect(recovered.files.feed_retirements.status).toBe("empty");
+    expect(recorded.transport.requests.filter(request => request.url.pathname === "/gone.xml")).toHaveLength(1);
     expect(receipts).toHaveLength(1);
     const native = await readLedgerParquet(join(recorded.inputs.outputRoot, receipts[0]!.files[0]!.path), "seen", {
       schema: SeenRowSchema, schemaVersion: "2026-08-31",
