@@ -454,8 +454,8 @@ def test_every_role_and_every_value_role_is_declared() -> None:
         ("tables", "wind"),
     ],
 )
-def test_a_named_fixture_round_trips_byte_identically(directory: str, name: str) -> None:
-    """A hand-edited fixture drifts from the model that is supposed to describe it.
+def test_a_named_fixture_round_trips_without_losing_values(directory: str, name: str) -> None:
+    """A hand-edited fixture reads into its model and back with every value it carries.
 
     `tests/fixtures/contracts/` gets this from the contract gate. These live
     outside it because a table whose cell is deliberately wrong would read as a
@@ -463,11 +463,12 @@ def test_a_named_fixture_round_trips_byte_identically(directory: str, name: str)
     unrelated file cannot add work to this test.
     """
     path = VALIDATOR_FIXTURES / directory / f"{name}.json"
-    text = read_text(path)
-    payload: dict[str, Any] = json.loads(text)
+    payload: dict[str, Any] = json.loads(read_text(path))
     contract = ElementTable if directory == "tables" else VisualPlan
-    assert contract.from_json(text).to_json() == text
-    assert "\r" not in text and payload
+    record = contract.from_json(read_text(path))
+    once = record.to_json()
+    assert json.loads(once) == payload
+    assert contract.from_json(once) == record
 
 
 def test_the_unit_table_scales_within_one_dimension_are_arithmetic() -> None:

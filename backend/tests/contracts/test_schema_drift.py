@@ -42,20 +42,23 @@ RETIRED_OPTION_RECORD = "a-run-that-pinned-a-retired-option.json"
 
 
 @pytest.mark.parametrize("path", fixture_paths(), ids=fixture_id)
-def test_fixture_round_trips_byte_identically(path: Path) -> None:
-    """Keep current bytes unchanged and migrated bytes stable on the next read."""
-    text = read_text(path)
-    original = json.loads(text)
+def test_fixture_round_trips_without_losing_values(path: Path) -> None:
+    """Keep every written value, and once a stamp advances, keep the migrated form stable.
+
+    Formatting is not compared here. `test_json_serialization.py` holds the bytes.
+    """
+    original = json.loads(read_text(path))
     contract = BY_STEM[path.parent.name]
     record = load(path)
     once = record.to_json()
     if record.version == original["version"]:
-        assert once == text
+        assert json.loads(once) == original
     else:
         assert original["version"] < record.version
         assert record.version == contract.schema_version()
-    twice = contract.from_json(once).to_json()
-    assert twice == once
+    reloaded = contract.from_json(once)
+    assert reloaded == record
+    assert reloaded.to_json() == once
 
 
 def test_every_contract_has_at_least_one_fixture() -> None:
