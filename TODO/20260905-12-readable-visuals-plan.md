@@ -1,6 +1,6 @@
 # 12 - Visuals a reader can read
 
-**Last Updated**: 2026-09-13
+**Last Updated**: 2026-10-24
 **Level**: 5 (core design: where a drawing becomes pixels, a persisted contract, the drawn surface, and two build-failing floors)
 
 **Chain**: previous the two-call summariser plan (delivered, removed from TODO/) | next [`20260905-13-switch-on-deletion-plan.md`](20260905-13-switch-on-deletion-plan.md).
@@ -15,8 +15,9 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | Field | Value |
 | --- | --- |
 | Why this plan exists | Plan 01 made the chart's colours readable. It is still drawn on a fixed 825 by 437 canvas, so on a 390 CSS px phone it scales to about 0.31x and a 10px axis label draws at about **3.1 CSS px** - below the smallest type on the site at every supported width. That is not a taste complaint; it is a chart whose labels nobody can read. This plan replaces the renderer and makes "can a person read it" a gate rather than an opinion |
-| Hard scope - in | d3 replaces Vega-Lite and `vl-convert` for every type the planner can already emit, **drawn in the reader's browser from data the payload carries**; the drawing takes the width it is given; the legibility floor and the density floor as **build-failing** oracles; the number formatter; caption and one annotated mark; the whole-day look repeated |
+| Hard scope - in | d3 replaces Vega-Lite and `vl-convert` for every type the planner can already emit, **drawn in the reader's browser from data the payload carries**; the drawing takes the width it is given; the legibility floor and the density floor as **build-failing** oracles; the number formatter; caption and one annotated mark |
 | Hard scope - out | Any new visual type (plans 15 to 18). The byte cap, the keyboard route and hydration byte-identity (plan 14). The console (plan 20). Migrating the console's own charts - it keeps its engine and has no complaint against it |
+| Scope change | `2026-10-24`: row #6, "A whole day, again," is removed. A day-scale repeated browser pass is not a separate visual floor. It conflicts with the representative browser policy, and its page-level checks remain covered by the reader smoke plus each row's focused browser gate |
 | ESCALATE triggers | 1. The legibility floor cannot be satisfied at 390 CSS px without dropping data the plan selected - that is a planning problem, not a drawing one, and it goes back to plan 10's validator. 2. A per-type bespoke component is proposed - the payload's own metadata is the design system. 3. **Restated 2026-09-13 under the owner ruling.** It read: removing `vl-convert` moves a published byte other than through the intended redraw. Every drawing a reader receives moves now, by design, so the old trigger would fire on the intended change and catch nothing. What escalates instead is a day whose **marks** move - a published spec that draws a different number, a different count of marks, or a different order from the SVG it replaces. That is a compiler defect wearing a renderer's clothes. 4. The d3 modules the reading page now ships push it past its `page_weight` entry and the entry cannot be justified on what the reader gains |
 | Chosen strategy | **Contract first, then the engine, then the page, then the floors.** The payload learns to carry the chart's data while the old renderer still runs and nothing a reader sees moves; then the browser starts drawing and the renderer is deleted in one commit; then the layout work; then the floors that make it checkable. Contract, engine and layout are three different hats and no two share a commit |
 | Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4.` |
@@ -35,7 +36,6 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 3 | Numbers a reader can say out loud | 1b | C | PENDING | - | - | - |
 | 4 | The smallest label a person can read, and enough marks to be worth the space | 2, 3 | D | PENDING | - | - | - |
 | 5 | A caption, and one mark that lands first | 4 | E | PENDING | - | - | - |
-| 6 | A whole day, again | 5 | F | PENDING | - | - | - |
 
 **Row #1 became rows #1a and #1b on 2026-09-13, and the plan gained a group.** The owner ruled
 that the reader's browser draws the chart and the pipeline never does
@@ -225,31 +225,6 @@ deletion plus a drawing over data already on the wire.
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
 | 1 | Let every mark be equal | Then the reader has to find the point themselves, which is the work the visual was supposed to do | Susan |
-
----
-
-## 8. Row #6 - A whole day, again
-
-- **Scope:** Plan 01's whole-day browser check re-run against the new renderer, at day scale, both themes, phone and desktop.
-- **Files touched:** `frontend/tests/whole-day.spec.ts`, `docs/how-to/run-the-gates.md`, `docs/reference/pipeline-cost.md`
-- **Acceptance gates:** the browser suite; the section 12 smoke; `idhazh site-weight`.
-- **Oracle:** On the heaviest committed day: zero console errors, zero responses at 400 or above, zero horizontal overflow, every visual clearing both floors, **and more than one rendered type on the page**. A day publishing a single shape is a recorded defect, and only a day-scale check can see it.
-
-### Decisions
-
-| # | Decision | Authority |
-| --- | --- | --- |
-| 1 | This is the check no per-visual oracle can make. A per-visual gate cannot see a grey wall, a page that never settles, or 80 charts of identical width stacked | Susan, 2026-09-05 |
-| 2 | The largest committed day carries 621 items, so motion must be tokenised, bounded and killable - 621 entrance animations is a page that never settles | Row 32 |
-| 3 | A single-shape day is recorded as a defect and read jointly with keep rate. It is not a diversity target | Row 49 |
-
-### Rejected alternatives
-
-| # | Option | Why rejected | Authority |
-| --- | --- | --- | --- |
-| 1 | Trust the per-visual floors | They pass individually on a page that is a wall of identical drawings | Susan |
-
----
 
 ## See also
 
