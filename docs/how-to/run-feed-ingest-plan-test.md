@@ -1,6 +1,6 @@
 # Run the isolated feed planner checks
 
-**Last Updated**: 2026-10-22
+**Last Updated**: 2026-10-23
 
 How do you check the TypeScript planner without changing daily publication?
 Use `.github/workflows/feed-ingest-plan-test.yml`. It starts only by manual
@@ -29,8 +29,9 @@ separate planning recorder. It reads the returned source records and all five
 required ledger file sets through the original completion selector before
 exposing per-run planning completion.
 
-The last workflow step requires both independently verified live planning
-completion and a labelled `generated_fixture` full-audit result. That fixture
+The last workflow step requires independently verified live planning,
+separate live feed fetch/parse/replay, and a labelled `generated_fixture`
+full-audit result. That fixture
 runs the real observer against generated publication and complete named history,
 then independently reads its actual native output. Either missing proof exits
 with code 2. Live planning alone cannot pass; test publication is never labelled
@@ -142,6 +143,51 @@ network request or starts Python. These checks do not claim that the Python
 reader ran, that live feeds are reachable, or that a hosted job meets a speed
 target.
 
+### Separate live fetch and parse
+
+After verifying the actual plan, the workflow chooses one active source that
+the current plan successfully fetched and parsed. It resolves that source ID
+back to the committed source configuration. No entry link, page canonical tag
+or other fetched text selects a destination.
+
+An independent actual Hono listener receives separate POST requests to
+`/api/2026-10-20/fetch` and `/api/2026-10-20/parse`. Fetch uses `kind: feed`;
+parse references that exact fetch request, article identity and correlation.
+The check verifies the same article, source, run and correlation, distinct
+UUIDv5 observations, and the parse-to-fetch and attempt-to-fetch causes.
+It counts actual outbound DNS and HTTP calls through the unchanged production
+resolver and transport. Parse must make no such calls.
+
+The listener stops and reopens with unchanged inputs and the same private
+output root. Both completed request keys must return the original exact
+response strings and statuses, with no outbound calls. Changed input,
+operation and configuration must each return HTTP 409 `REQUEST_CONFLICT`.
+A digest over the two named journal records must remain unchanged after replay
+and refusals. This proves unchanged completed receipts, not exactly-once
+external network work across an interrupted fetch.
+
+`stage-api-proof.json` records `scope: live_configured_feed`, `status`, `stage`,
+`git_sha`, `source_id`, `article_id`, `run_id`, `correlation_id`, `calls`,
+`pending_request`, `journal_records_sha256` and `error`. A pending request
+retains its stage, endpoint and exact request fields before HTTP work starts.
+Each completed call holds its stage, endpoint,
+exact request keys and identity fields in `request`, `http_status`, exact
+body-free `response_json`, its `response_sha256`, and measured
+`network: {dns, http}` counts. An invalid response is withheld as
+`response_json: null`; its status and digest remain, and the check fails.
+The digest pair is `{before_restart, after_checks}`. Proof is written before
+each call and after each response; failures retain the exact failing stage.
+Only completed proof exposes `stage_api_complete: true`. An absent successful
+source, failed fetch, failed parse, identity mismatch or changed replay fails
+the job; none is silently skipped.
+
+The live proof covers a configured RSS/Atom feed, not an HTML article fetch.
+Existing recorded API cases cover feed and HTML parsing without network access.
+The actual planning request stays unkeyed and is called once; this workflow
+does not claim live keyed-plan replay, interrupted-request recovery, concurrent
+process locking or publication of its live selections. A reviewed merge and
+one coordinator-owned manual dispatch are still required for hosted evidence.
+
 The live HTTP step appends `progress.jsonl` and `audit-events.jsonl` during work,
 prints the same observations, and uploads partial evidence even on failure or
 cancellation. The completed `events.json` remains the report input.
@@ -200,10 +246,21 @@ The always-run artifact upload preserves partial evidence and completed files
 even when committing fails. Article text can be present in dispatch Parquet
 files, as declared by their existing contract. No upload proves a complete plan.
 
+The separate API journal contains full fetched bodies. Its output root is a
+new `feed-stage-api-private-*` sibling below runner temporary storage, outside
+the sole uploaded `feed-ingest-plan/` directory. The workflow never uploads or
+commits `planner-operations.sqlite`, its WAL/SHM files, headers or raw fetched
+bodies. Each operation closes its database before responding. After stopping
+the listener, the check removes only its own newly created private directory,
+including on failure. A cleanup failure is explicit; any retained private
+directory stays outside the artifact root. The public proof contains responses
+and record digests, never the journal records themselves.
+
 After both the genuine planning check and the separate generated full-audit
-gate pass, the workflow invokes the existing host collector and commits only
+gate pass, and the separate HTTP proof completes, the workflow commits only
 the explicit current-run file list plus its returned host file list. The
-generated full-audit directory is never included. The main commit contains:
+existing host collector still records the actual completed planning run.
+The generated full-audit directory is never included. The main commit contains:
 `state/raw/feed-ingest-plan/{editorial-selections,dispatches,rejections,article-assessments,source-runs,diversity}/YYYY/MM/DD/UUID.parquet`,
 any returned `state/raw/seen/YYYY/MM/DD/UUID.parquet`, and
 `state/raw/host-fingerprint/YYYY/MM/DD/UUID.parquet`.
@@ -261,6 +318,14 @@ flag and its default.
 The reporting default changed to true at the owner's request for a readable
 yield, timing and hardware summary (kumarsnaveen, 2026-10-22). The existing
 configuration control and removal condition remain in place.
+
+## Design rationale
+
+The separate live check fetches only a source URL already committed by the
+operator. A feed proves both HTTP operations without giving parsed links new
+authority to select destinations. Its private sibling output root keeps raw
+bodies outside the existing whole-directory artifact upload without changing
+the exact native planner and host commit list.
 
 ## See also
 
