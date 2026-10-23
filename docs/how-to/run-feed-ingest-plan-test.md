@@ -49,22 +49,29 @@ See [partition evidence](../architecture/sources/feed-partitioning.md).
 
 ## Manual controls
 
-The workflow exposes four strings. The actual CLI parser converts them into
-the shared request validator; strings never become shell code.
+The workflow exposes three text boxes and one strategy dropdown. All four
+values pass through the actual CLI parser and shared request validator;
+they never become shell code.
 
 ### Table A - Run controls
 
 | Id | Control | Meaning |
 | --- | --- | --- |
-| A1 | `freshness_hours` | Positive finite maximum article age; default 24 hours. Overrides this run's age cutoff, not the ranking half-life. |
-| A2 | `article_limit` | Optional positive integer; blank uses the configured 100-article selection limit. |
-| A3 | `shards` | Optional positive worker count; blank uses configuration. |
-| A4 | `partition_strategy` | `bin-pack`, `round-robin` or `none`; blank uses configuration. |
+| A1 | `freshness_hours` | Positive finite maximum article age; prefilled with 24 hours. Overrides this run's age cutoff, not the ranking half-life. |
+| A2 | `article_limit` | Optional positive integer; prefilled with 100 articles. Clear it to use configuration. |
+| A3 | `shards` | Optional positive worker count; prefilled with 4 workers. Clear it to use configuration. |
+| A4 | `partition_strategy` | Dropdown with `bin-pack` (default), `round-robin` and `none`. |
+
+The repository's `config/feed-ingest-plan.json` owns these defaults. GitHub
+requires literal form defaults, so the existing workflow test checks all four
+against that file and the strategy choices against the request validator.
+Update the form defaults when changing their configured values.
 
 There is no date or reporting input. One captured UTC clock supplies the run
-date and the runner. Strategy `none` resolves to one worker and refuses an
-explicit larger count before fetching. The committed planning configuration
-owns reporting and all other controls.
+date and the runner. For `none`, clear the prefilled `shards` value or set it
+to `1`. It uses one worker and refuses a larger explicit count before
+fetching. The committed planning configuration owns reporting and all other
+controls.
 
 ## Local offline checks
 
