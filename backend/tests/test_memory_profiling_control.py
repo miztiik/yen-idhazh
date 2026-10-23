@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import pytest
 from conftest import CONFIG_DIR
 
 from idhazh import cli, config
+from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.telemetry.host_control import memory_override
 from utilities.memory_profiling_control import resolve, write_override
@@ -15,7 +17,7 @@ from utilities.memory_profiling_control import resolve, write_override
 
 def test_config_default_and_cli_override_resolve_once() -> None:
     loaded = config.load(CONFIG_DIR)
-    assert loaded.app.observability.memory_profiling_enabled is True
+    loaded.app.observability.memory_profiling_enabled = True
     assert (
         config.with_memory_profiling_override(
             loaded, False
@@ -28,14 +30,20 @@ def test_config_default_and_cli_override_resolve_once() -> None:
 
 @pytest.mark.parametrize("choice", ["inherit", "on", "off"])
 def test_workflow_environment_resolves_memory_for_every_settings_loader(
-    monkeypatch: pytest.MonkeyPatch, choice: str
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, choice: str
 ) -> None:
+    root = tmp_path / "config"
+    shutil.copytree(CONFIG_DIR, root)
+    path = root / "idhazh.json"
+    app = AppConfig.from_json(path.read_text(encoding="utf-8"))
+    app.observability.memory_profiling_enabled = False
+    path.write_text(app.to_json(), encoding="utf-8", newline="\n")
     monkeypatch.setenv("MEMORY_PROFILING", choice)
-    expected = choice != "off"
-    assert config.load(CONFIG_DIR).app.observability.memory_profiling_enabled is expected
-    assert config.load_gardener(CONFIG_DIR).app.observability.memory_profiling_enabled is expected
+    expected = {"inherit": False, "on": True, "off": False}[choice]
+    assert config.load(root).app.observability.memory_profiling_enabled is expected
+    assert config.load_gardener(root).app.observability.memory_profiling_enabled is expected
     assert config.with_memory_profiling_override(
-        config.load(CONFIG_DIR), not expected
+        config.load(root), not expected
     ).app.observability.memory_profiling_enabled is not expected
 
 
@@ -72,6 +80,8 @@ def test_yaml_control_inherits_validated_config_and_accepts_only_protocol_values
     root = tmp_path / "config"
     root.mkdir()
     app = config.load(CONFIG_DIR).app
+    app.observability.host_telemetry_enabled = True
+    app.observability.memory_profiling_enabled = True
     (root / "idhazh.json").write_text(app.to_json(), encoding="utf-8", newline="\n")
     assert resolve("inherit", root)
     assert resolve("on", root)

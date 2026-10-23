@@ -1,6 +1,6 @@
 # What the pipeline records about the machine it ran on
 
-**Last Updated**: 2026-10-21
+**Last Updated**: 2026-10-23
 
 Every host-fingerprint field, what it means and which readings are optional.
 The hardware fingerprint is reusable by any pipeline. Callers name their
@@ -45,6 +45,13 @@ operator console, not on the news-reading pages.
 **The collector is independent of its callers.** A pipeline may use the shared
 recorder or leave host telemetry out. Existing historical readings and recovery
 backups are not rewritten.
+
+Python callers can pass `ask_placement=False` to the task recorder or machine-row
+writer to omit the external host-placement request while retaining local
+collection and ledger writes. The default is `True`; the elapsed-time writer
+makes no placement request. Job instrumentation tests use this existing
+acquisition choice and refuse entry to the real placement reader, so a missing
+forwarding step fails before any network access.
 
 The manual feed planner workflow installs the existing Bun fingerprint
 service and invokes `persistFingerprint` after live planning and the separate
