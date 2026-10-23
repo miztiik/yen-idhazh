@@ -52,9 +52,16 @@ export function fetchedBytes(prefix: string, fetcher: Fetcher): ByteSource {
 		if (!response.ok) throw new Error(`${url} answered ${response.status}`);
 		return new Uint8Array(await response.arrayBuffer());
 	}
+
 	return {
 		index: (path) => bytesAt(`${root}${path}`, { cache: 'no-store' }),
 		data: (path, version) => bytesAt(dataAddress(path, version), {}),
 		address: (path, version) => `${dataAddress(path, version)}&read=${readMark()}`
 	};
+}
+
+/** A compact session never exposes repository addresses to the engine or reuses HTTP data. */
+export function compactBytes(prefix: string, fetcher: Fetcher): ByteSource {
+	const source = fetchedBytes(prefix, (url, init) => fetcher(url, { ...init, cache: 'no-store' }));
+	return { index: source.index, data: source.data };
 }

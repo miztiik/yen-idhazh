@@ -178,9 +178,9 @@ export type SpanCost = {
 	/** Inclusive UTC bounds estimated for the answer, or null when no ledger reads a day. */
 	readFrom: DateStamp | null;
 	readTo: DateStamp | null;
-	unpackedDays: readonly DateStamp[];
 	cut: readonly CutDays[];
 	through: Readonly<Partial<Record<LedgerName, DateStamp>>>;
+	failure?: AskResult;
 };
 
 export type AskOptions = {
@@ -191,6 +191,7 @@ export type AskOptions = {
 	maxChars: number;
 	maxRows: number;
 	maxFetchBytes: number;
+	maxFiles: number;
 };
 
 export type AskFault = Exclude<LedgerFault, 'not-packed'> | 'engine' | null;
@@ -200,6 +201,8 @@ export type AskRefusal =
 	| { kind: 'not-read-only'; word: string }
 	| { kind: 'too-long'; chars: number; max: number }
 	| { kind: 'over-ceiling'; bytes: number; files: number; max: number }
+	| { kind: 'too-many-files'; files: number; max: number }
+	| { kind: 'ledger-not-enabled'; ledger: LedgerName }
 	| { kind: 'engine-error'; message: string };
 
 /** What one selected ledger is missing inside the span a written question read:
@@ -207,29 +210,19 @@ export type AskRefusal =
  *  aside unread. An answer names only a ledger that is missing either. */
 export type SpanGap = { ledger: LedgerName; lostDays: readonly DateStamp[]; setAside: SetAsideFiles };
 
-/** Days of one selected ledger cut from the window: every day before `before`, the first day any
- *  tier this page read names for it, where its answer starts. Nothing failed: the ledger began on
- *  that day, or that day is the 1st of its first month, packed whole, or this page reads the site
- *  alone and the site's copy starts there. A run-time answer, never persisted. */
+/** Days before the first compact period available for one selected ledger.
+ *  A month starts on its first UTC day, a year on 1 January. Never persisted. */
 export type CutDays = { ledger: LedgerName; before: DateStamp };
 
-/** Days of one selected ledger that this answer could not read: every day before `before`, the
- *  ledger's first day on this site, where its answer starts. Only the archive, the committed
- *  repository, is read around this way: when it cannot be read for the days the site copy dropped,
- *  whether its host did not answer, a file was not there, an index could not be read or a file
- *  arrived at the wrong size, the ledger is read from the site's days alone. Such a ledger's start
- *  is named here, never in `cut`. A run-time answer, never persisted. */
-export type UnansweredDays = { tier: 'archive'; ledger: LedgerName; before: DateStamp };
-
 /** `readFrom` is the first UTC day an answer with rows read: the window's first day, unless every
- *  selected ledger's answer starts later, because its earlier days were cut or the repository could
- *  not give them; then the earliest day one of them starts on. `cut` and `unanswered` name each such
+ *  selected ledger's answer starts later because its earlier days were cut;
+ *  then the earliest day one of them starts on. `cut` names each such
  *  ledger, in the order chosen. `readTo` is the last UTC day it read: each ledger's answer ends on
  *  the earlier of the window's last day and the newest day that ledger lists, and `readTo` is the
  *  latest such end of a ledger that read a day of the window. */
 export type AskResult =
-	| { state: 'ok'; columns: readonly Column[]; rows: Row[]; capped: boolean; read: FetchCost; readFrom: DateStamp; readTo: DateStamp; unpackedDays: readonly DateStamp[]; cut: readonly CutDays[]; unanswered: readonly UnansweredDays[]; gaps: readonly SpanGap[] }
-	| { state: 'quiet'; columns: readonly Column[]; read: FetchCost; cut: readonly CutDays[]; unanswered: readonly UnansweredDays[]; gaps: readonly SpanGap[] }
+	| { state: 'ok'; columns: readonly Column[]; rows: Row[]; capped: boolean; read: FetchCost; readFrom: DateStamp; readTo: DateStamp; cut: readonly CutDays[]; gaps: readonly SpanGap[] }
+	| { state: 'quiet'; columns: readonly Column[]; read: FetchCost; cut: readonly CutDays[]; gaps: readonly SpanGap[] }
 	| { state: 'missing'; ledger: LedgerName }
 	| { state: 'unreachable'; ledger: LedgerName | null; at: DateStamp | null; fault: AskFault }
 	| { state: 'refused'; because: AskRefusal };

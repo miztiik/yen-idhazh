@@ -6,8 +6,8 @@
 	import ColumnType from '$lib/console/explorer/ColumnType.svelte';
 	import { nextSort, numericBarShare, printCell, sortedRows, type SortSpec } from './answer';
 	type GapLine = { ledger: string; kind: string; text: string };
-	let { columns, rows, capped = false, maxRows, pageSize, cellMaxCh, barSpreadShare, spanText = '', siteFromText = '', unansweredText = '', gapLines = [], onOrderChange }: {
-		columns: readonly Column[]; rows: readonly Row[]; capped?: boolean; maxRows: number; pageSize: number; cellMaxCh: number; barSpreadShare: number; spanText?: string; siteFromText?: string; unansweredText?: string; gapLines?: readonly GapLine[]; onOrderChange?: (rows: Row[]) => void;
+	let { columns, rows, capped = false, maxRows, pageSize, cellMaxCh, barSpreadShare, spanText = '', siteFromText = '', gapLines = [], onOrderChange }: {
+		columns: readonly Column[]; rows: readonly Row[]; capped?: boolean; maxRows: number; pageSize: number; cellMaxCh: number; barSpreadShare: number; spanText?: string; siteFromText?: string; gapLines?: readonly GapLine[]; onOrderChange?: (rows: Row[]) => void;
 	} = $props();
 	let sort = $state<SortSpec>({ column: '', direction: null });
 	// svelte-ignore state_referenced_locally
@@ -55,7 +55,7 @@
 	</div>
 	<div class="show-more">
 		{#if shown < rows.length}<button type="button" onclick={() => (shown = Math.min(rows.length, shown + pageSize))}>Show {Math.min(pageSize, rows.length - shown)} more rows</button>{/if}
-		<p class="answer-note">{noteText}{#if unansweredText}{' '}<span class="warn" data-explorer-unanswered>{unansweredText}</span>{/if}{#each gapLines as line}{' '}<span data-explorer-gap={line.kind} data-ledger={line.ledger}>{line.text}</span>{/each}</p>
+		<p class="answer-note">{noteText}{#each gapLines as line}{' '}<span data-explorer-gap={line.kind} data-ledger={line.ledger}>{line.text}</span>{/each}</p>
 	</div>
 </div>
 

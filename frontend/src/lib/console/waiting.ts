@@ -4,7 +4,6 @@ import { megabytes } from '$lib/assist/session';
 import { grouped } from '$lib/charts/series';
 import { nameSpan } from '$lib/console/span-words';
 import type { AskRefusal } from '$lib/data/ledger';
-import type { UnansweredDays } from '$lib/data/slice-shapes';
 import { isDay } from '$lib/data/slice-shapes';
 
 export type PanelState = 'ready' | 'loading' | 'quiet' | 'missing' | 'unreachable' | 'refused';
@@ -83,6 +82,8 @@ export function refusedSentence(because: AskRefusal): string {
 	if (because.kind === 'not-read-only') return `Only questions run here: start with SELECT, WITH, DESCRIBE, SUMMARIZE or EXPLAIN. This starts with ${because.word}.`;
 	if (because.kind === 'too-long') return `This question is ${because.chars} characters long; the most this page runs is ${because.max}.`;
 	if (because.kind === 'over-ceiling') return `These days would fetch ${mb(because.bytes)} from ${because.files} files, and one question may fetch ${mb(because.max)}. Pick fewer days or fewer ledgers.`;
+	if (because.kind === 'too-many-files') return `These days need ${because.files} files; one question permits ${because.max}. Pick fewer days or fewer ledgers.`;
+	if (because.kind === 'ledger-not-enabled') return `${because.ledger} is not enabled for the Data explorer. Refresh the ledger list and choose an enabled ledger.`;
 	return 'The engine could not run this:';
 }
 
@@ -94,10 +95,8 @@ export function explorerQuietSentence(): string {
 	return 'Your question ran and matched no rows.';
 }
 
-export function explorerMissingSentence(ledger: string, published: boolean, explainUnasked = true): string {
-	return published
-		? `${ledger} is not packed yet.`
-		: `${ledger} is not on this site yet${explainUnasked ? ', so nothing was asked of it' : ''}.`;
+export function explorerMissingSentence(ledger: string): string {
+	return `${ledger} has no available compact record yet. Newest data waits for packing.`;
 }
 
 export function explorerUnreachableSentence(ledger: string | null, day: string | null, fault: string | null): string {
@@ -105,15 +104,7 @@ export function explorerUnreachableSentence(ledger: string | null, day: string |
 		return 'The query engine did not start in this browser. A current version of Chrome, Edge, Firefox or Safari runs it.';
 	}
 	if (fault === null) return `${ledger ?? 'The ledger'} for ${day ?? 'that day'} did not arrive, so the question did not run.`;
-	return `No file on this site holds ${ledger ?? 'the ledger'} for ${day ?? 'that day'}.`;
-}
-
-/** Name the repository days excluded from an answer, then offer the real retry. */
-export function explorerUnansweredNote(unanswered: readonly UnansweredDays[]): string {
-	const lines = unanswered.map(
-		({ ledger, before }) => `Days of the ${ledger} record before ${shortDate(before)} are not in this answer, because this page could not read them from the repository.`
-	);
-	return [...lines, 'Press Refresh, then Run, to try again.'].join(' ');
+	return `The compact record for ${ledger ?? 'the ledger'} at ${day ?? 'that day'} could not be read (${fault}). Press Refresh, then Run, to try again.`;
 }
 
 export function explorerChartIdleSentence(): string {

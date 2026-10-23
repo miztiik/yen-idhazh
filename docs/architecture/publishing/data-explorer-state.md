@@ -4,26 +4,30 @@
 
 Which state the Data explorer reads from the site, keeps in this browser and carries in a shared address.
 
-## Site data and Refresh
+## Source data and Refresh
 
-The route reads the ledger registry from `config/ledgers.json`. Its panel ids are
+The route reads the ledger registry from `config/ledgers.json` at the committed
+`ledger.archive_base_url`; an explicitly empty value uses site fixtures. Its panel ids are
 `data-explorer-ask`, `data-explorer-rows` and `data-explorer-shape`.
 [The workbench layout](../../concepts/console-design/how-the-data-explorer-shares-the-window.md)
 owns their visible arrangement.
 
 The route renders only in the browser. It uses the common `404.html` fallback,
 with `prerender = false` and `ssr = false`; it has no separate generated HTML
-file. Build-time configuration supplies knobs and the staged-publication list,
-not ledger rows. The browser fetches and validates the registry, indexes and
+file. Build-time configuration supplies knobs and the destination, not current
+membership or ledger rows. The browser fetches and validates the registry, indexes and
 chosen files. The registry's [explicit consent](../contracts/ledger-registry.md#explorer-consent-and-its-runtime-catalog)
 controls which ledgers the explorer offers and selects; it does not establish
 whether data is available.
 
 The page queries only the selected ledgers and UTC days. Refresh releases the
-page's cached indexes and files through `startAfresh()`, then fetches the registry
-again. It does not run the question. The
+page's immutable catalog, cached indexes, registered files and owned views through
+`startAfresh()`, then fetches the registry again. Old results cannot update the
+new session. All explorer HTTP reads use no-store, including same-size changed
+Parquet after Refresh. It does not run the question. The
 [written-question reader](how-the-query-door-answers-a-written-question.md)
-owns file selection, limits and archive behavior.
+owns compact selection, limits and explicit source failures. No repository error
+switches to a staged site copy. Newest data waits for packing.
 
 Refresh removes selections whose consent has been disabled or whose entry has
 gone, and names them in a notice. It does not silently substitute an example

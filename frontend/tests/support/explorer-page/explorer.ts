@@ -1,4 +1,4 @@
-import { fetchedBytes } from '../../../src/lib/data/fetched-bytes';
+import { compactBytes } from '../../../src/lib/data/fetched-bytes';
 import { pageKeeper } from '../../../src/lib/data/page-keeper';
 import { configuredCatalog } from '../../../src/lib/data/configured-catalog';
 import { readAsk } from '../../../src/lib/data/ask-reader';
@@ -11,9 +11,9 @@ declare global {
 }
 
 const keeper = pageKeeper(
-	fetchedBytes(__ASSET_BASE_URL__, (url, init) => fetch(url, init)),
+	compactBytes(__ASSET_BASE_URL__, (url, init) => fetch(url, init)),
 	() => import('../../../src/lib/data/engine').then((engine) => engine.browserEngine(new URL('/ext', location.href).href)),
 	configuredCatalog
 );
 
-window.explorerAsk = (options) => readAsk(keeper, null, options, {});
+window.explorerAsk = (options) => readAsk(keeper, options);

@@ -292,6 +292,8 @@ export function pageKeeper(source: ByteSource, openEngine: EngineOpener, catalog
 
 	async function release(): Promise<void> {
 		const settled = await Promise.allSettled([...names.values()]);
+		indexes.clear();
+		arrivals.clear();
 		names.clear();
 		heldLengths.clear();
 		const held = settled.flatMap((one) => (one.status === 'fulfilled' && 'name' in one.value ? [one.value.name] : []));
