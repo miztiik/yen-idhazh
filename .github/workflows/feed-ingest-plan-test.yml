@@ -3,6 +3,7 @@ name: Feed ingest plan test
 on:
   workflow_dispatch:
     inputs:
+      # GitHub needs literal form defaults; workflow tests bind them to config/feed-ingest-plan.json.
       freshness_hours:
         description: Maximum article age in hours for this run
         required: true
@@ -11,18 +12,22 @@ on:
       article_limit:
         description: Optional positive article limit; blank uses configuration
         required: false
-        default: ''
+        default: '100'
         type: string
       shards:
         description: Optional positive worker count; blank uses configuration
         required: false
-        default: ''
+        default: '4'
         type: string
       partition_strategy:
-        description: Optional bin-pack, round-robin or none; blank uses configuration
+        description: Article distribution; for none, clear shards or set it to 1
         required: false
-        default: ''
-        type: string
+        default: 'bin-pack'
+        type: choice
+        options:
+          - bin-pack
+          - round-robin
+          - none
 
 permissions:
   contents: write
