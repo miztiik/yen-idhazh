@@ -25,6 +25,7 @@ import { proposedOperation } from "../src/api/document-operations";
 import { FetchRequestSchema } from "../src/api/operation-contracts";
 import type { FeedWriteReceipt } from "../src/read-ledger-history/own-feed-receipts";
 import { parseDocument } from "../src/harvest-feeds/parse-document";
+import { redactProofResponse, requireExactReplay, requireReadableArticle, selectVerifiedArticle } from "../../../.github/scripts/feed-ingest-plan-http-proof";
 import { FeedHealthContract, PLANNER_OPERATION_VERSION } from "@idhazh/common-contracts";
 import { loadHarvestInputs } from "../src/harvest-feeds/load-harvest-inputs";
 
@@ -156,6 +157,23 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     expect(cliResult.audited_complete).toBe(false);
     expect(cliResult.planning_complete).toBe(true);
     expect(cliResult.status).toBe("planning_complete_audit_pending");
+    const selectedArticle = await selectVerifiedArticle(cli.inputs, cliResult, cli.inputs.outputRoot);
+    expect(selectedArticle.selection).toMatchObject({
+      run_id: cliResult.run_id, correlation_id: cliResult.correlation_id,
+      candidate_id: cliResult.selected_candidate_ids[0],
+    });
+    expect(selectedArticle.canonical_url).toBe("https://news.example/second");
+    await expect(selectVerifiedArticle(cli.inputs, {
+      ...cliResult, selected_candidate_ids: ["0".repeat(64)],
+    }, cli.inputs.outputRoot)).rejects.toThrow("DISPATCH_MEMBERSHIP_MISMATCH");
+    await expect(selectVerifiedArticle(cli.inputs, {
+      ...cliResult, correlation_id: randomUUID(),
+    }, cli.inputs.outputRoot)).rejects.toThrow("INVALID_PLANNING_COMPLETION");
+    await expect(selectVerifiedArticle(cli.inputs, {
+      ...cliResult, planning_completion: {
+        ...cliResult.planning_completion!, attempt: cliResult.planning_completion!.attempt + 1,
+      },
+    }, cli.inputs.outputRoot)).rejects.toThrow("DISPATCH_MEMBERSHIP_MISMATCH");
     expect(printed).toEqual([cliResult]);
     for (const field of ["run_id", "correlation_id", "date", "observed_at", "request",
       "strategy", "dispatch_count", "selected_candidate_ids", "assignments", "audit", "status"] as const) {
@@ -239,7 +257,8 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     };
     const parsedResponse = await post("parse", parseRequest, newApp);
     expect(parsedResponse.status).toBe(200);
-    const parsed = await parsedResponse.json();
+    const privateParseBytes = Buffer.from(await parsedResponse.arrayBuffer());
+    const parsed = JSON.parse(privateParseBytes.toString("utf8"));
     expect(parsed.failure).toBeNull();
     expect(parsed.parsed.article_text.length).toBeGreaterThan(0);
     const shared = await parseDocument("article", api.transport.recordings.bodies.article,
@@ -249,12 +268,53 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
       source_word_count: parsed.parsed.word_count, word_count: parsed.parsed.word_count,
       token_count: null, truncated: null, boilerplate: null,
     });
+    expect(() => requireReadableArticle(shared)).not.toThrow();
+    for (const unavailable of [
+      { ...shared, quality: null },
+      { ...shared, paywall: true, quality: null },
+      { ...shared, article_text: "", word_count: 0, quality: null },
+    ]) expect(() => requireReadableArticle(unavailable)).toThrow("HTML_EXTRACTION_UNAVAILABLE");
+    for (const invalid of [
+      { ...shared, quality: {} },
+      { ...shared, paywall: true, quality: {} },
+      { ...shared, article_text: null, quality: null },
+    ]) {
+      expect(() => requireReadableArticle(invalid)).toThrow();
+      expect(() => requireReadableArticle(invalid)).not.toThrow("HTML_EXTRACTION_UNAVAILABLE");
+    }
     expect(parsed.observation).toMatchObject({
       article_id: fetched.article_id, correlation_id, run_id: fetched.observation.run_id,
       caused_by_event_id: fetched.observation.event_id, operation: "parse",
     });
     expect(parsed.observation.event_id).not.toBe(fetched.observation.event_id);
-    expect(await (await post("parse", parseRequest, createPlanApp(api.inputs, api.runtime))).json()).toEqual(parsed);
+    const privateReplayBytes = Buffer.from(await (await post("parse", parseRequest, createPlanApp(api.inputs, api.runtime))).arrayBuffer());
+    requireExactReplay(privateParseBytes, privateReplayBytes);
+    const redacted = redactProofResponse("parse", "article", privateParseBytes, 200);
+    const redactedReplay = redactProofResponse("parse", "article", privateReplayBytes, 200);
+    expect(redacted.response_json).toBeNull();
+    expect(redacted.response_sha256).toBe(new Bun.CryptoHasher("sha256").update(privateParseBytes).digest("hex"));
+    expect(redactedReplay).toEqual(redacted);
+    expect(redacted.response_metadata).toMatchObject({
+      fetch_request_id: fetchRequest.request_id, observation: parsed.observation, failure: null,
+      parsed: { word_count: shared.word_count, quality: shared.quality,
+        article_text_length: shared.article_text.length, article_text_sha256: new Bun.CryptoHasher("sha256").update(shared.article_text).digest("hex") },
+    });
+    const publicBytes = JSON.stringify(redacted);
+    expect(publicBytes).not.toContain(shared.article_text);
+    expect(publicBytes).not.toContain('"article_text":');
+    expect(publicBytes).not.toContain('"page_title":');
+    expect(publicBytes).not.toContain('"author":');
+    const changedBytes = Buffer.from(JSON.stringify({ ...parsed, parsed: { ...parsed.parsed, article_text: `${shared.article_text} changed` } }));
+    expect(redactProofResponse("parse", "article", changedBytes, 200).response_json).toBeNull();
+    expect(() => requireExactReplay(privateParseBytes, changedBytes)).toThrow("private response bytes");
+    const privateErrorBytes = Buffer.from(JSON.stringify({
+      code: "REQUEST_CONFLICT", issues: [{ field: "secret", message: shared.article_text }],
+    }));
+    expect(redactProofResponse("parse", "article", privateErrorBytes, 409)).toEqual({
+      response_sha256: new Bun.CryptoHasher("sha256").update(privateErrorBytes).digest("hex"),
+      response_json: null, response_metadata: { code: "REQUEST_CONFLICT" },
+    });
+    expect(() => redactProofResponse("parse", "feed", privateParseBytes, 200)).toThrow("document parse");
     expect(api.transport.requests).toHaveLength(afterFetch);
     for (const changed of [
       { ...fetchRequest, url: "https://news.example/not-found" },
