@@ -1,11 +1,15 @@
 /** Does the isolated workflow preserve its manual, bounded and TypeScript-only execution boundary? */
 import { expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { copyFile, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { CompactIndexSchema, RawDayIndexSchema } from "../../../packages/common-contracts/src/index";
+import { CompactIndexSchema, RawDayIndexSchema, FeedHealthContract } from "../../../packages/common-contracts/src/index";
+import { persistLedger } from "../../../packages/ledger-file-writer/src/index";
+import { stageFeedHistory } from "../feed-ingest-plan-feed-history";
+import { selectHealthDays } from "../../../services/feed-ingest-plan/src/read-ledger-history/select-health-days";
+import { readLedgerParquet } from "../../../services/feed-ingest-plan/src/read-ledger-history/read-parquet";
 import { completeHistoryDayInputs, createSeenDayInputs, historyDays, historyIndexPaths, resolveHistoryInventory, sparseCheckoutPath } from "../feed-ingest-plan-outputs";
 import { requiredSeenDays } from "../../../services/feed-ingest-plan/src/read-ledger-history/read-seen-evidence";
 import { utcTimestamp } from "../../../services/feed-ingest-plan/src/harvest-feeds/harvest-types";
@@ -87,7 +91,7 @@ test("offers four manual controls and commits only genuine planner and host file
   expect(plan.run!.indexOf("await verifyPlanningCompletion(")).toBeLessThan(plan.run!.indexOf("await writeGitHubOutputs("));
   expect(plan.run).toContain("stageConfiguredDays(\"published\"");
   expect(plan.run).toContain("stageConfiguredDays(\"item-health\"");
-  expect(plan.run).toContain("inputs: { ...inputs.settings.inputs, seen_days, published_days, settled_failure_days }");
+  expect(plan.run).toContain("inputs: { ...inputs.settings.inputs, seen_days, published_days, settled_failure_days, feed_health_days, feed_retirement_days }");
   expect(plan.run).not.toContain("feed-ingest-plan-report");
   const reporting = steps.find(step => step.name === "Optional GitHub report")!;
   expect(reporting.if).toContain("workflow_reporting == 'true'");
@@ -127,7 +131,7 @@ test("offers four manual controls and commits only genuine planner and host file
   expect(checkout.with?.["sparse-checkout"]).not.toContain("/backend/");
 });
 
-test("derives UTC windows and stages indexed compact files before considering raw evidence", () => {
+test("derives UTC windows and stages indexed compact files before considering raw evidence", async () => {
   const days = historyDays("2026-01-01T00:00:00Z", 1, [1]);
   expect(days).toEqual(["2026-01-01", "2025-12-31"]);
   expect(historyDays(utcTimestamp(() => new Date("2026-01-01T00:00:00.999Z")), 1, [1])).toEqual(days);
@@ -182,6 +186,64 @@ test("derives UTC windows and stages indexed compact files before considering ra
   expect(() => historyIndexPaths([".."], days)).toThrow("prefix");
   expect(() => resolveHistoryInventory({ ledger: "dispatches", prefix: ["dispatches"], days,
     compact: [], raw: [{ ...raw, content_sha256: "a".repeat(64) }] })).toThrow("content_sha256");
+  const directory = await mkdtemp(join(tmpdir(), "native-feed-history-"));
+  try {
+    const fixture = FeedHealthContract.schema.parse(await Bun.file(join(root,
+      "tests", "fixtures", "feed-ingest-plan", "feed-health-row.json")).json());
+    const registration = {
+      name: "feed-health", family: "feed-health", grain: "raw-and-compact" as const,
+      lifecycle_status: "active" as const, prefix: ["feed-health"],
+    };
+    for (const day of ["2024-01-01", "2026-01-01"]) {
+      const writerContext = {
+        run_id: `${day}-1`, attempt: 1, job: "plan" as const, shard: 0,
+        pipeline_name: null, task_name: null, producer: "tests.native-history", git_sha: "a".repeat(40),
+      };
+      const written = await persistLedger({
+        ledger: "feed-health", registryEntry: registration, outputRoot: join(directory, "state"),
+        ledgerSettings: { format: "parquet", compression_raw: "snappy", compression_compact: "snappy" },
+        writerContext, rowContract: FeedHealthContract, period: { tier: "raw", covers: day },
+        rows: [{ ...fixture, date: day, run_id: writerContext.run_id, checked_at: `${day}T00:00:00Z` }],
+      });
+      if (day === "2024-01-01") {
+        const original = await readLedgerParquet(join(directory, "state", written.files[0]!.path), "feed-health", FeedHealthContract);
+        const compact = await persistLedger({
+          ledger: "feed-health", registryEntry: registration, outputRoot: join(directory, "state"),
+          ledgerSettings: { format: "parquet", compression_raw: "snappy", compression_compact: "snappy" },
+          writerContext: { ...writerContext, producer: "tests.compactor" }, rowContract: FeedHealthContract,
+          period: { tier: "compact", period: "daily", covers: day, builtFrom: 1 }, rows: original.rows,
+        });
+        const file = compact.files[0]!;
+        const index = join(directory, "state", "compact", "feed-health", "index", "daily.json");
+        await mkdir(dirname(index), { recursive: true });
+        await writeFile(index, JSON.stringify({
+          version: "2026-10-07", ledger: "feed-health", period: "daily",
+          entries: [{ covers: day, state: "packed", rows: 1, bytes: (await stat(join(directory, "state", file.path))).size }],
+        }));
+      }
+    }
+    const staged = await stageFeedHistory({
+      ledger: "feed-health", prefix: ["feed-health"], now: "2026-01-01T00:00:00Z",
+      raw_discovery_days: 1, authored: [],
+      read: async path => {
+        const file = Bun.file(join(directory, ...path.split("/")));
+        return await file.exists() ? file.json() : undefined;
+      },
+      listRawDay: async path => {
+        try {
+          return (await readdir(join(directory, ...path.split("/")))).map(name => `${path}/${name}`);
+        } catch (error) {
+          if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined;
+          throw error;
+        }
+      },
+    });
+    expect(staged.files).toContain("state/compact/feed-health/daily/2024/01/01.parquet");
+    const recorded = await selectHealthDays(directory, registration, staged.inputs, 2);
+    expect(recorded.map(day => day.day)).toEqual(["2024-01-01", "2026-01-01"]);
+    expect(staged.inputs.find(day => day.day === "2025-12-31")?.raw_files).toBeUndefined();
+    expect(staged.inventory_complete).toBe(false);
+  } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
 test("rejects hostile dispatch strings before any input load or network request", async () => {
@@ -231,7 +293,7 @@ test("strict-checks adapters, tests and the actual inline program in one compile
       "--exactOptionalPropertyTypes", "--noFallthroughCasesInSwitch", "--noUnusedLocals",
       "--noUnusedParameters", "--verbatimModuleSyntax", "--skipLibCheck",
       "--types", "bun", "--typeRoots", join(service, "node_modules", "@types"), ...generated,
-      ...["feed-ingest-plan-outputs.ts", "feed-ingest-plan-report.ts", "feed-ingest-plan-commit.ts", "feed-ingest-plan-verification.ts", "feed-ingest-plan-audit-fixture.ts",
+      ...["feed-ingest-plan-outputs.ts", "feed-ingest-plan-feed-history.ts", "feed-ingest-plan-report.ts", "feed-ingest-plan-commit.ts", "feed-ingest-plan-verification.ts", "feed-ingest-plan-audit-fixture.ts",
         "tests/feed-ingest-plan-outputs.test.ts", "tests/feed-ingest-plan-report.test.ts",
         "tests/feed-ingest-plan-workflow.test.ts"].map(path => join(root, ".github", "scripts", ...path.split("/"))),
     ], { cwd: service, stdout: "pipe", stderr: "pipe" });
@@ -252,7 +314,7 @@ test("runs the native compatibility verifier in a named-input copy with no backe
       "schemas/ledger-index.schema", "schemas/partition.schema", "schemas/policy.schema",
       "schemas/primitives", "schemas/rejection.schema", "schemas/source-run.schema",
       "schemas/source.schema", "schemas/telemetry.schema", "schemas/host-fingerprint.schema",
-      "schemas/harvest-diagnostics.schema", "schemas/item-health-failure.schema",
+      "schemas/harvest-diagnostics.schema", "schemas/item-health-failure.schema", "schemas/feed-health.schema",
     ].map(name => `packages/common-contracts/src/${name}.ts`);
     const writer = [
       "atomic-file", "index", "ledger-paths", "ledger-types", "persist-compact", "persist-ledger",

@@ -22,7 +22,7 @@ type RawResult = { response: TransportResponse | null; failure: FetchFailure | n
 type RobotDocument = ReturnType<typeof robotsParser> | null;
 type RobotResult = { document: RobotDocument; failure: FetchFailure | null; http_status: number | null; error_code?: string | null };
 export type PermittedFetcher = ReturnType<typeof createPermittedFetcher>;
-const retryableStatus = new Set([408, 425, 429, 500, 502, 503, 504]);
+export const retryableStatus = new Set([408, 425, 429, 500, 502, 503, 504]);
 const redirectStatus = new Set([301, 302, 303, 307, 308]);
 
 function decodeUnreserved(value: string): string {

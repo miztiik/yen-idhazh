@@ -7,7 +7,7 @@ import {
   DropReasonSchema, PreviousDiagnosticDropReasonSchema, PreviousPreDiagnosticsDropReasonSchema,
 } from "./rejection.schema";
 import { FetchStatusSchema, ParseStatusSchema } from "./source-run.schema";
-import { CountSchema, PlanningStageSchema, PositiveCountSchema, RunIdSchema, Sha256Schema, SlugSchema, TimestampSchema, reject } from "./primitives";
+import { CountSchema, DateStampSchema, PlanningStageSchema, PositiveCountSchema, RunIdSchema, Sha256Schema, SlugSchema, TimestampSchema, reject } from "./primitives";
 import { FEED_INGEST_EVENT_VERSION, HARVEST_DIAGNOSTICS_VERSION, PLANNER_EXCLUSIONS_VERSION } from "../version";
 import { HarvestDiagnosticsSchema } from "./harvest-diagnostics.schema";
 
@@ -18,6 +18,25 @@ export const FeedOutcomePayloadSchema = z.strictObject({
   fetch_duration_ms: CountSchema.nullable(), parse_duration_ms: CountSchema.nullable(),
   rejection_reason: DropReasonSchema.nullable(),
   diagnostics: HarvestDiagnosticsSchema.nullable().default(null),
+  history: z.strictObject({
+    lifecycle: z.enum(["eligible", "resting", "retired"]),
+    retirement_cause: z.enum(["http_410", "low_yield"]).nullable(),
+    endpoint_key: Sha256Schema, strikes: CountSchema, rested_runs: CountSchema,
+    gone_run_ids: z.array(RunIdSchema),
+    reliability: z.strictObject({
+      success_fraction: z.number().finite().min(0).max(1), productive: CountSchema,
+      attempted: PositiveCountSchema, window_days: PositiveCountSchema,
+      from_day: DateStampSchema.nullable(), through_day: DateStampSchema.nullable(),
+      production_factor: z.number().finite().min(0).max(1),
+    }).nullable(),
+    daily_published: z.strictObject({
+      day: DateStampSchema, observed_count: CountSchema,
+      availability: z.enum(["available", "unavailable"]),
+    }),
+    health_coverage: z.enum(["available", "unavailable"]),
+    reliability_coverage: z.enum(["available", "unavailable"]),
+    retirement_inventory_complete: z.literal(false),
+  }).nullable().default(null),
 });
 export const CandidateDecisionPayloadSchema = z.strictObject({
   kind: z.literal("candidate_decision"), assessment: ArticleAssessmentRecordSchema,
@@ -73,6 +92,9 @@ export const FeedIngestEventSchema = z.strictObject({
   $id: "feed-ingest-event", version: FEED_INGEST_EVENT_VERSION,
   changelog: [{
     version: FEED_INGEST_EVENT_VERSION,
+    change: "Record native feed rest, retirement, reliability and daily publication evidence.",
+  }, {
+    version: PLANNER_EXCLUSIONS_VERSION,
     change: "Record pre-fetch planner exclusions with their measured ledger evidence.",
   }, {
     version: HARVEST_DIAGNOSTICS_VERSION,
@@ -113,6 +135,9 @@ const PreviousDiagnosticEventSchema = z.strictObject({
 });
 
 export function readFeedIngestEvent(input: unknown): FeedIngestEvent {
+  if (input && typeof input === "object" && "version" in input && input.version === PLANNER_EXCLUSIONS_VERSION) {
+    return FeedIngestEventSchema.parse({ ...input, version: FEED_INGEST_EVENT_VERSION });
+  }
   if (input && typeof input === "object" && "version" in input && input.version === "2026-10-22T12:20") {
     const previous = PreviousEventSchema.parse(input);
     const payload = previous.payload.kind === "candidate_decision" ? {

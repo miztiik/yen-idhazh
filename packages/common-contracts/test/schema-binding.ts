@@ -9,7 +9,7 @@ import {
   LedgerCompletionEvidenceSchema, PartitionAssignmentSchema,
   PenaltyEvidenceSchema, PolicyIdentitySchema,
   RejectionDetailsSchema, RowIdentitySchema, ROW_IDENTITY_COLUMN_VERSIONS, ScoreEvidenceSchema, SourceRunRecordSchema,
-  SourceSnapshotSchema, WriterIdentitySchema,
+  SourceSnapshotSchema, WriterIdentitySchema, FeedHealthRowSchema, FeedRetirementRowSchema,
 } from "../src/index";
 
 export const runtimeSchemas = {
@@ -23,6 +23,7 @@ export const runtimeSchemas = {
   DropReasonCount: DropReasonCountSchema, CompletedFile: CompletedFileSchema,
   LedgerCompletionEvidence: LedgerCompletionEvidenceSchema, SourceRunRecord: SourceRunRecordSchema,
   ArticleAssessmentRecord: ArticleAssessmentRecordSchema, DiversityMetricRow: DiversityMetricRowSchema,
+  FeedHealthRow: FeedHealthRowSchema, FeedRetirementRow: FeedRetirementRowSchema,
 } satisfies Record<string, z.ZodType>;
 
 export const schemas = Object.fromEntries(

@@ -47,6 +47,7 @@ jobs:
             /services/host-fingerprints/
             /services/host-probes/
             /.github/scripts/feed-ingest-plan-outputs.ts
+            /.github/scripts/feed-ingest-plan-feed-history.ts
             /.github/scripts/feed-ingest-plan-commit.ts
             /.github/scripts/feed-ingest-plan-report.ts
             /.github/scripts/feed-ingest-plan-verification.ts
@@ -104,6 +105,9 @@ jobs:
           import { utcTimestamp } from "./services/feed-ingest-plan/src/harvest-feeds/harvest-types";
           import { ServiceSettingsSchema } from "./services/feed-ingest-plan/src/config/service-settings";
           import { requiredSeenDays } from "./services/feed-ingest-plan/src/read-ledger-history/read-seen-evidence";
+          import { HEALTH_RECORDED_DAYS } from "./services/feed-ingest-plan/src/read-ledger-history/read-feed-history";
+          import { selectHealthDays } from "./services/feed-ingest-plan/src/read-ledger-history/select-health-days";
+          import { stageFeedHistory } from "./.github/scripts/feed-ingest-plan-feed-history";
           import { CompactIndexSchema, RawDayIndexSchema } from "./packages/common-contracts/src/index";
           import type { CompactIndex, FeedIngestEvent, RawDayIndex } from "./packages/common-contracts/src/index";
           import { completeHistoryDayInputs, createExecutionOutputs, createSeenDayInputs, historyDays, resolveHistoryInventory, sparseCheckoutPath, writeGitHubOutputs } from "./.github/scripts/feed-ingest-plan-outputs";
@@ -132,8 +136,7 @@ jobs:
             const published_days = completeHistoryDayInputs(inputs.registrations.published.prefix,
               requiredSeenDays(now, inputs.clock_config.collect.published_window_days),
               inputs.settings.inputs.published_days, "published_days");
-            const settledRequired = inputs.clock_config.collect.settled_failure_codes.length === 0
-              ? [] : requiredSeenDays(now, 0);
+            const settledRequired = requiredSeenDays(now, 0);
             const settled_failure_days = completeHistoryDayInputs(inputs.registrations.item_health.prefix,
               settledRequired, inputs.settings.inputs.settled_failure_days, "settled_failure_days");
             const registry: { families: { ledgers: { name: string; prefix: string[] }[] }[] } =
@@ -162,6 +165,25 @@ jobs:
               const [text] = await Promise.all([new Response(held.stdout).text(), new Response(held.stderr).text()]);
               if (await held.exited !== 0) throw new Error(`history: failed to read named file ${path}`);
               return JSON.parse(text);
+            }
+            async function listRawDay(directory: string): Promise<string[] | undefined> {
+              const object = `HEAD:${directory}`;
+              const probe = Bun.spawn(["git", "cat-file", "--batch-check"], { stdin: "pipe", stdout: "pipe", stderr: "pipe" });
+              probe.stdin.write(`${object}\n`);
+              probe.stdin.end();
+              const [check] = await Promise.all([new Response(probe.stdout).text(), new Response(probe.stderr).text()]);
+              if (await probe.exited !== 0) throw new Error("Feed history cannot inspect its named UTC day");
+              if (check.trim() === `${object} missing`) return undefined;
+              if (!/^[a-f0-9]+ tree \d+\s*$/.test(check)) throw new Error("Feed history raw day is not a tree");
+              const listing = Bun.spawn(["git", "ls-tree", "-z", object], { stdout: "pipe", stderr: "pipe" });
+              const [text] = await Promise.all([new Response(listing.stdout).text(), new Response(listing.stderr).text()]);
+              if (await listing.exited !== 0) throw new Error("Feed history cannot list its named UTC day");
+              return text.split("\0").filter(Boolean).flatMap(entry => {
+                const match = /^100644 blob [a-f0-9]+\t([0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.parquet)$/.exec(entry);
+                if (match !== null) return [`${directory}/${match[1]}`];
+                if (/^100644 blob [a-f0-9]+\tindex\.json$/.test(entry)) return [];
+                throw new Error("Feed history UTC day contains an unexpected entry");
+              });
             }
             async function stageHistory(ledger: CompactIndex["ledger"], prefix: readonly string[], days: readonly string[],
               options: { indexes?: Partial<Record<CompactIndex["period"], string>>;
@@ -220,10 +242,27 @@ jobs:
             }
             await stageConfiguredDays("published", inputs.registrations.published.prefix, published_days);
             await stageConfiguredDays("item-health", inputs.registrations.item_health.prefix, settled_failure_days);
+            const feedInventories = [];
+            for (const [ledger, registration, authored] of [
+              ["feed-health", inputs.registrations.feed_health, inputs.settings.inputs.feed_health_days],
+              ["feed-retirements", inputs.registrations.feed_retirements, inputs.settings.inputs.feed_retirement_days],
+            ] as const) {
+              const policy = await Bun.file(`config/gardener/compact-${ledger}.json`).json();
+              if (!Number.isSafeInteger(policy.daily_keep_days) || policy.daily_keep_days < 0) throw new Error("Feed history raw discovery requires daily_keep_days");
+              const staged = await stageFeedHistory({
+                ledger, prefix: registration.prefix, now, raw_discovery_days: policy.daily_keep_days,
+                authored, read: readCommitted, listRawDay,
+              });
+              feedInventories.push(staged);
+              for (const path of staged.files) inventory.add(path);
+            }
             for (const path of inputs.settings.inputs.seen_files) inventory.add(path);
             const sparse = Bun.spawn(["git", "sparse-checkout", "add", "--skip-checks", ...[...inventory].map(sparseCheckoutPath)],
               { stdout: "inherit", stderr: "inherit" });
             if (await sparse.exited !== 0) throw new Error("history: named sparse checkout failed");
+            const feed_health_days = await selectHealthDays(root, inputs.registrations.feed_health,
+              feedInventories[0]!.inputs, Math.max(HEALTH_RECORDED_DAYS, inputs.clock_config.collect.reliability_window_days));
+            const feed_retirement_days = feedInventories[1]!.inputs;
             const git = Bun.spawn(["git", "rev-parse", "HEAD"], { stdout: "pipe", stderr: "inherit" });
             const git_sha = (await new Response(git.stdout).text()).trim();
             if (await git.exited !== 0) throw new Error("git_sha: cannot resolve the checkout commit");
@@ -232,7 +271,7 @@ jobs:
               throw new Error("workflow: runner directory, output path, run identity and attempt are required");
             }
             const settings = ServiceSettingsSchema.parse({ ...inputs.settings, enabled: true,
-              inputs: { ...inputs.settings.inputs, seen_days, published_days, settled_failure_days },
+              inputs: { ...inputs.settings.inputs, seen_days, published_days, settled_failure_days, feed_health_days, feed_retirement_days },
               run: { ...inputs.settings.run, attempt: Number(GITHUB_RUN_ATTEMPT) } });
             const artifactRoot = join(RUNNER_TEMP, "feed-ingest-plan");
             await mkdir(artifactRoot, { recursive: true });
@@ -278,6 +317,8 @@ jobs:
             await writeFile(join(artifactRoot, "events.json"), JSON.stringify(events));
             await writeFile(join(artifactRoot, "response.json"), JSON.stringify(summary));
             await verifyParquetFiles(join(artifactRoot, "state"), "dispatches", summary.files.dispatches, inputs.registrations.dispatches);
+            await verifyParquetFiles(join(artifactRoot, "state"), "feed-health", summary.files.feed_health, inputs.registrations.feed_health);
+            await verifyParquetFiles(join(artifactRoot, "state"), "feed-retirements", summary.files.feed_retirements, inputs.registrations.feed_retirements);
             for (const files of [summary.files.harvest_rejections, summary.files.screening_rejections, summary.files.curation_rejections]) {
               await verifyParquetFiles(join(artifactRoot, "state"), "rejections", files, inputs.registrations.rejections);
             }

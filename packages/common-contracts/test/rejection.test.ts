@@ -326,6 +326,9 @@ describe("planning audit contracts", () => {
     expect(schema.version).toBe(record.version);
     expect(schema.changelog).toEqual([{
       version: record.version,
+      change: "Record native feed rest, retirement, reliability and daily publication evidence.",
+    }, {
+      version: PLANNER_EXCLUSIONS_VERSION,
       change: "Record pre-fetch planner exclusions with their measured ledger evidence.",
     }, {
       version: HARVEST_DIAGNOSTICS_VERSION,
@@ -335,6 +338,18 @@ describe("planning audit contracts", () => {
       change: "Require UUID event and correlation identities with typed decision evidence.",
     }]);
     expect(schema.additionalProperties).toBe(false);
+    const historicalFeed = {
+      ...event(), version: PLANNER_EXCLUSIONS_VERSION,
+      audit_event_type: "feed_outcome", source_id: source.source_id,
+      payload: {
+        kind: "feed_outcome", source, fetch_status: "success", parse_status: "empty",
+        parsed_count: 0, harvested_count: 0, fetch_duration_ms: 1, parse_duration_ms: 1,
+        rejection_reason: "FEED_EMPTY", diagnostics: null,
+      },
+    };
+    const migratedFeed = readFeedIngestEvent(historicalFeed);
+    expect(migratedFeed.payload).toMatchObject({ history: null });
+    expect(migratedFeed.version).toBe(record.version);
   });
 
   test("exports the actual runtime input JSON schemas, including nested strict objects", () => {

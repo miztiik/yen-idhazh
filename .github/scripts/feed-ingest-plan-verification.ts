@@ -8,6 +8,7 @@ import {
   CandidateRejectionContract, CONTRACT_VERSION, DateStampSchema,
   FeedIngestDispatchSchema, LedgerCompletionEvidenceSchema,
   PositiveCountSchema, Sha256Schema, deriveCandidateId, deriveUrlKey,
+  FeedHealthContract, FeedRetirementContract,
 } from "../../packages/common-contracts/src/index";
 import { createFileId, createUnitId, digestRows, persistLedger } from "../../packages/ledger-file-writer/src/index";
 import type { LedgerRegistration, LogicalField, PersistLedgerResult } from "../../packages/ledger-file-writer/src/index";
@@ -34,7 +35,7 @@ export function validateLedgerFilePath(
 }
 
 export async function verifyParquetFiles(
-  root: string, ledger: "dispatches" | "rejections" | "article-assessments" | "diversity" | "source-runs", written: PersistLedgerResult,
+  root: string, ledger: "dispatches" | "rejections" | "article-assessments" | "diversity" | "source-runs" | "feed-health" | "feed-retirements", written: PersistLedgerResult,
   registration: LedgerRegistration, expectedRows?: readonly object[],
 ) {
   if (registration.name !== ledger) throw new Error("registration.name differs from the requested ledger");
@@ -73,7 +74,11 @@ export async function verifyParquetFiles(
           ? await readLedgerParquet(actualPath, ledger, ArticleAssessmentContract)
           : ledger === "diversity"
             ? await readLedgerParquet(actualPath, ledger, DiversityMetricContract)
-            : await readLedgerParquet(actualPath, ledger, SourceRunContract);
+            : ledger === "feed-health"
+              ? await readLedgerParquet(actualPath, ledger, FeedHealthContract)
+              : ledger === "feed-retirements"
+                ? await readLedgerParquet(actualPath, ledger, FeedRetirementContract)
+                : await readLedgerParquet(actualPath, ledger, SourceRunContract);
     if (actual.envelope.tier !== "raw" || actual.envelope.file_id !== file.file_id
       || actual.envelope.unit_id !== file.unit_id || actual.envelope.covers !== file.covers
       || actual.envelope.content_sha256 !== file.content_sha256 || actual.rows.length !== file.row_count) {
