@@ -126,7 +126,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'build-canary.mjs', 'build-frame-css.mjs', 'build-icons.mjs', 'build-state.ts',
 		'build-worker-switch.mjs', 'bundle-gate.mjs', 'canary-inventory.mjs', 'stage-publication.mjs',
 		'doc-test-inputs.ts', 'duckdb-addon.ts', 'payload-ceilings.mjs', 'published-ledgers.mjs',
-		'query-engine-assets.ts', 'raw-listed-through.mjs', 'run-checks.ts', 'setup-duckdb.ts',
+		'query-engine-assets.ts', 'run-checks.ts', 'setup-duckdb.ts',
 		'staged-publication.mjs', 'test-groups.ts', 'test-results.ts', 'test-scope.ts', 'verified-preview.ts'
 	],
 	'scripts/tests': [

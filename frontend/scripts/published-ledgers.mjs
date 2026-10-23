@@ -7,18 +7,14 @@
  * under `state/`, so the address a browser asks for and the committed path are
  * one string. `stage-publication.mjs` stages what this returns; nothing here writes.
  *
- * **The indexes are the compact list, and raw days have one bounded exception.** A reader asks only
- * for compact files an index names, so a compact file no index names is bytes nobody fetches.
+ * **The indexes are the compact list.** A reader asks only for compact files an
+ * index names, so a compact file no index names is bytes nobody fetches.
  * An entry `empty` or `lost` stays in its index and names no file, so it is never copied or
  * reported missing.
  * The copy is capped from each ledger's newest packed period rather than the
  * build clock, so a canary build keeps publishing the same fixture files next month.
- * That window is `src/lib/data/site-window.ts`, which the Data explorer reads too, so
- * it asks the archive only for days this copy may have dropped.
- * Reading the list rather than the tree also keeps any stray file off the site
- * with no list of things to leave out. The raw-day walk checks at most the
- * widest console preset of day directories after the newest packed day, so the
- * door can read files a writer produced before compaction takes them.
+ * That window is `src/lib/data/site-window.ts`. Reading the list rather than
+ * the tree also keeps any stray file off the site.
  *
  * **A ledger not packed yet is left out; a missing index stops the build; a
  * missing data file does not.** A published ledger with no compact folder has not
@@ -37,26 +33,13 @@
  * lands.
  */
 
-import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { existsSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 import { siteKeepsFrom } from '../src/lib/data/site-window.ts';
-import { daysBetween, namesFile, newestNamed } from '../src/lib/data/slice.ts';
-import { ledgerCatalog, ledgerFolders, REGISTRY } from './ledger-prefixes.mjs';
+import { namesFile, newestNamed } from '../src/lib/data/slice.ts';
+import { CONFIG_ROOT, ledgerCatalog, ledgerFolders, REGISTRY } from './ledger-prefixes.mjs';
 
-/** The tunable knobs, the same file `backend/idhazh/contracts/app_config.py` validates. */
-const CONFIG_FILE = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'config', 'idhazh.json');
-const APPEARANCE_FILE = join(
-	dirname(fileURLToPath(import.meta.url)),
-	'..',
-	'..',
-	'config',
-	'appearance.json'
-);
-
-/** A ledger name as `LedgerName` spells one: lower-case words joined by hyphens. */
-const LEDGER_NAME = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+const APPEARANCE_FILE = join(CONFIG_ROOT, 'appearance.json');
 
 /** The compact periods, each with one index. A format literal of the ledger layout. */
 const PERIODS = /** @type {const} */ (['daily', 'monthly', 'yearly']);
@@ -69,39 +52,22 @@ const PERIODS = /** @type {const} */ (['daily', 'monthly', 'yearly']);
  * @property {Record<string, string>} indexes Trimmed index payloads, keyed by the same path in `files`.
  * @property {string[]} refused One line a fault that stops the build; empty when it may go on.
  * @property {string[]} missing Every data file an index names and the tree lacks, under the state root.
- * @property {string[]} logs Lines for the build log: a ledger not packed yet, and raw-day listing decisions.
+ * @property {string[]} logs Lines for the build log: a ledger not packed yet.
  */
 
 /**
- * The ledgers the committed config publishes.
+ * The ledgers whose validated registry entries consent to explorer publication.
  *
- * A config that cannot be read, or a name that is not a ledger name, throws: the
- * build cannot know what to publish, and a guess is a site that says less than
- * the committed tree.
+ * An unreadable or invalid registry throws: the build cannot know what to
+ * publish, and a guess is a site that says less than the committed tree.
  *
- * @param {string} [file]
  * @param {string} [registryFile]
  * @returns {string[]}
  */
-export function publishedLedgers(file = CONFIG_FILE, registryFile = REGISTRY) {
-	const named = JSON.parse(readFileSync(file, 'utf8'))?.ledger?.published;
-	if (!Array.isArray(named)) throw new Error('ledger.published in config/idhazh.json is not a list');
-	for (const name of named) {
-		if (typeof name !== 'string' || !LEDGER_NAME.test(name)) {
-			throw new Error(
-				`ledger.published in config/idhazh.json names ${JSON.stringify(name)}, which is not a ledger name`
-			);
-		}
-	}
-	const consented = ledgerCatalog(registryFile).entries
+export function publishedLedgers(registryFile = REGISTRY) {
+	return ledgerCatalog(registryFile).entries
 		.filter((entry) => entry.publish_to_data_explorer)
 		.map((entry) => entry.name);
-	// Remove the bridge when the last ledger.published consumer reads registry consent.
-	if (new Set(named).size !== named.length || named.length !== consented.length ||
-		named.some((name) => !consented.includes(name))) {
-		throw new Error('ledger.published disagrees with publish_to_data_explorer in config/ledgers.json');
-	}
-	return consented;
 }
 
 export function publishedWindowDays(file = APPEARANCE_FILE) {
@@ -302,111 +268,6 @@ export function newestPackedDay(stateRoot, ledger, rootName = 'state') {
 	return read.newest;
 }
 
-/** @param {string} day */
-function dayParts(day) {
-	return day.split('-');
-}
-
-/** @param {number} day */
-function dayString(day) {
-	return new Date(day * 86_400_000).toISOString().slice(0, 10);
-}
-
-/** @param {string[]} names */
-function rawDigest(names) {
-	return createHash('sha256').update(names.join('\n'), 'utf8').digest('hex');
-}
-
-/**
- * @param {string} ledger
- * @param {string} day
- * @param {string[]} names
- * @param {number[]} sizes
- * @param {string} listedAt
- */
-function listingText(ledger, day, names, sizes, listedAt) {
-	return `${JSON.stringify(
-		{
-			ledger,
-			date: day,
-			files: names,
-			content_sha256: rawDigest(names),
-			bytes: sizes,
-			listed_at: listedAt
-		},
-		null,
-		2
-	)}\n`;
-}
-
-/**
- * Stage raw days not packed yet. The bound is one directory check per day, for at most
- * the widest console preset per published ledger; publishing more history cannot widen it.
- *
- * @param {string} stateRoot
- * @param {string} ledger
- * @param {string} folder
- * @param {number | null} newestPacked
- * @param {number} spanDays
- * @param {string} listedAt
- * @param {string} rootName
- * @returns {{files: string[], listings: Record<string, string>, logs: string[]}}
- */
-function rawDaysNotPackedYet(stateRoot, ledger, folder, newestPacked, spanDays, listedAt, rootName) {
-	if (newestPacked === null) {
-		return { files: [], listings: {}, logs: [`published ledgers: ${ledger} has no packed day; raw-day walk skipped.`] };
-	}
-	const start = newestPacked + 1;
-	const end = start + spanDays - 1;
-	if (start > end) return { files: [], listings: {}, logs: [] };
-	/** @type {{day: string, directory: string, exists: boolean}[]} */
-	const checked = [];
-	let newestRaw = null;
-	for (const day of daysBetween(dayString(start), dayString(end))) {
-		const [year, month, date] = dayParts(day);
-		const directory = join(stateRoot, 'raw', ...folder.split('/'), year, month, date);
-		const exists = existsSync(directory) && statSync(directory).isDirectory();
-		checked.push({ day, directory, exists });
-		if (exists) newestRaw = day;
-	}
-	if (newestRaw === null) return { files: [], listings: {}, logs: [] };
-	/** @type {string[]} */
-	const files = [];
-	/** @type {Record<string, string>} */
-	const listings = {};
-	/** @type {string[]} */
-	const logs = [];
-	for (const dayInfo of checked) {
-		if (dayInfo.day > newestRaw) break;
-		const listing = `raw/${folder}/index/${dayInfo.day}.json`;
-		if (!dayInfo.exists) {
-			listings[listing] = listingText(ledger, dayInfo.day, [], [], listedAt);
-			files.push(listing);
-			continue;
-		}
-		const names = readdirSync(dayInfo.directory)
-			.filter((name) => statSync(join(dayInfo.directory, name)).isFile())
-			.sort();
-		const refused = names.filter((name) => !name.endsWith('.parquet'));
-		if (refused.length > 0) {
-			for (const name of refused) {
-				logs.push(
-					`published ledgers: ${rootName}/raw/${folder}/${dayInfo.day.replaceAll('-', '/')}/${name} is not parquet; ${dayInfo.day} is left unlisted.`
-				);
-			}
-			continue;
-		}
-		const sizes = names.map((name) => statSync(join(dayInfo.directory, name)).size);
-		listings[listing] = listingText(ledger, dayInfo.day, names, sizes, listedAt);
-		files.push(listing);
-		for (const name of names) {
-			const [year, month, date] = dayParts(dayInfo.day);
-			files.push(`raw/${folder}/${year}/${month}/${date}/${name}`);
-		}
-	}
-	return { files, listings, logs };
-}
-
 /**
  * What the site publishes out of one state root for these ledgers.
  *
@@ -419,17 +280,24 @@ function rawDaysNotPackedYet(stateRoot, ledger, folder, newestPacked, spanDays, 
  * @param {string} stateRoot
  * @param {readonly string[]} ledgers
  * @param {string} [rootName] How a refusal or a log line names `stateRoot`: a repository path, never an absolute one.
- * @param {number} [spanDays] How many UTC days the copy keeps: the widest console preset, unless a test names its own.
+ * @param {number} [spanDays] How many UTC days the compact copy keeps: the widest console preset, unless a test names its own.
+ * @param {string} [registryFile] The validated registry used to resolve the supplied ledger names.
  * @returns {LedgerCopy}
  */
-export function ledgerCopy(stateRoot, ledgers, rootName = 'state', spanDays = publishedWindowDays()) {
+export function ledgerCopy(
+	stateRoot,
+	ledgers,
+	rootName = 'state',
+	spanDays = publishedWindowDays(),
+	registryFile = REGISTRY
+) {
 	/** @type {LedgerCopy} */
 	const copy = { files: [], indexes: {}, refused: [], missing: [], logs: [] };
 	if (ledgers.length === 0) return copy;
-	const folders = ledgerFolders(ledgers);
+	const folders = ledgerFolders(ledgers, registryFile);
 	if (!existsSync(stateRoot) || !statSync(stateRoot).isDirectory()) {
 		copy.refused.push(
-			`the state root ${rootName}/ is not there, and ledger.published names ${ledgers.join(', ')}`
+			`the state root ${rootName}/ is not there, and explorer consent names ${ledgers.join(', ')}`
 		);
 		return copy;
 	}
@@ -437,7 +305,6 @@ export function ledgerCopy(stateRoot, ledgers, rootName = 'state', spanDays = pu
 	const files = new Set();
 	/** @type {Set<string>} */
 	const missing = new Set();
-	const listedAt = new Date(Date.now()).toISOString().replace(/\.\d{3}Z$/, 'Z');
 	for (const ledger of ledgers) {
 		const folder = folders[ledger];
 		if (!existsSync(join(stateRoot, 'compact', ...folder.split('/')))) {
@@ -468,10 +335,11 @@ export function ledgerCopy(stateRoot, ledgers, rootName = 'state', spanDays = pu
 				copy.indexes[index] = readFileSync(join(stateRoot, ...index.split('/')), 'utf8');
 				files.add(index);
 			}
-			copy.logs.push(`published ledgers: ${ledger} has no packed day; raw-day walk skipped.`);
+			copy.logs.push(`published ledgers: ${ledger} has no packed day.`);
 			continue;
 		}
-		const firstDay = /** @type {number} */ (dayNumber(siteKeepsFrom(dayString(newest), spanDays)));
+		const newestDay = new Date(newest * 86_400_000).toISOString().slice(0, 10);
+		const firstDay = /** @type {number} */ (dayNumber(siteKeepsFrom(newestDay, spanDays)));
 		for (const period of PERIODS) {
 			const index = `compact/${folder}/index/${period}.json`;
 			const at = join(stateRoot, ...index.split('/'));
@@ -491,10 +359,6 @@ export function ledgerCopy(stateRoot, ledgers, rootName = 'state', spanDays = pu
 				else missing.add(file);
 			}
 		}
-		const raw = rawDaysNotPackedYet(stateRoot, ledger, folder, newest, spanDays, listedAt, rootName);
-		copy.logs.push(...raw.logs);
-		for (const file of raw.files) files.add(file);
-		Object.assign(copy.indexes, raw.listings);
 	}
 	copy.files = [...files].sort();
 	copy.missing = [...missing].sort();

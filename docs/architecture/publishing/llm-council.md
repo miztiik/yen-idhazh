@@ -1,6 +1,6 @@
 # The LLM-COUNCIL, and why judging has its own clock
 
-**Last Updated**: 2026-10-12
+**Last Updated**: 2026-10-23
 
 The room a model verdict is taken in. `LLM-COUNCIL` is a workflow of its own -
 [../../../.github/workflows/llm-council.yml](../../../.github/workflows/llm-council.yml) -
@@ -59,10 +59,9 @@ memory and now pulls two, and both of those arrive through the digest
 pipeline's own use of the applied merge line rather than through anything the
 council runs.
 
-The console's Data explorer also lists `council-run-records` as published,
-through `ledger.published` in `config/idhazh.json`. The site build copies its
-three compact indexes and the files those indexes name inside the shared
-console window.
+The validated `council-run-records` entry in `config/ledgers.json` consents to
+the Data explorer. The site build copies its three compact indexes and the
+files those indexes name inside the shared console window.
 `page_weight.payload_ceilings_bytes` bounds each council index at 2,088
 compressed bytes, twice the heavier generated index at the declared retention
 limit: 76 daily entries weigh 1,044 bytes at Node gzip level 5, while 17 monthly

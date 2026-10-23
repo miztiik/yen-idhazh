@@ -291,82 +291,63 @@ handed to `sliceFromDisk()`.
 
 ## What the site holds for the door
 
-The site holds the ledgers `ledger.published` in `config/idhazh.json` names:
-`candidate-models`, `counterfactual-scores`, `gardener`, `host-fingerprint`,
-`item-health`, `published`, `seen` and `summary-quality-evals`. It holds nothing
-else of `state/`. The build copies each ledger's three indexes, trimmed to the widest
-console span, and every compact file those trimmed indexes name, to the path each
-has under `state/`: `frontend/scripts/stage-publication.mjs` stages them into
-`frontend/static/state/`, which git ignores, and the bundler carries them into
-the site. A published data file is byte for byte the ledger itself, so it cannot
-say anything `state/` does not. The trimmed indexes are new files for the staged
-site only, and they keep the same `CompactIndex` shape. The committed registry
-`config/ledgers.json` is copied verbatim to the site at `config/ledgers.json`.
-`frontend/scripts/published-ledgers.mjs` decides which ledger files are in that
-staged tree.
+The site holds compact files only for ledgers whose validated entries in
+`config/ledgers.json` set `publish_to_data_explorer` to true. The build copies
+their three indexes, trimmed to the widest console span, and every compact file
+those indexes name, to the same path under `state/`. The staging script writes
+these files into the git-ignored `frontend/static/state/`; the bundler carries
+them into the site. A copied data file is byte for byte the compact ledger.
+Trimmed indexes are build outputs with the existing `CompactIndex` shape. The
+registry is copied verbatim to `config/ledgers.json`. The build derives its
+eligible names from registry consent; there is no second publication list.
 
-- **The trimmed indexes are the list.** No directory is walked, so a raw day and
-  any file no trimmed index names stay off the site with
-  no list of things to leave out. A file whose entry has `rows: 0` is copied too,
+- **The trimmed indexes are the list.** The build reads the named indexes and
+  files only; it does not walk raw or compact directories. A file whose entry
+  has `rows: 0` is copied too,
   so every entry resolves, although the door never asks for one. An entry
   `empty` or `lost` names no file, so nothing is copied for it and nothing is
   reported missing; it stays in its trimmed index.
-- **A published ledger with no compact folder is not packed yet, and the build
-  goes on.** Every ledger starts that way. The copy checks one named path,
-  `state/compact/<ledger>/`, stages nothing for that ledger and prints one line
-  in the build log that names it. The door then finds no `daily.json` and
-  answers `missing`: the route's note says the record is not packed yet, and
-  the Data explorer's status, answer and chart say the ledger is not packed
-  yet through `explorerMissingSentence`. Its publication membership comes
-  from `ledger.published`; a ledger outside that list still says it is not
-  on this site. The browser-console fault says "This record is not packed
-  yet.", without a publication remedy or a promise about the next upkeep.
-  A compact folder deleted by accident reads the same way, and that log line and the
-  bundle gate's report, which names the ledger, are the only signs of it.
-- **A published ledger with some of its indexes but not all three stops the
-  build**, which names the ledger and each missing index. A browser asks for a
+- **A consented ledger with no compact folder is not packed yet, and the build
+  goes on.** Every ledger starts that way. The copy checks
+  `state/compact/<prefix>/`, stages nothing for that ledger and prints one line
+  in the build log. The door then finds no `daily.json` and answers `missing`.
+  A compact folder deleted by accident reads the same way; the log and bundle
+  gate report name the ledger.
+- **A consented ledger missing any of its three indexes stops the build**, which
+  names the ledger and each missing index. A browser asks for a
   ledger's indexes before anything else, so a 404 there would be the only sign
-  that the ledger was published wrongly. The whole site waits, reading pages
-  included, until the ledger is whole again or leaves `ledger.published`.
+  that the site copy is incomplete.
 - **The cap is the widest console span, anchored on the ledger's data.** On
   2026-10-03 that span is 90 UTC days. It is counted back from the newest day
   any of the three packed indexes names: a day as itself, a month through its
   last UTC day and a year through 31 December. A period is copied whole when it
   overlaps that span, so a month or year can make the oldest reachable day older
   than 90 days, and nothing older than that overlapping period is named. The
-  rule is one function, `frontend/src/lib/data/site-window.ts`, and the Data
-  explorer reads it too, so it asks the archive only for days the copy may have
-  dropped ([the archive tier](how-the-query-door-answers-a-written-question.md#archive-tier)).
-- **Raw days after the newest packed day are listed for the site only.** The
-   build checks at most the same 90 UTC days after each ledger's newest packed
-   day, writes one `RawDayIndex` under `state/raw/<ledger>/index/<day>.json` for
-   each listed day, and copies the parquet writer files the listing names. A day
-   whose raw directory also holds a non-parquet writer file is left unlisted, and
-   the build log names that file.
+  rule is one function, `frontend/src/lib/data/site-window.ts`. The explorer
+  uses its configured reach for direct compact reads.
+- **Raw files are never staged for the site.** A writer's new raw data waits
+  until compaction creates indexed compact files. Historical raw storage and
+  packing are unchanged.
 - **A data file an index names and the tree lacks does not stop it.** The build
   copies the rest and puts a `file-missing` warning, naming the file, on the run's
   page; the door answers `unreachable` for a span that reaches that day.
-- **The canary build publishes the fixture's ledgers**, because the copy reads the
-  same `STATE_ROOT` the build-time readers do, and a root that is not there stops
-  the build rather than publishing nothing.
+- **The canary build uses its own `STATE_ROOT`**, and a missing root stops the
+  build rather than publishing nothing.
 - **With `visuals.asset_base_url` set, no ledger file is copied**, because the
   door asks that host. Whoever sets it puts each `state/compact/<ledger>/` tree
   there, and the bundle gate skips the ledgers' keys. The registry still ships
   from this site, because the page reads it as the site's declaration of what it
   can show.
-- **Every ledger a panel names in a `slice()` or `ledgerReach()` call must be
-  in `ledger.published`, and no test checks it.** The test that checked it
-  scanned the frontend source tree, a read that grows with the repository, so it
-  was deleted (Guardrail #12), and the door's ledger type, `LedgerName` in
-  `frontend/src/lib/data/slice-shapes.ts`, admits every declared ledger.
-  `feed-health` is one the site does not hold: a build-time reader asks it
-  through `sliceFromDisk`, and no browser panel asks it.
+- **Panel coverage is checked against consent.** The named backend panel-query
+  test verifies that every browser panel ledger is enabled in the registry and
+  has the required row columns. `feed-health` is not enabled for the explorer;
+  a build-time reader uses it through `sliceFromDisk`.
 
 **What it weighs, and what bounds it.** Day and month indexes are bounded by each
 ledger's declaration: `daily_keep_days` plus 31 day entries and the months its
 window keeps, or the months awaiting yearly packing. A ledger that keeps rows
 forever packs years, so the yearly index grows by one entry a year rather than by
-one month forever. Each published ledger's index directory has a
+one month forever. Each explorer-enabled ledger's index directory has a
 `page_weight.payload_ceilings_bytes` key at least twice its longest bounded day
 or month index. Most keys hold 2,200 gzipped bytes. The `gardener` key holds
 2,064, exactly twice its longest index: a day index of at most 76 entries, 45
@@ -381,16 +362,16 @@ also fails when a day or month keep window grows past its bound. A ledger not
 packed yet has no file in the build, so the bundle gate reports its key as not
 weighed and names the ledger. That key fails nothing, so CI and the publish
 after a push to `main` go on while the ledger waits for its first packing. The
-gate looks for the ledger's files in the two folders the site copy stages for
-it, `state/compact/<ledger>/` and `state/raw/<ledger>/`, so a published ledger
-with some of its files in the build and no index still fails the gate
+gate looks only for compact files under `state/compact/<prefix>/`, so a
+consented ledger with compact data in the build and no index still fails the gate
 (`frontend/scripts/payload-ceilings.mjs`). Size a key from
 the runner's reading, because zlib-ng, which some local Python builds use, reads
 the same index about 4 percent smaller. **The data files carry no ceiling, and no
 gate yet weighs what one span reads.**
 
-Measured 2026-10-03 on this shared Windows machine from a real build of the
-committed `state/`, after raw-day listings were staged, the whole built site
+Historical measurement from 2026-10-03 on this shared Windows machine, from a
+real build of the committed `state/` after raw-day listings were staged; it is
+not the current compact-only output. The whole built site
 weighed 160,958,761 bytes, or 153.5 MB, beside the 1,073,741,824-byte Pages cap.
 That leaves 870.5 MB before GitHub Pages refuses the deploy. The compact ledger
 files under `build/state/compact/` weighed 15,809,007 bytes, or 15.1 MB, in all:

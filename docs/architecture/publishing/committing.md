@@ -9,6 +9,22 @@ It builds a private candidate on fetched `main`, not a commit or rebase in the
 caller's checkout. HEAD, the caller's index and sparse patterns do not move.
 The workflows are described in [GitHub Actions](../../reference/github-actions.md).
 
+## When a data commit publishes the site
+
+After successful CI on a push, `publish_decision.py` checks the commits in that
+push. Changes confined to `state/raw/` and `state/compact/` do not trigger a
+site build, including when they land with paths the decision already ignores,
+such as documentation. Changes to published digest files, site code or other
+existing build inputs still trigger publication. Manual publication remains
+available from the default branch, and an unreadable Git range still publishes
+so the site does not stay stale. The rule stays in this decision program; the
+workflow adds no path filter or second event mechanism.
+
+This avoids rebuilding the site only to refresh ledger copies: the Data
+explorer reads consented compact data from the configured repository, while
+existing panels retain their build-time compact copies. New raw rows still wait
+for compaction before the explorer can read them.
+
 ## Evidence is not permission
 
 An internal `PublicationRequest` carries the existing `WriterIdentity`, the

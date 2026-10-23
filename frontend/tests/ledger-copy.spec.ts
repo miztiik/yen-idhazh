@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { cpSync, copyFileSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,7 +17,7 @@ import { projectDay } from '../src/lib/payload/project';
 /**
  * Which files of `state/` the build copies for a published ledger, and when it stops.
  *
- * `scripts/published-ledgers.mjs` reads each published ledger's three indexes and
+ * `scripts/published-ledgers.mjs` reads each consented ledger's three indexes and
  * lists what they name; `stage-publication.mjs` stages that list. Each case below
  * writes a small state tree holding one fault, or one stage of a ledger's life,
  * and reads the answer, so none of them needs a site build.
@@ -106,16 +106,9 @@ test('Row16 ORACLE: nested Python-contract Parquet is staged whole and flat host
 	expect(paths).toEqual([...expected.keys()].sort());
 	for (const [file, bytes] of expected) {
 		const actual = readFileSync(join(staticRoot, file));
-		if (/^state\/raw\/.+\/index\/\d{4}-\d{2}-\d{2}\.json$/.test(file)) {
-			const { listed_at: actualInstant, ...actualListing } = JSON.parse(actual.toString());
-			const { listed_at: expectedInstant, ...expectedListing } = JSON.parse(bytes.toString());
-			expect(actualInstant).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
-			expect(expectedInstant).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
-			expect(actualListing).toEqual(expectedListing);
-		} else {
-			expect(actual, file).toEqual(bytes);
-		}
+		expect(actual, file).toEqual(bytes);
 	}
+	expect(paths.filter((file) => file.startsWith('state/raw/'))).toEqual([]);
 });
 
 test('all six feed ledgers are explicitly published at the browser registry prefixes', () => {
@@ -166,12 +159,11 @@ test('registry prefixes reject unsafe segments, unknown names and ambiguous mapp
 	expect(() => ledgerFolders(['feed-ingest-plan-dispatches'], file)).toThrow(/does not register/);
 });
 
-test('nested daily, monthly, yearly, index and raw paths retain the requested copy window', () => {
+test('nested compact paths retain the requested copy window', () => {
 	const folder = 'feed-ingest-plan/dispatches';
 	const tree = Object.fromEntries(Object.entries(aWholeLedger('dispatches')).map(
 		([name, text]) => [name.replace('compact/dispatches/', `compact/${folder}/`), text]
 	));
-	tree[`raw/${folder}/2026/09/04/writer.parquet`] = 'PAR1';
 	const copy = ledgerCopy(aStateTree(tree), ['dispatches'], 'state', 365);
 	expect(copy.files).toEqual([
 		`compact/${folder}/daily/2026/09/01.parquet`,
@@ -180,12 +172,8 @@ test('nested daily, monthly, yearly, index and raw paths retain the requested co
 		`compact/${folder}/index/monthly.json`,
 		`compact/${folder}/index/yearly.json`,
 		`compact/${folder}/monthly/2026/08.parquet`,
-		`compact/${folder}/yearly/2025/2025.parquet`,
-		`raw/${folder}/2026/09/04/writer.parquet`,
-		`raw/${folder}/index/2026-09-03.json`,
-		`raw/${folder}/index/2026-09-04.json`
+		`compact/${folder}/yearly/2025/2025.parquet`
 	]);
-	expect(JSON.parse(copy.indexes[`raw/${folder}/index/2026-09-03.json`])).toMatchObject({ ledger: 'dispatches', files: [] });
 	expect(copy.refused).toEqual([]);
 	expect(copy.missing).toEqual([]);
 });
@@ -406,7 +394,6 @@ function aLedgerHolding(ledger: string, indexes: Record<Period, Entry[]>): Recor
 	return tree;
 }
 
-const RAW_FILE = '01a0fbc4-1707-8428-b765-119571d6249f.parquet';
 const INDEXES = [
 	'compact/item-health/index/daily.json',
 	'compact/item-health/index/monthly.json',
@@ -423,11 +410,8 @@ const INDEXES = [
 interface Stage {
 	stage: string;
 	indexes: Record<Period, Entry[]>;
-	/** Raw day folders, `YYYY/MM/DD`, each holding one writer file. */
-	raw: string[];
-	newest: string;
 	kept: Record<Period, Entry[]>;
-	/** Every data file and raw listing staged; the three indexes always are. */
+	/** Every compact data file staged; the three indexes always are. */
 	staged: string[];
 }
 
@@ -437,8 +421,6 @@ const STAGES: Stage[] = [
 		// is copied, so every entry the site's index names resolves.
 		stage: 'a ledger that has never held a row',
 		indexes: { daily: quiet('2026-10-01', '2026-10-15'), monthly: [packed('2026-09', 0)], yearly: [] },
-		raw: [],
-		newest: '2026-10-15',
 		kept: { daily: quiet('2026-10-01', '2026-10-15'), monthly: [packed('2026-09', 0)], yearly: [] },
 		staged: ['compact/item-health/monthly/2026/09.parquet'],
 
@@ -447,8 +429,6 @@ const STAGES: Stage[] = [
 		// It began on 12 Aug 2026. Its month entry covers August from the 1st.
 		stage: 'a ledger that began mid-month, once that month closed',
 		indexes: { daily: quiet('2026-09-01', '2026-10-01'), monthly: [packed('2026-08', 3)], yearly: [] },
-		raw: [],
-		newest: '2026-10-01',
 		kept: { daily: quiet('2026-09-01', '2026-10-01'), monthly: [packed('2026-08', 3)], yearly: [] },
 		staged: ['compact/item-health/monthly/2026/08.parquet'],
 
@@ -459,8 +439,6 @@ const STAGES: Stage[] = [
 		// yes: one archive read that finds nothing.
 		stage: 'a ledger whose first year packed, though it began in August',
 		indexes: { daily: quiet('2027-02-01', '2027-03-05'), monthly: [empty('2027-01')], yearly: [packed('2026', 4)] },
-		raw: [],
-		newest: '2027-03-05',
 		kept: { daily: quiet('2027-02-01', '2027-03-05'), monthly: [empty('2027-01')], yearly: [packed('2026', 4)] },
 		staged: ['compact/item-health/yearly/2026/2026.parquet'],
 
@@ -472,8 +450,6 @@ const STAGES: Stage[] = [
 			monthly: [],
 			yearly: []
 		},
-		raw: [],
-		newest: '2026-09-10',
 		kept: {
 			daily: [packed('2026-09-01', 1), packed('2026-09-02', 1), packed('2026-09-03', 1), ...quiet('2026-09-04', '2026-09-08'), packed('2026-09-09', 1), packed('2026-09-10', 1)],
 			monthly: [],
@@ -499,29 +475,19 @@ const STAGES: Stage[] = [
 			monthly: [packed('2026-08', 4), empty('2026-09'), empty('2026-10'), empty('2026-11')],
 			yearly: []
 		},
-		raw: [],
-		newest: '2027-01-10',
 		kept: { daily: quiet('2026-12-01', '2027-01-10'), monthly: [empty('2026-10'), empty('2026-11')], yearly: [] },
 		staged: [],
 
 	},
 	{
-		// Packing stopped after 2 Sep 2026 while the writer went on. The copy counts back from
-		// the newest packed day, never from a raw day, and lists the raw days after it.
+		// Packing stopped after 2 Sep 2026 while the writer went on. The copy keeps
+		// only the compact files the indexes name.
 		stage: 'a ledger whose packing paused while its writer went on',
 		indexes: { daily: [packed('2026-09-01', 1), packed('2026-09-02', 1)], monthly: [], yearly: [] },
-		raw: ['2026/09/03', '2026/09/04', '2026/09/05'],
-		newest: '2026-09-02',
 		kept: { daily: [packed('2026-09-01', 1), packed('2026-09-02', 1)], monthly: [], yearly: [] },
 		staged: [
 			'compact/item-health/daily/2026/09/01.parquet',
-			'compact/item-health/daily/2026/09/02.parquet',
-			`raw/item-health/2026/09/03/${RAW_FILE}`,
-			`raw/item-health/2026/09/04/${RAW_FILE}`,
-			`raw/item-health/2026/09/05/${RAW_FILE}`,
-			'raw/item-health/index/2026-09-03.json',
-			'raw/item-health/index/2026-09-04.json',
-			'raw/item-health/index/2026-09-05.json'
+			'compact/item-health/daily/2026/09/02.parquet'
 		],
 
 	},
@@ -534,8 +500,6 @@ const STAGES: Stage[] = [
 			monthly: [packed('2026-09', 5, { lost_days: ['2026-09-07'], set_aside: 2 })],
 			yearly: []
 		},
-		raw: [],
-		newest: '2026-10-03',
 		kept: {
 			daily: [packed('2026-10-01', 1), lost('2026-10-02'), packed('2026-10-03', 1)],
 			monthly: [packed('2026-09', 5, { lost_days: ['2026-09-07'], set_aside: 2 })],
@@ -553,12 +517,12 @@ const STAGES: Stage[] = [
 for (const each of STAGES) {
 	test(`${each.stage}: the copy keeps what its indexes record`, () => {
 		const tree = aLedgerHolding('item-health', each.indexes);
-		for (const day of each.raw) tree[`raw/item-health/${day}/${RAW_FILE}`] = 'PAR1';
 		const copy = ledgerCopy(aStateTree(tree), ['item-health'], 'state', 90);
 		expect(copy.refused).toEqual([]);
 		expect(copy.missing).toEqual([]);
 		expect(copy.logs).toEqual([]);
 		expect(copy.files).toEqual([...INDEXES, ...each.staged].sort());
+		expect(copy.files.some((file) => file.startsWith('raw/'))).toBe(false);
 		for (const period of ['daily', 'monthly', 'yearly'] as const) {
 			const index = JSON.parse(copy.indexes[`compact/item-health/index/${period}.json`]);
 			expect(index.entries, period).toEqual(each.kept[period]);
@@ -615,8 +579,8 @@ for (const period of ['daily', 'monthly', 'yearly']) {
 	});
 }
 
-test('a published ledger with no compact folder stages nothing, stops nothing, and the build log names it once', () => {
-	// item-health has written a raw day and has never been packed: the state every ledger starts in.
+test('a consented ledger with no compact folder stages nothing and names the unavailable ledger', () => {
+	// item-health has raw records but has not been packed yet.
 	const tree = aWholeLedger('summary-quality-evals');
 	tree['raw/item-health/2026/09/02/01a0fbc4-1707-8428-b765-119571d6249f.parquet'] = 'PAR1';
 	const copy = ledgerCopy(aStateTree(tree), ['item-health', 'summary-quality-evals']);
@@ -711,7 +675,7 @@ test('an index that is not this ledger\'s, or names a path rather than a day, st
 test('a state root that is not there stops the build when a ledger is published, and only then', () => {
 	const gone = join(test.info().outputPath('nowhere'), 'state');
 	expect(ledgerCopy(gone, ['summary-quality-evals']).refused).toEqual([
-		'the state root state/ is not there, and ledger.published names summary-quality-evals'
+	'the state root state/ is not there, and explorer consent names summary-quality-evals'
 	]);
 	expect(ledgerCopy(gone, [])).toEqual({ files: [], indexes: {}, refused: [], missing: [], logs: [] });
 });
@@ -726,157 +690,29 @@ test('a refusal names the state root the way the build was told to, never by its
 	]);
 	const gone = join(test.info().outputPath('nowhere'), 'state');
 	expect(ledgerCopy(gone, ['summary-quality-evals'], 'backend/var/canary/state').refused).toEqual([
-		'the state root backend/var/canary/state/ is not there, and ledger.published names summary-quality-evals'
+		'the state root backend/var/canary/state/ is not there, and explorer consent names summary-quality-evals'
 	]);
 });
 
-test('publication reads consent from the supplied registry and refuses migration-list disagreement', () => {
-	const config = test.info().outputPath('idhazh.json');
+test('publication reads consent only from the supplied validated registry', () => {
 	const registry = test.info().outputPath('ledgers.json');
-	mkdirSync(dirname(config), { recursive: true });
 	const payload = JSON.parse(readFileSync(new URL('../../config/ledgers.json', import.meta.url), 'utf8'));
 	for (const family of payload.families) {
 		for (const entry of family.ledgers) {
-			entry.publish_to_data_explorer = ['host-fingerprint', 'summary-quality-evals'].includes(entry.name);
+			entry.publish_to_data_explorer = entry.name === 'dispatches';
 		}
 	}
 	writeFileSync(registry, JSON.stringify(payload));
-	writeFileSync(config, JSON.stringify({ ledger: { published: ['host-fingerprint', 'summary-quality-evals'] } }));
-	expect(publishedLedgers(config, registry)).toEqual(['host-fingerprint', 'summary-quality-evals']);
-	writeFileSync(config, JSON.stringify({ ledger: { published: ['summary-quality-evals', 'host-fingerprint'] } }));
-	expect(publishedLedgers(config, registry)).toEqual(['host-fingerprint', 'summary-quality-evals']);
-	for (const published of [[], ['host-fingerprint'], ['host-fingerprint', 'summary-quality-evals', 'seen'], ['host-fingerprint', 'host-fingerprint']]) {
-		writeFileSync(config, JSON.stringify({ ledger: { published } }));
-		expect(() => publishedLedgers(config, registry)).toThrow(/disagrees/);
-	}
-	writeFileSync(config, JSON.stringify({ ledger: {} }));
-	expect(() => publishedLedgers(config, registry)).toThrow(/not a list/);
-	writeFileSync(config, JSON.stringify({ ledger: { published: ['../summary-quality-evals'] } }));
-	expect(() => publishedLedgers(config, registry)).toThrow('which is not a ledger name');
+	expect(publishedLedgers(registry)).toEqual(['dispatches']);
+	const nested = 'feed-ingest-plan/dispatches';
+	const tree = Object.fromEntries(Object.entries(aWholeLedger('dispatches')).map(
+		([name, text]) => [name.replace('compact/dispatches/', `compact/${nested}/`), text]
+	));
+	const copy = ledgerCopy(aStateTree(tree), ['dispatches'], 'state', 365, registry);
+	expect(copy.files).toContain(`compact/${nested}/daily/2026/09/01.parquet`);
 	for (const family of payload.families) {
 		for (const entry of family.ledgers) entry.publish_to_data_explorer = false;
 	}
 	writeFileSync(registry, JSON.stringify(payload));
-	writeFileSync(config, JSON.stringify({ ledger: { published: [] } }));
-	expect(publishedLedgers(config, registry)).toEqual([]);
-});
-
-test('raw days after the newest packed day are listed through the newest raw day, with sizes', () => {
-	const first = '01a0fbc4-1707-8428-b765-119571d6249f.parquet';
-	const second = '01a0fca4-b1cd-8c8b-a2ea-b2f6f3a7e52e.parquet';
-	const copy = ledgerCopy(
-		aStateTree({
-			'compact/item-health/index/daily.json': anIndex('item-health', 'daily', ['2026-09-01']),
-			'compact/item-health/index/monthly.json': anIndex('item-health', 'monthly', []),
-			'compact/item-health/index/yearly.json': anIndex('item-health', 'yearly', []),
-			'compact/item-health/daily/2026/09/01.parquet': 'PAR1',
-			[`raw/item-health/2026/09/02/${second}`]: 'PAR1',
-			[`raw/item-health/2026/09/02/${first}`]: 'PAR12345',
-			[`raw/item-health/2026/09/04/${first}`]: 'PAR12'
-		}),
-		['item-health']
-	);
-	const listed = JSON.parse(copy.indexes['raw/item-health/index/2026-09-02.json']);
-	expect(copy.refused).toEqual([]);
-	expect(copy.files).toContain(`raw/item-health/2026/09/02/${first}`);
-	expect(copy.files).toContain(`raw/item-health/2026/09/02/${second}`);
-	expect(copy.files).toContain('raw/item-health/index/2026-09-03.json');
-	expect(copy.files).toContain('raw/item-health/index/2026-09-04.json');
-	expect(listed).toMatchObject({
-		ledger: 'item-health',
-		date: '2026-09-02',
-		files: [first, second],
-		bytes: [8, 4]
-	});
-	expect(listed).not.toHaveProperty('version');
-	expect(listed.listed_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
-	expect(JSON.parse(copy.indexes['raw/item-health/index/2026-09-03.json']).files).toEqual([]);
-	expect(JSON.parse(copy.indexes['raw/item-health/index/2026-09-04.json']).bytes).toEqual([5]);
-});
-
-test('the build listing keeps the compaction listing digest and adds file sizes', () => {
-	// The fixture's two writer files are 4 and 8 bytes long. Its listing, which an older
-	// compaction wrote, carries the digest below: SHA-256 over the two names joined with one
-	// newline, which `backend/tests/contracts/test_raw_day_listing_fixture.py` checks against
-	// the Python rule.
-	const first = '01a0fbc4-1707-8428-b765-119571d6249f.parquet';
-	const second = '01a0fca4-b1cd-8c8b-a2ea-b2f6f3a7e52e.parquet';
-	const fixtureDay = join(process.cwd(), '..', 'tests', 'fixtures', 'raw-day-listing', 'state', 'raw', 'item-health', '2026', '09', '02');
-	const root = aStateTree({
-		'compact/item-health/index/daily.json': anIndex('item-health', 'daily', ['2026-09-01']),
-		'compact/item-health/index/monthly.json': anIndex('item-health', 'monthly', []),
-		'compact/item-health/index/yearly.json': anIndex('item-health', 'yearly', []),
-		'compact/item-health/daily/2026/09/01.parquet': 'PAR1'
-	});
-	const targetDay = join(root, 'raw', 'item-health', '2026', '09', '02');
-	mkdirSync(targetDay, { recursive: true });
-	for (const name of [first, second]) cpSync(join(fixtureDay, name), join(targetDay, name));
-
-	const copy = ledgerCopy(root, ['item-health']);
-	const staged = JSON.parse(copy.indexes['raw/item-health/index/2026-09-02.json']);
-	expect(staged).toMatchObject({
-		ledger: 'item-health',
-		date: '2026-09-02',
-		files: [first, second],
-		content_sha256: 'd68833c946407d8c06fe5835c706cc425a3891d3e95f410652d0f7b5a6598495',
-		bytes: [4, 8]
-	});
-	expect(staged).not.toHaveProperty('version');
-});
-
-test('a raw day holding a non-parquet writer file is left unlisted and named in the build log', () => {
-	const parquet = '01a0fbc4-1707-8428-b765-119571d6249f.parquet';
-	const json = '01a0fbc4-1707-8428-b765-119571d6249f.json';
-	const copy = ledgerCopy(
-		aStateTree({
-			'compact/seen/index/daily.json': anIndex('seen', 'daily', ['2026-09-01']),
-			'compact/seen/index/monthly.json': anIndex('seen', 'monthly', []),
-			'compact/seen/index/yearly.json': anIndex('seen', 'yearly', []),
-			'compact/seen/daily/2026/09/01.parquet': 'PAR1',
-			[`raw/seen/2026/09/02/${parquet}`]: 'PAR1',
-			[`raw/seen/2026/09/02/${json}`]: '{}\n'
-		}),
-		['seen']
-	);
-	expect(copy.files).not.toContain('raw/seen/index/2026-09-02.json');
-	expect(copy.files).not.toContain(`raw/seen/2026/09/02/${parquet}`);
-	expect(copy.logs).toEqual([
-		'published ledgers: state/raw/seen/2026/09/02/01a0fbc4-1707-8428-b765-119571d6249f.json is not parquet; 2026-09-02 is left unlisted.'
-	]);
-});
-
-test('a ledger with no packed day stages no raw listings and logs the skipped walk', () => {
-	const copy = ledgerCopy(
-		aStateTree({
-			'compact/candidate-models/index/daily.json': anIndex('candidate-models', 'daily', []),
-			'compact/candidate-models/index/monthly.json': anIndex('candidate-models', 'monthly', []),
-			'compact/candidate-models/index/yearly.json': anIndex('candidate-models', 'yearly', []),
-			'raw/candidate-models/2026/09/02/01a0fbc4-1707-8428-b765-119571d6249f.parquet': 'PAR1'
-		}),
-		['candidate-models']
-	);
-	expect(copy.files).toEqual([
-		'compact/candidate-models/index/daily.json',
-		'compact/candidate-models/index/monthly.json',
-		'compact/candidate-models/index/yearly.json'
-	]);
-	expect(copy.logs).toEqual([
-		'published ledgers: candidate-models has no packed day; raw-day walk skipped.'
-	]);
-});
-
-test('a raw directory inside the widest window is listed even when its date is after today', () => {
-	const file = '01a0fbc4-1707-8428-b765-119571d6249f.parquet';
-	const copy = ledgerCopy(
-		aStateTree({
-			'compact/item-health/index/daily.json': anIndex('item-health', 'daily', ['2099-01-01']),
-			'compact/item-health/index/monthly.json': anIndex('item-health', 'monthly', []),
-			'compact/item-health/index/yearly.json': anIndex('item-health', 'yearly', []),
-			'compact/item-health/daily/2099/01/01.parquet': 'PAR1',
-			[`raw/item-health/2099/01/02/${file}`]: 'PAR1'
-		}),
-		['item-health']
-	);
-	expect(copy.files).toContain('raw/item-health/index/2099-01-02.json');
-	expect(copy.files).toContain(`raw/item-health/2099/01/02/${file}`);
+	expect(publishedLedgers(registry)).toEqual([]);
 });

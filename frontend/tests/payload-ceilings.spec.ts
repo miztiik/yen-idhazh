@@ -95,11 +95,7 @@ test('a key that names nothing and belongs to no published ledger still fails', 
 });
 
 const filesWithNoIndex: Record<string, Record<string, string>> = {
-	'a compact data file': { 'state/compact/item-health/daily/2026/10/01.parquet': 'PAR1' },
-	'a listed raw day': {
-		'state/raw/item-health/index/2026-10-02.json': '{}',
-		'state/raw/item-health/2026/10/02/0001.parquet': 'PAR1'
-	}
+	'a compact data file': { 'state/compact/item-health/daily/2026/10/01.parquet': 'PAR1' }
 };
 
 for (const [ledger, folder] of [['item-health', 'item-health'], ['dispatches', 'feed-ingest-plan/dispatches']] as const) {
@@ -118,6 +114,24 @@ for (const [ledger, folder] of [['item-health', 'item-health'], ['dispatches', '
 		});
 	}
 }
+
+test('raw files alone do not count as compact files staged for a ledger', () => {
+	const key = 'state/compact/item-health/index/';
+	const build = aBuildTree({
+		'state/raw/item-health/2026/10/02/0001.parquet': 'PAR1'
+	});
+	expect(weighPayloads(build, { [key]: 2200 }, ['item-health'], '', onDisk)).toEqual({
+		weighed: [],
+		over: [],
+		namesNothing: [],
+		notWeighed: [{
+			key,
+			reason:
+				'item-health is not packed yet, so the build holds none of its files. ' +
+				'If it was packed before, restore state/compact/item-health/ from git history.'
+		}]
+	});
+});
 
 test('a file over its ceiling fails, a file at its ceiling does not, and a directory key bounds each file on its own', () => {
 	const build = aBuildTree({
