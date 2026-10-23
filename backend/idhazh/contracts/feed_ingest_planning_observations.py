@@ -21,7 +21,9 @@ class SalienceFeedObservation(Model):
     """Whether one configured voting feed named this existing candidate."""
 
     feed_id: Slug
-    available: bool = Field(description="Complete voting input, independent of a known positive vote.")
+    available: bool = Field(
+        description="Complete voting input, independent of a known positive vote."
+    )
     voted: bool | None
     unavailable_reason: NonEmpty | None
 
@@ -60,7 +62,9 @@ class PlanningObservations(Model):
         elif self.salience_available:
             expected = False
         if self.on_front_page is not expected:
-            raise ValueError("front-page observation must preserve positive votes and unknown absence")
+            raise ValueError(
+                "front-page observation must preserve positive votes and unknown absence"
+            )
         if len({feed.feed_id for feed in self.salience}) != len(self.salience):
             raise ValueError("salience feed ids must be distinct")
         if self.feed_headline is None and (
