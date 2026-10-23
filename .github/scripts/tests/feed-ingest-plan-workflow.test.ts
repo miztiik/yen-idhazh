@@ -55,6 +55,16 @@ async function workflow() {
 }
 
 test("offers four manual controls and commits only genuine planner and host files", async () => {
+  const ci = record(Bun.YAML.parse(await readFile(join(root, ".github", "workflows", "ci.yml"), "utf8")));
+  const gateSteps = record(record(ci.jobs).gates).steps;
+  if (!Array.isArray(gateSteps)) throw new Error("Expected CI gate steps");
+  const preflight = gateSteps.map(record).find(step => step.name === "Isolated planner workflow preflight");
+  expect(preflight?.if).toBe("needs.scope.outputs.code == 'true'");
+  expect(preflight?.["continue-on-error"]).not.toBe(true);
+  expect(preflight?.run).toContain("bun test ./.github/scripts/tests/feed-ingest-plan-report.test.ts");
+  expect(preflight?.run).toContain("./.github/scripts/tests/feed-ingest-plan-outputs.test.ts");
+  expect(preflight?.run).toContain("./.github/scripts/tests/feed-ingest-plan-workflow.test.ts --timeout 30000");
+  expect(preflight?.run).toContain("bun run .github/scripts/feed-ingest-plan-verification.ts");
   const { parsed, steps } = await workflow();
   expect(Object.keys(parsed.on)).toEqual(["workflow_dispatch"]);
   const inputs = parsed.on.workflow_dispatch.inputs;
@@ -121,6 +131,7 @@ test("offers four manual controls and commits only genuine planner and host file
   const runs = steps.flatMap(step => step.run === undefined ? [] : [step.run]).join("\n");
   expect(runs).not.toMatch(/\b(python|pip|pytest|uv)\b|git\s+(commit|push)|\beval\s*\(/i);
   const checkout = steps.find(step => step.uses?.startsWith("actions/checkout@"))!;
+  expect(checkout.with?.["sparse-checkout"]).toContain("/.github/workflows/ci.yml");
   expect(checkout.with?.["sparse-checkout-cone-mode"]).toBe(false);
   expect(checkout.with?.["persist-credentials"]).toBe(true);
   expect(checkout.with?.["sparse-checkout"]).toContain("/packages/common-contracts/");
@@ -253,6 +264,7 @@ test("runs the native compatibility verifier in a named-input copy with no backe
       "schemas/primitives", "schemas/rejection.schema", "schemas/source-run.schema",
       "schemas/source.schema", "schemas/telemetry.schema", "schemas/host-fingerprint.schema",
       "schemas/harvest-diagnostics.schema", "schemas/item-health-failure.schema",
+      "schemas/planner-operation.schema",
     ].map(name => `packages/common-contracts/src/${name}.ts`);
     const writer = [
       "atomic-file", "index", "ledger-paths", "ledger-types", "persist-compact", "persist-ledger",

@@ -32,6 +32,8 @@ CONFIG_FILES: dict[str, type[Contract]] = {
 }
 
 FIXTURE_FILES: Final = (
+    "fetched-document/refused.json",
+    "planner-operation/started.json",
     "feed-ingest-candidate/one-article.json",
     "feed-ingest-dispatch/one-article.json",
     "feed-ingest-rejection/empty-feed.json",
