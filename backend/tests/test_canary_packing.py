@@ -80,15 +80,20 @@ def test_the_canary_feed_results_reach_the_packed_days_the_voices_page_reads(
 
 def test_published_council_records_keep_completed_and_failed_steps(tmp_path: Path) -> None:
     state = tmp_path / "state"
-    filed = build_canary_day.file_published_fixture_rows(state)
-    build_canary_day.pack_fixture_ledgers(state, tmp_path)
+    build_canary_day.file_published_fixture_rows(state)
     which = LedgerName.COUNCIL_RUN_RECORDS
-    assert filed[which] == 2
-    rows = ledger.load_days(state, which, [build_canary_day.DATE], model=CouncilRunRecord)
-    assert sorted((row.outcome.value, row.fault) for row in rows) == [
-        ("completed", None), ("failed", "raised"),
+    date = build_canary_day.DATE
+    filed = ledger.load_days(state, which, [date], model=CouncilRunRecord)
+
+    build_canary_day.pack_fixture_ledgers(state, tmp_path)
+
+    packed = ledger.load_days(state, which, [date], model=CouncilRunRecord)
+    assert packed == filed
+    assert sorted((row.outcome.value, row.fault) for row in packed) == [
+        ("completed", None),
+        ("failed", "raised"),
     ]
-    assert all(row.started_at == f"{build_canary_day.DATE}T22:04:11Z" for row in rows)
+    assert all(row.started_at == f"{date}T22:04:11Z" for row in packed)
 
 
 def test_canary_packing_does_not_initialize_over_a_lost_yearly_index(tmp_path: Path) -> None:
