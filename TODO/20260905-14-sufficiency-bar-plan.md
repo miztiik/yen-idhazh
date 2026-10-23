@@ -120,7 +120,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | --- | --- | --- |
 | 1 | The largest committed day carries **621 items**. 621 entrance animations is a page that never settles | Row 32 |
 | 2 | Motion is bounded by a token, not by each component's own judgement, so the bound cannot drift per chart | Susan |
-| 3 | Plan 12 recorded the constraint while changing the renderer; this row is where it becomes a gate | Plan 12 row 6 |
+| 3 | The renderer keeps motion bounded and tied to shared tokens; this row makes the limit a gate | Plan 12's renderer scope |
 
 ### Rejected alternatives
 

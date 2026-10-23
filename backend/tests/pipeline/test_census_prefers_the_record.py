@@ -14,7 +14,7 @@ beats one that does not. The tests below take the question off the table at the
 source rather than relying on that settlement - both writers derive the row from
 the same sealed file, so they agree cell for cell and the order buys nothing.
 
-Every test is driven from the fixture plan's five items over captured pages and
+Every test is driven from the bounded fixture plan over captured pages and
 recorded replies - no network, nothing mocked (Guardrail #7), and a cost that
 does not move when the archive grows (Guardrail #12).
 """
@@ -44,9 +44,6 @@ from ._builders import _work_stage, isolate_ledgers
 
 pytestmark = pytest.mark.slow
 
-#: The fixture plan's size. Named once so a sixth item moves one line.
-PLANNED_ITEMS: Final = 5
-
 LABEL_REPLY: Final = FIXTURES_DIR / "completions" / "label" / "labelled.json"
 
 SUMMARIZE_AND_PLAN_REPLY: Final = (
@@ -62,6 +59,7 @@ def worked(tmp_path: Path, monkeypatch: MonkeyPatch) -> tuple[RunPlan, Path]:
         monkeypatch,
         replies=(LABEL_REPLY.read_bytes(), SUMMARIZE_AND_PLAN_REPLY.read_bytes()),
     )
+    assert run_plan.items, "an empty plan would exercise no census rows"
     return run_plan, items_dir
 
 
@@ -135,7 +133,7 @@ def test_every_cell_the_shard_sealed_reaches_the_days_ledger(
     kept = committed(state, run_plan.date)
     on_disk = sealed(items_dir)
     assert set(kept) == set(on_disk) == {item.item_id for item in run_plan.items}
-    assert len(kept) == PLANNED_ITEMS
+    assert len(kept) == len(run_plan.items)
     for item_id, row in kept.items():
         moved = {
             name
@@ -193,8 +191,10 @@ def test_which_writer_reaches_the_ledger_first_does_not_change_the_row(
     stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
     after_assemble = committed(state, run_plan.date)
 
-    assert set(after_the_worker) == set(after_assemble)
-    assert len(after_the_worker) == PLANNED_ITEMS
+    assert set(after_the_worker) == set(after_assemble) == {
+        item.item_id for item in run_plan.items
+    }
+    assert len(after_the_worker) == len(run_plan.items)
     for item_id, row in after_the_worker.items():
         assert row == after_assemble[item_id], f"{item_id} depends on which writer got there first"
 
@@ -246,12 +246,12 @@ def test_work_then_assemble_leaves_one_row_per_item(
     or filed as the other writer, shows here as a count rather than as a slow
     read later.
 
-    **Exactly one row per item.** Two writers recorded all five, so a reader
-    that did not settle them would return ten rows, and every count taken off
+    **Exactly one row per item.** Both writers recorded the plan, so a reader
+    that did not settle them would return two rows per item, and every count taken off
     this ledger - a feed's share of the day, the day's own metrics - would read
     double.
 
-    What this cannot settle is a production-scale row count: five fixture items
+    What this cannot settle is a production-scale row count: a bounded fixture plan
     over captured pages is a shape check, not a load test.
     """
     settings = config.load(CONFIG_DIR)
@@ -271,4 +271,4 @@ def test_work_then_assemble_leaves_one_row_per_item(
 
     rows = ledger.load_days(state, LedgerName.ITEM_HEALTH, [run_plan.date], model=ItemHealthRow)
     assert sorted(row.item_id for row in rows) == sorted(item.item_id for item in run_plan.items)
-    assert len(rows) == PLANNED_ITEMS, f"{len(rows)} rows for {PLANNED_ITEMS} items"
+    assert len(rows) == len(run_plan.items)

@@ -29,6 +29,32 @@ def _referenced_inputs(workflow: dict[str, object]) -> set[str]:
     }
 
 
+def test_input_check_helpers_distinguish_references_from_declarations() -> None:
+    workflow: dict[str, object] = {
+        "on": {
+            "workflow_dispatch": {
+                "inputs": {
+                    "declared": {
+                        "description": "${{ inputs.declaration_only }}",
+                    }
+                }
+            }
+        },
+        "jobs": {
+            "check": {
+                "steps": [{"run": "echo ${{ inputs.declared }} ${{ inputs.missing }}"}]
+            }
+        },
+    }
+
+    declared = set(_declared_dispatch_inputs(workflow))
+    referenced = _referenced_inputs(workflow)
+
+    assert declared == {"declared"}
+    assert referenced == {"declared", "missing"}
+    assert referenced - declared == {"missing"}
+
+
 def test_every_input_an_expression_reads_is_declared_by_that_workflow() -> None:
     """An undeclared `inputs.x` is empty at expression time, and that is the quiet failure.
 

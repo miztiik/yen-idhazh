@@ -259,7 +259,13 @@ def test_the_published_item_carries_the_plan_rows_own_ranking_signal() -> None:
     them knows why the story was chosen. The plan row is the only place that
     fact still exists by this stage.
     """
-    planned = plan().items[0].model_copy(update={"time_source": TimeSource.FEED})
+    planned = plan().items[0].model_copy(update={
+        "time_source": TimeSource.FEED,
+        "carried_by": 7,
+        "watchlist_hit": True,
+        "on_front_page": True,
+        "rank_score": 8.25,
+    })
     item = assemble.to_digest_item(
         article=article(),
         summary=summary(),
@@ -270,11 +276,10 @@ def test_the_published_item_carries_the_plan_rows_own_ranking_signal() -> None:
         planned=planned,
     )
 
-    assert item.carried_by == planned.carried_by == 3
+    assert item.carried_by == planned.carried_by
     assert item.watchlist_hit == planned.watchlist_hit
     assert item.on_front_page == planned.on_front_page
-    assert item.rank_score == planned.rank_score == 3.4
-    assert item.on_front_page, "the fixture's first item did get an aggregator vote"
+    assert item.rank_score == planned.rank_score
     assert item.time_source is TimeSource.FEED
 
 
@@ -368,7 +373,8 @@ def test_the_note_never_claims_we_read_the_first_100_percent() -> None:
 
 
 def test_an_uncut_article_of_full_length_says_nothing() -> None:
-    assert assemble.reader_note(article()) is None
+    uncut = article().model_copy(update={"truncated": False, "source_form": SourceForm.ARTICLE})
+    assert assemble.reader_note(uncut) is None
 
 
 def test_a_day_publishes_even_when_items_failed() -> None:
@@ -722,8 +728,20 @@ def test_the_two_ledgers_agree_about_which_shards_ran(
     isolate_ledgers(tmp_path, monkeypatch)
     state = tmp_path / "state"
     capture = FIXTURES_DIR / "runtime" / "2026-08-26-5-shard-3.prom"
+    captured = read_text(capture)
+    token_line = next(
+        line for line in captured.splitlines() if line.startswith("llamacpp:prompt_tokens_total ")
+    )
+    captured_tokens = int(token_line.split()[1])
+    expected_tokens = {}
 
     for shard in (0, 1):
+        expected_tokens[shard] = captured_tokens + shard * 17
+        shard_capture = tmp_path / f"shard-{shard}.prom"
+        shard_capture.write_text(
+            captured.replace(token_line, f"llamacpp:prompt_tokens_total {expected_tokens[shard]}"),
+            encoding="utf-8",
+        )
         with a_server_that_refuses_every_completion() as server:
             stage_work(
                 run_plan,
@@ -742,7 +760,7 @@ def test_the_two_ledgers_agree_about_which_shards_ran(
             state_root=common.STATE_ROOT,
             commit_sha=SEED_COMMIT,
             shard=shard,
-            metrics_path=capture,
+            metrics_path=shard_capture,
         )
 
     rows = health_rows(state, run_plan.date)
@@ -751,7 +769,7 @@ def test_the_two_ledgers_agree_about_which_shards_ran(
     )
 
     assert {row.machine_shard for row in rows} == {row.shard for row in counted} == {0, 1}
-    assert [row.server_prompt_tokens for row in counted] == [23411, 23411], (
+    assert {row.shard: row.server_prompt_tokens for row in counted} == expected_tokens, (
         "each shard files what its own server counted"
     )
     assert len(rows) == len(run_plan.items)
@@ -844,8 +862,11 @@ def test_a_desk_publishes_why_it_ran_what_it_ran() -> None:
     look identical on the page, and the reader has no way to tell them apart.
     """
     settings = config.load(CONFIG_DIR)
+    vertical = VerticalPlan(
+        id="ai", considered=11, planned=2, eligible_feeds=4, too_old=3, below_feed_floor=False
+    )
     day = assemble.build_day(
-        plan=plan(),
+        plan=plan().model_copy(update={"verticals": [vertical]}),
         items=[digest_item(run_n=1)],
         previous=None,
         taxonomy=settings.taxonomy,
@@ -855,9 +876,9 @@ def test_a_desk_publishes_why_it_ran_what_it_ran() -> None:
     )
 
     desk = next(ref for ref in day.verticals if ref.id == "ai")
-    assert desk.considered == 5, "the day dropped what the plan already counted"
-    assert desk.too_old == 0
-    assert desk.below_feed_floor is False
+    assert desk.considered == vertical.considered, "the day dropped what the plan already counted"
+    assert desk.too_old == vertical.too_old
+    assert desk.below_feed_floor == vertical.below_feed_floor
 
 
 def test_a_desk_no_run_ever_planned_invents_no_shortfall() -> None:
@@ -982,7 +1003,10 @@ def test_a_desk_retired_mid_day_keeps_the_explanation_it_already_had() -> None:
     stories stay on the day, so the sentence under them has to stay true.
     """
     settings = config.load(CONFIG_DIR)
-    base = plan()
+    vertical = VerticalPlan(
+        id="ai", considered=13, planned=2, eligible_feeds=4, too_old=2, below_feed_floor=False
+    )
+    base = plan().model_copy(update={"verticals": [vertical]})
     first = assemble.build_day(
         plan=base,
         items=[digest_item(run_n=1)],
@@ -1003,8 +1027,9 @@ def test_a_desk_retired_mid_day_keeps_the_explanation_it_already_had() -> None:
     )
 
     desk = next(ref for ref in second.verticals if ref.id == "ai")
-    assert desk.considered == 5
-    assert desk.below_feed_floor is False
+    assert desk.considered == vertical.considered
+    assert desk.too_old == vertical.too_old
+    assert desk.below_feed_floor == vertical.below_feed_floor
 
 
 def test_a_run_that_comes_back_as_itself_still_produces_a_day() -> None:
@@ -1152,8 +1177,10 @@ def test_a_write_is_atomic(tmp_path: Path) -> None:
 
 def test_the_manifest_records_what_ran_against_what() -> None:
     settings = config.load(CONFIG_DIR)
+    base = plan()
+    run_plan = base.model_copy(update={"run_id": f"{base.date}-73"})
     day = assemble.build_day(
-        plan=plan(),
+        plan=run_plan,
         items=[digest_item()],
         previous=None,
         taxonomy=settings.taxonomy,
@@ -1162,7 +1189,7 @@ def test_the_manifest_records_what_ran_against_what() -> None:
         retention_window_months=-1,
     )
     manifest = assemble.build_manifest(
-        plan=plan(),
+        plan=run_plan,
         day=day,
         previous=None,
         summaries=[summary()],
@@ -1176,7 +1203,7 @@ def test_the_manifest_records_what_ran_against_what() -> None:
         site_files=2,
     )
     assert isinstance(manifest, RunManifest)
-    assert manifest.runs[-1].run_id == "2026-08-21-1"
+    assert manifest.runs[-1].run_id == run_plan.run_id
     assert manifest.runs[-1].config_digests
     assert manifest.runs[-1].inputs is None, "no work shard recorded any, so none is recorded"
 
@@ -1252,10 +1279,8 @@ def test_a_run_records_how_many_feeds_a_desk_could_ask_and_against_what_floor() 
     floored = base.model_copy(
         update={
             "verticals": [
-                vertical.model_copy(update={"feed_floor": 35})
-                if vertical.id == "ai"
-                else vertical
-                for vertical in base.verticals
+                VerticalPlan(id="ai", considered=4, planned=1, eligible_feeds=3, feed_floor=35),
+                VerticalPlan(id="energy", considered=2, planned=1, eligible_feeds=2, feed_floor=None),
             ]
         }
     )
@@ -1461,17 +1486,18 @@ def test_a_later_manifest_counts_verticals_for_its_own_run(tmp_path: Path) -> No
     base_plan = plan()
     first_item = base_plan.items[0]
     second_item = base_plan.items[1]
+    vertical = next(held for held in base_plan.verticals if held.id == first_item.vertical)
     first_plan = base_plan.model_copy(
         update={
             "items": [first_item],
-            "verticals": [base_plan.verticals[0].model_copy(update={"planned": 1})],
+            "verticals": [vertical.model_copy(update={"planned": 1})],
         }
     )
     second_plan = base_plan.model_copy(
         update={
             "items": [second_item],
             "run_id": f"{base_plan.date}-2",
-            "verticals": [base_plan.verticals[0].model_copy(update={"planned": 1})],
+            "verticals": [vertical.model_copy(update={"planned": 1})],
         }
     )
     first_summary = summary().model_copy(
@@ -1528,12 +1554,16 @@ def test_a_later_manifest_counts_verticals_for_its_own_run(tmp_path: Path) -> No
     )
 
     assert len(second_day.items) == 2
-    assert second_manifest.runs[-1].verticals[0].planned == 1
-    assert second_manifest.runs[-1].verticals[0].published == 1
+    counts = {held.id: held for held in second_manifest.runs[-1].verticals}
+    assert counts[vertical.id].planned == 1
+    assert counts[vertical.id].published == 1
 
     old_payload = second_manifest.model_dump(mode="json")
     old_payload["version"] = "2026-08-21T02:00"
-    old_payload["runs"][1]["verticals"][0]["published"] = 2
+    old_count = next(
+        held for held in old_payload["runs"][1]["verticals"] if held["id"] == vertical.id
+    )
+    old_count["published"] = 2
     old_path = tmp_path / "run.json"
     old_path.write_text(json.dumps(old_payload), encoding="utf-8")
 
@@ -1541,7 +1571,8 @@ def test_a_later_manifest_counts_verticals_for_its_own_run(tmp_path: Path) -> No
 
     assert migrated is not None
     assert migrated.version == RunManifest.schema_version()
-    assert migrated.runs[-1].verticals[0].published == 1
+    migrated_counts = {held.id: held for held in migrated.runs[-1].verticals}
+    assert migrated_counts[vertical.id].published == 1
 
 
 def test_the_committed_day_fixture_still_loads() -> None:

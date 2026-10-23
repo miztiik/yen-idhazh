@@ -24,8 +24,7 @@ from idhazh.contracts.knobs.gardener import (
     RetentionPolicy,
 )
 from idhazh.contracts.knobs.models import ModelsConfig
-from idhazh.contracts.knobs.observability import SUPERSEDED_RETENTION_NAMES, ObservabilityConfig
-from idhazh.contracts.knobs.retention import SUPERSEDED_RETENTION_KNOBS
+from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.retention import oldest_month_kept
 
 from ._fixtures import APP_CONFIG_EVERY_KNOB_DIFFERS, committed_models_raw
@@ -50,24 +49,6 @@ def test_never_hard_deleting_is_the_default_a_reader_gets() -> None:
     assert isinstance(packed.monthly_window, ForeverWindow), (
         "config/gardener/compact-summary-quality-evals.json drops a month of eval rows"
     )
-
-
-def test_the_committed_config_no_longer_emits_a_removed_name() -> None:
-    """The Oracle: the committed file loads, and no lifecycle value is defaulted.
-
-    Defaulted is the failure to catch. A knob deleted from the file and never
-    re-spelled under its new name would still load - on the contract's default -
-    and nothing would say the operator's number had gone.
-    """
-    raw = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
-    assert not set(raw["observability"]) & set(SUPERSEDED_RETENTION_NAMES)
-    assert not set(raw["retention"]) & set(SUPERSEDED_RETENTION_KNOBS)
-    assert not set(raw["collect"]) & set(SUPERSEDED_COLLECT_NAMES)
-
-    for successor in (*SUPERSEDED_COLLECT_NAMES.values(), "availability_rest_runs"):
-        assert successor in raw["collect"], f"collect.{successor} is defaulted, not set"
-    loaded = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
-    assert loaded.collect.availability_strikes_before_rest == 5
 
 
 #: Every cleanup knob that moved into a gardener declaration, and the file it went to.

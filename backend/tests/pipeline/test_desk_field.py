@@ -6,6 +6,7 @@ from conftest import CONFIG_DIR
 
 from idhazh import assemble, config
 from idhazh.contracts.article import Article
+from idhazh.contracts.run_plan import VerticalPlan
 
 from ._builders import (
     article,
@@ -101,8 +102,16 @@ def test_a_day_lists_both_words_and_counts_each_under_its_own() -> None:
     would publish a count with nothing to attach it to, and one that listed only
     the vertical would render a story under a nameless topic.
     """
+    run_plan = plan().model_copy(
+        update={
+            "verticals": [
+                VerticalPlan(id="energy", considered=3, planned=1, eligible_feeds=2),
+                VerticalPlan(id="ai", considered=0, planned=0, eligible_feeds=1),
+            ]
+        }
+    )
     day = assemble.build_day(
-        plan=plan(),
+        plan=run_plan,
         items=[
             assemble.to_digest_item(
                 article=relabelled_article(),
@@ -121,7 +130,7 @@ def test_a_day_lists_both_words_and_counts_each_under_its_own() -> None:
     )
 
     refs = {ref.id: ref for ref in day.verticals}
-    assert set(refs) == {"ai", "energy"}
+    assert set(refs) == {vertical.id for vertical in run_plan.verticals}
     assert refs["energy"].count == 1, "the feed that carried it still declares energy"
     assert refs["energy"].desk_count == 0, "and the page draws nothing under energy"
     assert refs["ai"].count == 0, "no ai feed carried this story"
