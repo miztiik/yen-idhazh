@@ -100,7 +100,7 @@ def a_config_with_shards(root: Path, shards: int) -> Path:
         (config_dir / "gardener" / filename).write_text(
             read_text(CONFIG_DIR / "gardener" / filename), encoding="ascii", newline="\n"
         )
-    for filename in ("idhazh.json", "appearance.json"):
+    for filename in ("idhazh.json", "ledgers.json", "appearance.json"):
         (config_dir / filename).write_text(
             read_text(CONFIG_DIR / filename), encoding="ascii", newline="\n"
         )

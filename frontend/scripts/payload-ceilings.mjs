@@ -28,10 +28,9 @@
  *
  * The walk is over the named keys and not over the build, so what this costs is
  * set by how many ceilings are written rather than by how much the pipeline has
- * accumulated (Guardrail #12). A ledger's files are the two folders the site
- * copy stages for it, `state/compact/<registered-prefix>/` and
- * `state/raw/<registered-prefix>/`, so
- * whether the build holds any of them is one existence check on each named
+ * accumulated (Guardrail #12). A ledger's files are the compact folder the
+ * site copy stages for it, `state/compact/<registered-prefix>/`, so whether
+ * the build holds any of them is one existence check on each named
  * path. A directory key does read every file under itself, and that read grows -
  * a month a run appends is a file this opens. It is bounded where it matters by
  * native ledger retention. There is no ceiling for retired public CSV copies.
@@ -39,7 +38,7 @@
 
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { ledgerFolders } from './ledger-prefixes.mjs';
+import { ledgerFolders, REGISTRY } from './ledger-prefixes.mjs';
 
 /**
  * Where the published ledgers sit in a build: `stage-publication.mjs` copies each
@@ -96,7 +95,7 @@ function filesCovered(build, key) {
 function notPackedYet(build, key, folders) {
 	const ledger = Object.keys(folders).find((name) => key === `${LEDGERS}compact/${folders[name]}/index/`);
 	if (ledger === undefined) return undefined;
-	const roots = [`${LEDGERS}compact/${folders[ledger]}`, `${LEDGERS}raw/${folders[ledger]}`];
+	const roots = [`${LEDGERS}compact/${folders[ledger]}`];
 	return roots.some((folder) => existsSync(join(build, ...folder.split('/')))) ? undefined : ledger;
 }
 
@@ -105,13 +104,14 @@ function notPackedYet(build, key, folders) {
  *
  * @param {string} build The finished build's root directory.
  * @param {Readonly<Record<string, number>>} ceilings `page_weight.payload_ceilings_bytes`: key -> its ceiling.
- * @param {readonly string[]} published `ledger.published`: the ledgers the site copy stages.
+ * @param {readonly string[]} published Consent-derived ledgers the site copy stages.
  * @param {string} servedFrom `visuals.asset_base_url`: the host that serves the ledgers, or `''` for this site.
  * @param {(file: string) => number} weigh What one file weighs, given its path on disk. The gate passes its gzip -5 size.
+ * @param {string} [registryFile] The validated registry used to resolve the supplied ledger names.
  * @returns {PayloadWeights}
  */
-export function weighPayloads(build, ceilings, published, servedFrom, weigh) {
-	const folders = ledgerFolders(published);
+export function weighPayloads(build, ceilings, published, servedFrom, weigh, registryFile = REGISTRY) {
+	const folders = ledgerFolders(published, registryFile);
 	/** @type {PayloadWeights} */
 	const answer = { weighed: [], over: [], namesNothing: [], notWeighed: [] };
 	for (const key of Object.keys(ceilings).sort()) {

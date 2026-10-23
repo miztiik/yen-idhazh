@@ -43,15 +43,6 @@ declare global {
 	/** Frame knobs, injected by `vite.config.ts`. */
 	const __FRAME_CONFIG__: import('$lib/server/config').FrameConfig;
 
-	/** Ledgers published on this site, injected by `vite.config.ts`. */
-	const __PUBLISHED_LEDGERS__: string[];
-
-	/** How many UTC days staging keeps: the widest `console.window_presets`. */
-	const __SITE_WINDOW_DAYS__: number;
-
-	/** The newest staged raw day listing per ledger. */
-	const __RAW_LISTED_THROUGH__: Partial<Record<string, string>>;
-
 	/** `icons.stroke_px`: the icon line width in screen pixels. */
 	const __ICON_STROKE_PX__: number;
 

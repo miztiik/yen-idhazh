@@ -26,6 +26,8 @@ NOT_BUILD_INPUTS: Final = (
     "docs/",
     "frontend/tests/",
     "notebooks/",
+    "state/raw/",
+    "state/compact/",
     "tests/",
 )
 

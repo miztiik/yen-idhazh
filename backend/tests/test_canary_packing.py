@@ -23,13 +23,14 @@ from idhazh.contracts.ledger_name import LedgerName
 from utilities import build_canary_day
 
 
-def test_the_fixture_ledgers_pack_from_a_state_tree_outside_the_repository_root(
+def test_the_fixture_ledgers_pack_and_keep_a_later_raw_write(
     tmp_path: Path,
 ) -> None:
     """`tmp_path` stands for the repository and `canary/` for the tree the canary builds.
 
     Each ledger given a fixture row is packed. A new ledger with no row still
     initializes its indexes so a later pass can distinguish it from a lost index.
+    The later raw write verifies backend storage independently of site staging.
     """
     state = tmp_path / "canary" / ledger.STATE_DIRNAME
     state.mkdir(parents=True)

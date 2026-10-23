@@ -111,6 +111,7 @@ def test_a_hung_model_request_costs_one_item_not_the_shard(
     fast_settings = config.Settings(
         council=settings.council,
         app=settings.app,
+        ledgers=settings.ledgers,
         models=settings.models.model_copy(
             update={
                 "summarizer": summarizer.model_copy(
@@ -181,6 +182,7 @@ def test_a_shard_out_of_clock_stops_itself_instead_of_being_killed(
                 )
             }
         ),
+        ledgers=settings.ledgers,
         models=settings.models,
         appearance=settings.appearance,
         sources=settings.sources,

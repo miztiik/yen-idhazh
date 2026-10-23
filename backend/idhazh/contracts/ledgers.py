@@ -163,6 +163,16 @@ class LedgersConfig(Model):
 
     families: list[LedgerFamily]
 
+    @property
+    def data_explorer_ledgers(self) -> tuple[LedgerName, ...]:
+        """The registered ledgers whose owner enabled compact explorer reads."""
+        return tuple(
+            held.name
+            for family in self.families
+            for held in family.ledgers
+            if held.publish_to_data_explorer
+        )
+
     @model_validator(mode="after")
     def _every_family_once(self) -> Self:
         """Two families of one name are two lists claiming one folder.

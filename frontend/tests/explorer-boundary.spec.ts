@@ -39,8 +39,7 @@ async function buildPage(): Promise<void> {
         logLevel: 'warn',
         resolve: { alias: { '$app/paths': path.join(pageSource, 'paths.ts') } },
         define: {
-            __ASSET_BASE_URL__: JSON.stringify('/root'),
-            __RAW_LISTED_THROUGH__: JSON.stringify({})
+            __ASSET_BASE_URL__: JSON.stringify('/root')
         },
         build: { outDir: pageBuild, emptyOutDir: true, target: 'es2022', assetsInlineLimit: 0, reportCompressedSize: false }
     });

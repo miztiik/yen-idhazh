@@ -186,6 +186,7 @@ def traced_settings() -> config.Settings:
                 )
             }
         ),
+        ledgers=settings.ledgers,
         models=settings.models,
         appearance=settings.appearance,
         sources=settings.sources,
@@ -211,6 +212,7 @@ def untraced_settings() -> config.Settings:
                 )
             }
         ),
+        ledgers=settings.ledgers,
         models=settings.models,
         appearance=settings.appearance,
         sources=settings.sources,

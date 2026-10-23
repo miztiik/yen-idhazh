@@ -17,6 +17,7 @@ from idhazh.contracts.knobs.page_weight import PageWeightConfig
 from idhazh.contracts.knobs.windows import months_a_window_can_touch
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.ledgers import LedgersConfig
 from idhazh.ledger import door_folders
 
 pytestmark = pytest.mark.contract
@@ -211,19 +212,20 @@ def test_every_published_ledger_bounds_its_indexes_at_twice_their_longest() -> N
     some later pull request.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
+    ledgers = LedgersConfig.from_json(read_text(CONFIG_DIR / "ledgers.json")).data_explorer_ledgers
     payloads = committed.page_weight.payload_ceilings_bytes
     tasks = config.load_gardener(CONFIG_DIR).tasks
 
     bounded = sorted(path for path in payloads if path.startswith(LEDGERS))
-    assert bounded == sorted(index_key(ledger) for ledger in committed.ledger.published), (
-        "every published ledger has one payload key for its index directory, and no "
+    assert bounded == sorted(index_key(ledger) for ledger in ledgers), (
+        "every explorer-enabled ledger has one payload key for its index directory, and no "
         "other ledger has one: a ledger without a key ships indexes no gate weighs, and "
-        "a key for a ledger that is not published names nothing in the build"
+        "a key for a ledger without consent names nothing in the build"
     )
-    for ledger in committed.ledger.published:
+    for ledger in ledgers:
         policy = tasks.get(config.compaction_task(ledger))
         assert isinstance(policy, CompactionPolicy), (
-            f"{ledger.value} is published and no compaction task writes its indexes"
+            f"{ledger.value} is enabled for the explorer and no compaction task writes its indexes"
         )
         days = policy.daily_keep_days + LONGEST_MONTH_DAYS
         months = months_kept(policy)

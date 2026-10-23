@@ -861,12 +861,14 @@ def test_packing_years_keeps_every_month_until_its_year_and_waits_past_the_next_
         assert refusal in message
 
 
-def published(config_dir: Path, *ledgers: str) -> Path:
-    """The same config, with these ledgers in `ledger.published`."""
-    app = config_dir / "idhazh.json"
-    held = json.loads(app.read_text(encoding="utf-8"))
-    held["ledger"]["published"] = list(ledgers)
-    app.write_text(json.dumps(held), encoding="utf-8")
+def explorer_enabled(config_dir: Path, *ledgers: str) -> Path:
+    """The same config, with explorer consent enabled for these ledgers."""
+    registry = config_dir / "ledgers.json"
+    held = json.loads(registry.read_text(encoding="utf-8"))
+    for family in held["families"]:
+        for entry in family["ledgers"]:
+            entry["publish_to_data_explorer"] = entry["name"] in ledgers
+    registry.write_text(json.dumps(held), encoding="utf-8")
     return config_dir
 
 
@@ -885,12 +887,12 @@ def published(config_dir: Path, *ledgers: str) -> Path:
     ],
     ids=["forever", "short-of-the-widest-window", "long-enough"],
 )
-def test_a_published_ledger_reaches_the_widest_window_and_keeps_months_forever_only_packed(
+def test_an_explorer_enabled_ledger_reaches_the_widest_window_and_keeps_months_forever_only_packed(
     tmp_path: Path, changes: dict[str, Any], refusal: str | None
 ) -> None:
     """What a reader fetches first stays bounded, and the console's widest span has its days."""
     compaction = a_compaction("gardener", **changes)
-    config_dir = published(a_garden(tmp_path, compact_gardener=compaction), "gardener")
+    config_dir = explorer_enabled(a_garden(tmp_path, compact_gardener=compaction), "gardener")
     if refusal is None:
         config.load_gardener(config_dir)
     else:
@@ -912,7 +914,7 @@ def test_a_published_ledger_that_packs_years_waits_what_its_declaration_says(
         "monthly_window": {"unit": "forever"},
         "monthly_keep_days": earliest + days_past_the_earliest,
     }
-    config_dir = published(
+    config_dir = explorer_enabled(
         a_garden(tmp_path, compact_gardener=a_compaction("gardener", **packs)), "gardener"
     )
     if refusal is None:
@@ -993,7 +995,7 @@ def test_finite_yearly_retention_checks_the_published_console_floor(tmp_path: Pa
         "gardener", monthly_window={"unit": "forever"}, monthly_keep_days=93,
         yearly_keep_months=1, yearly_prune_enable=True,
     )
-    config_dir = published(a_garden(tmp_path, compact_gardener=compact), "gardener")
+    config_dir = explorer_enabled(a_garden(tmp_path, compact_gardener=compact), "gardener")
     assert "widest span the console offers would have days no file holds" in refused(config_dir)
 
 

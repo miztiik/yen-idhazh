@@ -1,6 +1,6 @@
 # The ledger registry
 
-**Last Updated**: 2026-10-22
+**Last Updated**: 2026-10-23
 
 A ledger is a committed file or folder under `state/` that one run writes so that a later run can read it. A ledger exists in code only when it is registered, and registering it takes two edits. The first is one member of `LedgerName`, the ledger's one name in code. The second is one entry in `config/ledgers.json`, which puts the ledger in a family - one top-level folder under `state/` - and says where its files sit. When the code loads, it checks that the two edits agree, and the build stops if they do not.
 
@@ -54,11 +54,13 @@ test is `test_frontend_registry_shape.py`; the vocabulary and segment-grammar
 test is `test_frontend_vocabularies.py`. Bounded catalog mutations and native
 Node imports are covered by `ledger-catalog.spec.ts`.
 
-During migration, `ledger.published` in `config/idhazh.json` remains a checked
-bridge, not the build's authority: publication derives its selection from
-consent and refuses any set disagreement or duplicate in the old list.
-Remove this bridge after its remaining consumers move to the catalog.
-The initial conversion preserves exact membership, not a fixed member count.
+`publish_to_data_explorer` in the validated `config/ledgers.json` entry is the
+only publication consent. `config/idhazh.json` has no second allowlist. The
+site build uses the registry entry for membership and prefix; it copies the
+consented compact indexes and the files they name. The initial conversion
+preserved the previous membership exactly, without making its count an
+invariant. The [committing guide](../publishing/committing.md) owns the staging
+and publication rules.
 The frontend query door now uses the parsed catalog for membership and paths.
 `LedgerName` is a string there; a page keeper holds the immutable catalog used
 to validate names and compose paths. Ordinary panels and disk reads use the
@@ -207,7 +209,7 @@ into an active family unchanged. See [judge status](../publishing/llm-council.md
 **What a new ledger owes.** A new ledger files through the ledger door from its first row. It owes every edit below, each in the file named beside it, and the change that adds the ledger makes all of them. The check at load time, or the test named beside an edit, refuses the change while one is missing.
 
 - **Lifecycle.**
-  - A family in `config/ledgers.json` with `lifecycle_status` `active`, a one-line `description` and the UTC day it is `onboarded`, holding the ledger's entry: grain `raw-and-compact`, explicit `publish_to_data_explorer` consent, and the `prefix` it files under inside `state/raw/` and `state/compact/`, which starts with the family's name and ends with the ledger's own value. A ledger that joins a family adds only its entry to that family's `ledgers`, and the family's status covers it from its first row. During the migration bridge, the consented set and `ledger.published` must agree exactly.
+  - A family in `config/ledgers.json` with `lifecycle_status` `active`, a one-line `description` and the UTC day it is `onboarded`, holding the ledger's entry: grain `raw-and-compact`, explicit `publish_to_data_explorer` consent, and the `prefix` it files under inside `state/raw/` and `state/compact/`, which starts with the family's name and ends with the ledger's own value. A ledger that joins a family adds only its entry to that family's `ledgers`, and the family's status covers it from its first row.
   - Its `LedgerName` member in `backend/idhazh/contracts/ledger_name.py`, spelled from its value and its family ([One typed name for one ledger](#one-typed-name-for-one-ledger)).
   - Its value in `config/ledgers.json`, which the frontend catalog validates before a reader can use it. Do not add a second frontend name or folder list; `ledger-catalog.spec.ts` covers catalog membership and prefix-based path composition.
 - **Write and read.**

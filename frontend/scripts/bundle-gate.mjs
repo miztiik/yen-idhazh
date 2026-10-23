@@ -58,12 +58,12 @@ import { dirname, join, posix, relative, resolve, sep } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import ts from 'typescript';
 import { assetBaseUrl } from '../asset-base.js';
+import { CONFIG_ROOT, REGISTRY } from './ledger-prefixes.mjs';
 import { LEDGERS, weighPayloads } from './payload-ceilings.mjs';
 import { publishedLedgers } from './published-ledgers.mjs';
 
 const BUILD = 'build';
 const ROOT = 'build/_app/immutable';
-const REGISTRY = 'config/ledgers.json';
 
 const retiredEngine = 'echarts';
 const manifest = JSON.parse(readFileSync('package.json', 'utf8'));
@@ -241,7 +241,7 @@ let failed = false;
  * day-payload marker in every document that should not carry one. That check has
  * no number in it, so it returns the same verdict whatever the archive holds.
  */
-const CONFIG = resolve(process.cwd(), '..', 'config', 'idhazh.json');
+const CONFIG = resolve(CONFIG_ROOT, 'idhazh.json');
 
 let config;
 try {
@@ -318,12 +318,12 @@ if (payloadCeilings === null || typeof payloadCeilings !== 'object' || Array.isA
 
 let published;
 try {
-	published = publishedLedgers(CONFIG);
+	published = publishedLedgers(REGISTRY);
 } catch (error) {
 	console.error(`bundle gate: ${error.message}`);
 	process.exit(1);
 }
-const payloads = weighPayloads(BUILD, payloadCeilings, published, assetBaseUrl(), gzipBytes);
+const payloads = weighPayloads(BUILD, payloadCeilings, published, assetBaseUrl(), gzipBytes, REGISTRY);
 const payloadKeys = Object.keys(payloadCeilings).sort();
 if (payloadKeys.length > 0) {
 	console.log(
