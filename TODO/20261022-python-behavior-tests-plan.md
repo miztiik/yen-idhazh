@@ -62,7 +62,7 @@ Table D - PR outcomes
 | D4 | 4 | Safe removals with named survivors | 1, 2 | C | DONE | - | - | - |
 | D5 | 5 | Expectations derived from the test's own input | 2 | D | PENDING | - | - | - |
 | D6 | 6 | Pipeline records follow the input that produced them | 1 | E | PENDING | - | - | - |
-| D7 | 7 | Config reader values and accurate migration test names | 1 | F | IN-FLIGHT | config-reader-behavior-proofs | - | - |
+| D7 | 7 | Config reader values and accurate migration test names | 1 | F | DONE | config-reader-behavior-proofs | [#1653](https://github.com/miztiik/yen-idhazh/pull/1653) | - |
 | D8 | 8 | Workflow checks retain independent failure evidence | 1 | G | PENDING | - | - | - |
 
 The canary implementation for Row 3 is delivered separately from its suite-wide
