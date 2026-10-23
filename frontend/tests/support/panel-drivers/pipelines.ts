@@ -30,7 +30,6 @@ export async function populatedPanels(page: Page, worker: number): Promise<void>
 }
 
 async function recordState(page: Page, state: BasicNothing): Promise<void> {
-	await page.addInitScript(() => Object.defineProperty(globalThis, '__RAW_LISTED_THROUGH__', { value: {}, configurable: true }));
 	await page.route('**/state/compact/{item-health,summary-quality-evals}/index/*.json', async (route) => {
 		if (state === 'loading') return;
 		if (state === 'missing') { await route.fulfill({ status: 404, body: '' }); return; }

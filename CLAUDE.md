@@ -149,8 +149,8 @@ Which directory holds what, who writes it, whether it is committed and whether a
 
 ## 4. Layer and Dependency Boundaries
 
-- `frontend/src/` MUST NOT depend on a runtime backend service - there is none in production. It reads committed files under `frontend/public/` and nothing else.
-- `backend/` is the only writer of pipeline output under `frontend/public/`. The site reads only that output.
+- `frontend/src/` MUST NOT depend on a runtime backend service - there is none in production. Ordinary panels read staged committed files. The Data explorer may also read the current registry and registered, consented compact payloads from the committed `ledger.archive_base_url`; an explicitly empty value selects site fixtures. This does not permit raw discovery, another destination or a server. The [written-question contract](docs/architecture/publishing/how-the-query-door-answers-a-written-question.md#design-rationale) records the owner ruling.
+- `backend/` is the only writer of pipeline output under `frontend/public/` and of the compact repository output the explorer reads. Static publication, sanitization and operator-controlled destination boundaries remain unchanged.
 - `backend/` MUST NOT import frontend code, and frontend code MUST NOT import backend code. They meet only through committed data and the contracts declared in `backend/idhazh/contracts/` (Guardrail #1, section 1a).
 - `backend/idhazh/contracts/` MUST NOT import any other subpackage of `backend/idhazh/`. Contracts are the bottom of the dependency graph; everything else depends on them.
 - Every stage lives in its own module and is invocable on its own with a file in and a file out. A stage that can only run as part of the whole pipeline, or whose body sits in the file that dispatches it, is a design error.

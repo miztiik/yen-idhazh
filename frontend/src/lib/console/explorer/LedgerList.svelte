@@ -4,10 +4,9 @@
 	import Icon from '$lib/icons/Icon.svelte';
 	import type { RegistryLedger } from './registry';
 	import { shortDate } from '$lib/format';
-	let { ledgers, selected, published, through = {}, spanFrom = '', filter = '', onToggle, onFilter, onRefresh, refreshing = false }: {
+	let { ledgers, selected, through = {}, spanFrom = '', filter = '', onToggle, onFilter, onRefresh, refreshing = false }: {
 		ledgers: readonly RegistryLedger[];
 		selected: string[];
-		published: string[];
 		through?: Readonly<Partial<Record<string, string>>>;
 		spanFrom?: string;
 		filter?: string;
@@ -29,7 +28,6 @@
 		selected;
 		shown;
 		through;
-		published;
 		if (selected.length === 0) return;
 		void tick().then(() => {
 			if (!following || options === null) return;
@@ -70,13 +68,14 @@
 		<button type="button" onclick={onRefresh} disabled={refreshing}><Icon id="list-refresh" /> {refreshing ? 'Refreshing' : 'Refresh'}</button>
 	</div>
 	<label class="filter">Filter <input value={filter} oninput={(event) => onFilter(event.currentTarget.value)} /></label>
+	<p class="packing-note">Newest data waits for packing. Refresh reads current compact files; Run asks the question.</p>
 	<div class="ledger-options" bind:this={options} onscroll={scrolled}>
 		{#each shown as ledger (ledger.name)}
 			{@const ledgerThrough = through[ledger.name]}
-			<label class="ledger" data-ledger-name={ledger.name} data-published={published.includes(ledger.name) ? 'yes' : 'no'} data-chosen={selected.includes(ledger.name) ? 'yes' : 'no'}>
+			<label class="ledger" data-ledger-name={ledger.name} data-chosen={selected.includes(ledger.name) ? 'yes' : 'no'}>
 				<input type="checkbox" checked={selected.includes(ledger.name)} onchange={() => onToggle(ledger.name)} />
 				<span>{ledger.name}</span>
-				<small class:late={ledgerThrough !== undefined && spanFrom !== '' && ledgerThrough < spanFrom}>{published.includes(ledger.name) ? `${ledger.grain}${ledgerThrough ? ` - through ${shortDate(ledgerThrough)}` : ''}` : `not on this site - ${ledger.grain}`}</small>
+				<small class:late={ledgerThrough !== undefined && spanFrom !== '' && ledgerThrough < spanFrom}>{ledger.grain}{ledgerThrough ? ` - packed through ${shortDate(ledgerThrough)}` : ' - availability not established'}</small>
 			</label>
 		{/each}
 	</div>
@@ -84,7 +83,8 @@
 
 <style>
 	/* Head, filter, then the rows, which take what is left and scroll once the rail gives the list a height. */
-	.ledger-list { display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: var(--space-3); }
+	.ledger-list { display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); gap: var(--space-3); }
+	.packing-note { margin: 0; color: var(--color-text-secondary); font-size: var(--text-xs); }
 	.rail-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
 	h3 { margin: 0; display: inline-flex; align-items: center; gap: var(--space-1); color: var(--color-text-tertiary); font-size: var(--text-xs); font-weight: 600; letter-spacing: var(--tracking-label); text-transform: uppercase; }
 	button { border: 1px solid var(--color-rule); border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-text); padding: var(--space-1) var(--space-2); }
@@ -96,7 +96,6 @@
 	.ledger { min-block-size: var(--workbench-control); display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 var(--space-2); align-items: center; padding-inline: var(--space-3); border-inline-start: 3px solid transparent; background: var(--color-surface); cursor: pointer; font-family: var(--font-data); font-size: var(--text-xs); line-height: var(--leading-xs); }
 	.ledger input { margin: 0; }
 	.ledger small { grid-column: 2; color: var(--color-text-tertiary); }
-	.ledger[data-published='no'] span { color: var(--color-text-secondary); }
 	.ledger[data-chosen='yes'] { border-inline-start-color: var(--color-accent); background: var(--tint-accent); }
 	.ledger[data-chosen='yes'] span { font-weight: 600; }
 	.ledger[data-chosen='yes'] small { color: var(--color-text-secondary); }

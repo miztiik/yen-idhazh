@@ -136,7 +136,7 @@ test.describe('explorer boundary', () => {
                 sql: "SELECT * FROM read_csv('https://example.invalid/x.csv')",
                 maxChars: 500,
                 maxRows: 10,
-                maxFetchBytes: 100000000
+                maxFetchBytes: 100000000, maxFiles: 128
             }));
             expect(answer).toMatchObject({ state: 'refused', because: { kind: 'engine-error' } });
             await expect.poll(() => workerLog.join('\n')).toContain('connect-src');

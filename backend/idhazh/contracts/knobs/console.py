@@ -476,6 +476,15 @@ class ConsoleConfig(Model):
         ge=1,
         description="Most rows one Data explorer answer holds before it is capped.",
     )
+    explorer_max_files: int = Field(
+        default=128,
+        ge=1,
+        strict=True,
+        description=(
+            "Most unique compact Parquet candidates per explorer question, "
+            "including column and empty-view sources."
+        ),
+    )
     explorer_max_fetch_bytes: int = Field(
         default=67108864,
         ge=1,

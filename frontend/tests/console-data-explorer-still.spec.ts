@@ -1,7 +1,10 @@
 import { expect, test } from './support/browser';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { buildFeedLedgers, FEED_LEDGERS, stageFeedLedgers } from './support/feed-ledgers';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { buildFeedLedgers, FEED_LEDGERS } from './support/feed-ledgers';
+import { buildLedger } from './support/ledger-lifecycle';
+import { ledgerArchiveBaseUrl } from '../src/lib/server/config';
+import { parseLedgerCatalog } from '../src/lib/data/ledger-catalog';
 import {
 	chooseExplorerQuestion,
 	expectAnswer,
@@ -14,19 +17,22 @@ const PINNED = '2026-10-23';
 
 /** One real query and chart interaction cover the workbench, not every chart transition. */
 test('a reader loads real ledgers, queries them, and draws the answer', async ({ page, context }) => {
-	const source = test.info().outputPath('source');
-	const staticRoot = test.info().outputPath('static');
-	const site = join(staticRoot, 'state');
+	const repository = test.info().outputPath('repository');
+	const source = join(repository, 'state');
 	await buildFeedLedgers(source);
-	const copy = stageFeedLedgers(source, site);
-	await context.addInitScript(() => Object.defineProperty(
-		globalThis, '__RAW_LISTED_THROUGH__', { value: {}, configurable: true }
-	));
-	await context.route(/\/state\/(?:raw|compact)\//, (route) => {
-		const url = new URL(route.request().url());
-		const file = url.pathname.slice(url.pathname.indexOf('/state/') + '/state/'.length);
-		if (!copy.files.includes(file)) return route.fulfill({ status: 404 });
-		return route.fulfill({ status: 200, body: readFileSync(join(site, ...file.split('/'))) });
+	const registry = JSON.parse(readFileSync(resolve('..', 'config', 'ledgers.json'), 'utf8'));
+	mkdirSync(join(repository, 'config'), { recursive: true });
+	const registryPath = join(repository, 'config', 'ledgers.json');
+	writeFileSync(registryPath, JSON.stringify(registry));
+	const origin = ledgerArchiveBaseUrl();
+	expect(origin).not.toBe('');
+	const requests: string[] = [];
+	page.on('request', (request) => requests.push(request.url()));
+	await context.route(`${origin}/**`, (route) => {
+		const relative = route.request().url().slice(origin.length + 1).split('?')[0];
+		if (relative !== 'config/ledgers.json' && !relative.startsWith('state/compact/')) return route.abort('blockedbyclient');
+		const file = join(repository, ...relative.split('/'));
+		return existsSync(file) ? route.fulfill({ status: 200, body: readFileSync(file) }) : route.fulfill({ status: 404 });
 	});
 	await page.setViewportSize({ width: 1280, height: 900 });
 	await openExplorer(page, PINNED);
@@ -61,4 +67,27 @@ test('a reader loads real ledgers, queries them, and draws the answer', async ({
 	await expect.poll(() => page.evaluate(
 		() => document.documentElement.scrollWidth <= document.documentElement.clientWidth
 	)).toBe(true);
+
+	// Only the generated repository changes. The preview server keeps the same compiled site.
+	registry.families[0].ledgers.push({
+		name: 'runtime-report', prefix: ['feed-ingest-plan', 'runtime-report'], grain: 'raw-and-compact',
+		publish_to_data_explorer: true, stem: null, suffix: null
+	});
+	writeFileSync(registryPath, JSON.stringify(registry));
+	await buildLedger(source, {
+		ledger: 'runtime-report', catalog: parseLedgerCatalog(registry),
+		pinned: '2026-10-22', days: [{ ago: 0, rows: 3 }], columns: { status: 'new packed rows' }
+	});
+	await page.setViewportSize({ width: 1280, height: 900 });
+	await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+	await expect(page.locator('[data-ledger-name="runtime-report"]')).toBeVisible();
+	await expect(page.locator('[data-explorer-answer]')).toHaveCount(0);
+	await expect(page.locator('.history-menu li')).toHaveCount(1);
+	await chooseExplorerQuestion(page, ['runtime-report'], 'SELECT status, count(*) AS rows FROM "runtime-report" GROUP BY status');
+	await runExplorer(page);
+	await expectAnswer(page, 'table');
+	expect(await tableRows(page)).toEqual([['new packed rows', '3']]);
+	await page.screenshot({ path: test.info().outputPath('compact-workbench.png') });
+	expect(requests.filter((url) => /\/state\/raw\/|api\.github\.com|\/contents\//.test(url))).toEqual([]);
+	expect(requests.filter((url) => url === `${origin}/config/ledgers.json`)).toHaveLength(2);
 });

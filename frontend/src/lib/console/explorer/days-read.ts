@@ -19,12 +19,8 @@ export function describeDaysRead(from: DateStamp, to: DateStamp): string {
 	return days === 1 ? `Read from 1 UTC day, ${shortDate(to)}.` : `Read from ${days} UTC days, ${shortDate(from)} to ${shortDate(to)}.`;
 }
 
-/** The sentence that names a ledger whose days before `before` were cut from the window. "Not on
- *  this site" stays true whether the ledger began on that day, that day is the 1st of its first
- *  month, packed whole, or this page reads the site alone. When `before` is after `lastDay`, the
- *  window's last day, the ledger gave the answer nothing, and the sentence says so, because an
- *  operator should not have to work that out from two dates. */
+/** Name the compact record's first day without claiming earlier days were empty. */
 export function describeCutDays({ ledger, before }: CutDays, lastDay: DateStamp): string {
-	const sentence = `Days of the ${ledger} record before ${shortDate(before)} are not on this site`;
+	const sentence = `Days of the ${ledger} record before ${shortDate(before)} are not available in this compact record`;
 	return before > lastDay ? `${sentence}, so nothing from that record is in this answer.` : `${sentence}.`;
 }

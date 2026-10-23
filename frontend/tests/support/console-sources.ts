@@ -95,7 +95,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	],
 	'src/lib/data': [
 		'ask-reader.ts', 'compact-index.ts', 'configured-catalog.ts', 'engine.ts', 'fetched-bytes.ts', 'host-fingerprint.ts', 'ledger-catalog.ts', 'ledger-columns.ts',
-		'ledger-reach.ts', 'ledger.ts', 'page-keeper.ts', 'raw-day-index.ts', 'read-session.ts', 'site-window.ts',
+		'ledger-reach.ts', 'ledger.ts', 'page-keeper.ts', 'read-session.ts', 'site-window.ts',
 		'slice-query.ts', 'slice-reader.ts', 'slice-shapes.ts', 'slice.ts', 'statement.ts'
 	],
 	'src/lib/icons': ['generated.ts', 'Icon.svelte'],

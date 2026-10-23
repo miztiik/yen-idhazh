@@ -350,6 +350,7 @@ export interface ExplorerConfig {
 	row_page: number;
 	max_rows: number;
 	max_fetch_bytes: number;
+	max_files: number;
 	query_max_chars: number;
 	link_max_bytes: number;
 	reach_days: number;
@@ -598,6 +599,7 @@ const EXPLORER_DEFAULTS: ExplorerConfig = {
 	row_page: 50,
 	max_rows: 1000,
 	max_fetch_bytes: 67108864,
+	max_files: 128,
 	query_max_chars: 6855,
 	link_max_bytes: 8192,
 	reach_days: 365,
@@ -1107,6 +1109,7 @@ export function explorerConfig(): ExplorerConfig {
 		row_page: consoleBlock.explorer_row_page ?? EXPLORER_DEFAULTS.row_page,
 		max_rows: consoleBlock.explorer_max_rows ?? EXPLORER_DEFAULTS.max_rows,
 		max_fetch_bytes: consoleBlock.explorer_max_fetch_bytes ?? EXPLORER_DEFAULTS.max_fetch_bytes,
+		max_files: consoleBlock.explorer_max_files ?? EXPLORER_DEFAULTS.max_files,
 		query_max_chars: consoleBlock.explorer_query_max_chars ?? EXPLORER_DEFAULTS.query_max_chars,
 		link_max_bytes: consoleBlock.explorer_link_max_bytes ?? EXPLORER_DEFAULTS.link_max_bytes,
 		reach_days: consoleBlock.explorer_reach_days ?? EXPLORER_DEFAULTS.reach_days,

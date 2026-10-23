@@ -47,6 +47,14 @@ from idhazh.contracts.knobs.ui import ThemeChoice, UiConfig
 
 pytestmark = pytest.mark.contract
 
+
+def test_explorer_file_limit_defaults_and_bounds() -> None:
+    assert ConsoleConfig().explorer_max_files == 128
+    assert ConsoleConfig(explorer_max_files=1).explorer_max_files == 1
+    for value in (0, -1, 1.5, True, "128"):
+        with pytest.raises(ValidationError, match="explorer_max_files"):
+            ConsoleConfig.model_validate({"explorer_max_files": value})
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 APPEARANCE_PATH = REPO_ROOT / "config" / "appearance.json"
 

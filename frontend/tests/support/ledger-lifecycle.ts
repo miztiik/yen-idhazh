@@ -33,6 +33,7 @@ import { nodeEngine } from '../../src/lib/data/engine';
 import type { Fetcher } from '../../src/lib/data/fetched-bytes';
 import { ledgerFolder } from '../../src/lib/data/slice-reader';
 import { configuredCatalog } from '../../src/lib/data/configured-catalog';
+import type { LedgerCatalog } from '../../src/lib/data/ledger-catalog';
 import type { DateStamp, LedgerName } from '../../src/lib/data/slice-shapes';
 import { engineExtensionRepository, ledgerArchiveBaseUrl } from '../../src/lib/server/config';
 
@@ -50,6 +51,7 @@ export type BuiltCell = number | string | boolean | null;
 
 export interface BuiltLedger {
 	ledger: LedgerName;
+	catalog?: LedgerCatalog;
 	/** The UTC day every `ago` counts back from. */
 	pinned: DateStamp;
 	/** Every day the ledger's indexes name; a day left out is a hole. */
@@ -153,7 +155,7 @@ export async function buildLedger(root: string, built: BuiltLedger): Promise<voi
 		named.set(covers, day);
 	}
 	const ascending = [...named.keys()].sort();
-	const ledgerRoot = path.join(root, 'compact', ...ledgerFolder(configuredCatalog, built.ledger).split('/'));
+	const ledgerRoot = path.join(root, 'compact', ...ledgerFolder(built.catalog ?? configuredCatalog, built.ledger).split('/'));
 	const daily: CompactEntry[] = [];
 	const monthly: CompactEntry[] = [];
 	for (const covers of ascending) {
@@ -275,13 +277,11 @@ export function servedFrom(root: string, prefix: string): { fetcher: Fetcher; as
 	return { fetcher, asked };
 }
 
-/** Answer a page's requests to its own site for one ledger's compact files from `root`, a 404 for
- *  a file it lacks, and switch the page's writers' tier off: a built ledger has no writer's files,
- *  so the raw days the site build listed would be read from the canary. A request to the archive
- *  host is left to `serveArchiveToPage`, or to the block in `tests/support/browser.ts`. */
+/** Serve one built compact ledger in the explorer's explicit empty-origin fixture mode.
+ *  Ordinary panel reads also retain their site source. */
 export async function serveToPage(context: BrowserContext, root: string, ledger: LedgerName): Promise<void> {
 	const archive = ledgerArchiveBaseUrl();
-	await context.addInitScript(() => Object.defineProperty(globalThis, '__RAW_LISTED_THROUGH__', { value: {}, configurable: true }));
+	await context.addInitScript(() => Object.defineProperty(globalThis, '__ARCHIVE_BASE_URL__', { value: '', configurable: true }));
 	await context.route(
 		(url) => (archive === '' || !url.href.startsWith(`${archive}/`)) && url.pathname.includes(`/state/compact/${ledger}/`),
 		(route) => {

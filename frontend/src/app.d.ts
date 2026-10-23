@@ -31,7 +31,7 @@ declare global {
 	/** `ledger.engine_extension_repository`: where the query engine downloads its add-ons. */
 	const __ENGINE_EXTENSION_REPOSITORY__: string;
 
-	/** `ledger.archive_base_url`: where Data explorer reads older packed ledgers whole. */
+	/** `ledger.archive_base_url`: the explorer's sole registry and compact source when nonempty. */
 	const __ARCHIVE_BASE_URL__: string;
 
 	/** Shared knobs and each route's console file, injected by `vite.config.ts`. */
@@ -46,8 +46,7 @@ declare global {
 	/** Ledgers published on this site, injected by `vite.config.ts`. */
 	const __PUBLISHED_LEDGERS__: string[];
 
-	/** How many UTC days of each published ledger the site copy keeps: the widest
-	 *  `console.window_presets`. Data explorer asks the archive only for older days. */
+	/** How many UTC days staging keeps: the widest `console.window_presets`. */
 	const __SITE_WINDOW_DAYS__: number;
 
 	/** The newest staged raw day listing per ledger. */
