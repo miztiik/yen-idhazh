@@ -765,10 +765,9 @@ That is the swap. No workflow changes: `digest.yml`, `validate.yml` and
 refuses a model repository, a weights filename or a moving revision written into
 any of them.
 
-### 2.2 The two status lines
+### 2.2 Check the pointer and entry
 
-What is in force is printed by two commands, and they are the check that the
-edit did what you meant:
+Use two commands to verify the pointer and weights entry:
 
 ```text
 git grep -n '"models_file"' -- config/idhazh.json
@@ -784,9 +783,8 @@ and the SHA-256 the runtime checks the downloaded bytes against.
 | --- | --- |
 | The three tokenizer readings | paste them now. `measure_budgets.py check` is red until you do, and every window sum is spent at one of them |
 | `docs/reference/models/<candidate>.md` | the dossier. Paste the `dossier.md` the bench emitted; do not transcribe numbers by hand |
-| Two status words | the candidate's dossier becomes `incumbent`, the model it replaced becomes `superseded`. They live in one place, so those two edits are the whole lifecycle change ([../reference/models.md](../reference/models.md)) |
-| Docs and diagrams that name the configured model | search for the old id |
-| Tests that assert the configured model | leave fixture ids that are deliberately historical or generic alone |
+| Docs and diagrams | search for model-specific instructions or stale measurements |
+| Tests | update only tests whose subject is the configured entry; leave deliberately historical fixtures alone |
 
 **The readings are the one source edit a swap costs, and that is deliberate.**
 They sit in `backend/idhazh/measured.py` rather than in `config/` because they
@@ -887,9 +885,8 @@ point of use
 "models_file": "models/<incumbent>.json"
 ```
 
-The same line, back. With it go the three tokenizer readings and the two status
-words - the dossier that said `superseded` says `incumbent` again - and that is
-the whole revert.
+The same line, back. With it go the three tokenizer readings for the weights
+that the pointer now selects.
 
 **What a revert does not need, and why:**
 
@@ -906,7 +903,7 @@ and health before normal workers resume.
 
 ## See also
 
-- [../reference/models.md](../reference/models.md) - one row a model, the status words, and what is in force right now.
+- [../reference/models.md](../reference/models.md) - one row per model and links to each dossier.
 - [fine-tune-a-model.md](fine-tune-a-model.md) - the corpus, the teacher, and what a base swap does to an adapter.
 - [test-models-locally.md](test-models-locally.md) - download, serve and measure the local models.
 - [troubleshoot-one-url.md](troubleshoot-one-url.md) - run one real URL through fetch, extraction and summarization.

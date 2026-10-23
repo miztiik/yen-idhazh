@@ -23,6 +23,7 @@
     "https://news.example/paywall": [{"status": 200, "body": "<html><head><title>Paywall evidence</title><script type=\"application/ld+json\">{\"@type\":\"Article\",\"isAccessibleForFree\":false}</script></head><body><article><h1>Paywall evidence</h1><p>The publisher supplies this introduction but restricts access to the rest of the article. This observation belongs to screening, not a fabricated successful eligibility decision from harvesting.</p><p>Subscribe to continue reading.</p></article></body></html>"}],
     "https://news.example/error": [{"status": 503, "body": ""}],
     "https://news.example/not-found": [{"status": 404, "body": ""}],
+    "https://news.example/gone.xml": [{"status": 410, "body": ""}],
     "https://news.example/timeout": [{"error": "timeout"}],
     "https://news.example/network-error": [{"error": "ECONNRESET"}],
     "https://news.example/retry": [{"status": 503, "body": ""}, {"status": 200, "fixture": "article"}],

@@ -1,6 +1,6 @@
 # Python tests that prove behavior
 
-**Last Updated**: 2026-10-23
+**Last Updated**: 2026-10-22
 **Level**: 3 - change test coverage across reader and writer boundaries without changing production behavior.
 
 ## 0 - Operating contract
@@ -58,8 +58,17 @@ Table D - PR outcomes
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | D1 | 1 | Semantic contracts and focused byte guarantees | - | A | DONE | - | - | - |
 | D2 | 2 | Vector tests independent of the current asset | - | A | DONE | - | - | - |
-| D3 | 3 | Finish the behavior review and remove proven fixture-only checks | 1, 2 | B | PENDING | - | - | - |
+| D3 | 3 | Finish the behavior review and remove proven fixture-only checks | 1, 2 | B | IN-FLIGHT | - | - | - |
+| D4 | 4 | Safe removals with named survivors | 1, 2 | C | DONE | - | - | - |
 | D5 | 5 | Expectations derived from the test's own input | 2 | D | DONE | input-based-vector-expectations | #1654 | - |
+| D6 | 6 | Pipeline records follow the input that produced them | 1 | E | DONE | input-based-pipeline-records | [#1655](https://github.com/miztiik/yen-idhazh/pull/1655) | - |
+| D7 | 7 | Config reader values and accurate migration test names | 1 | F | DONE | config-reader-behavior-proofs | [#1653](https://github.com/miztiik/yen-idhazh/pull/1653) | - |
+| D8 | 8 | Workflow checks retain independent failure evidence | 1 | G | PENDING | - | - | - |
+
+The canary implementation for Row 3 is delivered separately from its suite-wide
+review obligation. Rows 5 and 6 carry additional changes found by that review.
+The review stays open until the previously screened functions have been read,
+each proposed action has a disposition, and the final collection is reconciled.
 
 ## 2 - Row #1 - Semantic contracts and focused byte guarantees
 
@@ -168,6 +177,127 @@ Table J - Rejected alternatives
 | J3 | Move every data assertion into a new producer check or scheduled suite | Many checks are already enforced, or concern only a test fixture; relocating all of them preserves the redundancy. | Extra runtime reads and another maintenance surface; a genuine uncovered production invariant must be priced separately. | Existing producer ownership and the contract-impact boundary. |
 | J4 | Treat fewer tests as proof of faster CI | Collected count does not measure runtime and shared-runner noise can dominate. | Paired runs on identified hardware if a later implementation decision actually needs a speed measurement. | Existing measurement policy. |
 
+## 5 - Row #4 - Safe removals (follow-on of the suite review)
+
+- **Scope:** Remove only the named duplicate checks below. Production code,
+  committed data, helpers and owner-held tests stay unchanged.
+- **Approved correction:** The coordinator selected A1 on 2026-10-23 on
+  kumarsnaveen's behalf under the owner's existing structural-fix and
+  scope-expansion instruction; this was not a new direct owner answer.
+  Strengthen the existing healthy-feed test to require a planned item from
+  the lab feed, and use the two named config-file survivors for the file proof.
+  The first proposed feed proof passed before that change. The constructed
+  retired-knob refusal never reads the committed file and is not its proof.
+- **Config-bound correction:** The coordinator cancelled brief item 5(b) after
+  the body-level group-2 review. Keep the per-file `declared_for` equality:
+  the active-model refusal does not check inactive files. This retains a
+  guarantee rather than silently treating the constructed swap as its proof.
+- **Base:** `9893c08d7174fb489a34209d91c6d7f9598df5d0`, current
+  `origin/main` when work started.
+- **Dependencies:** Rows 1 and 2 supply the completed prerequisites. Row 3's
+  unfinished suite-wide review is not a prerequisite and remains open.
+- **Reference search:** The retention module has other tests and stays. The
+  model-loading test keeps loading every named model file and checking its
+  declared pairing. The registry's committed-file
+  validation moves into `test_the_committed_registry_loads_and_names_each_ledger`.
+- **Acceptance:** Run the shared selector, all seven changed test modules with
+  `pytest -n 0`, root ruff and mypy. Compare collected identifiers before and
+  after. Apply each fault separately in a disposable `git archive` copy of this
+  branch, never in the working implementation.
+
+Table K - Removals and surviving proofs
+
+| ID | Removed check | Surviving behavior test | Negative proof |
+| --- | --- | --- | --- |
+| K1 | `test_host_readings.py::test_the_two_proc_stat_captures_an_oracle_reads_are_committed` | `test_the_processor_busy_share_is_read_from_a_real_proc_stat_pair`; its zero-steal assertion stays | Delete the starting capture in the copy; the survivor must fail reading it. |
+| K2 | `test_plan.py::test_every_feed_fixture_this_module_serves_parses` | `test_a_healthy_feed_is_read_and_its_entries_are_planned`, strengthened under the approved correction to require a planned item from the lab feed | Replace `tests/fixtures/feeds/lab-blog.xml` with non-XML in the copy; the corrected survivor must fail. |
+| K3 | `test_appearance_config.py::test_the_committed_file_validates` | `contracts/test_app_config.py::test_config_file_validates[appearance.json]` | Rename one appearance contract field in the copy; the survivor must fail validation. |
+| K4 | The explicit set and count assertions in `contracts/test_ledger_registry.py::test_the_committed_registry_names_every_ledger_exactly_once` | `test_a_ledger_with_no_entry_stops_the_build_naming_it`, `test_a_ledger_named_twice_stops_the_build_naming_it`, `test_an_entry_for_no_ledger_is_refused_by_the_name_it_carries`, `test_a_ledger_listed_in_two_families_stops_the_build_naming_both`; committed-file loading stays in its own named test | Remove the split-family refusal branch in the copy; the split-family survivor must fail. |
+| K5 | `contracts/test_model_registry.py::test_every_committed_model_entry_declares_the_weights_its_settings_are_for` | `test_a_model_swap_can_no_longer_inherit_settings_nothing_declared_for_it` and the unchanged every-model-file pairing check | Remove the `declared_for` refusal in the copy; the swap survivor must fail. The per-file assertion retains committed pairing coverage. |
+| K6 | KEEP the `declared_for` assertion in `contracts/test_model_registry.py::test_every_model_file_loads_and_not_only_the_one_the_pointer_names`; brief item 5(b) is cancelled | This is the only check of an inactive model file's pairing; the active swap does not cover it | Change only an inactive model's `declared_for` in the copy; the retained per-file check must fail. |
+| K7 | `contracts/test_retention_knobs.py::test_the_committed_config_no_longer_emits_a_removed_name` | `contracts/test_retired_knobs.py::test_a_config_still_carrying_a_removed_knob_is_refused_by_name`, `contracts/test_app_config.py::test_config_file_validates[idhazh.json]`, `test_the_config_file_names_every_knob_it_owns[idhazh.json]` | Add a removed knob to the copied config and run the named survivors. |
+| K8 | `contracts/test_app_config.py::test_the_committed_reject_ceiling_leaves_the_brief_gate_a_live_band` and only the committed-file assertion in `test_no_judges_own_measurement_reaches_the_shared_config_contract` | `test_a_reject_ceiling_under_the_brief_gate_is_refused` and `test_config_file_validates[idhazh.json]` | Remove the reject-ceiling refusal in the copy; the boundary survivor must fail. Config loading remains independently covered. |
+
+### Feed inputs and the conditions their consumers need
+
+The deleted parameter cases checked only an XML declaration, not whether a
+feed parsed. That prefix is incidental formatting: valid XML need not carry
+it. The real consumers read `tests/fixtures/feeds/` through `BODIES`,
+`fetcher_over` and the plan stage. They retain their branch-selecting input:
+
+- `lab-blog.xml`, `trade-press.xml`, `community.atom`: the healthy-feed test
+  plans the shared headline, and now requires the lab feed as its source.
+- `empty.xml`: `test_a_feed_that_answers_two_hundred_with_nothing_in_it_counts_as_read`
+  checks a successful reply with no planned item from that feed.
+- `undated.xml`: `test_an_undated_story_is_never_too_old` and
+  `test_an_undated_entry_gets_the_age_we_first_saw_it` keep the undated item
+  and check its assigned time.
+- `future-dated.xml`: `test_a_date_too_far_in_the_future_is_not_a_date` checks
+  both replaced and accepted future times.
+- `cross-vertical-duplicate.xml`:
+  `test_cross_vertical_duplicate_drops_once_before_the_safety_ceiling` checks
+  the surviving item and the dropped duplicate.
+- `prolific-outlet.xml`: `test_an_outlet_running_two_different_stories_keeps_both`
+  requires more than one planned item from the outlet.
+- `outlet-repeat-first.xml`, `outlet-repeat-second.xml`:
+  `test_one_outlet_never_runs_the_identical_piece_twice` and
+  `test_two_outlets_on_one_story_are_both_planned` distinguish shared and
+  different mastheads.
+- `front-page.xml`: the front-page consumer checks that a recorded vote is
+  carried without changing rank; the separate address-exclusion check stays.
+
+No other consumer or fixture condition is removed. The XML-prefix assertion
+is not retained as a new fixture audit.
+
+### Negative proof outcomes
+
+Each fault ran separately in a disposable archive copy. All nine selected
+survivor cases passed before faults. Each copied production or data edit was
+restored from the archive after its check.
+
+1. Missing starting capture: the processor-share survivor failed with
+   `FileNotFoundError`; its zero-steal assertion stays unchanged.
+2. Non-XML lab feed: the original healthy-feed survivor passed, disproving the
+   brief's first claim. The approved source assertion passed with the real
+   input, then failed with the non-XML input: the planned item's source was
+   `trade-press`, not `lab-blog`.
+3. Renamed `AppearanceConfig.motion`: `test_config_file_validates[appearance.json]`
+   failed with the named extra-field validation error.
+4. Removed split-family refusal: the split-family survivor failed because
+   the remaining duplicate refusal did not name both families.
+5. Removed model pairing refusal: the model-swap survivor failed because
+   `ValueError` was not raised. It proves the active refusal only. The separate
+   per-file equality stays to cover inactive model files.
+6. Added `collect.quarantine_after_failures`: both
+   `test_config_file_validates[idhazh.json]` and
+   `test_the_config_file_names_every_knob_it_owns[idhazh.json]` failed naming
+   the removed knob. The constructed retired-knob refusal passed, as expected
+   after correcting the proof: it independently checks validator behavior,
+   not the committed file.
+7. Removed reject-ceiling refusal: the boundary survivor failed because
+   `ValidationError` was not raised. The removed config-loading assertion
+   remains covered by `test_config_file_validates[idhazh.json]`.
+8. Inactive-model pairing: the retained every-model-file test passed unchanged
+   input, then failed when only `declared_for` in
+   `config/models/gemma-4-e4b-qat-no-draft.json` changed to a different digest.
+   The assertion named that inactive file, confirming why brief item 5(b)
+   must not remove it.
+
+This row does not close the full suite review. Row 3 delivered only its canary
+changes; review groups 2, 6, 7 and 8 still need assertion-level classification.
+All held safety, history, persisted-format and config-bound checks stay.
+
+### Collection reconciliation
+
+An untouched archive of the recorded base collected 7,237 parameter cases
+across 4,882 test functions. This branch collected 7,221 cases across 4,876
+functions: 16 fewer cases and six fewer functions. The identifier comparison
+contains only five nonparameterized deletions, the eleven cases of the deleted feed
+prefix function, and the committed-registry test's rename. The partial assertion removal and the strengthened feed consumer preserve
+their identifiers. The inactive-model pairing assertion stays unchanged.
+The first checkout collection overlapped the edits and was discarded; these
+counts use the untouched archive and the completed branch instead.
+
 ## 6 - Row #5 - Expectations derived from the test's own input
 
 - **Scope:** Replace fixture-derived identities, counts and dates with expectations
@@ -234,6 +364,158 @@ Table J - Rejected alternatives
   70 pytest cases passed. `git diff --check` passed.
 - **Dependencies:** Row 2's generated vector tests. Row 4 and this row touch no
   common application/test file; serialize edits to this shared plan.
+
+## 7 - Row #6 - Pipeline records follow the input that produced them
+
+- **Scope:** Remove literal expectations copied from a fixture where the actual
+  guarantee is preservation of the input, selection under test-owned settings,
+  or reconciliation between a producer and its reader.
+- **Files touched:** `backend/tests/pipeline/test_census_prefers_the_record.py`,
+  `test_day_fragments.py`, `test_degrade.py`, `test_desk_field.py`,
+  `test_eval_row.py`, `test_publish_window.py`, `test_recorded_inputs.py`,
+  `test_two_calls.py`, `test_work_health_payload.py`, `test_work_order.py`,
+  `test_work_records.py` in the same directory.
+- **Reference checks:** Use the full identifiers in the group-5 review report.
+  Its 30 rewrite proposals contain 26 pipeline cases and four council cases.
+  Only the pipeline cases belong to this row. All 35 pipeline candidates and
+  their helpers were read: 24 were rewritten and 11 retained. All 116 test
+  identifiers remain; none were added, removed, renamed or skipped.
+- **Changes and acceptance proof:**
+  - Reconcile persisted item ids/counts with the exact plan supplied to the work
+    stage. A dropped or extra item, changed recorded cell, or changed writer order
+    must still fail.
+  - Set ranking signals, desk counts, tracing switches and truncation flags in
+    the test when those values select its branch. Check propagation against
+    those independent inputs, not values produced by the function under test.
+  - Derive capture counters and recorded-reply text from their raw input fields.
+    Keep explicit arithmetic and refusal reasons.
+  - Give fragment-order and failed-then-published cases test-owned run ids and
+    outcomes. Preserve tie-breaking, day reconciliation and historical reads.
+  - Keep the fresh-clone safety bound, recorded run/config digests, manifest wire
+    keys and the historical run-record proof. They are guarantees, not incidental
+    fixture values.
+- **Gates:** Shared changed-test selector; disposable broken-code checks for each
+  distinct preserved behavior. Record full changed and surviving identifiers.
+- **KEEP:** The paused-family literal checks the exact ledger/family protocol
+  identity and skip record. Replacing it with whatever config currently names
+  could hide incorrect lifecycle wiring. The fresh-clone check retains its
+  positive safety ceiling and usable feeds/taxonomy; loading alone is weaker.
+  Recorded config digest inventories, historical item/run links, raw manifest
+  keys, publication inventory setup, unchanged writes and independent arithmetic
+  remain unchanged. The chosen two-item work-record input stays explicit; unlike
+  the removed five-item census constants, it is not copied from fixture size.
+- **Negative proofs (2026-10-23):** A disposable copy of main `3e4935c1f` plus
+  these eleven edited test modules imported its own production package. Each
+  of 25 named production faults caused its intended test failures: 28 failed
+  executions cover all 24 rewritten identifiers, with no collection errors.
+  Faults cover lost/invented rows, changed cells and writer order, fragment
+  clock/id ordering and recovered failures, lost headings and metadata,
+  truncation/ranking propagation, raw shard totals, desk counts, run identity,
+  null feed floors, later-run counts, trace parents, cut-reply recovery, band
+  and original-position ordering, and capture-directory placement.
+  Full identifiers, exact edits and output links are recorded in the phase's
+  external `row6-proof-report.json` and `row6-negative-results.json`.
+  All copied test hashes matched, all mutated production files were restored,
+  and the disposable copy was removed after verification.
+- **Selector (2026-10-23):** From `frontend/`,
+  `npm run test:changed -- --python <absolute-python-executable>` selected
+  exactly these eleven modules. Whitespace and ruff passed; mypy reported no issues
+  in 834 source files; all 116 pytest tests passed with zero skips.
+  Record: `backend/var/checks/7afab1b065bc5c0bee7ce2e70fbd1efee601a2592015dee79fbf4f544ad3eb8c.json`.
+  No production, config, data, frontend or dependency change was made.
+- **Plan integration:** The coordinator released the serialized edit slot on
+  2026-10-23. Its correction selects Row 7's frozen full plan as the base,
+  imports only D5/Row5 from Row 5 commit `d13c8f3`, and then adds D6/Row6.
+  Other delivered rows and the open D3 review are preserved.
+- **Dependencies:** Row 1's byte/value ownership. No production, persisted format,
+  configuration or frontend change. Serialize edits to this shared plan.
+
+## 8 - Row #7 - Config reader values and accurate migration test names
+
+- **Scope:** Check config readers against the named file's own input values,
+  retain independent digest computation, and stop migration-test names from
+  claiming to scan current publication data.
+- **Files touched:** `backend/tests/contracts/test_council_config.py`,
+  `test_content_similarity_judge_config.py`, `test_feed_ingest_config.py`,
+  `test_committed_days.py` in that directory, and `docs/how-to/run-the-gates.md`.
+- **Reference checks:** The named functions below exist in the coordinator's
+  current tree. `test_curated_registries.py` already has Row 1's semantic check;
+  do not reimplement the obsolete group-1 rewrite. The similarity metrics path
+  test preserves an independent historical address and stays unchanged.
+- **Changes and acceptance proof:**
+  - `test_the_committed_file_names_every_knob_and_both_loaders_read_it`:
+    retain full loaded-value equality and raw-byte SHA-256 expectation.
+    Its separate field-set assertion is redundant with that full equality.
+    Removing a loaded field must still fail the retained comparison.
+  - `test_the_judge_owns_the_three_execution_knobs_and_shared_stages_keep_the_rest`:
+    compare the three named execution fields with the input file's values,
+    not literals copied from today's file. Preserve namespace separation and
+    digest inclusion. Replacing a loaded value with the wrong constant must fail.
+  - `test_python_authored_config_and_config_only_vertical_extension`:
+    compare loaded policy values with its input, or set independent valid
+    values in the test, rather than pinning today's five numeric policy values.
+    Keep the published workflow flag, known/unknown vertical acceptance and
+    cross-language config binding. A reader discarding an authored policy or
+    accepting an unknown vertical must still fail.
+  - Rename `test_a_committed_day_reads_an_absent_ranking_field_as_unknown` to
+    `test_a_day_written_before_the_ranking_fields_reads_them_as_unknown`, and
+    `test_every_committed_day_revalidates_with_no_shortfall_counts` to
+    `test_a_desk_written_before_the_shortfall_counts_reads_each_as_unknown`.
+    Keep their bodies, populated-input conditions and migration assertions.
+  - Clarify gate guidance: historical reader fixtures, known identity values,
+    wire-format guarantees and config/consumer bindings are behavior evidence.
+    Only checks of incidental stored content belong outside behavior tests.
+- **Gates:** Shared changed-test selector and disposable wrong-reader checks.
+  Renames preserve the exact collection cases under their corrected names.
+- **Dependencies:** Row 1. No production or data change; serialize plan edits.
+- **Proof record:** In isolated copies, returning default council settings while
+  changing the copied file's `shards` value from 4 to 5 failed the full-value
+  comparison. Pinning the similarity reader to 200/1/0 while the copied input
+  named 201 pairs failed the input-value comparison. Replacing the feed
+  reader's `min_words_article` with 180 failed against the test-owned value
+  181. Each mutation failed at its intended assertion; none touched this
+  worktree.
+- **Gate record:** The shared selector selected the four changed test modules
+  and two documentation-only paths. Its first run passed Ruff, mypy (831 source
+  files), and all 75 tests in 24.92 seconds, but returned exit 1 because the
+  frozen plan import changed its fingerprint during the run. A post-import run
+  passed Ruff, mypy (831 source files), and all 75 tests in 10.18 seconds with
+  exit 0.
+
+## 9 - Row #8 - Workflow checks retain independent failure evidence
+
+- **Scope:** Keep checks of executable workflow code and its safety boundaries.
+  Add bounded evidence that two checkers can detect an invalid input, remove one
+  comparison of harness constants, and derive publication dates from its input.
+- **Files touched:** `backend/tests/workflows/test_inline_python_imports.py`,
+  `test_workflow_inputs.py`, `test_publication_conflict.py`,
+  `test_staged_paths.py` in the same directory.
+- **Reference checks:** The group-4 supplemental review verified the four bodies
+  and helper functions against the frozen baseline; the coordinator also read
+  these current bodies. Its other nine rewrite/removal/rename proposals are
+  rejected: they protect real trigger, staging, identity or timing behavior.
+- **Changes and acceptance proof:**
+  - Keep `test_every_inline_program_imports_the_modules_it_uses` and its named
+    workflow sweep. Separately drive `_modules_used` and `_bound_names` with
+    a bounded program that uses `hashlib` with and without an import. A checker
+    that reports no modules or misses bound imports must fail.
+  - Keep `test_every_input_an_expression_reads_is_declared_by_that_workflow`
+    and its named workflow sweep. Add a constructed workflow that declares one
+    input but reads that input and another undeclared input. Require exactly the
+    undeclared input to be reported. Dropping references or reading declarations
+    as references must fail the relevant constructed case.
+  - `test_two_checkouts_keep_both_real_publication_updates`: compare dates with
+    the two days registered by the test, in independently chosen newest-first
+    order. Dropping either day or reversing order must still fail.
+  - `test_the_plan_job_publishes_the_day_directory_it_decided`: retain the real
+    workflow output and shell-expression checks; remove only the final equality
+    between `SUBSTITUTED_DATE` and `SUBSTITUTED_DAY_DIR`, plus unused imports.
+    `test_triggers.py::test_a_dispatched_date_becomes_the_day_it_names` already
+    executes that date expansion. A wrong workflow day expression still fails.
+- **Gates:** Shared changed-test selector and disposable checker/publication
+  faults. Record the real-run survivor outcome without claiming a skipped case
+  ran. No workflow, production, config, data or frontend edits.
+- **Dependencies:** Row 1. Serialize edits to this shared plan.
 
 ## See also
 

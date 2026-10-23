@@ -1,0 +1,16 @@
+{
+  "version": "2026-09-02T20:00",
+  "run_id": "2026-10-23-39879819504",
+  "date": "2026-10-23",
+  "feed_id": "abc-au-world",
+  "checked_at": "2026-10-23T00:45:05Z",
+  "outcome": "ok",
+  "status": 200,
+  "items": 25,
+  "detail": null,
+  "endpoint_key": "b372bd2ba21413274972a8ccd770baa73d345f1cbaa93ff4692febff18ecbb13",
+  "robots_outcome": "allowed",
+  "robots_checked_at": null,
+  "robots_status": null,
+  "target_attempted": true
+}

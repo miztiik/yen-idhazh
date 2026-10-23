@@ -1,21 +1,17 @@
 # Qwen3.5-9B-Q4_K_M
 
 **Last Updated**: 2026-09-29
-**Status: incumbent.** It has summarized every published item since 2026-08-27.
-`incumbent` is one of three words a dossier's status line may hold - `evaluated`,
-`incumbent`, `superseded` - and this line is the only place this model's
-lifecycle is written ([models.md](../models.md)).
 
-One model, one page. Every figure below is a reading of **these weights**, it is
-the only reading of that quantity in force, and it carries the hardware that took
-it, the date and the spread. Nothing here was re-derived and nothing was rounded:
-each figure is the one the instrument log recorded, moved rather than restated.
+One model, one page. Every figure below is a reading of **these weights**. It
+carries the hardware that took it, the date and the spread. Nothing here was
+re-derived and nothing was rounded: each figure is the one the instrument log
+recorded, moved rather than restated.
 
-**Where a quantity depends on which runner GitHub gave the job, the reading in
-force is the spread across machines rather than one number.** That is still one
-reading of one quantity - the quantity is what these weights do on the fleet we
-actually get, and a single figure would answer a question nobody can ask, since
-nothing selects the machine ([the processor
+**Where a quantity depends on which runner GitHub gave the job, read the spread
+across machines rather than one number.** That is still one reading of one
+quantity - the quantity is what these weights do on the fleet we actually get,
+and a single figure would answer a question nobody can ask, since nothing
+selects the machine ([the processor
 lottery](../benchmarks/the-processor-lottery.md), owner ruling 2026-09-15).
 
 **A reading taken against other weights is not on this page at all.** A token
@@ -27,9 +23,8 @@ labelled as the retired incumbent's
 
 ## Identity
 
-`config/models/qwen3.5-9b-q4km.json` is where these fields are declared, and
-`config/idhazh.json` names that file in one line, `models_file`. The
-digest identifies the bytes the runtime opened; the repository revision
+`config/models/qwen3.5-9b-q4km.json` is where these fields are declared. The
+digest identifies the bytes the runtime opens; the repository revision
 identifies the snapshot they came from and is pinned rather than a branch, so the
 file, the alias, the revision and the expected digest move together or not at
 all.

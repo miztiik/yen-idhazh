@@ -29,13 +29,13 @@
 		{:else}
 			<div data-source-health="notes" data-source-health-drawn={census.notes.length}>
 				<table>
-					<thead><tr><th>Source</th><th>Desk</th><th>What is holding it back</th><th>Offered</th><th>Published</th></tr></thead>
+					<thead><tr><th>Source</th><th>Desk</th><th>Current limitation</th><th>Offered</th><th>Published</th></tr></thead>
 					<tbody>{#each census.notes as note (note.source_id)}
 						<tr data-source-note={note.source_id}><td>{note.title}<br/><small data-source-note-id>{note.source_id}</small></td><td>{note.vertical}</td><td data-source-note-withheld>{note.withheld}</td><td>{note.opportunities}</td><td>{note.publications}</td></tr>
 					{/each}</tbody>
 				</table>
 			</div>
-			{#if census.hidden > 0}<p class="notes" data-source-health-more>{census.hidden} more sources are held back, none by a louder state than the last row here.</p>{/if}
+			{#if census.hidden > 0}<p class="notes" data-source-health-more>{census.hidden} more sources have a limitation, none ranked above the last row here.</p>{/if}
 		{/if}
 		<div class="evidence" data-source-health-record={census.view.yield_readable ? 'measured' : 'short'} data-source-health-days={census.view.complete_dates}>
 			{#if census.view.complete_dates > 0}<p class="notes">Over {census.view.complete_dates} complete {census.view.complete_dates === 1 ? 'day' : 'days'}, sources were offered {census.totals.offered} addresses and published {census.totals.published}. {census.totals.failures} source-owned failures stay in those offered counts. {#if !census.view.yield_readable}These are counts and not a rate.{/if}</p>{/if}

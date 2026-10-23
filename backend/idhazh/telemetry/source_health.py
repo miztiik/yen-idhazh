@@ -43,9 +43,11 @@ from idhazh.contracts.feed_health import FeedHealthRow, RobotsOutcome, derive_en
 from idhazh.contracts.feed_retirement import FeedRetirementRow, RetirementCause
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.recorded_instant import instant_bounds
 from idhazh.contracts.source_health_view import SourceHealthView
 from idhazh.contracts.sources import FeedDef
 from idhazh.discover import live, settled
+from idhazh.health_order import latest_observations, observation_groups
 from idhazh.ledger import load_health
 
 logger = logging.getLogger(__name__)
@@ -69,9 +71,11 @@ class EndpointRecord:
 
     endpoint_key: str
     gone_runs: tuple[str, ...]
-    """Distinct runs that read `410` since this address last delivered, oldest first."""
+    """Distinct `410` runs proved to follow every productive observation."""
     permission: RobotsOutcome | None
     """The newest robots answer on record. `None` when no run has recorded one."""
+    permission_known: bool = True
+    """False when overlapping observations disagree about the latest permission."""
 
     def retires(self, *, after_runs: int) -> bool:
         """Has the server said `gone` on enough distinct runs to stop asking?"""
@@ -86,7 +90,7 @@ class EndpointRecord:
         and reading those as refusals would take every desk under its floor on
         the day this landed.
         """
-        return self.permission not in UNPERMITTED
+        return self.permission_known and self.permission not in UNPERMITTED
 
 
 def endpoint_records(history: Iterable[FeedHealthRow]) -> dict[str, EndpointRecord]:
@@ -110,26 +114,34 @@ def endpoint_records(history: Iterable[FeedHealthRow]) -> dict[str, EndpointReco
     Permission is separate and simply the newest answer on record. A rest and a
     plain failure carry no robots answer, so neither disturbs it.
     """
-    gone: dict[str, list[str]] = {}
-    permission: dict[str, RobotsOutcome | None] = {}
+    grouped: dict[str, list[FeedHealthRow]] = {}
     for row in settled(history):
         key = row.endpoint_key
         if key is None:
             continue
-        runs = gone.setdefault(key, [])
-        permission.setdefault(key, None)
-        if row.answered:
-            runs.clear()
-        elif row.status == GONE and row.run_id not in runs:
-            runs.append(row.run_id)
-        if row.robots_outcome is not None:
-            permission[key] = row.robots_outcome
-    return {
-        key: EndpointRecord(
-            endpoint_key=key, gone_runs=tuple(runs), permission=permission[key]
+        grouped.setdefault(key, []).append(row)
+    records: dict[str, EndpointRecord] = {}
+    for key, rows in grouped.items():
+        answers = [row for row in rows if row.answered]
+        last_end = max((instant_bounds(row.checked_at)[1] for row in answers), default=None)
+        certain = {
+            row.run_id: None
+            for group in observation_groups(rows)
+            for row in group
+            if not row.answered and row.status == GONE
+            and (last_end is None or instant_bounds(row.checked_at)[0] >= last_end)
+        }
+        permissions = {
+            row.robots_outcome
+            for row in latest_observations([row for row in rows if row.robots_outcome is not None])
+        }
+        permission_known = len(permissions) <= 1
+        permission = next(iter(permissions), None) if permission_known else None
+        records[key] = EndpointRecord(
+            endpoint_key=key, gone_runs=tuple(certain), permission=permission,
+            permission_known=permission_known,
         )
-        for key, runs in gone.items()
-    }
+    return records
 
 
 def retirements(

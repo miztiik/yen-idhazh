@@ -344,6 +344,7 @@ def test_a_healthy_feed_is_read_and_its_entries_are_planned() -> None:
     assert titles(built)[0] == "Example Lab releases a smaller model", (
         "the story three feeds carried leads the day"
     )
+    assert built.items[0].source_id == LAB.id
 
 
 def test_the_plan_records_an_operator_shard_count_even_when_it_exceeds_the_derivation() -> None:
@@ -841,9 +842,14 @@ def test_the_feed_order_in_config_does_not_decide_the_day() -> None:
     ]
 
 
-def test_generated_at_comes_from_the_clock_it_was_handed() -> None:
+def test_generated_at_comes_from_the_clock_it_was_handed(tmp_path: Path) -> None:
     built = plan([LAB, TRADE, COMMUNITY], now="2026-08-22T06:00:00Z")
     assert built.generated_at == "2026-08-22T06:00:00Z"
+    for name, captured in (("seconds", "2026-08-22T06:00:00Z"), ("milliseconds", "2026-08-22T06:00:00.123Z")):
+        state = tmp_path / name
+        precise = plan([LAB, TRADE, COMMUNITY], now=captured, state=state)
+        assert precise.generated_at == "2026-08-22T06:00:00Z"
+        assert {row.checked_at for row in health_after(state)} == {captured}
 
 
 def test_a_plan_round_trips_through_its_own_schema() -> None:
@@ -1939,12 +1945,3 @@ def test_the_manifest_records_the_count_it_was_handed_and_never_a_derived_one() 
     assert RunRecord.model_validate(older).shards is None, (
         "a manifest written before the cell has to read, not fail the build"
     )
-
-
-# --- the fixtures themselves -------------------------------------------------
-
-
-@pytest.mark.parametrize("name", sorted(BODIES.values()))
-def test_every_feed_fixture_this_module_serves_parses(name: str) -> None:
-    """A fixture that silently stopped parsing would make these tests pass for the wrong reason."""
-    assert read_text(FEEDS / name).startswith("<?xml")

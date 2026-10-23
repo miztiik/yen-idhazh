@@ -2,9 +2,11 @@
 import { z } from "zod";
 import { CountSchema, NonEmptySchema, RunIdSchema, Sha256Schema, SlugSchema, TimestampSchema, UrlSchema } from "./primitives";
 import { FetchFailureSchema } from "./harvest-diagnostics.schema";
+import { RecordedInstantSchema } from "./recorded-instant.schema";
 
 export const OPERATION_VERSION = "2026-10-23T09:22";
 const OperationVersionSchema = z.enum(["2026-10-23", OPERATION_VERSION]).default(OPERATION_VERSION);
+export const PLANNER_OPERATION_VERSION = "2026-10-23T18:50";
 export const RequestIdSchema = z.uuid({ version: "v4" });
 export const FetchAttemptSchema = z.strictObject({
   phase: z.enum(["validation", "robots", "target"]), sequence: CountSchema, retry: CountSchema,
@@ -50,12 +52,15 @@ export const FetchedDocumentSchema = z.strictObject({
   ],
 });
 export const PlannerOperationSchema = z.strictObject({
-  version: OperationVersionSchema,
+  version: z.enum(["2026-10-23", OPERATION_VERSION, PLANNER_OPERATION_VERSION]).default(PLANNER_OPERATION_VERSION),
   request_id: RequestIdSchema, operation: z.enum(["fetch", "parse", "plan"]),
   input_sha256: Sha256Schema, config_sha256: Sha256Schema, run_id: RunIdSchema,
-  correlation_id: RequestIdSchema, created_at: TimestampSchema, state: z.enum(["started", "complete"]),
+  correlation_id: RequestIdSchema, created_at: RecordedInstantSchema, state: z.enum(["started", "complete"]),
   response_json: z.string().nullable(), artifact: FetchedDocumentSchema.nullable(),
 }).superRefine((value, ctx) => {
+  if (value.created_at.includes(".") && value.version < PLANNER_OPERATION_VERSION) {
+    ctx.addIssue({ code: "custom", message: "legacy operations use whole-second created_at" });
+  }
   if (value.state === "started" && (value.response_json !== null || value.artifact !== null)) {
     ctx.addIssue({ code: "custom", message: "started requests cannot carry completed output" });
   }
@@ -68,8 +73,9 @@ export const PlannerOperationSchema = z.strictObject({
     }
   }
 }).meta({
-  version: OPERATION_VERSION,
+  version: PLANNER_OPERATION_VERSION,
   changelog: [
+    { version: PLANNER_OPERATION_VERSION, change: "Retain the original captured clock precision through replay." },
     { version: OPERATION_VERSION, change: "Retain measured retry waits on fetched artifacts." },
     { version: "2026-10-23", change: "Declare durable keyed operator request replay." },
   ],
