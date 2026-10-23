@@ -1,138 +1,129 @@
-# Which native feed history the isolated planner uses
+# Which history and source authority the TypeScript planner uses
 
 **Last Updated**: 2026-10-23
 
-The TypeScript planner reads the feed-health and feed-retirement files written
-by the existing pipeline. It writes the same native rows for its own feed reads.
-It does not treat planner source-run audit records as feed-health history.
-The [native health rules](health.md) own rest, endpoint retirement and reliability.
-The [runner](feed-plan-runner.md) owns the captured UTC clock and stage order.
+The TypeScript planner reads native feed-health files for temporary rest and
+measured reliability. Permanent retirement comes only from the existing source
+configuration, `config/sources.json`, which a person curates. A source-run audit
+record is not feed-health history.
 
-## Named history and incomplete inventories
+## Permanent retirement is curated configuration
 
-`inputs.feed_health_days` and `inputs.feed_retirement_days` name UTC days,
-compact indexes and either raw files or a raw index. The existing native reader
-checks file identities, schemas, digests and byte counts. Yearly files take
-precedence over monthly, daily and raw files. A shared file cache prevents
-reading a month or year again for each named day. Higher attempts replace
-earlier attempts of the same native work unit.
+`feeds` supplies the current configured feed and audit population. Only its
+active entries may be fetched. Draft entries and entries marked retired are
+inactive and produce no DNS or feed request.
 
-Health uses the newest 31 **native represented days**. Reliability uses the
-newest `collect.reliability_window_days` represented days. This matches
-`ledger_files.held_days`: a raw day holding files or a nonempty daily index
-contributes its day; a nonempty monthly or yearly index contributes every
-calendar day of that period, including days whose read returns no rows.
-It is neither a trailing calendar cutoff nor a filter keeping only row-bearing
-days. Duplicate feed/run results settle with the native preference: a read
-carrying usable links wins; otherwise the later check wins.
+`retired` is validated separately: each entry must have `status: retired` and
+`retired_on`. Its IDs must not conflict with the feed list. Historical retired
+metadata does not require an active desk or source-kind lookup. The list is
+retained in the effective input fingerprint and reconstruction, but is never
+appended to live feeds, salience votes or feed-outcome measurements. An archived
+list of sources does not create that many new observed feed reads.
 
-Within a native day, the TypeScript reader orders runs by the recorded UTC
-check time. Exact raw files supply their original millisecond write time when checks have the same
-second; it never substitutes a compactor's write clock. Without that original
-raw clock, the recorded second is the only time key. Numeric execution is the
-final deterministic tie-break when the time keys agree.
-This fixes repeated listener requests whose random numeric run IDs are not
-chronological. Existing Python `load_health` still orders by numeric execution
-alone; its runtime is unchanged here. Mixed-producer ordering in that reader,
-and unrecoverable same-second order in compacted records with opaque IDs,
-remain explicit compatibility gaps rather than a claim of full parity.
+TypeScript does not read, discover, register, write or retain receipts for
+`feed-retirements`. It does not mutate source configuration. HTTP 410 is an
+actual failed feed read and can contribute to temporary rest; it never creates
+another permanent retirement store. Existing historical files and legacy Python
+retirement capabilities are not removed by this TypeScript policy.
 
-The isolated workflow stages the three registered compact indexes and their
-named files. It also checks individual raw UTC-day directories within
-`daily_keep_days` from each ledger's existing gardener config. This is a
-discovery bound, not a health window or retirement expiry. Explicit authored
-older inputs remain included. The selector uses raw presence and native compact
-cover metadata before slicing its day count; it does not infer represented
-days from row presence after reading.
+## Native health inputs
 
-Neither this discovery method nor an arbitrary supplied list proves that it
-contains every old, unindexed raw file. The result therefore reports
-`retirement_inventory_complete: false`. It honors every supplied retirement
-without an age cutoff. A missing day stays missing, not known empty. Fewer
-recorded health days than requested report unavailable coverage; observations
-that do exist remain usable and keep their actual counts.
+`inputs.feed_health_days` names UTC days, native compact indexes, and either raw
+files or a raw index. The native reader validates schemas, file identities,
+byte counts and canonical row digests. Yearly files take precedence over
+monthly, daily and raw files. Shared file caches avoid opening one compact file
+again for each represented day.
 
-Full discovery uses the same native raw and compact files and their indexes.
-Existing publication-inventory entries and exact producer receipts can name
-files already recorded there. Reading existing feed-health entries does not
-authorize adding retirement entries or changing the publisher. Those producer
-and inventory-role decisions still require owner approval.
-No parallel history file or second authority is required. The coordinated
-inventory-selector follow-up must prove which permitted native inputs it
-covers while preserving missing evidence. This increment does not claim
-complete external inventory discovery or full feed-history parity.
+Health uses the newest 31 native represented days. Reliability uses
+`collect.reliability_window_days`. Native `ledger_files.held_days` includes a raw
+day holding files or a nonempty daily cover; a nonempty compact month or year
+represents all its calendar days, including selected days that return no rows.
+The selector does not replace this rule with a trailing calendar cutoff or a
+filter keeping only row-bearing days.
 
-One listener also retains its own exact durable native file receipts between
-requests, including writes completed before a later stage fails. Their paths
-are relative to the actual configured output root, not the checkout; readback
-rejects traversal, escaping links, wrong ledgers, days and native identities.
-Health receipts retain the newest configured count of recorded days, including
-calendar gaps. Retirement receipts retain state for current configured
-endpoints without a time expiry. No directory scan is used for this readback.
-Receipts are observations, not proof that an unavailable external day was empty.
+The health input resolver uses the existing publication inventory's health
+paths, the three native compact indexes and exact checked producer receipts.
+Compacted precedence is resolved before staging, so absorbed raw paths in an
+older inventory are not fetched as current raw evidence. No directory probe,
+new date index, parallel history file or retirement input is needed.
 
-## Feed decisions and native writes
+Missing evidence remains unavailable. Current observations never turn a
+missing earlier day into a known empty day. Named observations are not a claim
+that every possible external producer has been inventoried.
 
-Retirement is decided before rest. Only HTTP 410 results with an observed
-endpoint key count toward automatic retirement; a usable successful feed read
-clears that endpoint's 410 record. Other failures, permission refusals, empty
-reads and rests do not clear it. A retirement retains the distinct deciding
-run IDs and is written before the run's health rows. A configured URL edit
-has a different SHA256 endpoint key and does not inherit an old retirement.
-An older row without a key is never assigned today's address.
+## Recorded time and uncertain order
 
-Rest follows `collect.availability_strikes_before_rest` for both the strike
-threshold and the number of skipped runs, matching production.
-`collect.availability_rest_runs` remains unread, as it is in the Python rule.
-A rest and a robots result neither add nor clear a strike. A productive read
-clears it. A rest ends after its recorded skip count reaches the threshold.
+[Recorded instants](../contracts/recorded-instants.md) owns the field-specific
+precision and uncertainty rule for native `checked_at` and keyed-request
+`created_at`. It also owns preservation through raw, daily, monthly and yearly
+storage. Neither file creation time nor a run identifier proves observation
+chronology.
 
-Resting and retired active feeds produce an unrequested feed outcome with
-explicit history evidence, no invented HTTP failure and no network request.
-Draft and curated-retired sources retain `SOURCE_INACTIVE`.
-Native skipped rows say whether the cause was rest, HTTP 410 retirement,
-sustained low-yield retirement or inactive source configuration.
-Health `items` counts distinct usable offered links, including links later
-rejected by article rules; it is not the raw XML-entry or published count.
-Native versions remain `2026-09-02T20:00` for health and `2026-09-17` for
-retirement. Compatible older rows retain their versions and unavailable fields.
-No historical payload is restamped.
+Duplicate feed/run accounts retain the native preference for a productive read.
+Where accounts agree on productivity, only a definitely later saved check can
+replace the held account by time. Packing does not add timing evidence.
 
-## Evidence is not a new ranking policy
+Temporary rest uses `collect.availability_strikes_before_rest` for both the
+failure threshold and rested-run count, matching the existing rule;
+`collect.availability_rest_runs` remains unread. A productive read clears the
+failure streak. Robots results and skips do not add failures. Only a result
+proved for every admitted order is applied.
 
-Each feed event records the observed productive reads, evidence-bearing
-attempts, raw success fraction, requested recorded-day count and actual day
-bounds. Rest and permission refusals are outside the denominator. No
-evidence-bearing read means unavailable reliability, not a fabricated success.
-The current run's persisted feed read joins this measurement, matching the
-Python plan stage's read-after-write order. Lifecycle decisions still use only
-the earlier record. Current observations do not turn missing older days into
-known empty days or prove that the supplied inventory is complete.
-`production_factor` also exposes the native fraction clamped to
-`collect.reliability_floor`; it is not multiplied into portfolio scores.
-Source-run audit summaries receive the measured fraction, attempts and
-recorded-day count even when that source supplied no eligible article.
+When tied or overlapping times leave the rest action unproven, the event records
+an unknown lifecycle and unavailable counters rather than choosing a last row.
+The feed is not automatically rested from that uncertain history; ordinary
+source-status and robots checks still apply before it is fetched. Known
+configured retirement is honored regardless of uncertain health order.
 
-The daily published evidence reads only the captured UTC day's native
-item-health rows, matching `ledger.rows.load_source_counts`: successful
-outcomes count once per URL key. Failed attempts do not count. An available,
-known-empty day supports zero; unavailable coverage exposes only an observed
-lower bound, not a claim of zero publications. This is distinct from the
-current planning attempt's `SourceRunRecord.published_count`, which remains
-null until a publication observer supplies its result.
-Both native item-health projections pin their independent supported stamp,
-`2026-10-20`; a planner contract or event revision cannot silently widen it.
+## Durable observations in one listener
 
-Feed events carry this evidence through the existing stage payload and its
-versioned reader. The API/CLI summary includes coverage and native file
-receipts. The isolated workflow verifies and commits the exact health and
-retirement output files beside the existing planner outputs.
+One listener retains its own exact health-file receipts across requests,
+including writes completed before a later stage fails. Paths resolve under the
+actual configured output root, not the checkout. Readback validates relative
+paths, escaping links, registered native paths, ledger/day/file identity and
+content. Retention is bounded by the configured represented-day count.
+
+There is no scan and no separately persisted listener history authority.
+Receipts remain observations, not proof that unavailable external history was
+empty. A process restart needs the existing native input inventory or exact
+caller-supplied receipts.
+
+## Evidence does not change ranking policy
+
+The current persisted feed read joins reliability after the health write.
+Events carry the actual productive count, evidence-bearing attempts, fraction,
+represented-day bounds, requested cover and native floor factor. Rest and
+permission refusals stay outside that denominator. No evidence-bearing read
+means unavailable reliability, not invented success.
+
+The native floor factor is evidence, not a multiplier added to the approved
+TypeScript portfolio formula. Source-run summaries receive the measured
+fraction, attempts and window even when a source supplies no eligible article.
+
+Daily publication evidence reads only the captured UTC day's successful native
+item-health rows and counts each URL once. Failed attempts do not count.
+Unavailable coverage exposes an observed lower bound, not known zero.
+Both item-health projections independently pin native support at
+`2026-10-20`; planner or event stamps cannot silently widen it.
+Current-attempt `SourceRunRecord.published_count` remains null until an actual
+publication observer supplies its result.
+
+The versioned feed event carries these facts. Native health receipts join the
+exact verified workflow output files; no retirement output is created.
 
 ## Design rationale
 
-The portfolio's approved score, diversity penalties and quotas remain
-unchanged. Applying the Python reliability multiplier or daily source ceiling
-would change selection policy, not merely supply missing evidence. Those
-choices require an explicit owner decision. A missing inventory is an input
-limitation to repair, not evidence that a feed is healthy or that an old
-endpoint has become eligible.
+Owner ruling, kumarsnaveen_microsoft, 2026-10-23: permanent TypeScript retirement
+is the existing source registry's retired list and status, not another raw or
+compact retirement ledger. This replaces the earlier draft dynamic-retirement
+assumption. It authorizes no source-configuration mutation, new state file,
+glob exception, publication-inventory purpose or publisher change.
+
+Owner approval, kumarsnaveen_microsoft, 2026-10-23, "Bug 1 - A1": evolve the
+existing check/request clock fields and their readers without adding a column
+or using packaging as observation order. The narrow Python time-capture and
+reader changes follow the [recorded-instant contract](../contracts/recorded-instants.md).
+
+Portfolio scores, diversity penalties and quotas remain unchanged. Applying a
+reliability multiplier or daily source ceiling would change selection policy,
+not merely provide evidence, and still needs a separate owner decision.

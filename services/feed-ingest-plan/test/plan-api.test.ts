@@ -25,6 +25,8 @@ import { proposedOperation } from "../src/api/document-operations";
 import { FetchRequestSchema } from "../src/api/operation-contracts";
 import type { FeedWriteReceipt } from "../src/read-ledger-history/own-feed-receipts";
 import { parseDocument } from "../src/harvest-feeds/parse-document";
+import { FeedHealthContract, PLANNER_OPERATION_VERSION } from "@idhazh/common-contracts";
+import { loadHarvestInputs } from "../src/harvest-feeds/load-harvest-inputs";
 
 test("health is explicit; disabled, malformed, oversized and unknown controls cannot fetch", async () => {
   const inputs = await loadPlanInputs(fileURLToPath(new URL("../../../", import.meta.url)));
@@ -79,6 +81,39 @@ test("health is explicit; disabled, malformed, oversized and unknown controls ca
   });
   expect(disabledFetch.status).toBe(503);
   expect(transport.requests).toHaveLength(0);
+  const authority = await recordedPlan([
+    source(), source({ id: "draft-source", status: "draft" }),
+    source({ id: "retired-in-feeds", status: "retired", retired_on: "2026-10-20" }),
+  ]);
+  try {
+    const retired = source({ id: "curated-retired", status: "retired", retired_on: "2026-10-20" });
+    const rawSources = { feeds: authority.inputs.harvest.sources, retired: [retired] };
+    const before = JSON.stringify(rawSources);
+    const rawInputs = {
+      config: authority.inputs.harvest.config,
+      taxonomy: { ...authority.inputs.harvest.taxonomy, ...authority.inputs.harvest.registry },
+      sources: rawSources,
+      extraction: { ...authority.inputs.harvest.extraction_settings, extract: authority.inputs.harvest.extraction },
+    };
+    authority.inputs.harvest = loadHarvestInputs(rawInputs);
+    expect(authority.inputs.harvest.sources).toHaveLength(rawSources.feeds.length);
+    expect(authority.inputs.harvest.retired_sources).toHaveLength(1);
+    const guarded = createPlanApp(authority.inputs, authority.runtime);
+    for (const source_id of ["curated-retired", "retired-in-feeds", "draft-source"]) {
+      const result = await guarded.request("/api/2026-10-20/fetch", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ request_id: randomUUID(), correlation_id: randomUUID(), source_id, kind: "feed" }),
+      });
+      expect(result.status).toBe(400);
+      expect((await result.json()).issues[0].field).toBe("source_id");
+    }
+    expect(authority.transport.requests).toHaveLength(0);
+    expect(JSON.stringify(rawSources)).toBe(before);
+    expect(() => loadHarvestInputs({ ...rawInputs,
+      sources: { ...rawSources, retired: [{ ...retired, retired_on: null }] } })).toThrow();
+    expect(() => loadHarvestInputs({ ...rawInputs,
+      sources: { ...rawSources, retired: [{ ...retired, status: "active", retired_on: null }] } })).toThrow();
+  } finally { await authority.close(); }
 });
 
 test("actual API and awaited CLI compose the same recorded plan and disclose the same audit limit", async () => {
@@ -93,9 +128,20 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     });
     expect(response.status).toBe(200);
     const apiResult = await response.json();
+    const capturedHealth = await readLedgerParquet(join(api.inputs.outputRoot, apiResult.files.feed_health.files[0].path),
+      "feed-health", FeedHealthContract);
+    expect(capturedHealth.rows.every(({ row }) => row.checked_at === "2026-10-21T23:59:59.999Z")).toBe(true);
+    const saved = await openOperationStore(api.inputs.outputRoot);
+    try {
+      expect(saved.get(key)).toMatchObject({
+        version: PLANNER_OPERATION_VERSION, created_at: "2026-10-21T23:59:59.999Z",
+      });
+    } finally { saved.close(); }
     const requestCount = api.transport.requests.length;
     const restarted = createPlanApp(api.inputs, api.runtime);
-    const replayed = await restarted.request("/api/2026-10-20/plan", {
+    const replayed = await createPlanApp(api.inputs, {
+      ...api.runtime, clock: () => { throw new Error("Completed replay must not acquire a new run clock"); },
+    }).request("/api/2026-10-20/plan", {
       method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": key },
       body: JSON.stringify({ freshness_hours: 18, article_limit: 1, partition_strategy: "none" }),
     });
@@ -296,7 +342,7 @@ test("one listener retains durable seen receipts from an output root outside the
   const recorded = await recordedPlan([
     source({ url: "https://news.example/article-failures.xml" }),
     source({ id: "rest-cycle", url: "https://news.example/empty.xml" }),
-    source({ id: "retire-cycle", url: "https://news.example/gone.xml" }),
+    source({ id: "gone-health", url: "https://news.example/gone.xml" }),
   ]);
   const outputRoot = await mkdtemp(join(tmpdir(), "planner-output-root-"));
   const receipts: { day: string; files: readonly PersistedLedgerFile[] }[] = [];
@@ -306,7 +352,6 @@ test("one listener retains durable seen receipts from an output root outside the
     recorded.inputs.outputRoot = outputRoot;
     recorded.inputs.clock_config.collect.seen_window_days = 1;
     recorded.inputs.clock_config.collect.availability_strikes_before_rest = 1;
-    recorded.inputs.clock_config.collect.feed_http_410_runs_before_retirement = 1;
     recorded.inputs.settings.inputs.seen_days = [{ day: "2026-10-21", raw_files: [] }];
     delete recorded.runtime.run_number;
     recorded.runtime.clock = () => new Date(`2026-10-21T12:00:00.${String(clocks++).padStart(3, "0")}Z`);
@@ -326,16 +371,26 @@ test("one listener retains durable seen receipts from an output root outside the
     expect(first.first_sight.created_count).toBeGreaterThan(0);
     expect(second.first_sight.created_count).toBe(0);
     expect(second.source_records.find((row: { source_id: string }) => row.source_id === "rest-cycle").fetch_status).toBe("not_requested");
-    expect(second.source_records.find((row: { source_id: string }) => row.source_id === "retire-cycle").fetch_status).toBe("not_requested");
+    expect(second.source_records.find((row: { source_id: string }) => row.source_id === "gone-health").fetch_status).toBe("not_requested");
     expect(second.feed_history.own_receipts.filter((receipt: { ledger: string }) => receipt.ledger === "feed-health")).toHaveLength(1);
     const thirdResponse = await post();
     expect(thirdResponse.status).toBe(200);
     const third = await thirdResponse.json();
     expect(third.source_records.find((row: { source_id: string }) => row.source_id === "rest-cycle").fetch_status).toBe("success");
-    expect(third.source_records.find((row: { source_id: string }) => row.source_id === "retire-cycle").fetch_status).toBe("not_requested");
-    expect(third.feed_history.own_receipts.filter((receipt: { ledger: string }) => receipt.ledger === "feed-retirements")).toHaveLength(1);
-    expect(recorded.transport.requests.filter(request => request.url.pathname === "/gone.xml")).toHaveLength(1);
+    expect(third.source_records.find((row: { source_id: string }) => row.source_id === "gone-health").fetch_status).toBe("http_failure");
+    expect(third.feed_history.own_receipts.every((receipt: { ledger: string }) => receipt.ledger === "feed-health")).toBe(true);
+    expect(recorded.transport.requests.filter(request => request.url.pathname === "/gone.xml")).toHaveLength(2);
+    expect(third.files).not.toHaveProperty("feed_retirements");
     expect(recorded.transport.requests.filter(request => request.url.pathname === "/empty.xml")).toHaveLength(2);
+    recorded.runtime.clock = () => new Date("2026-10-21T12:00:00.002Z");
+    expect((await post()).status).toBe(200);
+    const frozen = await post();
+    expect(frozen.status).toBe(200);
+    expect((await frozen.json()).source_records.find((row: { source_id: string }) => row.source_id === "rest-cycle").fetch_status)
+      .toBe("success");
+    const unknown = recorded.events.filter(event => event.source_id === "rest-cycle" && event.payload.kind === "feed_outcome").at(-1);
+    if (unknown?.payload.kind !== "feed_outcome") throw new Error("Missing frozen-clock feed observation");
+    expect(unknown.payload.history?.lifecycle).toBe("unknown");
     expect(feedReceipts.flatMap(receipt => receipt.files).every(file => !file.path.includes("\\") && !file.path.includes(":"))).toBe(true);
     expect(receipts).toHaveLength(1);
     const file = await readLedgerParquet(join(recorded.inputs.outputRoot, receipts[0]!.files[0]!.path), "seen", {
@@ -362,7 +417,7 @@ test("a later dispatch failure does not lose already durable first sight from th
   const recorded = await recordedPlan([
     source({ url: "https://news.example/article-failures.xml" }),
     source({ id: "rest-cycle", url: "https://news.example/empty.xml" }),
-    source({ id: "retire-cycle", url: "https://news.example/gone.xml" }),
+    source({ id: "gone-health", url: "https://news.example/gone.xml" }),
   ]);
   const receipts: { day: string; files: readonly PersistedLedgerFile[] }[] = [];
   const feedReceipts: FeedWriteReceipt[] = [];
@@ -370,7 +425,6 @@ test("a later dispatch failure does not lose already durable first sight from th
   try {
     recorded.inputs.clock_config.collect.seen_window_days = 0;
     recorded.inputs.clock_config.collect.availability_strikes_before_rest = 1;
-    recorded.inputs.clock_config.collect.feed_http_410_runs_before_retirement = 1;
     recorded.inputs.settings.inputs.seen_days = [{ day: "2026-10-21", raw_files: [] }];
     delete recorded.runtime.run_number;
     recorded.runtime.clock = () => new Date(`2026-10-21T12:0${clocks++}:00Z`);
@@ -389,15 +443,15 @@ test("a later dispatch failure does not lose already durable first sight from th
     expect(receipts).toHaveLength(1);
     const failedAgain = await post();
     expect(failedAgain.status).toBe(500);
-    expect(feedReceipts.filter(receipt => receipt.ledger === "feed-retirements")).toHaveLength(1);
+    expect(feedReceipts).toHaveLength(2);
     await unlink(blocked);
     const retried = await post();
     expect(retried.status).toBe(200);
     const recovered = await retried.json();
     expect(recovered).not.toHaveProperty("issues");
-    expect(recovered.feed_history.own_receipts.filter((receipt: { ledger: string }) => receipt.ledger === "feed-retirements")).toHaveLength(1);
-    expect(recovered.files.feed_retirements.status).toBe("empty");
-    expect(recorded.transport.requests.filter(request => request.url.pathname === "/gone.xml")).toHaveLength(1);
+    expect(recovered.feed_history.own_receipts.every((receipt: { ledger: string }) => receipt.ledger === "feed-health")).toBe(true);
+    expect(recovered.files).not.toHaveProperty("feed_retirements");
+    expect(recorded.transport.requests.filter(request => request.url.pathname === "/gone.xml")).toHaveLength(2);
     expect(receipts).toHaveLength(1);
     const native = await readLedgerParquet(join(recorded.inputs.outputRoot, receipts[0]!.files[0]!.path), "seen", {
       schema: SeenRowSchema, schemaVersion: "2026-08-31",

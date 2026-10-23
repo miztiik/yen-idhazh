@@ -43,7 +43,7 @@ export async function harvestFeeds(
   const feeds = await mapPool(inputs.sources, inputs.config.harvest.concurrency, async configured => {
     const source = sourceSnapshot(inputs, configured);
     const history = context.feed_history?.get(source.source_id);
-    if (source.status === "active" && history !== undefined && history.lifecycle !== "eligible") {
+    if (source.status === "active" && history?.lifecycle === "resting") {
       return {
         offered: [], rejection: null,
         outcome: FeedOutcomePayloadSchema.parse({

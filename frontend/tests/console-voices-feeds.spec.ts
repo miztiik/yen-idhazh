@@ -53,6 +53,13 @@ test.describe('the quarantine rule, without a browser', () => {
             }))
         ];
         expect(resting(served, QUARANTINE_AFTER)).toBe(false);
+        const failure = { ...at(9), checkedAt: '2026-08-30T12:00:00.100Z', outcome: 'transient', items: 0 };
+        const skip = { ...at(1), checkedAt: '2026-08-30T12:00:00.100Z', outcome: 'skipped', items: 0 };
+        expect(resting([failure, skip], 1)).toBeNull();
+        expect(resting([skip, failure], 1)).toBeNull();
+        expect(resting([failure, { ...skip, checkedAt: '2026-08-30T12:00:00.101Z' }], 1)).toBe(false);
+        expect(resting([{ ...failure, checkedAt: '2026-08-30T12:00:00Z' }, skip], 1)).toBeNull();
+        expect(streak([failure, skip])).toBe(1);
     });
     test('an answer that carried nothing is a failure, and a polite refusal is not', () => {
         const empty: FeedRead = { date: '2026-08-01', runId: 'r1', outcome: 'ok', items: 0 };
@@ -92,8 +99,9 @@ const EVIDENCE: {
 function at(run: number): {
     date: string;
     runId: string;
+    checkedAt: string;
 } {
-    return { date: '2026-08-30', runId: `2026-08-30-${run}` };
+    return { date: '2026-08-30', runId: `2026-08-30-${run}`, checkedAt: `2026-08-30T12:00:${String(run).padStart(2, '0')}Z` };
 }
 test.describe('the evidence table, without a browser', () => {
     const twoStrikes: FeedRead[] = [

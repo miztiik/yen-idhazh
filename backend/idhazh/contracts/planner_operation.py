@@ -17,6 +17,7 @@ from idhazh.contracts.base import (
 )
 from idhazh.contracts.feed_ingest_candidate import Count, NonEmpty
 from idhazh.contracts.feed_ingest_diagnostics import FetchFailure
+from idhazh.contracts.recorded_instant import RecordedInstant
 
 HttpStatus = Annotated[StrictInt, Field(ge=100, le=599)]
 ErrorCode = Annotated[str, Field(max_length=64, pattern=r"^[A-Z][A-Z0-9_]*$")]
@@ -102,9 +103,14 @@ class FetchedDocument(Contract):
 class PlannerOperation(Contract):
     """One keyed request holds its captured identity and exact completed response."""
 
-    version: Literal["2026-10-23", "2026-10-23T09:22"] = "2026-10-23T09:22"
+    version: Literal["2026-10-23", "2026-10-23T09:22", "2026-10-23T18:50"] = "2026-10-23T18:50"
     __schema_stem__: ClassVar[str] = "planner-operation"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-23T18:50",
+            change="created_at retains the original captured clock precision through replay.",
+            why="A keyed request must not discard its observation order before executing.",
+        ),
         ChangelogEntry(
             version="2026-10-23T09:22",
             change="Retain measured retry waits on fetched artifacts.",
@@ -122,13 +128,15 @@ class PlannerOperation(Contract):
     config_sha256: Sha256
     run_id: RunId
     correlation_id: UUID4
-    created_at: Timestamp
+    created_at: RecordedInstant
     state: Literal["started", "complete"]
     response_json: str | None
     artifact: FetchedDocument | None
 
     @model_validator(mode="after")
     def validate_completion(self) -> Self:
+        if "." in self.created_at and self.version < "2026-10-23T18:50":
+            raise ValueError("legacy operations use whole-second created_at")
         has_output = self.response_json is not None or self.artifact is not None
         if self.state == "started" and has_output:
             raise ValueError("started requests cannot carry completed output")

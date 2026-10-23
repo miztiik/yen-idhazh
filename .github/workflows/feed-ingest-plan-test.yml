@@ -245,28 +245,21 @@ jobs:
             }
             await stageConfiguredDays("published", inputs.registrations.published.prefix, published_days);
             await stageConfiguredDays("item-health", inputs.registrations.item_health.prefix, settled_failure_days);
-            const feedInventories: Awaited<ReturnType<typeof stageFeedHistory>>[] = [];
-            for (const [ledger, registration, authored] of [
-              ["feed-health", inputs.registrations.feed_health, inputs.settings.inputs.feed_health_days],
-              ["feed-retirements", inputs.registrations.feed_retirements, inputs.settings.inputs.feed_retirement_days],
-            ] as const) {
-              const policy = await Bun.file(`config/gardener/compact-${ledger}.json`).json();
-              if (!Number.isSafeInteger(policy.daily_keep_days) || policy.daily_keep_days < 0) throw new Error("Feed history raw discovery requires daily_keep_days");
-              const staged = await stageFeedHistory({
-                ledger, prefix: registration.prefix, now, raw_discovery_days: policy.daily_keep_days,
-                authored, read: readCommitted, listRawDay,
-              });
-              feedInventories.push(staged);
-              for (const path of staged.files) inventory.add(path);
-            }
+            const healthPolicy = await Bun.file("config/gardener/compact-feed-health.json").json();
+            if (!Number.isSafeInteger(healthPolicy.daily_keep_days) || healthPolicy.daily_keep_days < 0) throw new Error("Feed history raw discovery requires daily_keep_days");
+            const feedInventory = await stageFeedHistory({
+              ledger: "feed-health", prefix: inputs.registrations.feed_health.prefix, now,
+              raw_discovery_days: healthPolicy.daily_keep_days,
+              authored: inputs.settings.inputs.feed_health_days, read: readCommitted, listRawDay,
+            });
+            for (const path of feedInventory.files) inventory.add(path);
             for (const path of inputs.settings.inputs.seen_files) inventory.add(path);
             const sparse = Bun.spawn(["git", "sparse-checkout", "add", "--skip-checks", ...[...inventory].map(sparseCheckoutPath)],
               { stdout: "inherit", stderr: "inherit" });
             if (await sparse.exited !== 0) throw new Error("history: named sparse checkout failed");
             const feed_health_days = await selectHealthDays(root, inputs.registrations.feed_health,
-              feedInventories[0]!.inputs.filter(day => feedInventories[0]!.represented_days.includes(day.day)),
+              feedInventory.inputs.filter(day => feedInventory.represented_days.includes(day.day)),
               Math.max(HEALTH_RECORDED_DAYS, inputs.clock_config.collect.reliability_window_days));
-            const feed_retirement_days = feedInventories[1]!.inputs;
             const git = Bun.spawn(["git", "rev-parse", "HEAD"], { stdout: "pipe", stderr: "inherit" });
             const git_sha = (await new Response(git.stdout).text()).trim();
             if (await git.exited !== 0) throw new Error("git_sha: cannot resolve the checkout commit");
@@ -275,7 +268,7 @@ jobs:
               throw new Error("workflow: runner directory, output path, run identity and attempt are required");
             }
             const settings = ServiceSettingsSchema.parse({ ...inputs.settings, enabled: true,
-              inputs: { ...inputs.settings.inputs, seen_days, published_days, settled_failure_days, feed_health_days, feed_retirement_days },
+              inputs: { ...inputs.settings.inputs, seen_days, published_days, settled_failure_days, feed_health_days },
               run: { ...inputs.settings.run, attempt: Number(GITHUB_RUN_ATTEMPT) } });
             const artifactRoot = join(RUNNER_TEMP, "feed-ingest-plan");
             await mkdir(artifactRoot, { recursive: true });
@@ -324,7 +317,6 @@ jobs:
             await writeFile(join(artifactRoot, "response.json"), JSON.stringify(summary));
             await verifyParquetFiles(join(artifactRoot, "state"), "dispatches", summary.files.dispatches, inputs.registrations.dispatches);
             await verifyParquetFiles(join(artifactRoot, "state"), "feed-health", summary.files.feed_health, inputs.registrations.feed_health);
-            await verifyParquetFiles(join(artifactRoot, "state"), "feed-retirements", summary.files.feed_retirements, inputs.registrations.feed_retirements);
             for (const files of [summary.files.harvest_rejections, summary.files.screening_rejections, summary.files.curation_rejections]) {
               await verifyParquetFiles(join(artifactRoot, "state"), "rejections", files, inputs.registrations.rejections);
             }

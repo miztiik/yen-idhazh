@@ -9,7 +9,7 @@ import {
   LedgerCompletionEvidenceSchema, PartitionAssignmentSchema,
   PenaltyEvidenceSchema, PolicyIdentitySchema,
   RejectionDetailsSchema, RowIdentitySchema, ROW_IDENTITY_COLUMN_VERSIONS, ScoreEvidenceSchema, SourceRunRecordSchema,
-  SourceSnapshotSchema, WriterIdentitySchema, FeedHealthRowSchema, FeedRetirementRowSchema,
+  SourceSnapshotSchema, WriterIdentitySchema, FeedHealthRowSchema,
   FetchedDocumentSchema, PlannerOperationSchema,
   ExtractionQualitySchema,
 } from "../src/index";
@@ -25,7 +25,7 @@ export const runtimeSchemas = {
   DropReasonCount: DropReasonCountSchema, CompletedFile: CompletedFileSchema,
   LedgerCompletionEvidence: LedgerCompletionEvidenceSchema, SourceRunRecord: SourceRunRecordSchema,
   ArticleAssessmentRecord: ArticleAssessmentRecordSchema, DiversityMetricRow: DiversityMetricRowSchema,
-  FeedHealthRow: FeedHealthRowSchema, FeedRetirementRow: FeedRetirementRowSchema,
+  FeedHealthRow: FeedHealthRowSchema,
   FetchedDocument: FetchedDocumentSchema, PlannerOperation: PlannerOperationSchema,
   ExtractionQuality: ExtractionQualitySchema,
 } satisfies Record<string, z.ZodType>;

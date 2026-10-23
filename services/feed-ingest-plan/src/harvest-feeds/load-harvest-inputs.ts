@@ -25,7 +25,12 @@ const SourceConfigSchema = LifecycleSchema.safeExtend({
   id: SlugSchema, url: ConfiguredUrlSchema, title: NonEmptySchema, vertical: SlugSchema,
   kind: SlugSchema, tier: PositiveCountSchema, form: SourceFormSchema, weight: WeightSchema,
 });
-const SourcesSchema = z.object({ feeds: z.array(SourceConfigSchema) });
+const SourcesSchema = z.object({
+  feeds: z.array(SourceConfigSchema),
+  retired: z.array(SourceConfigSchema.refine(source => source.status === "retired", {
+    message: "retired entries must have retired status and a retirement date",
+  })).default([]),
+});
 const RegistrySchema = z.object({
   verticals: z.array(z.object({ id: SlugSchema })),
   source_kinds: z.array(LifecycleSchema.safeExtend({ id: SlugSchema })),
@@ -50,11 +55,11 @@ export function loadHarvestInputs(raw: {
 }) {
   const planning = loadPlanningConfig(raw.config, raw.taxonomy);
   const registry = RegistrySchema.parse(raw.taxonomy);
-  const sources = SourcesSchema.parse(raw.sources).feeds;
+  const { feeds: sources, retired } = SourcesSchema.parse(raw.sources);
   const extraction_settings = ExtractionSchema.parse(raw.extraction);
   const extraction = extraction_settings.extract;
   for (const [name, ids] of [
-    ["source", sources.map(source => source.id)],
+    ["source", [...sources, ...retired].map(source => source.id)],
     ["source kind", registry.source_kinds.map(kind => kind.id)],
     ["source tier", registry.source_tiers.map(tier => tier.id)],
   ] as const) {
@@ -80,11 +85,11 @@ export function loadHarvestInputs(raw: {
   // This digest covers every validated input that can change harvested content or provenance.
   const { workflow_reporting, ...contentConfig } = planning.config;
   const snapshot = {
-    config: contentConfig, registry, sources, extraction,
+    config: contentConfig, registry, sources, retired, extraction,
     extractor_version: EXTRACTOR_VERSION, sanitizer_version: SANITIZER_FINGERPRINT,
   };
   const config_sha256 = createHash("sha256").update(JSON.stringify(snapshot)).digest("hex");
-  return { ...planning, registry, sources, extraction, extraction_settings, config_sha256 };
+  return { ...planning, registry, sources, retired_sources: retired, extraction, extraction_settings, config_sha256 };
 }
 
 export async function readHarvestInputs(paths: {

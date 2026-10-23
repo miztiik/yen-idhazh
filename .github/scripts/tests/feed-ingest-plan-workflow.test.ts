@@ -10,6 +10,7 @@ import { persistLedger } from "../../../packages/ledger-file-writer/src/index";
 import { stageFeedHistory } from "../feed-ingest-plan-feed-history";
 import { selectHealthDays } from "../../../services/feed-ingest-plan/src/read-ledger-history/select-health-days";
 import { readLedgerParquet } from "../../../services/feed-ingest-plan/src/read-ledger-history/read-parquet";
+import { verifyHealthOrderCompaction } from "../../../services/feed-ingest-plan/test/health-order-recording";
 import { completeHistoryDayInputs, createSeenDayInputs, historyDays, historyIndexPaths, resolveHistoryInventory, sparseCheckoutPath } from "../feed-ingest-plan-outputs";
 import { requiredSeenDays } from "../../../services/feed-ingest-plan/src/read-ledger-history/read-seen-evidence";
 import { utcTimestamp } from "../../../services/feed-ingest-plan/src/harvest-feeds/harvest-types";
@@ -118,7 +119,7 @@ test("offers four manual controls and commits only genuine planner and host file
   expect(plan.run!.indexOf("await verifyPlanningCompletion(")).toBeLessThan(plan.run!.indexOf("await writeGitHubOutputs("));
   expect(plan.run).toContain("stageConfiguredDays(\"published\"");
   expect(plan.run).toContain("stageConfiguredDays(\"item-health\"");
-  expect(plan.run).toContain("inputs: { ...inputs.settings.inputs, seen_days, published_days, settled_failure_days, feed_health_days, feed_retirement_days }");
+  expect(plan.run).toContain("inputs: { ...inputs.settings.inputs, seen_days, published_days, settled_failure_days, feed_health_days }");
   expect(plan.run).not.toContain("feed-ingest-plan-report");
   const reporting = steps.find(step => step.name === "Optional GitHub report")!;
   expect(reporting.if).toContain("workflow_reporting == 'true'");
@@ -166,6 +167,7 @@ test("offers four manual controls and commits only genuine planner and host file
 });
 
 test("derives UTC windows and stages indexed compact files before considering raw evidence", async () => {
+  await verifyHealthOrderCompaction();
   const days = historyDays("2026-01-01T00:00:00Z", 1, [1]);
   expect(days).toEqual(["2026-01-01", "2025-12-31"]);
   expect(historyDays(utcTimestamp(() => new Date("2026-01-01T00:00:00.999Z")), 1, [1])).toEqual(days);
@@ -375,7 +377,7 @@ test("runs the native compatibility verifier in a named-input copy with no backe
       "schemas/primitives", "schemas/rejection.schema", "schemas/source-run.schema",
       "schemas/source.schema", "schemas/telemetry.schema", "schemas/host-fingerprint.schema",
       "schemas/harvest-diagnostics.schema", "schemas/item-health-failure.schema", "schemas/feed-health.schema",
-      "schemas/planner-operation.schema",
+      "schemas/planner-operation.schema", "schemas/recorded-instant.schema", "observation-order",
     ].map(name => `packages/common-contracts/src/${name}.ts`);
     const writer = [
       "atomic-file", "index", "ledger-paths", "ledger-types", "persist-compact", "persist-ledger",

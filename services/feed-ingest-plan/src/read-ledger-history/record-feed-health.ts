@@ -1,8 +1,8 @@
-/** Which native health and retirement rows record this run before downstream work can fail? */
+/** Which native health rows record this run before downstream work can fail? */
 import type { FeedOutcomePayload, WriterIdentity } from "@idhazh/common-contracts";
 import { persistLedger } from "@idhazh/ledger-file-writer";
 import type { LedgerRegistration, LedgerSettings } from "@idhazh/ledger-file-writer";
-import { FeedHealthContract, FeedRetirementContract } from "@idhazh/common-contracts";
+import { FeedHealthContract } from "@idhazh/common-contracts";
 import type { FeedHistory } from "./read-feed-history";
 import { retryableStatus } from "../harvest-feeds/robots-policy";
 import type { HarvestResult } from "../harvest-feeds/harvest-types";
@@ -11,7 +11,7 @@ import type { FeedWriteReceipt } from "./own-feed-receipts";
 export async function recordFeedHealth(input: {
   outcomes: readonly FeedOutcomePayload[]; articles: HarvestResult["articles"]; history: FeedHistory; now: string;
   writer: WriterIdentity; outputRoot: string; settings: LedgerSettings;
-  health: LedgerRegistration; retirements: LedgerRegistration;
+  health: LedgerRegistration;
   on_persisted?: (receipt: FeedWriteReceipt) => void;
 }) {
   const rows = input.outcomes.map(outcome => {
@@ -35,9 +35,7 @@ export async function recordFeedHealth(input: {
           ? [offered.canonical_url] : [];
       })).size,
       detail: skipped ? outcome.source.status !== "active" ? "source inactive"
-        : history.lifecycle === "retired" ? history.retirement_cause === "http_410"
-          ? "address retired after repeated 410 Gone" : "address retired after sustained low yield"
-          : "resting after repeated failures"
+        : "resting after repeated failures"
         : outcome.rejection_reason,
       endpoint_key: history.endpoint_key,
       robots_outcome: diagnostics?.robots === "unknown" ? "unreachable" : diagnostics?.robots ?? null,
@@ -45,26 +43,14 @@ export async function recordFeedHealth(input: {
       target_attempted: !skipped && !robots && failure !== "unsafe-target",
     });
   });
-  const write = async <T extends object>(
-    ledger: "feed-health" | "feed-retirements", registration: LedgerRegistration,
-    contract: { schema: import("zod").z.ZodType<T>; schemaVersion: string }, rows: readonly T[],
-  ) => {
-    const result = await persistLedger({
-      ledger, registryEntry: registration, rowContract: contract, rows,
-      period: { tier: "raw", covers: input.now.slice(0, 10) },
-      writerContext: input.writer, outputRoot: input.outputRoot, ledgerSettings: input.settings,
-    });
-    if (result.status === "skipped") throw new Error(`Required ${ledger} write was skipped`);
-    return result;
-  };
-  const retirements = await write("feed-retirements", input.retirements, FeedRetirementContract, input.history.new_retirements);
-  if (retirements.files.length > 0) input.on_persisted?.({
-    ledger: "feed-retirements", day: input.now.slice(0, 10), files: retirements.files,
-    endpoint_keys: input.history.new_retirements.map(row => row.endpoint_key),
+  const health = await persistLedger({
+    ledger: "feed-health", registryEntry: input.health, rowContract: FeedHealthContract, rows,
+    period: { tier: "raw", covers: input.now.slice(0, 10) },
+    writerContext: input.writer, outputRoot: input.outputRoot, ledgerSettings: input.settings,
   });
-  const health = await write("feed-health", input.health, FeedHealthContract, rows);
+  if (health.status === "skipped") throw new Error("Required feed-health write was skipped");
   if (health.files.length > 0) input.on_persisted?.({
     ledger: "feed-health", day: input.now.slice(0, 10), files: health.files,
   });
-  return { health, retirements, rows };
+  return { health, rows };
 }

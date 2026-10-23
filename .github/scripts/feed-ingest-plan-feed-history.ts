@@ -24,7 +24,7 @@ function compactDays(index: CompactIndex): string[] {
 }
 
 export async function stageFeedHistory(input: {
-  ledger: "feed-health" | "feed-retirements"; prefix: readonly string[];
+  ledger: "feed-health"; prefix: readonly string[];
   now: string; raw_discovery_days: number; authored: readonly SeenDayInput[];
   read: (path: string) => Promise<unknown | undefined>;
   listRawDay: (directory: string) => Promise<readonly string[] | undefined>;

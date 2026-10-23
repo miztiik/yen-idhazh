@@ -68,10 +68,11 @@ the numeric run identity explicitly. Independent requests at the same instant
 therefore do not share a run ID. The configured attempt and checkout commit
 identify the writer. Writer shard zero is provenance, not worker assignment.
 
-The [native feed-history reader](planner-feed-history.md) supplies rest,
-permanent endpoint retirement, source reliability and daily published evidence.
-Its inventory limits remain explicit; these observations do not change the
-portfolio scoring formula or quotas.
+The [native health-history reader](planner-feed-history.md) supplies rest,
+source reliability and daily published evidence. Permanent retirement comes
+from the existing source registry, not another ledger. Inventory and time-order
+uncertainty remain explicit; none of this evidence changes portfolio scoring or
+quotas.
 
 The loader reads only named files in service settings: planning, taxonomy,
 sources, extraction and ledger registrations. Output goes below the configured

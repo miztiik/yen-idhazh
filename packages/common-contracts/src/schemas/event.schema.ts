@@ -19,10 +19,8 @@ export const FeedOutcomePayloadSchema = z.strictObject({
   rejection_reason: DropReasonSchema.nullable(),
   diagnostics: HarvestDiagnosticsSchema.nullable().default(null),
   history: z.strictObject({
-    lifecycle: z.enum(["eligible", "resting", "retired"]),
-    retirement_cause: z.enum(["http_410", "low_yield"]).nullable(),
-    endpoint_key: Sha256Schema, strikes: CountSchema, rested_runs: CountSchema,
-    gone_run_ids: z.array(RunIdSchema),
+    lifecycle: z.enum(["eligible", "resting", "retired", "unknown"]),
+    endpoint_key: Sha256Schema, strikes: CountSchema.nullable(), rested_runs: CountSchema.nullable(),
     reliability: z.strictObject({
       success_fraction: z.number().finite().min(0).max(1), productive: CountSchema,
       attempted: PositiveCountSchema, window_days: PositiveCountSchema,
@@ -35,7 +33,6 @@ export const FeedOutcomePayloadSchema = z.strictObject({
     }),
     health_coverage: z.enum(["available", "unavailable"]),
     reliability_coverage: z.enum(["available", "unavailable"]),
-    retirement_inventory_complete: z.literal(false),
   }).nullable().default(null),
 });
 export const CandidateDecisionPayloadSchema = z.strictObject({

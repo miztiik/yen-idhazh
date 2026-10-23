@@ -11,7 +11,7 @@ import {
   SourceRunRecordSchema, SourceSnapshotSchema, StageCompletionPayloadSchema,
   WriterIdentitySchema, deriveCandidateId, deriveUrlKey, validateEnvelopeContainer,
   readFeedIngestEvent, HarvestDiagnosticsSchema, HARVEST_DIAGNOSTICS_VERSION, PLANNER_EXCLUSIONS_VERSION,
-  FetchAttemptSchema, OPERATION_VERSION,
+  FetchAttemptSchema, OPERATION_VERSION, PLANNER_OPERATION_VERSION, RecordedInstantSchema, TimestampSchema,
   EXTRACTION_QUALITY_VERSION,
   PreviousHarvestDiagnosticsSchema,
   ArticleAssessmentContract,
@@ -394,7 +394,14 @@ describe("planning audit contracts", () => {
         `../../../tests/fixtures/contracts/${path}`, import.meta.url,
       )).json();
       expect(runtimeSchemas[name].parse(original).version).toBe("2026-10-23");
-      expect(runtimeSchemas[name].parse({ ...original, version: undefined }).version).toBe(OPERATION_VERSION);
+      expect(runtimeSchemas[name].parse({ ...original, version: undefined }).version)
+        .toBe(name === "PlannerOperation" ? PLANNER_OPERATION_VERSION : OPERATION_VERSION);
+      if (name === "PlannerOperation") {
+        expect(runtimeSchemas[name].parse(original).created_at).toBe(original.created_at);
+        expect(runtimeSchemas[name].parse({ ...original, version: PLANNER_OPERATION_VERSION,
+          created_at: `${at.slice(0, -1)}.123Z` }).created_at)
+          .toBe(`${at.slice(0, -1)}.123Z`);
+      }
     }
     const earlierAttempt = FetchAttemptSchema.parse({
       phase: "target", sequence: 0, retry: 0, duration_ms: 0,
@@ -402,5 +409,10 @@ describe("planning audit contracts", () => {
     });
     expect(earlierAttempt.backoff_ms).toBeNull();
     expect(earlierAttempt.retry_total_ms).toBeNull();
+    for (const value of [at, `${at.slice(0, -1)}.000Z`, `${at.slice(0, -1)}.123Z`]) {
+      expect(RecordedInstantSchema.parse(value)).toBe(value);
+    }
+    expect(TimestampSchema.safeParse(`${at.slice(0, -1)}.123Z`).success).toBe(false);
+    expect(RecordedInstantSchema.safeParse("2026-02-31T00:00:00.123Z").success).toBe(false);
   });
 });

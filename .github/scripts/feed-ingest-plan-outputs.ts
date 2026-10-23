@@ -18,7 +18,7 @@ type PlanSummary = ReturnType<typeof summarizePlan>;
 type Registrations = Readonly<{
   dispatches: LedgerRegistration; rejections: LedgerRegistration; selections: LedgerRegistration; seen: LedgerRegistration;
   assessments: LedgerRegistration; diversity: LedgerRegistration; source_runs: LedgerRegistration;
-  feed_health: LedgerRegistration; feed_retirements: LedgerRegistration;
+  feed_health: LedgerRegistration;
 }>;
 
 function paths(result: PersistLedgerResult, entry: LedgerRegistration): string[] {
@@ -76,7 +76,6 @@ export function createExecutionOutputs(summary: PlanSummary, registrations: Regi
   const selections = paths(summary.files.selections, registrations.selections);
   const seen = paths(summary.files.seen, registrations.seen);
   const health = paths(summary.files.feed_health, registrations.feed_health);
-  const retirements = paths(summary.files.feed_retirements, registrations.feed_retirements);
   const rejections = [
     ...paths(summary.files.harvest_rejections, registrations.rejections),
     ...paths(summary.files.screening_rejections, registrations.rejections),
@@ -117,7 +116,7 @@ export function createExecutionOutputs(summary: PlanSummary, registrations: Regi
       ["rejections", "rejections", rejectionResult],
     ] as const) verifyLedgerReceipt(ledger, files, summary.metrics.receipts[key]);
   }
-  const all = [...dispatches, ...selections, ...rejections, ...seen, ...health, ...retirements, ...metricPaths];
+  const all = [...dispatches, ...selections, ...rejections, ...seen, ...health, ...metricPaths];
   if (new Set(all).size !== all.length) throw new Error("files.path occurs more than once");
   if (summary.files.dispatches.files.reduce((total, file) => total + file.row_count, 0) !== candidates.length
     || summary.files.selections.files.reduce((total, file) => total + file.row_count, 0) !== candidates.length) {
@@ -130,7 +129,7 @@ export function createExecutionOutputs(summary: PlanSummary, registrations: Regi
     matrix: JSON.stringify({ include: Array.from({ length: count }, (_, worker_assignment) => ({ worker_assignment })) }),
     dispatch_files: JSON.stringify(dispatches), rejection_files: JSON.stringify(rejections),
     selection_files: JSON.stringify(selections), seen_files: JSON.stringify(seen),
-    feed_health_files: JSON.stringify(health), feed_retirement_files: JSON.stringify(retirements),
+    feed_health_files: JSON.stringify(health),
     current_run_files: JSON.stringify(all),
     first_sight_absence_proof: summary.first_sight.absence_proof,
     ...metrics,

@@ -28,6 +28,7 @@ export type PlanRuntime = {
   run_number?: string;
   correlation_id?: string;
   clock?: () => Date;
+  captured_at?: string;
   boundary?: NonNullable<Parameters<typeof harvestFeeds>[3]>;
   log?: (event: FeedIngestEvent) => void;
   progress?: (record: ProgressRecord) => void;
@@ -43,13 +44,14 @@ export type PlanRuntime = {
 export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: PlanRuntime) {
   const captured = runtime.clock?.() ?? new Date();
   const request = resolvePlanRequest(raw, inputs.harvest.config);
-  const context = resolveRunContext(inputs.settings, runtime.git_sha, captured, runtime.run_number, runtime.correlation_id);
+  const context = resolveRunContext(inputs.settings, runtime.git_sha, captured,
+    runtime.run_number, runtime.correlation_id, runtime.captured_at);
   if (!inputs.settings.enabled) throw new PlanError("PLANNER_DISABLED", "Planner is disabled by service settings", "enabled");
   for (const entry of [
     inputs.registrations.rejections, inputs.registrations.selections,
     inputs.registrations.dispatches, inputs.registrations.seen,
     inputs.registrations.published, inputs.registrations.item_health,
-    inputs.registrations.feed_health, inputs.registrations.feed_retirements,
+    inputs.registrations.feed_health,
   ]) {
     if (entry.lifecycle_status !== "active") throw new PlanError("LEDGER_INACTIVE", `Required ledger ${entry.name} is not active`, entry.name);
   }
@@ -57,7 +59,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   const harvestInputs = loadHarvestInputs({
     config: { ...inputs.harvest.config, curate: { ...inputs.harvest.config.curate, article_limit: request.article_limit } },
     taxonomy: { ...inputs.harvest.taxonomy, ...inputs.harvest.registry },
-    sources: { feeds: inputs.harvest.sources },
+    sources: { feeds: inputs.harvest.sources, retired: inputs.harvest.retired_sources },
     extraction: { ...inputs.harvest.extraction_settings, extract: inputs.harvest.extraction },
   });
   const overrides = request.freshness_hours === undefined ? {} : { freshness_hours: request.freshness_hours };
@@ -95,12 +97,11 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     blocked_url_markers: inputs.clock_config.collect.blocked_url_markers,
   };
   const feedHistory = await readFeedHistory({
-    root: inputs.root, now: context.now, run_id: context.run_id,
+    root: inputs.root, now: context.captured_at, run_id: context.run_id,
     sources: harvestInputs.sources.map(source => sourceSnapshot(harvestInputs, source)),
     policy: inputs.clock_config.collect,
-    health: inputs.registrations.feed_health, retirements: inputs.registrations.feed_retirements,
+    health: inputs.registrations.feed_health,
     health_days: inputs.settings.inputs.feed_health_days,
-    retirement_days: inputs.settings.inputs.feed_retirement_days,
     own_receipts: runtime.feed_history_receipts ?? [], receipt_root: inputs.outputRoot,
   });
   const dailyPublication = await readDailyPublication({
@@ -125,9 +126,9 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     ledgerSettings: inputs.ledgerSettings,
   }, runtime.boundary);
   const feedFiles = await recordFeedHealth({
-    outcomes: harvest.feed_outcomes, articles: harvest.articles, history: feedHistory, now: context.now,
+    outcomes: harvest.feed_outcomes, articles: harvest.articles, history: feedHistory, now: context.captured_at,
     writer: context.writer, outputRoot: inputs.outputRoot, settings: inputs.ledgerSettings,
-    health: inputs.registrations.feed_health, retirements: inputs.registrations.feed_retirements,
+    health: inputs.registrations.feed_health,
     ...(runtime.on_feed_history_persisted === undefined ? {} : { on_persisted: runtime.on_feed_history_persisted }),
   });
   observeFeedReliability(feedHistory, feedFiles.rows, inputs.clock_config.collect);
@@ -139,14 +140,12 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     const sourceHistory = feedHistory.sources.get(outcome.source.source_id)!;
     outcome.history = {
       ...sourceHistory,
-      gone_run_ids: [...sourceHistory.gone_run_ids],
       daily_published: {
         day: context.date, observed_count: dailyPublication.counts.get(outcome.source.source_id) ?? 0,
         availability: dailyPublication.history.availability,
       },
       health_coverage: feedHistory.history.health.availability,
       reliability_coverage: feedHistory.history.reliability.availability,
-      retirement_inventory_complete: false,
     };
     logger.emit("harvest-feeds", outcome, outcome.source.status === "active"
       ? harvestPolicy(harvestInputs, outcome.source.vertical, overrides) : fallbackPolicy, outcome.source.source_id);
@@ -220,7 +219,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
       selections: portfolio.selections, curation_rejections: portfolio.rejections,
       dispatches,
       seen: seen.sealing,
-      feed_health: feedFiles.health, feed_retirements: feedFiles.retirements,
+      feed_health: feedFiles.health,
     },
     evidence: { harvest, screening, curation, seen, exclusions: exclusionEvidence, partition, feed_history: feedHistory, daily_publication: dailyPublication },
   };
@@ -266,7 +265,6 @@ export function summarizePlan(result: FeedPlanResult & { metrics?: PlanningMetri
     },
     feed_history: {
       ...result.evidence.feed_history.history,
-      retirement_inventory_complete: false,
       daily_publication: result.evidence.daily_publication.history,
     },
     audit: {
