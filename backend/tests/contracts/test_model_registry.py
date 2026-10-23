@@ -395,7 +395,8 @@ def test_every_model_file_loads_and_not_only_the_one_the_pointer_names() -> None
     """
     for name in MODEL_FILES:
         path = CONFIG_DIR / "models" / name
-        ModelsConfig.from_json(read_text(path))
+        entry = ModelsConfig.from_json(read_text(path)).summarizer
+        assert entry.declared_for == entry.sha256, path.name
 
 
 def test_no_committed_file_declares_a_second_entry() -> None:
