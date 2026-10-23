@@ -30,8 +30,8 @@ required ledger file sets through the original completion selector before
 exposing per-run planning completion.
 
 The last workflow step requires independently verified live planning,
-separate live feed fetch/parse/replay, and a labelled `generated_fixture`
-full-audit result. That fixture
+separate live feed and selected HTML article fetch/parse/replay, and a labelled
+`generated_fixture` full-audit result. That fixture
 runs the real observer against generated publication and complete named history,
 then independently reads its actual native output. Either missing proof exits
 with code 2. Live planning alone cannot pass; test publication is never labelled
@@ -153,6 +153,14 @@ or other fetched text selects a destination.
 An independent actual Hono listener receives separate POST requests to
 `/api/2026-10-20/fetch` and `/api/2026-10-20/parse`. Fetch uses `kind: feed`;
 parse references that exact fetch request, article identity and correlation.
+The same checks then run with `kind: article`. Its operator URL comes only
+from a current-run sealed dispatch, read by its exact receipt filename through
+the native Parquet reader and current dispatch contract. The earlier original
+completion selector verifies the actual dispatch and selection ledgers.
+The proof rechecks dispatch receipt hashes, selected membership, run, completed
+attempt, UTC day and correlation, then requires nonempty extracted content and an active
+configured source. It does not follow a new feed link or a page canonical tag.
+Both document pairs retain the actual plan's run and correlation.
 The check verifies the same article, source, run and correlation, distinct
 UUIDv5 observations, and the parse-to-fetch and attempt-to-fetch causes.
 It counts actual outbound DNS and HTTP calls through the unchanged production
@@ -160,29 +168,55 @@ resolver and transport. Parse must make no such calls.
 
 The listener stops and reopens with unchanged inputs and the same private
 output root. Both completed request keys must return the original exact
-response strings and statuses, with no outbound calls. Changed input,
+response bytes and statuses, with no outbound calls. Changed input,
 operation and configuration must each return HTTP 409 `REQUEST_CONFLICT`.
-A digest over the two named journal records must remain unchanged after replay
+A digest over each pair's two named journal records must remain unchanged after replay
 and refusals. This proves unchanged completed receipts, not exactly-once
 external network work across an interrupted fetch.
 
-`stage-api-proof.json` records `scope: live_configured_feed`, `status`, `stage`,
-`git_sha`, `source_id`, `article_id`, `run_id`, `correlation_id`, `calls`,
-`pending_request`, `journal_records_sha256` and `error`. A pending request
+`stage-api-proof.json` records
+`scope: live_configured_feed_and_selected_article`, `status`, `stage`,
+`git_sha`, `documents`, `reason` and `error`. Each document records `kind`,
+`status`, `stage`, `git_sha`, `source_id`, `article_id`, `run_id`,
+`correlation_id`, `selection`, `calls`, `pending_request`,
+`journal_records_sha256`, `reason` and `error`. Article `selection` retains
+the selected candidate, run and correlation plus the exact native dispatch
+file identity and content digest; feed selection is null. A pending request
 retains its stage, endpoint and exact request fields before HTTP work starts.
 Each completed call holds its stage, endpoint,
 exact request keys and identity fields in `request`, `http_status`, exact
-body-free `response_json`, its `response_sha256`, and measured
-`network: {dns, http}` counts. An invalid response is withheld as
+body-free feed `response_json`, its full-response `response_sha256`,
+whitelisted `response_metadata`, and measured `network: {dns, http}` counts.
+HTML responses and all error responses always have `response_json: null`.
+Fetch metadata retains only validated body-free receipt fields.
+HTML parse metadata retains the fetch request and observation identities,
+kind, typed failure, actual word count, text digest and UTF-16 string length,
+paywall evidence, bounded warnings and the native quality object, including
+extractor and sanitizer fingerprints. It excludes article text, title and author.
+Full original and replay response bytes are compared in private memory
+before completion; comparing two redacted null fields is never replay proof.
+An invalid response is withheld as
 `response_json: null`; its status and digest remain, and the check fails.
 The digest pair is `{before_restart, after_checks}`. Proof is written before
 each call and after each response; failures retain the exact failing stage.
 Only completed proof exposes `stage_api_complete: true`. An absent successful
-source, failed fetch, failed parse, identity mismatch or changed replay fails
+source, unavailable readable selected article, failed fetch, failed parse,
+identity mismatch or changed replay fails
 the job; none is silently skipped.
 
-The live proof covers a configured RSS/Atom feed, not an HTML article fetch.
-Existing recorded API cases cover feed and HTML parsing without network access.
+An unavailable article records `NO_READABLE_SELECTED_ARTICLE`; a live article
+without readable admitted extraction records `HTML_EXTRACTION_UNAVAILABLE`.
+This includes known null quality, a paywall or an empty body. Malformed
+metadata remains a validation failure, not an unavailable reading.
+Other bounded reasons distinguish an unavailable feed, invalid completion,
+dispatch membership mismatch, failed checks and private cleanup failure.
+The actual quality flags, short-abstract exemption and native signal precedence
+remain unchanged. This check makes no worker-token or truncation claim and
+does not shorten worker input.
+
+The live proof now requires both a configured RSS/Atom feed and a genuine
+selected HTML article. Existing recorded API cases exercise native selection,
+redaction, response hashing and private exact-byte replay without network access.
 The actual planning request stays unkeyed and is called once; this workflow
 does not claim live keyed-plan replay, interrupted-request recovery, concurrent
 process locking or publication of its live selections. A reviewed merge and
@@ -253,8 +287,9 @@ commits `planner-operations.sqlite`, its WAL/SHM files, headers or raw fetched
 bodies. Each operation closes its database before responding. After stopping
 the listener, the check removes only its own newly created private directory,
 including on failure. A cleanup failure is explicit; any retained private
-directory stays outside the artifact root. The public proof contains responses
-and record digests, never the journal records themselves.
+directory stays outside the artifact root. The public proof contains body-free
+feed responses, redacted HTML metadata and record digests, never full HTML
+parse responses or the journal records themselves.
 
 After both the genuine planning check and the separate generated full-audit
 gate pass, and the separate HTTP proof completes, the workflow commits only

@@ -29,10 +29,11 @@ def declaration(root: Path, **changes: object) -> Path:
 def test_the_judge_owns_the_three_execution_knobs_and_shared_stages_keep_the_rest() -> None:
     settings = config.load(CONFIG_DIR)
     execution = judge_settings.load(CONFIG_DIR)
+    raw = json.loads(
+        (CONFIG_DIR / "judges" / "content-similarity-judge.json").read_text(encoding="utf-8")
+    )
     assert execution.model_dump() == {
-        "pair_budget": 200,
-        "flush_every_pairs": 1,
-        "judge_temperature": 0.0,
+        name: raw[name] for name in type(execution).model_fields
     }
     shared = settings.app.assemble.same_story.judging_knobs().model_dump()
     assert not set(type(execution).model_fields) & set(shared)
