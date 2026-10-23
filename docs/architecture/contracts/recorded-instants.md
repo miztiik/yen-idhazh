@@ -59,6 +59,8 @@ An exact failure/skip count is returned only when its bounds agree. Rest is
 applied only when proved; an order-dependent unresolved result is explicitly
 unknown. Order-insensitive observations, such as a set containing only failed
 reads, can still support a decision.
+Unknown availability alone does not withhold an allowed source. The console
+keeps that limitation visible without counting it as a withheld source.
 
 The Python reader's legacy HTTP 410 fold similarly uses only runs proved to
 follow every productive read; known permanent retirements are honored.

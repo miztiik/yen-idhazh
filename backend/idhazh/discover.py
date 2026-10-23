@@ -338,7 +338,9 @@ def resting(history: Iterable[FeedHealthRow], *, after_failures: int) -> frozens
     by_feed: dict[str, list[FeedHealthRow]] = {}
     for row in settled(history):
         by_feed.setdefault(row.feed_id, []).append(row)
-    return frozenset(feed_id for feed_id, rows in by_feed.items() if _rests(rows, after_failures) is True)
+    return frozenset(
+        feed_id for feed_id, rows in by_feed.items() if _rests(rows, after_failures) is True
+    )
 
 
 def _rests(rows: list[FeedHealthRow], after_failures: int) -> bool | None:
