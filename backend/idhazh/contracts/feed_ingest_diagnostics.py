@@ -1,8 +1,8 @@
 """Which fetch or extraction operation failed, and what was actually measured?"""
 
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from idhazh.contracts.base import Model
 from idhazh.contracts.feed_ingest_candidate import Count
@@ -24,6 +24,49 @@ ExtractionFailure = Literal[
     "empty-content",
     "missing-title",
 ]
+ExtractionSignal = Literal["contaminated", "boilerplate", "not_prose", "too_short"]
+
+
+class ExtractionQuality(Model):
+    """Article length and shape measured before any worker model-input cap."""
+
+    source_word_count: Count
+    word_count: Count
+    corroborated_word_count: Count | None
+    token_count: Count | None
+    truncated: bool | None
+    truncated_at_tokens: Annotated[int, Field(strict=True, ge=1)] | None
+    truncation_cap_tokens: Annotated[int, Field(strict=True, ge=256)]
+    too_short: bool
+    not_prose: bool
+    boilerplate: bool | None
+    contaminated: bool | None
+    failure_code: ExtractionSignal | None
+    rejected: bool
+    extractor_version: Annotated[str, Field(min_length=1)]
+    sanitizer_version: Annotated[str, Field(min_length=1)]
+
+    @model_validator(mode="after")
+    def validate_measurements(self) -> Self:
+        if self.source_word_count < self.word_count:
+            raise ValueError("source_word_count counts the body before a cap")
+        if (self.corroborated_word_count is None) != (self.contaminated is None):
+            raise ValueError("contamination requires an independent length reading")
+        if self.corroborated_word_count == 0:
+            raise ValueError("an independent length reading must contain words")
+        if (self.truncated is True) != (self.truncated_at_tokens is not None):
+            raise ValueError("a truncation point requires an applied cut")
+        expected = (
+            "contaminated" if self.contaminated else
+            "boilerplate" if self.boilerplate else
+            "not_prose" if self.not_prose else
+            "too_short" if self.too_short else None
+        )
+        if self.failure_code != expected:
+            raise ValueError("failure_code must follow native signal precedence")
+        if self.rejected and self.failure_code is None:
+            raise ValueError("a quality rejection requires a measured signal")
+        return self
 
 
 class HarvestDiagnostics(Model):
@@ -48,6 +91,10 @@ class HarvestDiagnostics(Model):
             "no_text",
             "no_title",
             "unknown",
+            "contaminated",
+            "boilerplate",
+            "not_prose",
+            "too_short",
         ]
         | None
     ) = None
@@ -69,9 +116,14 @@ class HarvestDiagnostics(Model):
             "missing-title",
             "malformed-feed",
             "empty-feed",
+            "contaminated",
+            "boilerplate",
+            "not_prose",
+            "too_short",
         ]
         | None
     ) = None
     fetch_ms: Count | None = None
     extract_ms: Count | None = None
     warnings: list[Literal["malformed-json-ld"]] = Field(default=[], max_length=1)
+    quality: ExtractionQuality | None = None

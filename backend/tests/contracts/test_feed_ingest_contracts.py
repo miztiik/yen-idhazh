@@ -123,14 +123,16 @@ def normalized_shape(node: dict[str, Any], root: dict[str, Any]) -> Any:
     return (kind, node.get("default", "<required>"))
 
 
-@pytest.mark.parametrize(("module", "name"), CONTRACT_NAMES)
+@pytest.mark.parametrize(
+    ("module", "name"), (*CONTRACT_NAMES, ("feed_ingest_diagnostics", "ExtractionQuality"))
+)
 def test_typescript_field_types_defaults_and_vocabularies(
     module: str,
     name: str,
     typescript_schemas: dict[str, Any],
 ) -> None:
     contract = getattr(importlib.import_module(f"idhazh.contracts.{module}"), name)
-    ours = contract.json_schema()
+    ours = contract.model_json_schema() if name == "ExtractionQuality" else contract.json_schema()
     theirs = typescript_schemas[name]
     assert normalized_shape(theirs, theirs) == normalized_shape(ours, ours)
 

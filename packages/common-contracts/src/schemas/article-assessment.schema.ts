@@ -3,12 +3,12 @@ import { z } from "zod";
 import { ArticleLabelsSchema, PolicyIdentitySchema, ScoreEvidenceSchema, SourceFormSchema, SourceSnapshotSchema } from "./source.schema";
 import { DropReasonSchema, REASON_STAGES } from "./rejection.schema";
 import { CountSchema, DateStampSchema, FiniteSchema, NonEmptySchema, PlanningStageSchema, PositiveCountSchema, PositiveSchema, Sha256Schema, SlugSchema, TimestampSchema, UrlSchema, deriveUrlKey, reject } from "./primitives";
-import { CONTRACT_VERSION, FEED_INGEST_AUDIT_VERSION, HARVEST_DIAGNOSTICS_VERSION, PLANNER_EXCLUSIONS_VERSION } from "../version";
-import { HarvestDiagnosticsSchema } from "./harvest-diagnostics.schema";
+import { CONTRACT_VERSION, EXTRACTION_QUALITY_VERSION, FEED_INGEST_AUDIT_VERSION, HARVEST_DIAGNOSTICS_VERSION, PLANNER_EXCLUSIONS_VERSION } from "../version";
+import { HarvestDiagnosticsSchema, PreviousHarvestDiagnosticsSchema } from "./harvest-diagnostics.schema";
 
 export const VerdictStatusSchema = z.enum(["not_assessed", "assessed"]);
 export const ArticleAssessmentRecordSchema = z.strictObject({
-  version: z.literal(PLANNER_EXCLUSIONS_VERSION).default(PLANNER_EXCLUSIONS_VERSION), date: DateStampSchema, correlation_id: NonEmptySchema,
+  version: z.literal(EXTRACTION_QUALITY_VERSION).default(EXTRACTION_QUALITY_VERSION), date: DateStampSchema, correlation_id: NonEmptySchema,
   diagnostics: HarvestDiagnosticsSchema.nullable().default(null),
   candidate_id: Sha256Schema, source_id: SlugSchema, source: SourceSnapshotSchema, labels: ArticleLabelsSchema,
   canonical_url: UrlSchema.nullable(), url_key: Sha256Schema.nullable(),
@@ -67,7 +67,12 @@ export const PreviousArticleAssessmentSchema = z.strictObject({
 });
 export const PreviousDiagnosticArticleAssessmentSchema = z.strictObject({
   ...ArticleAssessmentRecordSchema.shape, version: z.literal(HARVEST_DIAGNOSTICS_VERSION),
+  diagnostics: PreviousHarvestDiagnosticsSchema.nullable().default(null),
   reason: DropReasonSchema.exclude(["ALREADY_PUBLISHED", "SETTLED_FAILURE", "BLOCKED_URL_MARKER"]).nullable(),
+});
+export const PreviousExclusionArticleAssessmentSchema = z.strictObject({
+  ...ArticleAssessmentRecordSchema.shape, version: z.literal(PLANNER_EXCLUSIONS_VERSION),
+  diagnostics: PreviousHarvestDiagnosticsSchema.nullable().default(null),
 });
 const { timing_at: _timingAt, timing_basis: _timingBasis, ...legacyFields } = PreviousArticleAssessmentSchema.shape;
 export const LegacyArticleAssessmentSchema = z.strictObject({
@@ -81,26 +86,32 @@ export const LegacyArticleAssessmentSchema = z.strictObject({
 export function migrateArticleAssessment(row: object): ArticleAssessmentRecord {
   const { effective_published_at, publication_clock, ...rest } = LegacyArticleAssessmentSchema.parse(row);
   return ArticleAssessmentRecordSchema.parse({
-    ...rest, version: PLANNER_EXCLUSIONS_VERSION,
+    ...rest, version: EXTRACTION_QUALITY_VERSION,
     timing_at: effective_published_at, timing_basis: publication_clock,
   });
 }
 
 export const ArticleAssessmentContract = {
   schema: ArticleAssessmentRecordSchema,
-  schemaVersion: PLANNER_EXCLUSIONS_VERSION,
+  schemaVersion: EXTRACTION_QUALITY_VERSION,
   legacyVersions: {
+    [PLANNER_EXCLUSIONS_VERSION]: {
+      schema: PreviousExclusionArticleAssessmentSchema,
+      migrate: (row: object): ArticleAssessmentRecord => ArticleAssessmentRecordSchema.parse({
+        ...PreviousExclusionArticleAssessmentSchema.parse(row), version: EXTRACTION_QUALITY_VERSION,
+      }),
+    },
     [CONTRACT_VERSION]: { schema: LegacyArticleAssessmentSchema, migrate: migrateArticleAssessment },
     [FEED_INGEST_AUDIT_VERSION]: {
       schema: PreviousArticleAssessmentSchema,
       migrate: (row: object): ArticleAssessmentRecord => ArticleAssessmentRecordSchema.parse({
-        ...PreviousArticleAssessmentSchema.parse(row), version: PLANNER_EXCLUSIONS_VERSION,
+        ...PreviousArticleAssessmentSchema.parse(row), version: EXTRACTION_QUALITY_VERSION,
       }),
     },
     [HARVEST_DIAGNOSTICS_VERSION]: {
       schema: PreviousDiagnosticArticleAssessmentSchema,
       migrate: (row: object): ArticleAssessmentRecord => ArticleAssessmentRecordSchema.parse({
-        ...PreviousDiagnosticArticleAssessmentSchema.parse(row), version: PLANNER_EXCLUSIONS_VERSION,
+        ...PreviousDiagnosticArticleAssessmentSchema.parse(row), version: EXTRACTION_QUALITY_VERSION,
       }),
     },
   },

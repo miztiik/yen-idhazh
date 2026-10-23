@@ -1,6 +1,6 @@
 # The Trust Boundary
 
-**Last Updated**: 2026-10-10
+**Last Updated**: 2026-10-23
 
 Where a stranger's bytes stop being instructions and become data, what actually enforces that, and the planted attacks that assert it on every change. This is the operational home of Guardrail #11.
 
@@ -150,6 +150,12 @@ blocked-player messages, not article paragraphs. Whole-token matching leaves
 similarly named prose containers intact. No video is loaded or consent bypassed.
 `EXTRACTOR_VERSION` was bumped for this change, so the pipeline identity records
 it. Historical article payloads are not rewritten.
+
+The isolated TypeScript planner applies the same class-token removal and
+[signal rules](extraction-quality.md) in its shared parse stage. Its provenance
+names the actual TypeScript libraries and sanitizer; it never claims that
+Trafilatura ran. Missing independent length or sibling-host evidence remains
+unmeasured, not a clean verdict.
 
 The bounded replay fixture
 [`france24-player.html`](../../../tests/fixtures/pages/france24-player.html)

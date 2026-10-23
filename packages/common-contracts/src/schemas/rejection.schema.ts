@@ -1,8 +1,8 @@
 /** Why did a feed or candidate receive a terminal rejection? */
 import { z } from "zod";
 import { CountSchema, DateStampSchema, FiniteSchema, NonEmptySchema, NonNegativeSchema, PositiveCountSchema, PositiveSchema, RejectionStageSchema, Sha256Schema, SlugSchema, TimestampSchema, UrlSchema, checkUrlIdentity, reject } from "./primitives";
-import { CONTRACT_VERSION, FEED_INGEST_AUDIT_VERSION, HARVEST_DIAGNOSTICS_VERSION, PLANNER_EXCLUSIONS_VERSION } from "../version";
-import { HarvestDiagnosticsSchema } from "./harvest-diagnostics.schema";
+import { CONTRACT_VERSION, EXTRACTION_QUALITY_VERSION, FEED_INGEST_AUDIT_VERSION, HARVEST_DIAGNOSTICS_VERSION, PLANNER_EXCLUSIONS_VERSION } from "../version";
+import { HarvestDiagnosticsSchema, PreviousHarvestDiagnosticsSchema } from "./harvest-diagnostics.schema";
 import { ItemHealthFailureCodeSchema } from "./item-health-failure.schema";
 
 export const DropReasonSchema = z.enum([
@@ -71,7 +71,7 @@ export const REQUIRED_DETAILS: Readonly<Partial<Record<DropReason, readonly (key
   PUBLICATION_BUDGET_EXCEEDED: ["observed_value", "limit"],
 };
 export const CandidateRejectionRecordSchema = z.strictObject({
-  version: z.literal(PLANNER_EXCLUSIONS_VERSION).default(PLANNER_EXCLUSIONS_VERSION), date: DateStampSchema, correlation_id: NonEmptySchema,
+  version: z.literal(EXTRACTION_QUALITY_VERSION).default(EXTRACTION_QUALITY_VERSION), date: DateStampSchema, correlation_id: NonEmptySchema,
   source_id: SlugSchema, feed_url: UrlSchema, subject: z.enum(["feed", "article"]),
   candidate_id: Sha256Schema.nullable(), url_key: Sha256Schema.nullable(),
   canonical_url: UrlSchema.nullable(), title: z.string().nullable(), categories: z.array(z.string()),
@@ -118,28 +118,38 @@ export const PreviousDiagnosticDropReasonSchema = DropReasonSchema.exclude([
 ]);
 const PreviousDiagnosticRejectionSchema = z.strictObject({
   ...CandidateRejectionRecordSchema.shape, version: z.literal(HARVEST_DIAGNOSTICS_VERSION),
-  details: z.strictObject({ ...previousDetails, diagnostics: HarvestDiagnosticsSchema.nullable().default(null) }),
+  details: z.strictObject({ ...previousDetails, diagnostics: PreviousHarvestDiagnosticsSchema.nullable().default(null) }),
   drop_reason: PreviousDiagnosticDropReasonSchema,
 });
+const PreviousExclusionRejectionSchema = z.strictObject({
+  ...CandidateRejectionRecordSchema.shape, version: z.literal(PLANNER_EXCLUSIONS_VERSION),
+  details: RejectionDetailsSchema.extend({ diagnostics: PreviousHarvestDiagnosticsSchema.nullable().default(null) }),
+});
 export const CandidateRejectionContract = {
-  schema: CandidateRejectionRecordSchema, schemaVersion: PLANNER_EXCLUSIONS_VERSION,
+  schema: CandidateRejectionRecordSchema, schemaVersion: EXTRACTION_QUALITY_VERSION,
   legacyVersions: {
+    [PLANNER_EXCLUSIONS_VERSION]: {
+      schema: PreviousExclusionRejectionSchema,
+      migrate: (row: object): CandidateRejectionRecord => CandidateRejectionRecordSchema.parse({
+        ...PreviousExclusionRejectionSchema.parse(row), version: EXTRACTION_QUALITY_VERSION,
+      }),
+    },
     [CONTRACT_VERSION]: {
       schema: PreviousRejectionSchema,
       migrate: (row: object): CandidateRejectionRecord => CandidateRejectionRecordSchema.parse({
-        ...PreviousRejectionSchema.parse(row), version: PLANNER_EXCLUSIONS_VERSION,
+        ...PreviousRejectionSchema.parse(row), version: EXTRACTION_QUALITY_VERSION,
       }),
     },
     [FEED_INGEST_AUDIT_VERSION]: {
       schema: PriorHarvestRejectionSchema,
       migrate: (row: object): CandidateRejectionRecord => CandidateRejectionRecordSchema.parse({
-        ...PriorHarvestRejectionSchema.parse(row), version: PLANNER_EXCLUSIONS_VERSION,
+        ...PriorHarvestRejectionSchema.parse(row), version: EXTRACTION_QUALITY_VERSION,
       }),
     },
     [HARVEST_DIAGNOSTICS_VERSION]: {
       schema: PreviousDiagnosticRejectionSchema,
       migrate: (row: object): CandidateRejectionRecord => CandidateRejectionRecordSchema.parse({
-        ...PreviousDiagnosticRejectionSchema.parse(row), version: PLANNER_EXCLUSIONS_VERSION,
+        ...PreviousDiagnosticRejectionSchema.parse(row), version: EXTRACTION_QUALITY_VERSION,
       }),
     },
   },
