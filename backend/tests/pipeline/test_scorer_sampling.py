@@ -44,6 +44,7 @@ def observed(observability: ObservabilityConfig) -> config.Settings:
     return config.Settings(
         council=settings.council,
         app=settings.app.model_copy(update={"observability": observability}),
+        ledgers=settings.ledgers,
         models=settings.models,
         appearance=settings.appearance,
         sources=settings.sources,

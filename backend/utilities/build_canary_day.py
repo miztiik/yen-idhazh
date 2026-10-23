@@ -148,7 +148,7 @@ FIXTURE_ROW_LEDGERS: Final[dict[LedgerName, tuple[type[FixtureRow], tuple[str, .
 #: Feed health and the hand marks are read at build time and never published, so
 #: they are added by name.
 PACKED_LEDGERS: Final = (
-    *config.load().app.ledger.published,
+    *config.load().ledgers.data_explorer_ledgers,
     LedgerName.FEED_HEALTH,
     LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS,
 )
@@ -1840,7 +1840,7 @@ def pack_fixture_ledgers(state: Path, repo_root: Path) -> None:
 
 
 def file_unpacked_fixture_day(state: Path) -> int:
-    """Write one raw day after packing, so the site build stages a writer listing."""
+    """Write one raw day after packing to retain real raw-writer coverage."""
     url = "https://canary.example.com/unpacked-ledger"
     row = ItemHealthRow(
         version=ItemHealthRow.schema_version(),

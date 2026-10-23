@@ -202,16 +202,7 @@
     "compression_compact": "zstd",
     "compression_raw": "snappy",
     "engine_extension_repository": "https://extensions.duckdb.org",
-    "format": "parquet",
-    "published": [
-      "candidate-models",
-      "counterfactual-scores",
-      "host-fingerprint",
-      "item-health",
-      "published",
-      "seen",
-      "summary-quality-evals"
-    ]
+    "format": "parquet"
   },
   "lens_weights": {
     "counterfactual_multiplier": 1.25,

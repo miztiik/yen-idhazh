@@ -121,7 +121,7 @@ def resolved_inputs(
                 LedgerName.PUBLISHED, through=through.isoformat(), days=(through - first).days + 1
             )
         )
-    published = tuple(settings.app.ledger.published)
+    published = settings.ledgers.data_explorer_ledgers
     promised: set[tuple[str, str]] = set()
     for which in dict.fromkeys(
         (

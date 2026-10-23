@@ -17,7 +17,7 @@ from idhazh.contracts.host_fingerprint import COLUMN_READERS as HOST_READERS
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import COLUMN_READERS as ITEM_READERS
 from idhazh.contracts.item_health import MACHINE_CELLS_RENAMED, UNREAD_CELLS, ItemHealthRow
-from idhazh.contracts.knobs.ledger import LedgerConfig
+from idhazh.contracts.ledgers import LedgersConfig
 from idhazh.contracts.run_shards import RunShards
 
 pytestmark = pytest.mark.contract
@@ -155,14 +155,14 @@ def declarations(text: str, module: str) -> tuple[QueryDeclaration, ...]:
 
 def query_faults(
     query: QueryDeclaration,
-    published: Sequence[str],
+    enabled: Sequence[str],
     columns: Mapping[str, Sequence[str]],
     unread: Mapping[str, Sequence[str]],
 ) -> tuple[str, ...]:
     where = f"{query.module}/{query.name}"
     faults = []
-    if query.ledger not in published:
-        faults.append(f"{where}: {query.ledger} is not in LedgerConfig.published")
+    if query.ledger not in enabled:
+        faults.append(f"{where}: {query.ledger} is not enabled for the Data explorer")
     if query.ledger not in columns:
         faults.append(f"{where}: {query.ledger} names no declared panel row shape")
         return tuple(faults)
@@ -192,25 +192,27 @@ def row_columns() -> dict[str, tuple[str, ...]]:
     }
 
 
+def explorer_ledgers() -> tuple[str, ...]:
+    registry = LedgersConfig.from_json(read_text(REPO_ROOT / "config/ledgers.json"))
+    return tuple(name.value for name in registry.data_explorer_ledgers)
+
+
 def test_count_capability_binds_only_the_approved_business_columns() -> None:
-    settings = LedgerConfig.model_validate(
-        json.loads(read_text(REPO_ROOT / "config/idhazh.json"))["ledger"]
-    )
     count = QueryDeclaration(
         module="machine", name="runShardsQuery", ledger="run-shards",
         columns=("date", "run_id", "shards"), span="widest",
     )
-    assert query_faults(count, settings.published, row_columns(), {}) == ()
+    assert query_faults(count, explorer_ledgers(), row_columns(), {}) == ()
     assert set(RunShards.model_fields) == {"version", *count.columns}
 
 
 def test_every_declared_query_uses_a_published_ledger_and_its_actual_row() -> None:
-    config = LedgerConfig.model_validate(json.loads(read_text(REPO_ROOT / "config/idhazh.json"))["ledger"])
     unread = {"item-health": tuple(name for names in UNREAD_CELLS.values() for name in names)}
     queries = load_queries()
+    enabled = explorer_ledgers()
     faults = [
         fault for query in queries
-        for fault in query_faults(query, config.published, row_columns(), unread)
+        for fault in query_faults(query, enabled, row_columns(), unread)
     ]
     assert not faults, "\n".join(faults)
     for module in QUERY_MODULES:
@@ -241,7 +243,7 @@ def test_every_query_declares_exactly_its_planned_columns() -> None:
 @pytest.mark.parametrize(
     ("ledger", "column", "fault"),
     (
-        ("scores", "date", "scores is not in LedgerConfig.published"),
+        ("scores", "date", "scores is not enabled for the Data explorer"),
         ("item-health", "summray_ms", "item-health.summray_ms is not a column"),
         ("item-health", "failed_field", "item-health.failed_field is still in UNREAD_CELLS"),
         ("summary-quality-evals", "summary_word_count", "summary-quality-evals.summary_word_count is not a column"),

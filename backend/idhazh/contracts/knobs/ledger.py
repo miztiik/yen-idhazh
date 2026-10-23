@@ -1,18 +1,10 @@
-"""How does the ledger door write a file, and what may a browser reach to read one?
+"""What format and compression does a ledger use, and where does the explorer read?
 
-Four knobs are read by `idhazh.ledger.persist` and nothing else. `format` is what a
-file is written as when its caller names none. The two compressions are one per
-tier: snappy for a raw file, which every reader opens without a plugin and which
-the compaction reads once, and zstd for a compact file, which is smaller and is
-read by this project alone. `published` names the ledgers whose compact files a
-browser may fetch, and `archive_base_url` names the optional public repository
-prefix the data explorer can use for older packed files.
-
-**`published` names every packed ledger the console can ask for.** The site
-build copies each one's three indexes, trimmed to the widest console span, and
-every compact file those trimmed indexes name. It refuses a ledger that lacks any
-index. A backend test holds every ledger a console panel asks the browser's query
-door for to this list.
+`format` is what a file is written as when its caller names none. The two
+compressions are one per tier: snappy for a raw file, which every reader opens
+without a plugin and which compaction reads once, and zstd for a compact file,
+which is smaller and is read by this project alone. `archive_base_url` names the
+optional public repository prefix the data explorer can use for packed files.
 
 `engine_extension_repository` is read by the site build alone: it is
 where the query engine that reads these files downloads its add-ons, and the one
@@ -25,7 +17,6 @@ from pydantic import Field, ValidationInfo, field_validator
 
 from idhazh.contracts.base import Model
 from idhazh.contracts.file_envelope import Compression, Format
-from idhazh.contracts.ledger_name import LedgerName
 
 
 class LedgerConfig(Model):
@@ -55,22 +46,13 @@ class LedgerConfig(Model):
             "is read by this project alone."
         ),
     )
-    published: list[LedgerName] = Field(
-        default_factory=list,
-        description=(
-            "The ledgers whose compact files a browser may fetch. The site build copies "
-            "each one's three indexes trimmed to the widest console span, and the compact "
-            "files those trimmed indexes name. Empty by default, because an entry here "
-            "publishes files."
-        ),
-    )
     archive_base_url: str = Field(
         default="",
         description=(
             "The public https prefix for the explorer's current registry and compact files. "
             "Empty intentionally selects site fixtures; a non-empty value is the sole source, "
-            "joins the page's connect-src "
-            "origins and is fetched by the page, never handed to the engine."
+            "joins the page's connect-src origins and is fetched by the page, never handed "
+            "to the engine."
         ),
     )
     engine_extension_repository: str = Field(
