@@ -1,8 +1,8 @@
 # What the Data explorer keeps and shares
 
-**Last Updated**: 2026-10-22
+**Last Updated**: 2026-10-23
 
-Which state the Data explorer reads from the site, keeps in this browser and carries in a shared address.
+Which data the Data explorer reads, keeps in this browser and carries in a shared address.
 
 ## Source data and Refresh
 
@@ -20,8 +20,11 @@ chosen files. The registry's [explicit consent](../contracts/ledger-registry.md#
 controls which ledgers the explorer offers and selects; it does not establish
 whether data is available.
 
-The page queries only the selected ledgers and UTC days. Refresh releases the
-page's immutable catalog, cached indexes, registered files and owned views through
+The page queries only the selected ledgers and UTC days. Each ledger's
+packed-through day comes from its compact indexes, not the current date; newer
+raw rows wait for compaction. The written-question reader owns the configured
+date reach, file and byte limits, and explicit repository errors. Refresh
+releases the page's immutable catalog, cached indexes, registered files and owned views through
 `startAfresh()`, then fetches the registry again. Old results cannot update the
 new session. All explorer HTTP reads use no-store, including same-size changed
 Parquet after Refresh. It does not run the question. The

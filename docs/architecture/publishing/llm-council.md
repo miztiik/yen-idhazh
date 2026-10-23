@@ -61,7 +61,9 @@ council runs.
 
 The validated `council-run-records` entry in `config/ledgers.json` consents to
 the Data explorer. The site build copies its three compact indexes and the
-files those indexes name inside the shared console window.
+files those indexes name inside the shared console window for ordinary panel
+reads. The Data explorer can also read the compact files directly from the
+configured repository without a site rebuild.
 `page_weight.payload_ceilings_bytes` bounds each council index at 2,088
 compressed bytes, twice the heavier generated index at the declared retention
 limit: 76 daily entries weigh 1,044 bytes at Node gzip level 5, while 17 monthly

@@ -1,6 +1,6 @@
 # Console Payloads
 
-**Last Updated**: 2026-10-12
+**Last Updated**: 2026-10-23
 The operator console reads native records as well as the remaining public
 projections. Each crossing into the site needs a contract (Guardrail #11).
 This page lists the public projections. The machine-readable copy is
@@ -175,7 +175,7 @@ panel on any route can draw, and it is **anchored on the newest day found rather
 than on today**: a clock anchor answers with nothing at all for a corpus that
 stopped publishing three months ago.
 
-### The allow-list has one copy
+### The refresh paths have one declaration
 
 `REFRESH_PATHS` on the `Commit the day` step names what a rebuild owns after a
 lost push race, and it is read from

@@ -4,7 +4,17 @@
 
 How the pipeline records progress, timings and outcomes. Logs explain a running process; committed, validated rows supply later runs and operator views.
 
-Storage and publication follow [telemetry intent](telemetry-intent.md). Read [the ledger registry](../architecture/contracts/ledger-registry.md) for current paths and publication consent. New charts fetch and query their data in the browser; remaining projections and prerendered data routes are known migration work, not patterns to extend. The validated `publish_to_data_explorer` entry selects which compact indexes and indexed files the build copies to the site. Each copied file includes every column, and the repository that commits it is public, so none of its columns is private ([what the site holds for the door](../architecture/publishing/how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)).
+Storage and publication follow [telemetry intent](telemetry-intent.md). Read
+[the ledger registry](../architecture/contracts/ledger-registry.md) for current
+paths and consent. New charts fetch and query their data in the browser;
+remaining projections and prerendered data routes are known migration work,
+not patterns to extend. The validated `publish_to_data_explorer` entry controls
+which compact ledgers the Data explorer offers and which compact indexes and
+indexed files the site build copies for its ordinary panels. The explorer can
+also read those files directly from the configured repository; it does not
+depend on a site rebuild. Each copied file includes every column, and the
+repository that commits it is public, so none of its columns is private
+([what the site holds for the door](../architecture/publishing/how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)).
 
 ## The envelope
 

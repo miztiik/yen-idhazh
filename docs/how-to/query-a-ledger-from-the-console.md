@@ -1,14 +1,19 @@
 # Query a ledger from the Data explorer console
 
-**Last Updated**: 2026-10-22
+**Last Updated**: 2026-10-23
 
 Use the Data explorer page when the console has the data you need but no purpose-built panel answers your question.
 
 ## What the page reads
 
-Data explorer offers the ledgers with [explicit consent](../architecture/contracts/ledger-registry.md#explorer-consent-and-its-runtime-catalog). It reads the current registry and compact files from the committed repository address in `ledger.archive_base_url`. An explicitly empty address uses the site. It never switches to a site copy after a repository error.
+Data explorer offers the ledgers with [explicit consent](../architecture/contracts/ledger-registry.md#explorer-consent-and-its-runtime-catalog). It reads the current registry and compact files from the committed repository address in `ledger.archive_base_url`. An explicitly empty address uses site fixtures. It never switches to a site copy after a repository error.
 
-The newest data waits for packing. Consent does not promise data exists. A ledger without packed records says so; missing or invalid named files produce an error, not a zero-row answer. Refresh reads the registry and files afresh without a site rebuild. It clears the old answer but runs no question: press Run afterward.
+The newest data waits for packing. Each ledger's answer stops at the newest
+UTC day its compact indexes name; raw rows after that day are not available yet.
+Consent does not promise data exists. A ledger without packed records says so;
+missing or invalid named files produce an error, not a zero-row answer. Refresh
+reads the registry and files afresh without a site rebuild. It clears the old
+answer but runs no question: press Run afterward.
 
 Days before a ledger's first compact period are cut from that ledger's answer and named below it. The selected dates do not move.
 
