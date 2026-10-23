@@ -14,7 +14,7 @@ import type { LedgerRowContract, PersistLedgerResult, StoredLedgerRow } from "@i
 import { Int64, tableFromIPC, vectorFromArray } from "apache-arrow";
 import initializeParquet, { Table as WasmTable, WriterPropertiesBuilder, readMetadata, readParquet, writeParquet } from "parquet-wasm/esm";
 import { tableToIPC } from "apache-arrow";
-import { readLedgerParquet } from "../src/read-ledger-history/read-parquet";
+import { readLedgerParquet, readLedgerParquetBytes } from "../src/read-ledger-history/read-parquet";
 import { readLedgerDay } from "../src/read-ledger-history/read-period";
 import { resolveFeedInventory } from "../src/read-ledger-history/read-feed-inventory";
 import { selectCompleteAttempt } from "../src/read-ledger-history/complete-attempt";
@@ -123,6 +123,13 @@ test("native raw and daily reads preserve original writer identity instead of th
     expect(raw.tier).toBe("raw");
     expect(raw.rows).toHaveLength(1);
     const original = raw.rows[0]!;
+    const rawPath = join(root, input.persisted.selections.files[0]!.path);
+    const exactBytes = await readFile(rawPath);
+    const parsedBytes = await readLedgerParquetBytes(
+      exactBytes, join(root, "not-on-disk", basename(rawPath)), "editorial-selections", selectionContract,
+    );
+    expect(parsedBytes.rows).toEqual(raw.rows);
+    expect(parsedBytes.envelope).toEqual(raw.files[0]!.envelope);
     const compact = await compactSelections(root, input, raw.rows, "daily");
     const current = await readLedgerDay({
       ledger: "editorial-selections", day: input.fixture.date, contract: selectionContract,

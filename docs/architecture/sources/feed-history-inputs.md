@@ -26,8 +26,8 @@ their expected execution identities. Receipt paths must be relative native
 UUID file paths. Conflicting hashes or another invocation's identity refuse
 discovery. `verifyFeedReceiptWrites` then checks the actual whole-file hashes,
 native Parquet schema, content digest, UTC partition and executed identities
-before those files can be used. The receipt's whole-file hash is not the
-row-content hash in the Parquet footer.
+against the same captured bytes before those files can be used. The receipt's
+whole-file hash is not the row-content hash in the Parquet footer.
 
 Inputs are one named publication inventory, six named compact indexes and
 the caller's exact receipt list. No directory or Git history walk discovers
@@ -74,10 +74,11 @@ was ever retired.
 The shared native retirement writer does not currently register its returned
 file paths in the publication inventory. Both plan-time HTTP 410 decisions
 and assemble-time low-yield decisions use that writer. Completing discovery
-requires registering those exact native writes in the existing inventory
-and retaining those path additions when assembly rebuilds on a newer main.
-That production correction is separate from this read-only TypeScript
-consumer; no new history store is a substitute for it.
+needs a source that proves which retained raw retirement files exist.
+Whether the publication inventory should list those paths, and how their
+publication retry would preserve them, remains an owner decision. This
+read-only consumer adds no registration and treats neither an empty file
+list nor that proposal as retirement-absence proof.
 
 ## Design rationale
 

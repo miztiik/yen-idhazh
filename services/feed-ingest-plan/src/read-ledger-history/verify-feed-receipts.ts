@@ -4,7 +4,7 @@ import { readFile, realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
 import type { LedgerRowContract } from "@idhazh/ledger-file-writer";
 import type { FeedReceiptWrite } from "./read-feed-inventory";
-import { readLedgerParquet } from "./read-parquet";
+import { readLedgerParquetBytes } from "./read-parquet";
 import type { LedgerRowProjectionContract } from "./read-parquet";
 
 export async function verifyFeedReceiptWrites<T extends object>(input: Readonly<{
@@ -25,7 +25,7 @@ export async function verifyFeedReceiptWrites<T extends object>(input: Readonly<
     if (createHash("sha256").update(bytes).digest("hex") !== write.sha256) {
       throw new Error("feed receipt: completed native file hash differs from its exact receipt");
     }
-    const file = await readLedgerParquet(path, input.ledger, input.contract);
+    const file = await readLedgerParquetBytes(bytes, path, input.ledger, input.contract);
     if (file.envelope.tier !== "raw" || file.envelope.covers !== write.day) {
       throw new Error("feed receipt: completed native file has another tier or UTC day");
     }

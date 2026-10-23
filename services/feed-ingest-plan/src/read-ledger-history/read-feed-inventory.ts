@@ -29,7 +29,7 @@ export type FeedInventoryInput = Readonly<{
 }>;
 const periods = ["yearly", "monthly", "daily"] as const;
 
-function calendarDays(covers: string): string[] {
+function listCalendarDays(covers: string): string[] {
   if (covers.length === 10) {
     const day = DateStampSchema.parse(covers);
     if (new Date(`${day}T00:00:00Z`).toISOString().slice(0, 10) !== day) {
@@ -49,22 +49,22 @@ function calendarDays(covers: string): string[] {
   }
   return days;
 }
-function rawDay(path: string, root: string): string | undefined {
+function readRawDay(path: string, root: string): string | undefined {
   if (!path.startsWith(`${root}/`)) return undefined;
   const parts = path.slice(root.length + 1).split("/");
   if (parts.length !== 4 || !FileIdNameSchema.safeParse(parts[3]).success) {
     throw new Error("feed inventory: native raw entry must name one UTC day's UUID file");
   }
   const day = parts.slice(0, 3).join("-");
-  calendarDays(day);
+  listCalendarDays(day);
   if (!path.endsWith(".parquet")) throw new Error("feed inventory: native JSON rows require a JSON reader");
   return day;
 }
-function sameWriter(left: WriterIdentity, right: WriterIdentity): boolean {
+function matchesWriter(left: WriterIdentity, right: WriterIdentity): boolean {
   return (Object.keys(WriterIdentitySchema.shape) as (keyof WriterIdentity)[])
     .every(key => left[key] === right[key]);
 }
-function compactPath(root: string, period: Period, covers: string): string {
+function buildCompactPath(root: string, period: Period, covers: string): string {
   return `${root}/${period}/${period === "yearly" ? `${covers}/${covers}` : covers.replaceAll("-", "/")}.parquet`;
 }
 
@@ -99,7 +99,7 @@ export function resolveFeedInventory(input: FeedInventoryInput): FeedInventory {
   const raw = new Map<string, Set<string>>();
   const addRaw = (path: string) => {
     NativeRelativePathSchema.parse(path);
-    const day = rawDay(path, rawRoot);
+    const day = readRawDay(path, rawRoot);
     if (day === undefined) return;
     let held = raw.get(day);
     if (held === undefined) raw.set(day, held = new Set());
@@ -117,9 +117,9 @@ export function resolveFeedInventory(input: FeedInventoryInput): FeedInventory {
   for (const supplied of input.receipts ?? []) {
     const receipt = PublicationReceiptInputSchema.parse(supplied.value);
     const expected = WriterIdentitySchema.parse(supplied.identity);
-    if (!sameWriter(receipt.identity, expected)) throw new Error("feed inventory: receipt belongs to another invocation");
+    if (!matchesWriter(receipt.identity, expected)) throw new Error("feed inventory: receipt belongs to another invocation");
     for (const [path, sha256] of Object.entries(receipt.writes)) {
-      const day = rawDay(path, rawRoot);
+      const day = readRawDay(path, rawRoot);
       if (day === undefined) continue;
       const previous = receiptWrites.get(path);
       if (previous !== undefined && previous.sha256 !== sha256) {
@@ -139,7 +139,7 @@ export function resolveFeedInventory(input: FeedInventoryInput): FeedInventory {
     for (const entry of index.entries) {
       // Python held_days includes every calendar day of a nonempty packed period.
       if (input.ledger === "feed-retirements" || entry.rows > 0) {
-        for (const day of calendarDays(entry.covers)) days.add(day);
+        for (const day of listCalendarDays(entry.covers)) days.add(day);
       }
     }
   }
@@ -158,7 +158,7 @@ export function resolveFeedInventory(input: FeedInventoryInput): FeedInventory {
   for (const day of selected) {
     const match = matchPeriod(day);
     if (match !== undefined) {
-      if (match.entry.state === "packed") files.add(compactPath(compactRoot, match.period, match.entry.covers));
+      if (match.entry.state === "packed") files.add(buildCompactPath(compactRoot, match.period, match.entry.covers));
       inputs.push({ day, indexes });
     } else {
       const rawFiles = [...(raw.get(day) ?? [])].sort();

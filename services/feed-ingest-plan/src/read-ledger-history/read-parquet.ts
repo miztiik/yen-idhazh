@@ -122,9 +122,14 @@ function readEnvelope(metadata: Map<unknown, unknown>): FileEnvelope {
 export async function readLedgerParquet<T extends object>(
   path: string, ledger: RowIdentity["ledger"], contract: LedgerRowContract<T> | LedgerRowProjectionContract<T>,
 ): Promise<ReadLedgerFile<T>> {
+  return readLedgerParquetBytes(await readFile(path), path, ledger, contract);
+}
+export async function readLedgerParquetBytes<T extends object>(
+  bytes: Uint8Array, path: string, ledger: RowIdentity["ledger"],
+  contract: LedgerRowContract<T> | LedgerRowProjectionContract<T>,
+): Promise<ReadLedgerFile<T>> {
   initialization ??= initializeParquet();
   await initialization;
-  const bytes = await readFile(path);
   const metadata = readMetadata(bytes);
   let envelope: FileEnvelope;
   const fileMetadata = metadata.fileMetadata();
