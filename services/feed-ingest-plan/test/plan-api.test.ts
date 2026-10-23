@@ -24,6 +24,7 @@ import { openOperationStore } from "../src/api/operation-store";
 import { proposedOperation } from "../src/api/document-operations";
 import { FetchRequestSchema } from "../src/api/operation-contracts";
 import type { FeedWriteReceipt } from "../src/read-ledger-history/own-feed-receipts";
+import { parseDocument } from "../src/harvest-feeds/parse-document";
 
 test("health is explicit; disabled, malformed, oversized and unknown controls cannot fetch", async () => {
   const inputs = await loadPlanInputs(fileURLToPath(new URL("../../../", import.meta.url)));
@@ -195,6 +196,13 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     const parsed = await parsedResponse.json();
     expect(parsed.failure).toBeNull();
     expect(parsed.parsed.article_text.length).toBeGreaterThan(0);
+    const shared = await parseDocument("article", api.transport.recordings.bodies.article,
+      "https://news.example/second", api.inputs.harvest.extraction, "article");
+    expect(parsed.parsed).toEqual(shared);
+    expect(parsed.parsed.quality).toMatchObject({
+      source_word_count: parsed.parsed.word_count, word_count: parsed.parsed.word_count,
+      token_count: null, truncated: null, boilerplate: null,
+    });
     expect(parsed.observation).toMatchObject({
       article_id: fetched.article_id, correlation_id, run_id: fetched.observation.run_id,
       caused_by_event_id: fetched.observation.event_id, operation: "parse",

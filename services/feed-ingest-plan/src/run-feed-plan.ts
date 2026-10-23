@@ -57,7 +57,8 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   const harvestInputs = loadHarvestInputs({
     config: { ...inputs.harvest.config, curate: { ...inputs.harvest.config.curate, article_limit: request.article_limit } },
     taxonomy: { ...inputs.harvest.taxonomy, ...inputs.harvest.registry },
-    sources: { feeds: inputs.harvest.sources }, extraction: { extract: inputs.harvest.extraction },
+    sources: { feeds: inputs.harvest.sources },
+    extraction: { ...inputs.harvest.extraction_settings, extract: inputs.harvest.extraction },
   });
   const overrides = request.freshness_hours === undefined ? {} : { freshness_hours: request.freshness_hours };
   const fallbackPolicy = resolveRunPolicy(harvestInputs, request.freshness_hours);

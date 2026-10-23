@@ -1,15 +1,15 @@
 /** Which typed observation crosses a planning stage boundary? */
 import { z } from "zod";
 import { isDeepStrictEqual } from "node:util";
-import { ArticleAssessmentRecordSchema, PreviousArticleAssessmentSchema, PreviousDiagnosticArticleAssessmentSchema } from "./article-assessment.schema";
+import { ArticleAssessmentContract, ArticleAssessmentRecordSchema, PreviousArticleAssessmentSchema, PreviousDiagnosticArticleAssessmentSchema, PreviousExclusionArticleAssessmentSchema } from "./article-assessment.schema";
 import { ArticleLabelsSchema, PolicyIdentitySchema, ScoreEvidenceSchema, SourceSnapshotSchema } from "./source.schema";
 import {
   DropReasonSchema, PreviousDiagnosticDropReasonSchema, PreviousPreDiagnosticsDropReasonSchema,
 } from "./rejection.schema";
 import { FetchStatusSchema, ParseStatusSchema } from "./source-run.schema";
 import { CountSchema, DateStampSchema, PlanningStageSchema, PositiveCountSchema, RunIdSchema, Sha256Schema, SlugSchema, TimestampSchema, reject } from "./primitives";
-import { FEED_INGEST_EVENT_VERSION, HARVEST_DIAGNOSTICS_VERSION, PLANNER_EXCLUSIONS_VERSION } from "../version";
-import { HarvestDiagnosticsSchema } from "./harvest-diagnostics.schema";
+import { EXTRACTION_QUALITY_VERSION, FEED_INGEST_EVENT_VERSION, HARVEST_DIAGNOSTICS_VERSION, PLANNER_EXCLUSIONS_VERSION } from "../version";
+import { HarvestDiagnosticsSchema, PreviousHarvestDiagnosticsSchema } from "./harvest-diagnostics.schema";
 
 export const FeedOutcomePayloadSchema = z.strictObject({
   kind: z.literal("feed_outcome"), source: SourceSnapshotSchema,
@@ -94,6 +94,9 @@ export const FeedIngestEventSchema = z.strictObject({
     version: FEED_INGEST_EVENT_VERSION,
     change: "Record native feed rest, retirement, reliability and daily publication evidence.",
   }, {
+    version: EXTRACTION_QUALITY_VERSION,
+    change: "Retain measured extraction quality and implementation fingerprints.",
+  }, {
     version: PLANNER_EXCLUSIONS_VERSION,
     change: "Record pre-fetch planner exclusions with their measured ledger evidence.",
   }, {
@@ -101,7 +104,7 @@ export const FeedIngestEventSchema = z.strictObject({
     change: "Retain measured fetch and extraction diagnostics on feed and article decisions.",
   }, {
     version: "2026-10-22T12:20",
-    change: "Require UUID event and correlation identities with typed decision evidence.",
+    change: "Older changes are in git.",
   }],
 });
 export type FeedIngestEvent = z.infer<typeof FeedIngestEventSchema>;
@@ -115,7 +118,7 @@ const PreviousEventSchema = z.strictObject({
   ...FeedIngestEventSchema.shape,
   version: z.literal("2026-10-22T12:20"),
   payload: z.discriminatedUnion("kind", [
-    FeedOutcomePayloadSchema.omit({ diagnostics: true }).extend({
+    FeedOutcomePayloadSchema.omit({ diagnostics: true, history: true }).extend({
       rejection_reason: PreviousPreDiagnosticsDropReasonSchema.nullable(),
     }),
     CandidateDecisionPayloadSchema.extend({ assessment: PreviousArticleAssessmentSchema }),
@@ -126,31 +129,56 @@ const PreviousDiagnosticEventSchema = z.strictObject({
   ...FeedIngestEventSchema.shape,
   version: z.literal(HARVEST_DIAGNOSTICS_VERSION),
   payload: z.discriminatedUnion("kind", [
-    FeedOutcomePayloadSchema.extend({
+    FeedOutcomePayloadSchema.omit({ history: true }).extend({
       rejection_reason: PreviousDiagnosticDropReasonSchema.nullable(),
+      diagnostics: PreviousHarvestDiagnosticsSchema.nullable().default(null),
     }),
     CandidateDecisionPayloadSchema.extend({ assessment: PreviousDiagnosticArticleAssessmentSchema }),
     PortfolioChoicePayloadSchema, StageCompletionPayloadSchema,
   ]),
 });
+const PreviousExclusionEventSchema = z.strictObject({
+  ...FeedIngestEventSchema.shape,
+  version: z.literal(PLANNER_EXCLUSIONS_VERSION),
+  payload: z.discriminatedUnion("kind", [
+    FeedOutcomePayloadSchema.omit({ history: true }).extend({ diagnostics: PreviousHarvestDiagnosticsSchema.nullable().default(null) }),
+    CandidateDecisionPayloadSchema.extend({ assessment: PreviousExclusionArticleAssessmentSchema }),
+    PortfolioChoicePayloadSchema, StageCompletionPayloadSchema,
+  ]),
+});
+const PreviousQualityEventSchema = z.strictObject({
+  ...FeedIngestEventSchema.shape,
+  version: z.literal(EXTRACTION_QUALITY_VERSION),
+  payload: z.discriminatedUnion("kind", [
+    FeedOutcomePayloadSchema.omit({ history: true }),
+    CandidateDecisionPayloadSchema, PortfolioChoicePayloadSchema, StageCompletionPayloadSchema,
+  ]),
+});
 
 export function readFeedIngestEvent(input: unknown): FeedIngestEvent {
-  if (input && typeof input === "object" && "version" in input && input.version === PLANNER_EXCLUSIONS_VERSION) {
-    return FeedIngestEventSchema.parse({ ...input, version: FEED_INGEST_EVENT_VERSION });
-  }
   if (input && typeof input === "object" && "version" in input && input.version === "2026-10-22T12:20") {
     const previous = PreviousEventSchema.parse(input);
     const payload = previous.payload.kind === "candidate_decision" ? {
-      ...previous.payload, assessment: { ...previous.payload.assessment, version: PLANNER_EXCLUSIONS_VERSION },
+      ...previous.payload, assessment: { ...previous.payload.assessment, version: ArticleAssessmentContract.schemaVersion },
     } : previous.payload;
     return FeedIngestEventSchema.parse({ ...previous, payload, version: FEED_INGEST_EVENT_VERSION });
   }
   if (input && typeof input === "object" && "version" in input && input.version === HARVEST_DIAGNOSTICS_VERSION) {
     const previous = PreviousDiagnosticEventSchema.parse(input);
     const payload = previous.payload.kind === "candidate_decision" ? {
-      ...previous.payload, assessment: { ...previous.payload.assessment, version: PLANNER_EXCLUSIONS_VERSION },
+      ...previous.payload, assessment: { ...previous.payload.assessment, version: ArticleAssessmentContract.schemaVersion },
     } : previous.payload;
     return FeedIngestEventSchema.parse({ ...previous, payload, version: FEED_INGEST_EVENT_VERSION });
+  }
+  if (input && typeof input === "object" && "version" in input && input.version === PLANNER_EXCLUSIONS_VERSION) {
+    const previous = PreviousExclusionEventSchema.parse(input);
+    const payload = previous.payload.kind === "candidate_decision" ? {
+      ...previous.payload, assessment: { ...previous.payload.assessment, version: ArticleAssessmentContract.schemaVersion },
+    } : previous.payload;
+    return FeedIngestEventSchema.parse({ ...previous, payload, version: FEED_INGEST_EVENT_VERSION });
+  }
+  if (input && typeof input === "object" && "version" in input && input.version === EXTRACTION_QUALITY_VERSION) {
+    return FeedIngestEventSchema.parse({ ...PreviousQualityEventSchema.parse(input), version: FEED_INGEST_EVENT_VERSION });
   }
   return FeedIngestEventSchema.parse(input);
 }

@@ -12,6 +12,9 @@ import {
   WriterIdentitySchema, deriveCandidateId, deriveUrlKey, validateEnvelopeContainer,
   readFeedIngestEvent, HarvestDiagnosticsSchema, HARVEST_DIAGNOSTICS_VERSION, PLANNER_EXCLUSIONS_VERSION,
   FetchAttemptSchema, OPERATION_VERSION,
+  EXTRACTION_QUALITY_VERSION,
+  PreviousHarvestDiagnosticsSchema,
+  ArticleAssessmentContract,
 } from "../src/index";
 import { runtimeSchemas, schemas } from "./schema-binding";
 
@@ -318,16 +321,37 @@ describe("planning audit contracts", () => {
     expect(record.payload.kind).toBe("candidate_decision");
     if (record.payload.kind !== "candidate_decision") throw new Error("Fixture must carry an article assessment");
     expect(record.payload.assessment.diagnostics).toBeNull();
+    expect(record.payload.assessment.version).toBe(ArticleAssessmentContract.schemaVersion);
     expect(record.payload.assessment).toEqual({
-      ...fixture.payload.assessment, version: PLANNER_EXCLUSIONS_VERSION, diagnostics: null,
+      ...fixture.payload.assessment, version: EXTRACTION_QUALITY_VERSION, diagnostics: null,
     });
     expect(readFeedIngestEvent(JSON.parse(JSON.stringify(record)))).toEqual(record);
+    const prior = {
+      ...fixture, version: PLANNER_EXCLUSIONS_VERSION, payload: {
+        ...fixture.payload, assessment: {
+          ...fixture.payload.assessment, version: PLANNER_EXCLUSIONS_VERSION,
+          diagnostics: PreviousHarvestDiagnosticsSchema.parse({ extract_ms: 2 }),
+        },
+      },
+    };
+    const migrated = readFeedIngestEvent(prior);
+    if (migrated.payload.kind !== "candidate_decision") throw new Error("Fixture must retain its assessment");
+    expect(migrated.payload.assessment.diagnostics).toMatchObject({ extract_ms: 2, quality: null });
+    expect(migrated.payload.assessment.version).toBe(ArticleAssessmentContract.schemaVersion);
+    expect(() => readFeedIngestEvent({
+      ...prior, payload: { ...prior.payload, assessment: {
+        ...prior.payload.assessment, diagnostics: { ...prior.payload.assessment.diagnostics, quality: null },
+      } },
+    })).toThrow();
     const schema = z.toJSONSchema(FeedIngestEventSchema, { io: "input" });
     expect(schema.$id).toBe("feed-ingest-event");
     expect(schema.version).toBe(record.version);
     expect(schema.changelog).toEqual([{
       version: record.version,
       change: "Record native feed rest, retirement, reliability and daily publication evidence.",
+    }, {
+      version: "2026-10-23",
+      change: "Retain measured extraction quality and implementation fingerprints.",
     }, {
       version: PLANNER_EXCLUSIONS_VERSION,
       change: "Record pre-fetch planner exclusions with their measured ledger evidence.",
@@ -336,7 +360,7 @@ describe("planning audit contracts", () => {
       change: "Retain measured fetch and extraction diagnostics on feed and article decisions.",
     }, {
       version: fixture.version,
-      change: "Require UUID event and correlation identities with typed decision evidence.",
+      change: "Older changes are in git.",
     }]);
     expect(schema.additionalProperties).toBe(false);
     const historicalFeed = {
