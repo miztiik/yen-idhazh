@@ -47,6 +47,7 @@ jobs:
             /services/host-fingerprints/
             /services/host-probes/
             /.github/scripts/feed-ingest-plan-outputs.ts
+            /.github/scripts/feed-ingest-plan-feed-history.ts
             /.github/scripts/feed-ingest-plan-commit.ts
             /.github/scripts/feed-ingest-plan-report.ts
             /.github/scripts/feed-ingest-plan-verification.ts
@@ -106,6 +107,8 @@ jobs:
           import { utcTimestamp } from "./services/feed-ingest-plan/src/harvest-feeds/harvest-types";
           import { ServiceSettingsSchema } from "./services/feed-ingest-plan/src/config/service-settings";
           import { requiredSeenDays } from "./services/feed-ingest-plan/src/read-ledger-history/read-seen-evidence";
+          import { HEALTH_RECORDED_DAYS } from "./services/feed-ingest-plan/src/read-ledger-history/read-feed-history";
+          import { stageFeedHistory } from "./.github/scripts/feed-ingest-plan-feed-history";
           import { CompactIndexSchema, RawDayIndexSchema } from "./packages/common-contracts/src/index";
           import type { CompactIndex, FeedIngestEvent, RawDayIndex } from "./packages/common-contracts/src/index";
           import { completeHistoryDayInputs, createExecutionOutputs, createSeenDayInputs, historyDays, resolveHistoryInventory, sparseCheckoutPath, writeGitHubOutputs } from "./.github/scripts/feed-ingest-plan-outputs";
@@ -135,8 +138,7 @@ jobs:
             const published_days = completeHistoryDayInputs(inputs.registrations.published.prefix,
               requiredSeenDays(now, inputs.clock_config.collect.published_window_days),
               inputs.settings.inputs.published_days, "published_days");
-            const settledRequired = inputs.clock_config.collect.settled_failure_codes.length === 0
-              ? [] : requiredSeenDays(now, 0);
+            const settledRequired = requiredSeenDays(now, 0);
             const settled_failure_days = completeHistoryDayInputs(inputs.registrations.item_health.prefix,
               settledRequired, inputs.settings.inputs.settled_failure_days, "settled_failure_days");
             const registry: { families: { ledgers: { name: string; prefix: string[] }[] }[] } =
@@ -223,10 +225,19 @@ jobs:
             }
             await stageConfiguredDays("published", inputs.registrations.published.prefix, published_days);
             await stageConfiguredDays("item-health", inputs.registrations.item_health.prefix, settled_failure_days);
+            const feedInventory = await stageFeedHistory({
+              ledger: "feed-health", prefix: inputs.registrations.feed_health.prefix, now,
+              health_window_days: Math.max(HEALTH_RECORDED_DAYS, inputs.clock_config.collect.reliability_window_days),
+              authored: inputs.settings.inputs.feed_health_days, read: readCommitted,
+            });
+            console.error(JSON.stringify({ event: "feed_health_inventory", inventory_complete: feedInventory.inventory_complete,
+              notices: feedInventory.notices, represented_days: feedInventory.represented_days }));
+            for (const path of feedInventory.files) inventory.add(path);
             for (const path of inputs.settings.inputs.seen_files) inventory.add(path);
             const sparse = Bun.spawn(["git", "sparse-checkout", "add", "--skip-checks", ...[...inventory].map(sparseCheckoutPath)],
               { stdout: "inherit", stderr: "inherit" });
             if (await sparse.exited !== 0) throw new Error("history: named sparse checkout failed");
+            const feed_health_days = feedInventory.inputs;
             const git = Bun.spawn(["git", "rev-parse", "HEAD"], { stdout: "pipe", stderr: "inherit" });
             const git_sha = (await new Response(git.stdout).text()).trim();
             if (await git.exited !== 0) throw new Error("git_sha: cannot resolve the checkout commit");
@@ -235,7 +246,7 @@ jobs:
               throw new Error("workflow: runner directory, output path, run identity and attempt are required");
             }
             const settings = ServiceSettingsSchema.parse({ ...inputs.settings, enabled: true,
-              inputs: { ...inputs.settings.inputs, seen_days, published_days, settled_failure_days },
+              inputs: { ...inputs.settings.inputs, seen_days, published_days, settled_failure_days, feed_health_days },
               run: { ...inputs.settings.run, attempt: Number(GITHUB_RUN_ATTEMPT) } });
             const artifactRoot = join(RUNNER_TEMP, "feed-ingest-plan");
             await mkdir(artifactRoot, { recursive: true });
@@ -283,6 +294,7 @@ jobs:
             await writeFile(join(artifactRoot, "events.json"), JSON.stringify(events));
             await writeFile(join(artifactRoot, "response.json"), JSON.stringify(summary));
             await verifyParquetFiles(join(artifactRoot, "state"), "dispatches", summary.files.dispatches, inputs.registrations.dispatches);
+            await verifyParquetFiles(join(artifactRoot, "state"), "feed-health", summary.files.feed_health, inputs.registrations.feed_health);
             for (const files of [summary.files.harvest_rejections, summary.files.screening_rejections, summary.files.curation_rejections]) {
               await verifyParquetFiles(join(artifactRoot, "state"), "rejections", files, inputs.registrations.rejections);
             }

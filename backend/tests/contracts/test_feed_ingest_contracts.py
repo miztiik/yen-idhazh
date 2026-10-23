@@ -139,21 +139,44 @@ def test_typescript_field_types_defaults_and_vocabularies(
 
 def test_typescript_envelope_fields_and_footer_keys(typescript_schemas: dict[str, Any]) -> None:
     from idhazh.contracts import file_envelope
+    from idhazh.contracts.feed_health import FeedHealthRow
+    from idhazh.contracts.publication_inventory import PublicationEntry, PublicationInventory
 
     for contract in (
         file_envelope.FileEnvelope,
         file_envelope.WriterIdentity,
         file_envelope.RowIdentity,
+        FeedHealthRow,
     ):
         ours = contract.model_json_schema()
         if contract is file_envelope.FileEnvelope:
             ours = file_envelope.FileEnvelope.json_schema()
+        elif contract is FeedHealthRow:
+            ours = FeedHealthRow.json_schema()
         theirs = typescript_schemas[contract.__name__]
         assert normalized_shape(theirs, theirs) == normalized_shape(ours, ours)
     assert typescript_schemas["__footer_keys"] == list(file_envelope._KEYS)
     assert typescript_schemas["__row_identity_column_versions"] == dict(
         file_envelope.RowIdentity.__column_versions__
     )
+    projections = typescript_schemas["__publication_inputs"]
+    entry = PublicationEntry.model_json_schema()
+    assert normalized_shape(projections["PublicationEntry"], projections["PublicationEntry"]) == (
+        normalized_shape(entry, entry)
+    )
+    native = PublicationInventory.json_schema()
+    projected = projections["PublicationInventory"]
+    assert typescript_schemas["__publication_input_versions"]["PublicationInventory"] == (
+        PublicationInventory.schema_version()
+    )
+    assert set(projected["properties"]) == {"version", "entries"}
+    for name in projected["properties"]:
+        ours, theirs = native["properties"][name], projected["properties"][name]
+        assert normalized_shape(
+            {key: value for key, value in theirs.items() if key != "default"}, projected
+        ) == normalized_shape(
+            {key: value for key, value in ours.items() if key != "default"}, native
+        )
 
 
 def rejection_payload() -> dict[str, Any]:

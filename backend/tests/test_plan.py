@@ -841,9 +841,14 @@ def test_the_feed_order_in_config_does_not_decide_the_day() -> None:
     ]
 
 
-def test_generated_at_comes_from_the_clock_it_was_handed() -> None:
+def test_generated_at_comes_from_the_clock_it_was_handed(tmp_path: Path) -> None:
     built = plan([LAB, TRADE, COMMUNITY], now="2026-08-22T06:00:00Z")
     assert built.generated_at == "2026-08-22T06:00:00Z"
+    for name, captured in (("seconds", "2026-08-22T06:00:00Z"), ("milliseconds", "2026-08-22T06:00:00.123Z")):
+        state = tmp_path / name
+        precise = plan([LAB, TRADE, COMMUNITY], now=captured, state=state)
+        assert precise.generated_at == "2026-08-22T06:00:00Z"
+        assert {row.checked_at for row in health_after(state)} == {captured}
 
 
 def test_a_plan_round_trips_through_its_own_schema() -> None:

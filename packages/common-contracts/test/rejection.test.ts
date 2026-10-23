@@ -11,7 +11,7 @@ import {
   SourceRunRecordSchema, SourceSnapshotSchema, StageCompletionPayloadSchema,
   WriterIdentitySchema, deriveCandidateId, deriveUrlKey, validateEnvelopeContainer,
   readFeedIngestEvent, HarvestDiagnosticsSchema, HARVEST_DIAGNOSTICS_VERSION, PLANNER_EXCLUSIONS_VERSION,
-  FetchAttemptSchema, OPERATION_VERSION,
+  FetchAttemptSchema, OPERATION_VERSION, PLANNER_OPERATION_VERSION, RecordedInstantSchema, TimestampSchema,
   PLANNING_OBSERVATIONS_VERSION,
   EXTRACTION_QUALITY_VERSION,
   PreviousHarvestDiagnosticsSchema,
@@ -349,6 +349,9 @@ describe("planning audit contracts", () => {
     expect(schema.version).toBe(record.version);
     expect(schema.changelog).toEqual([{
       version: record.version,
+      change: "Record native feed rest, retirement, reliability and daily publication evidence.",
+    }, {
+      version: "2026-10-23",
       change: "Retain measured extraction quality and implementation fingerprints.",
     }, {
       version: PLANNER_EXCLUSIONS_VERSION,
@@ -358,9 +361,21 @@ describe("planning audit contracts", () => {
       change: "Retain measured fetch and extraction diagnostics on feed and article decisions.",
     }, {
       version: fixture.version,
-      change: "Require UUID event and correlation identities with typed decision evidence.",
+      change: "Older changes are in git.",
     }]);
     expect(schema.additionalProperties).toBe(false);
+    const historicalFeed = {
+      ...event(), version: PLANNER_EXCLUSIONS_VERSION,
+      audit_event_type: "feed_outcome", source_id: source.source_id,
+      payload: {
+        kind: "feed_outcome", source, fetch_status: "success", parse_status: "empty",
+        parsed_count: 0, harvested_count: 0, fetch_duration_ms: 1, parse_duration_ms: 1,
+        rejection_reason: "FEED_EMPTY", diagnostics: null,
+      },
+    };
+    const migratedFeed = readFeedIngestEvent(historicalFeed);
+    expect(migratedFeed.payload).toMatchObject({ history: null });
+    expect(migratedFeed.version).toBe(record.version);
   });
 
   test("exports the actual runtime input JSON schemas, including nested strict objects", async () => {
@@ -380,7 +395,14 @@ describe("planning audit contracts", () => {
         `../../../tests/fixtures/contracts/${path}`, import.meta.url,
       )).json();
       expect(runtimeSchemas[name].parse(original).version).toBe("2026-10-23");
-      expect(runtimeSchemas[name].parse({ ...original, version: undefined }).version).toBe(OPERATION_VERSION);
+      expect(runtimeSchemas[name].parse({ ...original, version: undefined }).version)
+        .toBe(name === "PlannerOperation" ? PLANNER_OPERATION_VERSION : OPERATION_VERSION);
+      if (name === "PlannerOperation") {
+        expect(runtimeSchemas[name].parse(original).created_at).toBe(original.created_at);
+        expect(runtimeSchemas[name].parse({ ...original, version: PLANNER_OPERATION_VERSION,
+          created_at: `${at.slice(0, -1)}.123Z` }).created_at)
+          .toBe(`${at.slice(0, -1)}.123Z`);
+      }
     }
     const earlierAttempt = FetchAttemptSchema.parse({
       phase: "target", sequence: 0, retry: 0, duration_ms: 0,
@@ -388,5 +410,10 @@ describe("planning audit contracts", () => {
     });
     expect(earlierAttempt.backoff_ms).toBeNull();
     expect(earlierAttempt.retry_total_ms).toBeNull();
+    for (const value of [at, `${at.slice(0, -1)}.000Z`, `${at.slice(0, -1)}.123Z`]) {
+      expect(RecordedInstantSchema.parse(value)).toBe(value);
+    }
+    expect(TimestampSchema.safeParse(`${at.slice(0, -1)}.123Z`).success).toBe(false);
+    expect(RecordedInstantSchema.safeParse("2026-02-31T00:00:00.123Z").success).toBe(false);
   });
 });

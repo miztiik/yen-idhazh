@@ -61,6 +61,7 @@ from idhazh.gardener.tasks import _monthly_period
 from idhazh.ledger import paths
 
 from .._events import events, the_event
+from ._health_order import verify_health_order_compaction
 from ._marks import marks_on_disk
 from ._task import context_for, run_task
 
@@ -228,6 +229,7 @@ def test_a_compact_day_holds_exactly_what_settling_its_raw_files_gives_in_the_sa
     ]
     assert ledger.list_raw_files(state(root), VISUALS) == []
     assert outcome.stopped_because is StopReason.EXHAUSTED and disjoint(outcome)
+    verify_health_order_compaction(tmp_path / "health-order")
 
 
 def test_a_raw_day_folder_entry_that_is_not_a_file_needs_manual_action(

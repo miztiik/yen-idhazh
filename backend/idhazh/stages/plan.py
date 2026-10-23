@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from datetime import UTC, datetime
 from datetime import date as date_type
 from pathlib import Path
 from typing import Final
@@ -23,6 +24,7 @@ from idhazh.contracts.feed_health import (
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.recorded_instant import validate_recorded_instant
 from idhazh.contracts.run_plan import PlannedItem, PublishedAgeBand, RunPlan, VerticalPlan
 from idhazh.contracts.seen import SeenRow
 from idhazh.contracts.sources import FeedDef
@@ -127,10 +129,14 @@ def stage_plan(
     if shards is not None and shards < 1:
         raise ValueError(f"shards must be at least 1, got {shards}")
     read_url = fetcher or common.live_fetcher(settings)
-    clock = now or assemble.utc_now
     state = state_dir if state_dir is not None else common.STATE_ROOT
     collect = settings.app.collect
-    generated_at = clock()
+    checked_at = validate_recorded_instant(
+        now()
+        if now is not None
+        else datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    )
+    generated_at = checked_at[:19] + "Z"
     # Named by the execution that made it, not by a count of what is committed.
     # See `_next_run_n` for what the count could not do.
     run_id = _run_id(date, execution)
@@ -163,16 +169,16 @@ def stage_plan(
         if feed.id in retired:
             skipped += 1
             LOG.info("feed endpoint retired, not asked id=%s", feed.id)
-            health.append(_rest_row(feed, at=generated_at, run_id=run_id, why=RETIRED_DETAIL))
+            health.append(_rest_row(feed, at=checked_at, run_id=run_id, why=RETIRED_DETAIL))
             continue
         if feed.id in asleep:
             skipped += 1
             LOG.info("feed resting id=%s", feed.id)
-            health.append(_rest_row(feed, at=generated_at, run_id=run_id, why=RESTING_DETAIL))
+            health.append(_rest_row(feed, at=checked_at, run_id=run_id, why=RESTING_DETAIL))
             continue
         result = read_url(feed.url)
         found = discover.candidates_from_feed(feed, result.body) if result.ok else []
-        health.append(_health_row(feed, result, found=len(found), at=generated_at, run_id=run_id))
+        health.append(_health_row(feed, result, found=len(found), at=checked_at, run_id=run_id))
         if not result.ok:
             failed += 1
             LOG.warning("feed unavailable id=%s reason=%s", feed.id, result.detail)

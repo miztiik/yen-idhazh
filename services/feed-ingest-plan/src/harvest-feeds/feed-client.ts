@@ -21,6 +21,7 @@ export async function readFeed(
     parsed_count: null, harvested_count: null, fetch_duration_ms: null, parse_duration_ms: null,
     rejection_reason: null,
     diagnostics: null,
+    history: null,
   };
   if (source.status !== "active") {
     outcome.rejection_reason = "SOURCE_INACTIVE";

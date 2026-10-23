@@ -46,7 +46,8 @@ from idhazh.contracts.source_health_view import (
 )
 from idhazh.contracts.sources import FeedDef, Sources
 from idhazh.contracts.taxonomy import Taxonomy
-from idhazh.discover import live, resting, settled, streak
+from idhazh.discover import live, resting, settled
+from idhazh.health_order import availability_evidence, observation_groups
 from idhazh.telemetry.source_health import endpoint_records, feed_reliability
 
 #: Where the view sits under `frontend/public/`. Beside the day payloads rather
@@ -94,7 +95,8 @@ def active_feeds(sources: Sources, verticals: Iterable[str]) -> list[FeedDef]:
 
 
 def _availability(
-    rows: Sequence[FeedHealthRow], *, resting_ids: frozenset[str], feed_id: str
+    rows: Sequence[FeedHealthRow], *, resting_ids: frozenset[str], feed_id: str,
+    after_failures: int,
 ) -> SourceAvailability:
     """What the committed record says about this address now.
 
@@ -114,7 +116,10 @@ def _availability(
     ordered = _chronological(rows)
     if not [row for row in ordered if not row.preserves]:
         return SourceAvailability.NEVER_ASKED
-    return SourceAvailability.FAILING if streak(ordered) > 0 else SourceAvailability.ANSWERING
+    evidence = availability_evidence(ordered, after_failures=after_failures)
+    if evidence.resting is None or evidence.failing is None:
+        return SourceAvailability.UNAVAILABLE
+    return SourceAvailability.FAILING if evidence.failing else SourceAvailability.ANSWERING
 
 
 def _chronological(rows: Sequence[FeedHealthRow]) -> list[FeedHealthRow]:
@@ -126,7 +131,7 @@ def _chronological(rows: Sequence[FeedHealthRow]) -> list[FeedHealthRow]:
     the same two keys `chronological` in `frontend/src/lib/feed-health.ts` sorts
     on, because the page and the run have to read the record the same way round.
     """
-    return sorted(rows, key=lambda row: (row.date, row.run_id))
+    return [row for group in observation_groups(rows) for row in group]
 
 
 def _complete_dates(rows: Iterable[ItemHealthRow], *, today: str, keep: int) -> list[str]:
@@ -291,7 +296,9 @@ def build(
         key = derive_endpoint_key(feed.url)
         record = records.get(key)
         permission = (
-            SourcePermission.UNRECORDED
+            SourcePermission.UNAVAILABLE
+            if record is not None and not record.permission_known
+            else SourcePermission.UNRECORDED
             if record is None or record.permission is None
             else _PERMISSION[record.permission]
         )
@@ -311,7 +318,8 @@ def build(
                 vertical=feed.vertical,
                 permission=permission,
                 availability=_availability(
-                    by_feed.get(feed.id, []), resting_ids=resting_ids, feed_id=feed.id
+                    by_feed.get(feed.id, []), resting_ids=resting_ids, feed_id=feed.id,
+                    after_failures=collect.availability_strikes_before_rest,
                 ),
                 retired=key in retired_on,
                 retired_on=retired_on.get(key),
@@ -448,6 +456,8 @@ def headline(
 
     missing = sum(1 for row in rows if not row.reliability_reads)
     missing += sum(1 for row in rows if row.source_yield is None)
+    missing += sum(1 for row in rows if row.availability is SourceAvailability.UNAVAILABLE)
+    missing += sum(1 for row in rows if row.permission is SourcePermission.UNAVAILABLE)
     if missing:
         return f"{missing} figures on this page are not computed yet."
 

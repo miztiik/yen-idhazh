@@ -638,7 +638,7 @@ const EXPLORER_DEFAULTS: ExplorerConfig = {
 			title: "Feeds with no good fetch in the span",
 			ledgers: ["feed-health"],
 			days: 14,
-			sql: "SELECT feed_id, count(*) AS checks, max(checked_at) AS last_checked FROM \"feed-health\" GROUP BY feed_id HAVING count(*) FILTER (WHERE outcome = 'ok') = 0 ORDER BY checks DESC"
+			sql: "SELECT feed_id, count(*) AS checks, max(CAST(checked_at AS TIMESTAMP)) AS latest_recorded_lower_bound_utc FROM \"feed-health\" GROUP BY feed_id HAVING count(*) FILTER (WHERE outcome = 'ok') = 0 ORDER BY checks DESC"
 		},
 		{
 			id: "why-items-failed",

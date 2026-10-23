@@ -49,6 +49,17 @@ export async function harvestFeeds(
   } };
   const feeds = await mapPool(inputs.sources, inputs.config.harvest.concurrency, async configured => {
     const source = sourceSnapshot(inputs, configured);
+    const history = context.feed_history?.get(source.source_id);
+    if (source.status === "active" && history?.lifecycle === "resting") {
+      return {
+        offered: [], rejection: null,
+        outcome: FeedOutcomePayloadSchema.parse({
+          kind: "feed_outcome", source, fetch_status: "not_requested", parse_status: "not_attempted",
+          parsed_count: null, harvested_count: null, fetch_duration_ms: null, parse_duration_ms: null,
+          rejection_reason: null,
+        }),
+      };
+    }
     context.progress?.("FEED_FETCH_STARTED", { source_id: source.source_id });
     const started = performance.now();
     const result = await readFeed(source, feedFetcher, context, inputs.config.harvest.fetch_timeout_ms);
