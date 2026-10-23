@@ -1,6 +1,6 @@
 # Feed and article failure diagnostics
 
-**Last Updated**: 2026-10-22
+**Last Updated**: 2026-10-23
 
 Which operation failed, what evidence survives it, and which durations were
 actually measured? This is the isolated TypeScript planner's diagnostic
@@ -34,11 +34,12 @@ Table A
 | A4 | `robots_failure`, `robots_http_status` | The cached robots lookup's cause and last HTTP status. These distinguish a denied rule from an unreachable or unsafe robots document without inventing a target response. |
 | A5 | `error_code` | An available OS, TLS or Undici error token. The wire format admits only uppercase letters, digits and underscores, up to 64 characters. No exception message, URL, header or local path is copied. |
 | A6 | `extraction_failure` | Missing document root, DOM depth overflow, empty extracted content or missing title. Successful body extraction with no title remains distinguishable from empty text. |
-| A7 | `failure_code` | The existing Python item-health vocabulary where meanings match: robots denied/unreachable, blocked address, HTTP client/rate/server error, network error, no text or no title. Unmatched conditions use `unknown`, with their exact typed `detail`, rather than pretending to be a network failure. |
+| A7 | `failure_code` | The existing Python item-health vocabulary where meanings match, including the selected measured extraction signal. A signal on a successful extraction is not itself a terminal refusal. Unmatched conditions use `unknown`, with their exact typed `detail`, rather than pretending to be a network failure. |
 | A8 | `stopped_stage`, `detail` | The failed operation (`fetch`, `extract` or feed `parse`) and its fixed cause token. Feed parsing distinguishes malformed input from a successfully parsed empty feed. No fetched prose reaches this field. |
 | A9 | `fetch_ms` | Measured milliseconds around that item's complete permitted fetch, including DNS, robots lookup or cache wait, retries, backoff, redirects and body reading. |
 | A10 | `extract_ms` | Measured milliseconds around the synchronous article extractor, including typed failures. Null if extraction was not attempted. |
 | A11 | `warnings` | A bounded set of warning kinds. Currently `malformed-json-ld` identifies invalid publisher metadata without declaring the article failed. |
+| A12 | `quality` | Measured source/body words, independent publisher length, native shape signals, configured consequence and actual implementation fingerprints. Null before extraction or on historical rows. [Extraction quality](extraction-quality.md) owns each meaning and its unavailable readings. |
 
 Null means unavailable or unperformed; zero milliseconds means a real
 measurement rounded below one millisecond. Inactive feeds, invalid entry
@@ -85,10 +86,11 @@ or weaken decoded byte limits, abort handling or address pinning.
 
 ## Historical records
 
-Rejections, article assessments, source-run rejection vocabularies and planner
-events advance to `2026-10-22T18:15`. Python ledger declarations carry their
+Rejections, article assessments and planner events advance to `2026-10-23`;
+source-run vocabulary and its stamp are unchanged. Python ledger declarations carry their
 changelog entries; TypeScript owns the event changelog.
-Earlier rejection and assessment rows migrate with null diagnostics. Nothing
+Earlier rejection and assessment rows without diagnostics migrate with null
+diagnostics; existing historical diagnostics gain null quality. Nothing
 reconstructs a missing HTTP status, error token or duration from a broad old
 rejection reason. The existing publication-time migration is unchanged.
 Source-run predecessors retain their counts and recorded completion proof.
@@ -108,12 +110,11 @@ the complete fetch duration must not be divided into invented socket phases.
 Intermediate retry error history is not retained; the terminal cause and last
 received status are retained.
 
-Python also records extraction quality signals for short text, non-prose,
-boilerplate and multi-article contamination. The corresponding production
-rejection flags are currently false: recording those signals and rejecting
-articles for them are different behaviors. This phase does not implement
-those signals or change their gating policy. It also does not add published
-history exclusions, feed retirement, caps, workers or production cutover.
+The [quality contract](extraction-quality.md) records the remaining extractor
+differences, missing sibling-host measurement and worker-owned token/cap
+measurements. Recording a shape signal and rejecting an article for it remain
+different behaviors. This change does not alter ranking, workers or production
+cutover.
 
 ## Design rationale
 

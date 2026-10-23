@@ -115,7 +115,7 @@ export async function harvestArticle(
   }
   let extracted: ReturnType<typeof extractArticle>;
   const extractStarted = performance.now();
-  try { extracted = await parseDocument("article", fetched.body, entry.link, inputs.extraction.paywall_markers); }
+  try { extracted = await parseDocument("article", fetched.body, entry.link, inputs.extraction, source.form); }
   catch (error) {
     if (!(error instanceof ArticleExtractionError)) throw error;
     emitDocumentObservations(context, eventIdentity, candidate_id, "parse", fetchedEvent.event_id, utcTimestamp(context.clock));
@@ -140,9 +140,10 @@ export async function harvestArticle(
   diagnostics = {
     ...diagnostics, extract_ms,
     extraction_failure, failure_code: extraction_failure === "empty-content" ? "no_text"
-      : extraction_failure === "missing-title" ? "no_title" : null,
+      : extraction_failure === "missing-title" ? "no_title" : extracted.quality?.failure_code ?? null,
     stopped_stage: extraction_failure === null ? null : "extract", detail: extraction_failure,
     warnings: extracted.warnings,
+    quality: extracted.quality,
   } satisfies HarvestDiagnostics;
   if (diagnostics.warnings.length) context.progress?.("ARTICLE_EXTRACTION_WARNING", {
     source_id: source.source_id, candidate_id, diagnostics,
@@ -151,6 +152,17 @@ export async function harvestArticle(
     ...fetchedObservation, paywall: extracted.paywall, paywall_evidence: extracted.paywall_evidence, extraction,
     diagnostics,
   };
+  if (extracted.quality?.rejected) {
+    diagnostics = {
+      ...diagnostics, extraction_failure: null, stopped_stage: "extract", detail: extracted.quality.failure_code,
+      failure_code: extracted.quality.failure_code,
+    };
+    return HarvestArticleResultSchema.parse({
+      candidate: null,
+      rejection: recordRejection(source, context, "EXTRACT_FAILED", { http_status: fetched.http_status, diagnostics }, article),
+      observation: { ...completeObservation, diagnostics },
+    });
+  }
   if (!article.title || !extracted.article_text) {
     return HarvestArticleResultSchema.parse({
       candidate: null, rejection: recordRejection(source, context, extracted.article_text ? "MISSING_REQUIRED_FIELDS" : "EXTRACT_EMPTY", {

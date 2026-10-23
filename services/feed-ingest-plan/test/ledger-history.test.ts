@@ -7,6 +7,7 @@ import { basename, dirname, join } from "node:path";
 import {
   ArticleAssessmentRecordSchema, CandidateRejectionContract, CONTRACT_VERSION,
   EditorialSelectionRowSchema, SourceRunRecordSchema,
+  PLANNER_EXCLUSIONS_VERSION, EXTRACTION_QUALITY_VERSION, PreviousHarvestDiagnosticsSchema,
 } from "@idhazh/common-contracts";
 import type { LedgerCompletionEvidence } from "@idhazh/common-contracts";
 import { appendIdentityColumns, describeObjectSchema, digestRows, persistLedger } from "@idhazh/ledger-file-writer";
@@ -222,6 +223,26 @@ test("recorded audit rows migrate through native Parquet without invented eviden
       [{ ...previousRejection, details, version: "2026-10-22" }], writer(run), "2026-10-22");
     const rejectionHistory = await readWritten(root, "rejections", day, CandidateRejectionContract, rejectionFile);
     expect(rejectionHistory.rows[0]!.row.details.diagnostics).toBeNull();
+    const priorDiagnostics = PreviousHarvestDiagnosticsSchema.parse({ extract_ms: 2 });
+    const priorAssessment = ArticleAssessmentContract.legacyVersions[PLANNER_EXCLUSIONS_VERSION];
+    const priorAssessmentRow = { ...previousAssessment, version: PLANNER_EXCLUSIONS_VERSION, diagnostics: priorDiagnostics };
+    const priorAssessmentFile = await writeRows(root, "article-assessments", day, priorAssessment.schema,
+      [priorAssessmentRow], writer(run), PLANNER_EXCLUSIONS_VERSION);
+    const readAssessment = await readWritten(root, "article-assessments", day, ArticleAssessmentContract, priorAssessmentFile);
+    expect(readAssessment.rows[0]!.row).toMatchObject({
+      version: EXTRACTION_QUALITY_VERSION, diagnostics: { extract_ms: 2, quality: null },
+    });
+    expect(priorAssessment.schema.safeParse({
+      ...priorAssessmentRow, diagnostics: { ...priorDiagnostics, quality: null },
+    }).success).toBe(false);
+    const priorRejection = CandidateRejectionContract.legacyVersions[PLANNER_EXCLUSIONS_VERSION];
+    const priorRejectionFile = await writeRows(root, "rejections", day, priorRejection.schema,
+      [{ ...previousRejection, version: PLANNER_EXCLUSIONS_VERSION,
+        details: { ...previousRejection.details, diagnostics: priorDiagnostics } }], writer(run), PLANNER_EXCLUSIONS_VERSION);
+    const readRejection = await readWritten(root, "rejections", day, CandidateRejectionContract, priorRejectionFile);
+    expect(readRejection.rows[0]!.row).toMatchObject({
+      version: EXTRACTION_QUALITY_VERSION, details: { diagnostics: { extract_ms: 2, quality: null } },
+    });
     expect(migrated.get("dispatches")).toHaveProperty("content");
   } finally { await rm(root, { recursive: true, force: true }); }
 });

@@ -13,6 +13,7 @@ import {
   FetchedDocumentSchema, PlannerOperationSchema,
   PublicationEntryInputSchema, PublicationInventoryInputSchema, PublicationReceiptInputSchema,
   PUBLICATION_INVENTORY_VERSION, PUBLICATION_RECEIPT_VERSION,
+  ExtractionQualitySchema,
 } from "../src/index";
 
 export const runtimeSchemas = {
@@ -27,6 +28,7 @@ export const runtimeSchemas = {
   LedgerCompletionEvidence: LedgerCompletionEvidenceSchema, SourceRunRecord: SourceRunRecordSchema,
   ArticleAssessmentRecord: ArticleAssessmentRecordSchema, DiversityMetricRow: DiversityMetricRowSchema,
   FetchedDocument: FetchedDocumentSchema, PlannerOperation: PlannerOperationSchema,
+  ExtractionQuality: ExtractionQualitySchema,
 } satisfies Record<string, z.ZodType>;
 
 export const schemas = Object.fromEntries(

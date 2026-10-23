@@ -22,7 +22,8 @@ function assess(input: {
   freshness: FreshnessEvidence | null; evidence: ArticleEvidence | undefined;
 }) {
   const { candidate, rejection, observation, source, policy, context, freshness, evidence, stage } = input;
-  const extraction = observation.extraction === "success" && candidate !== null;
+  const extractedWords = candidate?.word_count ?? observation.diagnostics?.quality?.word_count ?? null;
+  const extraction = observation.extraction === "success" && extractedWords !== null;
   const failed = observation.extraction === "failed" || observation.extraction === "empty";
   const suitability = candidate !== null && observation.paywall !== null;
   const measured = freshness !== null && freshness.timing_source !== "unknown";
@@ -41,7 +42,7 @@ function assess(input: {
     timing_basis: measured ? freshness.timing_source : "unavailable",
     age_hours: measured ? freshness.age_hours : null,
     max_age_hours: measured ? policy.max_age_hours : null,
-    extracted_word_count: extraction ? candidate!.word_count : null,
+    extracted_word_count: extraction ? extractedWords : null,
     source_form: source.form,
     extraction_outcome: extraction ? "success" : failed ? "failed"
       : observation.extraction === "not-attempted" ? "not_attempted" : "unavailable",

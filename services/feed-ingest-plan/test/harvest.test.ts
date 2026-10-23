@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { tableFromIPC } from "apache-arrow";
+import { createHash } from "node:crypto";
 import { default as initializeWasm, readMetadata, readParquet } from "parquet-wasm/esm";
 import {
   CandidateRejectionRecordSchema, FeedIngestCandidateSchema, deriveCandidateId, deriveUrlKey,
@@ -12,6 +13,11 @@ import {
 import { harvestFeeds, loadHarvestInputs } from "@idhazh/feed-ingest-plan/harvest-feeds";
 import { parseFeed } from "../src/harvest-feeds/feed-client";
 import { extractArticle } from "../src/harvest-feeds/dom-extractor";
+import { parseDocument } from "../src/harvest-feeds/parse-document";
+import { EXTRACTOR_VERSION, SANITIZER_FINGERPRINT } from "../src/harvest-feeds/extraction-provenance";
+import { measureExtractionQuality } from "../src/harvest-feeds/extraction-quality";
+import { z } from "zod";
+import { ExtractionQualitySchema } from "@idhazh/common-contracts";
 import { canonicalizeUrl } from "../src/harvest-feeds/url-cleaner";
 import { createPinnedDispatcher, readResponseBody } from "../src/harvest-feeds/transport";
 import { addAbortSignal, PassThrough, Readable } from "node:stream";
@@ -238,17 +244,129 @@ test("inactive, empty, malformed, HTTP, timeout and address failures are distinc
 
 test("real inert DOM extraction retains prose and author but never calls a page resource", async () => {
   const { bodies } = await readRecordings();
-  const extracted = extractArticle(bodies.article, "https://news.example/story", ["subscribe to continue reading"]);
+  const controls = (await inputs()).extraction;
+  const extracted = extractArticle(bodies.article, "https://news.example/story", controls);
   expect(extracted.author).toBe("Page Reporter");
   expect(extracted.article_text).toContain("Independent reviewers will repeat the work");
   expect(extracted.article_text).not.toContain("Privacy and site links");
   expect(extracted.article_text).toContain("[link]");
   expect(extracted.article_text).toContain("[omitted]");
   expect(extracted.paywall).toBe(false);
+  expect(extracted.quality).toMatchObject({
+    word_count: extracted.word_count, source_word_count: extracted.word_count,
+    token_count: null, truncated: null, truncated_at_tokens: null,
+    truncation_cap_tokens: controls.truncation_cap_tokens,
+    boilerplate: null, contaminated: null, failure_code: null, rejected: false,
+    extractor_version: EXTRACTOR_VERSION, sanitizer_version: SANITIZER_FINGERPRINT,
+  });
+  expect(EXTRACTOR_VERSION).toMatch(/^defuddle-0\.19\.5-linkedom-0\.18\.13-idhazh-[a-f0-9]{64}$/);
+  expect(SANITIZER_FINGERPRINT).toMatch(/^idhazh-typescript-sanitizer-3-[a-f0-9]{64}$/);
+  const implementation = createHash("sha256");
+  for (const name of [
+    "dom-extractor.ts", "corroborated-words.ts", "extraction-quality.ts", "extraction-controls.ts",
+    "parse-document.ts", "extraction-provenance.ts",
+  ]) {
+    const code = await Bun.file(new URL(`../src/harvest-feeds/${name}`, import.meta.url)).text();
+    implementation.update(name).update("\0").update(code.replace(/\r\n/g, "\n")).update("\0");
+  }
+  expect(EXTRACTOR_VERSION.endsWith(implementation.digest("hex"))).toBe(true);
+  for (const invalid of [
+    { source_word_count: extracted.word_count - 1 },
+    { contaminated: false }, { corroborated_word_count: 0, contaminated: false },
+    { truncated: true }, { truncated_at_tokens: controls.truncation_cap_tokens },
+    { rejected: true }, { failure_code: "too_short" }, { boilerplate: true },
+  ]) expect(ExtractionQualitySchema.safeParse({ ...extracted.quality, ...invalid }).success).toBe(false);
+  const fixture = z.object({ pages: z.array(z.object({
+    file: z.enum(["contaminated-front-page.html", "france24-player.html", "chrome-only.html", "article.html"]),
+    source_word_count: z.int(), corroborated_word_count: z.int().nullable(),
+    too_short: z.boolean(), not_prose: z.boolean(), contaminated: z.boolean().nullable(),
+    failure_code: ExtractionQualitySchema.shape.failure_code,
+  })) }).parse(await Bun.file(new URL("../../../tests/fixtures/feed-ingest-plan/extraction-quality.json", import.meta.url)).json());
+  for (const { file, ...expected } of fixture.pages) {
+    const html = await Bun.file(new URL(`../../../tests/fixtures/pages/${file}`, import.meta.url)).text();
+    const parsed = await parseDocument("article", html, "https://news.example/story", controls, "article");
+    expect(parsed.quality).toMatchObject(expected);
+    expect(parsed.quality?.word_count).toBe(parsed.word_count);
+    expect(parsed.quality?.rejected).toBe(false);
+    expect(parsed.article_text).not.toMatch(/advertisement tracking|Manage my choices|disable it on this site/u);
+    if (parsed.quality === null) throw new Error("Recorded body must have actual quality evidence");
+    expect(ExtractionQualitySchema.parse(parsed.quality)).toEqual(parsed.quality);
+    if (expected.not_prose) {
+      expect(extractArticle(html, "https://news.example/story", { ...controls, reject_not_prose: true }).quality?.rejected).toBe(true);
+    }
+  }
+  const shortHtml = await Bun.file(new URL("../../../tests/fixtures/pages/france24-player.html", import.meta.url)).text();
+  const shortControls = { ...controls, prose_sentence_min: 1, reject_too_short: true };
+  for (const form of ["article", "abstract"] as const) {
+    expect(extractArticle(shortHtml, "https://news.example/story", shortControls, form).quality).toMatchObject({
+      failure_code: "too_short", too_short: true, rejected: form === "article",
+    });
+  }
+  expect(extractArticle(shortHtml, "https://news.example/story", { ...shortControls, reject_too_short: false }).quality?.rejected).toBe(false);
+  const firstParagraph = bodies.article.match(/<p>([^<]+)<\/p>/u)?.[1];
+  if (!firstParagraph) throw new Error("Recorded page must carry its first article paragraph");
+  const withMetadata = (metadata: string) => bodies.article.replace("</head>", `<script type="application/ld+json">${metadata}</script></head>`);
+  const witnessWords = firstParagraph.split(/\s+/u).length;
+  const witnessControls = { ...controls, corroboration_min_words: witnessWords, reject_contaminated: true };
+  const declared = JSON.stringify({ "@graph": [{ "@type": ["Article", "NewsArticle"], articleBody: firstParagraph }] });
+  const contaminated = extractArticle(withMetadata(declared), "https://news.example/story", witnessControls);
+  expect(contaminated.quality).toMatchObject({
+    source_word_count: extracted.word_count, corroborated_word_count: witnessWords,
+    contaminated: true, failure_code: "contaminated", rejected: true,
+  });
+  expect(extractArticle(withMetadata(declared), "https://news.example/story", { ...witnessControls, reject_contaminated: false }).quality?.rejected).toBe(false);
+  expect(extractArticle(withMetadata(declared), "https://news.example/story", {
+    ...witnessControls, corroboration_ratio_max: extracted.word_count / witnessWords,
+  }).quality?.contaminated).toBe(false);
+  expect(extractArticle(withMetadata(declared), "https://news.example/story", {
+    ...witnessControls, corroboration_min_words: witnessWords + 1,
+  }).quality?.contaminated).toBeNull();
+  expect(extractArticle(withMetadata(JSON.stringify({ "@type": "WebPage", articleBody: firstParagraph })),
+    "https://news.example/story", witnessControls).quality?.corroborated_word_count).toBeNull();
+  const microdata = bodies.article.replace("<article>", '<article itemprop="articleBody">');
+  expect(extractArticle(microdata, "https://news.example/story", controls).quality?.corroborated_word_count).toBeGreaterThan(100);
+  const foldedHeading = bodies.article.replace("</head>", '<meta property="og:title" content="STRASSE"></head>')
+    .replace(/<h1>[^<]+<\/h1>/u, "<h1>Stra\u00dfe</h1>");
+  expect(extractArticle(foldedHeading, "https://news.example/story", controls).quality?.corroborated_word_count).toBeGreaterThan(100);
+  const malformed = extractArticle(withMetadata("{broken JSON"), "https://news.example/story", controls);
+  expect(malformed.warnings).toEqual(["malformed-json-ld"]);
+  expect(malformed.quality?.corroborated_word_count).toBeNull();
+  expect(malformed.quality?.source_word_count).toBe(extracted.word_count);
+  const invalidAccess = extractArticle(withMetadata(JSON.stringify({ "@graph": [
+    { isAccessibleForFree: { toString: "" } },
+    { "@type": "NewsArticle", articleBody: firstParagraph },
+  ] })), "https://news.example/story", witnessControls);
+  expect(invalidAccess.paywall).toBe(false);
+  expect(invalidAccess.quality?.corroborated_word_count).toBe(witnessWords);
+  expect(invalidAccess.warnings).toEqual([]);
+  for (const access of [false, "false", " FALSE "]) {
+    const accessPage = extractArticle(withMetadata(JSON.stringify({ isAccessibleForFree: access })),
+      "https://news.example/story", controls);
+    expect(accessPage.paywall).toBe(true);
+    expect(accessPage.quality).toBeNull();
+  }
+  const lineHeavy = `${extracted.article_text}\n${extracted.page_title!.split(/\s+/u).join("\n")}`;
+  const shapeControls = { ...controls, prose_sentence_min: 1,
+    prose_line_count_min: 1, prose_line_ratio_min: 0 };
+  expect(measureExtractionQuality(lineHeavy, null, shapeControls, "article").not_prose).toBe(false);
+  expect(measureExtractionQuality(lineHeavy, null, { ...shapeControls, prose_line_ratio_min: 1 }, "article").not_prose).toBe(true);
+  expect(measureExtractionQuality(lineHeavy, null, {
+    ...shapeControls, prose_line_ratio_min: 1, prose_line_count_min: lineHeavy.split("\n").length + 1,
+  }, "article").not_prose).toBe(false);
+  expect(measureExtractionQuality(extracted.article_text, null, {
+    ...controls, prose_sentence_words_min: extracted.word_count + 1,
+  }, "article").not_prose).toBe(true);
+  expect(measureExtractionQuality(extracted.article_text, null, {
+    ...controls, min_source_words: extracted.word_count,
+  }, "article").too_short).toBe(false);
+  const capChanged = extractArticle(bodies.article, "https://news.example/story", { ...controls, truncation_cap_tokens: 256 });
+  expect(capChanged.article_text).toBe(extracted.article_text);
+  expect(capChanged.quality).toMatchObject({ token_count: null, truncated: null, truncation_cap_tokens: 256 });
   const paywall = extractArticle(bodies.article.replace("</head>", '<script type="application/ld+json">{"@type":"Article","isAccessibleForFree":false}</script></head>'),
-    "https://news.example/story", []);
+    "https://news.example/story", { ...controls, paywall_markers: [] });
   expect(paywall.paywall).toBe(true);
   expect(paywall.paywall_evidence).toBe("json-ld");
+  expect(paywall.quality).toBeNull();
 });
 
 test("URL identity uses discovery sorting, tracking removal and shared hashing", () => {
@@ -287,6 +405,21 @@ test("rootless extraction, empty content and article request failures do not kil
     expect(result.articles[8]?.observation.diagnostics).toMatchObject({
       extraction_failure: "missing-title", failure_code: "no_title", stopped_stage: "extract",
     });
+    expect(result.articles[8]?.observation.diagnostics?.quality?.source_word_count).toBeGreaterThan(0);
+    const malformedRecording = await readRecordings();
+    const recordedBody = result.candidates[0]!.article_text;
+    malformedRecording.bodies.article = malformedRecording.bodies.article.replace("</head>",
+      `<script type="application/ld+json">${JSON.stringify({ "@graph": [
+        { isAccessibleForFree: { toString: "" } },
+        { "@type": "NewsArticle", articleBody: recordedBody },
+      ] })}</script></head>`);
+    const metadataTransport = new RecordedTransport(malformedRecording);
+    const metadataResult = await harvestFeeds(loaded, context(), destination(join(root, "metadata")), {
+      transport: metadataTransport, resolve: metadataTransport.resolve,
+    });
+    expect(metadataResult.candidates.map(candidate => candidate.entry_ordinal)).toEqual([4, 5, 6, 7]);
+    expect(metadataResult.articles[4]?.observation.diagnostics?.quality?.corroborated_word_count).toBe(
+      recordedBody.split(/\s+/u).length);
     for (const article of result.articles) {
       if (article.rejection !== null) expect(article.rejection.details.diagnostics).toEqual(article.observation.diagnostics);
       if (article.observation.extraction !== "not-attempted") expect(article.observation.diagnostics?.extract_ms).toBeGreaterThanOrEqual(0);
@@ -299,6 +432,36 @@ test("rootless extraction, empty content and article request failures do not kil
     const table = tableFromIPC(wasmTable.intoIPCStream());
     expect(Array.from(table.getChild("drop_reason") ?? [])).toEqual(result.rejections.map(row => row.drop_reason));
     expect(Array.from(table.getChild("candidate_id") ?? [])).toContain(deriveCandidateId(context().writer.run_id, "recorded-news", 0));
+    const shortHtml = await Bun.file(new URL("../../../tests/fixtures/pages/france24-player.html", import.meta.url)).text();
+    for (const form of ["article", "abstract"] as const) {
+      const recordings = await readRecordings();
+      recordings.bodies.article = shortHtml;
+      const replay = new RecordedTransport(recordings);
+      const qualityInputs = await inputs([source({ form })], {
+        extraction: { prose_sentence_min: 1, reject_too_short: true },
+      });
+      const measured = await harvestFeeds(qualityInputs, context(), destination(join(root, form)), {
+        transport: replay, resolve: replay.resolve,
+      });
+      const qualityArticles = measured.articles.filter(article => article.observation.extraction === "success");
+      expect(qualityArticles).toHaveLength(2);
+      for (const article of qualityArticles) {
+        expect(article.observation.diagnostics?.quality).toMatchObject({
+          too_short: true, failure_code: "too_short", rejected: form === "article",
+        });
+        if (form === "article") {
+          expect(article.rejection?.drop_reason).toBe("EXTRACT_FAILED");
+          expect(article.rejection?.details.diagnostics).toEqual(article.observation.diagnostics);
+          expect(article.observation.diagnostics).toMatchObject({
+            failure_code: "too_short", stopped_stage: "extract", detail: "too_short",
+          });
+        } else {
+          expect(article.candidate?.word_count).toBe(37);
+          expect(article.rejection).toBeNull();
+          expect(article.observation.diagnostics?.stopped_stage).toBeNull();
+        }
+      }
+    }
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -306,7 +469,7 @@ test("report settings remain available without changing the planning fingerprint
   const baseline = await inputs();
   const load = (config: typeof baseline.config) => loadHarvestInputs({
     config, taxonomy: baseline.registry,
-    sources: { feeds: baseline.sources }, extraction: { extract: baseline.extraction },
+    sources: { feeds: baseline.sources }, extraction: baseline.extraction_settings,
   });
   const enabled = load({
     ...baseline.config,
@@ -328,6 +491,25 @@ test("report settings remain available without changing the planning fingerprint
     triage: { ...baseline.config.triage, max_age_hours: baseline.config.triage.max_age_hours + 1 },
   });
   expect(policyChange.config_sha256).not.toBe(baseline.config_sha256);
+  for (const [knob, value] of [
+    ["reject_not_prose", true], ["reject_contaminated", true], ["reject_boilerplate", true],
+    ["reject_too_short", false], ["prose_sentence_min", 4], ["prose_sentence_words_min", 9],
+    ["prose_line_count_min", 13], ["prose_line_ratio_min", 0.6], ["corroboration_ratio_max", 3],
+    ["corroboration_min_words", 101], ["truncation_cap_tokens", 256],
+  ] as const) {
+    const changed = loadHarvestInputs({
+      config: baseline.config, taxonomy: baseline.registry, sources: { feeds: baseline.sources },
+      extraction: { ...baseline.extraction_settings, extract: { ...baseline.extraction, [knob]: value } },
+    });
+    expect(changed.config_sha256, knob).not.toBe(baseline.config_sha256);
+  }
+  expect(() => loadHarvestInputs({
+    config: baseline.config, taxonomy: baseline.registry, sources: { feeds: baseline.sources },
+    extraction: {
+      ...baseline.extraction_settings,
+      evaluation: { brief_compression_ceiling: baseline.extraction_settings.evaluation.brief_compression_ceiling / 2 },
+    },
+  })).toThrow("extract.min_source_words");
 });
 
 test("a paused rejection registry cannot return a successful harvest with unwritten rejections", async () => {
@@ -353,7 +535,7 @@ test("live and draft sources require active registry classifications; retired so
           ? { ...kind, status: registryStatus, retired_on: registryStatus === "retired" ? "2026-10-20" : null } : kind),
       };
       expect(() => loadHarvestInputs({
-        config: baseline.config, taxonomy, sources: { feeds: [source({ status })] }, extraction: { extract: baseline.extraction },
+        config: baseline.config, taxonomy, sources: { feeds: [source({ status })] }, extraction: baseline.extraction_settings,
       })).toThrow("source kind must be active and registered");
       const tierTaxonomy = {
         ...baseline.registry,
@@ -361,7 +543,7 @@ test("live and draft sources require active registry classifications; retired so
           ? { ...tier, status: registryStatus, retired_on: registryStatus === "retired" ? "2026-10-20" : null } : tier),
       };
       expect(() => loadHarvestInputs({
-        config: baseline.config, taxonomy: tierTaxonomy, sources: { feeds: [source({ status })] }, extraction: { extract: baseline.extraction },
+        config: baseline.config, taxonomy: tierTaxonomy, sources: { feeds: [source({ status })] }, extraction: baseline.extraction_settings,
       })).toThrow("source tier must be active and registered");
     }
   }
@@ -373,11 +555,11 @@ test("live and draft sources require active registry classifications; retired so
     }],
   };
   const loaded = loadHarvestInputs({
-    config: baseline.config, taxonomy: historicalTaxonomy, sources: { feeds: [historical] }, extraction: { extract: baseline.extraction },
+    config: baseline.config, taxonomy: historicalTaxonomy, sources: { feeds: [historical] }, extraction: baseline.extraction_settings,
   });
   expect(loaded.sources[0]).toEqual(historical);
   expect(() => loadHarvestInputs({
-    config: baseline.config, taxonomy: baseline.registry, sources: { feeds: [historical] }, extraction: { extract: baseline.extraction },
+    config: baseline.config, taxonomy: baseline.registry, sources: { feeds: [historical] }, extraction: baseline.extraction_settings,
   })).toThrow("source.recorded-news.tier: missing registered snapshot weight");
   const root = await mkdtemp(join(tmpdir(), "harvest-historical-tier-"));
   try {

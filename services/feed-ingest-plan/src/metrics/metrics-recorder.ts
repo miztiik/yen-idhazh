@@ -95,7 +95,8 @@ export function preparePlanningMetrics(
   const original = loadHarvestInputs({
     config: { ...inputs.harvest.config, curate: { ...inputs.harvest.config.curate, article_limit: result.request.article_limit } },
     taxonomy: { ...inputs.harvest.taxonomy, ...inputs.harvest.registry },
-    sources: { feeds: inputs.harvest.sources }, extraction: { extract: inputs.harvest.extraction },
+    sources: { feeds: inputs.harvest.sources },
+    extraction: { ...inputs.harvest.extraction_settings, extract: inputs.harvest.extraction },
   });
   requireSame(result.evidence.harvest.inputs, original, "audit.harvest.inputs");
   requireSame(result.evidence.harvest.config, original.config, "audit.harvest.config");
