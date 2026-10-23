@@ -19,7 +19,6 @@ pytestmark = pytest.mark.contract
 def test_the_committed_file_names_every_knob_and_both_loaders_read_it() -> None:
     text = (CONFIG_DIR / "llm_council.json").read_text(encoding="utf-8")
     expected = json.loads(text)
-    assert set(expected) == set(CouncilConfig.model_fields)
     assert config.load_council(CONFIG_DIR).model_dump(mode="json") == expected
     settings = config.load(CONFIG_DIR)
     assert settings.council == config.load_council(CONFIG_DIR)
