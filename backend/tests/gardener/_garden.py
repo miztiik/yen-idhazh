@@ -40,7 +40,7 @@ GARDENER_FIXTURES: Final = FIXTURES_DIR / "gardener"
 TASK_PACKAGES: Final = GARDENER_FIXTURES / "task_packages"
 
 #: The committed files a gardener config folder needs beside its declarations.
-COMMITTED_FILES: Final = ("idhazh.json", "appearance.json", "idhazh_gardener.json")
+COMMITTED_FILES: Final = ("idhazh.json", "ledgers.json", "appearance.json", "idhazh_gardener.json")
 
 #: The task declarations these integration fixtures exercise, not a directory census.
 COMMITTED_DECLARATIONS: Final = (

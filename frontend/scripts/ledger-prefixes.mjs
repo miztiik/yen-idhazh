@@ -1,14 +1,17 @@
 /** Which validated registry prefixes belong to the named raw-and-compact ledgers? */
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { configuredCatalog } from '../src/lib/data/configured-catalog.ts';
 import { parseLedgerCatalog } from '../src/lib/data/ledger-catalog.ts';
 
-export const REGISTRY = fileURLToPath(new URL('../../config/ledgers.json', import.meta.url));
+export const CONFIG_ROOT = process.env.CONFIG_ROOT
+	? resolve(process.env.CONFIG_ROOT)
+	: fileURLToPath(new URL('../../config', import.meta.url));
+export const REGISTRY = resolve(CONFIG_ROOT, 'ledgers.json');
 
 /** @param {string} [file] */
 export function ledgerCatalog(file) {
-	return file === undefined ? configuredCatalog : parseLedgerCatalog(JSON.parse(readFileSync(file, 'utf8')));
+	return parseLedgerCatalog(JSON.parse(readFileSync(file ?? REGISTRY, 'utf8')));
 }
 
 /**

@@ -153,6 +153,8 @@ def test_a_failed_push_or_a_manual_ci_run_does_not_publish(
         ("backend/idhazh/stage.py", "false"),
         ("frontend/tests/page.spec.ts", "false"),
         (".github/workflows/ci.yml", "false"),
+        ("state/raw/feed-health/2026/10/03/rows.parquet", "false"),
+        ("state/compact/feed-health/daily/2026/10/03.parquet", "false"),
     ],
 )
 def test_a_push_publishes_only_when_it_changed_what_the_site_is_built_from(
@@ -163,6 +165,32 @@ def test_a_push_publishes_only_when_it_changed_what_the_site_is_built_from(
     result = after_ci(repo, before=first, checked=head, tip=head)
     assert result["publish"] == published
     assert result["ref"] == head
+
+
+def test_telemetry_mixed_with_existing_noninputs_does_not_publish(tmp_path: Path) -> None:
+    repo, first = a_repository(tmp_path)
+    head = a_commit(
+        repo,
+        {
+            "state/raw/feed-health/2026/10/04/rows.parquet": "new raw rows\n",
+            "state/compact/feed-health/daily/2026/10/04.parquet": "new compact rows\n",
+            "docs/page.md": "# A revised page\n",
+        },
+    )
+    assert after_ci(repo, before=first, checked=head, tip=head)["publish"] == "false"
+
+
+def test_telemetry_mixed_with_a_published_digest_still_publishes(tmp_path: Path) -> None:
+    repo, first = a_repository(tmp_path)
+    head = a_commit(
+        repo,
+        {
+            "state/raw/feed-health/2026/10/04/rows.parquet": "new raw rows\n",
+            "state/compact/feed-health/daily/2026/10/04.parquet": "new compact rows\n",
+            "frontend/public/digest/2026/10/04/digest.json": "{}\n",
+        },
+    )
+    assert after_ci(repo, before=first, checked=head, tip=head)["publish"] == "true"
 
 
 def test_every_commit_of_a_push_counts_not_only_the_last(tmp_path: Path) -> None:

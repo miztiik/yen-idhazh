@@ -706,7 +706,7 @@ def _dispatch(
         # built tree, not about the open web.
         if args.site_tree is None:
             parser.error("published-columns needs --site-tree: the built bundle to check")
-        return published_columns.check(args.site_tree, settings.app.ledger.published)
+        return published_columns.check(args.site_tree, settings.ledgers.data_explorer_ledgers)
 
     if args.stage == "check-publication":
         # Above the fetcher for the same reason site-weight is: reading committed

@@ -57,7 +57,7 @@ from idhazh.contracts.knobs.gardener import (
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.knobs.windows import months_a_window_can_touch
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.ledgers import LedgerEntry
+from idhazh.contracts.ledgers import LedgerEntry, LedgersConfig
 from idhazh.contracts.run_manifest import ConfigDigest
 from idhazh.contracts.sources import Sources
 from idhazh.contracts.taxonomy import Taxonomy
@@ -71,6 +71,7 @@ DEFAULT_CONFIG_DIR: Final = REPO_ROOT / "config"
 
 _FILES: Final[tuple[str, ...]] = (
     "idhazh.json",
+    "ledgers.json",
     "sources.json",
     "taxonomy.json",
     "watchlist.json",
@@ -174,6 +175,7 @@ class Settings:
     """Every tunable the run will consult, already validated."""
 
     app: AppConfig
+    ledgers: LedgersConfig
     council: CouncilConfig
     models: ModelsConfig
     appearance: AppearanceConfig
@@ -216,6 +218,7 @@ def load(config_dir: Path = DEFAULT_CONFIG_DIR) -> Settings:
     """A fresh clone runs on the committed defaults; a missing file is a failure, not a default."""
     read = {name: (config_dir / name).read_text(encoding="utf-8") for name in _FILES}
     app = AppConfig.from_json(read["idhazh.json"])
+    ledgers = _read_ledgers(read["ledgers.json"])
     council = CouncilConfig.model_validate_json(read["llm_council.json"])
     council.bind_declarations(load_judge_declarations(config_dir, council), config_dir=config_dir)
     for name in council.judge_names:
@@ -236,6 +239,7 @@ def load(config_dir: Path = DEFAULT_CONFIG_DIR) -> Settings:
     )
     settings = Settings(
         app=app,
+        ledgers=ledgers,
         council=council,
         models=models,
         appearance=appearance,
@@ -356,6 +360,7 @@ class GardenerSettings:
     tasks: Mapping[str, TaskPolicy]
     #: The rest of the configuration the declarations were checked against.
     app: AppConfig
+    ledgers: LedgersConfig
 
 
 def load_gardener(config_dir: Path = DEFAULT_CONFIG_DIR) -> GardenerSettings:
@@ -368,6 +373,7 @@ def load_gardener(config_dir: Path = DEFAULT_CONFIG_DIR) -> GardenerSettings:
     gardener = _gardener_config(config_dir)
     tasks = _declarations(config_dir, gardener.task_names)
     app = AppConfig.from_json((config_dir / _FILES[0]).read_text(encoding="utf-8"))
+    ledgers = _read_ledgers((config_dir / "ledgers.json").read_text(encoding="utf-8"))
     from idhazh.telemetry.host_control import memory_override
 
     override = memory_override()
@@ -377,9 +383,19 @@ def load_gardener(config_dir: Path = DEFAULT_CONFIG_DIR) -> GardenerSettings:
         (config_dir / _APPEARANCE_FILE).read_text(encoding="utf-8")
     )
     refuse_what_the_declarations_break(
-        tasks, app=app, appearance=appearance, repo_root=config_dir.parent
+        tasks, app=app, ledgers=ledgers, appearance=appearance, repo_root=config_dir.parent
     )
-    return GardenerSettings(config=gardener, tasks=MappingProxyType(tasks), app=app)
+    return GardenerSettings(
+        config=gardener, tasks=MappingProxyType(tasks), app=app, ledgers=ledgers
+    )
+
+
+def _read_ledgers(text: str) -> LedgersConfig:
+    """Validate the registry this config root supplies."""
+    try:
+        return LedgersConfig.from_json(text)
+    except ValidationError as error:
+        raise ValueError(f"config/ledgers.json is refused: {error}") from error
 
 
 def _gardener_config(config_dir: Path) -> GardenerConfig:
@@ -419,6 +435,7 @@ def refuse_what_the_declarations_break(
     tasks: Mapping[str, TaskPolicy],
     *,
     app: AppConfig,
+    ledgers: LedgersConfig,
     appearance: AppearanceConfig,
     repo_root: Path,
 ) -> None:
@@ -434,7 +451,7 @@ def refuse_what_the_declarations_break(
     for name, policy in tasks.items():
         if isinstance(policy, CompactionPolicy):
             _refuse_a_compaction_declaration(
-                name, policy, tasks, app=app, appearance=appearance
+                name, policy, tasks, app=app, ledgers=ledgers, appearance=appearance
             )
         if isinstance(policy, CollectionTaskPolicy):
             _refuse_a_collection_named_for_another(name, policy)
@@ -862,8 +879,8 @@ def _refuse_a_published_reach_that_grows_or_falls_short(
         return
     if reach is None:
         raise ValueError(
-            f"{where} keeps monthly_window forever and {ledger} is in ledger.published, and "
-            "it sets no monthly_keep_days. A published ledger keeps its month files forever "
+            f"{where} keeps monthly_window forever and {ledger} is enabled for the explorer, and "
+            "it sets no monthly_keep_days. An explorer ledger keeps its month files forever "
             "only when it packs each finished year into one file, or what a reader's first "
             "request fetches grows with the archive"
         )
@@ -883,6 +900,7 @@ def _refuse_a_compaction_that_cuts_its_ledger(
     tasks: Mapping[str, TaskPolicy],
     *,
     app: AppConfig,
+    ledgers: LedgersConfig,
     appearance: AppearanceConfig,
 ) -> None:
     """Once a ledger is compacted its periods are its retention, so they must reach.
@@ -900,7 +918,7 @@ def _refuse_a_compaction_that_cuts_its_ledger(
             f"folder: call it {expected}.json"
         )
     reach = _reach(policy)
-    if ledger in app.ledger.published:
+    if ledger in ledgers.data_explorer_ledgers:
         _refuse_a_published_reach_that_grows_or_falls_short(
             where, policy, reach, appearance=appearance
         )
@@ -921,6 +939,7 @@ def _refuse_a_compaction_declaration(
     tasks: Mapping[str, TaskPolicy],
     *,
     app: AppConfig,
+    ledgers: LedgersConfig,
     appearance: AppearanceConfig,
 ) -> None:
     """Keep production governance separate from explicit trial-root compactions."""
@@ -976,5 +995,5 @@ def _refuse_a_compaction_declaration(
         )
 
     _refuse_a_compaction_that_cuts_its_ledger(
-        name, policy, tasks, app=app, appearance=appearance
+        name, policy, tasks, app=app, ledgers=ledgers, appearance=appearance
     )

@@ -226,18 +226,15 @@ def test_the_committed_registry_names_every_ledger_exactly_once() -> None:
     assert len(entries) == len(LedgerName)
 
 
-def test_explorer_consent_preserves_exact_publication_membership() -> None:
-    config = LedgersConfig.model_validate(a_registry())
-    published = json.loads((REPO_ROOT / "config" / "idhazh.json").read_text(encoding="utf-8"))[
-        "ledger"
-    ]["published"]
-    consented = {
-        held.name.value
-        for family in config.families
+def test_explorer_catalog_derives_eligible_names_from_registry_order() -> None:
+    registry = LedgersConfig.model_validate(a_registry())
+    expected = tuple(
+        held.name
+        for family in registry.families
         for held in family.ledgers
         if held.publish_to_data_explorer
-    }
-    assert consented == set(published)
+    )
+    assert registry.data_explorer_ledgers == expected
 
 
 @pytest.mark.parametrize("value", [None, 0, 1, "true", "false", [], {}])

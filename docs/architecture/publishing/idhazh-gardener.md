@@ -1,6 +1,6 @@
 # The gardener
 
-**Last Updated**: 2026-10-09
+**Last Updated**: 2026-10-23
 
 How the one program that deletes and rewrites what this repository keeps is put
 together: where its tasks come from, how a wake is split into shards, what a
@@ -371,10 +371,10 @@ wording can change with no migration. A row written before 2026-10-07 has no
 `fault` and no `recovered`, and reads as one that named none; on such a row
 `failed` means any stop for an error.
 
-**The record is published.** `gardener` is in `ledger.published` in
-`config/idhazh.json`, so the site holds its packed indexes, the files they name
-and the raw days not packed yet, and the console's Data explorer can ask it why
-a ledger is behind and what a pass recovered
+**The record is published.** The `gardener` entry in `config/ledgers.json`
+consents to the Data explorer, so the site holds its compact indexes and the
+files they name. The console can ask it why a ledger is behind and what a pass
+recovered
 ([what the site holds](how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)).
 Every cell can be published as it is: a closed word, a count, a flag, a UTC day
 or instant, the identity of the run that wrote the row, a task's name from

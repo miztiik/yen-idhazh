@@ -278,6 +278,7 @@ def copy_config(root: Path, *, models: dict[str, Any] | None = None) -> str:
     pointer = str(AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).models_file)
     for name in (
         "idhazh.json",
+        "ledgers.json",
         "sources.json",
         "taxonomy.json",
         "watchlist.json",

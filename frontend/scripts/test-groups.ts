@@ -41,7 +41,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'lenses', 'manifest', 'memory-held', 'merge-line', 'model-cards',
 		'one-pass-reductions', 'payload-ceilings',
 		'platform-mix', 'preview-port', 'processor-lost', 'prompt-reuse',
-		'publication', 'raw-listed-through', 'recorded-line',
+		'publication', 'recorded-line',
 		'recorded-slices', 'run-axis', 'run-yield', 'served-day', 'settings-moved',
 		'similarity-ledgers', 'span-sentences', 'span-words', 'statement',
 		'telemetry-header', 'telemetry-hold', 'throughput-window', 'time-split', 'tokens',

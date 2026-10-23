@@ -7,7 +7,7 @@ import { assetBaseUrl } from '../asset-base.js';
 import { projectDay } from '../src/lib/payload/project.ts';
 import { publicFiles } from '../src/lib/server/publication.ts';
 import { ledgerCopy, publishedLedgers } from './published-ledgers.mjs';
-import { ledgerFolders } from './ledger-prefixes.mjs';
+import { ledgerFolders, REGISTRY } from './ledger-prefixes.mjs';
 import { stagedPath } from './staged-publication.mjs';
 
 const digestRoot = process.env.DIGEST_ROOT
@@ -65,10 +65,10 @@ for (const file of publicFiles(publicRoot)) {
 	}
 }
 
-const ledgers = publishedLedgers();
+const ledgers = publishedLedgers(REGISTRY);
 const stateLabel = relative(resolve('..'), stateRoot).split(sep).join('/');
-const copy = ledgerCopy(stateRoot, ledgers, stateLabel);
-const folders = ledgerFolders(ledgers);
+const copy = ledgerCopy(stateRoot, ledgers, stateLabel, undefined, REGISTRY);
+const folders = ledgerFolders(ledgers, REGISTRY);
 if (copy.refused.length > 0) {
 	throw new Error(`Published ledger is incomplete:\n${copy.refused.join('\n')}`);
 }
@@ -91,7 +91,7 @@ if (!servedElsewhere) {
 	}
 }
 
-const registrySource = resolve('..', 'config', 'ledgers.json');
+const registrySource = REGISTRY;
 const registryTarget = join('static', 'config', 'ledgers.json');
 if (existsSync(registrySource)) stage(readFileSync(registrySource), registryTarget);
 else rmSync(registryTarget, { force: true });
