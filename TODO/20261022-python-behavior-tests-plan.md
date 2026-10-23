@@ -58,7 +58,7 @@ Table D - PR outcomes
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | D1 | 1 | Semantic contracts and focused byte guarantees | - | A | DONE | - | - | - |
 | D2 | 2 | Vector tests independent of the current asset | - | A | DONE | - | - | - |
-| D3 | 3 | Finish the behavior review and remove proven fixture-only checks | 1, 2 | B | PENDING | - | - | - |
+| D3 | 3 | Finish the behavior review and remove proven fixture-only checks | 1, 2 | B | DONE | - | - | - |
 
 ## 2 - Row #1 - Semantic contracts and focused byte guarantees
 
