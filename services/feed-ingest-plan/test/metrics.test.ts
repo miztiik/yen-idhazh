@@ -423,7 +423,7 @@ test("two actual runs retain changed source snapshots while rolling instances an
       config: inputs.harvest.config, taxonomy: { ...inputs.harvest.taxonomy, ...inputs.harvest.registry },
       sources: { feeds: inputs.harvest.sources.map(source =>
         source.id === "carrier" ? { ...source, status: "draft" } : source.id === "recorded-news" ? { ...source, kind: "research" } : source) },
-      extraction: { extract: inputs.harvest.extraction },
+      extraction: inputs.harvest.extraction_settings,
     });
     fixture.recorded.runtime.run_number = "701";
     const second = await runFeedPlan({ partition_strategy: "none" }, inputs, fixture.recorded.runtime);

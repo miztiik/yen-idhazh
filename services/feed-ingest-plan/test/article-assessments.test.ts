@@ -37,6 +37,20 @@ test("real publication timing and separate article/set scores survive translatio
         expect(row.score_evidence).toEqual(score);
       }
     }
+    recorded.transport.recordings.bodies.article = await Bun.file(new URL(
+      "../../../tests/fixtures/pages/france24-player.html", import.meta.url,
+    )).text();
+    recorded.inputs.harvest.extraction.prose_sentence_min = 1;
+    recorded.runtime.run_number = "701";
+    const signalled = await runFeedPlan({ partition_strategy: "none" }, recorded.inputs, recorded.runtime);
+    const rejected = translateArticleAssessments(signalled, recorded.inputs).filter(row => row.diagnostics?.quality?.rejected);
+    expect(rejected).toHaveLength(2);
+    for (const row of rejected) {
+      expect(row.reason).toBe("EXTRACT_FAILED");
+      expect(row.extraction_outcome).toBe("success");
+      expect(row.extracted_word_count).toBe(37);
+      expect(row.diagnostics?.quality).toMatchObject({ failure_code: "too_short", rejected: true });
+    }
   } finally { await recorded.close(); }
 }, 30000);
 

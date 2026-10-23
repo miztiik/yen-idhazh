@@ -46,7 +46,7 @@ export async function readFeed(
   outcome.fetch_status = "success";
   const parseStarted = performance.now();
   let entries: FeedEntry[];
-  try { entries = await parseDocument("feed", response.body, source.feed_url, []); }
+  try { entries = await parseDocument("feed", response.body, source.feed_url); }
   catch {
     outcome.parse_duration_ms = Math.round(performance.now() - parseStarted);
     outcome.parse_status = "failure";

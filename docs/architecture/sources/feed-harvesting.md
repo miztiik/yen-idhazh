@@ -1,6 +1,6 @@
 # Isolated feed harvesting
 
-**Last Updated**: 2026-10-22
+**Last Updated**: 2026-10-23
 
 How the TypeScript planner turns configured RSS/Atom entries into sanitized
 article candidates and records refusals. This path is separate from production
@@ -112,7 +112,7 @@ error. Retired kinds and verticals need not remain current registry members.
 
 The configuration fingerprint is SHA-256 of the UTF-8 JSON serialization of
 the validated planner configuration excluding `workflow_reporting`, relevant registry fields, source list and
-extraction controls, in that order. Each candidate carries that fingerprint
+extraction controls and actual extractor/sanitizer fingerprints, in that order. Each candidate carries that fingerprint
 and its resolved vertical policy. All unknown editorial labels remain null.
 Reporting settings remain available in the returned configuration, but neither
 their enabled flag nor removal text changes content identity or ledger digests.
@@ -210,6 +210,10 @@ failure and rejection without aborting sibling articles. Empty content remains
 a distinct `EXTRACT_EMPTY` rejection; typed extractor errors use
 `EXTRACT_FAILED`, never `FETCH_FAILED`. Unexpected programming failures still surface.
 
+The shared parser records actual [extraction quality](extraction-quality.md),
+including the configured consequences and unavailable worker measurements.
+Exact consent and blocked-player class tokens are removed before extraction.
+
 ## Dependencies and cost
 
 These are installed package-file bytes measured on Windows x64 with Bun 1.3.13,
@@ -247,8 +251,9 @@ bun run check
 bun test test\harvest.test.ts test\harvest-safety.test.ts --timeout 30000
 ```
 
-The tests read the five named `harvest-*` fixtures under
-`tests/fixtures/feed-ingest-plan/` and the named authored configuration files.
+The tests read named `harvest-*` fixtures and `extraction-quality.json` under
+`tests/fixtures/feed-ingest-plan/`, the four page files that quality fixture
+names, and the named authored configuration files.
 The response replay refuses an unrecorded request. No test uses live sources
 or Python. Real writer output is read through TypeScript Arrow and Parquet;
 this is not a claim that a Python reader executed.

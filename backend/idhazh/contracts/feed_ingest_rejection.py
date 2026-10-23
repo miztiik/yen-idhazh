@@ -1,7 +1,7 @@
 """Why was one feed or offered article refused at its deciding stage?"""
 
 from enum import StrEnum
-from typing import Any, ClassVar, Literal, Self
+from typing import Any, ClassVar, Literal, Self, get_args
 
 from pydantic import Field, model_validator
 
@@ -24,7 +24,7 @@ from idhazh.contracts.feed_ingest_candidate import (
     Positive,
     PositiveCount,
 )
-from idhazh.contracts.feed_ingest_diagnostics import HarvestDiagnostics
+from idhazh.contracts.feed_ingest_diagnostics import ExtractionSignal, HarvestDiagnostics
 from idhazh.contracts.item_health import FailureCode
 
 RejectionStage = Literal[
@@ -152,6 +152,11 @@ class CandidateRejectionRecord(Contract):
     __schema_stem__: ClassVar[str] = "feed-ingest-rejection"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-23",
+            change="Retain measured extraction quality and implementation fingerprints.",
+            why="A refusal must preserve measured signals and unavailable readings.",
+        ),
+        ChangelogEntry(
             version="2026-10-22T20:30",
             change="Record configured pre-fetch publication and settled-failure exclusions.",
             why="A terminal refusal must name the exact known reason without page measurements.",
@@ -168,11 +173,11 @@ class CandidateRejectionRecord(Contract):
         ),
         ChangelogEntry(
             version="2026-10-20",
-            change="Declare terminal feed and article rejections.",
-            why="Every deciding stage retains typed reasons and observations.",
+            change="Earlier changes are in this file's git history.",
+            why="Git retains the original declaration.",
         ),
     )
-    version: Literal["2026-10-22T20:30"] = "2026-10-22T20:30"
+    version: Literal["2026-10-23"] = "2026-10-23"
     date: DateStamp
     correlation_id: NonEmpty
     source_id: Slug
@@ -192,16 +197,26 @@ class CandidateRejectionRecord(Contract):
     @classmethod
     def migrate_previous_version(cls, value: Any) -> Any:
         if isinstance(value, dict) and value.get("version") in {
-            "2026-10-20", "2026-10-22", "2026-10-22T18:15"
+            "2026-10-20", "2026-10-22", "2026-10-22T18:15", "2026-10-22T20:30"
         }:
-            if value.get("drop_reason") in {
+            details = value.get("details")
+            diagnostics = details.get("diagnostics") if isinstance(details, dict) else None
+            if isinstance(diagnostics, dict) and (
+                "quality" in diagnostics
+                or diagnostics.get("failure_code") in get_args(ExtractionSignal)
+                or diagnostics.get("detail") in get_args(ExtractionSignal)
+            ):
+                raise ValueError(
+                    "extraction quality requires the declared quality contract version"
+                )
+            if value.get("version") != "2026-10-22T20:30" and value.get("drop_reason") in {
                 "ALREADY_PUBLISHED", "SETTLED_FAILURE", "BLOCKED_URL_MARKER"
             }:
                 raise ValueError(
                     "planner exclusions require the declared exclusion "
                     "contract version"
                 )
-            return {**value, "version": "2026-10-22T20:30"}
+            return {**value, "version": "2026-10-23"}
         return value
 
     @model_validator(mode="after")

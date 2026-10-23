@@ -1,0 +1,40 @@
+{
+  "pages": [
+    {
+      "file": "contaminated-front-page.html",
+      "source_word_count": 1378,
+      "corroborated_word_count": 1017,
+      "too_short": false,
+      "not_prose": false,
+      "contaminated": false,
+      "failure_code": null
+    },
+    {
+      "file": "france24-player.html",
+      "source_word_count": 37,
+      "corroborated_word_count": null,
+      "too_short": true,
+      "not_prose": true,
+      "contaminated": null,
+      "failure_code": "not_prose"
+    },
+    {
+      "file": "chrome-only.html",
+      "source_word_count": 13,
+      "corroborated_word_count": null,
+      "too_short": true,
+      "not_prose": true,
+      "contaminated": null,
+      "failure_code": "not_prose"
+    },
+    {
+      "file": "article.html",
+      "source_word_count": 209,
+      "corroborated_word_count": null,
+      "too_short": false,
+      "not_prose": false,
+      "contaminated": null,
+      "failure_code": null
+    }
+  ]
+}
