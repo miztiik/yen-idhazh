@@ -506,6 +506,8 @@ somebody remembered, and its own upkeep grows with the rest. The
 question to ask in review is the rule's own: does a run that changed no code
 make this slower.
 
+**Where a data check belongs, and what a removal cites.** A check on a stored artifact (a committed file, a fixture's current value, a count in today's data) belongs to the code that writes the artifact, or to an operator utility outside pytest. A test checks behaviour on input it controls. When a change removes a data check, its pull request names the behaviour test that survives and the broken-code edit that test detects. Which tests own byte and value checks is set out in the [schema page](../architecture/contracts/schemas.md#one-serialization-so-a-round-trip-is-byte-identical).
+
 ## The backend gates
 
 Run all three from the repository root. Each must be clean.

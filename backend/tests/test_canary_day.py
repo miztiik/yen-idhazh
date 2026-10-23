@@ -70,11 +70,23 @@ def source_words(row: EvalRow) -> int:
     return row.source_words_before_cap
 
 
-def test_every_published_item_is_scored() -> None:
-    """A day whose ledger names items the digest does not carry disagrees with itself."""
-    rows = scored()
-    assert [row.item_id for row in rows] == [item.item_id for item in published()]
-    assert {row.date for row in rows} == {build_canary_day.DATE}
+def test_each_published_item_and_its_filed_row_agree_on_id_band_and_cut(tmp_path: Path) -> None:
+    """Two files, one judgement, read back the way the console reads them.
+
+    The digest page and the console read different files, so each filed row is
+    read back through the ledger door and held to the item it was scored from. A
+    builder that scores the wrong band or cut, or a writer that drops or rewrites
+    a row, fails here. The cut is the rule the console counts.
+    """
+    items = published()
+    assert build_canary_day.file_scores(tmp_path, items, evaluation()) == len(items)
+    rows = {row.item_id: row for row in filed_rows(tmp_path)}
+
+    assert set(rows) == {item.item_id for item in items}
+    for item in items:
+        assert rows[item.item_id].date == build_canary_day.DATE
+        assert rows[item.item_id].band == item.band
+        assert rows[item.item_id].truncation_flagged == item.truncated
 
 
 def test_the_eight_item_day_has_a_rendered_chart_after_the_canary_seed(tmp_path: Path) -> None:
@@ -87,11 +99,6 @@ def test_the_eight_item_day_has_a_rendered_chart_after_the_canary_seed(tmp_path:
     assert item.visual.state == "rendered"
     assert item.visual.data_path == "digest/2026/08/20/ai-04.json"
     assert (tmp_path / item.visual.data_path).is_file()
-
-
-def test_the_published_band_and_the_ledger_band_agree() -> None:
-    """Two files, one judgement. The console and the digest page read different ones."""
-    assert [row.band for row in scored()] == [item.band for item in published()]
 
 
 def test_the_fixture_covers_every_confidence_band() -> None:
@@ -154,12 +161,6 @@ def test_some_rows_record_no_article_length_and_still_score() -> None:
         assert row.summary_words > 0
 
 
-def test_source_lengths_cross_more_than_one_decade() -> None:
-    """The x axis is a log one and labels whole decades, so one decade labels once."""
-    lengths = [source_words(row) for row in plotted()]
-    assert min(lengths) * 10 < max(lengths)
-
-
 def test_every_configured_target_zone_carries_a_mark() -> None:
     """The zone is drawn as a step across every band, so every step needs a point.
 
@@ -186,13 +187,6 @@ def test_a_summary_stays_inside_the_axis_the_chart_draws() -> None:
         assert 0 < row.summary_words <= ceiling
 
 
-def test_the_digest_and_the_ledger_agree_on_which_items_were_cut() -> None:
-    """One rule, two files. A reader is told what the console counts."""
-    items = published()
-    assert [item.truncated for item in items] == [row.truncation_flagged for row in scored()]
-    assert any(item.truncated for item in items), "no published item was cut"
-
-
 def test_one_published_item_is_both_an_abstract_and_cut() -> None:
     """The note joins a sentence per limit, and nothing rendered the pair.
 
@@ -210,12 +204,8 @@ def test_one_published_item_is_both_an_abstract_and_cut() -> None:
     ]
 
     assert len(both) == 1, "no published item is both an abstract and cut"
-    # Composed by `assemble.reader_note`, never spelled in the builder. The share
-    # is 2,100 words of 2,800, which is the cap over this row's `source_words`.
-    assert both[0].reader_note == (
-        "This is a summary of the paper's abstract. The full paper is a PDF. "
-        "We could only read the first 75 percent of this page."
-    )
+    # Composed by `assemble.reader_note`, whose wording its own test pins.
+    assert both[0].reader_note
 
 
 def filed_rows(state: Path) -> list[EvalRow]:

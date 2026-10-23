@@ -105,6 +105,7 @@ class SourcePermission(StrEnum):
     UNREACHABLE = "unreachable"
     #: No run has recorded an answer for this address at all.
     UNRECORDED = "unrecorded"
+    UNAVAILABLE = "unavailable"
 
 
 class SourceAvailability(StrEnum):
@@ -125,6 +126,7 @@ class SourceAvailability(StrEnum):
     RESTING = "resting"
     #: No run has asked this address. A record of nothing but rests is a rest.
     NEVER_ASKED = "never_asked"
+    UNAVAILABLE = "unavailable"
 
 
 class DayYield(Model):
@@ -341,6 +343,11 @@ class SourceHealthView(Contract):
 
     __schema_stem__: ClassVar[str] = "source-health-view"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-23T18:50",
+            change="Permission and availability can be unavailable when saved order is unproven.",
+            why="Tied observations must not be displayed as a known latest state.",
+        ),
         ChangelogEntry(
             version="2026-09-17",
             change="A dwell axis on the view and a day strip, a run and a date on each row.",

@@ -34,6 +34,7 @@ from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThresho
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.recorded_instant import instant_bounds
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.visual_prune import VisualPruneRow
@@ -323,15 +324,5 @@ def load_health(state_dir: Path, *, today: str, within_days: int) -> list[FeedHe
     held = ledger_files.held_days(state_dir, LedgerName.FEED_HEALTH)
     days = held if within_days == UNBOUNDED_WINDOW else held[max(0, len(held) - within_days) :]
     rows = ledger_files.load_days(state_dir, LedgerName.FEED_HEALTH, days, model=FeedHealthRow)
-    rows.sort(key=lambda row: (row.date, _run_n(row.run_id)))
+    rows.sort(key=lambda row: (row.date, *instant_bounds(row.checked_at), row.run_id))
     return rows
-
-
-def _run_n(run_id: str) -> int:
-    """The execution number out of `<date>-<execution>`, so a later run sorts last.
-
-    The trailing field is the GitHub run id on anything CI produced and a small
-    ordinal on anything a developer machine did, and both increase with time, so
-    the sort is chronological across the change and on either side of it.
-    """
-    return int(run_id.rsplit("-", 1)[1])

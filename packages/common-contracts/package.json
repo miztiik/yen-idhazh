@@ -3,7 +3,7 @@
   "version": "2026.10.20",
   "private": true,
   "type": "module",
-  "description": "Shared Python ledger contract copies and the authoritative planner event contract. Zod supplies strict runtime validation; TypeScript and Bun types add development-only install cost, with no browser bundle.",
+  "description": "Native ledger copies, planner events and shared observation-order rules. Browser callers import only the framework-free observation-order source module; Zod validates server contracts.",
   "exports": "./src/index.ts",
   "scripts": {
     "check": "tsc --noEmit",

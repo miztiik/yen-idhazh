@@ -68,6 +68,12 @@ the numeric run identity explicitly. Independent requests at the same instant
 therefore do not share a run ID. The configured attempt and checkout commit
 identify the writer. Writer shard zero is provenance, not worker assignment.
 
+The [native health-history reader](planner-feed-history.md) supplies rest,
+source reliability and daily published evidence. Permanent retirement comes
+from the existing source registry, not another ledger. Inventory and time-order
+uncertainty remain explicit; none of this evidence changes portfolio scoring or
+quotas.
+
 The loader reads only named files in service settings: planning, taxonomy,
 sources, extraction and ledger registrations. Output goes below the configured
 state root. Paths crossing a process boundary remain relative and
@@ -303,6 +309,7 @@ from masquerading as a fully audited plan while the audit contract is unsettled.
 ## See also
 
 - [Harvesting](feed-harvesting.md)
+- [Native health inputs](feed-history-inputs.md)
 - [Screening](feed-screening.md)
 - [Curation](feed-curation.md)
 - [Partitioning](feed-partitioning.md)

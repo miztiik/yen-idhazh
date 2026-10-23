@@ -5,7 +5,7 @@ import type { LedgerTable } from '../../server/ledger-rows';
 import type { RecordRead } from '../recording';
 import type { Range } from '../queries/window';
 import { windowRange } from '../queries/window';
-import { answered, chronological, failing, preserves, settled, reliability, resultLabel, streak } from '../../feed-health';
+import { answered, chronological, failing, latestFeedEvent, preserves, settled, reliability, resultLabel, streak } from '../../feed-health';
 import { tileStrip, type TileInput } from '../../charts/d3/tileStrip';
 import { datesOf, numberOf, wordOf, readingRecords, dayReadout } from './record';
 
@@ -67,7 +67,7 @@ export function feedsFailed(input: FeedInput, articles: readonly Row[] | null, r
 		for (const row of feedFailures) feedCodes.set(resultLabel(row), (feedCodes.get(resultLabel(row)) ?? 0) + 1);
 		const commonFeed = [...feedCodes].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0];
 		const newestFeedFailure = feedFailures.map((row) => row.date).sort().at(-1);
-		const lastFeed = chronological(feedRows).at(-1);
+		const lastFeed = latestFeedEvent(feedRows);
 		const failures = articleRows.filter((row) => Object.hasOwn(FAILS, wordOf(row.code, '')));
 		const days = dates.map((date) => {
 			const feedDay = feedRows.filter((row) => row.date === date && !preserves(row));
@@ -96,7 +96,8 @@ export function feedsFailed(input: FeedInput, articles: readonly Row[] | null, r
 		return {
 			sourceId, fired: firedDates.length,
 			feedFailures: feedFailures.length, feedStreak: streak(chronological(feedRows)),
-			feedResult: lastFeed ? resultLabel(lastFeed) : 'not recorded as asked',
+			feedResult: lastFeed ? resultLabel(lastFeed) : feedRows.length > 0
+				? 'latest result unavailable: saved observation times overlap' : 'not recorded as asked',
 			feed: tileStrip(days.map((day) => day.feed), { thresholds: [1, 1] }),
 			article: articles === null ? null : tileStrip(days.map((day) => day.article), { thresholds: [marked, named] }),
 			feedRecords: dayReadout(record('feed')), articleRecords: dayReadout(record('article')),

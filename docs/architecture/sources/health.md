@@ -3,6 +3,11 @@
 **Last Updated**: 2026-10-08
 What every feed did on every run, where that record lives, and how a run decides on its own to stop asking a dead source. Nothing on this page ever edits `config/sources.json`: a person owns the source list, and a run owns the evidence about it.
 
+The isolated TypeScript planner uses these native health rows for rest and
+reliability. Its permanent retirement authority is the curated source registry.
+The [history input contract](planner-feed-history.md) records that owner ruling,
+saved-time uncertainty and native health-input coverage.
+
 ## From item outcome to feed rest or retirement
 
 An item never enters quarantine or retirement. It either publishes or stops at

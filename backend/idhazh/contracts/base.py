@@ -43,6 +43,8 @@ YEAR_PATTERN: Final = r"^\d{4}$"
 # process as text, so it is pinned as text: one spelling means a re-serialized
 # payload is byte-identical to the one that was read.
 TIMESTAMP_PATTERN: Final = r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$"
+# Only observation and request-capture fields opt into this distinct clock spelling.
+RECORDED_INSTANT_PATTERN: Final = r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$"
 SLUG_PATTERN: Final = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
 # `<vertical>-<id>`: the reader-facing item address. The trailing field is
 # derived from the address hash, not from a rank position, so the same article

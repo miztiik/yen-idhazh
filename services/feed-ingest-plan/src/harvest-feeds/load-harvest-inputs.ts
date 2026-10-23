@@ -29,7 +29,11 @@ const SalienceConfigSchema = LifecycleSchema.safeExtend({
   id: SlugSchema, url: ConfiguredUrlSchema, title: NonEmptySchema,
 });
 const SourcesSchema = z.object({
-  feeds: z.array(SourceConfigSchema), salience: z.array(SalienceConfigSchema).nullable().default(null),
+  feeds: z.array(SourceConfigSchema),
+  salience: z.array(SalienceConfigSchema).nullable().default(null),
+  retired: z.array(SourceConfigSchema.refine(source => source.status === "retired", {
+    message: "retired entries must have retired status and a retirement date",
+  })).default([]),
 });
 const WatchlistSchema = z.object({
   entities: z.array(LifecycleSchema.safeExtend({
@@ -64,12 +68,12 @@ export function loadHarvestInputs(raw: {
 }) {
   const planning = loadPlanningConfig(raw.config, raw.taxonomy);
   const registry = RegistrySchema.parse(raw.taxonomy);
-  const { feeds: sources, salience } = SourcesSchema.parse(raw.sources);
+  const { feeds: sources, salience, retired } = SourcesSchema.parse(raw.sources);
   const watchlist = raw.watchlist === undefined ? null : WatchlistSchema.parse(raw.watchlist);
   const extraction_settings = ExtractionSchema.parse(raw.extraction);
   const extraction = extraction_settings.extract;
   for (const [name, ids] of [
-    ["source", [...sources, ...salience ?? []].map(source => source.id)],
+    ["source", [...sources, ...retired, ...salience ?? []].map(source => source.id)],
     ["source kind", registry.source_kinds.map(kind => kind.id)],
     ["source tier", registry.source_tiers.map(tier => tier.id)],
     ["lens", (registry.lenses ?? []).map(lens => lens.id)],
@@ -97,11 +101,11 @@ export function loadHarvestInputs(raw: {
   // This digest covers every validated input that can change harvested content or provenance.
   const { workflow_reporting, ...contentConfig } = planning.config;
   const snapshot = {
-    config: contentConfig, registry, sources, salience, watchlist, extraction,
+    config: contentConfig, registry, sources, retired, salience, watchlist, extraction,
     extractor_version: EXTRACTOR_VERSION, sanitizer_version: SANITIZER_FINGERPRINT,
   };
   const config_sha256 = createHash("sha256").update(JSON.stringify(snapshot)).digest("hex");
-  return { ...planning, registry, sources, salience, watchlist, extraction, extraction_settings, config_sha256 };
+  return { ...planning, registry, sources, retired_sources: retired, salience, watchlist, extraction, extraction_settings, config_sha256 };
 }
 
 export async function readHarvestInputs(paths: {
