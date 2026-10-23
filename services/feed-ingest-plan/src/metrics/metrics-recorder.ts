@@ -97,7 +97,7 @@ export function preparePlanningMetrics(
     taxonomy: { ...inputs.harvest.taxonomy, ...inputs.harvest.registry },
     sources: { feeds: inputs.harvest.sources, salience: inputs.harvest.salience },
     ...(inputs.harvest.watchlist === null ? {} : { watchlist: inputs.harvest.watchlist }),
-    extraction: { extract: inputs.harvest.extraction },
+    extraction: { ...inputs.harvest.extraction_settings, extract: inputs.harvest.extraction },
   });
   requireSame(result.evidence.harvest.inputs, original, "audit.harvest.inputs");
   requireSame(result.evidence.harvest.config, original.config, "audit.harvest.config");

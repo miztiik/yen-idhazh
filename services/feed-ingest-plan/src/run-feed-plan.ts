@@ -52,7 +52,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     taxonomy: { ...inputs.harvest.taxonomy, ...inputs.harvest.registry },
     sources: { feeds: inputs.harvest.sources, salience: inputs.harvest.salience },
     ...(inputs.harvest.watchlist === null ? {} : { watchlist: inputs.harvest.watchlist }),
-    extraction: { extract: inputs.harvest.extraction },
+    extraction: { ...inputs.harvest.extraction_settings, extract: inputs.harvest.extraction },
   });
   const overrides = request.freshness_hours === undefined ? {} : { freshness_hours: request.freshness_hours };
   const fallbackPolicy = resolveRunPolicy(harvestInputs, request.freshness_hours);

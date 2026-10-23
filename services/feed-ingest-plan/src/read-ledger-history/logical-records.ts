@@ -3,12 +3,13 @@ import { createHash } from "node:crypto";
 import {
   ArticleAssessmentContract, CandidateRejectionContract, CONTRACT_VERSION,
   DiversityMetricRowSchema, EditorialSelectionRowSchema, FEED_INGEST_AUDIT_VERSION,
-  FeedIngestDispatchSchema, LogicalLedgerCommitmentSchema,
+  LogicalLedgerCommitmentSchema,
 } from "@idhazh/common-contracts";
 import type { LedgerCompletionEvidence } from "@idhazh/common-contracts";
 import { describeObjectSchema, digestRows } from "@idhazh/ledger-file-writer";
 import type { LedgerRowContract, StoredLedgerRow } from "@idhazh/ledger-file-writer";
 import { DispatchContract } from "../metrics/audit-contracts";
+import { encodeHistoricalRecord } from "./encode-historical-record";
 
 type Ledger = LedgerCompletionEvidence["ledger"];
 // These are the production settlement keys in backend/idhazh/ledger/keys.py.
@@ -68,34 +69,6 @@ export function commitLogicalRecords(
     unique.set(key, previous ?? { held: { identity, row }, digest });
   }
 
-  function encodeHistoricalRecord(ledger: Ledger, row: object, version: string): object {
-    if (ledger === "dispatches") {
-      const current = FeedIngestDispatchSchema.parse(row);
-      const { planning_observations, ...content } = current.content;
-      if (planning_observations !== null) throw new Error("Historical dispatch proof cannot omit planning observations");
-      return { ...current, version, content: { ...content, version: CONTRACT_VERSION } };
-    }
-    if (ledger === "rejections") {
-      const current = CandidateRejectionContract.schema.parse(row);
-      const {
-        diagnostics, published_on: _publishedOn, failure_code: _failureCode,
-        matched_url_marker: _matchedUrlMarker, ...details
-      } = current.details;
-      if (diagnostics !== null) throw new Error("Historical rejection proof cannot omit measured diagnostics");
-      return { ...current, version, details };
-    }
-    if (ledger === "article-assessments") {
-      const { diagnostics, ...current } = ArticleAssessmentContract.schema.parse(row);
-      if (diagnostics !== null) throw new Error("Historical assessment proof cannot omit measured diagnostics");
-      if (version === CONTRACT_VERSION) {
-        const { timing_at, timing_basis, ...original } = current;
-        if (timing_basis === "first_seen") throw new Error("Historical assessment proof cannot represent first sight");
-        return { ...original, version, effective_published_at: timing_at, publication_clock: timing_basis };
-      }
-      return { ...current, version };
-    }
-    throw new Error(`${ledger}: historical logical record encoding is not declared`);
-  }
   const ordered = [...unique].sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0);
   // A protocol encoding: header then key/digest pairs, one JSON array per line.
   const hash = createHash("sha256").update(`${JSON.stringify([

@@ -7,6 +7,9 @@ import {
 } from "@idhazh/common-contracts";
 import type { PlanningRunOverrides, PolicyIdentity, SourceSnapshot } from "@idhazh/common-contracts";
 import { loadPlanningConfig, resolvePolicy } from "../config/resolve-policy";
+import { ExtractionControlsSchema } from "./extraction-controls";
+import { EXTRACTOR_VERSION, SANITIZER_FINGERPRINT } from "./extraction-provenance";
+export type { ExtractionControls } from "./extraction-controls";
 
 const LifecycleSchema = z.object({
   status: LifecycleStatusSchema, retired_on: DateStampSchema.nullable(),
@@ -43,15 +46,17 @@ const RegistrySchema = z.object({
   })).optional(),
 });
 const ExtractionSchema = z.object({
-  extract: z.object({
-    max_body_bytes: z.int().min(1024), max_retries: z.int().nonnegative(),
-    backoff_initial_seconds: z.number().finite().nonnegative(),
-    backoff_multiplier: z.number().finite().min(1),
-    paywall_markers: z.array(NonEmptySchema).min(1),
-  }),
+  extract: ExtractionControlsSchema,
+  summarize: z.object({ bands: z.array(z.object({ target_words_min: z.int().min(1) })).min(1) }),
+  evaluation: z.object({ brief_compression_ceiling: z.number().finite().gt(0).max(1) }),
+}).superRefine((value, ctx) => {
+  const floor = Math.ceil(value.summarize.bands[0]!.target_words_min / value.evaluation.brief_compression_ceiling);
+  if (value.extract.min_source_words !== floor) ctx.addIssue({
+    code: "custom", path: ["extract", "min_source_words"],
+    message: "extract.min_source_words must equal ceil(summarize.bands[0].target_words_min / evaluation.brief_compression_ceiling)",
+  });
 });
 export type ConfiguredSource = z.infer<typeof SourceConfigSchema>;
-export type ExtractionControls = z.infer<typeof ExtractionSchema>["extract"];
 export type HarvestInputs = ReturnType<typeof loadHarvestInputs>;
 
 export function loadHarvestInputs(raw: {
@@ -61,7 +66,8 @@ export function loadHarvestInputs(raw: {
   const registry = RegistrySchema.parse(raw.taxonomy);
   const { feeds: sources, salience } = SourcesSchema.parse(raw.sources);
   const watchlist = raw.watchlist === undefined ? null : WatchlistSchema.parse(raw.watchlist);
-  const extraction = ExtractionSchema.parse(raw.extraction).extract;
+  const extraction_settings = ExtractionSchema.parse(raw.extraction);
+  const extraction = extraction_settings.extract;
   for (const [name, ids] of [
     ["source", [...sources, ...salience ?? []].map(source => source.id)],
     ["source kind", registry.source_kinds.map(kind => kind.id)],
@@ -90,9 +96,12 @@ export function loadHarvestInputs(raw: {
   }
   // This digest covers every validated input that can change harvested content or provenance.
   const { workflow_reporting, ...contentConfig } = planning.config;
-  const snapshot = { config: contentConfig, registry, sources, salience, watchlist, extraction };
+  const snapshot = {
+    config: contentConfig, registry, sources, salience, watchlist, extraction,
+    extractor_version: EXTRACTOR_VERSION, sanitizer_version: SANITIZER_FINGERPRINT,
+  };
   const config_sha256 = createHash("sha256").update(JSON.stringify(snapshot)).digest("hex");
-  return { ...planning, registry, sources, salience, watchlist, extraction, config_sha256 };
+  return { ...planning, registry, sources, salience, watchlist, extraction, extraction_settings, config_sha256 };
 }
 
 export async function readHarvestInputs(paths: {

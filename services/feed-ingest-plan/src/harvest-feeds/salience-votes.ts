@@ -17,7 +17,7 @@ export async function readSalienceFeed(
     feed_id: feed.id, url_keys: null, unavailable_reason: result.failure ?? "fetch-unavailable",
   };
   let entries;
-  try { entries = await parseDocument("feed", result.body, feed.url, []); }
+  try { entries = await parseDocument("feed", result.body, feed.url); }
   catch { return { feed_id: feed.id, url_keys: null, unavailable_reason: "feed-parse-failed" }; }
   const url_keys = new Set<string>();
   for (const entry of entries) {

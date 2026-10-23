@@ -103,12 +103,15 @@ export async function executeDocumentOperation(
         throw new PlanError("INVALID_REQUEST", "Parse identity must match its fetched document", "article_id");
       }
       if (artifact.body === null || artifact.failure !== null) throw new PlanError("FETCH_UNAVAILABLE", "Fetch has no successful body to parse", "fetch_request_id");
+      const source = inputs.harvest.sources.find(source => source.id === artifact.source_id);
+      if (!source) throw new PlanError("ARTIFACT_INVALID", "Fetched source is absent from current configuration", "source_id");
       let parsed: unknown;
       let failure: string | null = null;
       try {
         parsed = artifact.kind === "feed"
-          ? await parseDocument("feed", artifact.body, artifact.canonical_url, inputs.harvest.extraction.paywall_markers)
-          : await parseDocument("article", artifact.body, artifact.canonical_url, inputs.harvest.extraction.paywall_markers);
+          ? await parseDocument("feed", artifact.body, artifact.canonical_url)
+          : await parseDocument("article", artifact.body, artifact.canonical_url, inputs.harvest.extraction,
+            source.form);
       } catch (error) {
         if (error instanceof ArticleExtractionError) failure = error.reason;
         else if (error instanceof FeedParseError) failure = "malformed-feed";

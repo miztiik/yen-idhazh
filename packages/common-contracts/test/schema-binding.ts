@@ -11,6 +11,7 @@ import {
   RejectionDetailsSchema, RowIdentitySchema, ROW_IDENTITY_COLUMN_VERSIONS, ScoreEvidenceSchema, SourceRunRecordSchema,
   SourceSnapshotSchema, WriterIdentitySchema,
   FetchedDocumentSchema, PlannerOperationSchema,
+  ExtractionQualitySchema,
 } from "../src/index";
 
 export const runtimeSchemas = {
@@ -25,6 +26,7 @@ export const runtimeSchemas = {
   LedgerCompletionEvidence: LedgerCompletionEvidenceSchema, SourceRunRecord: SourceRunRecordSchema,
   ArticleAssessmentRecord: ArticleAssessmentRecordSchema, DiversityMetricRow: DiversityMetricRowSchema,
   FetchedDocument: FetchedDocumentSchema, PlannerOperation: PlannerOperationSchema,
+  ExtractionQuality: ExtractionQualitySchema,
 } satisfies Record<string, z.ZodType>;
 
 export const schemas = Object.fromEntries(
