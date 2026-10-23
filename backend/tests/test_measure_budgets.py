@@ -194,6 +194,7 @@ def a_config_dir(root: Path, taxonomy: dict[str, Any]) -> Path:
     root.mkdir(parents=True, exist_ok=True)
     for name in (
         "idhazh.json",
+        "ledgers.json",
         "sources.json",
         "watchlist.json",
         "appearance.json",
