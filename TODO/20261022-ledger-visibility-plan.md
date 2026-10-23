@@ -1,6 +1,6 @@
 # Compact ledgers without site rebuilds
 
-**Last Updated**: 2026-10-22
+**Last Updated**: 2026-10-23
 **Level**: 5 - approved design; execution authorized by kumarsnaveen on 2026-10-22 UTC.
 
 ## 0. Operating contract
@@ -42,10 +42,10 @@
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Complete the publication-staging rename | - | A | DONE | ledger-staging-rename | - | Ledger staging rename |
 | C2 | 2 | Declare explorer consent and the validated catalog | 1 | B | DONE | ledger-consent-catalog | - | Ledger consent catalog |
-| C3 | 3 | Bind every frontend ledger path to its catalog | 2 | C | PENDING | catalog-bound-ledger-readers | [#1637](https://github.com/miztiik/yen-idhazh/pull/1637) | - |
+| C3 | 3 | Bind every frontend ledger path to its catalog | 2 | C | DONE | catalog-bound-ledger-readers | [#1637](https://github.com/miztiik/yen-idhazh/pull/1637) | - |
 | C4 | 4 | Read compact repository data directly in the explorer | 3 | D | DONE | direct-compact-ledger-reads | - | Direct compact reads |
 | C5 | 5 | Remove raw staging and duplicate publication policy | 4 | E | DONE | - | - | - |
-| C6 | 6 | Reconcile documentation with the delivered behavior | 5 | F | PENDING | - | - | - |
+| C6 | 6 | Reconcile documentation with the delivered behavior | 5 | F | DONE | - | - | - |
 
 ## 2. Row #1 - Complete the publication-staging rename
 

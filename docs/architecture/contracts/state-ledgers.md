@@ -1,6 +1,6 @@
 # The ledgers under state/
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-10-23
 
 `state/` is the only memory this pipeline has. Every run starts on a fresh machine with a fresh checkout, so anything one run needs to tell the next is committed (CLAUDE.md Guardrail #1). This page says what each committed ledger answers and why it files at the grain it does.
 
@@ -21,7 +21,7 @@ A window lets the reader name the files it wants and skip the rest. Without one 
 | `state/raw/seen/<YYYY>/<MM>/<DD>/<file_id>.parquet` | How old is this? - for an article whose feed carried no date. One file per plan job | raw and compact | `collect.seen_window_days` |
 | `state/raw/published/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Have we already run this? One file per assemble job | raw and compact | `collect.published_window_days` |
 | `state/raw/feed-health/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Is this source still working? One row per feed per run, one file per plan job | raw and compact | `HEALTH_WINDOW_DAYS` |
-| `state/raw/item-health/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What did every planned item do? One row per planned item per run, one file per writer | raw and compact | the published projection, a month at a time |
+| `state/raw/item-health/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What did every planned item do? One row per planned item per run, one file per writer | raw and compact | the console window, through compact indexes |
 | `state/raw/item-health-summary/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What is left of an item-health month. One row per date and stage, filed through the ledger door | raw and compact | the folded month |
 | `state/raw/feed-retirements/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Is this address gone for good? One file per writer, under the day the address was retired | raw and compact | the whole tree |
 | `state/raw/visual-prunes/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Is the picture backlog shrinking? One file per run | raw and compact | the whole tree |
@@ -66,7 +66,11 @@ Repeating a pending count files nothing; an unknown never erases a number.
 
 The console reads the feed record at build time from its packed files under `state/compact/feed-health/`, so the Voices page stops at the newest packed day. There is no published mirror; the one that existed until 2026-09-16 was never fetched.
 
-`state/raw/item-health/` is the fastest-growing ledger in the table above. The console reads native raw and compact rows through the ledger query door and compact indexes. There is no monthly public telemetry projection. Backend windowed reads still use `ledger.load_days` ([persistence.md](persistence.md#reading-a-whole-ledger)).
+`state/raw/item-health/` is the fastest-growing ledger in the table above. The
+console reads compact rows through the registry-bound query door and compact
+indexes; new raw rows wait for compaction. There is no monthly public telemetry
+projection. Backend windowed reads still use `ledger.load_days`
+([persistence.md](persistence.md#reading-a-whole-ledger)).
 
 `state/raw/feed-retirements/` is read whole because a retirement has no time bound. It files by day anyway, for the reason the section on the two whole-read ledgers gives below. It is also the smallest: a row is written only when a server has reported one address permanently gone on five distinct runs, and none had been written when it moved under `state/raw/` on 2026-09-28.
 
