@@ -1,0 +1,30 @@
+{
+  "completed_at": "2026-10-24T17:28:01Z",
+  "date": "2026-10-24",
+  "embeddings": {
+    "dimensions": 384,
+    "dtype": "int8",
+    "model_id": "all-minilm-l6-v2-quantized",
+    "vectors": {
+      "india-1p5wcvppx9cg01f7": "/QD8CP75A/3+/vz7/QQE/wj4AAIICPv6AwP++vj/AQPw+wIE+gIN+Aj9/PkD8AEAA/7/+AP7A/8I+wYGBv/+BAgABAUO9AT8BPr6/PsOCP4B/BUH/gcA//n+Cg4DAfj8+ff/CAQN9wX2+gj8AAb9AwH5/Af2BwIE+vn6/Qj//QAKBAH9AgX2+/z8BPf8AwX7AQEM+gP7BAIMAP4DAwIFAvr5/Pz+AvkAAAv3BQEBCQIEAPMC/f0ABgX5EAEF9voABAX/9gsE+gT/C/kB+Ab4AQT+AwEP//78/AEKA/kCAQAD+vgD+f32+g0MAA0L/v4EAv37/wAA/fgBAPL6+/b++fYA+/8EAgUQBQ3/+//6AQX7+wL8BPwNBAUFAPwF/AAH9wEGAg37/ez//f/7BgkC/ggF/O4OAwz3CQX5/gL9/wAF+v4CB/D9//oCDP75+AYDCP/9Bv4A/AUGAAL9CAL5BwXz8AMFAAf8+u4AAP0ACAD89uz+BQkEBPn/APwD+fT0",
+      "india-q7qyya8qm1c9smxc": "8/kO/AXzAQIAAAEGAfgEAwUC+/fr+v//AAMA/gL/BfwGA/UH+/7/+Qby+/cNBgP3/wP68v33/gr/+wkEAv/9BRH/Bfb++hgC/vn0AwAEC/gABPsO/wMB/wQA/PAEAQAE9PjxCfYK/fT+AgUACQMAAgn0//z1AQQEAAj7Avv/9gABAAoABgUB/ff1/Av+BAYCAfsC/QX6/fsCBQf/BAb2A/gGAvz4+P0H+g32//0GB/UI/gMDBfoF9gIAAQH+AvwM/Q4FBv0HAgP3Avf8AfwB/gX+CQIB/QD/AQr0AAUM9gDv/PH9+f7//voHBAQKBAH/APv4/AYP9wIIBAEMAPwC/fQECwoAAf4BAfsF/QIJ/AL4AAH8//f6/woBAvsB9A/69wQGA/r9AfsB//kSAgD/9QP3CwMIB/v7/wP5/vwM+gAB/gMDCwT7/gYCAv/8BwQJBP8A+gMGBf368gMC/P39Awf/CgcFBgb7/gkE/vsABvQDBgMABgQL/f729wII/f8F"
+    }
+  },
+  "failed_item_ids": [],
+  "items": [
+    {"also_covered_by": null,"also_ran_earlier": [],"band": "high","band_reason": null,"carried_by": 1,"desk": null,"entities": ["rbi"],"events": ["capex"],"introduced_by_run": 1,"item_id": "india-1p5wcvppx9cg01f7","lenses": ["cyber"],"on_front_page": false,"published_at": "2026-10-24T16:32:00Z","rank_score": 1.686221,"reader_note": null,"same_story_as": null,"secondary_desk": null,"source_form": "article","source_id": "india-today","source_kind": "reporting","source_name": "India Today","source_url": "https://indiatoday.in/india/story/rbi-odisha-data-centre-pm-modi-inauguration-jatni-ptag-3024417-2026-10-24","summary": "Prime Minister Narendra Modi is scheduled to visit Odisha on Sunday and inaugurate the Reserve Bank of India\u2019s Rs 169-crore data centre and Cybersecurity Training Institute in Bhubaneswar, according to Press Trust of India. The facilities are expected to strengthen financial data security and digital resilience. Chief Minister Mohan Charan Majhi said the visit would add a new chapter to Odisha\u2019s development.","time_source": "feed","title": "Modi set to inaugurate RBI\u2019s Odisha data centre","truncated": false,"updated_at": null,"updated_by_run": null,"vertical": "india","visual": null,"watchlist_hit": true},
+    {"also_covered_by": null,"also_ran_earlier": [],"band": "medium","band_reason": "hedge_dropped","carried_by": 1,"desk": null,"entities": ["google","openai"],"events": [],"introduced_by_run": 1,"item_id": "india-q7qyya8qm1c9smxc","lenses": [],"on_front_page": false,"published_at": "2026-10-24T16:00:18Z","rank_score": 1.674414,"reader_note": null,"same_story_as": null,"secondary_desk": null,"source_form": "article","source_id": "toi-top","source_kind": "reporting","source_name": "Times of India","source_url": "https://timesofindia.indiatimes.com/technology/tech-news/google-ceo-sundar-pichai-responds-to-sam-altmans-fend-google-off-remark/articleshow/135173537.cms","summary": "Alphabet and Google CEO Sundar Pichai rejected OpenAI chief Sam Altman's suggestion that Google merely bolts machine learning onto existing software. Citing the Gemini app as ground-up development, Pichai argued both adapting products and building new experiences are needed to win in generative AI.","time_source": "feed","title": "Google CEO Pichai Pushes Back on Altman's Bolt-On AI Claim","truncated": false,"updated_at": null,"updated_by_run": null,"vertical": "india","visual": null,"watchlist_hit": true}
+  ],
+  "items_planned": 2,
+  "run_id": "2026-10-24-40114598416",
+  "version": "2026-10-20",
+  "verticals": [
+    {"below_feed_floor": false,"considered": 6673,"eligible_feeds": 51,"feed_floor": 35,"id": "ai","planned": 0,"too_old": 6667},
+    {"below_feed_floor": false,"considered": 630,"eligible_feeds": 23,"feed_floor": 21,"id": "energy","planned": 0,"too_old": 612},
+    {"below_feed_floor": false,"considered": 602,"eligible_feeds": 25,"feed_floor": 21,"id": "business-economy","planned": 0,"too_old": 537},
+    {"below_feed_floor": false,"considered": 625,"eligible_feeds": 30,"feed_floor": 21,"id": "world","planned": 0,"too_old": 464},
+    {"below_feed_floor": false,"considered": 1317,"eligible_feeds": 22,"feed_floor": 21,"id": "india","planned": 2,"too_old": 593},
+    {"below_feed_floor": true,"considered": 0,"eligible_feeds": 0,"feed_floor": 21,"id": "science","planned": 0,"too_old": 0},
+    {"below_feed_floor": true,"considered": 0,"eligible_feeds": 0,"feed_floor": 21,"id": "climate","planned": 0,"too_old": 0}
+  ]
+}
