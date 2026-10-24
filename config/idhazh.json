@@ -225,6 +225,7 @@
     "host_fingerprint_bandwidth_floor_mib": 512,
     "host_fingerprint_bandwidth_jobs": [],
     "host_fingerprint_frequency_enabled": false,
+    "host_fingerprint_placement_enabled": true,
     "host_telemetry_enabled": true,
     "memory_profiling_enabled": true,
     "sample_rate": 1.0,

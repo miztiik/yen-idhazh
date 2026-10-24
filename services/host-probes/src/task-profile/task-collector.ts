@@ -69,7 +69,7 @@ export class TaskCollector {
     const unavailable: TaskSample["unavailable"] = {};
     let memory_kb: TaskSample["memory_kb"] = { total: null, free: null, available: null };
     let vmstat_major_faults: number | null = null;
-    if (config.memory_enabled) {
+    if (config.machine_memory_enabled) {
       const memoryText = readProcFile("meminfo", max_proc_bytes, context, this.scratch);
       const memory = parseMemoryInfo(memoryText.value ?? "");
       memory_kb = memory.value;

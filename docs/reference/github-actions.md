@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-10-24
 
 Which workflows run, when they run, and what they may publish.
 The [workflow declarations](../../.github/workflows/) are authoritative.
@@ -23,6 +23,16 @@ All schedules and run dates are UTC. Every workflow supports manual dispatch.
 
 Use filenames for dispatch and API calls. `workflow_run.workflows` matches display
 names instead: update its callers and the workflow tests when renaming a label.
+
+## Drift review
+
+The [drift review workflow](../../.github/workflows/drift.yml) runs
+[`drift_report.py`](../../backend/utilities/drift_report.py) against the saved
+evaluation records. The command loads and validates config files from the
+committed `config/` directory by default. A direct invocation may pass
+`--config <directory>` to select another config root; the same loader validates
+it before the report runs. The workflow exposes no config-root input, so its
+scheduled and manually dispatched runs keep the committed default.
 
 ## Content refresh
 

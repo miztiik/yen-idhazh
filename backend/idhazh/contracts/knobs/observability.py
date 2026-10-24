@@ -7,7 +7,7 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Any, Final, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictBool, model_validator
 
 from idhazh.contracts.base import Model, TaskName
 from idhazh.contracts.knobs.removed import refuse_a_removed_knob
@@ -215,6 +215,16 @@ class ObservabilityConfig(Model):
             "generations in one runner pool: a quarter of runs in which every job "
             "reports the same family, model and flags, which would make the row a "
             "constant and a constant is not a reading."
+        ),
+    )
+    host_fingerprint_placement_enabled: StrictBool = Field(
+        default=True,
+        description=(
+            "Whether host fingerprint collection requests the platform placement "
+            "metadata. False leaves those cells empty while retaining local host "
+            "collection and the fingerprint row. The caller may also opt out for "
+            "one task. Retire this switch only when placement metadata is no longer "
+            "collected."
         ),
     )
     memory_profiling_enabled: bool = Field(
