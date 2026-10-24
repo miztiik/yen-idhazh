@@ -74,7 +74,10 @@ def test_job_deadlines_follow_validated_bootstrap_outputs(job_name: str, key: st
     )
     assert job["timeout-minutes"] == f"${{{{ fromJSON(needs.job_bounds.outputs.{key}) }}}}"
     _command(key)
-    assert shard_bound.minutes(CONFIG_DIR, key=key, config_file=CONFIG_FILE) == 30
+    configured = shard_bound.minutes(CONFIG_DIR, key=key, config_file=CONFIG_FILE)
+    result = _run_bound(key, CONFIG_DIR)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == f"{key}={configured}\n"
 
 
 def test_job_timeout_values_substitute_independently(tmp_path: Path) -> None:
