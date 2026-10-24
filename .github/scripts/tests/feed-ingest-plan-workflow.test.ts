@@ -93,6 +93,17 @@ test("offers independent machine RAM control and commits only genuine planner an
   expect(probes?.run).toContain("bun run test");
   const resourceProof = gateSteps.map(record).find(step => step.name === "Live TypeScript RAM and optional copy proof");
   expect(resourceProof?.run).toBe("bun run .github/scripts/feed-ingest-plan-profile-proof.ts");
+  const cacheInstall = gateSteps.map(record).find(step => step.name === "Install optional Linux cache instruments");
+  expect(cacheInstall?.run).toBe("bash .github/scripts/install-host-cache-tools.sh");
+  expect(cacheInstall?.["continue-on-error"]).not.toBe(true);
+  const cacheTools = JSON.parse(await readFile(join(root, "config", "host-cache-tools.json"), "utf8"));
+  expect(cacheTools.perf.revision).toMatch(/^[a-f0-9]{40}$/);
+  expect(cacheTools.packages).not.toContain("linux-perf");
+  expect(cacheTools.packages.every((name: string) => !/^(python[0-9]|libpython)/.test(name))).toBe(true);
+  for (const option of ["NO_LIBPYTHON=1", "NO_JEVENTS=1", "PYTHON=/usr/bin/false", "PYTHON_CONFIG=/usr/bin/false"]) {
+    expect(cacheTools.perf.make_options).toContain(option);
+  }
+  expect(gateSteps.indexOf(cacheInstall)).toBeLessThan(gateSteps.indexOf(probes));
   const resourceUpload = gateSteps.map(record).find(step => step.name === "Preserve TypeScript resource proof");
   expect(record(resourceUpload?.with).path).toBe("test-results/host-probes/resource-proof.json");
   expect(preflight?.if).toBe("needs.scope.outputs.code == 'true'");
@@ -214,6 +225,8 @@ test("offers independent machine RAM control and commits only genuine planner an
   expect(steps.find(step => step.name === "Install declared TypeScript dependencies")!.run)
     .toContain("bun install --frozen-lockfile --cwd services/host-probes");
   expect(steps.find(step => step.id === "resources")!.run).toContain("await verifyLiveHostProfiling(");
+  expect(steps.find(step => step.name === "Install optional Linux cache instruments")!.run)
+    .toBe("bash .github/scripts/install-host-cache-tools.sh");
   expect(steps.find(step => step.name === "Check isolated adapters and native compatibility")!.run)
     .toContain("./services/host-probes/test/probe.test.ts");
   const commit = steps.find(step => step.name === "Commit exact live planner and host files")!;
@@ -235,6 +248,9 @@ test("offers independent machine RAM control and commits only genuine planner an
   expect(checkout.with?.["sparse-checkout"]).toContain("/packages/common-contracts/");
   expect(checkout.with?.["sparse-checkout"]).toContain("/.github/scripts/feed-ingest-plan-http-proof.ts");
   expect(checkout.with?.["sparse-checkout"]).toContain("/.github/scripts/feed-ingest-plan-profile-proof.ts");
+  expect(checkout.with?.["sparse-checkout"]).toContain("/.github/scripts/feed-ingest-plan-cache-proof.ts");
+  expect(checkout.with?.["sparse-checkout"]).toContain("/.github/scripts/feed-ingest-plan-cache-report.ts");
+  expect(checkout.with?.["sparse-checkout"]).toContain("/.github/scripts/install-host-cache-tools.sh");
   for (const name of ["profile-schema", "resource-report", "report-format"]) {
     expect(checkout.with?.["sparse-checkout"]).toContain(`/.github/scripts/feed-ingest-plan-${name}.ts`);
   }

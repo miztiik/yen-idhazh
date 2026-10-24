@@ -8,6 +8,7 @@ import type { ProfileProofIdentity, ResourceProof, StageProfileProof } from "./f
 import { escapeMarkdown, resourceNotice } from "./feed-ingest-plan-report-format";
 import { formatPidCpuReport } from "./feed-ingest-plan-pid-report";
 import { measurement } from "./feed-ingest-plan-resource-values";
+import { formatCacheReport } from "./feed-ingest-plan-cache-report";
 
 const ReportContextSchema = z.object({
   date: DateStampSchema, run_id: RunIdSchema, correlation_id: RequestIdSchema,
@@ -191,6 +192,8 @@ export function formatResourceReport(input: ResourceReportControls & Readonly<{
     }]),
   ]);
   annotations.push(...pidReport.annotations);
+  const cacheReport = resource === null ? { summary: "", annotations: [] as string[] } : formatCacheReport(resource);
+  annotations.push(...cacheReport.annotations);
   const contextRows = resource === null ? ["| J1 | Standalone RAM and copy OFF/ON | Not recorded; resource-proof.json absent. |"] : [
     `| J1 | Standalone RAM HTTP sample (${resource.status}) | ${escapeMarkdown(sample == null ? "Not recorded" :
       `total ${measurement(sample.memory_kb.total, "kB", sample.unavailable["memory_kb.total"])}; free ${measurement(sample.memory_kb.free, "kB", sample.unavailable["memory_kb.free"])}; available ${measurement(sample.memory_kb.available, "kB", sample.unavailable["memory_kb.available"])}; interval ${measurement(sample.interval_ms, "ms")}; ${sample.sampled_at} UTC`)} |`,
@@ -225,5 +228,6 @@ export function formatResourceReport(input: ResourceReportControls & Readonly<{
     "| Id | Observation | Recorded result |", "| --- | --- | --- |", ...contextRows, "",
     "The standalone probe writes resource-proof.json after document CPU windows close. Its one RAM HTTP sample still runs when task machine RAM is off. Copy OFF/ON is a separate bandwidth proof with two buffers, not L3 hit/miss counts or a task-RAM switch.", "",
     pidReport.summary,
+    ...(cacheReport.summary ? ["", cacheReport.summary] : []),
   ].join("\n") };
 }
