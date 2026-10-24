@@ -65,13 +65,13 @@ Table D - PR outcomes
 | D7 | 7 | Config reader values and accurate migration test names | 1 | F | DONE | config-reader-behavior-proofs | [#1653](https://github.com/miztiik/yen-idhazh/pull/1653) | - |
 | D8 | 8 | Workflow checks retain independent failure evidence | 1 | G | DONE | workflow-behavior-proofs | [#1656](https://github.com/miztiik/yen-idhazh/pull/1656), merged at `43bdd37d671275af2f904590f7ca69498cc74a91` | - |
 | D9 | 9 | Remove the unused watchlist entry limit | 1 | H | DONE | remove-unused-watchlist-limit | [#1657](https://github.com/miztiik/yen-idhazh/pull/1657), merged at `f479997fec70f4f57b13a6d3a649b5d92a4fd5f7` | - |
-| D10 | 10 | Independent historical reader proofs | 1 | I | DONE | independent-historical-reader-proofs | [#1659](https://github.com/miztiik/yen-idhazh/pull/1659), merged 2026-10-24 UTC at `f0449de3db08c710e5b2292a03910da157bcb498` | - |
-| D11 | 11 | Contract tests prove authored and constructed behavior | 1 | J | IN-FLIGHT | config-refusal-selection-proofs | - | - |
-| D12 | 12 | Explicit controls and measurement behavior | 1 | K | IN-FLIGHT | explicit-control-behavior-proofs | [#1661](https://github.com/miztiik/yen-idhazh/pull/1661) | - |
+| D10 | 10 | Independent historical reader proofs | 1 | I | DONE | independent-historical-reader-proofs | [#1659](https://github.com/miztiik/yen-idhazh/pull/1659), merged at `f0449de3db08c710e5b2292a03910da157bcb498` | - |
+| D11 | 11 | Contract tests prove authored and constructed behavior | 1 | J | DONE | config-refusal-selection-proofs | [#1664](https://github.com/miztiik/yen-idhazh/pull/1664), merged at `90ea0e77cedaf7eeaff8e9690bacf144eebb44d3` | - |
+| D12 | 12 | Explicit controls and measurement behavior | 1 | K | DONE | explicit-control-behavior-proofs | [#1661](https://github.com/miztiik/yen-idhazh/pull/1661), merged at `6a43c2b3c4747358a678587d8d877245b9b49134` | - |
 | D13 | 13 | Extraction and metric behavior | 1 | L | IN-FLIGHT | row13-test-proofs | - | - |
-| D14 | 14 | Grouping and dataset behavior | 1 | M | IN-FLIGHT | grouping-and-dataset-proofs | - | - |
-| D15 | 15 | Encoder thread resolution uses production behavior | 1 | N | DONE | prove-encoder-thread-resolution | - | - |
-| D16 | 16 | Bounded state CSV integrity checks | 1 | O | DONE | bound-csv-integrity-checks | - | - |
+| D14 | 14 | Grouping and dataset behavior | 1 | M | DONE | grouping-and-dataset-proofs | [#1665](https://github.com/miztiik/yen-idhazh/pull/1665), merged at `fe086c907f50f52c7c51a9c98c4425ce6f6e6357` | - |
+| D15 | 15 | Encoder thread resolution uses production behavior | 1 | N | DONE | prove-encoder-thread-resolution | [#1667](https://github.com/miztiik/yen-idhazh/pull/1667), merged at `956fd7e27cdcbc927bd86ce54ecede4f993779ef` | - |
+| D16 | 16 | Bounded state CSV integrity checks | 1 | O | DONE | bound-csv-integrity-checks | [#1668](https://github.com/miztiik/yen-idhazh/pull/1668), merged at `cff5cc58c8cc15c59b5b525fca84335e2e88c4ce` | - |
 | D17 | 17 | Default-on host-placement acquisition control | 12 | P | IN-FLIGHT | host-fingerprint-placement | - | - |
 | D18 | 18 | Workflow checks reject supported broken inputs | 1, 22 | Q | IN-FLIGHT | strengthen-workflow-proof-checks | - | - |
 | D19 | 19 | Independent source-health publication proofs | 1 | R | IN-FLIGHT | prove-source-health-publication | - | - |
@@ -653,10 +653,10 @@ counts use the untouched archive and the completed branch instead.
   Row 9's frozen full successor as the input. All prior row text and the exact
   owner ruling in A5 remain; D3 remains open. Rows 5, 8 and 9 have their verified
   merge receipts above. Plan-only integration does not repeat unchanged gates.
-- **Delivery:** Implementation commit `90c58a26c` is in PR
-  [#1659](https://github.com/miztiik/yen-idhazh/pull/1659), merged 2026-10-24
-  UTC at `f0449de3db08c710e5b2292a03910da157bcb498`. The suite-wide Row 3
-  review remains open.
+- **Delivery:** Implementation commit `90c58a26c` was delivered in
+  [#1659](https://github.com/miztiik/yen-idhazh/pull/1659), merged at
+  `f0449de3db08c710e5b2292a03910da157bcb498`. The suite-wide Row 3 review
+  remains open.
 
 ## 12 - Row #11 - Contract tests prove authored and constructed behavior
 
@@ -671,13 +671,15 @@ counts use the untouched archive and the completed branch instead.
   - `backend/tests/contracts/test_sources_and_marks.py`
   - `backend/tests/contracts/test_ledger_index.py`
   - `backend/tests/contracts/test_source_classification_binding.py`
+  - `frontend/tests/source-classification-binding.spec.ts`
+  - `frontend/scripts/test-groups.ts`
 - **Changes and acceptance proof:**
   - Compare the loaded rest threshold with the file value, keep the tuned
     threshold and real `after_failures` caller, and remove only the committed
     literal. Construct a finite published window one day beyond the authored
     first-sight window; require the loaded value and relation, not `730`.
     Keep named retired-key refusals and both the moved key and successor file
-    in the prune refusal.
+    in the prune refusal; remove one duplicate read of the same config file.
   - Hash the copied model-file bytes independently with SHA-256, then prove
     unchanged stability and changed-byte sensitivity. Remove the stale-teacher
     premise while retaining its named destination error. Keep
@@ -692,10 +694,11 @@ counts use the untouched archive and the completed branch instead.
     `definitions-a` taxonomy to prove a published retired lens still reads
     while its tombstone stops new matching.
   - Require the compact-index decoded model to equal the object written, not
-    only to serialize to stable text. Compare TypeScript field types with the
-    live Python JSON Schema using the TypeScript compiler API, require an
-    invalid property name in the refusal, and test omitted defaults beside
-    separately authored source kind and entity tier values.
+    only to serialize to stable text. Compare required TypeScript field names
+    and types with the live Python JSON Schema using the TypeScript compiler
+    API; an optional marker is refused because serialized output emits the
+    field. Require an invalid property name in the refusal, and test omitted
+    defaults beside separately authored source kind and entity tier values.
 - **Gates:** Run the shared changed-test selector over the seven backend
   modules and the frontend type-binding logic test, with Ruff and mypy.
   In disposable archive copies, fault each preserved behavior and record its
@@ -749,23 +752,41 @@ counts use the untouched archive and the completed branch instead.
     `backend/tests/contracts/test_taxonomy_and_prompts.py::test_a_draft_or_retired_entry_reaches_no_prompt`.
     Making a retired lens matchable failed
     `backend/tests/contracts/test_sources_and_marks.py::test_a_published_item_carrying_a_retired_lens_still_reads`.
-  -   Omitting compact-index state from a stable writer, with an empty entry in
-  the disposable input, passed text idempotence but failed object equality in
+  - Omitting compact-index state from a stable writer, with an empty entry in
+    the disposable input, passed text idempotence but failed object equality in
   `backend/tests/contracts/test_ledger_index.py::test_a_compact_index_writes_one_entry_a_line_and_reads_back_what_it_wrote`.
-  The TypeScript binding now parses the interface with the compiler API and
-  compares it with the live Python JSON Schema; its post-change fault proof
-  is pending. Accepting unknown properties failed
+    The TypeScript binding compares required interface AST fields with the
+    live Python JSON Schema. Boolean-to-string and optional-field AST
+    mutations fail
+    `frontend/tests/source-classification-binding.spec.ts::the Python source-kind binding refuses an optional TypeScript field`
+    and
+    `frontend/tests/source-classification-binding.spec.ts::the Python type binding refuses a boolean field changed to string`.
+    Accepting unknown properties failed
   `backend/tests/contracts/test_source_classification_binding.py::test_invalid_registry_refuses_loading_by_name[invalid-property-invented_rule]`.
-  Overwriting the authored source kind and entity tier each failed
+    Overwriting the authored source kind and entity tier each failed
   `backend/tests/contracts/test_source_classification_binding.py::test_configured_defaults_apply_only_to_authored_config`.
-- **Gate record:** Pending the final shared-selector run and post-change
-  TypeScript binding fault proof. The earlier 226-case backend-only record
-  predates this frontend test and does not certify the current change.
+- **Gate record:** The shared selector chose the seven backend modules and all
+  frontend groups because the selector inventory changed. Whitespace, Ruff,
+  mypy, Svelte checks, test-tooling checks and the canary build passed. Pytest
+  passed 225 cases, logic passed 1,501, and browser checks passed 113; none
+  failed or skipped. Record:
+  `backend/var/checks/cdbdb0c4954ddedb8a33c187ae08431d04bd5d604d09f1b73cc8362d5b53fb60.json`.
+  That run predates the optional-field proof and the duplicate-read cleanup.
+  The final targeted results are 27 passing retention tests and 3 passing
+  source-kind binding tests, including both bounded type faults; `npm run check`
+  found zero errors and warnings. The merge itself did not repeat local
+  application gates. PR checks `scope`, `gates`, `browser` and `site` passed at
+  the prior Row 11 head; `robots` was skipped.
 - **Plan integration:** The serialized slot is released. Row 5 and Row 9
-  delivery receipts, Row 10's verified head and the exact owner ruling in A5
+  delivery receipts, Row 10's merged receipt and the exact owner ruling in A5
   are retained. D3 remains open; Row 10 is not a dependency.
-- **Delivery:** Test and plan changes are committed in `62968e83a`; the
-  current-main merge is `6a2179890`. The phase pull request is pending.
+- **Delivery:** Tests and the initial plan update are committed in `62968e83a`
+  and `26ac9f90c`; current main, including Row 10's merge receipt, is merged
+  into this branch without rewriting history. The AST binding proof is
+  committed at `f0498735f`; [#1664](https://github.com/miztiik/yen-idhazh/pull/1664)
+  merged at `90ea0e77cedaf7eeaff8e9690bacf144eebb44d3`. The current
+  conflict-resolution candidate and targeted check results are recorded in
+  the Row 11 execution report. This worker did not merge the phase PR.
 
 ## 13 - Row #12 - Explicit controls and measurement behavior
 
@@ -814,6 +835,13 @@ counts use the untouched archive and the completed branch instead.
   source hashes verified. Fourteen controlled cases also pass when copied
   committed host/fingerprint/memory defaults are disabled and the roster is
   empty. No mock, added skip, changed acceptance rule or configuration knob.
+- **Bounded-input correction:** Replace both copied-tree config reads with the
+  named-input `council._config.copy_config` helper. The memory-loader case also
+  copies only `idhazh_gardener.json` and the declaration files named by its
+  `task_names`. The two affected modules pass 42 cases; Ruff and mypy pass.
+  Re-run disposable stale-exit, memory-inherit, memory-override and memory-YAML
+  faults against the corrected tests; every intended failure and restored
+  control passes. Hashes and logs are in the Row12 session evidence.
 - **Collection:** Exact base `3d6d4b9f6a4ea4e7681576531963e27f11e64332` and
   final implementation each collect 7,218 cases. No function or parameter case
   is removed. Two renames: `test_the_committed_config_names_a_labeller` becomes
@@ -826,19 +854,35 @@ counts use the untouched archive and the completed branch instead.
   fingerprint reproduce on the exact unchanged base. The fourth failure still
   lacks a Bun local package after two frozen restore attempts fail with EPERM.
   No Git safety setting, manifest or lockfile changes. Final helper tests:
-  15 passed and 2 existing POSIX skips; final helper type checks pass. Linux CI
-  must establish complete-suite success on the merge candidate.
+  15 passed and 2 existing POSIX skips; final helper type checks pass. On
+  pre-merge heads `cbb23a22ddcd711ebe3fa34a042e707050ba2a1b` and
+  `95e2808d8942b0aeb8995c2fc919d772a9952acc`, required `scope`, `gates`,
+  `robots` and `site` checks passed; `browser` skipped. The latest main
+  integration at `57366d88ae2bc0209121c5c52e6f2eb9eee07893` also passed
+  `scope`, `gates`, `robots` and `site`; `browser` skipped. Run:
+  `https://github.com/miztiik/yen-idhazh/actions/runs/40080891074`.
 - **Separate finding:** Existing `date.today()` in `measure_budgets.py` is not
   changed. Keep both cold-start measurement tests: stored spread is zero, while
   one repeat makes comparison unavailable. Keep recorded loopback integration.
 - **Plan integration:** Row 11 released the serialized slot at
   `26ac9f90cda08456c1f861c26285a2129924804c`. Its frozen plan is preserved
-  exactly before this section is added, without importing its implementation.
-  Current main was merged without rewriting history. Plan-only integration
-  does not repeat unchanged application gates. D3 remains open.
-- **Delivery:** Implementation `32c85d883` is delivered in open PR
-  [#1661](https://github.com/miztiik/yen-idhazh/pull/1661), not merged by this
-  worker. D12 remains IN-FLIGHT pending required Linux CI and merge.
+  as the starting point before this section was added. The corrected Row 11
+  section and merge receipt are preserved above; its implementation arrived
+  through the normal main merge.
+  Current main, including Row 10 at `f0449de3db08c710e5b2292a03910da157bcb498`,
+  was merged without rewriting history. Main through
+  `60b301d1c9edc188e2993252ebd5850d666bf8ec`, including the Row 11 merge, was
+  then merged normally in a conflict-only integration. Latest main through
+  `cff5cc58c8cc15c59b5b525fca84335e2e88c4ce`, including Row 16, was also
+  merged normally. Plan conflicts were resolved by retaining the completed
+  D11 merge receipt, Row 12's full section, and the complete Row 16 section;
+  the complete Row 13-15 sections and the Row 16 A5 ruling are preserved.
+  Exact-head CI passed. All 12 reviewed Row 12 test, production and
+  documentation files remain byte-identical to
+  `cbb23a22ddcd711ebe3fa34a042e707050ba2a1b`. D3 remains open.
+- **Delivery:** Implementation `32c85d883` was delivered in
+  [#1661](https://github.com/miztiik/yen-idhazh/pull/1661), merged at
+  `6a43c2b3c4747358a678587d8d877245b9b49134`. The worker did not merge it.
 - **Dependencies:** Row 1. Shared-plan editing remains serialized.
 
 ## 14 - Row #13 - Extraction and metric behavior
