@@ -8,9 +8,32 @@ import { indexSeenEvidence } from "../screen-article-candidates/seen-evidence";
 import { resolvePolicy } from "../config/resolve-policy";
 import { requireSame } from "./stage-membership";
 import { harvestPolicy } from "../harvest-feeds/load-harvest-inputs";
+import { resolveOperationalHistory } from "../curate-article-portfolio/portfolio-input";
 
 export function preflightMeasurements(result: FeedPlanResult, inputs: PlanInputs) {
   FeedIngestConfigSchema.parse(result.evidence.harvest.config);
+  const floor = inputs.clock_config.collect.reliability_floor;
+  requireSame(result.evidence.curation.reliability_controls, {
+    enabled: result.evidence.harvest.config.curate.source_reliability_penalty_enabled,
+    reliability_floor: floor,
+  }, "curation.reliability_controls");
+  for (const outcome of result.evidence.harvest.feed_outcomes) {
+    const native = result.evidence.feed_history.sources.get(outcome.source.source_id)?.reliability ?? null;
+    requireSame(outcome.history?.reliability, native, `source.${outcome.source.source_id}.reliability`);
+    if (native !== null) {
+      requireSame(native.window_days, inputs.clock_config.collect.reliability_window_days,
+        `source.${outcome.source.source_id}.window_days`);
+      requireSame(native.success_fraction, native.productive / native.attempted,
+        `source.${outcome.source.source_id}.success_fraction`);
+      requireSame(native.production_factor, Math.max(floor, native.success_fraction),
+        `source.${outcome.source.source_id}.production_factor`);
+    }
+  }
+  for (const article of result.evidence.curation.input) {
+    const id = article.candidate.source_id;
+    requireSame(article.evidence.operational, resolveOperationalHistory(id, article.evidence.operational,
+      result.evidence.feed_history.sources.get(id)?.reliability ?? null), `source.${id}.operational_history`);
+  }
   const maxFutureHours = FiniteSchema.min(0).parse(inputs.clock_config.collect.max_future_hours);
   const seen = indexSeenEvidence(result.evidence.seen.evidence);
   const overrides = result.request.freshness_hours === undefined ? {} : { freshness_hours: result.request.freshness_hours };

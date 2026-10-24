@@ -2,17 +2,17 @@
 import { isDeepStrictEqual } from "node:util";
 import {
   EffectiveFeedPolicySchema, FeedIngestCandidateSchema, FiniteSchema, NonEmptySchema,
-  NonNegativeSchema, PositiveCountSchema, TimestampSchema,
+  NonNegativeSchema, OperationalHistorySchema, TimestampSchema,
 } from "@idhazh/common-contracts";
+import type { OperationalHistory, SourceReliabilityPenalty } from "@idhazh/common-contracts";
 import type { ScreenedCandidate } from "../screen-article-candidates/triage-gates";
 import { resolvePolicy } from "../config/resolve-policy";
 import type { PlanningConfig } from "../config/resolve-policy";
 
 const millisecondsPerHour = 3_600_000;
 export type RecordedIdentity = Readonly<{ value: string; origin: string }>;
-export type OperationalEvidence = Readonly<{
-  success_fraction: number; attempted: number; window_days: number;
-}>;
+export type OperationalEvidence = Readonly<OperationalHistory>;
+export type ReliabilityControls = Readonly<Pick<SourceReliabilityPenalty, "enabled" | "reliability_floor">>;
 export type ArticleEvidence = Readonly<{
   publisher: RecordedIdentity | null;
   parent_domain: RecordedIdentity | null;
@@ -26,6 +26,18 @@ export type OpportunityEvidence = Readonly<{
   underrepresented_verticals: readonly string[] | null;
   origin: string | null;
 }>;
+
+export function resolveOperationalHistory(
+  source: string, supplied: OperationalEvidence | null, native: OperationalEvidence | null,
+): OperationalEvidence | null {
+  const measured = native === null ? null : {
+    success_fraction: native.success_fraction, attempted: native.attempted, window_days: native.window_days,
+  };
+  if (supplied !== null && measured !== null && !isDeepStrictEqual(supplied, measured)) {
+    throw new Error(`source.${source}.operational_history: supplied and native evidence disagree`);
+  }
+  return measured ?? supplied;
+}
 
 function validateIdentity(identity: RecordedIdentity | null): void {
   if (identity !== null) {
@@ -53,6 +65,7 @@ export function validatePortfolioArticles(
   let run: string | undefined;
   let correlation: string | undefined;
   const sources = new Map<string, PortfolioArticle["candidate"]["source"]>();
+  const operational = new Map<string, OperationalEvidence | null>();
   return articles.map(article => {
     const candidate = FeedIngestCandidateSchema.parse(article.candidate);
     if (identities.has(candidate.candidate_id)) throw new Error("Repeated candidate instance in portfolio input");
@@ -104,12 +117,12 @@ export function validatePortfolioArticles(
     validateIdentity(evidence.publisher);
     validateIdentity(evidence.parent_domain);
     NonNegativeSchema.parse(evidence.estimated_work);
-    if (evidence.operational !== null) {
-      const { success_fraction, attempted, window_days } = evidence.operational;
-      NonNegativeSchema.max(1).parse(success_fraction);
-      PositiveCountSchema.parse(attempted);
-      PositiveCountSchema.parse(window_days);
+    if (evidence.operational !== null) OperationalHistorySchema.parse(evidence.operational);
+    if (operational.has(candidate.source_id)
+      && !isDeepStrictEqual(operational.get(candidate.source_id), evidence.operational)) {
+      throw new Error(`source.${candidate.source_id}.operational_history: inconsistent per-source evidence`);
     }
+    operational.set(candidate.source_id, evidence.operational);
     if (evidence.primary_evidence !== null) {
       NonEmptySchema.parse(evidence.primary_evidence.origin);
       for (const id of evidence.primary_evidence.ids) NonEmptySchema.parse(id);

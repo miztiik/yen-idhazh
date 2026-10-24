@@ -31,6 +31,11 @@ class FeedIngestDispatch(Contract):
     __schema_stem__: ClassVar[str] = "feed-ingest-dispatch"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-24",
+            change="Carry selections with separate source-reliability score evidence.",
+            why="Dispatch preserves the selected ranking and original harvested content.",
+        ),
+        ChangelogEntry(
             version="2026-10-23",
             change="Carry candidate headline matches and salience observations.",
             why="Dispatch retains the planning evidence without changing selection scores.",
@@ -46,7 +51,7 @@ class FeedIngestDispatch(Contract):
             why="Worker allocation must preserve selection and content identity.",
         ),
     )
-    version: Literal["2026-10-23"] = "2026-10-23"
+    version: Literal["2026-10-24"] = "2026-10-24"
     content: FeedIngestCandidate
     selection: EditorialSelectionRow
     partition: PartitionAssignment
@@ -54,8 +59,16 @@ class FeedIngestDispatch(Contract):
     @model_validator(mode="before")
     @classmethod
     def migrate_previous_version(cls, value: Any) -> Any:
-        if isinstance(value, dict) and value.get("version") in ("2026-10-20", "2026-10-22"):
-            return {**value, "version": "2026-10-23"}
+        if isinstance(value, dict) and value.get("version") in (
+            "2026-10-20", "2026-10-22", "2026-10-23"
+        ):
+            selection = value.get("selection")
+            if (
+                isinstance(selection, dict)
+                and selection.get("version", "2026-10-20") != "2026-10-20"
+            ):
+                raise ValueError("historical dispatch requires its original selection version")
+            return {**value, "version": "2026-10-24"}
         return value
 
     @model_validator(mode="after")

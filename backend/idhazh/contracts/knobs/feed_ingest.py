@@ -153,6 +153,14 @@ class FeedSoftCaps(Model):
 
 class FeedCurateConfig(FeedCurationPolicy):
     article_limit: PositiveCount | None
+    source_reliability_penalty_enabled: bool = Field(
+        default=True,
+        strict=True,
+        description=(
+            "Apply measured source reliability separately from article quality. Remove this switch "
+            "and its disabled path when isolated selection becomes the sole planner."
+        ),
+    )
     soft_caps: FeedSoftCaps
     exploration_slot_share: Annotated[float, Field(strict=True, ge=0, le=1, allow_inf_nan=False)]
 

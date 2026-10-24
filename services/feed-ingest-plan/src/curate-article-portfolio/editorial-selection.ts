@@ -1,7 +1,7 @@
 /** Which unsharded selection and terminal losses does one screened run produce? */
 import {
   ArticleAssessmentRecordSchema, CandidateRejectionContract,
-  CONTRACT_VERSION, EditorialSelectionRowSchema,
+  EditorialSelectionContract, EditorialSelectionRowSchema, NonNegativeSchema,
 } from "@idhazh/common-contracts";
 import type { CandidateRejectionRecord, ScoreEvidence, WriterIdentity } from "@idhazh/common-contracts";
 import { persistLedger } from "@idhazh/ledger-file-writer";
@@ -20,14 +20,19 @@ export function curateArticles(input: Readonly<{
   planning: PlanningConfig;
   opportunity: OpportunityEvidence;
   observed_at: string;
+  reliability_floor: number;
 }>) {
   validateOpportunity(input.opportunity);
   const articles = validatePortfolioArticles(input.articles, input.planning, input.observed_at);
-  const carriers = groupCarriers(articles);
-  const normalization = normalizeOpportunity(carriers.representatives, input.opportunity, articles);
+  const controls = {
+    enabled: input.planning.config.curate.source_reliability_penalty_enabled,
+    reliability_floor: NonNegativeSchema.max(1).parse(input.reliability_floor),
+  };
+  const carriers = groupCarriers(articles, controls);
+  const normalization = normalizeOpportunity(carriers.representatives, input.opportunity, controls, articles);
   const portfolio = choosePortfolio(
     normalization.admitted, input.planning.config.curate, normalization.allowances,
-    carriers.groups, input.opportunity,
+    carriers.groups, input.opportunity, controls,
   );
   const rejections: CandidateRejectionRecord[] = [
     ...carriers.suppressed.map(suppression => recordRejection(
@@ -74,7 +79,7 @@ export function curateArticles(input: Readonly<{
   });
   if (articles.length !== rows.length + rejections.length) throw new Error("Curation terminal decisions do not reconcile");
   return {
-    input: articles, opportunity: structuredClone(input.opportunity),
+    input: articles, opportunity: structuredClone(input.opportunity), reliability_controls: controls,
     selected: portfolio.selected, rows, rejections, assessments, cutoffs: portfolio.cutoffs,
     choices: portfolio.choices, trace: portfolio.trace,
     carriers, normalization, quality: articles.map(article => ({
@@ -115,7 +120,7 @@ export async function persistPortfolio(result: CurationResult, context: Curation
   }));
   const selections = requireDurable(await persistLedger({
     ...common, ledger: "editorial-selections", registryEntry: context.registrations.selections,
-    rowContract: { schema: EditorialSelectionRowSchema, schemaVersion: CONTRACT_VERSION },
+    rowContract: EditorialSelectionContract,
     rows: result.rows,
   }));
   return { selections, rejections };

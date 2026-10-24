@@ -1,8 +1,8 @@
 /** Which unique records belong to one attempt, regardless of file layout or order? */
 import { createHash } from "node:crypto";
 import {
-  ArticleAssessmentContract, CandidateRejectionContract, CONTRACT_VERSION,
-  DiversityMetricRowSchema, EditorialSelectionRowSchema, FEED_INGEST_AUDIT_VERSION,
+  ArticleAssessmentContract, CandidateRejectionContract,
+  DiversityMetricRowSchema, EditorialSelectionContract, FEED_INGEST_AUDIT_VERSION,
   LogicalLedgerCommitmentSchema,
 } from "@idhazh/common-contracts";
 import type { LedgerCompletionEvidence } from "@idhazh/common-contracts";
@@ -24,7 +24,7 @@ export const PLANNING_RECORD_KEYS = {
 } as const;
 const contracts: Record<Ledger, LedgerRowContract<object>> = {
   dispatches: DispatchContract,
-  "editorial-selections": { schema: EditorialSelectionRowSchema, schemaVersion: CONTRACT_VERSION },
+  "editorial-selections": EditorialSelectionContract,
   rejections: CandidateRejectionContract,
   "article-assessments": ArticleAssessmentContract,
   diversity: { schema: DiversityMetricRowSchema, schemaVersion: FEED_INGEST_AUDIT_VERSION },

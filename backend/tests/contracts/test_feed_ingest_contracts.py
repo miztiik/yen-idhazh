@@ -260,6 +260,7 @@ def test_candidate_identity_precedes_article_validation() -> None:
 
 
 def test_dispatch_keeps_selection_and_content_identity() -> None:
+    from idhazh.contracts.feed_ingest_candidate import SourceReliabilityPenalty
     from idhazh.contracts.feed_ingest_dispatch import FeedIngestDispatch
     from idhazh.contracts.feed_ingest_planning_observations import PlanningObservations
 
@@ -268,6 +269,7 @@ def test_dispatch_keeps_selection_and_content_identity() -> None:
     )
     row = FeedIngestDispatch.model_validate(payload)
     assert row.partition.dispatch_count == 1
+    assert row.selection.ratings.source_reliability is None
     for partial_feed in (False, True):
         observations = {
             "feed_headline": None,
@@ -316,6 +318,46 @@ def test_dispatch_keeps_selection_and_content_identity() -> None:
                     ]
                 }
             )
+    authority = (
+        row.selection.policy.source_authority_weight
+        * row.selection.source.weight
+        * row.selection.source.applied_tier_weight
+    )
+    reliability = {
+        "enabled": True,
+        "source_authority_score": authority,
+        "reliability_floor": 0.5,
+        "history": {"success_fraction": 0.25, "attempted": 4, "window_days": 7},
+        "production_factor": 0.5,
+        "value": authority * (1 - 0.5),
+    }
+    current = row.model_dump(mode="json")
+    current["selection"]["ratings"]["source_reliability"] = reliability
+    measured = FeedIngestDispatch.model_validate(current)
+    assert measured.selection.ratings.source_reliability == (
+        SourceReliabilityPenalty.model_validate(reliability)
+    )
+    assert measured.selection.ratings.base_article_score == row.selection.ratings.base_article_score
+    historical = json.loads(json.dumps(payload))
+    historical["selection"]["ratings"]["source_reliability"] = reliability
+    with pytest.raises(ValidationError, match="declared score contract version"):
+        FeedIngestDispatch.model_validate(historical)
+    for change in (
+        {"production_factor": 0.25},
+        {"value": 0},
+        {"history": None},
+        {"enabled": False},
+        {"enabled": "false", "value": 0},
+        {"history": {"success_fraction": 0.25, "attempted": 0, "window_days": 7}},
+    ):
+        with pytest.raises(ValidationError):
+            SourceReliabilityPenalty.model_validate(reliability | change)
+    assert SourceReliabilityPenalty.model_validate(
+        reliability | {"history": None, "production_factor": None, "value": None}
+    ).history is None
+    assert SourceReliabilityPenalty.model_validate(
+        reliability | {"enabled": False, "value": 0}
+    ).value == 0
     payload["selection"]["candidate_id"] = "a" * 64
     with pytest.raises(ValidationError, match="candidate_id"):
         FeedIngestDispatch.model_validate(payload)
