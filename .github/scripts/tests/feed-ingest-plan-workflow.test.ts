@@ -15,13 +15,15 @@ import { verifyHealthOrderCompaction } from "../../../services/feed-ingest-plan/
 import { completeHistoryDayInputs, createSeenDayInputs, historyDays, historyIndexPaths, resolveHistoryInventory, sparseCheckoutPath } from "../feed-ingest-plan-outputs";
 import { requiredSeenDays } from "../../../services/feed-ingest-plan/src/read-ledger-history/read-seen-evidence";
 import { utcTimestamp } from "../../../services/feed-ingest-plan/src/harvest-feeds/harvest-types";
-import { CopyResultSchema } from "../feed-ingest-plan-profile-proof";
+import { CopyResultSchema, WorkflowMachineMemorySchema } from "../feed-ingest-plan-profile-schema";
+import { configureDocumentProfiling } from "../feed-ingest-plan-http-proof";
+import { loadConfig as loadProbeConfig } from "../../../services/host-probes/src/config";
 import { collectFingerprint } from "../../../services/host-fingerprints/src/collect-fingerprint";
 import { fixture as hostFixture } from "../../../services/host-fingerprints/test/fixture";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 type Workflow = {
-  on: { workflow_dispatch: { inputs: Record<string, { default: string; type: string; required: boolean; options?: string[] }> } };
+  on: { workflow_dispatch: { inputs: Record<string, { default: string | boolean; type: string; required: boolean; options?: string[] }> } };
   permissions: Record<string, string>;
   jobs: { "isolated-plan": { steps: {
     id?: string; name?: string; run?: string; uses?: string;
@@ -38,7 +40,8 @@ function assertWorkflow(value: unknown): asserts value is Workflow {
   const inputs = record(record(record(workflow.on).workflow_dispatch).inputs);
   for (const input of Object.values(inputs)) {
     const fields = record(input);
-    if (typeof fields.default !== "string" || typeof fields.type !== "string" || typeof fields.required !== "boolean") {
+    if (typeof fields.default !== (fields.type === "boolean" ? "boolean" : "string")
+      || typeof fields.type !== "string" || typeof fields.required !== "boolean") {
       throw new Error("Invalid dispatch input");
     }
     if (fields.options !== undefined && (!Array.isArray(fields.options) || fields.options.some(value => typeof value !== "string"))) {
@@ -68,7 +71,7 @@ async function workflow() {
   return { text, parsed, steps: parsed.jobs["isolated-plan"].steps };
 }
 
-test("offers four manual controls and commits only genuine planner and host files", async () => {
+test("offers independent machine RAM control and commits only genuine planner and host files", async () => {
   const fixtureHost = await hostFixture();
   try {
     const { row } = await collectFingerprint(fixtureHost.capture, fixtureHost.config, fixtureHost.settings, fixtureHost.inspection);
@@ -104,7 +107,22 @@ test("offers four manual controls and commits only genuine planner and host file
   const { parsed, steps } = await workflow();
   expect(Object.keys(parsed.on)).toEqual(["workflow_dispatch"]);
   const inputs = parsed.on.workflow_dispatch.inputs;
-  expect(Object.keys(inputs)).toEqual(["freshness_hours", "article_limit", "shards", "partition_strategy"]);
+  expect(Object.keys(inputs)).toEqual(["freshness_hours", "article_limit", "shards", "partition_strategy", "profile_machine_memory"]);
+  const probeConfig = await loadProbeConfig();
+  expect(inputs.profile_machine_memory).toMatchObject({
+    type: "boolean", required: false, default: probeConfig.task_profile.machine_memory_enabled,
+  });
+  expect(inputs.profile_machine_memory?.default).toBe(false);
+  expect(WorkflowMachineMemorySchema.parse(undefined)).toBe(false);
+  for (const value of ["false", "true"] as const) {
+    const enabled = WorkflowMachineMemorySchema.parse(value);
+    expect(configureDocumentProfiling(probeConfig, enabled).task_profile).toEqual({
+      ...probeConfig.task_profile, enabled: true, memory_enabled: true, machine_memory_enabled: enabled,
+    });
+  }
+  expect(probeConfig.task_profile.enabled).toBe(false);
+  expect(probeConfig.task_profile.memory_enabled).toBe(false);
+  expect(() => WorkflowMachineMemorySchema.parse("true; injected")).toThrow();
   const config = FeedIngestConfigSchema.parse(JSON.parse(await readFile(join(root, "config", "feed-ingest-plan.json"), "utf8")));
   for (const [field, value] of Object.entries({
     freshness_hours: config.triage.max_age_hours, article_limit: config.curate.article_limit ?? "",
@@ -122,6 +140,7 @@ test("offers four manual controls and commits only genuine planner and host file
   expect(plan.env).toEqual({
     FRESHNESS_HOURS: "${{ inputs.freshness_hours }}", ARTICLE_LIMIT: "${{ inputs.article_limit }}",
     SHARDS: "${{ inputs.shards }}", PARTITION_STRATEGY: "${{ inputs.partition_strategy }}",
+    PROFILE_MACHINE_MEMORY: "${{ inputs.profile_machine_memory }}",
   });
   expect(plan.run).not.toContain("${{");
   expect(plan.run).toContain("parseCliRequest(args)");
@@ -130,6 +149,8 @@ test("offers four manual controls and commits only genuine planner and host file
   expect(plan.run).toContain("timeout: false");
   expect(plan.run).toContain("await server.stop(true)");
   expect(plan.run).toContain("await verifyLiveDocumentHttp({ ...inputs, settings }");
+  expect(plan.run).toContain("summary, machineMemoryEnabled)");
+  expect(plan.run).toContain("WorkflowMachineMemorySchema.parse(process.env.PROFILE_MACHINE_MEMORY)");
   expect(plan.run).toContain('await writeGitHubOutputs(GITHUB_OUTPUT, { stage_api_complete: "true" })');
   expect(plan.run!.indexOf("await verifyPlanningCompletion(")).toBeLessThan(plan.run!.indexOf("await verifyLiveDocumentHttp("));
   const httpProof = await readFile(join(root, ".github", "scripts", "feed-ingest-plan-http-proof.ts"), "utf8");
@@ -147,7 +168,7 @@ test("offers four manual controls and commits only genuine planner and host file
   expect(httpProof).toContain('join(artifactRoot, "stage-api-proof.json")');
   expect(httpProof).not.toContain("app.request(");
   expect(httpProof).toContain("task_profiling:");
-  expect(httpProof).toContain("enabled: true, memory_enabled: true");
+  expect(httpProof).toContain("enabled: true, memory_enabled: true, machine_memory_enabled: machineMemoryEnabled");
   expect(httpProof).toContain('requireProfile("fetch", fetchRequest.request_id)');
   expect(httpProof).toContain('requireProfile("parse", parseRequest.request_id)');
   expect(httpProof).toContain("proof.profiling.after_checks_count !== 2");
@@ -170,6 +191,7 @@ test("offers four manual controls and commits only genuine planner and host file
   const reporting = steps.find(step => step.name === "Optional GitHub report")!;
   expect(reporting.if).toContain("workflow_reporting == 'true'");
   expect(reporting["continue-on-error"]).toBe(true);
+  expect(reporting.env).toEqual({ PROFILE_MACHINE_MEMORY: "${{ inputs.profile_machine_memory }}" });
   expect(steps.filter(step => step["continue-on-error"] === true)).toEqual([reporting]);
   const completion = steps.find(step => step.name === "Require genuine audited completion")!;
   expect(completion.run).toContain('process.env.AUDITED_COMPLETE !== "true"');
@@ -220,6 +242,9 @@ test("offers four manual controls and commits only genuine planner and host file
   expect(checkout.with?.["sparse-checkout"]).toContain("/.github/scripts/feed-ingest-plan-profile-proof.ts");
   expect(checkout.with?.["sparse-checkout"]).toContain("/.github/scripts/feed-ingest-plan-cache-proof.ts");
   expect(checkout.with?.["sparse-checkout"]).toContain("/.github/scripts/install-host-cache-tools.sh");
+  for (const name of ["profile-schema", "resource-report", "report-format"]) {
+    expect(checkout.with?.["sparse-checkout"]).toContain(`/.github/scripts/feed-ingest-plan-${name}.ts`);
+  }
   expect(checkout.with?.["sparse-checkout"]).toContain("/tests/fixtures/host-probes/");
   expect(checkout.with?.["sparse-checkout"]).not.toContain("/backend/");
   expect(steps.find(step => step.name === "Preserve isolated test evidence")!.with?.path)
