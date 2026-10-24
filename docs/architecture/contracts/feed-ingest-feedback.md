@@ -279,8 +279,10 @@ snapshot from the fresh committed snapshot and named raw/compact inputs, while
 preserving the run's immutable observation files. This costs a scoped adapter
 change and its concurrency tests; the actual production caller is not yet
 identified, so its declaration and ownership must be settled before
-implementation. A stale snapshot must never be replayed over a newer
-restriction.
+implementation. Invoking the Python publisher instead would add a Python
+execution surface and reopen the approved TypeScript-only boundary; that is
+not the recommended route. A stale snapshot must never be replayed over a
+newer restriction.
 
 No other run waits for settlement. If publication is refused or retries are
 exhausted, leave the previously committed snapshot and restrictions unchanged,
@@ -437,6 +439,9 @@ required because machine work and network requests are different facts. A
 normalized score can combine them only after the evidence identifies both the
 cost and the work that caused it. Historical host readings alone cannot support
 that attribution.
+This page stays whole because observations, settlement and scoring describe
+one feedback contract consumed by the next planner; separating them would
+detach persisted fields from the behavior they govern.
 
 Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC: count cost as waste only
 when an operation fails to produce usable material for a supported source-side
