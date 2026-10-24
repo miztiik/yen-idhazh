@@ -65,7 +65,7 @@ Table D - PR outcomes
 | D7 | 7 | Config reader values and accurate migration test names | 1 | F | DONE | config-reader-behavior-proofs | [#1653](https://github.com/miztiik/yen-idhazh/pull/1653) | - |
 | D8 | 8 | Workflow checks retain independent failure evidence | 1 | G | DONE | workflow-behavior-proofs | [#1656](https://github.com/miztiik/yen-idhazh/pull/1656), merged at `43bdd37d671275af2f904590f7ca69498cc74a91` | - |
 | D9 | 9 | Remove the unused watchlist entry limit | 1 | H | DONE | remove-unused-watchlist-limit | [#1657](https://github.com/miztiik/yen-idhazh/pull/1657), merged at `f479997fec70f4f57b13a6d3a649b5d92a4fd5f7` | - |
-| D10 | 10 | Independent historical reader proofs | 1 | I | DONE | independent-historical-reader-proofs | [#1659](https://github.com/miztiik/yen-idhazh/pull/1659), merged at `f0449de3db08c710e5b2292a03910da157bcb498` | - |
+| D10 | 10 | Independent historical reader proofs | 1 | I | DONE | independent-historical-reader-proofs | [#1659](https://github.com/miztiik/yen-idhazh/pull/1659), merged 2026-10-24 UTC at `f0449de3db08c710e5b2292a03910da157bcb498` | - |
 | D11 | 11 | Contract tests prove authored and constructed behavior | 1 | J | DONE | config-refusal-selection-proofs | [#1664](https://github.com/miztiik/yen-idhazh/pull/1664), merged at `90ea0e77cedaf7eeaff8e9690bacf144eebb44d3` | - |
 | D12 | 12 | Explicit controls and measurement behavior | 1 | K | DONE | explicit-control-behavior-proofs | [#1661](https://github.com/miztiik/yen-idhazh/pull/1661), merged at `6a43c2b3c4747358a678587d8d877245b9b49134` | - |
 | D13 | 13 | Extraction and metric behavior | 1 | L | IN-FLIGHT | row13-test-proofs | - | - |
@@ -885,12 +885,16 @@ counts use the untouched archive and the completed branch instead.
 ## 14 - Row #13 - Extraction and metric behavior
 
 - **Scope:** Replace checks tied to current corpus, fixture or output counts
-  with behavior proofs driven by independent test inputs, without changing
-  production behavior or acceptance rules.
+  with behavior proofs driven by independent test inputs. Add a validated
+  config root to the shipped drift-report CLI so its configured behavior is
+  tested through the actual command. Preserve production thresholds and
+  acceptance rules.
 - **Files touched:** `backend/tests/test_corpus.py`,
   `backend/tests/test_data_wrangler.py`, `backend/tests/test_derived_values.py`,
   `backend/tests/test_drift.py`, `backend/tests/test_elements.py`,
-  `backend/tests/test_entity_gap.py` and `backend/tests/test_evals.py`.
+  `backend/tests/test_entity_gap.py`, `backend/tests/test_evals.py`,
+  `backend/utilities/drift_report.py`, `docs/reference/github-actions.md` and
+  this plan for its Row 13 evidence correction.
 - **Changes and acceptance proof:**
   - Refuse a nonpositive pool multiple at the existing validation boundary;
     retain the committed-config loader proof. Give the data-wrangler row cap
@@ -899,8 +903,10 @@ counts use the untouched archive and the completed branch instead.
   - Keep successful committed-plan resolution and add a missing-element
     refusal. Use a test-owned histogram bin count and require the real resolver
     to return that number of bins.
-  - Review drift with a test-owned ledger whose recent window is one row short
-    of its independently chosen floor while the baseline has enough rows.
+  - Review drift through the shipped CLI with a test-owned config root and
+    populated ledger windows. Twenty rows pass the committed floor but fail
+    the validated nondefault floor of 21. The CLI accepts `--config`, defaults
+    to `DEFAULT_CONFIG_DIR` and passes that root to the real config loader.
     Check the reported shortfall, not source text or current defaults.
   - Replace fixed element totals with nonempty quantity and date conditions.
     Keep `ElementTable` overlap acceptance and prove the producer's real
@@ -920,26 +926,43 @@ counts use the untouched archive and the completed branch instead.
   contained 244 cases across the seven modules; the final collection contains
   244. The final identifier disposition is five renames, one added missing-link
   case and one removed bounded span-drift sweep; no other identifier changed.
-  The shared selector chose the seven changed modules. Whitespace and Ruff
-  passed, mypy passed over 834 source files, and all 244 pytest cases passed.
+  Whitespace and Ruff passed, mypy passed over 834 source files, and all 244
+  pytest cases passed. The stable post-merge selector on
+  `f0449de3db08c710e5b2292a03910da157bcb498` passed Ruff, mypy over 834 source
+  files and all 244 selected tests; record:
+  `backend/var/checks/3b541520238458854a16e86dd8f2d82f5abbbd69ff4ace392779c5ef701d7073.json`.
+  The focused CLI config-floor test and Ruff passed. Exact-head CI run
+  `40082666626` passed all five jobs on `3de8c29dfbdb983b1034c0a12840ce76538148e7`.
+  No broad local backend selector was repeated for the correction; exact-head
+  CI supplies backend and type coverage.
   Record: `backend/var/checks/df85b2ab916049084e39bd0b3425b033fb75e127c6e5c9814a3097f144f70958.json`.
-  That run used the initial base above. A post-merge rerun on
-  `f0449de3db08c710e5b2292a03910da157bcb498` is in progress; upstream changed
-  none of the seven Row 13 test files.
-- **Negative proofs:** Seventeen disposable production faults failed at their
-  intended tests. Named unchanged controls passed, including committed config,
-  independent element hashing, committed-plan resolution and the truncation
-  safety bound. Span-drift faults failed both named survivors. All injected
-  source and config edits were restored byte-for-byte; the disposable
-  worktree was removed. Final test hashes matched the proof record.
+  The initial collection record used the original base above.
+- **Negative proofs:** Reuse the 16 original non-drift fault proofs because
+  their consumed source and test inputs are unchanged. The committed-config
+  refusal proof set `qualification_pool_multiple` to zero; the named config
+  validation test refused it. Two drift production faults failed the named
+  CLI config-floor test: ignoring `--config`, and replacing the loaded report
+  floor with its default. Both restored controls passed. For the CLI, the
+  original and restored source SHA-256 is
+  `5b27ed9409a021a6df171c7e6a5a7591ba35ac5e67e62ab320037089da8f35cc`;
+  the faulted hash is
+  `a51d1d87222ae6ea588fa9b3d65ef9ef411d2c4db79ff0960839f5f8632a53cf`.
+  For the report, the original and restored source SHA-256 is
+  `6d5367f97db07d87c1d0cf5f3d2e6869a5aa8c328bbbaf9b48bc9c1135f1bf60`;
+  the faulted hash is
+  `b6e89ae1b7daf389583d14841126262438e32322715272891f8718193839acbe`.
+  Both disposable worktrees were removed.
 - **Plan integration:** The coordinator released the slot and named frozen
   predecessor `fc2711237a90f4b009e1d3cabf1bad2b77b69582` as the source. Rows 11
-  and 12 and all earlier plan text are preserved; D10 now records its verified
-  merge on 2026-10-24 UTC. A5 is unchanged, D3 remains open, and D12 remains
-  IN-FLIGHT. No Row 17 setting or unrelated main-branch plan edit was imported.
-- **Delivery:** Row 13 is delivered for review in its own phase PR. The suite-
-  wide Row 3 review remains open. No production, persisted-contract, config,
-  fixture, frontend or dependency changes.
+  and 12 and all earlier plan text are preserved; D10 records its verified
+  merge on 2026-10-24 UTC. Latest main through Row 19 was merged normally at
+  `e7f46b2317852ea5d3f212f83ea86ac51edc05ed`; all main sections through Row 19
+  remain. A5 is unchanged and D3 remains IN-FLIGHT. No Row 17 setting was
+  imported.
+- **Delivery:** Implementation and documentation correction are delivered in
+  [#1670](https://github.com/miztiik/yen-idhazh/pull/1670), with source commit
+  `3de8c29dfbdb983b1034c0a12840ce76538148e7`; the worker does not merge it.
+  The suite-wide Row 3 review remains open.
 - **Dependencies:** Row 1. Serialized plan editing is released for Row 14.
 
 ## 15 - Row #14 - Grouping and dataset behavior
@@ -1294,8 +1317,10 @@ counts use the untouched archive and the completed branch instead.
 - **Plan integration:** Verified and imported the complete frozen Row 18
   predecessor, 98,435 bytes, SHA-256
   `a4fe543dbb4f46aba16c0511cbfc1a8da4c10a2ce35a2155735a3776ebc654f3`.
-  Added only D19 and this section. All earlier evidence, A5 exceptions,
-  D3 IN-FLIGHT and Row 18's pending Row 22 prerequisite remain unchanged.
+  Added only D19 and this section. PR #1674 merged at
+  `e7f46b2317852ea5d3f212f83ea86ac51edc05ed`; D19 is DONE. All earlier
+  evidence, A5 exceptions, D3 IN-FLIGHT and Row 18's pending Row 22
+  prerequisite remain unchanged.
   The complete frozen successor releases the serialized editor to Row 20
   independently of remaining gates, push or CI.
 - **Delivery:** One coherent phase PR for coordinator review and merge.
@@ -1396,11 +1421,98 @@ counts use the untouched archive and the completed branch instead.
   blobs remain unchanged. The frozen historical Row 21 successor remains
   108,564 bytes with SHA-256
   `85bb171daf2a4e00cd4689817825e295d10ddd6a0638381698f1299d682cbca3`.
-- **Delivery:** [#1675](https://github.com/miztiik/yen-idhazh/pull/1675) is
-  open for review and has not been merged. Source commit
-  `7950bf6825560734a28d0dcd1d57a7634a378ac2` remains unchanged; the current
-  integration is subject to exact-head CI. `test_ledger.py` ownership remains
-  released.
+- **Delivery:** Delivered in
+  [#1675](https://github.com/miztiik/yen-idhazh/pull/1675), merged at
+  `31a689f073d602e75870f7fa48da72d3043f6c13`. Source commit
+  `7950bf6825560734a28d0dcd1d57a7634a378ac2` remains unchanged;
+  `test_ledger.py` ownership remains released. The worker did not merge it.
+- **Dependencies:** Row 1.
+
+## 23 - Row #22 - Configured council planning and collection job deadlines
+
+- **Scope:** Move only the planning and collection operational budgets out of
+  workflow literals into independent validated Actions configuration. Preserve
+  both 30-minute total-job defaults, including checkout and installation; a
+  step-only deadline is not an equivalent replacement.
+- **Authority:** This is the production prerequisite uncovered by Row 18's
+  corrected timeout proof, covered by kumarsnaveen's structural-expansion
+  authorization on 2026-10-24 UTC. Fowler supplied the construction; the owner,
+  not the advisor, authorized the scope expansion.
+- **Files touched:** `.github/workflows/llm-council.yml`;
+  `config/llm_council_job_timeouts.json` (new);
+  `backend/tests/workflows/test_council_job_timeouts.py` (new);
+  `backend/tests/workflows/test_llm_council_workflow.py` (three released
+  compatibility assertions only); `backend/utilities/shard_bound.py`
+  (descriptive docstring only);
+  `docs/architecture/publishing/llm-council.md`; this plan.
+- **Construction:** The `job_bounds` prerequisite checks out the workflow
+  revision and runs the existing strict positive-integer reader with stock
+  runner `python3`. It publishes separate planning and collection outputs.
+  Each consumer directly needs that job and uses its own output through
+  `fromJSON` at whole-job scope. No backend installation, model or tenant
+  loading is needed. Repository-authored Actions config has no persisted
+  payload version or migration.
+- **Preserved guarantees:** Judging keeps its existing shard output and
+  deadline. Collection still runs after planning or judging fails or is
+  cancelled, but only after budget validation succeeds. Failed validation
+  leaves the run red and cannot start planned work with missing deadlines.
+- **Runtime cost and rationale:** One runner startup and checkout is added
+  before planning. The prerequisite has no custom deadline and inherits the
+  Actions 6-hour ceiling, at which GitHub kills the job. There is no new CI
+  job, package dependency, destination or persisted shape. The existing
+  council page owns this policy; it stays whole because the addition explains
+  the same workflow clock.
+- **Oracle:** The real reader and actual CLI preserve distinct nondefault
+  planning and collection values and prove independent substitution. Missing
+  keys and bool/string/float/zero/negative values fail with the named key.
+  Tests follow the producer step, job output, direct dependency and
+  `fromJSON` job deadline. Missing dependencies, swapped keys, self-step
+  references, step-only deadlines, broken outputs and lost failure/cancellation
+  collection must fail.
+- **Inventory:** No existing test functions or identifiers are removed or
+  renamed. Six new functions add 18 parameter cases. Only the collector's
+  dependency assertion, job-level condition assertion and expected permissions
+  map change in the existing council module, after Row 18's explicit source
+  release. Row 18's checker and shared harness are not imported.
+- **Evidence at freeze:** Source commit
+  `55ab017f198b94f396553c348e9caf6f9768d261`; clean implementation tree before
+  importing the plan. New module: 18 passed. Existing council module:
+  43 passed. Collection: 61 cases, not a full-suite claim. Repository ruff
+  and targeted mypy passed. The shared selector expands unknown workflow,
+  config and utility inputs to all groups; only targeted gates run locally.
+  Two generic producer/artifact controls remain queued under `gate_lock`.
+- **Negative proof:** In a disposable base checkout with its own
+  `pyproject.toml` and verified reader import, the new wiring cases fail for
+  the absent direct dependency. Eight real YAML/config/reader faults fail at
+  their intended assertions/refusals: missing dependency, swapped producer
+  key, self-step timeout, absent whole-job timeout, wrong output, success-only
+  collection, zero config budget and reader acceptance of zero. All 18
+  unchanged controls pass before and after; source hashes restore exactly.
+  Separately moving the timeout onto the actual planning step fails only
+  the planning case; the collection case still passes. Both unchanged
+  two-case controls pass before and after that edit.
+- **Evidence identity:** Restored workflow SHA-256
+  `bc8fd1e1d41bf9f68ca69846e37e8bb8e5afb1e0c9ea8a72a6bb0040ee2f7fc7`;
+  new test
+  `3fb5c7c718907300b4323a45eef43311c91f0325efaf2e0595ea808336a8e3a2`;
+  config
+  `76d0cf38d409fd360126612e54d0dcb9c5b59b999e5f075f798b514eba424ea0`;
+  reader
+  `6a6b72898f8830ce22e664e9396007856a6e027ad15b114c83a672bec319fc87`;
+  three-assertion compatibility source
+  `a4dc627dd45fb9da720f88c8482173ff6fc31672b75bf969ce8bc8b52b2c4f39`.
+  Exact selected identifiers, changed-input hashes and fault logs are in the
+  worker's session report; these are evidence, not new application artifacts.
+- **Plan integration:** Verified and imported the exact full Row 21
+  predecessor, 108,564 bytes, SHA-256
+  `85bb171daf2a4e00cd4689817825e295d10ddd6a0638381698f1299d682cbca3`.
+  Added only D22, this complete section and the approved A5 scope note.
+  All earlier rows, earlier A5 exceptions and D3 remain intact. This complete
+  successor releases the serialized editor independently of gates and CI.
+- **Delivery:** Open an independently green phase PR after plan integration;
+  the worker does not merge. Row 18 depends on this production fix, then
+  integrates the new main wiring into its own checker work and reruns its
+  changed-input proofs.
 - **Dependencies:** Row 1.
 
 ## 23 - Row #22 - Configured council planning and collection job deadlines
