@@ -38,7 +38,7 @@ operator console, not on the news-reading pages.
 | Producer | [`silicon.py`](../../backend/idhazh/telemetry/silicon.py), through [`task_telemetry.record`](../../backend/idhazh/telemetry/task_telemetry.py), or the independent [`host-fingerprints`](../../services/host-fingerprints/src/index.ts) API/CLI. Both use the existing host ledger and separate pipeline/task identity. |
 | Read by | `/console/machine/`, through the browser questions in `frontend/src/lib/console/queries/machine.ts` and shared helpers in `frontend/src/lib/console/machine/records.ts` |
 | Key | `date`, `run_id`, `pipeline_name`, `task_name`, `shard`; legacy rows use `job` instead |
-| Switch | `observability.host_telemetry_enabled` for the whole instrument; `host_fingerprint` for host-row writes; `memory_profiling_enabled` for memory/page-fault observations only |
+| Switch | `observability.host_telemetry_enabled` for the whole instrument; `host_fingerprint` for host-row writes; `host_fingerprint_placement_enabled` for Python placement metadata; `memory_profiling_enabled` for memory/page-fault observations only |
 | Committed | The caller owns publication of the files returned by the recorder |
 | Shown on news-reading pages | **no.** Operator surface only |
 
@@ -52,6 +52,11 @@ collection and ledger writes. The default is `True`; the elapsed-time writer
 makes no placement request. Job instrumentation tests use this existing
 acquisition choice and refuse entry to the real placement reader, so a missing
 forwarding step fails before any network access.
+
+The default-on `observability.host_fingerprint_placement_enabled` setting also
+stops Python placement reads when false. The caller's `ask_placement=False`
+remains a narrower opt-out; neither choice stops local fingerprint collection
+or its ledger write.
 
 The manual feed planner workflow installs the existing Bun fingerprint
 service and invokes `persistFingerprint` after live planning and the separate
@@ -282,11 +287,17 @@ Table C - controls inside an enabled instrument
 | C3 | `memory_profiling: off` | Stop those memory/fault observations; leave their cells unavailable | CPU/load, timing, identity, heartbeat, item health or memory copying |
 | C4 | `observability.host_fingerprint: false` | Stop raw job fingerprint writes/probes | The complete resource monitor or per-item memory/CPU observations |
 | C5 | Empty `host_fingerprint_bandwidth_jobs`, or zero `host_fingerprint_bandwidth_floor_mib` | Stop the copy benchmark | Other host observations |
+| C6 | `observability.host_fingerprint_placement_enabled: false` | Stop Python placement metadata reads; leave those cells empty | Local host readings, the fingerprint row or its task clock |
 
 The master false value or caller's off choice wins first. Memory on cannot
 restart a disabled instrument. Whole off skips host readings, raw host
 writes and host-memory artifacts. It keeps work, item health and progress
 logging. No setting deletes existing readings.
+
+Placement metadata requires both the configured switch and the caller's
+`ask_placement` choice. Either false value skips the external read; true in the
+config cannot override a caller opting out, and a caller's default-on cannot
+override config opting out.
 
 Set the master field to false to stop collection for every caller:
 
@@ -716,6 +727,12 @@ later file completes the row rather than adding a second task record. Each write
 is an immutable file through the shared ledger, and the reader settles attempts
 using the common rules in
 [Persistence](../architecture/contracts/persistence.md#the-two-identifiers).
+
+**Platform placement is an independent opt-out.** Owner ruling, kumarsnaveen,
+2026-10-24: keep placement collection on by default, but let the operator stop
+the external metadata request in the selected config while local host
+collection and ledger writes continue. A caller may still opt out for one task;
+neither control may defeat the other.
 
 ## See also
 
