@@ -143,7 +143,7 @@ class AppConfig(Contract):
     extract: ExtractConfig = Field(default_factory=ExtractConfig)
     elements: ElementsConfig = Field(default_factory=ElementsConfig)
     models_file: ModelsFile = Field(
-        default="models/qwen3.5-9b-q4km.json",
+        default="models/ornith-1.5-9b-q5km.json",
         description=(
             "Which file under config/models/ holds the active model. The whole swap: "
             "every fact about a set of weights - the repository, the digest, the window "

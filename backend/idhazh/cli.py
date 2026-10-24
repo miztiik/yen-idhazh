@@ -231,10 +231,8 @@ STAGES: Final[tuple[str, ...]] = (
 def qualification_repeats(override: int | None, *, run: RunConfig) -> int:
     """How many times this invocation replays each frozen item.
 
-    The override goes back through `RunConfig` rather than being compared here,
-    so `--repeats 1` is refused by the same floor that refuses
-    `qualification_repeats: 1` in config. A second copy of the floor spelled in
-    this file is a floor that can drift away from the one the schema publishes.
+    The override goes back through `RunConfig`, so the CLI and config use
+    the same bounds without a second range check.
     """
     if override is None:
         return run.qualification_repeats
@@ -477,7 +475,7 @@ def _main(argv: Sequence[str] | None = None) -> int:
         default=None,
         help=(
             "Override run.qualification_repeats for this invocation. "
-            "`wording_spread` reads the replays. Refused below the knob's floor."
+            "`wording_spread` reads the replays. Uses the config field's bounds."
         ),
     )
     parser.add_argument(

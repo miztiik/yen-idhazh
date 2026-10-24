@@ -1,6 +1,6 @@
 # Swap the Summarizer Model
 
-**Last Updated**: 2026-10-09
+**Last Updated**: 2026-10-24
 The swap is one line in `config/idhazh.json`:
 
 ```json
@@ -631,9 +631,12 @@ gh workflow run validate.yml \
 ```
 
 **The form no longer asks how many times each article is replayed.** That count is
-`run.qualification_repeats` in `config/idhazh.json`, it is at least three, and the
-report names it beside the job bound. `idhazh qualify --repeats` overrides it for
-one invocation and is refused below the same floor.
+`run.qualification_repeats` in `config/idhazh.json`. The allowed range is one
+through three passes per item; the default when omitted is one pass. The
+committed config selects two passes. The report names the count beside the job
+bound. `idhazh qualify --repeats` overrides it for one invocation and uses the
+same field validation, including both bounds. One pass does not compare wording
+across passes; see [qualification.md](../concepts/qualification.md#design-rationale).
 
 The case builds a candidate config under gitignored
 `backend/var/candidate-config` - the committed tree with `models_file` moved and

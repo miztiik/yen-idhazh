@@ -1,6 +1,6 @@
 # The model's own file
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-24
 
 What `config/` says about a set of weights: which model runs, what runtime
 settings are declared for those exact bytes, how a turn is written for it, and
@@ -15,6 +15,22 @@ Everything that is a fact about one set of weights lives in one file of its own:
 **The swap is that one line, and so is the revert.** Point `models_file` at another committed file and the run opens another model; point it back and the incumbent's measured numbers are still on disk rather than in git history. Before 2026-09-14 a swap was eleven lines edited in place in the file every other knob lives in, and a revert had to reconstruct the previous model's numbers out of a diff.
 
 `models_file` is spelled relative to `config/` and its grammar pins it to `config/models/` and to `.json`, because the value is an operator's edit that becomes a path this build opens (`CLAUDE.md` section 2). It ships a default naming the committed file, so a fresh clone still runs unconfigured.
+
+The current default is `models/ornith-1.5-9b-q5km.json`. Keep it aligned with
+the committed selection when that selection changes. Recorded template checks
+remain tied to the model that produced their bytes, not the current selection.
+Server-setting checks accept the runtime's short and long flag spellings.
+The runtime-sweep utility has its own command-line options; these are not
+direct server flags. Its server launch must still use the shared argument
+builder.
+
+Owner ruling, kumarsnaveen, 2026-10-24: remove the turn-envelope, measurement
+and two-call pipeline test modules. This gives up their dedicated coverage,
+including stale tokenizer-reading checks in CI. The recorded measurements keep
+their original model identity; `backend/utilities/measure_budgets.py check`
+still reports stale readings when an operator asks. Judge tests cover role
+selection, verdicts and reasoning results without asserting runtime-specific
+output-limit or decoding keys. Request-builder tests own those wire details.
 
 **`config/idhazh.json` still carrying a `models` block is refused by name**, and refused rather than lifted onto the new file: a lift would read one model out of the old block while `models_file` named another file, and the run would stand a server up on whichever won.
 
@@ -31,6 +47,17 @@ The second alternative was one file holding every model, keyed by name, with the
 The alternative was to add the ten missing keys to the table. It was rejected because the table is the cost: it would be paid ten more times now and again for every parameter llama.cpp, vLLM or Ollama adds on their own schedules, while buying nothing a schema does not already give. A translation table across those three runtimes was rejected for the same reason one level up - a per-key map maintained against three projects that each change their parameters without telling us.
 
 What the splat may not do is reach a decode control. `response_format`, `json_schema` and `grammar` are how an injection is stopped from changing the shape of a reply, so each route refuses a sampling key that re-spells or disables its own control, and the set of refused keys is declared beside the control rather than in one list somebody has to remember. The refusal runs when the config loads as well as when a body is built, so an operator reads a message about the file they just edited rather than one about a request body, four hundred seconds into a run.
+
+**An output limit is not a shape control.** Owner ruling, kumarsnaveen,
+2026-10-24: `sampling.max_tokens` is accepted on every request route. The chat
+route defaults to 8,192 output tokens when the value is absent; an explicit
+value, including the active model's 4,096-token limit, wins. Rendered completions
+use the caller's shape-derived `n_predict` budget when no `max_tokens` is
+declared, or 8,192 tokens when the caller supplies no budget. An explicit
+`max_tokens` replaces that limit, survives continuations,
+and also bounds a separate reasoning span. A request sends only one of these
+limit keys. Output schemas and grammars remain enforced, and a reply stopped by
+its limit is still reported as truncated rather than published as complete.
 
 **What this pins and what it does not.** The thirteen committed values are the ones the pinned build already applies, so nothing about today's output moves. The sampler chain ORDER is a separate request key, `samplers`, and it is not pinned: a build that reorders the chain can still move the distribution with all thirteen values held.
 

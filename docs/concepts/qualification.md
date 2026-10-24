@@ -1,6 +1,6 @@
 # Qualification
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-24
 
 How a candidate model is judged before it may be adopted, and what a run that
 judged it actually proves.
@@ -22,6 +22,17 @@ not an instruction to an agent. The injection and budget gates retain
 as their source values. Report readers preserve the stored wording, including
 the later spelling, in JSON, the Markdown summary and the job log. A vocabulary
 sweep must not treat those emitted values as comments.
+
+## Design rationale
+
+**Qualification permits one through three passes per item, with one as the
+default.** Owner ruling, kumarsnaveen, 2026-10-24: remove the old three-pass
+minimum and ten-pass maximum. The committed config keeps its two-pass choice.
+One pass still runs the quality and safety checks, but cannot measure wording
+variation across passes. Additional passes buy that comparison at the cost of
+more model calls; identical wording is not an adoption requirement. The CLI
+validates its override through the same config field rather than repeating
+the bounds in its own logic.
 
 ## The gate has to call what the digest calls
 
