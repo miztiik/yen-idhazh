@@ -9,7 +9,7 @@ import { readoutOf } from '../src/lib/charts/readout';
 import { nativeFailureMix } from '../src/lib/console/pipelines/failure-mix';
 import { nativeTimeSplit, timeSplitReadout } from '../src/lib/console/pipelines/item-time-split';
 import { telemetryRow } from './support/telemetry-row';
-import { numberFormat } from './support/number-format';
+import { formatNumber, numberFormat } from './support/number-format';
 import { hydrated, setWindow, routeHref } from './support/console-window/controls';
 import { THROUGH, FIRST, dayBefore, nativeRow, timedRow, packedPipelines, servePipelines, settled } from './support/pipelines-ledgers';
 
@@ -63,7 +63,7 @@ for (const one of cases) {
 					if (preset === 1) await expect(heading).not.toContainText('newest');
 					else await expect(heading).toContainText(', the newest day');
 					if (name === 'failure-mix') {
-						await expect(section).toContainText(`${(one.failures / 3 * 100).toFixed(1)}% of recorded rows failed.`);
+						await expect(section).toContainText(`${formatNumber(one.failures / 3 * 100, { si: false })}% of recorded rows failed.`);
 						if (one.failures === 0) await expect(section.locator('[data-nothing-fired]')).toBeVisible();
 					} else {
 						await expect(section.locator('[data-duration-cohort]')).toContainText(`${one.timed * preset} of ${3 * preset}`);

@@ -11,6 +11,7 @@ import type { Row } from '../src/lib/data/ledger';
 import { ONE_DAYS } from './support/pipelines-span';
 import { dayBefore, openRetained } from './support/retained-telemetry';
 import { telemetryRow } from './support/telemetry-row';
+import { formatNumber } from './support/number-format';
 
 const CONFIG = JSON.parse(
 	readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
@@ -195,7 +196,7 @@ test.describe('the real native item-cost component', () => {
 		await expect(panel.locator('[data-item-cost-share]'), 'the retired prompt-share carrier returned').toHaveCount(0);
 		await expect(panel.locator('[data-item-cost-pairs]')).toContainText('Prompt reuse is on');
 		await expect(panel.getByRole('link', { name: 'Hardware' })).toHaveAttribute('href', '/console/machine/');
-		await expect(panel.locator('[data-item-cost-lead]')).toHaveText('4.00 seconds to write one summary.');
+		await expect(panel.locator('[data-item-cost-lead]')).toHaveText(`${formatNumber(4000 / 1000, { si: false })} seconds to write one summary.`);
 	});
 
 	test('the section draws the window the control set, and every item it counted is in a bar', async ({ page }) => {
