@@ -1050,6 +1050,11 @@ def test_a_verdict_file_round_trips_through_the_contract(
     call's window, dropped the log probability, or exponentiated it.
     """
     settings = _settings()
+    selected = settings.models.summarizer.model_dump(mode="python") | {"id": "unseen-judge-v2"}
+    settings = dataclasses.replace(
+        settings,
+        models=ModelsConfig.model_validate({"summarizer": selected}),
+    )
     day = _a_day()
     root = _a_day_on_disk(tmp_path, day)
     monkeypatch.setattr(common, "PUBLIC_ROOT", root)
@@ -1084,6 +1089,7 @@ def test_a_verdict_file_round_trips_through_the_contract(
     assert row.verdict_swapped is SameStoryVerdict.YES
     assert row.usable is True
     assert row.judge_model == settings.models.summarizer.id
+    assert report.metrics.judge_model == row.judge_model == "unseen-judge-v2"
     assert row.prompt_digest == prompt.prompt_digest()
     assert row.grammar_digest == prompt.grammar_digest()
     assert row.first_token_margin is not None
