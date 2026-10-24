@@ -252,9 +252,7 @@ def test_every_artifact_a_job_downloads_is_uploaded_by_a_job_it_waits_on() -> No
                 if isinstance(pattern := asked.get("pattern"), str):
                     prefix = pattern.removesuffix("*")
                     # A job's own later upload can match the prefix and cannot
-                    # exist yet, so it is not a producer of this download:
-                    # `validate.yml` reads `qualification-*` and then writes
-                    # `qualification-report`.
+                    # exist yet, so it is not a producer of this download.
                     producers = {
                         uploads[name] for name in uploads if name.startswith(prefix)
                     } - {job_name}

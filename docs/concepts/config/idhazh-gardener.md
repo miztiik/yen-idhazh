@@ -96,29 +96,28 @@ folder and then that name for a ledger filed inside its family's folder, such as
 `compact-<folder>` with `/` written `-`.
 The raw-day packing wait remains one whole day for every ledger.
 
-Table A. All nineteen declarations use the same packing and expiry settings.
+Table A. All eighteen declarations use the same packing and expiry settings.
 
 | ID | Declaration | Daily to monthly / monthly to yearly / yearly expiry |
 | --- | --- | --- |
-| A1 | `compact-candidate-models` | 45 days / 93 days / 36 calendar months |
-| A2 | `compact-council-run-records` | 45 days / 93 days / 36 calendar months |
-| A3 | `compact-counterfactual-scores` | 45 days / 93 days / 36 calendar months |
-| A4 | `compact-feed-health` | 45 days / 93 days / 36 calendar months |
-| A5 | `compact-feed-retirements` | 45 days / 93 days / 36 calendar months |
-| A6 | `compact-gardener` | 45 days / 93 days / 36 calendar months |
-| A7 | `compact-host-fingerprint` | 45 days / 93 days / 36 calendar months |
-| A8 | `compact-item-health` | 45 days / 93 days / 36 calendar months |
-| A9 | `compact-item-health-summary` | 45 days / 93 days / 36 calendar months |
-| A10 | `compact-published` | 45 days / 93 days / 36 calendar months |
-| A11 | `compact-run-plan` | 45 days / 93 days / 36 calendar months |
-| A12 | `compact-seen` | 45 days / 93 days / 36 calendar months |
-| A13 | `compact-summary-quality-evals` | 45 days / 93 days / 36 calendar months |
-| A14 | `compact-visual-prunes` | 45 days / 93 days / 36 calendar months |
-| A15 | `compact-content-similarity-judge-merge-line-holdout-scores` | 45 days / 93 days / 36 calendar months |
-| A16 | `compact-content-similarity-judge-scored-pairs` | 45 days / 93 days / 36 calendar months |
-| A17 | `compact-content-similarity-judge-metrics` | 45 days / 93 days / 36 calendar months |
-| A18 | `compact-content-similarity-judge-holdout-pairs` | 45 days / 93 days / 36 calendar months |
-| A19 | `compact-content-similarity-judge-fitted-thresholds` | 45 days / 93 days / 36 calendar months |
+| A1 | `compact-council-run-records` | 45 days / 93 days / 36 calendar months |
+| A2 | `compact-counterfactual-scores` | 45 days / 93 days / 36 calendar months |
+| A3 | `compact-feed-health` | 45 days / 93 days / 36 calendar months |
+| A4 | `compact-feed-retirements` | 45 days / 93 days / 36 calendar months |
+| A5 | `compact-gardener` | 45 days / 93 days / 36 calendar months |
+| A6 | `compact-host-fingerprint` | 45 days / 93 days / 36 calendar months |
+| A7 | `compact-item-health` | 45 days / 93 days / 36 calendar months |
+| A8 | `compact-item-health-summary` | 45 days / 93 days / 36 calendar months |
+| A9 | `compact-published` | 45 days / 93 days / 36 calendar months |
+| A10 | `compact-run-plan` | 45 days / 93 days / 36 calendar months |
+| A11 | `compact-seen` | 45 days / 93 days / 36 calendar months |
+| A12 | `compact-summary-quality-evals` | 45 days / 93 days / 36 calendar months |
+| A13 | `compact-visual-prunes` | 45 days / 93 days / 36 calendar months |
+| A14 | `compact-content-similarity-judge-merge-line-holdout-scores` | 45 days / 93 days / 36 calendar months |
+| A15 | `compact-content-similarity-judge-scored-pairs` | 45 days / 93 days / 36 calendar months |
+| A16 | `compact-content-similarity-judge-metrics` | 45 days / 93 days / 36 calendar months |
+| A17 | `compact-content-similarity-judge-holdout-pairs` | 45 days / 93 days / 36 calendar months |
+| A18 | `compact-content-similarity-judge-fitted-thresholds` | 45 days / 93 days / 36 calendar months |
 
 `item-health-summary` has a declaration but no generated rows yet.
 `telemetry-aggregate` remains `dry_run: true`; it produces summaries only for
@@ -166,13 +165,12 @@ whether the window's deletions are among the changes: a ledger can pack live
 while its window only reports, and a person turns the window live after reading
 what it would take. With `dry_run` `true` a pass changes nothing either way.
 
-The trial compactions are `compact-trial-item-health`,
-`compact-trial-host-fingerprint` and `compact-trial-candidate-models`. They pack
-live only under the roots they name. Each keeps 31 daily days and a three-month
-window, reports monthly deletion without deleting, and leaves yearly expiry
-disabled. This reaches the gardener's 90-day `trials` window. The production
-`compact-<folder>` remains the only declaration used for production retention
-and prune refusals.
+The trial compactions are `compact-trial-item-health` and
+`compact-trial-host-fingerprint`. They pack live only under the roots they name.
+Each keeps 31 daily days and a three-month window, reports monthly deletion
+without deleting, and leaves yearly expiry disabled. This reaches the
+gardener's 90-day `trials` window. The production `compact-<folder>` remains the
+only declaration used for production retention and prune refusals.
 
 ## The collection declarations that ship
 

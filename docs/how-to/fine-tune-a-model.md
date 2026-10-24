@@ -6,7 +6,7 @@ How the training corpus is built, what maintains it, and what a person does with
 it. Training itself does not happen here: the runner has no GPU, 4 vCPU and a
 6-hour job ceiling, so a training step in a workflow does not fit the machine
 (`CLAUDE.md` Guardrail #2). Using a fine-tuned model does fit - it enters through
-the same qualification as any other candidate.
+the same production pipeline test as any other model configuration.
 
 ## What exists today
 
@@ -555,8 +555,7 @@ Read it before training, not after. It already reads two ways - 1,015 rows from
 the retired `qwen3-8b-q4-k-m` and 429 from `qwen3-5-9b-q4-k-m` of 1,444 - so a
 model trained on it today learns mostly from a teacher that no longer serves.
 That is a fact to weigh, not a refusal: the rows are still summaries the project
-published. What moves the mix is time, because the roll evicts by date
-([evaluate-new-summarizer-model.md](evaluate-new-summarizer-model.md)).
+published. What moves the mix is time, because the roll evicts by date.
 
 **The committed `hf_base_repo` values are unverified.** `Qwen/Qwen3.5-9B` is the
 expected upstream for an `unsloth/*-GGUF` repository; nobody has confirmed it

@@ -3,8 +3,8 @@
 **Last Updated**: 2026-10-24
 
 This page records the result and limits of the experimental Ternary Bonsai 27B
-probe. It is not a model dossier and it does not replace the qualification
-workflow.
+probe. It records runtime behavior only; it does not establish summary quality
+or model suitability.
 
 ## Status
 
@@ -13,8 +13,8 @@ that reached inference did not return a usable reply before cancellation after
 about 188 minutes on four AMD EPYC 7763 cores. It is not performant enough for
 this repository at this time.
 
-This is a finding about the probe on this runtime and runner. It is not a
-summary-quality qualification, and it does not reject every ternary packing or
+This is a finding about the probe on this runtime and runner. It is not an
+evaluation of summary quality, and it does not reject every ternary packing or
 every future runtime. The model is not configured for the daily pipeline.
 
 ## Conditions
@@ -35,8 +35,8 @@ every future runtime. The model is not configured for the daily pipeline.
 
 The probe used the experimental `bonsai-ternary-model-test` workflow and a
 separate Node inference script. It did not use the repository's current
-production summarization path, fixed qualification corpus, qualification gates,
-or model dossier.
+production summarization path or a fixed article corpus, and it did not produce
+a model dossier.
 
 ## The run that reached inference
 
@@ -74,7 +74,7 @@ summary-quality reading.
 - One inference request did not return a usable reply before the run ended.
 - The model is not suitable for the repository's current nightly summarization
   workflow without further runtime work and a matched throughput measurement.
-- The model remains parked instead of being configured, qualified, or adopted.
+- The model remains parked instead of being configured or adopted.
 
 ## What this page does not settle
 
@@ -86,7 +86,7 @@ summary-quality reading.
 - Whether this model family should be adopted in the future.
 
 Future investigation can reopen the question, but it needs a bounded production
-shape and a paired or fixed corpus before qualification is meaningful.
+shape and a paired or fixed corpus before a summary-quality decision is meaningful.
 
 ## Records behind this page
 
@@ -97,7 +97,4 @@ shape and a paired or fixed corpus before qualification is meaningful.
 
 ## See also
 
-- [../models.md](../models.md) - model status and dossier index.
 - [../pipeline-cost.md](../pipeline-cost.md) - the runner and throughput readings that this probe does not replace.
-- [../../concepts/qualification.md](../../concepts/qualification.md) - what a model must pass before adoption.
-- [../../how-to/evaluate-new-summarizer-model.md](../../how-to/evaluate-new-summarizer-model.md) - how to measure and swap a summarizer candidate.

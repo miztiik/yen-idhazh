@@ -93,7 +93,7 @@ class SummaryBand(Model):
             "What to do with a reply that overshoots past the policy's allowance. A "
             "short band trims at the last complete sentence that fits, because wire-"
             "shaped prose front-loads and a tail cut is safe. A long band publishes "
-            "over-length instead: on a feature the qualification lands last, so cutting "
+            "over-length instead: a feature's key result may land last, so cutting "
             "the tail is how a summary becomes wrong rather than merely long."
         ),
     )

@@ -1,385 +1,63 @@
-# Troubleshoot One URL Locally
+# Troubleshoot a Pipeline Item
 
 **Last Updated**: 2026-10-04
 
-Use the real network, extraction boundary and local model to inspect one article
-without publishing a digest.
-
-## Capability boundary
-
-There is no first-class arbitrary-URL command today.
-
-The CLI does **not** have:
-
-- `idhazh work --url...`;
-- a fetch-only, extract-only or summarize-only command;
-- a way to derive `source_id`, vertical, tier or source form from a URL;
-- a way to derive the feed headline required by the article contract; or
-- a separate scratch output root.
-
-What exists:
-
-- `work` reads its plan from the run-plan ledger,
- `state/raw/run-plan/<YYYY>/<MM>/<DD>/`, and takes the plan of the run
- `--execution` names;
-- `--shard N --shards M` can select exactly one item already in that plan;
-- a manually created `RunPlan` can carry one arbitrary URL **when** its live
- `source_id` and feed headline are known, filed under a scratch trial folder
- so it never lands beside a production day's plans; and
-- `work` then runs the normal fetch -> extract -> sanitize -> summarize ->
- optional score chain.
-
-Do not invent a source id, tier, vertical, source form or title. Those values
-change pipeline behaviour. If the URL is not from a live source in
-`config/sources.json`, the faithful arbitrary-URL flow is missing and must be
-implemented.
-
-This is an operator procedure, not an automated test. It intentionally uses the
-real network. The normal address checks, robots policy, paywall refusal,
-sanitizer and model-output schema all remain active.
-
-## What this procedure writes
-
-It writes these gitignored diagnostics:
-
-```text
-backend/var/run/<date>/items/<item-id>.article.json
-backend/var/run/<date>/items/<item-id>.summary.json
-backend/var/run/<date>/items/<item-id>.eval.json
-```
-
-The eval file exists only when faithfulness scoring is enabled and succeeds.
-Path B also writes a scratch copy of `config/` under
-`backend/var/scratch-url-config/` and files its one-item plan, and anything else
-`work` records, under the scratch trial folder `state/scratch-url/`. The clean-up
-below deletes both.
-
-Do **not** run `assemble` for a scratch plan. Assemble writes the published
-digest and committed ledgers. This runbook stops after `work`.
-
-Path A reads a plan the pipeline already filed: the committed run-plan ledger
-holds every planned day, one plan per run. Do not run `plan` merely to create a
-scratch input unless its normal side effects are wanted: it reads every feed and
-updates the seen and feed-health ledgers under `state/`.
-
-## Prerequisites
-
-1. Install the package:
-
- ```powershell
-.venv\Scripts\python.exe -m pip install -e ".[dev]"
- ```
-
- Install `.[faithfulness]` too if the score is part of the problem. Otherwise
- use `--no-faithfulness`.
-
-2. Install llama.cpp and the configured summary model as described in
- [set-up-local-inference.md](set-up-local-inference.md).
-
-3. Print the server command from current config with the program in
- [test-models-locally.md](test-models-locally.md#serve-a-model). Save it to a
- file and run `.venv\Scripts\python.exe <file>`; it is the same program CI
- runs, so a flag typed by hand here is a different server.
-
-4. Run the printed command in a separate terminal. Do not retype or change its
- flags.
-
-5. Confirm the server is healthy:
-
- ```powershell
- Invoke-WebRequest http://127.0.0.1:8080/health
- ```
-
-On Linux, use `.venv/bin/python`, `backend/bin/llama-server` and
-`LD_LIBRARY_PATH=backend/bin`.
-
-## Path A: the URL is already in a plan
-
-This is the supported path. It does not edit the plan.
-
-Set the plan date and the exact URL:
-
-```powershell
-$env:DATE = "2026-08-24"
-$env:TARGET_URL = "https://publisher.example/article"
-```
-
-Locate the run whose plan holds the URL, and the item's zero-based index. With
-`shards` equal to the number of items, that index selects exactly one item:
-
-```powershell
-@'
-import sys
-from pathlib import Path
-
-from idhazh import ledger
-from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.run_plan import RunPlan
-from idhazh.discover import canonicalise
-
-date, raw_url = sys.argv[1:3]
-target = canonicalise(raw_url)
-for plan in ledger.load_days(Path("state"), LedgerName.RUN_PLAN, [date], model=RunPlan):
-    matches = [
-        index
-        for index, item in enumerate(plan.items)
-        if item.canonical_url == target or item.source_url == raw_url
-    ]
-    if len(matches) == 1:
-        index = matches[0]
-        execution = plan.run_id.rsplit("-", 1)[1]
-        print(f"run_id={plan.run_id} item_id={plan.items[index].item_id}")
-        print(
-            f".venv\\Scripts\\python.exe -m idhazh work --date {date} --execution {execution} "
-            f"--shard {index} --shards {len(plan.items)} --no-faithfulness"
-        )
-        break
-else:
-    raise SystemExit("no plan filed for that day holds the URL exactly once")
-'@ | .venv\Scripts\python.exe - $env:DATE $env:TARGET_URL
-```
-
-Run the command it prints. Remove `--no-faithfulness` when troubleshooting the
-scorer.
-
-## Path B: arbitrary URL from a configured live source
-
-This is a **manual workaround**, not a supported arbitrary-URL command. It
-constructs the payload that `plan` would normally produce.
-
-You must supply:
-
-- `TARGET_URL`: the article address;
-- `TARGET_TITLE`: the headline the feed supplied;
-- `SOURCE_ID`: a live feed id from `config/sources.json`; and
-- `DATE`: an unused local scratch date.
-
-List live source ids when needed:
-
-```powershell
-.venv\Scripts\python.exe -c "from idhazh import config; [print(feed.id) for feed in config.load().sources.feeds]"
-```
-
-Set the inputs:
-
-```powershell
-$env:DATE = "2026-08-24"
-$env:TARGET_URL = "https://publisher.example/article"
-$env:TARGET_TITLE = "Headline supplied by the feed"
-$env:SOURCE_ID = "configured-feed-id"
-```
-
-The scratch date must not already have a scratch plan. The script refuses to
-file a second one.
-
-Create the one-item plan, and the scratch config that points `work` at it:
-
-```powershell
-@'
-import json
-import os
-import shutil
-from datetime import UTC, datetime
-from pathlib import Path
-
-from idhazh import config, ledger
-from idhazh.contracts.base import derive_url_key
-from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.run_plan import PlannedItem, RunPlan, VerticalPlan
-from idhazh.discover import canonicalise, clean_title
-from idhazh.rank import item_id
-from idhazh.stages.plan import plan_writer
-
-SCRATCH_CONFIG = Path("backend/var/scratch-url-config")
-SCRATCH_STATE = Path("state") / "scratch-url"
-
-settings = config.load(Path("config"))
-feed = next(
-    (candidate for candidate in settings.sources.feeds if candidate.id == os.environ["SOURCE_ID"]),
-    None,
-)
-if feed is None:
-    raise SystemExit("SOURCE_ID must name a live feed in config/sources.json")
-
-title = clean_title(os.environ["TARGET_TITLE"])
-if title is None:
-    raise SystemExit("TARGET_TITLE must contain a usable feed headline")
-
-source_url = os.environ["TARGET_URL"]
-canonical_url = canonicalise(source_url)
-url_key = derive_url_key(canonical_url)
-date = os.environ["DATE"]
-run_id = f"{date}-0"
-if ledger.load_days(SCRATCH_STATE, LedgerName.RUN_PLAN, [date], model=RunPlan):
-    raise SystemExit(f"a scratch plan is already filed for {date} under {SCRATCH_STATE.as_posix()}")
-
-item = PlannedItem(
-    item_id=item_id(feed.vertical, url_key),
-    url_key=url_key,
-    source_url=source_url,
-    canonical_url=canonical_url,
-    source_id=feed.id,
-    tier=feed.tier,
-    source_form=feed.form,
-    vertical=feed.vertical,
-    title=title,
-    rank_score=0.0,
-)
-plan = RunPlan(
-    version=RunPlan.schema_version(),
-    date=date,
-    run_id=run_id,
-    generated_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-    verticals=[VerticalPlan(id=feed.vertical, considered=1, planned=1, eligible_feeds=1)],
-    items=[item],
-)
-
-# A copy of config/ whose one difference moves every ledger of this run onto the
-# scratch trial folder, so nothing lands beside a production day.
-shutil.copytree(Path("config"), SCRATCH_CONFIG, dirs_exist_ok=True)
-app_file = SCRATCH_CONFIG / "idhazh.json"
-app = json.loads(app_file.read_text(encoding="utf-8"))
-app["run"]["trial_state_dirname"] = SCRATCH_STATE.name
-app_file.write_text(json.dumps(app, indent=2) + "\n", encoding="utf-8")
-
-ledger.persist(
-    SCRATCH_STATE,
-    [plan],
-    ledger=LedgerName.RUN_PLAN,
-    covers=date,
-    identity=plan_writer(run_id, "0" * 40),
-)
-print(f"filed run {run_id} under {SCRATCH_STATE.as_posix()} item_id={item.item_id}")
-'@ | .venv\Scripts\python.exe -
-```
-
-Run the one-item chain against the scratch config, naming the scratch run:
-
-```powershell
-.venv\Scripts\python.exe -m idhazh work `
- --config backend\var\scratch-url-config `
- --date $env:DATE `
- --execution 0 `
- --shard 0 `
- --shards 1 `
- --no-faithfulness
-```
-
-Remove `--no-faithfulness` to load HHEM and write the eval payload.
-
-For Bash, export the same four variables and run the unchanged Python body with
-`python - <<'PY'... PY`.
-
-## Read the result
-
-First list the item files:
-
-```powershell
-Get-ChildItem "backend\var\run\$env:DATE\items"
-```
-
-Read the article payload before the summary. It tells you whether the network
-and trust boundary succeeded:
-
-```powershell
-Get-Content "backend\var\run\$env:DATE\items\*.article.json" -Raw |
- ConvertFrom-Json |
- Select-Object item_id, status, failure_code, failure_detail,
- word_count, token_count, brief, truncated
-```
-
-Then read the summary and timings:
-
-```powershell
-Get-Content "backend\var\run\$env:DATE\items\*.summary.json" -Raw |
- ConvertFrom-Json |
- Select-Object item_id, status, failure_code, failure_detail,
- title, summary, input_tokens, output_tokens,
- fetch_ms, extract_ms, summarize_ms, duration_ms
-```
-
-Interpret them in this order:
-
-| Evidence | Meaning |
-| --- | --- |
-| No article file | The worker crashed before it could persist the fetch/extract result. Read stderr. |
-| `ValidationError: an ok article carries title and text` | A manual plan omitted `TARGET_TITLE`. The worker does not derive the feed headline from the page. |
-| Article `status` is not `ok` | Fetch or extraction stopped the item. Read `failure_code` first, then `failure_detail`. |
-| Article is `ok` with `too_short`, `not_prose` or `boilerplate` | This is a recorded shape signal. The item can still continue, usually as `brief`. |
-| Article is `ok`, no summary file | The process stopped between extraction and the model result. Check server health and stderr. |
-| Summary `model_unreachable` | Nothing is listening at `127.0.0.1:8080`, or the local server died. |
-| Summary `model_refused` | The server answered, and the answer was an error. It is up, so do not restart it - read the last 50 lines of `llama-server.log` and check the flags the entry declares. A flag value the pinned build does not accept fails every request this way. |
-| Summary `model_timed_out` | The server took the request and did not answer inside `models.summarizer.request_timeout_minutes`. It was serving; it was writing more tokens than the clock admits. Read the output budget, not the process. |
-| Summary `shard_out_of_time` | The worker stopped starting items before it reached this one, so nothing was ever asked. The article was fetched and extracted; `run.shard_timeout_minutes` minus `run.shard_wrap_up_minutes` ran out first. This is a throughput reading, not a source fault. |
-| Summary `context_exceeded` | The server answered HTTP 400: the prompt plus the reply budget did not fit `--ctx-size`. Shorten the source, not the server. |
-| Summary `output_truncated` | The model exhausted the configured output budget before closing its JSON. |
-| Summary `labels_truncated` | The labelling call exhausted ITS output budget, so the call that writes the summary was never sent. That budget is derived from the labelling grammar in `classify.calls.label_budget_tokens`, not from the retired `max_answer_tokens`. |
-| Summary `bad_shape` | The constrained reply or reasoning channel violated the summary contract. |
-| Summary `length_out_of_range` | The reply parsed, but it holds fewer words than `summarize.length_policy.absolute_floor_words` and the source was longer than `floor_applies_above_source_words`. That combination reads as a failed extraction, not a short summary. Missing the band's ask is not this - it publishes. |
-| Summary `copied_source` | The summary's longest unbroken run copied from the source ran past `evaluation.verbatim_reject_ceiling`. Republishing an article body is a non-goal. |
-| Summary `leaked_address` | The summary carried an address, or the `[link]` placeholder the sanitizer left where the source's address was. The title degrades to the source headline instead. |
-| No eval file | Expected with `--no-faithfulness`; otherwise inspect scorer installation and stderr. |
-
-The fetched article text is deliberately visible in `.article.json` for local
-diagnosis. It stays under gitignored `backend/var/` and must not be committed.
-
-## Validate the whole local path
-
-The manual path was exercised on 2026-08-24 with a real BBC URL, the live
-`bbc-tech` source definition and local Qwen3-8B-Q4_K_M (retired incumbent,
-historical record) on an Intel a developer machine. One observation (`n=1`): fetch 328 ms,
-extraction 78 ms, summarization 352,921 ms. These are proof that the procedure
-reaches every stage, not performance baselines, and the configured summarizer
-has never been timed on this path.
-
-## Clean up
-
-Stop the llama server, then delete only the scratch run:
-
-```powershell
-Remove-Item -Recurse -Force "backend\var\run\$env:DATE"
-```
-
-Path B leaves its scratch config and scratch trial folder too. Delete both:
-
-```powershell
-Remove-Item -Recurse -Force "backend\var\scratch-url-config", "state\scratch-url"
-```
-
-Confirm no diagnostic payload is tracked:
-
-```powershell
-git status --short
-```
-
-## What a first-class command still needs
-
-A real arbitrary-URL feature would need a new CLI command, for example:
-
-```text
-idhazh inspect-url --url... --source-id... --title...
-```
-
-That command does not exist. To add it correctly, it must:
-
-- require or derive every `PlannedItem` field without inventing source metadata;
-- use the same live fetcher, robots policy, extractor, sanitizer and model
- request as `work`;
-- write only to a gitignored inspection directory;
-- never append `state/`, write `frontend/public/`, or call `assemble`;
-- expose stage boundaries so fetch and extraction can be inspected without a
- running model; and
-- ship with contract and integration tests using captured fixtures, while the
- operator command itself remains able to use the real network.
-
-Until that exists, Path A is supported and Path B is the explicit manual
-workaround. A URL with no configured source identity cannot be run faithfully.
+Use CI records to inspect an item that the pipeline already processed; the
+project does not support local model inference or arbitrary-URL runs.
+
+## Inspect a production run
+
+1. Find the run that processed the item:
+
+   ```powershell
+   gh run list --repo miztiik/yen-idhazh --workflow digest.yml
+   ```
+
+2. Use the run's `captures-<shard>` artifacts to inspect model prompts, replies
+   and timings. Follow
+   [How to analyze a pipeline artifact](analyze-a-pipeline-artifact.md).
+
+3. If the run has no captures, inspect its workflow logs and the capture
+   settings for that run. Captures are not guaranteed when both prompt and reply
+   capture settings are off.
+
+The item-health ledger records the stage, outcome, failure code and timings for
+each planned item. See
+[item health](../architecture/sources/item-health.md) for its fields and
+[pipeline artifacts](analyze-a-pipeline-artifact.md) for the detailed model
+request record.
+
+## Test the production path
+
+The [Pipeline tests workflow](../reference/github-actions.md#pipeline-tests)
+runs the real production stages against the article cases in
+`config/pipeline-tests.json`. Its configured articles are the test inputs; it
+does not accept an arbitrary URL.
+
+There is no `work --url` command or supported way to create a scratch plan for a
+URL. Do not invent source metadata or create a local model server to work around
+that boundary. Add a first-class CI capability only through a separate,
+reviewed change with its own contract and tests.
+
+## Read a summary failure code
+
+The item-health ledger records the stage, outcome and failure code. Use that
+code to focus review of the run's workflow logs and captured artifact:
+
+| Summary `model_unreachable` | The configured model service did not answer. Check its startup and workflow logs. |
+| Summary `model_refused` | The model service returned an error. Check the request and service logs. |
+| Summary `model_timed_out` | The model service did not finish before its configured request limit. |
+| Summary `shard_out_of_time` | The worker reached its configured time limit before starting this item. |
+| Summary `context_exceeded` | The prompt and reply allowance did not fit the model context limit. |
+| Summary `output_truncated` | The model reply ended before it formed a complete summary. |
+| Summary `labels_truncated` | The labelling reply ended early, so the summary call did not run. |
+| Summary `bad_shape` | The model reply did not match the required summary shape. |
+| Summary `length_out_of_range` | The reply was below the minimum length for this source. |
+| Summary `copied_source` | The reply repeated too much text from the article. |
+| Summary `leaked_address` | The reply contained an address; the item uses its source headline instead. |
 
 ## See also
 
-- [run-the-pipeline.md](run-the-pipeline.md) - the supported plan, work and assemble stages.
-- [test-models-locally.md](test-models-locally.md) - install, serve and compare local models.
-- [set-up-local-inference.md](set-up-local-inference.md) - install llama.cpp and GGUF weights.
-- [../concepts/pipeline-loop.md](../concepts/pipeline-loop.md) - which stage owns each transformation.
-- [../architecture/sources/trust-boundary.md](../architecture/sources/trust-boundary.md) - address checks, robots, sanitization and output controls.
-- [../../CLAUDE.md](../../CLAUDE.md) - Guardrails #3, #7, #10 and #11.
+- [run-the-pipeline.md](run-the-pipeline.md) - what the production stages do and where they run.
+- [../reference/github-actions.md](../reference/github-actions.md) - workflow roles and triggers.
+- [../../CLAUDE.md](../../CLAUDE.md) - fetched text and operator-controlled model destinations.

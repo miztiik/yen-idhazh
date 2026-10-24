@@ -37,7 +37,6 @@ from pydantic import Field, StringConstraints, model_validator
 
 from idhazh.contracts.base import ChangelogEntry, Contract
 from idhazh.contracts.knobs.assist import AssistConfig
-from idhazh.contracts.knobs.bench import BenchConfig
 from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.evaluation import DriftConfig, EvaluationConfig
@@ -138,7 +137,6 @@ class AppConfig(Contract):
     )
 
     run: RunConfig = Field(default_factory=RunConfig)
-    bench: BenchConfig = Field(default_factory=BenchConfig)
     collect: CollectConfig = Field(default_factory=CollectConfig)
     extract: ExtractConfig = Field(default_factory=ExtractConfig)
     elements: ElementsConfig = Field(default_factory=ElementsConfig)

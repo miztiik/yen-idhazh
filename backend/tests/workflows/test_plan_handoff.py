@@ -12,22 +12,15 @@ run with `--execution`.
 
 from __future__ import annotations
 
-import os
-import subprocess
 from pathlib import Path
 from typing import Final
 
 import pytest
 
-from idhazh import ledger
-from idhazh.contracts.ledger_name import LedgerName
 from utilities import pipeline_test_case
 
 from ._harness import (
-    BENCH_CONFIG_STEP,
-    BENCH_CORPUS_STEP,
     SUBSTITUTED_EXECUTION,
-    _bash,
     _commit_call,
     _load_workflows,
     _mapping,
@@ -37,7 +30,6 @@ from ._harness import (
     _steps,
     _strings,
     _substitute,
-    requires_bash,
 )
 
 pytestmark = pytest.mark.workflow
@@ -45,31 +37,26 @@ pytestmark = pytest.mark.workflow
 #: Each workflow that hands a plan from its `plan` job to other jobs, and those jobs.
 PLAN_HANDOFFS: Final = {
     "digest.yml": ("assemble", "work"),
-    "validate.yml": ("qualify",),
 }
 
 #: Every workflow with a step that reads a plan through an `idhazh` verb.
-PLAN_READING_WORKFLOWS: Final = ("digest.yml", "measure.yml", "validate.yml")
+PLAN_READING_WORKFLOWS: Final = ("digest.yml",)
 
 #: Every verb that reads the plan its run made. Declared by hand, mirroring the
 #: verbs `idhazh.cli` routes through `_planned`.
 PLAN_READING_VERBS: Final = frozenset(
-    {"shards", "work", "record", "fingerprint", "job-clock", "assemble", "qualify", "validate"}
+    {"shards", "work", "record", "fingerprint", "job-clock", "assemble"}
 )
 
 #: The artifact the plan travels in, and the flag a step names its run with.
 PLAN_ARTIFACT: Final = "plan"
 EXECUTION_FLAG: Final = "--execution"
 
-#: How a `run:` body names its run: the GitHub run id the plan stage was given.
-NAMES_THE_RUN: Final = '--execution "${{ github.run_id }}"'
-
 #: Where the plan job puts the plan's folder, and where a reading job takes it from.
 FILED_IN: Final = "${{ steps.decide.outputs.plan_dir }}/"
 TAKEN_FROM: Final = "${{ needs.plan.outputs.plan_dir }}/"
 
-#: The bench step that times the cut corpus, and the pipeline-tests step that runs it.
-BENCH_SWEEP_STEP: Final = "Measure runtime candidate"
+#: The pipeline-tests step that runs its case.
 PIPELINE_TESTS_WORKFLOW: Final = "idhazh-pipeline-tests.yaml"
 PIPELINE_TESTS_RUN_STEP: Final = "Run the test case"
 
@@ -108,40 +95,6 @@ def test_the_plan_travels_as_the_ledger_folder_it_was_filed_in(workflow_name: st
     )
 
 
-@requires_bash
-def test_a_qualification_hands_on_the_trial_folder_its_plan_is_filed_in(tmp_path: Path) -> None:
-    """The plan job plans under the candidate config, whose trial folder holds the plan."""
-    workflow = _load_workflows()["validate.yml"]
-    trial = _mapping(_step(workflow, "plan", "name", BENCH_CONFIG_STEP).get("with"), "config")[
-        "trial_state"
-    ]
-    script = tmp_path / "decide.sh"
-    script.write_text(
-        _script(_step(workflow, "plan", "id", "decide"), "validate.yml/plan/decide"),
-        encoding="ascii",
-        newline="\n",
-    )
-    written = tmp_path / "github-output"
-    written.write_text("", encoding="ascii")
-    bash = _bash()
-    assert bash is not None
-    completed = subprocess.run(
-        [bash, script.as_posix()],
-        cwd=tmp_path,
-        env={**os.environ, "GITHUB_OUTPUT": written.as_posix()},
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert completed.returncode == 0, completed.stderr
-    outputs = dict(
-        line.split("=", 1) for line in written.read_text(encoding="utf-8").splitlines() if line
-    )
-    with ledger.use_registry(ledger.overlay_registry((str(trial),))):
-        expected = ledger.raw_root(Path(ledger.STATE_DIRNAME), LedgerName.RUN_PLAN)
-    assert outputs["plan_dir"] == expected.joinpath(*outputs["date"].split("-")).as_posix()
-
-
 @pytest.mark.parametrize("workflow_name", PLAN_READING_WORKFLOWS)
 def test_every_step_that_reads_the_plan_names_its_own_run(workflow_name: str) -> None:
     """Unnamed, a stage reads the newest plan of the day, which can be another run's."""
@@ -175,25 +128,6 @@ def test_a_day_rebuilt_after_a_lost_race_reads_the_same_runs_plan() -> None:
 
     source = inspect.getsource(digest_assemble.preparation)
     assert "common._load_plan(date, original.identity.run_id)" in source
-
-
-def test_the_bench_cuts_and_times_its_own_runs_plan() -> None:
-    """The cut replaces this run's plan, and every repeat works this run's plan."""
-    workflow = _load_workflows()["measure.yml"]
-    bodies = {
-        str(step.get("name")): str(step.get("run", ""))
-        for job_name in _mapping(workflow.get("jobs"), "measure.yml jobs")
-        for step in _steps(workflow, job_name)
-    }
-    for step_name, verb in (
-        (BENCH_CORPUS_STEP, "runtime_sweep.py freeze-corpus"),
-        (BENCH_SWEEP_STEP, "runtime_sweep.py sweep"),
-    ):
-        calls = _calls(bodies[step_name], verb)
-        assert len(calls) == 1, f"{step_name} must run {verb} once"
-        assert NAMES_THE_RUN in calls[0], f"{verb} must name the run whose plan it reads"
-    freeze = _calls(bodies[BENCH_CORPUS_STEP], "runtime_sweep.py freeze-corpus")[0]
-    assert "--commit" in freeze, "the cut is filed through the ledger door, which names a commit"
 
 
 def test_a_pipeline_test_runner_runs_the_plan_its_dispatch_drew() -> None:

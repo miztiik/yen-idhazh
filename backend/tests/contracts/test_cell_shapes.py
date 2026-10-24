@@ -491,18 +491,6 @@ def test_the_feed_detail_writer_fits_its_column() -> None:
         assert cell, f"{case} emptied the detail"
 
 
-def test_the_qualification_ledger_writer_fits_its_columns() -> None:
-    """The gate's runner label is an environment variable nobody in this repo wrote."""
-    from idhazh.contracts.validation_row import ValidationRow
-
-    for field in ("runner", "detail"):
-        column = field_column(ValidationRow.model_fields[field])
-        for case, raw in HOSTILE.items():
-            cell = base.fit_field(raw, model=ValidationRow, field=field, absent="unstated")
-            TypeAdapter(column).validate_python(cell)
-            assert cell, f"{case} emptied {field}"
-
-
 #
 # Two parsers read these files: `csv` here, and a state machine in the bundle.
 # One fixture, both readers, so they cannot drift apart quietly.

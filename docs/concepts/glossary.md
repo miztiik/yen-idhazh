@@ -33,9 +33,7 @@ a doc is a fine change to make; moving it into *this* page is not.
 
 | Word | What it means | Defined in |
 | --- | --- | --- |
-| **bench** | One `measure.yml` dispatch that measures a model's raw speed and latency, before any question about its quality | [../how-to/evaluate-new-summarizer-model.md](../how-to/evaluate-new-summarizer-model.md); the knobs are the `bench` block in [config.md](config.md) |
-| **canary** | One of five planted prompt-injection attacks, run against the model to prove the sanitizer holds. The **canary day** is a published day built from them, so the browser suite can attack a real page instead of a fixture | `backend/idhazh/stages/qualify_canaries.py`, `backend/utilities/build_canary_day.py` |
-| **candidate** | A model being judged before it may replace the one in use | [qualification.md](qualification.md) |
+| **canary** | A planted prompt-injection example used to test untrusted-text controls. The **canary day** is a fixture publication used to check the reader surface | `backend/utilities/build_canary_day.py` |
 | **census** | A ledger that records **every** planned item, pass and fail alike, so a rate has its denominator beside its numerator. `item-health` is the census, and nothing in it is sampled - it is what every rate on every page divides by | `backend/idhazh/contracts/item_health.py` |
 | **compaction** | Merging many small files into fewer, which saves files and changes no answer. A gardener `compaction` task moves a door ledger's raw files into one file a day and then one file a month, and deletes what it moved | [../architecture/publishing/ledger-compaction.md](../architecture/publishing/ledger-compaction.md) |
 | **council** | The nightly workflow where models judge borderline same-story pairs and fit the merge line | [../architecture/publishing/llm-council.md](../architecture/publishing/llm-council.md) |
@@ -47,9 +45,8 @@ a doc is a fine change to make; moving it into *this* page is not.
 | **item** | One source URL and everything derived from it. The atom of the whole system | [pipeline-loop.md](pipeline-loop.md) |
 | **ledger** | A committed file under `state/` that one run writes so a later run can read a fact it found: one row shape, filed one way, at one address. **The directory is a ledger too**: `state/day-metrics/` is the day-metrics ledger, and `state/raw/item-health/` with `state/compact/item-health/` is the item-health ledger. Every ledger sits in exactly one **family**. The pipeline has no memory of its own: every run starts on a fresh machine with a fresh checkout | [../architecture/contracts/state-ledgers.md](../architecture/contracts/state-ledgers.md); which ones exist is `config/ledgers.json` and the code is `backend/idhazh/ledger/` |
 | **partition** | One file holding one period of a collection that grows. The directory is the collection and the filename says the period | [partitions.md](partitions.md) |
-| **qualification** | The gates a candidate model must clear before it may be adopted, and what clearing them proves | [qualification.md](qualification.md) |
 | **run** | One turn of the pipeline. The schedule turns it five times a day | [pipeline-loop.md](pipeline-loop.md) |
-| **scratch config** | A copy of `config/` with the model pointer moved, so a candidate can be measured without editing the committed tree. Two keys may differ and no third | `backend/utilities/candidate_pointer.py` |
+| **scratch config** | A temporary copy of `config/` with the model pointer moved, so pipeline tests can use another model without editing the committed tree | `backend/utilities/candidate_pointer.py` |
 | **seen ledger** | The ledger that answers "how old is this?" for an article whose feed carried no date | [pipeline-loop.md](pipeline-loop.md) |
 | **segment** | The rows one writer commits into the day they record, in a file of its own: a raw file the ledger door names for its writer under `state/raw/<ledger>/<YYYY>/<MM>/<DD>/`, or a trace named `<run_id>-<attempt>-<job>-<shard>.jsonl`. Two writers never share a filename, so a lost push race cannot stack two copies of a row | `backend/idhazh/ledger/filenames.py` |
 | **shard** | The batch of items handed to one worker, so a day's work runs in parallel. `run.shard_size` is URLs per worker | `backend/idhazh/contracts/knobs/run.py` |

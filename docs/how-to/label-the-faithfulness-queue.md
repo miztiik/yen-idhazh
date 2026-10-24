@@ -31,12 +31,11 @@ kept for **14 days**. After that the day is gone and cannot be relabelled.
 
  One directory per shard is fine. The tool reads the whole tree.
 
-### A day you ran yourself
+### A day from CI
 
-Run the pipeline as [run-the-pipeline.md](run-the-pipeline.md) describes, with
-faithfulness scoring on. `work` writes the package to
-`backend/var/evidence/<date>/` as it scores, and that is the default the tool
-reads, so nothing needs to be downloaded or named.
+Download the `evidence-*` artifact from the digest workflow as described above.
+Pass its directory to `label_queue.py --evidence`; local model inference is not
+supported.
 
 ## Draw the queue
 

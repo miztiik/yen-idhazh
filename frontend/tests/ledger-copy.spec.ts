@@ -533,38 +533,38 @@ for (const each of STAGES) {
 
 test('an empty daily index anchors on the newest month and copies that month file', () => {
 	const tree = {
-		'compact/candidate-models/index/daily.json': anIndex('candidate-models', 'daily', []),
-		'compact/candidate-models/index/monthly.json': anIndex('candidate-models', 'monthly', ['2026-06']),
-		'compact/candidate-models/index/yearly.json': anIndex('candidate-models', 'yearly', ['2025']),
-		'compact/candidate-models/monthly/2026/06.parquet': 'PAR1',
-		'compact/candidate-models/yearly/2025/2025.parquet': 'PAR1'
+		'compact/item-health/index/daily.json': anIndex('item-health', 'daily', []),
+		'compact/item-health/index/monthly.json': anIndex('item-health', 'monthly', ['2026-06']),
+		'compact/item-health/index/yearly.json': anIndex('item-health', 'yearly', ['2025']),
+		'compact/item-health/monthly/2026/06.parquet': 'PAR1',
+		'compact/item-health/yearly/2025/2025.parquet': 'PAR1'
 	};
-	const copy = ledgerCopy(aStateTree(tree), ['candidate-models']);
+	const copy = ledgerCopy(aStateTree(tree), ['item-health']);
 	expect(copy.refused).toEqual([]);
 	expect(copy.files).toEqual([
-		'compact/candidate-models/index/daily.json',
-		'compact/candidate-models/index/monthly.json',
-		'compact/candidate-models/index/yearly.json',
-		'compact/candidate-models/monthly/2026/06.parquet'
+		'compact/item-health/index/daily.json',
+		'compact/item-health/index/monthly.json',
+		'compact/item-health/index/yearly.json',
+		'compact/item-health/monthly/2026/06.parquet'
 	]);
-	expect(coversIn(copy.indexes['compact/candidate-models/index/daily.json'])).toEqual([]);
-	expect(coversIn(copy.indexes['compact/candidate-models/index/monthly.json'])).toEqual(['2026-06']);
-	expect(coversIn(copy.indexes['compact/candidate-models/index/yearly.json'])).toEqual([]);
+	expect(coversIn(copy.indexes['compact/item-health/index/daily.json'])).toEqual([]);
+	expect(coversIn(copy.indexes['compact/item-health/index/monthly.json'])).toEqual(['2026-06']);
+	expect(coversIn(copy.indexes['compact/item-health/index/yearly.json'])).toEqual([]);
 });
 
 test('a ledger with three empty indexes stages the indexes and no data', () => {
 	const tree = {
-		'compact/candidate-models/index/daily.json': anIndex('candidate-models', 'daily', []),
-		'compact/candidate-models/index/monthly.json': anIndex('candidate-models', 'monthly', []),
-		'compact/candidate-models/index/yearly.json': anIndex('candidate-models', 'yearly', [])
+		'compact/item-health/index/daily.json': anIndex('item-health', 'daily', []),
+		'compact/item-health/index/monthly.json': anIndex('item-health', 'monthly', []),
+		'compact/item-health/index/yearly.json': anIndex('item-health', 'yearly', [])
 	};
-	const copy = ledgerCopy(aStateTree(tree), ['candidate-models']);
+	const copy = ledgerCopy(aStateTree(tree), ['item-health']);
 	expect(copy.refused).toEqual([]);
 	expect(copy.missing).toEqual([]);
 	expect(copy.files).toEqual([
-		'compact/candidate-models/index/daily.json',
-		'compact/candidate-models/index/monthly.json',
-		'compact/candidate-models/index/yearly.json'
+		'compact/item-health/index/daily.json',
+		'compact/item-health/index/monthly.json',
+		'compact/item-health/index/yearly.json'
 	]);
 });
 

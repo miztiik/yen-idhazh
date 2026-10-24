@@ -59,9 +59,8 @@ change another run made to it is kept. Both numbers are in
 left unrecorded, and the squash is due again the next day - one wake, not one
 cadence.
 
-It sits here and not in `backend/idhazh/` because it runs git, and nothing in
-the package may start a process (`backend/tests/test_canaries.py`). Its module
-scope is the standard library alone: `idhazh` is imported by the one function
+It sits here and not in the task package because it runs git. Its module scope
+is the standard library alone: `idhazh` is imported by the one function
 that reads the declaration and binds the task, and `idhazh.crash_trace` where
 a crash is printed, so a run that cannot be recorded names the exception's type
 and frames and never its text.

@@ -112,18 +112,17 @@ Start here, in this order:
 | What each pipeline stage owns | [`docs/concepts/pipeline-loop.md`](docs/concepts/pipeline-loop.md) |
 | How a summary is scored, and why | [`docs/concepts/evaluation.md`](docs/concepts/evaluation.md) |
 | What one column on the eval row means | [`docs/concepts/summary-metrics.md`](docs/concepts/summary-metrics.md) |
-| How a candidate model is judged before it serves | [`docs/concepts/qualification.md`](docs/concepts/qualification.md) |
 | Where stories come from | [`docs/architecture/sources/discovery.md`](docs/architecture/sources/discovery.md) |
 | Why a story gets a chart or nothing | [`docs/architecture/publishing/visuals.md`](docs/architecture/publishing/visuals.md) |
 | Real numbers from real hardware | [`docs/reference/pipeline-cost.md`](docs/reference/pipeline-cost.md) |
-| How to run it yourself | [`docs/how-to/run-the-pipeline.md`](docs/how-to/run-the-pipeline.md) |
-| How to test the models locally | [`docs/how-to/test-models-locally.md`](docs/how-to/test-models-locally.md) |
+| How the production pipeline runs | [`docs/how-to/run-the-pipeline.md`](docs/how-to/run-the-pipeline.md) |
+| How to test the production pipeline | [`docs/reference/github-actions.md#pipeline-tests`](docs/reference/github-actions.md#pipeline-tests) |
 | **What every top-level directory is for** | [`docs/reference/repository-layout.md`](docs/reference/repository-layout.md) |
 | Where any other doc belongs | [`docs/reference/documentation-structure.md`](docs/reference/documentation-structure.md) |
 
 ---
 
-## Running it yourself
+## Local development
 
 ```bash
 python -m venv .venv
@@ -133,19 +132,10 @@ python -m venv .venv
 .venv/bin/python -m mypy                 # strict type check
 ```
 
-One day, end to end, needs a local model server - see
-[`docs/how-to/set-up-local-inference.md`](docs/how-to/set-up-local-inference.md) -
-and the faithfulness extra, or the scores come out empty:
-
-```bash
-python -m pip install -e ".[faithfulness]"
-python -m idhazh run              # plan, work, assemble - today, UTC
-python -m idhazh run --visuals    # ... and plan and draw the charts as well
-```
-
-Each stage also runs on its own (`plan`, `work`, `visuals`, `assemble`), which is
-how CI shards the slow one across machines. Model weights and llama.cpp binaries
-are downloaded, never committed.
+Production runs in GitHub Actions; local model inference is not supported.
+Use the [Pipeline tests workflow](docs/reference/github-actions.md#pipeline-tests)
+to exercise the production stages with configured article cases. Model weights
+and llama.cpp binaries are downloaded in CI and never committed.
 
 ## Repository layout
 

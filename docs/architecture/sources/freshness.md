@@ -181,9 +181,9 @@ committed rows resolve to a `source_url`, with no absent day and no absent item
 day's JSON payload ([../publishing/layout.md](../publishing/layout.md)) - it
 deletes old visuals and nothing else. The direction that got harder is address
 to row: that now needs the sha256 of the canonicalised URL computed first, which
-is a tool run rather than a grep
-([../../how-to/troubleshoot-one-url.md](../../how-to/troubleshoot-one-url.md)
-shows how much canonicalisation sits between a pasted URL and its key).
+is a tool run rather than a grep. The
+[item troubleshooting guide](../../how-to/troubleshoot-one-url.md) explains
+how to inspect CI records for a processed item.
 
 ## A failure that cannot change today is remembered too
 

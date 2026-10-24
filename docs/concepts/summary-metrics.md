@@ -15,11 +15,6 @@ means, so it stays on [evaluation.md](evaluation.md#faithfulness-scored-twice)
 with the rest of the judgement. Every column below exists because faithfulness
 alone cannot see the failure it names.
 
-**A qualification diagnostic is not here either.** `wording_spread` and the
-corpus rows mean nothing without the run that produced them and the gate they
-deliberately are not, so they live on
-[qualification.md](qualification.md).
-
 ## Why faithfulness alone is not enough
 
 Faithfulness measures **consistency with the source, not informativeness**. Two failure modes score beautifully on it:
@@ -147,8 +142,8 @@ Each of these was specified one way, and the arithmetic says otherwise:
 - **A compression *band* is a length detector.** At a fixed output budget, the ratio is dominated by how long the article was. A band on it would flag every short article forever, for a reason that is never about the summary. The ratio is recorded as a diagnostic; the real failures - a headline, or a copy - are detected directly by absolute word bounds.
 - **Verbatim overlap must be contiguous.** Measured as a longest common *subsequence*, function words match in order in almost any document, which puts a floor under the score and makes it move with length instead of with copying. Contiguous n-grams and the longest unbroken run do not have that floor.
 
-For a brief item, `verbatim_run > evaluation.brief_compression_ceiling` is the
-copying gate the qualification run reads. The default is 0.5. This is the
+For a brief item, `verbatim_run > evaluation.brief_compression_ceiling` marks
+copying. The default is 0.5. This is the
 arithmetic ceiling that makes a 30-word ask possible at a 60-word source floor.
 It is not a confidence threshold. The confidence band stays on the faithfulness
 axis.
@@ -262,7 +257,6 @@ counterweights.
 ## See also
 
 - [evaluation.md](evaluation.md) - how a published summary is judged, and how the judgement is kept honest. Faithfulness, the bands, the human labels and the ledger these columns are written to.
-- [qualification.md](qualification.md) - the gates a candidate model must clear. Several read a threshold stated in a column defined here.
 - [../architecture/publishing/autotune-summary-quality.md](../architecture/publishing/autotune-summary-quality.md) - the target design in which these thresholds move themselves, with no human in the loop. This page says what a number means; that one says what makes it change.
 - [../architecture/publishing/console.md](../architecture/publishing/console.md) - the panels that draw these columns.
 - [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #10 (a number carries its hardware, date and spread).

@@ -34,8 +34,6 @@ Guardrail #12).
 
 from __future__ import annotations
 
-from typing import Final
-
 import pytest
 
 from idhazh.contracts.ledger_name import LedgerName
@@ -51,16 +49,6 @@ from ._harness import (
 
 pytestmark = [pytest.mark.workflow, pytest.mark.slow]
 
-# Every workflow that commits, except the trial one. `measure.yml` writes under
-# the trial state root, throws away most of what it writes, and holds its own
-# staged list closed-world in test_bench_targets.py - so a ledger it does not
-# stage is a decision rather than a loss. Every other commit label the harness
-# declares is in scope, so a sixth commit step joins without an edit here, and a
-# second workflow that writes a ledger is held to the same parity as the daily
-# run.
-TRIAL_WORKFLOW: Final = "measure.yml"
-
-
 def _job_commit_calls() -> dict[tuple[str, str], dict[str, list[str]]]:
     """(Workflow, job) -> commit label -> the paths that label stages.
 
@@ -69,8 +57,6 @@ def _job_commit_calls() -> dict[tuple[str, str], dict[str, list[str]]]:
     """
     calls: dict[tuple[str, str], dict[str, list[str]]] = {}
     for label, workflow in COMMIT_WORKFLOWS.items():
-        if workflow == TRIAL_WORKFLOW:
-            continue
         argv = _commit_call(label)[0]
         assert argv[0] == label, "the workflow must select its own concrete digest policy"
         calls.setdefault((workflow, COMMIT_JOBS[label]), {})[label] = list(

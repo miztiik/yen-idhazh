@@ -51,10 +51,6 @@
     "search_months": 1,
     "similarity_floor": 0.35
   },
-  "bench": {
-    "corpus_items": 3,
-    "repeats": 2
-  },
   "collect": {
     "availability_rest_runs": 5,
     "availability_strikes_before_rest": 5,
@@ -124,30 +120,14 @@
     "band_high_min": 0.8,
     "band_medium_min": 0.5,
     "brief_compression_ceiling": 0.5,
-    "canary_files": [
-      "direct-instruction-override",
-      "encoded-payload",
-      "exfiltration-via-url",
-      "fake-system-delimiter",
-      "page-title-instruction",
-      "tool-call-injection"
-    ],
     "chunk_overlap_words": 150,
     "chunk_words": 900,
-    "golden_set_size": 20,
     "label_draw_per_decile": 6,
     "label_min_run_days": 10,
     "labellers": [
       "miztiik"
     ],
-    "qualification_min_brief": 2,
-    "qualification_min_over_cap": 2,
-    "qualification_min_per_band": 3,
-    "qualification_pool_multiple": 6,
     "spot_checks_per_week": 10,
-    "validation_articles": 20,
-    "validation_drop_max": 0.1,
-    "validation_switch_margin": 0.05,
     "verbatim_reject_ceiling": 0.75
   },
   "extract": {
@@ -240,7 +220,6 @@
     "payload_ceilings_bytes": {
       "config/ledgers.json": 3600,
       "console/band.json": 2000,
-      "state/compact/candidate-models/index/": 2200,
       "state/compact/council-run-records/index/": 2088,
       "state/compact/counterfactual-scores/index/": 2200,
       "state/compact/feed-ingest-plan/article-assessments/index/": 2200,
@@ -280,8 +259,6 @@
   },
   "run": {
     "max_parallel": 8,
-    "qualification_repeats": 2,
-    "qualify_on_the_production_path": true,
     "safety_ceiling_per_day": 400,
     "safety_ceiling_per_run": 80,
     "shard_size": 5,

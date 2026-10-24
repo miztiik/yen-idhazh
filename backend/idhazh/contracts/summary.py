@@ -122,7 +122,7 @@ class Summary(Contract):
             "before the verdict existed and on any item that never reached it. "
             "`publish` is inside the band's ask or inside the tolerance around it; "
             "`publish_over` ran long on a band that would rather be long than cut a "
-            "qualification off the end; `trim` was cut at the last complete sentence "
+            "key detail off the end; `trim` was cut at the last complete sentence "
             "that fits; `fail` did not reach the absolute floor and is a failed "
             "extraction rather than a summary."
         ),

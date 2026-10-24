@@ -126,21 +126,12 @@ class ServerJob(StrEnum):
     together. Six committed counters rows still carry the value, and a member
     with no producer left is the only thing that can read them back.
 
-    **`decide` is here for a file's writer and not for a column.** `validate.yml`'s
-    gate job files the candidate-models ledger's verdict through the ledger door,
-    and the door names a file's writer from this set - so the job belongs here.
-    No row of the three ledgers that carry a `job` column can hold it: that job
-    stands no server up, records no machine and reads no item. Their generated
-    schemas list it because one enum answers "which workflow job" for the whole
-    repository, which is why none of the three is version-stamped for it - a
-    stamp says a shape moved, and theirs did not.
-
-    **`operator` is here for a file's writer and not for a column, as `decide`
-    is.** A command a person runs on their own machine, outside any workflow,
-    files a door ledger - the merge line's holdout score - and the door names
-    every file's writer from this set. No row of the three ledgers that carry a
-    `job` column can hold it, so none of them is version-stamped for it; the
-    file envelope, whose writer identity can, is.
+    **`operator` is here for a file's writer and not for a column.** A command
+    a person runs on their own machine, outside any workflow, files a door
+    ledger - the merge line's holdout score - and the door names every file's
+    writer from this set. No row of the three ledgers that carry a `job` column
+    can hold it, so none of them is version-stamped for it; the file envelope,
+    whose writer identity can, is.
 
     **`migrate`, `run-tasks` and `history` are here before any workflow runs
     them.** The ledger door names a file's writer from this set, so a job has to
@@ -164,13 +155,9 @@ class ServerJob(StrEnum):
     ASSEMBLE = "assemble"
     # Retired from digest.yml on 2026-09-13. Kept for the six rows above.
     VISUALS = "visuals"
-    # measure.yml. The bench job that runs the real work stage over the fixed
-    # corpus `bench.corpus_items` sizes, and the one measurement job that writes
-    # a run plan.
+    # Retained for persisted runtime measurement rows.
     RUNTIME = "runtime"
-    # validate.yml. The job that runs the gates and files the candidate's
-    # verdict. It stands no server up and records no machine, so it names a
-    # writer of the candidate-models ledger and of nothing else here.
+    # Retired publisher value retained to read existing writer identities.
     DECIDE = "decide"
     # The jobs that maintain rows rather than record them: an operator's range
     # prune, which files a door day again without the days it takes, and the

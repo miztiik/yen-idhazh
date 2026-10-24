@@ -1,9 +1,8 @@
 """What does the corpus squash do that needs no git? It records the day the squash ran.
 
 The squash itself - the boundary, the new root, the replay and the push - is git,
-and `backend/utilities/corpus_history.py` runs it, because nothing under
-`backend/idhazh/` may start a process (`backend/tests/test_canaries.py`). What is
-left for this module is the one piece of state that turns a force-push a day into
+and `backend/utilities/corpus_history.py` runs it. What is left for this module
+is the one piece of state that turns a force-push a day into
 one a cadence: `last_run` in `corpus/corpus.meta.json`, written through its
 contract. That program binds this module through the registry, as a shard binds
 its tasks, and calls `run` after the replay and before the push.

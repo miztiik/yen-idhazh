@@ -117,8 +117,8 @@ class ModelRef(Model):
             "entry nobody has fetched yet declares none, and the run then records the "
             "size it opened on both sides rather than comparing a number to itself. It "
             "sits beside sha256 because it is the same kind of fact and has the same "
-            "source, and because a qualification that had to be told it on the command "
-            "line was a fact about these weights living somewhere other than the file "
+            "source, and because a pipeline test that had to be told it on the command "
+            "line would keep a fact about these weights somewhere other than the file "
             "that names them."
         ),
     )

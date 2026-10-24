@@ -1,15 +1,8 @@
 """How does one article become a summary and a picture, in two adjacent calls?
 
-Production's call path, and the only one. It lived inside `work.py` until
-2026-09-15, which meant `qualify` could not run it: the qualification gate
-posted to the chat route with one call an item and let the model's own template
-write the prompt, so a model that passed the gate could still fail in `work` on
-the grammar, on the label reply's schema, or on the window check. The gate
-measured a model rather than the model.
-
-Nothing about the sequence changed when it moved. The order is still
-`classify.dag.NODES`, the budget is still sized there, and the two calls are
-still adjacent per item because the server holds one cache slot.
+This is the path the digest and pipeline tests use. The order is declared in
+`classify.dag.NODES`, the budget is sized there, and the two calls stay adjacent
+per item because the server holds one cache slot.
 """
 
 

@@ -293,9 +293,8 @@ def _row(declared: _Declared, prefix: str, key: str, value: str, at: str) -> str
 def _draft_rows(declared: _Declared, files: Sequence[ModelFile], *, prefix: str) -> list[str]:
     """The one companion's four refs, or four empty strings where there is none.
 
-    The keys stay `draft_*` because `measure.yml`'s four inline download steps
-    read them under those names, at the trial prefix. Delete these four when
-    those steps reach the shared download; nothing else reads them.
+    The `draft_*` keys name the optional companion weights file. The shared
+    downloader reads them under the trial prefix when the model declares one.
 
     Two companions are refused rather than truncated. This publishes the first
     while the cache key digests all of them, so an entry declaring two keyed on

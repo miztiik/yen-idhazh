@@ -76,12 +76,10 @@ task failure keeps the job red. No tenants means no row and no commit.
 Sparse tenant inputs are resolved separately, from named paths/periods/indexes
 in the chosen source tree; an unavailable blob is an error, not absence.
 
-Measurement, qualification and vector backfill are the additional genuine
-clients, through `record_publish.py`. Each observes its real producer and has a
-separate concrete declaration; none retains another publication engine.
-Pipeline tests are a fourth additional client: `pipeline_test_publish.py`
-checks exact downloaded artifacts, executed raw identities and independently
-declared case roots before invoking the same publisher. Empty artifacts publish
+Vector backfill is an additional client of `record_publish.py`; it observes its
+real producer and has a separate concrete declaration. The pipeline-test
+publisher checks downloaded artifacts, executed raw identities and declared
+case roots before invoking the same publisher. Empty artifacts publish
 nothing; committed UUID collisions and foreign local bytes are refused.
 
 Encoder comparison uses `encoder_publish.py`. Collection still runs when

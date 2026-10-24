@@ -5,11 +5,9 @@ and config it runs. It reads the commit this checkout is at, the exact folders
 its tasks own or read, and the files under each task's named periods. A task
 that names a period as it runs has it listed from the same commit then. It runs the shard through
 `idhazh.gardener.runner`, whose tasks fetch only the folders they read, and
-lands what the runner hands back. It sits here rather than in the package
-because landing and reading the commit run git, and nothing under
-`backend/idhazh/` may start a process (`backend/tests/test_canaries.py`): the
-package that reads the open web holds no machinery an injected instruction
-could use to act.
+lands what the runner hands back. It sits here rather than in the task package
+because landing and reading the commit run git; the task package records the
+work, while this utility owns the commit operations.
 
     python backend/utilities/gardener_publish.py NAME | --shard N --run-id R --attempt A
 

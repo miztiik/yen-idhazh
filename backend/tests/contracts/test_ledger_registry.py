@@ -222,6 +222,12 @@ def test_the_committed_registry_loads_and_names_each_ledger() -> None:
     LedgersConfig.from_json(REGISTRY.read_text(encoding="utf-8"))
 
 
+def test_candidate_model_verdicts_are_retired_and_not_published() -> None:
+    family = a_family(LedgerName.CANDIDATE_MODELS.value)
+    assert family["lifecycle_status"] == "retired"
+    assert family["ledgers"][0]["publish_to_data_explorer"] is False
+
+
 def test_explorer_catalog_derives_eligible_names_from_registry_order() -> None:
     payload = a_registry()
     families = list(reversed(payload["families"]))

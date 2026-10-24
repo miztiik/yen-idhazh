@@ -80,11 +80,6 @@ from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
 from idhazh.contracts.source_health_view import SourceHealthView
 from idhazh.contracts.sources import FeedDef, SourceForm
-from idhazh.contracts.validation_row import (
-    LeaderboardProvenance,
-    ValidationRow,
-    ValidationVerdict,
-)
 from idhazh.contracts.visual import VisualPlan, VisualType
 from idhazh.contracts.visual_data import (
     RENDERER_VERSION,
@@ -1716,24 +1711,6 @@ def file_published_fixture_rows(state: Path) -> dict[LedgerName, int]:
                 }
             )
             for name in ("a-selection-that-ran-no-model.json", "a-part-that-raised.json")
-        ],
-        LedgerName.CANDIDATE_MODELS: [
-            ValidationRow(
-                version=ValidationRow.schema_version(),
-                model_id="canary-model",
-                is_incumbent=True,
-                selected=True,
-                leaderboard_hhem=None,
-                leaderboard_provenance=LeaderboardProvenance.NOT_REPORTED,
-                measured_hhem=0.82,
-                articles=3,
-                date=DATE,
-                run_id=SCORE_RUN_ID,
-                commit_sha=FIXTURE_SHA,
-                runner="canary",
-                verdict=ValidationVerdict.CONFIRMED,
-                detail="fixture candidate model",
-            )
         ],
         LedgerName.COUNTERFACTUAL_SCORES: [
             CounterfactualScoreRow(

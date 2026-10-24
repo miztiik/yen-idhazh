@@ -52,10 +52,9 @@ from .test_compaction import (
 pytestmark = pytest.mark.contract
 
 #: The daily span each ledger's index named on 2026-10-04, read from the
-#: committed indexes that day. Each of these seven compactions ended `failed`,
+#: committed indexes that day. Each of these six compactions ended `failed`,
 #: refusing a month from before its ledger began.
 FAILED_ON_2026_10_04: Final = {
-    "compact-candidate-models": ("2026-09-01", "2026-09-16"),
     "compact-counterfactual-scores": ("2026-09-01", "2026-10-01"),
     "compact-feed-health": ("2026-08-01", "2026-10-01"),
     "compact-host-fingerprint": ("2026-09-01", "2026-10-01"),

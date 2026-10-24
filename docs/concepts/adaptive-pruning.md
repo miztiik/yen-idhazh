@@ -182,7 +182,6 @@ is the count of month shards a console read opens, and no read opens a visual
 | `state/raw/visual-prunes/` | Keep | none | it is property 5 - the record of what the prune did, including the runs it did nothing |
 | `state/raw/feed-retirements/` | Keep | never | it carries no time window at all. A run that forgot a retired address would start asking a dead one again |
 | `state/labels.csv` | **Keep, always** | never | the only ground truth here, and the one file in `state/` a person wrote rather than a machine. No committed instance yet |
-| `state/<run.trial_state_dirname>/raw/candidate-models/` and its matching compact folder | Pack, then keep for the trial window | 31 daily days plus three months | one verdict a dispatch, filed through the ledger door. `compact-trial-candidate-models` packs only its declared trial roots; monthly deletion is report-only and yearly expiry is disabled |
 
 ### `corpus/` - the rolling training window
 
@@ -225,17 +224,6 @@ year against the 1 GB Pages ceiling. That is not urgent and it is not nothing.
 The three questions answer it - a run appends, and no read reaches past
 `assist.search_months` widened by `assist.search_min_days` - so its honest policy
 is delete, with an age of its own. Nobody has set one, so the row reads none.
-
-**`state/validation-2026-08-22.csv` was deleted on 2026-09-18.** Four rows under
-a header, recording one day's model qualification, at the root of `state/` where
-nothing else sat loose. The register recorded it as having no writer, which was
-already wrong when it was written - `evals.writer.append_validation` wrote it, and
-the path came from a hardcoded string joined to the repository root, so no config
-could move it and a qualification dispatch wrote production state. Nothing read
-it, and the shape had moved on far enough that today's reader could not have
-parsed it: the file carries no `leaderboard_provenance` column. Git is the
-archive (CLAUDE.md section 8). The verdict now goes through the ledger door to
-the folder in the row above, and the owner ruled the deletion on 2026-09-18.
 
 ## Design rationale
 

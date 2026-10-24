@@ -138,36 +138,6 @@ class RunConfig(Model):
             "root is refused, and a configured case is appended only below that root."
         ),
     )
-    qualification_repeats: int = Field(
-        default=1,
-        ge=1,
-        le=3,
-        description=(
-            "How many times a qualification shard runs each item. One pass evaluates "
-            "the item without comparing wording across passes. Additional passes "
-            "measure wording variation and cost more model calls. "
-            "`idhazh qualify --repeats` overrides the configured count for one "
-            "invocation and uses this field's bounds."
-        ),
-    )
-    # Remove this knob once one qualification has cleared `decide` on the production
-    # path; the losing branch goes with it, and `_one_call` stays because the
-    # injection canaries are the one caller that wants a single call.
-    qualify_on_the_production_path: bool = Field(
-        default=True,
-        description=(
-            "Whether `idhazh qualify` summarizes the way the digest does. True is the "
-            "digest's own path: the article is labelled and then summarized, in two "
-            "adjacent calls. False is the qualification's own single call, which is "
-            "what it did until 2026-09-15 and what every shard before that date "
-            "measured. True by default because a gate that clears a call path nothing "
-            "publishes has cleared nothing, and the switch exists so a run that goes "
-            "wrong on it can be put back without a code change. Moving it moves every "
-            "per-item number in a shard, so `QualificationShard.calls_per_item` records "
-            "which side produced one."
-        ),
-    )
-
     @model_validator(mode="after")
     def _a_trial_case_requires_a_trial_root(self) -> Self:
         """A case slug is meaningful only below an explicitly named trial root."""

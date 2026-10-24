@@ -20,8 +20,8 @@ any other non-zero code is the one the pipeline itself returned. A person readin
 the run page can then tell a typo from a test case that really failed.
 
 The faithfulness scorer is skipped. It is a second model download, and this
-workflow checks that a model walks the production path quickly; how good its
-summaries are is `validate.yml`'s question.
+workflow checks that a model walks the production path; it does not assess
+summary quality.
 """
 
 from __future__ import annotations

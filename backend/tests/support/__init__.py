@@ -1,1 +1,1 @@
-"""Bounded helpers for backend tests."""
+"""Bounded shared readers and builders for backend tests."""
