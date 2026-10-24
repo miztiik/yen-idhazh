@@ -1,14 +1,13 @@
 """Is any ledger still kept as CSV?
 
 Every ledger now files through the ledger door, or files JSON at an address the
-registry builds. Three checks, and each reads a fixed input (Guardrail #12): the
-registry in `config/ledgers.json`, the `.gitattributes` file, and what
-`git ls-files` names for two patterns under `state/`. None walks a tree.
+registry builds. These checks read only `config/ledgers.json` and
+`.gitattributes`. CI rejects changed state CSV paths in one supplied commit
+range through `frontend/scripts/state-csv-guard.ts`, not a tracked-tree scan.
 """
 
 from __future__ import annotations
 
-import subprocess
 from typing import Final
 
 import pytest
@@ -33,9 +32,6 @@ FILED_BY_DAY: Final[dict[LedgerName, tuple[Grain, str | None]]] = {
     LedgerName.TRACES: (Grain.DAY_TREE, None),
     LedgerName.DIGEST_FRAGMENTS: (Grain.DAY_TREE, None),
 }
-
-#: A committed CSV file under `state/`, at any depth.
-STATE_CSV: Final = ("state/*.csv", "state/**/*.csv")
 
 
 def test_no_ledger_in_the_registry_files_csv() -> None:
@@ -65,16 +61,3 @@ def test_no_path_takes_a_union_merge() -> None:
     ]
 
     assert [line for line in attributes if "merge=union" in line] == []
-
-
-def test_no_csv_file_is_committed_under_state() -> None:
-    """Fails when any commit adds a CSV file under `state/`, at any depth."""
-    committed = subprocess.run(
-        ["git", "ls-files", "--", *STATE_CSV],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.splitlines()
-
-    assert committed == [], f"{len(committed)} CSV file(s) under state/, first {committed[:3]}"
