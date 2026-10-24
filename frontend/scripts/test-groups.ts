@@ -43,6 +43,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'platform-mix', 'preview-port', 'processor-lost', 'prompt-reuse',
 		'publication', 'recorded-line',
 		'recorded-slices', 'run-axis', 'run-yield', 'served-day', 'settings-moved',
+		'source-classification-binding',
 		'similarity-ledgers', 'span-sentences', 'span-words', 'statement',
 		'telemetry-header', 'telemetry-hold', 'throughput-window', 'time-split', 'tokens',
 		'topics', 'verdict-split', 'vocabulary', 'weights'
