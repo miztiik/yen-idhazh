@@ -126,7 +126,7 @@ class EvaluationConfig(Model):
             "on the choice the stratified selection gets, never a cap on the walk: a "
             "shard that has not yet been offered every length tier keeps going through "
             "its slice. Raising it buys fetch seconds, never model minutes, because the "
-            "model still sees corpus_per_shard articles - one address measured 2.1 s on "
+            "model still sees articles_per_shard articles - one address measured 2.1 s on "
             "2026-08-26 over 150 of them, against 330 minutes for the job."
         ),
     )

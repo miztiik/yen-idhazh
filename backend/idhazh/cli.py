@@ -481,7 +481,7 @@ def _main(argv: Sequence[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
-        "--corpus-per-shard",
+        "--articles-per-shard",
         type=int,
         default=10,
         help="How many frozen articles one qualification shard replays.",
@@ -881,7 +881,7 @@ def _dispatch(
             shard=args.shard,
             shards=args.shards,
             repeats=qualification_repeats(args.repeats, run=settings.app.run),
-            corpus_per_shard=args.corpus_per_shard,
+            articles_per_shard=args.articles_per_shard,
             candidate=_candidate_identity(settings, args),
             scorer=_scorer(not args.no_faithfulness),
             commit_sha=args.commit,

@@ -88,7 +88,7 @@ class _Share(NamedTuple):
     a fraction is what loses a tier: a shard that stopped at its 1-in-3 share
     would walk away from the second long read in its slice, and a sibling whose
     slice held none could not make it up. Aiming high costs nothing - the corpus
-    is still `corpus_per_shard` articles, and a tier nobody found is named
+    is still `articles_per_shard` articles, and a tier nobody found is named
     rather than replaced.
     """
 
@@ -400,7 +400,7 @@ def stage_qualify(
     shard: int,
     shards: int,
     repeats: int,
-    corpus_per_shard: int,
+    articles_per_shard: int,
     candidate: CandidateIdentity,
     scorer: object,
     commit_sha: str,
@@ -446,7 +446,9 @@ def stage_qualify(
 
     mine = shard_of(plan, shard=shard, shards=shards)
     share = corpus_share(settings.app.evaluation)
-    frozen, attempted, unmet = _freeze(mine, settings, read_url, keep=corpus_per_shard, share=share)
+    frozen, attempted, unmet = _freeze(
+        mine, settings, read_url, keep=articles_per_shard, share=share
+    )
 
     root = common.QUALIFICATION_ROOT / date / f"shard-{shard}"
     for entry in frozen:

@@ -38,7 +38,7 @@ class BenchConfig(Model):
             "article-observations across three dispatches, so fewer articles means a "
             "better chance the run produces a usable reading at all.\n\n"
             "It never touches the qualification corpus, which is `validate.yml`'s own "
-            "`corpus_per_shard` dispatch input and stays where it is. A bench says how "
+            "`articles_per_shard` dispatch input and stays where it is. A bench says how "
             "fast; a qualification says how good, and the second needs its 30 articles "
             "to bound an undetected defect rate."
         ),

@@ -183,7 +183,7 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("measure.yml", "threads"): "^[1-9][0-9]*$",
     ("idhazh-gardener.yml", "force"): DISPATCH_BOOLEAN,
     ("validate.yml", "candidate_models_file"): DISPATCH_READ_BY_NAME,
-    ("validate.yml", "corpus_per_shard"): "^[1-9][0-9]{0,3}$",
+    ("validate.yml", "articles_per_shard"): "^[1-9][0-9]{0,3}$",
     ("validate.yml", "job_budget_minutes"): "^[1-9][0-9]{0,3}$",
     ("validate.yml", "shards"): "^[1-8]$",
 }

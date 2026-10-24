@@ -39,7 +39,7 @@ on:
       shards:
         description: 'Capture-and-replay jobs. Each one freezes its own slice.'
         default: '3'
-      corpus_per_shard:
+      articles_per_shard:
         description: 'Frozen articles each shard replays'
         default: '10'
       job_budget_minutes:
@@ -164,7 +164,7 @@ jobs:
       - id: fanout
         env:
           SHARDS: ${{ inputs.shards }}
-          CORPUS_PER_SHARD: ${{ inputs.corpus_per_shard }}
+          ARTICLES_PER_SHARD: ${{ inputs.articles_per_shard }}
           JOB_BUDGET_MINUTES: ${{ inputs.job_budget_minutes }}
         run: |
           set -euo pipefail
@@ -172,9 +172,9 @@ jobs:
             echo "shards must be an integer from 1 through 8" >&2
             exit 1
           fi
-          for count in "$CORPUS_PER_SHARD" "$JOB_BUDGET_MINUTES"; do
+          for count in "$ARTICLES_PER_SHARD" "$JOB_BUDGET_MINUTES"; do
             if ! [[ "$count" =~ ^[1-9][0-9]{0,3}$ ]]; then
-              echo "corpus_per_shard and job_budget_minutes are 1 through 9999" >&2
+              echo "articles_per_shard and job_budget_minutes are 1 through 9999" >&2
               exit 1
             fi
           done
@@ -366,7 +366,7 @@ jobs:
             --execution "${{ github.run_id }}" \
             --shard "${{ matrix.shard }}" \
             --shards "${{ fromJSON(inputs.shards) }}" \
-            --corpus-per-shard "${{ fromJSON(inputs.corpus_per_shard) }}" \
+            --articles-per-shard "${{ fromJSON(inputs.articles_per_shard) }}" \
             --weights "$CANDIDATE_WEIGHTS" \
             --commit "${GITHUB_SHA}" \
             --runner ubuntu-latest

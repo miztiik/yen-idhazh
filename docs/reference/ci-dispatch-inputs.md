@@ -69,7 +69,7 @@ The named inputs:
 - **Matched** - `digest.date`, `digest.article_limit`, `llm-council.date`,
  `drift.recent_days`, `drift.baseline_days`,
  `measure.corpus_links`, `measure.threads`, `measure.budget_samples`,
- `validate.shards`, `validate.corpus_per_shard`,
+ `validate.shards`, `validate.articles_per_shard`,
  `validate.job_budget_minutes`.
 
 **`digest.article_limit` makes a short test run of the full pipeline.** Blank,

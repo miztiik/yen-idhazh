@@ -626,7 +626,7 @@ digest. After a swap it is red until the paste lands; that is the point of it.
 gh workflow run validate.yml \
  -f candidate_models_file='models/<name>.json' \
  -f shards='3' \
- -f corpus_per_shard='10' \
+ -f articles_per_shard='10' \
  -f job_budget_minutes='330'
 ```
 

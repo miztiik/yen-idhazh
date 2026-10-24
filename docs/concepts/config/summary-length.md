@@ -163,7 +163,7 @@ consolation prize next to not needing the copy.
 `evaluation.qualification_pool_multiple` sizes how wide a qualification shard
 casts before it selects. It is a floor and not a cap: a shard whose slice has not
 yet offered every length tier keeps walking. Raising it buys fetch seconds and
-never model minutes, because the model still sees `corpus_per_shard` articles.
+never model minutes, because the model still sees `articles_per_shard` articles.
 
 `evaluation.qualification_min_per_band`, `qualification_min_over_cap` and
 `qualification_min_brief` say what shape that corpus should come out. They
