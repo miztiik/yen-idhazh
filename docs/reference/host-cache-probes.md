@@ -158,6 +158,16 @@ copied into the two named recordings under `tests/fixtures/host-probes/`.
 Those fixtures test parsing and missing-value behavior without contacting
 the network or claiming a live measurement.
 
+The optional workflow report appends one compact Table L and one notice after
+the existing H/I/J/K reports. It shows exact event refusals with null counts,
+the brief native curve, observed CPU/host context and measured native-tool
+cost. Python execution counts are labelled as perf-build counts. It never
+calls the curve direct L3-hit latency or a denied counter a measured count.
+Before rendering, cache target/start identity, handle, expiry and initial/final
+results must match the controlled task proof; foreign or changed metadata
+fails explicitly. Older evidence with `cache: null` preserves the previous
+tables and notice batch unchanged.
+
 ## Design rationale
 
 The mature native tools own event access and pointer-chase execution.

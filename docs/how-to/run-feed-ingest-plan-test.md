@@ -327,6 +327,11 @@ It retains real native working-set latency readings and exact perf event
 results or a typed hardware/permission refusal. A refusal leaves counter
 measurement pending on a permitted host; it is not a passing hit/miss reading.
 Optional Linux tool installation records its actual time and binary bytes.
+Optional reporting appends a separate compact Table L and cache notice from
+that validated same-task evidence. It shows null hardware counts as unavailable,
+not zero, and labels the working-set curve as not direct L3-hit latency.
+Cache/task target, handle and result mismatches refuse reporting; absent older
+cache evidence preserves H/I/J/K and their existing notices.
 The counter proof reuses the controlled external-PID task API journey.
 The latency curve uses its own real HTTP command after that task closes;
 it is not CPU profiling of the caller. Default-off, unsupported, malformed

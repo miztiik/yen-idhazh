@@ -249,6 +249,7 @@ test("offers independent machine RAM control and commits only genuine planner an
   expect(checkout.with?.["sparse-checkout"]).toContain("/.github/scripts/feed-ingest-plan-http-proof.ts");
   expect(checkout.with?.["sparse-checkout"]).toContain("/.github/scripts/feed-ingest-plan-profile-proof.ts");
   expect(checkout.with?.["sparse-checkout"]).toContain("/.github/scripts/feed-ingest-plan-cache-proof.ts");
+  expect(checkout.with?.["sparse-checkout"]).toContain("/.github/scripts/feed-ingest-plan-cache-report.ts");
   expect(checkout.with?.["sparse-checkout"]).toContain("/.github/scripts/install-host-cache-tools.sh");
   for (const name of ["profile-schema", "resource-report", "report-format"]) {
     expect(checkout.with?.["sparse-checkout"]).toContain(`/.github/scripts/feed-ingest-plan-${name}.ts`);
