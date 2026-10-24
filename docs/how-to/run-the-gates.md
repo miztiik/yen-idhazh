@@ -24,7 +24,8 @@ unstaged edits and untracked files. Use `--base <ref>` for a different base.
 Every selected group prints the path and reason that selected it. Shared
 contracts, config, styles, layouts and dependencies expand coverage. An unknown
 path or an unreadable base selects broader coverage, never an empty pass.
-Documentation-only changes run a whitespace check, not either application suite.
+The scope job runs a whitespace check for every change. Documentation-only
+changes skip the application jobs, instead of starting one to do no code checks.
 
 | Group | What it checks | Preparation |
 | --- | --- | --- |
