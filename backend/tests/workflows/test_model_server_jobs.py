@@ -57,6 +57,7 @@ from ._harness import (
     _published,
     _script,
     _server_starters,
+    _shell_commands,
     _starter_shell,
     _step,
     _steps,
@@ -680,18 +681,12 @@ def test_the_weights_path_a_launcher_derives_is_the_one_the_download_wrote(
         step = _step(workflows[filename], job_name, "name", step_name)
         shell = _starter_shell(step)
         assert ARGV_MODULE_CALL in shell, f"{where} starts a server some other way"
-        named = root_name in shell or root_name in str(
-            _mapping(step.get("env"), f"{where} env").values()
-        )
-        # A start inside the model-server action reads `inputs.config_root`, so
-        # the root is the one the job hands the action.
-        if not named and any(
-            one.get("uses") == MODEL_SERVER_ACTION
-            for one in _declared_steps(workflows[filename], job_name)
-        ):
+        named = _launcher_config_root(step)
+        if named == "${{ inputs.config_root }}":
             given = _action_call(workflows[filename], job_name, MODEL_SERVER_ACTION)
-            named = given.get("config_root") == root_name
-        assert named, f"{where} reads its flags from some root other than {root_name}"
+            default = _local_action_inputs(MODEL_SERVER_ACTION)["config_root"].get("default")
+            named = given.get("config_root", str(default))
+        assert named == root_name, f"{where} reads {named!r}, not {root_name!r}"
         assert MODEL_PATH_ENV not in shell, f"{where} is still told which model file to open"
 
         assert roots[root_name], f"no {root_name} was built, so this is checking nothing"
@@ -700,3 +695,55 @@ def test_the_weights_path_a_launcher_derives_is_the_one_the_download_wrote(
             assert derived == landed, (
                 f"{root} declares {derived} and the download wrote {landed}"
             )
+
+
+def _launcher_config_root(step: dict[str, object]) -> str:
+    """Read the start command's exact config root, resolving a whole step-env variable."""
+    commands = [
+        words
+        for words in _shell_commands(_script(step, "launcher"))
+        if len(words) > 3
+        and words[0] in {"python", "python3"}
+        and words[1:3] == ["backend/utilities/model_runtime.py", "start-server"]
+    ]
+    assert len(commands) == 1, "the step must call the launcher once"
+    words = commands[0]
+    roots = [
+        word.split("=", 1)[1] if word.startswith("--config-root=") else words[index + 1]
+        for index, word in enumerate(words)
+        if word == "--config-root" or word.startswith("--config-root=")
+    ]
+    assert len(roots) == 1, "the launcher must name one config root"
+    root = roots[0]
+    variable = re.fullmatch(r"\$(?:([A-Za-z_][A-Za-z_0-9]*)|\{([A-Za-z_][A-Za-z_0-9]*)\})", root)
+    if variable:
+        root = str(
+            _mapping(step.get("env"), "launcher env")[variable.group(1) or variable.group(2)]
+        )
+    return root
+
+
+@pytest.mark.parametrize(
+    ("argument", "environment", "expected"),
+    [
+        ("config", {}, "config"),
+        ("backend/var/candidate-config", {}, "backend/var/candidate-config"),
+        ('"$CONFIG_ROOT"', {"CONFIG_ROOT": "config"}, "config"),
+        (
+            '"${CONFIG_ROOT}"',
+            {"CONFIG_ROOT": "${{ inputs.config_root }}"},
+            "${{ inputs.config_root }}",
+        ),
+    ],
+)
+def test_launcher_root_is_the_argument_not_a_word_elsewhere_in_the_step(
+    argument: str,
+    environment: dict[str, str],
+    expected: str,
+) -> None:
+    step: dict[str, object] = {
+        "run": "echo config; python3 backend/utilities/model_runtime.py start-server "
+        f"--config-root {argument}",
+        "env": environment,
+    }
+    assert _launcher_config_root(step) == expected
