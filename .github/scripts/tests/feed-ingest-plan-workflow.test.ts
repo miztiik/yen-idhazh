@@ -5,8 +5,9 @@ import { copyFile, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { CompactIndexSchema, RawDayIndexSchema, FeedHealthContract, PUBLICATION_INVENTORY_VERSION } from "../../../packages/common-contracts/src/index";
+import { CompactIndexSchema, RawDayIndexSchema, FeedHealthContract, FeedIngestConfigSchema, PUBLICATION_INVENTORY_VERSION } from "../../../packages/common-contracts/src/index";
 import { persistLedger } from "../../../packages/ledger-file-writer/src/index";
+import { PlanRequestSchema } from "../../../services/feed-ingest-plan/src/api/plan-request";
 import { stageFeedHistory } from "../feed-ingest-plan-feed-history";
 import { selectHealthDays } from "../../../services/feed-ingest-plan/src/read-ledger-history/select-health-days";
 import { readLedgerParquet } from "../../../services/feed-ingest-plan/src/read-ledger-history/read-parquet";
@@ -14,10 +15,13 @@ import { verifyHealthOrderCompaction } from "../../../services/feed-ingest-plan/
 import { completeHistoryDayInputs, createSeenDayInputs, historyDays, historyIndexPaths, resolveHistoryInventory, sparseCheckoutPath } from "../feed-ingest-plan-outputs";
 import { requiredSeenDays } from "../../../services/feed-ingest-plan/src/read-ledger-history/read-seen-evidence";
 import { utcTimestamp } from "../../../services/feed-ingest-plan/src/harvest-feeds/harvest-types";
+import { CopyResultSchema } from "../feed-ingest-plan-profile-proof";
+import { collectFingerprint } from "../../../services/host-fingerprints/src/collect-fingerprint";
+import { fixture as hostFixture } from "../../../services/host-fingerprints/test/fixture";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 type Workflow = {
-  on: { workflow_dispatch: { inputs: Record<string, { default: string; type: string }> } };
+  on: { workflow_dispatch: { inputs: Record<string, { default: string; type: string; required: boolean; options?: string[] }> } };
   permissions: Record<string, string>;
   jobs: { "isolated-plan": { steps: {
     id?: string; name?: string; run?: string; uses?: string;
@@ -34,7 +38,12 @@ function assertWorkflow(value: unknown): asserts value is Workflow {
   const inputs = record(record(record(workflow.on).workflow_dispatch).inputs);
   for (const input of Object.values(inputs)) {
     const fields = record(input);
-    if (typeof fields.default !== "string" || typeof fields.type !== "string") throw new Error("Invalid dispatch input");
+    if (typeof fields.default !== "string" || typeof fields.type !== "string" || typeof fields.required !== "boolean") {
+      throw new Error("Invalid dispatch input");
+    }
+    if (fields.options !== undefined && (!Array.isArray(fields.options) || fields.options.some(value => typeof value !== "string"))) {
+      throw new Error("Invalid dispatch choices");
+    }
   }
   if (Object.values(record(workflow.permissions)).some(value => typeof value !== "string")) throw new Error("Invalid permissions");
   const steps = record(record(workflow.jobs)["isolated-plan"]).steps;
@@ -60,10 +69,29 @@ async function workflow() {
 }
 
 test("offers four manual controls and commits only genuine planner and host files", async () => {
+  const fixtureHost = await hostFixture();
+  try {
+    const { row } = await collectFingerprint(fixtureHost.capture, fixtureHost.config, fixtureHost.settings, fixtureHost.inspection);
+    const copy = CopyResultSchema.parse({ ...row, article_text: "private recorded response" });
+    expect(copy.memcpy_probe_mib).toBe(0);
+    expect(copy.memcpy_gib_s).toBeNull();
+    expect(copy.cpu_model).toBe(row.cpu_model);
+    expect(copy).not.toHaveProperty("article_text");
+    expect(copy).not.toHaveProperty("run_id");
+    expect(Object.keys(copy)).toEqual(Object.keys(CopyResultSchema.shape));
+  } finally { await fixtureHost.cleanup(); }
   const ci = record(Bun.YAML.parse(await readFile(join(root, ".github", "workflows", "ci.yml"), "utf8")));
   const gateSteps = record(record(ci.jobs).gates).steps;
   if (!Array.isArray(gateSteps)) throw new Error("Expected CI gate steps");
   const preflight = gateSteps.map(record).find(step => step.name === "Isolated planner workflow preflight");
+  const probes = gateSteps.map(record).find(step => step.name === "TypeScript host probes");
+  expect(probes?.["working-directory"]).toBe("services/host-probes");
+  expect(probes?.run).toContain("bun run check");
+  expect(probes?.run).toContain("bun run test");
+  const resourceProof = gateSteps.map(record).find(step => step.name === "Live TypeScript RAM and optional copy proof");
+  expect(resourceProof?.run).toBe("bun run .github/scripts/feed-ingest-plan-profile-proof.ts");
+  const resourceUpload = gateSteps.map(record).find(step => step.name === "Preserve TypeScript resource proof");
+  expect(record(resourceUpload?.with).path).toBe("test-results/host-probes/resource-proof.json");
   expect(preflight?.if).toBe("needs.scope.outputs.code == 'true'");
   expect(preflight?.["continue-on-error"]).not.toBe(true);
   expect(preflight?.run).toContain("bun test ./.github/scripts/tests/feed-ingest-plan-report.test.ts");
@@ -74,8 +102,18 @@ test("offers four manual controls and commits only genuine planner and host file
   expect(Object.keys(parsed.on)).toEqual(["workflow_dispatch"]);
   const inputs = parsed.on.workflow_dispatch.inputs;
   expect(Object.keys(inputs)).toEqual(["freshness_hours", "article_limit", "shards", "partition_strategy"]);
-  expect(inputs.freshness_hours?.default).toBe("24");
-  for (const field of ["article_limit", "shards", "partition_strategy"]) expect(inputs[field]?.default).toBe("");
+  const config = FeedIngestConfigSchema.parse(JSON.parse(await readFile(join(root, "config", "feed-ingest-plan.json"), "utf8")));
+  for (const [field, value] of Object.entries({
+    freshness_hours: config.triage.max_age_hours, article_limit: config.curate.article_limit ?? "",
+    shards: config.partition.default_shards, partition_strategy: config.partition.default_strategy,
+  })) {
+    expect(inputs[field]?.default, `${field} form default must match config/feed-ingest-plan.json`).toBe(String(value));
+  }
+  for (const field of ["freshness_hours", "article_limit", "shards"]) expect(inputs[field]?.type).toBe("string");
+  expect(inputs.freshness_hours?.required).toBe(true);
+  for (const field of ["article_limit", "shards", "partition_strategy"]) expect(inputs[field]?.required).toBe(false);
+  expect(inputs.partition_strategy?.type).toBe("choice");
+  expect(inputs.partition_strategy?.options).toEqual(PlanRequestSchema.shape.partition_strategy.unwrap().options);
   expect(parsed.permissions).toEqual({ contents: "write" });
   const plan = steps.find(step => step.id === "plan")!;
   expect(plan.env).toEqual({
@@ -105,6 +143,11 @@ test("offers four manual controls and commits only genuine planner and host file
   expect(httpProof).toContain('post("changed_config_conflict", "fetch", fetchRequest)');
   expect(httpProof).toContain('join(artifactRoot, "stage-api-proof.json")');
   expect(httpProof).not.toContain("app.request(");
+  expect(httpProof).toContain("task_profiling:");
+  expect(httpProof).toContain("enabled: true, memory_enabled: true");
+  expect(httpProof).toContain('requireProfile("fetch", fetchRequest.request_id)');
+  expect(httpProof).toContain('requireProfile("parse", parseRequest.request_id)');
+  expect(httpProof).toContain("proof.profiling.after_checks_count !== 2");
   expect(plan.run).toContain('appendFileSync(join(artifactRoot, "audit-events.jsonl")');
   expect(plan.run).toContain('appendFileSync(join(artifactRoot, "progress.jsonl")');
   expect(plan.run).not.toContain("await main(");
@@ -131,11 +174,13 @@ test("offers four manual controls and commits only genuine planner and host file
   expect(completion.env).toEqual({
     PLANNING_COMPLETE: "${{ steps.plan.outputs.planning_complete }}",
     STAGE_API_COMPLETE: "${{ steps.plan.outputs.stage_api_complete }}",
+    RESOURCE_PROOF_COMPLETE: "${{ steps.resources.outputs.resource_proof_complete }}",
     AUDITED_COMPLETE: "${{ steps.audit_fixture.outputs.audited_complete }}",
     AUDIT_SCOPE: "${{ steps.audit_fixture.outputs.scope }}",
   });
   expect(completion.run).toContain('process.env.PLANNING_COMPLETE !== "true"');
   expect(completion.run).toContain('process.env.STAGE_API_COMPLETE !== "true"');
+  expect(completion.run).toContain('process.env.RESOURCE_PROOF_COMPLETE !== "true"');
   expect(completion.run).toContain('process.env.AUDIT_SCOPE !== "generated_fixture"');
   expect(steps.find(step => step.id === "audit_fixture")!.run).toContain("await verifyFullAuditFixture(");
   const host = steps.find(step => step.id === "host")!;
@@ -144,9 +189,15 @@ test("offers four manual controls and commits only genuine planner and host file
   expect(host.run).toContain('pipeline_name: "feed-ingest-plan", task_name: "isolated-plan"');
   expect(steps.find(step => step.name === "Install declared TypeScript dependencies")!.run)
     .toContain("bun install --frozen-lockfile --cwd services/host-fingerprints");
+  expect(steps.find(step => step.name === "Install declared TypeScript dependencies")!.run)
+    .toContain("bun install --frozen-lockfile --cwd services/host-probes");
+  expect(steps.find(step => step.id === "resources")!.run).toContain("await verifyLiveHostProfiling(");
+  expect(steps.find(step => step.name === "Check isolated adapters and native compatibility")!.run)
+    .toContain("./services/host-probes/test/probe.test.ts");
   const commit = steps.find(step => step.name === "Commit exact live planner and host files")!;
   expect(commit.if).toContain("steps.audit_fixture.outputs.scope == 'generated_fixture'");
   expect(commit.if).toContain("steps.plan.outputs.stage_api_complete == 'true'");
+  expect(commit.if).toContain("steps.resources.outputs.resource_proof_complete == 'true'");
   expect(commit.env).toEqual({
     CURRENT_RUN_FILES: "${{ steps.plan.outputs.current_run_files }}", HOST_FILES: "${{ steps.host.outputs.host_files }}",
   });
@@ -161,6 +212,8 @@ test("offers four manual controls and commits only genuine planner and host file
   expect(checkout.with?.["persist-credentials"]).toBe(true);
   expect(checkout.with?.["sparse-checkout"]).toContain("/packages/common-contracts/");
   expect(checkout.with?.["sparse-checkout"]).toContain("/.github/scripts/feed-ingest-plan-http-proof.ts");
+  expect(checkout.with?.["sparse-checkout"]).toContain("/.github/scripts/feed-ingest-plan-profile-proof.ts");
+  expect(checkout.with?.["sparse-checkout"]).toContain("/tests/fixtures/host-probes/");
   expect(checkout.with?.["sparse-checkout"]).not.toContain("/backend/");
   expect(steps.find(step => step.name === "Preserve isolated test evidence")!.with?.path)
     .toBe("${{ runner.temp }}/feed-ingest-plan/");
@@ -356,7 +409,7 @@ test("strict-checks adapters, tests and the actual inline program in one compile
       "--noUnusedParameters", "--verbatimModuleSyntax", "--skipLibCheck",
       "--types", "bun", "--typeRoots", join(service, "node_modules", "@types"), ...generated,
       ...["feed-ingest-plan-outputs.ts", "feed-ingest-plan-feed-history.ts", "feed-ingest-plan-report.ts", "feed-ingest-plan-commit.ts", "feed-ingest-plan-verification.ts", "feed-ingest-plan-audit-fixture.ts",
-        "feed-ingest-plan-http-proof.ts",
+        "feed-ingest-plan-http-proof.ts", "feed-ingest-plan-profile-proof.ts",
         "tests/feed-ingest-plan-outputs.test.ts", "tests/feed-ingest-plan-report.test.ts",
         "tests/feed-ingest-plan-workflow.test.ts"].map(path => join(root, ".github", "scripts", ...path.split("/"))),
     ], { cwd: service, stdout: "pipe", stderr: "pipe" });

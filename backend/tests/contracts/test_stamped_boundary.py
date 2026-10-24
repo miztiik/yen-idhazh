@@ -15,7 +15,7 @@ from idhazh.contracts import CONTRACTS
 from idhazh.contracts.base import Contract, StalePayloadError
 from idhazh.contracts.console_band import ConsoleBand, ConsoleRoute, RouteId
 from idhazh.contracts.console_payloads import CONSOLE_PAYLOADS, payloads_by_stem
-from idhazh.contracts.item_health import DROPPED_CELLS, RETIRED_CELLS, ItemHealthRow
+from idhazh.contracts.item_health import RETIRED_CELLS, ItemHealthRow
 from idhazh.contracts.visual_decision import VisualDecision
 
 pytestmark = pytest.mark.contract
@@ -95,7 +95,7 @@ def _a_sealed_item_row() -> dict[str, Any]:
     )
 
 
-@pytest.mark.parametrize("dropped", sorted(DROPPED_CELLS))
+@pytest.mark.parametrize("dropped", ("runner_name", "cgroup_peak_bytes", "max_output_tokens"))
 def test_a_sealed_row_carrying_a_column_the_contract_dropped_still_reads(
     dropped: str, tmp_path: Path
 ) -> None:

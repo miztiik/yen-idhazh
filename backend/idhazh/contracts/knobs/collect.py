@@ -176,7 +176,6 @@ class CollectConfig(Model):
             "reviewed and accepted (Guardrail #6)."
         ),
     )
-    watchlist_max_entities: int = Field(default=30, ge=1)
     settled_failure_codes: tuple[FailureCode, ...] = Field(
         default=(
             FailureCode.ROBOTS_DENIED,
