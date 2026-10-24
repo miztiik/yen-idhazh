@@ -402,7 +402,7 @@ def test_the_default_theme_is_the_one_root_carries() -> None:
     theme = ThemeChoice(base.group(1))
     appearance = AppearanceConfig.model_validate_json(APPEARANCE_PATH.read_text(encoding="utf-8"))
     for name, declared in {
-        "appearance default": AppearanceConfig().digest.theme_default,
+        "appearance default": AppearanceConfig.model_validate({}).digest.theme_default,
         "UI default": UiConfig().theme_default,
         "config/appearance.json": appearance.digest.theme_default,
         "config/idhazh.json": committed_app_config().ui.theme_default,
