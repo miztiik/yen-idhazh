@@ -7,11 +7,12 @@ How do measured feed and article costs affect the next planner selection?
 **Status**: Contract proposal; no feedback score or state writer is deployed.
 The user approved separate hardware and request measures, automatic score use
 after evidence qualifies, replacement of RSS reliability in the isolated
-TypeScript planner, the configurable provisional score settings below,
+TypeScript planner, the configurable evidence settings below,
 requests-first eligibility, and counting only supported source-side failures
 as waste. D3/D4 approvals recorded below define the initial observations and
-summary settlement. The rolling closed-UTC-day window is configurable with a
-seven-day default. D5 activation thresholds remain unapproved.
+per-source operational state. The rolling closed-UTC-day window is
+configurable with a seven-day default. D5 admission, restriction and polling
+rules remain unapproved.
 
 ## Scope
 
@@ -66,8 +67,8 @@ duplicate counter on the event.
 
 **Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC:** Extend existing
 records with actual article-request totals, technical extraction outcomes and
-supported failure causes. Save per-source summaries with evidence dates,
-coverage and policy version. Do not invent CPU or memory costs.
+supported failure causes. Save per-source operational state with evidence
+dates, coverage and policy version. Do not invent CPU or memory costs.
 
 For requests, `FetchAttemptSchema` already records one row per producer
 execution, including retries and manually followed redirects. Its `phase`
@@ -100,14 +101,16 @@ do not. Do not add a second word-count test or semantic judgment.
 `FeedOutcomePayload.parse_status` only describes RSS entry parsing and is not
 an article extraction result.
 
-Extend the existing source/run and operation records and their writers; do not
-add a parallel rollup. Record actual article-target request totals and
-technical extraction outcomes. Keep source, pipeline and unresolved causes
-distinct; only supported source-side failure can count as waste. Per-source
-summary coverage is measured opportunities divided by attempted opportunities;
-zero denominator means unknown. CPU and private-memory costs remain
-unavailable until attributable. Feed-poll and robots costs stay at their
-actual operation scope, not copied onto articles.
+Extend existing source/run and operation records and their writers; do not
+add a parallel rollup. Record actual work for every fetch, parse and technical
+check, including article-target requests and extraction outcomes. This is
+collection of completed work, not a sample of 25 ordinary articles. Keep
+source, pipeline and unresolved causes distinct; only supported source-side
+failure can count as waste. Per-source operational-state coverage is measured
+opportunities divided by attempted opportunities; zero denominator means
+unknown. CPU and private-memory costs remain unavailable until attributable.
+Feed-poll and robots costs stay at their actual operation scope, not copied
+onto articles.
 
 The table's correction identity, publisher mapping, full component schema and
 detailed per-operation bindings remain proposals unless specified by the
@@ -127,44 +130,30 @@ penalty = min(1, sum(component_weight * component_waste))
 priority = editorial_priority - (source_authority_contribution * penalty)
 ```
 
-The approved provisional component weights are one third each for CPU, memory
-and requests. They are not calibrated by the historical records. The value 1
-means all measured work in that component was classified as waste; it is the
-normalization endpoint, not a historical percentile. The combined penalty
-cannot exceed 1.
-
-Do not mix raw CPU, memory and request values. Normalize each component first.
-An unavailable component remains `null` and is not given extra weight through
-renormalization. If no component has supported evidence, the combined penalty
-is `null` and makes no score change. A measured zero is different: it requires
-a known nonzero denominator and no observed waste.
-
-The score change applies only to the source-authority contribution. It keeps
-the curated source weight and tier. It replaces the existing RSS reliability
-penalty; it does not add a second operational penalty. Unknown or insufficient
-evidence does not demote a source. Once configured evidence rules pass, the
-supported penalty applies automatically.
+Each component is normalized separately; unavailable components remain `null`
+and do not gain weight through renormalization. A component with no supported
+evidence makes no score change. A measured zero requires a known nonzero
+denominator and no observed waste. The score changes only the source-authority
+contribution, preserves the curated weight and tier, and replaces rather than
+stacks with the RSS reliability penalty.
 
 ## Provisional evidence settings
 
-The owner approved these provisional configuration values. They are policy
-defaults, not measurements learned from the historical records:
+These owner-approved policy defaults are not measurements learned from the
+historical records:
 
 - A configurable rolling window of closed UTC days, defaulting to seven.
 - At least 20 distinct measured article opportunities for a component.
 - At least 80 percent coverage of attempted opportunities for that component.
 - Equal one-third weights for CPU, memory and requests.
+- Requests are the only eligible component until CPU and private memory have
+  source-attributable evidence; do not renormalize the equal weights.
+- Unqualified evidence has no impact and does not fall back to RSS reliability.
 
-Below the support or coverage requirement, preserve the readings as
-unqualified evidence and do not apply that component. The historical CPU,
-memory and retry fields cannot calibrate these settings: CPU and memory are
-not source-attributed waste, and retry fields are not a complete request
-census.
-
-The producer additions above are not measurements already present in the
-historical files. The seven-day default, 20 opportunities, 80 percent and
-equal weights are approved policy defaults; they do not prove that CPU or
-memory collection is available or calibrated.
+Below either evidence requirement, preserve readings as unqualified and do not
+apply that component. Historical CPU, memory and retry fields cannot
+calibrate these values: the first two lack source attribution, and retries
+are not a complete request census.
 
 Use the raw per-source waste ratio over the configured rolling window. Do not
 add a reference cohort, prior or decay: the component already has a fixed unit
@@ -173,23 +162,12 @@ calibrate a prior or half-life. The cost is that new sources remain
 unqualified until they meet the approved support and coverage rules; no seed
 value pretends to be measured evidence.
 
-Approved score boundary: requests are the first eligible operational
-component. Keep CPU and private memory unavailable until source-attributable
-evidence exists. Preserve equal one-third weights without renormalization, so
-requests alone can contribute at most one third. Unqualified evidence has no
-impact and does not fall back to RSS reliability.
-
-Current process CPU and memory readings cannot qualify their source
-components. The request component is the only eligible component until
-source-attributable CPU or memory evidence exists.
-
 ## D4 proposal: durable settlement
 
-Reuse the existing registered ledger writer for observed events and state.
-Define a `settle-ingest-feedback` stage that writes a versioned state snapshot;
-concurrent invocations remain allowed.
+Reuse the existing registered ledger writer for observations and derived
+operational state. Concurrent invocations remain allowed.
 
-**Owner-directed requirements, 2026-10-24 UTC:** make the evidence window
+**Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC:** make the evidence window
 configurable, defaulting to seven closed UTC days; read registered data under
 both `state/raw/` and `state/compact/`; allow concurrent runs; and design for
 graceful failure. Exclude the current UTC day. The window rolls forward each
@@ -200,6 +178,14 @@ positive-integer setting, default `7`. This is distinct from
 `metrics.rolling_window_days`, which serves publication metrics. Compute the
 named date range once per run from the UTC clock and this setting.
 
+Raw observations are written once as native, registered Parquet under
+`state/raw/{ledger}/`. The gardener compacts them to
+`state/compact/{ledger}/`; readers use the existing indexes and period
+precedence so a date is counted once. The derived per-source operational
+state is also a declared, registered Parquet ledger payload, not a growing
+JSON sidecar or input to the digest-feed summarizer. The ledger name and
+persisted row shape remain to be settled before a writer is added.
+
 Yes, read both roots through the registered ledger reader and compact indexes.
 For each date, use the compact period when an index names it; otherwise use
 that date's raw files. Follow the existing period precedence so a date comes
@@ -207,75 +193,68 @@ from exactly one source. Do not append raw re-run files to compact rows when
 the index already names that date; this avoids counting the same observations
 twice.
 
-### Table B - Summary field decisions
+### Table B - Operational-state field decisions
 
-| Id | Field | Type or status |
+| Id | Field | Proposed type or status |
 | --- | --- | --- |
-| B1 | `state_revision` | Positive integer, advanced per committed snapshot |
-| B2 | `parent_revision` | Nullable positive integer naming the snapshot read |
+| B1 | `state_revision` | Positive integer, advanced per committed operational-state payload |
+| B2 | `parent_revision` | Nullable positive integer naming the state revision used as its base |
 | B3 | `written_at_utc`, `evidence_cutoff_utc` | UTC instants |
 | B4 | `window_days` | Positive integer copied from configured setting |
 | B5 | `window_start`, `window_end` | UTC dates; the closed days selected by `window_days` |
 | B6 | `code_revision`, `policy_version` | Writer revision and policy version used |
-| B7 | `sources` | Per-source rows keyed by nonempty `source_id`, with evidence dates, component counts/coverage and any separately approved restriction fields |
-| B8 | Per-source `next_poll_at_utc`, `next_probe_at_utc` | Nullable UTC instants |
+| B7 | `sources` | Per-source rows keyed by nonempty `source_id`, with evidence dates, request counts and coverage |
+| B8 | D5 control fields | Excluded until separately approved; not implied by operational telemetry |
 
 **Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC:** Preserve immutable
-per-run observations. If another run saves first, recalculate only the summary
-from the newer records. A failed save leaves the old summary intact and
-reports failure. An already-running selection keeps the summary revision it
-read. Report corrections outside the configured evidence window, but do not
-use them in that window's score.
+per-run observations. If another run saves first, recalculate only the
+derived per-source operational state from the newer records. A failed save
+leaves the old state intact and reports failure. An already-running selection
+keeps the state revision it read. Report corrections outside the configured
+evidence window, but do not use them in that window's score.
 
-Each source row has `publisher_id: string|null` and `cpu`, `private_memory`
-and `http_requests` component records. Each component has
-`status: qualified|insufficient_support|unavailable`; nullable integer
-`total` and `wasted` amounts `>= 0`; integer `distinct_opportunities` and
-`measured_opportunities` `>= 0`; and nullable finite `coverage` and
-`waste_fraction` in `[0,1]`. For a qualified component, its denominator is
-nonzero, `wasted <= total`, support is at least 20 and coverage is at least
-0.8.
+The request component's exact field shape remains to be declared. Preserve
+request totals, wasted requests when supported, distinct and measured
+opportunities, evidence dates, coverage, qualification status and policy
+version. Do not add CPU or memory amounts: those are unavailable until
+attributable.
 
-The proposed D5 restriction record has `status: normal|restricted|probe_due|trial`,
-`scope: article|endpoint|feed|null`, a nullable stable `scope_key`, nullable
-closed `reason_code`, and nullable UTC `restricted_since_utc` and
-`next_probe_at_utc`. These fields do not approve activation of any D5
-restriction policy. Scope keys come from configured source or candidate
-identity, not fetched text or arbitrary URLs.
+Restriction state is not part of this approved D3/D4 operational telemetry
+payload. Any later D5 restriction fields require separate approval. Existing
+robots, trust and access-safety rules remain unchanged.
 
-Keep the feedback snapshot separate from the curated source catalog: it may
-hold temporary access state, but cannot retire a source or publisher. Each
-source row keeps the confirmed `publisher_id` used for its observations.
-Because this snapshot is a persisted payload read by a later run and is not
-the planner-only event stream, declare its native model under
-`backend/idhazh/contracts/` and keep the TypeScript reader copy in step with
-the existing binding tests.
+Keep operational state separate from the curated source catalog: it cannot
+retire a source or publisher. Declare its Pydantic model under
+`backend/idhazh/contracts/`; persist it through the registered Parquet ledger
+writer and read it through the existing raw/compact ledger reader, with
+TypeScript copies held by the existing binding tests. Do not create a JSON
+state file or another unregistered persistence path.
 
 The checkpoint is `state_revision`, `evidence_cutoff_utc`,
 `window_start` and `window_end`; do not add settled event IDs. Recompute the
-configured named UTC days and select the latest compatible snapshot through
-the registered index, not a repository walk.
+configured named UTC days and select the latest compatible operational state
+through the registered ledger index, not a repository walk.
 
 Recompute the active configured window from named ledger periods, then publish
-the derived summary. Report corrections outside the configured window; do not
-use them in that window's score. The event replay and correction identity
-details remain proposals. An older correction does not rewrite expired score
-evidence or clear a restriction.
+the derived per-source operational state. Report corrections outside the
+configured window; do not use them in that window's score. The event replay
+and correction identity details remain proposals. An older correction does
+not rewrite expired score evidence or clear a restriction.
 
 Do not serialize fetch, parse, planning or selection, and do not add
-selection idempotency. Keep each run's observation files immutable and
-uniquely named; regenerate only the replaceable feedback summary from the
-latest committed summary and registered ledger inputs.
+selection idempotency. Keep each run's raw observation files immutable and
+uniquely named; regenerate only the replaceable per-source operational-state
+Parquet payload from the latest committed state and registered ledger inputs.
 
 Use the shared publisher's existing recovery pattern
 ([committing completed output](../publishing/committing.md)): prepare derived
 output again from named inputs on a fresh `main`, while retaining completed
 immutable observations. Reuse that pattern, not a global lock or a custom Git
 retry loop. The conflict is narrow: two runs may
-read revision R and both compute a summary. Once one lands, Git rejects the
-other's stale candidate. Rebuilding on the new tip incorporates newer records;
-replaying the stale summary could overwrite newer state. This race does not
-justify holding fetch, parse or selection.
+read revision R and both compute derived state. Once one lands, Git rejects
+the other's stale candidate. Rebuilding on the new tip incorporates newer
+records; replaying stale state could overwrite newer state. This race does
+not justify holding fetch, parse or selection.
 
 This is not a direct call to the shared publisher here: the TypeScript planner
 publisher currently retries the same immutable files but cannot rebuild
@@ -283,37 +262,38 @@ derived state, and the shared Python publisher cannot be invoked as a local
 Python step in this isolated TypeScript flow. The proposed implementation is
 a narrow prepare callback at the existing TypeScript publication boundary.
 On a stale base, it would use the existing bounded push-retry policy to
-rebuild only the summary from the fresh committed summary and named raw/compact
-inputs, while preserving immutable observations. This costs a scoped adapter
-change and concurrency tests; the production caller and exact summary shape
-remain to be named before implementation. A stale summary must never be
-replayed over newer state.
+rebuild only the per-source operational-state payload from the fresh committed
+state and named raw/compact inputs, while preserving immutable observations.
+This costs a scoped adapter change and concurrency tests; the production
+caller and exact state shape remain to be named before implementation. Stale
+state must never be replayed over newer state.
 
 Settlement does not queue or hold other runs. If publication is refused or
-retries are exhausted, leave the previously committed summary unchanged,
+retries are exhausted, leave the previously committed operational state unchanged,
 retain the run artifacts, report the save failure and do not stop the entire
 planner run. Missing or unreadable state is not empty history and must not
 clear known restrictions.
 
-A run that already read the previous snapshot may finish with that view; a new
-restriction governs allocations that read after it is published. Preventing
-already-running allocations from using an older view would require a separate
-per-source reservation rule, which is not included in this proposal.
+A run that already read the previous operational state may finish with that
+view; any separately approved future policy governs later allocations.
+Preventing already-running allocations from using an older view would require
+a separate per-source reservation rule, which is not included in this
+proposal.
 
-The next allocation reads the latest usable summary with its code, revision
-and original UTC window. If the current summary is unreadable, use the last
-valid saved summary when one exists and label it `stale_fallback`; preserve its
+The next allocation reads the latest usable operational state with its code,
+revision and original UTC window. If the current state is unreadable, use the
+last valid saved state when one exists and label it `stale_fallback`; preserve its
 original window and do not invent an expiry time. Apply its saved qualified
 adjustment and known restrictions as the best available state, but do not call
 them current. If none is readable, continue selection without an operational
 adjustment and emit `restrictions_unverified`; never write empty history over
 saved state. Existing robots, trust and access-safety checks do not change.
 
-The proposed read result carries `summary_status: current|stale_fallback|unavailable`,
+The proposed read result carries `state_status: current|stale_fallback|unavailable`,
 nullable `state_revision` and nullable `window_start`/`window_end`. For
 `unavailable`, the score adjustment is null and the result includes the
 `restrictions_unverified` notice, whose meaning is that restrictions could
-not be verified. Fallback data retains its original revision and date range.
+not be verified. Fallback state retains its original revision and date range.
 No age threshold is proposed; the status records what the reader used without
 claiming it is current.
 
@@ -325,21 +305,54 @@ automatic score use after qualification is already approved. Keep any
 existing API development flag separate from feedback policy. This proposal
 does not add selection idempotency, conditional HTTP or semantic assessment.
 
-### Table C - Provisional controls requiring approval
+### Table C - Unapproved controls and conditional trial
 
 | Id | Setting | Proposed type and value | Effect |
 | --- | --- | --- | --- |
-| C1 | `trial_opportunities` | Integer, 25 per source trial | Report each attempt. Does not activate catalog membership. |
+| C1 | `age_group_article_cap` | 100 actual article requests per age group for the bounded trial; fewer if a group has fewer eligible entries | A2 is conditionally approved only if the config/code change stays small. At most 500 trial requests across the five groups. It does not cap all-work telemetry, ordinary fetches, selection inputs or the existing 100-item selected-output limit. Report unknown-age entries separately. |
 | C2 | `restriction_failures` | 3 consecutive known source-attributed failures for one source and endpoint/feed scope, within the configured window | A known success at that scope resets the streak; unknown, pipeline and unresolved outcomes neither assert failure nor reset it. Article refusal restricts only that article. |
 | C3 | `restriction_pause_hours` | Integer, 24 | Pause ends by making a recovery probe due; elapsed time alone does not restore ordinary work. |
 | C4 | `recovery_successes` | 3 distinct successful opportunities across at least 2 UTC dates, with at least 80 percent known outcomes | Restore trial access only after observed recovery. |
 | C5 | `special_probe_budget` | 20 opportunities per planner run, at most 1 per source | Recovery first, then stable source ID. Does not cap ordinary fetches. |
 | C6 | `maximum_poll_gap_hours` | Integer, 24 | Proposed freshness ceiling only; it does not define adaptive polling cadence. |
 
-These are estimates, not approved limits. In particular, the consecutive
-failure rule avoids restricting a high-volume source for scattered failures;
-the threshold and window still need approval. A 20-item probe allowance is
-not the score's 20-item support floor. Permanent retirement remains curated.
+Apart from A2's conditional trial decision, these are unapproved proposals,
+not approved limits. The earlier 25-article value is withdrawn; it was an
+unapproved trial-budget suggestion, not an observation or ordinary-work cap.
+Record all actual fetch, parse and technical-check work, regardless of the
+trial's age-group cap. In particular, the consecutive failure rule avoids
+restricting a high-volume source for scattered failures; the threshold and
+window still need approval. A 20-item probe allowance is separate from the
+score's 20-opportunity support floor. Permanent retirement remains curated.
+
+For A2, use exact non-overlapping age groups: `[0,2)`, `[2,6)`, `[6,12)`,
+`[12,24)`, and `[24,36]` hours. Use the existing captured observation clock
+and trusted publication-time evidence. An item without a known age is counted
+in a separate unknown-age result; do not assign an age. The cap is up to 100
+article requests per group during the trial, fewer when the group has fewer
+eligible entries. It does not cap the complete parsed-batch input, telemetry
+for other work or normal production selection.
+
+The current harvester parses feed entries before article requests. It already
+computes publication age from the captured clock and records actual article
+work. The smallest implementation is one config-driven trial selector in
+`services/feed-ingest-plan/src/harvest-feeds/harvest-pool.ts`, before
+`harvestArticle`, then the existing fetch, parse, observation and registered
+Parquet writers. The bounded footprint is the config, its existing Zod config
+schema and validation case, this internal harvest seam, and focused tests.
+Reuse the current age calculation; do not add an HTTP or selection API field,
+another ranking system, a second pipeline or new age semantics. This is a
+small internal config/harvest change, not an API or selection-contract rewrite.
+If implementation needs broader changes, pause because A2 is conditional.
+
+Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC: approve A2 only if it is
+not too much of a configuration or coding change. The approved trial groups
+are non-overlapping age ranges `[24,36]`, `[12,24)`, `[6,12)`, `[2,6)` and
+`[0,2)` hours, with up to 100 article requests from each and fewer when
+available entries are fewer. This applies only to bounded trial measurement,
+not ordinary selection or a cap on captured work. Unknown age is reported
+separately, never assigned an invented age. The 25-article proposal is
+withdrawn.
 
 Adaptive polling cadence remains unresolved. I Feed names new eligible
 discoveries per completed permitted poll as the evidence and requires due
@@ -393,7 +406,7 @@ second penalty or an inverse-yield term. If evidence is not qualified, record
 RSS reliability. Preserve RSS observations as historical evidence only.
 
 The saved score needs one typed `source_operational` evidence object. The
-approved trace is limited to the summary status, revision and evidence window,
+approved trace is limited to the operational-state status, revision and evidence window,
 plus the request counts and coverage that support the score. Do not add
 restriction scope or other policy fields to this score trace.
 
@@ -402,16 +415,16 @@ restriction scope or other policy fields to this score trace.
 | Id | Field | Proposed type and bound |
 | --- | --- | --- |
 | D1 | `status` | `qualified`, `insufficient_support` or `unavailable` |
-| D2 | `summary_status` | `current`, `stale_fallback` or `unavailable` |
-| D3 | `state_revision` | Nullable positive integer from the summary actually used |
-| D4 | `window_days`, `window_start`, `window_end` | Configured positive day count and nullable UTC dates from the summary actually used |
-| D5 | `policy_version` | Version used to produce the summary |
-| D6 | `http_requests` | Request `total` and `wasted` amounts, distinct and measured opportunity counts, and coverage; `wasted <= total`; counts are nonnegative; coverage is nullable in `[0,1]` |
-| D7 | `operational_penalty` | Nullable finite number in `[0,1]`; null evidence makes no score change |
+| D2 | `state_status` | `current`, `stale_fallback` or `unavailable` |
+| D3 | `state_revision` | Nullable positive integer from the operational state actually used |
+| D4 | `window_days`, `window_start`, `window_end` | Configured positive day count and nullable UTC dates from the operational state actually used |
+| D5 | `http_requests` | Request `total` and `wasted` amounts, distinct and measured opportunity counts, and coverage; `wasted <= total`; counts are nonnegative; coverage is nullable in `[0,1]` |
+| D6 | `operational_penalty` | Nullable finite number in `[0,1]`; null evidence makes no score change |
 
-This trace carries no CPU/memory amounts, restriction scope or additional
-policy digest. The current score contract has no operational or summary-read
-status, state revision or evidence-window fields.
+The per-source operational state records `policy_version`; do not duplicate
+it in the score trace. The trace carries no CPU/memory amounts, restriction
+scope or additional policy digest. The current score contract has no
+operational-state status, state revision or evidence-window fields.
 Add the object to the saved score evidence, not to a new selection request or
 response. The old `source_reliability` shape remains readable for historical
 rows only; it is not a fallback for new scores. Reader-first schema migration
@@ -443,7 +456,7 @@ exception does not make the saved score row TypeScript-only.
   persisted field shape. The observations, source/pipeline/unresolved
   attribution, article request totals, source-side waste rule and configurable
   evidence window are approved.
-- D4: exact summary schema, production caller and implementation details for
+- D4: exact operational-state schema, production caller and implementation details for
   fresh-base preparation. The concurrency, immutable-observation, failure,
   stale-read and late-correction behavior is approved.
 - D5: trial/restriction/recovery thresholds, polling formula, review cadence,
@@ -456,42 +469,10 @@ These remaining choices need approval before implementation.
 ## Design rationale
 
 The owner asked for a score that can reduce priority when measured operational
-waste is high, with the combined penalty capped at 1. Separate units are
-required because machine work and network requests are different facts. A
-normalized score can combine them only after the evidence identifies both the
-cost and the work that caused it. Historical host readings alone cannot support
-that attribution. This page stays whole because the observations, settlement
-and score are one contract consumed by the next planner; splitting them would
+cost. Requests, CPU and memory need separate measures because their units and
+attribution differ. This page stays whole because its observations, settlement
+and score form one contract consumed by the next planner; splitting it would
 separate persisted fields from the behavior they govern.
-Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC: count cost as waste only
-when an operation fails to produce usable material for a supported source-side
-reason. Keep CPU, memory and request costs separate, normalize each before
-combining, and apply the penalty automatically only after evidence qualifies.
-Use configurable provisional defaults of a seven-day UTC window, 20 distinct
-article opportunities, 80 percent measured coverage and equal one-third
-component weights. These values are not calibrated by the historical data.
-
-Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC: requests are the first
-eligible operational component. Keep CPU and private memory unavailable until
-attributable. Do not renormalize the equal one-third weights; requests alone
-can contribute at most one third. Unqualified evidence has no impact and does
-not fall back to RSS reliability.
-
-Owner direction, 2026-10-24 UTC: make the closed-UTC-day evidence window
-configurable, default seven days; read registered data from both
-`state/raw/` and `state/compact/`; allow concurrent runs; and design for
-graceful failures. Compact indexes determine which tier supplies each day.
-The window rolls forward; it is not a frozen seven-date set. A whole-run queue
-was considered and withdrawn: observations are append-only, so it would hold
-fetch, parse and selection without preventing a stale derived snapshot from
-overwriting newer state. Protect only publication of the derived snapshot.
-
-Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC: when the current summary
-is unreadable, use the last valid saved summary if available. If none is
-readable, continue selection without operational adjustment and report that
-restrictions could not be verified. Mark fallback state as stale, retain its
-original UTC range, and do not invent an age limit. Do not overwrite saved
-state with empty history. Existing robots and access-safety rules remain.
 
 ## See also
 
