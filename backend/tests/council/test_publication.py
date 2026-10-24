@@ -5,9 +5,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from _host_placement import refuse_external_placement
 from gardener._garden import an_origin, git, on_origin, quiet_git
 
 from idhazh import ledger
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.council_run_record import CouncilRunRecord
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.ledger_name import LedgerName
@@ -16,7 +18,7 @@ from idhazh.council import registry, session
 from utilities.council_publish import settle_and_publish
 from utilities.publication_git import Repository
 
-from ._config import copy_config, write_declarations
+from ._config import copy_config, set_host_fingerprint_placement, write_declarations
 from ._tenants import TENANT_SOURCE, a_venue, forget
 from .test_lifecycle import room
 
@@ -124,18 +126,21 @@ def test_many_tenants_and_later_dates_survive_a_failure(
     monkeypatch.setattr(session, "COUNCIL_ROOT", repo / "backend" / "var" / "council")
     forget(package)
     try:
-        assert (
-            settle_and_publish(
-                repo=repo,
-                dates=("2026-10-08", "2026-10-09"),
-                run_id="2026-10-09-123",
-                commit_sha=git(repo, "rev-parse", "HEAD").strip(),
-                config_root=configuration(tmp_path, slugs),
-                started_at=datetime(2026, 10, 9, 23, 59, tzinfo=UTC),
-                clock=lambda: datetime(2026, 10, 10, 0, 2, tzinfo=UTC),
+        config_root = configuration(tmp_path, slugs)
+        set_host_fingerprint_placement(config_root, False)
+        with refuse_external_placement():
+            assert (
+                settle_and_publish(
+                    repo=repo,
+                    dates=("2026-10-08", "2026-10-09"),
+                    run_id="2026-10-09-123",
+                    commit_sha=git(repo, "rev-parse", "HEAD").strip(),
+                    config_root=config_root,
+                    started_at=datetime(2026, 10, 9, 23, 59, tzinfo=UTC),
+                    clock=lambda: datetime(2026, 10, 10, 0, 2, tzinfo=UTC),
+                )
+                == 1
             )
-            == 1
-        )
         for slug in slugs:
             for date in ("2026-10-08", "2026-10-09"):
                 assert on_origin(origin, f"state/experiments/{slug}/{date}.json") == "completed\n"
@@ -175,6 +180,9 @@ def test_many_tenants_and_later_dates_survive_a_failure(
         assert host_rows[0].job_seconds == 180
         assert host_rows[0].memcpy_probe_mib == 0
         assert host_rows[0].memcpy_gib_s is None
+        assert host_rows[0].job == ServerJob.SAVE_COUNCIL_RESULTS.value
+        assert host_rows[0].run_id == "2026-10-09-123"
+        assert host_rows[0].measured_at is not None
     finally:
         forget(package)
 

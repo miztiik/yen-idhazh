@@ -331,6 +331,15 @@ edit and no schema regeneration.
 a schema change, a regeneration and a release. A vocabulary that expensive to
 move does not move, which is the state the lenses were in for weeks.
 
+**Term validation and matching have separate proofs.** The native lens and event
+models accept curated phrases and refuse a punctuation-first term or a
+one-character word at the keyword field. Each refusal isolates one existing
+constraint; scanning today's valid terms cannot prove that invalid terms are
+refused. Small authored taxonomy and watchlist models drive matcher, hostile-text,
+retirement and article-tagging tests independently of curator edits. Separate
+committed-config checks still require active lenses and events to carry terms
+and every watched entity to carry an alias.
+
 ## See also
 
 - [glossary.md](glossary.md) - the other half of the vocabulary: the words for the machinery that runs, rather than the words put on a story.

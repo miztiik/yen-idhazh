@@ -8,7 +8,8 @@ import {
   LegacyArticleAssessmentSchema,
   SourceRunRecordSchema,
   LedgerCompletionEvidenceSchema, SOURCE_RUN_VERSION,
-  PLANNING_OBSERVATIONS_VERSION, PreviousFeedIngestDispatchSchema, readFeedIngestDispatch,
+  PLANNING_OBSERVATIONS_VERSION, SOURCE_RELIABILITY_VERSION,
+  PreviousFeedIngestDispatchSchema, PreviousObservedFeedIngestDispatchSchema, readFeedIngestDispatch,
 } from "@idhazh/common-contracts";
 import type {
   DiversityMetricRow,
@@ -88,10 +89,11 @@ export const SourceRunContract: LedgerRowContract<SourceRunRecord> = {
 };
 export const DispatchContract: LedgerRowContract<FeedIngestDispatch> = {
   schema: FeedIngestDispatchSchema,
-  schemaVersion: PLANNING_OBSERVATIONS_VERSION,
+  schemaVersion: SOURCE_RELIABILITY_VERSION,
   legacyVersions: {
     [PREVIOUS_VERSION]: { schema: LegacyDispatchSchema, migrate: migrateDispatch },
     [FEED_INGEST_AUDIT_VERSION]: { schema: PreviousDispatchSchema, migrate: migrateDispatch },
+    [PLANNING_OBSERVATIONS_VERSION]: { schema: PreviousObservedFeedIngestDispatchSchema, migrate: migrateDispatch },
   },
 };
 

@@ -1,6 +1,6 @@
 # What the Pipeline Costs to Run
 
-**Last Updated**: 2026-10-10
+**Last Updated**: 2026-10-24
 
 Where current runtime measurements live and how to use them when sizing work. This page does not keep a history of production runs or duplicate model readings.
 
@@ -72,7 +72,16 @@ Budget-bearing readings live in [measured.py](../../backend/idhazh/measured.py),
 python backend/utilities/measure_budgets.py check
 ```
 
+Each record keeps its value, date, measured model digest, method and remeasurement
+instructions. The digest identifies the weights that produced the reading; it
+must not be loaded from the current model selection, which can change without
+remeasurement. Historical comparisons and design discussion do not belong in
+the record.
+
 Retake model-dependent readings in CI when the subject changes. Do not copy a value from this page into a gate or silently shorten content to make a context window fit.
+
+`measure_budgets.py read` dates a reading with the current UTC day, not the
+host's local day. `--taken-on YYYY-MM-DD` keeps the date the operator supplies.
 
 ## What to measure next
 

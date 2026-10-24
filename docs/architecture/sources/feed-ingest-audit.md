@@ -1,6 +1,6 @@
 # Feed planning audit recording
 
-**Last Updated**: 2026-10-22
+**Last Updated**: 2026-10-24
 
 Which observations can the isolated feed planner record without claiming that
 an incomplete attempt is complete?
@@ -47,7 +47,7 @@ losses. A candidate cannot be admitted and rejected at the same stage. Feed
 decisions remain separate from article losses. Duplicate losses are a subset of
 terminal losses, not an extra term in the input/output equation. Carrier
 membership is retained separately from the unique selected primary source.
-Current event revision `2026-10-22T12:20` requires UUIDv5 `event_id` and
+Current event revision `2026-10-24` requires UUIDv5 `event_id` and
 UUIDv4 `correlation_id`, following [the identity contract](../contracts/identity.md).
 Its sole declaration and validation are in the TypeScript Zod event schema;
 no Python event model is required or imported. Shared ledger rows retain their
@@ -64,6 +64,14 @@ recorded attempts and window; absent history stays null. Publication and lead
 counts stay null. Internal summaries have no completion phase or file evidence.
 Only after all five required ledgers pass native verification are complete source
 records derived from them and written to `source-runs`.
+
+Before writing, the recorder checks the reliability switch and floor against
+the original configuration, matches each article's operational history to the
+native source reading, and refuses conflicting supplied evidence. It replays
+curation with the same screened articles, opportunity evidence and captured
+clock, then compares carrier groups, source normalization, choices, score trace
+and assessments. The separate reliability penalty therefore cannot be added
+only to a final display or changed without changing the proved decision.
 
 Assessments retain measured extraction, attribution, suitability checks and
 the exact timing consumed by screening. No semantic evaluation is inferred from length, a byline
@@ -253,10 +261,10 @@ meaning. The recorder therefore never converts pending internal summaries direct
 complete records. It first proves the five existing ledger commitments, then
 writes and verifies source completion.
 
-The audit contract version is `2026-10-22`, with source-run revision
-`2026-10-22T10:05`. TypeScript readers migrate
-named `2026-10-20` rows through their recorded old schemas; the Python source
-contracts also migrate those rows without supplying missing timing facts.
+The [contract stamps](../contracts/schemas.md#what-holds-the-copy-in-step)
+advance only for the payloads whose stored meaning changes. TypeScript readers
+migrate named old rows through their recorded schemas; the Python source
+contracts also migrate them without supplying missing timing or reliability.
 Workflow verification uses these same current and legacy row contracts.
 The optional report reader migrates old event envelopes and their nested
 assessment fields before enforcing current event identity and policy checks.

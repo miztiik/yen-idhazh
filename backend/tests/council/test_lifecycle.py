@@ -27,13 +27,29 @@ RUN = "2026-10-11-123"
 SHA = "a" * 40
 
 
-def room(root: Path, declarations: dict[str, tuple[str, bool]]) -> Path:
+def room(
+    root: Path,
+    declarations: dict[str, tuple[str, bool]],
+    *,
+    shards: int | None = None,
+    first_night: str | None = None,
+    repair_window_nights: int | None = None,
+    repair_dates_a_night: int | None = None,
+) -> Path:
     """Write a registered room, including unavailable judges' declarations."""
     target = copy_config(root)
     shutil.copyfile(CONFIG_DIR / "ledgers.json", target / "ledgers.json")
     path = target / "llm_council.json"
     raw = json.loads(path.read_text(encoding="utf-8"))
     raw["judge_names"] = list(declarations)
+    for name, value in (
+        ("shards", shards),
+        ("first_night", first_night),
+        ("repair_window_nights", repair_window_nights),
+        ("repair_dates_a_night", repair_dates_a_night),
+    ):
+        if value is not None:
+            raw[name] = value
     path.write_text(json.dumps(raw), encoding="utf-8", newline="\n")
     (target / "judges").mkdir(exist_ok=True)
     for name, (status, model) in declarations.items():
@@ -72,6 +88,7 @@ def test_only_active_judges_get_cells_work_and_publication_paths(
             "active-judge": ("active", runs_model),
             "retired-judge": ("retired", False),
         },
+        shards=3,
     )
     council = config.load_council(target)
     assert night_plan.main(["--config-root", str(target), "--tonight", DATE]) == 0

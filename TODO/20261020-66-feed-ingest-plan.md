@@ -2,6 +2,7 @@
 
 **Last Updated**: 2026-10-24
 **Level**: 5 (source-kind/tier and persisted-contract migration requires owner approval before execution; the later planner implementation follows the approved contracts)
+**Status**: The sixteen historical component rows remain DONE within their recorded acceptance scope. Expanded follow-ups remain open: genuine Phase 2 publication/lead integration and testing are OPEN (U6), and production cutover is NOT APPROVED (U7). The publisher-ID documentation contract is IN-FLIGHT (U8). The name `/select-articles` is approved; publisher-ID runtime wiring and the API input/output contract and implementation await confirmation (U9). Table V enumerates remaining nonsemantic I Feed work; unsettled controls remain DESIGN PENDING.
 
 Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0.
 
@@ -192,7 +193,7 @@ implementation and all row statuses remain unchanged.
 | # | Term | Canonical owner | Config control and boundary |
 | --- | --- | --- | --- |
 | T1 | Source / feed | FeedDef in backend/idhazh/contracts/sources.py | A configured feed entry, identified by source_id. Its weight, status, allowance, and source-concentration penalty are independent controls. Preserve feed identity; do not use source_id as publisher identity. |
-| T2 | Publisher | The outlet rule in docs/architecture/publishing/autotune-content-similarity.md | Group carrier evidence by the recorded outlet, not by feed count; retain the separate configured parent-domain concentration limit. Two feeds from one publisher are not two independent publishers. |
+| T2 | Publisher | The existing [outlet rule](../docs/architecture/publishing/autotune-content-similarity.md) and [publisher-ID contract](../docs/architecture/contracts/publisher-identity.md) | Group carrier evidence by the recorded outlet, not by feed count; retain the separate configured parent-domain concentration limit. Two feeds from one publisher are not two independent publishers. Immutable ID naming is documented, not wired into runtime or stored fields. |
 | T3 | Vertical | docs/concepts/taxonomy.md, A vertical is a partition | The source feed's configured subject grouping. `vertical_overrides` controls its planning thresholds/weights; `lambda_vertical` controls portfolio saturation by this grouping. Do not rename or overwrite it when an article is filed elsewhere. |
 | T4 | Desk | docs/concepts/taxonomy.md, A desk is where the day published the story | Actual publication placement, using the same ID vocabulary as verticals but a separate field. Its existing configured floor/ceiling and placement rules are independent of vertical planning policy. `lambda_desk` can act only on a validated assigned desk; unavailable desk evidence is recorded as unavailable, not copied from vertical. |
 | T5 | Lens | docs/concepts/taxonomy.md, A lens is a question asked of items already collected | Cross-cutting theme membership comes from the configured lens matcher. Each lens's existing weight and the separate `lambda_lens` saturation coefficient are configurable. Do not call a lens a topic, desk, or vertical in the new contract. |
@@ -296,8 +297,9 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 
 ## 3. Status Reckoner
 
-Final acceptance, 2026-10-22 17:29 UTC: all sixteen rows and the owner-approved
-repairs are delivered on main. Original dependency PRs #1614-#1624 landed
+Historical component acceptance, 2026-10-22 17:29 UTC: Table D records the
+sixteen delivered rows and owner-approved repairs, not completion of the
+expanded follow-ups in Table U. Original dependency PRs #1614-#1624 landed
 before Phase 1 repair [#1627](https://github.com/miztiik/yen-idhazh/pull/1627).
 Final repair [#1628](https://github.com/miztiik/yen-idhazh/pull/1628) landed as
 `e1497d2f49d695bf90c51e70bbe1e516e1896891` after guarded exact-head review.
@@ -1943,6 +1945,12 @@ Those earlier results do not close these follow-ups or approve production
 planner/worker replacement. CPU collection remains active for the whole task;
 one-second polling is a cadence, never a profiling cutoff.
 
+Owner approval, kumarsnaveen_microsoft, 2026-10-24, compatibility-gate A1:
+U4 includes the historical published-column gate correction in the
+[contract rationale](../docs/architecture/contracts/schemas.md#design-rationale).
+No Python planning/ranking runtime change, local Python run, new test function
+or historical rewrite is authorized.
+
 ### Table U - Expanded delivery phases
 
 | Id | Status | Focused PR phase | Required completion evidence |
@@ -1950,16 +1958,55 @@ one-second polling is a cadence, never a profiling cutoff.
 | U1 | IN-FLIGHT | Resource report, independent whole-machine RAM checkbox and one-second task polling | One focused PR adds actual CPU/PID RAM/optional machine RAM to completion summaries and safe notices, retains copy OFF/ON separately, and binds the default-false workflow input to collection. Recorded checks prove independent controls, identity refusal, truthful partial windows and disabled reporting. Coordinator review, all five CI checks, hosted checkbox-ON verification and bounded OFF proof remain required. |
 | U2 | IN-FLIGHT | PID CPU and task-scoped host-probe HTTP start/stop | Child `5bfd52a3-9cfc-4d56-93b8-e9f4cf2a4365`, branch `task-scoped-host-profiling`, owns independent counter work; final integration depends on U1's config split. Add guarded process CPU without relabelling aggregate host CPU; expose real whole-task collection through the host-probe API with owned lifecycle, cleanup and integration tests. The current HTTP sample route is not this capability. |
 | U3 | IN-FLIGHT | L3 latency and hardware cache hit/miss support | Child `6a57ff1e-bdfc-4248-86f8-cd5b17c8bde2` owns optional counter adapters and controlled cache-latency tools; final routing follows U2. Distinguish latency, cache events and existing copy bandwidth. Prove actual runner capability, keeping denied or unsupported hardware measurements explicitly unavailable. L3 size or copy throughput alone does not close this row. |
-| U4 | IN-FLIGHT | Separate recorded source-reliability penalty | Owner approved this first selection improvement and its default-true switch; Apply source reliability child `6a51cd25-3e27-44d2-b837-4d0af537a117` owns its focused PR. Preserve TypeScript's set-aware MMR selection, meaning selection balances value against similarity, rather than promising identical Python selections. Record the separate reliability penalty and prove its effect with bounded integration cases; no Python runtime change. |
-| U5 | PENDING | Remaining selection improvements from the Python path | Parent reviews day-wide concentration limits and selection bonuses independently, retaining useful TypeScript selection behavior. Each approved change needs its own declared effect and integration evidence; U4 does not approve a source-authority formula or close these decisions. |
+| U4 | DELIVERED | Separate recorded source-reliability penalty | Merged [#1672](https://github.com/miztiik/yen-idhazh/pull/1672) as `0185035bbd8971ff15fdb8e83259b16ee942d5bc`. Exact candidate `a60abed0c0a42a513a32d415f1f2d239010f5a7c` passed all five CI checks, including the historical compatibility proof. The default-true, separately recorded operational penalty preserves TypeScript's set-aware selection; it does not change article quality or Python planning/ranking runtime. The [curation contract](../docs/architecture/sources/feed-curation.md) owns the behavior; U5-U7 remain separate. |
+| U5 | PENDING | Remaining selection improvements from the Python path | Review day-aware, data-only preferences using recorded publisher exposure and existing numeric priority; no article-quality comparison is authorized. The numeric comparison rule and preference strength remain DESIGN PENDING. No hard day caps or missing-history selection blocking. Selection bonuses remain separate owner decisions, retaining useful TypeScript selection behavior. Each approved change needs its own declared effect and integration evidence; U4 does not close these decisions. Publisher identity and the independent publisher-breadth API proposal are tracked separately in U8/U9. |
 | U6 | OPEN | Phase 2 genuine publication and lead-observer integration/testing | Integrate actual publication and lead observations with the planner's recorded identities and test the complete flow against genuine output. Generated full-audit fixtures prove the observer boundary only; they do not complete this phase or certify live publication. |
 | U7 | PENDING - NOT APPROVED | Production planner and worker cutover | Requires separate owner approval and a staged integration/test plan for real producer and consumer paths. Neither this report PR, the historical DONE rows nor generated audit fixtures authorize cutover or completion of the original plan's broader intent. |
+| U8 | IN-FLIGHT | Immutable curated publisher-ID documentation contract | Review the canonical [creation and preservation rules](../docs/architecture/contracts/publisher-identity.md), including collisions, unknown history and schema authority. Owner-approved naming option A1 authorizes documentation only. Coordinator review remains open; no catalog fields, feed assignments, persisted fields or runtime behavior are implemented by this phase. |
+| U9 | NAME APPROVED - CONTRACT PENDING | Independent post-parse `/select-articles` contract and implementation | Owner approved the name only. Confirm the typed parsed-batch/server-owned-local-reference input/output contract, publisher-group mappings, policy coefficients and runtime implementation before execution. The proposed step follows parsing and deterministic screening, before worker partitioning, using same-run validated candidates plus bounded history/configuration. Broader nonsemantic I Feed inputs/metrics remain in scope, not closed or removed by this phase. No new fetch/parse content deduplication, qualitative assessment, factual verification or semantic story-novelty/classification; bounded exact-URL newness is allowed and U5's soft-preference boundary remains. |
+
+### Table V - Pending nonsemantic I Feed scope
+
+This is the remaining scope inventory, not another executable design or an
+approval to turn on controls. [I Feed](../docs/architecture/sources/i-feed.md)
+remains the canonical design. Earlier first-priority choices order the work;
+they do not omit the other nonsemantic responsibilities below.
+
+PENDING means a capability or its integration proof is unfinished, not that
+every underlying reading is absent. DESIGN PENDING identifies unsettled
+contracts, settings, state-writer ownership, thresholds or activation authority;
+resolve the [open design choices](../docs/architecture/sources/i-feed.md#what-the-next-design-pass-must-settle)
+before an execution plan or automatic control is approved. Each later change
+must name its fixed run input or bounded UTC evidence window.
+
+| Id | Status | Pending work and completion boundary | Canonical home |
+| --- | --- | --- | --- |
+| V1 | PENDING - CONTRACT DESIGN PENDING | Complete uniform fetch/parse observation contracts and wiring through `/fetch`, `/parse` and `/plan`. Reuse existing HTTP, extraction, word-count and revision readings; cover actual network requests/retries, feed-entry parsing and technical extraction outcomes with source/run/attempt provenance and explicit unknown or not-attempted states. Existing readings alone do not prove uniform wiring. | [Record responsibilities](../docs/architecture/sources/i-feed.md#what-we-keep) |
+| V2 | PENDING - DEFINITIONS DESIGN PENDING | Build bounded per-source article-access, extraction and actual request/retry-cost rollups. Settle observed denominators and source-versus-pipeline attribution. Retries spend work but are not distinct article support; a successful feed poll does not prove that its articles can be read. | [Component evidence](../docs/architecture/sources/i-feed.md#component-evidence) |
+| V3 | DESIGN PENDING | Define UTC evidence age/cutoffs, distinct-article support, coverage/exposure denominators, normalization, priors, decay/half-lives and missing-data behavior. Keep raw readings and support beside estimates. Units, windows and settings need confirmation; missing evidence is not known zero. | [Scoring definitions](../docs/architecture/sources/i-feed.md#how-scoring-works) |
+| V4 | DESIGN PENDING | Settle one private state writer, versioned state and checkpoints. The next run must read latest compatible data without replacing pinned code/policy, settle each outcome once, retain partial/failed-run evidence and bound late catch-up. Define overlapping-run, failed-commit and insufficient-state recovery without silently clearing restrictions or waiting for unfinished work. | [Next-run update](../docs/architecture/sources/i-feed.md#what-changes-before-the-next-run) |
+| V5 | DESIGN PENDING | Report every article in a bounded technical-admission sample, including successful-extraction warnings and exclusions; insufficient support returns review. Assess access and extraction only, not qualitative article value. Sample limits, sufficiency thresholds and admission activation authority remain unsettled. | [First delivery](../docs/architecture/sources/i-feed.md#what-we-should-build-first) |
+| V6 | DESIGN PENDING | Define temporary access-restriction scope, permitted due probes, probation and recovery evidence before ordinary work resumes. HTTP 403 alone is not paywall proof; score decay does not clear a restriction. Thresholds, durations, probe budgets and transition authority need decisions. Permanent retirement stays a catalog action. | [Access and recovery](../docs/architecture/sources/i-feed.md#lifecycle-and-classification) |
+| V7 | DESIGN PENDING | Count distinct new eligible exact-URL keys within an explicit bounded seen window per completed permitted poll, with poll cost. Wire the cadence/due-time consumer: no poll means unknown arrivals; observed zero is not article failure. Settle freshness, maximum-gap, coverage and exploration trade-offs and scheduling authority; no fetch cap is chosen here. | [Polling and cadence](../docs/architecture/sources/i-feed.md#quiet-feeds-and-polling-cost) |
+| V8 | DESIGN PENDING | Define endpoint-bound ETag/Last-Modified state, conditional requests and HTTP 304 handling. Prove validators are used and unchanged responses are not failed extractions; preserve cached-response provenance without inventing unseen arrivals. Validator storage/lifecycle and state-writer ownership need confirmation. | [Conditional HTTP](../docs/architecture/sources/i-feed.md#quiet-feeds-and-polling-cost) |
+| V9 | PENDING | Review structured host/path-segment exclusions with explicit subdomain/case behavior, reasons and scope. Preserve the affiliate-exclusion intent without rejecting a query-string mention. This matcher correction does not approve an identity-changing URL cleanup policy. | [Host/path filtering](../docs/architecture/sources/i-feed.md#url-cleanup-proposal) |
+| V10 | DESIGN PENDING - SEPARATE APPROVAL | Obtain separate approval for versioned URL canonicalization and tracking-query rules. Preserve unknown query keys, repeated values, escaping, original addresses and historical identities. Compare old/new keys on bounded fixtures; do not reassign ambiguous history or use a blanket fallback that restores false merges. | [URL identity review](../docs/architecture/sources/i-feed.md#url-cleanup-proposal) |
+| V11 | PENDING - ACTIVATION DESIGN PENDING | Use bounded recorded operational regressions and recent reviews to distinguish source-access failures from shared extractor/release failures. Prove `/plan` observations reach settlement and the actual next-run consumer, including partial and unknown outcomes. Review cadence, triggers and promotion/rollback authority remain unsettled; a fixed fixture alone is not the live feedback loop. | [Operational review](../docs/architecture/sources/i-feed.md#detect-drift-without-confusing-its-cause) |
+| V12 | OPEN - PHASE 2 | U6 still needs genuine worker/model-cost, publication and lead observations joined to validated run/article/source identities, with real end-to-end integration proof. Generated publication fixtures prove only the observer boundary, not live completion or measured model cost. Production cutover remains separately unapproved in U7. | [Cost attribution](../docs/architecture/sources/i-feed.md#component-evidence); U6/U7 |
+
+This inventory authorizes no automatic settings tuner, silent fetch cap,
+qualitative assessment, semantic novelty/new-development claim, factual
+verification or content deduplication. Bounded exact-URL newness is operational
+evidence, not story novelty. Permanent retirement remains an explicit change to
+the owner-controlled source catalog.
 
 ## See also
 
+- [../docs/architecture/sources/i-feed.md](../docs/architecture/sources/i-feed.md) - canonical design and unsettled choices behind the pending nonsemantic inventory.
 - [../docs/architecture/contracts/identity.md](../docs/architecture/contracts/identity.md) - UUIDv5/v8 and deterministic identifier grammar.
 - [../docs/architecture/contracts/persistence.md](../docs/architecture/contracts/persistence.md) - persistence and FileEnvelope contracts.
 - [../docs/architecture/contracts/schemas.md](../docs/architecture/contracts/schemas.md) - schema rules and contract definitions.
+- [../docs/architecture/contracts/publisher-identity.md](../docs/architecture/contracts/publisher-identity.md) - approved immutable publisher-ID naming contract; implementation is not approved.
 - [../config/sources.json](../config/sources.json) - canonical source registry.
 - [../config/ledgers.json](../config/ledgers.json) - state ledger catalog and compaction enrollment.
 - [../docs/how-to/execute-a-plan.md](../docs/how-to/execute-a-plan.md) - execution contract.

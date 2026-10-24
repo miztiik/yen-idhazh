@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import contextlib
 import io
 import json
@@ -55,6 +56,7 @@ from ._harness import (
     _pin_output_name,
     _run_bodies,
     _script,
+    _shell_commands,
     _step,
     _steps,
     _strings,
@@ -1455,16 +1457,87 @@ def test_no_step_opens_the_committed_models_file_once_a_candidate_may_be_named()
     )
 
     for body in _run_bodies(workflow):
-        for line in body.splitlines():
-            if line.lstrip().startswith("#"):
-                continue
-            assert '"config/idhazh.json"' not in line, line
-            assert 'Path("config")' not in line, line
+        assert not _committed_config_reads(body), body
 
     steps = [step.get("name") or step.get("uses") for step in _steps(workflow, TEST_CASE_JOB)]
     assert steps.index(build.get("name")) < steps.index(TEST_CASE_CONFIG_STEP), (
         "every test case is cut from the copy, so the copy has to exist first"
     )
+
+
+def _committed_config_reads(script: str) -> list[str]:
+    """Find literal config CLI roots, shell file reads and inline Python open/Path calls.
+
+    This inspects simple commands and Python -c, not computed paths or shell
+    variables. The candidate action is checked separately at its input boundary.
+    """
+    found: list[str] = []
+    for words in _shell_commands(script):
+        if words[0] in {"python", "python3"}:
+            for index, word in enumerate(words):
+                option, separator, value = word.partition("=")
+                if option in {"--config", "--config-root"}:
+                    if not separator:
+                        assert index + 1 < len(words), f"{option} has no value"
+                        value = words[index + 1]
+                    if value.removeprefix("./").rstrip("/") in {"config", "config/idhazh.json"}:
+                        found.append(value)
+            if "-c" in words:
+                source = words[words.index("-c") + 1]
+                for node in ast.walk(ast.parse(source)):
+                    if not isinstance(node, ast.Call) or not node.args:
+                        continue
+                    function = node.func
+                    name = (
+                        function.id
+                        if isinstance(function, ast.Name)
+                        else (function.attr if isinstance(function, ast.Attribute) else "")
+                    )
+                    argument = node.args[0]
+                    if (
+                        name in {"open", "Path"}
+                        and isinstance(argument, ast.Constant)
+                        and isinstance(argument.value, str)
+                        and argument.value.removeprefix("./").rstrip("/")
+                        in {"config", "config/idhazh.json"}
+                    ):
+                        found.append(argument.value)
+        elif words[0] in {"cat", "jq", "head", "tail", "less"}:
+            found.extend(
+                word for word in words[1:] if word.removeprefix("./") == "config/idhazh.json"
+            )
+    return found
+
+
+@pytest.mark.parametrize(
+    "script",
+    [
+        "python -m idhazh plan --config-root config",
+        "python3 tool.py --config 'config'",
+        'python3 tool.py --config-root="config"',
+        "cat config/idhazh.json",
+        "jq .models_file 'config/idhazh.json'",
+        """python3 -c 'import json; json.load(open("config/idhazh.json"))'""",
+        '''python3 -c "from pathlib import Path; Path('config') / 'models.json'"''',
+    ],
+)
+def test_literal_committed_config_reads_are_detected(script: str) -> None:
+    assert _committed_config_reads(script)
+
+
+@pytest.mark.parametrize(
+    "script",
+    [
+        "python3 tool.py --config-root backend/var/candidate-config",
+        'python3 tool.py --config "$CONFIG_ROOT"',
+        "echo config/idhazh.json",
+        "# python3 tool.py --config-root config",
+        """python3 -c 'config = "a variable"; print(config)'""",
+        """python3 -c 'print("config/idhazh.json")'""",
+    ],
+)
+def test_config_words_without_a_committed_read_are_allowed(script: str) -> None:
+    assert not _committed_config_reads(script)
 
 
 def test_the_pin_verb_prints_the_build_the_model_block_reads(tmp_path: Path) -> None:

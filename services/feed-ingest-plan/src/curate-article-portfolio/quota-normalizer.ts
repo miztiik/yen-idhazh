@@ -1,6 +1,6 @@
 /** How much source opportunity is earned by distinct recorded evidence? */
 import { compareArticle } from "./quality-decoupler";
-import type { OpportunityEvidence, PortfolioArticle } from "./portfolio-input";
+import type { OpportunityEvidence, PortfolioArticle, ReliabilityControls } from "./portfolio-input";
 
 export type BonusWitness = Readonly<{
   kind: "uncovered_event_cluster" | "underrepresented_vertical" | "unique_evidence";
@@ -12,6 +12,7 @@ export type SourceAllowance = Readonly<{
 
 export function normalizeOpportunity(
   articles: readonly PortfolioArticle[], opportunity: OpportunityEvidence,
+  controls: ReliabilityControls,
   evidenceArticles: readonly PortfolioArticle[] = articles,
 ) {
   const bySource = new Map<string, PortfolioArticle[]>();
@@ -33,7 +34,7 @@ export function normalizeOpportunity(
   const rejected: { article: PortfolioArticle; allowance: SourceAllowance; position: number }[] = [];
   const allowances = new Map<string, SourceAllowance>();
   for (const [source, bucket] of [...bySource].sort(([a], [b]) => a.localeCompare(b))) {
-    const sorted = bucket.sort(compareArticle);
+    const sorted = bucket.sort((left, right) => compareArticle(left, right, controls));
     const policy = sorted[0]!.policy.curate;
     const witnesses: BonusWitness[] = [];
     const used = new Set<string>();

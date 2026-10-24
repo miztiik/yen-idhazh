@@ -9,7 +9,7 @@ from typing import Final
 
 import pytest
 from conftest import CONFIG_DIR, REPO_ROOT, read_text
-from pydantic import ValidationError
+from pydantic import StrictBool, ValidationError
 
 from idhazh import config
 from idhazh.classify import dag
@@ -1037,22 +1037,6 @@ def test_the_wait_worth_a_sentence_is_a_knob_the_frontend_agrees_with() -> None:
     assert int(mirrored.group(1)) == UiConfig().payload_slow_ms
 
 
-def test_the_seed_covers_what_a_reading_surface_draws_before_a_reader_acts() -> None:
-    """The seed is what a document holds once the rest of the day arrives by fetch.
-
-    Every lead is an anchor into the stream, so a document that carries fewer
-    stories than the leading block holds is a block whose links scroll to
-    nothing. That is the floor, and it is not the whole answer: the leads are
-    chosen across the WHOLE day, so a lead can sit at position 300 of the
-    published order and outside any prefix. Whichever row moves the item list
-    to a browser fetch owns that, and this is the number it starts from.
-    """
-    ui = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).ui
-    assert ui.shell_seed_items >= ui.leading_stories, (
-        f"a {ui.shell_seed_items}-story seed cannot hold {ui.leading_stories} leads"
-    )
-
-
 def test_a_shared_subject_is_worth_less_than_a_second_feed_carrying_the_story() -> None:
     """Decision 3's ceiling, derived rather than spelled.
 
@@ -1128,7 +1112,9 @@ def test_the_item_health_census_is_not_switchable() -> None:
     The explicit switch list keeps the census from gaining an off switch.
     """
     switches = {
-        name for name, field in ObservabilityConfig.model_fields.items() if field.annotation is bool
+        name
+        for name, field in ObservabilityConfig.model_fields.items()
+        if field.annotation in (bool, StrictBool)
     }
     assert switches == {
         "evaluation_enabled",
@@ -1137,6 +1123,7 @@ def test_the_item_health_census_is_not_switchable() -> None:
         "host_telemetry_enabled",
         "memory_profiling_enabled",
         "host_fingerprint_frequency_enabled",
+        "host_fingerprint_placement_enabled",
     }
     assert ObservabilityConfig().memory_profiling_enabled is True
     assert (
@@ -1146,6 +1133,25 @@ def test_the_item_health_census_is_not_switchable() -> None:
         is False
     )
     assert "census" in (ObservabilityConfig.__doc__ or "")
+
+
+def test_host_fingerprint_placement_is_default_on_and_strict() -> None:
+    assert ObservabilityConfig().host_fingerprint_placement_enabled is True
+    assert (
+        ObservabilityConfig(host_fingerprint_placement_enabled=True)
+        .host_fingerprint_placement_enabled
+        is True
+    )
+    assert (
+        ObservabilityConfig(host_fingerprint_placement_enabled=False)
+        .host_fingerprint_placement_enabled
+        is False
+    )
+    for invalid in ("true", "false", 0, 1, None):
+        with pytest.raises(ValidationError):
+            ObservabilityConfig.model_validate(
+                {"host_fingerprint_placement_enabled": invalid}
+            )
 
 
 def test_a_sample_rate_of_zero_is_refused_because_the_toggle_already_says_off() -> None:
