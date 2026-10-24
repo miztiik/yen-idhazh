@@ -93,10 +93,6 @@ export const TaskProfileSchema = z.strictObject({
     || value.samples.at(-1)?.elapsed_ms !== value.elapsed_ms) {
     context.addIssue({ code: "custom", path: ["samples"], message: "must retain the actual closing observation and whole-task count" });
   }
-  if (["owner_exited", "pid_reused", "expired", "service_stopped", "start_aborted"].includes(value.end_reason)
-    && value.outcome !== "cancelled") {
-    context.addIssue({ code: "custom", path: ["outcome"], message: "interrupted task profiles must be cancelled" });
-  }
   if (!value.config.enabled || value.full_window_count >= value.sample_count
     || (value.samples.length === value.sample_count && value.full_window_count !== value.samples.filter(sample =>
       sample.phase !== "opening" && sample.cpu_window.full_window && sample.cpu_window.cpu.reason === null).length)) {
