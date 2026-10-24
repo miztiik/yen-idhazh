@@ -1,6 +1,6 @@
 # The ledger registry
 
-**Last Updated**: 2026-10-23
+**Last Updated**: 2026-10-24
 
 A ledger is a committed file or folder under `state/` that one run writes so that a later run can read it. A ledger exists in code only when it is registered, and registering it takes two edits. The first is one member of `LedgerName`, the ledger's one name in code. The second is one entry in `config/ledgers.json`, which puts the ledger in a family - one top-level folder under `state/` - and says where its files sit. When the code loads, it checks that the two edits agree, and the build stops if they do not.
 
@@ -372,12 +372,12 @@ rows during packing would remove the only complete answer before the later
 reader can verify completion. The six planning ledgers therefore keep each
 attempt until that reader selects one.
 
-**Candidate-model verdicts are retained but no longer published.** Removing
-the validation workflow removes their writer and compaction task. The ledger
-family stays registered as retired so its persisted name and path remain
-recognisable, while explicit false consent keeps it out of the Data explorer.
-This preserves the shared ledger vocabulary without advertising an empty
-ledger or changing the envelope contract.
+**The candidate-model ledger and its files are removed, not retired.** Owner
+ruling, 2026-10-24. No writer or reader remains for its verdict rows. The owner
+chose to delete the 16 empty daily files and three indexes, remove the registry
+family and both language names, and advance the file-envelope contract. No
+historical decoder or compaction policy remains; the removed name is not
+migrated because its committed data was deleted.
 
 ## See also
 

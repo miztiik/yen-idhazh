@@ -153,22 +153,6 @@
       ]
     },
     {
-      "name": "candidate-models",
-      "lifecycle_status": "retired",
-      "description": "The verdict on each candidate model, filed on the day it was measured.",
-      "onboarded": "2026-09-27",
-      "ledgers": [
-        {
-          "name": "candidate-models",
-          "publish_to_data_explorer": false,
-          "grain": "raw-and-compact",
-          "prefix": ["candidate-models"],
-          "stem": null,
-          "suffix": null
-        }
-      ]
-    },
-    {
       "name": "item-health-summary",
       "lifecycle_status": "active",
       "description": "Daily totals of item health for each step, kept after the per-item rows are deleted.",

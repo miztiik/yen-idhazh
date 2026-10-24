@@ -5,7 +5,8 @@ import {
   CandidateRejectionRecordSchema, CompletedFileSchema, DiversityMetricRowSchema,
   DropReasonCountSchema, EditorialSelectionRowSchema, FeedIngestCandidateSchema,
   FeedIngestDispatchSchema,
-  FileEnvelopeSchema, FOOTER_METADATA_KEYS, OPTIONAL_FOOTER_METADATA_KEYS,
+  ENVELOPE_VERSIONS, FILE_ENVELOPE_VERSION, FileEnvelopeSchema,
+  FOOTER_METADATA_KEYS, OPTIONAL_FOOTER_METADATA_KEYS,
   LedgerCompletionEvidenceSchema, PartitionAssignmentSchema,
   PenaltyEvidenceSchema, PolicyIdentitySchema,
   RejectionDetailsSchema, RowIdentitySchema, ROW_IDENTITY_COLUMN_VERSIONS, ScoreEvidenceSchema, SourceRunRecordSchema,
@@ -45,6 +46,7 @@ export const publicationInputSchemas = {
 
 if (import.meta.main) process.stdout.write(`${JSON.stringify({
   ...schemas, __footer_keys: footerKeys, __optional_footer_keys: optionalFooterKeys,
+  __envelope_versions: ENVELOPE_VERSIONS, __file_envelope_version: FILE_ENVELOPE_VERSION,
   __row_identity_column_versions: ROW_IDENTITY_COLUMN_VERSIONS,
   __publication_inputs: publicationInputSchemas,
   __publication_input_versions: {
