@@ -189,12 +189,15 @@ class TestCompiledBar:
         compiled = compile_bar(plan, table, visuals=committed_visuals())
 
         stated = {element.element_id: element for element in table.elements}
-        numbers = re.findall(
-            r"(?<![\w,])\d+(?:,\d{3})*(?:\.\d+)?(?![\w,])",
-            compiled.alt_text,
-        )
+        numbers = [
+            Decimal(number.replace(",", ""))
+            for number in re.findall(
+                r"(?<![\w,])[+-]?\d+(?:,\d{3})*(?:\.\d+)?(?![\w,])",
+                compiled.alt_text,
+            )
+        ]
         expected = [
-            format(Decimal(str(stated[cited].value)).normalize(), ",f")
+            Decimal(str(stated[cited].value))
             for cited in plan.encodings.quantity
         ]
         assert numbers == expected
