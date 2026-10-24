@@ -120,11 +120,12 @@ export async function verifyLiveHostProfiling(
 }
 
 if (import.meta.main) {
-  const { RUNNER_TEMP, GITHUB_SHA, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT } = process.env;
-  if (!RUNNER_TEMP || !GITHUB_SHA || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT) {
-    throw new Error("Hosted resource proof requires the runner directory, revision and run identity");
+  const { GITHUB_SHA, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT } = process.env;
+  if (!GITHUB_SHA || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT) {
+    throw new Error("Hosted resource proof requires the revision and run identity");
   }
-  const root = join(RUNNER_TEMP, "feed-ingest-plan");
+  // The CI artifact belongs to the existing test-report tree, never the published tree.
+  const root = join("test-results", "host-probes");
   await mkdir(root, { recursive: true });
   const proof = await verifyLiveHostProfiling({
     git_sha: GITHUB_SHA, run_id: `${new Date().toISOString().slice(0, 10)}-${GITHUB_RUN_ID}`,

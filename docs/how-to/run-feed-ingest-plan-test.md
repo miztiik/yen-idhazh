@@ -1,6 +1,6 @@
 # Run the isolated feed planner checks
 
-**Last Updated**: 2026-10-23
+**Last Updated**: 2026-10-24
 
 How do you check the TypeScript planner without changing daily publication?
 Use `.github/workflows/feed-ingest-plan-test.yml`. It starts only by manual
@@ -283,6 +283,9 @@ counts. Copy work never overlaps fetch/parse CPU measurement.
 temporary evidence root. Completion requires `resource_proof_complete: true`.
 Main CI also runs this same RAM HTTP/copy proof without fetching live feeds
 or publishing data, and retains the `typescript-resource-proof` artifact.
+Its artifact uses the existing ignored
+`test-results/host-probes/resource-proof.json` test-report path; the isolated
+workflow keeps its proof in the temporary evidence root.
 Neither path writes another host ledger or changes shared defaults. See
 [measurement semantics and controls](../reference/host-metrics.md#whole-task-typescript-samples).
 The integrated live-feed and selected-article proof still needs the

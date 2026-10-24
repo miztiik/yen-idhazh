@@ -90,6 +90,8 @@ test("offers four manual controls and commits only genuine planner and host file
   expect(probes?.run).toContain("bun run test");
   const resourceProof = gateSteps.map(record).find(step => step.name === "Live TypeScript RAM and optional copy proof");
   expect(resourceProof?.run).toBe("bun run .github/scripts/feed-ingest-plan-profile-proof.ts");
+  const resourceUpload = gateSteps.map(record).find(step => step.name === "Preserve TypeScript resource proof");
+  expect(record(resourceUpload?.with).path).toBe("test-results/host-probes/resource-proof.json");
   expect(preflight?.if).toBe("needs.scope.outputs.code == 'true'");
   expect(preflight?.["continue-on-error"]).not.toBe(true);
   expect(preflight?.run).toContain("bun test ./.github/scripts/tests/feed-ingest-plan-report.test.ts");

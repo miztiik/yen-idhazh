@@ -195,7 +195,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: typescript-resource-proof
-          path: ${{ runner.temp }}/feed-ingest-plan/resource-proof.json
+          path: test-results/host-probes/resource-proof.json
           if-no-files-found: warn
 
       - name: Tests, including the five injection canaries
