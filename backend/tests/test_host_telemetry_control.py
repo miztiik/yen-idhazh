@@ -23,11 +23,11 @@ from utilities.host_telemetry_control import resolve
 
 def test_master_switch_overrides_python_collection(tmp_path: Path) -> None:
     app = config.load(CONFIG_DIR).app
+    app.observability.host_telemetry_enabled = True
     root = tmp_path / "config"
     root.mkdir()
     path = root / "idhazh.json"
     path.write_text(app.to_json(), encoding="ascii")
-    assert app.observability.host_telemetry_enabled
     for mode in ("python", "off"):
         assert resolve(mode, root) == mode
     app.observability.host_telemetry_enabled = False

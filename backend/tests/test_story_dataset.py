@@ -116,21 +116,33 @@ def answer(batch: WorkerBatch, worker_id: str = "primary-example-fixture") -> Wo
     )
 
 
-def test_approved_multi_memberships_are_equal_and_partial_is_not_duplicate() -> None:
+def test_approved_multi_memberships_are_equal_and_partial_is_not_duplicate(work: Path) -> None:
     approved = {example.id: example for example in fixtures().examples}
-    assert len(approved["B7"].a_decision.memberships) == 2
-    assert len(approved["B7"].b_decision.memberships) == 1
-    assert len(approved["B8"].b_decision.memberships) == 2
-    assert (
-        approved["B7"].pair_decision.coverage == approved["B8"].pair_decision.coverage == "partial"
-    )
-    assert "primary" not in type(approved["B7"].a_decision.memberships[0]).model_fields
-    assert approved["B6"].pair_decision.story == "shared"
-    assert approved["B6"].pair_decision.occurrence == "different"
-    assert approved["B4"].pair_decision.topic == "shared"
-    assert approved["B4"].pair_decision.event == "different"
-    for name in ("B1", "B2", "B3", "B9"):
-        assert approved[name].pair_decision.coverage == "duplicate"
+    store = seeded_store(work)
+    try:
+        catalog = read_catalog(store)
+        article_ids = set(articles())
+        for example in approved.values():
+            validate_decision(example.a_decision, catalog, [], article_ids)
+            validate_decision(example.b_decision, catalog, [], article_ids)
+
+        assert len(approved["B7"].a_decision.memberships) == 2
+        assert len(approved["B7"].b_decision.memberships) == 1
+        assert len(approved["B8"].b_decision.memberships) == 2
+        assert (
+            approved["B7"].pair_decision.coverage
+            == approved["B8"].pair_decision.coverage
+            == "partial"
+        )
+        assert "primary" not in type(approved["B7"].a_decision.memberships[0]).model_fields
+        assert approved["B6"].pair_decision.story == "shared"
+        assert approved["B6"].pair_decision.occurrence == "different"
+        assert approved["B4"].pair_decision.topic == "shared"
+        assert approved["B4"].pair_decision.event == "different"
+        for name in ("B1", "B2", "B3", "B9"):
+            assert approved[name].pair_decision.coverage == "duplicate"
+    finally:
+        store.close()
 
 
 def test_frozen_capture_git_attributes_preserve_exact_crlf_bytes() -> None:
@@ -297,15 +309,24 @@ def test_worker_catalog_sidecar_keeps_bound_revision_after_concurrent_review(wor
         store.close()
 
 
-def test_b10_source_findings_are_real_but_boundary_remains_unresolved() -> None:
+def test_b10_source_findings_are_real_but_boundary_remains_unresolved(work: Path) -> None:
     example = fixtures().examples[-1]
-    assert example.id == "B10" and example.a_decision.state == "unresolved"
-    assert example.pair_decision.story == "unresolved"
-    assert example.pair_decision.occurrence == "same"
-    assert example.pair_decision.coverage == "unresolved"
-    assert len(example.a_decision.source_checks) == 2
-    assert all(check.checked_at is None for check in example.a_decision.source_checks)
-    assert not any("Negotiated terms" in item.name for item in fixtures().catalog.entities)
+    store = seeded_store(work)
+    try:
+        catalog = read_catalog(store)
+        article_ids = set(articles())
+        validate_decision(example.a_decision, catalog, [], article_ids)
+        validate_decision(example.b_decision, catalog, [], article_ids)
+
+        assert example.id == "B10" and example.a_decision.state == "unresolved"
+        assert example.pair_decision.story == "unresolved"
+        assert example.pair_decision.occurrence == "same"
+        assert example.pair_decision.coverage == "unresolved"
+        assert len(example.a_decision.source_checks) == 2
+        assert all(check.checked_at is None for check in example.a_decision.source_checks)
+        assert not any("Negotiated terms" in item.name for item in fixtures().catalog.entities)
+    finally:
+        store.close()
 
 
 def test_schema_rejects_ranking_fake_human_and_unreasoned_uncertainty() -> None:
@@ -1092,14 +1113,24 @@ def vector_fixture() -> VectorManifest:
 def test_known_probability_pair_sampling_reports_separate_overlapping_streams() -> None:
     from idhazh.story_dataset.sampling import build_pairs, sample_indices
 
-    selected = policy().model_copy(update={"representative_pair_probability": 1.0})
-    frame = build_pairs(manifest(), articles(), selected)
-    assert frame.population_size == 190 and len(frame.pairs) == 190
-    assert all(row.representative_probability == 1 for row in frame.pairs)
+    selected = policy().model_copy(
+        update={"metadata_neighbors": 1, "representative_pair_probability": 0.1, "seed": 0}
+    )
+    evidence = articles()
+    expected_population = len(evidence) * (len(evidence) - 1) // 2
+    frame = build_pairs(manifest(), evidence, selected)
+    assert frame.population_size == expected_population
+    assert len(frame.pairs) < expected_population
+    assert frame.representative_probability == 0.1
     assert any(row.challenge_tags for row in frame.pairs)
+    assert any(
+        row.representative_probability == 0.1 and row.challenge_tags for row in frame.pairs
+    )
     assert all(len(row.missing_vector_articles) == 2 for row in frame.pairs)
-    assert sample_indices(190, 0.25, 3) == sample_indices(190, 0.25, 3)
-    assert len(sample_indices(190, 0.25, 3)) < 190
+    assert sample_indices(expected_population, 0.25, 3) == sample_indices(
+        expected_population, 0.25, 3
+    )
+    assert len(sample_indices(expected_population, 0.25, 3)) < expected_population
 
 
 def test_four_real_vector_slices_union_ranks_without_averaging() -> None:

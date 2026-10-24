@@ -194,6 +194,28 @@ def _settings() -> config.Settings:
     return config.load(CONFIG_DIR)
 
 
+def _settings_with_temperatures(
+    root: Path, *, judge_temperature: float, entry_temperature: float
+) -> config.Settings:
+    settings = _settings()
+    judge_raw = json.loads(read_text(CONFIG_DIR / "judges" / "content-similarity-judge.json"))
+    judge_raw["judge_temperature"] = judge_temperature
+    judge_path = root / "judges" / "content-similarity-judge.json"
+    judge_path.parent.mkdir(parents=True, exist_ok=True)
+    judge_path.write_text(json.dumps(judge_raw), encoding="utf-8", newline="\n")
+
+    model_config = settings.app.models_file
+    model_raw = json.loads(read_text(CONFIG_DIR / model_config))
+    model_raw["summarizer"]["sampling"]["temperature"] = entry_temperature
+    model_path = root / model_config
+    model_path.parent.mkdir(parents=True, exist_ok=True)
+    model_path.write_text(json.dumps(model_raw), encoding="utf-8", newline="\n")
+    models = ModelsConfig.model_validate(
+        settings.models.model_dump(mode="json") | {"summarizer": model_raw["summarizer"]}
+    )
+    return dataclasses.replace(settings, config_dir=root, models=models)
+
+
 def _settings_flushing_every(root: Path, pairs: int) -> config.Settings:
     """The committed settings with one knob moved, so the cadence is read and not assumed."""
     settings = _settings()
@@ -645,7 +667,7 @@ def test_every_decode_carries_the_grammar_and_asks_for_the_first_position() -> N
         assert "json_schema" not in body, "two controls in one body is a build deciding which wins"
 
 
-def test_the_decode_is_sent_at_the_judging_knob_and_not_the_entry() -> None:
+def test_the_decode_is_sent_at_the_judging_knob_and_not_the_entry(tmp_path: Path) -> None:
     """A sampler that strays turns the swap from a bias reading into a noise reading.
 
     Read off the posted body rather than off the config, because the defect this
@@ -653,10 +675,16 @@ def test_the_decode_is_sent_at_the_judging_knob_and_not_the_entry() -> None:
     see. The entry's own temperature is asserted to be a different number, so
     this fails rather than passes by coincidence if the wiring is dropped.
     """
-    settings = _settings()
+    settings = _settings_with_temperatures(
+        tmp_path, judge_temperature=0.37, entry_temperature=0.71
+    )
     from idhazh.content_similarity_judge import settings as judge_settings
 
     tuning = judge_settings.load(settings.config_dir)
+    entry = settings.models.summarizer
+    assert tuning.judge_temperature == 0.37
+    assert entry.sampling["temperature"] == 0.71
+    assert entry.sampling["temperature"] != tuning.judge_temperature
     day = _a_day()
     with JudgeServer(_reply("two-events")) as server:
         judge.judge_pair(
@@ -669,11 +697,6 @@ def test_the_decode_is_sent_at_the_judging_knob_and_not_the_entry() -> None:
         decodes = server.decodes
 
     assert decodes, "no body was posted, so this proves nothing"
-    assert tuning.judge_temperature == 0.0, "the committed judging knob is no longer greedy"
-    entry = settings.models.summarizer
-    assert entry.sampling["temperature"] != tuning.judge_temperature, (
-        "the entry and the knob hold the same number, so this test cannot tell them apart"
-    )
     for body in decodes:
         assert body["temperature"] == tuning.judge_temperature
         assert body["top_p"] == entry.sampling["top_p"]

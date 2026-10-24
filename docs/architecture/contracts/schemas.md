@@ -535,6 +535,9 @@ The assemble stage uses this contract's writer for every new fragment.
 Existing fragments remain readable and are not rewritten in bulk.
 
 **The writer's layout is held by tests; a curator's own whitespace is not.** Every layout parses to the same payload, so a hand edit that reflows one record across ten lines is accepted and reads the same. `backend/tests/contracts/test_json_serialization.py` holds each serializer's bytes against hand-written expectations. `backend/tests/contracts/test_record_layouts.py` holds which writer a contract selects and which record lists it puts on one line, including the three curated registries. `backend/tests/contracts/test_curated_registries.py` holds that a hand-edited registry has exactly the keys and values its contract writes, so a field is spelled out even when it holds its default.
+Separate controlled examples under `tests/fixtures/curated-registries/` prove
+native reader/writer preservation of populated values, list order and default
+handling; they do not relax the explicit-field rule for curated files.
 
 Historical reader tests spell old column names independently of the production
 rename and removal tables. Removing a migration must fail the same collected
