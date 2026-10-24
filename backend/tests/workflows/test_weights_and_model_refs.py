@@ -39,6 +39,7 @@ from ._harness import (
     _declared_dispatch_inputs,
     _every_env,
     _expression,
+    _expression_references,
     _load_workflows,
     _mapping,
     _model_server_callers,
@@ -785,15 +786,43 @@ def _pasted(body: str) -> list[str]:
     """
     found: list[str] = []
     for expression in re.findall(r"\$\{\{(.*?)\}\}", body, re.S):
-        segments = expression.strip().split(".")
-        if segments[0] not in PASTEABLE_CONTEXTS:
-            continue
-        # An expression can carry an operator after the value it reads, so the
-        # last segment is cut at the first character a name cannot hold.
-        name = re.split(r"[^A-Za-z0-9_-]", segments[-1], maxsplit=1)[0]
-        if name in PUBLISHED_KEYS or any(name.endswith(f"_{key}") for key in PUBLISHED_KEYS):
+        references = _expression_references("${{" + expression + "}}", PASTEABLE_CONTEXTS)
+        if any(
+            reference[-1] in PUBLISHED_KEYS
+            or any(reference[-1].endswith(f"_{key}") for key in PUBLISHED_KEYS)
+            for reference in references
+        ):
             found.append(expression.strip())
     return found
+
+
+@pytest.mark.parametrize(
+    "expression",
+    [
+        "steps.model.outputs.summarizer_file",
+        "toJSON(steps.model.outputs.summarizer_file)",
+        "steps.model.outputs.summarizer_file || steps.x.outputs.y",
+        "steps.x.outputs.y || needs.model.outputs.summarizer_file",
+        "inputs['summarizer_file']",
+        "steps['model'].outputs['summarizer_file']",
+    ],
+)
+def test_published_shell_values_cannot_hide_inside_an_expression(expression: str) -> None:
+    assert _pasted("echo ${{ " + expression + " }}") == [expression]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "echo $MODEL_FILE",
+        "echo ${{ env.summarizer_file }}",
+        "echo ${{ github.summarizer_file }}",
+        "echo ${{ steps.model.outputs.unrelated }}",
+        "echo ${{ toJSON('steps.model.outputs.summarizer_file') }}",
+    ],
+)
+def test_other_shell_values_are_not_published_model_references(body: str) -> None:
+    assert _pasted(body) == []
 
 
 def test_no_job_that_reaches_the_shared_download_pastes_a_value_the_reader_published() -> None:

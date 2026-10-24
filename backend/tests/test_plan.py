@@ -26,6 +26,7 @@ import pytest
 from conftest import (
     CONFIG_DIR,
     FIXTURES_DIR,
+    collect_config,
     read_text,
     seed_feed_health,
     seed_item_health,
@@ -35,6 +36,7 @@ from conftest import (
 
 from idhazh import cli, config, fetch, ledger
 from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import (
     FeedHealthRow,
     FetchOutcome,
@@ -56,7 +58,7 @@ from idhazh.contracts.run_manifest import RunRecord, RunStatus
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.seen import PublishedRow
 from idhazh.contracts.sources import FeedDef, SalienceFeedDef, Sources
-from idhazh.contracts.taxonomy import LifecycleStatus, VerticalDef
+from idhazh.contracts.taxonomy import LifecycleStatus, SourceTier, VerticalDef
 from idhazh.fan_out import shard_count
 from idhazh.stages import common
 from idhazh.stages.common import Fetcher, shard_of
@@ -248,6 +250,36 @@ def settings_for(
     )
 
 
+def story_supply(
+    count: int, *, vertical: str = "ai", tier: SourceTier = 2
+) -> tuple[list[FeedDef], dict[str, fetch.FetchResult]]:
+    """One distinct story per newsroom, with no source quota to hide a lost story."""
+    feeds = [
+        FeedDef(
+            id=f"{vertical}-supply-{index}",
+            vertical=vertical,
+            title=f"Example {vertical} newsroom {index}",
+            url=f"https://{vertical}-supply-{index}.example.org/feed",
+            tier=tier,
+        )
+        for index in range(count)
+    ]
+    replies = {
+        feed.url: fetch.FetchResult(
+            FetchOutcome.OK,
+            status=200,
+            body=(
+                "<rss version='2.0'><channel><title>Reports</title><item>"
+                f"<title>{vertical} field report {index}</title>"
+                f"<link>https://{vertical}-supply-{index}.example.org/story</link>"
+                "</item></channel></rss>"
+            ).encode(),
+        )
+        for index, feed in enumerate(feeds)
+    }
+    return feeds, replies
+
+
 def plan(
     feeds: list[FeedDef],
     *,
@@ -265,8 +297,11 @@ def plan(
     cap: int | None = None,
     article_limit: int | None = None,
     shards: int | None = None,
+    run: RunConfig | None = None,
 ) -> RunPlan:
     settings = settings_for(feeds, salience=salience, verticals=verticals, retired=retired)
+    if run is not None:
+        settings = dataclasses.replace(settings, app=settings.app.model_copy(update={"run": run}))
     if safety_ceiling is not None:
         settings = dataclasses.replace(
             settings,
@@ -356,11 +391,23 @@ def test_the_plan_records_an_operator_shard_count_even_when_it_exceeds_the_deriv
 
 
 def test_the_plan_derives_its_shard_count_from_its_final_items() -> None:
-    built = plan([LAB, TRADE, COMMUNITY], article_limit=1)
-
-    assert built.shards == shard_count(
-        len(built.items), run=config.load(CONFIG_DIR).app.run
+    run = RunConfig.model_validate(
+        {
+            **config.load().app.run.model_dump(),
+            "shard_size": 2,
+            "max_parallel": 4,
+            "safety_ceiling_per_run": 12,
+            "safety_ceiling_per_day": 12,
+        }
     )
+    feeds, replies = story_supply(6)
+    full = plan(feeds, fetcher=replies.__getitem__, run=run)
+    built = plan(feeds, fetcher=replies.__getitem__, run=run, article_limit=3)
+
+    assert len(full.items) == 6
+    assert full.shards == 3
+    assert len(built.items) == 3
+    assert built.shards == 2, "three final items need two workers, not the pool's three"
 
 
 def test_a_feed_that_answers_two_hundred_with_nothing_in_it_counts_as_read() -> None:
@@ -516,16 +563,55 @@ def test_a_second_vertical_with_no_feeds_still_appears_in_the_plan() -> None:
 
 def test_supply_decides_the_size_of_the_day() -> None:
     """No per-vertical cap. What the feeds offered is what the day is."""
-    built = plan([LAB, TRADE, COMMUNITY])
-    assert len(built.items) == built.verticals[0].planned
-    assert built.verticals[0].planned > 0
+    run = RunConfig.model_validate(
+        {
+            **config.load().app.run.model_dump(),
+            "safety_ceiling_per_run": 12,
+            "safety_ceiling_per_day": 12,
+        }
+    )
+    for count in (6, 9):
+        feeds, replies = story_supply(count)
+        built = plan(feeds, fetcher=replies.__getitem__, run=run)
+        assert {item.canonical_url for item in built.items} == {
+            f"https://ai-supply-{index}.example.org/story" for index in range(count)
+        }
+        assert len(built.items) == built.verticals[0].planned == count
 
 
-def test_no_single_feed_becomes_the_vertical() -> None:
-    """`collect.max_per_source` is 2, and the lab feed alone carries three stories."""
-    built = plan([LAB, TRADE, COMMUNITY])
+def test_no_single_feed_becomes_the_vertical(tmp_path: Path) -> None:
+    """All three lab stories are young enough to compete for the live source allowance."""
+    lab_supply = {
+        MODEL_RELEASE,
+        "https://blog.example-lab.org/2026/08/decoding-notes",
+        "https://blog.example-lab.org/2026/08/supply-agreement",
+    }
+    collect = config.load().app.collect
+    settings = settings_for([LAB, TRADE, COMMUNITY])
+    available_collect = collect_config(
+        **{
+            **collect.model_dump(),
+            "max_age_hours": 48,
+            "max_per_source": len(lab_supply),
+        }
+    )
+    available = stage_plan(
+        DATE,
+        settings=dataclasses.replace(
+            settings, app=settings.app.model_copy(update={"collect": available_collect})
+        ),
+        commit_sha="a" * 40,
+        fetcher=fetcher_over(LAB_URL, TRADE_URL, COMMUNITY_URL),
+        now=lambda: NOW,
+        state_dir=tmp_path / "available",
+    )
+    assert {
+        item.canonical_url for item in available.items if item.source_id == LAB.id
+    } == lab_supply, "all three authored stories must reach selection before testing the quota"
+    built = plan([LAB, TRADE, COMMUNITY], max_age_hours=48)
     from_lab = [item for item in built.items if item.source_id == "lab-blog"]
-    assert len(from_lab) <= config.load().app.collect.max_per_source
+    assert {item.canonical_url for item in from_lab} <= lab_supply
+    assert len(from_lab) == min(len(lab_supply), collect.max_per_source)
 
 
 def test_the_safety_ceiling_is_a_crash_guard_not_a_reading_budget() -> None:
@@ -534,15 +620,31 @@ def test_the_safety_ceiling_is_a_crash_guard_not_a_reading_budget() -> None:
     It drops the weakest items across the whole day rather than truncating one
     vertical, and a normal day never comes near it.
     """
-    built = plan([LAB, TRADE, COMMUNITY])
-    every = list(built.items)
+    every = []
+    for vertical, identity, score in (
+        ("ai", "ai-90", 1.0),
+        ("energy", "energy-80", 4.0),
+        ("energy", "energy-02", 8.0),
+        ("ai", "ai-03", 8.0),
+        ("energy", "energy-01", 10.0),
+    ):
+        url = f"https://example.org/{identity}"
+        every.append(
+            PlannedItem(
+                item_id=identity,
+                url_key=derive_url_key(url),
+                source_url=url,
+                canonical_url=url,
+                source_id=f"{vertical}-wire",
+                tier=2,
+                vertical=vertical,
+                rank_score=score,
+            )
+        )
     trimmed = _within_ceiling(every, ceiling=2)
-    assert len(trimmed) == 2
-    assert [item.item_id for item in trimmed] == [
-        item.item_id for item in every if item in trimmed
-    ], "the surviving items keep the order the plan gave them"
-    weakest = min(every, key=lambda item: item.rank_score)
-    assert weakest not in trimmed
+    assert [item.item_id for item in trimmed] == ["ai-03", "energy-01"], (
+        "score chooses across desks, item ID breaks the tie, and survivors keep input order"
+    )
     assert _within_ceiling(every, ceiling=len(every) + 1) == every
 
 
@@ -698,19 +800,53 @@ def test_an_article_limit_keeps_the_best_stories_of_the_whole_run() -> None:
     Unset, it plans exactly what it planned before. It can lower the crash
     guard and never raise it.
     """
-    full = plan([LAB, TRADE, COMMUNITY])
-    assert len(full.items) > 2, "the fixture pool has to be big enough to show a trim"
-
-    limited = plan([LAB, TRADE, COMMUNITY], article_limit=2)
-    assert [item.item_id for item in limited.items] == [
-        item.item_id for item in _within_ceiling(list(full.items), ceiling=2)
-    ]
-    assert plan([LAB, TRADE, COMMUNITY], article_limit=None).to_json() == full.to_json()
-    assert plan([LAB, TRADE, COMMUNITY], article_limit=len(full.items) + 1).to_json() == (
-        full.to_json()
+    run = RunConfig.model_validate(
+        {
+            **config.load().app.run.model_dump(),
+            "safety_ceiling_per_run": 12,
+            "safety_ceiling_per_day": 12,
+        }
     )
+    ai_feeds, ai_replies = story_supply(3, tier=3)
+    energy_feeds, energy_replies = story_supply(3, vertical="energy", tier=1)
+    feeds = [*ai_feeds, *energy_feeds]
+    replies = {**ai_replies, **energy_replies}
+    verticals = [
+        AI,
+        VerticalDef(id="energy", display_name="Energy", min_feeds=3, definition=DEFINITION),
+    ]
+    full = plan(feeds, fetcher=replies.__getitem__, verticals=verticals, run=run)
+    assert len(full.items) == 6
+    strongest = sorted(full.items, key=lambda item: (-item.rank_score, item.item_id))[:2]
+    assert {item.vertical for item in strongest} == {"energy"}
+    winners = {item.item_id for item in strongest}
+    expected = [item.item_id for item in full.items if item.item_id in winners]
+    assert expected != [item.item_id for item in full.items[:2]]
 
-    guarded = plan([LAB, TRADE, COMMUNITY], safety_ceiling=1, article_limit=len(full.items))
+    limited = plan(
+        feeds, fetcher=replies.__getitem__, verticals=verticals, run=run, article_limit=2
+    )
+    assert [item.item_id for item in limited.items] == expected
+    for limit in (None, len(full.items) + 1):
+        assert (
+            plan(
+                feeds,
+                fetcher=replies.__getitem__,
+                verticals=verticals,
+                run=run,
+                article_limit=limit,
+            ).to_json()
+            == full.to_json()
+        )
+
+    guarded = plan(
+        feeds,
+        fetcher=replies.__getitem__,
+        verticals=verticals,
+        run=run,
+        safety_ceiling=1,
+        article_limit=len(full.items),
+    )
     assert len(guarded.items) == 1, "the limit never raises the safety ceiling"
 
 
@@ -1233,8 +1369,8 @@ def test_a_feed_that_filled_its_share_of_today_takes_less_of_the_next_run() -> N
     assert len(again.items) == len(first.items), "and the day is not one story shorter"
 
 
-def test_a_run_that_has_the_day_to_itself_plans_what_it_always_planned() -> None:
-    """No feed is crowding, so the second pass never runs and nothing moves."""
+def test_fresh_state_roots_produce_the_same_plan_items() -> None:
+    """The same supply and settings produce the same items without prior history."""
     state = Path(tempfile.mkdtemp())
     first = plan(DESK, state=state, source_share=CROWDED_SHARE)
     again = plan(DESK, state=Path(tempfile.mkdtemp()), source_share=CROWDED_SHARE)
@@ -1337,22 +1473,29 @@ def test_a_working_feed_records_what_it_yielded() -> None:
 
 
 def test_the_record_never_carries_the_response_body() -> None:
-    """A feed is a stranger's text and this row lands on a published page (Guardrail #11)."""
-    state = Path(tempfile.mkdtemp())
-    hostile = "<script>alert(1)</script>" * 40
-    plan(
-        [LAB, TRADE, COMMUNITY],
-        fetcher=failing(
-            LAB_URL,
-            fetch.FetchResult(outcome=FetchOutcome.PERMANENT, status=404, detail=hostile),
-            TRADE_URL,
-            COMMUNITY_URL,
-        ),
-        state=state,
-    )
-    row = next(r for r in health_after(state) if r.feed_id == "lab-blog")
-    assert row.detail is not None
-    assert len(row.detail) <= 200, "a detail is one line of ours, never an unbounded body"
+    """The health record clips our detail and never substitutes the supplied body."""
+    body = b"PRIVATE_RESPONSE_BODY"
+    for supplied_length, recorded_length in ((199, 199), (201, 200)):
+        state = Path(tempfile.mkdtemp())
+        plan(
+            [LAB, TRADE, COMMUNITY],
+            fetcher=failing(
+                LAB_URL,
+                fetch.FetchResult(
+                    outcome=FetchOutcome.PERMANENT,
+                    status=404,
+                    detail="x" * supplied_length,
+                    body=body,
+                ),
+                TRADE_URL,
+                COMMUNITY_URL,
+            ),
+            state=state,
+        )
+        row = next(r for r in health_after(state) if r.feed_id == "lab-blog")
+        assert row.detail == "x" * recorded_length
+        assert len(row.detail) <= 200
+        assert body.decode() not in row.to_json()
 
 
 def test_two_runs_on_one_day_both_leave_a_record() -> None:
@@ -1854,10 +1997,9 @@ def test_every_item_lands_in_exactly_one_shard(shards: int) -> None:
 def test_shards_are_round_robin_so_the_long_articles_spread() -> None:
     """Contiguous blocks would hand one worker a whole vertical, and its timeout."""
     built = built_plan()
-    if len(built.items) < 2:
-        pytest.skip("the fixture pool is too small to interleave")
-    assert shard_of(built, shard=0, shards=2)[0] == built.items[0]
-    assert shard_of(built, shard=1, shards=2)[0] == built.items[1]
+    assert len(built.items) >= 3, "the real fixture plan must distinguish blocks from strides"
+    assert shard_of(built, shard=0, shards=2) == list(built.items[0::2])
+    assert shard_of(built, shard=1, shards=2) == list(built.items[1::2])
 
 
 def test_a_shard_beyond_the_item_count_is_empty_rather_than_an_error() -> None:

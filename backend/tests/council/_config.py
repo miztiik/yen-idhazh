@@ -39,6 +39,13 @@ def copy_config(root: Path) -> Path:
     return target
 
 
+def set_host_fingerprint_placement(target: Path, enabled: bool) -> None:
+    path = target / "idhazh.json"
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    raw["observability"]["host_fingerprint_placement_enabled"] = enabled
+    path.write_text(json.dumps(raw, indent=2), encoding="utf-8", newline="\n")
+
+
 def write_declarations(target: Path, slugs: tuple[str, ...]) -> None:
     """Write explicit active, model-free declarations for the test's registered judges."""
     (target / "judges").mkdir(exist_ok=True)

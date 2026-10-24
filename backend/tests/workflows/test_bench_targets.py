@@ -67,6 +67,7 @@ from ._harness import (
     _copy_config,
     _declared_dispatch_inputs,
     _expression,
+    _git_writes,
     _isolated_env,
     _job,
     _load_workflows,
@@ -75,6 +76,7 @@ from ._harness import (
     _normalize_condition,
     _publication_scopes,
     _script,
+    _shell_commands,
     _shell_words,
     _stage_invocations,
     _step,
@@ -195,15 +197,105 @@ def test_the_budget_retake_is_its_own_target_and_writes_no_committed_file() -> N
         script = step.get("run")
         if not isinstance(script, str):
             continue
-        for committed in ("git commit", "git push", COMMIT_PROGRAM.name):
-            assert committed not in script, (
-                f"{BUDGETS_JOB}/{step.get('name')} commits, and a measurement a workflow "
-                "committed would be a number a workflow decided"
-            )
-        for destination in ("docs/", "backend/idhazh/measured.py"):
-            assert f"> {destination}" not in script and f">> {destination}" not in script, (
-                f"{BUDGETS_JOB}/{step.get('name')} writes into {destination}"
-            )
+        assert not _git_writes(script) and COMMIT_PROGRAM.name not in script, (
+            f"{BUDGETS_JOB}/{step.get('name')} commits a measurement"
+        )
+        assert not _committed_destinations(script), (
+            f"{BUDGETS_JOB}/{step.get('name')} writes into a committed measurement file"
+        )
+
+
+def _committed_destinations(script: str) -> list[str]:
+    """Find literal redirect, tee, cp and mv destinations, not read-only source paths."""
+    found: list[str] = []
+    for quoted in _shell_commands(script, preserve_quotes=True):
+        words = [_shell_words(word)[0] for word in quoted]
+        destinations = [
+            words[index + 1]
+            for index, word in enumerate(quoted[:-1])
+            if word in {">", ">>", ">|", "&>"}
+        ]
+        if words[0] in {"tee", "cp", "mv"}:
+            arguments = [word for word in words[1:] if not word.startswith("-")]
+            if words[0] == "tee":
+                destinations.extend(arguments)
+            elif arguments:
+                targets: list[str] = []
+                for index, word in enumerate(words[:-1]):
+                    if word in {"-t", "--target-directory"}:
+                        targets.append(words[index + 1])
+                targets.extend(
+                    word.split("=", 1)[1]
+                    for word in words
+                    if word.startswith("--target-directory=")
+                )
+                destinations.extend(targets or arguments[-1:])
+        found.extend(
+            path
+            for path in destinations
+            if path.removeprefix("./").rstrip("/") == "docs"
+            or path.removeprefix("./").startswith("docs/")
+            or path.removeprefix("./") == "backend/idhazh/measured.py"
+        )
+    return found
+
+
+@pytest.mark.parametrize(
+    "script",
+    [
+        "git commit -m reading",
+        "git  push origin HEAD",
+        "git -c user.name=x commit -m reading",
+        "git -C . -c user.name=x push",
+        "true && git push",
+    ],
+)
+def test_direct_git_writes_are_commands_not_substrings(script: str) -> None:
+    assert _git_writes(script)
+
+
+@pytest.mark.parametrize(
+    "script",
+    [
+        "echo 'git commit and git push'",
+        "# git commit -m reading",
+        "git -c user.name=x status",
+        "printf '%s' 'git -c user.name=x push'",
+    ],
+)
+def test_read_only_shell_text_is_not_a_git_write(script: str) -> None:
+    assert not _git_writes(script)
+
+
+@pytest.mark.parametrize(
+    "script",
+    [
+        "echo reading >docs/report.md",
+        "echo reading >> 'backend/idhazh/measured.py'",
+        "echo reading | tee -a docs/report.md",
+        "cp backend/var/result.md docs/report.md",
+        "mv backend/var/result.md ./docs/report.md",
+        "cp -t docs backend/var/result.md",
+    ],
+)
+def test_committed_measurement_writes_are_detected(script: str) -> None:
+    assert _committed_destinations(script)
+
+
+@pytest.mark.parametrize(
+    "script",
+    [
+        "cat docs/report.md > backend/var/report.md",
+        "cp docs/report.md backend/var/report.md",
+        "cp -t backend/var docs/report.md",
+        "mv --target-directory=backend/var docs/report.md",
+        "echo 'tee docs/report.md'",
+        "printf '%s' '>' docs/report.md",
+        "# cp result.md docs/report.md",
+    ],
+)
+def test_reading_a_committed_measurement_is_not_writing_it(script: str) -> None:
+    assert not _committed_destinations(script)
 
 
 def test_a_bench_artifact_outlives_the_dispatch_that_wrote_it() -> None:
@@ -286,10 +378,18 @@ def test_the_server_case_asks_for_the_raw_case_only_when_there_is_one() -> None:
     workflow = _load_workflows()["measure.yml"]
     ran = f"{BENCH_RAW_JOB_EXPRESSION}.result == 'success'"
 
+    downloads = [
+        step
+        for step in _steps(workflow, BENCH_SERVER_JOB)
+        if str(step.get("uses", "")).startswith("actions/download-artifact")
+        and _mapping(step.get("with"), "raw download").get("name") == "bench-raw"
+    ]
+    assert len(downloads) == 1, "the server case must download the raw case once"
+    _step(workflow, BENCH_SERVER_JOB, "name", BENCH_EMIT_STEP)
     for step in _steps(workflow, BENCH_SERVER_JOB):
         reads_raw = (
             str(step.get("uses", "")).startswith("actions/download-artifact")
-            or str(step.get("name") or "") == BENCH_EMIT_STEP
+            or step.get("name") == BENCH_EMIT_STEP
         )
         if not reads_raw:
             continue
@@ -822,23 +922,67 @@ def test_a_job_that_runs_a_script_importing_idhazh_installs_it_first() -> None:
             body for step in _steps(workflow, job_name) if isinstance(body := step.get("run"), str)
         ]
         utilities = {
-            match
+            word
             for body in bodies
-            for match in re.findall(r"backend/utilities/[A-Za-z0-9_]+\.py", body)
+            for words in _shell_commands(body)
+            for word in words
+            if re.fullmatch(r"backend/utilities/[A-Za-z0-9_]+\.py", word)
         }
         importers = {
             path
             for path in utilities
             if re.search(r"^from idhazh|^import idhazh", read_text(REPO_ROOT / path), re.MULTILINE)
         }
-        needs_the_package = any(script in body for body in bodies for script in importers)
-        if not needs_the_package:
-            continue
-        installs = any(re.search(r"pip install (-e )?[\".]", body) for body in bodies)
-        assert installs, (
-            f"measure.yml/{job_name} runs a utility that imports idhazh and never "
-            "installs it, so the job dies on ModuleNotFoundError"
-        )
+        _assert_installed_before_use(bodies, importers, f"measure.yml/{job_name}")
+
+
+def _assert_installed_before_use(bodies: list[str], importers: set[str], where: str) -> None:
+    """Check ordered simple commands for local pip install before Python package use."""
+    installed = False
+    for body in bodies:
+        for words in _shell_commands(body):
+            pip = words
+            if words[:3] in (["python", "-m", "pip"], ["python3", "-m", "pip"]):
+                pip = ["pip", *words[3:]]
+            if pip[:2] in (["pip", "install"], ["pip3", "install"]):
+                installed |= any(word == "." or word.startswith(".[") for word in pip[2:])
+            if words[0] not in {"python", "python3"}:
+                continue
+            module = (
+                len(words) > 2
+                and words[1] == "-m"
+                and (words[2] == "idhazh" or words[2].startswith("idhazh."))
+            )
+            if module or any(word in importers for word in words[1:2]):
+                assert installed, f"{where} imports idhazh before installing it"
+
+
+@pytest.mark.parametrize(
+    "bodies",
+    [
+        ["python -m idhazh plan", "pip install -e ."],
+        ["python3 backend/utilities/model_speed_case.py && pip install -e ."],
+        ["python3 -m idhazh.council.run_identity; python -m pip install ."],
+    ],
+)
+def test_package_use_before_install_is_refused(bodies: list[str]) -> None:
+    with pytest.raises(AssertionError, match="before installing"):
+        _assert_installed_before_use(bodies, {BENCH_SPEED_MODULE}, "controlled job")
+
+
+@pytest.mark.parametrize(
+    "bodies",
+    [
+        ["pip install -e .", "python -m idhazh plan"],
+        ['python -m pip install -e ".[dev]" && python3 backend/utilities/model_speed_case.py'],
+        ["pip install .; python3 -m idhazh.council.run_identity"],
+        ["echo 'python -m idhazh plan'"],
+    ],
+)
+def test_install_order_check_accepts_installed_and_nonimporting_commands(
+    bodies: list[str],
+) -> None:
+    _assert_installed_before_use(bodies, {BENCH_SPEED_MODULE}, "controlled job")
 
 
 def test_an_offset_dispatch_measures_different_articles_than_the_one_before_it(

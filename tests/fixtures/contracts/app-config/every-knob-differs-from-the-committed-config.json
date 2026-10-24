@@ -334,6 +334,7 @@
       "work"
     ],
     "host_fingerprint_frequency_enabled": true,
+    "host_fingerprint_placement_enabled": false,
     "host_telemetry_enabled": false,
     "memory_profiling_enabled": false,
     "sample_rate": 0.25,
