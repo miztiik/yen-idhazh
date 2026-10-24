@@ -1371,6 +1371,86 @@ def _shell_words(script: str, *, comments: bool = False) -> list[str]:
     return shlex.split("\n".join(_logical_shell_lines(script)), comments=comments)
 
 
+def _shell_commands(script: str) -> list[list[str]]:
+    """Inspect simple POSIX commands, separators and unquoted substitutions, not shell execution.
+
+    Quotes and comments use shlex; continuations use the shared line reader.
+    This does not evaluate branches, variables, heredocs or quoted substitutions.
+    """
+    commands: list[list[str]] = []
+    for line in _logical_shell_lines(script):
+        line = re.sub(r"\$\{\{.*?\}\}", "ACTION_VALUE", line)
+        lexer = shlex.shlex(line, posix=True, punctuation_chars=";&|()<>")
+        lexer.whitespace_split = True
+        words: list[str] = []
+        for word in [*lexer, ";"]:
+            if word and all(character in ";&|()" for character in word):
+                while words and (
+                    words[0] in {"if", "then", "do", "!"}
+                    or re.match(r"^[A-Za-z_][A-Za-z_0-9]*=", words[0])
+                ):
+                    words.pop(0)
+                if words:
+                    commands.append(words)
+                words = []
+            else:
+                words.append(word)
+    return commands
+
+
+def _git_writes(script: str) -> list[list[str]]:
+    """Find direct git writes with -c/-C, path options and valueless/equals options."""
+    found: list[list[str]] = []
+    for words in _shell_commands(script):
+        if words[0] != "git":
+            continue
+        index = 1
+        while index < len(words) and words[index].startswith("-"):
+            option = words[index]
+            index += 2 if option in {"-c", "-C", "--git-dir", "--work-tree"} else 1
+        if index < len(words) and words[index] in {"commit", "push"}:
+            found.append(words)
+    return found
+
+
+def _expression_references(text: str, contexts: tuple[str, ...]) -> list[tuple[str, ...]]:
+    """Read dotted and literal-bracket context references inside Actions expressions.
+
+    String literals are tokens, not references. Wrappers and operators do not
+    hide a reference. A dynamic bracket leaves only its known prefix.
+    """
+    references: list[tuple[str, ...]] = []
+    token = re.compile(r"'(?:''|[^'])*'|[A-Za-z_][A-Za-z_0-9-]*|[^\s]")
+    for expression in re.findall(r"\$\{\{(.*?)\}\}", text, re.S):
+        tokens = token.findall(expression)
+        index = 0
+        while index < len(tokens):
+            if tokens[index] not in contexts or (index and tokens[index - 1] in {".", "["}):
+                index += 1
+                continue
+            reference = [tokens[index]]
+            index += 1
+            while index < len(tokens):
+                if tokens[index] == "." and index + 1 < len(tokens):
+                    name = tokens[index + 1]
+                    if not re.fullmatch(r"[A-Za-z_][A-Za-z_0-9-]*", name):
+                        break
+                    reference.append(name)
+                    index += 2
+                elif (
+                    tokens[index] == "["
+                    and index + 2 < len(tokens)
+                    and tokens[index + 1].startswith("'")
+                    and tokens[index + 2] == "]"
+                ):
+                    reference.append(tokens[index + 1][1:-1].replace("''", "'"))
+                    index += 3
+                else:
+                    break
+            references.append(tuple(reference))
+    return references
+
+
 def _needs(workflow: dict[str, object], job_name: str) -> list[str]:
     """What a job waits on, whether it was written as one name or a list."""
     declared = _job(workflow, job_name).get("needs")

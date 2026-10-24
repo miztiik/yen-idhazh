@@ -33,6 +33,7 @@ from utilities import gardener_publish, gardener_shards
 from ._harness import (
     PRUNE_PUSH_STEP,
     WORKFLOWS_DIR,
+    _expression_references,
     _job,
     _load_workflows,
     _mapping,
@@ -308,16 +309,33 @@ def test_the_shards_push_with_the_default_token_and_never_a_personal_one() -> No
     workflow = gardener()
     for job in (PLAN, RUN_TASKS, HISTORY):
         assert all("token" not in checkout for checkout in _checkouts(workflow, job)), job
-    secrets = {
-        part.split("}}")[0].strip()
-        for part in text.split("${{")[1:]
-        if part.strip().startswith("secrets.")
-    }
-    assert secrets == {"secrets.GITHUB_TOKEN"}
+    secrets = set(_expression_references(text, ("secrets",)))
+    assert secrets == {("secrets", "GITHUB_TOKEN")}
     step = _step(workflow, RUN_TASKS, "name", "Run the shard's tasks and land its record")
     assert _mapping(step.get("env"), "shard step env")["GITHUB_TOKEN"] == (
         "${{ secrets.GITHUB_TOKEN }}"
     )
+
+
+@pytest.mark.parametrize(
+    ("expression", "expected"),
+    [
+        ("secrets.GITHUB_TOKEN", ("secrets", "GITHUB_TOKEN")),
+        ("toJSON(secrets.PERSONAL_TOKEN)", ("secrets", "PERSONAL_TOKEN")),
+        ("secrets['PERSONAL_TOKEN']", ("secrets", "PERSONAL_TOKEN")),
+        ("secrets[matrix.token]", ("secrets",)),
+    ],
+)
+def test_secret_references_remain_visible_inside_wrappers_and_brackets(
+    expression: str,
+    expected: tuple[str, ...],
+) -> None:
+    assert _expression_references("${{ " + expression + " }}", ("secrets",)) == [expected]
+
+
+def test_secret_names_in_expression_strings_are_not_secret_reads() -> None:
+    assert _expression_references("${{ 'secrets.PERSONAL_TOKEN' }}", ("secrets",)) == []
+    assert _expression_references("${{ env.PERSONAL_TOKEN }}", ("secrets",)) == []
 
 
 def test_the_plan_job_runs_the_standard_library_planner_before_any_install() -> None:
