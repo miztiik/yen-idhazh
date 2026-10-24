@@ -11,8 +11,8 @@ async function runCli(): Promise<void> {
   console.log({
     runner: env.RUNNER_NAME,
     shard: env.SHARD_ID,
-    model: env.MODEL_NAME,
-    serverUrl: env.SERVER_URL,
+    model: env.modelRuntime.request.model,
+    serverUrl: env.modelRuntime.base_url,
     hasUrl: Boolean(env.URL),
     hasInputText: Boolean(env.INPUT_TEXT),
     l3Cache: detectL3Cache(),
@@ -26,14 +26,9 @@ async function runCli(): Promise<void> {
         url: env.URL,
         input_text: env.INPUT_TEXT,
         system_prompt: env.PROMPT,
-        server_url: env.SERVER_URL,
-        model_name: env.MODEL_NAME,
       },
       eventBus,
-      {
-        serverUrl: env.SERVER_URL,
-        modelName: env.MODEL_NAME,
-      }
+      env.modelRuntime
     );
 
     console.log("\n============================================================");
@@ -42,7 +37,7 @@ async function runCli(): Promise<void> {
     console.log(JSON.stringify(result, null, 2));
     console.log("============================================================\n");
 
-    renderGithubStepSummary(env.MODEL_NAME, result, eventBus.getEventHistory());
+    renderGithubStepSummary(env.modelRuntime.request.model, result, eventBus.getEventHistory());
     console.log("✅ CLI run completed successfully. Telemetry saved to pipeline-events.jsonl");
   } catch (err: any) {
     console.error("❌ Pipeline run terminated with error:", err.message);

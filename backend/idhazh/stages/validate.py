@@ -85,6 +85,7 @@ def _summarize_one(
             prompt_digest=prompt_digest,
             run_id=run_id,
             trace=trace,
+            markers=markers,
         )
         with trace.span(telemetry.SpanName.PARSE_REPLY) as span:
             summary = summarize.to_summary(

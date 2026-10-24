@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from types import MappingProxyType
-from typing import Any, ClassVar, Final, Self
+from typing import Annotated, Any, ClassVar, Final
 
 from pydantic import Field, model_validator
 
@@ -185,7 +185,7 @@ class ModelEntry(ModelRef):
     """Which weights, and everything a run needs to talk to them.
 
     **This is the shape a person declares**, and `ModelsConfig` is made of it.
-    It is `ModelRef` plus the two facts about this model's reasoning that the
+    It is `ModelRef` plus the template inputs and reasoning syntax that the
     model's own chat template cannot hand back, and the digest those facts and
     the settings were derived against - so a config entry that gets one wrong
     fails here, and a `run.json` written before any of them existed still reads.
@@ -223,15 +223,31 @@ class ModelEntry(ModelRef):
         ),
     )
     thinking_kwarg: str | None = Field(
-        default="enable_thinking",
         min_length=1,
         description=(
             "The template variable that turns this model's reasoning on and off, sent "
             "as the one key of chat_template_kwargs. It is declared rather than derived "
             "because a rendering cannot return the name of a variable nobody sent it. "
-            "Null means this template reads no keywords at all, and then the request "
-            "carries no chat_template_kwargs and thinking_close must be null too; this "
-            "entry refuses the pair."
+            "Null means no reasoning switch is sent. A template that always reasons "
+            "can still declare thinking_close without a switch."
+        ),
+    )
+    chat_template_kwargs: dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "Additional template variables, sent unchanged during template derivation "
+            "and chat requests. The reasoning switch, when named, is set by "
+            "thinking_close and must not be repeated here."
+        ),
+    )
+    reasoning_delimiters: tuple[
+        Annotated[str, Field(min_length=1)], Annotated[str, Field(min_length=1)]
+    ] | None = Field(
+        default=None,
+        description=(
+            "An explicit opening and closing pair for legacy inline reasoning. Null "
+            "means no inline parser. Runtime reasoning_content and separate reasoning "
+            "spans need no delimiter pair."
         ),
     )
     declared_for: Sha256 | None = Field(
@@ -279,21 +295,12 @@ class ModelEntry(ModelRef):
         return self.thinking_close is not None
 
     @model_validator(mode="after")
-    def _a_template_that_reads_no_keyword_cannot_be_asked_to_think(self) -> Self:
-        """Reasoning is asked for through a template keyword, so a null name refuses it.
-
-        Both halves are facts about somebody else's template, so this entry owns
-        the pair. A null keyword with a closing marker declared is a claim
-        nothing can satisfy: the request carries no `chat_template_kwargs` at
-        all, the template renders its own default, and the only symptom is
-        whatever that default happens to be.
-        """
-        if self.thinking_kwarg is None and self.thinking_close is not None:
+    def _the_reasoning_switch_has_one_owner(self) -> ModelEntry:
+        """A template switch cannot have two conflicting declarations."""
+        if self.thinking_kwarg is not None and self.thinking_kwarg in self.chat_template_kwargs:
             raise ValueError(
-                f"thinking_kwarg is null, so a request sends no chat_template_kwargs at "
-                f"all, and thinking_close is {self.thinking_close!r}, which asks this "
-                "template to turn reasoning on through a keyword nothing sends. Name "
-                "the keyword this model's template reads, or set thinking_close null"
+                f"chat_template_kwargs repeats thinking_kwarg {self.thinking_kwarg!r}; "
+                "thinking_close decides that switch"
             )
         return self
 

@@ -28,18 +28,10 @@ on:
         description: 'Input text (used directly if input_source is text, or as fallback)'
         required: false
         default: 'Local LLMs allow running transformer architectures directly on edge devices and continuous integration runners without transmitting data over third-party APIs.'
-      model_family:
-        description: 'HuggingFace Repo Name & Model Family (owner/repo)'
-        required: true
-        default: 'ornith-ai/Ornith-1.5-9B-GGUF'
-      model_id:
-        description: 'Specific Model ID / GGUF Filename (leave blank for auto-detect)'
+      models_file:
+        description: 'Model declaration under config/; blank uses config/idhazh.json.'
         required: false
         default: ''
-      context_size:
-        description: 'Context Window Size'
-        required: false
-        default: '16384'
       max_word_length:
         description: 'Maximum ingested word count per article before truncation'
         required: false
@@ -53,6 +45,9 @@ jobs:
   run-pipeline:
     runs-on: ubuntu-latest
     name: Phased LLM Inference & UniEval Audit
+    env:
+      CONFIG_ROOT: ${{ inputs.models_file != '' && 'backend/var/candidate-config' || 'config' }}
+      PYTHONPATH: backend
 
     steps:
       - name: Checkout Code
@@ -66,7 +61,38 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.12'
+
+      - name: Setup Bun Runtime
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install
+        run: |
+          python -m pip install 'pydantic>=2.12'
+          python -m pip install -e . --no-deps
+
+      - name: Point scratch config at the selected declaration
+        if: inputs.models_file != ''
+        uses: ./.github/actions/candidate-config
+        with:
+          models_file: ${{ inputs.models_file }}
+
+      - name: Validate the selected request
+        id: request
+        run: |
+          set -euo pipefail
+          DECLARED=$(python backend/utilities/model_runtime.py describe-request --config-root "$CONFIG_ROOT")
+          echo "probe_url=$(echo "$DECLARED" | jq -r .base_url)" >> "$GITHUB_OUTPUT"
+
+      - name: Read pinned runtime build
+        id: runtime
+        run: python backend/utilities/model_runtime.py print-pinned-build >> "$GITHUB_OUTPUT"
+
+      - name: Install Summarizer Dependencies
+        working-directory: services/summarizer
+        run: bun install --frozen-lockfile
 
       # 1. TUNE LINUX MEMORY
       - name: Configure Linux Memory & Swappiness
@@ -79,174 +105,27 @@ jobs:
           sudo mkswap /swapfile
           sudo swapon /swapfile
 
-      # 2. INSTALL LLAMA.CPP
-      - name: Install Official llama.cpp
-        run: |
-          curl -LsSf https://llama.app/install.sh | SKIP_CUDA=1 SKIP_ROCM=1 SKIP_VULKAN=1 sh
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-
-      # 3. PARALLEL SETUP: DEPENDENCIES & GGUF MODEL DOWNLOAD
-      - name: Parallel Setup (Dependencies & Model Download)
+      - name: Install existing inference and evaluation dependencies
         run: |
           set -euo pipefail
+          if [ ! -f package.json ]; then npm init -y; fi
+          npm pkg set type="module"
+          npm install --no-audit --no-fund defuddle linkedom feedsmith tidy-url
 
-          # Ensure all child background jobs are killed if parent script exits unexpectedly
-          trap 'kill $(jobs -p) 2>/dev/null || true' EXIT
+          pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+          pip install --no-cache-dir transformers sentencepiece protobuf evaluate rouge-score nltk rank-bm25 prettytable scipy fastapi uvicorn pydantic
+          python -c "import nltk; nltk.download('punkt'); nltk.download('punkt_tab')"
 
-          LOG_DEPS="/tmp/install_deps.log"
-          LOG_MODEL="/tmp/download_model.log"
-          mkdir -p ./models
+          rm -rf /tmp/unieval
+          git clone --depth 1 https://github.com/maszhongming/UniEval.git /tmp/unieval
 
-          # Resolve Hugging Face Model Filename in Parent Shell
-          REPO="${{ github.event.inputs.model_family }}"
-          SPECIFIC_FILE="${{ github.event.inputs.model_id }}"
-
-          echo "[$(date +%T)] 🔍 Resolving model filename for '${REPO}'..."
-          if [ -n "$SPECIFIC_FILE" ]; then
-            FILE="$SPECIFIC_FILE"
-          else
-            FILE=$(curl -sL "https://huggingface.co/api/models/${REPO}/tree/main" | jq -r '.[].path' | grep -iE '\.gguf$' | grep -iE 'q5_k_m|q4_k_m' | head -n 1)
-            [ -z "$FILE" ] && FILE=$(curl -sL "https://huggingface.co/api/models/${REPO}/tree/main" | jq -r '.[].path' | grep -iE '\.gguf$' | head -n 1)
-          fi
-
-          if [ -z "$FILE" ] || [ "$FILE" = "null" ]; then
-            echo "::error::Failed to resolve a valid .gguf file from Hugging Face repository: ${REPO}"
-            exit 1
-          fi
-
-          echo "MODEL_FILE=$FILE" >> $GITHUB_ENV
-          echo "[$(date +%T)] 🎯 Target Model: $FILE"
-
-          # -------------------------------------------------------------
-          # FUNCTION 1: Runtime Dependencies Setup
-          # -------------------------------------------------------------
-          task_install_deps() {
-            echo "[$(date +%T)] Starting Node.js & Python dependencies installation..."
-            
-            if [ ! -f package.json ]; then npm init -y; fi
-            npm pkg set type="module"
-            npm install --no-audit --no-fund defuddle linkedom feedsmith tidy-url
-
-            pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
-            pip install --no-cache-dir transformers sentencepiece protobuf evaluate rouge-score nltk rank-bm25 prettytable scipy fastapi uvicorn pydantic
-            python -c "import nltk; nltk.download('punkt'); nltk.download('punkt_tab')"
-
-            rm -rf /tmp/unieval
-            git clone --depth 1 https://github.com/maszhongming/UniEval.git /tmp/unieval
-            echo "[$(date +%T)] All runtime dependencies successfully installed."
-          }
-
-          # -------------------------------------------------------------
-          # FUNCTION 2: Model Binary Download
-          # -------------------------------------------------------------
-          task_download_model() {
-            echo "[$(date +%T)] Starting model download for ./models/$FILE..."
-            if [ ! -f "./models/$FILE" ]; then
-              curl -fL -C - \
-                --retry 3 \
-                --retry-delay 2 \
-                --retry-connrefused \
-                -o "./models/$FILE" \
-                "https://huggingface.co/${REPO}/resolve/main/${FILE}"
-            else
-              echo "Model file already exists in cache."
-            fi
-            echo "[$(date +%T)] Model binary download verified and complete."
-          }
-
-          # -------------------------------------------------------------
-          # DISPATCH PARALLEL JOBS
-          # -------------------------------------------------------------
-          task_install_deps > "$LOG_DEPS" 2>&1 &
-          PID_DEPS=$!
-
-          task_download_model > "$LOG_MODEL" 2>&1 &
-          PID_MODEL=$!
-
-          echo "[$(date +%T)] 🚀 Parallel tasks dispatched:"
-          echo "       ↳ [PID $PID_DEPS] Runtime Dependencies (logging to $LOG_DEPS)"
-          echo "       ↳ [PID $PID_MODEL] GGUF Model Download (logging to $LOG_MODEL)"
-
-          declare -A TASK_NAMES=( ["$PID_DEPS"]="Dependencies Installation" ["$PID_MODEL"]="GGUF Model Download" )
-          declare -A TASK_LOGS=( ["$PID_DEPS"]="$LOG_DEPS" ["$PID_MODEL"]="$LOG_MODEL" )
-
-          # -------------------------------------------------------------
-          # FAIL-FAST EVENT LOOP (wait -n)
-          # -------------------------------------------------------------
-          for _ in 1 2; do
-            EXITED_PID=""
-            if wait -n -p EXITED_PID; then
-              NAME="${TASK_NAMES[$EXITED_PID]}"
-              echo "[$(date +%T)] ✅ $NAME completed successfully."
-              echo "::group::📄 View $NAME Logs"
-              cat "${TASK_LOGS[$EXITED_PID]}"
-              echo "::endgroup::"
-            else
-              STATUS=$?
-              NAME="${TASK_NAMES[${EXITED_PID:-$PID_DEPS}]}"
-              echo "::error::[$(date +%T)] ❌ $NAME failed with exit code $STATUS!"
-
-              # Terminate sibling task immediately to release runner bandwidth
-              kill "$PID_DEPS" "$PID_MODEL" 2>/dev/null || true
-
-              echo "::group::🚨 FAILED TASK LOG: $NAME"
-              cat "${TASK_LOGS[${EXITED_PID:-$PID_DEPS}]}"
-              echo "::endgroup::"
-              exit $STATUS
-            fi
-          done
-
-          # Disable trap on clean completion
-          trap - EXIT
-          echo "[$(date +%T)] 🎉 Both setup stages completed in parallel without error."
-
-      # 4. START LLAMA-SERVER (PORT 9931)
-      - name: Start llama-server Daemon (Port 9931)
-        run: |
-          CORES=$(nproc)
-          CTX="${{ github.event.inputs.context_size }}"
-
-          llama serve \
-            -m "./models/$MODEL_FILE" \
-            --host 127.0.0.1 \
-            --port 9931 \
-            -c $CTX \
-            -np 1 \
-            --flash-attn on \
-            --cache-type-k q8_0 \
-            --cache-type-v q8_0 \
-            -b 4096 \
-            -ub 1024 \
-            -t $CORES \
-            -tb $CORES \
-            --temp 0.2 \
-            --repeat-penalty 1.15 \
-            > llama-server.log 2>&1 &
-
-          SERVER_PID=$!
-          echo $SERVER_PID > .llama_server.pid
-
-          READY=0
-          for i in {1..120}; do
-            if ! kill -0 $SERVER_PID 2>/dev/null; then
-              echo '{"timestamp":"'$(date -u +%FT%TZ)'","level":"ERROR","message":"llama serve died on startup"}'
-              cat llama-server.log
-              exit 1
-            fi
-
-            if curl -s http://127.0.0.1:9931/health | grep -q "ok"; then
-              echo '{"timestamp":"'$(date -u +%FT%TZ)'","level":"INFO","message":"llama server is ready on port 9931"}'
-              READY=1
-              break
-            fi
-            sleep 0.5
-          done
-
-          if [ $READY -ne 1 ]; then
-            echo '{"timestamp":"'$(date -u +%FT%TZ)'","level":"ERROR","message":"llama server failed to start within 60s"}'
-            cat llama-server.log
-            exit 1
-          fi
+      - name: Start selected model
+        uses: ./.github/actions/model-server
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          probe_url: ${{ steps.request.outputs.probe_url }}
+          llama_cpp_build: ${{ steps.runtime.outputs.llama_cpp_build }}
+          config_root: ${{ env.CONFIG_ROOT }}
 
       # 5. PHASE 1: RUN INGESTION & LLM INFERENCE
       - name: Execute Phase 1 Inference
@@ -257,12 +136,7 @@ jobs:
           URL: "${{ github.event.inputs.url }}"
           PROMPT: "${{ github.event.inputs.prompt }}"
           INPUT_TEXT: "${{ github.event.inputs.input_text }}"
-          CONTEXT_SIZE: "${{ github.event.inputs.context_size }}"
           MAX_WORD_LENGTH: "${{ github.event.inputs.max_word_length }}"
-          SERVER_URL: "http://127.0.0.1:9931"
-          MODEL_NAME: "${{ env.MODEL_FILE }}"
-          MODEL_FAMILY: "${{ github.event.inputs.model_family }}"
-          REQUESTED_MODEL_ID: "${{ github.event.inputs.model_id }}"
           SHARD_ID: "${{ github.job }}"
           RUNNER_NAME: "${{ runner.name }}"
           RUNNER_OS: "${{ runner.os }}"
@@ -271,24 +145,17 @@ jobs:
           GITHUB_RUN_NUMBER: "${{ github.run_number }}"
           GITHUB_WORKFLOW: "${{ github.workflow }}"
           PIPELINE_EVENTS_PATH: "pipeline-events.jsonl"
-          LLAMA_TEMPERATURE: "0.2"
-          LLAMA_TOP_K: "40"
-          LLAMA_TOP_P: "0.95"
-          LLAMA_MIN_P: "0.05"
-          LLAMA_REPEAT_PENALTY: "1.15"
-          LLAMA_PRESENCE_PENALTY: "0.2"
-          LLAMA_FREQUENCY_PENALTY: "0.2"
-          LLAMA_MAX_TOKENS: "4350"
         run: |
           npx --yes tsx .github/scripts/ai-pipeline.ts --phase=infer
 
       # 6. TEARDOWN LLAMA-SERVER & RECLAIM PHYSICAL RAM
       - name: Stop llama-server (Reclaim Memory)
+        if: always()
         run: |
-          if [ -f .llama_server.pid ]; then
+          if [ -f llama-server.pid ]; then
             echo '{"timestamp":"'$(date -u +%FT%TZ)'","level":"INFO","message":"Stopping llama-server to reclaim RAM for UniEval..."}'
-            kill -9 $(cat .llama_server.pid) || true
-            rm -f .llama_server.pid
+            kill "$(cat llama-server.pid)" || true
+            rm -f llama-server.pid
             sudo sync && echo 3 | sudo tee /proc/sys/vm/drop_caches
           fi
 
@@ -328,9 +195,6 @@ jobs:
       # 8. PHASE 2: RUN QUALITY AUDIT
       - name: Execute Phase 2 Quality Audit
         env:
-          MODEL_NAME: "${{ env.MODEL_FILE }}"
-          MODEL_FAMILY: "${{ github.event.inputs.model_family }}"
-          REQUESTED_MODEL_ID: "${{ github.event.inputs.model_id }}"
           RUNNER_NAME: "${{ runner.name }}"
           RUNNER_OS: "${{ runner.os }}"
           RUNNER_ARCH: "${{ runner.arch }}"

@@ -133,18 +133,9 @@ def _leaf_paths(node: object, path: str = "") -> list[str]:
 
 
 def test_a_fresh_clone_runs_on_the_defaults() -> None:
-    """Every knob has a default now, so an empty config is usable.
-
-    `models` was the one block with no default and it left this file on
-    2026-09-14. What replaced it is `models_file`, which defaults to the
-    committed model's file - so the empty mapping below is the whole config a
-    fresh clone needs.
-    """
+    """The committed config selects the model; unrelated knobs retain defaults."""
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
-    minimal = AppConfig.model_validate({})
-    assert minimal.models_file == committed.models_file, (
-        "the default names the committed file, or a fresh clone reads a model nobody put there"
-    )
+    minimal = AppConfig.model_validate({"models_file": committed.models_file})
     assert (CONFIG_DIR / minimal.models_file).is_file()
     assert minimal.run.safety_ceiling_per_run == committed.run.safety_ceiling_per_run
     assert minimal.run.trial_case_dirname is None
@@ -154,14 +145,19 @@ def test_a_fresh_clone_runs_on_the_defaults() -> None:
     )
 
 
+def test_source_code_does_not_select_a_model_when_the_pointer_is_missing() -> None:
+    with pytest.raises(ValidationError, match="models_file"):
+        AppConfig.model_validate({})
+
+
 def test_qualification_defaults_to_one_pass() -> None:
-    assert AppConfig.model_validate({}).run.qualification_repeats == 1
+    assert AppConfig.model_validate({"models_file": "models/test.json"}).run.qualification_repeats == 1
 
 
 @pytest.mark.parametrize("repeats", [1, 2, 3])
 def test_qualification_accepts_one_through_three_passes(repeats: int) -> None:
     assert AppConfig.model_validate(
-        {"run": {"qualification_repeats": repeats}}
+        {"models_file": "models/test.json", "run": {"qualification_repeats": repeats}}
     ).run.qualification_repeats == repeats
 
 
@@ -173,7 +169,9 @@ def test_qualification_refuses_counts_outside_one_through_three(repeats: int) ->
 
 def test_a_trial_case_requires_a_trial_state_root() -> None:
     with pytest.raises(ValidationError, match=r"run\.trial_case_dirname requires"):
-        AppConfig.model_validate({"run": {"trial_case_dirname": "one-case"}})
+        AppConfig.model_validate(
+            {"models_file": "models/test.json", "run": {"trial_case_dirname": "one-case"}}
+        )
 
 
 def test_a_trial_case_may_not_reuse_a_ledger_root(tmp_path: Path) -> None:
@@ -1118,7 +1116,7 @@ def test_a_fresh_clone_measures_itself_and_the_committed_config_agrees() -> None
     one is the window of the gardener task that spends it.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
-    fresh = AppConfig.model_validate({})
+    fresh = AppConfig.model_validate({"models_file": "models/test.json"})
 
     assert committed.observability.model_dump() == fresh.observability.model_dump()
     assert fresh.observability.evaluation_enabled
@@ -1217,7 +1215,9 @@ def test_a_config_with_no_logging_block_reads_every_flag_at_its_documented_defau
     It cannot settle whether these defaults are right for a quiet production
     run; only a run under them says that.
     """
-    fresh = AppConfig.model_validate({"run": {"max_parallel": 2}}).logging
+    fresh = AppConfig.model_validate(
+        {"models_file": "models/test.json", "run": {"max_parallel": 2}}
+    ).logging
     assert fresh.level is LogLevel.INFO
     assert fresh.item_lines is True
     assert fresh.stage_lines is True
@@ -1250,7 +1250,9 @@ def test_every_logging_flag_moved_off_its_default_survives_the_round_trip() -> N
     assert json.dumps(once, sort_keys=True) == json.dumps(payload, sort_keys=True)
     twice = LoggingConfig.model_validate(once).model_dump(mode="json")
     assert json.dumps(twice, sort_keys=True) == json.dumps(once, sort_keys=True)
-    assert AppConfig.model_validate({"logging": payload}).logging.waiting_heartbeat_seconds == 5
+    assert AppConfig.model_validate(
+        {"models_file": "models/test.json", "logging": payload}
+    ).logging.waiting_heartbeat_seconds == 5
 
 
 def test_a_negative_heartbeat_is_refused_and_the_error_names_the_field() -> None:
@@ -1511,7 +1513,7 @@ def test_the_feature_ships_off_and_a_fresh_clone_publishes_what_it_always_did() 
     `floor_min` produced before the block existed. A clone with no judge in it
     has no block at all, which reaches the same day by the shorter road.
     """
-    fresh = AppConfig.model_validate({}).assemble.same_story
+    fresh = AppConfig.model_validate({"models_file": "models/test.json"}).assemble.same_story
     committed = AppConfig.from_json(
         read_text(CONFIG_DIR / "idhazh.json")
     ).assemble.same_story.judging_knobs()
@@ -1541,7 +1543,7 @@ def test_a_config_with_no_judge_in_it_validates_and_stays_that_way() -> None:
     judge in it registers none either - and a slug naming a judge that is not
     there is refused by name on the night it runs.
     """
-    none_at_all = AppConfig.model_validate({})
+    none_at_all = AppConfig.model_validate({"models_file": "models/test.json"})
 
     assert none_at_all.assemble.same_story.adaptive_dedup_threshold is None
 

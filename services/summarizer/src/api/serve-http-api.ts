@@ -46,14 +46,11 @@ export function createHttpServer(port?: number) {
           }
 
           const eventBus = new PipelineEventBus(env.RUNNER_NAME, env.SHARD_ID);
-          const result = await orchestratePipeline(validationResult.data, eventBus, {
-            serverUrl: env.SERVER_URL,
-            modelName: env.MODEL_NAME,
-          });
+          const result = await orchestratePipeline(validationResult.data, eventBus, env.modelRuntime);
 
           // If running inside CI, automatically publish the Step Summary
           if (process.env.GITHUB_STEP_SUMMARY) {
-            renderGithubStepSummary(env.MODEL_NAME, result, eventBus.getEventHistory());
+            renderGithubStepSummary(env.modelRuntime.request.model, result, eventBus.getEventHistory());
           }
 
           res.writeHead(200);

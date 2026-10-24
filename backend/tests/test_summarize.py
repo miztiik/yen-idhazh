@@ -55,6 +55,7 @@ from idhazh.contracts.knobs.summarize import (
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.summary import LengthAction, Summary, SummaryStatus
 from idhazh.evals.metrics import verbatim_run
+from idhazh.llm.reasoning import split_reasoning
 from idhazh.llm.server import (
     PROBE_ANSWER,
     UNCAPPED_N_PREDICT,
@@ -95,7 +96,6 @@ from idhazh.summarize import (
     paragraph_rule,
     parse_draft,
     prompt_inputs,
-    split_thinking,
     system_prompt,
     to_summary,
     trim_to_words,
@@ -113,6 +113,7 @@ GENERATED_AT = "2026-08-21T06:12:53Z"
 #: check is that the number the caller passed is the number the body carries,
 #: which is a property of the builder rather than of any one caller's grammar.
 ANSWER_BUDGET: Final = 512
+RECORDED_REASONING_DELIMITERS: Final = ("<think>", "</think>")
 
 
 def article(name: str = "ok") -> Article:
@@ -120,7 +121,10 @@ def article(name: str = "ok") -> Article:
 
 
 def completion(name: str) -> Completion:
-    return parse_completion(read_text(COMPLETIONS / f"{name}.json"))
+    return parse_completion(
+        read_text(COMPLETIONS / f"{name}.json"),
+        reasoning_delimiters=RECORDED_REASONING_DELIMITERS,
+    )
 
 
 TITLE = "Example Lab publishes smaller inference model under a permissive licence"
@@ -144,7 +148,10 @@ def body(**overrides: object) -> str:
 def replied(text: str, source: str = "ok", **kwargs: object) -> Summary:
     return to_summary(
         article(source),
-        Completion(content=text, prompt_tokens=10, completion_tokens=10),
+        parse_completion(
+            json.dumps({"content": text, "tokens_evaluated": 10, "tokens_predicted": 10}),
+            reasoning_delimiters=RECORDED_REASONING_DELIMITERS,
+        ),
         model_id="m",
         generated_at=GENERATED_AT,
         **kwargs,  # type: ignore[arg-type]
@@ -2027,7 +2034,7 @@ class TestTheThinkingReachesNothing:
         return completion("reasoned-anyway")
 
     def thought(self) -> str:
-        block = split_thinking(self.recorded().content)[1]
+        block = self.recorded().inline_reasoning
         assert block, "the fixture stopped carrying a think block, so this proves nothing"
         return block
 
@@ -2066,7 +2073,7 @@ class TestTheThinkingReachesNothing:
             markers=markers,
             max_answer_tokens=900,
         )
-        answer = split_thinking(self.recorded().content)[0]
+        answer = self.recorded().content
 
         second = continued_completion_payload(
             first,
@@ -2089,13 +2096,60 @@ class TestTheThinkingReachesNothing:
 
 
 def test_a_reply_without_a_think_block_passes_through() -> None:
-    content, thought = split_thinking('{"summary": "x"}')
+    content, thought = split_reasoning('{"summary": "x"}')
     assert content == '{"summary": "x"}'
     assert thought is None
 
 
+def test_inline_reasoning_is_read_only_with_its_explicit_delimiters() -> None:
+    recorded = read_text(COMPLETIONS / "reasoned-anyway.json")
+    raw = parse_completion(recorded)
+    normalized = parse_completion(recorded, reasoning_delimiters=RECORDED_REASONING_DELIMITERS)
+    assert raw.reasoning == ""
+    assert raw.content.startswith("<think>")
+    assert normalized.reasoned
+    assert normalized.content.startswith("{")
+    assert normalized.completion_tokens == raw.completion_tokens
+    assert normalized.prompt_tokens == raw.prompt_tokens
+    assert normalized.finish_reason == raw.finish_reason
+
+
+def test_an_unknown_declared_reasoning_pair_uses_the_same_response_boundary() -> None:
+    raw = json.loads(read_text(COMPLETIONS / "reasoned-anyway.json"))
+    message = raw["choices"][0]["message"]
+    message["content"] = message["content"].replace("<think>", "[reason]").replace(
+        "</think>", "[/reason]"
+    )
+    normalized = parse_completion(
+        json.dumps(raw), reasoning_delimiters=("[reason]", "[/reason]")
+    )
+    assert normalized.content == completion("reasoned-anyway").content
+    assert normalized.inline_reasoning == completion("reasoned-anyway").inline_reasoning
+
+
+def test_inline_delimiters_inside_a_json_answer_remain_content() -> None:
+    content = json.dumps({"summary": "The string <think> is not a reasoning prefix."})
+    parsed = parse_completion(
+        json.dumps({"content": content}),
+        reasoning_delimiters=RECORDED_REASONING_DELIMITERS,
+    )
+    assert parsed.content == content
+    assert not parsed.reasoned
+
+
+def test_an_unclosed_reasoning_prefix_has_no_answer() -> None:
+    parsed = parse_completion(
+        json.dumps({"content": "[reason]The answer is not ready."}),
+        reasoning_delimiters=("[reason]", "[/reason]"),
+    )
+    assert parsed.content == ""
+    assert parsed.reasoned
+
+
 def test_an_empty_think_block_is_accepted() -> None:
-    content, thought = split_thinking('<think></think>{"summary": "x"}')
+    content, thought = split_reasoning(
+        '<think></think>{"summary": "x"}', delimiters=RECORDED_REASONING_DELIMITERS
+    )
     assert content == '{"summary": "x"}'
     assert thought == ""
 
@@ -2110,13 +2164,11 @@ def test_an_empty_block_cannot_hide_a_second_one_that_reasoned() -> None:
     """
     raw = f"<think></think><think>weighing it up</think>{body()}"
 
-    content, thought = split_thinking(raw)
+    content, thought = split_reasoning(raw, delimiters=RECORDED_REASONING_DELIMITERS)
     assert content == body()
     assert thought is not None
     assert thought.strip() == "weighing it up"
 
-    with pytest.raises(ValueError, match="reasoned anyway"):
-        parse_draft(raw)
     assert replied(raw).status is SummaryStatus.FAILED
 
 
@@ -2183,19 +2235,15 @@ class TestTheRefusalsAreConditionalOnTheDeclaration:
 
     def test_an_inline_think_block_still_fails_where_nothing_asked_for_one(self) -> None:
         """Case one of the parse-side refusal: the flag did not take."""
-        with pytest.raises(ValueError, match="reasoned anyway"):
-            parse_draft(f"<think>weighing it up</think>{body()}")
-
         assert self.summarised_with("reasoned-anyway", thinking=False).status is (
             SummaryStatus.FAILED
         )
 
     def test_an_inline_think_block_is_discarded_where_the_entry_declared_one(self) -> None:
         """Case two: what came back is what was asked for, and none of it survives."""
-        draft = parse_draft(f"<think>weighing it up</think>{body()}", thinking=True)
+        draft = parse_draft(completion("reasoned-anyway").content, thinking=True)
 
-        assert draft.title == TITLE
-        assert "weighing it up" not in draft.summary
+        assert completion("reasoned-anyway").inline_reasoning not in draft.summary
         assert self.summarised_with("reasoned-anyway", thinking=True).status is SummaryStatus.OK
 
     def test_a_reasoning_channel_still_fails_where_nothing_asked_for_one(self) -> None:

@@ -20,9 +20,19 @@ All schedules and run dates are UTC. Every workflow supports manual dispatch.
 | `idhazh-gardener.yml` | `Idhazh Gardener` | `40 0 * * *` | Retention and history maintenance |
 | `backfill.yml` | `Vector backfill` | none | Repair closed days' vectors |
 | `idhazh-pipeline-tests.yaml` | `Pipeline tests` | none | Check a model with real articles |
+| `yen-ai-pipeline.yml` | `Yen-AI-Pipeline` | none | Run the independent summarizer API |
+| `ai-pipeline-tests.yml` | `Yen-Summarizers` | none | Run independent TypeScript inference and its existing audit |
 
 Use filenames for dispatch and API calls. `workflow_run.workflows` matches display
 names instead: update its callers and the workflow tests when renaming a label.
+
+Both independent inference workflows accept `models_file`. Blank follows
+`config/idhazh.json`; a value selects that declaration through the shared
+candidate-config action. Both launch through the shared model-server action
+and obtain request settings and the committed destination through
+`model_runtime.py describe-request`. They expose no independent model-name,
+repository, quantization or sampling selection. See
+[ci-model-runtime.md](ci-model-runtime.md) for the shared runtime contract.
 
 ## Drift review
 

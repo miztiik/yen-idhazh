@@ -80,8 +80,13 @@ EXPECTED_WORKFLOWS: Final = {
 }
 
 # Named inputs keep workflow checks independent of new files in the checkout.
-# The addon workflow has no application routing contract in EXPECTED_WORKFLOWS.
-WORKFLOW_FILES: Final = (*EXPECTED_WORKFLOWS, "duckdb-addon.yml")
+# Extra workflows share runtime checks but have no application routing contract here.
+WORKFLOW_FILES: Final = (
+    *EXPECTED_WORKFLOWS,
+    "duckdb-addon.yml",
+    "yen-ai-pipeline.yml",
+    "ai-pipeline-tests.yml",
+)
 WORKFLOW_PATHS: Final = tuple(WORKFLOWS_DIR / name for name in WORKFLOW_FILES)
 
 
@@ -263,6 +268,8 @@ LLAMA_RUNTIME_WORKFLOWS: Final = frozenset(
         "llm-council.yml",
         "measure.yml",
         "validate.yml",
+        "yen-ai-pipeline.yml",
+        "ai-pipeline-tests.yml",
     }
 )
 
@@ -323,7 +330,7 @@ SHARED_DOWNLOAD_CALLS: Final = (DOWNLOAD_MODEL_FILES,)
 #: download moved into Python the literal host stopped appearing in four of
 #: these jobs, and a search over `run:` bodies alone would have found four -
 #: which every check written over that search would have passed, quietly.
-WEIGHTS_FETCH_JOBS: Final = 8
+WEIGHTS_FETCH_JOBS: Final = 10
 
 # Every job in the repository that downloads a `.gguf`, the step that checks it,
 # the first step that reads it, and the one place the expected digest is

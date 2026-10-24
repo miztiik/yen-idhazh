@@ -2,8 +2,7 @@ import { z } from "zod";
 
 export const EnvironmentVariablesSchema = z.object({
   PORT: z.coerce.number().default(9932),
-  SERVER_URL: z.string().url().default("http://127.0.0.1:9931"),
-  MODEL_NAME: z.string().min(1).default("Ornith-1.5-9B-Q4_K_M.gguf"),
+  CONFIG_ROOT: z.string().min(1).optional(),
   RUNNER_NAME: z.string().default("local-runner"),
   SHARD_ID: z.string().default("local-shard"),
   URL: z.string().optional().default(""),

@@ -149,7 +149,12 @@ def stage_judge_item_pairs(
     # per-call check.
     prompt.first_token_openings(partial(token_pieces, base_url, timeout=timeout))
     markers = derive_turn_markers(base_url, entry=entry, timeout=timeout)
-    client = partial(post, endpoint=completion_url(base_url), timeout=timeout)
+    client = partial(
+        post,
+        endpoint=completion_url(base_url),
+        timeout=timeout,
+        reasoning_delimiters=entry.reasoning_delimiters,
+    )
     items = _items_by_url_key(
         date,
         digest_root=digest_root,

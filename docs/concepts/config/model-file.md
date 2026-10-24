@@ -14,11 +14,10 @@ Everything that is a fact about one set of weights lives in one file of its own:
 
 **The swap is that one line, and so is the revert.** Point `models_file` at another committed file and the run opens another model; point it back and the incumbent's measured numbers are still on disk rather than in git history. Before 2026-09-14 a swap was eleven lines edited in place in the file every other knob lives in, and a revert had to reconstruct the previous model's numbers out of a diff.
 
-`models_file` is spelled relative to `config/` and its grammar pins it to `config/models/` and to `.json`, because the value is an operator's edit that becomes a path this build opens (`CLAUDE.md` section 2). It ships a default naming the committed file, so a fresh clone still runs unconfigured.
+`models_file` is spelled relative to `config/` and its grammar pins it to `config/models/` and to `.json`, because the value is an operator's edit that becomes a path this build opens (`CLAUDE.md` section 2). It is required. A fresh clone reads the committed selection from `config/idhazh.json`; source code selects no model file.
 
-The current default is `models/ornith-1.5-9b-q5km.json`. Keep it aligned with
-the committed selection when that selection changes. Recorded template checks
-remain tied to the model that produced their bytes, not the current selection.
+Recorded template checks remain tied to the model that produced their bytes,
+not the current selection.
 Server-setting checks accept the runtime's short and long flag spellings.
 The runtime-sweep utility has its own command-line options; these are not
 direct server flags. Its server launch must still use the shared argument
@@ -37,6 +36,22 @@ output-limit or decoding keys. Request-builder tests own those wire details.
 **Both files travel with the run.** `Settings.digests` records the pointer file and the model file it names, because the pointer moving and the file it points at being re-tuned are two different edits and a record that held only one of them could not tell them apart.
 
 ### Design rationale
+
+Owner approval, kumarsnaveen, 2026-10-24: a valid compatible model file must
+work without a source, schema, fixture or model-list edit. The selected entry
+owns server flags, sampling, template variables and optional inline reasoning
+delimiters. `thinking_kwarg` must explicitly name a switch or be null. Null
+does not forbid reasoning: a template can always reason without a switch.
+`chat_template_kwargs` passes additional variables unchanged; it cannot repeat
+the reasoning switch. A response uses the runtime's `reasoning_content`
+channel first. Only an explicit `reasoning_delimiters` pair enables legacy
+inline handling; null selects no inline parser. Separate reasoning and answer
+spans continue to use `thinking_close`.
+
+This removes source defaults, not runtime compatibility checks. Missing files,
+invalid settings, an unreadable template or a decoder that ignores the output
+schema still fail by name. It does not select new weights or change measured
+tokenizer ratios, performance tests, encoders, evaluation tools or fine-tuning.
 
 The alternative was to leave the block where it was and make the swap a careful multi-line edit with a checklist. It was rejected because the checklist is the failure: the summarizer moved from the 8B to the 9B on 2026-08-27 and the settings block did not move with it, which is the incident the `declared_for` rule below exists for. A rule that catches a half-done edit is worth having; not needing the edit is worth more.
 

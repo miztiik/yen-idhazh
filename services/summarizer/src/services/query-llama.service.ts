@@ -1,4 +1,7 @@
 import http from "node:http";
+import https from "node:https";
+import type { ModelRuntime } from "../config/load-model-runtime.js";
+import { buildModelRequest, readModelContent } from "./model-request.service.js";
 import { RawModelAnalysisSchema, type RawModelAnalysis } from "../schemas/export-all-schemas.js";
 
 export interface LlamaInferenceTimings {
@@ -21,22 +24,20 @@ export interface LlamaInferenceResponse {
   timings: LlamaInferenceTimings;
 }
 
-function postOpenAIChatCompletion(urlStr: string, payload: unknown): Promise<any> {
+function postOpenAIChatCompletion(urlStr: string, payload: unknown, timeoutSeconds: number): Promise<any> {
   return new Promise((resolve, reject) => {
     const targetUrl = new URL(urlStr);
     const bodyData = JSON.stringify(payload);
 
-    const req = http.request(
+    const transport = targetUrl.protocol === "https:" ? https : http;
+    const req = transport.request(
+      targetUrl,
       {
-        hostname: targetUrl.hostname,
-        port: targetUrl.port,
-        path: targetUrl.pathname,
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Content-Length": Buffer.byteLength(bodyData),
         },
-        timeout: 0, // Infinite patience to avoid Undici 300s timeout during CPU prefill
       },
       (res) => {
         let raw = "";
@@ -57,6 +58,8 @@ function postOpenAIChatCompletion(urlStr: string, payload: unknown): Promise<any
     );
 
     req.on("error", reject);
+    const deadline = setTimeout(() => req.destroy(new Error("Model request timed out.")), timeoutSeconds * 1000);
+    req.on("close", () => clearTimeout(deadline));
     req.write(bodyData);
     req.end();
   });
@@ -108,56 +111,28 @@ Definitions for classification axes:
 }
 
 export async function queryLlamaServer(
-  serverUrl: string,
-  modelName: string,
+  runtime: ModelRuntime,
   systemPrompt: string,
   userPrompt: string
 ): Promise<LlamaInferenceResponse> {
-  const payload = {
-    model: modelName,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt },
-    ],
-    temperature: 0.2,
-    response_format: { type: "json_object" },
-    stream: false,
-    chat_template_kwargs: { enable_thinking: false },
-  };
+  const payload = buildModelRequest(runtime, systemPrompt, userPrompt, { type: "json_object" });
 
-  const response = await postOpenAIChatCompletion(`${serverUrl}/v1/chat/completions`, payload);
-  const rawContent = response.choices?.[0]?.message?.content || "";
+  const endpoint = new URL("/v1/chat/completions", runtime.base_url).href;
+  const response = await postOpenAIChatCompletion(endpoint, payload, runtime.timeout_seconds);
+  const rawContent = response.choices?.[0]?.message?.content ?? "";
+  const answerContent = readModelContent(response, runtime);
 
   let parsedJson: unknown;
   try {
-    const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
-    parsedJson = JSON.parse(jsonMatch ? jsonMatch[0] : rawContent);
+    const jsonMatch = answerContent.match(/\{[\s\S]*\}/);
+    parsedJson = JSON.parse(jsonMatch ? jsonMatch[0] : answerContent);
   } catch (err: any) {
     throw new Error(`Failed to parse JSON from model output: ${err.message}. Raw: ${rawContent}`);
   }
 
-  // Zod contract verification of the model's raw inference response
   const parseResult = RawModelAnalysisSchema.safeParse(parsedJson);
-  let parsedAnalysis: RawModelAnalysis;
-
-  if (parseResult.success) {
-    parsedAnalysis = parseResult.data;
-  } else {
-    console.warn("⚠️ LLM response did not perfectly fulfill schema; synthesizing fallback fields:", parseResult.error.format());
-    const fallback = parsedJson as any;
-    parsedAnalysis = {
-      headline: fallback?.headline || "Document Summary",
-      executive_summary: fallback?.executive_summary || rawContent.trim(),
-      key_points: Array.isArray(fallback?.key_points) && fallback.key_points.length > 0
-        ? fallback.key_points
-        : ["Extracted from raw model text"],
-      sentiment: fallback?.sentiment || "neutral",
-      stance_on_change: fallback?.stance_on_change || "not_applicable",
-      stance_on_economic_power: fallback?.stance_on_economic_power || "not_applicable",
-      stance_on_state_power: fallback?.stance_on_state_power || "not_applicable",
-      stance_on_borders: fallback?.stance_on_borders || "not_applicable",
-      stance_on_personal_sphere: fallback?.stance_on_personal_sphere || "not_applicable",
-    };
+  if (!parseResult.success) {
+    throw new Error(`Model response failed RawModelAnalysisSchema: ${parseResult.error.message}`);
   }
 
   const promptTokens = response.usage?.prompt_tokens ?? response.timings?.prompt_n ?? 0;
@@ -165,7 +140,7 @@ export async function queryLlamaServer(
 
   return {
     rawContent,
-    parsedAnalysis,
+    parsedAnalysis: parseResult.data,
     usage: {
       prompt_tokens: promptTokens,
       completion_tokens: completionTokens,

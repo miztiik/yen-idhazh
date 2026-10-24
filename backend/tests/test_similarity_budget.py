@@ -120,7 +120,7 @@ def test_the_refusal_names_every_knob_a_person_could_move() -> None:
 
 def test_a_config_with_no_judge_block_has_nothing_to_check() -> None:
     """This judge is optional, so its absence is a night the council runs without it."""
-    without = AppConfig.model_validate({})
+    without = AppConfig.model_validate({"models_file": "models/test.json"})
 
     assert without.assemble.same_story.adaptive_dedup_threshold is None
     budget.refuse_a_night_this_tenant_cannot_finish(without, council=CouncilConfig())

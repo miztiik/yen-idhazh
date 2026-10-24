@@ -11,6 +11,13 @@ Point it at another file in `config/models/` and everything follows it: the
 daily run, the qualification case and the bench all read the entry that file
 holds. **The revert is the same line back.**
 
+The pointer is required; there is no model-file default in source. A new file
+does not join a model list or require a new test fixture. It must describe
+weights and capabilities the installed runtime can serve. Missing artifacts,
+an unsupported template or a failed constrained-decode check still stop startup
+with the failed requirement named. A valid declaration is not a claim about
+summary quality or speed.
+
 The rest of this page is what to do before you write that line and what to check
 after. It covers the build-time summary model, which also decides the picture.
 The faithfulness scorer and the browser search model have their own contracts
@@ -178,7 +185,9 @@ a fact about them.
 | `server` | llama-server's own flags, spelled as the binary spells them: the window (`--ctx-size`), the slots (`-np`), the threads |
 | `sampling` | the sampler values a request sends, spelled as the request body spells them |
 | `request_timeout_minutes` | how long one request may wait for an answer |
-| `thinking_kwarg`, `thinking_close` | the template variable that switches the model's reasoning, and what the model writes to end it. Null `thinking_close` means no reasoning |
+| `thinking_kwarg`, `thinking_close` | explicitly name the reasoning switch or set it null; declare the separate reasoning span's closing marker, or null for no reasoning |
+| `chat_template_kwargs` | additional template variables, used during template derivation and chat requests; do not repeat `thinking_kwarg` |
+| `reasoning_delimiters` | an explicit opening/closing pair only when legacy replies carry inline reasoning; null uses no inline parser |
 | `declared_for` | the `sha256` the settings above were measured against |
 | `companion_files` | any extra file the weights need, such as a draft head |
 

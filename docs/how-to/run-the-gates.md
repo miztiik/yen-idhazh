@@ -242,6 +242,13 @@ Hosted duration is measured by the CI step, not estimated as a passing gate.
 This subsection stays here because it selects the local commands; format and
 compatibility rules remain in the persistence contract.
 
+The independent summarizer service reads its selected model through the
+existing Python config loader, unlike the feed planner above. From the
+repository root, its native checks are `bun run --cwd services/summarizer check`
+and `bun run --cwd services/summarizer test`. Its tests copy named config inputs
+and replay recorded responses on loopback; they download no model and contact
+no external service.
+
 ## Design rationale
 
 ### Bounded state CSV integrity check

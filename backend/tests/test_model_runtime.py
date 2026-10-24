@@ -11,7 +11,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from contracts._fixtures import copy_config
+from support.paths import FIXTURES_DIR, read_text
+from support.server import RecordedEndpoint
 
+from idhazh.llm.server import ProbeRefusedError
 from utilities import model_refs, model_runtime
 
 WEIGHTS = b"the weights, as bytes"
@@ -19,6 +23,20 @@ COMPANION = b"a draft head"
 
 #: Where a fetched file lands, read off the reader rather than spelled again.
 MODELS_DIR = Path(model_refs.MODELS_DIR)
+
+
+def test_startup_refuses_a_runtime_that_does_not_hold_the_response_schema(tmp_path: Path) -> None:
+    copy_config(tmp_path)
+    config_root = tmp_path / "config"
+    pointer_path = config_root / "idhazh.json"
+    pointer = json.loads(pointer_path.read_text(encoding="utf-8"))
+    recorded = read_text(FIXTURES_DIR / "completions" / "ok.json").encode("utf-8")
+    with RecordedEndpoint(200, recorded) as runtime:
+        pointer["model_server"]["base_url"] = runtime.base_url
+        pointer_path.write_text(json.dumps(pointer), encoding="utf-8")
+        with pytest.raises(ProbeRefusedError, match="decoder is not held"):
+            model_runtime.describe_request(config_root, prove_runtime=True)
+        assert runtime.served == 1
 
 
 def _entry(**extra: object) -> dict[str, object]:
