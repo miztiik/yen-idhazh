@@ -44,16 +44,13 @@ on:
       threads:
         description: 'Comma-separated llama-bench thread counts, for example 4,8'
         default: '4'
-      # One dispatch's answer to the same question `bench.run_model_speed_case`
-      # answers for every dispatch. `config` follows the knob; the other two
-      # overrule it for this run and nothing else, so an operator who wants the
-      # rest of the flow without the half-hour of llama-bench needs no commit.
+      # The llama-bench case: raw prefill and decode rates, a tenth to a third of
+      # the dispatch. `skip` runs the server case alone, for exercising the flow.
       model_speed_case:
-        description: 'Run the llama-bench speed case? config follows bench.run_model_speed_case'
+        description: 'Run the llama-bench speed case (raw prefill and decode rates)? skip runs the server case alone'
         type: choice
-        default: config
+        default: run
         options:
-          - config
           - run
           - skip
       corpus_links:
@@ -79,19 +76,21 @@ on:
           - draft_depth
       # What the job timeout is spent on is repeats times articles times cases,
       # and the first two of those now sit beside each other in `bench` so that
-      # raising one shows the other. Empty follows `bench.repeats`.
+      # raising one shows the other. The default is `bench.repeats`, written out
+      # here, and a test holds the two to the same number.
       runtime_repeats:
-        description: 'Repeats per case, overruling bench.repeats for this run. Use 2 for draft_depth'
-        default: ''
+        description: 'Repeats per case, overruling bench.repeats (2) for this run'
+        default: '2'
       # The corpus is what the job timeout is actually spent in, and a case set
       # multiplies it: `draft_depth` runs FOUR cases, so two repeats is eight
       # passes rather than the four a named candidate costs. At the 13.1 minutes
       # an article the slowest pass has recorded, eight passes over the
       # committed three articles is 314 minutes against a 330 minute timeout,
-      # and two articles is 210. Empty follows `bench.corpus_items`.
+      # and two articles is 210. The default is `bench.corpus_items`, written out
+      # here, and a test holds the two to the same number.
       runtime_corpus_items:
-        description: 'Articles per repeat, overruling bench.corpus_items for this run. Use 2 for draft_depth'
-        default: ''
+        description: 'Articles per repeat, overruling bench.corpus_items (3) for this run. Use 2 for draft_depth'
+        default: '3'
       # Breadth comes from several jobs rather than a longer one. Eight passes
       # over five articles is about 524 minutes against a 360-minute platform
       # ceiling, so five articles cannot share a job with four cases. Each
@@ -163,9 +162,9 @@ jobs:
   # given, the configured model otherwise. One place, so the two cases of the
   # bench cannot disagree about which bytes they measured.
   #
-  # And it is where the speed case is decided, for the same reason plus one: a
-  # job's own `if:` cannot read a step of its own job, so the answer has to
-  # arrive as a `needs` output.
+  # And it is where the speed case's answer is passed on, for the same reason
+  # plus one: a job's own `if:` cannot read a step of its own job, so the answer
+  # has to arrive as a `needs` output.
   models:
     name: Read the candidate out of config
     runs-on: ubuntu-latest
@@ -192,20 +191,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      # `model_speed_case.py` reads `bench.run_model_speed_case` through the
-      # contract, so this job needs the package installed even though it writes
-      # nothing and finishes in under a minute. It had neither a Python setup
-      # nor an install from 2026-09-17, when the speed case became bypassable,
-      # until the first bench dispatched after that died here on
-      # `ModuleNotFoundError: No module named 'idhazh'`. The `models` step below
-      # is dependency-free on purpose and stays that way.
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
-          cache: pip
-          cache-dependency-path: pyproject.toml
-
-      - run: pip install -e .
+      # Dependency-free on purpose: this job reads one file and publishes the refs
+      # every other job needs, so it installs nothing.
 
       # Each value is asserted to be one bare word at the one point that writes
       # them, so an expression that substitutes one into a shell command below
@@ -223,17 +210,12 @@ jobs:
             --also-pinned \
             --models-file "$CANDIDATE_MODELS_FILE" >> "$GITHUB_OUTPUT"
 
-      # Config decides, the dispatch may overrule, and the module holds the
-      # rule so this file never spells it twice (Guardrail #6). The input
-      # arrives through `env` for the same reason the models file does: a value
-      # pasted into a shell command would be text before it was a value.
+      # The dispatch input is the whole answer: `run` or `skip`, and GitHub
+      # enumerates it. It arrives through `env` so it is read by name, not pasted.
       - id: speed
         env:
           MODEL_SPEED_CASE: ${{ inputs.model_speed_case }}
-        run: |
-          set -euo pipefail
-          python3 backend/utilities/model_speed_case.py \
-            --dispatch "$MODEL_SPEED_CASE" | tee /dev/stderr >> "$GITHUB_OUTPUT"
+        run: echo "model_speed_case=$MODEL_SPEED_CASE" >> "$GITHUB_OUTPUT"
 
   # The bench, case one: raw prefill and decode throughput with nothing else in
   # the process. This is the case that says whether the weights can move tokens
@@ -827,6 +809,25 @@ jobs:
             --gguf-cache-hit "$GGUF_CACHE_HIT"
 
 
+      # The run page, written whether the sweep passed or was refused: a refused
+      # run is the one most worth reading. The verdict and the key numbers go out
+      # as annotations on the run; the page holds the configuration, each article
+      # with its summary and source link, and the timings. Nothing here is committed.
+      - name: Write the bench run page
+        if: always()
+        env:
+          CANDIDATE_ID: ${{ needs.models.outputs.candidate_id }}
+          MODELS_FILE: ${{ needs.models.outputs.candidate_models_file }}
+          SPEED_CASE: ${{ needs.models.outputs.model_speed_case }}
+        run: |
+          set -euo pipefail
+          python3 backend/utilities/runtime_run_page.py \
+            --candidate-id "$CANDIDATE_ID" \
+            --models-file "$MODELS_FILE" \
+            --speed-case "$SPEED_CASE" \
+            --page backend/var/runtime-sweep/run-page.md
+          cat backend/var/runtime-sweep/run-page.md >> "$GITHUB_STEP_SUMMARY"
+
       # Only when there is one to read. A bypassed speed case writes no
       # `bench-raw` artifact at all, and a download that named a missing
       # artifact would fail this job at the end of a five-hour run.
@@ -869,8 +870,7 @@ jobs:
             echo 'the sweep, the machine record and the runtime artifact are all'
             echo 'here; prefill and decode rates are not.'
             echo
-            echo 'To get them, dispatch again with model_speed_case set to run, or'
-            echo 'set bench.run_model_speed_case back to true.'
+            echo 'To get them, dispatch again with model_speed_case set to run.'
           } >> "$GITHUB_STEP_SUMMARY"
 
       # THE ONE THING THIS WORKFLOW PUSHES. Every other step here uploads an
