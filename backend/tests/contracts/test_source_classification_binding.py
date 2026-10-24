@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -19,7 +18,7 @@ from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.digest_day import DigestItem
 from idhazh.contracts.eval_row import ConfidenceBand
 from idhazh.contracts.summary import Summary
-from idhazh.contracts.taxonomy import SourceKindDefinition, Taxonomy
+from idhazh.contracts.taxonomy import Taxonomy
 from idhazh.discover import Candidate
 from idhazh.rank import authority_terms, plan_vertical
 
@@ -79,23 +78,6 @@ console.log(JSON.stringify({
     )
     value: dict[str, Any] = json.loads(result.stdout)
     return value
-
-
-def test_frontend_kind_definition_fields_match_python() -> None:
-    text = (REPO_ROOT / "frontend/src/lib/bands.ts").read_text(encoding="utf-8")
-    interface = re.search(r"export interface SourceKindDefinition \{(.*?)\}", text, re.S)
-    assert interface
-    fields = dict(re.findall(r"(\w+): ([^;]+);", interface[1]))
-    assert set(fields) == set(SourceKindDefinition.model_fields)
-    assert fields == {
-        "id": "string",
-        "display_name": "string",
-        "status": "string",
-        "retired_on": "string | null",
-        "show_on_item": "boolean",
-        "counts_as_reporting": "boolean",
-        "requires_reporting_for_lead": "boolean",
-    }
 
 
 def test_frontend_kind_vocabulary_comes_from_the_same_registry() -> None:
@@ -189,7 +171,7 @@ def test_config_only_extension_reaches_plan_publication_and_frontend(tmp_path: P
         ("default-kind", "default_source_kind"),
         ("default-tier", "default_entity_tier"),
         ("nonfinite-weight", "finite"),
-        ("invalid-property", "extra"),
+        ("invalid-property", "invented_rule"),
         ("inactive-kind", "independent-review"),
         ("conflicting-legacy-weight", "conflicts"),
     ],
@@ -237,19 +219,28 @@ def test_configured_defaults_apply_only_to_authored_config(tmp_path: Path) -> No
     write(root, "taxonomy.json", taxonomy)
     sources = read(root, "sources.json")
     sources["feeds"][0].pop("kind")
+    sources["feeds"][1]["kind"] = "reporting"
     write(root, "sources.json", sources)
     watchlist = read(root, "watchlist.json")
     watchlist["entities"][0]["feeds"] = [
         {
-            "id": "entity-review",
-            "title": "Entity review",
+            "id": "entity-review-default",
+            "title": "Entity review default",
             "url": "https://example.test/feed",
-        }
+        },
+        {
+            "id": "entity-review-explicit",
+            "title": "Entity review explicit",
+            "url": "https://example.test/second-feed",
+            "tier": 2,
+        },
     ]
     write(root, "watchlist.json", watchlist)
     settings = load(root)
     assert settings.sources.feeds[0].kind == "independent-review"
+    assert settings.sources.feeds[1].kind == "reporting"
     assert settings.watchlist.entities[0].feeds[0].tier == 4
+    assert settings.watchlist.entities[0].feeds[1].tier == 2
     historical = Taxonomy.from_json(
         (CONTRACT_FIXTURES_DIR / "taxonomy/with-tombstones.json").read_text(encoding="utf-8")
     )

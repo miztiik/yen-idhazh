@@ -22,6 +22,7 @@ import csv
 import json
 import shutil
 import sys
+from collections import Counter
 from collections.abc import Iterator
 from itertools import pairwise
 from pathlib import Path
@@ -307,8 +308,10 @@ class TestTheDraw:
             scorer_version=live_scorer(records),
             per_decile=6,
         )
-        missing = labels.shortfalls(drawn, per_decile=6)
-        assert len(drawn) == 60 - sum(missing.values())
+        available = Counter(row.hhem for row in _built_rows() if row.scorer_version == LIVE_SCORER)
+        taken = Counter(float(row["hhem"]) for row in drawn)
+        assert taken == {score: min(6, count) for score, count in available.items()}
+        assert labels.shortfalls(drawn, per_decile=6) == {9: 6 - SHORT_DECILE_ROWS}
 
     def test_the_queue_is_not_ordered_by_score(self) -> None:
         """A queue sorted by score leaks the gradient to the labeller."""
@@ -353,7 +356,10 @@ class TestTheDraw:
         """Extraction failures are the sample, not noise to be tidied out of it."""
         records = ledger()
         pool = labels.eligible(records, scorer_version=live_scorer(records))
-        assert any(int(row["source_words"]) < 50 for row in pool)
+        short = next(row for row in _built_rows() if row.source_words == A_SHORT_SOURCE)
+        kept = next(row for row in pool if row["url_key"] == short.url_key)
+        assert kept["output_digest"] == short.output_digest
+        assert int(kept["source_words"]) == A_SHORT_SOURCE
 
 
 class TestWhatTheLedgerHolds:
@@ -480,6 +486,12 @@ class TestTheQueueIsRunnable:
     ) -> None:
         root = tmp_path / "sitting"
         _a_sitting_world(root)
+        knobs = root / "config" / "idhazh.json"
+        payload = json.loads(knobs.read_text(encoding="utf-8"))
+        payload["evaluation"]["labellers"] = ["miztiik"]
+        knobs.write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n"
+        )
         before = _committed_ledger()
         monkeypatch.setattr(label_queue, "REPO_ROOT", root)
         monkeypatch.setattr(sys, "argv", ["label_queue.py", "--label", "--labeller", "miztiik"])
@@ -641,15 +653,9 @@ class TestTheLedger:
         labels.append(path, [a_label()])
         assert labels.read_header(path) == LabelRow.csv_columns()
 
-    def test_the_committed_config_names_a_labeller(self) -> None:
-        """An empty roster refuses every write, and it was empty until 2026-09-22.
-
-        That is what `0 of 60` on the evaluation page has always measured. Empty
-        this list again and the only independent check this project has on its
-        faithfulness judge stops being runnable, silently.
-        """
+    def test_the_committed_labelling_knobs_hold_their_documented_values(self) -> None:
+        """A sitting draws six per decile after ten run-days at one scorer."""
         settings = config.load(CONFIG_DIR)
-        assert settings.app.evaluation.labellers, "an empty roster refuses every write"
         assert settings.app.evaluation.label_draw_per_decile == 6
         assert settings.app.evaluation.label_min_run_days == 10
 

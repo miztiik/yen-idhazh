@@ -68,6 +68,13 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Reject added or changed state CSV files
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node frontend/scripts/state-csv-guard.ts
+
       - id: decide
         env:
           EVENT: ${{ github.event_name }}
