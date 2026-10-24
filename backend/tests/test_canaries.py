@@ -357,6 +357,22 @@ def refused_markers(**replaced: str) -> str:
     return str(refused.value)
 
 
+def test_derived_markers_keep_selected_template_variables_and_inline_syntax() -> None:
+    markers = turn_markers_from_renderings(
+        model_id="an-unlisted-compatible-entry",
+        thinking_kwarg=None,
+        thinking_close="[/reason]",
+        chat_template_kwargs={"answer_style": "plain", "format": {"brief": True}},
+        reasoning_delimiters=("[reason]", "[/reason]"),
+        **renderings_of(),
+    )
+    assert markers.thinks
+    assert markers.template_kwargs() == {
+        "answer_style": "plain", "format": {"brief": True}
+    }
+    assert markers.reasoning_delimiters == ("[reason]", "[/reason]")
+
+
 def test_an_entry_whose_family_the_pattern_never_learned_is_refused_at_server_start() -> None:
     """The answer to a family nobody anticipated, and the reason the list may be short.
 

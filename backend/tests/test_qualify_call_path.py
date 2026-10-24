@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
+
 import test_qualify as built
 from support.models import a_server
-from support.paths import CONTRACT_FIXTURES_DIR, read_text
+from support.paths import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 
 from idhazh import config
 from idhazh.contracts.article import Article
@@ -17,7 +19,7 @@ from idhazh.contracts.qualification import (
 from idhazh.contracts.summary import Summary
 from idhazh.evals import qualification_summary
 from idhazh.evals.qualify import schema_validity
-from idhazh.llm.server import Completion
+from idhazh.llm.server import Completion, parse_completion
 from idhazh.stages import qualify
 
 
@@ -109,6 +111,22 @@ def test_the_token_counts_are_the_pairs_sum_rather_than_one_calls() -> None:
 def test_a_reasoning_channel_opened_in_either_call_is_one_the_item_used() -> None:
     """The leak is that the model reasoned at all, not which call it did it in."""
     assert folded(a_reply(reasoning="  thinking  "), a_reply()).reasoning_channel_used is True
+
+
+def test_normalization_preserves_inline_word_and_runtime_channel_accounting() -> None:
+    recorded = json.loads(read_text(FIXTURES_DIR / "completions" / "reasoned-anyway.json"))
+    raw = recorded["choices"][0]["message"]["content"]
+    recorded["choices"][0]["message"]["content"] = raw.replace("<think>", "[reason]").replace(
+        "</think>", "[/reason]"
+    )
+    reply = parse_completion(json.dumps(recorded), reasoning_delimiters=("[reason]", "[/reason]"))
+    observed = folded(reply)
+    assert observed.think_block_words == len(reply.inline_reasoning.split()) > 0
+    assert not observed.reasoning_channel_used, "an inline prefix is not a runtime channel"
+    channel = parse_completion(read_text(FIXTURES_DIR / "completions" / "reasoning-channel.json"))
+    observed = folded(channel)
+    assert observed.reasoning_channel_used
+    assert observed.think_block_words == 0
 
 
 def test_a_call_that_never_happened_contributes_nothing_and_raises_nothing() -> None:
