@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import calendar
 import csv
 import io
 import json
@@ -434,7 +435,16 @@ def test_the_unbounded_cover_reads_one_held_month_at_a_time(
 
     assert len(published) == 6
     held = sorted({on[:7] for on in _SIX_MONTHS})
-    assert asked == [ledger.month_days(month) for month in held]
+    expected = []
+    for month in held:
+        year, month_number = map(int, month.split("-"))
+        expected.append(
+            [
+                date_type(year, month_number, day).isoformat()
+                for day in range(1, calendar.monthrange(year, month_number)[1] + 1)
+            ]
+        )
+    assert asked == expected
 
 
 def test_a_finite_cover_without_the_day_it_is_anchored_on_refuses() -> None:
@@ -713,18 +723,24 @@ def test_the_fitted_line_is_filed_under_the_day_it_was_fitted_for(tmp_path: Path
     a ledger nothing else can find.
     """
     fitted_on = "2026-09-18"
+    covers = "2026-09-17"
     which = LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS
     identity = judge_identity(run_id=f"{fitted_on}-1").model_copy(
         update={"producer": "stages.set_merge_line"}
     )
+    fitted = fitted_row(on=fitted_on)
 
     (filed,) = ledger.persist(
-        tmp_path, [fitted_row(on=fitted_on)], ledger=which, covers=fitted_on, identity=identity
+        tmp_path, [fitted], ledger=which, covers=covers, identity=identity
     )
 
     assert filed.parent.relative_to(tmp_path).as_posix() == (
         "raw/content-similarity-judge/fitted-thresholds/2026/09/18"
     )
+    assert ledger.read_envelope(filed).identity == identity
+    assert ledger.load_fitted_thresholds(
+        tmp_path, today=fitted_on, within_days=1
+    ) == [fitted]
     assert ledger.compact_folder(tmp_path, which).relative_to(tmp_path).as_posix() == (
         "compact/content-similarity-judge/fitted-thresholds"
     )
@@ -1060,28 +1076,26 @@ def test_the_day_cover_reads_the_newest_recorded_days_and_reliability_counts_onl
 
     window = PARITY_WINDOW_DAYS
     recorded = ledger.held_days(state, LedgerName.FEED_HEALTH)
-    named = set(recorded[-window:])
+    expected_recorded = ["2026-09-30", "2026-10-01", "2026-10-02"]
+    expected_days = {"2026-10-01", "2026-10-02"}
     read = ledger.load_health(state, today=today, within_days=window)
 
-    assert len(recorded) == PARITY_DAYS
-    assert len(named) == window, "the cover counts recorded days, and every day here recorded one"
-    assert {row.date for row in read} == named, "the read reached a day the window did not name"
-    assert read == [row for row in rows if row.date in named]
+    assert recorded == expected_recorded
+    assert {row.date for row in read} == expected_days, "the read reached a day outside the cover"
+    assert read == [row for row in rows if row.date in expected_days]
 
     floor = 0.05
     over_the_same_rows = {
         feed_id: feed_reliability(
-            [row for row in rows if row.feed_id == feed_id and row.date in named],
+            [row for row in rows if row.feed_id == feed_id and row.date in expected_days],
             floor=floor,
         )
         for feed_id in PARITY_FEEDS
     }
     measured = reliability(state, today=today, within_days=window, floor=floor)
 
+    assert measured == {"steady": 0.5, "broken": floor, "skipped": 1.0}
     assert measured == over_the_same_rows
-    assert 0.0 < measured["steady"] < 1.0, "the fixture has to separate the three feeds"
-    assert measured["broken"] == floor
-    assert measured["skipped"] == 1.0
 
 
 def test_a_second_attempt_at_one_run_leaves_one_row_per_feed(tmp_path: Path) -> None:
