@@ -8,8 +8,8 @@ How do measured feed and article costs affect the next planner selection?
 The user approved separate hardware and request measures, automatic score use
 after evidence qualifies, replacement of RSS reliability in the isolated
 TypeScript planner, the configurable provisional score settings below, and
-counting only supported source-side failures as waste. Producer fields and the
-remaining D4-D5 details still need owner approval before implementation.
+counting only supported source-side failures as waste. The field additions and
+the D3-D5/D8 choices below are proposals, not approval to implement them.
 
 ## Scope
 
@@ -27,36 +27,88 @@ CPU and process-memory readings, but not article-attributed CPU time,
 memory-time, a complete HTTP request count or historical publisher IDs. They
 describe machine use, not which publisher caused it or how much was waste.
 
-## Observation proposal
+## D3 proposal: observations and source rollups
 
-Keep unlike measurements separate until each has a declared unit and can be
-linked to the work that caused it.
+Reuse the event identity already declared in
+`FeedIngestEventSchema`: `event_id`, `correlation_id`, `run_id`, `attempt`,
+`sequence`, `occurred_at`, `stage`, `source_id` and `candidate_id`. Reuse the
+writer envelope's `git_sha` for the pipeline revision and the existing
+extractor revision where the producer records it. Do not add a second event ID,
+run ID or revision field.
 
-- **CPU**: exclusive operation CPU time in milliseconds, summed across cores.
-  Host CPU busy percentage is not article CPU time.
-- **Memory**: attributable private memory in byte-milliseconds. A process RSS
-  snapshot is not the amount of memory used by one article.
-- **Requests**: actual outbound HTTP requests as an integer count. Count each
-  dispatched redirect or retry once. DNS checks, replayed responses and API
-  calls are not outbound requests.
+The current feed-ingest event, source-run and planner-operation contracts
+persist outcomes, durations, source/candidate identity and request attempts.
+They do not persist article-attributed CPU or private-memory cost. Host CPU and
+process RSS in other ledgers are not article costs. The existing feed
+`parse_status` describes RSS entry parsing; `success` with `parsed_count > 0`
+does not prove article material was extracted. Keep those cases distinct.
 
-Each observation needs a stable event identity, source and run identity,
-attempt, correlation, UTC event time, producer revision, outcome, and
-attribution: `source`, `pipeline` or `unresolved`. A publisher identity is
-included only when the producer recorded a confirmed curated ID. Do not fill
-historical gaps from today's source catalog.
+Add `attribution` and nullable `failure_code` to each `FeedIngestEvent`
+operation record. The planner-only event stream remains its TypeScript-owned
+contract. Use the existing request-attempt and observation records for request
+counts; do not persist a duplicate counter on the event.
 
-Count an operation's cost as waste only when it failed to produce usable
-material for a supported source-side reason. Keep costs from successful
-operations, pipeline failures and unresolved causes as evidence, but do not
-deduct them from a publisher. A failed article alone does not prove its CPU,
-memory or requests were wasted by the source. Shared setup costs stay at their
-actual scope and are not copied onto each article.
+| Field or measure | Proposed type and bound | Source and rule |
+| --- | --- | --- |
+| `publisher_id` | Nonempty configured ID or null | Record the configured ID at observation time after Row 3. Keep null when unknown; never backfill history from today's catalog. |
+| `attribution` | `source`, `pipeline` or `unresolved` | Required on each operation outcome. A status code alone does not establish source attribution. |
+| `failure_code` | Nullable string from the producer's declared code vocabulary | Preserve the exact recorded cause. An unrecognized code maps to `unresolved`, not source failure. |
+| `cpu_ms` | Nullable integer, `>= 0` | Eligible only when measured CPU belongs exclusively to this operation. A process CPU delta during overlapping work is not source-attributable. |
+| Task-profile process CPU | Existing pinned-process CPU delta, diagnostic only | It is not additive across overlapping operations and cannot enter source waste. Do not copy it into an article event. |
+| `private_memory` | `unavailable` for source scoring until attribution is proved | Process RSS, including sampled maximum, is diagnostic only. It includes retained and shared memory and cannot identify which source caused it. |
+| `http_request_count` | Nullable integer, `>= 0` | Count dispatched article-target HTTP requests, including each retry and redirect once. Exclude validation checks and API calls. Leave null when the producer cannot prove complete coverage. |
 
-Use distinct keys for article opportunities, operations and HTTP requests.
-Retries increase request work, not the number of article opportunities.
-Replaying an observation does not add support. A genuinely repeated operation
-retains its real additional cost.
+For requests, `FetchAttemptSchema` already records one row per producer
+execution, including retries and manually followed redirects. Its `phase`
+distinguishes `validation`, `robots` and `target`. Count only `target` rows in
+the article request measure. Keep feed polls and robots requests at their
+source-operation scope; do not copy their cost onto each article. The current
+producer's manual redirects make the attempt list complete at its
+`transport.request` boundary, not for work hidden inside another transport.
+The writer must keep that boundary and test the count against recorded
+attempts. The current feed-poll record does not carry a complete request
+census; keep that count null until the producer records each dispatched
+request. Do not infer it from a successful feed response.
+
+Use `(run_id, source_id, candidate_id)` as the article-opportunity key.
+Retries and correction records do not add article support. Use `event_id` as
+the replay key. A correction is a new event with nullable
+`corrects_event_id` and `correction_revision`. Both fields are null for an
+ordinary event and both are present for a correction. The positive correction
+revision replaces the prior contribution; tied revisions are invalid. Each
+event retains its UTC time and producer revision. Operation costs that cannot
+be linked to one article stay at their actual feed, run or pipeline scope.
+
+Use the existing `ArticleAssessmentRecordSchema.extraction_outcome` as the
+nonsemantic article extraction result. Its values are `success`, `failed`,
+`not_attempted` and `unavailable`; suitability and semantic judgments are
+separate fields. A source-attributed `failed` extraction, or a supported
+source-side fetch refusal that prevented extraction, can mark linked work as
+waste. `not_attempted`, `unavailable`, pipeline failure and unresolved cause
+do not. Do not add a second word-count test or semantic judgment.
+`FeedOutcomePayload.parse_status` only describes RSS entry parsing and is not
+an article extraction result.
+
+Extend the existing `SourceRunRecord` row in TypeScript and Pydantic, and its
+`source-run-summary.ts` writer, rather than adding a parallel rollup. It is
+already one source/run row. Add nullable confirmed `publisher_id`, attempted
+and measured distinct article-opportunity counts as integers `>= 0`, and for
+article-linked target requests, nullable integer `total` and `wasted` amounts
+`>= 0`. When both amounts are known, require `wasted <= total`. The CPU and
+private-memory components stay unavailable until attribution is proved; do
+not convert process readings into source costs. Keep feed-poll and robots
+costs in separate source-operation records; do not divide them among article
+opportunities. Keep separate pipeline and unresolved costs in their existing
+event or operation records at the actual scope; do not copy them to the source
+row. Derive coverage as
+`measured_opportunities / attempted_opportunities`; when its denominator is
+zero, keep coverage unknown. Only source-attributed, failed operation costs
+enter a source's `wasted` amount. A successful operation, a pipeline failure,
+an unresolved cause or a feed poll with no new entries is not source waste.
+The Pydantic `SourceRunRecord` remains the authority for that persisted row;
+the TypeScript copy and its binding checks must change with it.
+Stamp the changed row contract and migrate old rows to null for new evidence;
+do not restamp old rows as if their missing measurements were zero.
 
 ## Proposed score
 
@@ -71,11 +123,11 @@ penalty = min(1, sum(component_weight * component_waste))
 priority = editorial_priority - (source_authority_contribution * penalty)
 ```
 
-The proposed component weights are one third each for CPU, memory and requests.
-These are simple provisional weights, not values calibrated by the historical
-records. The value 1 means all measured work in that component was classified
-as waste; it is the normalization endpoint, not a historical percentile.
-The combined penalty cannot exceed 1.
+The approved provisional component weights are one third each for CPU, memory
+and requests. They are not calibrated by the historical records. The value 1
+means all measured work in that component was classified as waste; it is the
+normalization endpoint, not a historical percentile. The combined penalty
+cannot exceed 1.
 
 Do not mix raw CPU, memory and request values. Normalize each component first.
 An unavailable component remains `null` and is not given extra weight through
@@ -105,19 +157,180 @@ memory and retry fields cannot calibrate these settings: CPU and memory are
 not source-attributed waste, and retry fields are not a complete request
 census.
 
-## State and settlement proposal
+The producer additions above are not measurements already present in the
+historical files. The seven days, 20 opportunities, 80 percent and equal
+weights are approved policy defaults; they do not prove that CPU or memory
+collection is available or calibrated.
 
-Use one serialized writer and the existing registered ledger. Do not add
-another permanent retirement authority or discover history by walking a
-growing directory. Pin the code and policy used for a decision while reading
-the latest compatible state.
+Use the raw per-source waste ratio over the fixed seven-day window. Do not add
+a reference cohort, prior or decay: the component already has a fixed unit and
+a `[0,1]` endpoint, while no historical source-attributed data can calibrate a
+prior or half-life. The cost is that new sources remain unqualified until
+they meet the approved support and coverage rules; no seed value pretends to
+be measured evidence.
 
-Settle each event once by its stable identity. A correction replaces the
-earlier contribution for that identity and signal. A failed commit does not
-advance the state checkpoint. Missing or incompatible state stays unknown; it
-does not become an empty history or clear a restriction. A bounded catch-up
-limit, overlapping-run behavior and exact checkpoint fields remain open in
-the plan's D4 decision.
+Approved score boundary: requests are the first eligible operational
+component. Keep CPU and private memory unavailable until source-attributable
+evidence exists. Preserve equal one-third weights without renormalization, so
+requests alone can contribute at most one third. Unqualified evidence has no
+impact and does not fall back to RSS reliability.
+
+Current process CPU and memory readings cannot qualify their source
+components. The request component is the only eligible component until
+source-attributable CPU or memory evidence exists.
+
+## D4 proposal: durable settlement
+
+Reuse the existing registered ledger writer for observed events and state.
+Keep one `settle-ingest-feedback` writer. Its versioned state snapshot should
+carry:
+
+| Field | Proposed type and bound |
+| --- | --- |
+| `state_revision` | Positive integer, advanced once per committed snapshot |
+| `parent_revision` | Nullable positive integer naming the snapshot read |
+| `written_at_utc`, `evidence_cutoff_utc` | UTC instants |
+| `window_start`, `window_end` | UTC dates; exactly the seven named evidence days |
+| `code_revision`, `policy_digest` | The writer's Git revision and digest of the settings used |
+| `sources` | Rows keyed by nonempty `source_id`, each with the component and restriction fields below |
+| Per-source `next_poll_at_utc`, `next_probe_at_utc` | Nullable UTC instants |
+
+Each source row has `publisher_id: string|null` and `cpu`, `private_memory`
+and `http_requests` component records. Each component has
+`status: qualified|insufficient_support|unavailable`; nullable integer
+`total` and `wasted` amounts `>= 0`; integer `distinct_opportunities` and
+`measured_opportunities` `>= 0`; and nullable finite `coverage` and
+`waste_fraction` in `[0,1]`. For a qualified component, its denominator is
+nonzero, `wasted <= total`, support is at least 20 and coverage is at least
+0.8.
+
+The restriction record has `status: normal|restricted|probe_due|trial`,
+`scope: article|endpoint|feed|null`, a nullable stable `scope_key`, nullable
+closed `reason_code`, and nullable UTC `restricted_since_utc` and
+`next_probe_at_utc`. Scope keys come from configured source or candidate
+identity, not fetched text or arbitrary URLs.
+
+Keep the feedback snapshot separate from the curated source catalog: it may
+hold temporary access state, but cannot retire a source or publisher. Each
+source row keeps the confirmed `publisher_id` used for its observations.
+Because this snapshot is a persisted payload read by a later run and is not
+the planner-only event stream, declare its native model under
+`backend/idhazh/contracts/` and keep the TypeScript reader copy in step with
+the existing binding tests.
+
+The checkpoint is `state_revision`, `evidence_cutoff_utc`,
+`window_start` and `window_end`; do not add a growing list of settled event
+IDs. Recompute the fixed window from its seven named UTC ledger days. Select
+the latest compatible snapshot through the registered ledger index, not a
+repository walk.
+
+Settle by `event_id`; an identical replay adds no amount or support. A
+correction names the event it replaces and does not create another article
+opportunity. Recompute the active seven-day window from named ledger periods,
+then commit the new snapshot. The proposed late-event bound is the same seven
+closed UTC days; an older correction is reported as late and does not rewrite
+expired score evidence. It never clears a restriction.
+
+The ledger writer gives atomic replacement of one file, but it does not lock
+multiple writers or compare revisions. The planner's SQLite operation store
+is durable only where its database file is retained; it is not the committed
+cross-run feedback state. The smallest safe proposal is to serialize the
+state-reading, planning and settlement workflow, then require
+`parent_revision` to match before writing. This costs queued runs and can
+increase discovery delay. If runs are not serialized, a second coordination
+mechanism and its failure recovery must be approved before implementation.
+
+The next allocation must read the latest compatible committed snapshot while
+keeping its code and policy pinned. A failed commit does not advance
+`state_revision`; the next run replays the named evidence window. Missing or
+incompatible state must not become empty history or erase restrictions. The
+recommended degraded behavior is to stop the run with an explicit state error
+rather than allocate from unknown restrictions; the owner must approve that
+cost before implementation.
+
+## D5 proposal: bounded controls and operational review
+
+These values are estimates for owner review, not measured limits. They do not
+cap ordinary configured feed fetching. Add no separate score-enable flag:
+automatic score use after qualification is already approved. Keep any
+existing API development flag separate from feedback policy. This proposal
+does not add selection idempotency, conditional HTTP or semantic assessment.
+
+| Setting | Proposed type and default | Effect |
+| --- | --- | --- |
+| `trial_opportunities` | Integer, 25 maximum per source trial | Report each attempted article. Qualification still needs at least 20 measured opportunities and 80 percent coverage; 25 allows 20 measured opportunities at exactly 80 percent. It does not activate catalog membership. |
+| `restriction_failures` | Integer, 3 distinct source-attributed failed opportunities in 7 closed UTC days, at the same endpoint or feed scope | Pause ordinary work only at that scope. An explicit article-level refusal affects only that article. A bare HTTP 403, pipeline failure or unresolved cause does not trigger it. |
+| `restriction_pause_hours` | Integer, 24 | After the pause, make one recovery probe due; expiry does not restore ordinary work. |
+| `recovery_successes` | Integer, 3 distinct successful article opportunities across at least 2 UTC dates, with at least 80 percent known outcomes | Restore trial access only after the observed sequence; successful time alone is not recovery. |
+| `special_probe_budget` | Integer, 20 opportunities per planner run, at most 1 per source | Shared cap for admission and recovery probes, with due recovery probes first and stable source ID as the tie-break. This is not a cap on ordinary configured feed polls or article fetches. |
+| `maximum_poll_gap_hours` | Integer, 24 | Schedule each permitted feed no later than the current 24-hour freshness target. If workflow delay makes that impossible, record missed freshness; do not claim a guarantee or silently drop ordinary work. |
+
+The trial, restriction, recovery and probe numbers are proposals, not owner
+decisions. A 20-item probe allowance and the score's 20-item support floor
+serve different purposes; the first limits extra work and the second
+qualifies a score. They must not be silently treated as the same approval.
+Keep permanent retirement in the curated catalog. Never broaden a restriction
+from an article or endpoint to a feed or publisher without evidence at that
+larger scope.
+
+For Row 19, compare two fixed windows: the latest seven closed UTC days and
+the seven immediately before them. The review input is the named registered
+ledger days, grouped by source and producer revision, with source, pipeline
+and unresolved outcomes kept separate. Report distinct opportunity counts,
+coverage, raw outcomes and measured cost totals. Below 20 opportunities or 80
+percent coverage, report `insufficient_evidence`; do not infer a regression.
+Run the review once after settlement and whenever the producer revision
+changes. Classify a supported issue as source-local when its cause is
+source-attributed and confined to one evidenced scope; classify it as
+pipeline-wide when pipeline-attributed failures share a producer revision;
+report `mixed` when both occur and `insufficient_evidence` when support or
+coverage is low. It recommends an action but cannot change score settings,
+restrictions or catalog membership.
+
+The proposed next-allocation reader is
+`services/feed-ingest-plan/src/run-feed-plan.ts`, before article selection.
+The proposed review call is `review-ingest-operations.ts` from that same
+planner run, with Markdown rendered by
+`.github/scripts/feed-ingest-plan-report.ts`. There is no production workflow
+caller for this flow today; the existing test workflow is not a production
+caller. Row 19 cannot close until an owner-approved real caller writes and
+consumes the report and a later allocation reads the resulting committed
+state.
+
+## D8 proposal: replace the RSS penalty
+
+Keep the approved arithmetic:
+
+```text
+source_operational_penalty = source_authority_contribution * operational_penalty
+priority_score = base_article_score - source_operational_penalty
+```
+
+Use the existing equal-thirds, capped component calculation for
+`operational_penalty`. It replaces the RSS reliability term; it does not add a
+second penalty or an inverse-yield term. If evidence is not qualified, record
+`operational_penalty = null` and apply zero score change. Do not fall back to
+RSS reliability. Preserve RSS observations as historical evidence only.
+
+The saved score needs one typed `source_operational` evidence object:
+
+| Field | Proposed type and bound |
+| --- | --- |
+| `status` | `qualified`, `insufficient_support`, `missing_state` or `incompatible_state` |
+| `state_revision` | Nullable positive integer |
+| `policy_digest` | Nullable SHA-256 digest |
+| `window_start`, `window_end` | Nullable UTC dates |
+| `cpu`, `private_memory`, `http_requests` | Fixed component records: `status` is `qualified`, `insufficient_support` or `unavailable`; nullable integer `total` and `wasted` amounts are `>= 0`; `attempted_opportunities` and `measured_opportunities` are integers `>= 0`; nullable `coverage` and `waste_fraction` are finite numbers in `[0,1]`; `weight` is a finite number in `[0,1]`, set to one third |
+| `operational_penalty` | Nullable finite number in `[0,1]` |
+| `source_authority_contribution` | Finite number `>= 0` used for this choice |
+
+The current score contract has no operational status or state revision field.
+Add the object to the saved score evidence, not to a new selection request or
+response. The old `source_reliability` shape remains readable for historical
+rows only; it is not a fallback for new scores. Reader-first schema migration
+remains required: extend the existing Pydantic `ScoreEvidence` and its
+TypeScript copy, then update the named binding tests. The planner-event
+exception does not make the saved score row TypeScript-only.
 
 ## Acceptance examples
 
@@ -130,23 +343,34 @@ the plan's D4 decision.
   unknown.
 - If only requests have supported evidence, CPU and memory stay `null`; their
   missing values do not increase the request weight.
-- If all supported components are fully wasted, the penalty is 1 and the
-  operational part of priority is reduced to zero.
+- If requests are the only supported component and all their measured work is
+  waste, the penalty is one third; unavailable CPU and memory do not add to it.
+- If all three components later have qualified, fully wasted evidence, the
+  penalty is 1 and the operational part of priority is reduced to zero.
 - An unknown historical publisher remains unknown rather than inheriting
   today's feed mapping.
 
 ## Open contract decisions
 
-- D3: define the producer fields and exact operation-to-cost bindings. The
-  source-side failure rule and provisional window, support, coverage and
-  component weights are approved.
-- D4: set the bounded catch-up limit, correction key and checkpoint fields.
-- D5: set the evidence rules that trigger automatic use of a score, plus the
-  separate limits and authority for trials, restrictions, recovery and polling.
-- D6: the 0.25 coefficient and replacement of feed crowding are approved; the
-  exact exposure normalization and history fallback remain open in the
-  curation contract.
-No implementation may treat these proposals as approved behavior.
+- D3: the request-first score eligibility and one-third maximum are approved
+  as recorded below. The typed producer additions, nonsemantic extraction
+  failure binding, poll/robots cost separation and no-prior/no-decay proposal
+  still need approval. Source-attributable CPU is not established by the
+  current task-profile process delta. The approved seven-day window, 20-item
+  support floor, 80-percent coverage and equal weights do not approve these
+  producer fields.
+- D4: approve the snapshot fields, seven-day late-event bound, serialized
+  workflow cost and stop-on-missing-state behavior.
+- D5: approve or change the trial, restriction, recovery, special-probe and
+  maximum-poll-gap values; approve the bounded review windows, cadence, caller
+  and report-only authority.
+- D8: the request-first component eligibility, equal-thirds/no-renormalization
+  behavior, no-impact treatment for unqualified evidence and no-RSS-fallback
+  rule are approved as recorded below. The typed `source_operational` trace
+  remains a proposal. The RSS penalty replacement, automatic use after
+  qualification and no-duplicate-penalty rule are already approved.
+Only the explicitly recorded portions are approved. The remaining D3-D5 and
+D8 proposals still need approval before implementation.
 
 ## Design rationale
 
@@ -164,6 +388,12 @@ combining, and apply the penalty automatically only after evidence qualifies.
 Use configurable provisional defaults of a seven-day UTC window, 20 distinct
 article opportunities, 80 percent measured coverage and equal one-third
 component weights. These values are not calibrated by the historical data.
+
+Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC: requests are the first
+eligible operational component. Keep CPU and private memory unavailable until
+attributable. Do not renormalize the equal one-third weights; requests alone
+can contribute at most one third. Unqualified evidence has no impact and does
+not fall back to RSS reliability.
 
 ## See also
 
