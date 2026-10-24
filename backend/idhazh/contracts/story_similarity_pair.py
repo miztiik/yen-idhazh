@@ -101,6 +101,7 @@ JudgeModelId = Literal[
     "qwen3-5-9b-q4-k-m-thinking",
     "ornith-1-5-9b-q5-k-m",
     "gemma-4-e4b-it-qat-ud-q4-k-xl",
+    "qwen3-8-9b-q5-k-m-distill",
 ]
 
 #: The slug this judge files its readings under. A closed set is honest here in
@@ -161,6 +162,11 @@ class StorySimilarityPair(Contract):
     __schema_stem__: ClassVar[str] = "story-similarity-pair"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-24",
+            change="The Qwen 3.8 Distill Q5 model joins judge_model.",
+            why="A shipped model file can be recorded in a future judge verdict.",
+        ),
+        ChangelogEntry(
             version="2026-10-08",
             change="shard is renamed work_part_index. An old shard heading is read under it.",
             why="The ledger door writes its own shard cell on every row it files.",
@@ -174,11 +180,6 @@ class StorySimilarityPair(Contract):
             version="2026-09-21T14:00",
             change="decode_digest is gone. Its heading is carried and dropped on read.",
             why="It proved two runs asked alike, and this project does not claim that.",
-        ),
-        ChangelogEntry(
-            version="2026-09-21T13:00",
-            change="Descriptions say shard where they said leg. No field moved.",
-            why="`leg` was a second name for the shard this row already carries a column for.",
         ),
         ChangelogEntry(
             version="2026-09-21T12:00",
