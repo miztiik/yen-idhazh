@@ -631,7 +631,7 @@ def file_machine_row(
         shard=shard,
         probe_floor_mib=knobs.host_fingerprint_bandwidth_floor_mib if reads_bandwidth else 0,
         probe_cache_multiple=knobs.host_fingerprint_bandwidth_cache_multiple,
-        ask_placement=ask_placement,
+        ask_placement=ask_placement and knobs.host_fingerprint_placement_enabled,
     )
     landed = ledger.persist(
         state_root,
