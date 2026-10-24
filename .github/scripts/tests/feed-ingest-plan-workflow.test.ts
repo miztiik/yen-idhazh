@@ -90,6 +90,9 @@ test("offers four manual controls and commits only genuine planner and host file
   expect(probes?.run).toContain("bun run test");
   const resourceProof = gateSteps.map(record).find(step => step.name === "Live TypeScript RAM and optional copy proof");
   expect(resourceProof?.run).toBe("bun run .github/scripts/feed-ingest-plan-profile-proof.ts");
+  const cacheInstall = gateSteps.map(record).find(step => step.name === "Install optional Linux cache instruments");
+  expect(cacheInstall?.run).toBe("bash .github/scripts/install-host-cache-tools.sh");
+  expect(cacheInstall?.["continue-on-error"]).not.toBe(true);
   const resourceUpload = gateSteps.map(record).find(step => step.name === "Preserve TypeScript resource proof");
   expect(record(resourceUpload?.with).path).toBe("test-results/host-probes/resource-proof.json");
   expect(preflight?.if).toBe("needs.scope.outputs.code == 'true'");
@@ -192,6 +195,8 @@ test("offers four manual controls and commits only genuine planner and host file
   expect(steps.find(step => step.name === "Install declared TypeScript dependencies")!.run)
     .toContain("bun install --frozen-lockfile --cwd services/host-probes");
   expect(steps.find(step => step.id === "resources")!.run).toContain("await verifyLiveHostProfiling(");
+  expect(steps.find(step => step.name === "Install optional Linux cache instruments")!.run)
+    .toBe("bash .github/scripts/install-host-cache-tools.sh");
   expect(steps.find(step => step.name === "Check isolated adapters and native compatibility")!.run)
     .toContain("./services/host-probes/test/probe.test.ts");
   const commit = steps.find(step => step.name === "Commit exact live planner and host files")!;
@@ -213,6 +218,8 @@ test("offers four manual controls and commits only genuine planner and host file
   expect(checkout.with?.["sparse-checkout"]).toContain("/packages/common-contracts/");
   expect(checkout.with?.["sparse-checkout"]).toContain("/.github/scripts/feed-ingest-plan-http-proof.ts");
   expect(checkout.with?.["sparse-checkout"]).toContain("/.github/scripts/feed-ingest-plan-profile-proof.ts");
+  expect(checkout.with?.["sparse-checkout"]).toContain("/.github/scripts/feed-ingest-plan-cache-proof.ts");
+  expect(checkout.with?.["sparse-checkout"]).toContain("/.github/scripts/install-host-cache-tools.sh");
   expect(checkout.with?.["sparse-checkout"]).toContain("/tests/fixtures/host-probes/");
   expect(checkout.with?.["sparse-checkout"]).not.toContain("/backend/");
   expect(steps.find(step => step.name === "Preserve isolated test evidence")!.with?.path)

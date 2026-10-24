@@ -11,6 +11,7 @@ import { HostSampleSchema } from "../../services/host-probes/src/probe/sample-ho
 import { collectFingerprint } from "../../services/host-fingerprints/src/collect-fingerprint";
 import { loadConfig, loadSettings, SelectedSettingsSchema } from "../../services/host-fingerprints/src/config";
 import { probeBufferMib } from "../../services/host-fingerprints/src/inspect/copy-bandwidth";
+import { CacheProofSchema, verifyLiveCacheProfiling } from "./feed-ingest-plan-cache-proof";
 
 const fields = HostFingerprintRowSchema.shape;
 export const CopyResultSchema = z.object({
@@ -22,7 +23,7 @@ export const CopyResultSchema = z.object({
 const ResourceProofSchema = z.strictObject({
   scope: z.literal("live_linux_ram_http_and_separate_copy"),
   status: z.enum(["running", "complete", "failed"]),
-  stage: z.enum(["start", "ram_http", "copy_off", "copy_on", "complete"]),
+  stage: z.enum(["start", "ram_http", "copy_off", "copy_on", "cache", "complete"]),
   git_sha: z.string().regex(/^[a-f0-9]{40}$/), run_id: z.string().min(1), correlation_id: z.uuid(),
   host: z.strictObject({ platform: z.literal("linux"), arch: z.string(), release: z.string(), bun: z.string() }),
   sample: HostSampleSchema.nullable(),
@@ -33,6 +34,7 @@ const ResourceProofSchema = z.strictObject({
     off: CopyResultSchema.nullable(), on: CopyResultSchema.nullable(),
     off_reason: z.string().nullable(), on_reason: z.string().nullable(),
   }).nullable(),
+  cache: CacheProofSchema.nullable(),
   error: z.string().nullable(),
 });
 
@@ -44,7 +46,7 @@ export async function verifyLiveHostProfiling(
     scope: "live_linux_ram_http_and_separate_copy", status: "running", stage: "start",
     git_sha: identity.git_sha, run_id: identity.run_id, correlation_id: identity.correlation_id,
     host: { platform: "linux", arch: arch(), release: release(), bun: Bun.version },
-    sample: null, copy: null, error: null,
+    sample: null, copy: null, cache: null, error: null,
   };
   const persist = () => writeFile(join(artifactRoot, "resource-proof.json"), JSON.stringify(ResourceProofSchema.parse(proof)));
   await persist();
@@ -106,6 +108,12 @@ export async function verifyLiveHostProfiling(
         }
       }
     }
+    proof.stage = "cache";
+    await persist();
+    if (!process.env.RUNNER_TEMP) throw new Error("Cache proof requires the declared optional tool installation");
+    proof.cache = await verifyLiveCacheProfiling(await loadProbeConfig(), proof.copy.on!,
+      await Bun.file(join(process.env.RUNNER_TEMP, "host-cache-tool-install.json")).json(),
+      async cache => { proof.cache = cache; await persist(); });
     proof.stage = "complete";
     proof.status = "complete";
   } catch {

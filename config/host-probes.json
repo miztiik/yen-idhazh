@@ -8,6 +8,26 @@
     "max_retained_samples": 128,
     "lifecycle_timeout_ms": 10000
   },
+  "cache_probe": {
+    "max_output_bytes": 65536,
+    "lifecycle_timeout_ms": 3000,
+    "max_concurrent": 1,
+    "counters": {
+      "enabled": false,
+      "events": ["LLC-loads:u", "LLC-load-misses:u"],
+      "max_duration_ms": 30000
+    },
+    "latency": {
+      "enabled": false,
+      "max_working_set_bytes": 1073741824,
+      "max_points": 8,
+      "working_set_bytes": [4096, 32768, 262144, 2097152, 16777216, 134217728, 1073741824],
+      "stride_bytes": 64,
+      "tlb_locality_bytes": 262144,
+      "samples": 2,
+      "timeout_ms": 30000
+    }
+  },
   "listen_host": "127.0.0.1",
   "listen_port": 3005,
   "max_proc_bytes": 1048576

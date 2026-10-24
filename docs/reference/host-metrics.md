@@ -310,6 +310,11 @@ endpoint and the existing optional copy benchmark. Copying measures median
 read-plus-write throughput with two cache-sized buffers; it does not measure
 L3 hit or miss counts and runs outside fetch/parse CPU windows.
 
+The separate default-off [cache probes](host-cache-probes.md) measure exact
+last-level-cache read events with Linux perf and a native random-pointer-chain
+working-set latency curve. Copy throughput is neither of those measurements.
+Cache results are transient and do not add fingerprint fields.
+
 ## Controls and precedence
 
 The normally selected shared file is `config/idhazh.json`. A workflow that
@@ -506,9 +511,10 @@ the quota unavailable rather than treating it as unlimited.
 
 ## What the processor will not tell us
 
-**No cache hit rate, no cache miss rate, no cache occupancy.** The guest has no
-hardware performance monitoring unit, so there is no counter to read. The gap is
-in the machine, not in this record's column set.
+**A host fingerprint contains no cache event counts or cache occupancy.**
+The [optional transient instrument](host-cache-probes.md) attempts exact
+last-level-cache events on the actual host. A denied or unsupported instrument
+is unavailable, not a zero count. It does not change this persisted record.
 
 Read on `ubuntu-latest` on 2026-09-20 by a dispatched job that ran the six
 `/proc` and `/sys` reads below, on three draws of image `ubuntu-24.04`
@@ -541,18 +547,12 @@ $ grep -om1 cqm_occup_llc /proc/cpuinfo
 no cqm
 ```
 
-**The `cpu` event source is the one that decides it.** Every source the guest
-does list is the kernel's own software instrumentation - a breakpoint, a probe
-point, a tracepoint, a model-specific register - and none of them counts a cache
-access. `cpu` is the entry a hardware unit publishes, and its directory is not
-there at all. So the rule is: **an absent or empty
-`/sys/bus/event_source/devices/cpu/events/` closes the question.** No profiling
-toolchain reads what the host does not expose, and installing one only moves the
-failure later.
-
-**`perf_event_paranoid` at 4 sits beside that and is not the blocker.** It is a
-sysctl, and the runner carries passwordless sudo, so it is adjustable. A missing
-unit is not.
+Those draws did not expose a usable hardware counter source. That observation
+does not settle another image or pool, and a single named sysfs directory is
+not a portable capability test: some processors expose different PMU names.
+The optional instrument attempts its exact events and reports the actual
+tool, permission or event refusal. It never changes `perf_event_paranoid`,
+requests elevated counter privileges or alters kernel security.
 
 **Cache occupancy through the resource-director interface is gone the same way.**
 `/sys/fs/resctrl` is not mounted and `/proc/cpuinfo` carries neither `rdt_a` nor

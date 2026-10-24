@@ -283,6 +283,12 @@ counts. Copy work never overlaps fetch/parse CPU measurement.
 temporary evidence root. Completion requires `resource_proof_complete: true`.
 Main CI also runs this same RAM HTTP/copy proof without fetching live feeds
 or publishing data, and retains the `typescript-resource-proof` artifact.
+The same step now opts into the separate
+[cache instruments](../reference/host-cache-probes.md), after copy work closes.
+It retains real native working-set latency readings and exact perf event
+results or a typed hardware/permission refusal. A refusal leaves counter
+measurement pending on a permitted host; it is not a passing hit/miss reading.
+Optional Linux tool installation records its actual time and binary bytes.
 Its artifact uses the existing ignored
 `test-results/host-probes/resource-proof.json` test-report path; the isolated
 workflow keeps its proof in the temporary evidence root.

@@ -17,6 +17,9 @@ import type { TaskProfile } from "../src/task-profile/profile-schema";
 import { readProcessIdentity, readProcessMemory } from "../src/task-profile/process-memory";
 import { TaskCollector } from "../src/task-profile/task-collector";
 import { CollectorInputSchema } from "../src/task-profile/profile-schema";
+import { startCacheCounters } from "../src/cache-probe/cache-counters";
+import { measureWorkingSetLatency } from "../src/cache-probe/working-set-latency";
+import { classifyPerfFailure, parsePerfCounters } from "../src/cache-probe/perf-output";
 
 const fixtureRoot = new URL("../../../tests/fixtures/", import.meta.url);
 const temporaryDirectories: string[] = [];
@@ -87,6 +90,13 @@ test("missing, malformed, reset and unchanged counters do not invent utilization
     parseCpuCounters("cpu 90071992547409920 0 0 0 0 0 0 0"),
     parseCpuCounters("cpu 90071992547409921 0 0 1 0 0 0 0"),
   ).value).toEqual({ user: 50, system: 0, idle: 50, iowait: 0, steal: 0 });
+  expect(classifyPerfFailure("No permission to enable LLC-loads:u event.")).toBe("permission_denied");
+  expect(classifyPerfFailure("Cannot find PMU `cpu'")).toBe("event_unsupported");
+  for (const text of ["", "NaN;;LLC-loads:u;1;100.00", "1;ns;LLC-loads:u;1;100.00",
+    "1;;cache-references;1;100.00", "1;;LLC-loads:u;0;100.00", "1;;LLC-loads:u;1;0.00",
+    "1;;LLC-loads:u;1;101.00", "9007199254740992;;LLC-loads:u;1;100.00"]) {
+    expect(() => parsePerfCounters(text, ["LLC-loads:u"])).toThrow();
+  }
 });
 
 test("memory fields stay independently unavailable instead of becoming zero", () => {
@@ -278,6 +288,19 @@ test("missing and oversized proc files are explicit while valid siblings survive
   let reported = false;
   expect(await profileTask({ config, context, report: () => { reported = true; } }, identity, () => "actual work")).toBe("actual work");
   expect(reported).toBe(false);
+  const target = { pid: 4242, start_ticks: "12345" };
+  const counters = await startCacheCounters(config.cache_probe, target, config.max_proc_bytes, context);
+  expect(counters.initial?.status).toBe("disabled");
+  expect((await counters.close()).measurement_obtained).toBe(false);
+  expect((await measureWorkingSetLatency(config.cache_probe, config.max_proc_bytes, context)).status).toBe("disabled");
+  const cacheEnabled = {
+    ...config.cache_probe, counters: { ...config.cache_probe.counters, enabled: true },
+    latency: { ...config.cache_probe.latency, enabled: true },
+  };
+  expect((await (await startCacheCounters(cacheEnabled, target, config.max_proc_bytes, { platform: "unsupported" })).close()).reason)
+    .toBe("unsupported_platform");
+  expect((await measureWorkingSetLatency(cacheEnabled, config.max_proc_bytes, { platform: "unsupported" })).reason)
+    .toBe("unsupported_platform");
   const enabled = { ...config, task_profile: { ...config.task_profile, enabled: true } };
   await expect(startTaskProfile({ config: enabled, context, report: () => {} }, {
     pipeline_name: "error", task_name: "error", run_id: "error", request_id: randomUUID(), correlation_id: randomUUID(),
@@ -290,6 +313,17 @@ test("configuration rejects unknown fields, missing fields and invalid controls 
   expect(ProbeConfigSchema.safeParse(config).success).toBe(true);
   expect(config.task_profile.enabled).toBe(false);
   expect(config.task_profile.memory_enabled).toBe(false);
+  expect(config.cache_probe.counters.enabled).toBe(false);
+  expect(config.cache_probe.latency.enabled).toBe(false);
+  for (const latency of [
+    { ...config.cache_probe.latency, stride_bytes: 7 },
+    { ...config.cache_probe.latency, working_set_bytes: [4096, 4096] },
+    { ...config.cache_probe.latency, working_set_bytes: [4096, 2147483648] },
+    { ...config.cache_probe.latency, timeout_ms: 1 },
+  ]) expect(ProbeConfigSchema.safeParse({ ...config, cache_probe: { ...config.cache_probe, latency } }).success).toBe(false);
+  expect(ProbeConfigSchema.safeParse({
+    ...config, cache_probe: { ...config.cache_probe, counters: { ...config.cache_probe.counters, events: ["cache-misses"] } },
+  }).success).toBe(false);
   for (const [field, value] of [
     ["cpu_window_ms", 0], ["poll_interval_ms", 0], ["max_retained_samples", 1], ["lifecycle_timeout_ms", 0],
   ] as const) expect(ProbeConfigSchema.safeParse({

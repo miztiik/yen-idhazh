@@ -1,0 +1,8 @@
+{
+  "packages": ["linux-tools-generic", "build-essential", "perl"],
+  "multichase": {
+    "repository": "https://github.com/google/multichase.git",
+    "revision": "8b68e918f8d2e84794f2c20cdb6c7ebb9c3952bb",
+    "license": "Apache-2.0"
+  }
+}

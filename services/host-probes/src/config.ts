@@ -1,6 +1,7 @@
 /** Which validated controls govern one host sampling service? */
 import { z } from "zod";
 import { constants as bufferConstants } from "node:buffer";
+import { CacheProbeConfigSchema } from "./cache-probe/cache-config";
 
 // Bun timers use a signed 32-bit millisecond delay; larger values overflow.
 const MAX_TIMER_DELAY_MS = 2 ** 31 - 1;
@@ -19,6 +20,7 @@ export const TaskProfileConfigSchema = z.strictObject({
 export const ProbeConfigSchema = z.object({
   sample_interval_ms: z.number().int().positive().max(MAX_TIMER_DELAY_MS),
   task_profile: TaskProfileConfigSchema,
+  cache_probe: CacheProbeConfigSchema,
   listen_host: z.string().trim().min(1),
   listen_port: z.number().int().min(1).max(65535),
   max_proc_bytes: z.number().int().positive().max(bufferConstants.MAX_LENGTH - 1),
