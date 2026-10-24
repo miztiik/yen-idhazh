@@ -27,7 +27,8 @@
 		tickAnchor,
 		type Margin
 	} from '$lib/charts/frame';
-	import { capLabel, grouped, rangeMarks } from '$lib/charts/series';
+	import { capLabel, grouped as formatGrouped, rangeMarks } from '$lib/charts/series';
+	import { useNumberFormat } from '$lib/number-format-context';
 	import { factsOf, markReadout, recordsOf } from '$lib/charts/readout';
 	import ChartReadout from './ChartReadout.svelte';
 	import type { CapPoint, SourceCut } from '../../routes/console/voices/+page.server';
@@ -45,6 +46,8 @@
 		/** `chart.readout_max_share`. */
 		readoutMaxShare: number;
 	} = $props();
+	const numberFormat = useNumberFormat();
+	const grouped = (value: number) => formatGrouped(value, numberFormat);
 
 	/** The row a pointer, a key or a tap has picked, or null for the first. */
 	let picked = $state<number | null>(null);
@@ -198,7 +201,7 @@
 	 * right, from the room the label itself needs rather than from a constant.
 	 * A constant is what stopped being big enough the last time. */
 	function flips(x: number, index: number): boolean {
-		return x + 4 + labelWidth(capLabel(caps, index), 10) > box.right;
+		return x + 4 + labelWidth(capLabel(caps, index, numberFormat), 10) > box.right;
 	}
 
 	function sentence(source: SourceCut): string {
@@ -310,7 +313,7 @@
 					font-size="10"
 					data-cap-label={cap.words}
 				>
-					{capLabel(caps, index)}
+					{capLabel(caps, index, numberFormat)}
 				</text>
 			{/each}
 

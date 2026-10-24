@@ -111,6 +111,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-24T18:29",
+            change="visuals.number_format added.",
+            why="The digest and console need one declared number style.",
+        ),
+        ChangelogEntry(
             version="2026-10-24",
             change="bench.run_model_speed_case removed; the model_speed_case input decides it.",
             why="A knob nothing reads is a second spelling of the dispatch input.",

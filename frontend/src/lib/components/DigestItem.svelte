@@ -31,6 +31,7 @@
 	import { itemTime, paragraphsOf, shortDate } from '$lib/format';
 	import Icon from '$lib/icons/Icon.svelte';
 	import type { DigestCoverage, DigestItem } from '$lib/payload/types';
+	import type { NumberFormatConfig } from '$lib/number-format';
 	import { shownLenses } from '$lib/payload/lenses';
 	import ItemMeta from './ItemMeta.svelte';
 	import ItemVisual from './ItemVisual.svelte';
@@ -39,6 +40,7 @@
 
 	let {
 		item,
+		numberFormat,
 		verticalName,
 		level = 2,
 		showVertical = true,
@@ -51,6 +53,7 @@
 		onRead
 	}: {
 		item: DigestItem;
+		numberFormat: NumberFormatConfig;
 		verticalName: string;
 		/** 2 on a flat list, 3 under a topic heading. A skipped level breaks
 		 * heading-to-heading navigation. */
@@ -217,7 +220,7 @@
 			{/if}
 		</div>
 
-		<ItemVisual visual={item.visual} />
+		<ItemVisual visual={item.visual} {numberFormat} />
 	</div>
 
 	<div class="item-rail">

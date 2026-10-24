@@ -33,6 +33,7 @@ import { area, curveBumpX } from 'd3-shape';
 
 import type { Frame } from '../frame';
 import { grouped } from '../series';
+import type { NumberFormatConfig } from '../../number-format';
 
 export interface FlowDrop {
 	label: string;
@@ -58,6 +59,7 @@ export interface FlowOptions {
 	nodeGap: number;
 	/** Include the shared count verdict on a stepped result, for a caller's headline. */
 	includeCountsStatus?: boolean;
+	number_format: NumberFormatConfig;
 }
 
 export interface FlowNode {
@@ -123,16 +125,19 @@ function checked(stages: readonly FlowStageInput[]): void {
 }
 
 /** Where the counts stop being one flow, in words, or null where they are one. */
-function imbalance(stages: readonly FlowStageInput[]): string | null {
+function imbalance(
+	stages: readonly FlowStageInput[],
+	numberFormat: NumberFormatConfig
+): string | null {
 	const listed = 'so the counts are not one flow and the stages are listed rather than drawn.';
 	for (const [index, stage] of stages.entries()) {
 		const out = stage.left + stage.drops.reduce((sum, drop) => sum + drop.count, 0);
 		if (out !== stage.arrived) {
-			return `${stage.label} counts ${grouped(stage.arrived)} arriving and ${grouped(out)} leaving, ${listed}`;
+			return `${stage.label} counts ${grouped(stage.arrived, numberFormat)} arriving and ${grouped(out, numberFormat)} leaving, ${listed}`;
 		}
 		const next = stages[index + 1];
 		if (next !== undefined && next.arrived !== stage.left) {
-			return `${stage.label} lets ${grouped(stage.left)} through and ${next.label} counts ${grouped(next.arrived)} arriving, ${listed}`;
+			return `${stage.label} lets ${grouped(stage.left, numberFormat)} through and ${next.label} counts ${grouped(next.arrived, numberFormat)} arriving, ${listed}`;
 		}
 	}
 	return null;
@@ -293,7 +298,7 @@ export function flow(
 ): FlowGeometry | SteppedGeometry | null {
 	checked(stages);
 	if (stages.length === 0 || stages[0].arrived <= 0) return null;
-	const note = imbalance(stages);
+	const note = imbalance(stages, opts.number_format);
 	const geometry = note !== null ? stepped(stages, note) : opts.narrow ? stepped(stages, null) : diagram(stages, opts);
 	return opts.includeCountsStatus && geometry.kind === 'stepped'
 		? { ...geometry, countsConsistent: note === null }

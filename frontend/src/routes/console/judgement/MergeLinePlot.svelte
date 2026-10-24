@@ -46,6 +46,8 @@
 	import { dayMonth } from '$lib/format';
 	import { clampEnvelope, clampNote, corridorOf, heldNote, type LineDay } from '$lib/console/merge-line';
 	import { nameSpan } from '$lib/console/span-words';
+	import { formatNumber } from '$lib/number-format';
+	import { useNumberFormat } from '$lib/number-format-context';
 
 	let {
 		days: inputDays,
@@ -78,10 +80,10 @@
 		 * one, which draws no strip rather than a zero-height one. */
 		markedApart: { low: number; high: number; count: number } | null;
 	} = $props();
+	const numberFormat = useNumberFormat();
 
 	/** How many decimals a fitted line is reported at. One bin is 0.001, so a
 	 * fourth decimal would print a precision the fit cannot produce. */
-	const PLACES = 3;
 
 	let measured = $state<number | null>(null);
 	let selected = $state<number | null>(null);
@@ -133,7 +135,7 @@
 	}
 
 	function reads(value: number): string {
-		return value.toFixed(PLACES);
+		return formatNumber(value, numberFormat, { si: false });
 	}
 
 	const marks = $derived(
@@ -214,8 +216,8 @@
 	id="merge-line"
 	title="Where the merge line sits"
 	note={drawn.length === 0
-		? `The dashed rule shows the line ${ruleDay} was built with. The scale is the whole range a fitted line may take.${holdoutZone === null || markedApart === null ? '' : ` The tinted strip shows the part of the score range inside this plot for ${markedApart.count} pairs a person marked as two stories. Their scores run from ${markedApart.low.toFixed(4)} to ${markedApart.high.toFixed(4)}.`}`
-		: `${windowDays === 1 ? "The applied reading is the nightly calculation's final score for grouping two stories as one, after limits on its change. The proposed reading is the score before those limits. The shaded band shows how far the calculated line was allowed to fall that day. A build may have used a different line." : "The solid line is the nightly calculation's final score for grouping two stories as one, after limits on its change. The dotted line is the proposed score before those limits. The shaded band shows how far the calculated line was allowed to fall each day. A build may have used a different line."}${holdoutZone === null || markedApart === null ? '' : ` The tinted strip shows the part of the score range inside this plot for ${markedApart.count} pairs a person marked as two stories. Their scores run from ${markedApart.low.toFixed(4)} to ${markedApart.high.toFixed(4)}. If used to group stories, ${windowDays === 1 ? 'an applied reading' : 'a calculated line'} inside this strip would clear the score threshold for at least one of those pairs. This does not show that a build grouped them.`}`}
+		? `The dashed rule shows the line ${ruleDay} was built with. The scale is the whole range a fitted line may take.${holdoutZone === null || markedApart === null ? '' : ` The tinted strip shows the part of the score range inside this plot for ${markedApart.count} pairs a person marked as two stories. Their scores run from ${reads(markedApart.low)} to ${reads(markedApart.high)}.`}`
+		: `${windowDays === 1 ? "The applied reading is the nightly calculation's final score for grouping two stories as one, after limits on its change. The proposed reading is the score before those limits. The shaded band shows how far the calculated line was allowed to fall that day. A build may have used a different line." : "The solid line is the nightly calculation's final score for grouping two stories as one, after limits on its change. The dotted line is the proposed score before those limits. The shaded band shows how far the calculated line was allowed to fall each day. A build may have used a different line."}${holdoutZone === null || markedApart === null ? '' : ` The tinted strip shows the part of the score range inside this plot for ${markedApart.count} pairs a person marked as two stories. Their scores run from ${reads(markedApart.low)} to ${reads(markedApart.high)}. If used to group stories, ${windowDays === 1 ? 'an applied reading' : 'a calculated line'} inside this strip would clear the score threshold for at least one of those pairs. This does not show that a build grouped them.`}`}
 >
 	<div
 		data-windowed="merge-line"

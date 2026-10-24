@@ -10,6 +10,8 @@ import type { SeriesInput } from './d3/dateSeries';
 import { compareRuns } from '../console/queries/shared';
 import { readoutOf, type Readout, type ReadoutInput } from './readout';
 import { grouped } from './series';
+import { formatNumber } from '../number-format';
+import type { NumberFormatConfig } from '../number-format';
 
 /** The five points a latency curve is quoted at.
  *
@@ -41,19 +43,19 @@ export function quantile(sorted: readonly number[], fraction: number): number {
 }
 
 /** Seconds as a clock a person reads, or the honest absence of one. */
-export function seconds(value: number | null): string {
+export function seconds(value: number | null, numberFormat: NumberFormatConfig): string {
 	if (value === null) return '-';
-	if (value < 60) return `${value.toFixed(value < 10 ? 1 : 0)} s`;
+	if (value < 60) return `${formatNumber(value, numberFormat, { si: false })} s`;
 	const minutes = Math.floor(value / 60);
 	const rest = Math.round(value - minutes * 60);
 	return minutes < 60
-		? `${minutes} m ${rest} s`
-		: `${Math.floor(minutes / 60)} h ${minutes % 60} m`;
+		? `${formatNumber(minutes, numberFormat, { exact: true, si: false })} m ${formatNumber(rest, numberFormat, { exact: true, si: false })} s`
+		: `${formatNumber(Math.floor(minutes / 60), numberFormat, { exact: true, si: false })} h ${formatNumber(minutes % 60, numberFormat, { exact: true, si: false })} m`;
 }
 
 /** Bytes as gibibytes, which is the unit the runner's own limit is quoted in. */
-export function gib(value: number | null): string {
-	return value === null ? '-' : `${(value / 1024 / 1024 / 1024).toFixed(2)} GiB`;
+export function gib(value: number | null, numberFormat: NumberFormatConfig): string {
+	return value === null ? '-' : `${formatNumber(value / 1024 / 1024 / 1024, numberFormat, { si: false })} GiB`;
 }
 
 // ---------------------------------------------------------------------------
@@ -193,11 +195,15 @@ function pair(
 }
 
 /** Rank each measured gap against the rule, retaining both independent readings. */
-export function clocksChart(pairs: readonly ClockPair[], tolerancePct: number): RankedGeometry | null {
+export function clocksChart(
+	pairs: readonly ClockPair[],
+	tolerancePct: number,
+	numberFormat: NumberFormatConfig
+): RankedGeometry | null {
 	return rankedList(pairs.flatMap((pair) => pair.gapPct === null ? [] : [{
 		label: pair.label,
 		value: pair.gapPct,
-		context: `item ledger ${pair.ledger?.toFixed(2)}; server ${pair.server?.toFixed(2)} tokens a second`,
+		context: `item ledger ${pair.ledger === null ? '-' : formatNumber(pair.ledger, numberFormat)}; server ${pair.server === null ? '-' : formatNumber(pair.server, numberFormat)} tokens a second`,
 		...(pair.agrees === false ? { status: 'disagrees' } : {})
 	}]), { rules: [{ at: tolerancePct, label: 'Allowed disagreement' }] });
 }
@@ -284,6 +290,7 @@ export function percentileHistory(
  */
 export function latencyColumns(
 	runs: readonly LatencyRun[],
+	numberFormat: NumberFormatConfig,
 	events?: ReadoutInput['events']
 ): Readout {
 	return readoutOf({
@@ -294,13 +301,13 @@ export function latencyColumns(
 				label: `p${percentile}`,
 				swatch: null,
 				values: runs.map((run) => run.ms[at] ?? 0),
-				format: (ms: number) => seconds(ms / 1000)
+				format: (ms: number) => seconds(ms / 1000, numberFormat)
 			})),
 			{
 				label: 'Items timed',
 				swatch: null,
 				values: runs.map((run) => run.items),
-				format: (value: number) => grouped(value)
+				format: (value: number) => grouped(value, numberFormat)
 			}
 		],
 		...(events === undefined ? {} : { events }),
@@ -459,21 +466,11 @@ export function costOf(tokens: { input: number; output: number }, rate: CostRate
 	);
 }
 
-/** Money as digits and an ISO code, never a symbol.
- *
- * `toLocaleString` reads the machine's locale and two builds have to agree, and
- * a currency symbol in front of a number is exactly the shape a bill takes.
- *
- * A real cost never prints as zero. An amount above nothing that rounds away
- * at the decimals asked for comes back as `<0.01 USD`, the same rule the console
- * already applies to a millisecond total: a `0` there would say the work was
- * free, and the work was not free.
- */
-export function money(amount: number, currency: string, decimals = 2): string {
-	const floor = Math.pow(10, -decimals);
-	if (amount > 0 && amount < floor / 2) return `<${floor.toFixed(decimals)} ${currency}`;
-	const rounded = amount.toFixed(decimals);
-	const [whole, fraction] = rounded.split('.');
-	const separated = grouped(Number(whole));
-	return `${fraction === undefined ? separated : `${separated}.${fraction}`} ${currency}`;
+/** Money as the configured number and an ISO code, never a symbol. */
+export function money(
+	amount: number,
+	currency: string,
+	numberFormat: NumberFormatConfig
+): string {
+	return `${formatNumber(amount, numberFormat, { si: false })} ${currency}`;
 }

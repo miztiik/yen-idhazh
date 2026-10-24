@@ -30,6 +30,7 @@
 import { BANDS } from '../bands';
 import { readoutOf, type Readout } from '../charts/readout';
 import { bandFor, grouped, type SummaryBand } from '../charts/series';
+import { formatNumber, type NumberFormatConfig } from '../number-format';
 import type { StackRule, StackSeries } from '../charts/stack-types';
 import { dayMonth, shortDate } from '../format';
 import { countDays, nameSpan, openWithSpan } from './span-words';
@@ -540,11 +541,11 @@ export function matchRules(thresholds: MatchThresholds, floor: number): StackRul
  * a figure nobody can act on: a day that put half of four summaries above 95
  * percent and a day that did it over four hundred are not the same day.
  */
-export function matchNotes(days: readonly EvalDay[]): string[] {
-	return days.map((day) => `${grouped(day.matched)} summaries checked`);
+export function matchNotes(days: readonly EvalDay[], numberFormat: NumberFormatConfig): string[] {
+	return days.map((day) => `${grouped(day.matched, numberFormat)} summaries checked`);
 }
 
-export function matchColumns(days: readonly EvalDay[]): Readout {
+export function matchColumns(days: readonly EvalDay[], numberFormat: NumberFormatConfig): Readout {
 	const percent = (value: number) => `${value}%`;
 	return readoutOf({
 		type: 'dateSeries',
@@ -568,7 +569,7 @@ export function matchColumns(days: readonly EvalDay[]): Readout {
 				// would be a key to a series that was never drawn.
 				swatch: null,
 				values: days.map((day) => day.matched),
-				format: (value: number) => grouped(value)
+				format: (value: number) => grouped(value, numberFormat)
 			}
 		],
 		notMeasured: 'No summary was checked on this day',
@@ -605,7 +606,11 @@ function middleDay(values: readonly (number | null)[]): number | null {
 	return known.length === 0 ? null : at(known, 0.5);
 }
 
-export function matchHeadline(days: readonly EvalDay[], windowDays: number): string | null {
+export function matchHeadline(
+	days: readonly EvalDay[],
+	windowDays: number,
+	numberFormat: NumberFormatConfig
+): string | null {
 	const drawn = matchDays(days);
 	if (drawn.length === 0) return null;
 	const mid = middleDay(drawn.map((day) => day.matchMid));
@@ -617,7 +622,7 @@ export function matchHeadline(days: readonly EvalDay[], windowDays: number): str
 		windowDays === 1
 			? `${openWithSpan(windowDays)} put`
 			: `Over ${nameSpan(windowDays)} the middle day put`;
-	return `${lead} half its summaries above ${mid} percent, and a quarter of them under ${low} percent, on ${grouped(totals.matched)} summaries checked.`;
+	return `${lead} half its summaries above ${mid} percent, and a quarter of them under ${low} percent, on ${grouped(totals.matched, numberFormat)} summaries checked.`;
 }
 
 /** Which day the faithfulness plot's points are, as its intro says it. A
@@ -650,13 +655,17 @@ export function matchLabel(windowDays: number, rulesAt: readonly number[]): stri
  * summary that only looks faithful because the article was cut cannot pass. The
  * gap between them is the reading, so the panel says how often there is one.
  */
-export function widerNote(days: readonly EvalDay[], windowDays: number): string | null {
+export function widerNote(
+	days: readonly EvalDay[],
+	windowDays: number,
+	numberFormat: NumberFormatConfig
+): string | null {
 	const totals = evalTotals(days);
 	if (totals.matched === 0) return null;
 	if (totals.widerDiffers === 0) {
-		return `Scored against the whole article instead of the part the machine read, every one of these ${grouped(totals.matched)} summaries scores the same. The two readings only part when the article was cut.`;
+		return `Scored against the whole article instead of the part the machine read, every one of these ${grouped(totals.matched, numberFormat)} summaries scores the same. The two readings only part when the article was cut.`;
 	}
-	return `Scored against the whole article instead of the part the machine read, ${grouped(totals.widerDiffers)} of these ${grouped(totals.matched)} summaries score differently, by up to ${totals.widestGap} points.`;
+	return `Scored against the whole article instead of the part the machine read, ${grouped(totals.widerDiffers, numberFormat)} of these ${grouped(totals.matched, numberFormat)} summaries score differently, by up to ${totals.widestGap} points.`;
 }
 
 /** One recorded instrument over the window. */
@@ -713,9 +722,13 @@ export function flagReadings(days: readonly EvalDay[]): FlagReading[] {
  * hundred and calling it a percent would read as a share of something, and it
  * is not one - it runs from -1 to 1 and has no denominator.
  */
-export function recordedText(reading: RecordedReading, value: number | null): string {
+export function recordedText(
+	reading: RecordedReading,
+	value: number | null,
+	numberFormat: NumberFormatConfig
+): string {
 	if (value === null) return '-';
-	if (reading.unit === 'percent') return `${value}%`;
-	if (reading.unit === 'cosine') return value.toFixed(2);
-	return `${value.toFixed(1)} per 1,000 words`;
+	if (reading.unit === 'percent') return `${formatNumber(value, numberFormat, { si: false })}%`;
+	if (reading.unit === 'cosine') return formatNumber(value, numberFormat, { si: false });
+	return `${formatNumber(value, numberFormat, { si: false })} per 1,000 words`;
 }

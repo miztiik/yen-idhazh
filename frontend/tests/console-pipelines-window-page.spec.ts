@@ -9,6 +9,7 @@ import { readoutOf } from '../src/lib/charts/readout';
 import { nativeFailureMix } from '../src/lib/console/pipelines/failure-mix';
 import { nativeTimeSplit, timeSplitReadout } from '../src/lib/console/pipelines/item-time-split';
 import { telemetryRow } from './support/telemetry-row';
+import { numberFormat } from './support/number-format';
 import { hydrated, setWindow, routeHref } from './support/console-window/controls';
 import { THROUGH, FIRST, dayBefore, nativeRow, timedRow, packedPipelines, servePipelines, settled } from './support/pipelines-ledgers';
 
@@ -67,7 +68,7 @@ for (const one of cases) {
 					} else {
 						await expect(section.locator('[data-duration-cohort]')).toContainText(`${one.timed * preset} of ${3 * preset}`);
 						await expect(section.locator('[data-stack-elapsed]')).toHaveCount(preset);
-						await expect(section.locator('[data-readout="item-time-split"]')).toContainText('0.80 s');
+						await expect(section.locator('[data-readout="item-time-split"]')).toContainText('0.8 s');
 					}
 				}
 			}
@@ -97,10 +98,10 @@ test('a day with no row draws no column, and its strip says so, while a day that
 	expect(mix.recorded).toBe(2);
 	expect(mix.failures).toBe(1);
 	const split = nativeTimeSplit(nativeRows, calendar);
-	const splitStrip = timeSplitReadout(split);
+	const splitStrip = timeSplitReadout(split, numberFormat);
 	expect(splitStrip.columns).toEqual(['2030-06-13', '2030-06-14', '2030-06-15']);
 	expect(splitStrip.series.slice(0, 7).map((band) => band.values)).toEqual(
-		['0.10 s', '0.02 s', '0.60 s', '0.03 s', '0.05 s', '0.80 s', '0.00 s'].map((value) => [null, null, value]));
+		['0.1 s', '0.02 s', '0.6 s', '0.03 s', '0.05 s', '0.8 s', '0 s'].map((value) => [null, null, value]));
 	expect(splitStrip.notMeasured).toBe('Not measured for the complete cohort');
 	expect(split.series.map((stage) => stage.points.map((point) => point.value))).toEqual(
 		[100, 20, 600, 30, 50].map((value) => [null, null, value]));

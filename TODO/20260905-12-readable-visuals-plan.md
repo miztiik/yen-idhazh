@@ -33,7 +33,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 1a | The payload carries the chart's data, and nothing draws it from there yet | - | A | DONE #687 | p12-r1a | #687 | worker |
 | 1b | The browser draws the chart, and the pipeline stops rendering | 1a | B | DONE #689 | p12-r1b | #689 | worker |
 | 2 | The drawing takes the width it is given | 1b | C | DONE #716 | p12-r2 | #716 | worker |
-| 3 | Numbers a reader can say out loud | 1b | C | PENDING | - | - | - |
+| 3 | Numbers a reader can say out loud | 1b | C | IN-FLIGHT | shared-number-formatting | - | worker |
 | 4 | The smallest reader label stays readable | 2, 3 | D | PENDING | - | - | - |
 | 5 | A caption, and one mark that lands first | 4 | E | PENDING | - | - | - |
 
@@ -160,17 +160,17 @@ deletion plus a drawing over data already on the wire.
 - **Row #2 is complete,** so the five files it shared with this row no longer constrain scheduling. Two paths this row named were stale on 2026-10-24: the `schemas/` files, because the generated schema layer was retired on 2026-09-23 (`docs/architecture/contracts/schemas.md`), and `tuned.json`, which does not exist.
 - **Acceptance gates:** `ruff`; `mypy --strict`; `npm run check`; build; `bundle-gate`; `npm run test:changed -- --group logic` for the cross-path oracle; the browser suite.
 - **Oracle:** The same value formatted by the digest path and by the console path returns the identical string, asserted over a table of magnitudes spanning thousands to trillions. **Two formatters is how `2M` and `2,000,000` end up on one page**, and only a cross-path assertion catches it.
-- **Open before dispatch (owner decision):** Decision 2 applies one locale 'at build time', which is Python, but the Files list names TypeScript modules. One formatter in two languages is the failure this row exists to prevent. Recommendation: one TypeScript formatter that the reader and the console both call, with the locale declared in config and never taken from the reader's browser. That amends decision 2's 'at build time'. The knob also needs one owner file: `visuals` in `config/idhazh.json`, or `chart` in `config/appearance.json`, not both.
+- **Owner ruling (kumarsnaveen, 2026-10-24):** One TypeScript formatter serves the reader's drawing and the console. `visuals.number_format` in `config/idhazh.json` is the only owner of its locale and precision; the formatter never reads the reader's browser locale.
 
 ### Decisions
 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | SI, and metric, wherever a quantity has an SI form: `2M tokens`, not `2,000,000 tokens`. **The prefix set is the SI set and nothing else** - no `bn`, no `lakh`, no `crore`, because each is read differently by a different part of the audience | O47, section 7.5 |
-| 2 | **One declared locale, at build time.** `1.234` is one thousand two hundred and thirty-four in Berlin and slightly more than one in London. Reading the reader's browser would make two readers see different bytes, which breaks byte identity and is the reader-varying behaviour Guardrail #1 refuses | O47 |
+| 2 | **One declared locale, used by the shared TypeScript formatter.** `1.234` is one thousand two hundred and thirty-four in Berlin and slightly more than one in London. The formatter reads `visuals.number_format.locale`, never the reader's browser, so a reader's location cannot change the displayed value | Owner ruling, kumarsnaveen, 2026-10-24; O47 |
 | 3 | Precision is declared in config, so `2M` versus `2.4M` is a decision and not an accident of the input | O47 |
 | 4 | **Formatting is not a derived value** and needs no provenance - nothing about the quantity moved. `convert` is, and it landed in plan 10 | O47, O45 |
-| 5 | `d3-format` and `d3-time-format` are already named in the module matrix and do the prefix and precision rules with no code of ours | Section 7.5 |
+| 5 | `Intl.NumberFormat` supplies locale-aware grouping and rounding in the shared TypeScript formatter; it is built into the browser and adds no dependency or shipped library bytes | Owner ruling, kumarsnaveen, 2026-10-24 |
 | 6 | Where formatting changes an article's figure, the accessible name keeps the article's own characters. The design system requires the source text beside a converted figure | Design system, 'A figure on a chart is the article's or it is ours' |
 
 ### Rejected alternatives

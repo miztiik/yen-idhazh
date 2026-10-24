@@ -24,7 +24,6 @@ import {
 	clocksChart,
 	costOf,
 	itemRead,
-	money,
 	percentileHistory,
 	pooledReadRate,
 	quantile,
@@ -41,7 +40,7 @@ import {
 	type MachineLimits,
 	type MachineRun
 } from '../src/lib/console/machine/counters';
-import { dateSeries } from '../src/lib/charts/d3/dateSeries';
+import { dateSeries, money, numberFormat } from './support/number-format';
 import { frame } from '../src/lib/charts/frame';
 import { articleCost, runnerHourSeconds } from '../src/lib/console/machine/article-cost';
 import { processorLostOverDays } from '../src/lib/console/machine/processor-lost';
@@ -331,13 +330,13 @@ test.describe('do the two clocks agree', () => {
 	test('native ranked gaps keep the independent readings, rule and unknown state', () => {
 		const view = clockAgreement(onlyRun(TWO_SHARDS),
 			[...items(0, 1000, 50_000), ...items(1, 500, 50_000)], 5);
-		const geometry = clocksChart(view.pairs, 5);
+		const geometry = clocksChart(view.pairs, 5, numberFormat);
 		expect(geometry?.rows.map((row) => row.value)).toEqual([50, 0]);
 		expect(geometry?.rules.map((rule) => [rule.at, rule.label])).toEqual([[5, 'Allowed disagreement']]);
 		expect(geometry?.rows[0].row).toMatchObject({
-			status: 'disagrees', context: 'item ledger 20.00; server 40.00 tokens a second'
+			status: 'disagrees', context: 'item ledger 20; server 40 tokens a second'
 		});
-		expect(clocksChart([{ label: 'shard 0', ledger: null, server: 40, gapPct: null, agrees: null }], 5)).toBeNull();
+		expect(clocksChart([{ label: 'shard 0', ledger: null, server: 40, gapPct: null, agrees: null }], 5, numberFormat)).toBeNull();
 	});
 
 	test('a ledger with no shard falls back to the run and says which grain it used', () => {
@@ -548,11 +547,10 @@ test.describe('what a run reads against what it writes', () => {
 	});
 
 	test('money is digits and an ISO code, and never reads the machine locale', () => {
-		expect(money(1234.5, 'USD', 2)).toBe('1,234.50 USD');
-		expect(money(0.0123, 'USD', 4)).toBe('0.0123 USD');
-		expect(money(0, 'EUR', 2)).toBe('0.00 EUR');
-		// A real cost never prints as zero. The work was not free.
-		expect(money(0.0027, 'USD', 2)).toBe('<0.01 USD');
+		expect(money(1234.5, 'USD')).toBe('1,230 USD');
+		expect(money(0.0123, 'USD')).toBe('0.0123 USD');
+		expect(money(0, 'EUR')).toBe('0 EUR');
+		expect(money(0.0027, 'USD')).toBe('0.0027 USD');
 	});
 });
 
@@ -774,10 +772,10 @@ test.describe('a run the counters refuse, handed to every figure built from arti
 
 	test('the processor lost to other tenants counts it', () => {
 		const thresholds = { marked: 1, named: 10 };
-		const accepted = processorLostOverDays(acceptedRows, thresholds);
+		const accepted = processorLostOverDays(acceptedRows, thresholds, numberFormat);
 		expect([accepted.from, accepted.outOf, accepted.days[0].worstPct]).toEqual([2, 2, 0.5]);
 		expect(accepted.named).toBeNull();
-		const both = processorLostOverDays(bothRuns, thresholds);
+		const both = processorLostOverDays(bothRuns, thresholds, numberFormat);
 		expect([both.from, both.outOf, both.days[0].worstPct]).toEqual([4, 4, 12]);
 		// The day is named for a share only the refused run's article lost.
 		expect(both.named?.key).toBe('2026-09-04');
@@ -989,10 +987,10 @@ test.describe('the Hardware browser redraws, from stated readings', () => {
 			{ run_id: '2026-09-01-9', item_id: 'old', item_total_ms: 99000 },
 			{ run_id: '2026-09-01-10', item_id: 'new', item_total_ms: 4000, fetch_ms: 1000, extract_ms: 1000,
 				summarize_ms: 1000, faithfulness_ms: 2000, stage_gap_ms: -1000, queue_wait_ms: 500 }
-		]);
+		], numberFormat);
 		expect(actual.run).toBe('2026-09-01-10');
 		expect(actual.rows).toHaveLength(1);
-		expect(actual.rows[0]).toMatchObject({ value: 4, context: 'waited 0.5 s first; stages overlapped by 1.0 s' });
+		expect(actual.rows[0]).toMatchObject({ value: 4, context: 'waited 0.5 s first; stages overlapped by 1 s' });
 		expect(actual.rows[0]).not.toHaveProperty('segments');
 	});
 
@@ -1002,18 +1000,18 @@ test.describe('the Hardware browser redraws, from stated readings', () => {
 		expect(slowestArticles([
 			{ run_id: newer, item_id: 'new', item_total_ms: 1000 },
 			{ run_id: older, item_id: 'old', item_total_ms: 9000 }
-		]).run).toBe(newer);
+		], numberFormat).run).toBe(newer);
 	});
 
 	test('positive gaps close the elapsed stack; queue wait stays outside it and missing stages stay absent', () => {
 		const row = { run_id: '2026-09-01-1', item_id: 'one', item_total_ms: 5000,
 			fetch_ms: 1000, extract_ms: 1000, summarize_ms: 1000, faithfulness_ms: 1000,
 			stage_gap_ms: 1000, queue_wait_ms: 2000 };
-		const measured = slowestArticles([row]).rows[0];
+		const measured = slowestArticles([row], numberFormat).rows[0];
 		expect(measured.value).toBe(5);
 		expect(measured.segments?.map((segment) => segment.value)).toEqual([1, 1, 1, 1, 1]);
-		expect(measured.context).toBe('waited 2.0 s first');
-		expect(slowestArticles([{ ...row, extract_ms: null }]).rows[0]).not.toHaveProperty('segments');
+		expect(measured.context).toBe('waited 2 s first');
+		expect(slowestArticles([{ ...row, extract_ms: null }], numberFormat).rows[0]).not.toHaveProperty('segments');
 	});
 
 	test('native host logical, algorithm and model load conflicts preserve whole-run refusal in both orders', () => {
@@ -1116,7 +1114,7 @@ test.describe('the Hardware browser redraws, from stated readings', () => {
 		};
 		const busy = { date: modern.date, run_id: modern.run_id, machine_shard: 0,
 			cpu_busy_pct: 50, item_total_ms: 2000 };
-		const options = { watchedFlags: ['avx2'], colour: { stops: 5, floor: 0.4 }, recording: true, cacheMargin: 2 };
+		const options = { watchedFlags: ['avx2'], colour: { stops: 5, floor: 0.4 }, numberFormat, recording: true, cacheMargin: 2 };
 		test('physical, logical, allowed, quota and frozen readings stay separate from whole-host cost', () => {
 			const held = countersFrom([modern], [], [{ run_id: 'one', shards: 1 }], limits);
 			expect(held.refused).toEqual([]);

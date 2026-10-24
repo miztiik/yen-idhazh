@@ -1,8 +1,8 @@
-import { megabytes } from '$lib/assist/session';
 import type { FetchCost } from '$lib/data/ledger';
 import { daysBetween } from '$lib/data/slice';
 import { plural as countNoun, shortDate } from '$lib/format';
 import { explorerMissingSentence } from '$lib/console/waiting';
+import { formatNumber, type NumberFormatConfig } from '../../number-format';
 
 export type ExplorerStatusState =
 	| 'idle'
@@ -38,17 +38,23 @@ export function plural(count: number, noun: string): string {
 	return countNoun(count, noun, `${noun}s`);
 }
 
-export function size(bytes: number): string {
-	if (bytes > 0 && bytes < 102_400) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-	return `${megabytes(bytes)} MB`;
+function formattedPlural(count: number, noun: string, numberFormat: NumberFormatConfig): string {
+	return `${formatNumber(count, numberFormat, { exact: true })} ${count === 1 ? noun : `${noun}s`}`;
 }
 
-export function elapsed(ms: number | null | undefined): string {
+export function size(bytes: number, numberFormat: NumberFormatConfig): string {
+	if (bytes > 0 && bytes < 102_400) return `${formatNumber(Math.max(1, Math.round(bytes / 1024)), numberFormat, { exact: true })} KB`;
+	return `${formatNumber(bytes / 1024 / 1024, numberFormat, { si: false })} MB`;
+}
+
+export function elapsed(ms: number | null | undefined, numberFormat: NumberFormatConfig): string {
 	if (ms === null || ms === undefined) return '0 ms';
-	return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
+	return ms < 1000
+		? `${formatNumber(ms, numberFormat, { exact: true })} ms`
+		: `${formatNumber(ms / 1000, numberFormat, { si: false })} s`;
 }
 
-export function statusSentence(input: ExplorerStatusInput): string {
+export function statusSentence(input: ExplorerStatusInput, numberFormat: NumberFormatConfig): string {
 	switch (input.state) {
 		case 'notice':
 			return input.notice ?? '';
@@ -57,13 +63,13 @@ export function statusSentence(input: ExplorerStatusInput): string {
 		case 'costing':
 			return 'Checking SQL tables and query limits.';
 		case 'running-fetch':
-			return `Fetching ${plural(input.files ?? 0, 'file')}, ${size(input.bytes ?? 0)}.`;
+			return `Fetching ${formattedPlural(input.files ?? 0, 'file', numberFormat)}, ${size(input.bytes ?? 0, numberFormat)}.`;
 		case 'running-query':
 			return 'Running the question.';
 		case 'answered':
-			return (input.read?.files ?? 0) === 0 ? `Answered in ${elapsed(input.ms)}.` : `Answered in ${elapsed(input.ms)}. Read ${plural(input.read?.files ?? 0, 'file')}, ${size(input.read?.bytes ?? 0)}.`;
+			return (input.read?.files ?? 0) === 0 ? `Answered in ${elapsed(input.ms, numberFormat)}.` : `Answered in ${elapsed(input.ms, numberFormat)}. Read ${formattedPlural(input.read?.files ?? 0, 'file', numberFormat)}, ${size(input.read?.bytes ?? 0, numberFormat)}.`;
 		case 'quiet':
-			return (input.read?.files ?? 0) === 0 ? `Ran in ${elapsed(input.ms)} and matched no rows.` : `Ran in ${elapsed(input.ms)} and matched no rows. Read ${plural(input.read?.files ?? 0, 'file')}, ${size(input.read?.bytes ?? 0)}.`;
+			return (input.read?.files ?? 0) === 0 ? `Ran in ${elapsed(input.ms, numberFormat)} and matched no rows.` : `Ran in ${elapsed(input.ms, numberFormat)} and matched no rows. Read ${formattedPlural(input.read?.files ?? 0, 'file', numberFormat)}, ${size(input.read?.bytes ?? 0, numberFormat)}.`;
 		case 'refused':
 			return 'Did not run. The reason is where the answer would be.';
 		case 'missing':
@@ -77,7 +83,7 @@ export function statusSentence(input: ExplorerStatusInput): string {
 			const to = input.readTo;
 			const days = from && to ? daysBetween(from, to).length : 0;
 			const dates = days === 1 && to ? `: ${shortDate(to)}` : days > 1 && from && to ? `, from ${shortDate(from)} through ${shortDate(to)}` : '';
-			const prefix = `Run will read ${plural(input.files ?? 0, 'file')}, ${size(input.bytes ?? 0)} from ${plural(input.ledgers ?? 0, 'ledger')} over ${plural(days, 'UTC day')}${dates}.`;
+			const prefix = `Run will read ${formattedPlural(input.files ?? 0, 'file', numberFormat)}, ${size(input.bytes ?? 0, numberFormat)} from ${formattedPlural(input.ledgers ?? 0, 'ledger', numberFormat)} over ${formattedPlural(days, 'UTC day', numberFormat)}${dates}.`;
 			const engine = input.firstRun ? ' It also starts the query engine.' : '';
 			const empty = input.ledger !== undefined && input.through !== undefined ? ` Nothing in ${input.ledger} after ${shortDate(input.through)}.` : '';
 			return `${prefix}${engine}${empty}`;

@@ -1,7 +1,7 @@
 /** Actual native failure surfaces retain row divisors, calendar gaps and measured zero. */
 import { expect, test } from './support/door-page';
 import { nativeFailureMix } from '../src/lib/console/pipelines/failure-mix';
-import { dateSeries } from '../src/lib/charts/d3/dateSeries';
+import { dateSeries } from './support/number-format';
 import { frame } from '../src/lib/charts/frame';
 import { dayBefore, items, openRetained } from './support/retained-telemetry';
 import { setWindow } from './support/console-window/controls';

@@ -5,6 +5,7 @@ import { sparklineMarks, type SparklineMarks } from './sparkline';
 import { targetMarks, type TargetMarks } from './targetbar';
 import { daysInWindow, type TimeWindow } from './viewport';
 import { grouped } from './series';
+import { formatNumber, type NumberFormatConfig } from '../number-format';
 
 export interface GlanceDay {
 	date: string;
@@ -48,39 +49,36 @@ export interface ChartRule {
 	verdict: string;
 }
 
-function trim(value: number): string {
-	return String(Number(value.toFixed(1)));
+export function minutesText(minutes: number, numberFormat: NumberFormatConfig): string {
+	return formatNumber(minutes, numberFormat, { si: false });
 }
 
-export function minutesText(minutes: number): string {
-	return minutes.toFixed(1);
-}
-
-export function coverageText(coverage: number): string {
-	return `${Math.round(coverage)}%`;
+export function coverageText(coverage: number, numberFormat: NumberFormatConfig): string {
+	return `${formatNumber(coverage, numberFormat, { si: false })}%`;
 }
 
 function verdictOf(
 	minutes: number | null,
 	coverage: number | null,
 	thresholds: ChartThresholds,
-	days: number
+	days: number,
+	numberFormat: NumberFormatConfig
 ): string {
 	const day = days === 1 ? openWithSpan(days) : 'The median day';
 	const cost =
 		minutes === null
 			? `${day} has no minutes on record${days === 1 ? '' : ` over ${nameSpan(days)}`}`
-			: `${day} spends ${minutesText(minutes)} minutes per visual, ` +
+			: `${day} spends ${minutesText(minutes, numberFormat)} minutes per visual, ` +
 				`${minutes > thresholds.minutesTarget ? 'past' : 'inside'} the ` +
-				`${trim(thresholds.minutesTarget)} that retires chart drawing`;
+				`${formatNumber(thresholds.minutesTarget, numberFormat, { si: false })} that retires chart drawing`;
 	const reach =
 		coverage === null
 			? days === 1
 				? 'did not publish anything to put a visual on'
 				: 'no day published anything to put a visual on'
-			: `puts a visual on ${coverageText(coverage)} of what it published, ` +
+			: `puts a visual on ${coverageText(coverage, numberFormat)} of what it published, ` +
 				`${coverage < thresholds.coveragePct ? 'below' : 'above'} the ` +
-				`${trim(thresholds.coveragePct)}% floor`;
+				`${formatNumber(thresholds.coveragePct, numberFormat, { si: false })}% floor`;
 	return `${cost}, and ${reach}.`;
 }
 
@@ -88,7 +86,8 @@ function verdictOf(
 export function chartRule(
 	days: readonly GlanceDay[],
 	thresholds: ChartThresholds,
-	windowDays: number
+	windowDays: number,
+	numberFormat: NumberFormatConfig
 ): ChartRule {
 	const narrow = windowDays < thresholds.ruleDays;
 	const ordered = narrow ? [] : [...days].sort((a, b) => a.date.localeCompare(b.date));
@@ -113,7 +112,7 @@ export function chartRule(
 		coverageTrend,
 		minutesDays: minutesTrend.values.length,
 		coverageDays: coverageTrend.values.length,
-		verdict: verdictOf(minutes, coverage, thresholds, windowDays)
+		verdict: verdictOf(minutes, coverage, thresholds, windowDays, numberFormat)
 	};
 }
 
@@ -201,8 +200,12 @@ export function siteCostMeasure(windowDays: number): string {
 		: `Bytes the committed payload tree gained on each published day, over the articles that day published. Over ${countDays(windowDays)}.`;
 }
 
-export function horizonRate(articlesPerDay: number, windowDays: number): string {
-	const rate = `${grouped(Math.round(articlesPerDay))} articles a published day`;
+export function horizonRate(
+	articlesPerDay: number,
+	windowDays: number,
+	numberFormat: NumberFormatConfig
+): string {
+	const rate = `${grouped(Math.round(articlesPerDay), numberFormat)} articles a published day`;
 	return windowDays === 1 ? `${rate}, ${nameSpan(windowDays)}'s count` : `a median of ${rate}`;
 }
 

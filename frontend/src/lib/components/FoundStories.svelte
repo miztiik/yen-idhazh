@@ -25,11 +25,13 @@
 	import { shortDate } from '$lib/format';
 	import type { SearchOutcome } from '$lib/assist/search';
 	import type { DayForPage } from '$lib/payload/types';
+	import type { NumberFormatConfig } from '$lib/number-format';
 
 	let {
 		found,
 		days,
 		verticalNames,
+		numberFormat,
 		onClear
 	}: {
 		found: SearchOutcome;
@@ -37,6 +39,7 @@
 		 * lands. A date with no entry yet is a result still waiting for its day. */
 		days: Record<string, DayForPage | null>;
 		verticalNames: Record<string, string>;
+		numberFormat: NumberFormatConfig;
 		/** Put the day back. The field's next keystroke does this too. */
 		onClear: () => void;
 	} = $props();
@@ -58,6 +61,7 @@
 				{#if item}
 					<DigestItemView
 						{item}
+						{numberFormat}
 						verticalName={verticalNames[item.vertical] ?? item.vertical}
 						level={3}
 						showVertical={false}

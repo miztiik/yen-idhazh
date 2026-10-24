@@ -365,7 +365,7 @@
     "tagline": "A daily digest that checks its own work.",
     "theme_default": "dark"
   },
-  "version": "2026-09-08T16:49",
+  "version": "2026-10-24T18:29",
   "visuals": {
     "asset_base_url": "",
     "downgrade_floor_percentiles": [],
@@ -380,6 +380,11 @@
     "max_output_tokens": 400,
     "min_chart_points": 3,
     "min_diagram_steps": 3,
+    "number_format": {
+      "locale": "en-GB",
+      "si_prefix_from": 1000,
+      "significant_digits": 3
+    },
     "request_timeout_minutes": 2.0
   }
 }

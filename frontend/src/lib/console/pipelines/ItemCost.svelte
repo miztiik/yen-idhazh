@@ -5,15 +5,18 @@
 	import { SERIES_TOKENS } from '../series-tokens';
 	import type { Row } from '$lib/data/ledger';
 	import type { ConsoleConfig, ChartConfig } from '$lib/server/config';
+	import { formatNumber } from '$lib/number-format';
+	import { useNumberFormat } from '$lib/number-format-context';
 	let { rows, knobs, chart }: { rows: Row[]; knobs: ConsoleConfig; chart: ChartConfig } = $props();
+	const numberFormat = useNumberFormat();
 	const cost = $derived(nativeItemCost(rows));
 </script>
 
 <p data-lede data-item-cost-lead data-item-cost-rows={cost.rows} class="lede">
-	{cost.writing === null ? 'No summary-writing clock was measured.' : `${(cost.writing.median / 1000).toFixed(2)} seconds to write one summary.`}
+	{cost.writing === null ? 'No summary-writing clock was measured.' : `${formatNumber(cost.writing.median / 1000, numberFormat, { si: false })} seconds to write one summary.`}
 </p>
 <p data-comparison="Writing one summary against reading one prompt.">Writing one summary against reading one prompt; their distributions share one time axis.</p>
-<p>{cost.writeCostRatio === null ? 'The two per-token costs cannot yet be compared.' : `Writing a token cost ${cost.writeCostRatio.toFixed(1)} times reading one.`}</p>
+<p>{cost.writeCostRatio === null ? 'The two per-token costs cannot yet be compared.' : `Writing a token cost ${formatNumber(cost.writeCostRatio, numberFormat, { si: false })} times reading one.`}</p>
 {#each [{ times: cost.reading, name: 'item-reading', subject: 'Seconds to read one prompt', verb: 'read', noun: 'prompt', nouns: 'prompts', token: SERIES_TOKENS['reading-prompt'] },
 	{ times: cost.writing, name: 'item-writing', subject: 'Seconds to write one summary', verb: 'written', noun: 'summary', nouns: 'summaries', token: SERIES_TOKENS['writing-reply'] }] as part (part.name)}
 	<div class={part.name}>

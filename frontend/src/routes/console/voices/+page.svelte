@@ -55,7 +55,7 @@
 	const fallback = $derived(fallbackFeeds(data.feedInput, windowDays, console.feed_rows, knobs.article_fails_marked, knobs.article_fails_named));
 	const failed = $derived(feedsAnswer !== 'pending' && feedsAnswer.state !== 'ok' ? fallback : span === null ? null : feedsFailed(data.feedInput,
 		rowsOf(feedsAnswer), span, console.feed_rows, knobs.article_fails_marked, knobs.article_fails_named));
-	const times = $derived(fetchTime(rowsOf(fetchAnswer), console.source_rows));
+	const times = $derived(fetchTime(rowsOf(fetchAnswer), console.source_rows, data.number_format));
 	const cuts = $derived(cutsSpan === null ? null : sourceCuts(rowsOf(cutsAnswer), cutsSpan, console.source_rows));
 	const chosen = $derived(whyChosen(rowsOf(chosenAnswer), knobs.why_chosen_rows));
 	const catches = $derived(watchSpan === null ? null : watchlist(rowsOf(watchAnswer), watchSpan, knobs.watchlist_hits_marked, knobs.watchlist_hits_named));

@@ -20,6 +20,7 @@
 	 * broken control.
 	 */
 	import { money, type CostRate } from '$lib/charts/machine';
+	import { useNumberFormat } from '$lib/number-format-context';
 	import { onMount } from 'svelte';
 
 	let {
@@ -37,6 +38,7 @@
 		/** Which of the two the page is pricing with, right now. */
 		source: 'configured' | 'yours';
 	} = $props();
+	const numberFormat = useNumberFormat();
 
 	const KEY = 'idhazh:cost-rate';
 
@@ -136,11 +138,11 @@
 	     is and that nobody sent it. -->
 	<p class="basis" data-rate-basis>
 		{source === 'yours' ? 'Using your rate' : 'Using the configured rate'}:
-		<strong>{money(inputRate, configured.currency, 4)}</strong> a million prompt tokens and
-		<strong>{money(outputRate, configured.currency, 4)}</strong> a million written tokens.
+		<strong>{money(inputRate, configured.currency, numberFormat)}</strong> a million prompt tokens and
+		<strong>{money(outputRate, configured.currency, numberFormat)}</strong> a million written tokens.
 		{#if source === 'yours'}
-			The configured pair is {money(configured.inputPerMillion, configured.currency, 4)} and
-			{money(configured.outputPerMillion, configured.currency, 4)}.
+			The configured pair is {money(configured.inputPerMillion, configured.currency, numberFormat)} and
+			{money(configured.outputPerMillion, configured.currency, numberFormat)}.
 			<button type="button" class="reset" data-rate-reset onclick={reset}>
 				Use the configured rate
 			</button>

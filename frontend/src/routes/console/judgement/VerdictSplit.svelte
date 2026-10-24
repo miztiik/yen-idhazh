@@ -22,7 +22,9 @@
 	 */
 	import { chartWidth, frame, linearAxis, observeWidth } from '$lib/charts/frame';
 	import Panel from '$lib/components/Panel.svelte';
-	import { grouped } from '$lib/charts/series';
+	import { grouped as formatGrouped } from '$lib/charts/series';
+	import { formatNumber } from '$lib/number-format';
+	import { useNumberFormat } from '$lib/number-format-context';
 	import {
 		populationRange,
 		precisionCorridor,
@@ -52,6 +54,8 @@
 		figures: { inBand: number | null; judged: number | null; usable: number | null };
 		evidence?: string[];
 	} = $props();
+	const numberFormat = useNumberFormat();
+	const grouped = (value: number) => formatGrouped(value, numberFormat);
 
 	/** The width the table rebins to. One row a fifth of the numbers, at the
 	 * resolution a reader can compare off a page. */
@@ -80,11 +84,11 @@
 	);
 
 	function reads(value: number): string {
-		return value.toFixed(3);
+		return formatNumber(value, numberFormat, { si: false });
 	}
 
 	function percent(share: number | null): string {
-		return share === null ? '-' : `${(share * 100).toFixed(1)}%`;
+		return share === null ? '-' : `${formatNumber(share * 100, numberFormat, { si: false })}%`;
 	}
 
 	function figure(value: number | null): string {

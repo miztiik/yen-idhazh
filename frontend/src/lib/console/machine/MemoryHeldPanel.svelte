@@ -17,6 +17,8 @@
 	import Panel from '$lib/components/Panel.svelte';
 	import { memoryHeldWithin, type MemoryHeldRecord } from '$lib/console/machine/memory-held';
 	import { countDays, nameSpan, openWithSpan } from '$lib/console/span-words';
+	import { useNumberFormat } from '$lib/number-format-context';
+	import { formatNumber } from '$lib/number-format';
 
 	let {
 		record,
@@ -29,6 +31,7 @@
 		end: string;
 		days: number;
 	} = $props();
+	const numberFormat = useNumberFormat();
 
 	const view = $derived(memoryHeldWithin(record, start, end));
 	const latest = $derived(view.days.at(-1));
@@ -51,7 +54,7 @@
 		data-model-rule-name="machine-memory-held"
 		data-model-rule="no" data-model-rule-none="This is one day's memory partition, not a comparison between days.">
 		{serverShare === null ? 'The model server did not record its memory bound.'
-			: `At most ${serverShare.toFixed(1)} percent of the machine's memory was resident in the model server at the tightest recorded moment.`}
+			: `At most ${formatNumber(serverShare, numberFormat, { si: false })} percent of the machine's memory was resident in the model server at the tightest recorded moment.`}
 	</p>
 	<p data-comparison="The model server's memory against everything else">The model server's memory against everything else.</p>
 	{#if view.empty}

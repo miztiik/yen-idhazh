@@ -17,7 +17,8 @@
 	const box = $derived(frame(chartWidth(measured, chart.width_px), chart.height_px));
 	const fullRule = $derived(completeModelRule(rule, series.flatMap((one) => one.points.map((point) => point.date))));
 	const geometry = $derived(dateSeries(series, {
-		frame: box, stacked, density: chart.tick_density, valueTicks: 4, padding: 0.2, rule: fullRule, rules, domain
+		frame: box, stacked, density: chart.tick_density, valueTicks: 4, padding: 0.2, rule: fullRule, rules, domain,
+		number_format: chart.number_format
 	}));
 	const readout = $derived(geometry === null ? null : {
 		...geometry.readout,

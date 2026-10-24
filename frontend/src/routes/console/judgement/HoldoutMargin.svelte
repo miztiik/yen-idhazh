@@ -32,6 +32,8 @@
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import Panel from '$lib/components/Panel.svelte';
 	import { shortDate } from '$lib/format';
+	import { formatNumber } from '$lib/number-format';
+	import { useNumberFormat } from '$lib/number-format-context';
 	import {
 		agreedNote,
 		belowLine,
@@ -101,6 +103,7 @@
 		/** `chart.readout_max_share`. */
 		readoutMaxShare: number;
 	} = $props();
+	const numberFormat = useNumberFormat();
 
 	/** How far under a dot its own label sits, and how far under that the row
 	 * label of the strip sits. Laid out from the top of the plot so the panel is
@@ -170,11 +173,11 @@
 	const tone = $derived(holdoutTone(reading, reach));
 
 	function reads(value: number): string {
-		return value.toFixed(3);
+		return formatNumber(value, numberFormat, { si: false });
 	}
 
 	function offNote(off: HoldoutMark[], side: string): string {
-		const scores = off.map((mark) => mark.score.toFixed(4)).join(', ');
+		const scores = off.map((mark) => reads(mark.score)).join(', ');
 		return (
 			`${off.length} marked ${off.length === 1 ? 'pair scores' : 'pairs score'} ${side} this ` +
 			`scale, at ${scores}. The scale is a window a few days' fall wide around the line, so a ` +
@@ -189,7 +192,7 @@
 	}
 
 	function offScores(off: HoldoutMark[]): string {
-		return off.map((mark) => mark.score.toFixed(4)).join(', ');
+		return off.map((mark) => reads(mark.score)).join(', ');
 	}
 
 	/** One thing a pointer, a tap or a key can land on, in reading order: the
@@ -216,21 +219,21 @@
 	/** What each mark says to a screen reader: the sentence its tooltip carried. */
 	function pointName(point: HoldoutPoint): string {
 		if (point.kind === 'dot') {
-			return `${point.mark.leftTitle} against ${point.mark.rightTitle}, scoring ${point.mark.score.toFixed(4)}`;
+			return `${point.mark.leftTitle} against ${point.mark.rightTitle}, scoring ${reads(point.mark.score)}`;
 		}
 		if (point.kind === 'off') {
 			return `${offCount(point.off, point.side === 'low' ? 'below' : 'above')}, at ${offScores(point.off)}`;
 		}
 		if (agreedAt === null) return '';
 		return agreedOnScale
-			? `${agreedScores.length} pairs read as one story, running ${agreedAt.min.toFixed(4)} to ${agreedAt.max.toFixed(4)}, middle ${agreedAt.median.toFixed(4)}`
-			: `${agreedScores.length} pairs read as one story, all of them off this scale, running ${agreedAt.min.toFixed(4)} to ${agreedAt.max.toFixed(4)}`;
+			? `${agreedScores.length} pairs read as one story, running ${reads(agreedAt.min)} to ${reads(agreedAt.max)}, middle ${reads(agreedAt.median)}`
+			: `${agreedScores.length} pairs read as one story, all of them off this scale, running ${reads(agreedAt.min)} to ${reads(agreedAt.max)}`;
 	}
 
 	/** Each point's record: every word its name says, and what it means for the
 	 * line. A panel with nothing marked still prints one record saying so. */
 	const records = $derived.by((): ReadoutFacts[] => {
-		const four = (value: number) => value.toFixed(4);
+		const four = reads;
 		const built = points.map((point) => {
 			if (point.kind === 'dot') {
 				return factsOf(
@@ -303,7 +306,7 @@
 			: undefined}
 		data-holdout-domain={`${domain[0].toFixed(4)},${domain[1].toFixed(4)}`}
 		data-holdout-zone={`${zone[0].toFixed(4)},${zone[1].toFixed(4)}`}
-		data-holdout-margin={outcome.margin === null ? '' : marginDistance(outcome.margin)}
+		data-holdout-margin={outcome.margin === null ? '' : marginDistance(outcome.margin, numberFormat)}
 		data-holdout-violations={outcome.violations}
 		data-holdout-reach={`${reach.today},${reach.tomorrow},${reach.dayAfter}`}
 	>
@@ -321,7 +324,7 @@
 				<span class="figure" data-lede data-holdout-figure>-</span>
 				<span class="words">of room; no scored pairs marked apart were returned</span>
 			{:else}
-				<span class="figure" data-lede data-holdout-figure>{marginDistance(outcome.margin)}</span>
+				<span class="figure" data-lede data-holdout-figure>{marginDistance(outcome.margin, numberFormat)}</span>
 				<span class="words"
 					>{violated
 						? 'below the closest pair a person marked as two stories'
@@ -335,7 +338,7 @@
 			     there is and never how fast it can be spent, and it can be spent in
 			     one night. -->
 			<p class="consequence" data-holdout-reach-note>
-				{reachNote(reach, maxDownStep, apart.length)}
+				{reachNote(reach, maxDownStep, apart.length, numberFormat)}
 			</p>
 		{/if}
 
@@ -351,7 +354,7 @@
 				viewBox={`0 0 ${box.width} ${box.height}`}
 				role="group"
 				tabindex="0"
-				aria-label={`Where the merge line sits against the pairs a person marked as two stories. ${holdoutNote(outcome, reading, marked, applied)} ${agreedNote(agreedScores, applied)}`}
+				aria-label={`Where the merge line sits against the pairs a person marked as two stories. ${holdoutNote(outcome, reading, marked, applied, numberFormat)} ${agreedNote(agreedScores, applied, numberFormat)}`}
 				use:markReadout={{
 					count: points.length,
 					walk: 'row',
@@ -410,7 +413,7 @@
 						y2={markY}
 						stroke="var(--color-text-secondary)"
 						stroke-width="2"
-						data-holdout-span={marginDistance(outcome.margin ?? 0)}
+						data-holdout-span={marginDistance(outcome.margin ?? 0, numberFormat)}
 					/>
 					<text
 						x={(ruleX + at(outcome.closest.score)) / 2}
@@ -420,7 +423,7 @@
 						font-size="10"
 						data-holdout-span-label
 					>
-						{marginDistance(outcome.margin ?? 0)}
+						{marginDistance(outcome.margin ?? 0, numberFormat)}
 					</text>
 				{/if}
 
@@ -455,7 +458,7 @@
 				>
 					{apartAt === null
 						? 'No scored pairs marked two stories were returned'
-						: `read as two stories: ${apartAt.min.toFixed(4)} to ${apartAt.max.toFixed(4)}`}
+						: `read as two stories: ${reads(apartAt.min)} to ${reads(apartAt.max)}`}
 				</text>
 
 				{#each drawn as mark (mark.leftTitle + mark.rightTitle)}
@@ -482,7 +485,7 @@
 							font-size="10"
 							data-holdout-dot-label={mark.score.toFixed(4)}
 						>
-							{mark.score.toFixed(4)}
+							{reads(mark.score)}
 						</text>
 					{/if}
 				{/each}
@@ -521,7 +524,7 @@
 				>
 					{agreedAt === null
 						? 'No scored pairs marked one story were returned'
-						: `read as one story: ${agreedAt.min.toFixed(4)} to ${agreedAt.max.toFixed(4)}, middle ${agreedAt.median.toFixed(4)}, ${agreedBelow} below the line`}
+						: `read as one story: ${reads(agreedAt.min)} to ${reads(agreedAt.max)}, middle ${reads(agreedAt.median)}, ${agreedBelow} below the line`}
 				</text>
 
 				{#if agreedAt !== null && agreedOnScale}
@@ -595,10 +598,10 @@
 		/>
 
 		<p class="reading" data-holdout-note>
-			{marked === 0 ? 'No hand marks were returned. This does not show whether a person has marked a pair.' : holdoutNote(outcome, reading, marked, applied)}
+			{marked === 0 ? 'No hand marks were returned. This does not show whether a person has marked a pair.' : holdoutNote(outcome, reading, marked, applied, numberFormat)}
 		</p>
 		<p class="reading" data-holdout-agreed={agreedScores.length}>
-			{agreedNote(agreedScores, applied)}
+			{agreedNote(agreedScores, applied, numberFormat)}
 		</p>
 		{#each [{ off: offLow, side: 'below' }, { off: offHigh, side: 'above' }] as edge (edge.side)}
 			{#if edge.off.length > 0}
@@ -621,7 +624,7 @@
 					<tbody>
 						{#each apart as mark (mark.leftTitle + mark.rightTitle)}
 							<tr data-holdout-row={mark.score.toFixed(4)}>
-								<th scope="row">{mark.score.toFixed(4)}</th>
+								<th scope="row">{reads(mark.score)}</th>
 								<td>{mark.leftTitle}</td>
 								<td>{mark.rightTitle}</td>
 								<td>{mark.markedOn}</td>
@@ -637,7 +640,7 @@
 		{/if}
 		{/if}
 		<p class="under" data-holdout-scored={scored === null ? 'none' : scored.date}>
-			{scoredNote(scored)}
+			{scoredNote(scored, numberFormat)}
 		</p>
 		{#if skips !== null}
 			<p class="under" data-holdout-skips={skipped.length}>{skips}</p>

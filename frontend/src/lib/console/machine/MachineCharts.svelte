@@ -10,6 +10,7 @@
 	import { emptyState } from '$lib/charts/d3/empty';
 	import { AXIS_LABEL_GAP_PX, chartWidth, frame, labelWidth, MARGIN, observeWidth } from '$lib/charts/frame';
 	import { clockAgreement, clocksChart, readAgainstWritten, workSeries, money, type CostRate } from '$lib/charts/machine';
+	import { formatNumber } from '$lib/number-format';
 	import { costOverDays } from '$lib/charts/cost';
 	import { settingsRules } from '$lib/console/settings-moved';
 	import { nameSpan } from '$lib/console/span-words';
@@ -25,6 +26,7 @@
 		newest?: CounterRun | null; newestRunId?: string | null; chart: ChartConfig; shell: ConsoleShell;
 		start: string; end: string; knobs: Readonly<Record<string, number>>; rate: CostRate; windowDays: number;
 	} = $props();
+	const numberFormat = $derived(chart.number_format);
 	let width = $state<number | null>(null);
 	const box = $derived(frame(chartWidth(width, chart.width_px), chart.height_px));
 	const contextBox = $derived(frame(chartWidth(width, chart.width_px), chart.height_px,
@@ -35,7 +37,7 @@
 	const slower = $derived(slowerMachines(rows));
 	const comparableKinds = $derived(new Set([...slower.reading, ...slower.writing]
 		.filter((row) => (row.range?.count ?? 0) >= knobs.slower_machines_min_articles).map((row) => row.label)));
-	const slowest = $derived(slowestArticles(rows));
+	const slowest = $derived(slowestArticles(rows, numberFormat));
 	const memoryReadings = $derived(closestToMemory(rows));
 	const closest = $derived(rankedList(memoryReadings, { max: knobs.closest_to_memory_rows }));
 	const tightest = $derived([...memoryReadings].sort((a, b) => b.value - a.value || a.label.localeCompare(b.label))[0]);
@@ -53,7 +55,7 @@
 		: id === 'context-headroom' ? 'Each prompt against the reading limit'
 		: id === 'prompt-reuse' ? 'Text held for the label call against text the summary call reads fresh'
 		: 'Tokens read against tokens written');
-	const clockRows = $derived(clocksChart(clocks.pairs, knobs.clocks_agree_within_pct));
+	const clockRows = $derived(clocksChart(clocks.pairs, knobs.clocks_agree_within_pct, numberFormat));
 	const context = $derived(contextReadings(rows));
 	const contextDomain = $derived([
 		Math.min(1, ...context.label, ...context.summary, ...context.rules.map((one) => one.at)),
@@ -78,7 +80,14 @@
 			points: cost.days.map((day) => ({ date: day.date, value: day.running })) }];
 		return workSeries(work.runs, 'tokens');
 	});
-	const drawing = $derived(dateSeries(series, { frame: box, density: chart.tick_density, valueTicks: 4, padding: 0.2, rule }));
+	const drawing = $derived(dateSeries(series, {
+		frame: box,
+		density: chart.tick_density,
+		valueTicks: 4,
+		padding: 0.2,
+		rule,
+		number_format: numberFormat
+	}));
 	const ruleNote = $derived.by(() => {
 		if (!('changes' in rule)) return rule.declined;
 		const dates = new Set(series.flatMap((one) => one.points.map((point) => point.date)));
@@ -108,12 +117,12 @@
 				: clocks.disagreeing === 0 && gaps.length === clocks.pairs.length &&
 					newest?.shards !== null && newest?.reported.length === newest?.shards
 					? `Every shard's two clocks agreed within ${knobs.clocks_agree_within_pct} percent in the newest run.`
-					: `${widestGap.toFixed(2)} percent was the widest gap between the two clocks.`}</p>
-			<RankedList geometry={clockRows} caption="The two clocks" maxText={`${clockRows?.max.toFixed(1) ?? '0'}% apart`} fitRuleLabels
+						: `${formatNumber(widestGap, numberFormat, { si: false })} percent was the widest gap between the two clocks.`}</p>
+				<RankedList geometry={clockRows} caption="The two clocks" maxText={`${clockRows === null ? '0' : formatNumber(clockRows.max, numberFormat, { si: false })}% apart`} fitRuleLabels
 				unmeasuredNote="One instrument recorded nothing." emptyNote="One instrument recorded nothing." />
 			{#each clocks.pairs as pair (pair.label)}
 				<p data-clock-pair={pair.label} data-clock-gap={pair.gapPct?.toFixed(2) ?? ''} data-clock-agrees={pair.agrees === null ? 'unknown' : String(pair.agrees)}>
-					{pair.label}: {pair.gapPct === null ? 'one instrument recorded nothing' : `${pair.gapPct.toFixed(2)}% apart`}.
+					{pair.label}: {pair.gapPct === null ? 'one instrument recorded nothing' : `${formatNumber(pair.gapPct, numberFormat, { si: false })}% apart`}.
 				</p>
 			{/each}
 			{#if newest}<p data-planned-shards>{newest.shards === null ? 'The planned shard count was not recorded.'
@@ -123,7 +132,7 @@
 				: comparableKinds.size === 1 ? slower.reference.referenceRows === rows.length
 					? 'Every article ran on one kind of machine.' : 'Only one kind of machine has enough comparable work.'
 				: readingLeader && slower.typical.read !== null && slower.typical.read > 0
-					? `${readingLeader.label} took ${(readingLeader.value / slower.typical.read).toFixed(2)} times ${slower.reference.cpuModel}'s typical reading time.`
+					? `${readingLeader.label} took ${formatNumber(readingLeader.value / slower.typical.read, numberFormat, { si: false })} times ${slower.reference.cpuModel}'s typical reading time.`
 					: 'No machine recorded enough comparable reading work.'}</p>
 			<div class="halves">
 				{#each ['reading', 'writing'] as kind}
@@ -131,32 +140,33 @@
 					{@const target = kind === 'reading' ? slower.typical.read : slower.typical.write}
 					{@const geometry = rankedList(readings, { max: knobs.fleet_top_kinds, minCount: knobs.slower_machines_min_articles,
 						rules: target === null ? [] : [{ at: target, label: slower.reference.cpuModel ?? 'Reference machine' }] })}
-					<RankedList {geometry} caption={kind === 'reading' ? 'Reading' : 'Writing'} maxText={`${geometry?.max.toFixed(2) ?? '0'} seconds`} fitRuleLabels
+					<RankedList {geometry} caption={kind === 'reading' ? 'Reading' : 'Writing'} maxText={`${geometry === null ? '0' : formatNumber(geometry.max, numberFormat, { si: false })} seconds`} fitRuleLabels
 						unmeasuredNote="No comparable reading." emptyNote="No comparable reading." />
 				{/each}
 			</div>
 			<p>{slower.withoutReference} runs had no reference-machine reading. {slower.reference.unqualified} articles lacked a comparable reading.</p>
 		{:else if id === 'slowest-articles'}
 			{@const geometry = rankedList(slowest.rows, { max: knobs.slowest_articles_rows })}
-			<p class="lede" data-lede>{geometry?.rows.length ? `${geometry.rows[0].value.toFixed(1)} seconds for the slowest article.` : 'No article recorded elapsed time.'}</p>
-			<RankedList {geometry} caption="Longest articles" maxText={`${geometry?.max.toFixed(1) ?? '0'} seconds`}
+			<p class="lede" data-lede>{geometry?.rows.length ? `${formatNumber(geometry.rows[0].value, numberFormat, { si: false })} seconds for the slowest article.` : 'No article recorded elapsed time.'}</p>
+			<RankedList {geometry} caption="Longest articles" maxText={`${geometry === null ? '0' : formatNumber(geometry.max, numberFormat, { si: false })} seconds`}
 				unmeasuredNote="No elapsed time recorded." emptyNote="No elapsed time recorded." />
 			<p>{slowest.unmeasured} articles did not record elapsed time.</p>
 		{:else if id === 'closest-to-memory'}
 			<p class="lede" data-lede>{tightest?.ends
-				? `The tightest article left ${(tightest.ends.end - tightest.value).toFixed(2)} GiB of the machine's ${tightest.ends.end.toFixed(2)} GiB free.`
+				? `The tightest article left ${formatNumber(tightest.ends.end - tightest.value, numberFormat, { si: false })} GiB of the machine's ${formatNumber(tightest.ends.end, numberFormat, { si: false })} GiB free.`
 				: 'No article recorded available memory.'}</p>
-			<RankedList geometry={closest} caption="Memory held against machine memory" maxText={`${closest?.max.toFixed(2) ?? '0'} GiB`}
+			<RankedList geometry={closest} caption="Memory held against machine memory" maxText={`${closest === null ? '0' : formatNumber(closest.max, numberFormat, { si: false })} GiB`}
 				unmeasuredNote="Memory was not recorded." emptyNote="Memory was not recorded." />
 		{:else if id === 'context-headroom'}
 			<p class="lede" data-lede>{context.limits.length
-				? `${(100 * Math.max(0, ...context.label, ...context.summary) / context.limits[0]).toFixed(1)} percent of the smallest reading limit for the largest prompt.`
+				? `${formatNumber(100 * Math.max(0, ...context.label, ...context.summary) / context.limits[0], numberFormat, { si: false })} percent of the smallest reading limit for the largest prompt.`
 				: 'No request-slot limit was recorded.'}</p>
 			{#if context.limits.length}<p>{context.limits[0]} tokens per request slot, at the smallest recorded limit.</p>{/if}
 			<div class="halves">
 				{#each ['label', 'summary'] as call}
 					<div use:observeWidth={(px) => (width = px)}><Distribution geometry={distribution(call === 'label' ? context.label : context.summary, {
-						frame: contextBox, minValues: knobs.context_min_values, valueTicks: 4, scale: 'log', domain: contextDomain, rules: context.rules
+						frame: contextBox, minValues: knobs.context_min_values, valueTicks: 4, scale: 'log', domain: contextDomain, rules: context.rules,
+						number_format: numberFormat
 					})} empty={emptyState('quiet', 'Too few positive request readings to draw a distribution.')}
 						name={`context-${call}`} label={`${call} request tokens, logarithmic scale`} width={contextBox.width} height={contextBox.height} readoutMaxShare={chart.readout_max_share} /></div>
 				{/each}
@@ -165,18 +175,18 @@
 				{context.limits.length > 1 ? ` Other request-slot limits: ${context.limits.slice(1).join(', ')} tokens.` : ''}</p>
 		{:else}
 			<p class="lede" data-lede>{id === 'counterfactual-cost'
-				? `${cost.runningTotal.toFixed(4)} ${rate.currency}, counterfactual, never a bill.`
-				: id === 'prompt-reuse' ? reuseMedian === null ? 'No label request recorded held text.' : `${reuseMedian.toFixed(0)} tokens held for the middle label request.`
+				? `${money(cost.runningTotal, rate.currency, numberFormat)}, counterfactual, never a bill.`
+				: id === 'prompt-reuse' ? reuseMedian === null ? 'No label request recorded held text.' : `${formatNumber(reuseMedian, numberFormat)} tokens held for the middle label request.`
 					: work.runs.length && work.runs.reduce((sum, run) => sum + run.output, 0) > 0
-						? `${(work.runs.reduce((sum, run) => sum + run.input, 0) / work.runs.reduce((sum, run) => sum + run.output, 0)).toFixed(2)} tokens read for each token written.`
+						? `${formatNumber(work.runs.reduce((sum, run) => sum + run.input, 0) / work.runs.reduce((sum, run) => sum + run.output, 0), numberFormat, { si: false })} tokens read for each token written.`
 						: 'No run recorded both token counts.'}</p>
 			{#if id === 'counterfactual-cost'}
 				<RateControl configured={rate} bind:inputRate={inputPrice} bind:outputRate={outputPrice} bind:source={rateSource} />
 				<dl class="costs" data-cost-figures data-cost-source={rateSource}>
-					<div data-cost="input"><dt>Reading the prompts</dt><dd>{money(priced.input, rate.currency, 2)}</dd></div>
-					<div data-cost="output"><dt>Writing the answers</dt><dd>{money(priced.output, rate.currency, 2)}</dd></div>
-					<div data-cost="total"><dt>This window</dt><dd>{money(cost.runningTotal, rate.currency, 2)}</dd></div>
-					<div data-cost="per-article"><dt>An article, out of {priced.items}</dt><dd>{priced.items ? money(cost.runningTotal / priced.items, rate.currency, 4) : 'Not recorded'}</dd></div>
+					<div data-cost="input"><dt>Reading the prompts</dt><dd>{money(priced.input, rate.currency, numberFormat)}</dd></div>
+					<div data-cost="output"><dt>Writing the answers</dt><dd>{money(priced.output, rate.currency, numberFormat)}</dd></div>
+					<div data-cost="total"><dt>This window</dt><dd>{money(cost.runningTotal, rate.currency, numberFormat)}</dd></div>
+					<div data-cost="per-article"><dt>An article, out of {priced.items}</dt><dd>{priced.items ? money(cost.runningTotal / priced.items, rate.currency, numberFormat) : 'Not recorded'}</dd></div>
 				</dl>
 			{/if}
 			<div use:observeWidth={(px) => (width = px)}><DateSeries geometry={drawing}
@@ -184,8 +194,8 @@
 				empty={emptyState('quiet', 'Nothing recorded for this comparison.')}
 				name={id} label={title} width={box.width} height={box.height} readoutMaxShare={chart.readout_max_share} /></div>
 			{#if ruleNote}<p data-model-rule-empty={id}>{ruleNote}</p>{/if}
-			{#if id === 'prompt-reuse'}{#each reuse as check}<p>{check.call}: our pooled held share {check.ours?.toFixed(1) ?? 'not recorded'}%;
-				server's middle held share {check.server?.toFixed(1) ?? 'not recorded'}%; {check.count} complete article readings.</p>{/each}{/if}
+			{#if id === 'prompt-reuse'}{#each reuse as check}<p>{check.call}: our pooled held share {check.ours === null ? 'not recorded' : formatNumber(check.ours, numberFormat, { si: false })}%;
+				server's middle held share {check.server === null ? 'not recorded' : formatNumber(check.server, numberFormat, { si: false })}%; {formatNumber(check.count, numberFormat, { exact: true, si: false })} complete article readings.</p>{/each}{/if}
 		{/if}
 	</div>
 </Panel>

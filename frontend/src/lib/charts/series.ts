@@ -1,4 +1,5 @@
 import { dayMonth } from '../format';
+import { formatNumber, type NumberFormatConfig } from '../number-format';
 import { daysBetween, daysInWindow, type TimeWindow } from './viewport';
 
 /** The legacy CSV reader's header, retained until its last component leaves.
@@ -321,19 +322,22 @@ export interface CapLine {
  * other one and this row retired it, along with `capsInView` and `seenWords`;
  * the range plot derives its own cut points in `capPoints`.
  */
-export function capLabel(caps: readonly CapLine[], index: number): string {
+export function capLabel(
+	caps: readonly CapLine[],
+	index: number,
+	numberFormat: NumberFormatConfig
+): string {
 	const cap = caps[index];
-	const words = `cut at ${grouped(cap.words)} words`;
+	const words = `cut at ${grouped(cap.words, numberFormat)} words`;
 	if (caps.length === 1) return words;
 	return index === 0
 		? `${words} (to ${dayMonth(cap.last)})`
 		: `${words} (from ${dayMonth(cap.first)})`;
 }
 
-/** Thousands separated by hand, because `toLocaleString` reads the machine's
- * locale and two builds have to agree. */
-export function grouped(value: number): string {
-	return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+/** Exact counts use the same configured locale as every other number. */
+export function grouped(value: number, numberFormat: NumberFormatConfig): string {
+	return formatNumber(value, numberFormat, { exact: true, si: false });
 }
 
 export interface SummaryBand {
@@ -470,11 +474,15 @@ export function bandOutliers(placed: readonly BandPlacement[]): BandPlacement[] 
  * length it starts at - the length it stops at is the next rung's floor, and
  * the last rung has no ceiling at all.
  */
-export function bandSpan(bands: readonly SummaryBand[], index: number): string {
+export function bandSpan(
+	bands: readonly SummaryBand[],
+	index: number,
+	numberFormat: NumberFormatConfig
+): string {
 	const next = bands[index + 1];
-	if (next === undefined) return `${grouped(bands[index].min_source_words)} and over`;
-	if (index === 0) return `under ${grouped(next.min_source_words)}`;
-	return `${grouped(bands[index].min_source_words)} to ${grouped(next.min_source_words - 1)}`;
+	if (next === undefined) return `${grouped(bands[index].min_source_words, numberFormat)} and over`;
+	if (index === 0) return `under ${grouped(next.min_source_words, numberFormat)}`;
+	return `${grouped(bands[index].min_source_words, numberFormat)} to ${grouped(next.min_source_words - 1, numberFormat)}`;
 }
 
 /** One stage's day: the median, and the counts behind it.

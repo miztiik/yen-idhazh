@@ -15,7 +15,8 @@
 	import Panel from '$lib/components/Panel.svelte';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import { factsOf, markReadout, recordsOf } from '$lib/charts/readout';
-	import { grouped } from '$lib/charts/series';
+	import { grouped as formatGrouped } from '$lib/charts/series';
+	import { useNumberFormat } from '$lib/number-format-context';
 	import {
 		BUSY_HELD_BOTH_BEFORE,
 		type LostTile,
@@ -47,6 +48,8 @@
 		/** `chart.readout_max_share`. */
 		readoutMaxShare: number;
 	} = $props();
+	const numberFormat = useNumberFormat();
+	const grouped = (value: number) => formatGrouped(value, numberFormat);
 
 	/** Which of the three sentences the span earns.
 	 *

@@ -1,6 +1,11 @@
 /** The live native memory readers, not the retired board's page attributes. */
 import { expect, test } from '@playwright/test';
-import { memoryHeld, memoryHeldWithin } from '../src/lib/console/machine/memory-held';
+import { memoryHeld as buildMemoryHeld, memoryHeldWithin } from '../src/lib/console/machine/memory-held';
+import { numberFormat } from './support/number-format';
+
+function memoryHeld(health: readonly Record<string, string>[]) {
+	return buildMemoryHeld(health, numberFormat);
+}
 import { textRows } from '../src/lib/console/machine/records';
 import { memoryHeldQuery } from '../src/lib/console/queries/machine';
 import { rangeFor, type RouteReach } from '../src/lib/console/queries/window';

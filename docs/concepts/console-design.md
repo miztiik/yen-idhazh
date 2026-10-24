@@ -38,9 +38,9 @@ in words a person can act on and never in the name of the column behind it.
 Five rules hold for every number the console prints:
 
 - **A count of that day's items, not a score.** No value between zero and one
- reaches the screen, and no cell prints a decimal. A share prints as whole
- percent. Counts of 1,000 or more use the shared thousands separator, never
- the machine's locale. Where an agreement share rounds to its mark's printed
+ reaches the screen, and a count stays exact. A share prints as a percent.
+ The shared number formatter uses the declared locale and precision, never the
+ machine's locale. Where an agreement share rounds to its mark's printed
  figure but is not equal to the mark, it prints `just above 15%` or
  `just below 15%`, using that mark's own figure. This applies to the sentence,
  the daily readout and the dot's name. At exact equality it prints `15%`.
@@ -291,9 +291,10 @@ owner's carve-out for that one, 2026-08-30, on conditions this section holds:
  meets before any of the numbers - so it is the one place the word cannot be
  missed. The four figures above the chart keep the sentence they already
  carried. The chart does not inherit it by being near it.
-- **Digits are grouped by hand, never by `toLocaleString`.** The server draws
- the page and two builds have to agree; a locale-dependent separator moves the
- prerendered document and the byte gate reads it as a regression.
+- **A number uses the shared formatter.** It reads its locale and significant
+ digits from `visuals.number_format` in `config/idhazh.json`, never from the
+ browser. The Data explorer remains the exception: it prints the engine's
+ answer as written.
 
 ## Data explorer prints the engine answer as written
 
@@ -415,6 +416,12 @@ facts - two sections both explaining that they follow the window rather than a
 pan, or a date span printed under the heading that already printed it.
 
 ## Design rationale
+
+The console and digest drawing share one number formatter, so the same quantity
+does not acquire different separators or precision on different pages. The
+formatter's settings have one owner in `config/idhazh.json`; the Data explorer
+keeps engine values unchanged because operators need to read those values as
+written.
 
 **The calculated line is not a history of builds.** Judgement's solid merge
 series shows each nightly calculation's final value. Its proposal, daily step

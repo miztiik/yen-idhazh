@@ -9,6 +9,7 @@
 	import type { ChartConfig } from '../../server/config';
 	import { completeModelRule } from './model-rule';
 	import { nameSpan } from '../span-words';
+	import { formatNumber } from '$lib/number-format';
 	let { days, instruments, start, end, rule, checkerRule, chart, windowDays }: {
 		days: readonly (ModelDay & { determinismViolations: number | null })[] | null;
 		instruments: readonly { date: string; recorded: Readonly<Record<string, number | null>> }[];
@@ -67,7 +68,9 @@
 						</td>{/each}
 						{#each extra as instrument}
 							{@const value = instruments.find((entry) => entry.date === day.date)?.recorded[instrument.id] ?? null}
-							<td data-instrument={instrument.id}>{value === null ? 'not measured' : instrument.unit === 'cosine' ? value.toFixed(2) : `${value}%`}</td>
+							<td data-instrument={instrument.id}>{value === null ? 'not measured' : instrument.unit === 'cosine'
+								? formatNumber(value, chart.number_format, { si: false })
+								: `${formatNumber(value, chart.number_format, { si: false })}%`}</td>
 						{/each}
 					</tr>
 				{/each}</tbody>

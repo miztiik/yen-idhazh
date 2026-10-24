@@ -34,6 +34,7 @@
 	import { isDay, type CutDays } from '$lib/data/slice-shapes';
 	import { preflight } from '$lib/data/ask-reader';
 	import Icon from '$lib/icons/Icon.svelte';
+	import { formatNumber } from '$lib/number-format';
 
 	let { data } = $props();
 
@@ -203,34 +204,34 @@
 
 	function statusLine(): string {
 		const currentAnswer = sql === answeredSql;
-		if (keepNotice !== null) return statusSentence({ state: 'notice', notice: keepNotice });
-		if (linkNotices.length > 0) return statusSentence({ state: 'link', linkNotices });
+		if (keepNotice !== null) return statusSentence({ state: 'notice', notice: keepNotice }, data.number_format);
+		if (linkNotices.length > 0) return statusSentence({ state: 'link', linkNotices }, data.number_format);
 		if (importing) return 'Inspecting the local Parquet file. Nothing is uploaded.';
 		if (running) return 'Preparing the SQL tables and running the question.';
-		if (costing) return statusSentence({ state: 'costing' });
+		if (costing) return statusSentence({ state: 'costing' }, data.number_format);
 		if (currentAnswer && result?.state === 'ok' && lastRead !== null) {
-			return statusSentence({ state: 'answered', ms: lastMs, read: lastRead });
+			return statusSentence({ state: 'answered', ms: lastMs, read: lastRead }, data.number_format);
 		}
 		if (currentAnswer && result?.state === 'quiet' && lastRead !== null) {
-			return statusSentence({ state: 'quiet', ms: lastMs, read: lastRead });
+			return statusSentence({ state: 'quiet', ms: lastMs, read: lastRead }, data.number_format);
 		}
-		if (currentAnswer && result?.state === 'refused') return statusSentence({ state: 'refused' });
-		if (currentAnswer && result?.state === 'missing') return statusSentence({ state: 'missing', ledger: result.ledger });
-		if (currentAnswer && result?.state === 'unreachable') return statusSentence({ state: result.fault === 'engine' ? 'unreachable-engine' : 'unreachable-files' });
+		if (currentAnswer && result?.state === 'refused') return statusSentence({ state: 'refused' }, data.number_format);
+		if (currentAnswer && result?.state === 'missing') return statusSentence({ state: 'missing', ledger: result.ledger }, data.number_format);
+		if (currentAnswer && result?.state === 'unreachable') return statusSentence({ state: result.fault === 'engine' ? 'unreachable-engine' : 'unreachable-files' }, data.number_format);
 		if (cost.failure?.state === 'missing') return explorerMissingSentence(cost.failure.ledger);
-		if (cost.failure?.state === 'refused') return refusedSentence(cost.failure.because);
+		if (cost.failure?.state === 'refused') return refusedSentence(cost.failure.because, data.number_format);
 		if (cost.failure?.state === 'unreachable') return explorerUnreachableSentence(cost.failure.ledger, cost.failure.at, cost.failure.fault);
 		const refusal = preflight(cost, config.max_files, config.max_fetch_bytes);
-		if (refusal !== null) return refusedSentence(refusal);
+		if (refusal !== null) return refusedSentence(refusal, data.number_format);
 		const locals = imports.filter((table) => cost.locals?.includes(table.alias));
 		const localBytes = locals.reduce((sum, table) => sum + table.bytes, 0);
 		if ((cost.ledgers?.length ?? 0) === 0) {
 			return locals.length > 0
-				? `Run will read ${locals.length} local ${locals.length === 1 ? 'table' : 'tables'}, ${size(localBytes)}. Ledger dates do not filter local rows.`
+				? `Run will read ${formatNumber(locals.length, data.number_format, { exact: true })} local ${locals.length === 1 ? 'table' : 'tables'}, ${size(localBytes, data.number_format)}. Ledger dates do not filter local rows.`
 				: 'Run will evaluate this question without reading tables.';
 		}
 		const empty = emptyLedgerLines();
-		return `${statusSentence({ state: 'idle', files: cost.files - locals.length, bytes: cost.bytes - localBytes, ledgers: cost.ledgers?.length ?? 0, readFrom: cost.readFrom, readTo: cost.readTo })}${locals.length ? ` Also reads ${locals.length} local ${locals.length === 1 ? 'table' : 'tables'}, ${size(localBytes)}, without date filtering.` : ''}${empty ? ` ${empty}` : ''}`;
+		return `${statusSentence({ state: 'idle', files: cost.files - locals.length, bytes: cost.bytes - localBytes, ledgers: cost.ledgers?.length ?? 0, readFrom: cost.readFrom, readTo: cost.readTo }, data.number_format)}${locals.length ? ` Also reads ${formatNumber(locals.length, data.number_format, { exact: true })} local ${locals.length === 1 ? 'table' : 'tables'}, ${size(localBytes, data.number_format)}, without date filtering.` : ''}${empty ? ` ${empty}` : ''}`;
 	}
 	function explorerGapLines(gaps: readonly SpanGap[]) {
 		const catalog = registry;
@@ -808,7 +809,7 @@
 			{:else if result.state === 'unreachable'}
 				<div class="answer-state warn" data-state="unreachable">{explorerUnreachableSentence(result.ledger, result.at, result.fault)}</div>
 			{:else if result.state === 'refused'}
-				<div class="answer-state" data-state="refused">{refusedSentence(result.because)}{#if result.because.kind === 'engine-error'}<pre>{result.because.message}</pre>{/if}</div>
+				<div class="answer-state" data-state="refused">{refusedSentence(result.because, data.number_format)}{#if result.because.kind === 'engine-error'}<pre>{result.because.message}</pre>{/if}</div>
 			{/if}
 		{/key}
 	</div>

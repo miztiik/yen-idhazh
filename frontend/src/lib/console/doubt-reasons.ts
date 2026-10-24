@@ -23,6 +23,7 @@
 import { readoutOf, type Readout } from '../charts/readout';
 import { dayMonth, shortDate } from '../format';
 import { grouped } from '../charts/series';
+import type { NumberFormatConfig } from '../number-format';
 import type { StackSeries } from '../charts/stack-types';
 import type { ChartToken } from '../charts/theme';
 import { countDays, nameSpan } from './span-words';
@@ -181,7 +182,7 @@ export function reasonsDrawn(days: readonly ReasonDay[]): DoubtReason[] {
  * denominator invites a trend that is not there: 45 doubted of 208 published and
  * 45 of 731 are different facts.
  */
-export function reasonColumns(days: readonly ReasonDay[]): Readout {
+export function reasonColumns(days: readonly ReasonDay[], numberFormat: NumberFormatConfig): Readout {
 	return readoutOf({
 		type: 'dateSeries',
 		columns: days.map((day) => shortDate(day.date)),
@@ -190,7 +191,7 @@ export function reasonColumns(days: readonly ReasonDay[]): Readout {
 			swatch: `var(${reason.token})`,
 			values: days.map((day) => day.counts[reason.id] ?? 0),
 			format: (count: number, column: number) =>
-				`${grouped(count)} of ${grouped(days[column]?.items ?? 0)}`
+				`${grouped(count, numberFormat)} of ${grouped(days[column]?.items ?? 0, numberFormat)}`
 		})),
 		notMeasured: 'Nothing was doubted on this day',
 		resting: 'last'
@@ -242,7 +243,11 @@ export function reasonsLabel(windowDays: number): string {
  * the window and what the share means all sit in the same sentence. Null where
  * the window doubted nothing, which the empty state says instead.
  */
-export function reasonHeadline(days: readonly ReasonDay[], windowDays: number): string | null {
+export function reasonHeadline(
+	days: readonly ReasonDay[],
+	windowDays: number,
+	numberFormat: NumberFormatConfig
+): string | null {
 	const totals = reasonTotals(days);
 	if (totals.explained === 0) return null;
 	const top = [...REASONS].sort(
@@ -252,7 +257,7 @@ export function reasonHeadline(days: readonly ReasonDay[], windowDays: number): 
 	const pct = share(count, totals.items);
 	const rough = pct === null ? null : oneIn(pct);
 	const ratio = rough === null ? '' : `, or about ${rough} published`;
-	return `The reason given most often is "${top.label}": ${grouped(count)} summaries in ${nameSpan(windowDays)}${ratio}.`;
+	return `The reason given most often is "${top.label}": ${grouped(count, numberFormat)} summaries in ${nameSpan(windowDays)}${ratio}.`;
 }
 
 /** The days that carry a band and no reason, said as a sentence.
@@ -260,12 +265,16 @@ export function reasonHeadline(days: readonly ReasonDay[], windowDays: number): 
  * Null where every doubtful summary in the window names its own reason, which is
  * every day this pipeline has published since the field was added.
  */
-export function unexplainedNote(days: readonly ReasonDay[], windowDays: number): string | null {
+export function unexplainedNote(
+	days: readonly ReasonDay[],
+	windowDays: number,
+	numberFormat: NumberFormatConfig
+): string | null {
 	const totals = reasonTotals(days);
 	if (totals.unexplained === 0) return null;
 	const doubted = totals.explained + totals.unexplained;
 	const dayWord = totals.unexplainedDays === 1 ? 'day' : 'days';
-	return `${grouped(totals.unexplained)} of the ${grouped(doubted)} doubted summaries in ${nameSpan(windowDays)} have no reason written down, on ${totals.unexplainedDays} ${dayWord}. Those columns are short by that much: the reason is missing from our record, not from the summary.`;
+	return `${grouped(totals.unexplained, numberFormat)} of the ${grouped(doubted, numberFormat)} doubted summaries in ${nameSpan(windowDays)} have no reason written down, on ${totals.unexplainedDays} ${dayWord}. Those columns are short by that much: the reason is missing from our record, not from the summary.`;
 }
 
 /** The reasons the window never saw, said as a sentence.

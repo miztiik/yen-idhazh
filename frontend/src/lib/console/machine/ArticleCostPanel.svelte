@@ -10,7 +10,9 @@
 	 */
 	import Panel from '$lib/components/Panel.svelte';
 	import { seconds } from '$lib/charts/machine';
-	import { grouped } from '$lib/charts/series';
+	import { grouped as formatGrouped } from '$lib/charts/series';
+	import { formatNumber } from '$lib/number-format';
+	import { useNumberFormat } from '$lib/number-format-context';
 	import {
 		costTrack,
 		runnerHourSeconds,
@@ -31,6 +33,8 @@
 		windowDays: number;
 		chart: ChartConfig;
 	} = $props();
+	const numberFormat = useNumberFormat();
+	const grouped = (value: number) => formatGrouped(value, numberFormat);
 
 	/** Mebibytes, signed, because an article that gives memory back is a reading
 	 * and printing it unsigned would turn a fall into a rise. */
@@ -38,7 +42,7 @@
 		if (bytes === null) return '-';
 		const value = bytes / 1024 / 1024;
 		const sign = value > 0 ? '+' : value < 0 ? '-' : '';
-		return `${sign}${grouped(Number(Math.abs(value).toFixed(1)))} MiB`;
+		return `${sign}${formatNumber(Math.abs(value), numberFormat, { si: false })} MiB`;
 	}
 
 	/** How many articles a runner-hour buys at the middle figure.
@@ -50,7 +54,7 @@
 	 */
 	function fits(hour: number, each: number): string {
 		const many = hour / each;
-		return many < 10 ? many.toFixed(1) : grouped(Math.round(many));
+		return formatNumber(many, numberFormat);
 	}
 
 	const processor = $derived(cost.processorSeconds);
@@ -82,7 +86,7 @@
 		<p class="lede" data-lede
 			data-model-rule-name="machine-article-cost"
 			data-model-rule="no" data-model-rule-none="These are per-article prices, not a comparison between days.">
-			{processor.mid === null ? 'No processor price recorded.' : `${seconds(processor.mid)} of processor time for the middle article.`}
+			{processor.mid === null ? 'No processor price recorded.' : `${seconds(processor.mid, numberFormat)} of processor time for the middle article.`}
 		</p>
 		<p data-comparison="The middle article against the range most articles fall in">The middle article against the range most articles fall in.</p>
 		<ul class="costs" data-chart-type="rangeTrack" data-panel-question="is it working"
@@ -112,7 +116,7 @@
 						{/if}
 					</p>
 				{:else}
-					<p class="value" data-article-cost-value="processor">{seconds(processor.mid)}</p>
+					<p class="value" data-article-cost-value="processor">{seconds(processor.mid, numberFormat)}</p>
 					{#if tracks.processor}
 						<div
 							class="track"
@@ -132,8 +136,9 @@
 					<p class="reach">
 						The middle article of {grouped(processor.from)}, which is the ones a machine record
 						could be matched to out of {grouped(processor.outOf)} that recorded a busy share and a
-						clock; the cheapest took {seconds(processor.low)} and the dearest {seconds(
-							processor.high
+						clock; the cheapest took {seconds(processor.low, numberFormat)} and the dearest {seconds(
+							processor.high,
+							numberFormat
 						)}.
 					</p>
 					{#if hour !== null && processor.mid > 0}
@@ -217,7 +222,7 @@
 						its reply.
 					</p>
 				{:else}
-					<p class="value" data-article-cost-value="model">{seconds(model.mid)}</p>
+					<p class="value" data-article-cost-value="model">{seconds(model.mid, numberFormat)}</p>
 					{#if tracks.model}
 						<div
 							class="track"
@@ -234,8 +239,8 @@
 						</div>
 					{/if}
 					<p class="reach">
-						The middle article of {grouped(model.from)}; the quickest took {seconds(model.low)} and the
-						slowest {seconds(model.high)}.
+						The middle article of {grouped(model.from)}; the quickest took {seconds(model.low, numberFormat)} and the
+						slowest {seconds(model.high, numberFormat)}.
 					</p>
 					<p class="against">
 						Reading the prompt and writing the reply, as the model server itself timed them and added

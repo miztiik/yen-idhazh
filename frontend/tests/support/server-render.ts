@@ -17,6 +17,24 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { compile, preprocess } from 'svelte/compiler';
+import { render as renderComponent } from 'svelte/server';
+import type { Component } from 'svelte';
+import { NUMBER_FORMAT_CONTEXT } from '../../src/lib/number-format-context';
+import { numberFormatConfig } from '../../src/lib/server/config';
+
+/** Supply the same configured context as the page layout to standalone renders. */
+export function renderConfigured(
+	component: Component<Record<string, unknown>>,
+	options: { props: Record<string, unknown>; context?: Map<unknown, unknown> }
+) {
+	return renderComponent(component, {
+		...options,
+		context: new Map([
+			[NUMBER_FORMAT_CONTEXT, numberFormatConfig()],
+			...(options?.context ?? [])
+		])
+	});
+}
 
 const frontend = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 

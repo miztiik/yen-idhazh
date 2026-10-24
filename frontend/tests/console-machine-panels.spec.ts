@@ -4,6 +4,7 @@ import { WATCHED_FLAG, type HostFingerprint } from '../src/lib/console/machine/h
 import { machineCounters, type MachineLimits, type MachineRun } from '../src/lib/console/machine/counters';
 import { copySpeedSentence, clockSentence, machineCards, uptimeSentence } from '../src/lib/charts/machine-cards';
 import { ledgers, plan, type ShardReading } from './support/machine-rows';
+import { numberFormat } from './support/number-format';
 /** The flags a card has to draw a chip for.
  *
  * The one copy, bound to the Python enum by
@@ -134,6 +135,7 @@ test.describe('the machines this run drew', () => {
 			{
 				watchedFlags: WATCHED,
 				colour: { stops: 4, floor: 0.35 },
+				numberFormat,
 				recording: true,
 				cacheMargin: 2
 			}
@@ -149,18 +151,18 @@ test.describe('the machines this run drew', () => {
 		expect(full?.l3Bar.state).toBe('drawn');
 		expect(empty?.l3Bar.state).toBe('drawn');
 		expect((full?.l3Bar.fraction ?? 0) / (empty?.l3Bar.fraction ?? 1)).toBeCloseTo(2, 4);
-		expect(copySpeedSentence(full!)).toBe(
-			'12.0 GiB/s, over a 256 MiB buffer against 64 MiB of L3 - 4.00 times it.'
+		expect(copySpeedSentence(full!, numberFormat)).toBe(
+			'12 GiB/s, over a 256 MiB buffer against 64 MiB of L3 - 4 times it.'
 		);
-		expect(copySpeedSentence(empty!)).toBe(
-			'No copy speed: the probe used a 32 MiB buffer against 32 MiB of L3, 1.00 times it, and a reading has to clear 2 times to be sure the copy left the cache.'
+		expect(copySpeedSentence(empty!, numberFormat)).toBe(
+			'No copy speed: the probe used a 32 MiB buffer against 32 MiB of L3, 1 times it, and a reading has to clear 2 times to be sure the copy left the cache.'
 		);
 		expect(clockSentence(full!)).toBe(
 			'Observed sample average 2750 MHz; reported hardware maximum unknown. The sample is not a sustained rate.'
 		);
 		expect(clockSentence(empty!)).toBe('Observed and reported maximum frequencies are unknown.');
-		expect(uptimeSentence(full!)).toBe('Up 2 m 5 s when we measured it.');
-		expect(uptimeSentence(empty!)).toBe('Uptime was not recorded on this job.');
+		expect(uptimeSentence(full!, numberFormat)).toBe('Up 2 m 5 s when we measured it.');
+		expect(uptimeSentence(empty!, numberFormat)).toBe('Uptime was not recorded on this job.');
 	});
 
 });
@@ -200,6 +202,7 @@ test.describe('the machine record names which state it is in', () => {
         ], {
             watchedFlags: WATCHED,
             colour: { stops: 4, floor: 0.35 },
+            numberFormat,
             recording: true,
             cacheMargin: 2
         });

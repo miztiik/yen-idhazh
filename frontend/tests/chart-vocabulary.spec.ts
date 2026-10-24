@@ -2,28 +2,36 @@ import { expect, test } from '@playwright/test';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { render } from 'svelte/server';
+import { renderConfigured as render } from './support/server-render';
 import ts from 'typescript';
 
 import { AXIS_LABEL_GAP_PX, AXIS_LABEL_PX, frame } from '../src/lib/charts/frame';
 import { UNRECORDED_STOP } from '../src/lib/charts/machine-colour';
 import { readoutOf } from '../src/lib/charts/readout';
-import { valueAxis } from '../src/lib/charts/d3/axis';
-import { dateSeries, type SeriesInput } from '../src/lib/charts/d3/dateSeries';
-import { distribution, distributionShortfall } from '../src/lib/charts/d3/distribution';
-import { emptyState, tooFewSentence } from '../src/lib/charts/d3/empty';
-import { flow, type FlowStageInput } from '../src/lib/charts/d3/flow';
+import { type SeriesInput } from '../src/lib/charts/d3/dateSeries';
+import { emptyState } from '../src/lib/charts/d3/empty';
+import { type FlowStageInput } from '../src/lib/charts/d3/flow';
 import { prefersReducedMotion, REDUCED_MOTION_QUERY, transition } from '../src/lib/charts/d3/motion';
 import { absentHatch, orderedRamp, RESERVED_GREY } from '../src/lib/charts/d3/ordered-colour';
 import { overlapTimeline } from '../src/lib/charts/d3/overlapTimeline';
 import { paired, pairedShortfall, type PairedInput } from '../src/lib/charts/d3/paired';
-import { pairedScatter, pairedScatterShortfall, type ScatterInput } from '../src/lib/charts/d3/pairedScatter';
+import { type ScatterInput } from '../src/lib/charts/d3/pairedScatter';
 import { partsOfOne } from '../src/lib/charts/d3/partsOfOne';
 import { rankedList } from '../src/lib/charts/d3/rankedList';
 import { bandScale, linearScale, timeScale } from '../src/lib/charts/d3/scale';
 import { tileStrip } from '../src/lib/charts/d3/tileStrip';
 import { CHART_VOCABULARY_PAGE } from '../scripts/doc-test-inputs';
 import { inZone } from './support/in-zone';
+import {
+	dateSeries,
+	distribution,
+	distributionShortfall,
+	flow,
+	pairedScatter,
+	pairedScatterShortfall,
+	tooFewSentence,
+	valueAxis
+} from './support/number-format';
 import { serverCompiler } from './support/server-render';
 import { drawnSourceFiles, readSource, resolveSource, scriptTree } from './support/console-sources';
 
@@ -389,7 +397,7 @@ test.describe('the house style', () => {
 		const axis = valueAxis([-0.4, 1.2], box, { along: 'y', ticks: 4 });
 		expect(axis.domain[0]).toBeLessThanOrEqual(-0.4);
 		const texts = axis.ticks.map((tick) => tick.text).filter((text) => text !== '');
-		expect(texts.every((text) => /^-?[\d,]+\.\d$/.test(text)), texts.join(' ')).toBe(true);
+		expect(texts.every((text) => /^-?[\d,]+(?:\.\d+)?$/.test(text)), texts.join(' ')).toBe(true);
 		expect(texts.join('')).not.toMatch(/[^\x20-\x7e]/);
 		const positive = valueAxis([3, 9], box, { along: 'x', ticks: 4 });
 		expect(positive.domain[0]).toBe(0);
