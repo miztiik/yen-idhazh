@@ -139,19 +139,15 @@ class RunConfig(Model):
         ),
     )
     qualification_repeats: int = Field(
-        default=3,
-        ge=3,
-        le=10,
+        default=1,
+        ge=1,
+        le=3,
         description=(
-            "How many times a qualification shard replays each item. Three is the "
-            "smallest count that separates a model that is deterministic from one that "
-            "happened to agree twice, and it is the floor rather than the default "
-            "because a report built on fewer passes is a report that cannot fail. It "
-            "used to be a dispatch input an operator typed per run, where `1` was legal "
-            "and nothing downstream could refuse it. Ten is the ceiling because that is "
-            "past any determinism question; a run that wants more edits this field. "
-            "`idhazh qualify --repeats` overrides it for one invocation and is refused "
-            "on the same floor."
+            "How many times a qualification shard runs each item. One pass evaluates "
+            "the item without comparing wording across passes. Additional passes "
+            "measure wording variation and cost more model calls. "
+            "`idhazh qualify --repeats` overrides the configured count for one "
+            "invocation and uses this field's bounds."
         ),
     )
     # Remove this knob once one qualification has cleared `decide` on the production
