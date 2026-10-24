@@ -1,12 +1,13 @@
-"""How long may one sharded job take, read from the one file that says so?
+"""How long may one job take, read from the one file that says so?
 
 A value Actions cannot read as a number leaves the job with no bound at all, so
-it is held to a whole positive count here. Two callers ask: the work shard of a
-digest run, and a judging shard of a council night. One reader and one refusal,
+it is held to a whole positive count here. Callers ask for digest work shards,
+council judging shards, and council planning and collection jobs. One reader and one refusal,
 because a second utility would be a second answer to what a bound is.
 
 The key is a dotted path within the named file. The work shard's bound sits in
-`run` in `idhazh.json`; the council's sits in `llm_council.json`. What is printed is the
+`run` in `idhazh.json`; council shard and job deadlines sit in `llm_council.json`
+and `llm_council_job_timeouts.json`, respectively. What is printed is the
 path's last segment: an Actions output name cannot carry a dot, and the leaf is
 the name the workflow reads it back by.
 """
