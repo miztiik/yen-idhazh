@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import functools
 import hashlib
-import os
 import shutil
 import signal
 import sys
