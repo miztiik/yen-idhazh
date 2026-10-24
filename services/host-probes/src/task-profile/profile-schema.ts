@@ -71,6 +71,22 @@ export const TaskProfileSchema = z.strictObject({
     || value.samples.at(-1)?.elapsed_ms !== value.elapsed_ms) {
     context.addIssue({ code: "custom", path: ["samples"], message: "must retain the actual closing observation and whole-task count" });
   }
+  if (!value.config.enabled || value.full_window_count >= value.sample_count
+    || (value.samples.length === value.sample_count && value.full_window_count !== value.samples.filter(sample =>
+      sample.phase !== "opening" && sample.cpu_window.full_window && sample.cpu_window.cpu.reason === null).length)) {
+    context.addIssue({ code: "custom", path: ["full_window_count"], message: "must describe actual enabled CPU observations" });
+  }
+  if (!value.config.machine_memory_enabled && (value.machine_available_min_kb !== null
+    || value.machine_major_faults_delta !== null || value.samples.some(sample =>
+      Object.values(sample.memory_kb).some(reading => reading !== null) || sample.vmstat_major_faults !== null))) {
+    context.addIssue({ code: "custom", path: ["machine_available_min_kb"], message: "disabled machine RAM must have no measurements" });
+  }
+  if (!value.config.memory_enabled && (Object.values(value.processes).some(process =>
+    process.sampled_rss_max_kb !== null || process.major_faults_delta !== null)
+    || value.samples.some(sample => Object.values(sample.processes).some(process =>
+      Object.values(process.memory_kb).some(reading => reading !== null) || process.major_faults !== null)))) {
+    context.addIssue({ code: "custom", path: ["processes"], message: "disabled PID RAM must have no measurements" });
+  }
 });
 export const CollectorInputSchema = z.strictObject({
   identity: TaskIdentitySchema, config: TaskProfileConfigSchema,

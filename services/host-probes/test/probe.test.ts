@@ -127,7 +127,7 @@ test("periodic file sampling uses closing minus opening counters and closes with
   expect(unchanged.unavailable.cpu).toBe("no_ticks");
 
   const config = await loadConfig();
-  config.task_profile = { ...config.task_profile, enabled: true, memory_enabled: true,
+  config.task_profile = { ...config.task_profile, enabled: true, memory_enabled: true, machine_memory_enabled: true,
     cpu_window_ms: 30, poll_interval_ms: 10, max_retained_samples: 8 };
   const reports: TaskProfile[] = [];
   const options = {
@@ -174,6 +174,11 @@ test("periodic file sampling uses closing minus opening counters and closes with
   expect(retained.sample_count).toBeGreaterThan(config.task_profile.max_retained_samples);
   expect(retained.samples).toHaveLength(config.task_profile.max_retained_samples);
   expect(bounded.close("error")).toBe(retained);
+  const machineOnly = new TaskCollector(CollectorInputSchema.parse({
+    ...collectorInput, config: { ...collectorInput.config, memory_enabled: false },
+  })).close("success");
+  expect(machineOnly.machine_available_min_kb).toBe(8192000);
+  expect(machineOnly.processes.worker.closing.unavailable["memory_kb.rss"]).toBe("configured_off");
   await Bun.write(join(directory, "stat"), await fixture("runtime/2026-08-30-probe-proc-stat-at-start.txt"));
   const reset = new TaskCollector(CollectorInputSchema.parse({
     ...collectorInput, config: {
@@ -263,6 +268,23 @@ test("missing and oversized proc files are explicit while valid siblings survive
   const identity = { pipeline_name: "off", task_name: "off", run_id: "off", request_id: randomUUID(), correlation_id: randomUUID() };
   await Bun.write(join(directory, "stat"), await fixture("runtime/2026-08-30-probe-proc-stat-at-start.txt"));
   await mkdir(join(directory, "meminfo"));
+  await rm(join(directory, "vmstat"));
+  await mkdir(join(directory, "vmstat"));
+  let processOnly: TaskProfile | undefined;
+  await profileTask({
+    config: { ...config, task_profile: { ...config.task_profile, enabled: true, memory_enabled: true, machine_memory_enabled: false } },
+    context, report: profile => { processOnly = profile; },
+  }, identity, () => {
+    copyFileSync(fileURLToPath(new URL("runtime/2026-08-30-probe-proc-stat-at-end.txt", fixtureRoot)), join(directory, "stat"));
+    return "Actual CPU and PID RAM without machine reads";
+  });
+  expect(processOnly?.cpu.value?.user).toBeCloseTo(53 / 7991 * 100, 10);
+  expect(processOnly?.processes.worker.closing.memory_kb.rss).toBe(600);
+  expect(processOnly?.processes.worker.sampled_rss_max_kb).toBe(600);
+  expect(processOnly?.machine_available_min_kb).toBeNull();
+  expect(processOnly?.machine_major_faults_delta).toBeNull();
+  expect(processOnly?.samples.at(-1)?.unavailable["memory_kb.total"]).toBe("configured_off");
+  expect(processOnly?.samples.at(-1)?.unavailable.vmstat_major_faults).toBe("configured_off");
   await rm(join(directory, String(process.pid), "stat"));
   await mkdir(join(directory, String(process.pid), "stat"));
   let cpuOnly: TaskProfile | undefined;
@@ -290,7 +312,10 @@ test("configuration rejects unknown fields, missing fields and invalid controls 
   expect(ProbeConfigSchema.safeParse(config).success).toBe(true);
   expect(config.task_profile.enabled).toBe(false);
   expect(config.task_profile.memory_enabled).toBe(false);
+  expect(config.task_profile.machine_memory_enabled).toBe(false);
+  expect(config.task_profile.poll_interval_ms).toBe(1000);
   for (const [field, value] of [
+    ["memory_enabled", "true"], ["machine_memory_enabled", "true"],
     ["cpu_window_ms", 0], ["poll_interval_ms", 0], ["max_retained_samples", 1], ["lifecycle_timeout_ms", 0],
   ] as const) expect(ProbeConfigSchema.safeParse({
     ...config, task_profile: { ...config.task_profile, [field]: value },

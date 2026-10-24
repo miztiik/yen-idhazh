@@ -19,16 +19,17 @@ import { EXTRACTOR_VERSION, SANITIZER_FINGERPRINT } from "../../services/feed-in
 import { DispatchContract as nativeDispatchContract } from "../../services/feed-ingest-plan/src/metrics/audit-contracts";
 import { readLedgerParquet } from "../../services/feed-ingest-plan/src/read-ledger-history/read-parquet";
 import { verifyParquetFiles } from "./feed-ingest-plan-verification";
-import { z } from "../../services/host-probes/node_modules/zod";
 import { loadConfig as loadProbeConfig, ProbeConfigSchema } from "../../services/host-probes/src/config";
+import type { ProbeConfig } from "../../services/host-probes/src/config";
 import { TaskProfileSchema } from "../../services/host-probes/src/task-profile/profile-schema";
 import type { TaskProfile } from "../../services/host-probes/src/task-profile/profile-schema";
+import { DocumentProfilingSchema, StageProfileProofSchema } from "./feed-ingest-plan-profile-schema";
 
-const DocumentProfilingSchema = z.strictObject({
-  profiles: z.array(TaskProfileSchema).max(2),
-  actual_work_count: z.int().nonnegative().nullable(),
-  after_checks_count: z.int().nonnegative().nullable(),
-});
+export function configureDocumentProfiling(config: ProbeConfig, machineMemoryEnabled: boolean): ProbeConfig {
+  return ProbeConfigSchema.parse({ ...config, task_profile: {
+    ...config.task_profile, enabled: true, memory_enabled: true, machine_memory_enabled: machineMemoryEnabled,
+  } });
+}
 
 class ProofUnavailable extends Error {
   constructor(readonly reason: "NO_SUCCESSFUL_CONFIGURED_FEED" | "INVALID_PLANNING_COMPLETION"
@@ -167,12 +168,22 @@ type Call = {
 export async function verifyLiveDocumentHttp(
   inputs: PlanInputs, runtime: PlanRuntime, progress: readonly ProgressRecord[],
   runnerTemp: string, artifactRoot: string, summary: ReturnType<typeof summarizePlan>,
+  machineMemoryEnabled: boolean,
 ) {
+  const profilingConfig = configureDocumentProfiling(await loadProbeConfig(), machineMemoryEnabled);
+  if (summary.planning_completion?.attempt !== inputs.settings.run.attempt) {
+    throw new ProofUnavailable("INVALID_PLANNING_COMPLETION");
+  }
   const evidence = {
     scope: "live_configured_feed_and_selected_article", status: "running", stage: "select_source",
-    git_sha: runtime.git_sha, documents: [] as object[], error: null as string | null, reason: null as string | null,
+    git_sha: runtime.git_sha, run_id: summary.run_id, attempt: inputs.settings.run.attempt,
+    correlation_id: summary.correlation_id, task_profile: profilingConfig.task_profile,
+    documents: [] as object[], error: null as string | null, reason: null as string | null,
   };
-  const persist = () => writeFile(join(artifactRoot, "stage-api-proof.json"), JSON.stringify(evidence));
+  const persist = () => {
+    StageProfileProofSchema.parse(evidence);
+    return writeFile(join(artifactRoot, "stage-api-proof.json"), JSON.stringify(evidence));
+  };
   await persist();
   try {
     const completed = progress.find(event => event.eventType === "FEED_FETCH_COMPLETED"
@@ -213,7 +224,7 @@ export async function verifyLiveDocumentHttp(
     evidence.documents.push(proof);
     const persist = () => {
       evidence.stage = `${target.kind}:${proof.stage}`;
-      DocumentProfilingSchema.parse(proof.profiling);
+      StageProfileProofSchema.parse(evidence);
       return writeFile(join(artifactRoot, "stage-api-proof.json"), JSON.stringify(evidence));
     };
     let privateRoot: string | undefined;
@@ -230,9 +241,6 @@ export async function verifyLiveDocumentHttp(
       privateRoot = outputRoot;
       const counts = { dns: 0, http: 0 };
       const apiInputs = { ...inputs, outputRoot };
-      const probeConfig = await loadProbeConfig();
-      const profilingConfig = ProbeConfigSchema.parse({ ...probeConfig,
-        task_profile: { ...probeConfig.task_profile, enabled: true, memory_enabled: true } });
       const apiRuntime: PlanRuntime = {
         ...runtime,
         task_profiling: {
@@ -296,8 +304,10 @@ export async function verifyLiveDocumentHttp(
           || profile.processes.worker.closing.start_ticks === null
           || profile.processes.worker.closing.memory_kb.rss === null
           || profile.processes.worker.sampled_rss_max_kb === null
-          || profile.machine_available_min_kb === null
-          || profile.samples.at(-1)?.memory_kb.total === null
+          || (machineMemoryEnabled && (profile.machine_available_min_kb === null
+            || profile.samples.at(-1)?.memory_kb.total === null))
+          || (!machineMemoryEnabled && (profile.machine_available_min_kb !== null
+            || profile.samples.at(-1)?.unavailable["memory_kb.total"] !== "configured_off"))
           || (profile.cpu.reason !== null && profile.cpu.reason !== "no_ticks")) {
           throw new Error(`${operation}: live task profiling evidence is unavailable or mismatched`);
         }

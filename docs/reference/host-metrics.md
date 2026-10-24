@@ -265,14 +265,19 @@ close the instrument. A cancelled caller does not detach unfinished work: the
 wrapper closes when that work settles. Unexpected collector or report failures
 are errors, not successful measurements.
 
-`config/host-probes.json` owns the independent task controls. Both
-`task_profile.enabled` and `task_profile.memory_enabled` default to false.
-Their declaring schema states their retirement conditions. Whole off starts no
-thread and reads no host or process file; memory off reads CPU only.
-`cpu_window_ms` defaults to 1000 milliseconds and `poll_interval_ms` to 100
-milliseconds. Neither ends the task measurement. The former sets the rolling
-CPU window; the latter requests the polling cadence. Actual intervals can be
-longer when collection or scheduling is slow.
+`config/host-probes.json` owns three independent task controls:
+`task_profile.enabled` starts the instrument, `memory_enabled` permits PID RAM,
+and `machine_memory_enabled` permits whole-machine RAM and vmstat reads.
+All three default to false. Their declaring schema states their retirement
+conditions. Whole off starts no thread and reads no host or process file.
+Machine RAM off performs no task meminfo/vmstat reads; CPU and separately
+enabled PID RAM still work. PID RAM off does not disable machine RAM.
+`cpu_window_ms` and `poll_interval_ms` both default to 1000 milliseconds.
+Neither ends the task measurement: the worker observes the entire task.
+The former sets the rolling CPU window; the latter requests one poll each
+second. They remain independently configurable. Actual intervals can be
+longer when collection or scheduling is slow; fast work can finish before
+its first periodic poll and still has opening and closing observations.
 `max_retained_samples` defaults to 128 observations and must hold the window's
 polls plus two endpoints. Both raw CPU history and returned observations stay
 bounded. Whole-task counts, extrema and endpoint differences survive eviction.
@@ -287,10 +292,10 @@ percentages across measured rolling windows. No wait is added to a task to
 manufacture a reading. Observation instants use the real UTC clock and elapsed
 time uses a monotonic clock, independent of a caller's frozen planning clock.
 
-With memory enabled, machine total, free and available RAM use the existing
-probe. The result also contains sampled minimum available RAM and the endpoint
-difference in machine major page faults. Process RAM names the actual calling
-PID. An optional additional server requires an operator-supplied PID and its
+With machine RAM enabled, total, free and available RAM use the existing probe.
+The result also contains sampled minimum available RAM and the endpoint
+difference in machine major page faults. Independently enabled process RAM
+names the actual calling PID. An optional additional server requires an operator-supplied PID and its
 kernel start ticks; there is no process search. Start ticks are checked before
 and after each status read. Exit, PID reuse and missing fields have explicit
 reasons and null values. RSS is resident RAM; anonymous RSS is resident
@@ -309,6 +314,24 @@ separate recorded CPU-bound work, live document work, the real RAM HTTP
 endpoint and the existing optional copy benchmark. Copying measures median
 read-plus-write throughput with two cache-sized buffers; it does not measure
 L3 hit or miss counts and runs outside fetch/parse CPU windows.
+
+The isolated workflow's `profile_machine_memory` checkbox selects only task
+machine RAM and defaults to false. Its separate standalone RAM HTTP sample and
+copy OFF/ON proof still run; they are not task measurements. Optional reporting
+reads the workflow-written `stage-api-proof.json` and `resource-proof.json`.
+Tables H and I show document fetch/parse CPU, elapsed time, window and poll
+controls, observed counts, guarded PID RAM and optional machine RAM. Table J
+keeps standalone RAM, host context, L3 and cache-derived copy buffers/rates
+separate. All values retain their units and unavailable reasons. No sample
+dump enters the summary or notices.
+
+The report validates the executed revision, run, attempt, correlation and
+document request identities before showing measurements. Replay labels also
+require matching response and journal digests and unchanged profile counts.
+Missing older artifacts mean not recorded, not zero or successful collection.
+Invalid or foreign evidence fails the existing optional report step explicitly;
+reporting off reads no evidence and writes no summary or annotations. These
+transient inputs add no native host fields, durable request fields or ledger.
 
 ## Controls and precedence
 
