@@ -44,9 +44,10 @@ STATE: Final = Path("state")
 #: Computed from `5a9c6f32f:backend/idhazh/ledger/__init__.py` by calling those
 #: functions, so a row here is the old answer rather than a reading of it.
 #:
-#: One row is not the old answer: `item-health-summary` was
-#: `telemetry-aggregate`, renamed to say what it holds while it had no
-#: single committed file - so the old address held nothing to move.
+#: Two rows are not the old answer, and the difference is only their first
+#: segment. `candidate-models` was `validation` and `item-health-summary` was
+#: `telemetry-aggregate`, renamed to say what they hold while neither had a
+#: single committed file - so the old addresses held nothing to move.
 #:
 #: Two folders are not the old module's answer either, because it built no
 #: folder for a ledger filed by month or by stamp. Each is the folder its callers
@@ -74,6 +75,11 @@ AT_THE_BASE: Final[dict[str, tuple[str | None, str | None, str | None]]] = {
         "state/scores/2026/09/18",
         "state/scores/2026/09/18",
         "state/scores",
+    ),
+    "CANDIDATE_MODELS": (
+        "state/candidate-models/2026/09/18",
+        "state/candidate-models/2026/09/18",
+        "state/candidate-models",
     ),
     "ITEM_HEALTH_SUMMARY": (
         "state/item-health-summary/2026-09.csv",
@@ -214,6 +220,12 @@ def without(*names: str) -> list[dict[str, Any]]:
 def test_the_committed_registry_loads_and_names_each_ledger() -> None:
     """The file the build reads passes the registry's own ledger checks."""
     LedgersConfig.from_json(REGISTRY.read_text(encoding="utf-8"))
+
+
+def test_candidate_model_verdicts_are_retired_and_not_published() -> None:
+    family = a_family(LedgerName.CANDIDATE_MODELS.value)
+    assert family["lifecycle_status"] == "retired"
+    assert family["ledgers"][0]["publish_to_data_explorer"] is False
 
 
 def test_explorer_catalog_derives_eligible_names_from_registry_order() -> None:
@@ -509,6 +521,7 @@ def test_the_claimed_roots_differ_from_the_base_only_by_the_names_given() -> Non
     assert ledger.claimed_roots() - CLAIMED_AT_THE_BASE == {
         "feed-ingest-plan",
         "feed-retirements",
+        "candidate-models",
         "council-run-records",
         "item-health-summary",
         "summary-quality-evals",

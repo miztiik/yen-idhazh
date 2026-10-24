@@ -372,6 +372,13 @@ rows during packing would remove the only complete answer before the later
 reader can verify completion. The six planning ledgers therefore keep each
 attempt until that reader selects one.
 
+**Candidate-model verdicts are retained but no longer published.** Removing
+the validation workflow removes their writer and compaction task. The ledger
+family stays registered as retired so its persisted name and path remain
+recognisable, while explicit false consent keeps it out of the Data explorer.
+This preserves the shared ledger vocabulary without advertising an empty
+ledger or changing the envelope contract.
+
 ## See also
 
 - [state-ledgers.md](state-ledgers.md) - what each ledger answers, and why it files at the grain it does.
