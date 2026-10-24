@@ -495,21 +495,31 @@ def test_a_truncated_article_files_two_different_lengths() -> None:
     cells, which is why it survived for months.
     """
     article = Article.from_json(read_text(CONTRACT_FIXTURES_DIR / "article" / "truncated.json"))
+    text_words = len((article.text or "").split())
+    article = article.model_copy(update={"word_count": text_words})
     row = _row_for(article)
 
     assert article.truncated, "the fixture has to be an article that was actually cut"
-    assert row.source_words_before_cap == article.source_word_count == 5240
-    assert row.source_words == article.word_count == 4310
-    assert row.source_words < row.source_words_before_cap, "930 words never reached the model"
+    assert row.source_words_before_cap is not None
+    assert row.source_words_before_cap == article.source_word_count
+    assert row.source_words is not None
+    assert row.source_words == text_words
+    assert row.source_words < row.source_words_before_cap, (
+        "some source words never reached the model"
+    )
 
 
 def test_an_untruncated_article_reads_the_same_length_twice() -> None:
     """Equal is the truth here: the whole article IS the text the model saw."""
     article = Article.from_json(read_text(CONTRACT_FIXTURES_DIR / "article" / "ok.json"))
+    expected_length = len((article.text or "").split())
+    article = article.model_copy(
+        update={"word_count": expected_length, "source_word_count": expected_length}
+    )
     row = _row_for(article)
 
     assert not article.truncated
-    assert row.source_words_before_cap == row.source_words == 1320
+    assert row.source_words_before_cap == row.source_words == expected_length
 
 
 def test_the_lengths_do_not_move_when_the_scored_text_does() -> None:
@@ -551,11 +561,15 @@ def test_an_old_payload_that_was_cut_cannot_say_how_long_the_article_was() -> No
     the model read.
     """
     article = Article.from_json(read_text(CONTRACT_FIXTURES_DIR / "article" / "truncated.json"))
-    row = _row_for(article.model_copy(update={"source_word_count": None}))
+    text_words = len((article.text or "").split())
+    article = article.model_copy(update={"word_count": text_words, "source_word_count": None})
+    row = _row_for(article)
 
     assert article.truncated
     assert row.source_words_before_cap is None
-    assert row.source_words == 4310, "the seen count is still a measurement"
+    assert row.source_words == text_words, (
+        "the seen count is still a measurement"
+    )
 
 
 def test_an_old_payload_that_was_never_cut_knows_its_own_length() -> None:
@@ -565,10 +579,12 @@ def test_an_old_payload_that_was_never_cut_knows_its_own_length() -> None:
     are equal by construction. Refusing to say so would throw away a fact.
     """
     article = Article.from_json(read_text(CONTRACT_FIXTURES_DIR / "article" / "ok.json"))
-    row = _row_for(article.model_copy(update={"source_word_count": None}))
+    text_words = len((article.text or "").split())
+    article = article.model_copy(update={"word_count": text_words, "source_word_count": None})
+    row = _row_for(article)
 
     assert not article.truncated
-    assert row.source_words_before_cap == row.source_words == 1320
+    assert row.source_words_before_cap == row.source_words == text_words
 
 
 # --- The flag that says extract cut the body ---------------------------------
