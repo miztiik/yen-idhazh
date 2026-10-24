@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { loadConfig } from "../../../services/host-probes/src/config";
 import { CollectorInputSchema } from "../../../services/host-probes/src/task-profile/profile-schema";
 import { TaskCollector } from "../../../services/host-probes/src/task-profile/task-collector";
+import { parseClockTicks } from "../../../services/host-probes/src/task-profile/clock-ticks";
 import { sampleHost } from "../../../services/host-probes/src/probe/sample-host";
 import { collectFingerprint } from "../../../services/host-fingerprints/src/collect-fingerprint";
 import { fixture as hostFixture } from "../../../services/host-fingerprints/test/fixture";
@@ -45,15 +46,21 @@ export async function recordProfileEvidence(
     const calls: StageProfileProof["documents"][number]["calls"] = [];
     for (const operation of ["fetch", "parse"] as const) {
       copyFileSync(start, join(directory, "stat"));
+      await Bun.write(join(directory, String(process.pid), "stat"), processInput.stat.replace("4242 ", `${process.pid} `));
       const collector = new TaskCollector(CollectorInputSchema.parse({
         identity: { pipeline_name: "feed-ingest-plan", task_name: operation,
           run_id: identity.run_id, correlation_id: identity.correlation_id, request_id: requests[operation].request_id },
         config: config.task_profile, max_proc_bytes: config.max_proc_bytes,
-        worker_pid: process.pid, server: null, context: { platform: "linux", procRoot: directory },
+        worker_pid: process.pid, target: null, clock_ticks_per_second: parseClockTicks(processInput.clock_ticks),
+        expires_after_ms: null, server: null, context: { platform: "linux", procRoot: directory },
       }));
       const input = processInput.status.repeat(128);
       for (let repeat = 0; repeat < 512; repeat++) digest(input);
-      if (options.withTicks !== false) copyFileSync(end, join(directory, "stat"));
+      if (options.withTicks !== false) {
+        copyFileSync(end, join(directory, "stat"));
+        await Bun.write(join(directory, String(process.pid), "stat"),
+          processInput.cpu_intervals[0].closing_stat.replace("4242 ", `${process.pid} `));
+      }
       profiles.push(collector.close("success"));
       const original = { stage: operation, endpoint: operation, request: requests[operation], http_status: 200,
         response_sha256: digest(processInput.status), network: { dns: 0, http: 0 } };

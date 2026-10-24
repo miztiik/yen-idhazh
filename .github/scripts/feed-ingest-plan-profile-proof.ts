@@ -1,4 +1,4 @@
-/** Prove live RAM HTTP readings and the existing optional copy probe outside task CPU windows. */
+/** Prove live task CPU/RAM HTTP readings and the separate existing optional copy probe. */
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { arch, release } from "node:os";
@@ -9,8 +9,10 @@ import { HostSampleSchema } from "../../services/host-probes/src/probe/sample-ho
 import { collectFingerprint } from "../../services/host-fingerprints/src/collect-fingerprint";
 import { loadConfig, loadSettings, SelectedSettingsSchema } from "../../services/host-fingerprints/src/config";
 import { probeBufferMib } from "../../services/host-fingerprints/src/inspect/copy-bandwidth";
+import { verifyTaskProfileHttp } from "./host-task-profile-proof";
 import { CopyResultSchema, ProfileProofIdentitySchema, ResourceProofSchema } from "./feed-ingest-plan-profile-schema";
 import type { ResourceProof } from "./feed-ingest-plan-profile-schema";
+import { formatPidCpuReport } from "./feed-ingest-plan-pid-report";
 
 export async function verifyLiveHostProfiling(
   identity: { git_sha: string; run_id: string; correlation_id: string; attempt: number }, artifactRoot: string,
@@ -20,7 +22,7 @@ export async function verifyLiveHostProfiling(
     ...ProfileProofIdentitySchema.parse(identity),
     scope: "live_linux_ram_http_and_separate_copy", status: "running", stage: "start",
     host: { platform: "linux", arch: arch(), release: release(), bun: Bun.version },
-    sample: null, copy: null, error: null,
+    sample: null, task_profile: null, copy: null, error: null,
   };
   const persist = () => writeFile(join(artifactRoot, "resource-proof.json"), JSON.stringify(ResourceProofSchema.parse(proof)));
   await persist();
@@ -42,6 +44,12 @@ export async function verifyLiveHostProfiling(
     }
     await server.stop(true);
     server = undefined;
+    proof.stage = "task_cpu_ram_http";
+    await persist();
+    proof.task_profile = await verifyTaskProfileHttp(identity);
+    const pidReport = formatPidCpuReport([{ work: "Controlled CPU task / external PID", profile: proof.task_profile.profile }]);
+    for (const notice of pidReport.annotations) console.log(notice);
+    await persist();
     const config = await loadConfig();
     const settings = await loadSettings();
     if (!settings.observability.host_telemetry_enabled || !settings.observability.host_fingerprint) {
@@ -82,6 +90,7 @@ export async function verifyLiveHostProfiling(
         }
       }
     }
+    if (proof.task_profile === null) throw new Error("Task CPU/RAM HTTP evidence is required for resource completion");
     proof.stage = "complete";
     proof.status = "complete";
   } catch {
