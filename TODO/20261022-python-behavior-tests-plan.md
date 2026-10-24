@@ -13,7 +13,7 @@ Table A - Scope and execution
 | A2 | Status | Execution authorized by kumarsnaveen on 2026-10-23. The owner also authorized the structural follow-on work needed to complete the original suite-wide intent. |
 | A3 | Hard scope - in | Review the Python suite against Table C; replace blanket fixture-format checks; remove proven duplicate data checks; preserve reader, writer, migration, identity, failure-handling and safety behavior. |
 | A4 | Chosen strategy | Semantic reader/writer checks plus focused tests where exact bytes have a consumer. Fowler ruled this construction on 2026-10-22; the owner set the behavior-focused intent. |
-| A5 | Contract impact | No persisted shape, version stamp, migration, serializer, digest algorithm, production validation rule or dependency changes. Exception: Row 9 removes the unused `collect.watchlist_max_entities` configuration knob and its test-only entry cap, authorized by kumarsnaveen on 2026-10-23. Named config fixtures lose only that setting; historical retention and source-weight evidence stays intact. Session review reports are not a new application artifact. Exception: Row 16 replaces the whole-tree state CSV audit with a bounded supplied-commit-range gate, authorized by kumarsnaveen on 2026-10-23 UTC (option A1). Runs without a range explicitly provide no whole-tree integrity certification; invalid supplied ranges fail closed. |
+| A5 | Contract impact | No persisted shape, version stamp, migration, serializer, digest algorithm, production validation rule or dependency changes. Exception: Row 9 removes the unused `collect.watchlist_max_entities` configuration knob and its test-only entry cap, authorized by kumarsnaveen on 2026-10-23. Named config fixtures lose only that setting; historical retention and source-weight evidence stays intact. Session review reports are not a new application artifact. Exception: Row 16 replaces the whole-tree state CSV audit with a bounded supplied-commit-range gate, authorized by kumarsnaveen on 2026-10-23 UTC (option A1). Runs without a range explicitly provide no whole-tree integrity certification; invalid supplied ranges fail closed. Exception: Row 17 adds `observability.host_fingerprint_placement_enabled`, a default-on strict config control for Python placement metadata acquisition, authorized by kumarsnaveen on 2026-10-24 UTC (option A1). It leaves local machine measurements and ledger writes active and changes no persisted payload. |
 | A6 | Evidence baseline | Investigated against `0d2268015334e4028448b1f564a76ce51fd69968`. Recheck changed targets against current `origin/main` before dispatch. The earlier chat's keyword counts and deletion percentages are not verified findings or targets. |
 | A7 | Inventory method | Before the first implementation edit, collect the suite once with `python -m pytest --collect-only -n 0 -q -o addopts="" backend/tests`. Keep the result and base commit in the session report. Record collected parameter cases separately from test functions; collection does not certify a passing test run. |
 | A8 | Review record | For each candidate, record its full pytest identifier, asserted behavior, input source, primary Table C category, secondary categories, proposed action, remaining test, and concrete broken-code edit that remaining test detects. Unrelated behavior tests get a separate primary category. Primary counts must partition the collected list; secondary counts may overlap and must say so. Read assertions and called helpers; names and keywords only find candidates. |
@@ -67,11 +67,14 @@ Table D - PR outcomes
 | D9 | 9 | Remove the unused watchlist entry limit | 1 | H | DONE | remove-unused-watchlist-limit | [#1657](https://github.com/miztiik/yen-idhazh/pull/1657), merged at `f479997fec70f4f57b13a6d3a649b5d92a4fd5f7` | - |
 | D10 | 10 | Independent historical reader proofs | 1 | I | DONE | independent-historical-reader-proofs | [#1659](https://github.com/miztiik/yen-idhazh/pull/1659), merged at `f0449de3db08c710e5b2292a03910da157bcb498` | - |
 | D11 | 11 | Contract tests prove authored and constructed behavior | 1 | J | DONE | config-refusal-selection-proofs | [#1664](https://github.com/miztiik/yen-idhazh/pull/1664), merged at `90ea0e77cedaf7eeaff8e9690bacf144eebb44d3` | - |
-| D12 | 12 | Explicit controls and measurement behavior | 1 | K | IN-FLIGHT | explicit-control-behavior-proofs | [#1661](https://github.com/miztiik/yen-idhazh/pull/1661) | - |
+| D12 | 12 | Explicit controls and measurement behavior | 1 | K | DONE | explicit-control-behavior-proofs | [#1661](https://github.com/miztiik/yen-idhazh/pull/1661), merged at `6a43c2b3c4747358a678587d8d877245b9b49134` | - |
 | D13 | 13 | Extraction and metric behavior | 1 | L | IN-FLIGHT | row13-test-proofs | - | - |
-| D14 | 14 | Grouping and dataset behavior | 1 | M | IN-FLIGHT | grouping-and-dataset-proofs | - | - |
-| D15 | 15 | Encoder thread resolution uses production behavior | 1 | N | DONE | prove-encoder-thread-resolution | - | - |
-| D16 | 16 | Bounded state CSV integrity checks | 1 | O | DONE | bound-csv-integrity-checks | - | - |
+| D14 | 14 | Grouping and dataset behavior | 1 | M | DONE | grouping-and-dataset-proofs | [#1665](https://github.com/miztiik/yen-idhazh/pull/1665), merged at `fe086c907f50f52c7c51a9c98c4425ce6f6e6357` | - |
+| D15 | 15 | Encoder thread resolution uses production behavior | 1 | N | DONE | prove-encoder-thread-resolution | [#1667](https://github.com/miztiik/yen-idhazh/pull/1667), merged at `956fd7e27cdcbc927bd86ce54ecede4f993779ef` | - |
+| D16 | 16 | Bounded state CSV integrity checks | 1 | O | DONE | bound-csv-integrity-checks | [#1668](https://github.com/miztiik/yen-idhazh/pull/1668), merged at `cff5cc58c8cc15c59b5b525fca84335e2e88c4ce` | - |
+| D17 | 17 | Default-on host-placement acquisition control | 12 | P | IN-FLIGHT | host-fingerprint-placement | - | - |
+| D18 | 18 | Workflow checks reject supported broken inputs | 1, 22 | Q | IN-FLIGHT | strengthen-workflow-proof-checks | - | - |
+| D19 | 19 | Independent source-health publication proofs | 1 | R | IN-FLIGHT | prove-source-health-publication | - | - |
 
 The canary implementation for Row 3 is delivered separately from its suite-wide
 review obligation. Rows 5 and 6 carry additional changes found by that review.
@@ -867,9 +870,9 @@ counts use the untouched archive and the completed branch instead.
   Exact-head CI passed. All 12 reviewed Row 12 test, production and
   documentation files remain byte-identical to
   `cbb23a22ddcd711ebe3fa34a042e707050ba2a1b`. D3 remains open.
-- **Delivery:** Implementation `32c85d883` is delivered in open PR
-  [#1661](https://github.com/miztiik/yen-idhazh/pull/1661), not merged by this
-  worker. D12 remains IN-FLIGHT pending CI on this merge candidate and merge.
+- **Delivery:** Implementation `32c85d883` was delivered in
+  [#1661](https://github.com/miztiik/yen-idhazh/pull/1661), merged at
+  `6a43c2b3c4747358a678587d8d877245b9b49134`. The worker did not merge it.
 - **Dependencies:** Row 1. Shared-plan editing remains serialized.
 
 ## 14 - Row #13 - Extraction and metric behavior
@@ -1099,6 +1102,193 @@ counts use the untouched archive and the completed branch instead.
 - **Delivery:** One phase PR for coordinator review and merge; the worker
   does not merge the PR. The frozen full successor releases the serialized
   editor to Row 17 independently of checks, push or CI.
+- **Dependencies:** Row 1.
+
+## 18 - Row #17 - Default-on host-placement acquisition control
+
+- **Scope:** Add the owner-approved default-on config setting that can stop
+  Python placement metadata acquisition without stopping local machine
+  measurements or ledger writes. Keep the real reader and its safety boundary.
+- **Authority:** kumarsnaveen selected A1 on 2026-10-24 UTC. This row does not
+  take the other council rewrites. The config value and the caller's explicit
+  `ask_placement=False` choice both prevent placement acquisition.
+- **Files touched:** `backend/idhazh/contracts/knobs/observability.py`,
+  `backend/idhazh/telemetry/silicon.py`, `config/idhazh.json`,
+  `backend/tests/contracts/test_app_config.py`,
+  `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`,
+  `backend/tests/test_silicon.py`, `backend/tests/_host_placement.py`,
+  `backend/tests/council/_config.py`,
+  `backend/tests/council/test_session.py`,
+  `backend/tests/council/test_publication.py`,
+  `docs/reference/host-metrics.md` and this plan.
+- **Implementation:** The observability contract declares a `StrictBool`
+  setting with a default of true, and the committed config states true
+  explicitly. `silicon.file_machine_row` passes the caller's choice AND the
+  config value to the real placement reader. There is no new CLI switch,
+  environment value, persisted payload, migration, transport stub,
+  dependency, destination change or broader telemetry redesign.
+- **Behavior proofs:** Config tests cover default true, explicit true/false
+  and invalid types. Real local collection proves config false and caller
+  false each skip the actual placement function while still writing a
+  populated machine row with its local UTC clock. A scoped `sys.setprofile`
+  guard verifies that the default-on recorder reaches the actual placement
+  function, then stops before URL use or network access. The two named council
+  proofs are `backend/tests/council/test_session.py::test_settle_records_one_machine_for_the_night_not_for_each_judged_date`
+  and `backend/tests/council/test_publication.py::test_many_tenants_and_later_dates_survive_a_failure`.
+  They use config false with real local collection and preserve machine-row
+  counts, identities, clocks, publication receipts and failure/sibling
+  guarantees.
+- **Independent faults:** Three planned production faults must fail for the
+  intended evidence: ignoring config false, ignoring caller false, and
+  disabling local machine collection when placement is off. The bounded
+  runner restores the source after each fault. These proofs had not run at
+  plan freeze.
+- **Local gates at plan freeze:** The six focused config, silicon and council
+  tests passed before the final nullable-clock assertion was added. Ruff and
+  whitespace checks passed. Mypy found the optional timestamp use; the test
+  now asserts the timestamp exists before parsing it, and the type check must
+  be rerun. The independent fault proofs and the refreshed shared selector
+  remain pending. CI on the merge candidate is authoritative. No published
+  site behavior changed.
+- **Plan integration:** Verified and imported the complete frozen Row 16
+  predecessor, 89,674 bytes, SHA-256
+  `9b79f8297e884665f4a77f0f0b6faedc6de97bac39a9a860e18fcda4019563be`.
+  Added only D17, this section and the owner-approved A5 placement-setting
+  exception. All prior rows, evidence, rulings, D3 IN-FLIGHT and D12 IN-FLIGHT
+  remain unchanged.
+- **Delivery:** One phase PR for coordinator review and merge. The worker does
+  not merge the PR. The frozen full successor releases the serialized editor
+  to Row 18 independently of remaining checks, push or CI.
+- **Dependencies:** Row 12's real `ask_placement` forwarding API.
+
+## 19 - Row #18 - Workflow checks reject supported broken inputs
+
+- **Scope:** Repair the existing checks that pass broken workflow inputs.
+  Keep the actual committed YAML as the subject, all live policy, historical
+  evidence and trust checks. The fingerprint enum-forwarding finding F4 is
+  reserved for its separate phase after Row 17.
+- **Files touched:** `backend/tests/workflows/test_llm_council_workflow.py`,
+  `backend/tests/workflows/test_weights_and_model_refs.py`,
+  `backend/tests/workflows/test_bench_targets.py`,
+  `backend/tests/workflows/test_pipeline_tests_workflow.py`,
+  `backend/tests/workflows/test_gardener_workflow.py`,
+  `backend/tests/workflows/test_model_server_jobs.py`,
+  `backend/tests/workflows/_harness.py` and this plan. No production, config
+  or workflow edits belong to this row.
+- **Implementation:** Inspect structured timeout keys instead of a regex over
+  a dictionary's printed form. Read supported dotted and literal-bracket
+  Actions references inside wrappers and multiple-reference expressions.
+  Inspect ordered simple shell commands for package installation before
+  utility or module use, direct Git commit/push commands and literal write
+  destinations. Detect literal committed config reads at supported CLI,
+  shell and inline Python call sites. Require the actual raw-download and
+  dossier-emission steps before checking their conditions. Resolve each
+  launcher's exact config-root argument through the step environment or
+  action input and default. No generic shell interpreter, new framework,
+  dependency, mock, skip or network access is added.
+- **Preserved checks:** Timeout source/output propagation, published-key and
+  allowed-context rules, actual named utility imports, candidate action
+  inputs and ordering, raw-case conditions, default-token scope, shard
+  permissions, and downloaded/derived model-path equality remain active.
+  No existing test identifier is removed.
+- **Local evidence at freeze:** The six modules collect 258 cases against
+  196 baseline cases: all 196 exact identifiers remain, with 62 controlled
+  parameter cases added. The initial run passed 254 and failed four.
+  Three failures were a relative interpreter import path; all three pass
+  with the absolute checkout path. The fourth is the genuine timeout
+  defect below. Ruff passes. The initial scoped type check found reuse
+  of a local variable with a different type; this is corrected and the
+  repeat is pending. Full CI is authoritative on the merge candidate.
+- **Independent faults:** The nine original assertions passed unchanged
+  YAML and all 13 disposable workflow fault cases. Eight repaired
+  non-timeout assertions pass unchanged YAML and fail all 12 corresponding
+  cases with assertion failures, not collection errors or skips. Cases
+  cover wrapped published output, installation moved after use, module
+  use before installation, a committed config-root read, removed raw
+  download, removed dossier emission, Git global-option commit, tee into
+  docs, wrapped and bracket personal secrets, direct shard push and the
+  wrong digest action config root. Every disposable workflow's restored
+  SHA-256 is verified; exact identifiers and JUnit receipts are in the
+  worker's session report.
+- **Finding and dependency:** F1 exposes literal 30-minute deadlines in
+  `llm-council.yml`'s planning and collection jobs. Fowler ruled that the
+  shard-timeout claim was narrower, but these are still tunable-policy
+  defects under Guardrail 6. The coordinator assigned prerequisite Row 22
+  to add a direct-consumer planning/collection timeout config and a small
+  predecessor job that uses the existing bound reader. Row 22 keeps the
+  whole-job deadlines and failure-safe collection. Row 18 does not waive
+  this finding, hide the two jobs or ship a red candidate; integration and
+  merge wait for Row 22. This row does not guess or implement that design.
+- **Plan integration:** Verified and imported the complete frozen Row 17
+  predecessor, 93,831 bytes, SHA-256
+  `bba347d9985ed1e242a2e654d8a8fdf13bbece766a4f1657dbe5d081fbbdcde0`.
+  Added only D18 and this section. All prior rows, A5 exceptions, D3 status
+  and evidence remain unchanged. The full frozen successor releases the
+  serialized editor to Row 19 independently of gates and CI.
+- **Delivery:** One coherent PR, reviewed and merged by the coordinator.
+  The worker opens it and does not merge.
+- **Dependencies:** Row 1; Row 22 for integration and merge.
+
+## 20 - Row #19 - Independent source-health publication proofs
+
+- **Scope:** Make the existing publication proofs detect lost source evidence
+  independently of the producer they compare. Strengthen only concrete
+  false branches and contradicted claims in
+  `backend/tests/test_publish_source_health.py`; no production, config,
+  contract, fixture or published-policy change.
+- **Implementation:** Explicitly select a configured active feed for real
+  publication. Seed its actual endpoint health and item records through the
+  ledger door. The written source must be answering with permission
+  unrecorded and exact item counts. The three selected recorded dates must
+  independently report six opportunities, three publications and three
+  source-owned failures, not only match a reference build's bytes.
+  The privacy case reads the real published file and excludes exact supplied
+  addresses and keys as well as the existing forbidden field words.
+- **Other concrete repairs:** Reverse two distinct permission answers;
+  clear an old failure after a newer success; prove the configured rest
+  threshold's two sides; distinguish an unrelated retirement key; refuse
+  both retirement/date mismatches; actually include a robots denial in
+  the no-evidence case; separate a partial discount from the reliability
+  floor; include a thin source in the headline denominator; prove strict
+  alarm and inclusive decision boundaries; arrange worst-yield order
+  opposite to alphabetical and input order; deliver duplicate publication
+  attempts directly to the fold rather than deduplicating them in setup.
+- **Preserved guarantees:** Public path, configured-source census, return/file
+  and complete-reference byte equality, complete UTC date edges, bounded
+  selected-file reads, calendar-window contrast, ranker-factor parity,
+  source-owned failure attribution, unreadable history, empty states,
+  retirement/rest exclusions and published privacy all remain.
+- **Inventory:** The actual base has 33 functions, not the brief's 31.
+  All 33 survive: 14 strengthened and 19 KEEP. Six parameter cases are
+  added, so the final expected collection is 43 rather than 37.
+  No function is deleted or skipped. The one rename is
+  `test_a_thin_record_is_never_named_however_bad_it_looks` to
+  `test_the_alarm_requires_enough_decisions_and_a_yield_strictly_below_its_bar`.
+  Exact identifiers, category assignments and KEEP reasons are in the
+  worker's session report.
+- **KEEP correction:** PSH-7,
+  `test_the_record_says_it_is_too_short_rather_than_printing_a_rate`,
+  stays unchanged. Its long input is already clipped to the configured
+  minimum before the readability assertion, so it already proves that
+  exact edge. The initial proposed parameter cases are not retained.
+- **Evidence at plan freeze:** The initial 44-case control passed before
+  the PSH-7 correction; that is not the final 43-case receipt.
+  Disposable real-source faults have already exposed the two publication
+  holes and an endpoint-key leak at the intended assertions, with passing
+  restored controls. The remaining fault runs and final selected gate are
+  pending. The copy contains only 184 actually consumed named source/config
+  files, retains `pyproject.toml`, and verifies its import provenance.
+  No setup/collection failure is accepted as negative evidence. Linux CI
+  remains authoritative on the merge candidate.
+- **Plan integration:** Verified and imported the complete frozen Row 18
+  predecessor, 98,435 bytes, SHA-256
+  `a4fe543dbb4f46aba16c0511cbfc1a8da4c10a2ce35a2155735a3776ebc654f3`.
+  Added only D19 and this section. All earlier evidence, A5 exceptions,
+  D3 IN-FLIGHT and Row 18's pending Row 22 prerequisite remain unchanged.
+  The complete frozen successor releases the serialized editor to Row 20
+  independently of remaining gates, push or CI.
+- **Delivery:** One coherent phase PR for coordinator review and merge.
+  The worker opens it and does not merge it.
 - **Dependencies:** Row 1.
 
 ## See also
