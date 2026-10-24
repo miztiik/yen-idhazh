@@ -150,9 +150,14 @@ class StorySimilarityPair(Contract):
     __schema_stem__: ClassVar[str] = "story-similarity-pair"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-10-24",
+            version="2026-10-24T19:49",
             change="Scorer and judge model identities accept any valid slug.",
             why="Recorded identities must remain readable after the selected models change.",
+        ),
+        ChangelogEntry(
+            version="2026-10-24",
+            change="The Qwen 3.8 Distill Q5 model joins judge_model.",
+            why="A shipped model file can be recorded in a future judge verdict.",
         ),
         ChangelogEntry(
             version="2026-10-08",
@@ -163,11 +168,6 @@ class StorySimilarityPair(Contract):
             version="2026-09-24",
             change="key_point and key_point_weight go. Both headings are carried and dropped.",
             why="The term shipped at a weight of zero and never moved a score.",
-        ),
-        ChangelogEntry(
-            version="2026-09-21T14:00",
-            change="decode_digest is gone. Its heading is carried and dropped on read.",
-            why="It proved two runs asked alike, and this project does not claim that.",
         ),
         ChangelogEntry(
             version="2026-09-21T12:00",

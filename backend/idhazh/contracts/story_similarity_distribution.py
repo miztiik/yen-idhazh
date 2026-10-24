@@ -90,9 +90,14 @@ class StorySimilarityDistribution(Contract):
     __schema_stem__: ClassVar[str] = "story-similarity-distribution"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-10-24",
+            version="2026-10-24T19:49",
             change="Scorer and judge model identities accept any valid slug.",
             why="Recorded identities must remain readable after the selected models change.",
+        ),
+        ChangelogEntry(
+            version="2026-10-24",
+            change="The Qwen 3.8 Distill Q5 model joins judge_model.",
+            why="A shipped model file can be recorded in a future judge verdict.",
         ),
         ChangelogEntry(
             version="2026-09-24",
@@ -103,11 +108,6 @@ class StorySimilarityDistribution(Contract):
             version="2026-09-21T20:00",
             change="Added judged_dates. An older record reads its counted dates as its memory.",
             why="A reset archives the counts, and which nights were read is not a count.",
-        ),
-        ChangelogEntry(
-            version="2026-09-21T14:00",
-            change="decode_digest is gone. A record that still carries the key loads.",
-            why="It proved two runs asked alike, and this project does not claim that.",
         ),
         ChangelogEntry(
             version="2026-09-18",

@@ -38,7 +38,7 @@ Saved similarity model identities use `Slug`, the same lowercase letters,
 digits and single separating hyphens accepted for configured model IDs.
 `StorySimilarityPair`, `StorySimilarityDistribution`,
 `FittedSimilarityThreshold`, `ContentSimilarityJudgeMetrics` and
-`MergeLineHoldoutScore` advance to `2026-10-24`. Readers validate the recorded
+`MergeLineHoldoutScore` advance to `2026-10-24T19:49`. Readers validate the recorded
 spelling, never membership in today's selected model file. Existing JSON,
 CSV and Parquet strings, versions and provenance remain unchanged on read;
 no archive rewrite, second write format or migration is needed.

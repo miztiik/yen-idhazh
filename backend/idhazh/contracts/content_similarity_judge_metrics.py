@@ -64,9 +64,14 @@ class ContentSimilarityJudgeMetrics(JudgeConfigStamp, Contract):
     __schema_stem__: ClassVar[str] = "content-similarity-judge-metrics"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-10-24",
+            version="2026-10-24T19:49",
             change="Judge model identities accept any valid slug.",
             why="Recorded identities must remain readable after the selected models change.",
+        ),
+        ChangelogEntry(
+            version="2026-10-24",
+            change="The Qwen 3.8 Distill Q5 model joins judge_model.",
+            why="A shipped model file can be recorded in a future judge verdict.",
         ),
         ChangelogEntry(
             version="2026-10-08",
@@ -80,8 +85,8 @@ class ContentSimilarityJudgeMetrics(JudgeConfigStamp, Contract):
         ),
         ChangelogEntry(
             version="2026-09-21",
-            change="Initial shape: the shard's funnel, its two rates, its margin and its clocks.",
-            why="Nothing recorded how this judge's own instrument behaved over a shard.",
+            change="Earlier changes are in this file's git history.",
+            why="A changelog says what moved lately; git is the archive.",
         ),
     )
 

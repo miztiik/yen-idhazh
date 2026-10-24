@@ -93,9 +93,14 @@ class FittedSimilarityThreshold(Contract):
     __schema_stem__: ClassVar[str] = "fitted-similarity-threshold"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-10-24",
+            version="2026-10-24T19:49",
             change="Scorer and judge model identities accept any valid slug.",
             why="Recorded identities must remain readable after the selected models change.",
+        ),
+        ChangelogEntry(
+            version="2026-10-24",
+            change="The Qwen 3.8 Distill Q5 model joins judge_model.",
+            why="A shipped model file can be recorded in a future judge verdict.",
         ),
         ChangelogEntry(
             version="2026-09-24",
@@ -106,11 +111,6 @@ class FittedSimilarityThreshold(Contract):
             version="2026-09-21",
             change="held_reason `legs_missing` is now `shards_missing`. The old value still reads.",
             why="`leg` was a second name for the shard the rest of this feature already names.",
-        ),
-        ChangelogEntry(
-            version="2026-09-19",
-            change="smoothing_weight splits into fall_weight and rise_weight; max_up_step added.",
-            why="The line now damps and caps both directions, so one number cannot carry it.",
         ),
         ChangelogEntry(
             version="2026-09-18",

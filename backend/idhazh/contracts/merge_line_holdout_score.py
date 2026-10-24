@@ -69,7 +69,7 @@ class MergeLineHoldoutScore(Contract):
     __schema_stem__: ClassVar[str] = "content-similarity-judge-merge-line-holdout-score"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-10-24",
+            version="2026-10-24T19:49",
             change="Scorer model identities accept any valid slug.",
             why="Recorded identities must remain readable after the selected models change.",
         ),
