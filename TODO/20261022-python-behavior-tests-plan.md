@@ -85,6 +85,8 @@ Table D - PR outcomes
 | D27 | 27 | Explicit offline gardener collection controls | 17, 26 | Z | IN-FLIGHT | control-gardener-host-collection | - | - |
 | D28 | 28 | Independent prefix normalization arithmetic | 1, 27 | AA | IN-FLIGHT | prove-vector-arithmetic | - | - |
 | D29 | 29 | Populated registry values and mandatory real CSV reader | 1, 28 | AB | IN-FLIGHT | close-contract-proof-gaps | - | - |
+| D30 | 30 | Native tagging-term acceptance and refusal | 1, 29 | AC | IN-FLIGHT | validate-tagging-terms | - | - |
+| D31 | 31 | Bind declared UI defaults to their consumers | 1, 17, 30 | AD | IN-FLIGHT | bind-ui-default-consumers | - | - |
 
 The canary implementation for Row 3 is delivered separately from its suite-wide
 review obligation. Rows 5 and 6 carry additional changes found by that review.
@@ -2114,6 +2116,172 @@ Table I - Independent controls and expected faults
   CI-receipt-only commit. Keep worktree, branch and evidence artifacts.
 - **Dependencies:** Row 1 supplies semantic test policy; Row 28 is the exact
   full-plan predecessor, not a production dependency.
+
+## 31 - Row #30 - Native tagging-term acceptance and refusal
+
+- **Intent and scope:** Resolve supplemental103/104 in
+  `backend/tests/test_tag.py` and `docs/concepts/taxonomy.md` only, plus this
+  serialized plan append. No production, accepted language, policy, dependency,
+  payload or publication change. Keep supplemental101/102's distinct committed
+  active-entry and entity-alias effectiveness checks.
+- **Fixed baseline:** Commit
+  `e7f46b2317852ea5d3f212f83ea86ac51edc05ed` carries 21 test functions and
+  21 collected cases in the tag module. Original source is 11,142 bytes,
+  SHA-256 `daac8ea824136e4ad36ef23f5d4b216d362881283075117461aa817ab062a109`.
+  The archived baseline receipt lists every original identifier.
+- **Identifier accounting:** All identifiers use prefix
+  `backend/tests/test_tag.py::`. Remove
+  `test_the_committed_terms_are_all_matchable` in favor of
+  `test_keyword_models_accept_curated_phrases` and
+  `test_keyword_models_refuse_a_punctuation_first_term`.
+  Remove `test_no_committed_term_is_short_enough_to_match_inside_a_word`
+  in favor of `test_keyword_models_refuse_a_one_character_word`.
+  Each replacement is collected once for `[lens]` and once for `[event]`.
+  Rename
+  `test_the_tagger_can_only_ever_emit_an_id_the_committed_file_carries`
+  to `test_the_tagger_can_only_ever_emit_an_id_the_vocabulary_carries`;
+  preserve its actual hostile text and closed-vocabulary assertions.
+  Retain the other 18 identifiers. Expected final accounting is 22 functions
+  and 25 collected cases: 21 original cases minus two removed scans, plus six
+  native-model cases, with one rename and no dropped safety responsibility.
+- **Native refusal:** Construct the actual `LensDef` and `EventDef`, not a
+  library-only `TypeAdapter` and not a copied constraint. Both accept two-letter
+  words and phrases containing the existing permitted space, apostrophe,
+  slash, ampersand, period and hyphen. The two-character punctuation-first
+  input `--` isolates the pattern; the one-character alphanumeric input `a`
+  isolates minimum length. Each refusal must identify `keywords[0]` and its
+  own validation error kind. Primary category C2; secondary C5 and C6.
+- **Controlled matcher inputs:** Native `Taxonomy` and `Watchlist` fixtures
+  carry known lenses, events, entities and aliases. No current configuration
+  is read at module import. Only the two retained committed-config guards
+  load current config inside their test bodies. Whole-word matching,
+  case/punctuation folding, phrase order, sorting, absent documents, hostile
+  text, retired lens/entity tombstones, actual Article-to-tag composition,
+  alias matching, failed articles, payload preservation, repeatability and
+  the six named prompt-file checks remain distinct responsibilities.
+- **Owning documentation:** Explain why native refusal and controlled matcher
+  behavior are separate from committed-config effectiveness in the existing
+  taxonomy design rationale. The page stays whole because this paragraph
+  explains the same curated-term boundary, not another subsystem.
+- **Frozen source:** Tag module is 13,686 bytes, SHA-256
+  `5093905178de89ef8f6d41d01a6bed128e3c56e83f04e1ca7c490006b06bf3f7`.
+  Taxonomy page is 22,722 bytes, SHA-256
+  `2ff73108c9a16a8664b6fe0bbb2a412194c59396d5a2c98a32ba054f166af907`.
+  Release the source-writing slot with these hashes before expensive checks.
+- **Required real faults and controls:** In one disposable archived-base copy,
+  import its own actual contracts and overlay only the changed tag test.
+  First remove the actual `MatchTerm` pattern while retaining minimum length:
+  both punctuation-refusal cases must fail because the native models accept
+  the formerly invalid input. Restore exact production bytes. Then relax only
+  the actual minimum length to one: both short-word refusal cases must fail
+  for that reason. Restore exact production bytes and run all 25 cases as the
+  control. Record original/restored production hashes and exact test results.
+  These proofs are PENDING at freeze; no pass is claimed.
+- **Gate state at freeze:** Shared selector inspection, bounded affected
+  pytest, changed-file Ruff, changed-file mypy and whitespace checks are
+  PENDING. Use the documented shared lock only for pytest, not Ruff/mypy.
+  No redundant full local backend/frontend run. Full merge-candidate CI is
+  authoritative and PENDING; no browser check is required for this test/doc
+  change.
+- **Immutable integration:** Verified and imported exact released Row 29,
+  160,945 bytes, SHA-256
+  `84dcb99543de018d2dd38b9ccf6e3a436f94f2c8d55dff51f881c5ee3b982d14`.
+  Append only D30 and this complete section before See also. Deleting only
+  those additions must reconstruct every predecessor byte, including A5,
+  D3 IN-FLIGHT, the single D11 and all earlier complete sections and receipts.
+  Freeze the independent full30 artifact and release it immediately to the
+  coordinator and Row 31 without waiting on gates, Row 29 CI or merge.
+- **Delivery:** After real focused proofs and gates, integrate current main
+  normally and preserve newer canonical plan receipts. Open the authorized
+  phase PR without merging. Report fixed baseline/final identifiers, mapping,
+  source hashes, actual fault/control evidence, immutable handoff and exact
+  PR-head receipts to the coordinator. Do not rewrite historical frozen
+  artifacts or add a CI-receipt-only commit. Keep this worktree and evidence.
+- **Dependencies:** Row 1 supplies semantic test policy. Exact full Row 29 is
+  the plan predecessor only; there is no production/source dependency.
+
+
+## 2 - Row #31 - Bind declared UI defaults to their consumers
+
+- **Scope:** Resolve supplemental findings 5, 58 and 60 individually. This is
+  a test-only binding repair, not a theme feature. No production validator,
+  payload, configuration value, model default, frontend behavior, dependency,
+  editor policy, mock or network change.
+- **Files:** `backend/tests/contracts/test_app_config.py`,
+  `backend/tests/test_appearance_config.py`,
+  `docs/how-to/run-the-gates.md`, and this serialized plan update.
+- **Original/final mapping:** Delete only
+  `test_the_seed_covers_what_a_reading_surface_draws_before_a_reader_acts`.
+  Its inequality is false: the actual home shell carries the prefix UNION
+  the leading stories. Existing survivor:
+  `frontend/tests/day-seam.spec.ts`, describe `the home page anchors its leads`,
+  case `every lead is in the seed, however far down the day it sits`.
+  That bounded fixture places leads at positions 25 and 39 with a prefix of
+  15 items; omitting the actual homeShell keep list fails the lead inclusion
+  assertions. No frontend case or browser matrix is added.
+- **Appearance formatting:** Rename
+  `test_the_committed_file_is_lf_and_ascii` to
+  `test_the_committed_file_is_ascii`. Preserve its ASCII refusal under
+  CLAUDE.md section 5. Remove only its current-file carriage-return assertion:
+  `.gitattributes` owns checkout line endings. Remove the false claim that
+  appearance-file bytes contribute to the run digest. Legal JSON whitespace
+  edits must not fail these checks.
+- **Default binding:** Keep
+  `test_the_default_theme_is_the_one_root_carries`, replacing independent
+  dark literals with agreement against the actual tokens.css :root selector
+  group. Bind native UI/appearance defaults, both committed config declarations,
+  app.html initial/storage-refusal choices, and theme.ts absent-storage,
+  absent-choice and storage-refusal fallbacks. Missing declarations fail by
+  name. Use bounded declaration matches following existing binding-test
+  practice, not a custom CSS/TypeScript parser or a new dependency.
+  The theme_default field does not currently drive first paint; do not claim
+  that declaration agreement proves runtime configurability.
+- **Preservation:** Every other configuration guard and historical/safety
+  responsibility remains. In particular, preserve the raw subject/carriage
+  inequality and the actual Row 17 strict host-placement cases unchanged.
+  Primary categories: C10 for the removed false relation, C4 for formatting,
+  and C5 for consumer/default agreement.
+- **Owning documentation:** Add only neutral testing guidance explaining
+  declaration agreement versus runtime configurability. The existing gate page
+  stays whole: the paragraph clarifies what a binding check certifies, within
+  the existing local-check guidance, rather than adding a separate procedure.
+- **Frozen source:** Commit `435c9d955` contains only the three owned source/doc
+  paths. SHA-256: app-config test
+  `5b77d13c89ddfe90c71adad5ed575d43e05cc36790d54f65d6391bfca615a9c9`;
+  appearance test
+  `d832d63e730e6b5c5d459f6ac843f1f8d2fdbca3cb0b1797c72d6796c30c064e`;
+  gate guide
+  `3f7fc0e37e9316ca3152d2c24ebde7fd476a1ef304c38ea1f17b3c3050a1bb04`.
+  Source slot released before expensive checks.
+- **Required faults and controls:** In a disposable copy, independently change
+  the actual CSS root theme, actual app.html fallback, actual theme.ts fallback,
+  and committed theme declaration; each disagreement must fail the binding.
+  Insert non-ASCII into otherwise valid appearance JSON and require the
+  retained ASCII refusal. Legal whitespace-only JSON edits must pass.
+  Restore original bytes and record hashes and passing controls.
+  These proofs are PENDING at freeze; no passing result is claimed.
+- **Gate state at freeze:** Shared `--list` inspected. Inherited Row 17 source
+  selects broad groups; full exact-head CI remains authoritative and PENDING.
+  Only the two affected Python files receive local pytest, Ruff and mypy.
+  Focused pytest is queued behind the documented machine lock. No redundant
+  full local backend/frontend suite and no new published-site smoke obligation.
+- **Immutable integration:** Import exact released full30, 166,646 bytes,
+  SHA-256
+  `9ab4621b497f06a2c7e89bce69320c985110d6c8eafbe23db1d9823b8260c039`.
+  Append only D31 and this complete section before See also. Reverse removal
+  must reconstruct exact30, preserving A5, D3 IN-FLIGHT, the single D11,
+  every earlier section and all earlier receipts. Freeze independent full31
+  and release immediately without waiting for gates or merges.
+- **Delivery:** After Row 17 merges, integrate current main normally, preserve
+  newer canonical receipts, finish focused proofs, and open the authorized phase
+  PR. Do not merge it. Report exact source/case accounting, fault/restoration
+  evidence, immutable artifact and PR-head receipts to the coordinator. Do not
+  rewrite historical artifacts or add a CI-receipt-only commit.
+- **Dependencies:** Actual Row 17 supplies the owned app-config test base.
+  Row 30 is the immutable full-plan predecessor only. Row 1 supplies the
+  semantic test policy.
+
+
 
 ## See also
 
