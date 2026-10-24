@@ -54,7 +54,16 @@ DERIVED_TURN_MARKERS = FIXTURES_DIR / "llm" / "derived-turn-markers.json"
 
 def committed_renderings(model_file: str) -> dict[str, Any]:
     """Read the one model entry from the recorded turn-envelope fixture."""
-    return json.loads(read_text(DERIVED_TURN_MARKERS))["entries"][model_file]
+    loaded = json.loads(read_text(DERIVED_TURN_MARKERS))
+    if not isinstance(loaded, dict):
+        raise TypeError("Derived turn markers must be a JSON object")
+    entries = loaded.get("entries")
+    if not isinstance(entries, dict):
+        raise TypeError("Derived turn markers entries must be a JSON object")
+    recorded = entries.get(model_file)
+    if not isinstance(recorded, dict):
+        raise KeyError(f"Derived turn markers have no entry for {model_file}")
+    return {str(key): value for key, value in recorded.items()}
 
 
 def collect_config(**values: Any) -> CollectConfig:
