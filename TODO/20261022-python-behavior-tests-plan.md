@@ -68,11 +68,11 @@ Table D - PR outcomes
 | D10 | 10 | Independent historical reader proofs | 1 | I | DONE | independent-historical-reader-proofs | [#1659](https://github.com/miztiik/yen-idhazh/pull/1659), merged 2026-10-24 UTC at `f0449de3db08c710e5b2292a03910da157bcb498` | - |
 | D11 | 11 | Contract tests prove authored and constructed behavior | 1 | J | DONE | config-refusal-selection-proofs | [#1664](https://github.com/miztiik/yen-idhazh/pull/1664), merged at `90ea0e77cedaf7eeaff8e9690bacf144eebb44d3` | - |
 | D12 | 12 | Explicit controls and measurement behavior | 1 | K | DONE | explicit-control-behavior-proofs | [#1661](https://github.com/miztiik/yen-idhazh/pull/1661), merged at `6a43c2b3c4747358a678587d8d877245b9b49134` | - |
-| D13 | 13 | Extraction and metric behavior | 1 | L | IN-FLIGHT | row13-test-proofs | - | - |
+| D13 | 13 | Extraction and metric behavior | 1 | L | DONE | row13-test-proofs | [#1670](https://github.com/miztiik/yen-idhazh/pull/1670), merged at `6019523e22802792a5de672c4df9d90ff4447c7a` | - |
 | D14 | 14 | Grouping and dataset behavior | 1 | M | DONE | grouping-and-dataset-proofs | [#1665](https://github.com/miztiik/yen-idhazh/pull/1665), merged at `fe086c907f50f52c7c51a9c98c4425ce6f6e6357` | - |
 | D15 | 15 | Encoder thread resolution uses production behavior | 1 | N | DONE | prove-encoder-thread-resolution | [#1667](https://github.com/miztiik/yen-idhazh/pull/1667), merged at `956fd7e27cdcbc927bd86ce54ecede4f993779ef` | - |
 | D16 | 16 | Bounded state CSV integrity checks | 1 | O | DONE | bound-csv-integrity-checks | [#1668](https://github.com/miztiik/yen-idhazh/pull/1668), merged at `cff5cc58c8cc15c59b5b525fca84335e2e88c4ce` | - |
-| D17 | 17 | Default-on host-placement acquisition control | 12 | P | IN-FLIGHT | host-fingerprint-placement | - | - |
+| D17 | 17 | Default-on host-placement acquisition control | 12 | P | IN-FLIGHT | host-fingerprint-placement | [#1682](https://github.com/miztiik/yen-idhazh/pull/1682) | - |
 | D18 | 18 | Workflow checks reject supported broken inputs | 1, 22 | Q | IN-FLIGHT | strengthen-workflow-proof-checks | - | - |
 | D19 | 19 | Independent source-health publication proofs | 1 | R | DONE | prove-source-health-publication | [#1674](https://github.com/miztiik/yen-idhazh/pull/1674), merged at `e7f46b2317852ea5d3f212f83ea86ac51edc05ed` | - |
 | D20 | 20 | Prove reader output behavior | 1 | S | IN-FLIGHT | prove-reader-output-behavior | - | - |
@@ -880,9 +880,10 @@ counts use the untouched archive and the completed branch instead.
   Exact-head CI passed. All 12 reviewed Row 12 test, production and
   documentation files remain byte-identical to
   `cbb23a22ddcd711ebe3fa34a042e707050ba2a1b`. D3 remains open.
-- **Delivery:** Implementation `32c85d883` was delivered in
-  [#1661](https://github.com/miztiik/yen-idhazh/pull/1661), merged at
-  `6a43c2b3c4747358a678587d8d877245b9b49134`. The worker did not merge it.
+- **Delivery:** PR [#1661](https://github.com/miztiik/yen-idhazh/pull/1661)
+  carried head `cbb23a22ddcd711ebe3fa34a042e707050ba2a1b` and merged at
+  `6a43c2b3c4747358a678587d8d877245b9b49134` after `scope`, `gates`, `robots`
+  and `site` passed; `browser` was skipped. D12 is DONE.
 - **Dependencies:** Row 1. Shared-plan editing remains serialized.
 
 ## 14 - Row #13 - Extraction and metric behavior
@@ -1178,24 +1179,30 @@ counts use the untouched archive and the completed branch instead.
 - **Independent faults:** Three planned production faults must fail for the
   intended evidence: ignoring config false, ignoring caller false, and
   disabling local machine collection when placement is off. The bounded
-  runner restores the source after each fault. These proofs had not run at
-  plan freeze.
-- **Local gates at plan freeze:** The six focused config, silicon and council
-  tests passed before the final nullable-clock assertion was added. Ruff and
-  whitespace checks passed. Mypy found the optional timestamp use; the test
-  now asserts the timestamp exists before parsing it, and the type check must
-  be rerun. The independent fault proofs and the refreshed shared selector
-  remain pending. CI on the merge candidate is authoritative. No published
-  site behavior changed.
+  runner restores the source after each fault.
+- **Local gates:** The six focused config, silicon and council tests passed
+  after the nullable-clock assertion, before the main merge. Ruff and
+  whitespace checks passed. Mypy passed on the eight affected source and test
+  files. Three production-fault proofs passed: ignoring configured false,
+  ignoring caller false, and disabling local collection when placement is off.
+  The fault runner restored `silicon.py` byte-for-byte. The shared selector
+  list was preserved; its run was stopped while waiting for all five seats and
+  grants no test certification. CI on the merge candidate is authoritative.
+  No published site behavior changed.
 - **Plan integration:** Verified and imported the complete frozen Row 16
   predecessor, 89,674 bytes, SHA-256
   `9b79f8297e884665f4a77f0f0b6faedc6de97bac39a9a860e18fcda4019563be`.
   Added only D17, this section and the owner-approved A5 placement-setting
-  exception. All prior rows, evidence, rulings, D3 IN-FLIGHT and D12 IN-FLIGHT
-  remain unchanged.
-- **Delivery:** One phase PR for coordinator review and merge. The worker does
-  not merge the PR. The frozen full successor releases the serialized editor
-  to Row 18 independently of remaining checks, push or CI.
+  exception. Then merged current `origin/main` normally after Rows 11 and 12
+  were delivered. The conflict resolution keeps exactly one complete current-
+  main Row 11 section and its merged receipt, the completed Row 12 receipt and
+  bounded-copy corrections, and all complete Rows 13-16. The later main merge
+  retains the completed Rows 14-16 receipts and complete Rows 18-22 sections.
+  D3 remains IN-FLIGHT; D12 is DONE.
+- **Delivery:** PR [#1682](https://github.com/miztiik/yen-idhazh/pull/1682)
+  is open for coordinator review and merge. The worker does not merge it. The
+  frozen full successor releases the serialized editor to Row 18 independently
+  of remaining checks, push or CI.
 - **Dependencies:** Row 12's real `ask_placement` forwarding API.
 
 ## 19 - Row #18 - Workflow checks reject supported broken inputs
