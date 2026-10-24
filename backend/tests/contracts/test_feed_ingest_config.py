@@ -20,7 +20,7 @@ MODEL_NAMES = (
     "FeedScreeningPolicy", "FeedPenaltyWeights", "FeedCurationPolicy",
     "FeedScreeningPatch", "FeedPenaltyWeightsPatch", "FeedCurationPatch",
     "VerticalPolicyOverride", "PlanningRunOverrides", "EffectiveFeedPolicy",
-    "FeedHarvestConfig", "FeedTriageConfig", "FeedSoftCaps", "FeedCurateConfig",
+    "FeedUrlExclusion", "FeedHarvestConfig", "FeedTriageConfig", "FeedSoftCaps", "FeedCurateConfig",
     "FeedPartitionConfig", "FeedSealConfig", "FeedWorkflowReportingConfig",
     "FeedMetricsConfig", "FeedIngestConfig", "PlanningTaxonomy",
 )

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from typing import Annotated, Any, Literal, Self
 
@@ -126,11 +127,28 @@ class EffectiveFeedPolicy(Model):
     curate: FeedCurationPolicy
 
 
+class FeedUrlExclusion(Model):
+    """Which host and path does the isolated planner exclude before an article request?"""
+
+    host: Annotated[str, Field(
+        pattern=re.compile(
+            r"^(?=.{1,253}\.?$)[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?"
+            r"(?:\.[a-zA-Z0-9](?:[-0-9a-zA-Z]{0,61}[0-9a-zA-Z])?)*\.?$"
+        ),
+        json_schema_extra={"format": "hostname"},
+    )]
+    path_prefix: Annotated[str, Field(
+        pattern=r"^\/.*", json_schema_extra={"format": "starts_with"},
+    )]
+    include_subdomains: bool = Field(strict=True)
+
+
 class FeedHarvestConfig(Model):
     concurrency: PositiveCount
     fetch_timeout_ms: PositiveCount
     user_agent: NonEmpty
     blocked_categories: list[NonEmpty]
+    url_exclusions: list[FeedUrlExclusion]
 
 
 class FeedTriageConfig(FeedScreeningPolicy):

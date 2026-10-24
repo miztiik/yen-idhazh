@@ -109,7 +109,7 @@ tracing context. The existing default-off service flag gates the new routes.
 | E12 | 12 | Enforce temporary access restrictions and earned recovery | 11 | J | PENDING | - | - | - |
 | E13 | 13 | Apply discovery evidence before feed polling | 12 | K | PENDING | - | - | - |
 | E14 | 14 | Conditional HTTP (removed by owner ruling) | - | - | REMOVED | - | - | - |
-| E15 | 15 | Correct structured host and path exclusions | 1 | B | PENDING | - | - | - |
+| E15 | 15 | Correct structured host and path exclusions | - (matcher intent approved separately) | B | IN-REVIEW | structured-url-exclusions | - | - |
 | E16 | 16 | Review and migrate URL identity separately | 15 | L | PENDING | - | - | - |
 | E17 | 17 | Prove dispatch-Parquet parity, then wire digest workers | 8 | A | DEFERRED | - | - | - |
 | E18 | 18 | Connect actual downstream outcomes to the observer | 2, 10, 17 | M | DEFERRED | - | - | - |
@@ -607,13 +607,23 @@ owner-approved plan is required to revisit this optimization.
 
 - **Scope:** Replace the existing article-prefetch predicate and audit verification with one pure structured host/path matcher, preserving the exclusion intent rather than adding a parallel pool filter over the old substring check.
 - **Level:** 2; no URL identity change.
+- **Authorization:** The owner approved this matcher correction independently of
+  Row 1's open feedback design on 2026-10-24 UTC. The earlier Row 1 dependency
+  does not block this phase. Delivery awaits PR review; this phase does not
+  authorize Row 16 or a Python runtime matcher rewrite.
 - **Files touched:**
   - `config/feed-ingest-plan.json`
+  - `backend/idhazh/contracts/knobs/feed_ingest.py` (config declaration only)
+  - `backend/tests/contracts/test_feed_ingest_config.py` (existing binding parameters)
   - `packages/common-contracts/src/schemas/config.schema.ts`
   - `services/feed-ingest-plan/src/harvest-feeds/url-exclusions.ts` (new)
   - `services/feed-ingest-plan/src/harvest-feeds/harvest-article.ts`
-  - `services/feed-ingest-plan/src/harvest-feeds/harvest-pool.ts`
+  - `services/feed-ingest-plan/src/harvest-feeds/harvest-types.ts`
+  - `services/feed-ingest-plan/src/load-plan-inputs.ts`
+  - `services/feed-ingest-plan/src/run-feed-plan.ts`
   - `services/feed-ingest-plan/src/metrics/stage-membership.ts`
+  - `services/feed-ingest-plan/test/early-age.test.ts`
+  - `services/feed-ingest-plan/test/harvest-recordings.ts`
   - `services/feed-ingest-plan/test/harvest-safety.test.ts`
   - `services/feed-ingest-plan/test/plan-engine.test.ts`
   - `tests/fixtures/feed-ingest-plan/harvest-safety.json`

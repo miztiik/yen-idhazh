@@ -70,5 +70,38 @@
     {"status": 503, "body": "", "expected": "robots-unknown"},
     {"error": "timeout", "expected": "robots-unknown"},
     {"error": "ECONNRESET", "expected": "robots-unknown"}
+  ],
+  "url_exclusions": [
+    {"host": "fool.com", "path_prefix": "/the-ascent", "include_subdomains": true}
+  ],
+  "url_exclusion_cases": [
+    {"name": "exact host and exact path", "url": "https://fool.com/the-ascent", "expected": true},
+    {"name": "host case and path child", "url": "https://FOOL.COM/the-ascent/story?ref=example#section", "expected": true},
+    {
+      "name": "rule host case is ignored",
+      "url": "https://fool.com/the-ascent/story",
+      "rules": [{"host": "FOOL.COM", "path_prefix": "/the-ascent", "include_subdomains": true}],
+      "expected": true
+    },
+    {"name": "approved subdomain", "url": "https://news.fool.com/the-ascent/story", "expected": true},
+    {"name": "host suffix without a dot boundary", "url": "https://fool.com.evil.example/the-ascent/story", "expected": false},
+    {"name": "path prefix without a segment boundary", "url": "https://fool.com/the-ascentive/story", "expected": false},
+    {"name": "path case is significant", "url": "https://fool.com/The-Ascent/story", "expected": false},
+    {"name": "query and fragment do not supply a matching path", "url": "https://news.example/story?next=fool.com/the-ascent/story#fool.com/the-ascent", "expected": false},
+    {
+      "name": "subdomains can be disabled",
+      "url": "https://news.fool.com/the-ascent/story",
+      "rules": [{"host": "fool.com", "path_prefix": "/the-ascent", "include_subdomains": false}],
+      "expected": false
+    }
+  ],
+  "invalid_url_exclusions": [
+    {},
+    {"host": "https://fool.com", "path_prefix": "/the-ascent", "include_subdomains": true},
+    {"host": "fool.com", "path_prefix": "the-ascent", "include_subdomains": true},
+    {"host": "fool.com", "path_prefix": "/the-ascent/", "include_subdomains": true},
+    {"host": "fool.com", "path_prefix": "/the-ascent?next=story", "include_subdomains": true},
+    {"host": "fool.com", "path_prefix": "/the-ascent", "include_subdomains": "yes"},
+    {"host": "fool.com", "path_prefix": "/the-ascent", "include_subdomains": true, "marker": "fool.com/the-ascent/"}
   ]
 }

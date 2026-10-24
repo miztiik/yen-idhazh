@@ -1,6 +1,6 @@
 # Feed candidate screening
 
-**Last Updated**: 2026-10-21
+**Last Updated**: 2026-10-24
 
 Which harvested articles pass the isolated planner's screening checks?
 This stage does not change production planning or fetch any content.
@@ -47,6 +47,28 @@ labels or harvested policy is rewritten. The later engine owns loading settled
 history and constructing downstream assessments.
 
 ## Gates and timing
+
+Before any article request, the isolated TypeScript harvester checks
+`harvest.url_exclusions` in `config/feed-ingest-plan.json`. Each validated rule
+names a host, a path prefix and whether subdomains are included. Hosts compare
+without case; subdomains must end at a dot boundary. Paths compare with case
+and match the prefix itself or its descendants at a slash boundary. A root
+prefix matches all paths on that host. Queries and fragments do not participate.
+Rule paths have no trailing slash except the root and cannot contain a query,
+fragment or dot segment.
+
+The committed `fool.com` rule includes subdomains and `/the-ascent` descendants.
+It keeps affiliate-product pages out without rejecting unrelated articles that
+mention that address in a query. Other reporting on the host stays eligible.
+This preserves the editorial exclusion, not a new assessment of article quality.
+Changing or removing that editorial scope needs owner review.
+
+The harvester and the planning audit use one pure structured matcher. A match
+retains `BLOCKED_URL_MARKER`, the existing `fool.com/the-ascent/` detail and the
+unchanged canonical URL hash. It records no attempted article fetch. The rule
+also applies when harvesting is called without publication or failure history.
+This correction changes only the isolated TypeScript path. Python still reads
+its existing marker configuration; URL identity and query cleanup are unchanged.
 
 Policies resolve through the existing
 [vertical policy resolver](feed-ingest-policies.md). Word thresholds use source

@@ -1,9 +1,11 @@
 /** Exercise recorded robots, address, sanitization and request-failure boundaries. */
 import { expect, test } from "bun:test";
+import { FeedUrlExclusionSchema } from "@idhazh/common-contracts";
 import { sanitizeText, SANITIZER_VERSION } from "../src/harvest-feeds/sanitize-text";
 import { isPublicAddress, validateTargetName } from "../src/harvest-feeds/safe-target";
 import { createPermittedFetcher, crawlerProduct, parseRobots, robotsPermits } from "../src/harvest-feeds/robots-policy";
 import { mapPool } from "../src/harvest-feeds/harvest-pool";
+import { matchUrlExclusion } from "../src/harvest-feeds/url-exclusions";
 import { fetchDiagnostics } from "../src/harvest-feeds/fetch-diagnostics";
 import { RecordedTransport, inputs, readRecordings, readSafety, source } from "./harvest-recordings";
 
@@ -30,11 +32,19 @@ test("literal, encoded and named unsafe addresses fail before transport", async 
   expect(transport.requests).toEqual([]);
 });
 
-test("recorded repeated groups, precedence, wildcard and encoded path rules bind the configured crawler", async () => {
+test("recorded robots rules and structured URL exclusions bind configured policy", async () => {
   const fixture = await readSafety();
   const loaded = await inputs();
   const agent = loaded.config.harvest.user_agent;
   expect(crawlerProduct(agent)).toBe("YenIdhazhBot");
+  expect(loaded.config.harvest.url_exclusions).toEqual(fixture.url_exclusions);
+  for (const rule of fixture.url_exclusions) expect(FeedUrlExclusionSchema.safeParse(rule).success).toBe(true);
+  for (const rule of fixture.invalid_url_exclusions) expect(FeedUrlExclusionSchema.safeParse(rule).success).toBe(false);
+  for (const vector of fixture.url_exclusion_cases) {
+    const matched = matchUrlExclusion(vector.url, vector.rules ?? fixture.url_exclusions);
+    expect(matched !== undefined, vector.name).toBe(vector.expected);
+    if (matched !== undefined) expect(vector.rules ?? fixture.url_exclusions).toContainEqual(matched);
+  }
   for (const recording of fixture.robots) {
     const document = parseRobots(recording.body, "https://news.example");
     for (const path of recording.allowed) expect(robotsPermits(document, `https://news.example${path}`, agent), `${recording.name} ${path}`).toBe(true);
