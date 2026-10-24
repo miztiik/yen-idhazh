@@ -327,10 +327,15 @@ When enabled, the separate adapter validates the existing typed event array
 and formats source outcomes, observed stage counts and candidate-decision
 counts. The live response supplies existing source-run counts for offered,
 fresh, harvested, duplicate, screened eligible, normalized and selected entries,
-with the resolved requested limit. Feed failures are separate. Per-reason
-counts name their denominators; feed decisions use every configured source,
-including inactive sources that were not fetched. Fetch failures separately
-use attempted feeds. Unknown feed entry counts remain unknown.
+with the resolved requested limit. Table D groups refusals by subject and stage,
+with feed groups before article groups and stages in their declared order.
+Rows within each group share one denominator and sort by count, largest first;
+equal counts use alphabetical reason order. The subject, stage, reason and
+denominator are explicit; feed and article counts are never ranked together.
+Feed decisions use every configured source, including inactive sources that
+were not fetched. Article refusals use observed parsed entries, not an inferred
+stage-input count. Fetch failures in the yield table separately use attempted
+feeds. Unknown feed entry counts remain unknown.
 Recorded progress supplies completed operation outcomes and paired elapsed
 intervals for history, planning, audit and HTTP. Event gaps are not summed as
 operation time. Shared `HarvestDiagnosticsSchema` validates the actual operation
