@@ -1371,7 +1371,7 @@ def _shell_words(script: str, *, comments: bool = False) -> list[str]:
     return shlex.split("\n".join(_logical_shell_lines(script)), comments=comments)
 
 
-def _shell_commands(script: str) -> list[list[str]]:
+def _shell_commands(script: str, *, preserve_quotes: bool = False) -> list[list[str]]:
     """Inspect simple POSIX commands, separators and unquoted substitutions, not shell execution.
 
     Quotes and comments use shlex; continuations use the shared line reader.
@@ -1380,7 +1380,7 @@ def _shell_commands(script: str) -> list[list[str]]:
     commands: list[list[str]] = []
     for line in _logical_shell_lines(script):
         line = re.sub(r"\$\{\{.*?\}\}", "ACTION_VALUE", line)
-        lexer = shlex.shlex(line, posix=True, punctuation_chars=";&|()<>")
+        lexer = shlex.shlex(line, posix=not preserve_quotes, punctuation_chars=";&|()<>")
         lexer.whitespace_split = True
         words: list[str] = []
         for word in [*lexer, ";"]:

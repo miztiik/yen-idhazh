@@ -208,10 +208,11 @@ def test_the_budget_retake_is_its_own_target_and_writes_no_committed_file() -> N
 def _committed_destinations(script: str) -> list[str]:
     """Find literal redirect, tee, cp and mv destinations, not read-only source paths."""
     found: list[str] = []
-    for words in _shell_commands(script):
+    for quoted in _shell_commands(script, preserve_quotes=True):
+        words = [_shell_words(word)[0] for word in quoted]
         destinations = [
             words[index + 1]
-            for index, word in enumerate(words[:-1])
+            for index, word in enumerate(quoted[:-1])
             if word in {">", ">>", ">|", "&>"}
         ]
         if words[0] in {"tee", "cp", "mv"}:
@@ -219,15 +220,16 @@ def _committed_destinations(script: str) -> list[str]:
             if words[0] == "tee":
                 destinations.extend(arguments)
             elif arguments:
-                destinations.append(arguments[-1])
+                targets: list[str] = []
                 for index, word in enumerate(words[:-1]):
                     if word in {"-t", "--target-directory"}:
-                        destinations.append(words[index + 1])
-                destinations.extend(
+                        targets.append(words[index + 1])
+                targets.extend(
                     word.split("=", 1)[1]
                     for word in words
                     if word.startswith("--target-directory=")
                 )
+                destinations.extend(targets or arguments[-1:])
         found.extend(
             path
             for path in destinations
@@ -285,7 +287,10 @@ def test_committed_measurement_writes_are_detected(script: str) -> None:
     [
         "cat docs/report.md > backend/var/report.md",
         "cp docs/report.md backend/var/report.md",
+        "cp -t backend/var docs/report.md",
+        "mv --target-directory=backend/var docs/report.md",
         "echo 'tee docs/report.md'",
+        "printf '%s' '>' docs/report.md",
         "# cp result.md docs/report.md",
     ],
 )
