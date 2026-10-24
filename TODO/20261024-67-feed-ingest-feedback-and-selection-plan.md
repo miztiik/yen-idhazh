@@ -102,7 +102,7 @@ tracing context. The existing default-off service flag gates the new routes.
 | E5 | 5 | Classify failure and work attribution | 4 | E | PENDING | - | - | - |
 | E6 | 6 | Aggregate article delivery and request costs | 5 | F | PENDING | - | - | - |
 | E7 | 7 | Compute supported operational estimates | 6 | G | PENDING | - | - | - |
-| E8 | 8 | Deliver selection, partition and persistence APIs | - (authorized stage contracts included) | E | IN-FLIGHT | feed-ingest-feedback-selection | - | - |
+| E8 | 8 | Deliver selection, partition and persistence APIs | - (authorized stage contracts included) | E | DONE | feed-ingest-feedback-selection | - | - |
 | E9 | 9 | Apply the soft publisher-exposure preference | 8 | F | PENDING | - | - | - |
 | E10 | 10 | Settle feedback and consume it in the next allocation | 7, 8 | H | PENDING | - | - | - |
 | E11 | 11 | Report bounded technical admission trials | 10 | I | PENDING | - | - | - |
@@ -430,6 +430,7 @@ deferred.
   - `docs/architecture/sources/feed-operator-api.md`
 - **Acceptance gates:** Local: the existing API integration case exercises combined screening/selection over a whole parse batch, per-item failures, missing batch, run/configuration mismatch and existing output parity. Its stage helper also covers 205 generated inputs with a one-article output limit, unchanged ranks, empty output, restart, invalid saved context, damaged assignments and a genuine dispatch-directory write failure. The full planner produces registered dispatch Parquet read by the native TypeScript reader. Service checks and selected API/engine/metric cases passed; the 22 isolated adapter cases and native verifier passed. The contract agent's 61 shared cases and check passed. CI remains authoritative for Python binding and full merge-candidate coverage. No local Python ran.
 - **Oracle:** The same validated candidate set and context produce identical unsharded selections through the new API and `/plan`; this cannot prove publication or worker consumption.
+- **Closure evidence:** Candidate `776fd5d72b37981ce09d605fd30abb0fcc70e1ac` passed all five jobs in [CI run 40126606533](https://github.com/miztiik/yen-idhazh/actions/runs/40126606533), including native field/type/vocabulary binding, named fixture round trips, full backend coverage and the real TypeScript stage/API suites. This closes only the authorized API phase. The broader Row 1/2 feedback contracts and deferred worker integration remain open.
 
 ### Table W - Decisions
 
