@@ -46,6 +46,13 @@ operator console, not on the news-reading pages.
 recorder or leave host telemetry out. Existing historical readings and recovery
 backups are not rewritten.
 
+Python callers can pass `ask_placement=False` to the task recorder or machine-row
+writer to omit the external host-placement request while retaining local
+collection and ledger writes. The default is `True`; the elapsed-time writer
+makes no placement request. Job instrumentation tests use this existing
+acquisition choice and refuse entry to the real placement reader, so a missing
+forwarding step fails before any network access.
+
 The manual feed planner workflow installs the existing Bun fingerprint
 service and invokes `persistFingerprint` after live planning and the separate
 generated audit gate. The producer remains `telemetry.silicon`; the caller is
