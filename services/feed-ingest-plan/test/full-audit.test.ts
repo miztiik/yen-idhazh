@@ -27,6 +27,8 @@ test("API and CLI expose genuine full audit completion, with independent native 
       expect(summary).toMatchObject({ status: "audit_complete", planning_complete: true, audited_complete: true,
         audit: { status: "complete", reason: null } });
       expect(summary.publication.history.coverage_days).toBe(summary.publication.history.required_days);
+      expect(summary.metrics.evidence.trace[0]?.evaluated[0]?.scores.source_reliability)
+        .toMatchObject({ enabled: true, production_factor: 1, value: 0 });
       expect(await verifyPublicationMetrics(observation, summary.publication)).toEqual({ status: "complete", reasons: [] });
       await expect(verifyPublicationMetrics(observation, { ...summary.publication, attempt: 2 })).rejects.toThrow("identity");
       await expect(verifyPublicationMetrics(observation, { ...summary.publication,

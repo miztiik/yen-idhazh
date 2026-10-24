@@ -9,7 +9,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, read_text
+from support.paths import CONFIG_DIR, read_text
 
 from idhazh.contracts.base import SLUG_PATTERN
 from utilities import measure_llm, model_refs

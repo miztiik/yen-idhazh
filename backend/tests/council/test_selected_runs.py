@@ -10,8 +10,8 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from conftest import FIXTURES_DIR
 from gardener._garden import an_origin, git, on_origin, quiet_git
+from support.paths import FIXTURES_DIR
 
 from idhazh import config, ledger
 from idhazh.contracts.council_run_record import CouncilRunRecord

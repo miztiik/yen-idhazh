@@ -1,6 +1,6 @@
 # The Summarizer Prompt
 
-**Last Updated**: 2026-10-10
+**Last Updated**: 2026-10-24
 
 What the model is asked to produce, how the two calls share context, and what the pipeline validates. Prompt wording is not a security control: sanitization and validated output shapes enforce the boundary.
 
@@ -94,7 +94,12 @@ Never recover a partially written summary. A visual plan may cite only validated
 
 ### The output budget is derived, not picked
 
-Derive reply budgets from the schema's bounded arrays and strings. Both calls use the shared JSON-width calculation, but their character-to-token conversions differ because their outputs differ.
+When the model file does not declare `sampling.max_tokens`, derive reply budgets
+from the schema's bounded arrays and strings. An explicit limit replaces those
+budgets on each request, including continuations; see
+[model-file.md](../../concepts/config/model-file.md#design-rationale).
+Both calls use the shared JSON-width calculation, but their character-to-token
+conversions differ because their outputs differ.
 
 The summarize-and-plan reply contains prose and bounded structure. The label reply uses a measured output-density estimate. Name the tokenizer and evidence behind that estimate; it is not a mathematical guarantee for every possible string.
 
@@ -113,7 +118,11 @@ After parsing, `to_summary` enforces publishability.
 
 ## Two spans on one call
 
-Reasoning is declared by the model's closing marker. On the explicit-completion path, a reasoning span runs without the output grammar until that marker, the context limit or timeout. The answer span continues the same prompt with the grammar restored and its own reply budget.
+Reasoning is declared by the model's closing marker. On the explicit-completion
+path, a reasoning span runs without the output grammar until that marker, the
+context limit or timeout, or the configured `max_tokens` limit when present.
+The answer span continues the same prompt with the grammar restored and its own
+reply budget, also replaced by an explicit `max_tokens` when present.
 
 Discard reasoning before the reply reaches a persisted payload, reader surface or later article-level continuation. With no declared marker, reject unexpected reasoning. Check both inline thinking blocks and a separate reasoning channel, and inspect every inline block rather than only the first.
 

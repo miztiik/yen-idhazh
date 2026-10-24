@@ -19,7 +19,7 @@ import json
 from typing import Any, Final
 
 import pytest
-from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
+from support.paths import CONFIG_DIR, FIXTURES_DIR, read_text
 
 from gardener._historical_config import PRE_YEARLY_CONFIG
 from idhazh import config

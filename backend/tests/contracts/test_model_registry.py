@@ -8,8 +8,8 @@ import re
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, MODEL_FILES, read_text
 from pydantic import ValidationError
+from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh import config
 from idhazh.config import refuse_a_model_nothing_could_run
@@ -25,6 +25,7 @@ from ._fixtures import (
     entry_with,
     swapped_summarizer,
 )
+from ._model_cases import MODEL_FILES
 
 pytestmark = pytest.mark.contract
 
@@ -177,6 +178,15 @@ def test_a_sampling_key_a_route_sets_itself_is_refused_when_the_config_loads() -
     message = str(raised.value)
     assert "models.summarizer.sampling" in message, "the refusal names the block"
     assert "grammar_lazy" in message, "and the key inside it"
+
+
+def test_a_configured_output_limit_is_accepted_when_the_config_loads() -> None:
+    raw = committed_models_raw()
+    raw["summarizer"]["sampling"]["max_tokens"] = 4096
+    models = ModelsConfig.model_validate(raw)
+
+    refuse_a_model_nothing_could_run("models/x.json", models)
+    assert models.summarizer.sampling["max_tokens"] == 4096
 
 
 def test_an_entry_that_dumps_and_reloads_is_not_refused_for_its_own_shape() -> None:

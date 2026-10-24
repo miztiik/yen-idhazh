@@ -135,11 +135,21 @@ def test_a_pipeline_test_runner_runs_the_plan_its_dispatch_drew() -> None:
     workflow = _load_workflows()[PIPELINE_TESTS_WORKFLOW]
     step = _step(workflow, "test-case", "name", PIPELINE_TESTS_RUN_STEP)
     assert _mapping(step.get("env"), "run step env")["RUN_EXECUTION"] == "${{ github.run_id }}"
+    assert _mapping(step.get("env"), "run step env")["RUN_COMMIT"] == "${{ github.sha }}"
     calls = _calls(_script(step, PIPELINE_TESTS_RUN_STEP), "pipeline_test_case.py run")
-    assert len(calls) == 1 and '--execution "$RUN_EXECUTION"' in calls[0]
+    assert len(calls) == 1
+    assert '--execution "$RUN_EXECUTION"' in calls[0]
+    assert '--commit "$RUN_COMMIT"' in calls[0]
 
     for verb in ("work", "record"):
         words = pipeline_test_case._stage(
-            verb, date="2026-09-14", execution=7, config_root=Path("config"), shard=0, shards=1
+            verb,
+            date="2026-09-14",
+            execution=7,
+            config_root=Path("config"),
+            shard=0,
+            shards=1,
+            commit="1234567890abcdef1234567890abcdef12345678",
         )
         assert words[words.index(EXECUTION_FLAG) + 1] == "7", f"{verb} must read this run's plan"
+        assert words[words.index("--commit") + 1] == "1234567890abcdef1234567890abcdef12345678"

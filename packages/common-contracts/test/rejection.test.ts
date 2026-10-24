@@ -10,12 +10,13 @@ import {
   PolicyIdentitySchema, REASON_STAGES, REQUIRED_DETAILS, RejectionDetailsSchema,
   SourceRunRecordSchema, SourceSnapshotSchema, StageCompletionPayloadSchema,
   WriterIdentitySchema, deriveCandidateId, deriveUrlKey, validateEnvelopeContainer,
-  readFeedIngestEvent, HarvestDiagnosticsSchema, HARVEST_DIAGNOSTICS_VERSION, PLANNER_EXCLUSIONS_VERSION,
+  readFeedIngestEvent, HarvestDiagnosticsSchema, PLANNER_EXCLUSIONS_VERSION,
   FetchAttemptSchema, OPERATION_VERSION, PLANNER_OPERATION_VERSION, RecordedInstantSchema, TimestampSchema,
   PLANNING_OBSERVATIONS_VERSION,
   EXTRACTION_QUALITY_VERSION,
   PreviousHarvestDiagnosticsSchema,
-  ArticleAssessmentContract,
+  ArticleAssessmentContract, EditorialSelectionContract, SourceReliabilityPenaltySchema,
+  SOURCE_RELIABILITY_VERSION, FEED_HISTORY_EVENT_VERSION, CONTRACT_VERSION,
 } from "../src/index";
 import { runtimeSchemas, schemas } from "./schema-binding";
 
@@ -294,6 +295,30 @@ describe("planning audit contracts", () => {
     expect(DiversityMetricRowSchema.safeParse({ ...metric, value: Infinity }).success).toBe(false);
     expect(DiversityMetricRowSchema.safeParse({ ...metric, top_k: 1 }).success).toBe(false);
     expect(DiversityMetricRowSchema.safeParse({ ...metric, basis: "stage" }).success).toBe(false);
+    const reliability = SourceReliabilityPenaltySchema.parse({
+      enabled: true, source_authority_score: 2, reliability_floor: 0.5,
+      history: { success_fraction: 0.25, attempted: 4, window_days: 7 },
+      production_factor: 0.5, value: 1,
+    });
+    for (const change of [
+      { history: null }, { production_factor: 0.25 }, { value: 0.5 }, { enabled: false },
+      { history: { ...reliability.history, attempted: 0 } },
+      { history: { ...reliability.history, success_fraction: 1.1 } },
+      { history: { ...reliability.history, window_days: 0 } },
+    ]) expect(SourceReliabilityPenaltySchema.safeParse({ ...reliability, ...change }).success).toBe(false);
+    expect(SourceReliabilityPenaltySchema.safeParse({
+      ...reliability, history: null, production_factor: null, value: null,
+    }).success).toBe(true);
+    expect(SourceReliabilityPenaltySchema.safeParse({ ...reliability, enabled: false, value: 0 }).success).toBe(true);
+    const oldSelection = EditorialSelectionContract.legacyVersions[CONTRACT_VERSION];
+    const { source_reliability: _reliability, ...previousRatings } = selection().ratings;
+    const original = oldSelection.schema.parse({ ...selection(), version: CONTRACT_VERSION, ratings: previousRatings });
+    const migrated = oldSelection.migrate(original);
+    expect(migrated.ratings.source_reliability).toBeNull();
+    expect({ ...migrated, version: original.version, ratings: previousRatings }).toEqual(original);
+    expect(oldSelection.schema.safeParse({
+      ...original, ratings: { ...original.ratings, source_reliability: reliability },
+    }).success).toBe(false);
   });
 
   test("binds event discriminators, candidate identities and stages", () => {
@@ -324,7 +349,7 @@ describe("planning audit contracts", () => {
     expect(record.payload.assessment.diagnostics).toBeNull();
     expect(record.payload.assessment.version).toBe(ArticleAssessmentContract.schemaVersion);
     expect(record.payload.assessment).toEqual({
-      ...fixture.payload.assessment, version: EXTRACTION_QUALITY_VERSION, diagnostics: null,
+      ...fixture.payload.assessment, version: SOURCE_RELIABILITY_VERSION, diagnostics: null,
     });
     expect(readFeedIngestEvent(JSON.parse(JSON.stringify(record)))).toEqual(record);
     const prior = {
@@ -349,6 +374,9 @@ describe("planning audit contracts", () => {
     expect(schema.version).toBe(record.version);
     expect(schema.changelog).toEqual([{
       version: record.version,
+      change: "Record separate source-reliability penalties on portfolio decisions.",
+    }, {
+      version: FEED_HISTORY_EVENT_VERSION,
       change: "Record native feed rest, retirement, reliability and daily publication evidence.",
     }, {
       version: "2026-10-23",
@@ -356,9 +384,6 @@ describe("planning audit contracts", () => {
     }, {
       version: PLANNER_EXCLUSIONS_VERSION,
       change: "Record pre-fetch planner exclusions with their measured ledger evidence.",
-    }, {
-      version: HARVEST_DIAGNOSTICS_VERSION,
-      change: "Retain measured fetch and extraction diagnostics on feed and article decisions.",
     }, {
       version: fixture.version,
       change: "Older changes are in git.",
@@ -376,6 +401,17 @@ describe("planning audit contracts", () => {
     const migratedFeed = readFeedIngestEvent(historicalFeed);
     expect(migratedFeed.payload).toMatchObject({ history: null });
     expect(migratedFeed.version).toBe(record.version);
+    for (const version of [EXTRACTION_QUALITY_VERSION, FEED_HISTORY_EVENT_VERSION]) {
+      const previous = { ...prior, version, payload: { ...prior.payload, assessment: {
+        ...prior.payload.assessment, version: EXTRACTION_QUALITY_VERSION,
+        diagnostics: HarvestDiagnosticsSchema.parse({ extract_ms: 2 }),
+      } } };
+      const migrated = readFeedIngestEvent(previous);
+      expect(migrated.payload).toMatchObject({ assessment: {
+        version: SOURCE_RELIABILITY_VERSION, diagnostics: { extract_ms: 2, quality: null },
+      } });
+      expect(readFeedIngestEvent(JSON.parse(JSON.stringify(migrated)))).toEqual(migrated);
+    }
   });
 
   test("exports the actual runtime input JSON schemas, including nested strict objects", async () => {

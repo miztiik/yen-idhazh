@@ -899,8 +899,8 @@ def parse_args() -> argparse.Namespace:
         help=(
             "What the server case replayed, as the report should state it - for example "
             "'3 articles'. Required rather than defaulted: it is the size of the corpus "
-            "a reading was taken over, and a default would be a second spelling of "
-            "`bench.corpus_items` that could disagree with it (Guardrail #6)."
+            "a reading was taken over, and a default could misstate which articles "
+            "the reading covered (Guardrail #10)."
         ),
     )
     emit.add_argument("--dossier", type=Path, default=Path("backend/var/bench/dossier.md"))

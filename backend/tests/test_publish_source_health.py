@@ -13,8 +13,8 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
-from conftest import seed_feed_health, seed_item_health
 from pydantic import ValidationError
+from support.ledger import seed_feed_health, seed_item_health
 
 from idhazh import config, day_partition, ledger
 from idhazh.contracts.base import Contract, derive_url_key

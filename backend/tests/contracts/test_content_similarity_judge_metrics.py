@@ -20,8 +20,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, SEED_COMMIT, read_text
 from pydantic import ValidationError
+from support.ledger import SEED_COMMIT
+from support.paths import CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob

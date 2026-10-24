@@ -15,7 +15,7 @@ from typing import Any
 
 import duckdb
 import pytest
-from conftest import REPO_ROOT
+from support.paths import REPO_ROOT
 
 from idhazh import config
 from idhazh.contracts.knobs.console import ConsoleConfig

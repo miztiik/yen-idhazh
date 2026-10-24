@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 
 import pytest
-from conftest import CONFIG_DIR, read_text
+from support.paths import CONFIG_DIR, read_text
 
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.knobs.content_similarity_judge import ContentSimilarityJudgeConfig

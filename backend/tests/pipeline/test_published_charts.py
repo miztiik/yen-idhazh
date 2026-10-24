@@ -6,8 +6,8 @@ import shutil
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, read_text
 from pytest import MonkeyPatch
+from support.paths import CONFIG_DIR, read_text
 
 from idhazh import assemble, config
 from idhazh.contracts.digest_day import DigestDay

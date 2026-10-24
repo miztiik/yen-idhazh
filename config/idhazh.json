@@ -193,7 +193,7 @@
   "model_server": {
     "base_url": "http://127.0.0.1:8080"
   },
-  "models_file": "models/qwen3.5-9b-q4km.json",
+  "models_file": "models/ornith-1.5-9b-q5km.json",
   "observability": {
     "cost_currency": "USD",
     "cost_input_per_million": 0.2,

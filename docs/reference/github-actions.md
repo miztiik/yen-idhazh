@@ -90,6 +90,8 @@ collisions - ledgers land tier-first at `state/raw/pipeline-tests/<case>/` and
 `run.trial_state_dirname` root. Only the commit job has write permission; validate
 downloaded rows and config-derived paths before staging them. Gather only the plan's
 named UTC day from each declared ledger, not a trial root's accumulated history.
+Every runner names the checked-out commit in its ledger identity, so the commit
+job rejects a result made from a different code version.
 Never write reader-facing payloads.
 
 ## Vector backfill

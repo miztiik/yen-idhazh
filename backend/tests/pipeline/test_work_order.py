@@ -7,7 +7,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR
+from support.paths import CONFIG_DIR
 
 from idhazh import config
 from idhazh.contracts.article import Article

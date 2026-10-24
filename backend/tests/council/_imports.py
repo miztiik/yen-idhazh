@@ -5,7 +5,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-from conftest import REPO_ROOT
+from support.paths import REPO_ROOT
 
 MODULE_NAMES = (
     "idhazh",

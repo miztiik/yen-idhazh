@@ -19,7 +19,8 @@ from dataclasses import replace
 from typing import Any
 
 import pytest
-from conftest import CONFIG_DIR, FIXTURES_DIR, collect_config, read_text
+from support.config import collect_config
+from support.paths import CONFIG_DIR, FIXTURES_DIR, read_text
 
 from idhazh import config
 from idhazh.contracts.base import TIMESTAMP_PATTERN, derive_url_key

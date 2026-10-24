@@ -21,7 +21,7 @@ import json
 import re
 from typing import Any, Final
 
-from conftest import FIXTURES_DIR, REPO_ROOT, read_text
+from support.paths import FIXTURES_DIR, REPO_ROOT, read_text
 
 from idhazh import rank
 from idhazh.config import load

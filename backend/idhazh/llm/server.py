@@ -96,6 +96,8 @@ CONTEXT_EXCEEDED_TYPE: Final = "exceed_context_size_error"
 #: read without knowing which flags the server was started with.
 UNCAPPED_N_PREDICT: Final = -1
 
+DEFAULT_MAX_TOKENS: Final = 8192
+
 #: What span two owns and span one may not inherit. A key here is stripped when
 #: the thinking span is derived from the answer body, and each one is here for
 #: its own reason rather than as a class.
@@ -445,6 +447,8 @@ def with_sampling(
     check: a config key that reached a decode control would turn constrained
     decoding into an option.
     """
+    if "max_tokens" in sampling and "n_predict" in sampling:
+        raise ValueError("sampling may not set both max_tokens and n_predict")
     clash = sorted(sampling.keys() & (body.keys() | disablers | _ALWAYS_REFUSED))
     if clash:
         raise ValueError(f"sampling may not set {', '.join(clash)} - this route sets it")
@@ -533,12 +537,8 @@ def server_argv(
 
 
 #: What re-spells or turns off `response_format`, the control the chat builder
-#: below sets. `max_tokens` is here because this route sends no cap by design: a
-#: cap from config makes the reply stop at `length`, and the item then fails
-#: `OUTPUT_TRUNCATED` before its content is read.
-CHAT_DISABLERS: Final[frozenset[str]] = frozenset(
-    {"json_schema", "grammar", "max_tokens", "n_predict"}
-)
+#: below sets. Output limits remain operator-controlled through `max_tokens`.
+CHAT_DISABLERS: Final[frozenset[str]] = frozenset({"json_schema", "grammar", "n_predict"})
 
 
 def request_payload(    *,
@@ -567,13 +567,9 @@ def request_payload(    *,
     its bytes and gets the two spans separately (`thinking_span`,
     `answer_span`).
 
-    **No token cap is sent, on either envelope.** One span carries both here, so
-    any number would have to be the sum of two budgets and a thinking envelope
-    has no honest sum to send. The server is started without `--predict` and its
-    own default is `-1`, infinity bounded by the window
-    (`tests/fixtures/runtime/b10598-llama-server-help.txt`), so omitting the key
-    says exactly what is true: the window stops this decode, and the
-    per-request timeout stops the wait.
+    The configured `max_tokens` limits the whole reply, including reasoning.
+    An omitted limit uses `DEFAULT_MAX_TOKENS`. Reaching the limit remains
+    a truncated reply, not a completed document.
     """
     payload: dict[str, Any] = {
         "model": model_id,
@@ -592,14 +588,16 @@ def request_payload(    *,
     # with a closing marker declared.
     if markers.thinking_kwarg is not None:
         payload["chat_template_kwargs"] = {markers.thinking_kwarg: markers.thinks}
-    return with_sampling(payload, sampling, CHAT_DISABLERS)
+    return with_sampling(
+        payload, {"max_tokens": DEFAULT_MAX_TOKENS, **sampling}, CHAT_DISABLERS
+    )
 
 
 #: What re-spells or turns off `json_schema`, the control the rendered-completion
 #: builder below sets. `response_format` is here although this route ignores it:
 #: a config key that set it would read as a shape control and bind nothing.
 COMPLETION_DISABLERS: Final[frozenset[str]] = frozenset(
-    {"response_format", "grammar", "grammar_lazy", "grammar_triggers", "max_tokens"}
+    {"response_format", "grammar", "grammar_lazy", "grammar_triggers"}
 )
 
 
@@ -612,7 +610,7 @@ def completion_payload(
     server: Mapping[str, Any],
     sampling: Mapping[str, Any],
     markers: TurnMarkers,
-    max_answer_tokens: int,
+    max_answer_tokens: int = DEFAULT_MAX_TOKENS,
 ) -> dict[str, Any]:
     """The request body for a prompt we rendered ourselves.
 
@@ -622,12 +620,9 @@ def completion_payload(
     route does - `response_format` is accepted and ignored here, which is a
     silent loss of the only control that matters, so it is never sent.
 
-    **The budget is handed in rather than read off the entry**, for the same
-    reason `continued_completion_payload` takes one: a rendered call is held to
-    a shape of its own, and a budget sized for some other shape cuts a reply
-    that did exactly what the grammar allowed. It is the caller's own
-    grammar-derived number and there is no role-level cap behind it: the
-    settings block carried two until 2026-09-21 and neither bounded this route.
+    An explicit `sampling.max_tokens` overrides the caller's shape-derived
+    budget. Without it, `n_predict` carries that derived budget. Only one
+    output-limit key is sent, including on continuations.
 
     **This is the answer span, whether or not one is thought in front of it.**
     Under a thinking envelope `thinking_span` derives span one from this body
@@ -648,7 +643,7 @@ def completion_payload(
         {
             "model": model_id,
             "prompt": render_prompt(system=system, user=user, markers=markers),
-            "n_predict": max_answer_tokens,
+            **({} if "max_tokens" in sampling else {"n_predict": max_answer_tokens}),
             "stream": False,
             "cache_prompt": caches_the_prompt(server),
             "json_schema": output_schema,
@@ -662,7 +657,7 @@ def completion_payload(
 #: `grammar_lazy` is the sharpest of them: it leaves `grammar` formally applied
 #: and never engaged, so the control is off with its own key untouched.
 GRAMMAR_DISABLERS: Final[frozenset[str]] = frozenset(
-    {"grammar_lazy", "grammar_triggers", "response_format", "json_schema", "max_tokens"}
+    {"grammar_lazy", "grammar_triggers", "response_format", "json_schema"}
 )
 
 
@@ -675,7 +670,7 @@ def grammar_completion_payload(
     server: Mapping[str, Any],
     sampling: Mapping[str, Any],
     markers: TurnMarkers,
-    max_answer_tokens: int,
+    max_answer_tokens: int = DEFAULT_MAX_TOKENS,
     first_token_alternatives: int,
     post_sampling_probs: bool = False,
 ) -> dict[str, Any]:
@@ -711,7 +706,7 @@ def grammar_completion_payload(
         {
             "model": model_id,
             "prompt": render_prompt(system=system, user=user, markers=markers),
-            "n_predict": max_answer_tokens,
+            **({} if "max_tokens" in sampling else {"n_predict": max_answer_tokens}),
             "n_probs": first_token_alternatives,
             "post_sampling_probs": post_sampling_probs,
             "stream": False,
@@ -785,21 +780,13 @@ def thinking_span(
     uncapped runs until it repeats itself, and the repetition ends only at the
     marker it is looping instead of writing, or at the window.
 
-    **`n_predict` is written here rather than left alone, and that is the whole
-    reason the constant survives.** The answer body this span is derived from
-    carries the caller's own grammar-derived budget, and a span that inherited
-    it would think under a number sized for the answer - four tokens on the
-    judge's route. `-1` is the spelling `--predict` documents, `number of tokens
-    to predict (default: -1, -1 = infinity)`, recorded in
-    `tests/fixtures/runtime/b10598-llama-server-help.txt`. The span then ends on
-    the entry's own closing marker or on the window, and on nothing else - and
+    An explicit `max_tokens` is retained for reasoning too. Otherwise,
+    `n_predict` is replaced with the runtime's uncapped value rather than
+    inheriting a budget sized for the answer. The span ends on
+    the entry's own closing marker, the output limit or the window, and
     llama-server excludes the stop string from what it returns, which is why
     `answer_span` writes the marker itself rather than trusting the reply to
     carry it.
-
-    **A stop alone would not do**, because a block that never closes eats the
-    window - which is exactly what this accepts, and why an uncapped span rests
-    its whole weight on the marker being the bytes this model actually writes.
     """
     close = markers.thinking_close
     if close is None:
@@ -808,7 +795,8 @@ def thinking_span(
             "a caller reached for one on an envelope that does not think"
         )
     span = {name: value for name, value in answer.items() if name not in _ANSWER_ONLY_KEYS}
-    span["n_predict"] = UNCAPPED_N_PREDICT
+    if "max_tokens" not in answer:
+        span["n_predict"] = UNCAPPED_N_PREDICT
     span["stop"] = [close]
     if temperature is not None:
         span["temperature"] = temperature
@@ -882,7 +870,7 @@ def continued_completion_payload(
     user: str,
     output_schema: dict[str, Any],
     markers: TurnMarkers,
-    max_answer_tokens: int,
+    max_answer_tokens: int = DEFAULT_MAX_TOKENS,
 ) -> dict[str, Any]:
     """A second request whose prompt IS the first one's, plus what it returned.
 
@@ -891,8 +879,9 @@ def continued_completion_payload(
     tokenised prompt, so everything the first call read and everything it wrote
     is answered from the slot and only the new turn is prefilled.
 
-    Only three things move: the prompt grows, the decoder is held to a different
-    shape, and the output budget is the one derived for that shape. Temperature,
+    The prompt grows, the decoder is held to a different shape, and an output
+    budget derived for the new shape replaces the old derived budget.
+    An explicit `max_tokens` stays unchanged. Temperature,
     `top_p`, `seed`, `stream` and the prompt cache are carried over untouched,
     because `completion_payload` is the one place that sets them
     (`docs/architecture/contracts/determinism.md`).
@@ -914,7 +903,7 @@ def continued_completion_payload(
     return {
         **first,
         "prompt": continued_prompt(str(first["prompt"]), reply=reply, user=user, markers=markers),
-        "n_predict": max_answer_tokens,
+        **({} if "max_tokens" in first else {"n_predict": max_answer_tokens}),
         "json_schema": output_schema,
     }
 

@@ -6,7 +6,7 @@ import json
 import shutil
 from pathlib import Path
 
-from conftest import CONFIG_DIR
+from support.paths import CONFIG_DIR
 
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.knobs.council import CouncilConfig

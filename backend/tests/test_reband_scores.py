@@ -12,7 +12,8 @@ from types import ModuleType
 from typing import Any, cast
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text, seed_scores
+from support.ledger import seed_scores
+from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.eval_row import EvalRow

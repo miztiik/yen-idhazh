@@ -25,8 +25,8 @@ from pathlib import Path
 from typing import Annotated, Any, Union, get_args, get_origin
 
 import pytest
-from conftest import REPO_ROOT
 from pydantic import BeforeValidator, StringConstraints, TypeAdapter, ValidationError
+from support.paths import REPO_ROOT
 
 from idhazh.contracts import CONTRACTS, base
 from idhazh.contracts.base import (

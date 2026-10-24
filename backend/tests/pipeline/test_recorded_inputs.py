@@ -5,9 +5,9 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
-from conftest import CONFIG_DIR, read_text
 from pydantic import TypeAdapter
 from pytest import MonkeyPatch
+from support.paths import CONFIG_DIR, read_text
 
 from idhazh import config, run_context, telemetry
 from idhazh.contracts.base import ServerJob

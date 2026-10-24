@@ -108,11 +108,45 @@ class PenaltyEvidence(Model):
         return self
 
 
+class OperationalHistory(Model):
+    """Which attempted feed reads produced items in the measured window?"""
+
+    success_fraction: Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)]
+    attempted: PositiveCount
+    window_days: PositiveCount
+
+
+class SourceReliabilityPenalty(Model):
+    """Which measured delivery history reduced only the source-authority contribution?"""
+
+    enabled: bool = Field(strict=True)
+    source_authority_score: NonNegative
+    reliability_floor: Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)]
+    history: OperationalHistory | None
+    production_factor: Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)] | None
+    value: NonNegative | None
+
+    @model_validator(mode="after")
+    def validate_measurement(self) -> Self:
+        if self.history is None:
+            if self.production_factor is not None or self.value is not None:
+                raise ValueError("unavailable reliability carries no factor or measured penalty")
+        else:
+            factor = max(self.reliability_floor, self.history.success_fraction)
+            if self.production_factor != factor:
+                raise ValueError("reliability factor must match the measured fraction and floor")
+            penalty = self.source_authority_score * (1 - factor) if self.enabled else 0
+            if self.value != penalty:
+                raise ValueError("reliability penalty must reduce only source authority")
+        return self
+
+
 class ScoreEvidence(Model):
     """Which ratings and separate portfolio penalties decided a greedy choice?"""
 
     base_article_score: Finite
     marginal_score: Finite
+    source_reliability: SourceReliabilityPenalty | None = None
     source: PenaltyEvidence
     source_kind: PenaltyEvidence
     domain: PenaltyEvidence

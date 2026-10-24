@@ -1,0 +1,5 @@
+{
+  "minimum_elapsed_work_ms": 3200,
+  "buffer_bytes": 33554432,
+  "minimum_periodic_samples": 2
+}

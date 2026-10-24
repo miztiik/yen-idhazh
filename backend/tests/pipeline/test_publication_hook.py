@@ -18,7 +18,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from conftest import SEED_COMMIT, record_fixture_day
+from support.ledger import SEED_COMMIT, record_fixture_day
 
 from idhazh import ledger
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome

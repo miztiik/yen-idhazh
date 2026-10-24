@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from typing import Final, Literal
 
-from conftest import FIXTURES_DIR, read_text
-
 from idhazh.contracts.base import Model
+from support.paths import FIXTURES_DIR, read_text
 
 CANARY_NAMES: Final = (
     "direct-instruction-override",

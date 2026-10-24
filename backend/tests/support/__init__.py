@@ -1,1 +1,1 @@
-"""Shared readers and builders for tests."""
+"""Bounded shared readers and builders for backend tests."""

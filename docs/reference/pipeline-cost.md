@@ -72,6 +72,12 @@ Budget-bearing readings live in [measured.py](../../backend/idhazh/measured.py),
 python backend/utilities/measure_budgets.py check
 ```
 
+Each record keeps its value, date, measured model digest, method and remeasurement
+instructions. The digest identifies the weights that produced the reading; it
+must not be loaded from the current model selection, which can change without
+remeasurement. Historical comparisons and design discussion do not belong in
+the record.
+
 Retake model-dependent readings in CI when the subject changes. Do not copy a value from this page into a gate or silently shorten content to make a context window fit.
 
 `measure_budgets.py read` dates a reading with the current UTC day, not the

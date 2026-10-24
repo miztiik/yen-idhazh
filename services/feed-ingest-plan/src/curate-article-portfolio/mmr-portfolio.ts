@@ -2,8 +2,8 @@
 import { PortfolioChoicePayloadSchema, ScoreEvidenceSchema } from "@idhazh/common-contracts";
 import type { FeedIngestConfig, PortfolioChoicePayload, ScoreEvidence } from "@idhazh/common-contracts";
 import { compareIdentity } from "./portfolio-input";
-import type { OpportunityEvidence, PortfolioArticle } from "./portfolio-input";
-import { measureArticle } from "./quality-decoupler";
+import type { OpportunityEvidence, PortfolioArticle, ReliabilityControls } from "./portfolio-input";
+import { measurePriority } from "./quality-decoupler";
 import type { SourceAllowance } from "./quota-normalizer";
 import type { CarrierGroup } from "./carrier-cluster";
 
@@ -32,7 +32,7 @@ function scalar(value: string | null | undefined): Labels {
 export function scoreMarginal(
   article: PortfolioArticle, selected: readonly PortfolioArticle[], allowance: SourceAllowance,
   group: CarrierGroup, opportunity: OpportunityEvidence, exploration: boolean,
-  relaxations: readonly Relaxation[],
+  relaxations: readonly Relaxation[], controls: ReliabilityControls,
 ): ScoreEvidence {
   const weights = article.policy.curate.mmr_weights;
   const terms = {
@@ -51,10 +51,10 @@ export function scoreMarginal(
         value: weights.lambda_coverage * Number(opportunity.covered_event_clusters.includes(article.candidate.labels.event_cluster_id)),
       },
   };
-  const base = measureArticle(article).base_article_score;
+  const priority = measurePriority(article, controls);
   return ScoreEvidenceSchema.parse({
-    base_article_score: base,
-    marginal_score: base - Object.values(terms).reduce((sum, term) => sum + (term.value ?? 0), 0),
+    base_article_score: priority.base_article_score, source_reliability: priority.source_reliability,
+    marginal_score: priority.priority_score - Object.values(terms).reduce((sum, term) => sum + (term.value ?? 0), 0),
     ...terms,
     source_allowance: allowance.allowance,
     bonus_uncovered_event_cluster: allowance.witnesses.some(w => w.kind === "uncovered_event_cluster"),
@@ -76,7 +76,7 @@ export type ChoiceStep = Readonly<{
 export function choosePortfolio(
   articles: readonly PortfolioArticle[], config: FeedIngestConfig["curate"],
   allowances: ReadonlyMap<string, SourceAllowance>, groups: readonly CarrierGroup[],
-  opportunity: OpportunityEvidence,
+  opportunity: OpportunityEvidence, controls: ReliabilityControls,
 ) {
   const groupById = new Map(groups.map(group => [group.representative.candidate.candidate_id, group]));
   const selected: PortfolioArticle[] = [];
@@ -115,7 +115,7 @@ export function choosePortfolio(
       return {
         article, candidate_id: article.candidate.candidate_id,
         scores: scoreMarginal(article, selected, allowance, group, opportunity,
-          exploration && !sources.has(article.candidate.source_id) && blocked.length === 0, relaxations),
+          exploration && !sources.has(article.candidate.source_id) && blocked.length === 0, relaxations, controls),
         blocked_by: blocked,
       };
     });

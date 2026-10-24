@@ -27,8 +27,8 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 from pydantic import TypeAdapter, ValidationError
+from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh import assemble, atomic_write, config
 from idhazh.assemble import ScoredPair, cross_source_pairs

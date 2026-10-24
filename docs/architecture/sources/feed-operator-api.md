@@ -1,6 +1,6 @@
 # Fetch and parse operator requests
 
-**Last Updated**: 2026-10-23
+**Last Updated**: 2026-10-24
 
 How do separate HTTP requests fetch and parse the same article without
 duplicating completed work? These are local build-time APIs, not site services.
@@ -121,9 +121,10 @@ can pass `PlanRuntime.task_profiling` with validated controls and a report
 callback. An absent callback configuration leaves profiling out. The ordinary
 listener writes enabled profiles as structured stderr records, never into the
 HTTP response, fetched artifact or SQLite record.
-The host probe's HTTP API still exposes only its standalone `GET /sample`
-route under the dated API prefix; task start/stop HTTP controls are follow-up
-work, not part of these embedded wrappers.
+The separate [host-probe task API](../../reference/host-probe-api.md)
+provides operator-owned HTTP start and stop controls for explicitly pinned
+processes. Its standalone `GET /sample` remains independent. These controls
+belong to the host probe, not these fetch/parse routes or their replay rules.
 
 Fetch starts measurement only after the active source and operator URL pass
 validation. Parse starts only after its completed fetch, configuration,

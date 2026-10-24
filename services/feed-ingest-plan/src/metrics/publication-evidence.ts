@@ -63,7 +63,7 @@ export const RecordedEventPairSchema = z.object({
   verdict: z.enum(["YES", "NO", "UNCLEAR"]).nullable(),
   verdict_swapped: z.enum(["YES", "NO", "UNCLEAR"]).nullable(), usable: z.boolean(),
   judge_model: z.enum(["qwen3-5-9b-q4-k-m", "qwen3-5-9b-q4-k-m-thinking", "ornith-1-5-9b-q5-k-m",
-    "gemma-4-e4b-it-qat-ud-q4-k-xl"]).nullable(),
+    "gemma-4-e4b-it-qat-ud-q4-k-xl", "qwen3-8-9b-q5-k-m-distill"]).nullable(),
   prompt_digest: Sha256Schema.nullable(), grammar_digest: Sha256Schema.nullable(),
   judge_id: z.literal("content-similarity-judge"),
   judge_temperature: z.number().finite().nonnegative().nullable(), grammar_applied: z.boolean().nullable(),

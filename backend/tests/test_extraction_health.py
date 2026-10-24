@@ -23,7 +23,7 @@ from collections import Counter
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
+from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh import config, elements, extract, telemetry
 from idhazh.contracts.article import Article

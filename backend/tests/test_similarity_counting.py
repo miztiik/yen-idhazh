@@ -20,7 +20,8 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, SEED_COMMIT, read_text
+from support.ledger import SEED_COMMIT
+from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh import atomic_write, config, ledger
 from idhazh.content_similarity_judge import tenant

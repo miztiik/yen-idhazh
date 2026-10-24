@@ -25,7 +25,8 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Final
 
-from conftest import FIXTURES_DIR, seed_host_fingerprint, seed_item_health
+from support.ledger import seed_host_fingerprint, seed_item_health
+from support.paths import FIXTURES_DIR
 
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.eval_row import EvalRow

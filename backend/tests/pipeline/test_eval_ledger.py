@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from conftest import seed_scores
+from support.ledger import seed_scores
 
 from idhazh import ledger
 from idhazh.contracts.eval_row import EvalRow

@@ -32,9 +32,9 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, FIXTURES_DIR
 from pydantic import ValidationError
 from support import canaries
+from support.paths import CONFIG_DIR, FIXTURES_DIR
 
 from idhazh import config, extract
 from idhazh.contracts.article import Article

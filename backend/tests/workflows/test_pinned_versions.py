@@ -6,7 +6,7 @@ import re
 import tomllib
 
 import pytest
-from conftest import REPO_ROOT, read_text
+from support.paths import REPO_ROOT, read_text
 
 from ._harness import (
     INSTALL_RUNTIME_CALL,

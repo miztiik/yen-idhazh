@@ -110,6 +110,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-24",
+            change="bench.run_model_speed_case removed; the model_speed_case input decides it.",
+            why="A knob nothing reads is a second spelling of the dispatch input.",
+        ),
+        ChangelogEntry(
             version="2026-10-11",
             change="council removed; its settings live in config/llm_council.json.",
             why="The council owns its settings and judge list, as the gardener does.",
@@ -125,11 +130,6 @@ class AppConfig(Contract):
             why="The hand marks moved onto the ledger door, and their read needs a bound.",
         ),
         ChangelogEntry(
-            version="2026-10-03T14:45",
-            change="console.data_explorer_tab removed; Data explorer knobs and panel group added.",
-            why="The Data explorer page is live and draws its own controls.",
-        ),
-        ChangelogEntry(
             version="2026-09-28",
             change="Earlier changes are in this file's git history.",
             why="A changelog says what moved lately; git is the archive.",
@@ -141,7 +141,7 @@ class AppConfig(Contract):
     extract: ExtractConfig = Field(default_factory=ExtractConfig)
     elements: ElementsConfig = Field(default_factory=ElementsConfig)
     models_file: ModelsFile = Field(
-        default="models/qwen3.5-9b-q4km.json",
+        default="models/ornith-1.5-9b-q5km.json",
         description=(
             "Which file under config/models/ holds the active model. The whole swap: "
             "every fact about a set of weights - the repository, the digest, the window "

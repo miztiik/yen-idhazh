@@ -35,13 +35,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Final
 
-from conftest import (
-    CONFIG_DIR,
-    CONTRACT_FIXTURES_DIR,
-    _rendered_by_the_template,
-    read_text,
-)
 from pytest import MonkeyPatch
+from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
+from support.server import render_template_response
 
 from idhazh import config, ledger, telemetry
 from idhazh.contracts.feed_health import FetchOutcome
@@ -150,7 +146,7 @@ class RecordedCompletionEndpoint:
             def do_POST(self) -> None:
                 raw = self.rfile.read(int(self.headers.get("Content-Length") or 0))
                 if self.path.endswith("/apply-template"):
-                    self._reply(_rendered_by_the_template(json.loads(raw)))
+                    self._reply(render_template_response(json.loads(raw)))
                     return
                 self._reply(next(replies))
 

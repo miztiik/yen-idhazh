@@ -36,7 +36,6 @@ def _function(code: CodeType | str) -> tuple[str, int, str]:
 def measure_fixture(root: Path, original_tests: Path) -> None:
     """Time a real fixture and count the index work of each compaction pass."""
     sys.path[:0] = [str(root / "backend"), str(original_tests)]
-    from conftest import seed_item_health
     from gardener.tasks._task import run_task
     from ledger._every_tier import (
         FILED_DAYS,
@@ -47,6 +46,7 @@ def measure_fixture(root: Path, original_tests: Path) -> None:
         TODAY,
     )
     from retention._trees import health_row
+    from support.ledger import seed_item_health
 
     from idhazh import ledger
     from idhazh.contracts.item_health import ItemStage

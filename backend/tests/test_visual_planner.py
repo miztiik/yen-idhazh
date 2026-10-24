@@ -13,16 +13,10 @@ import json
 from typing import Any
 
 import pytest
-from conftest import (
-    CONFIG_DIR,
-    CONTRACT_FIXTURES_DIR,
-    FIXTURES_DIR,
-    SUMMARIZE_AND_PLAN_REPLIES,
-    committed_markers,
-    label_payload,
-    read_text,
-)
 from pydantic import ValidationError
+from support.models import committed_markers
+from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
+from support.prompts import SUMMARIZE_AND_PLAN_REPLIES, label_payload
 
 from idhazh import config
 from idhazh.classify.calls import (
@@ -301,7 +295,9 @@ class TestTheGateSuppressesThePlanAndNeverTheCall:
         assert whole["prompt"].startswith(shared)
         assert suppressed["prompt"].startswith(shared)
         assert whole["prompt"][len(shared) :] != suppressed["prompt"][len(shared) :]
-        assert suppressed["n_predict"] == SUPPRESSED_BUDGET_TOKENS
+        assert suppressed.get("max_tokens", suppressed.get("n_predict")) == (
+            first.get("max_tokens", SUPPRESSED_BUDGET_TOKENS)
+        )
 
     def test_both_halves_reach_the_model_whichever_shape_is_asked_for(self) -> None:
         """They sit in the system turn now, so this is true by construction.
@@ -641,6 +637,5 @@ class TestTheDowngradeLadder:
             committed_visuals(downgrade_floor_percentiles=[50, 50])
         with pytest.raises(ValidationError):
             committed_visuals(downgrade_floor_percentiles=[101])
-
 
 

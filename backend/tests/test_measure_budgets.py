@@ -20,9 +20,9 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from conftest import CONFIG_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 from council._config import copy_config
 from pydantic import ValidationError
+from support.paths import CONFIG_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 
 from idhazh import config
 from idhazh import measured as measured_module

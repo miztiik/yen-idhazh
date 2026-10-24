@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from conftest import REPO_ROOT, read_text
 from pydantic import ValidationError
+from support.paths import REPO_ROOT, read_text
 
 from idhazh.contracts.knobs import feed_ingest
 
@@ -108,6 +108,13 @@ def test_python_authored_config_and_config_only_vertical_extension() -> None:
     assert config.triage.recency_half_life_hours == payload["triage"]["recency_half_life_hours"]
     assert config.workflow_reporting.enabled
     assert config.curate.article_limit == payload["curate"]["article_limit"]
+    assert config.curate.source_reliability_penalty_enabled
+    previous = dict(payload["curate"])
+    previous.pop("source_reliability_penalty_enabled")
+    assert feed_ingest.FeedCurateConfig.model_validate(previous).source_reliability_penalty_enabled
+    assert not feed_ingest.FeedCurateConfig.model_validate(
+        payload["curate"] | {"source_reliability_penalty_enabled": False}
+    ).source_reliability_penalty_enabled
 
     taxonomy_payload["verticals"].append(dict(taxonomy_payload["verticals"][0], id="oceans"))
     payload["vertical_overrides"] = {
@@ -134,6 +141,7 @@ def test_python_authored_config_and_config_only_vertical_extension() -> None:
     {"curate": {"mmr_weights": {"lambda_lens": None}}},
     {"curate": {"base_source_allowance": -1}},
     {"curate": {"soft_caps": {"max_source_share": 0.2}}},
+    {"curate": {"source_reliability_penalty_enabled": False}},
     {"triage": {"blocked_http_statuses": []}},
     {"harvest": {"concurrency": 1}},
     {"desk_overrides": {}},
@@ -156,6 +164,8 @@ def test_python_refuses_invalid_global_settings_and_duplicate_references() -> No
         {"partition": dict(payload["partition"], min_shards=9)},
         {"curate": dict(payload["curate"], article_limit=0)},
         {"curate": dict(payload["curate"], article_limit=1.5)},
+        {"curate": dict(payload["curate"], source_reliability_penalty_enabled="true")},
+        {"curate": dict(payload["curate"], source_reliability_penalty_enabled=None)},
         {"harvest": dict(payload["harvest"], concurrency="24")},
         {"desk_overrides": {}},
     )

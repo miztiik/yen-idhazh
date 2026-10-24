@@ -4,6 +4,62 @@
   "correlation_id": "portfolio-fixture",
   "policy_version": "portfolio-recorded-1",
   "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "reliability_floor": 0.5,
+  "reliability_cases": [
+    {
+      "name": "failed reads reduce only source authority", "enabled": true, "floor": 0.5,
+      "alpha": { "success_fraction": 0, "attempted": 4, "window_days": 7 },
+      "gamma": { "success_fraction": 1, "attempted": 4, "window_days": 7 },
+      "winner": "gamma", "alpha_penalty": 0.5, "gamma_penalty": 0
+    },
+    {
+      "name": "partial history keeps its actual denominator", "enabled": true, "floor": 0.5,
+      "alpha": { "success_fraction": 0.25, "attempted": 4, "window_days": 7 },
+      "gamma": { "success_fraction": 0.75, "attempted": 4, "window_days": 7 },
+      "winner": "gamma", "alpha_penalty": 0.5, "gamma_penalty": 0.25
+    },
+    {
+      "name": "configured floor can remove the ranking difference", "enabled": true, "floor": 1,
+      "alpha": { "success_fraction": 0, "attempted": 4, "window_days": 7 },
+      "gamma": { "success_fraction": 0.75, "attempted": 4, "window_days": 7 },
+      "winner": "alpha", "alpha_penalty": 0, "gamma_penalty": 0
+    },
+    {
+      "name": "unknown history is not a healthy reading", "enabled": true, "floor": 0.5,
+      "alpha": null, "gamma": null,
+      "winner": "alpha", "alpha_penalty": null, "gamma_penalty": null
+    },
+    {
+      "name": "one unavailable source stays neutral", "enabled": true, "floor": 0.5,
+      "alpha": { "success_fraction": 0.25, "attempted": 4, "window_days": 7 },
+      "gamma": null,
+      "winner": "gamma", "alpha_penalty": 0.5, "gamma_penalty": null
+    },
+    {
+      "name": "unknown and measured healthy have equal ranking effects", "enabled": true, "floor": 0.5,
+      "alpha": null,
+      "gamma": { "success_fraction": 1, "attempted": 4, "window_days": 7 },
+      "winner": "alpha", "alpha_penalty": null, "gamma_penalty": 0
+    },
+    {
+      "name": "equal reliability retains identity tie order", "enabled": true, "floor": 0.5,
+      "alpha": { "success_fraction": 0.5, "attempted": 4, "window_days": 7 },
+      "gamma": { "success_fraction": 0.5, "attempted": 4, "window_days": 7 },
+      "winner": "alpha", "alpha_penalty": 0.5, "gamma_penalty": 0.5
+    },
+    {
+      "name": "factor one preserves all original scores", "enabled": true, "floor": 0.5,
+      "alpha": { "success_fraction": 1, "attempted": 4, "window_days": 7 },
+      "gamma": { "success_fraction": 1, "attempted": 4, "window_days": 7 },
+      "winner": "alpha", "alpha_penalty": 0, "gamma_penalty": 0
+    },
+    {
+      "name": "disabled reliability retains history without affecting rank", "enabled": false, "floor": 0.5,
+      "alpha": { "success_fraction": 0, "attempted": 4, "window_days": 7 },
+      "gamma": { "success_fraction": 1, "attempted": 4, "window_days": 7 },
+      "winner": "alpha", "alpha_penalty": 0, "gamma_penalty": 0
+    }
+  ],
   "candidates": [
     {
       "name": "first", "source": "alpha", "ordinal": 0, "vertical": "ai",
@@ -39,7 +95,7 @@
     { "left": "Unrelated original report", "right": "Unrelated original report", "expected": "unavailable" }
   ],
   "recorded_format": {
-    "row_schema_version": "2026-10-20",
+    "row_schema_version": "2026-10-24",
     "candidate_first": "2abf9cb422a726f33a6f4a80295c8e2efa7ab9d3691114b9d7d328e83334d07a",
     "selection_unit_id": "fd2713f9-a8d3-5a9e-af1d-f81f8d50c1d8",
     "rejection_unit_id": "71f34820-62ad-5876-899c-bd53e451d073",

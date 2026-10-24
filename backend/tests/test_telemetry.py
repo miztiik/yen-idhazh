@@ -17,13 +17,8 @@ from pathlib import Path
 from typing import Annotated, Any, Final, get_args, get_origin
 
 import pytest
-from conftest import (
-    CONFIG_DIR,
-    CONTRACT_FIXTURES_DIR,
-    REPO_ROOT,
-    read_text,
-)
 from pydantic import StringConstraints, TypeAdapter
+from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 
 from idhazh import config, extract, summarize, telemetry
 from idhazh.contracts.article import Article, ArticleStatus

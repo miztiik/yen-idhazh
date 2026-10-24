@@ -23,7 +23,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, NamedTuple
 
 import pytest
-from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
+from support.paths import CONFIG_DIR, FIXTURES_DIR, read_text
 
 from idhazh import config
 from idhazh import fetch as fetch_module

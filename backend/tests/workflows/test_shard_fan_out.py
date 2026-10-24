@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, read_text
+from support.paths import CONFIG_DIR, read_text
 
 from utilities import shard_bound
 

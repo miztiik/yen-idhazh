@@ -15,9 +15,9 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from conftest import CONFIG_DIR
 from gardener._garden import GARDENER_FIXTURES, a_config
 from pydantic import TypeAdapter, ValidationError
+from support.paths import CONFIG_DIR
 
 from idhazh import config, ledger
 from idhazh.contracts.knobs.gardener import (

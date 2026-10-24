@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import CONFIG_DIR, read_text
 from retention._trees import site
+from support.paths import CONFIG_DIR, read_text
 
 from idhazh.build_publication import inventory_path, record_build_inventory
 from idhazh.cli import main

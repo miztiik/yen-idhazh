@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from conftest import REPO_ROOT
+from support.paths import REPO_ROOT
 
 from idhazh.contracts.article import ArticleStatus
 from idhazh.contracts.base import canonical_json, derive_text_digest, derive_url_key

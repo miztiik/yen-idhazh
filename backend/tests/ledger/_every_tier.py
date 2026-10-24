@@ -1,7 +1,7 @@
 """How does a test build a census whose rows sit in every kind of file the ledger door keeps?
 
 Through the door and the shipped compaction, never by hand. Rows are filed the
-way a run files them, through `conftest.seed_item_health`, and the shipped
+way a run files them, through `support.ledger.seed_item_health`, and the shipped
 `compact-item-health` task then runs live over the tree, found the way the
 runner finds it. So every file a test reads - raw, daily, monthly and yearly -
 is a file a wake would have left.
@@ -22,9 +22,9 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Final
 
-from conftest import seed_item_health
 from gardener.tasks._task import run_task
 from retention._trees import health_row
+from support.ledger import seed_item_health
 
 from idhazh import ledger
 from idhazh.contracts.collection_prune import StopReason

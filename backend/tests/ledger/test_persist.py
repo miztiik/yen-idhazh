@@ -23,8 +23,8 @@ from typing import Any, ClassVar, Final
 
 import pyarrow.parquet
 import pytest
-from conftest import FIXTURES_DIR, REPO_ROOT
 from pydantic import Field, model_validator
+from support.paths import FIXTURES_DIR, REPO_ROOT
 
 from idhazh import ledger
 from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, Model, RunId, ServerJob
