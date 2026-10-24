@@ -96,10 +96,14 @@ def test_the_plan_is_the_union_of_what_the_tenants_owe_newest_first(
         venue,
         package=A_VENUE,
         slug="another-judge",
-        behind_on=(LAST_NIGHT, THE_NIGHT_BEFORE),
+        behind_on=(LAST_NIGHT, THE_NIGHT_BEFORE, "2026-09-23"),
     )
     config_root = _config_registering(
-        venue, slugs=("one-judge", "another-judge"), repair_dates_a_night=2
+        venue,
+        slugs=("one-judge", "another-judge"),
+        first_night=THE_NIGHT_BEFORE,
+        repair_window_nights=6,
+        repair_dates_a_night=3,
     )
 
     planned = _planned(capsys, ["--config-root", str(config_root), "--tonight", TONIGHT])

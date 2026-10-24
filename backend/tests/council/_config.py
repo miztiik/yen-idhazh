@@ -42,7 +42,14 @@ def copy_config(root: Path) -> Path:
 def set_host_fingerprint_placement(target: Path, enabled: bool) -> None:
     path = target / "idhazh.json"
     raw = json.loads(path.read_text(encoding="utf-8"))
-    raw["observability"]["host_fingerprint_placement_enabled"] = enabled
+    raw["observability"].update(
+        {
+            "host_telemetry_enabled": True,
+            "host_fingerprint": True,
+            "host_fingerprint_bandwidth_jobs": [],
+            "host_fingerprint_placement_enabled": enabled,
+        }
+    )
     path.write_text(json.dumps(raw, indent=2), encoding="utf-8", newline="\n")
 
 

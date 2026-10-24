@@ -24,8 +24,19 @@ def test_each_judge_has_its_own_repair_cap(tmp_path: Path, monkeypatch: pytest.M
         tmp_path, package=package, slug="second", behind_on=("2026-10-07", "2026-10-06")
     )
     try:
-        target = room(tmp_path, {"first": ("active", False), "second": ("active", True)})
+        target = room(
+            tmp_path,
+            {"first": ("active", False), "second": ("active", True)},
+            first_night="2026-10-01",
+            repair_window_nights=6,
+            repair_dates_a_night=1,
+        )
         council = config.load_council(target)
+        assert (
+            council.first_night,
+            council.repair_window_nights,
+            council.repair_dates_a_night,
+        ) == ("2026-10-01", 6, 1)
         selected = night_plan.plan_the_night(
             council,
             tonight="2026-10-10",
