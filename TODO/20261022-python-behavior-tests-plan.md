@@ -13,7 +13,7 @@ Table A - Scope and execution
 | A2 | Status | Execution authorized by kumarsnaveen on 2026-10-23. The owner also authorized the structural follow-on work needed to complete the original suite-wide intent. |
 | A3 | Hard scope - in | Review the Python suite against Table C; replace blanket fixture-format checks; remove proven duplicate data checks; preserve reader, writer, migration, identity, failure-handling and safety behavior. |
 | A4 | Chosen strategy | Semantic reader/writer checks plus focused tests where exact bytes have a consumer. Fowler ruled this construction on 2026-10-22; the owner set the behavior-focused intent. |
-| A5 | Contract impact | No persisted shape, version stamp, migration, serializer, digest algorithm, production validation rule or dependency changes. Exception: Row 9 removes the unused `collect.watchlist_max_entities` configuration knob and its test-only entry cap, authorized by kumarsnaveen on 2026-10-23. Named config fixtures lose only that setting; historical retention and source-weight evidence stays intact. Session review reports are not a new application artifact. |
+| A5 | Contract impact | No persisted shape, version stamp, migration, serializer, digest algorithm, production validation rule or dependency changes. Exception: Row 9 removes the unused `collect.watchlist_max_entities` configuration knob and its test-only entry cap, authorized by kumarsnaveen on 2026-10-23. Named config fixtures lose only that setting; historical retention and source-weight evidence stays intact. Session review reports are not a new application artifact. Exception: Row 16 replaces the whole-tree state CSV audit with a bounded supplied-commit-range gate, authorized by kumarsnaveen on 2026-10-23 UTC (option A1). Runs without a range explicitly provide no whole-tree integrity certification; invalid supplied ranges fail closed. |
 | A6 | Evidence baseline | Investigated against `0d2268015334e4028448b1f564a76ce51fd69968`. Recheck changed targets against current `origin/main` before dispatch. The earlier chat's keyword counts and deletion percentages are not verified findings or targets. |
 | A7 | Inventory method | Before the first implementation edit, collect the suite once with `python -m pytest --collect-only -n 0 -q -o addopts="" backend/tests`. Keep the result and base commit in the session report. Record collected parameter cases separately from test functions; collection does not certify a passing test run. |
 | A8 | Review record | For each candidate, record its full pytest identifier, asserted behavior, input source, primary Table C category, secondary categories, proposed action, remaining test, and concrete broken-code edit that remaining test detects. Unrelated behavior tests get a separate primary category. Primary counts must partition the collected list; secondary counts may overlap and must say so. Read assertions and called helpers; names and keywords only find candidates. |
@@ -71,6 +71,7 @@ Table D - PR outcomes
 | D13 | 13 | Extraction and metric behavior | 1 | L | IN-FLIGHT | row13-test-proofs | - | - |
 | D14 | 14 | Grouping and dataset behavior | 1 | M | IN-FLIGHT | grouping-and-dataset-proofs | - | - |
 | D15 | 15 | Encoder thread resolution uses production behavior | 1 | N | DONE | prove-encoder-thread-resolution | - | - |
+| D16 | 16 | Bounded state CSV integrity checks | 1 | O | DONE | bound-csv-integrity-checks | - | - |
 
 The canary implementation for Row 3 is delivered separately from its suite-wide
 review obligation. Rows 5 and 6 carry additional changes found by that review.
@@ -1005,6 +1006,77 @@ counts use the untouched archive and the completed branch instead.
   behavior is preserved; no canonical utility documentation required a change.
 - **Dependencies:** Row 1. The complete frozen successor releases the
   serialized editor to Row 16 before checks, push or CI.
+
+## 17 - Row #16 - Bounded state CSV integrity checks
+
+- **Scope:** Replace only the growing tracked-tree CSV scan with a real
+  commit-range gate. Keep the registry grain/suffix and no-union-merge tests.
+- **Authority and accepted cost:** kumarsnaveen, 2026-10-23 UTC, selected A1:
+  add the bounded commit-range check. It rejects additions, modifications and
+  rename-ins of lowercase `state/...csv`, at any depth. Deletes and rename-outs
+  pass; matching remains case-sensitive. It does not inspect unchanged files.
+  A manual dispatch without a base, a branch-creation push with an all-zero
+  base, or a local invocation without endpoints visibly reports that no range
+  check ran and no whole-tree integrity certification was made. Supplied
+  invalid endpoints, a supplied base without a head, and unrelated histories
+  fail closed. The canonical guarantee and ruling are in
+  `docs/how-to/run-the-gates.md`.
+- **Files touched:** `frontend/scripts/state-csv-guard.ts`,
+  `frontend/scripts/tests/state-csv-guard.test.mjs`, `frontend/package.json`,
+  `.github/workflows/ci.yml`,
+  `backend/tests/contracts/test_no_csv_ledger_is_left.py`,
+  `backend/tests/workflows/test_ci_selection.py`,
+  `docs/how-to/run-the-gates.md` and this plan.
+- **Implementation:** The independent CLI resolves commits and their merge
+  base, then uses `git diff --name-only --no-renames --diff-filter=d -z`
+  over that one range. The existing `scope` job runs it before selection,
+  without a condition, swallowed failure or new CI job. The selector's broad
+  full-test fallback cannot turn an integrity error into success. Existing
+  tooling scripts type-check the guard and run its tests. No new dependency,
+  framework, persisted inventory, fixture rewrite, skip or mock.
+- **Identifier disposition:** Remove only
+  `backend/tests/contracts/test_no_csv_ledger_is_left.py::test_no_csv_file_is_committed_under_state`
+  and its dead `subprocess` import and `STATE_CSV` constant after the real
+  replacement proof passes. Retain
+  `backend/tests/contracts/test_no_csv_ledger_is_left.py::test_no_ledger_in_the_registry_files_csv`
+  and
+  `backend/tests/contracts/test_no_csv_ledger_is_left.py::test_no_path_takes_a_union_merge`.
+  Add
+  `backend/tests/workflows/test_ci_selection.py::test_state_csv_integrity_runs_before_selection_without_a_skip_or_fallback`
+  to check unconditional wiring, actual event bindings and full history.
+- **CLI proof:** The new named module runs 27 real-process cases in generated
+  temporary Git repositories. Rejection cases cover added, nested, modified,
+  renamed-in and quoted/spaced CSV paths. Acceptance cases cover deletes,
+  rename-outs, outside-state and unchanged files, uppercase directories and
+  suffixes, and other prefixes. Divergent histories prove use of the merge
+  base. Refusal cases cover invalid/missing refs, option-shaped refs, zero
+  heads, invalid dispatch heads, invalid/missing branch-creation heads,
+  all-zero PR bases and histories without an ancestor. Three no-range cases
+  assert the notice and absence of a pass claim. All 27 passed without skips.
+  Exact case names and command receipts remain in the session report.
+- **Independent faults:** In disposable copies, ignoring the CSV predicate
+  made the added-CSV exit assertion fail (zero instead of one); removing the
+  deletion filter made the delete acceptance fail (one instead of zero);
+  returning success after an invalid base made the refusal exit assertion
+  fail (zero instead of one). These were assertion failures in executed CLI
+  tests, not collection errors. Generated copies were removed.
+- **Local gates:** The shared selector selected backend, all frontend groups
+  and tooling for the CI/script changes. Exact local coverage was the
+  registered tooling suite (strict TypeScript check and 103 tests passed),
+  the two retained Python checks (both passed), and the new workflow wiring
+  test (passed). All 15 existing CI-selection cases passed in the initial
+  module run. Ruff and whitespace checks passed. Mypy and final CI receipts
+  are recorded in the running session report; full Linux CI is authoritative.
+  No published-site behavior changed, so no browser smoke is required.
+- **Plan integration:** Imported the complete frozen Row 15 predecessor,
+  84,555 bytes, SHA-256
+  `245fec63e996bd281be2bd305d97459c8319797cf93c9f749cfe53a19ada2f75`.
+  Added only D16, this section and the expressly approved A5 CSV exception.
+  All prior evidence, A5 exceptions and D3 IN-FLIGHT remain unchanged.
+- **Delivery:** One phase PR for coordinator review and merge; the worker
+  does not merge the PR. The frozen full successor releases the serialized
+  editor to Row 17 independently of checks, push or CI.
+- **Dependencies:** Row 1.
 
 ## See also
 
