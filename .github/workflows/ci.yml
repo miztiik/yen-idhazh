@@ -171,6 +171,10 @@ jobs:
           bun run check
           bun run test
 
+      - name: Install optional Linux cache instruments
+        if: needs.scope.outputs.code == 'true'
+        run: bash .github/scripts/install-host-cache-tools.sh
+
       - name: TypeScript host probes
         if: needs.scope.outputs.code == 'true'
         working-directory: services/host-probes

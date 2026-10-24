@@ -1,0 +1,36 @@
+{
+  "version": "2026-10-24",
+  "kind": "last_level_cache_counters",
+  "status": "unavailable",
+  "reason": "permission_denied",
+  "measurement_obtained": false,
+  "target": { "pid": 8714, "start_ticks": "37370" },
+  "host": { "platform": "linux", "arch": "x64", "release": "7.0.0-1017-azure" },
+  "interval": null,
+  "completion": null,
+  "scope": "existing_pid_threads_user_space_without_descendants",
+  "scaled": false,
+  "enabled_time_precision": "derived_from_running_percent_rounded_to_0.01_percent",
+  "events": [
+    {
+      "event": "LLC-loads:u",
+      "support": "unavailable",
+      "reason": "permission_denied",
+      "count": null,
+      "time_running_ns": null,
+      "time_enabled_ns_estimate": null,
+      "running_percent": null,
+      "multiplexing": "unknown"
+    },
+    {
+      "event": "LLC-load-misses:u",
+      "support": "unavailable",
+      "reason": "permission_denied",
+      "count": null,
+      "time_running_ns": null,
+      "time_enabled_ns_estimate": null,
+      "running_percent": null,
+      "multiplexing": "unknown"
+    }
+  ]
+}

@@ -6,6 +6,8 @@ import {
 import { TaskProfileConfigSchema } from "../../services/host-probes/src/config";
 import { OwnedProcessSchema, TaskProfileSchema } from "../../services/host-probes/src/task-profile/profile-schema";
 import { HostSampleSchema } from "../../services/host-probes/src/probe/sample-host";
+import { CacheProofSchema } from "./feed-ingest-plan-cache-proof";
+import { CacheCountersSchema, CacheCountersStartSchema } from "../../services/host-probes/src/cache-probe/cache-schema";
 
 export const WorkflowMachineMemorySchema = z.enum(["false", "true"]).default("false")
   .transform(value => value === "true");
@@ -66,6 +68,8 @@ export const TaskProfileProofSchema = z.strictObject({
   scope: z.literal("controlled_cpu_task"), handle: z.uuid(), expires_at: z.iso.datetime(),
   target: OwnedProcessSchema, server: OwnedProcessSchema, target_alive_at_stop: z.literal(true),
   work: ControlledWorkResultSchema, profile: TaskProfileSchema,
+  cache_counters_start: CacheCountersStartSchema.nullable().default(null),
+  cache_counters: CacheCountersSchema.nullable().default(null), repeat_stop_identical: z.boolean().default(false),
 }).superRefine((value, context) => {
   const { profile, work, target, server } = value;
   const worker = profile.processes.worker;
@@ -94,7 +98,7 @@ export const ResourceProofSchema = z.strictObject({
   ...ProfileProofIdentitySchema.shape,
   scope: z.literal("live_linux_ram_http_and_separate_copy"),
   status: z.enum(["running", "complete", "failed"]),
-  stage: z.enum(["start", "ram_http", "task_cpu_ram_http", "copy_off", "copy_on", "complete"]),
+  stage: z.enum(["start", "ram_http", "task_cpu_ram_http", "copy_off", "copy_on", "cache", "complete"]),
   host: z.strictObject({ platform: z.literal("linux"), arch: z.string(), release: z.string(), bun: z.string() }),
   sample: HostSampleSchema.nullable(),
   task_profile: TaskProfileProofSchema.nullable().default(null),
@@ -106,8 +110,10 @@ export const ResourceProofSchema = z.strictObject({
     off_reason: z.enum(["configured_off", "allocation_unavailable", "clock_unavailable"]).nullable(),
     on_reason: z.enum(["configured_off", "allocation_unavailable", "clock_unavailable"]).nullable(),
   }).nullable(),
+  cache: CacheProofSchema.nullable().default(null),
   error: z.string().nullable(),
 });
 export type ProfileProofIdentity = z.infer<typeof ProfileProofIdentitySchema>;
 export type StageProfileProof = z.infer<typeof StageProfileProofSchema>;
 export type ResourceProof = z.infer<typeof ResourceProofSchema>;
+export type TaskProfileProof = z.infer<typeof TaskProfileProofSchema>;

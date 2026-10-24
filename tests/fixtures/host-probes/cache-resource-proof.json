@@ -1,0 +1,1052 @@
+{
+  "git_sha": "4ac3c08a207f60b79e398de379803fb7a6d8fb61",
+  "run_id": "2026-10-24-40093385329",
+  "attempt": 1,
+  "correlation_id": "163e3b2c-1c55-4b34-b680-79c991fa361f",
+  "scope": "live_linux_ram_http_and_separate_copy",
+  "status": "complete",
+  "stage": "complete",
+  "host": {
+    "platform": "linux",
+    "arch": "x64",
+    "release": "7.0.0-1017-azure",
+    "bun": "1.3.13"
+  },
+  "sample": {
+    "sampled_at": "2026-10-24T12:25:25.386Z",
+    "interval_ms": 1000.9001149999999,
+    "cpu": {
+      "user": 0.7518796992481203,
+      "system": 0.2506265664160401,
+      "idle": 98.99749373433583,
+      "iowait": 0,
+      "steal": 0
+    },
+    "memory_kb": {
+      "total": 16366644,
+      "free": 3377332,
+      "available": 15020288
+    },
+    "vmstat": {
+      "pgfault": 14290889,
+      "pgmajfault": 9148,
+      "pswpin": 0,
+      "pswpout": 0
+    },
+    "unavailable": {}
+  },
+  "task_profile": {
+    "scope": "controlled_cpu_task",
+    "handle": "7fcc8ba4-1baa-4a28-a44d-d7cf9df3e475",
+    "expires_at": "2026-10-24T18:25:25.571Z",
+    "target": {
+      "pid": 8714,
+      "start_ticks": "37370"
+    },
+    "server": {
+      "pid": 8701,
+      "start_ticks": "37242"
+    },
+    "target_alive_at_stop": true,
+    "work": {
+      "type": "complete",
+      "allocated_bytes": 33554432,
+      "elapsed_ms": 3212.4307320000003,
+      "batches": 151,
+      "digest": "e35460e26db59551591797d5d9f6c5dcc1177e7b9ad3947eaafe1fe7432e84ee"
+    },
+    "profile": {
+      "identity": {
+        "pipeline_name": "host-probes",
+        "task_name": "controlled-cpu-task",
+        "run_id": "2026-10-24-40093385329",
+        "correlation_id": "163e3b2c-1c55-4b34-b680-79c991fa361f",
+        "request_id": "32f99db3-cddb-4de3-a933-492fdae14bca"
+      },
+      "collector": "worker_thread",
+      "outcome": "success",
+      "end_reason": "explicit_stop",
+      "started_at": "2026-10-24T12:25:25.574Z",
+      "finished_at": "2026-10-24T12:25:28.804Z",
+      "elapsed_ms": 3231.841961,
+      "config": {
+        "enabled": true,
+        "memory_enabled": true,
+        "machine_memory_enabled": true,
+        "cpu_window_ms": 1000,
+        "poll_interval_ms": 1000,
+        "max_retained_samples": 128,
+        "lifecycle_timeout_ms": 10000,
+        "max_profile_handles": 16,
+        "profile_handle_ttl_ms": 21600000
+      },
+      "process_clock_ticks_per_second": {
+        "reason": null,
+        "value": 100
+      },
+      "sample_count": 5,
+      "periodic_sample_count": 3,
+      "full_window_count": 4,
+      "cpu": {
+        "reason": null,
+        "value": {
+          "user": 25.465838509316768,
+          "system": 0.38819875776397517,
+          "idle": 74.14596273291926,
+          "iowait": 0,
+          "steal": 0
+        }
+      },
+      "sampled_busy_min_percent": 25.56237218813906,
+      "sampled_busy_max_percent": 26.25,
+      "machine_available_min_kb": 14988800,
+      "machine_major_faults_delta": 0,
+      "processes": {
+        "worker": {
+          "closing": {
+            "pid": 8714,
+            "start_ticks": "37370",
+            "cpu_window": {
+              "interval_ms": 1227.9875820000002,
+              "full_window": true,
+              "cpu": {
+                "reason": null,
+                "value": {
+                  "cpu_time_ms": 1230,
+                  "percent_one_core": 100.16387934450626
+                }
+              }
+            },
+            "memory_kb": {
+              "rss": 93428,
+              "hwm_lifetime": 94008,
+              "anon": 52144
+            },
+            "major_faults": 0,
+            "unavailable": {}
+          },
+          "sampled_rss_max_kb": 93428,
+          "major_faults_delta": 0,
+          "unavailable": {},
+          "cpu_interval_ms": 3230.641308,
+          "cpu": {
+            "reason": null,
+            "value": {
+              "cpu_time_ms": 3220,
+              "percent_one_core": 99.67061313883255
+            }
+          },
+          "sampled_cpu_min_percent_one_core": 98.79061644973453,
+          "sampled_cpu_max_percent_one_core": 100.16387934450626
+        },
+        "server": {
+          "closing": {
+            "pid": 8701,
+            "start_ticks": "37242",
+            "cpu_window": {
+              "interval_ms": 1227.7383300000001,
+              "full_window": true,
+              "cpu": {
+                "reason": null,
+                "value": {
+                  "cpu_time_ms": 30,
+                  "percent_one_core": 2.4435174228045806
+                }
+              }
+            },
+            "memory_kb": {
+              "rss": 119952,
+              "hwm_lifetime": 122772,
+              "anon": 71388
+            },
+            "major_faults": 0,
+            "unavailable": {}
+          },
+          "sampled_rss_max_kb": 121408,
+          "major_faults_delta": 0,
+          "unavailable": {},
+          "cpu_interval_ms": 3230.387246,
+          "cpu": {
+            "reason": null,
+            "value": {
+              "cpu_time_ms": 100,
+              "percent_one_core": 3.0956040989768074
+            }
+          },
+          "sampled_cpu_min_percent_one_core": 0.9990198007332926,
+          "sampled_cpu_max_percent_one_core": 3.991956833717283
+        }
+      },
+      "unavailable": {},
+      "samples": [
+        {
+          "phase": "opening",
+          "observed_at": "2026-10-24T12:25:25.574Z",
+          "elapsed_ms": 0,
+          "cpu_window": {
+            "interval_ms": 0,
+            "full_window": false,
+            "cpu": {
+              "reason": "no_ticks",
+              "value": null
+            }
+          },
+          "memory_kb": {
+            "total": 16366644,
+            "free": 3377092,
+            "available": 15020048
+          },
+          "vmstat_major_faults": 9148,
+          "processes": {
+            "worker": {
+              "pid": 8714,
+              "start_ticks": "37370",
+              "cpu_window": {
+                "interval_ms": 0,
+                "full_window": false,
+                "cpu": {
+                  "reason": "no_interval",
+                  "value": null
+                }
+              },
+              "memory_kb": {
+                "rss": 60636,
+                "hwm_lifetime": 60636,
+                "anon": 20120
+              },
+              "major_faults": 0,
+              "unavailable": {}
+            },
+            "server": {
+              "pid": 8701,
+              "start_ticks": "37242",
+              "cpu_window": {
+                "interval_ms": 0,
+                "full_window": false,
+                "cpu": {
+                  "reason": "no_interval",
+                  "value": null
+                }
+              },
+              "memory_kb": {
+                "rss": 121408,
+                "hwm_lifetime": 121408,
+                "anon": 72844
+              },
+              "major_faults": 0,
+              "unavailable": {}
+            }
+          },
+          "unavailable": {}
+        },
+        {
+          "phase": "poll",
+          "observed_at": "2026-10-24T12:25:26.576Z",
+          "elapsed_ms": 1003.019734,
+          "cpu_window": {
+            "interval_ms": 1003.019734,
+            "full_window": true,
+            "cpu": {
+              "reason": null,
+              "value": {
+                "user": 25.31328320802005,
+                "system": 0.5012531328320802,
+                "idle": 74.18546365914787,
+                "iowait": 0,
+                "steal": 0
+              }
+            }
+          },
+          "memory_kb": {
+            "total": 16366644,
+            "free": 3345844,
+            "available": 14988800
+          },
+          "vmstat_major_faults": 9148,
+          "processes": {
+            "worker": {
+              "pid": 8714,
+              "start_ticks": "37370",
+              "cpu_window": {
+                "interval_ms": 1002.1194679999999,
+                "full_window": true,
+                "cpu": {
+                  "reason": null,
+                  "value": {
+                    "cpu_time_ms": 990,
+                    "percent_one_core": 98.79061644973453
+                  }
+                }
+              },
+              "memory_kb": {
+                "rss": 93256,
+                "hwm_lifetime": 94008,
+                "anon": 52036
+              },
+              "major_faults": 0,
+              "unavailable": {}
+            },
+            "server": {
+              "pid": 8701,
+              "start_ticks": "37242",
+              "cpu_window": {
+                "interval_ms": 1002.0148429999999,
+                "full_window": true,
+                "cpu": {
+                  "reason": null,
+                  "value": {
+                    "cpu_time_ms": 40,
+                    "percent_one_core": 3.991956833717283
+                  }
+                }
+              },
+              "memory_kb": {
+                "rss": 120844,
+                "hwm_lifetime": 122772,
+                "anon": 72280
+              },
+              "major_faults": 0,
+              "unavailable": {}
+            }
+          },
+          "unavailable": {}
+        },
+        {
+          "phase": "poll",
+          "observed_at": "2026-10-24T12:25:27.576Z",
+          "elapsed_ms": 2003.6969579999998,
+          "cpu_window": {
+            "interval_ms": 1000.6772239999998,
+            "full_window": true,
+            "cpu": {
+              "reason": null,
+              "value": {
+                "user": 25.75,
+                "system": 0.5,
+                "idle": 73.75,
+                "iowait": 0,
+                "steal": 0
+              }
+            }
+          },
+          "memory_kb": {
+            "total": 16366644,
+            "free": 3345844,
+            "available": 14988800
+          },
+          "vmstat_major_faults": 9148,
+          "processes": {
+            "worker": {
+              "pid": 8714,
+              "start_ticks": "37370",
+              "cpu_window": {
+                "interval_ms": 1000.5342579999999,
+                "full_window": true,
+                "cpu": {
+                  "reason": null,
+                  "value": {
+                    "cpu_time_ms": 1000,
+                    "percent_one_core": 99.9466027279198
+                  }
+                }
+              },
+              "memory_kb": {
+                "rss": 93248,
+                "hwm_lifetime": 94008,
+                "anon": 52028
+              },
+              "major_faults": 0,
+              "unavailable": {}
+            },
+            "server": {
+              "pid": 8701,
+              "start_ticks": "37242",
+              "cpu_window": {
+                "interval_ms": 1000.634073,
+                "full_window": true,
+                "cpu": {
+                  "reason": null,
+                  "value": {
+                    "cpu_time_ms": 30,
+                    "percent_one_core": 2.9980989863814083
+                  }
+                }
+              },
+              "memory_kb": {
+                "rss": 119276,
+                "hwm_lifetime": 122772,
+                "anon": 70712
+              },
+              "major_faults": 0,
+              "unavailable": {}
+            }
+          },
+          "unavailable": {}
+        },
+        {
+          "phase": "poll",
+          "observed_at": "2026-10-24T12:25:28.578Z",
+          "elapsed_ms": 3004.783253,
+          "cpu_window": {
+            "interval_ms": 1001.0862950000001,
+            "full_window": true,
+            "cpu": {
+              "reason": null,
+              "value": {
+                "user": 25.31328320802005,
+                "system": 0.2506265664160401,
+                "idle": 74.43609022556392,
+                "iowait": 0,
+                "steal": 0
+              }
+            }
+          },
+          "memory_kb": {
+            "total": 16366644,
+            "free": 3352648,
+            "available": 14995604
+          },
+          "vmstat_major_faults": 9148,
+          "processes": {
+            "worker": {
+              "pid": 8714,
+              "start_ticks": "37370",
+              "cpu_window": {
+                "interval_ms": 1001.1447630000002,
+                "full_window": true,
+                "cpu": {
+                  "reason": null,
+                  "value": {
+                    "cpu_time_ms": 1000,
+                    "percent_one_core": 99.88565459838496
+                  }
+                }
+              },
+              "memory_kb": {
+                "rss": 93344,
+                "hwm_lifetime": 94008,
+                "anon": 52124
+              },
+              "major_faults": 0,
+              "unavailable": {}
+            },
+            "server": {
+              "pid": 8701,
+              "start_ticks": "37242",
+              "cpu_window": {
+                "interval_ms": 1000.9811610000002,
+                "full_window": true,
+                "cpu": {
+                  "reason": null,
+                  "value": {
+                    "cpu_time_ms": 10,
+                    "percent_one_core": 0.9990198007332926
+                  }
+                }
+              },
+              "memory_kb": {
+                "rss": 119100,
+                "hwm_lifetime": 122772,
+                "anon": 70536
+              },
+              "major_faults": 0,
+              "unavailable": {}
+            }
+          },
+          "unavailable": {}
+        },
+        {
+          "phase": "closing",
+          "observed_at": "2026-10-24T12:25:28.804Z",
+          "elapsed_ms": 3231.841961,
+          "cpu_window": {
+            "interval_ms": 1228.145003,
+            "full_window": true,
+            "cpu": {
+              "reason": null,
+              "value": {
+                "user": 25.357873210633947,
+                "system": 0.2044989775051125,
+                "idle": 74.43762781186093,
+                "iowait": 0,
+                "steal": 0
+              }
+            }
+          },
+          "memory_kb": {
+            "total": 16366644,
+            "free": 3352844,
+            "available": 14995800
+          },
+          "vmstat_major_faults": 9148,
+          "processes": {
+            "worker": {
+              "pid": 8714,
+              "start_ticks": "37370",
+              "cpu_window": {
+                "interval_ms": 1227.9875820000002,
+                "full_window": true,
+                "cpu": {
+                  "reason": null,
+                  "value": {
+                    "cpu_time_ms": 1230,
+                    "percent_one_core": 100.16387934450626
+                  }
+                }
+              },
+              "memory_kb": {
+                "rss": 93428,
+                "hwm_lifetime": 94008,
+                "anon": 52144
+              },
+              "major_faults": 0,
+              "unavailable": {}
+            },
+            "server": {
+              "pid": 8701,
+              "start_ticks": "37242",
+              "cpu_window": {
+                "interval_ms": 1227.7383300000001,
+                "full_window": true,
+                "cpu": {
+                  "reason": null,
+                  "value": {
+                    "cpu_time_ms": 30,
+                    "percent_one_core": 2.4435174228045806
+                  }
+                }
+              },
+              "memory_kb": {
+                "rss": 119952,
+                "hwm_lifetime": 122772,
+                "anon": 71388
+              },
+              "major_faults": 0,
+              "unavailable": {}
+            }
+          },
+          "unavailable": {}
+        }
+      ]
+    },
+    "cache_counters_start": {
+      "version": "2026-10-24",
+      "kind": "last_level_cache_counters",
+      "status": "unavailable",
+      "reason": "permission_denied",
+      "measurement_obtained": false,
+      "target": {
+        "pid": 8714,
+        "start_ticks": "37370"
+      },
+      "host": {
+        "platform": "linux",
+        "arch": "x64",
+        "release": "7.0.0-1017-azure"
+      },
+      "interval": null,
+      "completion": null,
+      "scope": "existing_pid_threads_user_space_without_descendants",
+      "scaled": false,
+      "enabled_time_precision": "derived_from_running_percent_rounded_to_0.01_percent",
+      "events": [
+        {
+          "event": "LLC-loads:u",
+          "support": "unavailable",
+          "reason": "permission_denied",
+          "count": null,
+          "time_running_ns": null,
+          "time_enabled_ns_estimate": null,
+          "running_percent": null,
+          "multiplexing": "unknown"
+        },
+        {
+          "event": "LLC-load-misses:u",
+          "support": "unavailable",
+          "reason": "permission_denied",
+          "count": null,
+          "time_running_ns": null,
+          "time_enabled_ns_estimate": null,
+          "running_percent": null,
+          "multiplexing": "unknown"
+        }
+      ]
+    },
+    "cache_counters": {
+      "version": "2026-10-24",
+      "kind": "last_level_cache_counters",
+      "status": "unavailable",
+      "reason": "permission_denied",
+      "measurement_obtained": false,
+      "target": {
+        "pid": 8714,
+        "start_ticks": "37370"
+      },
+      "host": {
+        "platform": "linux",
+        "arch": "x64",
+        "release": "7.0.0-1017-azure"
+      },
+      "interval": null,
+      "completion": null,
+      "scope": "existing_pid_threads_user_space_without_descendants",
+      "scaled": false,
+      "enabled_time_precision": "derived_from_running_percent_rounded_to_0.01_percent",
+      "events": [
+        {
+          "event": "LLC-loads:u",
+          "support": "unavailable",
+          "reason": "permission_denied",
+          "count": null,
+          "time_running_ns": null,
+          "time_enabled_ns_estimate": null,
+          "running_percent": null,
+          "multiplexing": "unknown"
+        },
+        {
+          "event": "LLC-load-misses:u",
+          "support": "unavailable",
+          "reason": "permission_denied",
+          "count": null,
+          "time_running_ns": null,
+          "time_enabled_ns_estimate": null,
+          "running_percent": null,
+          "multiplexing": "unknown"
+        }
+      ]
+    },
+    "repeat_stop_identical": true
+  },
+  "copy": {
+    "task_name": "isolated-copy-proof",
+    "floor_mib": 512,
+    "cache_multiple": 2,
+    "repeats": 3,
+    "buffers": 2,
+    "method": "median_read_plus_write",
+    "off": {
+      "memcpy_probe_mib": 0,
+      "memcpy_gib_s": null,
+      "l3_cache_bytes": 33554432,
+      "cpu_model": "AMD EPYC 7763 64-Core Processor",
+      "cpu_logical_processors": 4,
+      "cpu_allowed_processors": 4,
+      "cpu_quota_state": "unavailable",
+      "cpu_quota_cores": null,
+      "fingerprint": "c8dccc4ba20c6b60"
+    },
+    "on": {
+      "memcpy_probe_mib": 512,
+      "memcpy_gib_s": 33.30315068786553,
+      "l3_cache_bytes": 33554432,
+      "cpu_model": "AMD EPYC 7763 64-Core Processor",
+      "cpu_logical_processors": 4,
+      "cpu_allowed_processors": 4,
+      "cpu_quota_state": "unavailable",
+      "cpu_quota_cores": null,
+      "fingerprint": "c8dccc4ba20c6b60"
+    },
+    "off_reason": "configured_off",
+    "on_reason": null
+  },
+  "cache": {
+    "scope": "unprivileged_linux_cache_instruments",
+    "status": "complete",
+    "stage": "complete",
+    "counters_measurement": "pending_permitted_pmu_host",
+    "default_off": {
+      "counters": {
+        "version": "2026-10-24",
+        "kind": "last_level_cache_counters",
+        "status": "disabled",
+        "reason": "configured_off",
+        "measurement_obtained": false,
+        "target": {
+          "pid": 8701,
+          "start_ticks": "37242"
+        },
+        "host": null,
+        "interval": null,
+        "completion": null,
+        "scope": "existing_pid_threads_user_space_without_descendants",
+        "scaled": false,
+        "enabled_time_precision": "derived_from_running_percent_rounded_to_0.01_percent",
+        "events": [
+          {
+            "event": "LLC-loads:u",
+            "support": "unavailable",
+            "reason": "configured_off",
+            "count": null,
+            "time_running_ns": null,
+            "time_enabled_ns_estimate": null,
+            "running_percent": null,
+            "multiplexing": "unknown"
+          },
+          {
+            "event": "LLC-load-misses:u",
+            "support": "unavailable",
+            "reason": "configured_off",
+            "count": null,
+            "time_running_ns": null,
+            "time_enabled_ns_estimate": null,
+            "running_percent": null,
+            "multiplexing": "unknown"
+          }
+        ]
+      },
+      "latency": {
+        "version": "2026-10-24",
+        "kind": "cache_working_set_latency",
+        "status": "disabled",
+        "reason": "configured_off",
+        "measurement_obtained": false,
+        "host": null,
+        "interval": null,
+        "tool": "multichase",
+        "method": "single_dependent_random_pointer_chain",
+        "prefault": "chain_construction",
+        "warmup_samples_discarded": 1,
+        "sample_period_ms": 500,
+        "statistic": "mean_of_tool_samples",
+        "interpretation": "working_set_curve_not_direct_l3_hit_latency",
+        "points": []
+      }
+    },
+    "counters": {
+      "version": "2026-10-24",
+      "kind": "last_level_cache_counters",
+      "status": "unavailable",
+      "reason": "permission_denied",
+      "measurement_obtained": false,
+      "target": {
+        "pid": 8714,
+        "start_ticks": "37370"
+      },
+      "host": {
+        "platform": "linux",
+        "arch": "x64",
+        "release": "7.0.0-1017-azure"
+      },
+      "interval": null,
+      "completion": null,
+      "scope": "existing_pid_threads_user_space_without_descendants",
+      "scaled": false,
+      "enabled_time_precision": "derived_from_running_percent_rounded_to_0.01_percent",
+      "events": [
+        {
+          "event": "LLC-loads:u",
+          "support": "unavailable",
+          "reason": "permission_denied",
+          "count": null,
+          "time_running_ns": null,
+          "time_enabled_ns_estimate": null,
+          "running_percent": null,
+          "multiplexing": "unknown"
+        },
+        {
+          "event": "LLC-load-misses:u",
+          "support": "unavailable",
+          "reason": "permission_denied",
+          "count": null,
+          "time_running_ns": null,
+          "time_enabled_ns_estimate": null,
+          "running_percent": null,
+          "multiplexing": "unknown"
+        }
+      ]
+    },
+    "task_api": {
+      "target": {
+        "pid": 8714,
+        "start_ticks": "37370"
+      },
+      "handle": "7fcc8ba4-1baa-4a28-a44d-d7cf9df3e475",
+      "expires_at": "2026-10-24T18:25:25.571Z",
+      "initial": {
+        "version": "2026-10-24",
+        "kind": "last_level_cache_counters",
+        "status": "unavailable",
+        "reason": "permission_denied",
+        "measurement_obtained": false,
+        "target": {
+          "pid": 8714,
+          "start_ticks": "37370"
+        },
+        "host": {
+          "platform": "linux",
+          "arch": "x64",
+          "release": "7.0.0-1017-azure"
+        },
+        "interval": null,
+        "completion": null,
+        "scope": "existing_pid_threads_user_space_without_descendants",
+        "scaled": false,
+        "enabled_time_precision": "derived_from_running_percent_rounded_to_0.01_percent",
+        "events": [
+          {
+            "event": "LLC-loads:u",
+            "support": "unavailable",
+            "reason": "permission_denied",
+            "count": null,
+            "time_running_ns": null,
+            "time_enabled_ns_estimate": null,
+            "running_percent": null,
+            "multiplexing": "unknown"
+          },
+          {
+            "event": "LLC-load-misses:u",
+            "support": "unavailable",
+            "reason": "permission_denied",
+            "count": null,
+            "time_running_ns": null,
+            "time_enabled_ns_estimate": null,
+            "running_percent": null,
+            "multiplexing": "unknown"
+          }
+        ]
+      },
+      "target_alive_at_stop": true,
+      "repeat_stop_identical": true
+    },
+    "latency": {
+      "version": "2026-10-24",
+      "kind": "cache_working_set_latency",
+      "status": "measured",
+      "reason": null,
+      "measurement_obtained": true,
+      "host": {
+        "platform": "linux",
+        "arch": "x64",
+        "release": "7.0.0-1017-azure"
+      },
+      "interval": {
+        "started_at": "2026-10-24T12:25:29.452Z",
+        "finished_at": "2026-10-24T12:25:41.098Z",
+        "elapsed_ms": 11645.911564000002
+      },
+      "tool": "multichase",
+      "method": "single_dependent_random_pointer_chain",
+      "prefault": "chain_construction",
+      "warmup_samples_discarded": 1,
+      "sample_period_ms": 500,
+      "statistic": "mean_of_tool_samples",
+      "interpretation": "working_set_curve_not_direct_l3_hit_latency",
+      "points": [
+        {
+          "working_set_bytes": 4096,
+          "stride_bytes": 64,
+          "tlb_locality_bytes": 4096,
+          "page_size_bytes": 4096,
+          "nanoseconds_per_load": 1.246,
+          "sample_nanoseconds_per_load": [
+            1.246,
+            1.246
+          ],
+          "benchmark": {
+            "pid": 8731,
+            "start_ticks": "37776"
+          },
+          "allowed_cpu": 0,
+          "interval": {
+            "started_at": "2026-10-24T12:25:29.452Z",
+            "finished_at": "2026-10-24T12:25:30.974Z",
+            "elapsed_ms": 1521.9935459999997
+          }
+        },
+        {
+          "working_set_bytes": 32768,
+          "stride_bytes": 64,
+          "tlb_locality_bytes": 32768,
+          "page_size_bytes": 4096,
+          "nanoseconds_per_load": 1.34,
+          "sample_nanoseconds_per_load": [
+            1.339,
+            1.34
+          ],
+          "benchmark": {
+            "pid": 8733,
+            "start_ticks": "37928"
+          },
+          "allowed_cpu": 0,
+          "interval": {
+            "started_at": "2026-10-24T12:25:30.974Z",
+            "finished_at": "2026-10-24T12:25:32.478Z",
+            "elapsed_ms": 1503.3534809999992
+          }
+        },
+        {
+          "working_set_bytes": 262144,
+          "stride_bytes": 64,
+          "tlb_locality_bytes": 262144,
+          "page_size_bytes": 4096,
+          "nanoseconds_per_load": 3.798,
+          "sample_nanoseconds_per_load": [
+            3.797,
+            3.799
+          ],
+          "benchmark": {
+            "pid": 8735,
+            "start_ticks": "38078"
+          },
+          "allowed_cpu": 0,
+          "interval": {
+            "started_at": "2026-10-24T12:25:32.478Z",
+            "finished_at": "2026-10-24T12:25:33.982Z",
+            "elapsed_ms": 1504.3547369999997
+          }
+        },
+        {
+          "working_set_bytes": 2097152,
+          "stride_bytes": 64,
+          "tlb_locality_bytes": 262144,
+          "page_size_bytes": 4096,
+          "nanoseconds_per_load": 11.606,
+          "sample_nanoseconds_per_load": [
+            11.603,
+            11.61
+          ],
+          "benchmark": {
+            "pid": 8737,
+            "start_ticks": "38228"
+          },
+          "allowed_cpu": 0,
+          "interval": {
+            "started_at": "2026-10-24T12:25:33.982Z",
+            "finished_at": "2026-10-24T12:25:35.487Z",
+            "elapsed_ms": 1505.144549999999
+          }
+        },
+        {
+          "working_set_bytes": 16777216,
+          "stride_bytes": 64,
+          "tlb_locality_bytes": 262144,
+          "page_size_bytes": 4096,
+          "nanoseconds_per_load": 20.813,
+          "sample_nanoseconds_per_load": [
+            20.666,
+            20.959
+          ],
+          "benchmark": {
+            "pid": 8739,
+            "start_ticks": "38379"
+          },
+          "allowed_cpu": 0,
+          "interval": {
+            "started_at": "2026-10-24T12:25:35.487Z",
+            "finished_at": "2026-10-24T12:25:37.007Z",
+            "elapsed_ms": 1519.5517720000007
+          }
+        },
+        {
+          "working_set_bytes": 134217728,
+          "stride_bytes": 64,
+          "tlb_locality_bytes": 262144,
+          "page_size_bytes": 4096,
+          "nanoseconds_per_load": 78.305,
+          "sample_nanoseconds_per_load": [
+            77.992,
+            78.618
+          ],
+          "benchmark": {
+            "pid": 8741,
+            "start_ticks": "38531"
+          },
+          "allowed_cpu": 0,
+          "interval": {
+            "started_at": "2026-10-24T12:25:37.007Z",
+            "finished_at": "2026-10-24T12:25:38.636Z",
+            "elapsed_ms": 1629.5335689999993
+          }
+        },
+        {
+          "working_set_bytes": 1073741824,
+          "stride_bytes": 64,
+          "tlb_locality_bytes": 262144,
+          "page_size_bytes": 4096,
+          "nanoseconds_per_load": 77.447,
+          "sample_nanoseconds_per_load": [
+            77.738,
+            77.157
+          ],
+          "benchmark": {
+            "pid": 8743,
+            "start_ticks": "38694"
+          },
+          "allowed_cpu": 0,
+          "interval": {
+            "started_at": "2026-10-24T12:25:38.636Z",
+            "finished_at": "2026-10-24T12:25:41.098Z",
+            "elapsed_ms": 2461.9317520000004
+          }
+        }
+      ]
+    },
+    "affinity": {
+      "status": "verified",
+      "reason": null,
+      "parent_allowed_cpus": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "restricted_allowed_cpus": [
+        1,
+        3
+      ],
+      "measured_cpu": 1,
+      "discontiguous_tested": true
+    },
+    "cancellation": {
+      "owned_benchmark": {
+        "pid": 8729,
+        "start_ticks": "37775"
+      },
+      "reason": "cancelled",
+      "benchmark_exited": true,
+      "target_preserved": true
+    },
+    "beyond_recorded_llc": true,
+    "tool_install": {
+      "source_revision": "8b68e918f8d2e84794f2c20cdb6c7ebb9c3952bb",
+      "perf_source_revision": "028ef9c96e96197026887c0f092424679298aae8",
+      "perf_version": "perf version 7.0.g028ef9c96e96",
+      "perf_fetch_seconds": 5,
+      "perf_build_seconds": 114,
+      "multichase_build_seconds": 2,
+      "python_execution_count": 0,
+      "perf_elf_libraries": [
+        "libm.so.6",
+        "libz.so.1",
+        "libstdc++.so.6",
+        "liblzma.so.5",
+        "libzstd.so.1",
+        "libgcc_s.so.1",
+        "libc.so.6",
+        "ld-linux-x86-64.so.2"
+      ],
+      "perf_runtime_libraries": [
+        "linux-vdso.so.1",
+        "libm.so.6",
+        "libz.so.1",
+        "libstdc++.so.6",
+        "liblzma.so.5",
+        "libzstd.so.1",
+        "libgcc_s.so.1",
+        "libc.so.6",
+        "ld-linux-x86-64.so.2"
+      ],
+      "added_os_packages": [
+        {
+          "name": "build-essential",
+          "version": "12.12ubuntu2.26.04.2",
+          "installed_kib": 18
+        }
+      ],
+      "install_seconds": 147,
+      "multichase_binary_bytes": 1208608,
+      "perf_binary_bytes": 9161744
+    }
+  },
+  "error": null
+}
