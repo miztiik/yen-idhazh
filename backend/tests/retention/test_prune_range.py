@@ -30,11 +30,10 @@ from __future__ import annotations
 import functools
 import hashlib
 import os
-import signal
 import shutil
+import signal
 from collections.abc import Callable, Iterable, Iterator, Mapping
-from datetime import date as date_type
-from datetime import timedelta
+from datetime import date as date_type, timedelta
 from pathlib import Path
 from typing import Final
 
@@ -805,11 +804,11 @@ def test_a_pass_on_the_door_that_fails_part_way_names_what_changed_and_is_run_ag
         from ctypes.wintypes import BOOL, DWORD, HANDLE, LPCWSTR, LPVOID
 
         # CreateFileW flags and its failure handle are fixed by the Windows API.
-        GENERIC_READ = 0x80000000
-        SHARE_READ_WRITE = 0x00000003
-        OPEN_EXISTING = 3
-        FILE_ATTRIBUTE_NORMAL = 0x80
-        INVALID_HANDLE_VALUE = HANDLE(-1).value
+        generic_read = 0x80000000
+        share_read_write = 0x00000003
+        open_existing = 3
+        file_attribute_normal = 0x80
+        invalid_handle_value = HANDLE(-1).value
 
         @contextmanager
         def no_delete_share(path: Path) -> Iterator[None]:
@@ -822,14 +821,14 @@ def test_a_pass_on_the_door_that_fails_part_way_names_what_changed_and_is_run_ag
             close_handle.restype = BOOL
             handle = create_file(
                 str(path),
-                GENERIC_READ,
-                SHARE_READ_WRITE,
+                generic_read,
+                share_read_write,
                 None,
-                OPEN_EXISTING,
-                FILE_ATTRIBUTE_NORMAL,
+                open_existing,
+                file_attribute_normal,
                 None,
             )
-            if handle == INVALID_HANDLE_VALUE:
+            if handle == invalid_handle_value:
                 raise WinError(get_last_error())
             try:
                 yield

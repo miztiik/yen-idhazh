@@ -95,7 +95,7 @@ def test_named_members_survive_pathspec_batches_larger_than_the_process_limit(
         return f"state/old-days/2026/09/01/run-{item:08d}/{folders}"
 
     argument_limit = 32_767 if os.name == "nt" else os.sysconf("SC_ARG_MAX")
-    paths = [first, second]
+    paths = [first]
     used = sum(len(path) + 1 for path in paths)
     for item in range(argument_limit // (len(long_path(0)) + 1) + 1):
         path = long_path(item)
@@ -103,6 +103,8 @@ def test_named_members_survive_pathspec_batches_larger_than_the_process_limit(
         used += len(path) + 1
         if used > argument_limit:
             break
+    paths.append(second)
+    used += len(second) + 1
     assert used > argument_limit, "the path list did not cross the host argument limit"
 
     listed = gardener_publish.Checkout(checkout).list_files(paths)
