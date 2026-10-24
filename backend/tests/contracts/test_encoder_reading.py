@@ -17,6 +17,7 @@ import pytest
 from pydantic import ValidationError
 
 from idhazh.contracts.encoder_reading import EncoderReading, PairCounts, ReadingState
+from utilities.compare_summary_encoders import resolve_encoder_thread_count
 
 CONFIG = Path(__file__).resolve().parents[3] / "config" / "encoder-comparison.json"
 
@@ -104,18 +105,26 @@ def test_an_unavailable_reading_says_why() -> None:
         )
 
 
-def test_the_thread_setting_resolves_to_a_positive_count() -> None:
-    """The failure this test exists for: five shards died at once, 2026-10-08.
+@pytest.mark.parametrize(
+    ("requested", "available_processors", "expected"),
+    [
+        pytest.param(4, 12, 4, id="requested-count-takes-precedence"),
+        pytest.param(0, 12, 12, id="automatic-uses-processor-count"),
+        pytest.param(0, None, 1, id="automatic-falls-back-without-processor-count"),
+        pytest.param(4, None, 4, id="requested-count-needs-no-processor-count"),
+        pytest.param(0, 0, 1, id="automatic-falls-back-on-zero-processor-count"),
+    ],
+)
+def test_encoder_thread_count_resolution(
+    requested: int, available_processors: int | None, expected: int
+) -> None:
+    assert (
+        resolve_encoder_thread_count(requested, available_processors) == expected
+    )
 
-    The setting carries zero to mean "take the machine's own count", and the
-    program handed the zero straight to a library that will only accept a
-    positive number. Every shard failed in the first second, after the pair set
-    had been built and the weights had begun downloading.
-    """
-    import os
 
+def test_configured_thread_count_is_nonnegative() -> None:
     settings = json.loads(CONFIG.read_text(encoding="utf-8"))
-    asked = settings["encode"]["threads"]
-    assert asked >= 0, "a thread count is zero for automatic, or a positive number"
-    resolved = asked or os.cpu_count() or 1
-    assert resolved >= 1, "the resolved thread count has to be positive"
+    assert settings["encode"]["threads"] >= 0, (
+        "a thread count is zero for automatic, or a positive number"
+    )
