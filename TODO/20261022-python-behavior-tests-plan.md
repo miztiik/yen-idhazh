@@ -1750,6 +1750,18 @@ Table I - Independent controls and expected faults
   module statement remain unchanged. Ruff and whitespace checks pass. No
   placement case, helper, default or policy changes; no unchanged silicon
   suite rerun. The released immutable full successor remains historical.
+- **Post-freeze local results:** The bounded run of the 14 named gardener
+  modules passed all 215 cases with no failures, errors or skips. The JUnit
+  receipt is `backend/var/row27-gardener-users.xml` in the retained worktree.
+  Row 17 supplied its unchanged real placement proof receipt; the consumed
+  production `silicon.py` blob
+  `3c04fb46085421176d1750b479856ba56eb0d809` and original test module blob
+  `6501c6d18c517fd1698e02bc97b0cbc14b2a3ce9` match the Row 27 inputs.
+  Config-off, caller-off and collection-suppression faults were each detected,
+  and that runner restored its production source byte-for-byte. Reuse this
+  receipt without rerunning the unchanged fingerprint suite. Row 17 PR
+  [#1682](https://github.com/miztiik/yen-idhazh/pull/1682) is open, not merged,
+  at this receipt. No CI pass is claimed here.
 - **Plan integration:** Imported the exact released Row 26 full predecessor,
   141,434 bytes, SHA-256
   `d969aaf615469d8b84e3298d861332428346aa9f5d706bea0a96d83acb54c833`.
