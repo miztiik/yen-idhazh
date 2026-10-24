@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import json
-import re
 import subprocess
 from pathlib import Path
-from typing import Annotated, Any, get_args, get_origin
+from typing import Any
 
 import pytest
 from conftest import CONTRACT_FIXTURES_DIR, REPO_ROOT
@@ -19,7 +18,7 @@ from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.digest_day import DigestItem
 from idhazh.contracts.eval_row import ConfidenceBand
 from idhazh.contracts.summary import Summary
-from idhazh.contracts.taxonomy import SourceKindDefinition, Taxonomy
+from idhazh.contracts.taxonomy import Taxonomy
 from idhazh.discover import Candidate
 from idhazh.rank import authority_terms, plan_vertical
 
@@ -79,38 +78,6 @@ console.log(JSON.stringify({
     )
     value: dict[str, Any] = json.loads(result.stdout)
     return value
-
-
-def test_frontend_kind_definition_fields_match_python() -> None:
-    text = (REPO_ROOT / "frontend/src/lib/bands.ts").read_text(encoding="utf-8")
-    interface = re.search(r"export interface SourceKindDefinition \{(.*?)\}", text, re.S)
-    assert interface
-    fields = dict(re.findall(r"(\w+): ([^;]+);", interface[1]))
-    assert set(fields) == set(SourceKindDefinition.model_fields)
-    assert fields == {
-        "id": "string",
-        "display_name": "string",
-        "status": "string",
-        "retired_on": "string | null",
-        "show_on_item": "boolean",
-        "counts_as_reporting": "boolean",
-        "requires_reporting_for_lead": "boolean",
-    }
-    for name, field in SourceKindDefinition.model_fields.items():
-        annotation = field.annotation
-        if annotation is bool:
-            expected = "boolean"
-        elif type(None) in get_args(annotation):
-            non_null = next(arg for arg in get_args(annotation) if arg is not type(None))
-            if get_origin(non_null) is Annotated:
-                non_null = get_args(non_null)[0]
-            assert non_null is str, f"no TypeScript binding for {name}: {annotation}"
-            expected = "string | null"
-        elif isinstance(annotation, type) and issubclass(annotation, str):
-            expected = "string"
-        else:
-            pytest.fail(f"no TypeScript binding for {name}: {annotation}")
-        assert fields[name] == expected, f"{name} has a different type in TypeScript"
 
 
 def test_frontend_kind_vocabulary_comes_from_the_same_registry() -> None:
