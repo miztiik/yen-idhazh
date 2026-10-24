@@ -15,14 +15,14 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | Field | Value |
 | --- | --- |
 | Why this plan exists | Plan 01 made the chart's colours readable. It is still drawn on a fixed 825 by 437 canvas, so on a 390 CSS px phone it scales to about 0.31x and a 10px axis label draws at about **3.1 CSS px** - below the smallest type on the site at every supported width. That is not a taste complaint; it is a chart whose labels nobody can read. This plan replaces the renderer and makes "can a person read it" a gate rather than an opinion |
-| Hard scope - in | d3 replaces Vega-Lite and `vl-convert` for every type the planner can already emit, **drawn in the reader's browser from data the payload carries**; the drawing takes the width it is given; the legibility floor and the density floor as **build-failing** oracles; the number formatter; caption and one annotated mark |
-| Hard scope - out | Any new visual type (plans 15 to 18). The byte cap, the keyboard route and hydration byte-identity (plan 14). The console (plan 20). Migrating the console's own charts - it keeps its engine and has no complaint against it |
-| Scope change | `2026-10-24`: row #6, "A whole day, again," is removed. A day-scale repeated browser pass is not a separate visual floor. It conflicts with the representative browser policy, and its page-level checks remain covered by the reader smoke plus each row's focused browser gate |
+| Hard scope - in | d3 replaces Vega-Lite and `vl-convert` for every type the planner can already emit, **drawn in the reader's browser from data the payload carries**; the drawing takes the width it is given; the reader legibility floor is a **build-failing** oracle; the number formatter; caption and one annotated mark |
+| Hard scope - out | Any new visual type (plans 15 to 18). The byte cap, the keyboard route and hydration byte-identity (plan 14). The console (plan 20). Migrating the console's own charts - it keeps its engine and has no complaint against it. A reader mark-count density floor; mark-count adequacy stays with `visuals.min_chart_points` and `visuals.max_chart_points` in the visual validator |
+| Scope change | `2026-10-24`: row #6, "A whole day, again," is removed. A day-scale repeated browser pass is not a separate visual floor. It conflicts with the representative browser policy, and its page-level checks remain covered by the reader smoke plus each row's focused browser gate. Row #4 is also refined: it keeps only browser-computed reader label legibility; mark-count adequacy stays with the visual validator, and console label fitting and density rules stay with plan 20 |
 | ESCALATE triggers | 1. The legibility floor cannot be satisfied at 390 CSS px without dropping data the plan selected - that is a planning problem, not a drawing one, and it goes back to plan 10's validator. 2. A per-type bespoke component is proposed - the payload's own metadata is the design system. 3. **Restated 2026-09-13 under the owner ruling.** It read: removing `vl-convert` moves a published byte other than through the intended redraw. Every drawing a reader receives moves now, by design, so the old trigger would fire on the intended change and catch nothing. What escalates instead is a day whose **marks** move - a published spec that draws a different number, a different count of marks, or a different order from the SVG it replaces. That is a compiler defect wearing a renderer's clothes. 4. The d3 modules the reading page now ships push it past its `page_weight` entry and the entry cannot be justified on what the reader gains |
 | Chosen strategy | **Contract first, then the engine, then the page, then the floors.** The payload learns to carry the chart's data while the old renderer still runs and nothing a reader sees moves; then the browser starts drawing and the renderer is deleted in one commit; then the layout work; then the floors that make it checkable. Contract, engine and layout are three different hats and no two share a commit |
 | Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4.` |
 
-**Why the floors are in this plan and not the next.** A phase boundary is a place work stops. Full-width reflow **without** a legibility floor makes the wide end worse rather than better, and a check a person can skip is the one skipped on the day it would have bitten. Susan ruled the two floors into this plan on 2026-09-05; the byte cap and the hydration check may stand alone.
+**Why the legibility gate is in this plan and not the next.** A phase boundary is a place work stops. Full-width reflow **without** a legibility floor makes the wide end worse rather than better, and a check a person can skip is the one skipped on the day it would have bitten. Mark-count adequacy belongs to the visual validator, while console label fitting belongs to plan 20. Susan ruled the reader legibility gate into this plan on 2026-09-05 and narrowed it to browser-computed text size on 2026-10-24; the byte cap and the hydration check may stand alone.
 
 ---
 
@@ -34,7 +34,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 1b | The browser draws the chart, and the pipeline stops rendering | 1a | B | DONE #689 | p12-r1b | #689 | worker |
 | 2 | The drawing takes the width it is given | 1b | C | DONE #716 | p12-r2 | #716 | worker |
 | 3 | Numbers a reader can say out loud | 1b | C | PENDING | - | - | - |
-| 4 | The smallest label a person can read, and enough marks to be worth the space | 2, 3 | D | PENDING | - | - | - |
+| 4 | The smallest reader label stays readable | 2, 3 | D | PENDING | - | - | - |
 | 5 | A caption, and one mark that lands first | 4 | E | PENDING | - | - | - |
 
 **Row #1 became rows #1a and #1b on 2026-09-13, and the plan gained a group.** The owner ruled
@@ -178,21 +178,21 @@ deletion plus a drawing over data already on the wire.
 
 ---
 
-## 6. Row #4 - The smallest label a person can read, and enough marks to be worth the space
+## 6. Row #4 - The smallest reader label stays readable
 
-- **Scope:** Two build-failing oracles: the legibility floor and the density floor.
-- **Files touched:** `frontend/src/lib/charts/**`, `frontend/tests/visual-sufficiency.spec.ts` (new), `config/idhazh.json`, `docs/concepts/design-system.md`
-- **Acceptance gates:** `npm run check`; build; `bundle-gate`; the browser suite; the section 12 smoke at every supported width.
-- **Oracle:** For every drawn visual on a real committed day, the smallest drawn string's **computed** font size clears the site's smallest type **after** the scale-to-fit, at 360, 390 and 1440. Computed, not declared - the whole defect is that a declared 10px draws at 3.1.
+- **Scope:** One build-failing oracle: every drawn text string on the reader visual clears the resolved `--text-xs` token without inherited `viewBox` scaling.
+- **Files touched:** `frontend/src/lib/visual/bar.ts`, `frontend/src/lib/components/ItemVisual.svelte`, `frontend/tests/item-visual.spec.ts`, `docs/concepts/design-system.md`
+- **Acceptance gates:** `npm run check`; build; the browser suite; the section 12 smoke at 390 CSS px, with 360 and 1440 as reflow guards.
+- **Oracle:** At a real 390 CSS px phone card, the smallest visible string on the reader visual has a computed font size at or above the resolved `--text-xs` value. The same check stays green after card reflow to 360 and 1440 CSS px. The value comes from the browser, not a declared SVG size or test-only number.
 
 ### Decisions
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | These are **compiler oracles, not review items.** A check a person can skip is the one skipped on the day it would have bitten | O36, Susan |
+| 1 | This is a **browser oracle, not a review item.** A check a person can skip is the one skipped on the day it would have bitten | O36, Susan |
 | 2 | Measured 2026-09-02: 10px axis labels draw at about **3.1 CSS px** on a 390px phone, below the smallest type on the site at every supported width | Section 2.2 |
-| 3 | The size ratio ships as **`density_floor`**. The semantic measure keeps the name `information_delta` - a size ratio carries no semantics and says nothing about faithfulness | Row 27, owner |
-| 4 | Both floors live in this plan, not the next, because full-width reflow without a legibility floor makes the wide end worse | Susan, 2026-09-05 |
+| 3 | The undefined `density_floor` is removed. `visuals.min_chart_points` and `visuals.max_chart_points` already decide whether a visual carries enough or too many marks | Visual validator, owner ruling 2026-10-24 |
+| 4 | Console label fitting and mark-density rules stay under plan 20 and the current coordinate-frame rules. They do not share this reader floor | Susan, current console plan, 2026-10-24 |
 | 5 | A shortened number is still a drawn label and faces this floor unchanged. Making a number shorter is not a licence to set it smaller | O47 |
 
 ### Rejected alternatives
@@ -200,7 +200,7 @@ deletion plus a drawing over data already on the wire.
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
 | 1 | Advisory checks in review | The programme has already converged once on the minimum that passed every review - a surface using 40.6 percent of a 1536px screen | Susan |
-| 2 | Defer the floors to the sufficiency plan | A phase boundary is a place work stops, and this is the phase that changes the widths | Susan |
+| 2 | Reintroduce `density_floor` as a reader visual size ratio | A size ratio says nothing about whether a drawing has enough marks, is informative, or is useful | Susan, owner ruling 2026-10-24 |
 
 ---
 

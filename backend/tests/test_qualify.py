@@ -512,15 +512,15 @@ def test_a_second_output_digest_on_one_item_fails_no_gate() -> None:
     assert all(outcome.status is GateStatus.PASSED for outcome in outcomes.values())
 
 
-def test_the_temperature_does_not_change_which_gates_are_asked() -> None:
+def test_the_context_size_does_not_change_which_gates_are_asked() -> None:
     """There is no conditional gate left, so a report cannot be missing one."""
     drifted = with_one_bad_call(a_passing_shard(), output_digest="9" * 64)
 
-    greedy = outcomes_of(drifted)
-    sampled = outcomes_of(drifted, server=a_server(**{"--ctx-size": 16384}))
+    usual = outcomes_of(drifted)
+    larger = outcomes_of(drifted, server=a_server(**{"--ctx-size": 16384}))
 
-    assert set(greedy) == set(GateName)
-    assert set(sampled) == set(GateName)
+    assert set(usual) == set(GateName)
+    assert set(larger) == set(GateName)
 
 
 def test_the_spread_diagnostic_counts_wordings_rather_than_violations() -> None:
@@ -748,19 +748,51 @@ def test_shards_that_disagree_about_repeats_are_refused() -> None:
 
 
 def test_every_diagnostic_carries_its_denominator() -> None:
-    corpus = qualify.merge([a_passing_shard()])
+    scores = [scored(index, brief=index <= 2) for index in range(1, 6)]
+    observations = [
+        call(1),
+        call(2),
+        call(3, ok=False, failure_code="model_unreachable"),
+        call(4, summarize_seconds=0.0),
+        call(5, completion_tokens=0),
+        call(1, repeat=2, ok=False, failure_code="model_unreachable"),
+    ]
+    total = len(scores)
+    nonbrief = sum(not score.brief for score in scores)
+    timed = sum(
+        observation.ok and observation.summarize_seconds > 0 and observation.completion_tokens > 0
+        for observation in observations
+    )
+    assert (total, nonbrief, timed) == (5, 3, 2)
+    assert len(observations) == 6, "score counts must not be replaced by call counts"
+    corpus = qualify.merge(
+        [
+            a_passing_shard(
+                corpus=[item(index, brief=index <= 2) for index in range(1, 6)],
+                scores=scores,
+                observations=observations,
+            )
+        ]
+    )
     rows = qualify.diagnostics(corpus, evaluation=EVALUATION)
-    assert rows
-    assert all(row.denominator == len(corpus.scores) or row.denominator >= 0 for row in rows)
-    assert {row.name for row in rows} >= {
-        "unsupported_numbers_total",
-        "hedge_dropped_rate",
-        "hhem_mean",
-        "hhem_spread",
-        "compression_mean",
-        "generated_title_fallback_rate",
-        "decode_tokens_per_second_median",
+    expected = {
+        "unsupported_numbers_total": total,
+        "unsupported_numbers_rate": total,
+        "hedge_dropped_total": total,
+        "hedge_dropped_rate": total,
+        "extractiveness_mean_non_brief": nonbrief,
+        "verbatim_run_mean_non_brief": nonbrief,
+        "hhem_mean": total,
+        "hhem_spread": total,
+        "hhem_delta_mean": total,
+        "compression_mean": total,
+        "evidential_density_mean": total,
+        "speculative_density_mean": total,
+        "generated_title_fallback_rate": total,
+        "decode_tokens_per_second_median": timed,
     }
+    assert len(rows) == len(expected)
+    assert {row.name: row.denominator for row in rows} == expected
 
 
 def test_a_demoted_metric_does_not_block() -> None:

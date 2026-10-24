@@ -32,6 +32,7 @@ from ._harness import (
     _declared_steps,
     _dispatch_inputs,
     _effective_shell,
+    _git_writes,
     _job,
     _load_workflows,
     _local_action_inputs,
@@ -41,6 +42,7 @@ from ._harness import (
     _stage_invocations,
     _step,
     _steps,
+    _values_keyed,
 )
 
 pytestmark = pytest.mark.workflow
@@ -222,9 +224,20 @@ def test_the_unit_reads_its_timeout_from_the_one_file_that_says_so() -> None:
         f"backend/utilities/shard_bound.py --key {TIMEOUT_KEY} --config-file {TIMEOUT_FILE}"
         in script
     )
-    assert not re.search(r"\btimeout-minutes:\s*\d", str(_judges())), (
+    timeouts = _values_keyed(_judges(), frozenset({"timeout-minutes"}))
+    assert timeouts, "the workflow declares no timeout to check"
+    assert all(value.strip().startswith("${{") for _, value in timeouts), (
         "a timeout literal is a second answer to a question config already answers"
     )
+
+
+@pytest.mark.parametrize("value", ["12", " 12 ", "12.5"])
+def test_literal_timeout_values_are_visible_at_job_and_step_depth(value: str) -> None:
+    workflow = {"jobs": {"draw": {"timeout-minutes": value, "steps": [{"timeout-minutes": value}]}}}
+    assert _values_keyed(workflow, frozenset({"timeout-minutes"})) == [
+        ("timeout-minutes", value),
+        ("timeout-minutes", value),
+    ]
 
 
 def test_the_timeout_travels_as_a_job_output() -> None:
@@ -492,7 +505,7 @@ def test_a_matrix_with_no_cells_never_reaches_the_strategy_evaluator() -> None:
     )
     assert (
         _normalize_condition(_job(_judges(), "save_council_results")["if"], "the saving job")
-        == "always()"
+        == "always() && needs.job_bounds.result == 'success'"
     )
 
 
@@ -566,7 +579,7 @@ def test_a_dead_unit_does_not_cancel_its_siblings() -> None:
     # The harness reads the file as text, so a YAML boolean arrives as the word
     # somebody wrote. Comparing to the word is what this file can actually see.
     assert str(strategy["fail-fast"]).lower() == "false"
-    assert collect["needs"] == ["draw", "judge"]
+    assert collect["needs"] == ["job_bounds", "draw", "judge"]
 
 
 def test_a_unit_that_stops_early_still_ships_what_it_did() -> None:
@@ -665,6 +678,7 @@ def test_each_job_holds_only_the_permissions_its_steps_use() -> None:
     """Only the collecting job can write; judge code has a read-only token."""
     workflow = _judges()
     expected = {
+        "job_bounds": {"contents": "read"},
         "draw": {"contents": "read"},
         "judge": {"contents": "read", "actions": "read"},
         "save_council_results": {"contents": "write", "actions": "read"},
@@ -722,6 +736,9 @@ def test_no_shard_commits() -> None:
 
     assert [shell for shell in shells if shell], "the judging job runs no shell to search"
     assert not [shell for shell in shells if Path(COMMIT_PROGRAM).name in shell]
+    assert not [command for shell in shells for command in _git_writes(shell)], (
+        "a judging shard must not commit or push"
+    )
 
 
 def test_the_night_makes_one_commit_call_over_the_paths_its_tenants_named() -> None:

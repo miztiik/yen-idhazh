@@ -8,7 +8,6 @@ which is the claim that would rot silently.
 
 from __future__ import annotations
 
-import json
 from collections import defaultdict
 from collections.abc import Sequence
 from pathlib import Path
@@ -66,6 +65,7 @@ def health(
     items: int = 0,
     status: int | None = 200,
     robots: RobotsOutcome | None = None,
+    endpoint_url: str | None = None,
 ) -> FeedHealthRow:
     return FeedHealthRow(
         version=FeedHealthRow.schema_version(),
@@ -76,7 +76,7 @@ def health(
         outcome=outcome,
         status=status,
         items=items,
-        endpoint_key=derive_endpoint_key(f"https://{feed_id}.example.com/feed.xml"),
+        endpoint_key=derive_endpoint_key(endpoint_url or f"https://{feed_id}.example.com/feed.xml"),
         robots_outcome=robots,
         robots_checked_at=None,
         robots_status=None,
@@ -120,10 +120,11 @@ def fold(
     items: Sequence[ItemHealthRow] = (),
     retired_on: dict[str, str] | None = None,
     date: str = DATE,
+    collect: CollectConfig = COLLECT,
 ) -> SourceHealthView:
     return source_health.build(
         feeds=feeds,
-        collect=COLLECT,
+        collect=collect,
         health=health_rows,
         items=items,
         retired_on=retired_on or {},
@@ -151,16 +152,45 @@ def test_a_view_carries_no_field_that_could_hold_an_address_or_a_diagnostic() ->
     assert "detail" not in fields, "the ledger's detail is our own free text about a failed host"
 
 
-def test_the_published_bytes_carry_no_address_key_or_robots_answer_body() -> None:
+def test_the_published_bytes_carry_no_address_key_or_robots_answer_body(tmp_path: Path) -> None:
     """The same check one level down: what a page reads is the file, not the class."""
-    view = fold(
-        feeds=[feed("wire")],
-        health_rows=[health("wire", date=DATE, n=1, outcome=FetchOutcome.OK, items=4)],
-        items=[item("wire", date="2026-08-19", n=1, index=0, published=True)],
+    settings = config.load()
+    known = source_health.active_feeds(
+        settings.sources, [vertical.id for vertical in settings.taxonomy.verticals]
+    )[0]
+    feed_row = health(
+        known.id, date=DATE, n=1, outcome=FetchOutcome.OK, items=4, endpoint_url=known.url
     )
-    payload = json.dumps(json.loads(view.to_json()))
+    item_row = item(known.id, date="2026-08-19", n=1, index=0, published=True)
+    state = tmp_path / "state"
+    seed_feed_health(state, DATE, [feed_row])
+    seed_item_health(state, item_row.date, [item_row])
+    path = tmp_path / "public" / source_health.PUBLIC_FILENAME
+    source_health.publish(
+        sources=settings.sources,
+        taxonomy=settings.taxonomy,
+        collect=settings.app.collect,
+        date=DATE,
+        run_id=f"{DATE}-1",
+        generated_at=f"{DATE}T06:20:00Z",
+        state_root=state,
+        path=path,
+    )
+    payload = path.read_text(encoding="utf-8")
     for word in ("http://", "https://", "url_key", "endpoint_key", "robots"):
         assert word not in payload, f"the published view carries {word!r}"
+    for private in (
+        known.url,
+        feed_row.endpoint_key,
+        item_row.canonical_url,
+        item_row.url_key,
+    ):
+        assert private is not None
+        assert private not in payload, f"the published view carries {private!r}"
+    published = SourceHealthView.from_json(payload)
+    row = next(row for row in published.sources if row.source_id == known.id)
+    assert row.availability is SourceAvailability.ANSWERING
+    assert (row.opportunities, row.publications) == (1, 1)
 
 
 def test_permission_is_the_newest_answer_on_record() -> None:
@@ -171,7 +201,14 @@ def test_permission_is_the_newest_answer_on_record() -> None:
     landed. Neither is what the record says.
     """
     rows = [
-        health("wire", date="2026-08-19", n=1, outcome=FetchOutcome.OK, items=3),
+        health(
+            "wire",
+            date="2026-08-19",
+            n=1,
+            outcome=FetchOutcome.OK,
+            items=3,
+            robots=RobotsOutcome.ALLOWED,
+        ),
         health(
             "wire",
             date=DATE,
@@ -182,7 +219,16 @@ def test_permission_is_the_newest_answer_on_record() -> None:
     ]
     assert only(fold(feeds=[feed("wire")], health_rows=rows)).permission is SourcePermission.DENIED
     assert (
-        only(fold(feeds=[feed("wire")], health_rows=rows[:1])).permission
+        only(fold(feeds=[feed("wire")], health_rows=rows[::-1])).permission
+        is SourcePermission.DENIED
+    )
+    assert (
+        only(
+            fold(
+                feeds=[feed("wire")],
+                health_rows=[health("wire", date=DATE, n=1, outcome=FetchOutcome.OK, items=3)],
+            )
+        ).permission
         is SourcePermission.UNRECORDED
     )
     unreachable = [
@@ -237,6 +283,7 @@ def test_permission_states_sum_to_the_number_of_addresses() -> None:
     [
         ([(FetchOutcome.OK, 4)], SourceAvailability.ANSWERING),
         ([(FetchOutcome.OK, 4), (FetchOutcome.TRANSIENT, 0)], SourceAvailability.FAILING),
+        ([(FetchOutcome.TRANSIENT, 0), (FetchOutcome.OK, 4)], SourceAvailability.ANSWERING),
         ([(FetchOutcome.OK, 0)], SourceAvailability.FAILING),
         ([(FetchOutcome.SKIPPED, 0)], SourceAvailability.NEVER_ASKED),
         ([(FetchOutcome.ROBOTS_DENIED, 0)], SourceAvailability.NEVER_ASKED),
@@ -257,14 +304,21 @@ def test_availability_reports_the_run_s_own_rule(
     assert only(fold(feeds=[feed("wire")], health_rows=rows)).availability is expected
 
 
-def test_a_feed_past_the_strike_count_is_resting_rather_than_failing() -> None:
+@pytest.mark.parametrize(
+    ("strikes", "expected"),
+    [(2, SourceAvailability.FAILING), (3, SourceAvailability.RESTING)],
+)
+def test_a_feed_past_the_strike_count_is_resting_rather_than_failing(
+    strikes: int, expected: SourceAvailability
+) -> None:
     """The rest is the decision an operator can act on; failing is the symptom."""
+    collect = CollectConfig(availability_strikes_before_rest=3)
     rows = [
         health("wire", date=DATE, n=n, outcome=FetchOutcome.TRANSIENT, status=503)
-        for n in range(1, COLLECT.availability_strikes_before_rest + 1)
+        for n in range(1, strikes + 1)
     ]
-    assert only(fold(feeds=[feed("wire")], health_rows=rows)).availability is (
-        SourceAvailability.RESTING
+    assert only(fold(feeds=[feed("wire")], health_rows=rows, collect=collect)).availability is (
+        expected
     )
 
 
@@ -282,9 +336,19 @@ def test_retirement_is_rendered_and_never_re_derived() -> None:
     assert row.retired_on == "2026-08-11"
     assert row.title, "a retired row that resolves to no title names nothing an operator can act on"
     assert only(fold(feeds=[feed("wire")])).retired is False
+    unrelated = derive_endpoint_key("https://wire.example.com/feed-v2.xml")
+    assert (
+        only(fold(feeds=[feed("wire")], retired_on={unrelated: "2026-08-11"})).retired
+        is False
+    )
 
 
-def test_a_retirement_day_and_the_retirement_are_one_fact() -> None:
+@pytest.mark.parametrize(
+    ("retired", "retired_on"), [(True, None), (False, "2026-08-11")]
+)
+def test_a_retirement_day_and_the_retirement_are_one_fact(
+    retired: bool, retired_on: str | None
+) -> None:
     """Neither can be read alone, so the shape refuses one without the other."""
     with pytest.raises(ValidationError, match="retired_on is present exactly when"):
         SourceHealthRow(
@@ -293,8 +357,8 @@ def test_a_retirement_day_and_the_retirement_are_one_fact() -> None:
             vertical="ai",
             permission=SourcePermission.ALLOWED,
             availability=SourceAvailability.ANSWERING,
-            retired=True,
-            retired_on=None,
+            retired=retired,
+            retired_on=retired_on,
             opportunities=0,
             publications=0,
             source_failures=0,
@@ -316,10 +380,11 @@ def test_the_census_counts_one_address_on_one_date_once() -> None:
         item("wire", date=yesterday, n=2, index=0, published=False),
         # The third run of the same day got it through.
         item("wire", date=yesterday, n=3, index=0, published=True),
+        item("wire", date=yesterday, n=4, index=0, published=True),
         item("wire", date=yesterday, n=1, index=1, published=True),
     ]
     row = only(fold(feeds=[feed("wire")], items=rows))
-    assert row.opportunities == 2, "two addresses were planned, over four rows"
+    assert row.opportunities == 2, "two addresses were planned, over five rows"
     assert row.publications == 2
     assert row.source_failures == 0, "an address that published is not also a loss"
 
@@ -454,12 +519,30 @@ def test_the_view_round_trips_through_its_own_serialization() -> None:
 def test_publish_writes_the_view_where_the_console_reads_it(tmp_path) -> None:  # type: ignore[no-untyped-def]
     """And it reads the committed ledgers rather than anything held in memory."""
     state = tmp_path / "state"
+    settings = config.load()
+    known = source_health.active_feeds(
+        settings.sources, [vertical.id for vertical in settings.taxonomy.verticals]
+    )[0]
     seed_feed_health(
         state,
         DATE,
-        [health("wire", date=DATE, n=1, outcome=FetchOutcome.OK, items=3)],
+        [health(known.id, date=DATE, n=1, outcome=FetchOutcome.OK, items=3, endpoint_url=known.url)],
     )
-    settings = config.load()
+    seed_item_health(
+        state,
+        "2026-08-19",
+        [
+            item(known.id, date="2026-08-19", n=1, index=0, published=True),
+            item(
+                known.id,
+                date="2026-08-19",
+                n=1,
+                index=1,
+                published=False,
+                code=FailureCode.PAYWALLED,
+            ),
+        ],
+    )
     path = tmp_path / "public" / source_health.PUBLIC_FILENAME
     returned = source_health.publish(
         sources=settings.sources,
@@ -474,6 +557,10 @@ def test_publish_writes_the_view_where_the_console_reads_it(tmp_path) -> None:  
     assert path.name == "source-health.json"
     assert source_health.public_relpath() == "frontend/public/source-health.json"
     view = SourceHealthView.from_json(path.read_text(encoding="utf-8"))
+    row = next(row for row in view.sources if row.source_id == known.id)
+    assert row.availability is SourceAvailability.ANSWERING
+    assert row.permission is SourcePermission.UNRECORDED
+    assert (row.opportunities, row.publications, row.source_failures) == (2, 1, 1)
     assert view.to_json() == returned.to_json()
     assert len(view.sources) == len(
         source_health.active_feeds(
@@ -571,6 +658,13 @@ def test_a_rest_and_a_robots_answer_are_not_evidence_the_page_may_draw() -> None
         health_rows=[
             health("wire", date=DATE, n=1, outcome=FetchOutcome.SKIPPED),
             health("wire", date=DATE, n=2, outcome=FetchOutcome.SKIPPED),
+            health(
+                "wire",
+                date=DATE,
+                n=3,
+                outcome=FetchOutcome.ROBOTS_DENIED,
+                robots=RobotsOutcome.DENIED,
+            ),
         ],
     )
     assert only(rested).reliability_reads == 0
@@ -593,13 +687,18 @@ def test_a_factor_never_falls_through_the_floor_it_ships_with() -> None:
 def test_the_headline_names_the_worst_figure_against_its_own_bound() -> None:
     """A feed the ranking has already discounted outranks one that merely reads badly."""
     view = fold(
-        feeds=[feed("wire"), feed("other")],
+        feeds=[feed("wire"), feed("other"), feed("middle")],
         health_rows=[
             health("wire", date=DATE, n=n, outcome=FetchOutcome.OK, items=0) for n in (1, 2)
-        ],
+        ]
+        + [
+            health("middle", date=DATE, n=n, outcome=FetchOutcome.OK, items=4)
+            for n in (1, 2, 3)
+        ]
+        + [health("middle", date=DATE, n=4, outcome=FetchOutcome.OK, items=0)],
     )
     assert view.headline_sentence == (
-        "1 of 2 feeds are discounted to the 50% floor, which is as far as the ranking takes one."
+        "1 of 3 feeds are discounted to the 50% floor, which is as far as the ranking takes one."
     )
 
 
@@ -631,20 +730,26 @@ def test_the_headline_is_present_and_says_something_on_an_empty_window() -> None
 def test_the_headline_and_the_operator_alarm_name_the_same_sources() -> None:
     """One predicate under both, so the line and the list below it cannot disagree."""
     feeds, health_rows, items = _yielding("wire", published=2, lost=40)
-    view = fold(feeds=[feeds], health_rows=health_rows, items=items)
+    thin, thin_health, thin_items = _yielding("thin", published=1, lost=6)
+    view = fold(
+        feeds=[feeds, thin],
+        health_rows=[*health_rows, *thin_health],
+        items=[*items, *thin_items],
+    )
     named = source_health.below_the_yield_bar(
         view.sources,
         alarm_point=COLLECT.source_yield_alarm_point,
         min_decisions=COLLECT.source_yield_alarm_min_decisions,
     )
     assert [row.source_id for row in named] == ["wire"]
-    assert view.headline_sentence.startswith("1 of 1 sources decided 30 or more addresses")
+    assert view.headline_sentence.startswith("1 of 2 sources decided 30 or more addresses")
     alarm = source_health.yield_alarm(
         view,
         alarm_point=COLLECT.source_yield_alarm_point,
         min_decisions=COLLECT.source_yield_alarm_min_decisions,
     )
     assert alarm is not None and "wire" in alarm
+    assert "thin" not in alarm
 
 
 def _yielding(
@@ -702,19 +807,34 @@ def test_a_source_that_answers_but_does_not_read_is_named() -> None:
     assert "probe_feeds.py" in alarm, "an alarm that names no next step is a nag"
 
 
-def test_a_thin_record_is_never_named_however_bad_it_looks() -> None:
-    """One of seven is 14 percent and it is not evidence about a source.
+@pytest.mark.parametrize(
+    ("published", "lost", "named"),
+    [(1, 6, False), (0, 9, False), (0, 10, True), (4, 6, False)],
+)
+def test_the_alarm_requires_enough_decisions_and_a_yield_strictly_below_its_bar(
+    published: int, lost: int, named: bool
+) -> None:
+    """A bad share needs enough decisions, and a share on the bar is not below it.
 
     Measured 2026-09-06 over the committed view: without this floor the alarm's
     first run names cnn-world, which the source docs already ruled is a working
     feed carrying real reporting. A flag that is wrong on its first run is the
     flag nobody reads.
     """
-    thin, thin_health, thin_items = _yielding("thin", published=1, lost=6)
-    view = fold(feeds=[thin], health_rows=thin_health, items=thin_items)
+    collect = CollectConfig(source_yield_alarm_point=0.4, source_yield_alarm_min_decisions=10)
+    thin, thin_health, thin_items = _yielding("thin", published=published, lost=lost)
+    view = fold(feeds=[thin], health_rows=thin_health, items=thin_items, collect=collect)
 
-    assert only(view).source_yield == pytest.approx(1 / 7)
-    assert source_health.yield_alarm(view, alarm_point=0.5, min_decisions=30) is None
+    assert only(view).decisions == published + lost
+    assert only(view).source_yield == pytest.approx(published / (published + lost))
+    alarm = source_health.yield_alarm(
+        view,
+        alarm_point=collect.source_yield_alarm_point,
+        min_decisions=collect.source_yield_alarm_min_decisions,
+    )
+    assert (alarm is not None) is named
+    if named:
+        assert alarm is not None and "thin 0/10 (0%)" in alarm
 
 
 def test_a_source_is_not_charged_for_a_failure_it_does_not_own() -> None:
@@ -822,20 +942,20 @@ def test_a_healthy_source_raises_nothing_and_the_worst_is_named_first() -> None:
         is None
     )
 
-    bad, bad_health, bad_items = _yielding("bad", published=0, lost=73)
-    worse, worse_health, worse_items = _yielding("mid", published=26, lost=72)
+    bad, bad_health, bad_items = _yielding("zulu", published=0, lost=73)
+    worse, worse_health, worse_items = _yielding("alpha", published=26, lost=72)
     alarm = source_health.yield_alarm(
         fold(
-            feeds=[good, bad, worse],
-            health_rows=[*good_health, *bad_health, *worse_health],
-            items=[*good_items, *bad_items, *worse_items],
+            feeds=[good, worse, bad],
+            health_rows=[*good_health, *worse_health, *bad_health],
+            items=[*good_items, *worse_items, *bad_items],
         ),
         alarm_point=0.5,
         min_decisions=30,
     )
     assert alarm is not None
     assert "good" not in alarm
-    assert alarm.index("bad 0/73") < alarm.index("mid 26/98")
+    assert alarm.index("zulu 0/73") < alarm.index("alpha 26/98")
 
 
 # The census reads the newest complete recorded dates, not a calendar window.
@@ -858,7 +978,7 @@ def _day_folder(date: str) -> str:
     return f"{date[:4]}/{date[5:7]}/{date[8:10]}"
 
 
-def _gap_items() -> list[ItemHealthRow]:
+def _gap_items(feed_id: str = "wire") -> list[ItemHealthRow]:
     """One source over six recorded dates: the newest three, then older history.
 
     Each selected date offers two addresses and reads one, so the census the
@@ -868,12 +988,12 @@ def _gap_items() -> list[ItemHealthRow]:
     """
     rows: list[ItemHealthRow] = []
     for day in _GAP_SELECTED:
-        rows.append(item("wire", date=day, n=1, index=0, published=True))
+        rows.append(item(feed_id, date=day, n=1, index=0, published=True))
         rows.append(
-            item("wire", date=day, n=1, index=1, published=False, code=FailureCode.PAYWALLED)
+            item(feed_id, date=day, n=1, index=1, published=False, code=FailureCode.PAYWALLED)
         )
     for day in _GAP_OLDER:
-        rows.extend(item("wire", date=day, n=1, index=i, published=True) for i in range(3))
+        rows.extend(item(feed_id, date=day, n=1, index=i, published=True) for i in range(3))
     return rows
 
 
@@ -897,8 +1017,12 @@ def test_publish_reads_the_selected_dates_and_writes_the_complete_read_s_bytes(
     same bytes the complete read produces.
     """
     state = tmp_path / "state"
-    _write_item_health(state, _gap_items())
     settings = config.load()
+    known = source_health.active_feeds(
+        settings.sources, [vertical.id for vertical in settings.taxonomy.verticals]
+    )[0]
+    rows = _gap_items(known.id)
+    _write_item_health(state, rows)
     run_id = f"{_GAP_TODAY}-1"
     generated_at = f"{_GAP_TODAY}T06:20:00Z"
     reference = source_health.build(
@@ -907,7 +1031,7 @@ def test_publish_reads_the_selected_dates_and_writes_the_complete_read_s_bytes(
         ),
         collect=_GAP_SHORT,
         health=[],
-        items=_gap_items(),
+        items=rows,
         retired_on={},
         date=_GAP_TODAY,
         run_id=run_id,
@@ -927,6 +1051,8 @@ def test_publish_reads_the_selected_dates_and_writes_the_complete_read_s_bytes(
     assert view.complete_dates == _GAP_KEEP
     assert (view.first_date, view.last_date) == ("2026-07-10", "2026-09-01")
     assert view.yield_readable is True
+    row = next(row for row in view.sources if row.source_id == known.id)
+    assert (row.opportunities, row.publications, row.source_failures) == (6, 3, 3)
     assert view.to_json() == reference.to_json()
     assert path.read_text(encoding="utf-8") == reference.to_json()
 

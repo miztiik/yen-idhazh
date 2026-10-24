@@ -3,21 +3,12 @@ import { appendFile, readFile } from "node:fs/promises";
 import { DropReasonCountSchema, FeedIngestConfigSchema, HarvestDiagnosticsSchema, HostFingerprintRowSchema, RunIdSchema, SourceRunRecordSchema, WriterIdentitySchema, readFeedIngestEvent } from "../../packages/common-contracts/src/index";
 import type { DropReasonCount, FeedIngestEvent, HarvestDiagnostics } from "../../packages/common-contracts/src/index";
 import { join } from "node:path";
+import { escapeCommand, escapeParameter, escapeMarkdown } from "./feed-ingest-plan-report-format";
+import { WorkflowMachineMemorySchema } from "./feed-ingest-plan-profile-schema";
+import { formatResourceReport } from "./feed-ingest-plan-resource-report";
+import type { ResourceReportControls } from "./feed-ingest-plan-resource-report";
 
 export type PlannerReport = Readonly<{ annotations: readonly string[]; summary: string }>;
-
-function escapeCommand(value: string): string {
-  return value.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
-}
-
-function escapeParameter(value: string): string {
-  return escapeCommand(value).replaceAll(":", "%3A").replaceAll(",", "%2C");
-}
-
-function escapeMarkdown(value: string): string {
-  return value.replace(/[\u0000-\u0020\u007f-\u009f\u2028\u2029]/g, " ")
-    .replace(/[&<>"'\\`*_{}[\]()#+.!|:=-]/g, character => `&#${character.charCodeAt(0)};`);
-}
 
 function validateEvents(input: unknown): FeedIngestEvent[] {
   if (!Array.isArray(input)) throw new Error("events must be an array");
@@ -271,14 +262,34 @@ export function formatExecutionReport(input: Readonly<{
 
 export async function writePlannerReport(input: Readonly<{
   enabled: boolean; events: unknown; summaryPath?: string; annotate: (line: string) => void; executionSummary?: string;
+  resourceReport?: PlannerReport;
 }>): Promise<void> {
   if (!input.enabled) return;
   const report = formatPlannerReport(input.events);
   if (input.summaryPath === undefined || input.summaryPath.length === 0) {
     throw new Error("GITHUB_STEP_SUMMARY is required when workflow reporting is enabled");
   }
-  await appendFile(input.summaryPath, report.summary + (input.executionSummary ?? ""), "utf8");
-  for (const line of report.annotations) input.annotate(line);
+  await appendFile(input.summaryPath, report.summary + (input.executionSummary ?? "") + (input.resourceReport?.summary ?? ""), "utf8");
+  for (const line of [...report.annotations, ...(input.resourceReport?.annotations ?? [])]) input.annotate(line);
+}
+
+export async function readExecutionReport(directory: string, controls: ResourceReportControls = {}) {
+  const response: unknown = await Bun.file(join(directory, "response.json")).json();
+  return {
+    executionSummary: formatExecutionReport({
+      response,
+      host: await Bun.file(join(directory, "host.json")).exists() ? await Bun.file(join(directory, "host.json")).json() : null,
+      progress: (await readFile(join(directory, "progress.jsonl"), "utf8")).trim().split("\n").filter(Boolean).map(line => JSON.parse(line)),
+      historyStagingMs: await Bun.file(join(directory, "history-staging-ms.json")).json(),
+    }),
+    resourceReport: formatResourceReport({
+      response, ...controls,
+      stageProof: await Bun.file(join(directory, "stage-api-proof.json")).exists()
+        ? await Bun.file(join(directory, "stage-api-proof.json")).json() : null,
+      resourceProof: await Bun.file(join(directory, "resource-proof.json")).exists()
+        ? await Bun.file(join(directory, "resource-proof.json")).json() : null,
+    }),
+  };
 }
 
 if (import.meta.main) {
@@ -289,17 +300,17 @@ if (import.meta.main) {
     const eventsPath = process.argv[3];
     if (eventsPath === undefined) throw new Error("events path is required when workflow reporting is enabled");
     const directory = process.argv[4];
-    const executionSummary = directory === undefined ? undefined : formatExecutionReport({
-      response: await Bun.file(join(directory, "response.json")).json(),
-      host: await Bun.file(join(directory, "host.json")).exists() ? await Bun.file(join(directory, "host.json")).json() : null,
-      progress: (await readFile(join(directory, "progress.jsonl"), "utf8")).trim().split("\n").filter(Boolean).map(line => JSON.parse(line)),
-      historyStagingMs: await Bun.file(join(directory, "history-staging-ms.json")).json(),
+    const execution = directory === undefined ? undefined : await readExecutionReport(directory, {
+      machineMemoryEnabled: WorkflowMachineMemorySchema.parse(process.env.PROFILE_MACHINE_MEMORY),
+      ...(process.env.GITHUB_SHA === undefined ? {} : { gitSha: process.env.GITHUB_SHA }),
+      ...(process.env.GITHUB_RUN_ID === undefined ? {} : { runNumber: process.env.GITHUB_RUN_ID }),
+      ...(process.env.GITHUB_RUN_ATTEMPT === undefined ? {} : { runAttempt: process.env.GITHUB_RUN_ATTEMPT }),
     });
     await writePlannerReport({
       enabled: true, events: JSON.parse(await readFile(eventsPath, "utf8")),
       ...(process.env.GITHUB_STEP_SUMMARY === undefined ? {} : { summaryPath: process.env.GITHUB_STEP_SUMMARY }),
       annotate: line => console.log(line),
-      ...(executionSummary === undefined ? {} : { executionSummary }),
+      ...(execution === undefined ? {} : execution),
     });
   }
 }
