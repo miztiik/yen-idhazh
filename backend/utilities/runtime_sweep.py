@@ -374,6 +374,7 @@ def collect(date: str, label: str, repeat: int, *, items: int) -> Collected:
             raise RuntimeError(f"{label} repeat {repeat} wrote {len(found)} {what}, not {items}")
 
     sources = {}
+    origins = {}
     for path in articles:
         data = json.loads(path.read_text(encoding="utf-8"))
         source = {
@@ -381,6 +382,10 @@ def collect(date: str, label: str, repeat: int, *, items: int) -> Collected:
         }
         canonical = json.dumps(source, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
         sources[data["item_id"]] = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+        origins[data["item_id"]] = {
+            "source_url": data.get("source_url"),
+            "source_words": data.get("source_word_count"),
+        }
 
     digests = {}
     per_item = []
@@ -392,6 +397,7 @@ def collect(date: str, label: str, repeat: int, *, items: int) -> Collected:
         per_item.append(
             {
                 "item_id": data["item_id"],
+                **origins.get(data["item_id"], {}),
                 "output_digest": data["output_digest"],
                 "title": data["title"],
                 "summary": data["summary"],

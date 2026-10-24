@@ -53,8 +53,7 @@
   },
   "bench": {
     "corpus_items": 3,
-    "repeats": 3,
-    "run_model_speed_case": true
+    "repeats": 3
   },
   "collect": {
     "availability_rest_runs": 5,
