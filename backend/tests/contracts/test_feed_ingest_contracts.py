@@ -28,6 +28,7 @@ CONTRACT_NAMES = (
     ("planner_stage", "ParsedFeedBatch"),
     ("planner_stage", "SelectedFeedBatch"),
     ("planner_stage", "PartitionedFeedBatch"),
+    ("feed_ingest_observations", "DocumentObservationRecord"),
 )
 
 MODEL_NAMES = (
@@ -59,6 +60,23 @@ def test_declared_contract(module: str, name: str) -> None:
     assert contract in idhazh.contracts.CONTRACTS
     assert contract.schema_version() == contract.model_fields["version"].default
     assert contract.json_schema()["additionalProperties"] is False
+    if name == "DocumentObservationRecord":
+        observation = contract.from_json(
+            read_text(CONTRACT_FIXTURES_DIR / "feed-ingest-document-observation" / "refused-fetch.json")
+        )
+        attempt = observation.model_dump(mode="json") | {
+            "operation": "attempt",
+            "request_phase": "target",
+            "request_sequence": 0,
+            "retry": 0,
+            "request_coverage": "complete",
+            "dispatched_request_count": 0,
+        }
+        assert contract.model_validate(attempt).dispatched_request_count == 0
+        unknown = attempt | {"request_coverage": "unknown", "dispatched_request_count": None}
+        assert contract.model_validate(unknown).dispatched_request_count is None
+        with pytest.raises(ValidationError, match="unknown request coverage"):
+            contract.model_validate(unknown | {"dispatched_request_count": 0})
 
 
 def test_typescript_provenance_is_declared() -> None:

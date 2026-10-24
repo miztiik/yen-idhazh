@@ -1,6 +1,6 @@
 # The ledger registry
 
-**Last Updated**: 2026-10-23
+**Last Updated**: 2026-10-24
 
 A ledger is a committed file or folder under `state/` that one run writes so that a later run can read it. A ledger exists in code only when it is registered, and registering it takes two edits. The first is one member of `LedgerName`, the ledger's one name in code. The second is one entry in `config/ledgers.json`, which puts the ledger in a family - one top-level folder under `state/` - and says where its files sit. When the code loads, it checks that the two edits agree, and the build stops if they do not.
 
@@ -206,7 +206,7 @@ into an active family unchanged. See [judge status](../publishing/llm-council.md
 
 ## Onboarding and offboarding
 
-**What a new ledger owes.** A new ledger files through the ledger door from its first row. It owes every edit below, each in the file named beside it, and the change that adds the ledger makes all of them. The check at load time, or the test named beside an edit, refuses the change while one is missing.
+**What a new ledger owes.** A new ledger files through the ledger door from its first row. It owes every edit below, each in the file named beside it. The reader-side contract, binding and registration must be present before its writer emits rows. Owner approval on 2026-10-24 permits the D3 observation ledger to land those reader-side pieces before producer wiring; the later writer still uses the same registered door. The check at load time, or the test named beside an edit, refuses a change while one of its required pieces is missing.
 
 - **Lifecycle.**
   - A family in `config/ledgers.json` with `lifecycle_status` `active`, a one-line `description` and the UTC day it is `onboarded`, holding the ledger's entry: grain `raw-and-compact`, explicit `publish_to_data_explorer` consent, and the `prefix` it files under inside `state/raw/` and `state/compact/`, which starts with the family's name and ends with the ledger's own value. A ledger that joins a family adds only its entry to that family's `ledgers`, and the family's status covers it from its first row.
@@ -329,6 +329,13 @@ A producer hands the ledger its rows and the identity of the writer, and the led
 One module outside may ask, and none may carry a copy. `backend/idhazh/path_classes.py` answers whether a committed path was written by exactly one writer, which it can only do by reading the pattern that minted the name - so that pattern is public for it, and inlining a second copy of it is the thing being refused.
 
 ## Design rationale
+
+**A compatible reader lands before the first writer.** Owner approval,
+2026-10-24, for the feed-ingest feedback observations. Registering the row
+contract, its cross-language binding, raw-and-compact ledger path and
+compaction task first gives a later producer a reader that already accepts the
+shape. Keep data-explorer publication disabled until a separate consent
+decision.
 
 **The set of ledgers is a config file, not a Python set and not a glob.** Owner decision, 2026-09-26.
 

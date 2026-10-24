@@ -63,9 +63,9 @@ class LedgerStaging:
 
 
 #: Every `LedgerName`, and the two facts above for each. Declared by hand
-#: (Guardrail #3) rather than derived, so a ledger joins this table in the
-#: same commit that gives it a writer - never before, and never silently
-#: after.
+#: (Guardrail #3) rather than derived, so a ledger joins this table with its
+#: contract and reader registration. A planned writer may follow in a later
+#: phase, but the staging entry is never added silently after the ledger.
 REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
     LedgerName.FEED_INGEST_PLAN_DISPATCHES: LedgerStaging(
         writer=(
@@ -110,6 +110,14 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
     LedgerName.FEED_INGEST_PLAN_DIVERSITY: LedgerStaging(
         writer=(
             "planned TypeScript services/feed-ingest-plan audit adapter "
+            "through packages/ledger-file-writer; no writer exists yet"
+        ),
+        symbol=None,
+        job_labels=frozenset(),
+    ),
+    LedgerName.FEED_INGEST_PLAN_DOCUMENT_OBSERVATIONS: LedgerStaging(
+        writer=(
+            "planned TypeScript feed-ingest-plan observation writer "
             "through packages/ledger-file-writer; no writer exists yet"
         ),
         symbol=None,

@@ -6,7 +6,8 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import {
   ArticleAssessmentRecordSchema, CandidateRejectionContract, CONTRACT_VERSION,
-  EditorialSelectionContract, EditorialSelectionRowSchema, SourceRunRecordSchema,
+  DocumentObservationRecordSchema, EditorialSelectionContract, EditorialSelectionRowSchema, SourceRunRecordSchema,
+  DOCUMENT_OBSERVATION_VERSION,
   PLANNER_EXCLUSIONS_VERSION, EXTRACTION_QUALITY_VERSION, PreviousHarvestDiagnosticsSchema,
 } from "@idhazh/common-contracts";
 import type { LedgerCompletionEvidence } from "@idhazh/common-contracts";
@@ -24,7 +25,8 @@ import { readHistoricalSelections } from "../src/partition-article-shards/read-e
 import { partitionArticles, persistDispatches } from "../src/partition-article-shards/shard-packer";
 import { fixtureInput, readWritten, registration, settings, writer, writeRows } from "./partition-fixtures";
 import {
-  ArticleAssessmentContract, DiversityMetricContract, DispatchContract, SourceRunContract, legacyAuditSchemas,
+  ArticleAssessmentContract, DiversityMetricContract, DispatchContract, DocumentObservationContract,
+  SourceRunContract, legacyAuditSchemas,
 } from "../src/metrics/audit-contracts";
 
 const selectionContract = EditorialSelectionContract;
@@ -139,6 +141,59 @@ test("native raw and daily reads preserve original writer identity instead of th
     expect(current.rows[0]!.identity.attempt).toBe(1);
     expect(current.rows[0]!.identity.shard).toBe(0);
     expect(current.rows[0]!.identity.unit_id).toBe(original.identity.unit_id);
+
+    const observation = DocumentObservationRecordSchema.parse(await Bun.file(new URL(
+      "../../../tests/fixtures/contracts/feed-ingest-document-observation/refused-fetch.json", import.meta.url,
+    )).json());
+    const attemptObservation = {
+      ...observation, operation: "attempt" as const, request_phase: "target" as const,
+      request_sequence: 0, retry: 0, request_coverage: "complete" as const, dispatched_request_count: 0,
+    };
+    expect(DocumentObservationRecordSchema.parse(attemptObservation).dispatched_request_count).toBe(0);
+    expect(DocumentObservationRecordSchema.parse({
+      ...attemptObservation, request_coverage: "unknown", dispatched_request_count: null,
+    }).dispatched_request_count).toBeNull();
+    expect(() => DocumentObservationRecordSchema.parse({
+      ...attemptObservation, request_coverage: "unknown", dispatched_request_count: 0,
+    })).toThrow("unknown request coverage");
+    const observationWriter = writer(observation.observed_run_id!);
+    const observationRawWritten = await writeRows(
+      root, "document-observations", input.fixture.date, DocumentObservationRecordSchema,
+      [observation], observationWriter, DOCUMENT_OBSERVATION_VERSION,
+    );
+    const observationRaw = await readWritten(
+      root, "document-observations", input.fixture.date, DocumentObservationContract, observationRawWritten,
+    );
+    expect(observationRaw.tier).toBe("raw");
+    expect(observationRaw.rows[0]!.row).toMatchObject({
+      event_id: observation.event_id, occurred_at: observation.occurred_at,
+      request_coverage: null, dispatched_request_count: null,
+    });
+    const observationCompact = await persistLedger({
+      ledger: "document-observations", registryEntry: registration("document-observations"),
+      outputRoot: root, writerContext: { ...writer(observation.observed_run_id!, 9, 6), producer: "tests.compactor" },
+      ledgerSettings: settings, rowContract: DocumentObservationContract,
+      period: { tier: "compact", period: "daily", covers: input.fixture.date, builtFrom: 1 },
+      rows: observationRaw.rows,
+    });
+    const observationFile = observationCompact.files[0]!;
+    const observationPath = join(root, observationFile.path);
+    const observationIndexPath = join(root, "compact", "feed-ingest-plan", "document-observations", "index", "daily.json");
+    await mkdir(dirname(observationIndexPath), { recursive: true });
+    await writeFile(observationIndexPath, JSON.stringify({
+      version: "2026-10-07", ledger: "document-observations", period: "daily",
+      entries: [{
+        covers: input.fixture.date, rows: observationFile.row_count,
+        bytes: (await stat(observationPath)).size, state: "packed",
+      }],
+    }));
+    const observationDaily = await readLedgerDay({
+      ledger: "document-observations", day: input.fixture.date, contract: DocumentObservationContract,
+      indexes: { daily: observationIndexPath },
+    });
+    expect(observationDaily.tier).toBe("daily");
+    expect(observationDaily.rows.map(held => held.row)).toEqual([observation]);
+    expect(observationDaily.rows[0]!.identity.unit_id).toBe(observationRaw.rows[0]!.identity.unit_id);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

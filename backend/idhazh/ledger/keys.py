@@ -29,6 +29,7 @@ from idhazh.contracts.feed_ingest_article_assessment import ArticleAssessmentRec
 from idhazh.contracts.feed_ingest_dispatch import FeedIngestDispatch
 from idhazh.contracts.feed_ingest_diversity import DiversityMetricRow
 from idhazh.contracts.feed_ingest_editorial_selection import EditorialSelectionRow
+from idhazh.contracts.feed_ingest_observations import DocumentObservationRecord
 from idhazh.contracts.feed_ingest_rejection import CandidateRejectionRecord
 from idhazh.contracts.feed_ingest_source_run import SourceRunRecord
 from idhazh.contracts.feed_retirement import FeedRetirementRow
@@ -361,6 +362,9 @@ _DOOR_SHAPES: Final[dict[LedgerName, _DoorShape]] = {
     ),
     LedgerName.FEED_INGEST_PLAN_DIVERSITY: _DoorShape(
         FEED_INGEST_DIVERSITY_KEY, DiversityMetricRow
+    ),
+    LedgerName.FEED_INGEST_PLAN_DOCUMENT_OBSERVATIONS: _DoorShape(
+        ("event_id",), DocumentObservationRecord
     ),
     LedgerName.GARDENER: _DoorShape(COLLECTION_PRUNE_KEY, CollectionPruneRow),
     LedgerName.VISUAL_PRUNES: _DoorShape(VISUAL_PRUNE_KEY, VisualPruneRow),

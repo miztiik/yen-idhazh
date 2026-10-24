@@ -9,6 +9,7 @@ from dataclasses import replace
 from datetime import date
 from pathlib import Path
 from typing import Any
+from uuid import UUID, uuid5
 
 import pytest
 from gardener.tasks._task import run_declared
@@ -22,6 +23,7 @@ from idhazh.contracts.feed_ingest_candidate import derive_candidate_id
 from idhazh.contracts.feed_ingest_dispatch import FeedIngestDispatch
 from idhazh.contracts.feed_ingest_diversity import DiversityMetricRow
 from idhazh.contracts.feed_ingest_editorial_selection import EditorialSelectionRow
+from idhazh.contracts.feed_ingest_observations import DocumentObservationRecord
 from idhazh.contracts.feed_ingest_rejection import CandidateRejectionRecord
 from idhazh.contracts.feed_ingest_source_run import SourceRunRecord
 from idhazh.contracts.file_envelope import Format, Period, WriterIdentity
@@ -40,6 +42,11 @@ PLANNING_LEDGERS = (
     ("source-runs", SourceRunRecord, "feed-ingest-source-run/one-observation.json"),
     ("article-assessments", ArticleAssessmentRecord, "feed-ingest-article-assessment/one-observation.json"),
     ("diversity", DiversityMetricRow, "feed-ingest-diversity/one-observation.json"),
+    (
+        "document-observations",
+        DocumentObservationRecord,
+        "feed-ingest-document-observation/refused-fetch.json",
+    ),
 )
 
 
@@ -95,6 +102,10 @@ def _row(
         )
         payload["selection"]["candidate_id"] = content["candidate_id"]
     else:
+        if model is DocumentObservationRecord:
+            payload["event_id"] = str(
+                uuid5(UUID(payload["event_id"]), f"{run}\n{attempt}\n{int(second)}")
+            )
         if "run_id" in payload:
             payload["run_id"] = f"2026-10-20-{run}"
         if "attempt" in payload:

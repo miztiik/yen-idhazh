@@ -96,7 +96,7 @@ tracing context. The existing default-off service flag gates the new routes.
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | E1 | 1 | Approve runtime contracts and activation policy | - | A | IN-FLIGHT | feed-ingest-feedback-selection | - | - |
-| E2 | 2 | Land compatible shared readers before writers | 1 | B | PENDING | - | - | - |
+| E2 | 2 | Land compatible shared readers before writers | 1 | B | IN-FLIGHT | document-observation-contracts | - | - |
 | E3 | 3 | Implement curated publisher catalog references | 2 | C | PENDING | - | - | - |
 | E4 | 4 | Wire common fetch and parse observations | 2 (publisher IDs from 3 remain nullable until available) | D | PENDING | - | - | - |
 | E5 | 5 | Classify failure and work attribution | 4 | E | PENDING | - | - | - |
@@ -129,6 +129,12 @@ do not block recording observations. A2 adds only a conditional, bounded
 trial to Row 11 after the telemetry prerequisites in Rows 2, 4, 5 and 6. It
 does not require Row 10's score consumer. Other D5 rules do not gate these
 rows and must not restrict ordinary fetching.
+
+Row 2 currently delivers the registered per-operation observation contract,
+its TypeScript reader binding, and raw/compact fixture compatibility. It does
+not emit observations, add publisher mappings, or declare derived operational
+state or score traces; those remain separate Row 2 work before the row can
+close.
 
 ## 2. Shared implementation boundaries
 

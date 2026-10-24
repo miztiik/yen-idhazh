@@ -53,6 +53,16 @@ other ledgers are not article costs. The existing feed
 `parse_status` describes RSS entry parsing; `success` with `parsed_count > 0`
 does not prove article material was extracted. Keep those cases distinct.
 
+The Row 2 contract slice registers `document-observations` for raw and compact
+Parquet reads, with a Pydantic row model and a matching TypeScript reader
+contract. Fetch and parse outcomes remain separate from request-attempt rows;
+attempt rows retain their phase, sequence, retry, duration and known request
+count. Nullable `observed_run_id` and `observed_attempt` retain fact-source
+identity separately from the Parquet writer's required run identity. Unknown
+request coverage remains null rather than becoming a zero.
+This declaration does not emit observations or expose the ledger to the data
+explorer; producer wiring remains in Row 4.
+
 Record the approved `source`, `pipeline` or `unresolved` attribution and
 supported failure cause on operation observations; exact field names and types
 are implementation details. The planner-only event stream remains its

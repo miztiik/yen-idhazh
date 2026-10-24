@@ -19,6 +19,7 @@ import {
   PlannerHarvestObservationSchema, PlannerSeenEvidenceSchema, PlannerSeenRowSchema,
   PlannerSeenAvailableSchema, PlannerSeenUnavailableSchema,
   PreflightFreshnessSchema, StageReferenceRequestSchema, PartitionArticlesRequestSchema,
+  DocumentObservationRecordSchema,
 } from "../src/index";
 
 export const runtimeSchemas = {
@@ -46,6 +47,7 @@ export const runtimeSchemas = {
   SelectedFeedBatch: SelectedFeedBatchSchema, PartitionedFeedBatch: PartitionedFeedBatchSchema,
   StageReferenceRequest: StageReferenceRequestSchema,
   PartitionArticlesRequest: PartitionArticlesRequestSchema,
+  DocumentObservationRecord: DocumentObservationRecordSchema,
 } satisfies Record<string, z.ZodType>;
 
 export const schemas = Object.fromEntries(
