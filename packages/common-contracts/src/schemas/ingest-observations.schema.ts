@@ -28,8 +28,8 @@ export const DocumentObservationRecordSchema = z.strictObject({
   http_status: z.int().min(100).max(599).nullable(),
   attribution: z.enum(["source", "pipeline", "unresolved"]).nullable(),
   failure_code: z.union([
-    FetchFailureSchema, ExtractionFailureSchema, z.literal("malformed-feed"),
-  ]).nullable(),
+    FetchFailureSchema, ExtractionFailureSchema, z.literal("malformed-feed"), z.null(),
+  ]),
   request_phase: z.enum(["validation", "robots", "target"]).nullable(),
   request_sequence: CountSchema.nullable(),
   retry: CountSchema.nullable(),
