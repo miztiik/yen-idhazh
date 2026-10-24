@@ -26,7 +26,7 @@ export const CandidateSchema = FeedIngestCandidateSchema;
 export type FeedIngestCandidate = z.infer<typeof FeedIngestCandidateSchema>;
 
 const {
-  planning_observations: _observations, source: _source, ...previousCandidateFields
+  planning_observations: _observations, ...previousCandidateFields
 } = FeedIngestCandidateSchema.shape;
 export const PreviousContractFeedIngestCandidateSchema = z.strictObject({
   ...previousCandidateFields, source: PreviousSourceSnapshotSchema, version: z.literal(CONTRACT_VERSION),

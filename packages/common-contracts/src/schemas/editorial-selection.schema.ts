@@ -19,7 +19,7 @@ export const EditorialSelectionRowSchema = z.strictObject({
   if (value.source_id !== value.source.source_id || value.vertical !== value.source.vertical) reject(ctx, "source identity must match source snapshot");
 });
 export type EditorialSelectionRow = z.infer<typeof EditorialSelectionRowSchema>;
-const { source: _source, ...previousSelectionFields } = EditorialSelectionRowSchema.shape;
+const previousSelectionFields = EditorialSelectionRowSchema.shape;
 export const PreviousEditorialSelectionSchema = z.strictObject({
   ...previousSelectionFields, source: PreviousSourceSnapshotSchema,
   version: z.literal(CONTRACT_VERSION).default(CONTRACT_VERSION),
