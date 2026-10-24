@@ -26,18 +26,12 @@ class DocumentObservationRecord(Contract):
         ChangelogEntry(
             version="2026-10-24T23:08",
             change="Retain document scope and correction lineage.",
-            why=(
-                "Feedback must distinguish feed work from article opportunities "
-                "and replace corrected events."
-            ),
+            why="Separate feed scope and preserve corrected events.",
         ),
         ChangelogEntry(
             version="2026-10-24",
             change="Declare per-operation observations with scoped request accounting.",
-            why=(
-                "Later feedback must retain actual work and partial failures "
-                "without a duplicate event contract."
-            ),
+            why="Retain actual work and partial failures without a duplicate event contract.",
         ),
     )
 

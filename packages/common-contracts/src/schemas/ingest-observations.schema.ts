@@ -4,6 +4,7 @@ import {
   CountSchema, NonEmptySchema, PositiveCountSchema, RunIdSchema, Sha256Schema, SlugSchema,
   TimestampSchema,
 } from "./primitives";
+import { ExtractionFailureSchema, FetchFailureSchema } from "./harvest-diagnostics.schema";
 import { DOCUMENT_OBSERVATION_VERSION } from "../version";
 
 export const DocumentObservationRecordSchema = z.strictObject({
@@ -26,10 +27,8 @@ export const DocumentObservationRecordSchema = z.strictObject({
   duration_ms: CountSchema.nullable(),
   http_status: z.int().min(100).max(599).nullable(),
   attribution: z.enum(["source", "pipeline", "unresolved"]).nullable(),
-  failure_code: z.enum([
-    "http", "timeout", "unsafe-target", "dns", "network", "robots-denied",
-    "robots-unknown", "body-too-large", "redirect-loop", "missing-document-root",
-    "dom-depth-exceeded", "empty-content", "missing-title", "malformed-feed",
+  failure_code: z.union([
+    FetchFailureSchema, ExtractionFailureSchema, z.literal("malformed-feed"),
   ]).nullable(),
   request_phase: z.enum(["validation", "robots", "target"]).nullable(),
   request_sequence: CountSchema.nullable(),

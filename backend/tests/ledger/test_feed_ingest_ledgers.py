@@ -35,22 +35,23 @@ from idhazh.ledger.persist import StoredRow
 
 pytestmark = pytest.mark.contract
 
-PLANNING_LEDGERS = (
+PRODUCED_PLANNING_LEDGERS = (
     ("dispatches", FeedIngestDispatch, "feed-ingest-dispatch/one-article.json"),
     ("editorial-selections", EditorialSelectionRow, "feed-ingest-editorial-selection/one-article.json"),
     ("rejections", CandidateRejectionRecord, "feed-ingest-rejection/empty-feed.json"),
     ("source-runs", SourceRunRecord, "feed-ingest-source-run/one-observation.json"),
     ("article-assessments", ArticleAssessmentRecord, "feed-ingest-article-assessment/one-observation.json"),
     ("diversity", DiversityMetricRow, "feed-ingest-diversity/one-observation.json"),
-    (
-        "document-observations",
-        DocumentObservationRecord,
-        "feed-ingest-document-observation/refused-fetch.json",
-    ),
 )
+DOCUMENT_OBSERVATION_LEDGER = (
+    "document-observations",
+    DocumentObservationRecord,
+    "feed-ingest-document-observation/refused-fetch.json",
+)
+REGISTERED_PLANNING_LEDGERS = (*PRODUCED_PLANNING_LEDGERS, DOCUMENT_OBSERVATION_LEDGER)
 
 
-@pytest.mark.parametrize(("name", "model", "fixture"), PLANNING_LEDGERS)
+@pytest.mark.parametrize(("name", "model", "fixture"), REGISTERED_PLANNING_LEDGERS)
 def test_planning_ledger_registration(name: str, model: type[Contract], fixture: str) -> None:
     """Missing registration, a wrong row binding or an unscheduled task fails here."""
     assert name in LedgerName, f"Planning ledger {name} is not registered"
@@ -77,13 +78,15 @@ def test_planning_family_has_exactly_the_declared_ledgers() -> None:
     families = LedgersConfig.from_json(read_text(CONFIG_DIR / "ledgers.json")).families
     family = next((held for held in families if held.name == "feed-ingest-plan"), None)
     assert family is not None, "The feed-ingest-plan family is not registered"
-    assert {held.name.value for held in family.ledgers} == {name for name, _, _ in PLANNING_LEDGERS}
+    assert {held.name.value for held in family.ledgers} == {
+        name for name, _, _ in REGISTERED_PLANNING_LEDGERS
+    }
 
 
-def _identity(attempt: int, run: int = 1) -> WriterIdentity:
+def _identity(attempt: int, run: int = 1, shard: int = 0) -> WriterIdentity:
     return WriterIdentity(
         run_id=f"2026-10-20-{run}", attempt=attempt, job=ServerJob.PLAN,
-        shard=0, producer="tests.feed_ingest_ledgers", git_sha="a" * 40,
+        shard=shard, producer="tests.feed_ingest_ledgers", git_sha="a" * 40,
     )
 
 
@@ -136,7 +139,7 @@ def _snapshot(rows: list[StoredRow[Contract]]) -> list[tuple[str, int, str, str]
     )
 
 
-@pytest.mark.parametrize(("name", "model", "fixture"), PLANNING_LEDGERS)
+@pytest.mark.parametrize(("name", "model", "fixture"), REGISTERED_PLANNING_LEDGERS)
 def test_attempts_survive_real_compaction_and_late_repacking(
     tmp_path: Path, name: str, model: type[Contract], fixture: str
 ) -> None:
@@ -145,9 +148,12 @@ def test_attempts_survive_real_compaction_and_late_repacking(
     state = tmp_path / "state"
     first = _row(model, fixture, attempt=1)
     second = _row(model, fixture, attempt=1, second=True)
+    replay_identity = (
+        _identity(1, shard=1) if model is DocumentObservationRecord else _identity(1)
+    )
     for rows, identity in (
         ([first, second], _identity(1)),
-        ([first], _identity(1)),
+        ([first], replay_identity),
         ([_row(model, fixture, attempt=2)], _identity(2)),
         ([_row(model, fixture, attempt=1, run=2)], _identity(1, run=2)),
     ):
@@ -277,14 +283,15 @@ def test_zero_completion_evidence_survives_without_erasing_an_earlier_complete_a
     )
     native = json.loads((generated / "attempts.json").read_text(encoding="utf-8"))
     assert native["keys"] == {
-        name: list(ledger.door_key(LedgerName(name))) for name, _, _ in PLANNING_LEDGERS
+        name: list(ledger.door_key(LedgerName(name)))
+        for name, _, _ in PRODUCED_PLANNING_LEDGERS
     }
     for tier, today in (
         ("daily", date(2026, 10, 23)),
         ("monthly", date(2026, 11, 3)),
         ("yearly", date(2027, 3, 15)),
     ):
-        for name, _, _ in PLANNING_LEDGERS:
+        for name, _, _ in PRODUCED_PLANNING_LEDGERS:
             task = f"compact-feed-ingest-plan-{name}"
             declaration = config.load_gardener().tasks[task]
             tuned = declaration.model_copy(update={
