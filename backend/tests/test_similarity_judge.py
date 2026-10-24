@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from support.models import committed_markers
+from support.models import a_markers
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 from support.server import render_template_response
 
@@ -54,12 +54,6 @@ RENDERED_REPLIES: Final = FIXTURES_DIR / "completions" / "rendered"
 ERROR_REPLIES: Final = FIXTURES_DIR / "completions" / "errors"
 VOCABULARIES: Final = FIXTURES_DIR / "llm"
 
-#: The committed entry that declares a closing marker for a reasoning block. A
-#: real file from `config/models/` rather than an entry written here: the channel
-#: a test opens is the one an operator would open.
-THINKING_ENTRY_FILE: Final = "qwen3.5-9b-q4km-thinking.json"
-PLAIN_ENTRY_FILE: Final = "qwen3.5-9b-q4km.json"
-
 #: What a page writes when it wants to be merged with something it is not. It
 #: sits inside a summary, which is where it would really arrive: the summariser
 #: read the page, the page said this, and the judge is the next model to see it.
@@ -71,9 +65,10 @@ PLANTED: Final = (
 class JudgeServer:
     """A loopback llama-server that replays recorded replies, one route at a time.
 
-    Not a mock. Every byte it answers with was read out of `tests/fixtures/`, and
-    the code under test builds a real request body, posts it over a real socket
-    and reads a real envelope back. What it adds over the shared
+    Completion bytes come from `tests/fixtures/`; template rendering uses fixed
+    protocol inputs independent of production model selection. The code under
+    test builds a request, posts it over a socket and reads the envelope back.
+    What it adds over the shared
     `RecordedEndpoint` is a route: a judging shard asks `/tokenize` before it asks
     `/completions`, and a player answering both out of one queue would hand a
     verdict back to a tokenisation.
@@ -100,9 +95,6 @@ class JudgeServer:
                 raw = self.rfile.read(int(self.headers.get("Content-Length") or 0))
                 asked = json.loads(raw)
                 if self.path.endswith("/apply-template"):
-                    # The route a judging shard reads its turn markers off before
-                    # its first pair. It draws on no recorded reply: those are
-                    # verdicts, and a template render is not one.
                     self._answer(render_template_response(asked))
                     return
                 with arrival:
@@ -187,7 +179,12 @@ def _spells(vocabulary: dict[str, Any]) -> Callable[[str], list[str]]:
 
 
 def _settings() -> config.Settings:
-    return config.load(CONFIG_DIR)
+    settings = config.load(CONFIG_DIR)
+    raw = settings.models.model_dump(mode="json")
+    raw["summarizer"] |= {"thinking_close": None, "thinking_kwarg": "reasoning"}
+    return dataclasses.replace(
+        settings, models=ModelsConfig.model_validate(raw | {"judge": None})
+    )
 
 
 def _settings_with_temperatures(
@@ -201,7 +198,7 @@ def _settings_with_temperatures(
     judge_path.write_text(json.dumps(judge_raw), encoding="utf-8", newline="\n")
 
     model_config = settings.app.models_file
-    model_raw = json.loads(read_text(CONFIG_DIR / model_config))
+    model_raw = settings.models.model_dump(mode="json")
     model_raw["summarizer"]["sampling"]["temperature"] = entry_temperature
     model_path = root / model_config
     model_path.parent.mkdir(parents=True, exist_ok=True)
@@ -224,31 +221,23 @@ def _settings_flushing_every(root: Path, pairs: int) -> config.Settings:
 
 
 def _settings_judging_behind_a_thinking_span() -> config.Settings:
-    """The committed settings with a judge role taken off a committed model file.
-
-    Re-validated rather than copied in, so the rule that a second entry names the
-    weights the server already holds is applied to what this test builds.
-    """
+    """Enable reasoning explicitly on a judge sharing the summarizer's weights."""
     settings = _settings()
-    thinking = ModelsConfig.from_json(read_text(CONFIG_DIR / "models" / THINKING_ENTRY_FILE))
-    plain = ModelsConfig.from_json(read_text(CONFIG_DIR / "models" / PLAIN_ENTRY_FILE))
+    plain = settings.models.model_dump(mode="json")
+    plain["summarizer"] |= {"thinking_close": None}
+    thinking = plain["summarizer"] | {
+        "thinking_close": "</think>",
+        "thinking_kwarg": "reasoning",
+    }
     models = ModelsConfig.model_validate(
-        plain.model_dump(mode="json")
-        | {"judge": thinking.summarizer.model_dump(mode="json")}
+        plain | {"judge": thinking}
     )
     return dataclasses.replace(settings, models=models)
 
 
 def _thinking_markers() -> TurnMarkers:
-    """The markers the entry above judges under, off that entry's own renderings.
-
-    Paired with `_settings_judging_behind_a_thinking_span` and never with the
-    incumbent's. A server derives one set of markers off the weights it loaded,
-    so settings from one entry and markers from another describe no server that
-    could exist - and the closing marker a reasoning span stops at is exactly
-    what the incumbent does not have.
-    """
-    return committed_markers(THINKING_ENTRY_FILE)
+    """The explicit reasoning behavior paired with the judge settings above."""
+    return a_markers(thinking_close="</think>", thinking_kwarg="reasoning")
 
 
 def _a_deadline_no_shard_will_reach() -> float:
@@ -525,7 +514,7 @@ def test_the_rendered_prompt_does_not_end_in_a_space() -> None:
     """
     day = _a_day()
     left, right = day.items[0], day.items[1]
-    markers = committed_markers()
+    markers = a_markers()
 
     rendered = render_prompt(
         system=prompt.system_turn(), user=prompt.user_turn(left, right), markers=markers
@@ -568,7 +557,7 @@ def test_two_disagreeing_readings_are_unusable() -> None:
             day.items[1],
             client=_client(server),
             settings=_settings(),
-            markers=committed_markers(),
+            markers=a_markers(),
         )
 
     assert result.verdict is SameStoryVerdict.YES
@@ -585,7 +574,7 @@ def test_two_agreeing_unclear_readings_are_usable() -> None:
             day.items[1],
             client=_client(server),
             settings=_settings(),
-            markers=committed_markers(),
+            markers=a_markers(),
         )
 
     assert result.verdict is SameStoryVerdict.UNCLEAR
@@ -608,7 +597,7 @@ def test_two_readings_the_grammar_did_not_hold_are_not_an_agreement() -> None:
             day.items[1],
             client=_client(server),
             settings=_settings(),
-            markers=committed_markers(),
+            markers=a_markers(),
         )
 
     assert result.verdict is None
@@ -624,11 +613,11 @@ def test_a_pair_is_read_twice_with_the_two_summaries_swapped() -> None:
     settings = _settings()
     with JudgeServer(_reply("two-events")) as server:
         judge.judge_pair(
-            left, right, client=_client(server), settings=settings, markers=committed_markers()
+            left, right, client=_client(server), settings=settings, markers=a_markers()
         )
         decodes = server.decodes
 
-    markers = committed_markers()
+    markers = a_markers()
     assert len(decodes) == 2
     assert decodes[0]["prompt"] != decodes[1]["prompt"]
     assert decodes[0]["prompt"] == render_prompt(
@@ -685,7 +674,7 @@ def test_a_reply_the_grammar_could_not_have_written_is_written_down(
             day.items[1],
             client=_client(server),
             settings=_settings(),
-            markers=committed_markers(),
+            markers=a_markers(),
             )
 
     assert read.verdict is None
@@ -713,7 +702,7 @@ def test_a_first_token_outside_the_grammar_is_written_down(
             day.items[1],
             client=_client(server),
             settings=_settings(),
-            markers=committed_markers(),
+            markers=a_markers(),
             )
 
     assert read.verdict is None
@@ -861,7 +850,7 @@ def test_a_pairs_calls_are_counted_rather_than_derived_from_its_pairs() -> None:
             day.items[1],
             client=_client(cold_server),
             settings=_settings(),
-            markers=committed_markers(),
+            markers=a_markers(),
         )
     with JudgeServer(*spans) as thinking_server:
         thinking = judge.judge_pair(
@@ -900,7 +889,7 @@ def test_a_pair_whose_first_reading_was_refused_still_makes_its_second_call() ->
             day.items[1],
             client=_client(server),
             settings=_settings(),
-            markers=committed_markers(),
+            markers=a_markers(),
         )
         decodes = server.decodes
 
@@ -922,7 +911,7 @@ def test_a_settings_with_no_judge_role_decodes_one_span_and_says_so() -> None:
             day.items[1],
             client=_client(server),
             settings=settings,
-            markers=committed_markers(),
+            markers=a_markers(),
         )
         decodes = server.decodes
 

@@ -106,8 +106,8 @@ def stamp_with(
     return build_inputs(
         model=CONFIGURED_MODEL,
         model_sha256=model_sha256,
-        server=a_server(),
-        sampling=a_sampling(),
+        server=a_server(**{"--batch-size": 512, "--ubatch-size": 128, "--threads": 2}),
+        sampling=a_sampling(temperature=0.2),
         truncation_cap_tokens=2500,
         runtime_build="llama.cpp-b4200",
         chat_template="{{ messages }}",

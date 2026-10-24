@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 from pydantic import BaseModel, ValidationError
-from support.models import a_server, committed_markers
+from support.models import a_markers, a_server
 from support.paths import CONFIG_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 from support.prompts import LABEL_REPLIES, SUMMARIZE_AND_PLAN_REPLIES, a_table, label_payload
 from support.server import RecordedEndpoint
@@ -65,7 +65,7 @@ from idhazh.classify.calls import (
 from idhazh.contracts.article import Article
 from idhazh.contracts.element import ElementKind, ElementTable, Extractor
 from idhazh.contracts.knobs.extract import ElementsConfig
-from idhazh.contracts.knobs.models import ModelEntry, ModelsConfig
+from idhazh.contracts.knobs.models import ModelEntry
 from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.summary import Summary, SummaryStatus
@@ -88,11 +88,7 @@ RECORDED_PAYLOADS = FIXTURES_DIR / "planner" / "recorded-call-payloads.json"
 
 
 def configured() -> ModelEntry:
-    """The summarizer entry the committed config names, turn envelope included.
-
-    Read through `config.load`, which is what a stage calls, so a test never
-    reaches the markers by a second route.
-    """
+    """Read the validated summarizer entry selected by config."""
     return config.load(CONFIG_DIR).models.summarizer
 
 #: How to re-record after a DELIBERATE prompt or bound change. Nothing else may
@@ -215,7 +211,6 @@ PROMPT_FIXTURES = FIXTURES_DIR / "prompts"
 RENDERED_LABEL = PROMPT_FIXTURES / "label.txt"
 RENDERED_SUMMARIZE_AND_PLAN = PROMPT_FIXTURES / "summarize-and-plan.txt"
 CHAT_TEMPLATE_RENDERING = PROMPT_FIXTURES / "chat-template.json"
-RECORDED_MODEL_FILE = "qwen3.5-9b-q4km.json"
 
 
 def recorded_reply() -> str:
@@ -273,27 +268,19 @@ class TestThePromptBytes:
         assert label_system_prompt().startswith(text)
         assert named == set(LabelReply.model_fields)
 
-    def test_the_turn_markers_are_the_models_own(self) -> None:
-        """Recorded from the server that applies them, not written from memory.
+    def test_explicit_turn_markers_match_the_recorded_template(self) -> None:
+        """Check both reply openings against their historical recording.
 
-        Both reply openings, because the one a prompt ends with is chosen by the
-        envelope's own closing marker and a wrong pair would be invisible on the
-        case the recorded model runs. Its thinking case uses the same markers
-        with the closing marker enabled.
-
-        **The recording and the entry name the same weights.** The fixture says
-        which bytes the server had loaded. Compare it with that model's file,
-        not the current selection: changing models does not change a recording.
+        Its runtime and weights provenance stays in the fixture. No current
+        model entry supplies inputs to this historical protocol comparison.
         """
         recorded = json.loads(read_text(CHAT_TEMPLATE_RENDERING))
         system, user = recorded["system"], recorded["user"]
-        entry = ModelsConfig.from_json(
-            read_text(CONFIG_DIR / "models" / RECORDED_MODEL_FILE)
-        ).summarizer
-        markers = committed_markers(RECORDED_MODEL_FILE)
+        markers = a_markers(
+            reply_opening="<|im_start|>assistant\n<think>\n\n</think>\n\n"
+        )
         thinking = dataclasses.replace(markers, thinking_close="</think>")
 
-        assert entry.sha256 == recorded["weights_sha256"]
         assert render_prompt(system=system, user=user, markers=markers) == (
             recorded["generation_prompt"]
         )
@@ -311,7 +298,9 @@ class TestThePromptBytes:
         first one extended.
         """
         recorded = json.loads(read_text(CHAT_TEMPLATE_RENDERING))
-        markers = committed_markers()
+        markers = a_markers(
+            reply_opening="<|im_start|>assistant\n<think>\n\n</think>\n\n"
+        )
         opening = recorded["generation_prompt"] + recorded["reply"]
         ours = continued_prompt(
             render_prompt(
@@ -332,12 +321,12 @@ class TestThePromptBytes:
                 "a prompt that stops mid-sentence",
                 reply="{}",
                 user="and then?",
-                markers=committed_markers(),
+                markers=a_markers(),
             )
 
-    def test_every_marker_is_read_off_the_template_and_none_is_written_here(self) -> None:
+    def test_turn_rendering_uses_the_supplied_markers(self) -> None:
         """The substitution test: move the markers and the bytes move with them."""
-        markers = committed_markers()
+        markers = a_markers()
         moved = dataclasses.replace(markers, turn_closing="<<END>>")
 
         assert markers.turn("user", "hello").endswith(markers.turn_closing)
@@ -681,9 +670,9 @@ class TestTheLabelCallPrompting:
             model_id="m",
             server=entry.server,
             sampling=entry.sampling,
-            markers=committed_markers(),
+            markers=a_markers(),
         )
-        markers = committed_markers()
+        markers = a_markers()
         assert payload["json_schema"] == label_schema()
         assert payload["prompt"].startswith(markers.turn("system", label_system_prompt()))
         assert "4,200 megawatt hours" in payload["prompt"]
@@ -1348,7 +1337,7 @@ def test_a_recorded_label_reply_labels_the_table_over_a_loopback_socket(
         model_id="m",
         server=entry.server,
         sampling=entry.sampling,
-        markers=committed_markers(),
+        markers=a_markers(),
     )
     body = (LABEL_REPLIES / "labelled.json").read_bytes()
 
@@ -1395,19 +1384,21 @@ def summarize_and_plan_payload(article: Article, reply: str = "{}") -> dict[str,
     return build_summarize_and_plan_request(
         label_payload(article),
         reply,
-        markers=committed_markers(),
+        markers=a_markers(),
         source_words=article.band_source_words,
     )
 
 
-def build_label_with_derived_budget(article: Article) -> dict[str, Any]:
+def build_label_with_derived_budget(
+    article: Article, *, sampling: dict[str, Any] | None = None
+) -> dict[str, Any]:
     return build_label_request(
         article,
         a_table(article),
         model_id="m",
         server=a_server(),
-        sampling={},
-        markers=committed_markers(),
+        sampling={} if sampling is None else sampling,
+        markers=a_markers(),
     )
 
 
@@ -1506,7 +1497,7 @@ class TestTheInstructionsSitInFrontOfTheArticle:
         """
         ask = config.load(CONFIG_DIR).app.summarize
         entry = configured()
-        markers = committed_markers()
+        markers = a_markers()
         opening = markers.turn("system", label_system_prompt(ask))
 
         for article in (dense, article_ok):
@@ -1516,7 +1507,7 @@ class TestTheInstructionsSitInFrontOfTheArticle:
                 model_id="m",
                 server=entry.server,
                 sampling=entry.sampling,
-                markers=committed_markers(),
+                markers=a_markers(),
                 prompt_config=ask,
             )
             assert payload["prompt"].startswith(opening)
@@ -1585,7 +1576,7 @@ class TestTheInstructionsSitInFrontOfTheArticle:
 
 class TestTheSummarizeAndPlanShape:
     def test_the_label_reply_is_replayed_as_the_assistant_turn(self, dense: Article) -> None:
-        markers = committed_markers()
+        markers = a_markers()
         first = label_payload(dense)
         prompt = summarize_and_plan_payload(dense, '{"labels": []}')["prompt"]
 
@@ -1682,7 +1673,7 @@ class TestTheDerivedBudget:
         payload = build_summarize_and_plan_request(
             build_label_with_derived_budget(dense),
             "{}",
-            markers=committed_markers(),
+            markers=a_markers(),
             source_words=dense.band_source_words,
         )
 
@@ -1694,14 +1685,18 @@ class TestTheDerivedBudget:
 
     def test_the_second_call_decodes_nothing_the_first_call_settled(self, dense: Article) -> None:
         """Determinism is set in one place, and the summarize-and-plan call does not become a second one."""
-        first = label_payload(dense)
-        second = summarize_and_plan_payload(dense)
+        first = build_label_with_derived_budget(
+            dense, sampling={"temperature": 0.25, "top_p": 0.8, "seed": 42}
+        )
+        second = build_summarize_and_plan_request(
+            first, "{}", markers=a_markers(), source_words=dense.band_source_words
+        )
 
         assert [
             second[key] for key in ("temperature", "top_p", "seed", "stream", "cache_prompt")
         ] == [first[key] for key in ("temperature", "top_p", "seed", "stream", "cache_prompt")]
         assert second["prompt"].endswith(
-            committed_markers().opening_of(first["prompt"])
+            a_markers().opening_of(first["prompt"])
         ), "the reply opening is read off the label call's prompt, so the two cannot disagree"
 
 
@@ -1992,9 +1987,9 @@ def test_the_visual_gate_moves_nothing_in_front_of_the_cached_prefix() -> None:
         "message"
     ]["content"]
 
-    asked = build_summarize_and_plan_request(first, reply, markers=committed_markers(), plan=True)
+    asked = build_summarize_and_plan_request(first, reply, markers=a_markers(), plan=True)
     suppressed = build_summarize_and_plan_request(
-        first, reply, markers=committed_markers(), plan=False
+        first, reply, markers=a_markers(), plan=False
     )
     asked_prompt = str(asked["prompt"])
     suppressed_prompt = str(suppressed["prompt"])

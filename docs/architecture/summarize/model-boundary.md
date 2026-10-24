@@ -1,6 +1,6 @@
 # The model boundary
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-10-24
 
 How the summarizer stays generic while the model behind it changes. This page
 owns the shape of the boundary - what crosses it, which side each fact lives
@@ -378,11 +378,9 @@ dead.
 Reverting costs one line because adopting never modified the previous model's
 file. Its weights cache key is its own digest, so that cache is still valid.
 
-**A file the pointer does not name is still a file it can name**, so every entry
-under `config/models/` is loaded and checked by
-`backend/tests/contracts/test_model_registry.py` rather than only the active
-one. Before that, an alternative sat unvalidated until the day somebody switched
-to it - and that day is a pipeline run.
+**The selected file is validated when it is loaded.** Contract tests write valid
+and invalid entries under their own filenames. They do not keep a second list
+of production models that a new file must join before tests can run.
 
 **A second set of weights that drafts ahead of the first is not offered.** It
 was until 2026-09-21, as `models.summarizer.draft`, and the mechanism's whole
@@ -449,6 +447,14 @@ CI does not commit that page. Doc routing is reviewed in a pull request, and
 every commit CI makes lands in the range the scheduled prune has to rewrite.
 
 ## Design rationale
+
+**Tests describe behavior, not the selected model.** Generic tests supply
+explicit turn markers, reasoning keywords and server flags. A new valid model
+filename needs no fixture entry.
+Recorded protocol responses keep the runtime and weights provenance captured
+with them; current production settings must not change their inputs. Runtime
+marker derivation and sanitizer refusals remain covered with fixed inputs,
+including markers the boundary cannot safely accept.
 
 **One complete file per model, never a merge.** A layered shape - global
 defaults with per-model overrides - makes the same swap a one-line edit, so the
