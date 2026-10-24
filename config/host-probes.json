@@ -6,9 +6,12 @@
     "cpu_window_ms": 1000,
     "poll_interval_ms": 100,
     "max_retained_samples": 128,
-    "lifecycle_timeout_ms": 10000
+    "lifecycle_timeout_ms": 10000,
+    "max_profile_handles": 16,
+    "profile_handle_ttl_ms": 21600000
   },
   "listen_host": "127.0.0.1",
   "listen_port": 3005,
-  "max_proc_bytes": 1048576
+  "max_proc_bytes": 1048576,
+  "max_request_body_bytes": 16384
 }
