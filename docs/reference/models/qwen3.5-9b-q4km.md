@@ -77,9 +77,8 @@ which is Qwen's documented way to turn reasoning off.
 | The difference, which is what closes an empty block | `\n</think>\n\n` |
 
 So `reply_opening_thinking + thinking_close == reply_opening` exactly, and a
-non-empty block closes with the same bytes an empty one does. That identity is
-checked in `backend/tests/contracts/test_turn_envelope.py` rather than left as
-an argument on this page.
+non-empty block closes with the same bytes an empty one does. The recorded
+reply openings above describe this model, not the active model selection.
 
 **What the thinking setup has not measured.** Nothing on this page was re-taken
 with reasoning on. A thinking span decodes into the same sequence, so seconds an

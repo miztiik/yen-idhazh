@@ -180,6 +180,15 @@ def test_a_sampling_key_a_route_sets_itself_is_refused_when_the_config_loads() -
     assert "grammar_lazy" in message, "and the key inside it"
 
 
+def test_a_configured_output_limit_is_accepted_when_the_config_loads() -> None:
+    raw = committed_models_raw()
+    raw["summarizer"]["sampling"]["max_tokens"] = 4096
+    models = ModelsConfig.model_validate(raw)
+
+    refuse_a_model_nothing_could_run("models/x.json", models)
+    assert models.summarizer.sampling["max_tokens"] == 4096
+
+
 def test_an_entry_that_dumps_and_reloads_is_not_refused_for_its_own_shape() -> None:
     """A recorded settings mapping is empty on an entry, and empty is not a spelling.
 

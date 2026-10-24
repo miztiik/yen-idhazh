@@ -54,6 +54,7 @@ from ._harness import (
     _isolated_env,
     _load_workflows,
     _local_action_inputs,
+    _logical_shell_lines,
     _mapping,
     _model_server_callers,
     _published,
@@ -152,7 +153,12 @@ def test_every_job_that_starts_a_server_reaches_the_one_argv_builder() -> None:
                 executed.append((f"{filename}/{job_name}/{step.get('name')}", body))
 
     for where, body in executed:
-        commands = _uncommented(body)
+        delegated = "|".join(re.escape(path) for path in SERVER_STARTER_MODULES)
+        commands = "\n".join(
+            line
+            for line in _logical_shell_lines(_uncommented(body))
+            if not re.match(rf"^\s*python3?\s+(?:{delegated})(?:\s|$)", line)
+        )
         for flag in flags:
             # A whole token: `-fa` sits inside `fail-fast`, so a substring
             # search reports a flag nobody wrote.

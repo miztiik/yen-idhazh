@@ -268,19 +268,20 @@ def test_the_budget_threshold_names_the_replay_count_the_shards_recorded() -> No
     assert "at 5 passes per item" in outcomes_of(replayed)[GateName.BUDGET].threshold
 
 
-def test_the_replay_count_falls_back_to_the_knob_and_the_flag_cannot_go_under_its_floor() -> None:
-    """`--repeats` overrides one invocation; the floor that refuses it is the knob's own.
+def test_the_replay_count_falls_back_to_the_configured_count() -> None:
+    run = RunConfig(qualification_repeats=2)
+    assert cli.qualification_repeats(None, run=run) == run.qualification_repeats
 
-    One pass makes the determinism reading unable to fail, and a dispatch used
-    to be able to ask for it. The flag is resolved back through `RunConfig`, so
-    the refusal is the schema's rather than a second copy in the CLI.
-    """
-    assert cli.qualification_repeats(None, run=RUN) == RUN.qualification_repeats
-    assert cli.qualification_repeats(4, run=RUN) == 4
-    with pytest.raises(ValidationError):
-        cli.qualification_repeats(1, run=RUN)
-    with pytest.raises(ValidationError):
-        cli.qualification_repeats(11, run=RUN)
+
+@pytest.mark.parametrize("repeats", [1, 2, 3])
+def test_the_cli_accepts_every_count_in_the_config_range(repeats: int) -> None:
+    assert cli.qualification_repeats(repeats, run=RUN) == repeats
+
+
+@pytest.mark.parametrize("repeats", [0, 4])
+def test_the_cli_refuses_counts_outside_the_config_range(repeats: int) -> None:
+    with pytest.raises(ValidationError, match="qualification_repeats"):
+        cli.qualification_repeats(repeats, run=RUN)
 
 
 # --- One failure at a time --------------------------------------------------
