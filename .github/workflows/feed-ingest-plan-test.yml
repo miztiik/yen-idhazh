@@ -28,6 +28,11 @@ on:
           - bin-pack
           - round-robin
           - none
+      profile_machine_memory:
+        description: Profile whole-machine RAM during fetch and parse; CPU and process RAM stay enabled
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -59,8 +64,12 @@ jobs:
             /.github/scripts/feed-ingest-plan-audit-fixture.ts
             /.github/scripts/feed-ingest-plan-http-proof.ts
             /.github/scripts/feed-ingest-plan-profile-proof.ts
+            /.github/scripts/feed-ingest-plan-profile-schema.ts
+            /.github/scripts/feed-ingest-plan-resource-report.ts
+            /.github/scripts/feed-ingest-plan-report-format.ts
             /.github/scripts/tests/feed-ingest-plan-outputs.test.ts
             /.github/scripts/tests/feed-ingest-plan-report.test.ts
+            /.github/scripts/tests/feed-ingest-plan-profile-recording.ts
             /.github/scripts/tests/feed-ingest-plan-workflow.test.ts
             /.github/workflows/feed-ingest-plan-test.yml
             /.github/workflows/ci.yml
@@ -105,6 +114,7 @@ jobs:
           ARTICLE_LIMIT: ${{ inputs.article_limit }}
           SHARDS: ${{ inputs.shards }}
           PARTITION_STRATEGY: ${{ inputs.partition_strategy }}
+          PROFILE_MACHINE_MEMORY: ${{ inputs.profile_machine_memory }}
         run: |
           bun run - <<'TS'
           import { mkdir, writeFile } from "node:fs/promises";
@@ -128,6 +138,7 @@ jobs:
           import { completeHistoryDayInputs, createExecutionOutputs, createSeenDayInputs, historyDays, resolveHistoryInventory, sparseCheckoutPath, writeGitHubOutputs } from "./.github/scripts/feed-ingest-plan-outputs";
           import { verifyLedgerReceipt, verifyParquetFiles, verifyPlanningCompletion } from "./.github/scripts/feed-ingest-plan-verification";
           import { verifyLiveDocumentHttp } from "./.github/scripts/feed-ingest-plan-http-proof";
+          import { WorkflowMachineMemorySchema } from "./.github/scripts/feed-ingest-plan-profile-schema";
 
           const root = process.cwd();
           try {
@@ -141,6 +152,7 @@ jobs:
               if (value !== undefined && value.trim() !== "") args.push(`${flag}=${value}`);
             }
             const { request } = parseCliRequest(args);
+            const machineMemoryEnabled = WorkflowMachineMemorySchema.parse(process.env.PROFILE_MACHINE_MEMORY);
             const inputs = await loadPlanInputs(root);
             const captured = new Date();
             const now = utcTimestamp(() => captured);
@@ -328,7 +340,7 @@ jobs:
             });
             await verifyLiveDocumentHttp({ ...inputs, settings }, {
               git_sha, clock: () => captured, run_number: GITHUB_RUN_ID,
-            }, progressRecords, RUNNER_TEMP, artifactRoot, summary);
+            }, progressRecords, RUNNER_TEMP, artifactRoot, summary, machineMemoryEnabled);
             await writeGitHubOutputs(GITHUB_OUTPUT, { stage_api_complete: "true" });
           } catch (error) {
             console.error(JSON.stringify(describePlanError(error, root)));
@@ -404,6 +416,8 @@ jobs:
       - name: Optional GitHub report
         if: ${{ !cancelled() && steps.plan.outputs.workflow_reporting == 'true' }}
         continue-on-error: true
+        env:
+          PROFILE_MACHINE_MEMORY: ${{ inputs.profile_machine_memory }}
         run: bun run .github/scripts/feed-ingest-plan-report.ts config/feed-ingest-plan.json "$RUNNER_TEMP/feed-ingest-plan/events.json" "$RUNNER_TEMP/feed-ingest-plan"
 
       - name: Commit exact live planner and host files

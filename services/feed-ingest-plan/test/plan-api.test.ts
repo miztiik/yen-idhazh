@@ -283,6 +283,9 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
       task_name: "parse", request_id: parseRequest.request_id, correlation_id, run_id: fetched.observation.run_id,
     });
     expect(profiles[1]?.processes.worker.closing.pid).toBe(process.pid);
+    expect(profiles[1]?.config.machine_memory_enabled).toBe(false);
+    expect(profiles[1]?.machine_available_min_kb).toBeNull();
+    expect(profiles[1]?.samples.at(-1)?.unavailable["memory_kb.total"]).toBe("configured_off");
     expect(profiles[1]?.started_at).not.toBe(api.runtime.clock!().toISOString());
     expect(parsed.failure).toBeNull();
     expect(parsed.parsed.article_text.length).toBeGreaterThan(0);
@@ -314,6 +317,9 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     expect(parsed.observation.event_id).not.toBe(fetched.observation.event_id);
     const privateReplayBytes = Buffer.from(await (await post("parse", parseRequest, createPlanApp(api.inputs, api.runtime))).arrayBuffer());
     requireExactReplay(privateParseBytes, privateReplayBytes);
+    probeConfig.task_profile.machine_memory_enabled = true;
+    requireExactReplay(privateParseBytes, Buffer.from(await (await post("parse", parseRequest)).arrayBuffer()));
+    expect(await (await post("fetch", fetchRequest)).json()).toEqual(fetched);
     probeConfig.task_profile.enabled = false;
     requireExactReplay(privateParseBytes, Buffer.from(await (await post("parse", parseRequest)).arrayBuffer()));
     probeConfig.task_profile.enabled = true;
@@ -425,6 +431,8 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     if (process.platform === "linux") {
       expect(measured.cpu.reason).toBeNull();
       expect(measured.processes.worker.closing.memory_kb.rss).toBeGreaterThan(0);
+      expect(measured.full_window_count).toBeGreaterThan(0);
+      expect(measured.machine_available_min_kb).toBeGreaterThan(0);
     }
     console.error(JSON.stringify({ event: "recorded_parse_profile", platform: process.platform, arch: process.arch, profile: measured }));
   } finally { await Promise.all([api.close(), cli.close()]); }
