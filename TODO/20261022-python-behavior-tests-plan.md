@@ -79,7 +79,7 @@ Table D - PR outcomes
 | D21 | 21 | Prove ledger dates and named-plan reads | 1 | T | DONE | prove-ledger-date-selection | [#1675](https://github.com/miztiik/yen-idhazh/pull/1675), merged at `31a689f073d602e75870f7fa48da72d3043f6c13` | - |
 | D22 | 22 | Configured council planning and collection job deadlines | 1 | U | IN-FLIGHT | configure-council-job-deadlines | - | - |
 | D23 | 23 | Independent qualification and planning controls | 1 | V | IN-FLIGHT | prove-planning-controls-independently | [#1683](https://github.com/miztiik/yen-idhazh/pull/1683) | - |
-| D24 | 24 | Independent council test controls | 17 | W | IN-FLIGHT | prove-council-controls-independently | - | - |
+| D24 | 24 | Independent council test controls | 17 | W | IN-FLIGHT | prove-council-controls-independently | [#1688](https://github.com/miztiik/yen-idhazh/pull/1688) | - |
 | D25 | 25 | Concrete remaining gardener and ledger safety proofs | 24 | X | IN-FLIGHT | strengthen-gardener-safety-proofs | - | - |
 | D26 | 26 | Prove time boundaries without stand-ins | 21, 25 | Y | IN-FLIGHT | prove-time-boundaries-without-stand-ins | [#1679](https://github.com/miztiik/yen-idhazh/pull/1679) | - |
 | D27 | 27 | Explicit offline gardener collection controls | 17, 26 | Z | IN-FLIGHT | control-gardener-host-collection | - | - |
@@ -1699,10 +1699,12 @@ Table F - Controls, expected behavior and rejected faults
   final proof receipt. The independent source diff is `row24-source-diff.patch`,
   13,324 bytes, SHA-256
   `eda228338a5dce3d2bb06db238111d70a0c1cc24c497ac13519b6e21ef7f8f2a`.
-  Row 17 is the source dependency and has not yet merged, so no Row 24 PR head
-  exists. After its merge, verify the GitHub merge receipt and equivalent
-  source changes, merge current `main` normally into this branch, then open the
-  Row 24 phase PR. Do not merge the Row 24 PR.
+  Row 17 merged through [#1682](https://github.com/miztiik/yen-idhazh/pull/1682)
+  at `e3433f078fc74c82dbfa7729c3876204c3958550`; its required source is present
+  on `main`. Current `main` was integrated by normal merge commit
+  `243d036aa1f5191806e62d0a4a244bd3427e2a6d`. The authorized Row 24 phase PR
+  is [#1688](https://github.com/miztiik/yen-idhazh/pull/1688); it remains open
+  for review and required checks.
 - **Dependencies:** Row 17; Row 23 is the required exact plan predecessor, not
   a gate dependency.
 

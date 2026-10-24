@@ -74,12 +74,14 @@ def venue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     forget(A_VENUE)
 
 
-def _config_registering(root: Path, *slugs: str) -> Path:
+def _config_registering(root: Path, *slugs: str, shards: int | None = None) -> Path:
     """The loader's named config inputs, with the named slugs registered."""
     target = copy_config(root)
     write_declarations(target, slugs)
     raw = json.loads(read_text(target / "llm_council.json"))
     raw["judge_names"] = list(slugs)
+    if shards is not None:
+        raw["shards"] = shards
     (target / "llm_council.json").write_text(
         json.dumps(raw, indent=2), encoding="utf-8", newline="\n"
     )
@@ -366,7 +368,7 @@ def test_a_unit_that_raised_files_one_failed_row_beside_its_completed_siblings(
 ) -> None:
     """The Oracle: four parts recorded, exactly one failed, with no invented model cost."""
     a_scripted_venue(venue, package=A_VENUE, slug=A_SLUG, shard_count=4, dead_units=(2,))
-    config_root = _config_registering(venue, A_SLUG)
+    config_root = _config_registering(venue, A_SLUG, shards=5)
     state_root = tmp_path / "state"
 
     _a_whole_night(config_root, state_root, slugs=(A_SLUG,), shards=4, dead=(2,))
@@ -534,7 +536,7 @@ def test_the_saving_job_files_one_date_and_a_rerun_replaces_its_rows(
 ) -> None:
     """The door records the workflow identity and keeps only the later attempt."""
     a_scripted_venue(venue, package=A_VENUE, slug=A_SLUG, shard_count=2)
-    config_root = _config_registering(venue, A_SLUG)
+    config_root = _config_registering(venue, A_SLUG, shards=3)
     state_root = tmp_path / "state"
 
     monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
