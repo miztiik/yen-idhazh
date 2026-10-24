@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, ClassVar, Literal, Self
 
-from pydantic import Field, StrictInt, UUID4, model_validator
+from pydantic import UUID4, Field, StrictInt, model_validator
 
 from idhazh.contracts.base import (
     ChangelogEntry,
