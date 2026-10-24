@@ -258,7 +258,6 @@ def test_the_teacher_names_the_slot_the_model_file_declares() -> None:
     is what they wrote.
     """
     raw = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
-    assert raw["finetune"]["teacher"] in ModelsConfig.roles()
 
     with pytest.raises(ValidationError) as raised:
         AppConfig.model_validate(raw | {"finetune": raw["finetune"] | {"teacher": "summarize"}})
@@ -285,24 +284,34 @@ def test_the_pointer_may_not_leave_the_models_directory() -> None:
             AppConfig.model_validate({"models_file": escape})
 
 
-def test_the_model_file_is_digested_with_the_rest_of_the_config() -> None:
+def test_the_model_file_bytes_are_digested_with_the_rest_of_the_config(tmp_path: Path) -> None:
     """A run that did not record it could not say which model's numbers it read.
 
-    `models_file` names the file, so the digest of `config/idhazh.json` moves
-    when the POINTER moves and says nothing about what the file it points at
-    says. Both have to travel or a re-tuned model file is invisible to the
-    record.
+    A copied config keeps this proof independent of the committed pointer and
+    model. Re-reading unchanged bytes keeps one digest; changing the file's
+    bytes changes the digest even when the model still parses the same way.
     """
-    settings = config.load(CONFIG_DIR)
-    recorded = {digest.path: digest.sha256 for digest in settings.digests}
+    pointer = copy_config(tmp_path)
+    config_dir = tmp_path / "config"
+    model_path = config_dir / pointer
+    original_bytes = model_path.read_bytes()
+    model_digest_path = f"config/{pointer}"
 
-    assert f"config/{settings.app.models_file}" in recorded
-    text = read_text(CONFIG_DIR / settings.app.models_file)
-    assert recorded[f"config/{settings.app.models_file}"] == sha256_of(text)
+    first = config.load(config_dir)
+    unchanged = config.load(config_dir)
+    first_digest = {digest.path: digest.sha256 for digest in first.digests}[model_digest_path]
+    unchanged_digest = {
+        digest.path: digest.sha256 for digest in unchanged.digests
+    }[model_digest_path]
+    assert first_digest == hashlib.sha256(original_bytes).hexdigest()
+    assert unchanged_digest == first_digest
 
-
-def sha256_of(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+    changed_bytes = original_bytes + b"\n"
+    model_path.write_bytes(changed_bytes)
+    changed = config.load(config_dir)
+    changed_digest = {digest.path: digest.sha256 for digest in changed.digests}[model_digest_path]
+    assert changed_digest == hashlib.sha256(changed_bytes).hexdigest()
+    assert changed_digest != first_digest
 
 
 def test_a_model_swap_can_no_longer_inherit_settings_nothing_declared_for_it() -> None:

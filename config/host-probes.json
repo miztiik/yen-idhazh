@@ -1,5 +1,14 @@
 {
   "sample_interval_ms": 1000,
+  "task_profile": {
+    "enabled": false,
+    "memory_enabled": false,
+    "machine_memory_enabled": false,
+    "cpu_window_ms": 1000,
+    "poll_interval_ms": 1000,
+    "max_retained_samples": 128,
+    "lifecycle_timeout_ms": 10000
+  },
   "listen_host": "127.0.0.1",
   "listen_port": 3005,
   "max_proc_bytes": 1048576

@@ -272,7 +272,7 @@ def test_the_served_item_is_a_narrowing_of_the_published_one() -> None:
     assert set(DigestViewVisual.model_fields) < set(DigestVisual.model_fields)
 
 
-def test_every_committed_day_serves_a_view_that_validates() -> None:
+def test_a_day_without_the_ranking_fields_serves_a_valid_view_with_them_unknown() -> None:
     """The same migration on the projection a reader's browser fetches.
 
     A day must project to a payload the served contract accepts, and a field the

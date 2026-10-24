@@ -18,7 +18,7 @@ export function documentRoute(inputs: PlanInputs, runtime: PlanRuntime) {
     }
     const request = operation === "fetch" ? FetchRequestSchema.parse(raw) : ParseRequestSchema.parse(raw);
     c.env?.beginPlanning?.();
-    return c.body(await executeDocumentOperation(operation, request, inputs, runtime), 200, {
+    return c.body(await executeDocumentOperation(operation, request, inputs, runtime, c.req.raw.signal), 200, {
       "Content-Type": "application/json",
     });
   });

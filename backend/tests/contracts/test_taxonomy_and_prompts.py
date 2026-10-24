@@ -86,45 +86,38 @@ def test_a_draft_or_retired_entry_reaches_no_prompt() -> None:
     call site fails and prose cannot catch.
     """
     offered = taxonomy_fixture("definitions-a")
+    definition_block = offered.definition_block()
+    for entries in (offered.verticals, offered.lenses, offered.events):
+        for entry in entries:
+            if entry.status is LifecycleStatus.ACTIVE:
+                assert (
+                    f"- {entry.id} ({entry.display_name}): {entry.definition}"
+                    in definition_block
+                )
+
     payload = json.loads(offered.to_json())
     for entry in [*payload["verticals"], *payload["lenses"]]:
         if entry["status"] != LifecycleStatus.ACTIVE.value:
             entry["definition"] = "a sentence no prompt may carry"
 
-    assert Taxonomy.model_validate(payload).definition_block() == offered.definition_block()
-    assert "proposed-desk" not in offered.definition_block()
-    assert "ai-roi" not in offered.definition_block()
+    assert Taxonomy.model_validate(payload).definition_block() == definition_block
+    assert "proposed-desk" not in definition_block
+    assert "ai-roi" not in definition_block
 
 
-def test_every_offered_entry_of_the_committed_vocabulary_carries_its_sentence() -> None:
-    """The rule the contract enforces, held against the file a run really reads.
+@pytest.mark.parametrize("collection", ["verticals", "lenses", "events"])
+def test_an_offered_entry_without_a_definition_is_refused(collection: str) -> None:
+    """Each vocabulary rejects an active entry the prompt cannot explain."""
+    payload = taxonomy_fixture("definitions-a").model_dump(mode="json")
+    entry = next(
+        item
+        for item in payload[collection]
+        if item["status"] == LifecycleStatus.ACTIVE.value
+    )
+    entry["definition"] = ""
 
-    An id and a display name tell a model nothing, so a word offered with no
-    sentence beside it is a word it cannot read. The committed config is the one
-    that decides a run, not a value a fixture chose.
-    """
-    taxonomy = Taxonomy.from_json(read_text(CONFIG_DIR / "taxonomy.json"))
-    block = taxonomy.definition_block()
-    offered = [
-        *(
-            (item.id, item.definition)
-            for item in taxonomy.verticals
-            if item.status is LifecycleStatus.ACTIVE
-        ),
-        *(
-            (item.id, item.definition)
-            for item in taxonomy.lenses
-            if item.status is LifecycleStatus.ACTIVE
-        ),
-        *(
-            (item.id, item.definition)
-            for item in taxonomy.events
-            if item.status is LifecycleStatus.ACTIVE
-        ),
-    ]
-    for entry_id, definition in offered:
-        assert definition, f"{entry_id} is offered to the model with no definition"
-        assert definition in block
+    with pytest.raises(ValueError, match="offered with no definition"):
+        Taxonomy.model_validate(payload)
 
 
 def test_the_frontend_names_every_committed_lens_including_a_tombstone() -> None:

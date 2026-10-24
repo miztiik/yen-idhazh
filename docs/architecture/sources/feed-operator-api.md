@@ -109,6 +109,40 @@ keys or fetch receipts may be reused. Removing it deliberately ends replay
 protection and makes its fetch references unavailable; do not reuse old keys.
 No history walk, empty-day fabrication or receipt restamping occurs.
 
+## Optional task profiles
+
+The separate [whole-task instrument](../../reference/host-metrics.md#whole-task-typescript-samples)
+can profile actual fetch and parse work. The ordinary listener loads
+`config/host-probes.json`; the task instrument, PID RAM and machine RAM switches
+all default off. PID RAM and machine RAM are independent when the instrument
+is enabled. The canonical poll requests one observation each second throughout
+actual work, not a one-second profiling cutoff. Embedded callers
+can pass `PlanRuntime.task_profiling` with validated controls and a report
+callback. An absent callback configuration leaves profiling out. The ordinary
+listener writes enabled profiles as structured stderr records, never into the
+HTTP response, fetched artifact or SQLite record.
+The host probe's HTTP API still exposes only its standalone `GET /sample`
+route under the dated API prefix; task start/stop HTTP controls are follow-up
+work, not part of these embedded wrappers.
+
+Fetch starts measurement only after the active source and operator URL pass
+validation. Parse starts only after its completed fetch, configuration,
+article identity, correlation, body digest, body bounds and source pass their
+checks. Completed replay, key conflicts and these input refusals create no
+actual-work profile. A transport, safety or parser failure after work starts
+can create an error profile. Typed fetch and parse failures still keep their
+existing response behavior.
+
+The profile uses the journal's captured run, correlation and request identity;
+its observation clock is real UTC, not the captured planning clock. A report
+callback receives only the locally validated resource metadata. Profile
+controls stay outside the durable configuration fingerprint, so changing these
+runtime controls does not invalidate a completed response or create a new
+request. No ranking, selection, article text or source-status rule changes.
+Unexpected collection or callback errors fail explicitly and do not commit a
+successful response. As with any interrupted fetch, retry can repeat unfinished
+external work.
+
 ## Design rationale
 
 Separate endpoints let an operator inspect a real fetch before parsing it.
@@ -119,6 +153,10 @@ are added. Opaque response JSON is retained solely for exact HTTP replay,
 not interpreted as new planning authority. A stopped plan is refused because
 the existing native ledger writer and the request journal cannot share one
 transaction; pretending otherwise would duplicate durable work.
+
+A separate collector event loop is necessary because the actual parser can
+block its own thread. Runtime reporting stays outside durable response bytes
+so measurement cannot restamp a completed request or expose private content.
 
 ## See also
 

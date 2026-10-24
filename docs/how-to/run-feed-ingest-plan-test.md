@@ -1,6 +1,6 @@
 # Run the isolated feed planner checks
 
-**Last Updated**: 2026-10-23
+**Last Updated**: 2026-10-24
 
 How do you check the TypeScript planner without changing daily publication?
 Use `.github/workflows/feed-ingest-plan-test.yml`. It starts only by manual
@@ -49,9 +49,10 @@ See [partition evidence](../architecture/sources/feed-partitioning.md).
 
 ## Manual controls
 
-The workflow exposes three text boxes and one strategy dropdown. All four
-values pass through the actual CLI parser and shared request validator;
-they never become shell code.
+The workflow exposes three text boxes, one strategy dropdown and one
+whole-machine RAM checkbox. Planning values pass through the actual CLI parser
+and shared request validator; the checkbox passes through a strict boolean
+parser into the isolated task profiler. None becomes shell code.
 
 ### Table A - Run controls
 
@@ -61,11 +62,13 @@ they never become shell code.
 | A2 | `article_limit` | Optional positive integer; prefilled with 100 articles. Clear it to use configuration. |
 | A3 | `shards` | Optional positive worker count; prefilled with 4 workers. Clear it to use configuration. |
 | A4 | `partition_strategy` | Dropdown with `bin-pack` (default), `round-robin` and `none`. |
+| A5 | `profile_machine_memory` | Boolean checkbox, default false. Collect whole-machine RAM during actual document fetch/parse work. CPU and PID RAM stay enabled for that proof; the separate standalone RAM HTTP sample and copy OFF/ON proof remain independent. |
 
-The repository's `config/feed-ingest-plan.json` owns these defaults. GitHub
-requires literal form defaults, so the existing workflow test checks all four
-against that file and the strategy choices against the request validator.
-Update the form defaults when changing their configured values.
+The repository's `config/feed-ingest-plan.json` owns the first four defaults;
+`config/host-probes.json` owns the machine-RAM default. GitHub requires literal
+form defaults, so the existing workflow test binds them to their configuration
+and the strategy choices to the request validator. Update form defaults when
+changing their configured values.
 
 There is no date or reporting input. One captured UTC clock supplies the run
 date and the runner. For `none`, clear the prefilled `shards` value or set it
@@ -252,6 +255,62 @@ the independent Bun selector. Subprocesses have fixed timeouts and missing Bun
 fails rather than skips. This case is not part of the Python-free isolated
 workflow. [Gate commands](run-the-gates.md) own its installation and test cost.
 
+## Resource proof
+
+The isolated workflow explicitly enables the default-off whole-task CPU and
+PID RAM controls only for its separate fetch/parse listener. Whole-machine task
+RAM follows `profile_machine_memory`, false by default. It does not control PID
+RAM, the standalone RAM HTTP proof or the copy benchmark. The independent worker
+runs from each task's opening through closing observation, requesting one poll
+each second. The rolling CPU window is a separate control, not a one-second
+measurement cutoff. Each document's
+`stage-api-proof.json` entry contains validated profiles for exactly its two
+actual work calls. Their request, run and correlation identities must match.
+Restart replay and conflicts must leave the profile count at two as well as
+preserving the original response bytes and journal digest. No raw article
+body, parser response or journal enters these profiles.
+
+When optional reporting is enabled, completion adds task CPU and RAM to Tables
+H and I in the GitHub step summary and emits concise resource notices. Table J
+shows the separate RAM sample, L3 cache, derived copy buffer size, copy OFF/ON
+rates and host context. CPU is host-wide, not PID-specific. Sampled RSS maxima
+and machine available-memory minima are not exact task peaks. Missing evidence
+is not recorded; disabled machine RAM is labelled disabled, never zero.
+The report refuses malformed or foreign revision/run/attempt/correlation/request
+evidence before writing these measurements. Reporting errors remain in the
+existing optional step and do not become a new planner gate.
+
+A fast live parse may have only a partial CPU window or no elapsed CPU ticks.
+That is recorded, not padded with a wait or reported as a full window.
+The existing offline API case also parses a bounded generated document from
+the named recording, while an independent worker polls through synchronous
+work. Its `recorded_parse_profile` log is recorded-work evidence, not a live
+network measurement. The workflow runs these existing named cases on Linux;
+Windows results do not certify Linux process RAM.
+
+After all document profiles close, the separate resource step starts the real
+RAM sample HTTP listener and calls its sample route over loopback. It requires
+actual CPU and machine total, free and available RAM readings, even when task
+machine RAM is disabled. This is one standalone sample, not a background
+machine-memory poller. It then calls
+the existing host collector with copy unselected and explicitly selected for
+`isolated-copy-proof`. The test records the real hardware context, L3 size if
+available, derived buffer size, repeat count and median read-plus-write rate.
+It allocates two buffers and measures memory-copy throughput, not L3 hit/miss
+counts. Copy work never overlaps fetch/parse CPU measurement.
+
+`resource-proof.json` contains only validated safe metadata in the existing
+temporary evidence root. Completion requires `resource_proof_complete: true`.
+Main CI also runs this same RAM HTTP/copy proof without fetching live feeds
+or publishing data, and retains the `typescript-resource-proof` artifact.
+Its artifact uses the existing ignored
+`test-results/host-probes/resource-proof.json` test-report path; the isolated
+workflow keeps its proof in the temporary evidence root.
+Neither path writes another host ledger or changes shared defaults. See
+[measurement semantics and controls](../reference/host-metrics.md#whole-task-typescript-samples).
+The integrated live-feed and selected-article proof still needs the
+coordinator-owned manual dispatch after review.
+
 ## Inputs and isolated evidence
 
 The initial sparse checkout names configuration, relevant service and package
@@ -327,10 +386,15 @@ When enabled, the separate adapter validates the existing typed event array
 and formats source outcomes, observed stage counts and candidate-decision
 counts. The live response supplies existing source-run counts for offered,
 fresh, harvested, duplicate, screened eligible, normalized and selected entries,
-with the resolved requested limit. Feed failures are separate. Per-reason
-counts name their denominators; feed decisions use every configured source,
-including inactive sources that were not fetched. Fetch failures separately
-use attempted feeds. Unknown feed entry counts remain unknown.
+with the resolved requested limit. Table D groups refusals by subject and stage,
+with feed groups before article groups and stages in their declared order.
+Rows within each group share one denominator and sort by count, largest first;
+equal counts use alphabetical reason order. The subject, stage, reason and
+denominator are explicit; feed and article counts are never ranked together.
+Feed decisions use every configured source, including inactive sources that
+were not fetched. Article refusals use observed parsed entries, not an inferred
+stage-input count. Fetch failures in the yield table separately use attempted
+feeds. Unknown feed entry counts remain unknown.
 Recorded progress supplies completed operation outcomes and paired elapsed
 intervals for history, planning, audit and HTTP. Event gaps are not summed as
 operation time. Shared `HarvestDiagnosticsSchema` validates the actual operation

@@ -1,8 +1,9 @@
 /** Does optional reporting preserve evidence and refuse unsafe or unsupported claims? */
 import { test, expect } from "bun:test";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   FEED_INGEST_EVENT_VERSION, EXTRACTION_QUALITY_VERSION, readFeedIngestEvent,
 } from "../../../packages/common-contracts/src/index";
@@ -95,7 +96,9 @@ test("disabled reporting performs no writes or annotations and does not require 
   try {
     const summaryPath = join(root, "summary.md");
     const lines: string[] = [];
-    await writePlannerReport({ enabled: false, events: undefined, summaryPath, annotate: line => lines.push(line) });
+    await writePlannerReport({ enabled: false, events: undefined, summaryPath, annotate: line => lines.push(line),
+      get resourceReport(): never { throw new Error("Disabled reporting must not inspect resource evidence"); },
+    });
     expect(lines).toEqual([]);
     await expect(stat(summaryPath)).rejects.toMatchObject({ code: "ENOENT" });
     const events = await fixture();
@@ -103,6 +106,17 @@ test("disabled reporting performs no writes or annotations and does not require 
     expect(await readFile(summaryPath, "utf8")).toBe(formatPlannerReport(events).summary);
     expect(lines).toEqual([...formatPlannerReport(events).annotations]);
     await expect(writePlannerReport({ enabled: true, events, annotate: () => {} })).rejects.toThrow("GITHUB_STEP_SUMMARY");
+    const config = await Bun.file(new URL("../../../config/feed-ingest-plan.json", import.meta.url)).json();
+    const configPath = join(root, "reporting-disabled.json");
+    const disabledSummary = join(root, "disabled-summary.md");
+    await writeFile(configPath, JSON.stringify({ ...config, workflow_reporting: { ...config.workflow_reporting, enabled: false } }));
+    const child = Bun.spawn([process.execPath, fileURLToPath(new URL("../feed-ingest-plan-report.ts", import.meta.url)), configPath], {
+      stdout: "pipe", stderr: "pipe",
+      env: { ...Bun.env, GITHUB_STEP_SUMMARY: disabledSummary, PROFILE_MACHINE_MEMORY: "invalid unused input" },
+    });
+    const [output, errors] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()]);
+    expect({ exit: await child.exited, output, errors }).toEqual({ exit: 0, output: "", errors: "" });
+    await expect(stat(disabledSummary)).rejects.toMatchObject({ code: "ENOENT" });
   } finally {
     await rm(root, { recursive: true, force: true });
   }

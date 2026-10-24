@@ -7,9 +7,11 @@ from pathlib import Path
 
 import pytest
 from conftest import CONFIG_DIR
+from council._config import copy_config
 
 from idhazh import cli, config
 from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.knobs.gardener import GardenerConfig
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.telemetry.host_control import memory_override
 from utilities.memory_profiling_control import resolve, write_override
@@ -32,8 +34,18 @@ def test_config_default_and_cli_override_resolve_once() -> None:
 def test_workflow_environment_resolves_memory_for_every_settings_loader(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, choice: str
 ) -> None:
-    root = tmp_path / "config"
-    shutil.copytree(CONFIG_DIR, root)
+    root = copy_config(tmp_path)
+    gardener_path = root / "idhazh_gardener.json"
+    shutil.copyfile(CONFIG_DIR / gardener_path.name, gardener_path)
+    gardener = GardenerConfig.model_validate_json(gardener_path.read_text(encoding="utf-8"))
+    declarations = root / "gardener"
+    declarations.mkdir()
+    for name in gardener.task_names:
+        declaration = f"{name}.json"
+        shutil.copyfile(
+            CONFIG_DIR / "gardener" / declaration,
+            declarations / declaration,
+        )
     path = root / "idhazh.json"
     app = AppConfig.from_json(path.read_text(encoding="utf-8"))
     app.observability.memory_profiling_enabled = False
