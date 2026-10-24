@@ -10,7 +10,7 @@ import sys
 from typing import cast
 
 import pytest
-from conftest import CONFIG_DIR, REPO_ROOT, read_text
+from support.paths import CONFIG_DIR, REPO_ROOT, read_text
 
 from ._harness import (
     COMMIT_PROGRAM,

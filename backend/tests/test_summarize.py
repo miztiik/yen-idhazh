@@ -27,19 +27,11 @@ from string import Template
 from typing import Any, Final
 
 import pytest
-from conftest import (
-    CONFIG_DIR,
-    CONTRACT_FIXTURES_DIR,
-    FIXTURES_DIR,
-    REPO_ROOT,
-    RecordedEndpoint,
-    a_sampling,
-    a_server,
-    committed_markers,
-    llama_server_flags,
-    read_text,
-)
+from contracts._model_cases import MODEL_FILES
 from pydantic import ValidationError
+from support.models import a_sampling, a_server, committed_markers, llama_server_flags
+from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
+from support.server import RecordedEndpoint
 
 from idhazh import config, extract
 from idhazh.classify import calls
@@ -85,6 +77,7 @@ from idhazh.llm.server import (
     request_payload,
     server_argv,
     thinking_span,
+    window,
 )
 from idhazh.sanitize import (
     FENCE_CLOSE,
@@ -236,17 +229,17 @@ def test_the_prompt_tells_the_model_the_block_is_data() -> None:
 
 
 def test_decoding_parameters_come_from_config_and_nowhere_else() -> None:
+    sampling = a_sampling()
     payload = request_payload(
         model_id="m",
         system="s",
         user="u",
         output_schema={},
-        sampling=a_sampling(),
+        sampling=sampling,
         markers=built_envelope(),
     )
-    assert payload["temperature"] == 0.0
-    assert payload["top_p"] == 1.0
-    assert payload["seed"] == 0
+    for key, value in sampling.items():
+        assert payload[key] == value
     assert payload["stream"] is False
 
 
@@ -463,11 +456,12 @@ def test_the_server_is_started_from_config_not_by_hand() -> None:
 
     binary = Path("bin/llama-server")
     weights = Path("models/w.gguf")
+    flags = a_server(**{"--metrics": None})
     argv = server_argv(
         binary=binary,
         weights=weights,
         model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
-        server=a_server(**{"--metrics": None}),
+        server=flags,
         port=8181,
     )
     assert argv == [
@@ -479,15 +473,11 @@ def test_the_server_is_started_from_config_not_by_hand() -> None:
         "--no-context-shift",
         "--port",
         "8181",
-        "--ctx-size",
-        "8192",
-        "--batch-size",
-        "512",
-        "--ubatch-size",
-        "512",
-        "--threads",
-        "4",
-        "--metrics",
+        *(
+            token
+            for key, value in flags.items()
+            for token in ([key] if value is None else [key, str(value)])
+        ),
     ]
 
 
@@ -1025,7 +1015,7 @@ def test_the_named_builder_and_its_test_spell_server_flags() -> None:
     `workflows/test_model_server_jobs.py::test_every_job_that_starts_a_server_reaches_the_one_argv_builder`.
     """
     written_in_code = ("--alias", "--no-context-shift", "--port")
-    assert set(written_in_code) <= llama_server_flags() | {"--alias", "--port"}
+    assert set(written_in_code) <= llama_server_flags(MODEL_FILES) | {"--alias", "--port"}
 
     sources = (
         REPO_ROOT / "backend" / "idhazh" / "llm" / "server.py",
@@ -1133,23 +1123,22 @@ def test_no_module_that_opens_a_model_branches_on_which_model_it_is() -> None:
 def test_runtime_sweep_flags_are_emitted_only_when_configured() -> None:
     from idhazh.contracts.knobs.models import ModelRef
 
+    flags = {
+        "-np": 1,
+        "-fa": "on",
+        "-lm": "mmap+mlock",
+        "-ctk": "q8_0",
+        "-ctv": "q8_0",
+        "--prio": 2,
+        "--poll": 100,
+        "-tb": 4,
+        "--metrics": None,
+    }
     argv = server_argv(
         binary=Path("bin/llama-server"),
         weights=Path("models/w.gguf"),
         model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
-        server=a_server(
-            **{
-                "-np": 1,
-                "-fa": "on",
-                "-lm": "mmap+mlock",
-                "-ctk": "q8_0",
-                "-ctv": "q8_0",
-                "--prio": 2,
-                "--poll": 100,
-                "-tb": 4,
-                "--metrics": None,
-            }
-        ),
+        server=a_server(**flags),
         port=8181,
     )
 
@@ -1191,7 +1180,7 @@ def test_the_server_is_asked_to_describe_itself_only_when_configured() -> None:
         binary=Path("bin/llama-server"),
         weights=Path("models/w.gguf"),
         model=model,
-        server=a_server(),
+        server={key: value for key, value in a_server().items() if key != "-lv"},
         port=8181,
     )
     assert "-lv" not in quiet
@@ -2907,8 +2896,9 @@ def test_an_article_inside_the_context_budget_fits() -> None:
 
 def test_an_article_that_would_be_cut_off_mid_reply_does_not_fit() -> None:
     """Prompt plus reply must fit, or the reply ends mid-sentence and looks fine."""
-    oversized = article().model_copy(update={"token_count": 8000})
-    assert not fits_context(oversized, a_server())
+    server = a_server()
+    oversized = article().model_copy(update={"token_count": window(server)})
+    assert not fits_context(oversized, server)
 
 
 def test_the_biggest_article_the_extractor_hands_over_still_fits() -> None:

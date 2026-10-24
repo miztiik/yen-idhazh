@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR
+from support.paths import CONFIG_DIR
 
 from idhazh import config
 from idhazh.content_similarity_judge import settings as judge_settings

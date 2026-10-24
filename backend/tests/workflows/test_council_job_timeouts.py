@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, REPO_ROOT
+from support.paths import CONFIG_DIR, REPO_ROOT
 
 from utilities import shard_bound
 

@@ -8,8 +8,9 @@ from pathlib import Path
 from types import FrameType
 
 import pytest
-from conftest import CONFIG_DIR, SEED_COMMIT
 from pydantic import ValidationError
+from support.ledger import SEED_COMMIT
+from support.paths import CONFIG_DIR
 
 from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob

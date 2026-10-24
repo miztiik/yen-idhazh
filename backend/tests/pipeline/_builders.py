@@ -11,15 +11,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Final
 
-from conftest import (
-    CONFIG_DIR,
-    CONTRACT_FIXTURES_DIR,
-    FIXTURES_DIR,
-    RecordedEndpoint,
-    _rendered_by_the_template,
-    read_text,
-)
 from pytest import MonkeyPatch
+from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
+from support.server import RecordedEndpoint, render_template_response
 
 from idhazh import assemble, config
 from idhazh.contracts.article import Article
@@ -138,7 +132,7 @@ class SilentCompletionEndpoint:
                 raw = self.rfile.read(int(self.headers.get("Content-Length") or 0))
                 payload = json.loads(raw)
                 if self.path.endswith("/apply-template"):
-                    self._answer(_rendered_by_the_template(payload))
+                    self._answer(render_template_response(payload))
                     return
                 asked.append(payload)
                 if holds:

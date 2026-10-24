@@ -10,7 +10,7 @@ from datetime import date
 from pathlib import Path
 from typing import Final
 
-from conftest import seed_host_fingerprint, seed_item_health
+from support.ledger import seed_host_fingerprint, seed_item_health
 
 from idhazh import ledger
 from idhazh.contracts.host_fingerprint import HostFingerprintRow

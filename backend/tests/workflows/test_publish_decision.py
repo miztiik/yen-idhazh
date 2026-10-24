@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import FIXTURES_DIR, read_text
+from support.paths import FIXTURES_DIR, read_text
 
 from ._harness import PUBLISH_DECISION_MODULE, _load_workflows, _mapping, _step
 

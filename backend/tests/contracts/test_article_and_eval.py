@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, read_text
+from support.paths import CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh.contracts import derive_url_key
 from idhazh.contracts.article import Article

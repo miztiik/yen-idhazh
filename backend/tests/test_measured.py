@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
-from conftest import CONFIG_DIR, REPO_ROOT, read_text
+from support.paths import CONFIG_DIR, REPO_ROOT, read_text
 
 from idhazh import config
 from idhazh.measured import (

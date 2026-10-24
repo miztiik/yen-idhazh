@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from conftest import REPO_ROOT, read_text
+from support.paths import REPO_ROOT, read_text
 
 from idhazh.contracts.run_manifest import RunManifest
 

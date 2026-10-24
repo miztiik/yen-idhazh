@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Final
 
-from conftest import FIXTURES_DIR
+from support.paths import FIXTURES_DIR
 
 #: The two shapes that carry a read-side migration for the retired key, the key
 #: each one pops, and the misspelling that must still be refused. `RunRecord`

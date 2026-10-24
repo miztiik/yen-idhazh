@@ -13,16 +13,9 @@ from collections import Counter
 from pathlib import Path
 
 import pytest
-from conftest import (
-    CONFIG_DIR,
-    CONTRACT_FIXTURES_DIR,
-    REFILL_BODY,
-    REFILL_PUBLISHED,
-    committed_markers,
-    read_text,
-    refetched,
-    refill_recorded,
-)
+from support.models import committed_markers
+from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
+from support.refill import refetched, refill_body, refill_published, refill_recorded
 
 from idhazh import config, corpus, summarize
 from idhazh.contracts.app_config import AppConfig
@@ -335,17 +328,17 @@ def test_a_refetched_body_earns_its_own_band_rather_than_the_recorded_one(
     body that came back. A long page and a short one therefore get different
     system turns from the same ledger row, which is what this asserts.
     """
-    long_article, long_text = refetched(REFILL_BODY, app)
+    long_article, long_text = refetched(refill_body(), app)
     short_article, short_text = refetched(
-        " ".join(REFILL_BODY.split()[:40]), app, form=SourceForm.ABSTRACT
+        " ".join(refill_body().split()[:40]), app, form=SourceForm.ABSTRACT
     )
-    recorded = refill_recorded(long_article, REFILL_PUBLISHED)
+    recorded = refill_recorded(long_article, refill_published())
 
     long_row = corpus.rescored(
-        long_article, long_text, recorded=recorded, published=REFILL_PUBLISHED
+        long_article, long_text, recorded=recorded, published=refill_published()
     )
     short_row = corpus.rescored(
-        short_article, short_text, recorded=recorded, published=REFILL_PUBLISHED
+        short_article, short_text, recorded=recorded, published=refill_published()
     )
 
     assert short_article.brief and not long_article.brief
@@ -364,11 +357,11 @@ def test_a_refetched_body_earns_its_own_band_rather_than_the_recorded_one(
 
 def test_a_refilled_row_carries_the_published_words_as_its_target(app: AppConfig) -> None:
     """The assistant turn is what the digest published, through the decoder's rail."""
-    article, full_text = refetched(REFILL_BODY, app)
-    recorded = refill_recorded(article, REFILL_PUBLISHED)
+    article, full_text = refetched(refill_body(), app)
+    recorded = refill_recorded(article, refill_published())
 
     rows = corpus.harvest_rows(
-        [corpus.rescored(article, full_text, recorded=recorded, published=REFILL_PUBLISHED)],
+        [corpus.rescored(article, full_text, recorded=recorded, published=refill_published())],
         date=DATE,
         prompt_config=app.summarize,
         evaluation=app.evaluation,
@@ -376,8 +369,8 @@ def test_a_refilled_row_carries_the_published_words_as_its_target(app: AppConfig
 
     assert len(rows) == 1
     target = json.loads(rows[0].messages[2].content)
-    assert target["title"] == REFILL_PUBLISHED.title
-    assert target["summary"] == REFILL_PUBLISHED.summary
+    assert target["title"] == refill_published().title
+    assert target["summary"] == refill_published().summary
     assert rows[0].messages[1].content == summarize.user_turn(article)
 
 
@@ -388,10 +381,10 @@ def test_a_refilled_row_is_the_same_bytes_as_a_harvested_row(app: AppConfig) -> 
     not - a title into the summary slot - which no metric would catch and which
     would teach the model the wrong shape.
     """
-    article, full_text = refetched(REFILL_BODY, app)
-    recorded = refill_recorded(article, REFILL_PUBLISHED)
+    article, full_text = refetched(refill_body(), app)
+    recorded = refill_recorded(article, refill_published())
     rebuilt = corpus.rescored(
-        article, full_text, recorded=recorded, published=REFILL_PUBLISHED
+        article, full_text, recorded=recorded, published=refill_published()
     )
     live = corpus.Scored(
         article=article,
@@ -399,8 +392,8 @@ def test_a_refilled_row_is_the_same_bytes_as_a_harvested_row(app: AppConfig) -> 
             version=Summary.schema_version(),
             item_id=recorded.item_id,
             url_key=recorded.url_key,
-            title=REFILL_PUBLISHED.title,
-            summary=REFILL_PUBLISHED.summary,
+            title=refill_published().title,
+            summary=refill_published().summary,
             output_digest=recorded.output_digest,
             model_id=recorded.model_id,
             attempt=recorded.summary_attempt,
@@ -441,11 +434,11 @@ def test_the_counterweights_are_measured_against_the_body_that_came_back(
         "the tracks, and 60 trees are to be planted where the depot once stood."
     )
     article, full_text = refetched(unrelated, app)
-    recorded = refill_recorded(article, REFILL_PUBLISHED)
+    recorded = refill_recorded(article, refill_published())
     assert corpus.keeps_its_counterweights(recorded, evaluation=app.evaluation)
 
     rebuilt = corpus.rescored(
-        article, full_text, recorded=recorded, published=REFILL_PUBLISHED
+        article, full_text, recorded=recorded, published=refill_published()
     )
 
     assert rebuilt.row is not None
@@ -461,11 +454,11 @@ def test_a_determinism_violation_is_carried_across_the_rebuild(app: AppConfig) -
 
     Recomputing it as False would silently un-fail an item the run had caught.
     """
-    article, full_text = refetched(REFILL_BODY, app)
-    recorded = refill_recorded(article, REFILL_PUBLISHED, determinism_violation=True)
+    article, full_text = refetched(refill_body(), app)
+    recorded = refill_recorded(article, refill_published(), determinism_violation=True)
 
     rebuilt = corpus.rescored(
-        article, full_text, recorded=recorded, published=REFILL_PUBLISHED
+        article, full_text, recorded=recorded, published=refill_published()
     )
 
     assert rebuilt.row is not None
@@ -476,10 +469,10 @@ def test_a_determinism_violation_is_carried_across_the_rebuild(app: AppConfig) -
 
 
 def test_the_join_accepts_the_output_the_row_actually_scored(app: AppConfig) -> None:
-    article, _ = refetched(REFILL_BODY, app)
-    recorded = refill_recorded(article, REFILL_PUBLISHED)
+    article, _ = refetched(refill_body(), app)
+    recorded = refill_recorded(article, refill_published())
 
-    assert corpus.published_is_the_scored_one(REFILL_PUBLISHED, recorded=recorded)
+    assert corpus.published_is_the_scored_one(refill_published(), recorded=recorded)
 
 
 def test_the_join_refuses_a_summary_a_later_run_rewrote(app: AppConfig) -> None:
@@ -488,9 +481,9 @@ def test_the_join_refuses_a_summary_a_later_run_rewrote(app: AppConfig) -> None:
     Without this check a re-run's wording would be paired with the earlier run's
     measurements, and the corpus would teach a summary nobody published.
     """
-    article, _ = refetched(REFILL_BODY, app)
-    recorded = refill_recorded(article, REFILL_PUBLISHED)
-    rewritten = REFILL_PUBLISHED._replace(summary=REFILL_PUBLISHED.summary + " It was updated.")
+    article, _ = refetched(refill_body(), app)
+    recorded = refill_recorded(article, refill_published())
+    rewritten = refill_published()._replace(summary=refill_published().summary + " It was updated.")
 
     assert not corpus.published_is_the_scored_one(rewritten, recorded=recorded)
 
@@ -507,19 +500,19 @@ def test_the_join_stops_matching_a_row_scored_before_key_points_left(app: AppCon
     that produced it is gone. That is the point of the test - it is the only
     place left in the tree that can still say what the digest used to be.
     """
-    article, _ = refetched(REFILL_BODY, app)
+    article, _ = refetched(refill_body(), app)
     era = {
         "key_points": ["Reserve margin stays near 12 percent into February"],
-        "summary": REFILL_PUBLISHED.summary,
-        "title": REFILL_PUBLISHED.title,
+        "summary": refill_published().summary,
+        "title": refill_published().title,
     }
     before = hashlib.sha256(canonical_json(era).encode("utf-8")).hexdigest()
-    recorded = refill_recorded(article, REFILL_PUBLISHED).model_copy(
+    recorded = refill_recorded(article, refill_published()).model_copy(
         update={"output_digest": before}
     )
 
-    assert not corpus.published_is_the_scored_one(REFILL_PUBLISHED, recorded=recorded)
-    assert derive_output_digest(REFILL_PUBLISHED.summary, title=REFILL_PUBLISHED.title) != before
+    assert not corpus.published_is_the_scored_one(refill_published(), recorded=recorded)
+    assert derive_output_digest(refill_published().summary, title=refill_published().title) != before
 
 
 def test_the_digest_is_taken_over_the_summary_and_the_title_and_nothing_else() -> None:

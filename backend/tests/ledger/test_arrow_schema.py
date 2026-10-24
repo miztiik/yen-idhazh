@@ -14,8 +14,8 @@ from typing import Annotated, Any, ClassVar, Literal, cast
 from uuid import UUID
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, read_text
 from pydantic import Field
+from support.paths import CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh.contracts.base import (
     ChangelogEntry,

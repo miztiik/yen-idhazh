@@ -16,7 +16,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from conftest import read_text
+from support.paths import read_text
 
 from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.council import night_plan, registry

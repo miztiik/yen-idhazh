@@ -23,7 +23,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from conftest import seed_item_health, seed_scores
+from support.ledger import seed_item_health, seed_scores
 
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.day_metrics import DayInstrument, DayMetrics, DayStageTiming

@@ -17,8 +17,8 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import writer_identity
 from pytest import MonkeyPatch
+from support.ledger import writer_identity
 
 from idhazh import cli, ledger
 from idhazh.contracts.ledger_name import LedgerName

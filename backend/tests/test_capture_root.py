@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from conftest import CONTRACT_FIXTURES_DIR, read_text
+from support.paths import CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh.contracts.article import Article
 from idhazh.contracts.call_cost import CallKind

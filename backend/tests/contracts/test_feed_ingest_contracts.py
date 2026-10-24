@@ -10,8 +10,8 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 from pydantic import ValidationError
+from support.paths import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 
 pytestmark = pytest.mark.contract
 

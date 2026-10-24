@@ -6,8 +6,8 @@ import json
 import re
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 from pydantic import ValidationError
+from support.paths import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 
 from idhazh.contracts.console_band import (
     BandCheckerMoved,

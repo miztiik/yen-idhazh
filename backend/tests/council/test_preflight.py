@@ -11,7 +11,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from conftest import REPO_ROOT
+from support.paths import REPO_ROOT
 
 from idhazh import config
 from idhazh.contracts.council_events import CouncilProgram, Diagnostic

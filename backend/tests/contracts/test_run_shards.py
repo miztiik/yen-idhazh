@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import cast
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR
+from support.paths import CONTRACT_FIXTURES_DIR
 
 from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob

@@ -10,7 +10,8 @@ import time
 from pathlib import Path
 
 import pytest
-from conftest import REPO_ROOT, SEED_COMMIT, read_text
+from support.ledger import SEED_COMMIT
+from support.paths import REPO_ROOT, read_text
 
 from idhazh import cli, config, ledger
 from idhazh.contracts.app_config import AppConfig

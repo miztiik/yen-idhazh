@@ -19,8 +19,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 from pydantic import ValidationError
+from support.paths import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import derive_text_digest

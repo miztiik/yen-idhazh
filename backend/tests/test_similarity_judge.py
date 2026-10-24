@@ -26,14 +26,9 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from conftest import (
-    CONFIG_DIR,
-    CONTRACT_FIXTURES_DIR,
-    FIXTURES_DIR,
-    _rendered_by_the_template,
-    committed_markers,
-    read_text,
-)
+from support.models import committed_markers
+from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
+from support.server import render_template_response
 
 from idhazh import assemble, atomic_write, config
 from idhazh.contracts.base import derive_text_digest, derive_url_key
@@ -107,7 +102,7 @@ class JudgeServer:
                     # The route a judging shard reads its turn markers off before
                     # its first pair. It draws on no recorded reply: those are
                     # verdicts, and a template render is not one.
-                    self._answer(_rendered_by_the_template(asked))
+                    self._answer(render_template_response(asked))
                     return
                 with arrival:
                     sent.append({"path": self.path, **asked})

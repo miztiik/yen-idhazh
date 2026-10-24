@@ -28,7 +28,8 @@ from string import Template
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, a_sampling, a_server
+from support.models import a_sampling, a_server
+from support.paths import CONFIG_DIR
 
 from idhazh import config
 from idhazh.classify import calls
@@ -245,14 +246,17 @@ def test_every_ruled_logit_mover_is_still_enumerated_in_the_stamp() -> None:
 def test_a_moved_runtime_flag_moves_the_stamp(flag: str) -> None:
     """The whole point of digesting them: a quantised cache or a second slot can
     rewrite a summary, and the stamp used to hold still while it did."""
-    assert runtime_flags_spelling(a_server(**{flag: "q8_0"})) != runtime_flags_spelling(a_server())
+    pinned = a_server(**{flag: "q8_0"})
+    omitted = {key: value for key, value in pinned.items() if key != flag}
+    assert runtime_flags_spelling(pinned) != runtime_flags_spelling(omitted)
 
 
 def test_a_flag_the_file_leaves_out_spells_apart_from_a_pinned_one() -> None:
     """Absent means the runtime picks, which is a different choice from pinning a
     value - so it gets its own spelling rather than one of the values it may
     resolve to. A bare flag is neither, and spells as set."""
-    spelling = runtime_flags_spelling(a_server())
+    flags = {key: value for key, value in a_server().items() if key not in {"-ctk", "-tb"}}
+    spelling = runtime_flags_spelling(flags)
     assert spelling["-ctk"] == "runtime-default"
     assert spelling["-tb"] == "runtime-default"
     assert runtime_flags_spelling(a_server(**{"--jinja": None}))["--jinja"] == "set"
@@ -302,7 +306,7 @@ def test_a_sampler_the_file_leaves_out_is_absent_rather_than_guessed_at() -> Non
     record a guess as a measurement, and there is no list of every sampler to
     guess from - that list is the thing this row deleted.
     """
-    assert sampling_spelling(a_sampling()) == {
+    assert sampling_spelling({"temperature": 0.0, "top_p": 1.0, "seed": 0}) == {
         "seed": "0",
         "temperature": "0.0000",
         "top_p": "1.0000",

@@ -15,19 +15,11 @@ from string import Template
 from typing import Any
 
 import pytest
-from conftest import (
-    CONFIG_DIR,
-    FIXTURES_DIR,
-    LABEL_REPLIES,
-    REPO_ROOT,
-    SUMMARIZE_AND_PLAN_REPLIES,
-    RecordedEndpoint,
-    a_table,
-    committed_markers,
-    label_payload,
-    read_text,
-)
 from pydantic import BaseModel, ValidationError
+from support.models import committed_markers
+from support.paths import CONFIG_DIR, FIXTURES_DIR, REPO_ROOT, read_text
+from support.prompts import LABEL_REPLIES, SUMMARIZE_AND_PLAN_REPLIES, a_table, label_payload
+from support.server import RecordedEndpoint
 
 from idhazh import config, summarize
 from idhazh.classify.calls import (

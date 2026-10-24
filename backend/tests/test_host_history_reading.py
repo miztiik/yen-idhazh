@@ -3,7 +3,7 @@
 from pathlib import Path
 
 import pytest
-from conftest import writer_identity
+from support.ledger import writer_identity
 from test_ledger import fingerprint_row
 
 from idhazh import ledger

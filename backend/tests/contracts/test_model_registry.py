@@ -8,8 +8,8 @@ import re
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, MODEL_FILES, read_text
 from pydantic import ValidationError
+from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh import config
 from idhazh.config import refuse_a_model_nothing_could_run
@@ -25,6 +25,7 @@ from ._fixtures import (
     entry_with,
     swapped_summarizer,
 )
+from ._model_cases import MODEL_FILES
 
 pytestmark = pytest.mark.contract
 

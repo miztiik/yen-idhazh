@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 from pydantic import ValidationError
+from support.paths import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 
 from idhazh.contracts.base import ITEM_ID_PATTERN
 from idhazh.contracts.digest_day import DigestDay, DigestItem

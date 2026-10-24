@@ -13,16 +13,10 @@ import json
 from typing import Any
 
 import pytest
-from conftest import (
-    CONFIG_DIR,
-    CONTRACT_FIXTURES_DIR,
-    FIXTURES_DIR,
-    SUMMARIZE_AND_PLAN_REPLIES,
-    committed_markers,
-    label_payload,
-    read_text,
-)
 from pydantic import ValidationError
+from support.models import committed_markers
+from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
+from support.prompts import SUMMARIZE_AND_PLAN_REPLIES, label_payload
 
 from idhazh import config
 from idhazh.classify.calls import (

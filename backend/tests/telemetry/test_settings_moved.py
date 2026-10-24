@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 
 import pytest
-from conftest import REPO_ROOT
+from support.paths import REPO_ROOT
 
 from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.telemetry.publish.settings_moved import checker_moved, inputs_moved

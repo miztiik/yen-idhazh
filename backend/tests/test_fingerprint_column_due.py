@@ -21,7 +21,8 @@ import json
 from pathlib import Path
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, read_text, seed_scores, writer_identity
+from support.ledger import seed_scores, writer_identity
+from support.paths import CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh import ledger
 from idhazh.contracts.base import derive_url_key

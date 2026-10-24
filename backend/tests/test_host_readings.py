@@ -25,8 +25,8 @@ from types import FrameType
 from typing import IO
 
 import pytest
-from conftest import FIXTURES_DIR, read_text
 from pytest import MonkeyPatch
+from support.paths import FIXTURES_DIR, read_text
 
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.telemetry import host

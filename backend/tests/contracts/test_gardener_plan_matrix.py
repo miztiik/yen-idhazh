@@ -17,7 +17,7 @@ from typing import Any, Final
 
 import pytest
 import yaml  # type: ignore[import-untyped]
-from conftest import CONFIG_DIR, REPO_ROOT, read_text
+from support.paths import CONFIG_DIR, REPO_ROOT, read_text
 
 from idhazh.contracts.gardener_plan import GardenerPlan, Matrix, MatrixLeg, ShardPlan
 from utilities import gardener_shards

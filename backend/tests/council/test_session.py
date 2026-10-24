@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 from _host_placement import refuse_external_placement
-from conftest import REPO_ROOT, read_text
+from support.paths import REPO_ROOT, read_text
 
 from idhazh import cli, config, ledger
 from idhazh.contracts.council_run_record import CouncilRunRecord, EvaluationStep, ShardOutcome

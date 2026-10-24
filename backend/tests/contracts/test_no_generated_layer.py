@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import REPO_ROOT
+from support.paths import REPO_ROOT
 
 pytestmark = pytest.mark.contract
 

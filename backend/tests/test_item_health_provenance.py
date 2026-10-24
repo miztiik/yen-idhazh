@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import seed_item_health
+from support.ledger import seed_item_health
 
 from idhazh import ledger
 from idhazh.contracts.base import derive_url_key

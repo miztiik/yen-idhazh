@@ -6,8 +6,8 @@ import json
 from typing import Any
 
 import pytest
-from conftest import CONFIG_DIR, FIXTURES_DIR, MODEL_FILES, read_text
 from pydantic import ValidationError
+from support.paths import CONFIG_DIR, FIXTURES_DIR, read_text
 
 from idhazh.contracts.knobs.models import ModelEntry, ModelRef, ModelsConfig
 from idhazh.contracts.run_manifest import ModelRole, ModelUse
@@ -22,6 +22,7 @@ from idhazh.llm.server import (
 )
 
 from ._fixtures import committed_models, committed_models_raw
+from ._model_cases import MODEL_FILES
 
 pytestmark = pytest.mark.contract
 

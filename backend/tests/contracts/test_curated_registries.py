@@ -10,7 +10,7 @@ import json
 from copy import deepcopy
 
 import pytest
-from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
+from support.paths import CONFIG_DIR, FIXTURES_DIR, read_text
 
 from idhazh.contracts.base import Contract
 from idhazh.contracts.sources import Sources

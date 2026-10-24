@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import test_qualify as built
-from conftest import CONTRACT_FIXTURES_DIR, read_text
+from support.models import a_server
+from support.paths import CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh import config
 from idhazh.contracts.article import Article
@@ -57,7 +58,7 @@ def folded(*replies: Completion | None) -> ItemObservation:
         a_summary(),
         replies,
         repeat=1,
-        server=built.SERVER,
+        server=a_server(),
         seconds=1.0,
     )
 

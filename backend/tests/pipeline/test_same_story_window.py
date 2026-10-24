@@ -15,7 +15,7 @@ import json
 from pathlib import Path
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, read_text
+from support.paths import CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, to_base64
 from idhazh.stages import common

@@ -12,7 +12,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, read_text
+from support.paths import CONFIG_DIR, read_text
 
 from idhazh.council import registry
 from idhazh.council.session import VENUE_LEDGERS

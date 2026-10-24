@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from conftest import FIXTURES_DIR
+from support.paths import FIXTURES_DIR
 
 from idhazh import atomic_write, completed_writes
 from idhazh.contracts.publication_receipt import PublicationReceipt

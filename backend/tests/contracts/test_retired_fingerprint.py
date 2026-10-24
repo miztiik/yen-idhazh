@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 
 import pytest
-from conftest import read_text
 from pydantic import ValidationError
+from support.paths import read_text
 
 from idhazh.contracts import CONTRACTS, canonical_json
 

@@ -18,9 +18,9 @@ from typing import Any, Final, cast
 
 import pytest
 import yaml  # type: ignore[import-untyped]
-from conftest import CONFIG_DIR, REPO_ROOT, read_text
 from fixture_git import command as fixture_git_command
 from origin_template import copy_origin, template
+from support.paths import CONFIG_DIR, REPO_ROOT, read_text
 
 from idhazh import ledger, path_classes
 from idhazh.contracts.base import ServerJob

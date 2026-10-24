@@ -5,7 +5,7 @@ from __future__ import annotations
 import ast
 
 import pytest
-from conftest import REPO_ROOT, read_text
+from support.paths import REPO_ROOT, read_text
 
 from idhazh import extract
 from idhazh.contracts.eval_row import EvalRow

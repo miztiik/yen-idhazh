@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from conftest import FIXTURES_DIR, REPO_ROOT
+from support.paths import FIXTURES_DIR, REPO_ROOT
 
 from idhazh import config, ledger
 from idhazh.contracts.digest_day import DigestItem

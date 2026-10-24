@@ -21,9 +21,9 @@ import sys
 from pathlib import Path
 
 import pytest
-from conftest import REPO_ROOT
 from gardener._garden import GARDENER_FIXTURES, a_config
 from pydantic import ValidationError
+from support.paths import REPO_ROOT
 
 from idhazh import config
 from idhazh.contracts.gardener_plan import GardenerPlan, MatrixLeg

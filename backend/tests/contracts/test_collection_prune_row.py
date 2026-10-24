@@ -10,8 +10,8 @@ import json
 from typing import Any
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, read_text
 from pydantic import ValidationError
+from support.paths import CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh.contracts.collection_prune import (
     CollectionPruneRow,

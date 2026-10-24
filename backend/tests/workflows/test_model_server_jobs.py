@@ -11,8 +11,10 @@ from typing import Final
 from urllib.parse import urlsplit
 
 import pytest
-from conftest import CONFIG_DIR, REPO_ROOT, llama_server_flags, read_text
+from contracts._model_cases import MODEL_FILES
 from pytest import MonkeyPatch
+from support.models import llama_server_flags
+from support.paths import CONFIG_DIR, REPO_ROOT, read_text
 
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.base import canonical_json
@@ -139,7 +141,7 @@ def test_every_job_that_starts_a_server_reaches_the_one_argv_builder() -> None:
     # the list itself. Only `run:` scripts are read, because a dispatch-form
     # description that names `-tb` tells an operator what an input tunes and
     # starts nothing.
-    flags = llama_server_flags()
+    flags = llama_server_flags(MODEL_FILES)
     executed: list[tuple[str, str]] = []
     for filename, workflow in sorted(workflows.items()):
         for job_name in _mapping(workflow.get("jobs"), "jobs"):

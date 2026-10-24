@@ -7,8 +7,9 @@ import re
 from pathlib import Path
 from typing import Any, Final
 
-from conftest import CONFIG_DIR, FIXTURES_DIR, committed_markers, read_text
 from pytest import MonkeyPatch
+from support.models import committed_markers
+from support.paths import CONFIG_DIR, FIXTURES_DIR, read_text
 
 from idhazh import config, summarize
 from idhazh.classify import calls, dag

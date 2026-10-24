@@ -29,8 +29,9 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text, seed_scores
 from pydantic import ValidationError
+from support.ledger import seed_scores
+from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 
 from idhazh import config
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow

@@ -30,9 +30,9 @@ from typing import Any, Final
 from uuid import uuid4
 
 import pytest
-from conftest import CONFIG_DIR, FIXTURES_DIR, REPO_ROOT
 from fixture_git import command as fixture_git_command
 from origin_template import copy_origin, template
+from support.paths import CONFIG_DIR, FIXTURES_DIR, REPO_ROOT
 
 from idhazh.gardener.registry import TaskModule
 

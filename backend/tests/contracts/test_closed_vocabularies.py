@@ -6,8 +6,8 @@ import json
 from typing import Any
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, read_text
 from pydantic import ValidationError
+from support.paths import CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh.contracts.item_health import ItemHealthRow, TimeSource
 from idhazh.contracts.run_plan import PlannedItem
