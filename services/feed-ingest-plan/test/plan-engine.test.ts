@@ -21,6 +21,7 @@ import { endpointKey, readFeedHistory } from "../src/read-ledger-history/read-fe
 import { loadHarvestInputs, sourceSnapshot } from "../src/harvest-feeds/load-harvest-inputs";
 import { readDailyPublication, DailyPublicationSchema, DailyPublicationContract } from "../src/read-ledger-history/read-daily-publication";
 import { ItemHealthFailureProjectionContract } from "../src/read-ledger-history/item-health-failure";
+import { recordPlanningMetrics } from "../src/metrics/metrics-recorder";
 
 async function seenWindow(recorded: Awaited<ReturnType<typeof recordedPlan>>, knownUrl: string) {
   recorded.inputs.clock_config.collect.seen_window_days = 2;
@@ -154,6 +155,68 @@ test("real composition shares one clock and override and reads native dispatches
     const historyFixture = FeedHealthContract.schema.parse(await Bun.file(new URL(
       "../../../tests/fixtures/feed-ingest-plan/feed-health-row.json", import.meta.url,
     )).json());
+    const reliability = await recordedPlan([source({ id: "alpha" }), source({ id: "gamma" })]);
+    try {
+      const day = "2026-10-20";
+      const files = [];
+      for (let index = 0; index < 4; index++) {
+        const run = `${day}-${index + 1}`;
+        const written = await persistLedger({
+          ledger: "feed-health", registryEntry: reliability.inputs.registrations.feed_health,
+          outputRoot: reliability.inputs.outputRoot, ledgerSettings: reliability.inputs.ledgerSettings,
+          writerContext: {
+            run_id: run, attempt: 1, job: "plan", shard: 0,
+            pipeline_name: null, task_name: null, producer: "tests.reliability-history", git_sha: "a".repeat(40),
+          },
+          period: { tier: "raw", covers: day }, rowContract: FeedHealthContract,
+          rows: ["alpha", "gamma"].map(id => FeedHealthContract.schema.parse({
+            ...historyFixture, date: day, run_id: run, feed_id: id, checked_at: `${day}T12:00:0${index}Z`,
+            outcome: id === "gamma" && index === 0 ? "transient" : "ok",
+            status: id === "gamma" && index === 0 ? 503 : 200,
+            items: id === "alpha" || index === 3 ? 1 : 0,
+            endpoint_key: endpointKey(reliability.inputs.harvest.sources.find(source => source.id === id)!.url),
+          })),
+        });
+        files.push(...written.files);
+      }
+      reliability.inputs.settings.inputs.feed_health_days = [{
+        day, raw_files: files.map(file =>
+          relative(reliability.directory, join(reliability.inputs.outputRoot, file.path)).replaceAll("\\", "/")),
+      }];
+      reliability.inputs.harvest.config.curate.source_reliability_penalty_enabled = false;
+      const disabled = await runFeedPlan({ article_limit: 1, partition_strategy: "none" }, reliability.inputs, reliability.runtime);
+      reliability.inputs.harvest.config.curate.source_reliability_penalty_enabled = true;
+      const enabled = await runFeedPlan({ article_limit: 1, partition_strategy: "none" }, reliability.inputs, reliability.runtime);
+      expect(disabled.evidence.curation.rows[0]!.candidate_id).toBe(deriveCandidateId(enabled.context.run_id, "gamma", 2));
+      expect(enabled.evidence.curation.rows[0]!.candidate_id).toBe(deriveCandidateId(enabled.context.run_id, "alpha", 2));
+      expect(enabled.evidence.curation.quality.map(row => row.components))
+        .toEqual(disabled.evidence.curation.quality.map(row => row.components));
+      expect(enabled.evidence.feed_history.history.reliability.availability).toBe("unavailable");
+      expect(enabled.evidence.feed_history.sources.get("gamma")!.reliability).toMatchObject({
+        success_fraction: 2 / 5, productive: 2, attempted: 5,
+        production_factor: reliability.inputs.clock_config.collect.reliability_floor,
+      });
+      for (const article of enabled.evidence.curation.input) {
+        expect(article.evidence.operational).toEqual({
+          success_fraction: article.candidate.source_id === "gamma" ? 2 / 5 : 1,
+          attempted: 5, window_days: reliability.inputs.clock_config.collect.reliability_window_days,
+        });
+      }
+      expect(enabled.evidence.curation.carriers.groups.every(group => group.representative.candidate.source_id === "alpha")).toBe(true);
+      const audit = await recordPlanningMetrics(enabled, reliability.inputs);
+      expect(audit.planning_completion.status).toBe("complete");
+      expect(audit.source_records.find(row => row.source_id === "gamma")).toMatchObject({
+        history_success_fraction: 2 / 5, history_success_attempts: 5,
+        history_window_days: reliability.inputs.clock_config.collect.reliability_window_days,
+      });
+      const dispatch = await readLedgerParquet(join(reliability.inputs.outputRoot, enabled.files.dispatches.files[0]!.path),
+        "dispatches", DispatchContract);
+      expect(dispatch.rows[0]!.row.selection.ratings).toEqual(enabled.evidence.curation.rows[0]!.ratings);
+      expect(dispatch.rows[0]!.row.selection.ratings.source_reliability).toMatchObject({
+        enabled: true, history: { success_fraction: 1, attempted: 5 },
+        production_factor: 1, value: 0,
+      });
+    } finally { await reliability.close(); }
     const parity = await recordedPlan([
       source({ id: "sleeping" }), source({ id: "gone", url: "https://news.example/gone.xml" }),
       source({ id: "configured-retired", url: "https://news.example/retired.xml", status: "retired", retired_on: "2026-10-20" }),

@@ -34,7 +34,7 @@ export function resolvePolicy(
     ...patch?.triage,
     ...(run.freshness_hours === undefined ? {} : { max_age_hours: run.freshness_hours }),
   });
-  const { article_limit, soft_caps, exploration_slot_share, ...globalCurate } = loaded.config.curate;
+  const { article_limit, source_reliability_penalty_enabled, soft_caps, exploration_slot_share, ...globalCurate } = loaded.config.curate;
   return EffectiveFeedPolicySchema.parse({
     triage,
     curate: {

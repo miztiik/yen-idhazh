@@ -118,6 +118,29 @@ test("real harvest through partition seals representable raw source completion o
     expect(sources.rows.map(row => row.row)).toEqual(audit.source_records);
     expect(audit.source_records.every(row => row.observation_phase === "plan_complete" && row.published_count === null && row.lead_count === null)).toBe(true);
     expect(result.events.some(event => JSON.stringify(event).includes("plan_complete"))).toBe(false);
+    for (const row of batch.assessments) {
+      if (row.score_evidence === null) continue;
+      expect(row.score_evidence.source_reliability).toMatchObject({
+        enabled: true, history: { success_fraction: 1, attempted: 1 },
+        reliability_floor: recorded.inputs.clock_config.collect.reliability_floor,
+        production_factor: 1, value: 0,
+      });
+    }
+    const controls = structuredClone(result);
+    controls.evidence.curation.reliability_controls.enabled = false;
+    expect(() => preparePlanningMetrics(controls, recorded.inputs)).toThrow("curation.reliability_controls");
+    const configuration = structuredClone(recorded.inputs);
+    configuration.clock_config.collect.reliability_window_days++;
+    expect(() => preparePlanningMetrics(result, configuration)).toThrow("window_days");
+    const history = structuredClone(result);
+    const article = history.evidence.curation.input[0]!;
+    history.evidence.curation.input[0] = {
+      ...article, evidence: { ...article.evidence, operational: { success_fraction: 0, attempted: 4, window_days: 7 } },
+    };
+    expect(() => preparePlanningMetrics(history, recorded.inputs)).toThrow("operational_history");
+    const scores = structuredClone(result);
+    scores.evidence.curation.rows[0]!.ratings.marginal_score++;
+    expect(() => preparePlanningMetrics(scores, recorded.inputs)).toThrow("curation.replay");
   } finally { await recorded.close(); }
 }, 30000);
 

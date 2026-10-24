@@ -26,8 +26,28 @@ export const PenaltyEvidenceSchema = z.strictObject({
 }).superRefine((value, ctx) => {
   if (value.available !== (value.value !== null)) reject(ctx, "penalty availability must match its value");
 });
+export const OperationalHistorySchema = z.strictObject({
+  success_fraction: NonNegativeSchema.max(1),
+  attempted: PositiveCountSchema, window_days: PositiveCountSchema,
+});
+export const SourceReliabilityPenaltySchema = z.strictObject({
+  enabled: z.boolean(), source_authority_score: NonNegativeSchema,
+  reliability_floor: NonNegativeSchema.max(1), history: OperationalHistorySchema.nullable(),
+  production_factor: NonNegativeSchema.max(1).nullable(), value: NonNegativeSchema.nullable(),
+}).superRefine((value, ctx) => {
+  if (value.history === null) {
+    if (value.production_factor !== null || value.value !== null) reject(ctx, "unavailable reliability carries no factor or measured penalty");
+  } else {
+    const factor = Math.max(value.reliability_floor, value.history.success_fraction);
+    if (value.production_factor !== factor) reject(ctx, "reliability factor must match the measured fraction and floor");
+    if (value.value !== (value.enabled ? value.source_authority_score * (1 - factor) : 0)) {
+      reject(ctx, "reliability penalty must reduce only source authority");
+    }
+  }
+});
 export const ScoreEvidenceSchema = z.strictObject({
   base_article_score: FiniteSchema, marginal_score: FiniteSchema,
+  source_reliability: SourceReliabilityPenaltySchema.nullable().default(null),
   source: PenaltyEvidenceSchema, source_kind: PenaltyEvidenceSchema,
   domain: PenaltyEvidenceSchema, vertical: PenaltyEvidenceSchema,
   desk: PenaltyEvidenceSchema, lens: PenaltyEvidenceSchema,
@@ -39,6 +59,7 @@ export const ScoreEvidenceSchema = z.strictObject({
   replacement_url_key: Sha256Schema.nullable(), exploration_slot: z.boolean(),
   cap_relaxations: z.array(z.enum(["distinct_sources", "source_share"])),
 });
+export const PreviousScoreEvidenceSchema = ScoreEvidenceSchema.omit({ source_reliability: true });
 export const PolicyIdentitySchema = z.strictObject({
   policy_version: NonEmptySchema, config_sha256: Sha256Schema,
   min_words_article: PositiveCountSchema, min_words_abstract: PositiveCountSchema,
@@ -55,4 +76,6 @@ export const PolicyIdentitySchema = z.strictObject({
 export type SourceSnapshot = z.infer<typeof SourceSnapshotSchema>;
 export type ArticleLabels = z.infer<typeof ArticleLabelsSchema>;
 export type ScoreEvidence = z.infer<typeof ScoreEvidenceSchema>;
+export type OperationalHistory = z.infer<typeof OperationalHistorySchema>;
+export type SourceReliabilityPenalty = z.infer<typeof SourceReliabilityPenaltySchema>;
 export type PolicyIdentity = z.infer<typeof PolicyIdentitySchema>;

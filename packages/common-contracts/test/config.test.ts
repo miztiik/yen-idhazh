@@ -23,6 +23,12 @@ if (Bun.argv.includes("--emit-schemas")) {
       max_age_hours: 24, recency_half_life_hours: 18, recency_weight: 0.6,
     });
     expect(config.curate.article_limit).toBe(100);
+    expect(config.curate.source_reliability_penalty_enabled).toBe(true);
+    const { source_reliability_penalty_enabled: _enabled, ...previousCurate } = config.curate;
+    expect(configs.FeedCurateConfigSchema.parse(previousCurate).source_reliability_penalty_enabled).toBe(true);
+    expect(configs.FeedCurateConfigSchema.parse({
+      ...config.curate, source_reliability_penalty_enabled: false,
+    }).source_reliability_penalty_enabled).toBe(false);
     expect(config.curate.mmr_weights.lambda_source_kind).toBe(0.05);
     expect(config.vertical_overrides).toEqual({});
     expect(config.workflow_reporting.enabled).toBe(true);
@@ -41,6 +47,7 @@ if (Bun.argv.includes("--emit-schemas")) {
     { triage: { recency_weight: -1 } },
     { triage: { kind: "research" } },
     { curate: { source_authority_weight: Infinity } },
+    { curate: { source_reliability_penalty_enabled: false } },
     { curate: { base_source_allowance: -1 } },
     { curate: { mmr_weights: { lambda_lens: NaN } } },
     { curate: { soft_caps: { max_source_share: 0.2 } } },
@@ -72,6 +79,8 @@ if (Bun.argv.includes("--emit-schemas")) {
       { harvest: { ...config.harvest, concurrency: "24" } },
       { curate: { ...config.curate, article_limit: 0 } },
       { curate: { ...config.curate, article_limit: 1.5 } },
+      { curate: { ...config.curate, source_reliability_penalty_enabled: "true" } },
+      { curate: { ...config.curate, source_reliability_penalty_enabled: null } },
       { triage: { ...config.triage, min_words_article: true } },
       { triage: { ...config.triage, max_age_hours: Infinity } },
       { desk_overrides: {} },
