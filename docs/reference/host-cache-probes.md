@@ -84,8 +84,12 @@ Linux workflow install only the declared optional tools in
 `config/host-cache-tools.json`. The isolated workflow remains manual and has
 no new input.
 
-`perf` comes from Ubuntu's Linux tools package. `multichase` is Apache-2.0
-software built at the committed upstream revision with GCC, make and Perl.
+`perf` comes from Ubuntu's `linux-perf` package, with the older generic tools
+package as a declared alternative when the separate package is absent.
+Ubuntu's native perf package can link a system Python shared library; this
+adds no Python project package or interpreter invocation, and changes no
+production Python runtime. `multichase` is Apache-2.0 software built at the
+committed upstream revision with GCC, make and Perl.
 The installation records elapsed seconds and the actual perf and multichase
 binary byte counts. It adds no Python package, default npm dependency,
 browser asset or committed binary. Missing or failed installation fails the

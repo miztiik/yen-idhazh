@@ -44,6 +44,15 @@ export const CacheCounterSchema = z.strictObject({
   if (!measured && [value.count, value.time_running_ns, value.time_enabled_ns_estimate, value.running_percent].some(cell => cell !== null)) {
     context.addIssue({ code: "custom", message: "an unavailable event has no measurement values" });
   }
+  if (measured && value.time_running_ns !== null && value.running_percent !== null) {
+    const enabled = value.time_running_ns / (value.running_percent / 100);
+    if (value.time_enabled_ns_estimate !== enabled
+      || value.multiplexing !== (value.running_percent < 100 ? "reported" : "not_reported")) {
+      context.addIssue({ code: "custom", message: "counter scheduling metadata must agree with perf's reported percentage" });
+    }
+  } else if (value.multiplexing !== "unknown") {
+    context.addIssue({ code: "custom", message: "unavailable counters have unknown scheduling" });
+  }
 });
 export type CacheCounter = z.infer<typeof CacheCounterSchema>;
 export const CacheCountersSchema = z.strictObject({
@@ -64,7 +73,9 @@ export const CacheCountersSchema = z.strictObject({
   const measured = value.events.some(event => event.support === "measured");
   if (value.measurement_obtained !== measured || (value.status === "measured") !== measured
     || (value.status === "measured") !== (value.reason === null)
-    || (measured && (!value.interval || !value.host))) {
+    || (measured && (!value.interval || !value.host))
+    || (value.status === "disabled") !== (value.reason === "configured_off")
+    || new Set(value.events.map(event => event.event)).size !== value.events.length) {
     context.addIssue({ code: "custom", message: "cache status must describe actual counter evidence" });
   }
 });
@@ -99,7 +110,9 @@ export const CacheLatencySchema = z.strictObject({
 }).superRefine((value, context) => {
   const measured = value.status === "measured";
   if (measured !== value.measurement_obtained || measured !== (value.reason === null)
-    || measured !== (value.points.length > 0) || (measured && (!value.interval || !value.host))) {
+    || measured !== (value.points.length > 0) || (measured && (!value.interval || !value.host))
+    || (value.status === "disabled") !== (value.reason === "configured_off")
+    || value.points.some((point, index, points) => index > 0 && point.working_set_bytes <= points[index - 1]!.working_set_bytes)) {
     context.addIssue({ code: "custom", message: "latency requires actual finite tool readings" });
   }
 });

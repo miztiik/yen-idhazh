@@ -25,6 +25,7 @@ export const CacheProofSchema = z.strictObject({
   beyond_recorded_llc: z.boolean().nullable(),
   tool_install: z.strictObject({
     source_revision: z.string().regex(/^[a-f0-9]{40}$/),
+    perf_package: z.string().regex(/^[a-z0-9.-]+$/), perf_version: z.string().regex(/^perf version [0-9a-zA-Z.+_-]+$/),
     install_seconds: z.int().nonnegative(), multichase_binary_bytes: z.int().positive(), perf_binary_bytes: z.int().positive(),
   }),
 });

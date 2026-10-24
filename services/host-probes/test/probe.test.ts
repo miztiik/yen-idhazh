@@ -102,6 +102,14 @@ test("missing, malformed, reset and unchanged counters do not invent utilization
   expect(() => parseMultichaseOutput("", {
     working_set_bytes: 4096, stride_bytes: 64, tlb_locality_bytes: 4096, samples: 2,
   })).toThrow();
+  // These are CSV arithmetic inputs, not hardware readings or evidence that a host exposed a PMU.
+  const format = parsePerfCounters("7;;LLC-loads:u;500;50.00;;\n0;;LLC-load-misses:u;500;50.00;;", ["LLC-loads:u", "LLC-load-misses:u"]);
+  expect(format.map(event => event.count)).toEqual([7, 0]);
+  expect(format.every(event => event.time_enabled_ns_estimate === 1000 && event.multiplexing === "reported")).toBe(true);
+  const unsupported = parsePerfCounters("<not supported>;;LLC-loads:u;0;100.00;;\n<not counted>;;LLC-load-misses:u;0;100.00;;",
+    ["LLC-loads:u", "LLC-load-misses:u"]);
+  expect(unsupported.map(event => event.support)).toEqual(["unsupported", "not_counted"]);
+  expect(unsupported.every(event => event.count === null && event.running_percent === null)).toBe(true);
 });
 
 test("memory fields stay independently unavailable instead of becoming zero", () => {

@@ -1,5 +1,6 @@
 {
-  "packages": ["linux-tools-generic", "build-essential", "perl"],
+  "packages": ["build-essential", "perl"],
+  "perf_packages": ["linux-perf", "linux-tools-generic"],
   "multichase": {
     "repository": "https://github.com/google/multichase.git",
     "revision": "8b68e918f8d2e84794f2c20cdb6c7ebb9c3952bb",

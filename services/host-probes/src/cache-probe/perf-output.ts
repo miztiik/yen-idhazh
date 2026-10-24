@@ -2,9 +2,11 @@
 import { CacheCounterSchema } from "./cache-schema";
 import type { CacheCounter, CacheEvent, CacheReason } from "./cache-schema";
 
-export function unavailableCounter(event: CacheEvent, reason: CacheReason): CacheCounter {
+export function unavailableCounter(
+  event: CacheEvent, reason: CacheReason, support: "unsupported" | "unavailable" | "not_counted" = "unavailable",
+): CacheCounter {
   return CacheCounterSchema.parse({
-    event, support: reason === "event_unsupported" ? "unsupported" : reason === "not_counted" ? "not_counted" : "unavailable",
+    event, support,
     reason, count: null, time_running_ns: null, time_enabled_ns_estimate: null,
     running_percent: null, multiplexing: "unknown",
   });
@@ -27,7 +29,9 @@ export function parsePerfCounters(output: string, events: readonly CacheEvent[])
     // Later columns are perf's derived metrics; they do not define or replace raw event counts.
     if (!event || found.has(event) || cells.length < 5 || cells[1] !== "") throw new Error("Invalid perf counter output");
     if (cells[0] === "<not supported>" || cells[0] === "<not counted>") {
-      found.set(event, unavailableCounter(event, cells[0] === "<not supported>" ? "event_unsupported" : "not_counted"));
+      found.set(event, cells[0] === "<not supported>"
+        ? unavailableCounter(event, "event_unsupported", "unsupported")
+        : unavailableCounter(event, "not_counted", "not_counted"));
       continue;
     }
     if (!/^\d+$/.test(cells[0]!) || !/^\d+$/.test(cells[3]!)
