@@ -8,6 +8,7 @@ import { runFeedPlan, summarizePlan } from "./run-feed-plan";
 import type { PlanRuntime } from "./run-feed-plan";
 import { writeJsonLine } from "./logging/structured-logger";
 import { recordFeedPlan } from "./record-feed-plan";
+import { loadConfig as loadProbeConfig } from "../../host-probes/src/config";
 
 export async function main(args: readonly string[], options: {
   inputs?: PlanInputs; runtime?: PlanRuntime; output?: (result: ReturnType<typeof summarizePlan>) => void;
@@ -21,7 +22,13 @@ export async function main(args: readonly string[], options: {
     });
     const git_sha = (await new Response(git.stdout).text()).trim();
     if (await git.exited !== 0) throw new Error("git_sha: git could not resolve the checkout commit");
-    runtime = { git_sha };
+    runtime = {
+      git_sha,
+      task_profiling: {
+        config: await loadProbeConfig(),
+        report: profile => writeJsonLine({ event: "task_profile", profile }),
+      },
+    };
   }
   if (mode === "serve") return servePlan(inputs, runtime);
   const plan = await runFeedPlan(request, inputs, runtime);

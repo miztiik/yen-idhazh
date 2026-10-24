@@ -15,6 +15,7 @@ import { FetchRequestSchema, FetchedDocumentSchema, ParseRequestSchema, PlannerO
 import type { FetchedDocument, PlannerOperation } from "./operation-contracts";
 import { openOperationStore, sha256 } from "./operation-store";
 import type { PreparedOperation } from "./operation-store";
+import { profileTask } from "../../../host-probes/src/task-profile/task-profiler";
 
 export function operationConfigFingerprint(inputs: PlanInputs, runtime: PlanRuntime) {
   return sha256(JSON.stringify({
@@ -64,7 +65,7 @@ function checkArtifact(record: PlannerOperation, inputs: PlanInputs): FetchedDoc
   return artifact;
 }
 export async function executeDocumentOperation(
-  operation: "fetch" | "parse", raw: unknown, inputs: PlanInputs, runtime: PlanRuntime,
+  operation: "fetch" | "parse", raw: unknown, inputs: PlanInputs, runtime: PlanRuntime, signal?: AbortSignal,
 ) {
   const request = operation === "fetch" ? FetchRequestSchema.parse(raw) : ParseRequestSchema.parse(raw);
   if (!inputs.settings.enabled) throw new PlanError("PLANNER_DISABLED", "Planner is disabled by service settings", "enabled");
@@ -77,6 +78,11 @@ export async function executeDocumentOperation(
     }
     const proposed = prepareOperation(operation, request.request_id, request, request.correlation_id, inputs, runtime, runId);
     return (await store.execute(proposed, async record => {
+      const taskIdentity = {
+        pipeline_name: "feed-ingest-plan", task_name: operation, run_id: record.run_id,
+        correlation_id: record.correlation_id, request_id: record.request_id,
+      };
+      const controls = signal === undefined ? {} : { signal };
       if ("source_id" in request) {
         const source = inputs.harvest.sources.find(source => source.id === request.source_id);
         if (!source || source.status !== "active") throw new PlanError("INVALID_REQUEST", "Fetch requires an active configured source", "source_id");
@@ -84,9 +90,9 @@ export async function executeDocumentOperation(
         try { validateTargetName(url); }
         catch { throw new PlanError("INVALID_REQUEST", "Fetch requires a public HTTP URL without credentials", "url"); }
         const identity = canonicalizeUrl(url);
-        const fetched = await createPermittedFetcher(
+        const fetched = await profileTask(runtime.task_profiling, taskIdentity, () => createPermittedFetcher(
           inputs.harvest.config.harvest, inputs.harvest.extraction, runtime.boundary,
-        ).fetch(url);
+        ).fetch(url), { ...controls, outcome: result => result.failure === null ? "success" : "error" });
         const eventIdentity = {
           run_id: record.run_id, correlation_id: record.correlation_id,
           article_id: identity.url_key, source_id: request.source_id,
@@ -121,19 +127,19 @@ export async function executeDocumentOperation(
       if (artifact.body === null || artifact.failure !== null) throw new PlanError("FETCH_UNAVAILABLE", "Fetch has no successful body to parse", "fetch_request_id");
       const source = inputs.harvest.sources.find(source => source.id === artifact.source_id);
       if (!source) throw new PlanError("ARTIFACT_INVALID", "Fetched source is absent from current configuration", "source_id");
-      let parsed: unknown;
-      let failure: string | null = null;
-      try {
-        parsed = artifact.kind === "feed"
-          ? await parseDocument("feed", artifact.body, artifact.canonical_url)
-          : await parseDocument("article", artifact.body, artifact.canonical_url, inputs.harvest.extraction,
-            source.form);
-      } catch (error) {
-        if (error instanceof ArticleExtractionError) failure = error.reason;
-        else if (error instanceof FeedParseError) failure = "malformed-feed";
-        else throw error;
-        parsed = null;
-      }
+      const body = artifact.body;
+      const { parsed, failure } = await profileTask(runtime.task_profiling, taskIdentity, async () => {
+        try {
+          const parsed = artifact.kind === "feed"
+            ? await parseDocument("feed", body, artifact.canonical_url)
+            : await parseDocument("article", body, artifact.canonical_url, inputs.harvest.extraction, source.form);
+          return { parsed, failure: null };
+        } catch (error) {
+          if (error instanceof ArticleExtractionError) return { parsed: null, failure: error.reason };
+          if (error instanceof FeedParseError) return { parsed: null, failure: "malformed-feed" };
+          throw error;
+        }
+      }, { ...controls, outcome: result => result.failure === null ? "success" : "error" });
       const observation = observeDocument({
         run_id: fetchedRecord.run_id, correlation_id: fetchedRecord.correlation_id,
         article_id: artifact.article_id, source_id: artifact.source_id,
