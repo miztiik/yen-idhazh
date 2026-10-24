@@ -1,0 +1,33 @@
+{
+  "completed_at": "2026-10-24T22:55:25Z",
+  "date": "2026-10-24",
+  "embeddings": {
+    "dimensions": 384,
+    "dtype": "int8",
+    "model_id": "all-minilm-l6-v2-quantized",
+    "vectors": {
+      "india-rb9hj6chbrty31w0": "/gz/9/z9B/gDAf8KAPr+/QH9A/n5/gT8BREBAwD9/AoACfgE/AcJ/f79CQP8BPMIAvv/BQYFCv8E/v0E/Qr/+v8A+PsI+xUE9//8A/z9/gP2+QUC9wn4BP8BAf4EAgL5AAH+Bgf9/P4HAQP6Cfv4BAQE9//9DQIEAvj1/vUH9wD7+Qb9+/j4/fz8+vgC/Qn7BfUKAfj6+Qr+Dfz5BwkB/wMA/wIH+fgBB/X/BP76+QT4Cv4HBAD9+wb8AAz//vz/DfX9+fkIBA38AfUE/wkH/QQFBv0DCATzAgQFAvf7AQD/BPgB+P0FA/4D8fwG/gv9/gwEAf4B/QD7+vwB8/0G9QD/+vgS/AX/8Qv6CQD7Agz7/wv+CPkA/vkIDQL9+v0GB/wKBgT1BAH9AwUF+Az8Bwr5/wEM/AoA9v75CvsIBQD8/Pb8EAz//Qb1//Py+fr/AP7+Cv0KBfvy+QoFBALvAwj8+vz5Bg8FBf/z/QL/Avr28v4CBQgA///7BgMACfkA"
+    }
+  },
+  "failed_item_ids": [
+    "ai-hqf6j5zh5adpa2ed",
+    "ai-7s9n3zg4mmdxf20p",
+    "india-terq0z3bj170bnqa",
+    "india-dqe8q6fw4ndk7f3n"
+  ],
+  "items": [
+    {"also_covered_by": null,"also_ran_earlier": [],"band": "high","band_reason": null,"carried_by": 2,"desk": null,"entities": [],"events": [],"introduced_by_run": 1,"item_id": "india-rb9hj6chbrty31w0","lenses": [],"on_front_page": false,"published_at": "2026-10-24T22:09:47Z","rank_score": 1.439989,"reader_note": null,"same_story_as": null,"secondary_desk": null,"source_form": "article","source_id": "toi-india","source_kind": "reporting","source_name": "Times of India - India","source_url": "https://timesofindia.indiatimes.com/india/suspicious-pigeon-with-coded-ring-pak-currency-causes-a-flutter-in-jammu/articleshow/135176763.cms","summary": "Locals near Mawa, Samba district, Jammu captured a pigeon on Saturday carrying a coded ring (Code No 03341214150), an Urdu note and Pakistani currency. Officials said such incidents are not uncommon along the J&K\u2013Punjab frontier, where pigeons have been used for smuggling or messaging. Police seized the bird; security agencies are verifying the note\u2019s contents and the pigeon\u2019s origin.","time_source": "feed","title": "Coded-Ring Pigeon Seized in Jammu Border","truncated": false,"updated_at": null,"updated_by_run": null,"vertical": "india","visual": null,"watchlist_hit": false}
+  ],
+  "items_planned": 5,
+  "run_id": "2026-10-24-40139143618",
+  "version": "2026-10-20",
+  "verticals": [
+    {"below_feed_floor": false,"considered": 6709,"eligible_feeds": 51,"feed_floor": 35,"id": "ai","planned": 2,"too_old": 6703},
+    {"below_feed_floor": false,"considered": 633,"eligible_feeds": 23,"feed_floor": 21,"id": "energy","planned": 0,"too_old": 615},
+    {"below_feed_floor": false,"considered": 601,"eligible_feeds": 26,"feed_floor": 21,"id": "business-economy","planned": 0,"too_old": 536},
+    {"below_feed_floor": false,"considered": 620,"eligible_feeds": 30,"feed_floor": 21,"id": "world","planned": 0,"too_old": 463},
+    {"below_feed_floor": false,"considered": 1257,"eligible_feeds": 22,"feed_floor": 21,"id": "india","planned": 3,"too_old": 596},
+    {"below_feed_floor": true,"considered": 0,"eligible_feeds": 0,"feed_floor": 21,"id": "science","planned": 0,"too_old": 0},
+    {"below_feed_floor": true,"considered": 0,"eligible_feeds": 0,"feed_floor": 21,"id": "climate","planned": 0,"too_old": 0}
+  ]
+}
