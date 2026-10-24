@@ -237,6 +237,44 @@ Hosted duration is measured by the CI step, not estimated as a passing gate.
 This subsection stays here because it selects the local commands; format and
 compatibility rules remain in the persistence contract.
 
+## Design rationale
+
+### Bounded state CSV integrity check
+
+Owner ruling: kumarsnaveen, 2026-10-23 UTC, selected the bounded commit-range
+check instead of a growing tracked-tree scan. The existing CI `scope` job runs
+`frontend/scripts/state-csv-guard.ts` before test selection, on every change.
+Its failure is not caught by the selector's full-test fallback. No extra job,
+dependency or stored inventory is needed.
+
+For a supplied `BASE` and `HEAD`, the check resolves both commits and their
+merge base, then reads only changed non-deleted paths in that range. It rejects
+additions, modifications and rename-ins matching lowercase `state/` and `.csv`
+at any depth. Deletes and rename-outs pass. Matching remains case-sensitive;
+unchanged files are not checked. Invalid supplied commits, a supplied base
+without a head, or commits without a common ancestor fail the check.
+
+A manual dispatch has no base, even though CI supplies the current head.
+A branch-creation push has Git's all-zero base. These events, and a local run
+with neither endpoint, print a notice that no range check ran and no whole-tree
+integrity certification was made. This is the accepted cost: the check prevents
+prohibited changes in a supplied range; it does not certify existing state
+files or a manual run without a range.
+
+To check one committed change locally, from the repository root:
+
+```powershell
+$env:BASE = "origin/main"
+$env:HEAD = "HEAD"
+node frontend/scripts/state-csv-guard.ts
+```
+
+The CLI tests generate temporary Git repositories and check actual process
+exits, including refusals and no-range notices. The two Python checks in
+`backend/tests/contracts/test_no_csv_ledger_is_left.py` retain registry
+grain/suffix and no-union-merge coverage. This section stays on the gate page
+because it defines what the CI gate certifies, not a second test policy.
+
 ## Direct backend checks
 
 **CI is authoritative and it is faster than your machine by between six
