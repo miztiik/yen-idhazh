@@ -81,7 +81,7 @@ Table D - PR outcomes
 | D23 | 23 | Independent qualification and planning controls | 1 | V | IN-FLIGHT | prove-planning-controls-independently | - | - |
 | D24 | 24 | Independent council test controls | 17 | W | IN-FLIGHT | prove-council-controls-independently | - | - |
 | D25 | 25 | Concrete remaining gardener and ledger safety proofs | 24 | X | IN-FLIGHT | strengthen-gardener-safety-proofs | - | - |
-| D26 | 26 | Prove time boundaries without stand-ins | 21, 25 | Y | IN-FLIGHT | prove-time-boundaries-without-stand-ins | - | - |
+| D26 | 26 | Prove time boundaries without stand-ins | 21, 25 | Y | IN-FLIGHT | prove-time-boundaries-without-stand-ins | [#1679](https://github.com/miztiik/yen-idhazh/pull/1679) | - |
 
 The canary implementation for Row 3 is delivered separately from its suite-wide
 review obligation. Rows 5 and 6 carry additional changes found by that review.
@@ -1762,6 +1762,10 @@ Table I - Independent controls and expected faults
   The historical 141,434-byte Row 26 freeze with SHA-256
   `d969aaf615469d8b84e3298d861332428346aa9f5d706bea0a96d83acb54c833`
   remains unchanged; this final evidence is not a replacement freeze.
+- **Phase delivery:** [#1679](https://github.com/miztiik/yen-idhazh/pull/1679)
+  is open against `main`. It is not merged; full-suite CI remains the
+  merge-candidate gate. The frozen Row 26 successor has already been
+  released to Row 27 independently of these delivery receipts.
 
 ## See also
 
