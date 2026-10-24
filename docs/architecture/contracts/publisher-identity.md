@@ -4,9 +4,10 @@
 
 How is a publisher ID created once, then kept stable as names and feeds change?
 
-**Status**: Approved naming contract; implementation awaits separate owner
-confirmation. This page adds no catalog, schema field, feed assignment, API or
-runtime behavior. I Feed remains a design proposal, not a deployed engine.
+**Status**: Naming rules, catalog location and the simple config shape are
+approved, as are lifecycle meanings and legacy unknown-value behavior. Feed
+assignments, compatible-reader implementation, API and runtime behavior remain
+work to deliver. I Feed remains a design proposal, not a deployed engine.
 
 ## The identity being named
 
@@ -31,10 +32,12 @@ publisher ID. This contract does not replace it or change story grouping.
 Apply this procedure when catalog implementation is approved, not as permission
 to assign IDs to today's feeds:
 
-1. Check the owner-controlled source catalog, including existing aliases and
-   reserved or retired IDs. Establish which editorial publication the feed
-   belongs to from curated provenance. Do not infer it from a feed-ID prefix,
-   domain, feed title or parsed article text.
+1. Check the owner-controlled source catalog and its existing publisher IDs.
+   Use feed metadata only to find possible matches; confirm the editorial
+   publication from publisher-owned evidence before assigning an ID. AI may
+   help find and compare that evidence, but a feed-ID prefix, domain, feed
+   title or parsed article text alone is not proof. Leave uncertain matches
+   unknown.
 2. Reuse an existing ID when the publication is confirmed to be the same.
    If identity is uncertain, leave it unknown and obtain operator confirmation.
    Do not create a guessed publisher to complete a mapping.
@@ -52,10 +55,15 @@ to assign IDs to today's feeds:
    [primitives.ts](../../../packages/common-contracts/src/schemas/primitives.ts).
    Resolve a failed check before recording the ID; do not silently normalize
    invalid input.
-6. Record the reviewed ID, separate display name and identity provenance in the
-   owner-controlled source catalog, then bind feeds by explicit reference.
-   Catalog location and field layout need implementation approval. This page
-   does not create another registry file or assign any current feed.
+6. Record the reviewed ID and display name in the owner-controlled source
+   catalog, then bind feeds by explicit `publisher_id`. The registry will live
+   beside its feed references in
+   [`config/sources.json`](../../../config/sources.json). Publisher entries use
+   `id` and `display_name`; each feed's `publisher_id` is nullable, with
+   missing meaning unknown. The reviewed catalog change and its Git history
+   record the decision; there is no extra provenance field. Adding or changing
+   these values must not need per-publisher code edits. This page does not
+   assign any feed.
 
 Fetch, parse and later runtime stages read the recorded reference. They never
 regenerate a publisher ID from a URL, title, article text or changed display
@@ -89,12 +97,11 @@ An ID does not change when the publication changes its display name, moves
 domains, adds a feed or retires a feed. Retirement reserves the ID permanently;
 it must never be reassigned to another publication.
 
-Record name aliases explicitly against the existing identity. A duplicate
-registration, editorial merger or split requires owner-reviewed reconciliation
-that states what each old ID meant and how future references are resolved.
-Do not silently merge identities or rewrite earlier observations. The alias
-and reconciliation storage and any read-side migration remain implementation
-decisions, not new fields declared here.
+There is no separate alias or reconciliation list. A display-name change edits
+`display_name`; the stable ID does not change. A merger or split changes only
+the current feed-to-publisher assignments after owner review. Keep old IDs in
+the registry and leave historical observations unchanged; do not redirect or
+rewrite them.
 
 A historical observation with no publisher ID remains unknown. Today's
 feed-to-publisher mapping is not evidence that an earlier run recorded that
@@ -108,6 +115,9 @@ not introduce another regular expression. No such alias is added by this page.
 Catalog validation must refuse duplicate publisher definitions and nonnull
 feed references to an undefined publisher. Several feeds referencing one
 defined publisher are legal. Missing legacy IDs remain explicitly unknown.
+Legacy configuration without `publishers` reads as an empty registry; missing
+feed `publisher_id`, `added_on` or legacy `retirement_reason` remains unknown.
+Keep that reader path while the catalog is migrated.
 
 Syntax validation cannot prove that two feeds share a newsroom, that a name
 change preserves identity, or that an old reservation was not reused. Catalog
@@ -166,7 +176,8 @@ acceptance cases, not claims of executed runtime checks:
 - [ ] Check the positive and negative examples with the shared slug validator
   and the separate human identity review.
 - [ ] Keep the same ID through display-name and domain changes; prevent reuse
-  of a retired ID and require explicit alias or merger reconciliation.
+  of an old ID and change current mappings only after owner review of a merger
+  or split.
 - [ ] Keep missing historical IDs unknown, without current-catalog backfill.
 - [ ] Review catalog storage, actual feed mappings, persisted-field compatibility
   and cross-language binding coverage before wiring runtime readers or writers.
@@ -183,6 +194,20 @@ it once prevents a name or endpoint edit from changing the counted publisher.
 This adopts the existing editorial unit, not its mutable masthead text as the
 permanent identifier. Approval covers this contract only, not runtime wiring,
 shared persisted fields, feed assignments or the separate API implementation.
+
+Owner decision, kumarsnaveen_microsoft, 2026-10-24 UTC: keep the publisher
+registry in `config/sources.json`, beside the feed references it validates.
+Use `publishers[]` entries with `id` and `display_name`; each feed has nullable
+`publisher_id`. Do not add separate alias or reconciliation lists. Keep all
+publisher data in config so adding or changing an entry does not need a
+per-publisher code edit. A rename changes the display name; a merger or split
+changes current feed assignments after owner review; old IDs and historical
+observations remain unchanged. The reviewed catalog change and Git history
+are enough provenance; do not add an `identity_provenance` field.
+
+Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC: AI may help identify
+publisher-owned evidence for feed mappings. It must leave a feed unknown when
+that evidence does not settle the publication identity.
 
 ## See also
 

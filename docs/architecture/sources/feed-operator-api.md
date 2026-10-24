@@ -1,12 +1,12 @@
-# Fetch and parse operator requests
+# Feed planning operator APIs
 
 **Last Updated**: 2026-10-24
 
-How do separate HTTP requests fetch and parse the same article without
-duplicating completed work? These are local build-time APIs, not site services.
+How do local operator requests fetch, parse, select, partition and persist
+content? These are local build-time APIs, not site services.
 The existing [runner](feed-plan-runner.md) owns listener setup and enablement.
 
-## Two independent endpoints
+## Independent fetch and parse endpoints
 
 `POST /api/2026-10-20/fetch` accepts a JSON object with `request_id` and
 `correlation_id` as UUIDv4 strings, `source_id` naming an active configured
@@ -144,16 +144,139 @@ Unexpected collection or callback errors fail explicitly and do not commit a
 successful response. As with any interrupted fetch, retry can repeat unfinished
 external work.
 
+## Conditional requests are excluded
+
+This API keeps ordinary feed fetching. It does not send validators, cache feed
+bodies for reuse or handle `304` responses. Repeated polls can transfer the
+same body again, using more network bytes and time. Reducing that cost needs a
+separate owner-approved design and replay contract.
+
+## Selection, partition and persistence APIs
+
+All routes use the existing `/api/2026-10-20` prefix. `/plan` is the full-flow
+trigger. Its orchestrator calls the same operations as the standalone routes;
+it does not issue HTTP requests to its own listener.
+
+1. `/fetch` retrieves one configured feed or an explicitly authorized article.
+   It returns its fetch identity and outcome, not the body.
+2. `/parse` parses one completed fetch. In the full planner, the shared harvest
+   operations finish all permitted fetch/parse work before writing one complete
+   parsed-batch snapshot. This includes the original candidates and rejection
+   evidence for failed items. Standalone `/parse` remains per-document; it does
+   not guess when unrelated requests form a complete batch.
+3. `/select-articles` accepts `{"batch_id": "<parsed-batch UUID>"}`. It screens
+   eligibility and ranks eligible articles within this one API. It reads the
+   complete saved batch, without article lists, caller paths or a separate
+   input-count limit. It returns the new selected `batch_id`, `parsed_batch_id`,
+   run and correlation IDs, existing selection rows, typed `exclusions`, and
+   the selection/rejection write results. It does not fetch or call a model.
+4. `/partition-articles` accepts `{"batch_id": "<selected-batch UUID>"}` with
+   optional `strategy` and `shards`. Strategies are `bin-pack`, `round-robin`
+   and `none`; omitted controls use the committed partition configuration.
+   Worker counts must meet its existing bounds; `none` requires one worker.
+   The result contains a new `batch_id`, `selection_batch_id`, run/correlation,
+   strategy, worker count, per-worker estimated work and unchanged selected
+   content with worker assignments. It does not rerank articles.
+5. `/persist-dispatches` accepts `{"batch_id": "<partitioned-batch UUID>"}`.
+   It checks the saved assignments against the original selection and content,
+   then uses the registered Parquet writer. The response contains `batch_id`
+   and `files`, with explicit `written` or `empty` status. Each written file
+   names its relative path, file/unit identities, UTC period, row count and
+   content digest. A failed write is an error, not an empty success.
+
+The configured `article_limit`, currently 100 articles, bounds selected
+output only. It does not cap the number of candidates read from a batch.
+Selection has no idempotency key or request replay: another selection call
+creates another result identity, even when its selected rows are unchanged.
+Existing fetch/parse replay is unchanged.
+
+### Numbered API flow
+
+The arrows below carry validated payloads between the operations that `/plan`
+shares with the HTTP routes. The planner seals the complete parsed batch after
+harvesting; `/parse` itself remains a per-document API.
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "sans-serif", "primaryColor": "#f8fafc", "primaryTextColor": "#1f2937", "primaryBorderColor": "#64748b", "lineColor": "#64748b", "textColor": "#1f2937", "clusterBkg": "#f8fafc", "clusterBorder": "#94a3b8", "edgeLabelBackground": "#ffffff"}}}%%
+flowchart TD
+  PLAN["POST /plan<br/>Input: run controls and committed configuration"]
+  FETCH["1. POST /fetch<br/>Fetch configured feeds and permitted articles"]
+  PARSE["2. POST /parse<br/>Parse one fetched document; retain failures"]
+  BATCH[("Complete parsed batch<br/>Candidates, observations and failures")]
+  SELECT["3. POST /select-articles<br/>Screen eligibility, then rank and select"]
+  PARTITION["4. POST /partition-articles<br/>Assign selected articles to workers"]
+  PERSIST["5. POST /persist-dispatches<br/>Validate and write registered dispatch rows"]
+  FILES[("Dispatch Parquet files")]
+  RESULT["Planning response<br/>Batch IDs, named files, row counts and digests"]
+
+  PLAN -->|"Configured source IDs and run context"| FETCH
+  FETCH -->|"Fetch reference and document identity"| PARSE
+  PARSE -->|"Planner completes all permitted document work"| BATCH
+  BATCH -->|"Parsed batch_id; all candidates and failures"| SELECT
+  SELECT -->|"Selected batch_id; selections and exclusions"| PARTITION
+  PARTITION -->|"Partitioned batch_id; dispatch rows and assignments"| PERSIST
+  PERSIST -->|"Registered Parquet writer"| FILES
+  FILES -->|"Validated write result"| RESULT
+
+  classDef stage fill:#f8fafc,stroke:#64748b,stroke-width:1.5px,color:#1f2937;
+  classDef ledger fill:#eff6ff,stroke:#1d4ed8,stroke-width:1.5px,color:#1e3a8a;
+  classDef yes fill:#f0fdf4,stroke:#166534,stroke-width:1.5px,color:#14532d;
+
+  class PLAN,FETCH,PARSE,SELECT,PARTITION,PERSIST stage;
+  class BATCH,FILES ledger;
+  class RESULT yes;
+```
+
+### Saved batch identity and completion
+
+The native contracts in `backend/idhazh/contracts/planner_stage.py` own parsed,
+selected and partitioned snapshots. Their TypeScript copies have native
+field/type/vocabulary binding tests. Request/response and error schemas validate
+the HTTP boundaries. Snapshots retain the captured UTC clock, writer identity,
+effective request and configuration fingerprint so later calls do not silently
+use another run's settings or a newer clock.
+
+Each stage creates a UUIDv4 `batch_id`. The server stores its validated snapshot
+at `planner-batches/<stage>/<batch_id>.json` beneath the configured output root.
+The directory and suffix define the storage protocol, not a tunable destination.
+It writes a temporary file and renames it only after serialization finishes.
+An unfinished batch has no readable final snapshot. Reads name one stage and
+one UUID; no directory scan or correlation-based lookup is used.
+
+`correlation_id` only groups observations. `run_id` names the planning run.
+`batch_id` names the exact saved stage output; repeated calls in the same run
+can produce different batches. The UUID is not the final Parquet `file_id`:
+the existing ledger writer creates those file identities independently.
+
+The `/plan` response exposes `batches.parsed_batch_id`,
+`batches.selection_batch_id` and `batches.partition_batch_id`. These references
+remain usable after listener restart with the same configuration and checkout.
+Stored batches remain until the operator removes them with the listener
+stopped; deleting a snapshot makes that reference unavailable.
+
+Malformed or unknown request controls return HTTP 400; a disabled planner
+returns 503; a missing batch or wrong stage returns 404; a different current
+configuration returns 409. Invalid stored snapshots or failed writes return
+500. Existing configured HTTP body-byte limits remain in force; they are not
+an article-count cap.
+
+Worker parity and integration with `digest.yml` and `work.py` are deferred,
+not gates for this flow. Today, `work.py` still reads the Python run-plan
+ledger and assigns work by position. A valid dispatch Parquet file does not
+by itself prove that the production worker can consume it. Existing native
+contract binding checks remain required.
+
 ## Design rationale
 
 Separate endpoints let an operator inspect a real fetch before parsing it.
-Identity-only references keep raw paths and untrusted page controls outside
-the parse boundary. SQLite reuses Bun's bundled open-source storage engine
-for atomic commit and process locking: no package, download or browser bytes
-are added. Opaque response JSON is retained solely for exact HTTP replay,
-not interpreted as new planning authority. A stopped plan is refused because
-the existing native ledger writer and the request journal cannot share one
-transaction; pretending otherwise would duplicate durable work.
+Owner direction, 2026-10-24 UTC: screening and ranking share `/select-articles`;
+partitioning and persistence are separate APIs. The full planner uses the same
+operations to avoid HTTP loopback and duplicate algorithms. A saved batch gets
+its own identity because a run can have several independently selected or
+partitioned outputs; tracing identity cannot select a file. The server resolves
+that batch reference, so callers cannot select arbitrary paths.
+A parse failure remains attached to its own
+article; usable articles in the same batch can continue.
 
 A separate collector event loop is necessary because the actual parser can
 block its own thread. Runtime reporting stays outside durable response bytes
