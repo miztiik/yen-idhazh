@@ -65,8 +65,8 @@ Table D - PR outcomes
 | D7 | 7 | Config reader values and accurate migration test names | 1 | F | DONE | config-reader-behavior-proofs | [#1653](https://github.com/miztiik/yen-idhazh/pull/1653) | - |
 | D8 | 8 | Workflow checks retain independent failure evidence | 1 | G | DONE | workflow-behavior-proofs | [#1656](https://github.com/miztiik/yen-idhazh/pull/1656), merged at `43bdd37d671275af2f904590f7ca69498cc74a91` | - |
 | D9 | 9 | Remove the unused watchlist entry limit | 1 | H | DONE | remove-unused-watchlist-limit | [#1657](https://github.com/miztiik/yen-idhazh/pull/1657), merged at `f479997fec70f4f57b13a6d3a649b5d92a4fd5f7` | - |
-| D10 | 10 | Independent historical reader proofs | 1 | I | DONE | independent-historical-reader-proofs | [#1659](https://github.com/miztiik/yen-idhazh/pull/1659), merged 2026-10-24 UTC at `f0449de3db08c710e5b2292a03910da157bcb498` | - |
-| D11 | 11 | Contract tests prove authored and constructed behavior | 1 | J | IN-FLIGHT | config-refusal-selection-proofs | [#1664](https://github.com/miztiik/yen-idhazh/pull/1664) | - |
+| D10 | 10 | Independent historical reader proofs | 1 | I | DONE | independent-historical-reader-proofs | [#1659](https://github.com/miztiik/yen-idhazh/pull/1659), merged at `f0449de3db08c710e5b2292a03910da157bcb498` | - |
+| D11 | 11 | Contract tests prove authored and constructed behavior | 1 | J | DONE | config-refusal-selection-proofs | [#1664](https://github.com/miztiik/yen-idhazh/pull/1664), merged at `90ea0e77cedaf7eeaff8e9690bacf144eebb44d3` | - |
 | D12 | 12 | Explicit controls and measurement behavior | 1 | K | IN-FLIGHT | explicit-control-behavior-proofs | [#1661](https://github.com/miztiik/yen-idhazh/pull/1661) | - |
 | D13 | 13 | Extraction and metric behavior | 1 | L | IN-FLIGHT | row13-test-proofs | - | - |
 | D14 | 14 | Grouping and dataset behavior | 1 | M | IN-FLIGHT | grouping-and-dataset-proofs | - | - |
@@ -640,10 +640,10 @@ counts use the untouched archive and the completed branch instead.
   Row 9's frozen full successor as the input. All prior row text and the exact
   owner ruling in A5 remain; D3 remains open. Rows 5, 8 and 9 have their verified
   merge receipts above. Plan-only integration does not repeat unchanged gates.
-- **Delivery:** Implementation commit `90c58a26c` is in PR
-  [#1659](https://github.com/miztiik/yen-idhazh/pull/1659), merged 2026-10-24
-  UTC at `f0449de3db08c710e5b2292a03910da157bcb498`. The suite-wide Row 3
-  review remains open.
+- **Delivery:** Implementation commit `90c58a26c` was delivered in
+  [#1659](https://github.com/miztiik/yen-idhazh/pull/1659), merged at
+  `f0449de3db08c710e5b2292a03910da157bcb498`. The suite-wide Row 3 review
+  remains open.
 
 ## 12 - Row #11 - Contract tests prove authored and constructed behavior
 
@@ -771,9 +771,9 @@ counts use the untouched archive and the completed branch instead.
   and `26ac9f90c`; current main, including Row 10's merge receipt, is merged
   into this branch without rewriting history. The AST binding proof is
   committed at `f0498735f`; [#1664](https://github.com/miztiik/yen-idhazh/pull/1664)
-  is open. The current conflict-resolution candidate and targeted check
-  results are recorded in the Row 11 execution report. No merge of the phase
-  PR was performed.
+  merged at `90ea0e77cedaf7eeaff8e9690bacf144eebb44d3`. The current
+  conflict-resolution candidate and targeted check results are recorded in
+  the Row 11 execution report. This worker did not merge the phase PR.
 
 ## 13 - Row #12 - Explicit controls and measurement behavior
 
@@ -822,6 +822,13 @@ counts use the untouched archive and the completed branch instead.
   source hashes verified. Fourteen controlled cases also pass when copied
   committed host/fingerprint/memory defaults are disabled and the roster is
   empty. No mock, added skip, changed acceptance rule or configuration knob.
+- **Bounded-input correction:** Replace both copied-tree config reads with the
+  named-input `council._config.copy_config` helper. The memory-loader case also
+  copies only `idhazh_gardener.json` and the declaration files named by its
+  `task_names`. The two affected modules pass 42 cases; Ruff and mypy pass.
+  Re-run disposable stale-exit, memory-inherit, memory-override and memory-YAML
+  faults against the corrected tests; every intended failure and restored
+  control passes. Hashes and logs are in the Row12 session evidence.
 - **Collection:** Exact base `3d6d4b9f6a4ea4e7681576531963e27f11e64332` and
   final implementation each collect 7,218 cases. No function or parameter case
   is removed. Two renames: `test_the_committed_config_names_a_labeller` becomes
@@ -834,19 +841,35 @@ counts use the untouched archive and the completed branch instead.
   fingerprint reproduce on the exact unchanged base. The fourth failure still
   lacks a Bun local package after two frozen restore attempts fail with EPERM.
   No Git safety setting, manifest or lockfile changes. Final helper tests:
-  15 passed and 2 existing POSIX skips; final helper type checks pass. Linux CI
-  must establish complete-suite success on the merge candidate.
+  15 passed and 2 existing POSIX skips; final helper type checks pass. On
+  pre-merge heads `cbb23a22ddcd711ebe3fa34a042e707050ba2a1b` and
+  `95e2808d8942b0aeb8995c2fc919d772a9952acc`, required `scope`, `gates`,
+  `robots` and `site` checks passed; `browser` skipped. The latest main
+  integration at `57366d88ae2bc0209121c5c52e6f2eb9eee07893` also passed
+  `scope`, `gates`, `robots` and `site`; `browser` skipped. Run:
+  `https://github.com/miztiik/yen-idhazh/actions/runs/40080891074`.
 - **Separate finding:** Existing `date.today()` in `measure_budgets.py` is not
   changed. Keep both cold-start measurement tests: stored spread is zero, while
   one repeat makes comparison unavailable. Keep recorded loopback integration.
 - **Plan integration:** Row 11 released the serialized slot at
   `26ac9f90cda08456c1f861c26285a2129924804c`. Its frozen plan is preserved
-  exactly before this section is added, without importing its implementation.
-  Current main was merged without rewriting history. Plan-only integration
-  does not repeat unchanged application gates. D3 remains open.
+  as the starting point before this section was added. The corrected Row 11
+  section and merge receipt are preserved above; its implementation arrived
+  through the normal main merge.
+  Current main, including Row 10 at `f0449de3db08c710e5b2292a03910da157bcb498`,
+  was merged without rewriting history. Main through
+  `60b301d1c9edc188e2993252ebd5850d666bf8ec`, including the Row 11 merge, was
+  then merged normally in a conflict-only integration. Latest main through
+  `cff5cc58c8cc15c59b5b525fca84335e2e88c4ce`, including Row 16, was also
+  merged normally. Plan conflicts were resolved by retaining the completed
+  D11 merge receipt, Row 12's full section, and the complete Row 16 section;
+  the complete Row 13-15 sections and the Row 16 A5 ruling are preserved.
+  Exact-head CI passed. All 12 reviewed Row 12 test, production and
+  documentation files remain byte-identical to
+  `cbb23a22ddcd711ebe3fa34a042e707050ba2a1b`. D3 remains open.
 - **Delivery:** Implementation `32c85d883` is delivered in open PR
   [#1661](https://github.com/miztiik/yen-idhazh/pull/1661), not merged by this
-  worker. D12 remains IN-FLIGHT pending required Linux CI and merge.
+  worker. D12 remains IN-FLIGHT pending CI on this merge candidate and merge.
 - **Dependencies:** Row 1. Shared-plan editing remains serialized.
 
 ## 14 - Row #13 - Extraction and metric behavior
