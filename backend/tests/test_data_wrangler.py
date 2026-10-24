@@ -8,6 +8,7 @@ that it cannot run without the flag.
 
 from __future__ import annotations
 
+import json
 from collections import Counter
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -25,6 +26,7 @@ from conftest import (
     refill_recorded,
     seed_scores,
 )
+from contracts._fixtures import copy_config
 
 from idhazh import config, corpus
 from idhazh.contracts.app_config import AppConfig
@@ -71,8 +73,20 @@ def window(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def run(window: Path, *argv: str) -> int:
-    return data_wrangler.main(["--corpus-dir", str(window), *argv])
+def run(window: Path, *argv: str, config_dir: Path = CONFIG_DIR) -> int:
+    return data_wrangler.main(
+        ["--corpus-dir", str(window), "--config", str(config_dir), *argv]
+    )
+
+
+def config_with_finetune(root: Path, **changes: int) -> Path:
+    copy_config(root)
+    config_dir = root / "config"
+    path = config_dir / "idhazh.json"
+    payload = json.loads(read_text(path))
+    payload["finetune"].update(changes)
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return config_dir
 
 
 @pytest.fixture
@@ -96,13 +110,14 @@ def roomy(tmp_path: Path) -> Path:
 
 
 def test_stats_says_how_many_rows_a_session_would_actually_draw(
-    window: Path, capsys: pytest.CaptureFixture[str]
+    window: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """`train_rows` is a ceiling, and a session that quietly drew fewer is unattributable."""
-    assert run(window, "stats") == 0
+    config_dir = config_with_finetune(tmp_path, corpus_rows=3000)
+    assert run(window, "stats", config_dir=config_dir) == 0
     printed = capsys.readouterr().out
 
-    assert "rows                       6 of a 2000-row window" in printed
+    assert "rows                       6 of a 3000-row window" in printed
     assert "2026-08-01 to 2026-08-03" in printed
     assert "a session would draw" in printed
     assert "vertical ai" in printed
@@ -119,11 +134,13 @@ def test_stats_warns_when_the_prompt_moved_under_the_window(
 
 
 def test_stats_says_when_the_window_is_under_the_floor(
-    window: Path, capsys: pytest.CaptureFixture[str]
+    window: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    assert run(window, "stats") == 0
+    floor = 777
+    config_dir = config_with_finetune(tmp_path, min_rows=floor)
+    assert run(window, "stats", config_dir=config_dir) == 0
 
-    assert "below finetune.min_rows (500)" in capsys.readouterr().out
+    assert f"below finetune.min_rows ({floor})" in capsys.readouterr().out
 
 
 # --- split -----------------------------------------------------------------
@@ -276,14 +293,30 @@ def test_remove_with_yes_drops_exactly_the_named_row(
 
 
 def test_remove_refuses_to_take_the_window_below_the_floor(
-    window: Path, capsys: pytest.CaptureFixture[str]
+    window: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """And says how far below, because a refusal with no number is not an answer."""
-    assert run(window, "remove", "--yes", "--url-key", "a" * 64) == 1
+    floor = 777
+    config_dir = config_with_finetune(tmp_path, min_rows=floor)
+    remaining = len(corpus.read_rows(window)) - 1
+    assert (
+        run(
+            window,
+            "remove",
+            "--yes",
+            "--url-key",
+            "a" * 64,
+            config_dir=config_dir,
+        )
+        == 1
+    )
     printed = capsys.readouterr().out
 
     assert "refusing" in printed
-    assert "495 below finetune.min_rows (500)" in printed
+    assert (
+        f"{floor - remaining} below finetune.min_rows ({floor})"
+        in printed
+    )
     assert len(corpus.read_rows(window)) == 6
 
 
