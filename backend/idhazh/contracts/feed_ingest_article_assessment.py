@@ -21,9 +21,9 @@ from idhazh.contracts.feed_ingest_candidate import (
     NonEmpty,
     PlanningStage,
     PolicyIdentity,
-    reject_legacy_publisher_identity,
     ScoreEvidence,
     SourceSnapshot,
+    reject_legacy_publisher_identity,
 )
 from idhazh.contracts.feed_ingest_diagnostics import ExtractionSignal, HarvestDiagnostics
 from idhazh.contracts.feed_ingest_rejection import REASON_STAGES, DropReason

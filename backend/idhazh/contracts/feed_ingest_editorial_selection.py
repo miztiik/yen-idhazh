@@ -19,9 +19,9 @@ from idhazh.contracts.feed_ingest_candidate import (
     NonNegative,
     PolicyIdentity,
     PositiveCount,
-    reject_legacy_publisher_identity,
     ScoreEvidence,
     SourceSnapshot,
+    reject_legacy_publisher_identity,
 )
 
 
