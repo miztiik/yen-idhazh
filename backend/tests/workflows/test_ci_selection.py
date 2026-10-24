@@ -49,6 +49,31 @@ def test_the_selection_step_runs_what_this_module_drives() -> None:
     assert '>> "$GITHUB_OUTPUT"' in decide, "a job reads these lines back as step outputs"
 
 
+def test_state_csv_integrity_runs_before_selection_without_a_skip_or_fallback() -> None:
+    """CSV-only and documentation-only edits cannot bypass the range check."""
+    workflow = _load_workflows()["ci.yml"]
+    scope = _job(workflow, "scope")
+    steps = _steps(workflow, "scope")
+    guard = _step(workflow, "scope", "name", "Reject added or changed state CSV files")
+    decide = _step(workflow, "scope", "id", "decide")
+    assert not scope.get("if")
+    assert not scope.get("continue-on-error")
+    assert not guard.get("if")
+    assert not guard.get("continue-on-error")
+    assert steps.index(guard) < steps.index(decide)
+    assert shlex.split(_script(guard, "state CSV check")) == [
+        "node", "frontend/scripts/state-csv-guard.ts",
+    ]
+    assert guard["env"] == decide["env"] == {
+        "EVENT": "${{ github.event_name }}",
+        "BASE": "${{ github.event.pull_request.base.sha || github.event.before }}",
+        "HEAD": "${{ github.event.pull_request.head.sha || github.sha }}",
+    }
+    checkout = _step(workflow, "scope", "uses", "actions/checkout@v6")
+    assert steps.index(checkout) < steps.index(guard)
+    assert _mapping(checkout.get("with"), "scope checkout")["fetch-depth"] == "0"
+
+
 def test_the_robots_job_runs_the_module_the_selector_keys_on() -> None:
     """The selector buys `robots` only when it selects the module this job runs,
     so the two must name the same file."""
