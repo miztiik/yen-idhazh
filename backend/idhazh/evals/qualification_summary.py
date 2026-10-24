@@ -20,6 +20,23 @@ from idhazh.event_lines import escaped_data, escaped_property
 _PASSED = "PASS"
 _FAILED = "FAIL"
 
+#: GitHub's workflow command names. The protocol fixes these three words.
+_NOTICE = "notice"
+_WARNING = "warning"
+_ERROR = "error"
+
+#: The two verdict words, shown on the page and in the run's annotation list.
+_QUALIFIED = "QUALIFIED"
+_ESCALATE = "ESCALATE"
+
+#: Titles a reader sees on a page or an annotation. One spelling, both places.
+_VERDICT_TITLE = "Qualification verdict"
+_GATE_FAILED_TITLE = "Gate failed"
+_THIN_CORPUS_TITLE = "Corpus thinner than config asks"
+_MISSING_VERDICT = (
+    "No verdict was written, so no gate was read. The log of the gates step says why."
+)
+
 
 def _percent(part: int, whole: int) -> str:
     """A count against its denominator, because a rate alone is not a reading."""
@@ -165,11 +182,9 @@ def render_report(report: QualificationReport) -> str:
     different thing on every row is a column nobody can read.
     """
     failed = [outcome for outcome in report.gates if outcome.status is GateStatus.FAILED]
-    verdict = "QUALIFIED" if report.qualified else "ESCALATE"
-
+    verdict = _verdict_word(report)
     lines = [
-        f"## Qualification verdict: {verdict}",
-        "",
+        f"## {_VERDICT_TITLE}: {verdict}",        "",
         f"`{report.candidate.model_id}` on {report.date}, "
         f"{report.corpus_items} frozen articles, {report.repeats} repeats, "
         f"{report.scored} scored.",
@@ -240,12 +255,11 @@ def render_annotations(report: QualificationReport) -> list[str]:
     stays in the step summary.
     """
     failed = [outcome for outcome in report.gates if outcome.status is GateStatus.FAILED]
-    verdict = "QUALIFIED" if report.qualified else "ESCALATE"
     lines = [
         _command(
-            "notice",
-            "Qualification verdict",
-            f"{report.candidate.model_id}: {verdict}. "
+            _NOTICE,
+            _VERDICT_TITLE,
+            f"{report.candidate.model_id}: {_verdict_word(report)}. "
             f"{len(report.gates) - len(failed)} of {len(report.gates)} gates passed. "
             f"{report.corpus_items} articles, {report.repeats} repeats each, "
             f"{report.scored} scored.",
@@ -253,8 +267,8 @@ def render_annotations(report: QualificationReport) -> list[str]:
     ]
     lines += [
         _command(
-            "error",
-            f"Gate failed: {outcome.gate.value}",
+            _ERROR,
+            f"{_GATE_FAILED_TITLE}: {outcome.gate.value}",
             f"{outcome.measured} against {outcome.threshold}. Set by {outcome.source}. "
             f"{outcome.detail}",
         )
@@ -263,12 +277,21 @@ def render_annotations(report: QualificationReport) -> list[str]:
     if report.corpus_shortfalls:
         lines.append(
             _command(
-                "warning",
-                "Corpus thinner than config asks",
+                _WARNING,
+                _THIN_CORPUS_TITLE,
                 "; ".join(report.corpus_shortfalls),
             )
         )
     return lines
+
+
+def render_missing_verdict() -> str:
+    """What the run page says when the gates wrote no verdict at all."""
+    return _command(_ERROR, _VERDICT_TITLE, _MISSING_VERDICT)
+
+
+def _verdict_word(report: QualificationReport) -> str:
+    return _QUALIFIED if report.qualified else _ESCALATE
 
 
 def _command(level: str, title: str, message: str) -> str:

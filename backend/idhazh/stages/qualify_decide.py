@@ -37,6 +37,10 @@ from idhazh.stages.decide import DECIDE_SHARD
 #: as its producer: this module's own dotted name, less the package.
 PRODUCER: Final = __name__.partition(".")[2]
 
+#: The verdict as a contract payload, and the page a reader opens beside it.
+REPORT_JSON: Final = "report.json"
+REPORT_MD: Final = "report.md"
+
 
 def stage_qualify_decide(
     *,
@@ -116,9 +120,9 @@ def stage_qualify_decide(
             or f"every gate passed on {len(frozen.items)} frozen articles"
         ),
     )
-    atomic_write.write_atomic(common.QUALIFICATION_ROOT / "report.json", report.to_json())
+    atomic_write.write_atomic(common.QUALIFICATION_ROOT / REPORT_JSON, report.to_json())
     atomic_write.write_atomic(
-        common.QUALIFICATION_ROOT / "report.md",
+        common.QUALIFICATION_ROOT / REPORT_MD,
         qualification_summary.render_report(report),
     )
 
