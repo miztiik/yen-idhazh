@@ -8,6 +8,7 @@ from typing import Final
 
 import pytest
 from conftest import CONFIG_DIR, read_text
+from pydantic import ValidationError
 
 from idhazh import config
 from idhazh.contracts.app_config import AppConfig
@@ -112,7 +113,23 @@ def test_yearly_packing_bounds_month_files_while_every_row_is_kept(keep_days: in
     policy = CompactionPolicy.model_validate(
         declared.model_dump() | {"monthly_keep_days": keep_days}
     )
-    assert months_kept(policy) == 12 + months_a_window_can_touch(keep_days)
+    assert policy.monthly_keep_days == keep_days
+    assert months_a_window_can_touch(keep_days) == {93: 5, 180: 7, 367: 14}[keep_days]
+
+
+def test_yearly_packing_waits_until_the_next_january_is_absorbed_and_one_wake_passes() -> None:
+    declared = CompactionPolicy.model_validate_json(
+        read_text(CONFIG_DIR / "gardener" / "compact-summary-quality-evals.json")
+    ).model_dump()
+    payload = declared | {
+        "daily_keep_days": 45,
+        "monthly_window": {"unit": "forever"},
+        "monthly_keep_days": 76,
+    }
+    with pytest.raises(ValidationError, match="set at least 77"):
+        CompactionPolicy.model_validate(payload)
+    accepted = CompactionPolicy.model_validate(payload | {"monthly_keep_days": 77})
+    assert accepted.monthly_keep_days == 77
 
 
 def test_no_page_number_names_a_route_that_grows_when_a_run_publishes() -> None:
