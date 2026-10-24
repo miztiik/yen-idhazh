@@ -74,7 +74,9 @@ Table D - PR outcomes
 | D16 | 16 | Bounded state CSV integrity checks | 1 | O | DONE | bound-csv-integrity-checks | [#1668](https://github.com/miztiik/yen-idhazh/pull/1668), merged at `cff5cc58c8cc15c59b5b525fca84335e2e88c4ce` | - |
 | D17 | 17 | Default-on host-placement acquisition control | 12 | P | IN-FLIGHT | host-fingerprint-placement | - | - |
 | D18 | 18 | Workflow checks reject supported broken inputs | 1, 22 | Q | IN-FLIGHT | strengthen-workflow-proof-checks | - | - |
-| D19 | 19 | Independent source-health publication proofs | 1 | R | IN-FLIGHT | prove-source-health-publication | - | - |
+| D19 | 19 | Independent source-health publication proofs | 1 | R | DONE | prove-source-health-publication | [#1674](https://github.com/miztiik/yen-idhazh/pull/1674), merged at `e7f46b2317852ea5d3f212f83ea86ac51edc05ed` | - |
+| D20 | 20 | Prove reader output behavior | 1 | S | IN-FLIGHT | prove-reader-output-behavior | - | - |
+| D21 | 21 | Prove ledger dates and named-plan reads | 1 | T | IN-FLIGHT | prove-ledger-date-selection | [#1675](https://github.com/miztiik/yen-idhazh/pull/1675) | - |
 
 The canary implementation for Row 3 is delivered separately from its suite-wide
 review obligation. Rows 5 and 6 carry additional changes found by that review.
@@ -980,8 +982,10 @@ counts use the untouched archive and the completed branch instead.
   SHA-256 `e70837f6e5c8b8ae8bd035baf992bc378f366015b6873543b89957f3fa2107fc`.
   Only D14 and this section were added. All prior rows, including A5, D3,
   Rows 11-13 and the D10 merge receipt, remain unchanged.
-- **Delivery:** One phase PR for review; do not merge. No production, config,
-  contract, fixture, prompt, acceptance, frontend or dependency changes.
+- **Delivery:** Implementation was delivered in
+  [#1665](https://github.com/miztiik/yen-idhazh/pull/1665), merged at
+  `fe086c907f50f52c7c51a9c98c4425ce6f6e6357`. No production, config, contract,
+  fixture, prompt, acceptance, frontend or dependency changes.
 - **Dependencies:** Row 1. The frozen complete successor releases the
   serialized plan editor to Row 15 before PR delivery or CI completes.
 
@@ -1027,9 +1031,11 @@ counts use the untouched archive and the completed branch instead.
   `a7af64af9b7b3261997ffbb0bf61d3efb7aed6b6c0ca01f32ba06ec02f4e043a`.
   Only D15 and this section were added. All earlier text, A5, D3 IN-FLIGHT,
   Rows 11-14 and the D10 merge receipt remain unchanged.
-- **Delivery:** One phase PR for coordinator review and merge. No new config,
-  persisted shape, dependency, model choice, default or safety rule. Runtime
-  behavior is preserved; no canonical utility documentation required a change.
+- **Delivery:** Implementation was delivered in
+  [#1667](https://github.com/miztiik/yen-idhazh/pull/1667), merged at
+  `956fd7e27cdcbc927bd86ce54ecede4f993779ef`. No new config, persisted shape,
+  dependency, model choice, default or safety rule. Runtime behavior is
+  preserved; no canonical utility documentation required a change.
 - **Dependencies:** Row 1. The complete frozen successor releases the
   serialized editor to Row 16 before checks, push or CI.
 
@@ -1099,9 +1105,9 @@ counts use the untouched archive and the completed branch instead.
   `245fec63e996bd281be2bd305d97459c8319797cf93c9f749cfe53a19ada2f75`.
   Added only D16, this section and the expressly approved A5 CSV exception.
   All prior evidence, A5 exceptions and D3 IN-FLIGHT remain unchanged.
-- **Delivery:** One phase PR for coordinator review and merge; the worker
-  does not merge the PR. The frozen full successor releases the serialized
-  editor to Row 17 independently of checks, push or CI.
+- **Delivery:** Implementation was delivered in
+  [#1668](https://github.com/miztiik/yen-idhazh/pull/1668), merged at
+  `cff5cc58c8cc15c59b5b525fca84335e2e88c4ce`. The worker did not merge it.
 - **Dependencies:** Row 1.
 
 ## 18 - Row #17 - Default-on host-placement acquisition control
@@ -1288,7 +1294,108 @@ counts use the untouched archive and the completed branch instead.
   The complete frozen successor releases the serialized editor to Row 20
   independently of remaining gates, push or CI.
 - **Delivery:** One coherent phase PR for coordinator review and merge.
-  The worker opens it and does not merge it.
+  Implementation commit `d05dc235941ab15332a1e34bf33286184793860e` was
+  delivered in [#1674](https://github.com/miztiik/yen-idhazh/pull/1674),
+  merged 2026-10-24 at `10:04:18 UTC` as
+  `e7f46b2317852ea5d3f212f83ea86ac51edc05ed`. Exact-head `scope`, `gates` and
+  `site` checks passed; `robots` and `browser` were skipped.
+- **Dependencies:** Row 1.
+
+## 21 - Row #20 - Prove reader output behavior
+
+- **Scope:** Strengthen only `backend/tests/test_leading_stories.py` and
+  `backend/tests/test_render.py`. No production, config, contract, fixture,
+  dependency or frontend changes.
+- **Leading-story behavior:** Prove the configured block and desk caps, the
+  one-publication, one-subject and yesterday limits, item-id tie breaking,
+  freshness multiplication, null corroboration, and the block's configured
+  subject floor. Snapshot the caller's populated list and model values before
+  selection. Keep score-versus-input ordering, public-day preservation,
+  eligibility, provenance, true reasons and historical reads. Exercise the
+  12/13 wording edge with valid test-owned counts.
+- **Visual behavior:** Reverse both channels in a valid plan and derive the
+  expected marks from that plan and its table. Compare complete alt-text
+  number tokens to the source values. Keep published-data, provenance,
+  portability, output-failure and identity checks. Require the named no-picture
+  refusal, assert authored title and caption do not enter data, validate the
+  reserved item names through `ItemId`, set the test directory as the real
+  working directory, and prove a rejected write leaves no output tree.
+- **Evidence at freeze:** Against `c10fd2f03e90cad07fdd400cc55a72ef9042d2d8`,
+  the two modules collected 70 cases across 66 test functions. The new
+  freshness and weighted-signal cases add two functions; the count boundary
+  adds one case; one test name is corrected. No behavior test is removed.
+  The exact collected ids and source hashes are in the worker report.
+  `npm run test:changed -- --list` selected exactly these two backend modules.
+  The selected gate is queued on the shared gate lock; its result and the
+  disposable production-fault proofs are pending and are not represented as
+  passes. Fault copies must use the copied code and fail at the intended
+  assertions.
+- **Plan integration:** Verified and imported the complete frozen Row 19
+  predecessor, 102,543 bytes, SHA-256
+  `094f4dce4c63088201bc1120bbe9f58d5b69a837938c074962ee3bebf77eeaa7`.
+  Added only D20 and this section. Earlier rows, A5, D3, and Row 18's pending
+  Row 22 dependency remain unchanged. The complete frozen successor releases
+  the serialized editor to Row 21 independently of local gates and CI.
+- **Delivery:** Open one phase PR after plan integration. The worker does not
+  merge it.
+- **Dependencies:** Row 1.
+
+## 22 - Row #21 - Prove ledger dates and named-plan reads
+
+- **Scope:** Strengthen only `backend/tests/test_ledger.py` and
+  `backend/tests/test_plan_status.py`. No production, config, contract, fixture
+  or dependency changes. Do not change date meanings, accepted historical
+  payloads or publication policy.
+- **Ledger proofs:** `test_the_unbounded_cover_reads_one_held_month_at_a_time`
+  derives each expected month's days with `calendar.monthrange` and `date`,
+  independently of the production calendar helper, while retaining the
+  one-held-month-at-a-time read bound. The fitted-row test uses distinct valid
+  dates (`2026-09-18` fitted, `2026-09-17` covered), requires filing under the
+  fitted day, and reads back the row and writer identity. The newest-day test
+  explicitly names the generated dates (`2026-09-30`, `2026-10-01`,
+  `2026-10-02`), requires only `2026-10-01` and `2026-10-02` in the two-day
+  cover, and checks reliability using only those selected rows.
+- **Named-plan proofs:** The relative-root test requires the generated
+  `TODO/alpha.md` plan to be read with eleven populated rows and independent
+  first/last row values before comparing relative and absolute roots. Rename
+  `test_a_detached_worktree_is_never_asked_about_a_pull_request` to
+  `test_a_detached_worktree_note_omits_pull_request_wording`: the tested
+  guarantee is only that the note omits that wording. Do not add a pretend
+  GitHub client or claim that the test proves no request was made.
+- **Preserved guarantees:** Keep the 730-day cover/window safety, independent
+  116-part capture counts, read behavior, telemetry privacy, literal boundary
+  dates and real Git evidence. Do not alter the existing `FixedClock`
+  stand-in or timestamp semantics; its structural replacement is separate
+  work.
+- **Inventory:** Five baseline identifiers were collected. Four remain
+  unchanged; the detached-worktree note test is the sole rename. No test
+  functions are added or removed. Baseline SHA-1 object IDs were
+  `7879f3be43eded3350fc6a6be5c6cad79969cd2b` for `test_ledger.py` and
+  `43218ab4d92db65e963eb590f5f72dafc1cc2d7c` for `test_plan_status.py`;
+  resulting object IDs are `2312aab2e7fc587c7dd9a3be9ccf21bdb0e994de` and
+  `9be52e6a5d199d3f3451cea4017512d615505eb5`, respectively.
+- **Verification:** The shared selector record
+  `backend/var/checks/44fa0b73b9c905debcf25aa8af6aa523cb6e9f7dbbedd04961092167d15a0131.json`
+  records whitespace, Ruff, mypy and all 91 selected tests passing. Its source
+  modules match the unchanged Row 21 commit blobs
+  `2312aab2e7fc587c7dd9a3be9ccf21bdb0e994de` and
+  `9be52e6a5d199d3f3451cea4017512d615505eb5`; therefore this evidence is
+  reused for Row 21 without a repeat solely for main integration. Seven
+  disposable production faults failed at their intended assertions, five
+  controls passed before and after, and restored source hashes were verified.
+  No full-suite run is claimed.
+- **Plan integration:** Merged current `origin/main`
+  `e7f46b2317852ea5d3f212f83ea86ac51edc05ed` normally. Preserved the current
+  Row 11 section and verified receipts for Rows 11, 12, 14, 15, 16 and 19,
+  along with all other phase sections, A5 and D3. The two Row 21 test-module
+  blobs remain unchanged. The frozen historical Row 21 successor remains
+  108,564 bytes with SHA-256
+  `85bb171daf2a4e00cd4689817825e295d10ddd6a0638381698f1299d682cbca3`.
+- **Delivery:** [#1675](https://github.com/miztiik/yen-idhazh/pull/1675) is
+  open for review and has not been merged. Source commit
+  `7950bf6825560734a28d0dcd1d57a7634a378ac2` remains unchanged; the current
+  integration is subject to exact-head CI. `test_ledger.py` ownership remains
+  released.
 - **Dependencies:** Row 1.
 
 ## See also
