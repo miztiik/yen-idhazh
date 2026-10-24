@@ -70,13 +70,16 @@ an individual article's duration. The JSONL envelope exposes it as
 completion; feed and harvest-decision durations use the recorded operation
 measurements. Later decisions do not claim to have timed harvesting again.
 
-The existing JSON-LD parser records a malformed-metadata warning without
-copying publisher input. A completed article emits
+The existing JSON-LD parser removes malformed script nodes from its parsed
+document before Defuddle runs, and records a malformed-metadata warning without
+copying publisher input. Valid JSON-LD remains available to the project parser
+and Defuddle. A completed article emits
 `ARTICLE_EXTRACTION_WARNING` at `WARN` with source and candidate identity,
 and retains the warning in its diagnostic object even if extraction succeeds.
-Defuddle 0.19.5 has no supported logger callback; its own parse-error output
-can still include a bundled stack. This change neither replaces its parser
-nor patches or suppresses the global console. Its debug option stays off.
+Defuddle 0.19.5 has no supported logger callback. This change neither replaces
+its parser nor patches or suppresses the global console; removing malformed
+scripts prevents its parser from retrying and logging them. Its debug option
+stays off.
 
 Undici's decompression interceptor remains experimental. That warning concerns
 dependency stability, not an article failure. The mature built-in zlib codecs

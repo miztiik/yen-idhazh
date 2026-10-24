@@ -28,12 +28,7 @@ function declaresPaywall(value: unknown): boolean {
   return Object.values(value).some(declaresPaywall);
 }
 
-function paywallEvidence(document: Document, html: string, markers: readonly string[]): {
-  paywall: HarvestObservation["paywall"]; paywall_evidence: HarvestObservation["paywall_evidence"];
-  warnings: HarvestDiagnostics["warnings"];
-  metadata: unknown[];
-} {
-  let declared = false;
+function publisherMetadata(document: Document): { metadata: unknown[]; malformed: boolean } {
   let malformed = false;
   const metadata: unknown[] = [];
   for (const script of document.querySelectorAll("script")) {
@@ -41,12 +36,25 @@ function paywallEvidence(document: Document, html: string, markers: readonly str
     let payload: unknown;
     try { payload = JSON.parse(script.textContent ?? ""); }
     catch (error) {
-      if (error instanceof SyntaxError) { malformed = true; continue; }
+      if (error instanceof SyntaxError) {
+        malformed = true;
+        script.remove();
+        continue;
+      }
       throw error;
     }
     metadata.push(payload);
-    if (declaresPaywall(payload)) declared = true;
   }
+  return { metadata, malformed };
+}
+
+function paywallEvidence(document: Document, html: string, markers: readonly string[]): {
+  paywall: HarvestObservation["paywall"]; paywall_evidence: HarvestObservation["paywall_evidence"];
+  warnings: HarvestDiagnostics["warnings"];
+  metadata: unknown[];
+} {
+  const { metadata, malformed } = publisherMetadata(document);
+  const declared = metadata.some(declaresPaywall);
   const warnings: HarvestDiagnostics["warnings"] = malformed ? ["malformed-json-ld"] : [];
   if (declared) return { paywall: true, paywall_evidence: "json-ld", warnings, metadata };
   const normalized = html.replace(/\s+/gu, " ").toLowerCase();
@@ -93,8 +101,13 @@ function extractDocument(html: string, configuredUrl: string, config: Extraction
   const { document } = parseHTML(html);
   if (!document.documentElement) throw new ArticleExtractionError("missing-document-root");
   const { metadata, ...paywall } = paywallEvidence(document, html, config.paywall_markers);
-  const corroborated = paywall.paywall ? null : corroborateWords(parseHTML(html).document, metadata, config.corroboration_min_words,
-    container => bodyText(extractBody(parseHTML(container).document, configuredUrl).content));
+  let corroborated: number | null = null;
+  if (!paywall.paywall) {
+    const corroborationDocument = parseHTML(html).document;
+    publisherMetadata(corroborationDocument);
+    corroborated = corroborateWords(corroborationDocument, metadata, config.corroboration_min_words,
+      container => bodyText(extractBody(parseHTML(container).document, configuredUrl).content));
+  }
   for (const node of document.querySelectorAll(".o-em-consent,.o-em-adblock")) node.remove();
   const extracted = extractBody(document, configuredUrl);
   const text = sanitizeText(bodyText(extracted.content));
