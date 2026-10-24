@@ -7,6 +7,7 @@ import type { HarvestInputs } from "./load-harvest-inputs";
 import type { PermittedFetcher } from "./robots-policy";
 import { ArticleExtractionError, extractArticle } from "./dom-extractor";
 import { canonicalizeUrl } from "./url-cleaner";
+import { matchUrlExclusion, urlExclusionMarker } from "./url-exclusions";
 import { fetchRejection, recordRejection } from "./record-rejection";
 import { calculateFreshness } from "../screen-article-candidates/freshness-decay";
 import { resolvePolicy } from "../config/resolve-policy";
@@ -49,14 +50,12 @@ export async function harvestArticle(
       candidate: null, rejection: recordRejection(source, context, "MISSING_REQUIRED_FIELDS", {}, article), observation,
     });
   }
-  const markers = context.exclusions?.blocked_url_markers ?? [];
-  const canonicalUrl = identity.canonical_url;
-  const blockedMarker = markers.find(marker => canonicalUrl.toLowerCase().includes(marker.toLowerCase()));
-  if (blockedMarker !== undefined) {
+  const blockedRule = matchUrlExclusion(identity.canonical_url, inputs.config.harvest.url_exclusions);
+  if (blockedRule !== undefined) {
     return HarvestArticleResultSchema.parse({
       candidate: null,
       rejection: recordRejection(source, context, "BLOCKED_URL_MARKER", {
-        matched_url_key: identity.url_key, matched_url_marker: blockedMarker,
+        matched_url_key: identity.url_key, matched_url_marker: urlExclusionMarker(blockedRule),
       }, article),
       observation,
     });

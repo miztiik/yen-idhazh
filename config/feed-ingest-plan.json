@@ -4,7 +4,10 @@
     "concurrency": 24,
     "fetch_timeout_ms": 6000,
     "user_agent": "Mozilla/5.0 (compatible; YenIdhazhBot/2026.10; +https://github.com/miztiik/yen-idhazh)",
-    "blocked_categories": ["links", "show types", "podcasts", "video", "galleries"]
+    "blocked_categories": ["links", "show types", "podcasts", "video", "galleries"],
+    "url_exclusions": [
+      { "host": "fool.com", "path_prefix": "/the-ascent", "include_subdomains": true }
+    ]
   },
   "triage": {
     "min_words_article": 180,

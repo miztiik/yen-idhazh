@@ -7,11 +7,21 @@ import {
   FeedCurationPolicySchema, FeedScreeningPolicySchema, VerticalPolicyOverrideSchema,
 } from "./policy.schema";
 
+export const FeedUrlExclusionSchema = z.strictObject({
+  host: z.hostname(),
+  path_prefix: z.string().startsWith("/").refine(value =>
+    value.startsWith("/") && !/[?#\\]/.test(value) && !value.startsWith("//")
+    && (value === "/" || !value.endsWith("/"))
+    && new URL(value, "https://example.invalid").pathname === value,
+  "path_prefix must be an absolute path without query, fragment, dot segments or trailing slash"),
+  include_subdomains: z.boolean(),
+});
 export const FeedHarvestConfigSchema = z.strictObject({
   concurrency: PositiveCountSchema,
   fetch_timeout_ms: PositiveCountSchema,
   user_agent: NonEmptySchema,
   blocked_categories: z.array(NonEmptySchema),
+  url_exclusions: z.array(FeedUrlExclusionSchema),
 });
 export const FeedTriageConfigSchema = FeedScreeningPolicySchema.extend({
   blocked_http_statuses: z.array(z.int().min(100).max(599)),
