@@ -609,7 +609,7 @@ are five responsibilities, not a requirement for five new files or a framework.
 
 | Responsibility | Contents and ownership |
 | --- | --- |
-| Source catalog | Stable feed identity and [immutable curated publisher IDs](../contracts/publisher-identity.md), endpoints, provenance, starting assumptions, `added_on`, `retired_on` and typed `retirement_reason`. The publisher-ID page approves the naming rules, location and simple config shape; feed assignments and runtime use remain open. No `retirement_note` or substitute notes field. Preserve unknown legacy values. |
+| Source catalog | Stable feed identity and [immutable curated publisher IDs](../contracts/publisher-identity.md), endpoints, provenance, starting assumptions, `added_on`, `retired_on` and open lowercase `retirement_reason`. The publisher-ID page defines naming, location and config shape. Live assignments remain unknown pending publisher-owned evidence; reviewed IDs are carried through planning and observation records. No `retirement_note` or substitute notes field. Preserve unknown legacy values. |
 | I Feed policy | Formula and objective revisions; signal directions, units, valid domains and normalizers; component/method weights; priors; decay; quotas/floors; taxonomy adaptation; transitions; assessment and hygiene budgets. Parameters declare ranges and step bounds. Each action can be observe-only, recommend, or delegated execution. |
 | Evidence and assessments | Reuse measured ledgers. Link assessor outputs to underlying event IDs, with event/assessment/arrival times, method and rubric revisions, context, pool/selection/assessment probabilities, exposure, attribution and raw costs. Distinguish observation, assessment and prediction. Multiple ratings do not create multiple outcomes. |
 | Derived state | Component estimates and support, composite, effective priority, topic distributions, restrictions, due probes and update checkpoints. Pipeline-owned state is distinct from human-edited policy and catalog. |
@@ -624,8 +624,12 @@ need an explicit reconciliation procedure rather than two conflicting answers.
 Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC: set `added_on` to the
 UTC date a feed first enters the catalog. Leave absent legacy dates and
 retirement reasons unknown; do not infer them. A newly retired feed has
-`retired_on` and a lower-case slug `retirement_reason`; an existing retired
-entry may keep its missing reason as unknown. Keep reason values open in config
+`retired_on` and an open lowercase `retirement_reason`; an existing retired
+entry may keep its missing reason as unknown. Runtime readers preserve missing
+legacy values and validate recorded fields, but cannot identify an incomplete
+new edit from those same bytes. A new feed requires `added_on`; a new
+retirement requires `retired_on` and `retirement_reason` in curated edit review.
+Do not invent an unknown first-entry date. Keep reason values open in config
 so adding one does not require a code edit. These values remain in
 `config/sources.json`; source additions and changes must not need
 per-source code edits.
@@ -918,7 +922,7 @@ writing them as a plan earlier states decisions nobody made.
 | [probe_feeds.py](../../../backend/utilities/probe_feeds.py) | Improve the admission report. Preserve production fetch/extraction behavior; replace the any-one-success admission interpretation. |
 | [source_health.py](../../../backend/idhazh/telemetry/publish/source_health.py) and [item health](item-health.md) | Reuse source-outcome definitions carefully. The public view's maturity is global, not each feed's history, and the public JSON is not planner control state. |
 | [stages/plan.py](../../../backend/idhazh/stages/plan.py) and [rank.py](../../../backend/idhazh/rank.py) | Put temporary article-access decisions before spending the next article slot. Check the owning path when implementation starts; do not use a later warning as the control. |
-| [sources.py](../../../backend/idhazh/contracts/sources.py) | Define the feed-specific catalog changes and migration first. Keep `added_on`, `retired_on` and a typed `retirement_reason`; no `retirement_note`. |
+| [sources.py](../../../backend/idhazh/contracts/sources.py) | Define feed-specific catalog fields and compatible reads. Keep `added_on`, `retired_on` and an open lowercase `retirement_reason`; no `retirement_note`. |
 | [discover.py](../../../backend/idhazh/discover.py) | Fix host/path matching separately from identity-changing query cleanup. There is no `/news/` allowlist to remove. |
 | [test_discover.py](../../../backend/tests/test_discover.py) and [test_publish_source_health.py](../../../backend/tests/test_publish_source_health.py) | Extend bounded fixtures for the touched behavior. Add a focused report test when its contract is defined. |
 
