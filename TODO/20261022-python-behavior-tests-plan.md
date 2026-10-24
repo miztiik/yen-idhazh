@@ -1919,6 +1919,35 @@ Table I - Independent controls and expected faults
   `test_runner.py` SHA-256
   `ddf22cc620c300434686a0a81f2154801d5e89dd33122de6f961f324bb88375b`.
   The source-writing slot is released independently of gates and plan handoff.
+- **Post-freeze wording correction:** Coordinator-authorized level-0 commit
+  `598e9ff49` additionally changes `backend/tests/test_silicon.py`. Rename
+  `test_the_committed_config_reads_bandwidth_on_the_bench_and_nowhere_else`
+  to `test_the_committed_config_requests_no_bandwidth_jobs` and correct only
+  its docstring: the approved empty job list disables bandwidth everywhere.
+  AST comparison confirms the exact `assert named == ()` body and every other
+  module statement remain unchanged. Ruff and whitespace checks pass. No
+  placement case, helper, default or policy changes; no unchanged silicon
+  suite rerun. The released immutable full successor remains historical.
+- **Post-freeze local results:** The bounded run of the 14 named gardener
+  modules passed all 215 cases with no failures, errors or skips. The JUnit
+  receipt is `backend/var/row27-gardener-users.xml` in the retained worktree.
+  Row 17 supplied its unchanged real placement proof receipt; the consumed
+  production `silicon.py` blob
+  `3c04fb46085421176d1750b479856ba56eb0d809` and original test module blob
+  `6501c6d18c517fd1698e02bc97b0cbc14b2a3ce9` match the Row 27 inputs.
+  Config-off, caller-off and collection-suppression faults were each detected,
+  and that runner restored its production source byte-for-byte. Reuse this
+  receipt without rerunning the unchanged fingerprint suite. Row 17 PR
+  [#1682](https://github.com/miztiik/yen-idhazh/pull/1682) is open, not merged,
+  at this receipt. No CI pass is claimed here.
+- **Delivery integration:** Row 17 PR
+  [#1682](https://github.com/miztiik/yen-idhazh/pull/1682) merged at
+  `e3433f078fc74c82dbfa7729c3876204c3958550`. Merge that current main normally;
+  keep its complete canonical rows 1 through 29, corrected Row 24 repair cap
+  and all newer receipts. Reject duplicate row headings and outcome IDs before
+  indexing them. The two gardener sources retain their frozen hashes; reuse
+  the accepted local results rather than rerun unchanged checks. Open the
+  authorized Row 27 phase PR without merging it.
 - **Plan integration:** Imported the exact released Row 26 full predecessor,
   141,434 bytes, SHA-256
   `d969aaf615469d8b84e3298d861332428346aa9f5d706bea0a96d83acb54c833`.

@@ -50,6 +50,7 @@ from ._garden import (
     git,
     on_origin,
     quiet_git,
+    read_origin,
     write,
 )
 from ._garden import task_package as a_package
@@ -193,10 +194,9 @@ def test_a_shard_records_the_machine_it_drew_and_names_it_among_its_writes(
     declares every file it wrote and its publisher refuses one it did not, so a
     row written by a step alongside would be a row nobody staged.
 
-    The bandwidth cell is the one it leaves empty. `host_fingerprint_bandwidth_jobs`
-    names the bench, and a copy timed between two tasks would measure the wake
-    rather than the machine - so `memcpy_probe_mib` of zero is the reading, and
-    every other cell is still taken.
+    The fixture enables local collection, but selects neither bandwidth nor
+    external placement. These controls are loaded from its own config, not
+    inherited from production defaults. See `docs/reference/host-metrics.md`.
     """
     origin, checkout, settings = a_garden(tmp_path, monkeypatch, "runner", RUNNER_FILES)
     monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "9")
@@ -217,6 +217,14 @@ def test_a_shard_records_the_machine_it_drew_and_names_it_among_its_writes(
     assert machine.pipeline_name == "gardener"
     assert machine.task_name == "run-tasks"
     assert machine.run_id == RUN_ID, "the row is filed under the run the wake was given"
+    assert machine.measured_at is not None, "the local host observation was not taken"
+    assert machine.cpu_target_measured_at == machine.measured_at
+    assert (
+        machine.vm_size,
+        machine.vm_location,
+        machine.vm_zone,
+        machine.vm_fault_domain,
+    ) == (None, None, None, None)
     assert machine.memcpy_probe_mib == 0, "the wake timed a copy the knob did not ask for"
     assert machine.memcpy_gib_s is None, "an untaken reading is absent, never a rate"
     assert machine.job_seconds == 0, "the fixture's clock never advanced"
@@ -232,10 +240,14 @@ def test_a_shard_records_the_machine_it_drew_and_names_it_among_its_writes(
     )
     assert all((checkout / path).is_file() for path in named)
     if land:
-        assert all(on_origin(origin, path) is not None for path in named)
+        landed = read_origin(origin, tmp_path / "landed-host", *sorted(named))
+        assert all((landed / path).read_bytes() == (checkout / path).read_bytes() for path in named)
+    else:
+        assert all(on_origin(origin, path) is None for path in named)
     files = ledger.list_raw_files(
         checkout / ledger.STATE_DIRNAME, LedgerName.HOST_FINGERPRINT, days={WAKE.date().isoformat()}
     )
+    assert {held.path.relative_to(checkout).as_posix() for held in files} == named
     assert {held.envelope.identity.attempt for held in files} == {1}
 
 
@@ -250,6 +262,11 @@ def test_a_shard_uses_its_loaded_fingerprint_switch(
     assert outcome.exit_code == EXIT_OK
     assert outcome.landing is not None
     assert not any("host-fingerprint" in path for path in outcome.landing.written_paths)
+    assert not ledger.list_raw_files(
+        checkout / ledger.STATE_DIRNAME,
+        LedgerName.HOST_FINGERPRINT,
+        days={WAKE.date().isoformat()},
+    )
 
 
 def test_a_shard_whose_own_family_is_paused_fails_loudly_and_records_nothing(
