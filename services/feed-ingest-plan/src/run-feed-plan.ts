@@ -22,6 +22,7 @@ import type { PlanInputs } from "./load-plan-inputs";
 import type { PlanningMetricsResult, PublicationMetricsResult, PublicationRecorderInput } from "./metrics/metrics-recorder";
 import { createProgressLogger } from "./logging/progress-logger";
 import type { ProgressRecord } from "./logging/progress-logger";
+import type { TaskProfiling } from "../../host-probes/src/task-profile/task-profiler";
 
 export type PlanRuntime = {
   git_sha: string;
@@ -32,6 +33,7 @@ export type PlanRuntime = {
   boundary?: NonNullable<Parameters<typeof harvestFeeds>[3]>;
   log?: (event: FeedIngestEvent) => void;
   progress?: (record: ProgressRecord) => void;
+  task_profiling?: TaskProfiling;
   evidence?: ReadonlyMap<string, ArticleEvidence>;
   opportunity?: OpportunityEvidence;
   seen_receipts?: readonly OwnSeenReceipt[];

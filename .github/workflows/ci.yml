@@ -68,6 +68,13 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Reject added or changed state CSV files
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node frontend/scripts/state-csv-guard.ts
+
       - id: decide
         env:
           EVENT: ${{ github.event_name }}
@@ -164,6 +171,14 @@ jobs:
           bun run check
           bun run test
 
+      - name: TypeScript host probes
+        if: needs.scope.outputs.code == 'true'
+        working-directory: services/host-probes
+        run: |
+          bun install --frozen-lockfile
+          bun run check
+          bun run test
+
       - name: TypeScript feed planner and native audit evidence
         if: needs.scope.outputs.code == 'true'
         working-directory: services/feed-ingest-plan
@@ -177,6 +192,18 @@ jobs:
         run: |
           bun test ./.github/scripts/tests/feed-ingest-plan-report.test.ts ./.github/scripts/tests/feed-ingest-plan-outputs.test.ts ./.github/scripts/tests/feed-ingest-plan-workflow.test.ts --timeout 30000
           bun run .github/scripts/feed-ingest-plan-verification.ts
+
+      - name: Live TypeScript RAM and optional copy proof
+        if: needs.scope.outputs.code == 'true'
+        run: bun run .github/scripts/feed-ingest-plan-profile-proof.ts
+
+      - name: Preserve TypeScript resource proof
+        if: ${{ always() && needs.scope.outputs.code == 'true' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: typescript-resource-proof
+          path: test-results/host-probes/resource-proof.json
+          if-no-files-found: warn
 
       - name: Tests, including the five injection canaries
         if: needs.scope.outputs.code == 'true'
