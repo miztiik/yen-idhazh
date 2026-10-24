@@ -26,8 +26,10 @@ from typing import Final
 import pytest
 import yaml  # type: ignore[import-untyped]
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text, seed_scores
+from council._config import copy_config
 from pydantic import ValidationError
 
+from idhazh.config import load
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.eval_row import EvalRow
@@ -532,17 +534,22 @@ def ledger(
     )
 
 
-def review(directory: Path) -> subprocess.CompletedProcess[str]:
+def review(
+    directory: Path, *, config_root: Path | None = None
+) -> subprocess.CompletedProcess[str]:
     windows = scheduled_windows()
+    command = [
+        sys.executable,
+        str(REPO_ROOT / REVIEW_MODULE),
+        "--recent-days",
+        windows["RECENT_DAYS"],
+        "--baseline-days",
+        windows["BASELINE_DAYS"],
+    ]
+    if config_root is not None:
+        command.extend(["--config", str(config_root)])
     return subprocess.run(
-        [
-            sys.executable,
-            str(REPO_ROOT / REVIEW_MODULE),
-            "--recent-days",
-            windows["RECENT_DAYS"],
-            "--baseline-days",
-            windows["BASELINE_DAYS"],
-        ],
+        command,
         cwd=directory,
         env={
             **os.environ,
@@ -590,10 +597,40 @@ def configured_floor() -> int:
     return max(drift.min_window_rows, drift.min_domain_rows)
 
 
+def configuration_with_window_floor(root: Path, floor: int) -> Path:
+    config_root = copy_config(root)
+    path = config_root / "idhazh.json"
+    app = json.loads(read_text(path))
+    app["drift"]["min_window_rows"] = floor
+    path.write_text(json.dumps(app), encoding="utf-8", newline="\n")
+    if load(config_root).app.drift.min_window_rows != floor:
+        raise AssertionError("the test config did not retain its validated drift floor")
+    return config_root
+
+
 #: What the review prints when neither window holds a row, so there is no day to read.
 NO_DAY: Final = (
     "The summary-quality-evals ledger holds no day in the requested window - nothing was compared"
 )
+
+
+def test_the_review_cli_reads_its_validated_configured_window_floor(tmp_path: Path) -> None:
+    default_floor = configured_floor()
+    authored_floor = default_floor + 1
+    config_root = configuration_with_window_floor(tmp_path, authored_floor)
+    ledger(tmp_path, recent=default_floor, baseline=default_floor)
+
+    result = review(tmp_path, config_root=config_root)
+
+    assert result.returncode != 0, result.stdout
+    assert (
+        f"the recent window holds {default_floor} of the {authored_floor} rows "
+        "a comparison needs"
+    ) in result.stdout
+    assert (
+        f"the baseline window holds {default_floor} of the {authored_floor} rows "
+        "a comparison needs"
+    ) in result.stdout
 
 
 @pytest.mark.parametrize(

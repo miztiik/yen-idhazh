@@ -68,7 +68,7 @@ Table D - PR outcomes
 | D10 | 10 | Independent historical reader proofs | 1 | I | DONE | independent-historical-reader-proofs | [#1659](https://github.com/miztiik/yen-idhazh/pull/1659), merged 2026-10-24 UTC at `f0449de3db08c710e5b2292a03910da157bcb498` | - |
 | D11 | 11 | Contract tests prove authored and constructed behavior | 1 | J | IN-FLIGHT | config-refusal-selection-proofs | [#1664](https://github.com/miztiik/yen-idhazh/pull/1664) | - |
 | D12 | 12 | Explicit controls and measurement behavior | 1 | K | IN-FLIGHT | explicit-control-behavior-proofs | [#1661](https://github.com/miztiik/yen-idhazh/pull/1661) | - |
-| D13 | 13 | Extraction and metric behavior | 1 | L | IN-FLIGHT | row13-test-proofs | - | - |
+| D13 | 13 | Extraction and metric behavior | 1 | L | IN-FLIGHT | row13-test-proofs | [#1670](https://github.com/miztiik/yen-idhazh/pull/1670) | - |
 | D14 | 14 | Grouping and dataset behavior | 1 | M | IN-FLIGHT | grouping-and-dataset-proofs | - | - |
 | D15 | 15 | Encoder thread resolution uses production behavior | 1 | N | DONE | prove-encoder-thread-resolution | - | - |
 | D16 | 16 | Bounded state CSV integrity checks | 1 | O | DONE | bound-csv-integrity-checks | - | - |
@@ -852,12 +852,15 @@ counts use the untouched archive and the completed branch instead.
 ## 14 - Row #13 - Extraction and metric behavior
 
 - **Scope:** Replace checks tied to current corpus, fixture or output counts
-  with behavior proofs driven by independent test inputs, without changing
-  production behavior or acceptance rules.
+  with behavior proofs driven by independent test inputs. Add a validated config
+  root to the shipped drift-report CLI so its configured behavior is tested
+  through the actual command. Preserve production thresholds and acceptance rules.
 - **Files touched:** `backend/tests/test_corpus.py`,
   `backend/tests/test_data_wrangler.py`, `backend/tests/test_derived_values.py`,
   `backend/tests/test_drift.py`, `backend/tests/test_elements.py`,
-  `backend/tests/test_entity_gap.py` and `backend/tests/test_evals.py`.
+  `backend/tests/test_entity_gap.py`, `backend/tests/test_evals.py` and
+  `backend/utilities/drift_report.py`, plus
+  `TODO/20261022-python-behavior-tests-plan.md` for this evidence correction.
 - **Changes and acceptance proof:**
   - Refuse a nonpositive pool multiple at the existing validation boundary;
     retain the committed-config loader proof. Give the data-wrangler row cap
@@ -866,8 +869,10 @@ counts use the untouched archive and the completed branch instead.
   - Keep successful committed-plan resolution and add a missing-element
     refusal. Use a test-owned histogram bin count and require the real resolver
     to return that number of bins.
-  - Review drift with a test-owned ledger whose recent window is one row short
-    of its independently chosen floor while the baseline has enough rows.
+  - Review drift through the shipped CLI with a test-owned config root and
+    populated ledger windows. Twenty rows pass the committed floor but fail
+    the validated nondefault floor of 21. The CLI accepts `--config`, defaults
+    to `DEFAULT_CONFIG_DIR` and passes that root to the real config loader.
     Check the reported shortfall, not source text or current defaults.
   - Replace fixed element totals with nonempty quantity and date conditions.
     Keep `ElementTable` overlap acceptance and prove the producer's real
@@ -890,23 +895,28 @@ counts use the untouched archive and the completed branch instead.
   The shared selector chose the seven changed modules. Whitespace and Ruff
   passed, mypy passed over 834 source files, and all 244 pytest cases passed.
   Record: `backend/var/checks/df85b2ab916049084e39bd0b3425b033fb75e127c6e5c9814a3097f144f70958.json`.
-  That run used the initial base above. A post-merge rerun on
-  `f0449de3db08c710e5b2292a03910da157bcb498` is in progress; upstream changed
-  none of the seven Row 13 test files.
-- **Negative proofs:** Seventeen disposable production faults failed at their
-  intended tests. Named unchanged controls passed, including committed config,
-  independent element hashing, committed-plan resolution and the truncation
-  safety bound. Span-drift faults failed both named survivors. All injected
-  source and config edits were restored byte-for-byte; the disposable
-  worktree was removed. Final test hashes matched the proof record.
+  That run used the initial base above. The stable post-merge selector run on
+  `f0449de3db08c710e5b2292a03910da157bcb498` passed Ruff, mypy over 834 source
+  files and all 244 selected tests; record:
+  `backend/var/checks/3b541520238458854a16e86dd8f2d82f5abbbd69ff4ace392779c5ef701d7073.json`.
+  Upstream changed none of the seven Row 13 test files. The review correction's
+  new CLI test passes alone; its full shared-selector run is pending.
+- **Negative proofs:** The original 16 non-drift production faults remain
+  reusable because their tested source and test inputs are unchanged. The
+  committed-config loader refusal proof and the new drift CLI config-boundary
+  fault proofs are pending. The prior drift-only fault is replaced by proofs
+  against both the shipped CLI's config loading and the report's use of the
+  loaded floor. The previous named controls include independent element
+  hashing, committed-plan resolution and the truncation safety bound.
 - **Plan integration:** The coordinator released the slot and named frozen
   predecessor `fc2711237a90f4b009e1d3cabf1bad2b77b69582` as the source. Rows 11
   and 12 and all earlier plan text are preserved; D10 now records its verified
   merge on 2026-10-24 UTC. A5 is unchanged, D3 remains open, and D12 remains
   IN-FLIGHT. No Row 17 setting or unrelated main-branch plan edit was imported.
 - **Delivery:** Row 13 is delivered for review in its own phase PR. The suite-
-  wide Row 3 review remains open. No production, persisted-contract, config,
-  fixture, frontend or dependency changes.
+  wide Row 3 review remains open. No persisted-contract, config-default,
+  fixture, frontend or dependency changes; the drift CLI has one optional
+  config-root argument whose default preserves the existing command behavior.
 - **Dependencies:** Row 1. Serialized plan editing is released for Row 14.
 
 ## 15 - Row #14 - Grouping and dataset behavior
