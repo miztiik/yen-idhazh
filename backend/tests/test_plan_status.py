@@ -126,9 +126,22 @@ def test_relative_repo_root_names_the_same_plan(
     todo.mkdir()
     (todo / "alpha.md").write_text(ALPHA, encoding="ascii", newline="\n")
     monkeypatch.chdir(tmp_path)
-    assert read_named_plans(Path(), ["TODO/alpha.md"]) == read_named_plans(
-        tmp_path, ["TODO/alpha.md"]
+    relative = read_named_plans(Path(), ["TODO/alpha.md"])
+    assert len(relative) == 1
+    (plan,) = relative
+    assert plan.path == PurePosixPath("TODO/alpha.md")
+    assert len(plan.rows) == 11
+    assert (plan.rows[0].row_id, plan.rows[0].title, plan.rows[0].status_word) == (
+        "1",
+        "First",
+        "DONE",
     )
+    assert (plan.rows[-1].row_id, plan.rows[-1].title, plan.rows[-1].status_word) == (
+        "11",
+        "Eleventh",
+        "IN-FLIGHT",
+    )
+    assert relative == read_named_plans(tmp_path, ["TODO/alpha.md"])
 
 
 @pytest.fixture
@@ -509,7 +522,7 @@ def test_a_worktree_a_row_claims_is_named_by_that_row(tree: Path) -> None:
     assert "2 commits ahead" in note.detail
 
 
-def test_a_detached_worktree_is_never_asked_about_a_pull_request(tree: Path) -> None:
+def test_a_detached_worktree_note_omits_pull_request_wording(tree: Path) -> None:
     note = judge_tree(facts("review", branch=None, uncommitted=0, pull_read=False), [])
     assert "detached" in note.detail
     assert "pull request" not in note.detail
