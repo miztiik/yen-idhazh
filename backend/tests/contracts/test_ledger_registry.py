@@ -504,8 +504,7 @@ def test_the_claimed_roots_differ_from_the_base_only_by_the_names_given() -> Non
     gardener's own ledger, which files under the two roots and is claimed like
     every family. The last two are not families at all: they are the roots the
     ledger door files under, claimed so the sweep never reads them as a trial
-    run's trees. The retired candidate-models family stays claimed so its
-    historical rows survive.
+    run's trees.
     """
     assert ledger.claimed_roots() - CLAIMED_AT_THE_BASE == {
         "feed-ingest-plan",
@@ -516,7 +515,6 @@ def test_the_claimed_roots_differ_from_the_base_only_by_the_names_given() -> Non
         "traces",
         "day-metrics",
         "digest-fragments",
-        "candidate-models",
         "gardener",
         "raw",
         "run-plan",

@@ -4,7 +4,6 @@
   "max_downloaded_mb": 128,
   "shards": 5,
   "task_names": [
-    "compact-candidate-models",
     "compact-council-run-records",
     "compact-counterfactual-scores",
     "compact-feed-health",

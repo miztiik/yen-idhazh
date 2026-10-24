@@ -220,7 +220,6 @@
     "payload_ceilings_bytes": {
       "config/ledgers.json": 3400,
       "console/band.json": 2000,
-      "state/compact/candidate-models/index/": 2200,
       "state/compact/counterfactual-scores/index/": 2200,
       "state/compact/host-fingerprint/index/": 2200,
       "state/compact/item-health/index/": 2200,

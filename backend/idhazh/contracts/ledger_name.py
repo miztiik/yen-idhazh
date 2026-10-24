@@ -46,8 +46,6 @@ class LedgerName(StrEnum):
     ITEM_HEALTH = "item-health"
     HOST_FINGERPRINT = "host-fingerprint"
     SUMMARY_QUALITY_EVALS = "summary-quality-evals"
-    # Retired ledger name retained to read historical state.
-    CANDIDATE_MODELS = "candidate-models"
     ITEM_HEALTH_SUMMARY = "item-health-summary"
     PUBLISHED = "published"
     FEED_RETIREMENTS = "feed-retirements"
