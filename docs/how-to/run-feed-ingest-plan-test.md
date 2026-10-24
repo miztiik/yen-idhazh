@@ -89,7 +89,12 @@ bun run .github/scripts/feed-ingest-plan-verification.ts
 The test command allows the embedded strict TypeScript compiler up to 30
 seconds per test; this is not a planner speed requirement. One invocation
 checks the adapters, tests and actual inline program together, without a
-second adapter compilation. The workflow also runs strict package checks.
+second adapter compilation. That compiler reads a temporary copy of the
+workflow's exact named sparse selection, with links only for selected
+directories and their installed dependencies. Unselected adapter files in a
+complete developer or CI checkout cannot satisfy its imports. Removing a
+required module from the sparse selection must fail this existing case.
+The workflow also runs strict package checks.
 The existing main CI gates job runs these exact three selectors and the
 native verifier after its package checks. A normal planner-suite pass alone
 cannot replace that adapter and workflow preflight.
@@ -350,6 +355,10 @@ coordinator-owned manual dispatch after review.
 The initial sparse checkout names configuration, relevant service and package
 directories, the adapter scripts and tests, dependency manifests and locks,
 and bounded recorded fixtures. It excludes the backend.
+The resource, cache and profile reporters require both
+`.github/scripts/feed-ingest-plan-pid-report.ts` and
+`.github/scripts/feed-ingest-plan-resource-values.ts` in that named selection;
+checking them only in a complete checkout does not prove hosted readiness.
 
 The workflow uses the runner's `requiredSeenDays` with the same captured UTC
 clock. The current `collect.seen_window_days` value is 90, so its inclusive

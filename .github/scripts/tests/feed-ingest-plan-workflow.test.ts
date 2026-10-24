@@ -433,26 +433,43 @@ test("strict-checks adapters, tests and the actual inline program in one compile
   const { steps } = await workflow();
   const directory = await mkdtemp(join(root, ".row12-typecheck-"));
   try {
+    const checkout = steps.find(step => step.uses?.startsWith("actions/checkout@"))!;
+    const selection = checkout.with?.["sparse-checkout"];
+    if (typeof selection !== "string") throw new Error("Expected named sparse checkout inputs");
+    const adapters: string[] = [];
+    for (const entry of selection.trim().split("\n").map(value => value.trim())) {
+      if (!/^\/[\w./-]+$/.test(entry) || entry.split("/").includes("..")) {
+        throw new Error(`Expected a literal rooted sparse checkout input: ${entry}`);
+      }
+      const path = entry.slice(1);
+      const target = join(directory, ...path.split("/"));
+      await mkdir(dirname(target), { recursive: true });
+      if (entry.endsWith("/")) {
+        await symlink(join(root, ...path.split("/")), target, "junction");
+      } else {
+        await copyFile(join(root, ...path.split("/")), target);
+        if (path.startsWith(".github/scripts/") && path.endsWith(".ts")) adapters.push(target);
+      }
+    }
+    const inline = join(directory, "inline");
+    await mkdir(inline);
     const generated: string[] = [];
     for (const [index, step] of steps.entries()) {
       if (!step.run?.startsWith("bun run - <<'TS'")) continue;
       const script = step.run;
       const code = script.slice(script.indexOf("\n") + 1, script.lastIndexOf("\nTS"));
-      const path = join(directory, `workflow-${index}.ts`);
+      const path = join(inline, `workflow-${index}.ts`);
       await writeFile(path, code.replaceAll('from "./', 'from "../'), "utf8");
       generated.push(path);
     }
-    const service = join(root, "services", "feed-ingest-plan");
+    const service = join(directory, "services", "feed-ingest-plan");
     const child = Bun.spawn([
       "bun", "run", "tsc", "--noEmit", "--target", "ESNext", "--module", "ESNext",
       "--moduleResolution", "Bundler", "--strict", "--noUncheckedIndexedAccess",
       "--exactOptionalPropertyTypes", "--noFallthroughCasesInSwitch", "--noUnusedLocals",
       "--noUnusedParameters", "--verbatimModuleSyntax", "--skipLibCheck",
       "--types", "bun", "--typeRoots", join(service, "node_modules", "@types"), ...generated,
-      ...["feed-ingest-plan-outputs.ts", "feed-ingest-plan-feed-history.ts", "feed-ingest-plan-report.ts", "feed-ingest-plan-commit.ts", "feed-ingest-plan-verification.ts", "feed-ingest-plan-audit-fixture.ts",
-        "feed-ingest-plan-http-proof.ts", "feed-ingest-plan-profile-proof.ts",
-        "tests/feed-ingest-plan-outputs.test.ts", "tests/feed-ingest-plan-report.test.ts",
-        "tests/feed-ingest-plan-workflow.test.ts"].map(path => join(root, ".github", "scripts", ...path.split("/"))),
+      ...adapters,
     ], { cwd: service, stdout: "pipe", stderr: "pipe" });
     const [output, errors] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()]);
     expect({ exit: await child.exited, output, errors }).toEqual({ exit: 0, output: "", errors: "" });
