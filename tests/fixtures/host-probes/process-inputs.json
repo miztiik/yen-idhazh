@@ -1,7 +1,39 @@
 {
   "pid": 4242,
   "start_ticks": "12345",
+  "clock_ticks": "100\n",
   "stat": "4242 (recorded ) worker) R 1 1 1 0 -1 0 11 0 7 0 3 0 0 0 20 0 2 0 12345 0 0\n",
+  "cpu_intervals": [
+    {
+      "name": "multiple cores, no child or guest addition",
+      "closing_stat": "4242 (recorded ) worker) R 1 1 1 0 -1 0 11 0 7 0 253 50 999999 999999 20 0 2 0 12345 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 999999 999999\n",
+      "elapsed_ms": 1000,
+      "cpu_time_ms": 3000,
+      "percent_one_core": 300
+    },
+    {
+      "name": "zero ticks over a positive interval",
+      "closing_stat": "4242 (recorded ) worker) R 1 1 1 0 -1 0 11 0 7 0 3 0 0 0 20 0 2 0 12345 0 0\n",
+      "elapsed_ms": 750,
+      "cpu_time_ms": 0,
+      "percent_one_core": 0
+    },
+    {
+      "name": "actual interval rather than configured cadence",
+      "closing_stat": "4242 (recorded ) worker) R 1 1 1 0 -1 0 11 0 7 0 53 25 0 0 20 0 2 0 12345 0 0\n",
+      "elapsed_ms": 1500,
+      "cpu_time_ms": 750,
+      "percent_one_core": 50
+    },
+    {
+      "name": "large absolute counters retain a single tick",
+      "opening_stat": "4242 (recorded ) worker) R 1 1 1 0 -1 0 11 0 7 0 90071992547409920 7 0 0 20 0 2 0 12345 0 0\n",
+      "closing_stat": "4242 (recorded ) worker) R 1 1 1 0 -1 0 11 0 7 0 90071992547409921 7 0 0 20 0 2 0 12345 0 0\n",
+      "elapsed_ms": 2,
+      "cpu_time_ms": 10,
+      "percent_one_core": 500
+    }
+  ],
   "status": "Name:\trecorded worker\nVmRSS:\t600 kB\nVmHWM:\t900 kB\nRssAnon:\t400 kB\n",
   "closing_status": "Name:\trecorded worker\nVmRSS:\t700 kB\nVmHWM:\t900 kB\nRssAnon:\t500 kB\n"
 }

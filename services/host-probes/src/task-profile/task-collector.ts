@@ -4,25 +4,21 @@ import type { CpuCounters } from "../probe/cpu-sampler";
 import { parseMemoryInfo, parseVmstat } from "../probe/memory-probe";
 import { readProcFile } from "../probe/proc-reader";
 import type { Observation } from "../probe/proc-reader";
-import { readProcessIdentity, readProcessMemory, unavailableProcess } from "./process-memory";
+import { calculateCounterDifference } from "./counter-difference";
+import { ProcessCollector } from "./process-collector";
+import { ProcessPinError, readProcessIdentity } from "./process-stat";
 import { TaskProfileSchema } from "./profile-schema";
-import type { CollectorInput, OwnedProcess, ProcessSample, TaskOutcome, TaskProfile, TaskSample, TaskUnavailableReason } from "./profile-schema";
+import type { CollectorInput, OwnedProcess, TaskEndReason, TaskOutcome, TaskProfile, TaskSample, TaskUnavailableReason } from "./profile-schema";
 
 type Point = { at: number; cpu: Observation<CpuCounters>; sample: TaskSample };
 
-function difference(start: number | null, end: number | null, reason: TaskUnavailableReason): Observation<number, TaskUnavailableReason> {
-  return start === null || end === null ? { value: null, reason }
-    : end < start ? { value: null, reason: "counter_reset" }
-    : { value: end - start, reason: null };
-}
-
 export class TaskCollector {
   private readonly scratch: Buffer;
-  private readonly worker: Observation<OwnedProcess, TaskUnavailableReason>;
+  private readonly worker: ProcessCollector;
+  private readonly server: ProcessCollector;
   private readonly opening: Point;
   private readonly history: Point[] = [];
   private readonly samples: TaskSample[] = [];
-  private readonly rssMax: Record<"worker" | "server", number | null> = { worker: null, server: null };
   private sampleCount = 0;
   private periodicCount = 0;
   private fullWindowCount = 0;
@@ -34,21 +30,20 @@ export class TaskCollector {
 
   constructor(private readonly input: CollectorInput) {
     this.scratch = Buffer.alloc(input.max_proc_bytes + 1);
-    this.worker = input.config.memory_enabled
-      ? readProcessIdentity(input.worker_pid, input.max_proc_bytes, input.context, this.scratch)
-      : { value: null, reason: "configured_off" };
+    const observed = readProcessIdentity(input.worker_pid, input.max_proc_bytes, input.context, this.scratch);
+    const worker: Observation<OwnedProcess, TaskUnavailableReason> = input.target !== null
+      ? { value: input.target, reason: null }
+      : observed.reason !== null ? observed
+      : { value: { pid: observed.value.pid, start_ticks: observed.value.start_ticks }, reason: null };
+    this.worker = new ProcessCollector(input, worker, input.worker_pid, this.scratch);
+    this.server = new ProcessCollector(input, input.server === null
+      ? { value: null, reason: "not_configured" } : { value: input.server, reason: null }, input.server?.pid ?? null, this.scratch);
     this.opening = this.capture("opening");
+    if (input.target !== null && this.worker.identityReason !== null) throw new ProcessPinError(this.worker.identityReason);
   }
 
-  private process(role: "worker" | "server"): ProcessSample {
-    const { config, server, worker_pid, max_proc_bytes, context } = this.input;
-    const target = role === "worker" ? this.worker.value : server;
-    const pid = role === "worker" ? worker_pid : server?.pid ?? null;
-    if (!config.memory_enabled) return unavailableProcess(pid, target?.start_ticks ?? null, "configured_off");
-    if (target === null) return unavailableProcess(pid, null,
-      role === "server" ? "not_configured" : this.worker.reason ?? "invalid_data");
-    return readProcessMemory(target, max_proc_bytes, context, this.scratch);
-  }
+  get target(): OwnedProcess | null { return this.worker.pin.value; }
+  get ownerEndReason(): TaskEndReason | null { return this.worker.ownerEndReason; }
 
   private capture(phase: TaskSample["phase"]): Point {
     const { config, max_proc_bytes, context } = this.input;
@@ -89,7 +84,7 @@ export class TaskCollector {
       phase, observed_at: new Date().toISOString(), elapsed_ms,
       cpu_window: { interval_ms, full_window: interval_ms >= config.cpu_window_ms, cpu: windowCpu },
       memory_kb, vmstat_major_faults,
-      processes: { worker: this.process("worker"), server: this.process("server") },
+      processes: { worker: this.worker.capture(), server: this.server.capture() },
       unavailable,
     };
     const point = { at, cpu, sample };
@@ -108,10 +103,6 @@ export class TaskCollector {
     if (memory_kb.available !== null) {
       this.availableMin = this.availableMin === null ? memory_kb.available : Math.min(this.availableMin, memory_kb.available);
     }
-    for (const role of ["worker", "server"] as const) {
-      const rss = sample.processes[role].memory_kb.rss;
-      if (rss !== null) this.rssMax[role] = Math.max(this.rssMax[role] ?? rss, rss);
-    }
     return point;
   }
 
@@ -119,21 +110,11 @@ export class TaskCollector {
     if (this.closed === undefined) this.capture("poll");
   }
 
-  close(outcome: TaskOutcome): TaskProfile {
+  close(outcome: TaskOutcome, end_reason: TaskEndReason = "task_settled"): TaskProfile {
     if (this.closed !== undefined) return this.closed;
     const end = this.capture("closing");
     const unavailable: TaskProfile["unavailable"] = {};
-    const processes = (role: "worker" | "server") => {
-      const start = this.opening.sample.processes[role];
-      const closing = end.sample.processes[role];
-      const faults = difference(start.major_faults, closing.major_faults,
-        start.unavailable.major_faults ?? closing.unavailable.major_faults ?? "missing_field");
-      const missing: ProcessSample["unavailable"] = {};
-      if (faults.reason !== null) missing.major_faults_delta = faults.reason;
-      if (this.rssMax[role] === null) missing.sampled_rss_max_kb = closing.unavailable["memory_kb.rss"] ?? "missing_field";
-      return { closing, sampled_rss_max_kb: this.rssMax[role], major_faults_delta: faults.value, unavailable: missing };
-    };
-    const faults = difference(this.opening.sample.vmstat_major_faults, end.sample.vmstat_major_faults,
+    const faults = calculateCounterDifference(this.opening.sample.vmstat_major_faults, end.sample.vmstat_major_faults,
       this.opening.sample.unavailable.vmstat_major_faults ?? end.sample.unavailable.vmstat_major_faults ?? "missing_field");
     if (faults.reason !== null) unavailable.machine_major_faults_delta = faults.reason;
     if (this.availableMin === null) unavailable.machine_available_min_kb = end.sample.unavailable["memory_kb.available"] ?? "missing_field";
@@ -142,14 +123,18 @@ export class TaskCollector {
       unavailable.sampled_busy_max_percent = unavailable.sampled_busy_min_percent;
     }
     this.closed = TaskProfileSchema.parse({
-      identity: this.input.identity, collector: "worker_thread", outcome,
+      identity: this.input.identity, collector: "worker_thread",
+      outcome: this.ownerEndReason !== null
+        || ["expired", "service_stopped", "start_aborted"].includes(end_reason) ? "cancelled" : outcome,
+      end_reason: this.ownerEndReason ?? end_reason,
       started_at: this.opening.sample.observed_at, finished_at: end.sample.observed_at,
       elapsed_ms: end.sample.elapsed_ms, config: this.input.config,
+      process_clock_ticks_per_second: this.input.clock_ticks_per_second,
       sample_count: this.sampleCount, periodic_sample_count: this.periodicCount, full_window_count: this.fullWindowCount,
       cpu: this.resetAt !== null ? { value: null, reason: "counter_reset" } : calculateCpuPercentages(this.opening.cpu, end.cpu),
       sampled_busy_min_percent: this.busyMin, sampled_busy_max_percent: this.busyMax,
       machine_available_min_kb: this.availableMin, machine_major_faults_delta: faults.value,
-      processes: { worker: processes("worker"), server: processes("server") },
+      processes: { worker: this.worker.summarize(), server: this.server.summarize() },
       unavailable, samples: this.samples,
     });
     return this.closed;
