@@ -60,16 +60,22 @@ export async function startCacheCounters(
     elapsed_ms = performance.now() - started;
     return output;
   });
-  if (!await tool.control("enable", config.lifecycle_timeout_ms)) {
-    if (tool.running) tool.cancel("timeout");
-    const output = await exited;
-    return stoppedCounterSession(unavailable(output.reason ?? classifyPerfFailure(output.stderr)));
-  }
-  const afterStart = validateCounterTarget(target, maxProcBytes, context);
-  if (afterStart) {
-    tool.cancel(afterStart);
+  try {
+    if (!await tool.control("enable", config.lifecycle_timeout_ms)) {
+      if (tool.running) tool.cancel("timeout");
+      const output = await exited;
+      return stoppedCounterSession(unavailable(output.reason ?? classifyPerfFailure(output.stderr)));
+    }
+    const afterStart = validateCounterTarget(target, maxProcBytes, context);
+    if (afterStart) {
+      tool.cancel(afterStart);
+      await exited;
+      return stoppedCounterSession(unavailable(afterStart));
+    }
+  } catch (error) {
+    tool.cancel("tool_failed");
     await exited;
-    return stoppedCounterSession(unavailable(afterStart));
+    throw error;
   }
   let closing: Promise<CacheCounters> | undefined;
   let settle: (value: CacheCounters | PromiseLike<CacheCounters>) => void;

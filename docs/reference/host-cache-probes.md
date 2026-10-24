@@ -39,8 +39,9 @@ signalled.
 working set. Chain construction writes the pointers before timing. The tool
 pins its own benchmark thread to its first allowed CPU, drops its initial
 500 millisecond warm-up sample, and reports nanoseconds per load.
-The adapter retains the actual working set, stride, translation-locality
-range, individual readings, mean, benchmark PID/start identity and interval.
+The adapter retains the actual working set, stride, reported native page size,
+translation-locality range, individual readings, mean, benchmark PID/start
+identity and interval.
 The translation-locality range groups nearby addresses to limit address
 translation overhead; it does not remove that overhead.
 

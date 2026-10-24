@@ -73,6 +73,7 @@ export const CacheLatencyPointSchema = z.strictObject({
   working_set_bytes: count.positive(),
   stride_bytes: count.positive(),
   tlb_locality_bytes: count.positive(),
+  page_size_bytes: count.positive(),
   nanoseconds_per_load: z.number().finite().positive(),
   sample_nanoseconds_per_load: z.array(z.number().finite().positive()).min(1),
   benchmark: OwnedProcessSchema,

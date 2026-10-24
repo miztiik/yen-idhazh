@@ -48,7 +48,13 @@ export async function measureWorkingSetLatency(
       "-n", String(config.latency.samples), "-F", "0", "-a", "-v",
     ], { max_output_bytes: config.max_output_bytes, timeout_ms: remaining }, signal);
     const pid = await tool.ready;
-    const identity = pid === null ? null : readProcessIdentity(pid, maxProcBytes, context);
+    let identity: ReturnType<typeof readProcessIdentity> | null;
+    try { identity = pid === null ? null : readProcessIdentity(pid, maxProcBytes, context); }
+    catch (error) {
+      tool.cancel("invalid_target");
+      await tool.finished;
+      throw error;
+    }
     if (!identity || identity.reason !== null) {
       if (tool.running) tool.cancel("invalid_target");
       const output = await tool.finished;

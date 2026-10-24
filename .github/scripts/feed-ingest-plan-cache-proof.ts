@@ -7,15 +7,21 @@ import { CacheCountersSchema, CacheLatencySchema } from "../../services/host-pro
 import { startCacheCounters } from "../../services/host-probes/src/cache-probe/cache-counters";
 import { measureWorkingSetLatency } from "../../services/host-probes/src/cache-probe/working-set-latency";
 import { readProcessIdentity } from "../../services/host-probes/src/task-profile/process-memory";
+import { OwnedProcessSchema } from "../../services/host-probes/src/task-profile/profile-schema";
+import { startBoundedTool } from "../../services/host-probes/src/cache-probe/bounded-tool";
 
 export const CacheProofSchema = z.strictObject({
   scope: z.literal("unprivileged_linux_cache_instruments"),
   status: z.enum(["running", "complete", "failed"]),
-  stage: z.enum(["counters", "latency", "complete"]),
-  counters_measurement: z.enum(["pending", "measured", "pending_permitted_pmu_host"]),
+  stage: z.enum(["counters", "cancellation", "latency", "complete"]),
+  counters_measurement: z.enum(["pending", "measured", "partial_pending_supported_events", "pending_permitted_pmu_host"]),
   default_off: z.strictObject({ counters: CacheCountersSchema, latency: CacheLatencySchema }),
   counters: CacheCountersSchema.nullable(),
   latency: CacheLatencySchema.nullable(),
+  cancellation: z.strictObject({
+    owned_benchmark: OwnedProcessSchema, reason: z.literal("cancelled"),
+    benchmark_exited: z.literal(true), target_preserved: z.literal(true),
+  }).nullable(),
   beyond_recorded_llc: z.boolean().nullable(),
   tool_install: z.strictObject({
     source_revision: z.string().regex(/^[a-f0-9]{40}$/),
@@ -46,7 +52,7 @@ export async function verifyLiveCacheProfiling(
   }
   const proof = CacheProofSchema.parse({
     scope: "unprivileged_linux_cache_instruments", status: "running", stage: "counters",
-    counters_measurement: "pending", default_off, counters: null, latency: null,
+    counters_measurement: "pending", default_off, counters: null, latency: null, cancellation: null,
     beyond_recorded_llc: null, tool_install: installation,
   });
   await report(proof);
@@ -62,13 +68,41 @@ export async function verifyLiveCacheProfiling(
   const counters = await capture.close();
   proof.counters = counters;
   const permittedRefusal = ["permission_denied", "event_unsupported", "not_counted"].includes(counters.reason ?? "");
-  proof.counters_measurement = counters.status === "measured" ? "measured" : permittedRefusal ? "pending_permitted_pmu_host" : "pending";
+  proof.counters_measurement = counters.status === "measured"
+    ? counters.events.every(event => event.support === "measured") ? "measured" : "partial_pending_supported_events"
+    : permittedRefusal ? "pending_permitted_pmu_host" : "pending";
   await report(proof);
   if (counters.status !== "measured" && !permittedRefusal) {
     proof.status = "failed";
     await report(proof);
     throw new Error(`Cache counter capability failed explicitly: ${counters.reason}`);
   }
+  proof.stage = "cancellation";
+  await report(proof);
+  const cancellation = new AbortController();
+  const benchmark = startBoundedTool("multichase", [
+    "-c", "simple", "-t", "1", "-m", String(enabled.latency.working_set_bytes[0]),
+    "-s", String(enabled.latency.stride_bytes), "-n", String(enabled.latency.samples), "-F", "0",
+  ], { max_output_bytes: enabled.max_output_bytes, timeout_ms: enabled.latency.timeout_ms }, cancellation.signal);
+  const benchmarkPid = await benchmark.ready;
+  let owned: ReturnType<typeof readProcessIdentity> | null;
+  try { owned = benchmarkPid === null ? null : readProcessIdentity(benchmarkPid, config.max_proc_bytes, {}); }
+  finally {
+    cancellation.abort();
+    await benchmark.finished;
+  }
+  const cancelled = await benchmark.finished;
+  if (!owned || owned.reason !== null || cancelled.reason !== "cancelled"
+    || readProcessIdentity(owned.value.pid, config.max_proc_bytes, {}).reason !== "process_exited"
+    || readProcessIdentity(target.pid, config.max_proc_bytes, {}).value?.start_ticks !== target.start_ticks) {
+    proof.status = "failed";
+    await report(proof);
+    throw new Error("Cache benchmark cancellation did not prove owned cleanup and target survival");
+  }
+  proof.cancellation = {
+    owned_benchmark: { pid: owned.value.pid, start_ticks: owned.value.start_ticks },
+    reason: "cancelled", benchmark_exited: true, target_preserved: true,
+  };
   proof.stage = "latency";
   await report(proof);
   const latency = await measureWorkingSetLatency(enabled, config.max_proc_bytes);

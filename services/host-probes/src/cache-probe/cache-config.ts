@@ -41,5 +41,7 @@ export const CacheProbeConfigSchema = z.strictObject({
       context.addIssue({ code: "custom", path: ["timeout_ms"], message: "timeout must allow measured samples and each tool warm-up" });
     }
   }),
+}).refine(value => value.counters.max_duration_ms + value.lifecycle_timeout_ms <= MAX_TIMER_MS, {
+  path: ["counters", "max_duration_ms"], message: "counter duration and shutdown allowance must fit the runtime timer",
 });
 export type CacheProbeConfig = z.infer<typeof CacheProbeConfigSchema>;
