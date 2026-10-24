@@ -1303,7 +1303,10 @@ counts use the untouched archive and the completed branch instead.
   subject floor. Snapshot the caller's populated list and model values before
   selection. Keep score-versus-input ordering, public-day preservation,
   eligibility, provenance, true reasons and historical reads. Exercise the
-  12/13 wording edge with valid test-owned counts.
+  12/13 wording edge with valid test-owned counts. Compose real rank output
+  with lead selection to prove the committed carriage step beats a qualifying
+  shared-subject term, while a zero-weight control proves that subject term is
+  active.
 - **Visual behavior:** Reverse both channels in a valid plan and derive the
   expected marks from that plan and its table. Compare complete alt-text
   number tokens to the source values. Keep published-data, provenance,
@@ -1313,12 +1316,16 @@ counts use the untouched archive and the completed branch instead.
   working directory, and prove a rejected write leaves no output tree.
 - **Evidence at freeze:** Against `c10fd2f03e90cad07fdd400cc55a72ef9042d2d8`,
   the two modules collected 70 cases across 66 test functions. The new
-  freshness and weighted-signal cases add two functions; the count boundary
-  adds one case; one test name is corrected. No behavior test is removed.
+  freshness, weighted-signal and rank-to-lead composition cases add three
+  functions; the count boundary adds one case; one test name is corrected. No
+  behavior test is removed.
   The exact collected ids and source hashes are in the worker report.
   `npm run test:changed -- --list` selected exactly these two backend modules.
-  The selected gate is queued on the shared gate lock; its result and the
-  disposable production-fault proofs are pending and are not represented as
+  The first selected run reported 72 passes and one failure: the freshness
+  comparison shared a publication id and was capped. That test now gives each
+  story a distinct id. Its queued retry was stopped before it started, and the
+  rank-to-lead correction has not run yet. The final selected gate and
+  disposable production-fault proofs remain pending and are not represented as
   passes. Fault copies must use the copied code and fail at the intended
   assertions.
 - **Plan integration:** Verified and imported the complete frozen Row 19

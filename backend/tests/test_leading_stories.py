@@ -19,13 +19,18 @@ import pytest
 
 from idhazh.assemble import leading_stories, subject_clusters
 from idhazh.config import load
+from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestRunRef, DigestVerticalRef
 from idhazh.contracts.eval_row import ConfidenceBand
 from idhazh.contracts.item_health import TimeSource
 from idhazh.contracts.knobs.placement import PlacementConfig
 from idhazh.contracts.knobs.ui import UiConfig
-from idhazh.contracts.taxonomy import SourceKind, Taxonomy
+from idhazh.contracts.run_plan import PlannedItem
+from idhazh.contracts.sources import SourceForm
+from idhazh.contracts.taxonomy import SourceKind, Taxonomy, VerticalDef
 from idhazh.contracts.watchlist import EntityDef, Watchlist
+from idhazh.discover import Candidate
+from idhazh.rank import plan_vertical
 
 #: The hour the block is chosen at. An hour after the default story appeared,
 #: so every story a test does not date itself sits inside the freshness
@@ -410,6 +415,143 @@ def test_the_weights_bind_and_the_top_story_is_not_the_top_rank_score() -> None:
     items[1] = items[1].model_copy(update={"also_covered_by": 4})
     assert choose(items)[0] == items[0].item_id
     assert choose(items, lead_also_covered_weight=0.1)[0] == items[1].item_id
+
+
+def test_rank_carriage_outranks_a_qualifying_shared_subject_in_the_block() -> None:
+    """The committed rank step must beat the smaller subject term in the real path."""
+    configured = load()
+    app = configured.app
+    ui = app.ui
+
+    def planned_story(
+        item_id: str,
+        *,
+        vertical: str,
+        url: str,
+        title: str,
+        source_ids: list[str],
+    ) -> tuple[DigestItem, PlannedItem]:
+        candidates = [
+            Candidate(
+                canonical_url=url,
+                source_url=url,
+                url_key=derive_url_key(url),
+                source_id=source_id,
+                vertical=vertical,
+                tier=1,
+                source_form=SourceForm.ARTICLE,
+                title=title,
+                published_at=NOW,
+                weight=1.0,
+            )
+            for source_id in source_ids
+        ]
+        planned = plan_vertical(
+            VerticalDef(id=vertical, display_name=DESKS[vertical], min_feeds=1),
+            candidates,
+            config=app.collect,
+            eligible_feeds=len(source_ids),
+            now=NOW,
+        ).items
+        assert len(planned) == 1
+        ranked = planned[0]
+        assert ranked.carried_by == len(source_ids)
+        return (
+            story(
+                item_id,
+                vertical=vertical,
+                source_id=ranked.source_id,
+                title=ranked.title or title,
+                rank_score=ranked.rank_score,
+                carried_by=ranked.carried_by,
+                published_at=ranked.published_at,
+            ),
+            ranked,
+        )
+
+    extra, extra_ranked = planned_story(
+        "ai-0000000000",
+        vertical="ai",
+        url="https://extra.example.test/report",
+        title="A new chip order",
+        source_ids=["extra-feed-a", "extra-feed-b"],
+    )
+    subject_entries = [
+        planned_story(
+            f"world-{index + 1:010d}",
+            vertical="world",
+            url=f"https://subject.example.test/report-{index}",
+            title=f"Nvidia reports an update {index}",
+            source_ids=[f"subject-feed-{index}"],
+        )
+        for index in range(ui.lead_cluster_floor)
+    ]
+    subjects = [item for item, _ in subject_entries]
+    subject_ranks = [ranked for _, ranked in subject_entries]
+    neutral, neutral_ranked = planned_story(
+        "business-economy-0000000000",
+        vertical="business-economy",
+        url="https://neutral.example.test/report",
+        title="A report on business conditions",
+        source_ids=["neutral-feed"],
+    )
+    items = [extra, *subjects, neutral]
+
+    def selected_ids(weights: UiConfig) -> list[str]:
+        return [
+            item.item_id
+            for item in leading_stories(
+                items,
+                date="2026-08-31",
+                watchlist=REGISTRY,
+                taxonomy=configured.taxonomy,
+                ui=weights,
+                placement=app.placement,
+                now=NOW,
+                desk_names=DESKS,
+            )
+        ]
+
+    selected = selected_ids(ui)
+    selected_without_subject_weight = selected_ids(
+        ui.model_copy(update={"lead_shared_subject_weight": 0.0})
+    )
+    subject_ids = {item.item_id for item in subjects}
+    assert selected[0] == extra.item_id
+    assert min(selected.index(item_id) for item_id in subject_ids if item_id in selected) < (
+        selected.index(neutral.item_id)
+    )
+    assert selected_without_subject_weight.index(neutral.item_id) < min(
+        selected_without_subject_weight.index(item_id)
+        for item_id in subject_ids
+        if item_id in selected_without_subject_weight
+    )
+
+    assert extra_ranked.carriage_step == app.collect.carriage_step
+    assert all(ranked.carriage_step == 0.0 for ranked in subject_ranks)
+    equal_terms = (
+        "authority_score",
+        "tier_score",
+        "feed_weight",
+        "feed_reliability",
+        "watchlist_bonus",
+        "lens_bonus",
+        "recency_bonus",
+    )
+    assert all(
+        getattr(extra_ranked, term) == getattr(subject_ranks[0], term)
+        for term in equal_terms
+    )
+    assert all(ranked.rank_score == neutral_ranked.rank_score for ranked in subject_ranks)
+
+    cluster = next(
+        entry
+        for entry in subject_clusters(items, REGISTRY, taxonomy=configured.taxonomy)
+        if entry.entity == "nvidia"
+    )
+    assert cluster.qualifies(ui.lead_cluster_floor)
+    assert cluster.sources == {item.source_id for item in subjects}
+    assert ui.lead_shared_subject_weight > 0.0
 
 
 def test_every_weight_but_the_rank_score_at_zero_is_todays_order() -> None:
