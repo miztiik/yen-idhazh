@@ -1,7 +1,7 @@
 # 12 - Visuals a reader can read
 
 **Last Updated**: 2026-10-24
-**Level**: 5 (core design: where a drawing becomes pixels, a persisted contract, the drawn surface, and two build-failing floors)
+**Level**: 5 (core design: where a drawing becomes pixels, a persisted contract, the drawn surface, and one build-failing floor)
 
 **Chain**: previous the two-call summariser plan (delivered, removed from TODO/) | next [`20260905-13-switch-on-deletion-plan.md`](20260905-13-switch-on-deletion-plan.md).
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - O4, O5, O18, O19, O20, O36, O47, rows 22 to 37, sections 2.2, 7, 7.2, 7.5.
@@ -17,12 +17,12 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | Why this plan exists | Plan 01 made the chart's colours readable. It is still drawn on a fixed 825 by 437 canvas, so on a 390 CSS px phone it scales to about 0.31x and a 10px axis label draws at about **3.1 CSS px** - below the smallest type on the site at every supported width. That is not a taste complaint; it is a chart whose labels nobody can read. This plan replaces the renderer and makes "can a person read it" a gate rather than an opinion |
 | Hard scope - in | d3 replaces Vega-Lite and `vl-convert` for every type the planner can already emit, **drawn in the reader's browser from data the payload carries**; the drawing takes the width it is given; the reader legibility floor is a **build-failing** oracle; the number formatter; caption and one annotated mark |
 | Hard scope - out | Any new visual type (plans 15 to 18). The byte cap, the keyboard route and hydration byte-identity (plan 14). The console (plan 20). Migrating the console's own charts - it keeps its engine and has no complaint against it. A reader mark-count density floor; mark-count adequacy stays with `visuals.min_chart_points` and `visuals.max_chart_points` in the visual validator |
-| Scope change | `2026-10-24`: row #6, "A whole day, again," is removed. A day-scale repeated browser pass is not a separate visual floor. It conflicts with the representative browser policy, and its page-level checks remain covered by the reader smoke plus each row's focused browser gate. Row #4 is also refined: it keeps only browser-computed reader label legibility; mark-count adequacy stays with the visual validator, and console label fitting and density rules stay with plan 20 |
+| Scope change | `2026-10-24`: row #6, "A whole day, again," is removed. A day-scale repeated browser pass is not a separate visual floor. It conflicts with the representative browser policy, and its page-level checks remain covered by the reader smoke plus each row's focused browser gate. Row #4 is also refined: it keeps only browser-computed reader label legibility; mark-count adequacy stays with the visual validator, and console label fitting and density rules stay with the console chart rules |
 | ESCALATE triggers | 1. The legibility floor cannot be satisfied at 390 CSS px without dropping data the plan selected - that is a planning problem, not a drawing one, and it goes back to plan 10's validator. 2. A per-type bespoke component is proposed - the payload's own metadata is the design system. 3. **Restated 2026-09-13 under the owner ruling.** It read: removing `vl-convert` moves a published byte other than through the intended redraw. Every drawing a reader receives moves now, by design, so the old trigger would fire on the intended change and catch nothing. What escalates instead is a day whose **marks** move - a published spec that draws a different number, a different count of marks, or a different order from the SVG it replaces. That is a compiler defect wearing a renderer's clothes. 4. The d3 modules the reading page now ships push it past its `page_weight` entry and the entry cannot be justified on what the reader gains |
 | Chosen strategy | **Contract first, then the engine, then the page, then the floors.** The payload learns to carry the chart's data while the old renderer still runs and nothing a reader sees moves; then the browser starts drawing and the renderer is deleted in one commit; then the layout work; then the floors that make it checkable. Contract, engine and layout are three different hats and no two share a commit |
 | Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4.` |
 
-**Why the legibility gate is in this plan and not the next.** A phase boundary is a place work stops. Full-width reflow **without** a legibility floor makes the wide end worse rather than better, and a check a person can skip is the one skipped on the day it would have bitten. Mark-count adequacy belongs to the visual validator, while console label fitting belongs to plan 20. Susan ruled the reader legibility gate into this plan on 2026-09-05 and narrowed it to browser-computed text size on 2026-10-24; the byte cap and the hydration check may stand alone.
+**Why the legibility gate is in this plan and not the next.** A phase boundary is a place work stops. Full-width reflow **without** a legibility floor makes the wide end worse rather than better, and a check a person can skip is the one skipped on the day it would have bitten. Mark-count adequacy belongs to the visual validator, while console label fitting belongs to the console chart rules. Susan ruled the reader legibility gate into this plan on 2026-09-05 and narrowed it to browser-computed text size on 2026-10-24; the byte cap and the hydration check may stand alone.
 
 ---
 
@@ -43,6 +43,8 @@ that the reader's browser draws the chart and the pipeline never does
 That makes the old row #1 a contract change and a renderer deletion in one commit, which are
 different hats and never share one (section 0). The contract lands first so the engine row is a
 deletion plus a drawing over data already on the wire.
+
+**Rows #1b and #2 are done, but no browser spec makes the assertions their oracles name.** Verified 2026-10-24: nothing in `frontend/tests` measures the reader's drawing, and `item-visual.spec.ts` is logic-only. Row #1b's d3 accounting is in `where-a-drawing-becomes-pixels.md`, not the `visuals.md` its row names. Row #4's browser case carries the missing assertions.
 
 ---
 
@@ -152,12 +154,13 @@ deletion plus a drawing over data already on the wire.
 
 ## 5. Row #3 - Numbers a reader can say out loud
 
-- **Scope:** The display formatter: SI prefixes, one declared locale applied at build time, declared precision, shared by the compiler and the console.
-- **Files touched:** a shared formatter module under `frontend/src/lib/`, `config/idhazh.json` (`visuals.number_format`), `backend/idhazh/contracts/app_config.py`, `schemas/app-config.schema.json`, `tests/fixtures/contracts/app-config/tuned.json`, `frontend/src/lib/charts/**`, `frontend/src/lib/visual/**`, `frontend/src/lib/console/**`, `frontend/tests/**`, `docs/concepts/design-system.md`
+- **Scope:** The display formatter: SI prefixes, one declared locale, declared precision, shared by every surface that prints a figure (the reader's drawing and the console).
+- **Files touched:** a shared formatter module under `frontend/src/lib/`, `config/idhazh.json` (`visuals.number_format`), `backend/idhazh/contracts/knobs/visuals.py`, `backend/idhazh/contracts/app_config.py` (version and changelog), `frontend/src/lib/server/config.ts`, `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`, `frontend/src/lib/charts/**`, `frontend/src/lib/visual/**`, `frontend/src/lib/console/**`, `frontend/tests/**`, `docs/concepts/design-system.md`
 - **`frontend/src/lib/visual/**` joined the list on 2026-09-13 and `charts/**` stays on it, and the two entries are the row's whole point.** Row #1b put the digest renderer in `frontend/src/lib/visual/bar.ts` and left the console's engine in `charts/`, so there are now two paths that print a number and this row is the one that makes them print the same string. A list naming only one of the two cannot satisfy the cross-path oracle below.
-- **This row and row #2 share five files** - `config/idhazh.json`, `backend/idhazh/contracts/app_config.py`, `schemas/app-config.schema.json`, `tests/fixtures/contracts/app-config/tuned.json` and `docs/concepts/design-system.md` - so they are ready together but **may not run in the same block**, whatever `Parallel-group C` says. The group was assigned before either list was checked against the tree (found 2026-09-13).
-- **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; `npm run check`; build; `bundle-gate`; the browser suite.
+- **Row #2 is complete,** so the five files it shared with this row no longer constrain scheduling. Two paths this row named were stale on 2026-10-24: the `schemas/` files, because the generated schema layer was retired on 2026-09-23 (`docs/architecture/contracts/schemas.md`), and `tuned.json`, which does not exist.
+- **Acceptance gates:** `ruff`; `mypy --strict`; `npm run check`; build; `bundle-gate`; `npm run test:changed -- --group logic` for the cross-path oracle; the browser suite.
 - **Oracle:** The same value formatted by the digest path and by the console path returns the identical string, asserted over a table of magnitudes spanning thousands to trillions. **Two formatters is how `2M` and `2,000,000` end up on one page**, and only a cross-path assertion catches it.
+- **Open before dispatch (owner decision):** Decision 2 applies one locale 'at build time', which is Python, but the Files list names TypeScript modules. One formatter in two languages is the failure this row exists to prevent. Recommendation: one TypeScript formatter that the reader and the console both call, with the locale declared in config and never taken from the reader's browser. That amends decision 2's 'at build time'. The knob also needs one owner file: `visuals` in `config/idhazh.json`, or `chart` in `config/appearance.json`, not both.
 
 ### Decisions
 
@@ -168,6 +171,7 @@ deletion plus a drawing over data already on the wire.
 | 3 | Precision is declared in config, so `2M` versus `2.4M` is a decision and not an accident of the input | O47 |
 | 4 | **Formatting is not a derived value** and needs no provenance - nothing about the quantity moved. `convert` is, and it landed in plan 10 | O47, O45 |
 | 5 | `d3-format` and `d3-time-format` are already named in the module matrix and do the prefix and precision rules with no code of ours | Section 7.5 |
+| 6 | Where formatting changes an article's figure, the accessible name keeps the article's own characters. The design system requires the source text beside a converted figure | Design system, 'A figure on a chart is the article's or it is ours' |
 
 ### Rejected alternatives
 
@@ -181,9 +185,9 @@ deletion plus a drawing over data already on the wire.
 ## 6. Row #4 - The smallest reader label stays readable
 
 - **Scope:** One build-failing oracle: every drawn text string on the reader visual clears the resolved `--text-xs` token without inherited `viewBox` scaling.
-- **Files touched:** `frontend/src/lib/visual/bar.ts`, `frontend/src/lib/components/ItemVisual.svelte`, `frontend/tests/item-visual.spec.ts`, `docs/concepts/design-system.md`
-- **Acceptance gates:** `npm run check`; build; the browser suite; the section 12 smoke at 390 CSS px, with 360 and 1440 as reflow guards.
-- **Oracle:** At a real 390 CSS px phone card, the smallest visible string on the reader visual has a computed font size at or above the resolved `--text-xs` value. The same check stays green after card reflow to 360 and 1440 CSS px. The value comes from the browser, not a declared SVG size or test-only number.
+- **Files touched:** `frontend/tests/visual-legibility.spec.ts` (new; the browser case, in the `reader` group), `frontend/scripts/test-groups.ts` (registers it), `frontend/tests/item-visual.spec.ts` (the 360 and 1440 geometry checks), `frontend/src/lib/visual/bar.ts` and `frontend/src/lib/components/ItemVisual.svelte` (only if the case finds a sub-floor string or a scaled drawing), `docs/concepts/design-system.md`
+- **Acceptance gates:** `npm run check`; build; `bundle-gate`; `npm run test:changed -- --group logic` and `--group reader`; the section 12 smoke at 390 CSS px.
+- **Oracle:** One browser case, on the canary day's page at 390 CSS px: the computed `font-size` of every string the drawn `svg` paints is at least the resolved `--text-xs` value, and the `svg` renders at its drawn width, not scaled. The case also carries the browser assertions rows #1b and #2 never wrote. 360 and 1440 CSS px are logic-tier geometry checks in `item-visual.spec.ts`, not browser cases, because CLAUDE.md section 13 does not allow a browser case per width. It cannot settle whether a 12 px label reads comfortably, only that it never falls below the site's smallest type.
 
 ### Decisions
 
@@ -192,8 +196,9 @@ deletion plus a drawing over data already on the wire.
 | 1 | This is a **browser oracle, not a review item.** A check a person can skip is the one skipped on the day it would have bitten | O36, Susan |
 | 2 | Measured 2026-09-02: 10px axis labels draw at about **3.1 CSS px** on a 390px phone, below the smallest type on the site at every supported width | Section 2.2 |
 | 3 | The undefined `density_floor` is removed. `visuals.min_chart_points` and `visuals.max_chart_points` already decide whether a visual carries enough or too many marks | Visual validator, owner ruling 2026-10-24 |
-| 4 | Console label fitting and mark-density rules stay under plan 20 and the current coordinate-frame rules. They do not share this reader floor | Susan, current console plan, 2026-10-24 |
+| 4 | Console label fitting and mark density follow the console chart rules in `docs/architecture/publishing/console-charts.md`. They do not share this reader floor | Susan, 2026-10-24 |
 | 5 | A shortened number is still a drawn label and faces this floor unchanged. Making a number shorter is not a licence to set it smaller | O47 |
+| 6 | **Open for the owner:** the console's 10 px axis labels (`AXIS_LABEL_PX` in `frontend/src/lib/charts/frame.ts`) sit outside this floor. Whether they are an intended operator exception is not decided here | Susan, 2026-10-24; verified in `frame.ts` |
 
 ### Rejected alternatives
 
@@ -207,9 +212,10 @@ deletion plus a drawing over data already on the wire.
 ## 7. Row #5 - A caption, and one mark that lands first
 
 - **Scope:** The figure renders `title` and `caption` when present, and every visual carries at least one annotation drawn differently from its siblings.
-- **Files touched:** `frontend/src/lib/components/ItemVisual.svelte`, `frontend/src/lib/charts/**`, `frontend/tests/**`, `docs/concepts/design-system.md`
+- **Files touched:** `frontend/src/lib/components/ItemVisual.svelte`, `frontend/src/lib/visual/bar.ts`, `backend/idhazh/contracts/visual_data.py` (new optional fields, version stamp, changelog), `backend/idhazh/render/chart.py` (publishes them from the plan), `frontend/src/lib/payload/types.ts` (hand copy), `frontend/src/lib/payload/drawing.ts` (shape check), `backend/tests/test_render.py`, `backend/tests/contracts/`, `tests/fixtures/contracts/visual-data/`, `frontend/tests/visual-legibility.spec.ts` (the annotation assertion joins the row #4 case), `docs/concepts/design-system.md`
 - **Acceptance gates:** as row 4.
-- **Oracle:** Every published visual has exactly one annotated mark whose computed style differs from its siblings in at least one channel - asserted per visual on a real day, not on a fixture.
+- **Oracle:** Every published visual on the canary day's page has exactly one annotated mark whose computed style differs from its siblings in at least one channel, asserted in one browser case.
+- **Open before dispatch (owner decision, Level 5):** Bumping `RENDERER_VERSION` either makes older drawings refused, because `drawing.ts` accepts one version, or draws them in two styles on one page if both versions are accepted. Row #1b's decision 6 forbids both. Recommendation: no bump. Make `title`, `caption` and the annotation optional; a day without them draws as it does now, and the oracle applies to days compiled after this row.
 
 ### Decisions
 
