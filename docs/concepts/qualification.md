@@ -110,26 +110,11 @@ persists validated Article payloads under `backend/var/`, and replays those exac
 payload bytes through each candidate. Anything else is an exploratory run and
 does not support "only the weights changed."
 
-The existing HHEM arithmetic is a screening signal:
-
-| Condition | Legacy verdict |
-| --- | --- |
-| The incumbent measures more than `validation_drop_max` (0.10) below its leaderboard number | `rescore_candidates` - the ranking was not describing us, so score the others too |
-| A challenger beats the incumbent by at least `validation_switch_margin` (0.05) on our corpus | `switch_and_pause` |
-| Neither | `confirmed` |
-
-Three things about this are deliberate:
-
-- **A mean over three articles is not a mean.** A candidate scored on fewer than
- `validation_articles` is ignored, on both sides: an undersampled challenger
- cannot win and an undersampled incumbent cannot be confirmed.
-- **Better is not enough.** A model swap changes persisted model identity,
- pipeline fingerprints and future words. Current-output goldens may change;
- historical contract fixtures remain compatibility evidence and are not
- rewritten. A challenger that is merely ahead changes nothing. It has to be
- ahead by the margin.
-- **The rule never applies a switch.** It returns `switch_and_pause` and stops.
- That pause is the whole point of the gate.
+**Better is not enough.** A model swap changes persisted model identity,
+pipeline fingerprints and future words. Current-output goldens may change;
+historical contract fixtures remain compatibility evidence and are not
+rewritten. A challenger that is merely ahead is not a reason to swap: the gates
+decide.
 
 **The arithmetic may screen and must not select.** HHEM is the production alarm.
 Using it to choose the model optimizes against the monitor and breaks the rule

@@ -231,8 +231,6 @@ python -m idhazh validate --date 2026-08-22 --leaderboard 0.75
 
 # restart llama-server on the 4B, then
 python -m idhazh validate --date 2026-08-22 --leaderboard 0.74
-
-python -m idhazh decide --runner local
 ```
 
 Both models read the same planned URL list, but `validate` fetches and extracts

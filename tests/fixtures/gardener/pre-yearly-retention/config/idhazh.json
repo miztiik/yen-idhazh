@@ -152,8 +152,6 @@
     "qualification_pool_multiple": 6,
     "spot_checks_per_week": 10,
     "validation_articles": 20,
-    "validation_drop_max": 0.1,
-    "validation_switch_margin": 0.05,
     "verbatim_reject_ceiling": 0.75
   },
   "extract": {

@@ -86,7 +86,6 @@ from idhazh.stages import (
 from idhazh.stages import (
     backfill_vectors,
     common,
-    decide,
     harvest,
     qualify,
     qualify_canaries,
@@ -208,7 +207,6 @@ STAGES: Final[tuple[str, ...]] = (
     "harvest",
     "run",
     "validate",
-    "decide",
     "qualify",
     "qualify-canaries",
     "qualify-decide",
@@ -863,15 +861,6 @@ def _dispatch(
             fetcher=read_url,
         )
         return 0
-
-    if args.stage == "decide":
-        return decide.stage_decide(
-            settings=settings,
-            date=date,
-            run_id=plan_stage._run_id(date, args.execution),
-            commit_sha=args.commit,
-            runner=args.runner,
-        )
 
     if args.stage == "qualify":
         qualify.stage_qualify(

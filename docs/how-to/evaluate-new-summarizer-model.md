@@ -735,11 +735,7 @@ pass/fail.
 
 **HHEM alone is insufficient.** A model can raise faithfulness by copying more
 or by writing less. It is the production alarm, so it screens and does not
-select:
-
-- fewer than `evaluation.validation_articles` scored outputs -> no verdict;
-- gain below `evaluation.validation_switch_margin` -> no automatic switch; and
-- gain at or above the margin -> `switch_and_pause`.
+select.
 
 **A model swap is a new series, not a new point on the old one.** Segment every
 model-dependent metric by `model_id` and do not recompute a long run's date

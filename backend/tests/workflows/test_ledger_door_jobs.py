@@ -44,7 +44,6 @@ DOOR_WRITING_VERBS: Final[dict[str, str]] = {
         "idhazh.telemetry.source_health (feed-retirements) and "
         "idhazh.telemetry.publish.day_metrics (day-metrics)"
     ),
-    "decide": "idhazh.stages.decide (candidate-models)",
     "qualify-decide": "idhazh.stages.qualify_decide (candidate-models)",
     "fingerprint": "idhazh.telemetry.silicon (host-fingerprint)",
     "job-clock": "idhazh.telemetry.silicon (host-fingerprint)",

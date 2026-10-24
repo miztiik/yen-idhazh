@@ -6,14 +6,14 @@ import json
 from pathlib import Path
 
 import pytest
+import test_qualify as built
 from conftest import CONFIG_DIR, REPO_ROOT, read_text
 
 from idhazh import config, ledger
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.pipeline_tests import TRIAL_STATE_PREFIX, PipelineTestsConfig
-from idhazh.evals.golden import GoldenResult
-from idhazh.stages import common, decide
+from idhazh.stages import common, qualify_decide
 from utilities import candidate_pointer
 
 from ._harness import (
@@ -148,31 +148,19 @@ def test_the_gates_are_run_through_the_config_the_job_just_built() -> None:
     )
 
 
-def _golden(root: Path, model_id: str, measured: float) -> None:
-    """One model's golden-set result, as `stage_decide` reads them back."""
-    result = GoldenResult(
-        model_id=model_id,
-        leaderboard_hhem=0.75,
-        scores=[measured] * 20,
-        attempted=20,
-    )
-    (root / f"{model_id}.json").write_text(result.to_json(), encoding="utf-8")
-
-
-def test_a_decide_run_on_a_trial_config_writes_nothing_outside_its_own_tree(
+def test_a_qualify_decide_run_on_a_trial_config_writes_nothing_outside_its_own_tree(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The row's oracle, other half. Every path the stage wrote, listed and placed.
+    """The row's oracle, other half. Every state path the decide stage wrote, placed.
 
-    `evals.golden.ledger_relpath` returned `state/validation-<date>.csv` and both
-    callers joined it to `config.REPO_ROOT`, so `run.trial_state_dirname` could
-    not move it and a qualification wrote the tree a published day is built from.
-    The verdict comes off the state root now, and the state root is the one the
-    config names.
+    The verdict is filed through the ledger door under the state root, and the
+    state root is the one the config names, so a qualification on a trial config
+    cannot write the tree a published day is built from. Scratch under `var/`
+    is expected: the report pages land there and nothing under `state/` reads
+    them back.
 
     Asserted by diffing the whole fixture tree either side of the call rather
-    than by reading the one path the test expected: a stage that started writing
-    somewhere else entirely would pass the second kind of check.
+    than by reading the one path the test expected.
     """
     scratch = tmp_path / "candidate-config"
     _copy_config(scratch)
@@ -183,11 +171,12 @@ def test_a_decide_run_on_a_trial_config_writes_nothing_outside_its_own_tree(
     settings = config.load(scratch)
     assert settings.app.run.trial_state_dirname == BENCH_TRIAL_STATE
 
-    golden_root = tmp_path / "var" / "validation"
-    golden_root.mkdir(parents=True)
-    _golden(golden_root, settings.models.summarizer.id, measured=0.90)
-    _golden(golden_root, "a-challenger-that-lost", measured=0.50)
-    monkeypatch.setattr(common, "VALIDATION_ROOT", golden_root)
+    qualification_root = tmp_path / "var" / "qualification"
+    qualification_root.mkdir(parents=True)
+    (qualification_root / "shard-0.json").write_text(
+        built.a_passing_shard().to_json(), encoding="utf-8"
+    )
+    monkeypatch.setattr(common, "QUALIFICATION_ROOT", qualification_root)
     # Exactly what `cli` does when the config names a trial directory, and the
     # reason it is repeated rather than imported: the redirect is the thing under
     # test, so a test that called the router would be asking the router.
@@ -197,11 +186,12 @@ def test_a_decide_run_on_a_trial_config_writes_nothing_outside_its_own_tree(
     )
     before = {path for path in tmp_path.rglob("*") if path.is_file()}
 
-    decide.stage_decide(
+    qualify_decide.stage_qualify_decide(
         settings=settings,
         date="2026-09-17",
         run_id="2026-09-17-900000001",
         commit_sha="c" * 40,
+        job_budget_minutes=330.0,
         runner="ubuntu-latest",
     )
 
@@ -210,9 +200,10 @@ def test_a_decide_run_on_a_trial_config_writes_nothing_outside_its_own_tree(
         for path in tmp_path.rglob("*")
         if path.is_file() and path not in before
     )
-    assert written, "the stage recorded no verdict at all, so this proves nothing"
+    state_writes = [path for path in written if path.startswith("state/")]
+    assert state_writes, "the stage recorded no verdict at all, so this proves nothing"
     trial_tree = f"state/{TRIAL_STATE_PREFIX}/"
-    assert [path for path in written if not path.startswith(trial_tree)] == [], (
+    assert [path for path in state_writes if not path.startswith(trial_tree)] == [], (
         f"a stage on a trial config wrote outside {trial_tree}: {written}"
     )
     test_cases = PipelineTestsConfig.from_json(
@@ -220,7 +211,7 @@ def test_a_decide_run_on_a_trial_config_writes_nothing_outside_its_own_tree(
     ).test_cases
     case_roots = [f"{trial_tree}{test_case.id}/" for test_case in test_cases]
     assert not [
-        path for path in written if any(path.startswith(case_root) for case_root in case_roots)
+        path for path in state_writes if any(path.startswith(case_root) for case_root in case_roots)
     ], f"the decide stage wrote under a declared pipeline-test case root: {written}"
     assert not ledger.raw_root(production_root, LedgerName.CANDIDATE_MODELS).exists(), (
         "the production tree gained a candidate-models ledger"

@@ -28,10 +28,9 @@ from idhazh.contracts.validation_row import (
     ValidationRow,
     ValidationVerdict,
 )
-from idhazh.evals import qualification_summary, qualify, validation
+from idhazh.evals import qualification_summary, qualify
 from idhazh.stages import common
 from idhazh.stages.common import LOG
-from idhazh.stages.decide import DECIDE_SHARD
 
 #: The name the verdict file this stage writes through the ledger door carries
 #: as its producer: this module's own dotted name, less the package.
@@ -40,6 +39,14 @@ PRODUCER: Final = __name__.partition(".")[2]
 #: The verdict as a contract payload, and the page a reader opens beside it.
 REPORT_JSON: Final = "report.json"
 REPORT_MD: Final = "report.md"
+
+#: The decide stage runs once for the whole qualification, so it is shard 0 of one.
+DECIDE_SHARD: Final = 0
+
+#: What an empty runner label and an empty verdict detail record. Both columns have
+#: `min_length=1`, so an empty cell would raise and lose the whole ledger row.
+UNNAMED_RUNNER: Final = "unnamed runner"
+UNSTATED: Final = "detail could not be printed"
 
 
 def stage_qualify_decide(
@@ -150,7 +157,7 @@ def stage_qualify_decide(
                 run_id=run_id,
                 commit_sha=report.commit_sha,
                 runner=fit_field(
-                    runner, model=ValidationRow, field="runner", absent=validation.UNNAMED_RUNNER
+                    runner, model=ValidationRow, field="runner", absent=UNNAMED_RUNNER
                 ),
                 verdict=(
                     ValidationVerdict.QUALIFIED
@@ -158,7 +165,7 @@ def stage_qualify_decide(
                     else ValidationVerdict.NOT_QUALIFIED
                 ),
                 detail=fit_field(
-                    report.detail, model=ValidationRow, field="detail", absent=validation.UNSTATED
+                    report.detail, model=ValidationRow, field="detail", absent=UNSTATED
                 ),
             )
         ],
