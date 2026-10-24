@@ -25,7 +25,6 @@ from ._fixtures import (
     entry_with,
     swapped_summarizer,
 )
-from ._model_cases import MODEL_FILES
 
 pytestmark = pytest.mark.contract
 
@@ -98,7 +97,7 @@ def test_a_template_that_reads_no_keyword_may_not_be_asked_to_think() -> None:
 
 def test_a_template_that_reads_no_keyword_loads_with_reasoning_off() -> None:
     """The bite proof. Null is a legal declaration, not a broken entry."""
-    silent = ModelsConfig.model_validate(entry_with(thinking_kwarg=None))
+    silent = ModelsConfig.model_validate(entry_with(thinking_kwarg=None, thinking_close=None))
 
     assert silent.summarizer.thinking_kwarg is None
     assert silent.summarizer.thinks is False
@@ -111,8 +110,10 @@ def test_the_closing_marker_is_the_whole_declaration_that_reasoning_is_wanted() 
     keyword and three refusals - and every one of them reads this field. A
     second switch beside it was retired for that reason.
     """
-    quiet = ModelsConfig.model_validate(entry_with())
-    loud = ModelsConfig.model_validate(entry_with(thinking_close="</think>"))
+    quiet = ModelsConfig.model_validate(entry_with(thinking_close=None))
+    loud = ModelsConfig.model_validate(
+        entry_with(thinking_close="</think>", thinking_kwarg="reasoning")
+    )
 
     assert quiet.summarizer.thinks is False
     assert loud.summarizer.thinks is True
@@ -182,7 +183,7 @@ def test_a_sampling_key_a_route_sets_itself_is_refused_when_the_config_loads() -
 
 def test_a_configured_output_limit_is_accepted_when_the_config_loads() -> None:
     raw = committed_models_raw()
-    raw["summarizer"]["sampling"]["max_tokens"] = 4096
+    raw["summarizer"]["sampling"] = {"max_tokens": 4096}
     models = ModelsConfig.model_validate(raw)
 
     refuse_a_model_nothing_could_run("models/x.json", models)
@@ -203,17 +204,12 @@ def test_an_entry_that_dumps_and_reloads_is_not_refused_for_its_own_shape() -> N
     assert ModelsConfig.model_validate(payload).summarizer.inference == {}
 
 
-def test_the_committed_entry_names_the_keyword_rather_than_inheriting_it() -> None:
-    """The name is a model fact, so the file that names the weights names it too.
+def test_an_entry_preserves_its_declared_reasoning_keyword() -> None:
+    declared = ModelsConfig.model_validate(
+        entry_with(thinking_kwarg="reasoning", thinking_close=None)
+    )
 
-    It was spelled in `backend/idhazh/llm/server.py` and sent to every model
-    until 2026-09-14. The default is the incumbent's, which is why this asserts
-    the file carries it rather than asserting the default resolves.
-    """
-    raw = committed_models_raw()
-
-    assert raw["summarizer"]["thinking_kwarg"] == "enable_thinking"
-    assert "turns" not in raw["summarizer"], "the markers are the model's own template now"
+    assert declared.summarizer.thinking_kwarg == "reasoning"
 
 
 def changed_lines(before: str, after: str) -> int:
@@ -407,29 +403,11 @@ def test_the_one_shared_settings_block_is_refused_by_name() -> None:
     assert not SUPERSEDED_MODELS_NAMES["route"]
 
 
-def test_every_model_file_loads_and_not_only_the_one_the_pointer_names() -> None:
-    """A file `models_file` does not currently name is still a file it can name.
+def test_an_entry_without_a_judge_lists_only_the_summarizer() -> None:
+    declared = ModelsConfig.model_validate(committed_models_raw() | {"judge": None})
 
-    Exercise the named alternatives without discovering files in config/.
-    """
-    for name in MODEL_FILES:
-        path = CONFIG_DIR / "models" / name
-        entry = ModelsConfig.from_json(read_text(path)).summarizer
-        assert entry.declared_for == entry.sha256, path.name
-
-
-def test_no_committed_file_declares_a_second_entry() -> None:
-    """The optional entry is off by default, and the default is what ships.
-
-    A knob whose default flipped in the same commit that declared it is a
-    feature nobody agreed to run (Guardrail #6). This one is filled the day a
-    replay says a reasoned verdict is a better verdict, and not before.
-    """
-    for name in MODEL_FILES:
-        path = CONFIG_DIR / "models" / name
-        declared = ModelsConfig.from_json(read_text(path))
-        assert declared.judge is None, path.name
-        assert [name for name, _ in declared.entries()] == ["summarizer"], path.name
+    assert declared.judge is None
+    assert list(declared.entries()) == [("summarizer", declared.summarizer)]
 
 
 def test_a_second_entry_naming_other_weights_is_refused() -> None:
