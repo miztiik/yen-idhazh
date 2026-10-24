@@ -140,15 +140,19 @@ is data, never a control value, file path or outbound destination.
 
 Do not add content deduplication to fetch or parse under this approval.
 There is no new semantic deduplication, qualitative assessment or story
-classification here. Existing story handling is unchanged. Day-aware publisher
+classification here. Factual verification and semantic claims of novelty or new
+developments are excluded; exact URL newness within a bounded seen window is
+allowed and does not establish story novelty. Existing story handling is
+unchanged. Day-aware publisher
 preferences remain soft choices among comparably strong alternatives, not hard
 caps or a reason to block selection when history is missing.
 The existing [source-reliability penalty](../sources/feed-curation.md#inputs-and-independent-evidence)
 measures operational delivery, not article quality.
 
-The API route and action name, raw validated batch versus local saved-reference
-inputs, exact input/output shape, policy coefficients and implementation order
-require separate confirmation. This page selects none of them.
+The owner approved the API name `/select-articles`, not an implemented route.
+How it accepts a typed parsed batch or server-owned local references, and what
+it returns, still need confirmation. Publisher-group mappings, policy
+coefficients and runtime implementation remain next-phase decisions.
 
 ## Manual acceptance checklist
 
@@ -166,8 +170,9 @@ acceptance cases, not claims of executed runtime checks:
 - [ ] Keep missing historical IDs unknown, without current-catalog backfill.
 - [ ] Review catalog storage, actual feed mappings, persisted-field compatibility
   and cross-language binding coverage before wiring runtime readers or writers.
-- [ ] Obtain separate selection-API approval without adding fetch/parse content
-  deduplication, qualitative assessment, hard day caps or history blocking.
+- [ ] Obtain input/output-contract and implementation approval for
+  `/select-articles` without adding fetch/parse content deduplication,
+  qualitative assessment, hard day caps or history blocking.
 
 ## Design rationale
 
@@ -177,7 +182,7 @@ implementation. A human-readable key makes catalog review practical; choosing
 it once prevents a name or endpoint edit from changing the counted publisher.
 This adopts the existing editorial unit, not its mutable masthead text as the
 permanent identifier. Approval covers this contract only, not runtime wiring,
-shared persisted fields, feed assignments or the separate API proposal.
+shared persisted fields, feed assignments or the separate API implementation.
 
 ## See also
 
