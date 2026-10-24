@@ -71,6 +71,8 @@ jobs:
             /.github/scripts/install-host-cache-tools.sh
             /.github/scripts/feed-ingest-plan-profile-schema.ts
             /.github/scripts/feed-ingest-plan-resource-report.ts
+            /.github/scripts/feed-ingest-plan-pid-report.ts
+            /.github/scripts/feed-ingest-plan-resource-values.ts
             /.github/scripts/feed-ingest-plan-report-format.ts
             /.github/scripts/tests/feed-ingest-plan-outputs.test.ts
             /.github/scripts/tests/feed-ingest-plan-report.test.ts
