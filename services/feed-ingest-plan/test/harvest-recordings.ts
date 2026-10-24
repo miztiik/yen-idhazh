@@ -75,11 +75,12 @@ export function source(patch: Partial<ConfiguredSource> = {}): ConfiguredSource 
   return {
     id: "recorded-news", url: "https://news.example/feed.xml", title: "Configured science news",
     vertical: "world", kind: "reporting", tier: 2, form: "article",
-    weight: 0.8, status: "active", retired_on: null, publisher_id: null, ...patch,
+    weight: 0.8, status: "active", retired_on: null, added_on: null,
+    retirement_reason: null, publisher_id: null, ...patch,
   };
 }
 
-export async function inputs(sources: ConfiguredSource[] = [source()], overrides: {
+export async function inputs(sources: unknown[] = [source()], overrides: {
   harvest?: Record<string, unknown>; extraction?: Record<string, unknown>;
   lenses?: unknown; entities?: unknown; salience?: unknown; publishers?: unknown;
 } = {}) {

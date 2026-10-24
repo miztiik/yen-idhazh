@@ -215,7 +215,10 @@ test("recorded audit rows migrate through native Parquet without invented eviden
       expect(sourceHistory.rows[0]!.row).toMatchObject({ version: SourceRunContract.schemaVersion });
       expect(sourceHistory.rows[0]!.row.completion_evidence?.every(entry => entry.logical === null)).toBe(true);
     }
-    const { diagnostics: _diagnostics, ...previousAssessment } = ArticleAssessmentRecordSchema.parse(migrated.get("article-assessments"));
+    const { diagnostics: _diagnostics, ...currentAssessment } = ArticleAssessmentRecordSchema.parse(migrated.get("article-assessments"));
+    expect(currentAssessment.source.publisher_id).toBeNull();
+    const { publisher_id: _previousPublisherId, ...previousSource } = currentAssessment.source;
+    const previousAssessment = { ...currentAssessment, source: previousSource };
     const assessmentSchema = ArticleAssessmentContract.legacyVersions["2026-10-22"].schema;
     const assessmentFile = await writeRows(root, "article-assessments", day, assessmentSchema,
       [assessmentSchema.parse({ ...previousAssessment, version: "2026-10-22" })], writer(run), "2026-10-22");

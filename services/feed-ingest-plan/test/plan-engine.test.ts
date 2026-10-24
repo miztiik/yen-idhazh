@@ -76,7 +76,7 @@ test("real composition shares one clock and override and reads native dispatches
     source({ publisher_id: publisherId }),
     source({ id: "resting-news", status: "draft", publisher_id: publisherId }),
     source({ id: "empty-news", url: "https://news.example/empty.xml", publisher_id: publisherId }),
-  ], [{ id: publisherId, display_name: "Recorded Publication", added_on: "2026-10-21" }]);
+  ], [{ id: publisherId, display_name: "Recorded Publication" }]);
   let clocks = 0;
   recorded.runtime.clock = () => new Date(++clocks === 1 ? "2026-10-21T23:59:59.999Z" : "2026-10-22T00:00:01Z");
   const configuredLimit = recorded.inputs.harvest.config.curate.article_limit;

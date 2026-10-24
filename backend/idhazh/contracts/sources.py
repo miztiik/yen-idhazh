@@ -46,6 +46,10 @@ class FeedDef(Lifecycled):
     """One RSS/Atom feed, attached to exactly one vertical."""
 
     id: Slug
+    added_on: DateStamp | None = Field(
+        default=None,
+        description="UTC date the feed first entered the catalog; null means unknown.",
+    )
     vertical: Slug
     title: str = Field(min_length=1)
     url: Url
@@ -55,6 +59,11 @@ class FeedDef(Lifecycled):
         description="Who is speaking. A reader needs this before they will share an item.",
     )
     publisher_id: Slug | None = None
+    retirement_reason: str | None = Field(
+        default=None,
+        min_length=1,
+        description="Open lowercase reason for retirement; null means unknown or not retired.",
+    )
     form: SourceForm = Field(
         default=SourceForm.ARTICLE,
         description=(
@@ -69,32 +78,18 @@ class FeedDef(Lifecycled):
         description="Soft retirement: drop the weight, observe, then retire.",
     )
 
-
-class PublisherDef(Model):
-    """One reviewed editorial publication reserved in the source catalog."""
-
-    id: Slug
-    display_name: str = Field(min_length=1)
-    added_on: DateStamp | None = None
-    status: LifecycleStatus | None = None
-    retired_on: DateStamp | None = None
-    retirement_reason: str | None = Field(default=None, min_length=1)
-
     @model_validator(mode="after")
-    def _retirement_fields_match_status(self) -> Self:
+    def _retirement_metadata_matches_feed_lifecycle(self) -> Self:
         retired = self.status is LifecycleStatus.RETIRED
-        has_retirement_fields = self.retired_on is not None or self.retirement_reason is not None
-        if has_retirement_fields and (self.retired_on is None or self.retirement_reason is None):
-            raise ValueError("publisher retirement needs both retired_on and retirement_reason")
-        if retired and self.added_on is not None and not has_retirement_fields:
-            raise ValueError("a newly retired publisher needs retired_on and retirement_reason")
-        if self.status is not LifecycleStatus.RETIRED and has_retirement_fields:
-            raise ValueError("retirement fields are only meaningful on a retired publisher")
+        if self.retirement_reason is not None and not retired:
+            raise ValueError("retirement_reason is only meaningful on a retired feed")
+        if retired and self.added_on is not None and self.retirement_reason is None:
+            raise ValueError("a newly retired feed needs retirement_reason")
         if self.retirement_reason is not None and (
             not self.retirement_reason.strip()
             or self.retirement_reason != self.retirement_reason.lower()
         ):
-            raise ValueError("publisher retirement_reason must be nonempty lowercase text")
+            raise ValueError("feed retirement_reason must be nonempty lowercase text")
         if (
             self.retired_on is not None
             and self.added_on is not None
@@ -102,6 +97,13 @@ class PublisherDef(Model):
         ):
             raise ValueError("retired_on cannot precede added_on")
         return self
+
+
+class PublisherDef(Model):
+    """One reviewed editorial publication reserved in the source catalog."""
+
+    id: Slug
+    display_name: str = Field(min_length=1)
 
 
 class SalienceFeedDef(Lifecycled):
@@ -130,6 +132,11 @@ class Sources(Contract):
     __schema_stem__: ClassVar[str] = "sources"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-24T21:12:25",
+            change="Keep publisher definitions to identity fields and add feed lifecycle metadata.",
+            why="Publisher identity is stable; lifecycle belongs to each feed.",
+        ),
+        ChangelogEntry(
             version="2026-10-24T20:04",
             change="Add publisher definitions and nullable feed references.",
             why="New observations can retain reviewed identity while legacy values remain unknown.",
@@ -143,11 +150,6 @@ class Sources(Contract):
             version="2026-09-13T18:00",
             change="A salience feed's description no longer prices a front-page vote.",
             why="The knob that paid for the vote was removed in the same commit.",
-        ),
-        ChangelogEntry(
-            version="2026-08-23T18:47",
-            change="Added feed form with an abstract value.",
-            why="A reader must be told when the summary is of an abstract and not an article.",
         ),
         ChangelogEntry(
             version="2026-08-21",

@@ -1,7 +1,10 @@
 /** Which selected article content is assigned to one worker? */
 import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
-import { FeedIngestCandidateSchema, PreviousFeedIngestCandidateSchema, readFeedIngestCandidate } from "./candidate.schema";
+import {
+  FeedIngestCandidateSchema, PreviousContractFeedIngestCandidateSchema, PreviousObservedFeedIngestCandidateSchema,
+  readFeedIngestCandidate,
+} from "./candidate.schema";
 import { EditorialSelectionContract, EditorialSelectionRowSchema, PreviousEditorialSelectionSchema, PreviousReliableEditorialSelectionSchema } from "./editorial-selection.schema";
 import { PartitionAssignmentSchema } from "./partition.schema";
 import { reject } from "./primitives";
@@ -19,15 +22,15 @@ export type FeedIngestDispatch = z.infer<typeof FeedIngestDispatchSchema>;
 export const PreviousFeedIngestDispatchSchema = z.strictObject({
   ...FeedIngestDispatchSchema.shape,
   version: z.enum([CONTRACT_VERSION, FEED_INGEST_AUDIT_VERSION]),
-  content: PreviousFeedIngestCandidateSchema, selection: PreviousEditorialSelectionSchema,
+  content: PreviousContractFeedIngestCandidateSchema, selection: PreviousEditorialSelectionSchema,
 });
 export const PreviousObservedFeedIngestDispatchSchema = z.strictObject({
   ...FeedIngestDispatchSchema.shape, version: z.literal(PLANNING_OBSERVATIONS_VERSION),
-  content: PreviousFeedIngestCandidateSchema, selection: PreviousEditorialSelectionSchema,
+  content: PreviousObservedFeedIngestCandidateSchema, selection: PreviousEditorialSelectionSchema,
 });
 export const PreviousReliableFeedIngestDispatchSchema = z.strictObject({
   ...FeedIngestDispatchSchema.shape, version: z.literal(SOURCE_RELIABILITY_VERSION),
-  content: PreviousFeedIngestCandidateSchema, selection: PreviousReliableEditorialSelectionSchema,
+  content: PreviousObservedFeedIngestCandidateSchema, selection: PreviousReliableEditorialSelectionSchema,
 });
 export function readFeedIngestDispatch(raw: unknown): FeedIngestDispatch {
   if (typeof raw === "object" && raw !== null && "version" in raw

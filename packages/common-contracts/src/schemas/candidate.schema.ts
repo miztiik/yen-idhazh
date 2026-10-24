@@ -28,15 +28,15 @@ export type FeedIngestCandidate = z.infer<typeof FeedIngestCandidateSchema>;
 const {
   planning_observations: _observations, source: _source, ...previousCandidateFields
 } = FeedIngestCandidateSchema.shape;
-const PreviousCandidateSchema = z.strictObject({
+export const PreviousContractFeedIngestCandidateSchema = z.strictObject({
   ...previousCandidateFields, source: PreviousSourceSnapshotSchema, version: z.literal(CONTRACT_VERSION),
 });
-const PreviousObservedCandidateSchema = z.strictObject({
+export const PreviousObservedFeedIngestCandidateSchema = z.strictObject({
   ...FeedIngestCandidateSchema.shape, source: PreviousSourceSnapshotSchema,
   version: z.literal(PLANNING_OBSERVATIONS_VERSION),
 });
 export const PreviousFeedIngestCandidateSchema = z.union([
-  PreviousCandidateSchema, PreviousObservedCandidateSchema,
+  PreviousContractFeedIngestCandidateSchema, PreviousObservedFeedIngestCandidateSchema,
 ]);
 export function readFeedIngestCandidate(raw: unknown): FeedIngestCandidate {
   if (typeof raw === "object" && raw !== null && "version" in raw && raw.version === CONTRACT_VERSION) {

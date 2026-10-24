@@ -56,18 +56,24 @@ Apply this procedure when adding a publisher or assigning a feed:
    [primitives.ts](../../../packages/common-contracts/src/schemas/primitives.ts).
    Resolve a failed check before recording the ID; do not silently normalize
    invalid input.
-6. Record the reviewed ID and display name in the owner-controlled source
-   catalog, then bind feeds by explicit `publisher_id`. The registry lives
-   beside its feed references in
-   [`config/sources.json`](../../../config/sources.json). Publisher entries use
-   `id` and `display_name`; each feed's `publisher_id` is nullable, with
-   missing meaning unknown. A new entry records `added_on` as its UTC first-entry
-   date. A new retirement records `retired_on` and an open lowercase
-   `retirement_reason`; unknown legacy lifecycle values stay unknown. The
-   reviewed catalog change and its Git history record the decision; there is no
-   extra provenance field. Adding or changing these values must not need
-   per-publisher code edits. No current feed is assigned because this review
-   found no supporting publisher-owned evidence.
+6. Record only the reviewed ID and display name in the publisher registry, then
+   bind feeds by explicit `publisher_id`. The registry lives beside feed
+   references in [`config/sources.json`](../../../config/sources.json), and
+   each feed's `publisher_id` is nullable, with missing meaning unknown.
+   Lifecycle belongs to feed entries, not publisher entries: `added_on` is the
+   UTC date a feed first entered the catalog; a new feed records that date, and
+   a new retirement records `retired_on` and an open lowercase
+   `retirement_reason`. Missing legacy lifecycle values stay unknown. The same
+   missing fields can describe either
+   a legacy feed or an incomplete new edit, so runtime validation cannot tell
+   those cases apart. New feed and retirement edits must include their dates and
+   the retirement reason, as applicable, in curated edit review; that is an
+   editorial requirement, not a runtime guarantee. Do not invent unknown dates.
+   The reviewed catalog change and its Git history
+   record publisher-mapping decisions; there is no extra provenance field.
+   Adding or changing these values must not need per-publisher code edits. No
+   current feed is assigned because this review found no supporting
+   publisher-owned evidence.
 
 Fetch, parse and later runtime stages read the recorded reference. They never
 regenerate a publisher ID from a URL, title, article text or changed display
@@ -121,6 +127,11 @@ Legacy configuration without `publishers` reads as an empty registry. Missing
 feed IDs and lifecycle values remain unknown; readers do not fill them from the
 current catalog. New retirement reasons are open lowercase text, not a closed
 vocabulary.
+
+Publisher definitions contain only `id` and `display_name`; lifecycle belongs
+to feed entries. Readers check recorded lifecycle fields for consistency, but
+curated review establishes whether a new feed or retirement supplied all
+required values.
 
 Syntax validation cannot prove that two feeds share a newsroom, that a name
 change preserves identity, or that an old reservation was not reused. Catalog

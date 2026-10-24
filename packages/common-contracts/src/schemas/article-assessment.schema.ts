@@ -103,7 +103,7 @@ export const LegacyArticleAssessmentSchema = z.strictObject({
 export function migrateArticleAssessment(row: object): ArticleAssessmentRecord {
   const { effective_published_at, publication_clock, ...rest } = LegacyArticleAssessmentSchema.parse(row);
   return ArticleAssessmentRecordSchema.parse({
-    ...rest, version: SOURCE_RELIABILITY_VERSION,
+    ...rest, version: PUBLISHER_IDENTITY_VERSION,
     timing_at: effective_published_at, timing_basis: publication_clock,
   });
 }

@@ -25,7 +25,30 @@ const ConfiguredUrlSchema = UrlSchema.refine(value => {
 const SourceConfigSchema = LifecycleSchema.safeExtend({
   id: SlugSchema, url: ConfiguredUrlSchema, title: NonEmptySchema, vertical: SlugSchema,
   kind: SlugSchema, tier: PositiveCountSchema, form: SourceFormSchema, weight: WeightSchema,
+  added_on: DateStampSchema.nullable().default(null),
   publisher_id: SlugSchema.nullable().default(null),
+  retirement_reason: z.string().min(1).nullable().default(null).refine(
+    value => value === null || (value.trim().length > 0 && value === value.toLowerCase()),
+    "feed retirement_reason must be nonempty lowercase text",
+  ),
+}).superRefine((source, ctx) => {
+  if (source.retirement_reason !== null && source.status !== "retired") {
+    ctx.addIssue({
+      code: "custom", path: ["retirement_reason"],
+      message: "retirement_reason is only meaningful on a retired feed",
+    });
+  }
+  if (source.status === "retired" && source.added_on !== null && source.retirement_reason === null) {
+    ctx.addIssue({
+      code: "custom", path: ["retirement_reason"],
+      message: "a newly retired feed needs retirement_reason",
+    });
+  }
+  if (source.retired_on !== null && source.added_on !== null && source.retired_on < source.added_on) {
+    ctx.addIssue({
+      code: "custom", path: ["retired_on"], message: "retired_on cannot precede added_on",
+    });
+  }
 });
 const SalienceConfigSchema = LifecycleSchema.safeExtend({
   id: SlugSchema, url: ConfiguredUrlSchema, title: NonEmptySchema,

@@ -74,49 +74,61 @@ def test_a_controlled_registry_survives_a_read_and_a_rewrite(
         legacy.pop("publishers", None)
         for feed in [*legacy["feeds"], *legacy.get("retired", [])]:
             feed.pop("publisher_id", None)
+            feed.pop("added_on", None)
+            feed.pop("retirement_reason", None)
         legacy_sources = Sources.from_json(json.dumps(legacy))
         assert legacy_sources.publishers == []
         assert all(feed.publisher_id is None for feed in legacy_sources.feeds)
 
         publisher = {
             "id": "reviewed-publication", "display_name": "Reviewed Publication",
-            "added_on": "2026-10-20",
         }
         mapped = deepcopy(authored)
         mapped["publishers"] = [publisher]
         mapped["feeds"][0]["publisher_id"] = publisher["id"]
         assert Sources.model_validate(mapped).feeds[0].publisher_id == publisher["id"]
+        assert Sources.model_validate(mapped).publishers[0].model_dump(mode="json") == publisher
         with pytest.raises(ValidationError, match="publisher ids must be distinct"):
             Sources.model_validate({**mapped, "publishers": [publisher, publisher]})
         with pytest.raises(ValidationError, match="must reference a defined publisher"):
             Sources.model_validate({
                 **mapped, "feeds": [{**mapped["feeds"][0], "publisher_id": "missing-publication"}],
             })
-        old_publisher = Sources.model_validate({
-            **legacy, "publishers": [{
-                "id": "legacy-publication", "display_name": "Legacy Publication",
-            }],
-        }).publishers[0]
-        assert old_publisher.added_on is None
-        assert old_publisher.status is None
-        assert old_publisher.retired_on is None
-        assert old_publisher.retirement_reason is None
-        with pytest.raises(ValidationError, match="newly retired publisher"):
+        with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
             Sources.model_validate({
                 **mapped,
                 "publishers": [{**publisher, "status": "retired"}],
             })
-        retired = Sources.model_validate({
-            **mapped, "publishers": [{
-                **publisher, "status": "retired", "retired_on": "2026-10-21",
-                "retirement_reason": "publication closed",
-            }],
-        }).publishers[0]
-        assert retired.retirement_reason == "publication closed"
+
+        assert all(feed.added_on is None for feed in legacy_sources.retired)
+        assert all(feed.retirement_reason is None for feed in legacy_sources.retired)
+        retired_feed = deepcopy(mapped)
+        retired_feed["retired"][0]["added_on"] = "2026-09-10"
+        retired_feed["retired"][0]["retirement_reason"] = "feed retired"
+        parsed_retirement = Sources.model_validate(retired_feed).retired[0]
+        assert parsed_retirement.added_on == "2026-09-10"
+        assert parsed_retirement.retirement_reason == "feed retired"
+        incomplete_retirement = deepcopy(mapped)
+        incomplete_retirement["retired"][0]["added_on"] = "2026-09-10"
+        with pytest.raises(ValidationError, match="newly retired feed"):
+            Sources.model_validate(incomplete_retirement)
+        active_with_reason = deepcopy(mapped)
+        active_with_reason["feeds"][0]["retirement_reason"] = "feed retired"
+        with pytest.raises(ValidationError, match="only meaningful on a retired feed"):
+            Sources.model_validate(active_with_reason)
         with pytest.raises(ValidationError, match="lowercase"):
             Sources.model_validate({
-                **mapped, "publishers": [{
-                    **publisher, "status": "retired", "retired_on": "2026-10-21",
-                    "retirement_reason": "Publication Closed",
+                **mapped,
+                "retired": [{
+                    **mapped["retired"][0], "added_on": "2026-09-10",
+                    "retirement_reason": "Feed Retired",
+                }],
+            })
+        with pytest.raises(ValidationError, match="retired_on cannot precede added_on"):
+            Sources.model_validate({
+                **mapped,
+                "retired": [{
+                    **mapped["retired"][0], "added_on": "2026-09-20",
+                    "retirement_reason": "feed retired",
                 }],
             })

@@ -55,7 +55,8 @@ const LegacySourceRunSchema = z.strictObject({
 });
 const PreviousSourceRunSchema = LegacySourceRunSchema.extend({ version: z.literal("2026-10-22") });
 const PreviousDiagnosticSourceRunSchema = LegacySourceRunSchema.extend({ version: z.literal("2026-10-22T18:15") });
-const PreviousExclusionSourceRunSchema = SourceRunRecordSchema.extend({
+const PreviousExclusionSourceRunSchema = z.strictObject({
+  ...sourceRunFields,
   source: PreviousSourceSnapshotSchema,
   version: z.literal(PLANNER_EXCLUSIONS_VERSION),
 });

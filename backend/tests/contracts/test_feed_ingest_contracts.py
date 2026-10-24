@@ -62,7 +62,7 @@ def test_declared_contract(module: str, name: str) -> None:
     assert contract.json_schema()["additionalProperties"] is False
     publisher_snapshot = {"publisher_id": "recorded-publication"}
     publisher_source = {"source": publisher_snapshot}
-    previous_identity_cases = {
+    previous_identity_cases: dict[tuple[str, str], tuple[str, dict[str, object]]] = {
         ("feed_ingest_candidate", "FeedIngestCandidate"): ("2026-10-23", publisher_source),
         ("feed_ingest_article_assessment", "ArticleAssessmentRecord"): (
             "2026-10-24", publisher_source,

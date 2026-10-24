@@ -280,6 +280,8 @@ deferred.
   - `services/feed-ingest-plan/test/harvest.test.ts`
   - `services/feed-ingest-plan/test/plan-engine.test.ts`
   - `docs/architecture/contracts/publisher-identity.md`
+  - `docs/architecture/sources/i-feed.md`
+  - `tests/fixtures/curated-registries/sources.json`
 - **Acceptance gates:** Strict type checks and the existing native source-config, recorded harvest and planner cases. Prove valid shared references, duplicate and undefined-ID rejection, empty-registry legacy reads, fingerprint change on assignment, and identity through planning, observations and audit. The live registry remains empty because no current feed mapping had sufficient publisher-owned evidence; fixture mappings are not production assignments.
 - **Oracle:** Changing a publisher display name or domain does not change its ID, while duplicate definitions and undefined references fail; this cannot verify editorial identity without curated provenance.
 

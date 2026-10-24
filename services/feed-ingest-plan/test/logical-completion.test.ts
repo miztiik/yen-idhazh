@@ -49,10 +49,15 @@ test("logical proof survives native daily, monthly and yearly files with no orig
             const score = "score_evidence" in current ? current.score_evidence : null;
             const originalScore = score === null ? null : Object.fromEntries(
               Object.entries(score).filter(([key]) => key !== "source_reliability"));
-            return { ...held, row: legacy.schema.parse({
+            if ("details" in current) return { ...held, row: legacy.schema.parse({
               ...current, version: PLANNER_EXCLUSIONS_VERSION,
-              ...("details" in current ? { details: { ...current.details, diagnostics: originalDiagnostics } }
-                : { diagnostics: originalDiagnostics, score_evidence: originalScore }),
+              details: { ...current.details, diagnostics: originalDiagnostics },
+            }) };
+            expect(current.source.publisher_id).toBeNull();
+            const { publisher_id: _publisherId, ...source } = current.source;
+            return { ...held, row: legacy.schema.parse({
+              ...current, source, version: PLANNER_EXCLUSIONS_VERSION,
+              diagnostics: originalDiagnostics, score_evidence: originalScore,
             }) };
           });
           if (!zero) expect(oldRows.some(held => {
@@ -231,10 +236,16 @@ test("recorded rejection commitments retain their original schema stamp after mi
         const current = DispatchContract.schema.parse(held.row);
         const { planning_observations: _observations, ...content } = current.content;
         const { source_reliability: _reliability, ...ratings } = current.selection.ratings;
+        expect(current.content.source.publisher_id).toBeNull();
+        expect(current.selection.source.publisher_id).toBeNull();
+        const { publisher_id: _contentPublisherId, ...contentSource } = current.content.source;
+        const { publisher_id: _selectionPublisherId, ...selectionSource } = current.selection.source;
         const original = legacy.schema.parse({
           ...current, version,
-          content: version === PLANNING_OBSERVATIONS_VERSION ? current.content : { ...content, version: CONTRACT_VERSION },
-          selection: { ...current.selection, version: CONTRACT_VERSION, ratings },
+          content: version === PLANNING_OBSERVATIONS_VERSION ? {
+            ...current.content, source: contentSource, version: PLANNING_OBSERVATIONS_VERSION,
+          } : { ...content, source: contentSource, version: CONTRACT_VERSION },
+          selection: { ...current.selection, source: selectionSource, version: CONTRACT_VERSION, ratings },
         });
         return { ...held, row: original };
       });
@@ -276,11 +287,13 @@ test("recorded rejection commitments retain their original schema stamp after mi
         : ArticleAssessmentContract.legacyVersions[EXTRACTION_QUALITY_VERSION];
       const original = history.ledgers[ledger].rows.map(held => {
         const row = contract.schema.parse(held.row);
+        expect(row.source.publisher_id).toBeNull();
+        const { publisher_id: _publisherId, ...source } = row.source;
         const scores = "ratings" in row ? row.ratings : row.score_evidence;
         const oldScores = scores === null ? null : Object.fromEntries(
           Object.entries(scores).filter(([key]) => key !== "source_reliability"));
         return { ...held, row: legacy.schema.parse({
-          ...row, version, ...("ratings" in row ? { ratings: oldScores } : { score_evidence: oldScores }),
+          ...row, source, version, ...("ratings" in row ? { ratings: oldScores } : { score_evidence: oldScores }),
         }) };
       });
       const fields = describeObjectSchema(legacy.schema).fields;

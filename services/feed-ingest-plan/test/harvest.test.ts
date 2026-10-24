@@ -118,7 +118,7 @@ test("public harvest returns validated full text, provenance and actual observat
       source({ id: "retired-source", status: "retired", retired_on: "2026-10-20" }),
     ], {
       publishers: [{
-        id: "recorded-publication", display_name: "Recorded Publication", added_on: "2026-10-20",
+        id: "recorded-publication", display_name: "Recorded Publication",
       }],
       lenses: [
         { id: "alpha", keywords: ["PUBLIC/EVIDENCE"], weight: 0.2, status: "active", retired_on: null },
@@ -141,22 +141,36 @@ test("public harvest returns validated full text, provenance and actual observat
     const legacyPublisher = await inputs([], { publishers: [{
       id: "legacy-publication", display_name: "Legacy Publication",
     }] });
-    expect(legacyPublisher.publishers[0]).toMatchObject({
-      added_on: null, status: null, retired_on: null, retirement_reason: null,
-    });
-    const retiredPublisher = await inputs([], { publishers: [{
-      id: "retired-publication", display_name: "Retired Publication",
-      added_on: "2026-10-20", status: "retired", retired_on: "2026-10-21",
-      retirement_reason: "publication closed",
-    }] });
-    expect(retiredPublisher.publishers[0]).toMatchObject({
-      status: "retired", retired_on: "2026-10-21", retirement_reason: "publication closed",
-    });
+    expect(legacyPublisher.publishers).toEqual([{
+      id: "legacy-publication", display_name: "Legacy Publication",
+    }]);
     await expect(inputs([], { publishers: [{
-      id: "retired-publication", display_name: "Retired Publication",
-      added_on: "2026-10-20", status: "retired", retired_on: "2026-10-21",
-      retirement_reason: "Publication closed",
-    }] })).rejects.toThrow("lowercase");
+      id: "retired-publication", display_name: "Retired Publication", status: "retired",
+    }] })).rejects.toThrow();
+    const { added_on: _addedOn, retirement_reason: _retirementReason, ...legacyRetired } = source({
+      status: "retired", retired_on: "2026-10-21",
+    });
+    const legacyRetiredFeed = await inputs([legacyRetired]);
+    expect(legacyRetiredFeed.sources[0]).toMatchObject({
+      added_on: null, retirement_reason: null,
+    });
+    const retiredFeed = await inputs([source({
+      status: "retired", retired_on: "2026-10-21", added_on: "2026-10-20",
+      retirement_reason: "feed retired",
+    })]);
+    expect(retiredFeed.sources[0]).toMatchObject({
+      added_on: "2026-10-20", retired_on: "2026-10-21", retirement_reason: "feed retired",
+    });
+    await expect(inputs([source({
+      status: "retired", retired_on: "2026-10-21", added_on: "2026-10-20",
+    })])).rejects.toThrow("newly retired feed");
+    await expect(inputs([source({
+      status: "retired", retired_on: "2026-10-21", added_on: "2026-10-22",
+      retirement_reason: "feed retired",
+    })])).rejects.toThrow("cannot precede");
+    await expect(inputs([source({
+      retirement_reason: "Feed Retired",
+    })])).rejects.toThrow("lowercase");
     const logged: unknown[] = [];
     const runContext = context(record => logged.push(record));
     const observations = collectDocumentObservations(runContext);
