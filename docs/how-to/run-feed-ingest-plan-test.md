@@ -321,6 +321,22 @@ counts. Copy work never overlaps fetch/parse or controlled-task CPU measurement.
 temporary evidence root. Completion requires `resource_proof_complete: true`.
 Main CI also runs this same task CPU/RAM HTTP and copy proof without fetching live feeds
 or publishing data, and retains the `typescript-resource-proof` artifact.
+The same step now opts into the separate
+[cache instruments](../reference/host-cache-probes.md), after copy work closes.
+It retains real native working-set latency readings and exact perf event
+results or a typed hardware/permission refusal. A refusal leaves counter
+measurement pending on a permitted host; it is not a passing hit/miss reading.
+Optional Linux tool installation records its actual time and binary bytes.
+Optional reporting appends a separate compact Table L and cache notice from
+that validated same-task evidence. It shows null hardware counts as unavailable,
+not zero, and labels the working-set curve as not direct L3-hit latency.
+Cache/task target, handle and result mismatches refuse reporting; absent older
+cache evidence preserves H/I/J/K and their existing notices.
+The counter proof reuses the controlled external-PID task API journey.
+The latency curve uses its own real HTTP command after that task closes;
+it is not CPU profiling of the caller. Default-off, unsupported, malformed
+output, scheduling percentages and body deadlines stay in the existing named
+TypeScript cases, using the bounded native recordings where readings matter.
 Its artifact uses the existing ignored
 `test-results/host-probes/resource-proof.json` test-report path; the isolated
 workflow keeps its proof in the temporary evidence root.

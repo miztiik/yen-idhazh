@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { parseCpuCounters, calculateCpuPercentages } from "../src/probe/cpu-sampler";
 import { parseMemoryInfo, parseVmstat } from "../src/probe/memory-probe";
 import { sampleHost } from "../src/probe/sample-host";
-import { createSampleHandler, SAMPLE_PATH, START_TASK_PROFILE_PATH, STOP_TASK_PROFILE_PATH } from "../src/api/server";
+import { createSampleHandler, SAMPLE_PATH, START_TASK_PROFILE_PATH, STOP_TASK_PROFILE_PATH, CACHE_LATENCY_PATH } from "../src/api/server";
 import { loadConfig, ProbeConfigSchema } from "../src/config";
 import { profileTask, startTaskProfile } from "../src/task-profile/task-profiler";
 import { TaskProfileSchema } from "../src/task-profile/profile-schema";
@@ -20,6 +20,15 @@ import { calculateProcessCpu } from "../src/task-profile/process-cpu";
 import { parseClockTicks, resolveClockTicks } from "../src/task-profile/clock-ticks";
 import { TaskCollector } from "../src/task-profile/task-collector";
 import { CollectorInputSchema } from "../src/task-profile/profile-schema";
+import { readCounterToolFailure, startCacheCounters } from "../src/cache-probe/cache-counters";
+import { startBoundedTool } from "../src/cache-probe/bounded-tool";
+import type { ToolOutput } from "../src/cache-probe/bounded-tool";
+import { measureWorkingSetLatency } from "../src/cache-probe/working-set-latency";
+import { classifyPerfFailure, parsePerfCounters } from "../src/cache-probe/perf-output";
+import { CacheProbeController } from "../src/cache-probe/cache-controller";
+import { parseMultichaseOutput } from "../src/cache-probe/latency-output";
+import { CacheCountersSchema, CacheLatencySchema } from "../src/cache-probe/cache-schema";
+import { readProcFile } from "../src/probe/proc-reader";
 import { StartTaskProfileResponseSchema, StopTaskProfileResponseSchema } from "../src/api/task-command-schema";
 
 const fixtureRoot = new URL("../../../tests/fixtures/", import.meta.url);
@@ -97,6 +106,31 @@ test("recorded Linux CPU interval and memory satisfy the Row 5 oracle", async ()
       value: { cpu_time_ms: interval.cpu_time_ms, percent_one_core: interval.percent_one_core }, reason: null,
     });
   }
+  const latency = CacheLatencySchema.parse(JSON.parse(await fixture("host-probes/cache-working-set-latency.json")));
+  const counters = CacheCountersSchema.parse(JSON.parse(await fixture("host-probes/cache-counters-unavailable.json")));
+  expect(latency.measurement_obtained).toBe(true);
+  expect(counters.measurement_obtained).toBe(false);
+  expect(counters.reason).toBe("permission_denied");
+  expect(counters.events.every(event => event.count === null)).toBe(true);
+  // Replay the native display format from recorded numbers; do not manufacture latency readings.
+  const display = (value: number) => value.toFixed(value < 100 ? 3 : 1);
+  for (const point of latency.points) {
+    const text = [
+      "nr_threads = 1", `page_size = ${point.page_size_bytes} bytes`, `total_memory = ${point.working_set_bytes}`,
+      `stride = ${point.stride_bytes}`, `tlb_locality = ${point.tlb_locality_bytes}`, "chase = simple",
+      "samples (one column per thread, one row per sample):",
+      ...point.sample_nanoseconds_per_load.map(value => `${display(value)}  avg=${display(value)}`),
+      display(point.nanoseconds_per_load),
+    ].join("\n");
+    const expected = { ...point, samples: point.sample_nanoseconds_per_load.length };
+    expect(parseMultichaseOutput(text, expected)).toEqual({
+      nanoseconds_per_load: point.nanoseconds_per_load,
+      sample_nanoseconds_per_load: point.sample_nanoseconds_per_load, page_size_bytes: point.page_size_bytes,
+    });
+    expect(() => parseMultichaseOutput(`${text}\nNaN`, expected)).toThrow();
+    expect(() => parseMultichaseOutput(text, { ...expected, working_set_bytes: point.working_set_bytes + point.stride_bytes })).toThrow();
+    expect(() => parseMultichaseOutput(text.replace("chase = simple", "chase = parallel2"), expected)).toThrow();
+  }
 });
 
 test("nice and interrupts are accounted for, steal is visible, and guests are not counted twice", () => {
@@ -120,6 +154,35 @@ test("missing, malformed, reset and unchanged counters do not invent utilization
     parseCpuCounters("cpu 90071992547409920 0 0 0 0 0 0 0"),
     parseCpuCounters("cpu 90071992547409921 0 0 1 0 0 0 0"),
   ).value).toEqual({ user: 50, system: 0, idle: 50, iowait: 0, steal: 0 });
+  expect(classifyPerfFailure("No permission to enable LLC-loads:u event.")).toBe("permission_denied");
+  expect(classifyPerfFailure("Cannot find PMU `cpu'")).toBe("event_unsupported");
+  // Pinned perf's sig_atexit re-raises SIGINT; these exit-policy inputs contain no hardware readings.
+  const interrupted: ToolOutput = { code: null, signal: "SIGINT", reason: null, stdout: "", stderr: "" };
+  expect(readCounterToolFailure(interrupted, true)).toBeNull();
+  expect(readCounterToolFailure(interrupted, false)).toBe("tool_failed");
+  expect(readCounterToolFailure({ ...interrupted, code: 0, signal: null }, false)).toBeNull();
+  expect(readCounterToolFailure({ ...interrupted, code: 1, signal: null }, true)).toBe("tool_failed");
+  expect(readCounterToolFailure({ ...interrupted, code: 0 }, true)).toBe("tool_failed");
+  expect(readCounterToolFailure({ ...interrupted, signal: "SIGTERM" }, true)).toBe("tool_failed");
+  for (const reason of ["cancelled", "timeout", "output_limit"] as const) {
+    expect(readCounterToolFailure({ ...interrupted, reason }, true)).toBe(reason);
+  }
+  for (const text of ["", "NaN;;LLC-loads:u;1;100.00", "1;ns;LLC-loads:u;1;100.00",
+    "1;;cache-references;1;100.00", "1;;LLC-loads:u;0;100.00", "1;;LLC-loads:u;1;0.00",
+    "1;;LLC-loads:u;1;101.00", "9007199254740992;;LLC-loads:u;1;100.00"]) {
+    expect(() => parsePerfCounters(text, ["LLC-loads:u"])).toThrow();
+  }
+  expect(() => parseMultichaseOutput("", {
+    working_set_bytes: 4096, stride_bytes: 64, tlb_locality_bytes: 4096, samples: 2,
+  })).toThrow();
+  // These are CSV arithmetic inputs, not hardware readings or evidence that a host exposed a PMU.
+  const format = parsePerfCounters("7;;LLC-loads:u;500;50.00;;\n0;;LLC-load-misses:u;500;50.00;;", ["LLC-loads:u", "LLC-load-misses:u"]);
+  expect(format.map(event => event.count)).toEqual([7, 0]);
+  expect(format.every(event => event.time_enabled_ns_estimate === 1000 && event.multiplexing === "reported")).toBe(true);
+  const unsupported = parsePerfCounters("<not supported>;;LLC-loads:u;0;100.00;;\n<not counted>;;LLC-load-misses:u;0;100.00;;",
+    ["LLC-loads:u", "LLC-load-misses:u"]);
+  expect(unsupported.map(event => event.support)).toEqual(["unsupported", "not_counted"]);
+  expect(unsupported.every(event => event.count === null && event.running_percent === null)).toBe(true);
   const start = { value: { user: 90071992547409920n, system: 7n }, reason: null };
   const end = { value: { user: 90071992547409921n, system: 7n }, reason: null };
   const clock = parseClockTicks("250\n");
@@ -225,6 +288,11 @@ test("periodic file sampling uses closing minus opening counters and closes with
   expect(retained.sample_count).toBeGreaterThan(config.task_profile.max_retained_samples);
   expect(retained.samples).toHaveLength(config.task_profile.max_retained_samples);
   expect(bounded.close("error")).toBe(retained);
+  const machineOnly = new TaskCollector(CollectorInputSchema.parse({
+    ...collectorInput, config: { ...collectorInput.config, memory_enabled: false },
+  })).close("success");
+  expect(machineOnly.machine_available_min_kb).toBe(8192000);
+  expect(machineOnly.processes.worker.closing.unavailable["memory_kb.rss"]).toBe("configured_off");
   expect(retained.processes.worker.cpu.value).toEqual({ cpu_time_ms: 0, percent_one_core: 0 });
   expect(retained.processes.worker.cpu_interval_ms).toBeGreaterThan(0);
   const processStat = join(directory, String(process.pid), "stat");
@@ -246,11 +314,6 @@ test("periodic file sampling uses closing minus opening counters and closes with
     expect(failed.end_reason).toBe(failure === "pid_reused" ? "pid_reused" : "task_settled");
   }
   await Bun.write(processStat, openingStat);
-  const machineOnly = new TaskCollector(CollectorInputSchema.parse({
-    ...collectorInput, config: { ...collectorInput.config, memory_enabled: false },
-  })).close("success");
-  expect(machineOnly.machine_available_min_kb).toBe(8192000);
-  expect(machineOnly.processes.worker.closing.unavailable["memory_kb.rss"]).toBe("configured_off");
   await Bun.write(join(directory, "stat"), await fixture("runtime/2026-08-30-probe-proc-stat-at-start.txt"));
   const reset = new TaskCollector(CollectorInputSchema.parse({
     ...collectorInput, config: {
@@ -306,7 +369,31 @@ test("the real HTTP handler uses the sampler without external network", async ()
   expect(sample.unavailable.cpu).toBe("unsupported_platform");
   expect((await handler(new Request(`http://localhost${SAMPLE_PATH}`, { method: "POST" }))).status).toBe(405);
   expect((await handler(new Request("http://localhost/not-a-route"))).status).toBe(404);
+  const offLatency = await handler(command(CACHE_LATENCY_PATH, {}));
+  expect(offLatency.headers.get("Cache-Control")).toBe("no-store");
+  expect(CacheLatencySchema.parse(await offLatency.json()).status).toBe("disabled");
+  expect((await handler(command(CACHE_LATENCY_PATH, { program: "not-an-option" }))).status).toBe(400);
+  expect((await handler(new Request(`http://localhost${CACHE_LATENCY_PATH}`))).status).toBe(405);
   await handler.close();
+  const unsupported = createSampleHandler({
+    ...config, cache_probe: { ...config.cache_probe, latency: { ...config.cache_probe.latency, enabled: true } },
+  }, { platform: "unsupported" });
+  expect(CacheLatencySchema.parse(await (await unsupported(command(CACHE_LATENCY_PATH, {}))).json()).reason).toBe("unsupported_platform");
+  await unsupported.close();
+  const bounded = createSampleHandler({
+    ...config, cache_probe: { ...config.cache_probe, lifecycle_timeout_ms: 5 },
+  }, { platform: "unsupported" });
+  let cancelledBody = false;
+  const stalled = new Request(`http://localhost${CACHE_LATENCY_PATH}`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: new ReadableStream<Uint8Array>({
+      start(controller) { controller.enqueue(new TextEncoder().encode("{")); },
+      cancel() { cancelledBody = true; },
+    }),
+  });
+  expect((await bounded(stalled)).status).toBe(400);
+  expect(cancelledBody).toBe(true);
+  await bounded.close();
   const directory = await procDirectory();
   await rm(join(directory, "stat"));
   await mkdir(join(directory, "stat"));
@@ -366,6 +453,7 @@ test("HTTP sampling returns fixture memory and exposes a stopped CPU clock", asy
   await handler.close();
   const config = await loadConfig();
   config.task_profile = { ...config.task_profile, enabled: true, memory_enabled: false, max_profile_handles: 1 };
+  config.cache_probe.counters.enabled = true;
   const profiles: TaskProfile[] = [];
   const profilesHandler = createSampleHandler(config, { platform: "linux", procRoot: directory }, profile => { profiles.push(profile); });
   const input = { identity: taskIdentity(), target: { pid: 4242, start_ticks: "12345" } };
@@ -381,6 +469,8 @@ test("HTTP sampling returns fixture memory and exposes a stopped CPU clock", asy
     const started = StartTaskProfileResponseSchema.parse(await competing.find(result => result.status === 200)!.json());
     if (started.status !== "started") throw new Error("Enabled HTTP task profile did not start");
     expect(started.target).toEqual(input.target);
+    expect(started.cache_counters?.status).toBe("unavailable");
+    if (started.cache_counters?.status === "unavailable") expect(started.cache_counters.reason).toBe("target_not_owned");
     expect(Date.parse(started.expires_at)).toBeGreaterThan(Date.now());
     const stopping = await Promise.all([
       profilesHandler(command(STOP_TASK_PROFILE_PATH, { handle: started.handle, outcome: "success" })),
@@ -393,6 +483,7 @@ test("HTTP sampling returns fixture memory and exposes a stopped CPU clock", asy
     if (stopped.status !== "stopped") throw new Error("Enabled HTTP task profile did not stop");
     expect(stopped.end_reason).toBe("explicit_stop");
     expect(stopped.profile.outcome).toBe("success");
+    expect(stopped.cache_counters?.reason).toBe("target_not_owned");
     expect(stopped.profile.processes.worker.closing.pid).toBe(input.target.pid);
     expect(stopped.profile.processes.worker.closing.start_ticks).toBe(input.target.start_ticks);
     expect(stopped.profile.processes.worker.closing.unavailable["memory_kb.rss"]).toBe("configured_off");
@@ -481,9 +572,7 @@ test("HTTP sampling returns fixture memory and exposes a stopped CPU clock", asy
       expect((await pendingReport(command(START_TASK_PROFILE_PATH, input))).status).toBe(503);
       expect(readProcessIdentity(input.target.pid, config.max_proc_bytes, { platform: "linux", procRoot: directory }).value)
         .toMatchObject(input.target);
-    } finally {
-      releaseReport!();
-    }
+    } finally { releaseReport!(); }
   }
 });
 
@@ -505,6 +594,14 @@ test("missing and oversized proc files are explicit while valid siblings survive
   const context = { platform: "linux", procRoot: directory };
   const owned = { pid: 4242, start_ticks: "12345" };
   expect(readProcessIdentity(owned.pid, config.max_proc_bytes, context).value).toMatchObject(owned);
+  const cacheEnabled = {
+    ...config.cache_probe, counters: { ...config.cache_probe.counters, enabled: true },
+    latency: { ...config.cache_probe.latency, enabled: true },
+  };
+  expect((await (await startCacheCounters(cacheEnabled, { ...owned, start_ticks: "1" }, config.max_proc_bytes, context)).close()).reason)
+    .toBe("pid_reused");
+  expect((await (await startCacheCounters(cacheEnabled, owned, config.max_proc_bytes, context)).close()).reason)
+    .toBe("target_not_owned");
   expect(readProcessMemory(owned, config.max_proc_bytes, context).memory_kb.rss).toBe(600);
   expect(readProcessMemory({ ...owned, start_ticks: "1" }, config.max_proc_bytes, context).unavailable.major_faults).toBe("pid_reused");
   await Bun.write(join(directory, "4242", "status"), "VmRSS:\tbad kB\nVmHWM:\t900 kB\n");
@@ -574,10 +671,106 @@ test("missing and oversized proc files are explicit while valid siblings survive
   let reported = false;
   expect(await profileTask({ config, context, report: () => { reported = true; } }, identity, () => "actual work")).toBe("actual work");
   expect(reported).toBe(false);
+  const target = { pid: 4242, start_ticks: "12345" };
+  const counters = await startCacheCounters(config.cache_probe, target, config.max_proc_bytes, context);
+  expect(counters.initial?.status).toBe("disabled");
+  expect((await counters.close()).measurement_obtained).toBe(false);
+  expect((await measureWorkingSetLatency(config.cache_probe, config.max_proc_bytes, context)).status).toBe("disabled");
+  expect((await (await startCacheCounters(cacheEnabled, target, config.max_proc_bytes, { platform: "unsupported" })).close()).reason)
+    .toBe("unsupported_platform");
+  expect((await measureWorkingSetLatency(cacheEnabled, config.max_proc_bytes, { platform: "unsupported" })).reason)
+    .toBe("unsupported_platform");
+  const controller = new CacheProbeController(cacheEnabled, config.max_proc_bytes, { platform: "unsupported" });
+  const pending = controller.startCounters(target);
+  expect((await controller.measureLatency()).reason).toBe("concurrency_limit");
+  expect((await (await pending).settled).reason).toBe("unsupported_platform");
+  await controller.shutdown();
+  expect((await (await controller.startCounters(target)).close()).reason).toBe("cancelled");
+  expect((await controller.measureLatency()).reason).toBe("cancelled");
   const enabled = { ...config, task_profile: { ...config.task_profile, enabled: true } };
   await expect(startTaskProfile({ config: enabled, context, report: () => {} }, {
     pipeline_name: "error", task_name: "error", run_id: "error", request_id: randomUUID(), correlation_id: randomUUID(),
   })).rejects.toThrow("collector");
+  if (process.platform === "linux") {
+    // A real null run exercises pinned perf's controls and signal exit without opening a PMU counter.
+    for (const acknowledged of [true, false]) {
+      const native = startBoundedTool("perf", [
+        "stat", "--null", `--pid=${process.pid}`, "--delay=-1", "--control=fd:0,1",
+        `--timeout=${config.cache_probe.lifecycle_timeout_ms}`,
+      ], { max_output_bytes: config.cache_probe.max_output_bytes, timeout_ms: config.cache_probe.lifecycle_timeout_ms });
+      try {
+        expect(await native.control("enable", config.cache_probe.lifecycle_timeout_ms)).toBe(true);
+        if (acknowledged) expect(await native.control("disable", config.cache_probe.lifecycle_timeout_ms)).toBe(true);
+        const interrupted = native.interrupt();
+        expect(interrupted).toBe(true);
+        const output = await native.finished;
+        expect(output.reason).toBeNull();
+        expect(output.code).toBeNull();
+        expect(output.signal).toBe("SIGINT");
+        expect(readCounterToolFailure(output, acknowledged && interrupted)).toBe(acknowledged ? null : "tool_failed");
+      } finally {
+        if (native.running) native.cancel();
+        await native.finished;
+      }
+    }
+    const root = await procDirectory();
+    let ready: () => void;
+    let fail: (error: Error) => void;
+    const opening = new Promise<void>((resolve, reject) => { ready = resolve; fail = reject; });
+    let closing = false;
+    const child = Bun.spawn({
+      cmd: [process.execPath, fileURLToPath(new URL("host-probes/controlled-task.ts", fixtureRoot))],
+      stdin: "ignore", stdout: "ignore", stderr: "inherit", serialization: "json",
+      ipc(raw: unknown) {
+        if (typeof raw === "object" && raw !== null && "type" in raw && raw.type === "ready"
+          && "pid" in raw && raw.pid === child.pid) ready();
+        else fail(new Error("Controlled cleanup target returned invalid readiness"));
+      },
+      onExit() { if (!closing) fail(new Error("Controlled cleanup target exited before shutdown")); },
+    });
+    const timeout = setTimeout(() => fail(new Error("Controlled cleanup target startup timed out")), config.task_profile.lifecycle_timeout_ms);
+    try {
+      await opening;
+      clearTimeout(timeout);
+      const pin = readProcessIdentity(child.pid, config.max_proc_bytes, {});
+      if (pin.reason !== null) throw new Error("Controlled cleanup target has no actual process pin");
+      const target = { pid: pin.value.pid, start_ticks: pin.value.start_ticks };
+      await mkdir(join(root, String(target.pid)), { recursive: true });
+      for (const field of ["stat", "status"] as const) {
+        const actual = readProcFile(`${target.pid}/${field}`, config.max_proc_bytes, {});
+        if (actual.reason !== null) throw new Error("Controlled cleanup target has no actual proc input");
+        await Bun.write(join(root, String(target.pid), field), actual.value);
+      }
+      await rm(join(root, String(process.pid), "status"));
+      await mkdir(join(root, String(process.pid), "status"));
+      const shared = new CacheProbeController({
+        ...cacheEnabled, max_concurrent: 2,
+      }, config.max_proc_bytes, { platform: "linux", procRoot: root });
+      let counterSettled = false;
+      const counter = shared.startCounters(target).then(session => session.settled).then(result => {
+        counterSettled = true;
+        return result;
+      });
+      const failedLatency = shared.measureLatency();
+      const outcomes = Promise.allSettled([counter, failedLatency]);
+      try {
+        await expect(shared.shutdown()).rejects.toBeInstanceOf(AggregateError);
+        expect(counterSettled).toBe(true);
+        const results = await outcomes;
+        expect(results[0]!.status).toBe("fulfilled");
+        expect(results[1]!.status).toBe("rejected");
+        expect(readProcessIdentity(target.pid, config.max_proc_bytes, {}).value?.start_ticks).toBe(target.start_ticks);
+      } finally { await outcomes; }
+    } finally {
+      clearTimeout(timeout);
+      closing = true;
+      const cleanup = setTimeout(() => child.kill(), config.task_profile.lifecycle_timeout_ms);
+      try {
+        if (child.exitCode === null) child.send({ command: "close" });
+        expect(await child.exited).toBe(0);
+      } finally { clearTimeout(cleanup); }
+    }
+  }
 });
 
 test("configuration rejects unknown fields, missing fields and invalid controls by name", async () => {
@@ -588,6 +781,17 @@ test("configuration rejects unknown fields, missing fields and invalid controls 
   expect(config.task_profile.memory_enabled).toBe(false);
   expect(await resolveClockTicks(config)).toEqual({ value: null, reason: "configured_off" });
   expect(config.task_profile.cpu_window_ms).toBe(1000);
+  expect(config.cache_probe.counters.enabled).toBe(false);
+  expect(config.cache_probe.latency.enabled).toBe(false);
+  for (const latency of [
+    { ...config.cache_probe.latency, stride_bytes: 7 },
+    { ...config.cache_probe.latency, working_set_bytes: [4096, 4096] },
+    { ...config.cache_probe.latency, working_set_bytes: [4096, 2147483648] },
+    { ...config.cache_probe.latency, timeout_ms: 1 },
+  ]) expect(ProbeConfigSchema.safeParse({ ...config, cache_probe: { ...config.cache_probe, latency } }).success).toBe(false);
+  expect(ProbeConfigSchema.safeParse({
+    ...config, cache_probe: { ...config.cache_probe, counters: { ...config.cache_probe.counters, events: ["cache-misses"] } },
+  }).success).toBe(false);
   expect(config.task_profile.machine_memory_enabled).toBe(false);
   expect(config.task_profile.poll_interval_ms).toBe(1000);
   for (const [field, value] of [

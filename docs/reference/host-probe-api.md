@@ -4,6 +4,9 @@
 
 Which local HTTP commands measure one process for an operator-owned task?
 The Bun host probe includes PID CPU and optional process and machine RAM.
+Optional [cache probes](host-cache-probes.md) attach exact last-level-cache
+events to this same handle lifetime; their separate latency command measures
+an owned native benchmark, not the caller's task CPU.
 It samples until explicit stop, process exit, process reuse, service shutdown
 or the declared safety expiry. CPU windows and polling cadence do not end
 a task. [Measurement scopes and units](host-metrics.md#whole-task-typescript-samples)
@@ -88,6 +91,13 @@ reuse closes the profile as `cancelled`, with `owner_exited` or `pid_reused`.
 Safety expiry uses `cancelled` and `expired`, not successful full-task
 completion. Service shutdown uses `cancelled` and `service_stopped`.
 No close operation signals or kills an observed target or server.
+
+Start and stop return `cache_counters` beside the unchanged CPU/RAM `profile`.
+Both cache flags default to false. Counter refusal remains explicit and does
+not stop CPU/RAM profiling. The cache result retains its own actual interval.
+`POST /api/2026-10-24/cache/latency` accepts only `{}` and creates no task handle.
+Its native-tool, concurrency, body-time and working-set bounds are defined in
+the [cache reference](host-cache-probes.md).
 
 The instrument and completed handles exist only in this service process.
 There is no disk registry, host-ledger field or request-journal change.
