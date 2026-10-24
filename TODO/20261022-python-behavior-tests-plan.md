@@ -845,7 +845,9 @@ counts use the untouched archive and the completed branch instead.
   pre-merge heads `cbb23a22ddcd711ebe3fa34a042e707050ba2a1b` and
   `95e2808d8942b0aeb8995c2fc919d772a9952acc`, required `scope`, `gates`,
   `robots` and `site` checks passed; `browser` skipped. The latest main
-  integration requires its own CI because main advanced after those runs.
+  integration at `57366d88ae2bc0209121c5c52e6f2eb9eee07893` also passed
+  `scope`, `gates`, `robots` and `site`; `browser` skipped. Run:
+  `https://github.com/miztiik/yen-idhazh/actions/runs/40080891074`.
 - **Separate finding:** Existing `date.today()` in `measure_budgets.py` is not
   changed. Keep both cold-start measurement tests: stored spread is zero, while
   one repeat makes comparison unavailable. Keep recorded loopback integration.
@@ -862,9 +864,9 @@ counts use the untouched archive and the completed branch instead.
   merged normally. Plan conflicts were resolved by retaining the completed
   D11 merge receipt, Row 12's full section, and the complete Row 16 section;
   the complete Row 13-15 sections and the Row 16 A5 ruling are preserved.
-  All 12 reviewed Row 12 test, production and documentation files remain
-  byte-identical to `cbb23a22ddcd711ebe3fa34a042e707050ba2a1b`. D3 remains
-  open.
+  Exact-head CI passed. All 12 reviewed Row 12 test, production and
+  documentation files remain byte-identical to
+  `cbb23a22ddcd711ebe3fa34a042e707050ba2a1b`. D3 remains open.
 - **Delivery:** Implementation `32c85d883` is delivered in open PR
   [#1661](https://github.com/miztiik/yen-idhazh/pull/1661), not merged by this
   worker. D12 remains IN-FLIGHT pending CI on this merge candidate and merge.
