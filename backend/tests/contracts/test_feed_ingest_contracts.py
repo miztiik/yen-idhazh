@@ -124,6 +124,15 @@ def normalized_shape(node: dict[str, Any], root: dict[str, Any]) -> Any:
         )
     if kind == "object":
         if "patternProperties" in node:
+            patterns = node["patternProperties"]
+            if len(patterns) == 1:
+                pattern, value = next(iter(patterns.items()))
+                return (
+                    "record",
+                    pattern,
+                    normalized_shape(value, root),
+                    node.get("default", "<required>"),
+                )
             return (
                 "record",
                 tuple(
