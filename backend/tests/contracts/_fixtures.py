@@ -8,7 +8,7 @@ import shutil
 from pathlib import Path
 from typing import Any, Final
 
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
+from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 
 from idhazh.contracts import CONTRACTS, canonical_json
 from idhazh.contracts.app_config import AppConfig

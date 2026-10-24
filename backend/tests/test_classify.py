@@ -15,22 +15,11 @@ from string import Template
 from typing import Any
 
 import pytest
-from conftest import (
-    CONFIG_DIR,
-    FIXTURES_DIR,
-    INCUMBENT_MODEL,
-    LABEL_REPLIES,
-    REPO_ROOT,
-    SUMMARIZE_AND_PLAN_REPLIES,
-    RecordedEndpoint,
-    a_sampling,
-    a_server,
-    a_table,
-    committed_markers,
-    label_payload,
-    read_text,
-)
 from pydantic import BaseModel, ValidationError
+from support.models import a_server, committed_markers
+from support.paths import CONFIG_DIR, FIXTURES_DIR, REPO_ROOT, read_text
+from support.prompts import LABEL_REPLIES, SUMMARIZE_AND_PLAN_REPLIES, a_table, label_payload
+from support.server import RecordedEndpoint
 
 from idhazh import config, summarize
 from idhazh.classify.calls import (
@@ -226,6 +215,7 @@ PROMPT_FIXTURES = FIXTURES_DIR / "prompts"
 RENDERED_LABEL = PROMPT_FIXTURES / "label.txt"
 RENDERED_SUMMARIZE_AND_PLAN = PROMPT_FIXTURES / "summarize-and-plan.txt"
 CHAT_TEMPLATE_RENDERING = PROMPT_FIXTURES / "chat-template.json"
+RECORDED_MODEL_FILE = "qwen3.5-9b-q4km.json"
 
 
 def recorded_reply() -> str:
@@ -298,9 +288,9 @@ class TestThePromptBytes:
         recorded = json.loads(read_text(CHAT_TEMPLATE_RENDERING))
         system, user = recorded["system"], recorded["user"]
         entry = ModelsConfig.from_json(
-            read_text(CONFIG_DIR / "models" / INCUMBENT_MODEL)
+            read_text(CONFIG_DIR / "models" / RECORDED_MODEL_FILE)
         ).summarizer
-        markers = committed_markers(INCUMBENT_MODEL)
+        markers = committed_markers(RECORDED_MODEL_FILE)
         thinking = dataclasses.replace(markers, thinking_close="</think>")
 
         assert entry.sha256 == recorded["weights_sha256"]
@@ -1416,7 +1406,7 @@ def build_label_with_derived_budget(article: Article) -> dict[str, Any]:
         a_table(article),
         model_id="m",
         server=a_server(),
-        sampling=a_sampling(),
+        sampling={},
         markers=committed_markers(),
     )
 

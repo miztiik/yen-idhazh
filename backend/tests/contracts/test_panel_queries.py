@@ -10,7 +10,7 @@ from dataclasses import dataclass, replace
 from typing import Final
 
 import pytest
-from conftest import REPO_ROOT, read_text
+from support.paths import REPO_ROOT, read_text
 
 from idhazh.contracts.eval_row import RENAMED_CELLS, EvalRow
 from idhazh.contracts.host_fingerprint import COLUMN_READERS as HOST_READERS

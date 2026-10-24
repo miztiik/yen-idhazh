@@ -6,7 +6,7 @@ import shlex
 
 import pytest
 import yaml  # type: ignore[import-untyped]
-from conftest import read_text
+from support.paths import read_text
 
 from ._harness import COMMIT_PROGRAM_CALL, WORKFLOWS_DIR, _mapping, _step
 

@@ -13,8 +13,8 @@ import json
 from typing import Any
 
 import pytest
-from conftest import a_sampling, a_server
 from pydantic import ValidationError
+from support.models import a_sampling, a_server
 
 from idhazh import cli
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
@@ -36,8 +36,6 @@ from idhazh.evals import qualify
 from idhazh.llm.server import window
 
 EVALUATION = EvaluationConfig()
-SERVER = a_server()
-SAMPLING = a_sampling()
 RUN = RunConfig()
 SUMMARIZE = SummarizeConfig()
 
@@ -201,7 +199,7 @@ def outcomes_of(
         [shard],
         evaluation=EVALUATION,
         summarize=SUMMARIZE,
-        server=SERVER if server is None else server,
+        server=a_server() if server is None else server,
         run=RUN,
         budget_=a_passing_budget(),
         required_canaries=len(CANARY_NAMES),
@@ -550,7 +548,7 @@ def test_at_zero_temperature_the_spread_diagnostic_says_nothing() -> None:
     shard = a_passing_shard()
 
     assert qualify.wording_spread(
-        shard.observations, sampling=SAMPLING, repeats=shard.repeats
+        shard.observations, sampling=a_sampling(temperature=0.0), repeats=shard.repeats
     ) == []
 
 
@@ -575,7 +573,7 @@ def test_a_summary_under_the_floor_fails_and_a_long_one_does_not() -> None:
 
 
 def test_a_request_that_does_not_fit_the_context_fails() -> None:
-    over = window(SERVER)
+    over = window(a_server())
     broken = with_one_bad_call(a_passing_shard(), prompt_tokens=over)
     outcome = outcomes_of(broken)[GateName.CONTEXT_FIT]
     assert outcome.status is GateStatus.FAILED
@@ -585,7 +583,7 @@ def test_a_request_that_does_not_fit_the_context_fails() -> None:
 def test_the_cheap_predictor_may_not_under_reserve() -> None:
     """`fits_context` saying yes to a request that overflows is the failure mode
     the gate exists for: it is the check that runs before every production call."""
-    over = window(SERVER)
+    over = window(a_server())
     broken = with_one_bad_call(
         a_passing_shard(), prompt_tokens=over, fits_context_predicted=True
     )
@@ -606,7 +604,7 @@ def test_a_job_past_its_bound_fails_the_budget_gate() -> None:
         [a_passing_shard()],
         evaluation=EVALUATION,
         summarize=SUMMARIZE,
-        server=SERVER,
+        server=a_server(),
         run=RUN,
         budget_=qualify.Budget(
             job_budget_minutes=330.0, slowest_shard_seconds=331 * 60, slowest_item_seconds=900.0

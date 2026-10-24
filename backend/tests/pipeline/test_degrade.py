@@ -18,8 +18,8 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Final
 
-from conftest import FIXTURES_DIR, read_text
 from pytest import MonkeyPatch
+from support.paths import FIXTURES_DIR, read_text
 
 from idhazh import assemble
 from idhazh.contracts.article import Article, ArticleStatus, TitleSource

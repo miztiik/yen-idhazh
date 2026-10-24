@@ -16,8 +16,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 from pydantic import ValidationError
+from support.paths import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 
 from idhazh.contracts import CONTRACTS
 from idhazh.contracts.base import Contract

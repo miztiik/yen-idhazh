@@ -20,8 +20,8 @@ import sys
 from pathlib import Path
 
 import pytest
-from conftest import REPO_ROOT
 from pydantic import TypeAdapter
+from support.paths import REPO_ROOT
 
 from idhazh.contracts.knobs.gardener import TaskKind, TaskLifecycleStatus, TaskPolicy
 from idhazh.gardener import registry, runner

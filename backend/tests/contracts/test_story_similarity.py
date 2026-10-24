@@ -20,8 +20,8 @@ import json
 from typing import Any, get_args
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, MODEL_FILES, read_text
 from pydantic import ValidationError
+from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 
 from idhazh.contracts.base import derive_text_digest, derive_url_key
 from idhazh.contracts.fitted_similarity_threshold import (
@@ -40,6 +40,8 @@ from idhazh.contracts.story_similarity_pair import (
     StorySimilarityPair,
 )
 from idhazh.embed import EMBEDDER_ID
+
+from ._model_cases import MODEL_FILES
 
 pytestmark = pytest.mark.contract
 

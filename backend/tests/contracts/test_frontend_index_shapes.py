@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from conftest import REPO_ROOT, read_text
+from support.paths import REPO_ROOT, read_text
 
 from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.ledger_fault import LedgerFault

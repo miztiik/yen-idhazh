@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import REPO_ROOT, read_text
+from support.paths import REPO_ROOT, read_text
 
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.ledgers import LEDGER_SEGMENT_PATTERN, Grain, LedgerLifecycleStatus

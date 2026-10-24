@@ -17,13 +17,9 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 import pytest
-from conftest import (
-    CONTRACT_FIXTURES_DIR,
-    FIXTURES_DIR,
-    read_text,
-    seed_scores,
-)
 from pydantic import ValidationError
+from support.ledger import seed_scores
+from support.paths import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 
 from idhazh import ledger
 from idhazh.contracts.article import Article

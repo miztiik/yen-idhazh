@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from conftest import REPO_ROOT, read_text
 from pydantic import ValidationError
+from support.paths import REPO_ROOT, read_text
 
 from idhazh.contracts.knobs import feed_ingest
 

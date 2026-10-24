@@ -18,8 +18,8 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Final
 
-from conftest import CONFIG_DIR, FIXTURES_DIR
 from pydantic import TypeAdapter
+from support.paths import CONFIG_DIR, FIXTURES_DIR
 
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob

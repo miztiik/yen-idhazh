@@ -40,7 +40,8 @@ from pathlib import Path
 from typing import Final, NamedTuple
 
 import pytest
-from conftest import REPO_ROOT, SEED_COMMIT
+from support.ledger import SEED_COMMIT
+from support.paths import REPO_ROOT
 
 from ._harness import (
     GARDENER_PLAN_MODULE,

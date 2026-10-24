@@ -6,7 +6,7 @@ import json
 from typing import Any
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
+from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.knobs.collect import CollectConfig

@@ -6,7 +6,7 @@ import tomllib
 from pathlib import Path
 
 import pytest
-from conftest import REPO_ROOT, read_text
+from support.paths import REPO_ROOT, read_text
 
 from utilities.mark_census import declared_marks, module_marks, modules
 from utilities.slow_mark_audit import slow_threshold_seconds, threshold_phrase

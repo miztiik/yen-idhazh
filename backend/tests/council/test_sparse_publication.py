@@ -11,8 +11,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from conftest import FIXTURES_DIR
 from gardener._garden import a_partial_clone, an_origin, git, lazy_fetches, quiet_git, write
+from support.paths import FIXTURES_DIR
 
 from idhazh.contracts.publication_receipt import PublicationReceipt
 from idhazh.council import registry, session

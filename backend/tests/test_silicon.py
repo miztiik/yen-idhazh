@@ -11,7 +11,8 @@ from types import FrameType
 
 import pytest
 from _host_placement import refuse_external_placement
-from conftest import FIXTURES_DIR, SEED_COMMIT
+from support.ledger import SEED_COMMIT
+from support.paths import FIXTURES_DIR
 
 from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob

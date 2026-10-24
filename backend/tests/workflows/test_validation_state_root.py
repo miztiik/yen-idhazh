@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, REPO_ROOT, read_text
+from support.paths import CONFIG_DIR, REPO_ROOT, read_text
 
 from idhazh import config, ledger
 from idhazh.contracts.app_config import AppConfig

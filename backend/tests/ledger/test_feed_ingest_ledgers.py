@@ -11,8 +11,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 from gardener.tasks._task import run_declared
+from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 
 from idhazh import config, ledger
 from idhazh.contracts.base import Contract, ServerJob

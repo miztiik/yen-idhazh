@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
+from support.paths import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 
 from idhazh import config
 from idhazh.contracts.visual_prune import VisualPruneRow

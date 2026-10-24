@@ -14,8 +14,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from conftest import RecordedEndpoint
 from pytest import MonkeyPatch
+from support.server import RecordedEndpoint
 
 from idhazh.stages.work import stage_work
 

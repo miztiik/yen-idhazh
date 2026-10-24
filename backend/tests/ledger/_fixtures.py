@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from conftest import CONTRACT_FIXTURES_DIR, read_text
+from support.paths import CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh.contracts.base import Contract
 

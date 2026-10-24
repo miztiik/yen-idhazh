@@ -7,7 +7,8 @@ import json
 from pathlib import Path
 
 import pytest
-from conftest import REPO_ROOT, SEED_COMMIT
+from support.ledger import SEED_COMMIT
+from support.paths import REPO_ROOT
 
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import derive_url_key

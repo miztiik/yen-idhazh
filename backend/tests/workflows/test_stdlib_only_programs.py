@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import read_text
+from support.paths import read_text
 
 from ._harness import (
     CRASH_TRACE_MODULE,

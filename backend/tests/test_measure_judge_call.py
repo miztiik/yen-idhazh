@@ -15,7 +15,7 @@ import json
 from pathlib import Path
 from typing import Final
 
-from conftest import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
+from support.paths import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.knobs.placement import SECONDS_A_CALL

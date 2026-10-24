@@ -18,7 +18,6 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Final
 
 import pytest
-from conftest import seed_item_health
 from retention._trees import (
     HISTORY_MONTHS,
     NOT_MONTHS,
@@ -31,6 +30,7 @@ from retention._trees import (
     totals_from_aggregate,
     totals_from_shard,
 )
+from support.ledger import seed_item_health
 
 from idhazh import ledger, month_partition
 from idhazh.contracts.item_health import ItemHealthRow, ItemStage

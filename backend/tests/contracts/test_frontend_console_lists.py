@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Final, get_args
 
 import pytest
-from conftest import REPO_ROOT, read_text
+from support.paths import REPO_ROOT, read_text
 
 from idhazh.contracts.console_band import RouteId
 from idhazh.contracts.eval_row import BandReason, EvalRow

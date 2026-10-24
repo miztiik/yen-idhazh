@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
+from support.paths import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 
 from idhazh import assemble, atomic_write
 from idhazh.contracts.base import canonical_json

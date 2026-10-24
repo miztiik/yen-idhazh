@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from conftest import FIXTURES_DIR
+from support.paths import FIXTURES_DIR
 
 from idhazh.contracts.collection_prune import Recovery, StopReason
 from idhazh.contracts.gardener_events import ListEndMissing, PageCountChanged, PageOutOfOrder

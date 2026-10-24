@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from conftest import CONFIG_DIR, read_text
+from support.paths import CONFIG_DIR, read_text
 
 from idhazh import config, ledger
 from idhazh.config import GardenerSettings

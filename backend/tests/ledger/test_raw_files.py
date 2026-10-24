@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR
+from support.paths import CONTRACT_FIXTURES_DIR
 
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob

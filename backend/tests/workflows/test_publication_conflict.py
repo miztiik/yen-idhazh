@@ -7,8 +7,8 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from conftest import FIXTURES_DIR, REPO_ROOT, read_text
 from fixture_git import command as fixture_git_command
+from support.paths import FIXTURES_DIR, REPO_ROOT, read_text
 
 from idhazh import assemble
 from idhazh.contracts.digest_day import DigestDay

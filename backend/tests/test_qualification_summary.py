@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 import test_qualify as built
-from conftest import FIXTURES_DIR
 from pydantic import ValidationError
+from support.paths import FIXTURES_DIR
 
 from idhazh.contracts.qualification import (
     Diagnostic,

@@ -5,9 +5,10 @@ import json
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, writer_identity
 from gardener._garden import an_origin, git, quiet_git, write
 from retention._trees import health_row
+from support.ledger import writer_identity
+from support.paths import CONFIG_DIR
 
 from idhazh import completed_writes, config, ledger
 from idhazh.contracts.base import ServerJob

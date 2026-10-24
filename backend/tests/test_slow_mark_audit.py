@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from conftest import FIXTURES_DIR, REPO_ROOT
+from support.paths import FIXTURES_DIR, REPO_ROOT
 
 from utilities.slow_mark_audit import (
     average_seconds_by_module,

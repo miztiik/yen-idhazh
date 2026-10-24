@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
+from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh.contracts.base import Contract, canonical_json
 from idhazh.contracts.console_band import ConsoleBand

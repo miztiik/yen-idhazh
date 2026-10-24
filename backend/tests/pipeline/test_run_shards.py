@@ -3,8 +3,9 @@
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, SEED_COMMIT
 from pytest import MonkeyPatch
+from support.ledger import SEED_COMMIT
+from support.paths import CONFIG_DIR
 
 from idhazh import assemble, config, ledger
 from idhazh.contracts.ledger_name import LedgerName

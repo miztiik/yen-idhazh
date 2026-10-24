@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from conftest import REPO_ROOT
+from support.paths import REPO_ROOT
 
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.ledger import paths

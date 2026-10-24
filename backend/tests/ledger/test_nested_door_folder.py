@@ -7,8 +7,8 @@ from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
-from conftest import FIXTURES_DIR, REPO_ROOT, read_text
 from pydantic import ValidationError
+from support.paths import FIXTURES_DIR, REPO_ROOT, read_text
 
 from idhazh import ledger
 from idhazh.contracts.base import Contract, ServerJob

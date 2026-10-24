@@ -15,8 +15,8 @@ import logging
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, FIXTURES_DIR
 from pydantic import ValidationError
+from support.paths import CONFIG_DIR, FIXTURES_DIR
 
 from idhazh import capture, config, telemetry
 from idhazh.contracts.article import Article

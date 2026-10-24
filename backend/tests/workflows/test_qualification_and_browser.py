@@ -7,7 +7,7 @@ import re
 from collections.abc import Mapping
 
 import pytest
-from conftest import REPO_ROOT
+from support.paths import REPO_ROOT
 
 from ._harness import (
     BROWSER_CACHE_PATH,

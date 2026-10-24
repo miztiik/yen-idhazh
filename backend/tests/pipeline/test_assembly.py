@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from conftest import CONFIG_DIR, read_text
 from pytest import MonkeyPatch
+from support.paths import CONFIG_DIR, read_text
 
 from idhazh import cli, config
 from idhazh.contracts.eval_row import ConfidenceBand
