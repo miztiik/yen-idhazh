@@ -76,7 +76,7 @@ Table D - PR outcomes
 | D18 | 18 | Workflow checks reject supported broken inputs | 1, 22 | Q | IN-FLIGHT | strengthen-workflow-proof-checks | - | - |
 | D19 | 19 | Independent source-health publication proofs | 1 | R | DONE | prove-source-health-publication | [#1674](https://github.com/miztiik/yen-idhazh/pull/1674), merged at `e7f46b2317852ea5d3f212f83ea86ac51edc05ed` | - |
 | D20 | 20 | Prove reader output behavior | 1 | S | IN-FLIGHT | prove-reader-output-behavior | - | - |
-| D21 | 21 | Prove ledger dates and named-plan reads | 1 | T | IN-FLIGHT | prove-ledger-date-selection | - | - |
+| D21 | 21 | Prove ledger dates and named-plan reads | 1 | T | DONE | prove-ledger-date-selection | [#1675](https://github.com/miztiik/yen-idhazh/pull/1675), merged at `31a689f073d602e75870f7fa48da72d3043f6c13` | - |
 | D22 | 22 | Configured council planning and collection job deadlines | 1 | U | IN-FLIGHT | configure-council-job-deadlines | - | - |
 
 The canary implementation for Row 3 is delivered separately from its suite-wide
@@ -983,8 +983,10 @@ counts use the untouched archive and the completed branch instead.
   SHA-256 `e70837f6e5c8b8ae8bd035baf992bc378f366015b6873543b89957f3fa2107fc`.
   Only D14 and this section were added. All prior rows, including A5, D3,
   Rows 11-13 and the D10 merge receipt, remain unchanged.
-- **Delivery:** One phase PR for review; do not merge. No production, config,
-  contract, fixture, prompt, acceptance, frontend or dependency changes.
+- **Delivery:** Implementation was delivered in
+  [#1665](https://github.com/miztiik/yen-idhazh/pull/1665), merged at
+  `fe086c907f50f52c7c51a9c98c4425ce6f6e6357`. No production, config, contract,
+  fixture, prompt, acceptance, frontend or dependency changes.
 - **Dependencies:** Row 1. The frozen complete successor releases the
   serialized plan editor to Row 15 before PR delivery or CI completes.
 
@@ -1030,9 +1032,11 @@ counts use the untouched archive and the completed branch instead.
   `a7af64af9b7b3261997ffbb0bf61d3efb7aed6b6c0ca01f32ba06ec02f4e043a`.
   Only D15 and this section were added. All earlier text, A5, D3 IN-FLIGHT,
   Rows 11-14 and the D10 merge receipt remain unchanged.
-- **Delivery:** One phase PR for coordinator review and merge. No new config,
-  persisted shape, dependency, model choice, default or safety rule. Runtime
-  behavior is preserved; no canonical utility documentation required a change.
+- **Delivery:** Implementation was delivered in
+  [#1667](https://github.com/miztiik/yen-idhazh/pull/1667), merged at
+  `956fd7e27cdcbc927bd86ce54ecede4f993779ef`. No new config, persisted shape,
+  dependency, model choice, default or safety rule. Runtime behavior is
+  preserved; no canonical utility documentation required a change.
 - **Dependencies:** Row 1. The complete frozen successor releases the
   serialized editor to Row 16 before checks, push or CI.
 
@@ -1102,9 +1106,9 @@ counts use the untouched archive and the completed branch instead.
   `245fec63e996bd281be2bd305d97459c8319797cf93c9f749cfe53a19ada2f75`.
   Added only D16, this section and the expressly approved A5 CSV exception.
   All prior evidence, A5 exceptions and D3 IN-FLIGHT remain unchanged.
-- **Delivery:** One phase PR for coordinator review and merge; the worker
-  does not merge the PR. The frozen full successor releases the serialized
-  editor to Row 17 independently of checks, push or CI.
+- **Delivery:** Implementation was delivered in
+  [#1668](https://github.com/miztiik/yen-idhazh/pull/1668), merged at
+  `cff5cc58c8cc15c59b5b525fca84335e2e88c4ce`. The worker did not merge it.
 - **Dependencies:** Row 1.
 
 ## 18 - Row #17 - Default-on host-placement acquisition control
@@ -1290,9 +1294,12 @@ counts use the untouched archive and the completed branch instead.
   D3 IN-FLIGHT and Row 18's pending Row 22 prerequisite remain unchanged.
   The complete frozen successor releases the serialized editor to Row 20
   independently of remaining gates, push or CI.
-- **Delivery:** Delivered in
-  [#1674](https://github.com/miztiik/yen-idhazh/pull/1674), merged at
-  `e7f46b2317852ea5d3f212f83ea86ac51edc05ed`. The worker did not merge it.
+- **Delivery:** One coherent phase PR for coordinator review and merge.
+  Implementation commit `d05dc235941ab15332a1e34bf33286184793860e` was
+  delivered in [#1674](https://github.com/miztiik/yen-idhazh/pull/1674),
+  merged 2026-10-24 at `10:04:18 UTC` as
+  `e7f46b2317852ea5d3f212f83ea86ac51edc05ed`. Exact-head `scope`, `gates` and
+  `site` checks passed; `robots` and `browser` were skipped.
 - **Dependencies:** Row 1.
 
 ## 21 - Row #20 - Prove reader output behavior
@@ -1368,22 +1375,28 @@ counts use the untouched archive and the completed branch instead.
   `43218ab4d92db65e963eb590f5f72dafc1cc2d7c` for `test_plan_status.py`;
   resulting object IDs are `2312aab2e7fc587c7dd9a3be9ccf21bdb0e994de` and
   `9be52e6a5d199d3f3451cea4017512d615505eb5`, respectively.
-- **Evidence at plan freeze:** Source commit
-  `7950bf6825560734a28d0dcd1d57a7634a378ac2` is pushed to
-  `origin/prove-ledger-date-selection`; the source files are frozen and
-  `test_ledger.py` ownership is released. The shared selector selected only
-  the two changed backend test modules. The selected gate and disposable
-  production-fault proofs remain pending; no full-suite rerun is claimed.
-  Fault runs must fail at their named assertions, controls must pass before
-  and after, and restored source hashes must match.
-- **Plan integration:** Verified and imported the exact full Row 20
-  predecessor, 105,112 bytes, SHA-256
-  `1e46a3c54a6b5ae3911f153185e4fe186f8127ae8bec9bcfd5e479ef061be686`.
-  Added only D21 and this section. All earlier rows, A5, D3 and Row 18's
-  pending Row 22 dependency remain unchanged. This complete successor releases
-  the serialized editor to Row 22 independently of gates and CI.
-- **Delivery:** Open one phase PR after the plan and evidence are integrated.
-  The worker does not merge it.
+- **Verification:** The shared selector record
+  `backend/var/checks/44fa0b73b9c905debcf25aa8af6aa523cb6e9f7dbbedd04961092167d15a0131.json`
+  records whitespace, Ruff, mypy and all 91 selected tests passing. Its source
+  modules match the unchanged Row 21 commit blobs
+  `2312aab2e7fc587c7dd9a3be9ccf21bdb0e994de` and
+  `9be52e6a5d199d3f3451cea4017512d615505eb5`; therefore this evidence is
+  reused for Row 21 without a repeat solely for main integration. Seven
+  disposable production faults failed at their intended assertions, five
+  controls passed before and after, and restored source hashes were verified.
+  No full-suite run is claimed.
+- **Plan integration:** Merged current `origin/main`
+  `e7f46b2317852ea5d3f212f83ea86ac51edc05ed` normally. Preserved the current
+  Row 11 section and verified receipts for Rows 11, 12, 14, 15, 16 and 19,
+  along with all other phase sections, A5 and D3. The two Row 21 test-module
+  blobs remain unchanged. The frozen historical Row 21 successor remains
+  108,564 bytes with SHA-256
+  `85bb171daf2a4e00cd4689817825e295d10ddd6a0638381698f1299d682cbca3`.
+- **Delivery:** Delivered in
+  [#1675](https://github.com/miztiik/yen-idhazh/pull/1675), merged at
+  `31a689f073d602e75870f7fa48da72d3043f6c13`. Source commit
+  `7950bf6825560734a28d0dcd1d57a7634a378ac2` remains unchanged;
+  `test_ledger.py` ownership remains released. The worker did not merge it.
 - **Dependencies:** Row 1.
 
 ## 23 - Row #22 - Configured council planning and collection job deadlines
