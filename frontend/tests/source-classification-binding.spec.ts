@@ -56,8 +56,15 @@ function typescriptTypes(node: ts.TypeNode): Primitive[] {
 	throw new Error(`Unsupported TypeScript field type: ${node.getText()}`);
 }
 
-function assertFieldTypeMatches(name: string, type: ts.TypeNode, property: Schema, root: Schema): void {
-	expect(typescriptTypes(type).sort(), `TypeScript field ${name}`).toEqual(
+function assertFieldMatches(
+	name: string,
+	field: ts.PropertySignature,
+	property: Schema,
+	root: Schema
+): void {
+	if (field.questionToken) throw new Error(`TypeScript field ${name} must be required`);
+	if (!field.type) throw new Error(`TypeScript field ${name} must declare a type`);
+	expect(typescriptTypes(field.type).sort(), `TypeScript field ${name}`).toEqual(
 		pythonTypes(property, root).sort()
 	);
 }
@@ -102,8 +109,8 @@ test('the Python source-kind schema and TypeScript interface have the same field
 	expect([...fields.keys()].sort()).toEqual(Object.keys(schema.properties).sort());
 	for (const [name, property] of Object.entries(schema.properties)) {
 		const field = fields.get(name);
-		if (!field?.type) throw new Error(`TypeScript is missing field ${name}`);
-		assertFieldTypeMatches(name, field.type, property, schema);
+		if (!field) throw new Error(`TypeScript is missing field ${name}`);
+		assertFieldMatches(name, field, property, schema);
 	}
 });
 
@@ -111,6 +118,26 @@ test('the Python type binding refuses a boolean field changed to string', () => 
 	const schema = pythonSchema();
 	const property = schema.properties?.show_on_item;
 	if (!property) throw new Error('Python source-kind schema has no show_on_item field');
-	const changedType = ts.factory.createKeywordTypeNode(ts.SyntaxKind.StringKeyword);
-	expect(() => assertFieldTypeMatches('show_on_item', changedType, property, schema)).toThrow();
+	const changedField = ts.factory.createPropertySignature(
+		undefined,
+		'show_on_item',
+		undefined,
+		ts.factory.createKeywordTypeNode(ts.SyntaxKind.StringKeyword)
+	);
+	expect(() => assertFieldMatches('show_on_item', changedField, property, schema)).toThrow();
+});
+
+test('the Python source-kind binding refuses an optional TypeScript field', () => {
+	const schema = pythonSchema();
+	const property = schema.properties?.show_on_item;
+	if (!property) throw new Error('Python source-kind schema has no show_on_item field');
+	const optionalField = ts.factory.createPropertySignature(
+		undefined,
+		'show_on_item',
+		ts.factory.createToken(ts.SyntaxKind.QuestionToken),
+		ts.factory.createKeywordTypeNode(ts.SyntaxKind.BooleanKeyword)
+	);
+	expect(() => assertFieldMatches('show_on_item', optionalField, property, schema)).toThrow(
+		'must be required'
+	);
 });

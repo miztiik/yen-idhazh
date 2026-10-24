@@ -660,7 +660,7 @@ counts use the untouched archive and the completed branch instead.
     literal. Construct a finite published window one day beyond the authored
     first-sight window; require the loaded value and relation, not `730`.
     Keep named retired-key refusals and both the moved key and successor file
-    in the prune refusal.
+    in the prune refusal; remove one duplicate read of the same config file.
   - Hash the copied model-file bytes independently with SHA-256, then prove
     unchanged stability and changed-byte sensitivity. Remove the stale-teacher
     premise while retaining its named destination error. Keep
@@ -675,10 +675,11 @@ counts use the untouched archive and the completed branch instead.
     `definitions-a` taxonomy to prove a published retired lens still reads
     while its tombstone stops new matching.
   - Require the compact-index decoded model to equal the object written, not
-    only to serialize to stable text. Compare TypeScript field types with the
-    live Python JSON Schema using the TypeScript compiler API, require an
-    invalid property name in the refusal, and test omitted defaults beside
-    separately authored source kind and entity tier values.
+    only to serialize to stable text. Compare required TypeScript field names
+    and types with the live Python JSON Schema using the TypeScript compiler
+    API; an optional marker is refused because serialized output emits the
+    field. Require an invalid property name in the refusal, and test omitted
+    defaults beside separately authored source kind and entity tier values.
 - **Gates:** Run the shared changed-test selector over the seven backend
   modules and the frontend type-binding logic test, with Ruff and mypy.
   In disposable archive copies, fault each preserved behavior and record its
@@ -735,8 +736,11 @@ counts use the untouched archive and the completed branch instead.
   - Omitting compact-index state from a stable writer, with an empty entry in
     the disposable input, passed text idempotence but failed object equality in
   `backend/tests/contracts/test_ledger_index.py::test_a_compact_index_writes_one_entry_a_line_and_reads_back_what_it_wrote`.
-    The TypeScript binding compares the interface AST with the live Python
-    JSON Schema. A Boolean-to-string AST mutation failed
+    The TypeScript binding compares required interface AST fields with the
+    live Python JSON Schema. Boolean-to-string and optional-field AST
+    mutations fail
+    `frontend/tests/source-classification-binding.spec.ts::the Python source-kind binding refuses an optional TypeScript field`
+    and
     `frontend/tests/source-classification-binding.spec.ts::the Python type binding refuses a boolean field changed to string`.
     Accepting unknown properties failed
   `backend/tests/contracts/test_source_classification_binding.py::test_invalid_registry_refuses_loading_by_name[invalid-property-invented_rule]`.
@@ -748,10 +752,12 @@ counts use the untouched archive and the completed branch instead.
   passed 225 cases, logic passed 1,501, and browser checks passed 113; none
   failed or skipped. Record:
   `backend/var/checks/cdbdb0c4954ddedb8a33c187ae08431d04bd5d604d09f1b73cc8362d5b53fb60.json`.
-  The targeted source-kind binding spec passed both cases, including the
-  Boolean-to-string mutation proof; `npm run check` reported zero errors and
-  warnings. PR checks `scope`, `gates`, `browser` and `site` passed; `robots`
-  was skipped. Plan-only merge work did not repeat these gates.
+  That run predates the optional-field proof and the duplicate-read cleanup.
+  The final targeted results are 27 passing retention tests and 3 passing
+  source-kind binding tests, including both bounded type faults; `npm run check`
+  found zero errors and warnings. The merge itself did not repeat local
+  application gates. PR checks `scope`, `gates`, `browser` and `site` passed at
+  the prior Row 11 head; `robots` was skipped.
 - **Plan integration:** The serialized slot is released. Row 5 and Row 9
   delivery receipts, Row 10's merged receipt and the exact owner ruling in A5
   are retained. D3 remains open; Row 10 is not a dependency.
@@ -759,7 +765,9 @@ counts use the untouched archive and the completed branch instead.
   and `26ac9f90c`; current main, including Row 10's merge receipt, is merged
   into this branch without rewriting history. The AST binding proof is
   committed at `f0498735f`; [#1664](https://github.com/miztiik/yen-idhazh/pull/1664)
-  is open. No merge of the phase PR was performed.
+  is open. The current conflict-resolution candidate and targeted check
+  results are recorded in the Row 11 execution report. No merge of the phase
+  PR was performed.
 
 ## See also
 

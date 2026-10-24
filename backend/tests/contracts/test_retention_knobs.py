@@ -230,7 +230,6 @@ def test_the_published_window_is_unbounded_or_outlives_the_first_sight_store() -
     )
 
     raw = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
-    raw = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
     loaded = AppConfig.model_validate(raw).collect
     assert loaded.published_window_days == raw["collect"]["published_window_days"]
     assert loaded.published_window_days == -1 or (
