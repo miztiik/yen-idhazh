@@ -31,6 +31,7 @@ import { loadHarvestInputs } from "../src/harvest-feeds/load-harvest-inputs";
 import { loadConfig as loadProbeConfig } from "../../host-probes/src/config";
 import { TaskProfileSchema } from "../../host-probes/src/task-profile/profile-schema";
 import type { TaskProfile } from "../../host-probes/src/task-profile/profile-schema";
+import { verifyStageApis } from "./stage-api-cases";
 
 test("health is explicit; disabled, malformed, oversized and unknown controls cannot fetch", async () => {
   const inputs = await loadPlanInputs(fileURLToPath(new URL("../../../", import.meta.url)));
@@ -126,6 +127,7 @@ test("health is explicit; disabled, malformed, oversized and unknown controls ca
 });
 
 test("actual API and awaited CLI compose the same recorded plan and disclose the same audit limit", async () => {
+  await verifyStageApis();
   const api = await recordedPlan();
   const cli = await recordedPlan();
   const profiles: TaskProfile[] = [];
@@ -495,6 +497,12 @@ test("one listener retains durable seen receipts from an output root outside the
     expect(clocks).toBe(2);
     expect(first).not.toHaveProperty("issues");
     expect(second).not.toHaveProperty("issues");
+    const reselected = await createPlanApp(recorded.inputs, recorded.runtime)
+      .request("/api/2026-10-20/select-articles", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ batch_id: second.batches.parsed_batch_id }),
+      });
+    expect(reselected.status).toBe(200);
     expect(first.first_sight.absence_proof).toBe("unavailable");
     expect(first.first_sight.created_count).toBeGreaterThan(0);
     expect(second.first_sight.created_count).toBe(0);

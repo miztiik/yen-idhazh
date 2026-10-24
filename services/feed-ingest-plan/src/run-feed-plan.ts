@@ -1,10 +1,10 @@
 /** Which real stages produce dispatches and pending audit evidence for one run? */
+import { ParsedFeedBatchSchema } from "@idhazh/common-contracts";
 import type { FeedIngestEvent } from "@idhazh/common-contracts";
+import { randomUUID } from "node:crypto";
 import type { PersistedLedgerFile } from "@idhazh/ledger-file-writer";
 import { harvestFeeds } from "./harvest-feeds/harvest-pool";
-import { harvestPolicy, loadHarvestInputs, sourceSnapshot } from "./harvest-feeds/load-harvest-inputs";
-import { screenArticleCandidates } from "./screen-article-candidates/triage-gates";
-import { curateArticles, persistPortfolio } from "./curate-article-portfolio/editorial-selection";
+import { harvestPolicy, sourceSnapshot } from "./harvest-feeds/load-harvest-inputs";
 import type { ArticleEvidence, OpportunityEvidence } from "./curate-article-portfolio/portfolio-input";
 import { resolveOperationalHistory } from "./curate-article-portfolio/portfolio-input";
 import { resolveRunContext } from "./resolve-run-context";
@@ -18,7 +18,13 @@ import type { OwnSeenReceipt } from "./read-ledger-history/read-seen-evidence";
 import { resolvePlanRequest, PlanError } from "./api/plan-request";
 import { createStageLogger, resolveRunPolicy, writeAuditEvent } from "./logging/structured-logger";
 import { harvestAssessments, screeningAssessments } from "./logging/stage-assessments";
-import { prepareDispatches, sealDispatches } from "./seal-article-ledger/plan-sealer";
+import { readCurrentSelections } from "./partition-article-shards/read-editorial-selection";
+import { resolvePlanningInputs } from "./resolve-planning-inputs";
+import { writeStageBatch } from "./api/stage-store";
+import { operationConfigFingerprint } from "./api/document-operations";
+import { executeSelection } from "./api/selection-operation";
+import { executePartition } from "./api/partition-operation";
+import { executePersistence } from "./api/persistence-operation";
 import type { PlanInputs } from "./load-plan-inputs";
 import type { PlanningMetricsResult, PublicationMetricsResult, PublicationRecorderInput } from "./metrics/metrics-recorder";
 import { createProgressLogger } from "./logging/progress-logger";
@@ -38,6 +44,7 @@ export type PlanRuntime = {
   evidence?: ReadonlyMap<string, ArticleEvidence>;
   opportunity?: OpportunityEvidence;
   seen_receipts?: readonly OwnSeenReceipt[];
+  seen_days?: PlanInputs["settings"]["inputs"]["seen_days"];
   feed_history_receipts?: readonly OwnFeedReceipt[];
   on_feed_history_persisted?: (receipt: FeedWriteReceipt) => void;
   on_seen_persisted?: (receipt: { day: string; files: readonly PersistedLedgerFile[] }) => void;
@@ -59,13 +66,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     if (entry.lifecycle_status !== "active") throw new PlanError("LEDGER_INACTIVE", `Required ledger ${entry.name} is not active`, entry.name);
   }
   // Recompute the effective input fingerprint instead of changing a harvested policy later.
-  const harvestInputs = loadHarvestInputs({
-    config: { ...inputs.harvest.config, curate: { ...inputs.harvest.config.curate, article_limit: request.article_limit } },
-    taxonomy: { ...inputs.harvest.taxonomy, ...inputs.harvest.registry },
-    sources: { feeds: inputs.harvest.sources, retired: inputs.harvest.retired_sources, salience: inputs.harvest.salience },
-    ...(inputs.harvest.watchlist === null ? {} : { watchlist: inputs.harvest.watchlist }),
-    extraction: { ...inputs.harvest.extraction_settings, extract: inputs.harvest.extraction },
-  });
+  const harvestInputs = resolvePlanningInputs(inputs, request);
   const overrides = request.freshness_hours === undefined ? {} : { freshness_hours: request.freshness_hours };
   const fallbackPolicy = resolveRunPolicy(harvestInputs, request.freshness_hours);
   for (const source of harvestInputs.sources) {
@@ -84,7 +85,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   progress("HISTORY_READ_STARTED");
   const history = await readSeenEvidence(inputs.root, inputs.settings.inputs.seen_files, {
     now: context.now, lookback_days: inputs.clock_config.collect.seen_window_days,
-    days: inputs.settings.inputs.seen_days,
+    days: runtime.seen_days ?? inputs.settings.inputs.seen_days,
     receipt_root: inputs.outputRoot,
     ...(runtime.seen_receipts === undefined ? {} : { own_receipts: runtime.seen_receipts }),
   });
@@ -161,43 +162,32 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   complete("harvest-feeds", harvest.candidates.length + harvest.rejections.length, harvest.candidates.length,
     harvest.rejections.length, harvest.feed_outcomes.length);
   logger.startStep();
-  const screening = await screenArticleCandidates({
+  const parsedBatch = await writeStageBatch(inputs.outputRoot, "parsed", ParsedFeedBatchSchema, {
+    batch_id: randomUUID(), config_sha256: operationConfigFingerprint(inputs, runtime),
+    context, request,
     candidates: harvest.candidates,
     observations: Object.fromEntries(harvest.articles.filter(article => article.candidate !== null)
       .map(article => [article.observation.candidate_id, article.observation])),
-    seen: seen.evidence, planning: harvestInputs, clock_config: inputs.clock_config,
-    run: { now: context.now, run_id: context.run_id, correlation_id: context.correlation_id, overrides },
-  }, {
-    outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.rejections,
-    ledgerSettings: inputs.ledgerSettings, writerContext: context.writer,
-  });
-  for (const assessment of screeningAssessments({
-    harvest, screening, context, overrides, seen: seen.evidence,
-    maxFutureHours: inputs.clock_config.collect.max_future_hours, evidence: runtime.evidence,
-  })) logger.emit(
-    "screen-article-candidates", { kind: "candidate_decision", assessment },
-    assessment.policy, assessment.source_id, assessment.candidate_id,
-  );
-  complete("screen-article-candidates", harvest.candidates.length, screening.admitted.length, screening.rejections.length);
-  logger.startStep();
-  const curation = curateArticles({
-    articles: screening.admitted.map(article => {
-      const supplied = runtime.evidence?.get(article.candidate.candidate_id) ?? {
-        publisher: null, parent_domain: null, operational: null, primary_evidence: null,
-        estimated_work: article.candidate.word_count,
-      };
-      return { ...article, evidence: {
-        ...supplied,
-        operational: resolveOperationalHistory(article.candidate.source_id, supplied.operational,
-          feedHistory.sources.get(article.candidate.source_id)!.reliability),
-      } };
-    }),
-    planning: harvestInputs, observed_at: context.now,
-    reliability_floor: inputs.clock_config.collect.reliability_floor,
+    seen: seen.evidence, rejections: harvest.rejections,
+    evidence: Object.fromEntries(runtime.evidence ?? []),
+    operational_history: Object.fromEntries([...feedHistory.sources].map(([id, history]) =>
+      [id, resolveOperationalHistory(id, null, history.reliability)])),
     opportunity: runtime.opportunity ?? {
       covered_event_clusters: null, underrepresented_verticals: null, origin: null,
     },
   });
+  const selection = await executeSelection({ batch_id: parsedBatch.batch_id }, inputs, runtime, screening => {
+    for (const assessment of screeningAssessments({
+      harvest, screening, context, overrides, seen: seen.evidence,
+      maxFutureHours: inputs.clock_config.collect.max_future_hours, evidence: runtime.evidence,
+    })) logger.emit(
+      "screen-article-candidates", { kind: "candidate_decision", assessment },
+      assessment.policy, assessment.source_id, assessment.candidate_id,
+    );
+    complete("screen-article-candidates", harvest.candidates.length, screening.admitted.length, screening.rejections.length);
+    logger.startStep();
+  });
+  const { screening, curation, portfolio } = selection;
   for (const assessment of curation.assessments) logger.emit(
     "curate-article-portfolio", { kind: "candidate_decision", assessment },
     assessment.policy, assessment.source_id, assessment.candidate_id,
@@ -208,21 +198,29 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     logger.emit("curate-article-portfolio", step.choice, article.candidate.policy,
       article.candidate.source_id, article.candidate.candidate_id);
   }
-  const portfolio = await persistPortfolio(curation, {
-    outputRoot: inputs.outputRoot, writerContext: context.writer, ledgerSettings: inputs.ledgerSettings,
-    registrations: inputs.registrations, date: context.date,
-  });
   complete("curate-article-portfolio", screening.admitted.length, curation.rows.length, curation.rejections.length);
   logger.startStep();
-  const partition = await prepareDispatches(curation, portfolio, harvest.candidates, inputs, context, request);
+  await readCurrentSelections({
+    curation, persisted: portfolio.selections, candidates: harvest.candidates,
+    writer: context.writer, outputRoot: inputs.outputRoot, context,
+  });
+  const partitioned = await executePartition({
+    batch_id: selection.batch.batch_id, strategy: request.partition_strategy, shards: request.shards,
+  }, inputs, runtime);
+  const { partition } = partitioned;
   complete("partition-article-shards", curation.rows.length, partition.dispatches.length, 0);
   logger.startStep();
-  const dispatches = await sealDispatches(partition, inputs, context);
+  const dispatches = await executePersistence({ batch_id: partitioned.batch.batch_id }, inputs, runtime);
   complete("seal-article-ledger", partition.dispatches.length, partition.dispatches.length, 0);
   progress("PLANNING_STAGES_COMPLETED", { output_count: partition.dispatches.length });
   return {
     status: "dispatches_persisted_audit_pending" as const,
     context, request, events: logger.events,
+    batches: {
+      parsed_batch_id: parsedBatch.batch_id,
+      selection_batch_id: selection.batch.batch_id,
+      partition_batch_id: partitioned.batch.batch_id,
+    },
     files: {
       harvest_rejections: harvest.rejection_files,
       screening_rejections: screening.sealing,
@@ -253,6 +251,7 @@ export function summarizePlan(result: FeedPlanResult & { metrics?: PlanningMetri
     source_records: result.metrics?.source_records ?? null,
     run_id: result.context.run_id, correlation_id: result.context.correlation_id,
     date: result.context.date, observed_at: result.context.now, request: result.request,
+    batches: result.batches,
     strategy: result.evidence.partition.strategy, dispatch_count: result.evidence.partition.dispatch_count,
     selected_candidate_ids: result.evidence.curation.rows.map(row => row.candidate_id),
     assignments: result.evidence.partition.dispatches.map(dispatch => ({

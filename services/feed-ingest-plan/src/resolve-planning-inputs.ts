@@ -1,0 +1,16 @@
+/** Which effective harvest configuration belongs to one validated plan request? */
+import { loadHarvestInputs } from "./harvest-feeds/load-harvest-inputs";
+import type { PlanInputs } from "./load-plan-inputs";
+import type { resolvePlanRequest } from "./api/plan-request";
+
+export function resolvePlanningInputs(
+  inputs: PlanInputs, request: ReturnType<typeof resolvePlanRequest>,
+) {
+  return loadHarvestInputs({
+    config: { ...inputs.harvest.config, curate: { ...inputs.harvest.config.curate, article_limit: request.article_limit } },
+    taxonomy: { ...inputs.harvest.taxonomy, ...inputs.harvest.registry },
+    sources: { feeds: inputs.harvest.sources, retired: inputs.harvest.retired_sources, salience: inputs.harvest.salience },
+    ...(inputs.harvest.watchlist === null ? {} : { watchlist: inputs.harvest.watchlist }),
+    extraction: { ...inputs.harvest.extraction_settings, extract: inputs.harvest.extraction },
+  });
+}

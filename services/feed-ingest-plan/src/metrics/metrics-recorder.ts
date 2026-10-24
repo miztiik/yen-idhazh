@@ -17,7 +17,7 @@ import { preflightMeasurements, translateArticleAssessments } from "./article-as
 import { calculateDiversityMetrics } from "./diversity-metrics";
 import { reconcileStageMembership, requireSame } from "./stage-membership";
 import { completePlanningSources, deriveSourceRunSummaries } from "./source-run-summary";
-import { loadHarvestInputs } from "../harvest-feeds/load-harvest-inputs";
+import { resolvePlanningInputs } from "../resolve-planning-inputs";
 import { UtcInstantSchema } from "../screen-article-candidates/seen-evidence";
 import { readPlanningHistory, settlePlanningDay } from "./planning-populations";
 import type { NamedPlanningHistory } from "./planning-populations";
@@ -92,13 +92,7 @@ export function preparePlanningMetrics(
 ) {
   // Refuse the entire request before any Row 14 parse can erase exact timing.
   preflightMeasurements(result, inputs);
-  const original = loadHarvestInputs({
-    config: { ...inputs.harvest.config, curate: { ...inputs.harvest.config.curate, article_limit: result.request.article_limit } },
-    taxonomy: { ...inputs.harvest.taxonomy, ...inputs.harvest.registry },
-    sources: { feeds: inputs.harvest.sources, retired: inputs.harvest.retired_sources, salience: inputs.harvest.salience },
-    ...(inputs.harvest.watchlist === null ? {} : { watchlist: inputs.harvest.watchlist }),
-    extraction: { ...inputs.harvest.extraction_settings, extract: inputs.harvest.extraction },
-  });
+  const original = resolvePlanningInputs(inputs, result.request);
   requireSame(result.evidence.harvest.inputs, original, "audit.harvest.inputs");
   requireSame(result.evidence.harvest.config, original.config, "audit.harvest.config");
   const membership = reconcileStageMembership(result);

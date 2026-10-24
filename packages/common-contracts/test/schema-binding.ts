@@ -12,7 +12,12 @@ import {
   SourceSnapshotSchema, WriterIdentitySchema, FeedHealthRowSchema,
   FetchedDocumentSchema, PlannerOperationSchema,
   PublicationEntryInputSchema, PublicationInventoryInputSchema, PUBLICATION_INVENTORY_VERSION,
-  ExtractionQualitySchema,
+  ExtractionQualitySchema, ParsedFeedBatchSchema, SelectedFeedBatchSchema,
+  PartitionedFeedBatchSchema, PlannerStageContextSchema, PlannerStageRequestSchema,
+  PlannerArticleEvidenceSchema, PlannerOpportunityEvidenceSchema,
+  PlannerHarvestObservationSchema, PlannerSeenEvidenceSchema, PlannerSeenRowSchema,
+  PlannerSeenAvailableSchema, PlannerSeenUnavailableSchema,
+  PreflightFreshnessSchema, StageReferenceRequestSchema, PartitionArticlesRequestSchema,
 } from "../src/index";
 
 export const runtimeSchemas = {
@@ -28,7 +33,17 @@ export const runtimeSchemas = {
   ArticleAssessmentRecord: ArticleAssessmentRecordSchema, DiversityMetricRow: DiversityMetricRowSchema,
   FeedHealthRow: FeedHealthRowSchema,
   FetchedDocument: FetchedDocumentSchema, PlannerOperation: PlannerOperationSchema,
-  ExtractionQuality: ExtractionQualitySchema,
+  ExtractionQuality: ExtractionQualitySchema, PlannerStageContext: PlannerStageContextSchema,
+  PlannerStageRequest: PlannerStageRequestSchema, PlannerArticleEvidence: PlannerArticleEvidenceSchema,
+  PlannerOpportunityEvidence: PlannerOpportunityEvidenceSchema,
+  PlannerHarvestObservation: PlannerHarvestObservationSchema,
+  PlannerSeenRow: PlannerSeenRowSchema,
+  PlannerSeenAvailable: PlannerSeenAvailableSchema,
+  PlannerSeenUnavailable: PlannerSeenUnavailableSchema,
+  PreflightFreshness: PreflightFreshnessSchema, ParsedFeedBatch: ParsedFeedBatchSchema,
+  SelectedFeedBatch: SelectedFeedBatchSchema, PartitionedFeedBatch: PartitionedFeedBatchSchema,
+  StageReferenceRequest: StageReferenceRequestSchema,
+  PartitionArticlesRequest: PartitionArticlesRequestSchema,
 } satisfies Record<string, z.ZodType>;
 
 export const schemas = Object.fromEntries(
@@ -36,6 +51,9 @@ export const schemas = Object.fromEntries(
 );
 export default schemas;
 
+export const plannerStageSchemas = {
+  PlannerSeenEvidence: z.toJSONSchema(PlannerSeenEvidenceSchema, { io: "input" }),
+};
 export const footerKeys = FOOTER_METADATA_KEYS;
 export const optionalFooterKeys = OPTIONAL_FOOTER_METADATA_KEYS;
 export const publicationInputSchemas = {
@@ -45,6 +63,7 @@ export const publicationInputSchemas = {
 
 if (import.meta.main) process.stdout.write(`${JSON.stringify({
   ...schemas, __footer_keys: footerKeys, __optional_footer_keys: optionalFooterKeys,
+  __planner_stage_schemas: plannerStageSchemas,
   __row_identity_column_versions: ROW_IDENTITY_COLUMN_VERSIONS,
   __publication_inputs: publicationInputSchemas,
   __publication_input_versions: {
