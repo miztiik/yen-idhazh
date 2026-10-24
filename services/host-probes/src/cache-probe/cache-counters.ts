@@ -7,6 +7,7 @@ import type { CacheProbeConfig } from "./cache-config";
 import { CACHE_API_VERSION, CacheCountersSchema } from "./cache-schema";
 import type { CacheCounters, CacheReason } from "./cache-schema";
 import { startBoundedTool } from "./bounded-tool";
+import type { ToolOutput } from "./bounded-tool";
 import { classifyPerfFailure, parsePerfCounters, unavailableCounter } from "./perf-output";
 import { validateCounterTarget } from "./owned-target";
 
@@ -15,6 +16,12 @@ export type CounterSession = {
   settled: Promise<CacheCounters>;
   close: (cancelled?: boolean) => Promise<CacheCounters>;
 };
+export function readCounterToolFailure(output: ToolOutput, interrupted: boolean): CacheReason | null {
+  if (output.reason) return output.reason;
+  if ((output.code === 0 && output.signal === null)
+    || (interrupted && output.code === null && output.signal === "SIGINT")) return null;
+  return classifyPerfFailure(output.stderr);
+}
 export function refuseCacheCounters(config: CacheProbeConfig, target: OwnedProcess, reason: CacheReason): CacheCounters {
   return CacheCountersSchema.parse({
     version: CACHE_API_VERSION, kind: "last_level_cache_counters",
@@ -86,13 +93,15 @@ export async function startCacheCounters(
     close(cancelled = false) {
       closing ??= (async () => {
         let completion: CacheCounters["completion"] = "duration_limit";
+        let interrupted = false;
         if (cancelled || signal?.aborted) { completion = "cancelled"; tool.cancel(); }
         else if (tool.running) {
           if (await tool.control("disable", config.lifecycle_timeout_ms)) {
             completion = "stopped";
             finished_at = new Date().toISOString();
             elapsed_ms = performance.now() - started;
-            tool.interrupt();
+            // perf re-raises SIGINT after printing counters; only this acknowledged stop permits it.
+            interrupted = tool.interrupt();
           } else if (tool.running) tool.cancel("timeout");
         }
         const boundary = { started_at, finished_at, elapsed_ms };
@@ -101,8 +110,8 @@ export async function startCacheCounters(
         base.completion = completion;
         const refusal = validateCounterTarget(target, maxProcBytes, context);
         if (refusal) return unavailable(refusal);
-        if (output.reason) return unavailable(output.reason);
-        if (output.code !== 0) return unavailable(classifyPerfFailure(output.stderr));
+        const toolFailure = readCounterToolFailure(output, interrupted);
+        if (toolFailure) return unavailable(toolFailure);
         try {
           const events = parsePerfCounters(output.stderr, config.counters.events);
           const measured = events.some(event => event.support === "measured");

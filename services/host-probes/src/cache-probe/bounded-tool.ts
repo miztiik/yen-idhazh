@@ -67,7 +67,7 @@ export function startBoundedTool(
   return {
     ready, stdoutStarted, finished,
     get running() { return active; },
-    interrupt() { if (active) child.kill("SIGINT"); },
+    interrupt() { return active && child.kill("SIGINT"); },
     cancel(cause: CacheReason = "cancelled") { stop(cause); },
     async control(command: "enable" | "disable", timeoutMs: number): Promise<boolean> {
       let acknowledge: (value: boolean) => void;

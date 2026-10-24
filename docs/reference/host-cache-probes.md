@@ -35,6 +35,11 @@ The scope is its existing threads, without inherited descendant counters.
 Threads created after attachment are not included.
 Work elsewhere in that process is included. Control acknowledgements bound
 the actual observation interval; the counter's running time is also retained.
+On stop, the adapter waits for the disable acknowledgement before sending
+SIGINT to its own perf process. The pinned perf release re-raises SIGINT
+after printing final counters. That exit is accepted only when this
+acknowledged adapter stop sent the signal; cancellation, timeout, output
+overflow and unexpected termination still refuse the result.
 Exit, PID reuse and a different owner produce explicit unavailable results.
 Only the probe's own perf subprocess can be stopped; the target is never
 signalled.
@@ -184,4 +189,5 @@ event counts and a controlled latency curve answer different questions.
 - [../how-to/run-feed-ingest-plan-test.md#resource-proof](../how-to/run-feed-ingest-plan-test.md#resource-proof) - isolated proof boundaries.
 - [../../config/host-cache-tools.json](../../config/host-cache-tools.json) - optional Linux tool dependencies.
 - [perf stat](https://man7.org/linux/man-pages/man1/perf-stat.1.html) - event, control and output semantics.
+- [Pinned perf signal handling](https://github.com/torvalds/linux/blob/028ef9c96e96197026887c0f092424679298aae8/tools/perf/builtin-stat.c#L1097-L1137) - final counter output can end with the adapter's SIGINT.
 - [multichase](https://github.com/google/multichase) - established native pointer-chase tool.

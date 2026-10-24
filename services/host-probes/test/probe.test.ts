@@ -20,7 +20,9 @@ import { calculateProcessCpu } from "../src/task-profile/process-cpu";
 import { parseClockTicks, resolveClockTicks } from "../src/task-profile/clock-ticks";
 import { TaskCollector } from "../src/task-profile/task-collector";
 import { CollectorInputSchema } from "../src/task-profile/profile-schema";
-import { startCacheCounters } from "../src/cache-probe/cache-counters";
+import { readCounterToolFailure, startCacheCounters } from "../src/cache-probe/cache-counters";
+import { startBoundedTool } from "../src/cache-probe/bounded-tool";
+import type { ToolOutput } from "../src/cache-probe/bounded-tool";
 import { measureWorkingSetLatency } from "../src/cache-probe/working-set-latency";
 import { classifyPerfFailure, parsePerfCounters } from "../src/cache-probe/perf-output";
 import { CacheProbeController } from "../src/cache-probe/cache-controller";
@@ -154,6 +156,17 @@ test("missing, malformed, reset and unchanged counters do not invent utilization
   ).value).toEqual({ user: 50, system: 0, idle: 50, iowait: 0, steal: 0 });
   expect(classifyPerfFailure("No permission to enable LLC-loads:u event.")).toBe("permission_denied");
   expect(classifyPerfFailure("Cannot find PMU `cpu'")).toBe("event_unsupported");
+  // Pinned perf's sig_atexit re-raises SIGINT; these exit-policy inputs contain no hardware readings.
+  const interrupted: ToolOutput = { code: null, signal: "SIGINT", reason: null, stdout: "", stderr: "" };
+  expect(readCounterToolFailure(interrupted, true)).toBeNull();
+  expect(readCounterToolFailure(interrupted, false)).toBe("tool_failed");
+  expect(readCounterToolFailure({ ...interrupted, code: 0, signal: null }, false)).toBeNull();
+  expect(readCounterToolFailure({ ...interrupted, code: 1, signal: null }, true)).toBe("tool_failed");
+  expect(readCounterToolFailure({ ...interrupted, code: 0 }, true)).toBe("tool_failed");
+  expect(readCounterToolFailure({ ...interrupted, signal: "SIGTERM" }, true)).toBe("tool_failed");
+  for (const reason of ["cancelled", "timeout", "output_limit"] as const) {
+    expect(readCounterToolFailure({ ...interrupted, reason }, true)).toBe(reason);
+  }
   for (const text of ["", "NaN;;LLC-loads:u;1;100.00", "1;ns;LLC-loads:u;1;100.00",
     "1;;cache-references;1;100.00", "1;;LLC-loads:u;0;100.00", "1;;LLC-loads:u;1;0.00",
     "1;;LLC-loads:u;1;101.00", "9007199254740992;;LLC-loads:u;1;100.00"]) {
@@ -679,6 +692,27 @@ test("missing and oversized proc files are explicit while valid siblings survive
     pipeline_name: "error", task_name: "error", run_id: "error", request_id: randomUUID(), correlation_id: randomUUID(),
   })).rejects.toThrow("collector");
   if (process.platform === "linux") {
+    // A real null run exercises pinned perf's controls and signal exit without opening a PMU counter.
+    for (const acknowledged of [true, false]) {
+      const native = startBoundedTool("perf", [
+        "stat", "--null", `--pid=${process.pid}`, "--delay=-1", "--control=fd:0,1",
+        `--timeout=${config.cache_probe.lifecycle_timeout_ms}`,
+      ], { max_output_bytes: config.cache_probe.max_output_bytes, timeout_ms: config.cache_probe.lifecycle_timeout_ms });
+      try {
+        expect(await native.control("enable", config.cache_probe.lifecycle_timeout_ms)).toBe(true);
+        if (acknowledged) expect(await native.control("disable", config.cache_probe.lifecycle_timeout_ms)).toBe(true);
+        const interrupted = native.interrupt();
+        expect(interrupted).toBe(true);
+        const output = await native.finished;
+        expect(output.reason).toBeNull();
+        expect(output.code).toBeNull();
+        expect(output.signal).toBe("SIGINT");
+        expect(readCounterToolFailure(output, acknowledged && interrupted)).toBe(acknowledged ? null : "tool_failed");
+      } finally {
+        if (native.running) native.cancel();
+        await native.finished;
+      }
+    }
     const root = await procDirectory();
     let ready: () => void;
     let fail: (error: Error) => void;
