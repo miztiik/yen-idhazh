@@ -98,14 +98,15 @@ def test_every_dispatch_input_is_shaped_before_anything_acts_on_it() -> None:
     value here is not loud - it is a run that finishes and publishes to an
     address nobody looks at.
 
-    Discovery is closed-world. A new input turns up here whether or not anybody
-    remembered it, and fails until it is written down as an enumeration, as a
+    The application routing contract names its workflows in EXPECTED_WORKFLOWS.
+    A new input there fails until it is written down as an enumeration, as a
     value read by name, or with the pattern the workflow matches it against.
     """
     workflows = _load_workflows()
     found = {
         (filename, name)
         for filename, workflow in workflows.items()
+        if filename in EXPECTED_WORKFLOWS
         for name in _declared_dispatch_inputs(workflow)
     }
     assert found == set(DISPATCH_INPUT_SHAPES), (

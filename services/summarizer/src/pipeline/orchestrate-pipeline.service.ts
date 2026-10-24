@@ -18,19 +18,26 @@ import {
   queryLlamaServer,
 } from "../services/query-llama.service.js";
 import { PipelineEventBus } from "../services/dispatch-event.service.js";
+import type { ModelRuntime } from "../config/load-model-runtime.js";
 
 export async function orchestratePipeline(
   requestInput: SummarizeRequest,
   eventBus: PipelineEventBus,
-  defaults: { serverUrl: string; modelName: string }
+  runtime: ModelRuntime
 ): Promise<SummaryStructuredOutput> {
   const validatedInput = SummarizeRequestSchema.parse(requestInput);
 
   const cleanUrl = (validatedInput.url || "").trim();
   const fallbackText = (validatedInput.input_text || "").trim();
   const systemPrompt = validatedInput.system_prompt;
-  const serverUrl = validatedInput.server_url || defaults.serverUrl;
-  const modelName = validatedInput.model_name || defaults.modelName;
+  const serverUrl = runtime.base_url;
+  const modelName = runtime.request.model;
+  if (validatedInput.server_url && validatedInput.server_url.replace(/\/$/, "") !== serverUrl.replace(/\/$/, "")) {
+    throw new Error("server_url must match the committed model_server.base_url.");
+  }
+  if (validatedInput.model_name && validatedInput.model_name !== modelName) {
+    throw new Error("model_name must match the selected model declaration.");
+  }
 
   let targetText = fallbackText;
   let sourceAudit: SourceAudit;
@@ -140,7 +147,7 @@ export async function orchestratePipeline(
   // 3. Execution Phase
   let inferenceResult;
   try {
-    inferenceResult = await queryLlamaServer(serverUrl, modelName, fullSystemPrompt, userPrompt);
+    inferenceResult = await queryLlamaServer(runtime, fullSystemPrompt, userPrompt);
   } finally {
     clearInterval(heartbeatTimer);
   }

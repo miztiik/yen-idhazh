@@ -8,7 +8,9 @@
     "start": "bun run src/start-api-server.ts",
     "server": "bun run src/start-api-server.ts",
     "cli": "tsx src/execute-cli-pipeline.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check": "tsc --noEmit",
+    "test": "bun test"
   },
   "dependencies": {
     "defuddle": "^0.6.1",
