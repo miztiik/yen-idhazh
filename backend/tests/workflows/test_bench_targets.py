@@ -25,7 +25,6 @@ from idhazh.telemetry import silicon
 from utilities import (
     candidate_pointer,
     model_runtime,
-    model_speed_case,
     runtime_sweep,
     sweep_verdict,
 )
@@ -40,13 +39,12 @@ from ._harness import (
     BENCH_EMIT_STEP,
     BENCH_FINGERPRINT_STEP,
     BENCH_LEDGER_ROOT,
+    BENCH_PAGE_STEP,
     BENCH_RAW_JOB,
     BENCH_RAW_JOB_EXPRESSION,
     BENCH_RETENTION_DAYS,
     BENCH_SERVER_JOB,
     BENCH_SPEED_INPUT,
-    BENCH_SPEED_KNOB,
-    BENCH_SPEED_MODULE,
     BENCH_SPEED_OUTPUT,
     BENCH_SPEED_SKIP_STEP,
     BENCH_SUMMARY_STEP,
@@ -58,6 +56,7 @@ from ._harness import (
     COMMIT_STEPS,
     FINGERPRINT_BENCH_JOB,
     FINGERPRINT_JOB_FLAG,
+    IDHAZH_IMPORTER,
     MEASUREMENT_TARGETS,
     MODELS_POINTER_KEY,
     PINNED_LLAMA_BUILD,
@@ -402,41 +401,40 @@ def test_the_server_case_asks_for_the_raw_case_only_when_there_is_one() -> None:
     )
     script = _script(told, f"measure.yml/{BENCH_SERVER_JOB}/{BENCH_SPEED_SKIP_STEP}")
     assert "GITHUB_STEP_SUMMARY" in script
-    assert BENCH_SPEED_INPUT in script and BENCH_SPEED_KNOB in script, (
-        "the note says the two ways to get the missing half back"
+    assert BENCH_SPEED_INPUT in script, (
+        "the note names the dispatch input that brings the missing half back"
     )
 
 
-def test_whether_the_speed_case_runs_is_config_and_the_form_may_overrule_it() -> None:
-    """The substitution test. Change the knob and the answer follows it, with no source edit.
-
-    Driven through the module the workflow calls rather than through a copy of
-    its rule, over a copy of the committed tree, so a knob renamed under it
-    fails here rather than in a dispatch that quietly benched for half an hour
-    somebody had asked it not to (Guardrail #6).
-    """
+def test_the_speed_case_is_a_run_or_skip_choice_and_no_config_knob_decides_it() -> None:
+    """The dispatch input is the whole switch. A knob nothing reads is a second spelling of it."""
     workflow = _load_workflows()["measure.yml"]
     declared = _mapping(
         _declared_dispatch_inputs(workflow)[BENCH_SPEED_INPUT], f"measure.yml {BENCH_SPEED_INPUT}"
     )
-    assert set(_string_list(declared.get("options"), "options")) == set(model_speed_case.CHOICES)
-    assert declared.get("default") == model_speed_case.FOLLOW_CONFIG
+    assert sorted(_string_list(declared.get("options"), "options")) == ["run", "skip"]
+    assert declared.get("default") == "run"
 
-    step = _step(workflow, "models", "id", "speed")
-    script = _script(step, "measure.yml/models/speed")
-    assert BENCH_SPEED_MODULE in script, (
-        "the workflow asks the module rather than spelling the rule"
-    )
-    assert '"$GITHUB_OUTPUT"' in script, "the answer has to be an output or no job can read it"
+    script = _script(_step(workflow, "models", "id", "speed"), "measure.yml/models/speed")
+    assert '>> "$GITHUB_OUTPUT"' in script, "the answer has to be an output or no job can read it"
 
-    # The committed default, and the one the form can set over it.
-    assert model_speed_case.configured(None) is True
-    assert model_speed_case.decide("config", configured=True) == model_speed_case.RUN
-    assert model_speed_case.decide("config", configured=False) == model_speed_case.SKIP
-    assert model_speed_case.decide("skip", configured=True) == model_speed_case.SKIP
-    assert model_speed_case.decide("run", configured=False) == model_speed_case.RUN
-    with pytest.raises(ValueError, match=BENCH_SPEED_INPUT):
-        model_speed_case.decide("maybe", configured=True)
+    bench = json.loads(read_text(REPO_ROOT / "config" / "idhazh.json"))["bench"]
+    assert "run_model_speed_case" not in bench
+
+
+def test_the_bench_writes_its_run_page_whether_or_not_the_sweep_passed() -> None:
+    """A refused run is the one most worth reading, so the page is written either way."""
+    workflow = _load_workflows()["measure.yml"]
+    names = [step.get("name") for step in _steps(workflow, BENCH_SERVER_JOB)]
+    assert names.index(BENCH_PAGE_STEP) == names.index("Measure runtime candidate") + 1
+
+    step = _step(workflow, BENCH_SERVER_JOB, "name", BENCH_PAGE_STEP)
+    assert _normalize_condition(step.get("if"), BENCH_PAGE_STEP) == "always()"
+    script = _script(step, f"measure.yml/{BENCH_SERVER_JOB}/{BENCH_PAGE_STEP}")
+    assert "backend/utilities/runtime_run_page.py" in script
+    assert '>> "$GITHUB_STEP_SUMMARY"' in script
+    for flag in ("--candidate-id", "--models-file", "--speed-case"):
+        assert f'{flag} "$' in script, f"{flag} is pasted rather than read by name"
 
 
 def test_the_speed_case_puts_its_rates_on_the_run_page() -> None:
@@ -724,6 +722,8 @@ def _one_repeat(items: Path, *, count: int) -> list[dict[str, object]]:
                     "title": f"Article {index}",
                     "text": f"body {index}",
                     "source_form": "html",
+                    "source_url": f"https://example.test/{item_id}",
+                    "source_word_count": 100,
                     "truncated": False,
                     "brief": False,
                 }
@@ -778,6 +778,8 @@ def test_the_bench_artifact_carries_the_words_the_candidate_wrote(
     assert len(by_id) == count
     for payload in expected:
         entry = by_id[payload["item_id"]]
+        assert entry["source_url"] == f"https://example.test/{payload['item_id']}"
+        assert entry["source_words"] == 100, "the run page reads the article's own word count"
         assert entry["title"] == payload["title"]
         assert entry["summary"] == payload["summary"]
         assert entry["output_digest"] == payload["output_digest"], (
@@ -961,20 +963,20 @@ def _assert_installed_before_use(bodies: list[str], importers: set[str], where: 
     "bodies",
     [
         ["python -m idhazh plan", "pip install -e ."],
-        ["python3 backend/utilities/model_speed_case.py && pip install -e ."],
+        ["python3 backend/utilities/runtime_sweep.py && pip install -e ."],
         ["python3 -m idhazh.council.run_identity; python -m pip install ."],
     ],
 )
 def test_package_use_before_install_is_refused(bodies: list[str]) -> None:
     with pytest.raises(AssertionError, match="before installing"):
-        _assert_installed_before_use(bodies, {BENCH_SPEED_MODULE}, "controlled job")
+        _assert_installed_before_use(bodies, {IDHAZH_IMPORTER}, "controlled job")
 
 
 @pytest.mark.parametrize(
     "bodies",
     [
         ["pip install -e .", "python -m idhazh plan"],
-        ['python -m pip install -e ".[dev]" && python3 backend/utilities/model_speed_case.py'],
+        ['python -m pip install -e ".[dev]" && python3 backend/utilities/runtime_sweep.py'],
         ["pip install .; python3 -m idhazh.council.run_identity"],
         ["echo 'python -m idhazh plan'"],
     ],
@@ -982,7 +984,7 @@ def test_package_use_before_install_is_refused(bodies: list[str]) -> None:
 def test_install_order_check_accepts_installed_and_nonimporting_commands(
     bodies: list[str],
 ) -> None:
-    _assert_installed_before_use(bodies, {BENCH_SPEED_MODULE}, "controlled job")
+    _assert_installed_before_use(bodies, {IDHAZH_IMPORTER}, "controlled job")
 
 
 def test_an_offset_dispatch_measures_different_articles_than_the_one_before_it(
@@ -1192,7 +1194,7 @@ def test_an_empty_repeat_dispatch_follows_the_knob_and_a_named_one_is_bounded(
     committed = json.loads(read_text(scratch / "idhazh.json"))["bench"]["repeats"]
 
     assert runtime_sweep.repeats(scratch) == committed, "empty follows the knob"
-    assert runtime_sweep.repeats(scratch, dispatch="2") == 2, "a named value overrules it"
+    assert runtime_sweep.repeats(scratch, dispatch="3") == 3, "a named value overrules it"
     assert runtime_sweep.repeats(scratch) == committed, "and overruling it wrote nothing"
 
     # One reading has no spread, and the contract refuses the value before the
@@ -1203,18 +1205,17 @@ def test_an_empty_repeat_dispatch_follows_the_knob_and_a_named_one_is_bounded(
         runtime_sweep.repeats(scratch, dispatch="three")
 
 
-def test_the_repeat_dispatch_input_defaults_to_following_the_knob() -> None:
-    """A default of 3 in the workflow is the knob's value written a second time."""
-    declared = _mapping(
-        _declared_dispatch_inputs(_load_workflows()["measure.yml"])["runtime_repeats"],
-        "measure.yml runtime_repeats",
-    )
-    assert declared["default"] == "", (
-        "an empty default is what leaves bench.repeats the one place the number lives"
-    )
-    assert "bench.repeats" in str(declared["description"]), (
-        "the input has to name the knob it overrules, or an operator cannot find it"
-    )
+def test_the_repeat_and_corpus_form_defaults_are_the_committed_knobs() -> None:
+    """The form shows the number and the knob holds it. This test keeps them one number."""
+    workflow = _load_workflows()["measure.yml"]
+    bench = json.loads(read_text(REPO_ROOT / "config" / "idhazh.json"))["bench"]
+    inputs = _declared_dispatch_inputs(workflow)
+    for name, knob in (("runtime_repeats", "repeats"), ("runtime_corpus_items", "corpus_items")):
+        declared = _mapping(inputs[name], f"measure.yml {name}")
+        assert declared["default"] == str(bench[knob]), f"{name} and bench.{knob} disagree"
+        assert f"bench.{knob}" in str(declared["description"]), (
+            f"{name} has to name the knob it overrules, or an operator cannot find it"
+        )
 
     sweep = _step(
         _load_workflows()["measure.yml"], BENCH_SERVER_JOB, "name", "Measure runtime candidate"
