@@ -1,6 +1,6 @@
 # Intelligent F.E.E.D - I Feed
 
-**Last Updated**: 2026-09-13
+**Last Updated**: 2026-10-24
 
 **Status: design proposal and guidelines, not deployed behavior.**
 F.E.E.D expands to Feed Evaluation & Execution Decider. Intelligent F.E.E.D -
@@ -603,7 +603,7 @@ are five responsibilities, not a requirement for five new files or a framework.
 
 | Responsibility | Contents and ownership |
 | --- | --- |
-| Source catalog | Stable feed/publisher identity, endpoints, provenance, starting assumptions, `added_on`, `retired_on` and typed `retirement_reason`. No `retirement_note` or substitute notes field. Preserve unknown legacy values. |
+| Source catalog | Stable feed identity and [immutable curated publisher IDs](../contracts/publisher-identity.md), endpoints, provenance, starting assumptions, `added_on`, `retired_on` and typed `retirement_reason`. The publisher-ID page approves naming rules only, not catalog implementation. No `retirement_note` or substitute notes field. Preserve unknown legacy values. |
 | I Feed policy | Formula and objective revisions; signal directions, units, valid domains and normalizers; component/method weights; priors; decay; quotas/floors; taxonomy adaptation; transitions; assessment and hygiene budgets. Parameters declare ranges and step bounds. Each action can be observe-only, recommend, or delegated execution. |
 | Evidence and assessments | Reuse measured ledgers. Link assessor outputs to underlying event IDs, with event/assessment/arrival times, method and rubric revisions, context, pool/selection/assessment probabilities, exposure, attribution and raw costs. Distinguish observation, assessment and prediction. Multiple ratings do not create multiple outcomes. |
 | Derived state | Component estimates and support, composite, effective priority, topic distributions, restrictions, due probes and update checkpoints. Pipeline-owned state is distinct from human-edited policy and catalog. |
@@ -907,6 +907,7 @@ to rerun live feed probes or the application suite to edit these documents.
 ## See also
 
 - [../../concepts/feed.md](../../concepts/feed.md) - the earned-feed concept.
+- [../contracts/publisher-identity.md](../contracts/publisher-identity.md) - approved publisher-ID creation and preservation rules; implementation awaits confirmation.
 - [../publishing/autotune-feed-reliability.md](../publishing/autotune-feed-reliability.md) - **a feed's `tier` and `weight` are set by hand when it is added, and nothing re-reads them against how it has since behaved.** That page is where the automatic-tuning row above would be argued; it is a stub today.
 - [../../concepts/config.md](../../concepts/config.md) - configuration and generated contracts.
 - [../../concepts/evaluation.md](../../concepts/evaluation.md) - existing article and summary measurements.
