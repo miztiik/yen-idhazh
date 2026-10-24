@@ -81,7 +81,7 @@ Table D - PR outcomes
 | D23 | 23 | Independent qualification and planning controls | 1 | V | IN-FLIGHT | prove-planning-controls-independently | [#1683](https://github.com/miztiik/yen-idhazh/pull/1683) | - |
 | D24 | 24 | Independent council test controls | 17 | W | IN-FLIGHT | prove-council-controls-independently | - | - |
 | D25 | 25 | Concrete remaining gardener and ledger safety proofs | 24 | X | IN-FLIGHT | strengthen-gardener-safety-proofs | - | - |
-| D26 | 26 | Prove time boundaries without stand-ins | 21, 25 | Y | IN-FLIGHT | prove-time-boundaries-without-stand-ins | - | - |
+| D26 | 26 | Prove time boundaries without stand-ins | 21, 25 | Y | IN-FLIGHT | prove-time-boundaries-without-stand-ins | [#1679](https://github.com/miztiik/yen-idhazh/pull/1679) | - |
 | D27 | 27 | Explicit offline gardener collection controls | 17, 26 | Z | IN-FLIGHT | control-gardener-host-collection | - | - |
 | D28 | 28 | Independent prefix normalization arithmetic | 1, 27 | AA | IN-FLIGHT | prove-vector-arithmetic | - | - |
 | D29 | 29 | Populated registry values and mandatory real CSV reader | 1, 28 | AB | IN-FLIGHT | close-contract-proof-gaps | - | - |
@@ -1803,6 +1803,36 @@ Table I - Independent controls and expected faults
   Do not merge the Row 26 PR.
 - **Dependencies:** Row 21 owns the source prerequisite; Row 25 is the
   exact full-plan predecessor. Neither plan freeze waits for gates.
+
+- **Final local evidence:** After normal main integration at
+  `6f9a5d18d`, the three named modules collected and passed 67 cases.
+  All 61 original cases remain, accounting separately for Row 12's
+  main-delivered tokenizer-refusal rename; Row 26 adds six date cases.
+  Six copied production faults failed their intended assertions: lower
+  attempt settlement, local-day conversion, ignored operator date, removed
+  resolver call, naive callsite clock and local callsite clock. Every copied
+  module's import location was checked, each restored control passed, and
+  production source hashes matched after restoration. No collection failure
+  counts as a fault proof.
+  Removing an unregistered test marker then passed all six date cases with
+  no warnings; import spacing was normalized afterward. Ruff passed.
+  Mypy passed the initially changed three Python files and the binding
+  correction separately. The shared selector classified the utility as
+  unknown/shared and selected broad coverage; this row ran the focused
+  selection above and leaves the full suite to CI.
+- **Verified prerequisite and integration:** GitHub confirms Row 21 merged
+  at `31a689f073d602e75870f7fa48da72d3043f6c13` on
+  `2026-10-24T10:21:52Z`. Its `test_ledger.py` blob
+  `2312aab2e7fc587c7dd9a3be9ccf21bdb0e994de` matches the released source.
+  The normal merge retains every complete current-main Row 1-21 section
+  and its receipts, plus the complete later Row 22-26 sections and A5.
+  The historical 141,434-byte Row 26 freeze with SHA-256
+  `d969aaf615469d8b84e3298d861332428346aa9f5d706bea0a96d83acb54c833`
+  remains unchanged; this final evidence is not a replacement freeze.
+- **Phase delivery:** [#1679](https://github.com/miztiik/yen-idhazh/pull/1679)
+  is open against `main`. It is not merged; full-suite CI remains the
+  merge-candidate gate. The frozen Row 26 successor has already been
+  released to Row 27 independently of these delivery receipts.
 
 ## 28 - Row #27 - Explicit offline gardener collection controls
 
