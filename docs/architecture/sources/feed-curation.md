@@ -255,7 +255,9 @@ Malformed JSON, schema-invalid data, named native-integrity failures and
 unreadable optional files report `invalid_publication_history`, emit a warning
 with the precise diagnostic and use current selections. The shared reader
 still refuses corrupt evidence; this optional boundary never uses its rows.
-Unrecognized errors, including programming errors, are not suppressed.
+The reader marks these data refusals with `LedgerHistoryReadError`; callers do
+not copy its diagnostic strings to decide whether to continue. Unrecognized
+errors, including programming errors, are not suppressed.
 
 Only today's named files are read. A publication from yesterday's selection
 cannot be attributed unless today's bounded evidence supplies the required

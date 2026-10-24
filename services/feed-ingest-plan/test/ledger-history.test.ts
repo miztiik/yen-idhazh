@@ -19,6 +19,7 @@ import { readLedgerParquet } from "../src/read-ledger-history/read-parquet";
 import { readLedgerDay } from "../src/read-ledger-history/read-period";
 import { readPublisherPublication } from "../src/read-ledger-history/read-publisher-publication";
 import { classifyPublicationHistoryError } from "../src/read-ledger-history/classify-publication-history-error";
+import { LedgerHistoryReadError } from "../src/read-ledger-history/ledger-history-error";
 import { ItemHealthPublicationSchema, PublishedRowSchema, PUBLISHED_ROW_SCHEMA_VERSION } from "../src/metrics/publication-evidence";
 import { ITEM_HEALTH_ROW_SCHEMA_VERSION } from "../src/read-ledger-history/item-health-version";
 import { resolveHealthInventory } from "../src/read-ledger-history/read-health-inventory";
@@ -496,7 +497,13 @@ test("one named raw listing verifies its ordered filename digest, sizes and miss
     }
     expect(classifyPublicationHistoryError(new TypeError("unexpected programming error"))).toBeNull();
     expect(classifyPublicationHistoryError(new Error("unexpected programming error"))).toBeNull();
+    expect(classifyPublicationHistoryError(new SyntaxError("unexpected programming error"))).toBeNull();
     expect(classifyPublicationHistoryError("unexpected non-error")).toBeNull();
+    expect(classifyPublicationHistoryError(new LedgerHistoryReadError("renamed integrity diagnostic")))
+      .toBe("renamed integrity diagnostic");
+    await writeIndex(snapshots.files);
+    await writeFile(join(dirname(join(stateRoot, snapshots.files[0]!.path)), "index.json"), "{");
+    expect((await readPublisherPublication(request)).gaps).toEqual(["invalid_publication_history"]);
     for (const bytes of [new Uint8Array([1, 2, 3]), new Uint8Array(20)]) {
       await writeFile(join(stateRoot, publication.files[0]!.path), bytes);
       await expect(readLedgerDay({

@@ -14,6 +14,7 @@ import {
 } from "@idhazh/ledger-file-writer";
 import type { LedgerRowContract, LogicalField, LogicalType, StoredLedgerRow } from "@idhazh/ledger-file-writer";
 import type { z } from "zod";
+import { LedgerHistoryReadError } from "./ledger-history-error";
 
 let initialization: ReturnType<typeof initializeParquet> | undefined;
 export type ReadLedgerFile<T extends object> = Readonly<{
@@ -30,7 +31,7 @@ export type LedgerRowProjectionContract<T extends object> = Readonly<{
 function normalize(value: unknown): unknown {
   if (typeof value === "bigint") {
     const number = Number(value);
-    if (!Number.isSafeInteger(number)) throw new Error("Ledger integer exceeds the safe numeric range");
+    if (!Number.isSafeInteger(number)) throw new LedgerHistoryReadError("Ledger integer exceeds the safe numeric range");
     return number;
   }
   if (Array.isArray(value)) return value.map(normalize);
@@ -41,7 +42,7 @@ function normalize(value: unknown): unknown {
 
 function checkType(field: Field, expected: LogicalType): void {
   const type = field.type;
-  if (field.nullable !== expected.nullable) throw new Error(`Arrow nullability differs at ${field.name}`);
+  if (field.nullable !== expected.nullable) throw new LedgerHistoryReadError(`Arrow nullability differs at ${field.name}`);
   if (expected.kind === "struct" && DataType.isStruct(type) && expected.fields !== undefined) {
     checkFields(type.children, expected.fields);
   } else if (expected.kind === "list" && DataType.isList(type) && expected.itemType !== undefined) {
@@ -51,15 +52,15 @@ function checkType(field: Field, expected: LogicalType): void {
     || (expected.scalar === "int64" && DataType.isInt(type) && type.bitWidth === 64 && type.isSigned)
     || (expected.scalar === "float64" && DataType.isFloat(type) && type.precision === 2)
     || (expected.scalar === "bool" && DataType.isBool(type))
-  ))) throw new Error(`Arrow type differs at ${field.name}`);
+  ))) throw new LedgerHistoryReadError(`Arrow type differs at ${field.name}`);
 }
 function checkFields(fields: readonly Field[], expected: readonly LogicalField[]): void {
   if (fields.length !== expected.length || new Set(fields.map(field => field.name)).size !== fields.length) {
-    throw new Error(`Arrow columns differ from the declared stored schema: expected ${expected.map(field => field.name).join(",")}; received ${fields.map(field => field.name).join(",")}`);
+    throw new LedgerHistoryReadError(`Arrow columns differ from the declared stored schema: expected ${expected.map(field => field.name).join(",")}; received ${fields.map(field => field.name).join(",")}`);
   }
   for (const column of expected) {
     const field = fields.find(field => field.name === column.name);
-    if (field === undefined) throw new Error(`Missing Arrow column ${column.name}`);
+    if (field === undefined) throw new LedgerHistoryReadError(`Missing Arrow column ${column.name}`);
     checkType(field, column.type);
   }
 }
@@ -70,7 +71,7 @@ function logicalField(field: Field): LogicalField {
     logical = { kind: "struct", nullable: field.nullable, fields: type.children.map(logicalField) };
   } else if (DataType.isList(type)) {
     const child = type.children[0];
-    if (child === undefined) throw new Error(`Arrow list has no item field at ${field.name}`);
+    if (child === undefined) throw new LedgerHistoryReadError(`Arrow list has no item field at ${field.name}`);
     const item = logicalField(child);
     logical = { kind: "list", nullable: field.nullable, itemType: item.type, itemNullable: child.nullable };
   } else if (DataType.isUtf8(type)) {
@@ -82,29 +83,29 @@ function logicalField(field: Field): LogicalField {
   } else if (DataType.isBool(type)) {
     logical = { kind: "scalar", scalar: "bool", nullable: field.nullable };
   } else {
-    throw new Error(`Unsupported Arrow type at ${field.name}`);
+    throw new LedgerHistoryReadError(`Unsupported Arrow type at ${field.name}`);
   }
   return { name: field.name, type: logical, nullable: field.nullable };
 }
 function readEnvelope(metadata: Map<unknown, unknown>): FileEnvelope {
   const values = new Map<string, string>();
   for (const [key, value] of metadata) {
-    if (typeof key !== "string" || typeof value !== "string") throw new Error("Parquet metadata must contain string pairs");
+    if (typeof key !== "string" || typeof value !== "string") throw new LedgerHistoryReadError("Parquet metadata must contain string pairs");
     values.set(key, value);
   }
   for (const key of FOOTER_METADATA_KEYS) {
     if (!(OPTIONAL_FOOTER_METADATA_KEYS as readonly string[]).includes(key) && !values.has(key)) {
-      throw new Error(`Missing Parquet envelope key ${key}`);
+      throw new LedgerHistoryReadError(`Missing Parquet envelope key ${key}`);
     }
   }
   const number = (key: string): number => {
     const text = values.get(key);
     if (text === undefined || !/^\d+$/.test(text) || !Number.isSafeInteger(Number(text))) {
-      throw new Error(`Invalid Parquet envelope integer ${key}`);
+      throw new LedgerHistoryReadError(`Invalid Parquet envelope integer ${key}`);
     }
     return Number(text);
   };
-  return validateEnvelopeContainer(FileEnvelopeSchema.parse({
+  const envelope = FileEnvelopeSchema.parse({
     version: values.get("envelope_version"), row_schema_version: values.get("schema_version"),
     tier: values.get("tier"), ledger: values.get("ledger"), covers: values.get("covers"),
     period: values.get("period") ?? null, written_at_ms: number("written_at_ms"),
@@ -117,7 +118,25 @@ function readEnvelope(metadata: Map<unknown, unknown>): FileEnvelope {
     content_sha256: values.get("content_sha256"), writer: values.get("writer"),
     writer_version: values.get("writer_version"), compression: values.get("compression"),
     built_from: values.has("built_from") ? number("built_from") : null,
-  }), "parquet");
+  });
+  try {
+    return validateEnvelopeContainer(envelope, "parquet");
+  } catch (error) {
+    if (error instanceof Error && error.message === "writer does not match the observed container") {
+      throw new LedgerHistoryReadError(error.message, { cause: error });
+    }
+    throw error;
+  }
+}
+function parseParquet<T>(read: () => T): T {
+  try {
+    return read();
+  } catch (error) {
+    if (error instanceof Error && (error.message.startsWith("Parquet error: ") || error.message.startsWith("EOF: "))) {
+      throw new LedgerHistoryReadError(error.message, { cause: error });
+    }
+    throw error;
+  }
 }
 export async function readLedgerParquet<T extends object>(
   path: string, ledger: RowIdentity["ledger"], contract: LedgerRowContract<T> | LedgerRowProjectionContract<T>,
@@ -125,7 +144,7 @@ export async function readLedgerParquet<T extends object>(
   initialization ??= initializeParquet();
   await initialization;
   const bytes = await readFile(path);
-  const metadata = readMetadata(bytes);
+  const metadata = parseParquet(() => readMetadata(bytes));
   let envelope: FileEnvelope;
   const fileMetadata = metadata.fileMetadata();
   try {
@@ -135,17 +154,17 @@ export async function readLedgerParquet<T extends object>(
     metadata.free();
   }
   if (envelope.ledger !== ledger) {
-    throw new Error("Parquet ledger differs from the requested contract");
+    throw new LedgerHistoryReadError("Parquet ledger differs from the requested contract");
   }
   const projectionContract = "projectedFields" in contract ? contract : undefined;
   const legacy = projectionContract !== undefined || envelope.row_schema_version === contract.schemaVersion
     ? undefined : "legacyVersions" in contract ? contract.legacyVersions?.[envelope.row_schema_version] : undefined;
   if (projectionContract !== undefined) {
     if (SchemaVersionSchema.parse(envelope.row_schema_version) > projectionContract.schemaVersion) {
-      throw new Error("Parquet projection schema is newer than its declared fields");
+      throw new LedgerHistoryReadError("Parquet projection schema is newer than its declared fields");
     }
   } else if (envelope.row_schema_version !== contract.schemaVersion && legacy === undefined) {
-    throw new Error("Parquet row schema version differs from the requested contract");
+    throw new LedgerHistoryReadError("Parquet row schema version differs from the requested contract");
   }
   const storedSchema = legacy?.schema ?? contract.schema;
   const writer = envelope.identity;
@@ -155,11 +174,11 @@ export async function readLedgerParquet<T extends object>(
   });
   if (unit !== envelope.unit_id || createFileId({
     unit, attempt: writer.attempt, writtenAtMs: envelope.written_at_ms,
-  }) !== envelope.file_id) throw new Error("Parquet file or unit identifier differs from its writer");
+  }) !== envelope.file_id) throw new LedgerHistoryReadError("Parquet file or unit identifier differs from its writer");
   if (envelope.tier === "raw" && basename(path) !== `${envelope.file_id}.parquet`) {
-    throw new Error("Raw filename differs from its envelope file identifier");
+    throw new LedgerHistoryReadError("Raw filename differs from its envelope file identifier");
   }
-  const table = tableFromIPC(readParquet(bytes).intoIPCStream());
+  const table = tableFromIPC(parseParquet(() => readParquet(bytes)).intoIPCStream());
   const columns = projectionContract !== undefined ? table.schema.fields.map(logicalField)
     : appendIdentityColumns(describeObjectSchema(storedSchema).fields, envelope.version);
   if (projectionContract === undefined) checkFields(table.schema.fields, columns);
@@ -168,21 +187,21 @@ export async function readLedgerParquet<T extends object>(
     const actual = new Map(table.schema.fields.map(field => [field.name, field]));
     for (const identity of appendIdentityColumns([], envelope.version)) {
       const field = actual.get(identity.name);
-      if (field === undefined) throw new Error(`Missing Arrow identity column ${identity.name}`);
+      if (field === undefined) throw new LedgerHistoryReadError(`Missing Arrow identity column ${identity.name}`);
       checkType(field, identity.type);
     }
     for (const projected of described) {
       const field = actual.get(projected.name);
-      if (field === undefined) throw new Error(`Missing Arrow projection column ${projected.name}`);
+      if (field === undefined) throw new LedgerHistoryReadError(`Missing Arrow projection column ${projected.name}`);
       checkType(field, projected.type);
     }
   }
   const records = table.toArray().map(value => {
     const record = normalize(value);
-    if (typeof record !== "object" || record === null || Array.isArray(record)) throw new Error("Stored row is not an object");
+    if (typeof record !== "object" || record === null || Array.isArray(record)) throw new LedgerHistoryReadError("Stored row is not an object");
     return record as Record<string, unknown>;
   });
-  if (digestRows(records, columns) !== envelope.content_sha256) throw new Error("Parquet content digest differs from its rows");
+  if (digestRows(records, columns) !== envelope.content_sha256) throw new LedgerHistoryReadError("Parquet content digest differs from its rows");
   const rowFields = Object.keys(describeObjectSchema(storedSchema).root.properties as Record<string, unknown>);
   const rows = records.map(record => {
     const identity = RowIdentitySchema.parse(Object.fromEntries(
@@ -190,13 +209,13 @@ export async function readLedgerParquet<T extends object>(
     ));
     if (identity.ledger !== ledger || !(identity.covers === envelope.covers
       || (envelope.tier === "compact" && identity.covers.startsWith(`${envelope.covers}-`)))) {
-      throw new Error("Stored row belongs to another ledger or period");
+      throw new LedgerHistoryReadError("Stored row belongs to another ledger or period");
     }
     if (envelope.tier === "raw" && (identity.unit_id !== envelope.unit_id
       || identity.run_id !== writer.run_id || identity.attempt !== writer.attempt
       || identity.job !== writer.job || identity.pipeline_name !== writer.pipeline_name
       || identity.task_name !== writer.task_name || identity.shard !== writer.shard)) {
-      throw new Error("Raw row identity differs from its writer envelope");
+      throw new LedgerHistoryReadError("Raw row identity differs from its writer envelope");
     }
     const storedRow = projectionContract === undefined
       ? storedSchema.parse(Object.fromEntries(rowFields.map(key => [key, record[key]]))) : undefined;

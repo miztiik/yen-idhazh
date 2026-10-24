@@ -10,6 +10,7 @@ import type { CompactIndex } from "@idhazh/common-contracts";
 import type { LedgerRowContract, StoredLedgerRow } from "@idhazh/ledger-file-writer";
 import { readLedgerParquet } from "./read-parquet";
 import type { LedgerRowProjectionContract, ReadLedgerFile } from "./read-parquet";
+import { LedgerHistoryReadError } from "./ledger-history-error";
 
 type Period = CompactIndex["period"];
 export type LedgerDay<T extends object> = Readonly<{
@@ -47,6 +48,7 @@ async function readIndex(path: string): Promise<unknown | undefined> {
     return JSON.parse(await readFileFromDisk(path, "utf8")) as unknown;
   } catch (error) {
     if (missing(error)) return undefined;
+    if (error instanceof SyntaxError) throw new LedgerHistoryReadError("Invalid history index JSON", { cause: error });
     throw error;
   }
 }
@@ -75,8 +77,8 @@ export async function readLedgerDay<T extends object>(input: NamedDayInput<T>): 
       continue;
     }
     const index = CompactIndexSchema.parse(value);
-    if (index.version > COMPACT_INDEX_VERSION) throw new Error("Compact index schema is newer than the declared reader");
-    if (index.ledger !== ledger || index.period !== period) throw new Error("Named compact index belongs to another ledger or period");
+    if (index.version > COMPACT_INDEX_VERSION) throw new LedgerHistoryReadError("Compact index schema is newer than the declared reader");
+    if (index.ledger !== ledger || index.period !== period) throw new LedgerHistoryReadError("Named compact index belongs to another ledger or period");
     if (period === "yearly" && index.expired_through !== null && day.slice(0, 4) <= index.expired_through) expired = true;
     const covers = period === "yearly" ? day.slice(0, 4) : period === "monthly" ? day.slice(0, 7) : day;
     const entry = index.entries.find(entry => entry.covers === covers);
@@ -118,7 +120,7 @@ export async function readLedgerDay<T extends object>(input: NamedDayInput<T>): 
         if (!missing(error)) throw error;
         return result(entry.state, period);
       }
-      throw new Error("Compact index declares no file but its named file exists");
+      throw new LedgerHistoryReadError("Compact index declares no file but its named file exists");
     }
     if (entry.lost_days.includes(day)) return result("lost", period);
     if (entry.set_aside > 0) notices.push(`files-set-aside:${entry.set_aside}`);
@@ -131,9 +133,9 @@ export async function readLedgerDay<T extends object>(input: NamedDayInput<T>): 
       return result("missing", period);
     }
     if (file.envelope.tier !== "compact" || file.envelope.period !== period || file.envelope.covers !== entry.covers) {
-      throw new Error("Indexed compact file belongs to another period");
+      throw new LedgerHistoryReadError("Indexed compact file belongs to another period");
     }
-    if (file.bytes !== entry.bytes || file.rows.length !== entry.rows) throw new Error("Compact index row count or byte size differs from its file");
+    if (file.bytes !== entry.bytes || file.rows.length !== entry.rows) throw new LedgerHistoryReadError("Compact index row count or byte size differs from its file");
     verifySourcePartition([file]);
     const held = result("rows", period, [file]);
     return { ...held, status: held.rows.length === 0 ? "empty" : "rows" };
@@ -148,15 +150,15 @@ export async function readLedgerDay<T extends object>(input: NamedDayInput<T>): 
       return result("missing", "raw");
     }
     const index = RawDayIndexSchema.parse(value);
-    if (index.version > RAW_DAY_INDEX_VERSION) throw new Error("Raw index schema is newer than the declared reader");
-    if (index.ledger !== ledger || index.date !== day) throw new Error("Raw index belongs to another ledger or day");
+    if (index.version > RAW_DAY_INDEX_VERSION) throw new LedgerHistoryReadError("Raw index schema is newer than the declared reader");
+    if (index.ledger !== ledger || index.date !== day) throw new LedgerHistoryReadError("Raw index belongs to another ledger or day");
     const digest = createHash("sha256").update(index.files.join("\n"), "utf8").digest("hex");
-    if (digest !== index.content_sha256) throw new Error("Raw index filename digest differs from its list");
+    if (digest !== index.content_sha256) throw new LedgerHistoryReadError("Raw index filename digest differs from its list");
     rawFiles = index.files.map(name => join(dirname(input.rawIndex!), name));
     sizes = index.bytes;
   }
   if (rawFiles === undefined) return result("missing", null);
-  if (new Set(rawFiles).size !== rawFiles.length) throw new Error("Raw input names a file twice");
+  if (new Set(rawFiles).size !== rawFiles.length) throw new LedgerHistoryReadError("Raw input names a file twice");
   const files: ReadLedgerFile<T>[] = [];
   for (const [index, path] of rawFiles.entries()) {
     let file: ReadLedgerFile<T>;
@@ -167,9 +169,9 @@ export async function readLedgerDay<T extends object>(input: NamedDayInput<T>): 
       notices.push(`file-missing:${basename(path)}`);
       return result("missing", "raw");
     }
-    if (file.envelope.tier !== "raw" || file.envelope.covers !== day) throw new Error("Raw file belongs to another day or tier");
-    if (sizes !== null && sizes[index] !== file.bytes) throw new Error("Raw index byte size differs from its file");
-    if (files.some(held => held.envelope.file_id === file.envelope.file_id)) throw new Error("Raw input repeats a file identifier");
+    if (file.envelope.tier !== "raw" || file.envelope.covers !== day) throw new LedgerHistoryReadError("Raw file belongs to another day or tier");
+    if (sizes !== null && sizes[index] !== file.bytes) throw new LedgerHistoryReadError("Raw index byte size differs from its file");
+    if (files.some(held => held.envelope.file_id === file.envelope.file_id)) throw new LedgerHistoryReadError("Raw input repeats a file identifier");
     files.push(file);
   }
   verifySourcePartition(files);

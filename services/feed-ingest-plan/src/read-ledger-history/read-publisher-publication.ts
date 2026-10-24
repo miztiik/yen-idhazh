@@ -9,6 +9,7 @@ import { ITEM_HEALTH_ROW_SCHEMA_VERSION } from "./item-health-version";
 import type { PublisherPublicationHistory } from "../curate-article-portfolio/publisher-exposure";
 import { writeJsonLine } from "../logging/structured-logger";
 import { classifyPublicationHistoryError } from "./classify-publication-history-error";
+import { LedgerHistoryReadError } from "./ledger-history-error";
 
 type PublisherPublicationInput = Readonly<{
   root: string; day: string;
@@ -29,7 +30,7 @@ async function readConfirmedPublication(input: PublisherPublicationInput) {
   if (!published.every(usableDay)) gaps.push("publication_history_unavailable");
   const publications = new Map<string, string>();
   for (const day of published) for (const { row } of day.rows) {
-    if (row.published_on !== input.day) throw new Error("Publication row differs from its named UTC day");
+    if (row.published_on !== input.day) throw new LedgerHistoryReadError("Publication row differs from its named UTC day");
     const prior = publications.get(row.url_key);
     if (prior !== undefined && prior !== row.item_id) gaps.push("conflicting_publication_identity");
     publications.set(row.url_key, row.item_id);
@@ -49,10 +50,10 @@ async function readConfirmedPublication(input: PublisherPublicationInput) {
     healthHistory = historyCoverage(health);
     if (!health.every(usableDay) || !selections.every(usableDay)) gaps.push("publication_identity_history_unavailable");
     for (const day of health) for (const { row } of day.rows) {
-      if (row.date !== input.day) throw new Error("Publication health differs from its named UTC day");
+      if (row.date !== input.day) throw new LedgerHistoryReadError("Publication health differs from its named UTC day");
     }
     for (const day of selections) for (const { row } of day.rows) {
-      if (row.date !== input.day) throw new Error("Publisher snapshot differs from its named UTC day");
+      if (row.date !== input.day) throw new LedgerHistoryReadError("Publisher snapshot differs from its named UTC day");
     }
     for (const [url, item] of publications) {
       const owners = new Map(health.flatMap(day => day.rows).filter(({ row }) =>
