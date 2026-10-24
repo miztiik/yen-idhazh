@@ -556,6 +556,13 @@ not separate assertions that each equals the same literal. Declaration agreement
 does not prove runtime configurability: that requires changing the setting and
 observing the consumer's output.
 
+**A handoff states what each result proves.** Record the exact source commit,
+selected inputs and actual result. A passing control before a deliberate fault
+and a matching source hash after restoration do not claim a passing rerun
+after restoration. Historical collection lists and phase reports support
+identity accounting, not a final-source pass; the
+[execution contract](execute-a-plan.md#closure) owns that reconciliation.
+
 ## The backend gates
 
 Run all three from the repository root. Each must be clean.

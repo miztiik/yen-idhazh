@@ -28,6 +28,15 @@ row named in the handover. Merge each authorized green candidate whose
 prerequisites are met. For one left open, name the exact unmet check or
 decision; a completed worker report is not a completed merge.
 
+**Validate the shared plan before a merge.** Count every complete row heading
+and outcome ID before constructing a lookup; reject duplicates rather than
+letting a later entry replace an earlier one. A complete row section ends at
+the next level-two heading of any kind. Check both the candidate and the
+prospective merged plan against the current canonical plan: preserve complete
+sections and outcome rows outside the assigned row, along with shared scope,
+authority and unresolved-work metadata. A frozen handoff records an earlier
+release; it does not replace the current plan or certify later checks.
+
 **Mark a row `IN-FLIGHT` on the trunk before the branch is cut, when more than one agent is working the plan.** A status written only on the row's own branch is invisible until that branch merges, which is the window the mark exists to cover. With one agent there is nobody to collide with, so the mark buys nothing and costs a push - record the status in the change that does the work instead.
 
 **Between selecting a row and dispatching it, check the row against the tree.** All four checks are reading, not an entry into the row's implementation, and the fix for any of them is an edit to the plan-doc.
@@ -121,6 +130,15 @@ AUTO is the default. PAUSE and surface only for: a Level-5 row (CLAUDE.md sectio
 **What the plan decided is also where a fix starts.** When a defect found during execution touches something the plan decided, read what the plan meant that thing to be before you design a fix. Usually the build has drifted from that intent, and the fix brings the build back to it. A fix that changes the decision instead is a design change: say which decision it re-opens and what that costs, and give it to the person who made the decision. On one plan a configuration file was meant to list groups of records and the lifecycle of each group, and it had become a table of file locations. The first fixes proposed deleting the file. That re-opened what the plan had settled, when the fix was to make the file what the plan said it was.
 
 ## Closure
+
+For a suite-wide review, finish delivery before the final accounting. Pin the
+fully delivered source commit and collect once on that source. Reconcile full
+original function and parameter-case identities, not only totals. Name the
+authored reason and surviving guarantee for each removal, rename or
+replacement; record additions and unrelated concurrent changes separately.
+A matching name does not prove unchanged behavior, and a changed count does
+not prove equivalence. Reuse worker checks only where their tested inputs
+still match. Collection proves which cases exist, not that they pass.
 
 When every row is `DONE` / `COLLAPSED`: confirm the Status Reckoner is fully resolved, check that nothing durable is written only in the plan-doc ([distill-a-plan.md](distill-a-plan.md) says where anything left over goes), and delete the plan-doc (git history is the ledger, per [../reference/documentation-structure.md](../reference/documentation-structure.md)). A decision the plan defers to another plan is closed only when the receiving plan names it in a row of its own; a deferral with no receiving row is a dropped decision. **A defect a worker reported is closed the same way: by a fix, or by a row that will make one.** A pull request description is neither, because nobody reads a merged one again, and a list of known defects is neither when no row will fix what it lists. So before closing, read every worker report again and trace each defect it names to its fix or its row. On one plan a worker found that the test selector no longer ran the test a documentation page feeds. It wrote the finding in its pull request description, and the plan closed with the fault still live. Closing a plan does not invalidate an existing check, and a documentation-only closure uses documentation checks and CI rather than a fresh local application suite.
 
