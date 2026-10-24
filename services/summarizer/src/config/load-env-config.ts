@@ -1,8 +1,10 @@
 import { EnvironmentVariablesSchema, type EnvironmentVariables } from "../schemas/export-all-schemas.js";
+import { loadModelRuntime, type ModelRuntime } from "./load-model-runtime.js";
 
-let cachedEnv: EnvironmentVariables | null = null;
+type RuntimeEnvironment = EnvironmentVariables & { modelRuntime: ModelRuntime };
+let cachedEnv: RuntimeEnvironment | null = null;
 
-export function loadEnvConfig(): EnvironmentVariables {
+export function loadEnvConfig(): RuntimeEnvironment {
   if (cachedEnv) {
     return cachedEnv;
   }
@@ -14,6 +16,6 @@ export function loadEnvConfig(): EnvironmentVariables {
     throw new Error("Invalid environment configuration.");
   }
 
-  cachedEnv = result.data;
+  cachedEnv = { ...result.data, modelRuntime: loadModelRuntime(result.data.CONFIG_ROOT) };
   return cachedEnv;
 }

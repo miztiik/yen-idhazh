@@ -1,5 +1,6 @@
 // .github/scripts/ai-pipeline.ts
 import http from "node:http";
+import https from "node:https";
 import fs from "node:fs";
 import os from "node:os";
 import crypto from "node:crypto";
@@ -11,6 +12,8 @@ import { parseHTML } from "linkedom";
 import { Defuddle } from "defuddle/node";
 import { parseFeed } from "feedsmith";
 import { TidyURL } from "tidy-url";
+import { loadModelRuntime, type ModelRuntime } from "../../services/summarizer/src/config/load-model-runtime.js";
+import { buildModelRequest, readModelContent } from "../../services/summarizer/src/services/model-request.service.js";
 
 // -------------------------------------------------------------
 // 0. CONFIGURATION & STRUCTURED SCHEMAS
@@ -40,27 +43,7 @@ export const DEFAULT_ARTICLE_CONFIG: ArticleProcessingConfig = {
   ],
 };
 
-export interface ModelInferenceParams {
-  temperature: number;
-  top_k: number;
-  top_p: number;
-  min_p: number;
-  repeat_penalty: number;
-  presence_penalty: number;
-  frequency_penalty: number;
-  max_tokens: number;
-}
-
-export const DEFAULT_MODEL_CONFIG: ModelInferenceParams = {
-  temperature: 0.2,
-  top_k: 40,
-  top_p: 0.95,
-  min_p: 0.05,
-  repeat_penalty: 1.15,
-  presence_penalty: 0.2,
-  frequency_penalty: 0.2,
-  max_tokens: 4350,
-};
+export type ModelInferenceParams = Record<string, unknown>;
 
 export const PYTHON_EVAL_SERVER_URL = "http://127.0.0.1:9933";
 
@@ -1041,8 +1024,8 @@ export function getSystemPageSizeBytes(): number {
 
 function readServerPid(): number | null {
   try {
-    if (fs.existsSync(".llama_server.pid")) {
-      const pidStr = fs.readFileSync(".llama_server.pid", "utf8").trim();
+    if (fs.existsSync("llama-server.pid")) {
+      const pidStr = fs.readFileSync("llama-server.pid", "utf8").trim();
       const parsed = parseInt(pidStr, 10);
       return !isNaN(parsed) && parsed > 0 ? parsed : null;
     }
@@ -1144,22 +1127,20 @@ function getMemorySnapshot(): MemorySnapshot {
 // -------------------------------------------------------------
 // 9. OPENAI HTTP CLIENT WITH HARD SOCKET TIMEOUT
 // -------------------------------------------------------------
-function postOpenAIChatCompletion(urlStr: string, payload: any): Promise<any> {
+function postOpenAIChatCompletion(urlStr: string, payload: any, timeoutSeconds: number): Promise<any> {
   return new Promise((resolve, reject) => {
     const url = new URL(urlStr);
     const bodyData = JSON.stringify(payload);
 
-    const req = http.request(
+    const transport = url.protocol === "https:" ? https : http;
+    const req = transport.request(
+      url,
       {
-        hostname: url.hostname,
-        port: url.port,
-        path: url.pathname,
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Content-Length": Buffer.byteLength(bodyData),
         },
-        timeout: 900_000, // 15-minute socket timeout (avoids unbounded CI deadlocks)
       },
       (res) => {
         let raw = "";
@@ -1179,10 +1160,8 @@ function postOpenAIChatCompletion(urlStr: string, payload: any): Promise<any> {
       }
     );
 
-    req.on("timeout", () => {
-      req.destroy(new Error("LLM completion socket timed out after 15 minutes"));
-    });
-
+    const deadline = setTimeout(() => req.destroy(new Error("Model request timed out.")), timeoutSeconds * 1000);
+    req.on("close", () => clearTimeout(deadline));
     req.on("error", reject);
     req.write(bodyData);
     req.end();
@@ -1337,9 +1316,7 @@ export class AIEventPipeline extends EventEmitter {
     targetText: string;
     feedAudit?: FeedSelectionAudit;
     systemPrompt: string;
-    serverUrl: string;
-    modelName: string;
-    inferenceParams: ModelInferenceParams;
+    modelRuntime: ModelRuntime;
     maxWordLength: number;
   }): Promise<SummaryStructuredOutput> {
     const {
@@ -1349,11 +1326,12 @@ export class AIEventPipeline extends EventEmitter {
       targetText: rawTargetText,
       feedAudit,
       systemPrompt,
-      serverUrl,
-      modelName,
-      inferenceParams,
+      modelRuntime,
       maxWordLength,
     } = options;
+    const serverUrl = modelRuntime.base_url;
+    const modelName = modelRuntime.request.model;
+    const { model, stream, chat_template_kwargs, ...inferenceParams } = modelRuntime.request;
 
     let targetText = rawTargetText;
     const words = targetText.split(/\s+/).filter(Boolean);
@@ -1411,31 +1389,19 @@ export class AIEventPipeline extends EventEmitter {
     const cpuSampler = new SystemCpuSampler();
     cpuSampler.start(1000);
 
-    const openAiPayload = {
-      model: modelName,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPromptContent },
-      ],
-      temperature: inferenceParams.temperature,
-      top_k: inferenceParams.top_k,
-      top_p: inferenceParams.top_p,
-      min_p: inferenceParams.min_p,
-      repeat_penalty: inferenceParams.repeat_penalty,
-      presence_penalty: inferenceParams.presence_penalty,
-      frequency_penalty: inferenceParams.frequency_penalty,
-      max_tokens: inferenceParams.max_tokens,
-      response_format: {
-        type: "json_object",
-        schema: STRICT_SUMMARY_JSON_SCHEMA,
+    const openAiPayload = buildModelRequest(
+      modelRuntime,
+      systemPrompt,
+      userPromptContent,
+      {
+        type: "json_schema",
         json_schema: {
+          name: "summary",
           schema: STRICT_SUMMARY_JSON_SCHEMA,
           strict: true,
         },
       },
-      stream: false,
-      chat_template_kwargs: { enable_thinking: false },
-    };
+    );
 
     const startTime = performance.now();
     this.logEvent(
@@ -1472,15 +1438,26 @@ export class AIEventPipeline extends EventEmitter {
     }, 500);
 
     let rawContent = "";
+    let answerContent = "";
     let usage: any = null;
     let timings: any = null;
+    let parsed: any = {};
     let targetLevelError: string | null = null;
 
     try {
-      const response = await postOpenAIChatCompletion(`${serverUrl}/v1/chat/completions`, openAiPayload);
-      rawContent = response.choices?.[0]?.message?.content || "";
+      const endpoint = new URL("/v1/chat/completions", serverUrl).href;
+      const response = await postOpenAIChatCompletion(endpoint, openAiPayload, modelRuntime.timeout_seconds);
+      rawContent = response.choices?.[0]?.message?.content ?? "";
+      answerContent = readModelContent(response, modelRuntime);
       usage = response.usage;
       timings = response.timings;
+      parsed = extractBalancedJson(answerContent);
+      if (
+        !(typeof parsed.analytic_synthesis === "string" && parsed.analytic_synthesis.trim()) &&
+        !(typeof parsed.summary === "string" && parsed.summary.trim())
+      ) {
+        throw new Error("Model response requires a nonempty analytic_synthesis or legacy summary.");
+      }
     } catch (err: any) {
       targetLevelError = err.message || "Unknown completion failure";
       logStructured("ERROR", "Target-level LLM inference exception trapped", {
@@ -1574,8 +1551,6 @@ export class AIEventPipeline extends EventEmitter {
       );
     }
 
-    const parsed = extractBalancedJson(rawContent);
-
     let synthesisProse = "";
     if (typeof parsed.analytic_synthesis === "string" && parsed.analytic_synthesis.trim()) {
       synthesisProse = parsed.analytic_synthesis.trim();
@@ -1584,7 +1559,7 @@ export class AIEventPipeline extends EventEmitter {
     } else if (targetLevelError) {
       synthesisProse = `[Inference Processing Failed: ${targetLevelError}]`;
     } else {
-      synthesisProse = rawContent.trim();
+      synthesisProse = answerContent.trim();
     }
 
     const inLen = targetText.length || 1;
@@ -1750,8 +1725,8 @@ export function publishStepSummary(
     workflow: process.env.GITHUB_WORKFLOW || "CI",
     osArch: `${os.type()} ${os.arch()}`,
     shardId: process.env.SHARD_ID || "N/A",
-    modelFamily: process.env.MODEL_FAMILY || "N/A",
-    requestedModelId: process.env.REQUESTED_MODEL_ID || "N/A",
+    modelFamily: "Not recorded",
+    requestedModelId: "Not recorded",
   };
   const cm = firstResult.cpu_metrics || { maxCpuPercent: 0, avgCpuPercent: 0, samplesTaken: 0 };
   const sm = firstResult.swap_metrics || {
@@ -1831,16 +1806,10 @@ export function publishStepSummary(
     `| Parameter / Telemetry Field | Configured Value | Description |`,
     `| :--- | :--- | :--- |`,
     `| **HF Repo / Model Family** | \`${rm.modelFamily || "N/A"}\` | Hugging Face repository source |`,
-    `| **Model File / ID** | \`${modelName}${rm.requestedModelId ? " (Explicit: " + rm.requestedModelId + ")" : " (Auto-detected)"}\` | GGUF model binary |`,
-    `| **Temperature** | \`${inferenceParams.temperature}\` | Randomness / creativity control |`,
-    `| **Top-K** | \`${inferenceParams.top_k}\` | Top-K vocabulary truncation |`,
-    `| **Top-P (Nucleus)** | \`${inferenceParams.top_p}\` | Cumulative probability cutoff |`,
-    `| **Min-P** | \`${inferenceParams.min_p}\` | Relative minimum probability threshold |`,
-    `| **Repeat Penalty** | \`${inferenceParams.repeat_penalty}\` | Penalty against degenerative token loops |`,
-    `| **Presence Penalty** | \`${inferenceParams.presence_penalty}\` | Encourages exploring new subjects |`,
-    `| **Frequency Penalty** | \`${inferenceParams.frequency_penalty}\` | Discourages verbatim repetition |`,
-    `| **Max Output Tokens** | \`${inferenceParams.max_tokens}\` | Hard completion circuit-breaker |`,
-    `| **Context Size** | \`${process.env.CONTEXT_SIZE || "16384"}\` | Maximum transformer context window |`,
+    `| **Model File / ID** | \`${rm.requestedModelId} / ${modelName}\` | Selected model declaration |`,
+    ...Object.entries(inferenceParams).map(
+      ([key, value]) => `| \`${key}\` | \`${JSON.stringify(value)}\` | Selected request setting |`,
+    ),
     ``,
     `---`,
     ``,
@@ -1972,6 +1941,8 @@ export function publishStepSummary(
 // 12. MAIN RUNTIME
 // -------------------------------------------------------------
 async function main() {
+  const modelRuntime = loadModelRuntime(process.env.CONFIG_ROOT);
+  const { model, stream, chat_template_kwargs, ...inferenceParams } = modelRuntime.request;
   const runnerMetadata: RunnerMetadata = {
     runnerName: process.env.RUNNER_NAME ?? "Local-Runner",
     runId: process.env.GITHUB_RUN_ID ?? "0",
@@ -1979,13 +1950,12 @@ async function main() {
     workflow: process.env.GITHUB_WORKFLOW ?? "CI",
     osArch: `${os.type()} ${os.arch()}`,
     shardId: process.env.SHARD_ID ?? "shard-1",
-    modelFamily: process.env.MODEL_FAMILY ?? "",
-    requestedModelId: process.env.REQUESTED_MODEL_ID ?? "",
+    modelFamily: modelRuntime.repo,
+    requestedModelId: modelRuntime.file,
   };
 
   const phase = (process.argv.find((a) => a.startsWith("--phase="))?.split("=")[1] || "infer").toLowerCase();
-  const modelName = process.env.MODEL_NAME ?? "";
-  const serverUrl = process.env.SERVER_URL || "http://127.0.0.1:9931";
+  const modelName = modelRuntime.request.model;
   const pipelineEventsPath = process.env.PIPELINE_EVENTS_PATH || "pipeline-events.jsonl";
 
   // -------------------------------------------------------------
@@ -2129,11 +2099,11 @@ async function main() {
     );
 
     const retainedFeedAudit = updatedOutputs.find((o) => o.source_audit?.feedAudit)?.source_audit?.feedAudit;
-    const activeInferenceParams = updatedOutputs[0]?.inference_params || DEFAULT_MODEL_CONFIG;
+    const activeInferenceParams = updatedOutputs[0]?.inference_params || inferenceParams;
 
     publishStepSummary(
       "eval",
-      modelName || "GGUF-Model",
+      modelName,
       updatedOutputs,
       pipeline.getEventHistory(),
       activeInferenceParams,
@@ -2203,17 +2173,6 @@ You MUST analyze the text and output ONLY a valid JSON object matching this exac
   const maxAgeHours = parseFloat(process.env.FEED_MAX_AGE_HOURS || "24");
   const goalCount = parseInt(process.env.ARTICLE_COUNT_GOAL || "1", 10);
   const maxWordLength = parseInt(process.env.MAX_WORD_LENGTH || String(DEFAULT_ARTICLE_CONFIG.maxWordLength), 10);
-
-  const inferenceParams: ModelInferenceParams = {
-    temperature: parseFloat(process.env.LLAMA_TEMPERATURE || String(DEFAULT_MODEL_CONFIG.temperature)),
-    top_k: parseInt(process.env.LLAMA_TOP_K || String(DEFAULT_MODEL_CONFIG.top_k), 10),
-    top_p: parseFloat(process.env.LLAMA_TOP_P || String(DEFAULT_MODEL_CONFIG.top_p)),
-    min_p: parseFloat(process.env.LLAMA_MIN_P || String(DEFAULT_MODEL_CONFIG.min_p)),
-    repeat_penalty: parseFloat(process.env.LLAMA_REPEAT_PENALTY || String(DEFAULT_MODEL_CONFIG.repeat_penalty)),
-    presence_penalty: parseFloat(process.env.LLAMA_PRESENCE_PENALTY || String(DEFAULT_MODEL_CONFIG.presence_penalty)),
-    frequency_penalty: parseFloat(process.env.LLAMA_FREQUENCY_PENALTY || String(DEFAULT_MODEL_CONFIG.frequency_penalty)),
-    max_tokens: parseInt(process.env.LLAMA_MAX_TOKENS || String(DEFAULT_MODEL_CONFIG.max_tokens), 10),
-  };
 
   const pipeline = new AIEventPipeline(runnerMetadata, undefined, pipelineEventsPath);
 
@@ -2289,9 +2248,7 @@ You MUST analyze the text and output ONLY a valid JSON object matching this exac
       targetText: t.content,
       feedAudit,
       systemPrompt,
-      serverUrl,
-      modelName,
-      inferenceParams,
+      modelRuntime,
       maxWordLength,
     });
 

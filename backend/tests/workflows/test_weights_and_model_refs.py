@@ -26,6 +26,7 @@ from ._harness import (
     MODEL_SERVER_ACTION,
     MODELS_POINTER_KEY,
     PINNED_LLAMA_BUILD,
+    PROBE_URL_ENV,
     SHARED_WEIGHTS_KEY_PREFIX,
     VERIFY_MODEL_FILES,
     WEIGHTS_CACHE_ROLES,
@@ -79,6 +80,30 @@ PUBLISHED_KEYS = frozenset(
 #: The three contexts a `run:` body may substitute a job's own answers from.
 #: `github`, `matrix`, `env` and `secrets` carry no model value at all.
 PASTEABLE_CONTEXTS = ("steps", "needs", "inputs")
+
+
+@pytest.mark.parametrize("filename", ["yen-ai-pipeline.yml", "ai-pipeline-tests.yml"])
+def test_independent_launchers_validate_the_optional_model_file_before_launch(filename: str) -> None:
+    workflow = _load_workflows()[filename]
+    models_file = _mapping(_declared_dispatch_inputs(workflow)["models_file"], "models_file")
+    assert models_file.get("default") == ""
+    callers = _model_server_callers({filename: workflow})
+    assert len(callers) == 1
+    _, job_name = next(iter(callers))
+    pointer = _action_call(workflow, job_name, "./.github/actions/candidate-config")
+    assert pointer["models_file"] == "${{ inputs.models_file }}"
+    steps = _steps(workflow, job_name)
+    validation = next(
+        index
+        for index, step in enumerate(steps)
+        if "model_runtime.py describe-request" in str(step.get("run", ""))
+    )
+    launch = next(
+        index
+        for index, step in enumerate(steps)
+        if "model_runtime.py start-server" in str(step.get("run", ""))
+    )
+    assert validation < launch
 
 
 def test_every_fetched_weight_is_checked_before_anything_reads_it() -> None:
@@ -158,6 +183,8 @@ def test_no_step_starts_measuring_before_it_knows_which_model_answered() -> None
             for step in _steps(workflow, job_name):
                 script = step.get("run")
                 if not isinstance(script, str) or "/health" not in script:
+                    continue
+                if not any(marker in script for marker in (PROBE_URL_ENV, "PROBE_URL")):
                     continue
                 where = f"{filename}/{job_name}/{step.get('name')}"
                 assert "/v1/models" in script, (
@@ -443,13 +470,23 @@ def test_the_weights_cache_key_names_the_model_and_the_build_it_holds() -> None:
     # The build is the one half the model file does not decide, so it is the one
     # half that still crosses the boundary - and it has to arrive as a job
     # output that read the pin, never as a literal a caller composed.
-    relayed = re.compile(r"\$\{\{ needs\.[a-z_]+\.outputs\.[a-z_0-9]+ \}\}")
+    relayed = re.compile(
+        r"\$\{\{ (?P<context>needs|steps)\.(?P<id>[a-z_]+)\.outputs\."
+        r"(?P<key>[a-z_0-9]+) \}\}"
+    )
     for filename, job_name in sorted(callers):
         given = _action_call(workflows[filename], job_name, MODEL_SERVER_ACTION)
         name = _pin_output_name()
-        assert relayed.fullmatch(given[name]), (
+        source = relayed.fullmatch(given[name])
+        assert source is not None, (
             f"{filename}/{job_name} hands {name} the literal {given[name]!r}"
         )
+        if source["context"] == "steps":
+            step = _step(workflows[filename], job_name, "id", source["id"])
+            assert source["key"] == name
+            assert "model_runtime.py print-pinned-build" in _script(
+                step, f"{filename}/{job_name}/{source['id']}"
+            )
 
 
 #: Where each bench-side workflow decides what the candidate is: the step that
