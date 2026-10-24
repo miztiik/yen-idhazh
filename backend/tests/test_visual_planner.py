@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 from pydantic import ValidationError
-from support.models import committed_markers
+from support.models import a_markers
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 from support.prompts import SUMMARIZE_AND_PLAN_REPLIES, label_payload
 
@@ -279,7 +279,7 @@ class TestTheGateSuppressesThePlanAndNeverTheCall:
         """
         first = label_payload(article_ok)
         reply = read_text(FIXTURES_DIR / "completions" / "label" / "labelled.json")
-        markers = committed_markers()
+        markers = a_markers()
         whole = build_summarize_and_plan_request(
             first, reply, markers=markers, source_words=article_ok.band_source_words
         )

@@ -48,11 +48,14 @@ question, and the four answers do not mix.
 
 `backend/tests/conftest.py` owns pytest lifecycle isolation and shared contract
 fixtures. Tests import reusable helpers directly from `backend/tests/support/`:
-paths, model settings and recordings, prompt builders, recorded HTTP replies,
+paths, model settings, explicit protocol inputs, prompt builders, recorded HTTP replies,
 refill articles, and ledger writers. Fixture files stay under `tests/fixtures/`
-and are read inside tests, not during collection. Active-model helpers read the
-validated `config/idhazh.json` pointer; historical model cases are explicitly
-named in `backend/tests/contracts/_model_cases.py`.
+and are read inside tests, not during collection. Model-setting helpers read the
+validated `config/idhazh.json` pointer only when a test passes a config root.
+Otherwise they supply fixed test settings. Protocol behavior tests supply fixed turn
+markers, flags and reasoning settings, not a catalogue of model filenames.
+Recorded responses keep their original provenance; they do not take template
+inputs from the selected production model.
 
 ## The uncommitted map
 

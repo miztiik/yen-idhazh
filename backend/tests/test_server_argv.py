@@ -1,36 +1,16 @@
-"""Does every committed entry stand up the server it stood up yesterday?
-
-Four questions the command-line builder has to answer, and each one can fail.
-The golden files hold every flag and its value for every committed model file,
-captured before the file started spelling llama-server's own flags - so a wrong
-flag in a rewritten file is a red test rather than a run that starts on
-somebody else's settings.
-
-The golden is a mapping rather than the flat list, because the order flags
-arrive in changes nothing about the process llama-server runs.
-"""
+"""Does the command-line builder emit explicitly supplied server settings unchanged?"""
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
-from typing import Any
 
 import pytest
-from support.paths import CONFIG_DIR, read_text
+from contracts._fixtures import entry_with
 
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.llm.server import server_argv
 
 pytestmark = pytest.mark.contract
-
-def entry_with(server: dict[str, Any]) -> Any:
-    """The committed entry with its server block replaced, so a fixture case is
-    one edit away from a file a person really wrote."""
-    raw = json.loads(read_text(CONFIG_DIR / "models" / "qwen3.5-9b-q4km.json"))
-    raw["summarizer"]["server"] = server
-    return ModelsConfig.model_validate(raw).summarizer
-
 
 def test_a_sampling_value_in_the_server_block_reaches_the_command_line() -> None:
     """The blocks are the control, and this is what proves it is structural.
@@ -41,7 +21,9 @@ def test_a_sampling_value_in_the_server_block_reaches_the_command_line() -> None
     the builder never reads that one. A check that could be kept out of step
     with the builder is replaced by where the values sit.
     """
-    strayed = entry_with({"--ctx-size": 4096, "temperature": 0.7})
+    strayed = ModelsConfig.model_validate(
+        entry_with(server={"--ctx-size": 4096, "temperature": 0.7})
+    ).summarizer
     argv = server_argv(
         binary=Path("bin/llama-server"),
         weights=Path("var/models/weights.gguf"),
@@ -60,7 +42,9 @@ def test_a_flag_no_reader_of_ours_names_is_emitted_unchanged() -> None:
     a key in the model file and no edit anywhere else. A flag this build does
     not accept is refused by llama-server at start-up, which names it.
     """
-    unknown = entry_with({"--ctx-size": 4096, "--top-k": 40, "--mirostat": None})
+    unknown = ModelsConfig.model_validate(
+        entry_with(server={"--ctx-size": 4096, "--top-k": 40, "--mirostat": None})
+    ).summarizer
     argv = server_argv(
         binary=Path("bin/llama-server"),
         weights=Path("var/models/weights.gguf"),

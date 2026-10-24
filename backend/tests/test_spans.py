@@ -121,7 +121,7 @@ class RecordedCompletionEndpoint:
     It cycles the bodies it was given, so one item's two calls each get the reply
     their own decoder can read.
 
-    `/apply-template` is answered off the recorded renderings and takes nothing
+    `/apply-template` renders explicit protocol inputs and takes nothing
     from that cycle. The stage reads its turn markers there before its first
     item, so a server that answered it with a completion would hand a reply to a
     render and shift every item's body one place down the cycle.

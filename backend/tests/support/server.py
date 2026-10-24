@@ -6,29 +6,35 @@ import json
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
 from typing import Any
 
-from .models import committed_renderings
-from .paths import CONFIG_DIR
+from idhazh.llm.server import TurnMarkers
+
+from .models import a_markers
 
 
-def render_template_response(body: dict[str, Any], config_dir: Path = CONFIG_DIR) -> bytes:
-    """Render a template response with the active model's recorded markers."""
-    recorded = committed_renderings(config_dir=config_dir)
+def render_template_response(body: dict[str, Any], *, markers: TurnMarkers | None = None) -> bytes:
+    """Render explicit protocol inputs; this is not a captured template response."""
+    envelope = markers if markers is not None else a_markers()
     asks_to_think = any((body.get("chat_template_kwargs") or {}).values())
-    if len(body.get("messages") or []) > 2:
-        rendering = "history"
+    messages = body["messages"]
+    if messages[0]["role"] == "system":
+        prompt = envelope.conversation(
+            system=messages[0]["content"],
+            user=messages[1]["content"],
+        )
+        prompt += envelope.reply_opening_thinking if asks_to_think else envelope.reply_opening
     else:
-        rendering = "thinking" if asks_to_think else "plain"
-    return json.dumps({"prompt": recorded[rendering]}).encode("utf-8")
+        prompt = "".join(envelope.turn(turn["role"], turn["content"]) for turn in messages)
+        prompt += envelope.reply_opening
+    return json.dumps({"prompt": prompt}).encode("utf-8")
 
 
 class RecordedEndpoint:
     """Replay recorded llama-server replies over a local HTTP socket."""
 
     def __init__(
-        self, status: int, *bodies: bytes, hold_s: float = 0.0, config_dir: Path = CONFIG_DIR
+        self, status: int, *bodies: bytes, hold_s: float = 0.0, markers: TurnMarkers | None = None
     ) -> None:
         if not bodies:
             raise ValueError("a recorded endpoint replays at least one body")
@@ -51,7 +57,7 @@ class RecordedEndpoint:
                 raw = self.rfile.read(int(self.headers.get("Content-Length") or 0))
                 payload = json.loads(raw)
                 if self.path.endswith("/apply-template"):
-                    self._answer(200, render_template_response(payload, config_dir=config_dir))
+                    self._answer(200, render_template_response(payload, markers=markers))
                     return
                 sent.append(payload)
                 body = replies[len(served) % len(replies)]

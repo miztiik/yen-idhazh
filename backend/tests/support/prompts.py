@@ -10,7 +10,7 @@ from idhazh.contracts.element import ElementTable
 from idhazh.contracts.knobs.extract import ElementsConfig
 from idhazh.elements import element_table
 
-from .models import committed_markers
+from .models import a_markers
 from .paths import CONFIG_DIR, FIXTURES_DIR
 
 LABEL_REPLIES: Final = FIXTURES_DIR / "completions" / "label"
@@ -40,5 +40,5 @@ def label_payload(article: Article, *, config_dir: Path = CONFIG_DIR) -> dict[st
         model_id=entry.id,
         server=entry.server,
         sampling=entry.sampling,
-        markers=committed_markers(config_dir=config_dir),
+        markers=a_markers(),
     )
