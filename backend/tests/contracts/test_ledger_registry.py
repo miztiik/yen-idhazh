@@ -24,7 +24,7 @@ from pydantic import ValidationError
 from idhazh import assemble, ledger, telemetry
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.ledgers import Grain, LedgersConfig
+from idhazh.contracts.ledgers import Grain, LedgerEntry, LedgersConfig
 from idhazh.ledger import paths
 from idhazh.telemetry.publish import day_metrics
 
@@ -223,14 +223,21 @@ def test_the_committed_registry_loads_and_names_each_ledger() -> None:
 
 
 def test_explorer_catalog_derives_eligible_names_from_registry_order() -> None:
-    registry = LedgersConfig.model_validate(a_registry())
-    expected = tuple(
-        held.name
-        for family in registry.families
-        for held in family.ledgers
-        if held.publish_to_data_explorer
+    payload = a_registry()
+    families = list(reversed(payload["families"]))
+    selected = {
+        LedgerName.ITEM_HEALTH.value,
+        LedgerName.FEED_INGEST_PLAN_EDITORIAL_SELECTIONS.value,
+    }
+    for family in families:
+        for entry in family["ledgers"]:
+            entry["publish_to_data_explorer"] = entry["name"] in selected
+
+    registry = LedgersConfig.model_validate(payload | {"families": families})
+    assert registry.data_explorer_ledgers == (
+        LedgerName.ITEM_HEALTH,
+        LedgerName.FEED_INGEST_PLAN_EDITORIAL_SELECTIONS,
     )
-    assert registry.data_explorer_ledgers == expected
 
 
 @pytest.mark.parametrize("value", [None, 0, 1, "true", "false", [], {}])
@@ -262,6 +269,7 @@ def test_explorer_consent_refuses_non_compact_grains() -> None:
 def test_explorer_consent_is_independent_of_family_lifecycle(status: str) -> None:
     payload = a_registry()
     payload["families"][0]["lifecycle_status"] = status
+    payload["families"][0]["ledgers"][0]["publish_to_data_explorer"] = True
     held = LedgersConfig.model_validate(payload).families[0].ledgers[0]
     assert held.publish_to_data_explorer is True
 
@@ -554,13 +562,37 @@ def test_the_three_owners_build_the_paths_they_built_before() -> None:
         assert relpath == OWNER_BUILT_AT_THE_BASE[what]
 
 
-def test_every_entry_carries_the_fields_its_grain_needs() -> None:
-    """Directory-backed ledgers have no extension; only a flat file needs a stem."""
-    unsuffixed = {Grain.DAY_TREE, Grain.RAW_AND_COMPACT}
-    for member in LedgerName:
-        held = paths.entry(member)
-        assert (held.stem is not None) == (held.grain is Grain.FLAT)
-        assert (held.suffix is None) == (held.grain in unsuffixed)
+@pytest.mark.parametrize(
+    ("grain", "stem", "suffix"),
+    [
+        (Grain.FLAT, "score-distribution", ".json"),
+        (Grain.DAY_FILE, None, ".json"),
+        (Grain.DAY_TREE, None, None),
+        (Grain.STAMPED, None, ".json"),
+        (Grain.RAW_AND_COMPACT, None, None),
+    ],
+)
+def test_a_grain_accepts_its_path_fields_and_refuses_the_other_shapes(
+    grain: Grain, stem: str | None, suffix: str | None
+) -> None:
+    """Construct each valid shape and make its stem and suffix rules refuse edits."""
+    payload = {
+        "name": LedgerName.ITEM_HEALTH,
+        "grain": grain,
+        "prefix": ("item-health",),
+        "publish_to_data_explorer": False,
+        "stem": stem,
+        "suffix": suffix,
+    }
+    entry = LedgerEntry.model_validate(payload)
+    assert entry.stem == stem
+    assert entry.suffix == suffix
+
+    wrong_stem = "unexpected" if stem is None else None
+    wrong_suffix = ".json" if suffix is None else None
+    for field, value in (("stem", wrong_stem), ("suffix", wrong_suffix)):
+        with pytest.raises(ValidationError, match=rf"{field} must be"):
+            LedgerEntry.model_validate(payload | {field: value})
 
 
 def test_a_ledger_under_the_two_roots_has_no_registry_address() -> None:
