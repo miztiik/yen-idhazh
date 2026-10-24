@@ -1,0 +1,7 @@
+{
+  "pid": 4242,
+  "start_ticks": "12345",
+  "stat": "4242 (recorded ) worker) R 1 1 1 0 -1 0 11 0 7 0 3 0 0 0 20 0 2 0 12345 0 0\n",
+  "status": "Name:\trecorded worker\nVmRSS:\t600 kB\nVmHWM:\t900 kB\nRssAnon:\t400 kB\n",
+  "closing_status": "Name:\trecorded worker\nVmRSS:\t700 kB\nVmHWM:\t900 kB\nRssAnon:\t500 kB\n"
+}
