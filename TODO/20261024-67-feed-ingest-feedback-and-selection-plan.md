@@ -96,8 +96,8 @@ tracing context. The existing default-off service flag gates the new routes.
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | E1 | 1 | Approve runtime contracts and activation policy | - | A | IN-FLIGHT | feed-ingest-feedback-selection | - | - |
-| E2 | 2 | Land compatible shared readers before writers | 1 | B | IN-FLIGHT | publisher-catalog-support | - | - |
-| E3 | 3 | Implement curated publisher catalog references | 2 | C | IN-FLIGHT | publisher-catalog-support | - | - |
+| E2 | 2 | Land compatible shared readers before writers | 1 | B | IN-FLIGHT | publisher-catalog-support | [#1704](https://github.com/miztiik/yen-idhazh/pull/1704) | - |
+| E3 | 3 | Implement curated publisher catalog references | 2 | C | IN-FLIGHT | publisher-catalog-support | [#1704](https://github.com/miztiik/yen-idhazh/pull/1704) | - |
 | E4 | 4 | Wire common fetch and parse observations | 2, 3 | D | PENDING | - | - | - |
 | E5 | 5 | Classify failure and work attribution | 4 | E | PENDING | - | - | - |
 | E6 | 6 | Aggregate article delivery and request costs | 5 | F | PENDING | - | - | - |
