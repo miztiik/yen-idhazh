@@ -1726,13 +1726,17 @@ Table F - Controls, expected behavior and rejected faults
 
 Table G - Finding identity and exact source hashes
 
-| ID | Finding and disposition | Original -> survivor pytest identifier | Original function SHA-256 | Row 25 function SHA-256 |
+The function hashes below identify the source at the first frozen Row 25
+release. Post-freeze review corrections and current file hashes are recorded
+in the final evidence below; the immutable release artifact is unchanged.
+
+| ID | Finding and disposition | Original -> survivor pytest identifier | Original function SHA-256 | Frozen Row 25 function SHA-256 |
 | --- | --- | --- | --- | --- |
 | G1 | S1 - REWRITE | new -> `test_schedule.py::test_non_utc_instants_use_the_utc_day_at_the_eligibility_boundary`; new -> `test_non_utc_instants_use_the_utc_month_at_the_eligibility_boundary` | - | `bc88b797bea0f4db18cb83c4ad2069973a6c6c7b25be853705e38bd11818fa77`; `95284130e40736c6bada5cef581c0230c9cb97296ac8449eaaba17f3e5956869` |
-| G2 | R1 - REWRITE and rename | `test_report.py::test_no_sentence_a_task_can_be_told_says_a_member_is_gone` -> `test_guidance_and_recovery_notes_make_no_completed_removal_claim` | `fd4fb35a48e0be1b3633de93d93f9724c798f81f7dd69cf3a7cbd274d49b234d` | `f1e289edbf8b62ec47d77aecafd899db030890ae29b6f1613b37695bc38954a8` |
+| G2 | R1 - REWRITE and rename | `test_report.py::test_no_sentence_a_task_can_be_told_says_a_member_is_gone` -> `test_fixed_guidance_avoids_explicit_completed_removal_forms` | `fd4fb35a48e0be1b3633de93d93f9724c798f81f7dd69cf3a7cbd274d49b234d` | `f1e289edbf8b62ec47d77aecafd899db030890ae29b6f1613b37695bc38954a8` |
 | G3 | R2 - REWRITE | `test_report.py::test_every_word_a_record_or_a_line_can_hold_has_a_sentence_a_person_reads` -> same | `20b6214c71d3f3a5327c1f801a8b9f5fd58c41dfabc033f4880c80b7ff450c2b` | `fd2d01317fae7563ce906dcf6b8860d7cdfa6b099caa6d85916d1fbbd5e97723` |
 | G4 | E1 - REWRITE | `test_error_cause.py::test_a_403_is_unavailable_only_when_headers_prove_exhaustion` -> same | `c3f7cddd2aacc57df8c30ee02f5f1f67bbea24090c16affd229b9e69ea7e30d9` | `39e2d1823404341389686db489e89142f642db49c20f0471354fcf6c327ac6f6` |
-| G5 | D1 - REWRITE | `test_day_removal.py::test_a_day_that_is_not_a_utc_day_is_refused_before_a_file_is_read` -> same | `8f9a1a30a261b507aa38caaa4c501802cf084dfba660a9e310a7a4527d078de1` | `37f6693439929bcac816a4a14a073149898ede5aa70833170e6d9124eb9bd04c` |
+| G5 | D1 - REWRITE | `test_day_removal.py::test_a_day_that_is_not_a_utc_day_is_refused_before_a_file_is_read` -> `test_an_invalid_utc_day_is_refused_before_a_selected_index_is_read` | `8f9a1a30a261b507aa38caaa4c501802cf084dfba660a9e310a7a4527d078de1` | `37f6693439929bcac816a4a14a073149898ede5aa70833170e6d9124eb9bd04c` |
 | G6 | L1 - REWRITE | `test_lifecycle.py::test_every_checked_route_writes_into_an_active_family`; `test_every_checked_route_writes_nothing_into_a_paused_family_and_says_so_once` -> same | `61c790f03b837784082345dbffb9910825a3bce1be5c3eb925d75388a9777d3f`; `0d62f054f49cc2a410150c6b11639ba02bfa27006afaabf82d4701045a5deb2f` | `9ca489ae10fa4d60fae0d0560f2c58e9ec089b4f7185742d4a6f2c1cc9c3037f`; `5b61bc4aac178b6a64e2f12ecbeae5494630f4bcc442855de9ccb737f5d52e8b` |
 | G7 | A1 - REWRITE and rename | `test_arrow_schema.py::test_ledger_engines_and_door_have_no_run_plan_special_case` -> `test_run_plan_values_round_trip_through_each_generic_ledger_engine` | `27164426e4b9a151e7e15dff6e070965c6afdcfb7acfa8b7b8d33cf5f7fb05b2` | `6628fffcffd7cf9de9c4fe8c151f7da63d4e9ddf2330d78bfd2fae30d96736dd` |
 | G8 | V2 - RENAME | `test_visual_pruning.py::test_a_name_inside_the_dated_tree_that_is_not_a_date_is_a_fault` -> `test_a_year_level_sibling_does_not_change_a_named_day_visual_list` | `e358047a842a553a08ee5055bdeeaa4424511a65c8bf24912a612813c17cb025` | `fcc5524760dab22eed04a702b14503446ea3385e628ad4886148e765d9e05416` |
@@ -1748,7 +1752,7 @@ Table H - Independent controls and expected behavior
 | H2 | R1 | Check guidance and recovery notes separately with a narrow completed-removal-claim pattern. A dry, failed or deferred outcome cannot state that a member, file, day or period has already been removed. Neutral next-step guidance remains allowed. |
 | H3 | R2 | Retain exact key-set coverage for every `TaskOutcome`, `GardenerFault` and `RecoveryNote`; require every associated sentence value to be a nonblank string. |
 | H4 | E1 | Build real standard-library `HTTPError` responses with canonical, lowercase and mixed-case 403 headers. Assert exact `ErrorCause`; do not parse header values or use a successful fake HTTP client. |
-| H5 | D1 | Use a regular file as the state root with invalid UTC-day strings. The invalid-day `ValueError` must win; attempting the state-directory read first produces a distinct filesystem error. Keep valid-day missing-index refusals. |
+| H5 | D1 | Put malformed content at the actual selected daily compact-index path for `CENSUS`. A valid-day control must read and refuse that exact index. Each of the three invalid UTC-day forms must instead raise the day-format `ValueError` before that index is read. Keep valid-day missing-index refusals. |
 | H6 | L1 | Redirect the actual trace sink root to test-owned state, explicitly enable tracing, open a real deterministic span, and assert the persisted JSON record. The paused-family case still expects its one warning and no file. Other lifecycle routes and their paused controls remain. |
 | H7 | A1 | Read the named `RunPlan` contract fixture, pass nested values through the generic parquet and JSON-lines render/read engines, and validate the recovered rows against the same contract. Do not claim that the ledger door accepts `RunPlan`. |
 | H8 | V2 | Add a non-date file beside, not inside, the named year/day tree. The exact visual list for the named day remains unchanged. Keep malformed selected-path refusals; do not assert that an unselected sibling must fault. |
@@ -1769,6 +1773,24 @@ Table H - Independent controls and expected behavior
   Added only D25 and this section. A5, D3 and every earlier row section remain
   intact. This full Row 25 successor is frozen and released independently of
   gates and delivery.
+- **Post-freeze review and main integration:** The immutable Row 25 artifact
+  remains 137,147 bytes with SHA-256
+  `01b4131df8482f86ec00f350a98ad157691dbee642fee71ad1c013a2a825c7d7`.
+  Source review corrections are committed through `d2430f9b2`; they clarify
+  the explicit report wording check, put a real Git member after the long
+  absent pathspecs, prove the selected-index read boundary with a malformed
+  index and valid-day control, and preserve portable typing and trace-root
+  setup. The original artifact is not regenerated. Current `origin/main`
+  `6c88f140702840e4a94339b8ac2df8e988319905` is integrated normally. This
+  integration preserves its single complete row sections and corrected Row 24
+  selection cap from the 128,439-byte release with SHA-256
+  `ccd00f55421c6e0ab687a1fc33fc04be11bcad5ffc0a4879d8af9c7850ae316c`.
+- **Final evidence:** The final changed-file selector passed Ruff, mypy over
+  834 source files, and 212 selected pytest cases. Nine copied-production
+  faults failed at their intended behavior tests; every copied source file was
+  restored to its pre-fault SHA-256. The per-fault targets, control set and
+  restoration hashes are in the session artifact
+  `row25-fault-proof-receipts.md`. These results do not claim full-suite CI.
 - **Delivery:** Open one coherent phase PR when the source and evidence are
   ready. Do not merge it. Row 26 consumes this exact frozen successor.
 - **Dependencies:** Row 24 is the required exact plan predecessor and row

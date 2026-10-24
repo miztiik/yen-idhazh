@@ -7,6 +7,8 @@ returns only the size of the requested blob, with no network.
 from __future__ import annotations
 
 import json
+import os
+import sys
 from pathlib import Path
 from typing import Any, Final
 
@@ -79,17 +81,39 @@ def test_a_full_clone_is_sized_by_git_and_never_asks_github(
     assert blobs.asked == []
 
 
-def test_many_named_period_paths_are_split_before_git_is_called(
+def test_named_members_survive_pathspec_batches_larger_than_the_process_limit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Real Git results survive batches needed to stay under the host's argv limit."""
     quiet_git(tmp_path, monkeypatch)
-    _, checkout = an_origin(tmp_path, {})
+    first = "state/old-days/2026/09/01/first.csv"
+    second = "state/old-days/2026/09/01/second.csv"
+    files = {first: "first\n", second: "second\n"}
+    _, checkout = an_origin(tmp_path, files)
 
-    listed = gardener_publish.Checkout(checkout).list_files(
-        [
-            f"state/old-days/2026/09/01/run-{item:08d}-recorded-period-file.csv"
-            for item in range(1200)
-        ]
-    )
+    def long_path(item: int) -> str:
+        folders = "/".join("x" * 240 for _ in range(12))
+        return f"state/old-days/2026/09/01/run-{item:08d}/{folders}"
 
-    assert listed == []
+    if sys.platform == "win32":
+        argument_limit = 32_767
+    else:
+        argument_limit = os.sysconf("SC_ARG_MAX")
+    paths = [first]
+    used = sum(len(path) + 1 for path in paths)
+    for item in range(argument_limit // (len(long_path(0)) + 1) + 1):
+        path = long_path(item)
+        paths.append(path)
+        used += len(path) + 1
+        if used > argument_limit:
+            break
+    paths.append(second)
+    used += len(second) + 1
+    assert used > argument_limit, "the path list did not cross the host argument limit"
+
+    listed = gardener_publish.Checkout(checkout).list_files(paths)
+
+    assert [(entry.path, entry.size) for entry in listed] == [
+        (first, len(files[first].encode("utf-8"))),
+        (second, len(files[second].encode("utf-8"))),
+    ]
