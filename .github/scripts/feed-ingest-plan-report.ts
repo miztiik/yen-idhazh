@@ -1,7 +1,7 @@
 /** Which source and stage outcomes can validated planner events actually prove? */
 import { appendFile, readFile } from "node:fs/promises";
-import { FeedIngestConfigSchema, HarvestDiagnosticsSchema, HostFingerprintRowSchema, RunIdSchema, SourceRunRecordSchema, WriterIdentitySchema, readFeedIngestEvent } from "../../packages/common-contracts/src/index";
-import type { FeedIngestEvent, HarvestDiagnostics } from "../../packages/common-contracts/src/index";
+import { DropReasonCountSchema, FeedIngestConfigSchema, HarvestDiagnosticsSchema, HostFingerprintRowSchema, RunIdSchema, SourceRunRecordSchema, WriterIdentitySchema, readFeedIngestEvent } from "../../packages/common-contracts/src/index";
+import type { DropReasonCount, FeedIngestEvent, HarvestDiagnostics } from "../../packages/common-contracts/src/index";
 import { join } from "node:path";
 
 export type PlannerReport = Readonly<{ annotations: readonly string[]; summary: string }>;
@@ -150,11 +150,17 @@ export function formatExecutionReport(input: Readonly<{
     if (milliseconds < 0) throw new Error("Progress timing endpoints are reversed");
     return `${(milliseconds / 1000).toFixed(3)} seconds`;
   }
-  const drops = new Map<string, number>();
+  const drops = new Map<string, DropReasonCount>();
   for (const source of sources) for (const drop of source.drop_reasons) {
     const key = `${drop.subject} / ${drop.stage} / ${drop.reason}`;
-    drops.set(key, (drops.get(key) ?? 0) + drop.count);
+    drops.set(key, { ...drop, count: (drops.get(key)?.count ?? 0) + drop.count });
   }
+  const refusalFields = DropReasonCountSchema.shape;
+  const orderedDrops = [...drops.values()].sort((left, right) =>
+    refusalFields.subject.options.indexOf(left.subject) - refusalFields.subject.options.indexOf(right.subject)
+    || refusalFields.stage.options.indexOf(left.stage) - refusalFields.stage.options.indexOf(right.stage)
+    || right.count - left.count
+    || left.reason.localeCompare(right.reason));
   const observedEntries = sources.reduce((total, source) => total + (source.parsed_count ?? 0), 0);
   const feedAttempts = sources.filter(source => source.fetch_status !== "not_requested").length;
   const feedFailures = sources.filter(source => !["success", "not_requested"].includes(source.fetch_status)).length;
@@ -214,10 +220,12 @@ export function formatExecutionReport(input: Readonly<{
     "",
     "## Table D - Refusals",
     "",
-    "| Id | Subject / stage / reason | Count and denominator |",
-    "| --- | --- | --- |",
-    ...[...drops].map(([reason, count], index) => `| D${index + 1} | ${escapeMarkdown(reason)} | ${count}/${reason.startsWith("feed /") ? sources.length : observedEntries} ${reason.startsWith("feed /") ? "configured sources" : "observed parsed entries"} |`),
+    "| Id | Subject | Stage | Reason | Count and denominator |",
+    "| --- | --- | --- | --- | --- |",
+    ...orderedDrops.map((drop, index) => `| D${index + 1} | ${escapeMarkdown(drop.subject)} | ${escapeMarkdown(drop.stage.replaceAll("-", " "))} | ${escapeMarkdown(drop.reason)} | ${drop.count}/${drop.subject === "feed" ? sources.length : observedEntries} ${drop.subject === "feed" ? "configured sources" : "observed parsed entries"} |`),
     ...(drops.size === 0 ? ["No recorded refusals."] : []),
+    "",
+    "Refusals are grouped by subject and stage, then sorted by count from largest to smallest within each group; equal counts use alphabetical reason order. Feed and article counts are not ranked together.",
     "",
     "Feed decisions use all configured sources, including inactive sources that were not fetched. Article reasons use observed parsed entries, not all feeds. Failed feed parses have no known entry count. Early refusals occur before article fetching; later refusals must not be subtracted again.",
     "",
