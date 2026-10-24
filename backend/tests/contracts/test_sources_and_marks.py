@@ -187,13 +187,10 @@ def test_a_taxonomy_with_no_floor_and_no_ceiling_still_validates() -> None:
 def test_a_published_item_carrying_a_retired_lens_still_reads() -> None:
     """The read-side half of the retype, on a record a run really wrote.
 
-    `tests/fixtures/digest/retired-lens-item.json` is a verbatim copy of one of
-    the 18 committed items carrying `ai-roi`, which `config/taxonomy.json`
-    retired on 2026-08-30. Measured 2026-09-12 over the 22 committed days and
-    8,922 items: 12 on 2026-08-27, 3 on 2026-08-28 and 3 on 2026-08-29. It is a
-    fixture rather than a walk of the archive because a test may not pay for
-    what the pipeline has piled up (Guardrail #12), and because the fixture outlives
-    the day those three days age out of retention.
+    `tests/fixtures/digest/retired-lens-item.json` preserves an item carrying
+    `ai-roi` beside the live `china` lens. The bounded `definitions-a.json`
+    taxonomy retires `ai-roi`, so this read does not depend on today's live
+    vocabulary or a scan of the published archive.
 
     It also carries a live lens beside the tombstone, so the case it proves is
     the mixed one: a day does not get to keep half of what it said.
@@ -203,28 +200,27 @@ def test_a_published_item_carrying_a_retired_lens_still_reads() -> None:
     )
     assert item.lenses == ["ai-roi", "china"]
 
-    taxonomy = Taxonomy.from_json(read_text(CONFIG_DIR / "taxonomy.json"))
+    taxonomy = taxonomy_fixture("definitions-a")
     retired = {lens.id for lens in taxonomy.lenses if lens.status is LifecycleStatus.RETIRED}
     assert "ai-roi" in retired, "the fixture stopped being the case this test is about"
     assert "ai-roi" not in taxonomy.lens_terms(), "a tombstone must stop matching"
 
 
-def test_an_id_the_committed_vocabulary_no_longer_names_still_reads() -> None:
+def test_an_id_a_vocabulary_no_longer_names_still_reads() -> None:
     """The migration, stated as the thing it has to survive.
 
-    A closed enum could not read a word `config/taxonomy.json` had stopped
-    carrying, so the only safe way to remove a lens was never to remove one. An
-    open slug reads it, which is what lets a person delete an entry without
-    making every day that published it unreadable. The id is removed from the
-    fixture's vocabulary rather than from the committed file, so nothing here
-    depends on what config happens to hold today.
+    A closed enum could not read a word the vocabulary had stopped carrying, so
+    the only safe way to remove a lens was never to remove one. An open slug
+    reads it, which lets a person delete an entry without making every day that
+    published it unreadable. The bounded fixture names the vocabulary this
+    historical item predates.
     """
     payload = json.loads(read_text(FIXTURES_DIR / "digest" / "retired-lens-item.json"))
     payload["lenses"] = ["ai-roi", "supply-chain"]
     item = DigestItem.model_validate(payload)
     assert item.lenses == ["ai-roi", "supply-chain"]
 
-    taxonomy = Taxonomy.from_json(read_text(CONFIG_DIR / "taxonomy.json"))
+    taxonomy = taxonomy_fixture("definitions-a")
     assert "supply-chain" not in {lens.id for lens in taxonomy.lenses}
 
     with pytest.raises(ValidationError):
