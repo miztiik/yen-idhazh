@@ -79,9 +79,14 @@ class DocumentObservationRecord(Contract):
         if self.publisher_id is not None and self.source_id is None:
             raise ValueError("a publisher identity requires its source identity")
         if self.candidate_id is not None and (
-            self.document_kind != "article" or self.observed_run_id is None or self.source_id is None
+            self.document_kind != "article"
+            or self.observed_run_id is None
+            or self.source_id is None
         ):
-            raise ValueError("an article opportunity requires its article kind, run and source identity")
+            raise ValueError(
+                "an article opportunity requires its article kind, "
+                "run and source identity"
+            )
         if self.outcome == "failed":
             if self.attribution is None:
                 raise ValueError("a failed operation records its attribution status")
