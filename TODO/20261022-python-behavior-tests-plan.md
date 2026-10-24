@@ -60,11 +60,12 @@ Table D - PR outcomes
 | D2 | 2 | Vector tests independent of the current asset | - | A | DONE | - | - | - |
 | D3 | 3 | Finish the behavior review and remove proven fixture-only checks | 1, 2 | B | IN-FLIGHT | - | - | - |
 | D4 | 4 | Safe removals with named survivors | 1, 2 | C | DONE | - | [#1652](https://github.com/miztiik/yen-idhazh/pull/1652), merged at `75a4e12af6ad40f79691afba41b20ce71414c2e6` | - |
-| D5 | 5 | Expectations derived from the test's own input | 2 | D | DONE | input-based-vector-expectations | #1654 | - |
+| D5 | 5 | Expectations derived from the test's own input | 2 | D | DONE | input-based-vector-expectations | [#1654](https://github.com/miztiik/yen-idhazh/pull/1654), merged at `3073686d6d28f824f53e8b45a88caddf2691932a` | - |
 | D6 | 6 | Pipeline records follow the input that produced them | 1 | E | DONE | input-based-pipeline-records | [#1655](https://github.com/miztiik/yen-idhazh/pull/1655), merged at `6bb8dfea19613c116142131550c97fead234747d` | - |
 | D7 | 7 | Config reader values and accurate migration test names | 1 | F | DONE | config-reader-behavior-proofs | [#1653](https://github.com/miztiik/yen-idhazh/pull/1653) | - |
 | D8 | 8 | Workflow checks retain independent failure evidence | 1 | G | DONE | workflow-behavior-proofs | [#1656](https://github.com/miztiik/yen-idhazh/pull/1656), merged at `43bdd37d671275af2f904590f7ca69498cc74a91` | - |
-| D9 | 9 | Remove the unused watchlist entry limit | 1 | H | IN-FLIGHT | remove-unused-watchlist-limit | [#1657](https://github.com/miztiik/yen-idhazh/pull/1657) | - |
+| D9 | 9 | Remove the unused watchlist entry limit | 1 | H | DONE | remove-unused-watchlist-limit | [#1657](https://github.com/miztiik/yen-idhazh/pull/1657), merged at `f479997fec70f4f57b13a6d3a649b5d92a4fd5f7` | - |
+| D10 | 10 | Independent historical reader proofs | 1 | I | IN-FLIGHT | independent-historical-reader-proofs | [#1659](https://github.com/miztiik/yen-idhazh/pull/1659) | - |
 
 The canary implementation for Row 3 is delivered separately from its suite-wide
 review obligation. Rows 5 and 6 carry additional changes found by that review.
@@ -570,6 +571,72 @@ counts use the untouched archive and the completed branch instead.
   gardener-directory run was stopped and replaced with its sole changed-fixture
   consumer. Neither is counted as a pass. Full-suite CI remains required before
   merge.
+
+## 11 - Row #10 - Independent historical reader proofs
+
+- **Scope:** Make historical test inputs independent of production migration
+  tables, replace a self-derived month-window expectation, strengthen published
+  alias output checks, and preserve historical values without pinning whitespace.
+- **Files touched:** `backend/tests/contracts/test_two_call_ledgers.py`,
+  `test_stamped_boundary.py`, `test_page_ceilings.py`, `test_run_manifest.py`,
+  `test_source_classification_history.py`, `test_served_day.py` in the same
+  directory; `docs/architecture/contracts/schemas.md`.
+- **Changes and acceptance proof:**
+  - Spell the fourteen historical call and machine column renames literally.
+    Keep both call records, totals, absence of current headings, and full
+    read-back equality. Deleting one production rename must fail this case.
+  - Collect the three dropped-column cases from literal historical names:
+    `runner_name`, `cgroup_peak_bytes`, `max_output_tokens`. Deleting a
+    production dropped-column entry must fail its still-collected case.
+  - Check inclusive 93-, 180- and 367-day windows against independently known
+    maxima of 5, 7 and 14 calendar months. Retain `months_kept` for its independent
+    index-ceiling caller; remove it only from the tautological assertion.
+    With daily retention 45 and monthly retention forever, refuse year packing
+    at 76 days by name and accept 77 days. Removing the extra wake margin must
+    fail the refusal.
+  - Retain raw historical manifest alias-key checks. Also require emitted
+    records not to contain Python-only `items_decided` or `decision_ms` names.
+  - Preserve every recorded historical taxonomy key and value and require
+    next-write stability. Retain empty source-kind and source-tier assertions;
+    do not rewrite the fixture. This applies Row 1 E1/E2, not a byte-output
+    change. Dropping lenses or adding registry fields must fail.
+  - Vary the historical authored institution weight to 0.5, with expected 0.5,
+    while an empty weight record expects the original 1.0 default. Preserve
+    trade-press 0.6 and community 0.3 defaults in both cases. A reader ignoring
+    the authored institution weight must fail the non-default case.
+  - Rename the served-day test to
+    `test_a_day_without_the_ranking_fields_serves_a_valid_view_with_them_unknown`.
+    Preserve its complete body and its populated-input condition.
+- **Gates:** Shared changed-test selector over the six modules; disposable
+  mutation proofs with exact case identifiers and counts recorded separately.
+  No production, config, fixture, schema, acceptance or emitted-byte change.
+- **Dependencies:** Row 1. Serialize edits to this shared plan; do not merge.
+- **Gate record:** The selector chose exactly the six named modules and the
+  documentation-only schema page. Whitespace and Ruff passed; mypy found no
+  issues in 834 source files; all 65 pytest cases passed, zero skipped.
+  Record:
+  `backend/var/checks/13e3fe73f697df9d36eb1e2b3b0b7d5ad9e5d183f211acbc7e1b05c4bf43e317.json`.
+  Baseline collection had 53 functions and 64 cases; final coverage has 54
+  functions and 65 cases. One new boundary test, one name correction and two
+  revised weight-case identifiers explain every difference; no case is removed.
+- **Negative proofs:** Nine production faults in disposable copies caused
+  eleven intended failed cases, with no collection errors. Removing one rename
+  still collects its one case and fails readback; removing a dropped-column
+  entry keeps all three cases and fails only `cgroup_peak_bytes`. Their old
+  tests passed the same faults, with the old dropped-column test losing a case.
+  Floor division by 30 fails all three calendar expectations. Dropping the extra
+  wake accepts 76 and fails the refusal. Emitting each Python-only manifest key
+  fails the new absence assertion. Losing lenses or adding registry fields
+  fails taxonomy value equality. Ignoring authored institution 0.5 fails its
+  expected value while the old default-valued cases pass. A whitespace-only
+  taxonomy fixture change still passes. All disposable copies were removed.
+- **Plan integration:** The coordinator released the serialized slot and named
+  Row 9's frozen full successor as the input. All prior row text and the exact
+  owner ruling in A5 remain; D3 remains open. Rows 5, 8 and 9 have their verified
+  merge receipts above. Plan-only integration does not repeat unchanged gates.
+- **Delivery:** Implementation commit `90c58a26c` is in open PR
+  [#1659](https://github.com/miztiik/yen-idhazh/pull/1659). This phase is
+  delivered for review, not merged. The suite-wide Row 3 review remains open.
 
 ## See also
 

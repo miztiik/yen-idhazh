@@ -74,3 +74,4 @@ def test_the_manifest_keeps_the_keys_its_python_names_stopped_matching() -> None
     # And the round trip puts the keys back, which is what a reader fetches.
     written_back = json.loads(parsed.to_json())["runs"][-1]
     assert "items_routed" in written_back and "route_ms" in written_back
+    assert "items_decided" not in written_back and "decision_ms" not in written_back

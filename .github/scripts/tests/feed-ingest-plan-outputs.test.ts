@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises"
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
-import { readFeedIngestDispatch, RawDayIndexSchema } from "../../../packages/common-contracts/src/index";
+import { readFeedIngestDispatch, RawDayIndexSchema, SourceRunRecordSchema } from "../../../packages/common-contracts/src/index";
 import { persistLedger } from "../../../packages/ledger-file-writer/src/index";
 import { runFeedPlan, summarizePlan } from "../../../services/feed-ingest-plan/src/run-feed-plan";
 import { recordedPlan } from "../../../services/feed-ingest-plan/test/plan-recordings";
@@ -151,6 +151,62 @@ test("actual CLI planning proof and all native files survive both real report mo
       response: summary, host, progress, historyStagingMs: null,
     });
     expect(executionSummary).toContain("SOURCE&#95;INACTIVE | 1/2 configured sources");
+    const activeSource = summary.source_records?.find(row => row.fetch_status === "success");
+    const inactiveSource = summary.source_records?.find(row => row.fetch_status === "not_requested");
+    if (activeSource === undefined || inactiveSource === undefined) throw new Error("Report fixture requires fetched and inactive sources");
+    const refusalSources = [
+      { ...activeSource, parsed_count: 20, drop_reasons: [
+        { subject: "article", stage: "curate-article-portfolio", reason: "SOURCE_QUOTA_EXCEEDED", count: 3 },
+        { subject: "article", stage: "screen-article-candidates", reason: "STUB_CONTENT", count: 4 },
+        { subject: "article", stage: "harvest-feeds", reason: "FETCH_FAILED_HTTP", count: 4 },
+        { subject: "article", stage: "screen-article-candidates", reason: "DUPLICATE_CANONICAL_URL", count: 1 },
+        { subject: "article", stage: "curate-article-portfolio", reason: "DUPLICATE_CANONICAL_URL", count: 1 },
+        { subject: "article", stage: "screen-article-candidates", reason: "PAYWALL_OR_BLOCKED", count: 2 },
+        { subject: "article", stage: "harvest-feeds", reason: "EXTRACT_EMPTY", count: 2 },
+      ] },
+      { ...activeSource, source_id: "second-news", source: { ...activeSource.source, source_id: "second-news" },
+        parsed_count: 10, drop_reasons: [
+          { subject: "article", stage: "harvest-feeds", reason: "FETCH_FAILED_HTTP", count: 1 },
+          { subject: "article", stage: "screen-article-candidates", reason: "DUPLICATE_CANONICAL_URL", count: 1 },
+          { subject: "article", stage: "curate-article-portfolio", reason: "MMR_PORTFOLIO_CUTOFF", count: 1 },
+        ] },
+      inactiveSource,
+      ...["failed-one", "failed-two"].map(sourceId => ({
+        ...activeSource, source_id: sourceId, source: { ...activeSource.source, source_id: sourceId },
+        fetch_status: "http_failure", parse_status: "not_attempted", parsed_count: null, parse_duration_ms: null,
+        last_failure_at: activeSource.observed_at, last_failure_reason: "FETCH_FAILED_HTTP",
+        drop_reasons: [{ subject: "feed", stage: "harvest-feeds", reason: "FETCH_FAILED_HTTP", count: 1 }],
+      })),
+    ].map(row => SourceRunRecordSchema.parse({ ...row, expected_source_count: 5 }));
+    const refusalInput = { response: { ...summary, source_records: refusalSources }, host, progress, historyStagingMs: null };
+    const groupedReport = formatExecutionReport(refusalInput);
+    const refusalRows = groupedReport.match(/^\| D\d+ \|.*$/gm);
+    if (refusalRows === null) throw new Error("Report fixture requires refusal rows");
+    expect(refusalRows.map(row => row.split("|").slice(2, -1).map(cell => cell.trim()))).toEqual([
+      ["feed", "harvest feeds", "FETCH&#95;FAILED&#95;HTTP", "2/5 configured sources"],
+      ["feed", "harvest feeds", "SOURCE&#95;INACTIVE", "1/5 configured sources"],
+      ["article", "harvest feeds", "FETCH&#95;FAILED&#95;HTTP", "5/30 observed parsed entries"],
+      ["article", "harvest feeds", "EXTRACT&#95;EMPTY", "2/30 observed parsed entries"],
+      ["article", "screen article candidates", "STUB&#95;CONTENT", "4/30 observed parsed entries"],
+      ["article", "screen article candidates", "DUPLICATE&#95;CANONICAL&#95;URL", "2/30 observed parsed entries"],
+      ["article", "screen article candidates", "PAYWALL&#95;OR&#95;BLOCKED", "2/30 observed parsed entries"],
+      ["article", "curate article portfolio", "SOURCE&#95;QUOTA&#95;EXCEEDED", "3/30 observed parsed entries"],
+      ["article", "curate article portfolio", "DUPLICATE&#95;CANONICAL&#95;URL", "1/30 observed parsed entries"],
+      ["article", "curate article portfolio", "MMR&#95;PORTFOLIO&#95;CUTOFF", "1/30 observed parsed entries"],
+    ]);
+    const refusalMarkdown = groupedReport.split("## Table D - Refusals\n")[1]?.split("## Table E -")[0];
+    if (refusalMarkdown === undefined) throw new Error("Report fixture requires Table D");
+    const refusalHtml = Bun.markdown.html(refusalMarkdown);
+    expect(refusalHtml).toContain("<table>");
+    expect(refusalHtml.match(/<th>/g)).toHaveLength(5);
+    expect(refusalHtml.match(/<td>/g)).toHaveLength(refusalRows.length * 5);
+    expect(groupedReport).toContain("| C1 | Offered feed entries | 30 articles; 2/5 sources measured |");
+    expect(groupedReport).toContain("| C8 | Feed fetch failures | 2/4 attempted feeds |");
+    const reversedReport = formatExecutionReport({
+      ...refusalInput, response: { ...refusalInput.response, source_records: refusalSources.toReversed()
+        .map(row => ({ ...row, drop_reasons: row.drop_reasons.toReversed() })) },
+    });
+    expect(reversedReport.match(/^\| D\d+ \|.*$/gm)).toEqual(refusalRows);
     for (const response of [
       { ...summary, correlation_id: "another-correlation" },
       { ...summary, planning_completion: { ...summary.planning_completion!, attempt: summary.planning_completion!.attempt + 1 } },

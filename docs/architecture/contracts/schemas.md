@@ -518,6 +518,12 @@ Existing fragments remain readable and are not rewritten in bulk.
 
 **The writer's layout is held by tests; a curator's own whitespace is not.** Every layout parses to the same payload, so a hand edit that reflows one record across ten lines is accepted and reads the same. `backend/tests/contracts/test_json_serialization.py` holds each serializer's bytes against hand-written expectations. `backend/tests/contracts/test_record_layouts.py` holds which writer a contract selects and which record lists it puts on one line, including the three curated registries. `backend/tests/contracts/test_curated_registries.py` holds that a hand-edited registry has exactly the keys and values its contract writes, so a field is spelled out even when it holds its default.
 
+Historical reader tests spell old column names independently of the production
+rename and removal tables. Removing a migration must fail the same collected
+case, not remove its input or case. Historical taxonomy checks preserve all
+recorded keys and values, add no registry fields, and require the next write
+to remain identical without pinning the old file's whitespace.
+
 Timestamps are pinned as text - UTC, second precision, `Z` - rather than as a date type, for the same reason: one spelling, no offset ambiguity, and no serializer whose formatting can drift underneath a committed file.
 
 ## A derived value is rebuilt on read, never trusted
