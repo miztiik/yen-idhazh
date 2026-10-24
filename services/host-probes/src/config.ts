@@ -6,8 +6,8 @@ import { constants as bufferConstants } from "node:buffer";
 const MAX_TIMER_DELAY_MS = 2 ** 31 - 1;
 
 export const TaskProfileConfigSchema = z.strictObject({
-  enabled: z.boolean().default(false).describe("Retire after whole-task collection is approved for production; scope is transient task profiles only."),
-  memory_enabled: z.boolean().default(false).describe("Retire after process and machine RAM collection is approved; scope is enabled task profiles only."),
+  enabled: z.boolean().default(false).describe("Opt into transient whole-task profiles only; remove when this profiler is retired."),
+  memory_enabled: z.boolean().default(false).describe("Opt into process and machine RAM in enabled task profiles; remove when RAM collection is retired."),
   cpu_window_ms: z.int().positive().max(MAX_TIMER_DELAY_MS),
   poll_interval_ms: z.int().positive().max(MAX_TIMER_DELAY_MS),
   max_retained_samples: z.int().positive(),

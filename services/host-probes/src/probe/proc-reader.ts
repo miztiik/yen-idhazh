@@ -44,7 +44,7 @@ export function readProcFile(
     return { value: buffer.toString("utf8", 0, size), reason: null };
   } catch (error) {
     const code = error instanceof Error && "code" in error ? error.code : undefined;
-    if (code === "ENOENT" || code === "ENOTDIR") return { value: null, reason: "missing_file" };
+    if (code === "ENOENT" || code === "ENOTDIR" || code === "ESRCH") return { value: null, reason: "missing_file" };
     if (code === "EACCES" || code === "EPERM") return { value: null, reason: "permission_denied" };
     throw new Error(`Cannot read proc ${name}${typeof code === "string" ? ` (${code})` : ""}`, { cause: error });
   } finally {

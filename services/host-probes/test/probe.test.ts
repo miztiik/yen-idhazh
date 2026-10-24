@@ -175,11 +175,18 @@ test("periodic file sampling uses closing minus opening counters and closes with
   expect(retained.samples).toHaveLength(config.task_profile.max_retained_samples);
   expect(bounded.close("error")).toBe(retained);
   await Bun.write(join(directory, "stat"), await fixture("runtime/2026-08-30-probe-proc-stat-at-start.txt"));
-  const reset = new TaskCollector(collectorInput);
+  const reset = new TaskCollector(CollectorInputSchema.parse({
+    ...collectorInput, config: {
+      ...collectorInput.config, cpu_window_ms: collectorInput.config.lifecycle_timeout_ms,
+      max_retained_samples: Math.ceil(collectorInput.config.lifecycle_timeout_ms / collectorInput.config.poll_interval_ms) + 2,
+    },
+  }));
   await Bun.write(join(directory, "stat"), "cpu 1 0 0 1 0 0 0 0\n");
   reset.poll();
   await Bun.write(join(directory, "stat"), await fixture("runtime/2026-08-30-probe-proc-stat-at-end.txt"));
-  expect(reset.close("success").cpu.reason).toBe("counter_reset");
+  const resetProfile = reset.close("success");
+  expect(resetProfile.cpu.reason).toBe("counter_reset");
+  expect(resetProfile.samples.at(-1)?.cpu_window.cpu.reason).toBe("counter_reset");
   await expect(profileTask(options, identity, () => { throw new Error("actual task failed"); }))
     .rejects.toThrow("actual task failed");
   expect(reports.at(-1)?.outcome).toBe("error");

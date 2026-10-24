@@ -29,7 +29,7 @@ export class TaskCollector {
   private busyMin: number | null = null;
   private busyMax: number | null = null;
   private availableMin: number | null = null;
-  private counterReset = false;
+  private resetAt: number | null = null;
   private closed: TaskProfile | undefined;
 
   constructor(private readonly input: CollectorInput) {
@@ -57,13 +57,15 @@ export class TaskCollector {
     const at = performance.now();
     const first = this.history[0];
     const previous = this.history.at(-1);
-    if (previous && calculateCpuPercentages(previous.cpu, cpu).reason === "counter_reset") this.counterReset = true;
+    if (previous && calculateCpuPercentages(previous.cpu, cpu).reason === "counter_reset") this.resetAt = at;
     const elapsed_ms = first === undefined ? 0 : at - this.opening.at;
     const cutoff = at - config.cpu_window_ms;
     while (this.history.length > 1 && this.history[1]!.at <= cutoff) this.history.shift();
     const start = this.history[0];
     const interval_ms = start === undefined ? 0 : at - start.at;
-    const windowCpu = calculateCpuPercentages(start?.cpu ?? cpu, cpu);
+    const windowCpu = this.resetAt !== null && start !== undefined && start.at < this.resetAt
+      ? { value: null, reason: "counter_reset" as const }
+      : calculateCpuPercentages(start?.cpu ?? cpu, cpu);
     const unavailable: TaskSample["unavailable"] = {};
     let memory_kb: TaskSample["memory_kb"] = { total: null, free: null, available: null };
     let vmstat_major_faults: number | null = null;
@@ -144,7 +146,7 @@ export class TaskCollector {
       started_at: this.opening.sample.observed_at, finished_at: end.sample.observed_at,
       elapsed_ms: end.sample.elapsed_ms, config: this.input.config,
       sample_count: this.sampleCount, periodic_sample_count: this.periodicCount, full_window_count: this.fullWindowCount,
-      cpu: this.counterReset ? { value: null, reason: "counter_reset" } : calculateCpuPercentages(this.opening.cpu, end.cpu),
+      cpu: this.resetAt !== null ? { value: null, reason: "counter_reset" } : calculateCpuPercentages(this.opening.cpu, end.cpu),
       sampled_busy_min_percent: this.busyMin, sampled_busy_max_percent: this.busyMax,
       machine_available_min_kb: this.availableMin, machine_major_faults_delta: faults.value,
       processes: { worker: processes("worker"), server: processes("server") },
