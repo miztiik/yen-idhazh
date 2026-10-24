@@ -8,9 +8,10 @@ import { createHash } from "node:crypto";
 import { default as initializeWasm, readMetadata, readParquet } from "parquet-wasm/esm";
 import {
   CandidateRejectionRecordSchema, FeedIngestCandidateSchema, deriveCandidateId, deriveUrlKey,
-  FeedOutcomePayloadSchema,
+  FeedOutcomePayloadSchema, PLANNING_OBSERVATIONS_VERSION, readFeedIngestCandidate,
 } from "@idhazh/common-contracts";
 import { harvestFeeds, loadHarvestInputs } from "@idhazh/feed-ingest-plan/harvest-feeds";
+import { sourceSnapshot } from "../src/harvest-feeds/load-harvest-inputs";
 import { parseFeed } from "../src/harvest-feeds/feed-client";
 import { extractArticle } from "../src/harvest-feeds/dom-extractor";
 import { parseDocument } from "../src/harvest-feeds/parse-document";
@@ -109,9 +110,16 @@ test("public harvest returns validated full text, provenance and actual observat
   try {
     const transport = new RecordedTransport(await readRecordings());
     const loaded = await inputs([
-      source(), source({ id: "recorded-atom", url: "https://atom.example/feed.xml", kind: "research", tier: 1, form: "abstract" }),
+      source({ publisher_id: "recorded-publication" }),
+      source({
+        id: "recorded-atom", url: "https://atom.example/feed.xml", kind: "research",
+        tier: 1, form: "abstract", publisher_id: "recorded-publication",
+      }),
       source({ id: "retired-source", status: "retired", retired_on: "2026-10-20" }),
     ], {
+      publishers: [{
+        id: "recorded-publication", display_name: "Recorded Publication",
+      }],
       lenses: [
         { id: "alpha", keywords: ["PUBLIC/EVIDENCE"], weight: 0.2, status: "active", retired_on: null },
         { id: "zeta", keywords: ["public-evidence"], weight: 0.2, status: "draft", retired_on: null },
@@ -130,6 +138,39 @@ test("public harvest returns validated full text, provenance and actual observat
         { id: "failed-votes", title: "Failed optional feed", url: "https://news.example/malformed.xml", status: "active", retired_on: null },
       ],
     });
+    const legacyPublisher = await inputs([], { publishers: [{
+      id: "legacy-publication", display_name: "Legacy Publication",
+    }] });
+    expect(legacyPublisher.publishers).toEqual([{
+      id: "legacy-publication", display_name: "Legacy Publication",
+    }]);
+    await expect(inputs([], { publishers: [{
+      id: "retired-publication", display_name: "Retired Publication", status: "retired",
+    }] })).rejects.toThrow();
+    const { added_on: _addedOn, retirement_reason: _retirementReason, ...legacyRetired } = source({
+      status: "retired", retired_on: "2026-10-21",
+    });
+    const legacyRetiredFeed = await inputs([legacyRetired]);
+    expect(legacyRetiredFeed.sources[0]).toMatchObject({
+      added_on: null, retirement_reason: null,
+    });
+    const retiredFeed = await inputs([source({
+      status: "retired", retired_on: "2026-10-21", added_on: "2026-10-20",
+      retirement_reason: "feed retired",
+    })]);
+    expect(retiredFeed.sources[0]).toMatchObject({
+      added_on: "2026-10-20", retired_on: "2026-10-21", retirement_reason: "feed retired",
+    });
+    await expect(inputs([source({
+      status: "retired", retired_on: "2026-10-21", added_on: "2026-10-20",
+    })])).rejects.toThrow("newly retired feed");
+    await expect(inputs([source({
+      status: "retired", retired_on: "2026-10-21", added_on: "2026-10-22",
+      retirement_reason: "feed retired",
+    })])).rejects.toThrow("cannot precede");
+    await expect(inputs([source({
+      retirement_reason: "Feed Retired",
+    })])).rejects.toThrow("lowercase");
     const logged: unknown[] = [];
     const runContext = context(record => logged.push(record));
     const observations = collectDocumentObservations(runContext);
@@ -141,11 +182,21 @@ test("public harvest returns validated full text, provenance and actual observat
     const first = result.candidates[0];
     if (!first) throw new Error("recorded RSS candidate was not produced");
     expect(FeedIngestCandidateSchema.parse(first)).toEqual(first);
+    const { publisher_id: _publisherId, ...legacySource } = first.source;
+    const legacyCandidate = readFeedIngestCandidate({
+      ...first, version: PLANNING_OBSERVATIONS_VERSION, source: legacySource,
+    });
+    expect(legacyCandidate.source.publisher_id).toBeNull();
+    expect(() => readFeedIngestCandidate({
+      ...first, version: PLANNING_OBSERVATIONS_VERSION,
+    })).toThrow();
     expect(first.source).toEqual({
       source_id: "recorded-news", feed_url: "https://news.example/feed.xml", title: "Configured science news",
-      vertical: "world", kind: "reporting", tier: 2, form: "article", status: "active",
+      publisher_id: "recorded-publication", vertical: "world", kind: "reporting", tier: 2, form: "article", status: "active",
       weight: 0.8, applied_tier_weight: 0.6,
     });
+    expect(result.candidates.find(candidate => candidate.source.source_id === "recorded-atom")?.source.publisher_id)
+      .toBe("recorded-publication");
     expect(first.canonical_url).toBe("https://news.example/story?a=1&b=2");
     expect(first.url_key).toBe(deriveUrlKey(first.canonical_url));
     expect(first.author).toBe("Page Reporter");
@@ -189,7 +240,7 @@ test("public harvest returns validated full text, provenance and actual observat
       config: loaded.config, extraction: loaded.extraction_settings,
       taxonomy: { ...loaded.registry, lenses: loaded.registry.lenses!.map(lens =>
         lens.id === "alpha" ? { ...lens, weight: 0.3 } : lens) },
-      sources: { feeds: loaded.sources, salience: loaded.salience },
+      sources: { feeds: loaded.sources, salience: loaded.salience, publishers: loaded.publishers },
       watchlist: { entities: loaded.watchlist!.entities.map(entity => ({ ...entity, aliases: ["absent phrase"] })) },
     });
     expect(matchHeadline(first.title, changed)).toMatchObject({
@@ -197,6 +248,51 @@ test("public harvest returns validated full text, provenance and actual observat
       best_weighted_lens: { id: "alpha", weight: 0.3 }, watchlist_match: false,
     });
     expect(changed.config_sha256).not.toBe(loaded.config_sha256);
+    const displayNameChanged = loadHarvestInputs({
+      config: loaded.config, extraction: loaded.extraction_settings, taxonomy: loaded.registry,
+      sources: {
+        feeds: loaded.sources, salience: loaded.salience,
+        publishers: loaded.publishers.map(publisher => ({ ...publisher, display_name: "Renamed Publication" })),
+      },
+      watchlist: loaded.watchlist,
+    });
+    expect(sourceSnapshot(displayNameChanged, displayNameChanged.sources[0]!).publisher_id)
+      .toBe("recorded-publication");
+    const assignmentChanged = loadHarvestInputs({
+      config: loaded.config, extraction: loaded.extraction_settings,
+      taxonomy: { ...loaded.registry, lenses: loaded.registry.lenses },
+      sources: {
+        feeds: loaded.sources.map(feed => feed.id === "recorded-news" ? { ...feed, publisher_id: null } : feed),
+        salience: loaded.salience, publishers: loaded.publishers,
+      },
+      watchlist: loaded.watchlist,
+    });
+    expect(assignmentChanged.config_sha256).not.toBe(loaded.config_sha256);
+    const legacy = loadHarvestInputs({
+      config: loaded.config, extraction: loaded.extraction_settings,
+      taxonomy: loaded.registry,
+      sources: {
+        feeds: loaded.sources.map(({ publisher_id: _publisherId, ...feed }) => feed),
+        salience: loaded.salience,
+      },
+      watchlist: loaded.watchlist,
+    });
+    expect(legacy.publishers).toEqual([]);
+    expect(legacy.sources.every(feed => feed.publisher_id === null)).toBe(true);
+    expect(() => loadHarvestInputs({
+      config: loaded.config, extraction: loaded.extraction_settings, taxonomy: loaded.registry,
+      sources: { feeds: loaded.sources, publishers: [...loaded.publishers, ...loaded.publishers] },
+      watchlist: loaded.watchlist,
+    })).toThrow("publisher ids must be distinct");
+    expect(() => loadHarvestInputs({
+      config: loaded.config, extraction: loaded.extraction_settings, taxonomy: loaded.registry,
+      sources: {
+        feeds: loaded.sources.map(feed => feed.id === "recorded-news"
+          ? { ...feed, publisher_id: "undefined-publication" } : feed),
+        publishers: loaded.publishers,
+      },
+      watchlist: loaded.watchlist,
+    })).toThrow("unknown publisher");
     expect(matchHeadline("said remains chair AI/ROI", await inputs([], {
       lenses: [{ id: "short-word", keywords: ["ai"], weight: 0, status: "active", retired_on: null }],
     })).labels.lenses).toEqual(["short-word"]);

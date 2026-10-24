@@ -28,7 +28,8 @@ export async function recordFeedHealth(input: {
       : outcome.fetch_status === "success" ? "ok" : "transient";
     return FeedHealthContract.schema.parse({
       version: FeedHealthContract.schemaVersion, run_id: input.writer.run_id, date: input.now.slice(0, 10),
-      feed_id: outcome.source.source_id, checked_at: input.now, outcome: result,
+      feed_id: outcome.source.source_id, publisher_id: outcome.source.publisher_id,
+      checked_at: input.now, outcome: result,
       status, items: new Set(input.articles.flatMap(article => {
         const offered = article.candidate ?? article.rejection;
         return offered?.source_id === outcome.source.source_id && offered.canonical_url !== null

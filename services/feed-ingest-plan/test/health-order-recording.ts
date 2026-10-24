@@ -60,13 +60,21 @@ export async function verifyHealthOrderCompaction() {
       }));
       for (const old of [true, false]) {
         const rows = all.filter(row => (row.version === legacy.schemaVersion) === old);
-        const written = await persistLedger({
-          ledger: "feed-health", registryEntry: fixture.inputs.registrations.feed_health,
+        const writeContext = {
+          ledger: "feed-health" as const, registryEntry: fixture.inputs.registrations.feed_health,
           outputRoot: fixture.inputs.outputRoot, ledgerSettings: fixture.inputs.ledgerSettings,
           writerContext: writer(run_id, old ? "tests.legacy-health" : "tests.precise-health"),
-          period: { tier: "raw", covers: day },
-          rowContract: old ? legacy : FeedHealthContract, rows,
-        });
+          period: { tier: "raw" as const, covers: day },
+        };
+        const written = old
+          ? await persistLedger({
+              ...writeContext, rowContract: legacy,
+              rows: rows.map(row => {
+                const { publisher_id: _publisherId, ...legacyRow } = row;
+                return legacy.schema.parse(legacyRow);
+              }),
+            })
+          : await persistLedger({ ...writeContext, rowContract: FeedHealthContract, rows });
         rawFiles.push(...written.files);
         for (const file of written.files) {
           const held = await readLedgerParquet(join(fixture.inputs.outputRoot, file.path), "feed-health", FeedHealthContract);

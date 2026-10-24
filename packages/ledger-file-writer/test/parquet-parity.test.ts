@@ -697,7 +697,11 @@ describe("ledger Parquet readback", () => {
       expect(historicalReadback.files[0]!.rows[0]).toMatchObject(previous);
       const columns = readback.files[0]!.nativeColumns;
       expect(columns.filter(([name]) => !name.startsWith("content.planning_observations")
-        && !name.startsWith("selection.ratings.source_reliability"))).toEqual(recordedSchema.columns);
+        && !name.startsWith("selection.ratings.source_reliability")
+        && name !== "content.source.publisher_id" && name !== "selection.source.publisher_id"))
+        .toEqual(recordedSchema.columns);
+      expect(columns).toContainEqual(["content.source.publisher_id", "Utf8", true]);
+      expect(columns).toContainEqual(["selection.source.publisher_id", "Utf8", true]);
       expect(columns.filter(([name]) => name.startsWith("selection.ratings.source_reliability"))).toEqual([
         ["selection.ratings.source_reliability", "Struct", true],
         ["selection.ratings.source_reliability.enabled", "Bool", false],
