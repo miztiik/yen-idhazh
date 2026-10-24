@@ -7,9 +7,11 @@ How do measured feed and article costs affect the next planner selection?
 **Status**: Contract proposal; no feedback score or state writer is deployed.
 The user approved separate hardware and request measures, automatic score use
 after evidence qualifies, replacement of RSS reliability in the isolated
-TypeScript planner, the configurable provisional score settings below, and
-counting only supported source-side failures as waste. The field additions and
-the D3-D5/D8 choices below are proposals, not approval to implement them.
+TypeScript planner, the configurable provisional score settings below,
+requests-first eligibility, and counting only supported source-side failures
+as waste. The rolling closed-UTC-day window is configurable with a seven-day
+default. Other field additions and unsettled D3-D5/D8 choices remain
+proposals.
 
 ## Scope
 
@@ -146,7 +148,7 @@ supported penalty applies automatically.
 The owner approved these provisional configuration values. They are policy
 defaults, not measurements learned from the historical records:
 
-- A seven-day window of closed UTC days.
+- A configurable rolling window of closed UTC days, defaulting to seven.
 - At least 20 distinct measured article opportunities for a component.
 - At least 80 percent coverage of attempted opportunities for that component.
 - Equal one-third weights for CPU, memory and requests.
@@ -158,16 +160,16 @@ not source-attributed waste, and retry fields are not a complete request
 census.
 
 The producer additions above are not measurements already present in the
-historical files. The seven days, 20 opportunities, 80 percent and equal
-weights are approved policy defaults; they do not prove that CPU or memory
-collection is available or calibrated.
+historical files. The seven-day default, 20 opportunities, 80 percent and
+equal weights are approved policy defaults; they do not prove that CPU or
+memory collection is available or calibrated.
 
-Use the raw per-source waste ratio over the fixed seven-day window. Do not add
-a reference cohort, prior or decay: the component already has a fixed unit and
-a `[0,1]` endpoint, while no historical source-attributed data can calibrate a
-prior or half-life. The cost is that new sources remain unqualified until
-they meet the approved support and coverage rules; no seed value pretends to
-be measured evidence.
+Use the raw per-source waste ratio over the configured rolling window. Do not
+add a reference cohort, prior or decay: the component already has a fixed unit
+and a `[0,1]` endpoint, while no historical source-attributed data can
+calibrate a prior or half-life. The cost is that new sources remain
+unqualified until they meet the approved support and coverage rules; no seed
+value pretends to be measured evidence.
 
 Approved score boundary: requests are the first eligible operational
 component. Keep CPU and private memory unavailable until source-attributable
@@ -190,10 +192,29 @@ carry:
 | `state_revision` | Positive integer, advanced once per committed snapshot |
 | `parent_revision` | Nullable positive integer naming the snapshot read |
 | `written_at_utc`, `evidence_cutoff_utc` | UTC instants |
-| `window_start`, `window_end` | UTC dates; exactly the seven named evidence days |
+| `window_days` | Positive integer copied from the configured rolling-window setting |
+| `window_start`, `window_end` | UTC dates; exactly the named closed days selected by `window_days` |
 | `code_revision`, `policy_digest` | The writer's Git revision and digest of the settings used |
 | `sources` | Rows keyed by nonempty `source_id`, each with the component and restriction fields below |
 | Per-source `next_poll_at_utc`, `next_probe_at_utc` | Nullable UTC instants |
+
+**Owner-directed requirements, 2026-10-24 UTC:** make the evidence window
+configurable, defaulting to seven closed UTC days; read registered data under
+both `state/raw/` and `state/compact/`; allow concurrent runs; and design for
+graceful failure. Exclude the current UTC day. The window rolls forward each
+UTC day; it is not a frozen set of seven dates.
+
+Propose `feedback.window_days` in `config/feed-ingest-plan.json` as the
+positive-integer setting, default `7`. This is distinct from
+`metrics.rolling_window_days`, which serves publication metrics. Compute the
+named date range once per run from the UTC clock and this setting.
+
+Yes, read both roots through the registered ledger reader and compact indexes.
+For each date, use the compact period when an index names it; otherwise use
+that date's raw files. Follow the existing period precedence so a date comes
+from exactly one source. Do not append raw re-run files to compact rows when
+the index already names that date; this avoids counting the same observations
+twice.
 
 Each source row has `publisher_id: string|null` and `cpu`, `private_memory`
 and `http_requests` component records. Each component has
@@ -220,33 +241,60 @@ the existing binding tests.
 
 The checkpoint is `state_revision`, `evidence_cutoff_utc`,
 `window_start` and `window_end`; do not add a growing list of settled event
-IDs. Recompute the fixed window from its seven named UTC ledger days. Select
-the latest compatible snapshot through the registered ledger index, not a
-repository walk.
+IDs. Recompute the rolling window from its configured named UTC ledger days.
+Select the latest compatible snapshot through the registered ledger index,
+not a repository walk.
 
 Settle by `event_id`; an identical replay adds no amount or support. A
 correction names the event it replaces and does not create another article
-opportunity. Recompute the active seven-day window from named ledger periods,
-then commit the new snapshot. The proposed late-event bound is the same seven
-closed UTC days; an older correction is reported as late and does not rewrite
-expired score evidence. It never clears a restriction.
+opportunity. Recompute the active configured window from named ledger periods,
+then publish the derived snapshot. The proposed late-event bound is that same
+configured window; an older correction is reported as late and does not
+rewrite expired score evidence. It never clears a restriction.
 
-The ledger writer gives atomic replacement of one file, but it does not lock
-multiple writers or compare revisions. The planner's SQLite operation store
-is durable only where its database file is retained; it is not the committed
-cross-run feedback state. The smallest safe proposal is to serialize the
-state-reading, planning and settlement workflow, then require
-`parent_revision` to match before writing. This costs queued runs and can
-increase discovery delay. If runs are not serialized, a second coordination
-mechanism and its failure recovery must be approved before implementation.
+**Concurrency and failure handling remain a proposal, not an approved
+mechanism.** Do not serialize fetch, parse, planning or selection, and do not
+add selection idempotency. Keep each run's observation files immutable and
+uniquely named; regenerate the replaceable feedback snapshot from the latest
+committed state and registered ledger inputs.
+
+The shared publisher's existing recovery pattern
+([committing completed output](../publishing/committing.md)) handles a commit
+race by preparing derived output again from named inputs on a fresh `main`,
+while retaining completed immutable observations. Reuse that pattern, not a
+global lock or a custom Git retry loop. The conflict is narrow: two runs may
+read revision R and both compute the next snapshot. Once one lands, Git rejects
+the other's stale candidate. Rebuilding on the new tip incorporates the first
+snapshot and both runs' immutable observations; replaying the stale snapshot
+would instead overwrite a newer restriction. This race does not justify
+holding fetch, parse or selection.
+
+This is not a direct call to the shared publisher here: the TypeScript planner
+publisher currently retries the same immutable files but cannot rebuild
+derived state, and the shared Python publisher cannot be invoked as a local
+Python step in this isolated TypeScript flow. The proposed route is a narrow
+prepare callback at the existing TypeScript publication boundary. On a stale
+base, it would use the existing bounded push-retry policy to rebuild the
+snapshot from the fresh committed snapshot and named raw/compact inputs, while
+preserving the run's immutable observation files. This costs a scoped adapter
+change and its concurrency tests; the actual production caller is not yet
+identified, so its declaration and ownership must be settled before
+implementation. A stale snapshot must never be replayed over a newer
+restriction.
+
+No other run waits for settlement. If publication is refused or retries are
+exhausted, leave the previously committed snapshot and restrictions unchanged,
+retain the run artifacts, report settlement as failed/unsettled, and do not
+claim completion. Missing or unreadable state is not empty history and must
+not clear known restrictions.
 
 The next allocation must read the latest compatible committed snapshot while
 keeping its code and policy pinned. A failed commit does not advance
-`state_revision`; the next run replays the named evidence window. Missing or
-incompatible state must not become empty history or erase restrictions. The
-recommended degraded behavior is to stop the run with an explicit state error
-rather than allocate from unknown restrictions; the owner must approve that
-cost before implementation.
+`state_revision`; the next settlement recomputes the named evidence window.
+Missing or incompatible state must not become empty history or erase
+restrictions. Whether the affected allocation stops or proceeds without
+applying feedback state remains an operator-policy choice to settle before
+implementation; it must not claim that unknown state was applied.
 
 ## D5 proposal: bounded controls and operational review
 
@@ -259,7 +307,7 @@ does not add selection idempotency, conditional HTTP or semantic assessment.
 | Setting | Proposed type and default | Effect |
 | --- | --- | --- |
 | `trial_opportunities` | Integer, 25 maximum per source trial | Report each attempted article. Qualification still needs at least 20 measured opportunities and 80 percent coverage; 25 allows 20 measured opportunities at exactly 80 percent. It does not activate catalog membership. |
-| `restriction_failures` | Integer, 3 distinct source-attributed failed opportunities in 7 closed UTC days, at the same endpoint or feed scope | Pause ordinary work only at that scope. An explicit article-level refusal affects only that article. A bare HTTP 403, pipeline failure or unresolved cause does not trigger it. |
+| `restriction_failures` | Integer, 3 distinct source-attributed failed opportunities in the configured closed-UTC-day window, at the same endpoint or feed scope | Pause ordinary work only at that scope. An explicit article-level refusal affects only that article. A bare HTTP 403, pipeline failure or unresolved cause does not trigger it. |
 | `restriction_pause_hours` | Integer, 24 | After the pause, make one recovery probe due; expiry does not restore ordinary work. |
 | `recovery_successes` | Integer, 3 distinct successful article opportunities across at least 2 UTC dates, with at least 80 percent known outcomes | Restore trial access only after the observed sequence; successful time alone is not recovery. |
 | `special_probe_budget` | Integer, 20 opportunities per planner run, at most 1 per source | Shared cap for admission and recovery probes, with due recovery probes first and stable source ID as the tie-break. This is not a cap on ordinary configured feed polls or article fetches. |
@@ -273,10 +321,11 @@ Keep permanent retirement in the curated catalog. Never broaden a restriction
 from an article or endpoint to a feed or publisher without evidence at that
 larger scope.
 
-For Row 19, compare two fixed windows: the latest seven closed UTC days and
-the seven immediately before them. The review input is the named registered
-ledger days, grouped by source and producer revision, with source, pipeline
-and unresolved outcomes kept separate. Report distinct opportunity counts,
+For Row 19, compare two adjacent windows, each using the configured number of
+closed UTC days: the latest window and the one immediately before it. The
+review input is the named registered ledger days, grouped by source and
+producer revision, with source, pipeline and unresolved outcomes kept
+separate. Report distinct opportunity counts,
 coverage, raw outcomes and measured cost totals. Below 20 opportunities or 80
 percent coverage, report `insufficient_evidence`; do not infer a regression.
 Run the review once after settlement and whenever the producer revision
@@ -352,18 +401,21 @@ exception does not make the saved score row TypeScript-only.
 
 ## Open contract decisions
 
-- D3: the request-first score eligibility and one-third maximum are approved
-  as recorded below. The typed producer additions, nonsemantic extraction
-  failure binding, poll/robots cost separation and no-prior/no-decay proposal
-  still need approval. Source-attributable CPU is not established by the
-  current task-profile process delta. The approved seven-day window, 20-item
-  support floor, 80-percent coverage and equal weights do not approve these
-  producer fields.
-- D4: approve the snapshot fields, seven-day late-event bound, serialized
-  workflow cost and stop-on-missing-state behavior.
+- D3: the request-first score eligibility and one-third maximum are approved.
+  The seven-closed-day window is a configurable default. The typed producer
+  additions, nonsemantic extraction failure binding, poll/robots cost
+  separation and no-prior/no-decay proposal still need approval.
+  Source-attributable CPU is not established by the current task-profile
+  process delta. The approved support floor, coverage and weights do not
+  approve these producer fields.
+- D4: configurable rolling window, seven-day default, raw/compact registered
+  reads, concurrent runs and graceful failure are owner-directed requirements.
+  Snapshot fields, late-event policy, publication preparation and behavior
+  when state is missing or incompatible remain unapproved proposals.
 - D5: approve or change the trial, restriction, recovery, special-probe and
   maximum-poll-gap values; approve the bounded review windows, cadence, caller
-  and report-only authority.
+  and report-only authority. Window lengths use the proposed configurable
+  `feedback.window_days`, default seven.
 - D8: the request-first component eligibility, equal-thirds/no-renormalization
   behavior, no-impact treatment for unqualified evidence and no-RSS-fallback
   rule are approved as recorded below. The typed `source_operational` trace
@@ -394,6 +446,15 @@ eligible operational component. Keep CPU and private memory unavailable until
 attributable. Do not renormalize the equal one-third weights; requests alone
 can contribute at most one third. Unqualified evidence has no impact and does
 not fall back to RSS reliability.
+
+Owner direction, 2026-10-24 UTC: make the closed-UTC-day evidence window
+configurable, default seven days; read registered data from both
+`state/raw/` and `state/compact/`; allow concurrent runs; and design for
+graceful failures. Compact indexes determine which tier supplies each day.
+The window rolls forward; it is not a frozen seven-date set. A whole-run queue
+was considered and withdrawn: observations are append-only, so it would hold
+fetch, parse and selection without preventing a stale derived snapshot from
+overwriting newer state. Protect only publication of the derived snapshot.
 
 ## See also
 
