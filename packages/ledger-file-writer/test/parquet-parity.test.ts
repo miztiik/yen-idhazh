@@ -6,13 +6,13 @@ import { tmpdir } from "node:os";
 import { describe, expect, test } from "bun:test";
 import { tableFromIPC } from "apache-arrow";
 import {
-  ArticleAssessmentRecordSchema,
+  ArticleAssessmentContract, ArticleAssessmentRecordSchema,
   DiversityMetricRowSchema,
   FileEnvelopeSchema,
   FOOTER_METADATA_KEYS,
   OPTIONAL_FOOTER_METADATA_KEYS,
   FeedIngestDispatchSchema,
-  readFeedIngestDispatch, PLANNING_OBSERVATIONS_VERSION,
+  readFeedIngestDispatch, PreviousFeedIngestDispatchSchema, SOURCE_RELIABILITY_VERSION,
   RowIdentitySchema,
   WriterIdentitySchema,
   validateEnvelopeContainer,
@@ -404,7 +404,7 @@ describe("ledger Parquet readback", () => {
       const rows = [assessment("2026-10-20", ["na\u00efve", "\u6771\u4eac"]), assessment("2026-10-21", null)];
       const raw = await persistLedger({
         ledger: "article-assessments",
-        rowContract: { schema: ArticleAssessmentRecordSchema, schemaVersion: "2026-10-20" },
+        rowContract: { schema: ArticleAssessmentRecordSchema, schemaVersion: ArticleAssessmentContract.schemaVersion },
         rows,
         outputRoot: root,
         period: { tier: "raw", covers: "2026-10-21" },
@@ -448,7 +448,7 @@ describe("ledger Parquet readback", () => {
       });
       const compact = await persistLedger({
         ledger: "article-assessments",
-        rowContract: { schema: ArticleAssessmentRecordSchema, schemaVersion: "2026-10-20" },
+        rowContract: { schema: ArticleAssessmentRecordSchema, schemaVersion: ArticleAssessmentContract.schemaVersion },
         rows: compactRows,
         outputRoot: root,
         period: { tier: "compact", period: "monthly", covers: "2026-10", builtFrom: raw.files.length },
@@ -647,13 +647,26 @@ describe("ledger Parquet readback", () => {
 
   test("writes a real dispatch with worker assignment distinct from writer shard", async () => {
     await withOutputRoot(async (root) => {
-      const dispatch = readFeedIngestDispatch(
-        await readLedgerFixture("feed-ingest-dispatch-row.json"),
-      );
+      const recorded = await readLedgerFixture("feed-ingest-dispatch-row.json");
+      const previous = PreviousFeedIngestDispatchSchema.parse(recorded);
+      const migrated = readFeedIngestDispatch(recorded);
+      expect(migrated.selection.ratings.source_reliability).toBeNull();
+      const authority = migrated.selection.policy.source_authority_weight
+        * migrated.selection.source.weight * migrated.selection.source.applied_tier_weight;
+      const dispatch = FeedIngestDispatchSchema.parse({
+        ...migrated, selection: { ...migrated.selection, ratings: {
+          ...migrated.selection.ratings, marginal_score: migrated.selection.ratings.base_article_score - authority * 0.5,
+          source_reliability: {
+            enabled: true, source_authority_score: authority, reliability_floor: 0.5,
+            history: { success_fraction: 0.5, attempted: 4, window_days: 7 },
+            production_factor: 0.5, value: authority * 0.5,
+          },
+        } },
+      });
       expect(dispatch.partition.worker_assignment).not.toBe(writerContext.shard);
       const raw = await persistLedger({
         ledger: "dispatches",
-        rowContract: { schema: FeedIngestDispatchSchema, schemaVersion: PLANNING_OBSERVATIONS_VERSION },
+        rowContract: { schema: FeedIngestDispatchSchema, schemaVersion: SOURCE_RELIABILITY_VERSION },
         rows: [dispatch],
         outputRoot: root,
         period: { tier: "raw", covers: dispatch.content.date },
@@ -672,8 +685,31 @@ describe("ledger Parquet readback", () => {
         version: z.string(),
         columns: z.array(z.tuple([z.string(), z.string(), z.boolean()])),
       }).parse(await readLedgerFixture("dispatch-arrow-schema.json"));
+      const previousSchema = PreviousFeedIngestDispatchSchema.extend({ version: z.literal(previous.version) });
+      const historical = await persistLedger({
+        ledger: "dispatches", rowContract: { schema: previousSchema, schemaVersion: previous.version },
+        rows: [previous], outputRoot: root, period: { tier: "raw", covers: previous.content.date },
+        writerContext, ledgerSettings: compression, registryEntry: await registeredEntry("dispatches"),
+      });
+      if (historical.status !== "written") throw new Error("historical dispatch row was not written");
+      const historicalReadback = await checkParquetReadback("dispatches", root, historical.files, previousSchema);
+      expect(historicalReadback.files[0]!.nativeColumns).toEqual(recordedSchema.columns);
+      expect(historicalReadback.files[0]!.rows[0]).toMatchObject(previous);
       const columns = readback.files[0]!.nativeColumns;
-      expect(columns.filter(([name]) => !name.startsWith("content.planning_observations"))).toEqual(recordedSchema.columns);
+      expect(columns.filter(([name]) => !name.startsWith("content.planning_observations")
+        && !name.startsWith("selection.ratings.source_reliability"))).toEqual(recordedSchema.columns);
+      expect(columns.filter(([name]) => name.startsWith("selection.ratings.source_reliability"))).toEqual([
+        ["selection.ratings.source_reliability", "Struct", true],
+        ["selection.ratings.source_reliability.enabled", "Bool", false],
+        ["selection.ratings.source_reliability.source_authority_score", "Float64", false],
+        ["selection.ratings.source_reliability.reliability_floor", "Float64", false],
+        ["selection.ratings.source_reliability.history", "Struct", true],
+        ["selection.ratings.source_reliability.history.success_fraction", "Float64", false],
+        ["selection.ratings.source_reliability.history.attempted", "Int64", false],
+        ["selection.ratings.source_reliability.history.window_days", "Int64", false],
+        ["selection.ratings.source_reliability.production_factor", "Float64", true],
+        ["selection.ratings.source_reliability.value", "Float64", true],
+      ]);
       expect(columns).toContainEqual(["content.planning_observations", "Struct", true]);
       expect(columns).toContainEqual(["content.planning_observations.salience[].voted", "Bool", true]);
       expect(readback.files[0]?.identity.shard).toBe(writerContext.shard);
@@ -689,7 +725,7 @@ describe("ledger Parquet readback", () => {
       const invalid = { ...assessment("2026-10-21", null), source_id: "different-source" };
       await expect(persistLedger({
         ledger: "article-assessments",
-        rowContract: { schema: ArticleAssessmentRecordSchema, schemaVersion: "2026-10-20" },
+        rowContract: { schema: ArticleAssessmentRecordSchema, schemaVersion: ArticleAssessmentContract.schemaVersion },
         rows: [invalid],
         outputRoot: root,
         period: { tier: "raw", covers: "2026-10-21" },
@@ -709,7 +745,7 @@ describe("ledger Parquet readback", () => {
       };
       await expect(persistLedger({
         ledger: "article-assessments",
-        rowContract: { schema: ArticleAssessmentRecordSchema, schemaVersion: "2026-10-20" },
+        rowContract: { schema: ArticleAssessmentRecordSchema, schemaVersion: ArticleAssessmentContract.schemaVersion },
         rows: [assessment("2026-10-21", null)],
         outputRoot: root,
         period: { tier: "raw", covers: "2026-10-21" },
@@ -729,7 +765,7 @@ describe("ledger Parquet readback", () => {
 
       await expect(persistLedger({
         ledger: "article-assessments",
-        rowContract: { schema: ArticleAssessmentRecordSchema, schemaVersion: "2026-10-20" },
+        rowContract: { schema: ArticleAssessmentRecordSchema, schemaVersion: ArticleAssessmentContract.schemaVersion },
         rows: [assessment("2026-10-20", null), assessment("2026-10-21", null)],
         outputRoot: root,
         period: { tier: "raw", covers: "2026-10-21" },
