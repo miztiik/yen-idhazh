@@ -5,17 +5,19 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
-from conftest import writer_identity
+from conftest import CONTRACT_FIXTURES_DIR, read_text, writer_identity
 from pytest import CaptureFixture, mark
 
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.feed_health import FeedHealthRow
+from idhazh.contracts.feed_ingest_editorial_selection import EditorialSelectionRow
+from idhazh.contracts.feed_ingest_source_run import SourceRunRecord
 from idhazh.contracts.file_envelope import Compression, FileEnvelope, Format, Period, WriterIdentity
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.ledger import parquet, published_columns
-from idhazh.ledger.arrow_schema import Column, ColumnType
+from idhazh.ledger.arrow_schema import Column, ColumnType, LogicalType
 from idhazh.ledger.persist import file_columns
 
 from ._fixtures import fixture_rows
@@ -172,6 +174,63 @@ def test_older_file_lacking_a_newer_column_passes_and_prints(
         "published-columns host-fingerprint: checked 1 file(s), current 0, "
         "history 2000-01-01: 1 file(s), missing [unit_id], extra [none]\n"
     )
+    cases: tuple[
+        tuple[
+            type[EditorialSelectionRow] | type[SourceRunRecord],
+            LedgerName, str, str, str, bool,
+        ], ...
+    ] = (
+        (
+            EditorialSelectionRow, LedgerName.FEED_INGEST_PLAN_EDITORIAL_SELECTIONS,
+            "feed-ingest-editorial-selection/one-article.json",
+            "ratings", "source_reliability", True,
+        ),
+        (
+            SourceRunRecord, LedgerName.FEED_INGEST_PLAN_SOURCE_RUNS,
+            "feed-ingest-source-run/one-observation.json",
+            "completion_evidence", "logical", True,
+        ),
+        (
+            EditorialSelectionRow, LedgerName.FEED_INGEST_PLAN_EDITORIAL_SELECTIONS,
+            "feed-ingest-editorial-selection/one-article.json",
+            "ratings", "base_article_score", False,
+        ),
+    )
+    for index, (model, which, fixture, column_name, absent, compatible) in enumerate(cases):
+        nested_tree = tmp_path / f"nested-{index}"
+        row = model.from_json(read_text(CONTRACT_FIXTURES_DIR / fixture))
+        (nested_file,) = ledger.persist(
+            nested_tree / "state", [row], ledger=which,
+            covers=row.date, identity=_identity(), fmt=Format.PARQUET,
+        )
+        columns = file_columns(model)
+        column = next(column for column in columns if column.name == column_name)
+        assert isinstance(column.type, LogicalType)
+        if column.type.kind == "list":
+            item = column.type.item_type
+            assert item is not None and item.kind == "struct"
+            older_type = replace(column.type, item_type=replace(
+                item, fields=tuple(field for field in item.fields if field.name != absent),
+            ))
+        else:
+            older_type = replace(
+                column.type,
+                fields=tuple(field for field in column.type.fields if field.name != absent),
+            )
+        older_columns = tuple(
+            replace(held, type=older_type) if held.name == column_name else held
+            for held in columns
+        )
+        _rewrite_file(nested_file, columns=older_columns, schema_version="2026-10-20")
+        assert published_columns.check(nested_tree, [which]) == (0 if compatible else 1)
+        printed = capsys.readouterr().out
+        expected_line = (
+            "history 2026-10-20:" if compatible else f"FAIL F2 ledger={which.value}"
+        )
+        assert expected_line in printed
+        _rewrite_file(nested_file, columns=older_columns, schema_version=model.schema_version())
+        assert published_columns.check(nested_tree, [which]) == 1
+        assert f"column={column_name}" in capsys.readouterr().out
 
 
 def test_f1_current_stamp_with_missing_column_fails_and_prints(
@@ -217,6 +276,35 @@ def test_f2_shared_column_with_changed_type_fails_and_prints(
         "column=attempt file_type=string contract_type=int64; fix: give the contract "
         "a new version, CLAUDE.md section 11, or re-pack the file"
     ) in printed
+    nested_tree = tmp_path / "nested-type-change"
+    row = EditorialSelectionRow.from_json(read_text(
+        CONTRACT_FIXTURES_DIR / "feed-ingest-editorial-selection/one-article.json"
+    ))
+    (nested_file,) = ledger.persist(
+        nested_tree / "state", [row], ledger=LedgerName.FEED_INGEST_PLAN_EDITORIAL_SELECTIONS,
+        covers=row.date, identity=_identity(), fmt=Format.PARQUET,
+    )
+    columns = file_columns(EditorialSelectionRow)
+    ratings = next(column for column in columns if column.name == "ratings")
+    assert isinstance(ratings.type, LogicalType)
+    source = next(field for field in ratings.type.fields if field.name == "source")
+    changed_source = replace(source, type=replace(
+        source.type, fields=tuple(
+            replace(field, type=replace(field.type, scalar="string"))
+            if field.name == "value" else field for field in source.type.fields
+        ),
+    ))
+    changed_ratings = replace(ratings.type, fields=tuple(
+        changed_source if field.name == "source" else field for field in ratings.type.fields
+    ))
+    _rewrite_file(nested_file, columns=tuple(
+        replace(column, type=changed_ratings) if column.name == "ratings" else column
+        for column in columns
+    ), schema_version="2026-10-20")
+    assert published_columns.check(
+        nested_tree, [LedgerName.FEED_INGEST_PLAN_EDITORIAL_SELECTIONS],
+    ) == 1
+    assert "column=ratings" in capsys.readouterr().out
 
 
 def test_f3_newer_file_fails_and_prints(

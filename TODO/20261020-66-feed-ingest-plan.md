@@ -1943,6 +1943,12 @@ Those earlier results do not close these follow-ups or approve production
 planner/worker replacement. CPU collection remains active for the whole task;
 one-second polling is a cadence, never a profiling cutoff.
 
+Owner approval, kumarsnaveen_microsoft, 2026-10-24, compatibility-gate A1:
+U4 includes the historical published-column gate correction in the
+[contract rationale](../docs/architecture/contracts/schemas.md#design-rationale).
+No Python planning/ranking runtime change, local Python run, new test function
+or historical rewrite is authorized.
+
 ### Table U - Expanded delivery phases
 
 | Id | Status | Focused PR phase | Required completion evidence |
@@ -1950,7 +1956,7 @@ one-second polling is a cadence, never a profiling cutoff.
 | U1 | IN-FLIGHT | Resource report, independent whole-machine RAM checkbox and one-second task polling | One focused PR adds actual CPU/PID RAM/optional machine RAM to completion summaries and safe notices, retains copy OFF/ON separately, and binds the default-false workflow input to collection. Recorded checks prove independent controls, identity refusal, truthful partial windows and disabled reporting. Coordinator review, all five CI checks, hosted checkbox-ON verification and bounded OFF proof remain required. |
 | U2 | IN-FLIGHT | PID CPU and task-scoped host-probe HTTP start/stop | Child `5bfd52a3-9cfc-4d56-93b8-e9f4cf2a4365`, branch `task-scoped-host-profiling`, owns independent counter work; final integration depends on U1's config split. Add guarded process CPU without relabelling aggregate host CPU; expose real whole-task collection through the host-probe API with owned lifecycle, cleanup and integration tests. The current HTTP sample route is not this capability. |
 | U3 | IN-FLIGHT | L3 latency and hardware cache hit/miss support | Child `6a57ff1e-bdfc-4248-86f8-cd5b17c8bde2` owns optional counter adapters and controlled cache-latency tools; final routing follows U2. Distinguish latency, cache events and existing copy bandwidth. Prove actual runner capability, keeping denied or unsupported hardware measurements explicitly unavailable. L3 size or copy throughput alone does not close this row. |
-| U4 | IN-FLIGHT | Separate recorded source-reliability penalty | Owner approved this first selection improvement and its default-true switch; Apply source reliability child `6a51cd25-3e27-44d2-b837-4d0af537a117` owns its focused PR. Preserve TypeScript's set-aware MMR selection, meaning selection balances value against similarity, rather than promising identical Python selections. Record the separate reliability penalty and prove its effect with bounded integration cases; no Python runtime change. |
+| U4 | IN-FLIGHT | Separate recorded source-reliability penalty | Owner approved this first selection improvement and its default-true switch; Apply source reliability child `6a51cd25-3e27-44d2-b837-4d0af537a117` owns its focused PR. Preserve TypeScript's set-aware MMR selection, meaning selection balances value against similarity, rather than promising identical Python selections. Record the separate reliability penalty and prove its effect with bounded integration cases; no Python planning/ranking runtime change. The owner-approved historical published-column gate correction and existing-case compatibility checks are included. |
 | U5 | PENDING | Remaining selection improvements from the Python path | Parent reviews day-wide concentration limits and selection bonuses independently, retaining useful TypeScript selection behavior. Each approved change needs its own declared effect and integration evidence; U4 does not approve a source-authority formula or close these decisions. |
 | U6 | OPEN | Phase 2 genuine publication and lead-observer integration/testing | Integrate actual publication and lead observations with the planner's recorded identities and test the complete flow against genuine output. Generated full-audit fixtures prove the observer boundary only; they do not complete this phase or certify live publication. |
 | U7 | PENDING - NOT APPROVED | Production planner and worker cutover | Requires separate owner approval and a staged integration/test plan for real producer and consumer paths. Neither this report PR, the historical DONE rows nor generated audit fixtures authorize cutover or completion of the original plan's broader intent. |

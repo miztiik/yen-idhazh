@@ -36,6 +36,12 @@ The migration and its compatibility checks are owned by
 
 The ledger layer reads a field annotation as a recursive tree: scalar (`string`, `int64`, `float64`, `bool`), list (`list[T]` and `tuple[T, ...]`), or struct (nested Pydantic model). A closed set of unions and wrapped aliases is reduced before the conversion, and unsupported shapes fail with the full nested field path. `backend/idhazh/ledger/arrow_schema.py` is the single entry point; `backend/idhazh/ledger/parquet.py` renders that tree to Arrow; `backend/idhazh/ledger/json_lines.py` stays format-generic and never adds contract-specific branches.
 
+The published-column gate compares current files exactly. For older file
+stamps, its recursive type check permits missing nullable struct fields,
+including structs inside lists. Existing nested field order, types, nullability
+and list element types must still agree; missing required nested fields fail.
+This is a metadata check, not a row migration or a reason to rewrite old files.
+
 ## What the frontend carries
 
 **The machine record has one hand-written frontend type.**
@@ -623,6 +629,13 @@ selection, assessment, dispatch and event contracts for the
 [separate reliability penalty](../sources/feed-curation.md#design-rationale).
 Python changes remain declarations, migrations and compatibility bindings;
 the production Python ranking implementation is unchanged.
+
+Owner approval, kumarsnaveen_microsoft, 2026-10-24, compatibility-gate A1:
+extend the published-column validator and existing cases for nullable nested
+additions in older schemas. This narrowly extends the declaration-only Python
+scope to the compatibility gate. Current-schema and existing-type checks stay
+strict; no production planner change, local Python run or historical rewrite
+is authorized.
 
 Owner ruling, kumarsnaveen, 2026-10-22: remove the Python planner event model
 and its comparison checks because no Python production reader consumes it.
