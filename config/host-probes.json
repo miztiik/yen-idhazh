@@ -4,7 +4,7 @@
     "enabled": false,
     "memory_enabled": false,
     "cpu_window_ms": 1000,
-    "poll_interval_ms": 100,
+    "poll_interval_ms": 1000,
     "max_retained_samples": 128,
     "lifecycle_timeout_ms": 10000,
     "max_profile_handles": 16,

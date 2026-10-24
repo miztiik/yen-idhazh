@@ -21,7 +21,8 @@ Unknown fields fail. No command accepts a path, executable, URL, proc root,
 configuration override or process name to search. Task names, identity and
 PID pins must come from the operator, never fetched article text.
 Linux writes process identity and counters to `/proc/<pid>/stat`.
-The operator supplies both the requested PID and its kernel start ticks.
+The operator supplies both the requested PID and its kernel start ticks,
+the process start-time counter in that file.
 The start ticks distinguish a reused PID from the original process.
 
 `GET /api/2026-10-20/sample` remains the independent single-interval machine
@@ -59,8 +60,8 @@ Success returns HTTP 200 with `status: "started"`, that `handle`,
 the verified `target` and `expires_at`, a UTC instant.
 The caller starts its actual work only after this response.
 
-PID and start ticks are checked before collector startup and again in the
-collector's opening observation. A stale or unverifiable pin returns 409.
+The target PID and start ticks are checked before collector startup and again
+in the collector's opening observation. A stale or unverifiable pin returns 409.
 A caller that aborts startup receives no usable handle; the collector is
 closed before startup cleanup returns. Failed startup releases its reserved
 capacity.
@@ -80,7 +81,7 @@ capacity.
 still alive to obtain its closing CPU counters. The reply has HTTP 200,
 `status: "stopped"`, the `handle`, `end_reason` and validated `profile`.
 Concurrent and repeated stops return the same result while retained;
-the first stop owns the outcome.
+the first closing event owns the result.
 
 Normal HTTP stop uses `end_reason: "explicit_stop"`. A target exit or PID
 reuse closes the profile as `cancelled`, with `owner_exited` or `pid_reused`.
@@ -97,7 +98,7 @@ stderr; none of these makes it durable request authority.
 ## Bounds and failures
 
 `config/host-probes.json` owns these controls. The task instrument remains
-default-off; its process-RAM and machine-RAM controls are separate.
+default-off; RAM follows the [measurement controls](host-metrics.md#whole-task-typescript-samples).
 Neither CPU windows nor polling intervals limit task lifetime.
 
 Table A - task HTTP bounds

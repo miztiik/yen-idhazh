@@ -269,7 +269,7 @@ are errors, not successful measurements.
 `task_profile.enabled` and `task_profile.memory_enabled` default to false.
 Their declaring schema states their retirement conditions. Whole off starts no
 thread and reads no host or process file; memory off reads CPU only.
-`cpu_window_ms` defaults to 1000 milliseconds and `poll_interval_ms` to 100
+`cpu_window_ms` defaults to 1000 milliseconds and `poll_interval_ms` to 1000
 milliseconds. Neither ends the task measurement. The former sets the rolling
 CPU window; the latter requests the polling cadence. Actual intervals can be
 longer when collection or scheduling is slow.
@@ -279,25 +279,60 @@ bounded. Whole-task counts, extrema and endpoint differences survive eviction.
 `lifecycle_timeout_ms` defaults to 10000 milliseconds for starting or stopping
 the collector, not for limiting task duration.
 
-CPU remains host-wide, including other work on the machine. Whole-task shares
-use opening and closing counters. Each rolling sample reports its actual
+Host CPU remains machine-wide, including other work on the machine.
+Whole-task shares use opening and closing counters. Each rolling sample reports its actual
 interval and whether it spans the configured window; a short task can have no
 full window, or no elapsed CPU ticks. Busy extrema mean user plus system
 percentages across measured rolling windows. No wait is added to a task to
 manufacture a reading. Observation instants use the real UTC clock and elapsed
 time uses a monotonic clock, independent of a caller's frozen planning clock.
 
+Process CPU is separate. It measures the added user and kernel CPU time between
+two reads of the same PID and kernel start-time counter. Child-process CPU is
+excluded; Linux guest time is not added twice. Counters stay integers until
+subtraction, including values larger than JavaScript's exact number range.
+Each process uses its own actual monotonic observation interval, not the
+requested polling interval or the machine's observation time.
+
+`processes.worker.cpu` and `processes.server.cpu` report the whole-task
+`cpu_time_ms` and `percent_one_core`, with `cpu_interval_ms` beside them.
+Sampled process `cpu_window` values use the same units over rolling windows.
+One fully used core is 100 percent; a multi-threaded PID can exceed 100 percent.
+Zero added ticks over a positive interval is a real zero, not unavailable.
+Clock ticks are Linux CPU-accounting units. The fixed command
+`/usr/bin/getconf CLK_TCK` resolves their rate lazily once per enabled Bun
+process, with bounded output and the configured lifecycle deadline. This costs
+one Linux system-tool invocation and no npm or Python dependency. The returned
+`process_clock_ticks_per_second` records that verified rate or an unavailable
+reason; the collector never assumes a rate when it cannot read one.
+Very short intervals inherit the counter's clock-tick resolution.
+
+PID CPU collection does not depend on RAM enablement. A missing process status
+file makes its RAM unknown without discarding valid CPU counters from its stat
+file. A counter reset or PID reuse remains unavailable in the whole-task CPU
+result even after its raw sample leaves bounded history. The collector never
+rebinds a reused PID. Machine idle time is shared unused time, not guaranteed
+task growth capacity: these one-core process percentages do not claim a share
+of a verified target affinity or CPU quota.
+
 With memory enabled, machine total, free and available RAM use the existing
 probe. The result also contains sampled minimum available RAM and the endpoint
-difference in machine major page faults. Process RAM names the actual calling
-PID. An optional additional server requires an operator-supplied PID and its
-kernel start ticks; there is no process search. Start ticks are checked before
+difference in machine major page faults. By default, the in-process wrapper
+names the calling PID. An optional additional server requires an
+operator-supplied PID and its kernel start ticks; there is no process search.
+Start ticks are checked before
 and after each status read. Exit, PID reuse and missing fields have explicit
 reasons and null values. RSS is resident RAM; anonymous RSS is resident
 anonymous memory. `hwm_lifetime` is Linux's process-lifetime high-water mark,
 not a task peak. `sampled_rss_max_kb` is only the largest observed RSS, not an
-exact peak. Process readings include all its threads, collector overhead and
+exact peak. Process readings include all its threads and
 other work in that process; they are not task-exclusive allocations.
+An in-process caller also includes its collector-thread overhead.
+
+The [generic task HTTP commands](host-probe-api.md) reuse this collector for
+an explicitly pinned external target. In those results, `processes.worker`
+names the supplied target, not the probe service. The ordinary TypeScript
+wrapper still defaults to the actual calling PID.
 
 Profiles are locally validated transient metadata, separate from hardware
 rows and request journals. They retain pipeline, task, run, correlation and

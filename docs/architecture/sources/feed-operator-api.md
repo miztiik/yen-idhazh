@@ -1,6 +1,6 @@
 # Fetch and parse operator requests
 
-**Last Updated**: 2026-10-23
+**Last Updated**: 2026-10-24
 
 How do separate HTTP requests fetch and parse the same article without
 duplicating completed work? These are local build-time APIs, not site services.
@@ -136,6 +136,11 @@ request. No ranking, selection, article text or source-status rule changes.
 Unexpected collection or callback errors fail explicitly and do not commit a
 successful response. As with any interrupted fetch, retry can repeat unfinished
 external work.
+
+The separate [host-probe task commands](../../reference/host-probe-api.md)
+can profile other operator tasks by an explicitly pinned PID. They belong to
+the host-probe listener, not these fetch/parse routes, and do not change their
+durable replay rules.
 
 ## Design rationale
 

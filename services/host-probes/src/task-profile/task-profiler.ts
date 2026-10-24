@@ -39,6 +39,8 @@ export async function startTaskProfile(
     server: options.server ?? null, context: options.context ?? {},
   });
   const worker = new Worker(new URL("./collector.worker.ts", import.meta.url), { workerData: input });
+  let terminating: ReturnType<Worker["terminate"]> | undefined;
+  const terminate = () => terminating ??= worker.terminate();
   type Ready = Pick<TaskProfileSession, "target" | "expires_at">;
   let ready: (value: Ready) => void;
   let failedStart: (error: Error) => void;
@@ -54,7 +56,7 @@ export async function startTaskProfile(
   worker.on("message", (raw: unknown) => {
     const message = CollectorMessageSchema.safeParse(raw);
     if (!message.success) { fail(new Error("Task collector returned invalid metadata")); return; }
-    if (message.data.type === "ready") ready(message.data);
+    if (message.data.type === "ready") ready({ target: message.data.target, expires_at: message.data.expires_at });
     else if (message.data.type === "rejected") fail(new ProcessPinError(message.data.reason));
     else { received = true; finish({ profile: message.data.profile }); }
   });
@@ -68,7 +70,7 @@ export async function startTaskProfile(
   if (controls.signal?.aborted) abort();
   let details: Ready;
   try { details = await started; }
-  catch (error) { await worker.terminate(); throw error; }
+  catch (error) { await terminate(); throw error; }
   finally { clearTimeout(timeout); controls.signal?.removeEventListener("abort", abort); }
   const settled = (async (): Promise<TaskProfileResult> => {
     let result = await finished;
@@ -76,7 +78,7 @@ export async function startTaskProfile(
       try { await options.report(result.profile); }
       catch (error) { result = { error: new Error("Task profile reporting failed", { cause: error }) }; }
     }
-    try { await worker.terminate(); }
+    try { await terminate(); }
     catch (error) {
       result = { error: new AggregateError("error" in result ? [result.error, error] : [error], "Task collector cleanup failed") };
     }
@@ -96,6 +98,7 @@ export async function startTaskProfile(
           return result.profile;
         } finally {
           clearTimeout(timeout);
+          await terminate();
         }
       })();
       return closing;

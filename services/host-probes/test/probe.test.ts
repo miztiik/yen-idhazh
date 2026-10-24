@@ -17,7 +17,7 @@ import type { TaskProfile } from "../src/task-profile/profile-schema";
 import { readProcessMemory } from "../src/task-profile/process-memory";
 import { parseProcessStat, readProcessIdentity } from "../src/task-profile/process-stat";
 import { calculateProcessCpu } from "../src/task-profile/process-cpu";
-import { parseClockTicks } from "../src/task-profile/clock-ticks";
+import { parseClockTicks, resolveClockTicks } from "../src/task-profile/clock-ticks";
 import { TaskCollector } from "../src/task-profile/task-collector";
 import { CollectorInputSchema } from "../src/task-profile/profile-schema";
 import { StartTaskProfileResponseSchema, StopTaskProfileResponseSchema } from "../src/api/task-command-schema";
@@ -90,9 +90,10 @@ test("recorded Linux CPU interval and memory satisfy the Row 5 oracle", async ()
   expect(malformed.value?.cpu.reason).toBe("invalid_data");
   expect(malformed.value?.major_faults.value).toBe(7);
   for (const interval of recorded.cpu_intervals) {
+    const intervalOpening = parseProcessStat(recorded.pid, interval.opening_stat ?? recorded.stat);
     const closing = parseProcessStat(recorded.pid, interval.closing_stat);
-    if (closing.reason !== null) throw new Error(`Invalid recorded process interval: ${interval.name}`);
-    expect(calculateProcessCpu(opening.value.cpu, closing.value.cpu, interval.elapsed_ms, clock)).toEqual({
+    if (intervalOpening.reason !== null || closing.reason !== null) throw new Error(`Invalid recorded process interval: ${interval.name}`);
+    expect(calculateProcessCpu(intervalOpening.value.cpu, closing.value.cpu, interval.elapsed_ms, clock)).toEqual({
       value: { cpu_time_ms: interval.cpu_time_ms, percent_one_core: interval.percent_one_core }, reason: null,
     });
   }
@@ -126,6 +127,8 @@ test("missing, malformed, reset and unchanged counters do not invent utilization
     value: { cpu_time_ms: 4, percent_one_core: 200 }, reason: null,
   });
   expect(calculateProcessCpu(end, start, 1000, clock).reason).toBe("counter_reset");
+  expect(calculateProcessCpu({ value: { user: 10n, system: 1n }, reason: null },
+    { value: { user: 9n, system: 3n }, reason: null }, 1000, clock).reason).toBe("counter_reset");
   expect(calculateProcessCpu(start, start, 0, clock).reason).toBe("no_interval");
   expect(calculateProcessCpu(start, start, 1000, clock).value?.percent_one_core).toBe(0);
   expect(calculateProcessCpu(start, end, 1000, { value: null, reason: "clock_ticks_unavailable" }).reason)
@@ -308,6 +311,12 @@ test("the real HTTP handler uses the sampler without external network", async ()
   expect((await disabled(new Request(`http://localhost${START_TASK_PROFILE_PATH}`))).status).toBe(405);
   expect((await disabled(new Request(`http://localhost${START_TASK_PROFILE_PATH}`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: "{",
+  }))).status).toBe(400);
+  expect((await disabled(new Request(`http://localhost${START_TASK_PROFILE_PATH}`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: new Uint8Array([0xff]),
+  }))).status).toBe(400);
+  expect((await disabled(new Request(`http://localhost${START_TASK_PROFILE_PATH}`, {
+    method: "POST", body: JSON.stringify(input),
   }))).status).toBe(400);
   for (const declared of [false, true]) {
     const body = "x".repeat(config.max_request_body_bytes + 1);
@@ -514,10 +523,13 @@ test("missing and oversized proc files are explicit while valid siblings survive
 
 test("configuration rejects unknown fields, missing fields and invalid controls by name", async () => {
   expect(ProbeConfigSchema.safeParse({}).success).toBe(false);
-  const config = { ...(await loadConfig()), sample_interval_ms: 1, listen_host: "127.0.0.1", listen_port: 3005, max_proc_bytes: 1024 };
+  const config = { ...(await loadConfig()), sample_interval_ms: 1, listen_port: 3005, max_proc_bytes: 1024 };
   expect(ProbeConfigSchema.safeParse(config).success).toBe(true);
   expect(config.task_profile.enabled).toBe(false);
   expect(config.task_profile.memory_enabled).toBe(false);
+  expect(await resolveClockTicks(config)).toEqual({ value: null, reason: "configured_off" });
+  expect(config.task_profile.cpu_window_ms).toBe(1000);
+  expect(config.task_profile.poll_interval_ms).toBe(1000);
   for (const [field, value] of [
     ["cpu_window_ms", 0], ["poll_interval_ms", 0], ["max_retained_samples", 1], ["lifecycle_timeout_ms", 0],
     ["max_profile_handles", 0], ["profile_handle_ttl_ms", 0], ["profile_handle_ttl_ms", 2 ** 31],

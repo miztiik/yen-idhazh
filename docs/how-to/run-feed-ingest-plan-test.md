@@ -270,18 +270,33 @@ work. Its `recorded_parse_profile` log is recorded-work evidence, not a live
 network measurement. The workflow runs these existing named cases on Linux;
 Windows results do not certify Linux process RAM.
 
+The same resource proof also starts a separate real Bun process for a
+controlled CPU task. The named fixture touches 32 MiB of RAM and hashes that
+buffer for at least 3.2 seconds of elapsed work. These are controlled-work
+inputs, not a delay added to live fetch or parse. Actual CPU milliseconds
+are measured separately and need not equal elapsed time.
+
+The proof pins that child's PID and start ticks, then uses the real
+host-probe start/stop HTTP commands. It requires multiple one-second polls,
+positive CPU time for the requested external PID, matching process identities,
+process and machine RAM, and actual monotonic intervals. Stop takes the closing
+observation while the child is still alive; only then does the fixture owner
+close its child. `resource-proof.json` retains this as `task_profile` with
+scope `controlled_cpu_task`. It does not stand in for fast live document work.
+
 After all document profiles close, the separate resource step starts the real
 RAM sample HTTP listener and calls its sample route over loopback. It requires
-actual CPU and machine total, free and available RAM readings. It then calls
-the existing host collector with copy unselected and explicitly selected for
+actual CPU and machine total, free and available RAM readings. After the
+controlled task closes, it calls the existing host collector with copy
+unselected and explicitly selected for
 `isolated-copy-proof`. The test records the real hardware context, L3 size if
 available, derived buffer size, repeat count and median read-plus-write rate.
 It allocates two buffers and measures memory-copy throughput, not L3 hit/miss
-counts. Copy work never overlaps fetch/parse CPU measurement.
+counts. Copy work never overlaps fetch/parse or controlled-task CPU measurement.
 
 `resource-proof.json` contains only validated safe metadata in the existing
 temporary evidence root. Completion requires `resource_proof_complete: true`.
-Main CI also runs this same RAM HTTP/copy proof without fetching live feeds
+Main CI also runs this same task CPU/RAM HTTP and copy proof without fetching live feeds
 or publishing data, and retains the `typescript-resource-proof` artifact.
 Its artifact uses the existing ignored
 `test-results/host-probes/resource-proof.json` test-report path; the isolated

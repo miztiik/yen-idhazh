@@ -14,7 +14,7 @@ import { readPinnedProcess, readProcessIdentity } from "../../services/host-prob
 const MILLISECONDS_PER_SECOND = 1000;
 const BYTES_PER_LINUX_KB = 1024;
 const ControlsSchema = z.strictObject({
-  cpu_work_ms: z.number().finite().positive(), buffer_bytes: z.int().positive(),
+  minimum_elapsed_work_ms: z.number().finite().positive(), buffer_bytes: z.int().positive(),
   minimum_periodic_samples: z.int().positive(),
 });
 const WorkResultSchema = z.strictObject({
@@ -85,14 +85,20 @@ export async function verifyTaskProfileHttp(identity: { run_id: string; correlat
     }
     const target = pin(child.pid);
     const serverPin = pin(process.pid);
-    const response = await post(START_TASK_PROFILE_PATH, {
+    const input = {
       identity: { pipeline_name: "host-probes", task_name: "controlled-cpu-task", run_id: identity.run_id,
         correlation_id: identity.correlation_id, request_id: randomUUID() },
       target, server: serverPin,
-    });
-    if (response.status !== 200) throw new Error("Actual task profile HTTP start failed");
+    };
+    const refused = await post(START_TASK_PROFILE_PATH, { ...input, padding: "x".repeat(config.max_request_body_bytes) });
+    if (refused.status !== 413) throw new Error("Actual task HTTP ingress did not enforce max_request_body_bytes");
+    await refused.body?.cancel();
+    const response = await post(START_TASK_PROFILE_PATH, input);
+    if (response.status !== 200 || response.headers.get("cache-control") !== "no-store") {
+      throw new Error("Actual task profile HTTP start failed");
+    }
     const started = StartTaskProfileResponseSchema.parse(await response.json());
-    if (started.status !== "started" || JSON.stringify(started.target) !== JSON.stringify(target)) {
+    if (started.status !== "started" || started.target.pid !== target.pid || started.target.start_ticks !== target.start_ticks) {
       throw new Error("HTTP start did not return the requested process identity");
     }
     child.send({ command: "work" });
@@ -100,7 +106,9 @@ export async function verifyTaskProfileHttp(identity: { run_id: string; correlat
     if ("error" in worked) throw worked.error;
     const work = WorkResultSchema.parse(worked.message);
     const stoppedResponse = await post(STOP_TASK_PROFILE_PATH, { handle: started.handle, outcome: "success" });
-    if (stoppedResponse.status !== 200) throw new Error("Actual task profile HTTP stop failed");
+    if (stoppedResponse.status !== 200 || stoppedResponse.headers.get("cache-control") !== "no-store") {
+      throw new Error("Actual task profile HTTP stop failed");
+    }
     const stopped = StopTaskProfileResponseSchema.parse(await stoppedResponse.json());
     if (stopped.status !== "stopped") throw new Error("Enabled task CPU proof did not return its profile");
     const profile = stopped.profile;
@@ -114,7 +122,7 @@ export async function verifyTaskProfileHttp(identity: { run_id: string; correlat
       || clock.reason !== null || clock.value <= 0
       || worker.cpu.reason !== null || worker.cpu.value.cpu_time_ms <= 0 || worker.cpu.value.percent_one_core <= 0
       || worker.cpu_interval_ms < work.elapsed_ms || profile.elapsed_ms < work.elapsed_ms
-      || work.elapsed_ms < controls.cpu_work_ms || work.allocated_bytes !== controls.buffer_bytes
+      || work.elapsed_ms < controls.minimum_elapsed_work_ms || work.allocated_bytes !== controls.buffer_bytes
       || profile.periodic_sample_count < controls.minimum_periodic_samples
       || !profile.samples.some(sample => sample.phase === "poll" && sample.processes.worker.cpu_window.full_window
         && sample.processes.worker.cpu_window.cpu.value !== null
@@ -138,6 +146,7 @@ export async function verifyTaskProfileHttp(identity: { run_id: string; correlat
     finally {
       if (child !== undefined) {
         const ownedChild = child;
+        // Only this fixture's owner can end its child; the profiling API never signals the target.
         const cleanup = setTimeout(() => ownedChild.kill(), config.task_profile.lifecycle_timeout_ms);
         try {
           if (ownedChild.exitCode === null) ownedChild.send({ command: "close" });
