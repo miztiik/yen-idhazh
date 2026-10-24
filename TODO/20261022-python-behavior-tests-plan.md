@@ -1479,22 +1479,28 @@ counts use the untouched archive and the completed branch instead.
   `43218ab4d92db65e963eb590f5f72dafc1cc2d7c` for `test_plan_status.py`;
   resulting object IDs are `2312aab2e7fc587c7dd9a3be9ccf21bdb0e994de` and
   `9be52e6a5d199d3f3451cea4017512d615505eb5`, respectively.
-- **Evidence at plan freeze:** Source commit
-  `7950bf6825560734a28d0dcd1d57a7634a378ac2` is pushed to
-  `origin/prove-ledger-date-selection`; the source files are frozen and
-  `test_ledger.py` ownership is released. The shared selector selected only
-  the two changed backend test modules. The selected gate and disposable
-  production-fault proofs remain pending; no full-suite rerun is claimed.
-  Fault runs must fail at their named assertions, controls must pass before
-  and after, and restored source hashes must match.
-- **Plan integration:** Verified and imported the exact full Row 20
-  predecessor, 105,112 bytes, SHA-256
-  `1e46a3c54a6b5ae3911f153185e4fe186f8127ae8bec9bcfd5e479ef061be686`.
-  Added only D21 and this section. All earlier rows, A5, D3 and Row 18's
-  pending Row 22 dependency remain unchanged. This complete successor releases
-  the serialized editor to Row 22 independently of gates and CI.
-- **Delivery:** Open one phase PR after the plan and evidence are integrated.
-  The worker does not merge it.
+- **Verification:** The shared selector record
+  `backend/var/checks/44fa0b73b9c905debcf25aa8af6aa523cb6e9f7dbbedd04961092167d15a0131.json`
+  records whitespace, Ruff, mypy and all 91 selected tests passing. Its source
+  modules match the unchanged Row 21 commit blobs
+  `2312aab2e7fc587c7dd9a3be9ccf21bdb0e994de` and
+  `9be52e6a5d199d3f3451cea4017512d615505eb5`; therefore this evidence is
+  reused for Row 21 without a repeat solely for main integration. Seven
+  disposable production faults failed at their intended assertions, five
+  controls passed before and after, and restored source hashes were verified.
+  No full-suite run is claimed.
+- **Plan integration:** Merged current `origin/main`
+  `e7f46b2317852ea5d3f212f83ea86ac51edc05ed` normally. Preserved the current
+  Row 11 section and verified receipts for Rows 11, 12, 14, 15, 16 and 19,
+  along with all other phase sections, A5 and D3. The two Row 21 test-module
+  blobs remain unchanged. The frozen historical Row 21 successor remains
+  108,564 bytes with SHA-256
+  `85bb171daf2a4e00cd4689817825e295d10ddd6a0638381698f1299d682cbca3`.
+- **Delivery:** [#1675](https://github.com/miztiik/yen-idhazh/pull/1675) is
+  open for review and has not been merged. Source commit
+  `7950bf6825560734a28d0dcd1d57a7634a378ac2` remains unchanged; the current
+  integration is subject to exact-head CI. `test_ledger.py` ownership remains
+  released.
 - **Dependencies:** Row 1.
 
 ## 23 - Row #22 - Configured council planning and collection job deadlines
