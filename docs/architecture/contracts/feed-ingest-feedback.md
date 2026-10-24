@@ -9,9 +9,9 @@ The user approved separate hardware and request measures, automatic score use
 after evidence qualifies, replacement of RSS reliability in the isolated
 TypeScript planner, the configurable provisional score settings below,
 requests-first eligibility, and counting only supported source-side failures
-as waste. The rolling closed-UTC-day window is configurable with a seven-day
-default. Other field additions and unsettled D3-D5/D8 choices remain
-proposals.
+as waste. D3/D4 approvals recorded below define the initial observations and
+summary settlement. The rolling closed-UTC-day window is configurable with a
+seven-day default. D5 activation thresholds remain unapproved.
 
 ## Scope
 
@@ -45,22 +45,29 @@ process RSS in other ledgers are not article costs. The existing feed
 `parse_status` describes RSS entry parsing; `success` with `parsed_count > 0`
 does not prove article material was extracted. Keep those cases distinct.
 
-Add `attribution` and nullable `failure_code` to each `FeedIngestEvent`
-operation record. The planner-only event stream remains its TypeScript-owned
-contract. Use the existing request-attempt and observation records for request
-counts; do not persist a duplicate counter on the event.
+Propose recording `attribution` and nullable `failure_code` on existing
+operation records. Their source/pipeline/unresolved meaning and supported
+failure causes are approved; the exact field shape is not. The planner-only
+event stream remains its TypeScript-owned contract. Use the existing
+request-attempt and observation records for request counts; do not persist a
+duplicate counter on the event.
 
-### Table A - Proposed observation fields
+### Table A - Observation field decisions
 
-| Id | Field or measure | Proposed type and bound | Source and rule |
+| Id | Field or measure | Type or status | Source and rule |
 | --- | --- | --- | --- |
 | A1 | `publisher_id` | Nonempty configured ID or null | Record configured ID after Row 3. Keep unknown null; never backfill history. |
-| A2 | `attribution` | `source`, `pipeline` or `unresolved` | Required per operation. A status code alone does not prove source attribution. |
-| A3 | `failure_code` | Nullable declared code | Preserve cause; unknown codes map to `unresolved`. |
-| A4 | `cpu_ms` | Nullable integer, `>= 0` | Eligible only when CPU belongs exclusively to this operation. Overlapping process deltas are not attributable. |
+| A2 | `attribution` | Proposed `source`, `pipeline` or `unresolved` value | Preserve the owner-approved distinction; a status code alone does not prove source attribution. |
+| A3 | `failure_code` | Proposed nullable declared code | Preserve supported technical cause; unknown cause remains unresolved. |
+| A4 | `cpu_ms` | Nullable integer, `>= 0` | Proposal only. Eligible only when CPU belongs exclusively to this operation. Overlapping process deltas are not attributable. |
 | A5 | Task-profile process CPU | Existing pinned-process delta; diagnostic only | Not additive across overlapping operations and never eligible for source waste. |
 | A6 | `private_memory` | Unavailable for source scoring until attribution is proved | RSS and sampled maximum are diagnostic; they include retained/shared memory and cannot identify its source. |
-| A7 | `http_request_count` | Nullable integer, `>= 0` | Count complete article-target attempts, including retries and redirects once. Exclude validation/API calls; unknown if coverage is incomplete. |
+| A7 | `http_request_count` | Nullable integer, `>= 0` | Owner-approved actual article-target attempts, including retries and redirects once. Exclude validation/API calls; unknown if coverage is incomplete. |
+
+**Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC:** Extend existing
+records with actual article-request totals, technical extraction outcomes and
+supported failure causes. Save per-source summaries with evidence dates,
+coverage and policy version. Do not invent CPU or memory costs.
 
 For requests, `FetchAttemptSchema` already records one row per producer
 execution, including retries and manually followed redirects. Its `phase`
@@ -93,26 +100,19 @@ do not. Do not add a second word-count test or semantic judgment.
 `FeedOutcomePayload.parse_status` only describes RSS entry parsing and is not
 an article extraction result.
 
-Extend the existing `SourceRunRecord` row in TypeScript and Pydantic, and its
-`source-run-summary.ts` writer, rather than adding a parallel rollup. It is
-already one source/run row. Add nullable confirmed `publisher_id`, attempted
-and measured distinct article-opportunity counts as integers `>= 0`, and for
-article-linked target requests, nullable integer `total` and `wasted` amounts
-`>= 0`. When both amounts are known, require `wasted <= total`. The CPU and
-private-memory components stay unavailable until attribution is proved; do
-not convert process readings into source costs. Keep feed-poll and robots
-costs in separate source-operation records; do not divide them among article
-opportunities. Keep separate pipeline and unresolved costs in their existing
-event or operation records at the actual scope; do not copy them to the source
-row. Derive coverage as
-`measured_opportunities / attempted_opportunities`; when its denominator is
-zero, keep coverage unknown. Only source-attributed, failed operation costs
-enter a source's `wasted` amount. A successful operation, a pipeline failure,
-an unresolved cause or a feed poll with no new entries is not source waste.
-The Pydantic `SourceRunRecord` remains the authority for that persisted row;
-the TypeScript copy and its binding checks must change with it.
-Stamp the changed row contract and migrate old rows to null for new evidence;
-do not restamp old rows as if their missing measurements were zero.
+Extend the existing source/run and operation records and their writers; do not
+add a parallel rollup. Record actual article-target request totals and
+technical extraction outcomes. Keep source, pipeline and unresolved causes
+distinct; only supported source-side failure can count as waste. Per-source
+summary coverage is measured opportunities divided by attempted opportunities;
+zero denominator means unknown. CPU and private-memory costs remain
+unavailable until attributable. Feed-poll and robots costs stay at their
+actual operation scope, not copied onto articles.
+
+The table's correction identity, publisher mapping, full component schema and
+detailed per-operation bindings remain proposals unless specified by the
+owner ruling. Persisted shape and migration details must be settled before
+their writer changes.
 
 ## Proposed score
 
@@ -207,18 +207,25 @@ from exactly one source. Do not append raw re-run files to compact rows when
 the index already names that date; this avoids counting the same observations
 twice.
 
-### Table B - Proposed snapshot fields
+### Table B - Summary field decisions
 
-| Id | Field | Proposed type and bound |
+| Id | Field | Type or status |
 | --- | --- | --- |
 | B1 | `state_revision` | Positive integer, advanced per committed snapshot |
 | B2 | `parent_revision` | Nullable positive integer naming the snapshot read |
 | B3 | `written_at_utc`, `evidence_cutoff_utc` | UTC instants |
 | B4 | `window_days` | Positive integer copied from configured setting |
 | B5 | `window_start`, `window_end` | UTC dates; the closed days selected by `window_days` |
-| B6 | `code_revision`, `policy_digest` | Writer revision and settings digest |
-| B7 | `sources` | Rows keyed by nonempty `source_id`, with components and restriction fields |
+| B6 | `code_revision`, `policy_version` | Writer revision and policy version used |
+| B7 | `sources` | Per-source rows keyed by nonempty `source_id`, with evidence dates, component counts/coverage and any separately approved restriction fields |
 | B8 | Per-source `next_poll_at_utc`, `next_probe_at_utc` | Nullable UTC instants |
+
+**Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC:** Preserve immutable
+per-run observations. If another run saves first, recalculate only the summary
+from the newer records. A failed save leaves the old summary intact and
+reports failure. An already-running selection keeps the summary revision it
+read. Report corrections outside the configured evidence window, but do not
+use them in that window's score.
 
 Each source row has `publisher_id: string|null` and `cpu`, `private_memory`
 and `http_requests` component records. Each component has
@@ -229,10 +236,11 @@ and `http_requests` component records. Each component has
 nonzero, `wasted <= total`, support is at least 20 and coverage is at least
 0.8.
 
-The restriction record has `status: normal|restricted|probe_due|trial`,
+The proposed D5 restriction record has `status: normal|restricted|probe_due|trial`,
 `scope: article|endpoint|feed|null`, a nullable stable `scope_key`, nullable
 closed `reason_code`, and nullable UTC `restricted_since_utc` and
-`next_probe_at_utc`. Scope keys come from configured source or candidate
+`next_probe_at_utc`. These fields do not approve activation of any D5
+restriction policy. Scope keys come from configured source or candidate
 identity, not fetched text or arbitrary URLs.
 
 Keep the feedback snapshot separate from the curated source catalog: it may
@@ -248,49 +256,42 @@ The checkpoint is `state_revision`, `evidence_cutoff_utc`,
 configured named UTC days and select the latest compatible snapshot through
 the registered index, not a repository walk.
 
-Settle by `event_id`; an identical replay adds no amount or support. A
-correction names the event it replaces and does not create another article
-opportunity. Recompute the active configured window from named ledger periods,
-then publish the derived snapshot. The proposed late-event bound is that same
-configured window; an older correction is reported as late and does not
-rewrite expired score evidence. It never clears a restriction.
+Recompute the active configured window from named ledger periods, then publish
+the derived summary. Report corrections outside the configured window; do not
+use them in that window's score. The event replay and correction identity
+details remain proposals. An older correction does not rewrite expired score
+evidence or clear a restriction.
 
-**Concurrency and failure handling remain a proposal, not an approved
-mechanism.** Do not serialize fetch, parse, planning or selection, and do not
-add selection idempotency. Keep each run's observation files immutable and
-uniquely named; regenerate the replaceable feedback snapshot from the latest
-committed state and registered ledger inputs.
+Do not serialize fetch, parse, planning or selection, and do not add
+selection idempotency. Keep each run's observation files immutable and
+uniquely named; regenerate only the replaceable feedback summary from the
+latest committed summary and registered ledger inputs.
 
-The shared publisher's existing recovery pattern
-([committing completed output](../publishing/committing.md)) handles a commit
-race by preparing derived output again from named inputs on a fresh `main`,
-while retaining completed immutable observations. Reuse that pattern, not a
-global lock or a custom Git retry loop. The conflict is narrow: two runs may
-read revision R and both compute the next snapshot. Once one lands, Git rejects
-the other's stale candidate. Rebuilding on the new tip incorporates the first
-snapshot and both runs' immutable observations; replaying the stale snapshot
-would instead overwrite a newer restriction. This race does not justify
-holding fetch, parse or selection.
+Use the shared publisher's existing recovery pattern
+([committing completed output](../publishing/committing.md)): prepare derived
+output again from named inputs on a fresh `main`, while retaining completed
+immutable observations. Reuse that pattern, not a global lock or a custom Git
+retry loop. The conflict is narrow: two runs may
+read revision R and both compute a summary. Once one lands, Git rejects the
+other's stale candidate. Rebuilding on the new tip incorporates newer records;
+replaying the stale summary could overwrite newer state. This race does not
+justify holding fetch, parse or selection.
 
 This is not a direct call to the shared publisher here: the TypeScript planner
 publisher currently retries the same immutable files but cannot rebuild
 derived state, and the shared Python publisher cannot be invoked as a local
-Python step in this isolated TypeScript flow. The proposed route is a narrow
-prepare callback at the existing TypeScript publication boundary. On a stale
-base, it would use the existing bounded push-retry policy to rebuild the
-snapshot from the fresh committed snapshot and named raw/compact inputs, while
-preserving the run's immutable observation files. This costs a scoped adapter
-change and its concurrency tests; the actual production caller is not yet
-identified, so its declaration and ownership must be settled before
-implementation. Invoking the Python publisher instead would add a Python
-execution surface and reopen the approved TypeScript-only boundary; that is
-not the recommended route. A stale snapshot must never be replayed over a
-newer restriction.
+Python step in this isolated TypeScript flow. The proposed implementation is
+a narrow prepare callback at the existing TypeScript publication boundary.
+On a stale base, it would use the existing bounded push-retry policy to
+rebuild only the summary from the fresh committed summary and named raw/compact
+inputs, while preserving immutable observations. This costs a scoped adapter
+change and concurrency tests; the production caller and exact summary shape
+remain to be named before implementation. A stale summary must never be
+replayed over newer state.
 
 Settlement does not queue or hold other runs. If publication is refused or
-retries are exhausted, leave the previously committed snapshot and
-restrictions unchanged, retain the run artifacts, report settlement as
-failed/unsettled, do not advance `state_revision`, and do not stop the entire
+retries are exhausted, leave the previously committed summary unchanged,
+retain the run artifacts, report the save failure and do not stop the entire
 planner run. Missing or unreadable state is not empty history and must not
 clear known restrictions.
 
@@ -391,24 +392,26 @@ second penalty or an inverse-yield term. If evidence is not qualified, record
 `operational_penalty = null` and apply zero score change. Do not fall back to
 RSS reliability. Preserve RSS observations as historical evidence only.
 
-The saved score needs one typed `source_operational` evidence object:
+The saved score needs one typed `source_operational` evidence object. The
+approved trace is limited to the summary status, revision and evidence window,
+plus the request counts and coverage that support the score. Do not add
+restriction scope or other policy fields to this score trace.
 
 ### Table D - Proposed saved-score evidence
 
 | Id | Field | Proposed type and bound |
 | --- | --- | --- |
-| D1 | `status` | `qualified`, `insufficient_support`, `missing_state` or `incompatible_state` |
+| D1 | `status` | `qualified`, `insufficient_support` or `unavailable` |
 | D2 | `summary_status` | `current`, `stale_fallback` or `unavailable` |
 | D3 | `state_revision` | Nullable positive integer from the summary actually used |
-| D4 | `policy_digest` | Nullable SHA-256 digest |
-| D5 | `window_start`, `window_end` | Nullable UTC dates from the summary actually used |
-| D6 | `notice_code` | `restrictions_unverified` or null; set when no saved summary is readable |
-| D7 | `cpu`, `private_memory`, `http_requests` | Fixed components; each has `status: qualified|insufficient_support|unavailable`, nullable integer `total`/`wasted >= 0` (`wasted <= total` when known), nonnegative integer `distinct_opportunities`/`measured_opportunities`, nullable `coverage`/`waste_fraction` in `[0,1]`, and `weight: 1/3` |
-| D8 | `operational_penalty` | Nullable finite number in `[0,1]` |
-| D9 | `source_authority_contribution` | Finite number `>= 0` used for this choice |
+| D4 | `window_days`, `window_start`, `window_end` | Configured positive day count and nullable UTC dates from the summary actually used |
+| D5 | `policy_version` | Version used to produce the summary |
+| D6 | `http_requests` | Request `total` and `wasted` amounts, distinct and measured opportunity counts, and coverage; `wasted <= total`; counts are nonnegative; coverage is nullable in `[0,1]` |
+| D7 | `operational_penalty` | Nullable finite number in `[0,1]`; null evidence makes no score change |
 
-The current score contract has no operational or summary-read status, state
-revision or notice field.
+This trace carries no CPU/memory amounts, restriction scope or additional
+policy digest. The current score contract has no operational or summary-read
+status, state revision or evidence-window fields.
 Add the object to the saved score evidence, not to a new selection request or
 response. The old `source_reliability` shape remains readable for historical
 rows only; it is not a fallback for new scores. Reader-first schema migration
@@ -436,14 +439,17 @@ exception does not make the saved score row TypeScript-only.
 
 ## Open contract decisions
 
-- D3: producer fields, extraction binding, scope costs and no-prior/decay.
-- D4: snapshot fields, late-event rules, publication preparation and
-  missing-state details. Window, storage roots, concurrency and fallback
-  behavior are owner-directed.
+- D3: exact technical extraction binding, correction identity and detailed
+  persisted field shape. The observations, source/pipeline/unresolved
+  attribution, article request totals, source-side waste rule and configurable
+  evidence window are approved.
+- D4: exact summary schema, production caller and implementation details for
+  fresh-base preparation. The concurrency, immutable-observation, failure,
+  stale-read and late-correction behavior is approved.
 - D5: trial/restriction/recovery thresholds, polling formula, review cadence,
   caller and authority.
-- D8: typed saved-score trace. The approved arithmetic and fallback behavior
-  are recorded above.
+- D8: final trace field types against the existing score contract. Its
+  requests-first arithmetic and trace boundary are approved above.
 
 These remaining choices need approval before implementation.
 
