@@ -56,14 +56,14 @@
 	 */
 	import { base } from '$app/paths';
 	import { navigating } from '$app/state';
-	import { publishedVisualData, refusedVisualData } from '$lib/payload/drawing';
-	import type { SeededVisual, VisualData } from '$lib/payload/types';
+	import { isVisualData, publishedVisualData, refusedVisualData } from '$lib/payload/drawing';
+	import type { DigestVisual, VisualData } from '$lib/payload/types';
 	import { numberFormatter, type NumberFormatConfig } from '$lib/number-format';
 	import { whenNear } from '$lib/reveal';
 	import { drawBars, statedBars, type Drawing } from '$lib/visual/bar';
 	import { whenWide } from '$lib/visual/width';
 
-	let { visual, numberFormat }: { visual: SeededVisual | null; numberFormat: NumberFormatConfig } = $props();
+	let { visual, numberFormat }: { visual: DigestVisual | null; numberFormat: NumberFormatConfig } = $props();
 	const formatNumber = $derived(numberFormatter(numberFormat));
 
 	/** The file this story's marks are in, or null when it has none to ask for.
@@ -117,12 +117,11 @@
 				return null;
 			}
 			const data: unknown = await response.json();
-			const refused = refusedVisualData(data);
-			if (refused !== null) {
-				console.warn(`[digest] ${file}: ${refused}, so it is not drawn`);
+			if (!isVisualData(data)) {
+				console.warn(`[digest] ${file}: ${refusedVisualData(data)}, so it is not drawn`);
 				return null;
 			}
-			return data as VisualData;
+			return data;
 		} catch (error) {
 			// A story the reader scrolled away from cancelled its own request. That
 			// is the page working, so it says nothing.
@@ -200,6 +199,9 @@
 		use:measured
 	>
 		{#if drawing}
+			{#if drawing.title}
+				<div class="chart-title px-3 pt-3 text-sm font-semibold leading-snug text-text">{drawing.title}</div>
+			{/if}
 			<svg
 				viewBox="0 0 {drawing.width} {drawing.height}"
 				width={drawing.width}
@@ -207,8 +209,8 @@
 				role="presentation"
 			>
 				{#each drawing.bars as bar (bar.y)}
-					<text class="name" x="0" y={bar.label}>{bar.name}</text>
-					<rect class="bar" x="0" y={bar.y} width={bar.width} height={bar.height} rx="3" />
+					<text class="name" class:emphasized={bar.emphasized} x="0" y={bar.label}>{bar.name}</text>
+					<rect class="bar" class:emphasized={bar.emphasized} x="0" y={bar.y} width={bar.width} height={bar.height} rx="3" />
 					<text class="figure" x={bar.figure} y={bar.y + bar.height / 2}>{bar.displayed}</text>
 				{/each}
 				<line class="axis" x1="0" y1={drawing.baseline} x2={drawing.width} y2={drawing.baseline} />
@@ -216,6 +218,9 @@
 					<text class="unit" x="0" y={drawing.baseline + 16}>{drawing.unit}</text>
 				{/if}
 			</svg>
+			{#if drawing.caption}
+				<figcaption class="px-3 pb-3 text-xs leading-normal text-text-secondary">{drawing.caption}</figcaption>
+			{/if}
 		{/if}
 	</figure>
 {:else if wanted}
@@ -274,6 +279,18 @@
 
 	.bar {
 		fill: var(--chart-1);
+	}
+
+	.bar.emphasized {
+		fill: var(--chart-2);
+		stroke: var(--color-text);
+		stroke-width: 1;
+		stroke-dasharray: var(--space-1);
+	}
+
+	.name.emphasized {
+		font-weight: var(--font-weight-semibold);
+		fill: var(--color-text);
 	}
 
 	/* Stated rather than left to an empty box, so nothing a later rule does to a

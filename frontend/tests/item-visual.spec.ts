@@ -9,13 +9,16 @@ import type { VisualData } from '../src/lib/payload/types';
 test.describe('what may not be drawn', () => {
     function compiled(values: readonly number[] = [10, 20, 30, 40]): VisualData {
         return {
-            version: '2026-09-13',
-            renderer_version: '2026-09-13',
+            version: '2026-10-24',
+            renderer_version: '2026-10-24',
+            title: 'A comparison',
+            caption: null,
+            emphasized_mark_id: 'quantity-1',
             item_id: 'energy-4821903756',
             type: 'bar',
             marks: ['A', 'B', 'C', 'D'].flatMap((name, index) => [
-                { mark_id: `category-${index}`, text: name, value: null, unit: null, element_id: `name-${index}`, derived: null },
-                { mark_id: `quantity-${index}`, text: null, value: String(values[index]), unit: 'MW', element_id: `value-${index}`, derived: null }
+                { mark_id: `category-${index}`, text: name, value: null, unit: null, source_text: null, element_id: `name-${index}`, derived: null },
+                { mark_id: `quantity-${index}`, text: null, value: String(values[index]), unit: 'MW', source_text: null, element_id: `value-${index}`, derived: null }
             ]),
             encoding: {
                 category: [0, 1, 2, 3].map((index) => `category-${index}`),
@@ -28,6 +31,17 @@ test.describe('what may not be drawn', () => {
         const data = compiled();
         expect(refusedVisualData(data), 'a clean document was refused, so every case below is vacuous').toBeNull();
         expect(drawBars(data, 600, formatNumber).bars.length, 'a clean document drew no bar').toBeGreaterThan(0);
+    });
+    test('framing and one selected bar survive geometry without losing original figures', () => {
+        const data = compiled();
+        data.caption = '<script>not markup</script>';
+        data.marks[3].source_text = '0.02 GW';
+        const drawing = drawBars(data, 390, formatNumber);
+        expect(drawing.title).toBe(data.title);
+        expect(drawing.caption).toBe(data.caption);
+        expect(drawing.bars.map((bar) => bar.emphasized)).toEqual([false, true, false, false]);
+        expect(statedBars(drawing)).toContain('B 20 MW (highlighted) (source: 0.02 GW)');
+        expect(statedBars(drawing)).toContain(data.caption);
     });
     test('narrow and wide drawings keep every mark inside the measured width without changing their readings', () => {
         const data = compiled();
@@ -84,6 +98,11 @@ test.describe('what may not be drawn', () => {
         expect(publishedVisualData('digest/2026/08/20/energy-4821903756.json')).toBe(true);
     });
     for (const [name, breaks] of [
+        ['the retired renderer', (data: VisualData) => { data.renderer_version = '2026-09-13'; }],
+        ['emphasis on a category rather than a quantity', (data: VisualData) => { data.emphasized_mark_id = data.encoding.category[0]; }],
+        ['emphasis on an absent mark', (data: VisualData) => { data.emphasized_mark_id = 'absent'; }],
+        ['a duplicate mark id', (data: VisualData) => { data.marks.push(data.marks[0]); }],
+        ['a non-finite figure', (data: VisualData) => { data.marks[1].value = 'Infinity'; }],
         [
             'a renderer this page does not know',
             (data: VisualData) => {
