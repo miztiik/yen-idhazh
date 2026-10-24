@@ -26,6 +26,7 @@ import pytest
 from conftest import (
     CONFIG_DIR,
     FIXTURES_DIR,
+    collect_config,
     read_text,
     seed_feed_health,
     seed_item_health,
@@ -567,11 +568,39 @@ def test_supply_decides_the_size_of_the_day() -> None:
         assert len(built.items) == built.verticals[0].planned == count
 
 
-def test_no_single_feed_becomes_the_vertical() -> None:
-    """`collect.max_per_source` is 2, and the lab feed alone carries three stories."""
-    built = plan([LAB, TRADE, COMMUNITY])
+def test_no_single_feed_becomes_the_vertical(tmp_path: Path) -> None:
+    """All three lab stories are young enough to compete for the live source allowance."""
+    lab_supply = {
+        MODEL_RELEASE,
+        "https://blog.example-lab.org/2026/08/decoding-notes",
+        "https://blog.example-lab.org/2026/08/supply-agreement",
+    }
+    collect = config.load().app.collect
+    settings = settings_for([LAB, TRADE, COMMUNITY])
+    available_collect = collect_config(
+        **{
+            **collect.model_dump(),
+            "max_age_hours": 48,
+            "max_per_source": len(lab_supply),
+        }
+    )
+    available = stage_plan(
+        DATE,
+        settings=dataclasses.replace(
+            settings, app=settings.app.model_copy(update={"collect": available_collect})
+        ),
+        commit_sha="a" * 40,
+        fetcher=fetcher_over(LAB_URL, TRADE_URL, COMMUNITY_URL),
+        now=lambda: NOW,
+        state_dir=tmp_path / "available",
+    )
+    assert {
+        item.canonical_url for item in available.items if item.source_id == LAB.id
+    } == lab_supply, "all three authored stories must reach selection before testing the quota"
+    built = plan([LAB, TRADE, COMMUNITY], max_age_hours=48)
     from_lab = [item for item in built.items if item.source_id == "lab-blog"]
-    assert len(from_lab) <= config.load().app.collect.max_per_source
+    assert {item.canonical_url for item in from_lab} <= lab_supply
+    assert len(from_lab) == min(len(lab_supply), collect.max_per_source)
 
 
 def test_the_safety_ceiling_is_a_crash_guard_not_a_reading_budget() -> None:
