@@ -74,13 +74,36 @@ env:
   MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
 
 jobs:
+  job_bounds:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    outputs:
+      planning_timeout_minutes: ${{ steps.planning.outputs.planning_timeout_minutes }}
+      collection_timeout_minutes: ${{ steps.collection.outputs.collection_timeout_minutes }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - id: planning
+        run: |
+          set -euo pipefail
+          python3 backend/utilities/shard_bound.py --key planning_timeout_minutes --config-file llm_council_job_timeouts.json \
+            >> "$GITHUB_OUTPUT"
+
+      - id: collection
+        run: |
+          set -euo pipefail
+          python3 backend/utilities/shard_bound.py --key collection_timeout_minutes --config-file llm_council_job_timeouts.json \
+            >> "$GITHUB_OUTPUT"
+
   draw:
+    needs: job_bounds
     env:
       COUNCIL_EVENT_FILE: backend/var/council/events/planner.jsonl
     permissions:
       contents: read
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: ${{ fromJSON(needs.job_bounds.outputs.planning_timeout_minutes) }}
     outputs:
       date: ${{ steps.plan.outputs.date }}
       selection: ${{ steps.plan.outputs.selection }}
@@ -344,12 +367,13 @@ jobs:
     permissions:
       contents: write
       actions: read
-    needs: [draw, judge]
+    needs: [job_bounds, draw, judge]
     # A unit that died still leaves the others' work worth keeping, and a date
-    # still owes whatever its tenants settle.
-    if: always()
+    # still owes whatever its tenants settle. A failed bounds job planned
+    # nothing and cannot supply a valid total deadline for collection.
+    if: always() && needs.job_bounds.result == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: ${{ fromJSON(needs.job_bounds.outputs.collection_timeout_minutes) }}
     steps:
       - name: Stamp the collecting job clock
         run: echo "JOB_STARTED_AT=$(date -u +%s)" >> "$GITHUB_ENV"
