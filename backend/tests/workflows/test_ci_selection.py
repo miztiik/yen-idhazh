@@ -74,6 +74,21 @@ def test_state_csv_integrity_runs_before_selection_without_a_skip_or_fallback() 
     assert _mapping(checkout.get("with"), "scope checkout")["fetch-depth"] == "0"
 
 
+def test_documentation_only_changes_run_whitespace_not_application_gates() -> None:
+    workflow = _load_workflows()["ci.yml"]
+    scope = _job(workflow, "scope")
+    gates = _job(workflow, "gates")
+    steps = _steps(workflow, "scope")
+    whitespace = _step(workflow, "scope", "name", "Whitespace")
+
+    checkout = _step(workflow, "scope", "uses", "actions/checkout@v6")
+    assert steps.index(checkout) < steps.index(whitespace)
+    assert _script(whitespace, "scope whitespace") == "git diff --check HEAD^1 HEAD"
+    assert gates["if"] == "needs.scope.outputs.code == 'true'"
+    assert not any(step.get("name") == "Whitespace" for step in _steps(workflow, "gates"))
+    assert not scope.get("if")
+
+
 def test_the_robots_job_runs_the_module_the_selector_keys_on() -> None:
     """The selector buys `robots` only when it selects the module this job runs,
     so the two must name the same file."""

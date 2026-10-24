@@ -71,6 +71,11 @@ from idhazh.contracts.machine_panels import MachinePanels
 from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
 from idhazh.contracts.pipeline_tests import PipelineTestsConfig
 from idhazh.contracts.planner_operation import FetchedDocument, PlannerOperation
+from idhazh.contracts.planner_stage import (
+    ParsedFeedBatch,
+    PartitionedFeedBatch,
+    SelectedFeedBatch,
+)
 from idhazh.contracts.publication_inventory import PublicationInventory
 from idhazh.contracts.publication_receipt import PublicationReceipt
 from idhazh.contracts.reference_dataset import (
@@ -135,6 +140,9 @@ from idhazh.contracts.watchlist import EdgarPolicy, EntityDef, EntityFeed, Watch
 CONTRACTS: Final[tuple[type[Contract], ...]] = (
     FetchedDocument,
     PlannerOperation,
+    ParsedFeedBatch,
+    SelectedFeedBatch,
+    PartitionedFeedBatch,
     ArticleAssessmentRecord,
     CandidateRejectionRecord,
     DiversityMetricRow,
@@ -248,6 +256,8 @@ __all__ = [
     "Model",
     "ModelRole",
     "ModelUse",
+    "ParsedFeedBatch",
+    "PartitionedFeedBatch",
     "PipelineInputs",
     "PlannedItem",
     "PlannerOperation",
@@ -259,6 +269,7 @@ __all__ = [
     "RunShards",
     "RunStatus",
     "SalienceFeedDef",
+    "SelectedFeedBatch",
     "SourceForm",
     "SourceKind",
     "SourceKindDefinition",

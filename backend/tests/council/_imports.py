@@ -111,6 +111,7 @@ MODULE_NAMES = (
     "idhazh.ledger.rows",
     "idhazh.ledger.staging",
     "idhazh.run_context",
+    "idhazh.llm.reasoning",
     "idhazh.llm.server",
     "idhazh.sanitize",
     "idhazh.source_classification",

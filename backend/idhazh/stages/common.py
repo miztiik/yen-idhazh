@@ -343,6 +343,7 @@ def _two_spans(
         answer_span(payload, thought=thought.content, markers=markers),
         endpoint=endpoint,
         timeout=timeout,
+        reasoning_delimiters=markers.reasoning_delimiters,
     )
     # What the answer span really had to prefill. It is the one reading that
     # settles whether the slot held the thinking or re-read it, which is an
@@ -398,8 +399,15 @@ def _ask_the_model(
                     endpoint=endpoint,
                     timeout=timeout,
                 )
-                if markers is not None and markers.thinks
-                else post(payload, endpoint=endpoint, timeout=timeout)
+                if markers is not None and markers.thinks and "prompt" in payload
+                else post(
+                    payload,
+                    endpoint=endpoint,
+                    timeout=timeout,
+                    reasoning_delimiters=(
+                        markers.reasoning_delimiters if markers is not None else None
+                    ),
+                )
             )
         except HTTPError as error:
             # Before OSError, which HTTPError subclasses. A server that answered is

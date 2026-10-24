@@ -25,6 +25,22 @@ CONTRACT_NAMES = (
     ("feed_ingest_editorial_selection", "EditorialSelectionRow"),
     ("planner_operation", "FetchedDocument"),
     ("planner_operation", "PlannerOperation"),
+    ("planner_stage", "ParsedFeedBatch"),
+    ("planner_stage", "SelectedFeedBatch"),
+    ("planner_stage", "PartitionedFeedBatch"),
+)
+
+MODEL_NAMES = (
+    ("planner_stage", "PlannerStageContext"),
+    ("planner_stage", "PlannerStageRequest"),
+    ("planner_stage", "RecordedIdentity"),
+    ("planner_stage", "PrimaryEvidence"),
+    ("planner_stage", "PlannerArticleEvidence"),
+    ("planner_stage", "PlannerOpportunityEvidence"),
+    ("planner_stage", "PreflightFreshness"),
+    ("planner_stage", "PlannerHarvestObservation"),
+    ("planner_stage", "PlannerSeenAvailable"),
+    ("planner_stage", "PlannerSeenUnavailable"),
 )
 
 
@@ -107,6 +123,37 @@ def normalized_shape(node: dict[str, Any], root: dict[str, Any]) -> Any:
             root,
         )
     if kind == "object":
+        if "patternProperties" in node:
+            patterns = node["patternProperties"]
+            if len(patterns) == 1:
+                pattern, value = next(iter(patterns.items()))
+                return (
+                    "record",
+                    pattern,
+                    normalized_shape(value, root),
+                    node.get("default", "<required>"),
+                )
+            return (
+                "record",
+                tuple(
+                    sorted(
+                        (
+                            pattern,
+                            normalized_shape(value, root),
+                        )
+                        for pattern, value in node["patternProperties"].items()
+                    )
+                ),
+                node.get("additionalProperties", False),
+                node.get("default", "<required>"),
+            )
+        if "properties" not in node and isinstance(node.get("additionalProperties"), dict):
+            return (
+                "record",
+                node.get("propertyNames", {}).get("pattern"),
+                normalized_shape(node["additionalProperties"], root),
+                node.get("default", "<required>"),
+            )
         assert node.get("additionalProperties") is False, "Objects must reject unknown fields"
         required = set(node.get("required", []))
         return (
@@ -124,18 +171,35 @@ def normalized_shape(node: dict[str, Any], root: dict[str, Any]) -> Any:
 
 
 @pytest.mark.parametrize(
-    ("module", "name"), (*CONTRACT_NAMES, ("feed_ingest_diagnostics", "ExtractionQuality"))
+    ("module", "name"),
+    (
+        *CONTRACT_NAMES,
+        ("feed_ingest_diagnostics", "ExtractionQuality"),
+        *MODEL_NAMES,
+        ("planner_stage", "PlannerSeenEvidence"),
+    ),
 )
 def test_typescript_field_types_defaults_and_vocabularies(
     module: str,
     name: str,
     typescript_schemas: dict[str, Any],
 ) -> None:
-    contract = getattr(importlib.import_module(f"idhazh.contracts.{module}"), name)
-    ours = contract.model_json_schema() if name == "ExtractionQuality" else contract.json_schema()
-    theirs = typescript_schemas[name]
-    assert normalized_shape(theirs, theirs) == normalized_shape(ours, ours)
+    loaded = importlib.import_module(f"idhazh.contracts.{module}")
+    if name == "PlannerSeenEvidence":
+        from pydantic import TypeAdapter
 
+        from idhazh.contracts.planner_stage import PlannerSeenEvidence
+
+        ours = TypeAdapter(PlannerSeenEvidence).json_schema()
+        theirs = typescript_schemas["__planner_stage_schemas"][name]
+    elif name == "ExtractionQuality" or (module, name) in MODEL_NAMES:
+        ours = getattr(loaded, name).model_json_schema()
+        theirs = typescript_schemas[name]
+    else:
+        contract = getattr(loaded, name)
+        ours = contract.json_schema()
+        theirs = typescript_schemas[name]
+    assert normalized_shape(theirs, theirs) == normalized_shape(ours, ours)
 
 def test_typescript_envelope_fields_and_footer_keys(typescript_schemas: dict[str, Any]) -> None:
     from idhazh.contracts import file_envelope
@@ -183,6 +247,48 @@ def test_typescript_envelope_fields_and_footer_keys(typescript_schemas: dict[str
         ) == normalized_shape(
             {key: value for key, value in ours.items() if key != "default"}, native
         )
+
+
+def test_recorded_pair_projection_binds_native_fields_vocabularies_and_identity_format() -> None:
+    from idhazh.contracts.base import SLUG_PATTERN
+    from idhazh.contracts.story_similarity_pair import StorySimilarityPair
+
+    bun = shutil.which("bun")
+    assert bun, "Install Bun to run the publication evidence binding gate"
+    completed = subprocess.run(
+        [
+            bun,
+            "--eval",
+            'import { z } from "zod";'
+            'import { RecordedEventPairSchema } from "./src/metrics/publication-evidence";'
+            "process.stdout.write(JSON.stringify(z.toJSONSchema(RecordedEventPairSchema)));",
+        ],
+        cwd=REPO_ROOT / "services" / "feed-ingest-plan",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    projection = json.loads(completed.stdout)
+    native = StorySimilarityPair.json_schema()
+    fixture = json.loads(
+        read_text(REPO_ROOT / "tests" / "fixtures" / "feed-ingest-plan" / "publication-evidence.json")
+    )
+    assert list(projection["properties"]) == fixture["bindings"]["RecordedEventPair"]["fields"]
+    for name, field in projection["properties"].items():
+        source = native["properties"][name]
+        assert normalized_shape(
+            {key: value for key, value in field.items() if key != "default"}, projection
+        ) == normalized_shape(
+            {key: value for key, value in source.items() if key != "default"}, native
+        ), name
+    for name in ("scorer_model", "judge_model"):
+        for schema in (native, projection):
+            field = schema["properties"][name]
+            text = next(
+                branch for branch in field.get("anyOf", [field]) if branch.get("type") == "string"
+            )
+            assert text["pattern"] == SLUG_PATTERN
+            assert "enum" not in text and "const" not in text
 
 
 def rejection_payload() -> dict[str, Any]:

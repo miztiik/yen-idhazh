@@ -3,14 +3,10 @@ name: Yen-AI-Pipeline
 on:
   workflow_dispatch:
     inputs:
-      model_provider_family:
-        description: 'Model Provider / Family (e.g. ornith-ai, bartowski, Qwen)'
-        required: true
-        default: 'ornith-ai'
-      model_id:
-        description: 'Model ID (e.g. Ornith-1.5-9B-GGUF, Qwen2.5-7B-Instruct-GGUF)'
-        required: true
-        default: 'Ornith-1.5-9B-GGUF'
+      models_file:
+        description: 'Model declaration under config/; blank uses config/idhazh.json.'
+        required: false
+        default: ''
       url:
         description: 'Target URL to summarize (leave blank to use fallback text)'
         required: false
@@ -19,10 +15,6 @@ on:
         description: 'Direct/fallback input text'
         required: false
         default: 'Local LLMs allow running transformer architectures directly on edge devices and continuous integration runners without transmitting data over third-party APIs.'
-      context_size:
-        description: 'Context Window Size'
-        required: false
-        default: '16384'
       prompt:
         description: 'System Prompt'
         required: false
@@ -32,21 +24,48 @@ jobs:
   run-api-pipeline:
     runs-on: ubuntu-latest
     name: LLM Inference API Pipeline
+    env:
+      CONFIG_ROOT: ${{ inputs.models_file != '' && 'backend/var/candidate-config' || 'config' }}
+      PYTHONPATH: backend
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 1. Setup Bun Runtime
       - name: Setup Bun Runtime
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
-      # 2. Configure 8GB Swap and vm.swappiness=1
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install
+        run: |
+          python -m pip install 'pydantic>=2.12'
+          python -m pip install -e . --no-deps
+
+      - name: Point scratch config at the selected declaration
+        if: inputs.models_file != ''
+        uses: ./.github/actions/candidate-config
+        with:
+          models_file: ${{ inputs.models_file }}
+
+      - name: Validate the selected request
+        id: request
+        run: |
+          set -euo pipefail
+          DECLARED=$(python backend/utilities/model_runtime.py describe-request --config-root "$CONFIG_ROOT")
+          echo "probe_url=$(echo "$DECLARED" | jq -r .base_url)" >> "$GITHUB_OUTPUT"
+
+      - name: Read pinned runtime build
+        id: runtime
+        run: python backend/utilities/model_runtime.py print-pinned-build >> "$GITHUB_OUTPUT"
+
       - name: Configure Linux Swappiness
         run: |
-          echo "Setting swappiness to 1..."
           sudo sysctl vm.swappiness=1
           sudo swapoff -a || true
           sudo rm -f /swapfile || true
@@ -54,136 +73,69 @@ jobs:
           sudo chmod 600 /swapfile
           sudo mkswap /swapfile
           sudo swapon /swapfile
-          cat /proc/sys/vm/swappiness
 
-      # 3. Install Bun Dependencies
       - name: Install Dependencies
-        run: |
-          cd services/summarizer
-          bun install
+        working-directory: services/summarizer
+        run: bun install --frozen-lockfile
 
-      # 4. Install Official llama.cpp (Static Binary)
-      - name: Install Official llama.cpp
-        run: |
-          curl -LsSf https://llama.app/install.sh | SKIP_CUDA=1 SKIP_ROCM=1 SKIP_VULKAN=1 sh
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-          ~/.local/bin/llama --version
-
-      # 5. Cache Model Directory
-      - name: Cache Model Directory
-        id: cache-model
-        uses: actions/cache@v4
+      - name: Start selected model
+        uses: ./.github/actions/model-server
         with:
-          path: ./models
-          key: model-cache-${{ github.event.inputs.model_provider_family }}-${{ github.event.inputs.model_id }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          probe_url: ${{ steps.request.outputs.probe_url }}
+          llama_cpp_build: ${{ steps.runtime.outputs.llama_cpp_build }}
+          config_root: ${{ env.CONFIG_ROOT }}
 
-      # 6. Resolve and Download Model from HuggingFace
-      - name: Download Model from HuggingFace
-        run: |
-          mkdir -p ./models
-          REPO="${{ github.event.inputs.model_provider_family }}/${{ github.event.inputs.model_id }}"
-          echo "Resolving GGUF from repository: $REPO"
-
-          FILE=$(curl -sL "https://huggingface.co/api/models/${REPO}/tree/main" | jq -r '.[].path' | grep -iE '\.gguf$' | grep -iE 'q5_k_m|q4_k_m' | head -n 1)
-          [ -z "$FILE" ] && FILE=$(curl -sL "https://huggingface.co/api/models/${REPO}/tree/main" | jq -r '.[].path' | grep -iE '\.gguf$' | head -n 1)
-
-          if [ -z "$FILE" ]; then
-            echo "::error::No .gguf files found in repository '$REPO'!"
-            exit 1
-          fi
-
-          echo "Selected GGUF: $FILE"
-          echo "MODEL_FILE=$FILE" >> $GITHUB_ENV
-
-          if [ ! -f "./models/$FILE" ]; then
-            echo "Downloading $FILE..."
-            curl -fL -o "./models/$FILE" "https://huggingface.co/${REPO}/resolve/main/${FILE}"
-          else
-            echo "Found $FILE in runner cache."
-          fi
-
-          if [ "$(head -c 4 "./models/$FILE")" != "GGUF" ]; then
-            echo "::error::Downloaded file is corrupted or not a valid GGUF binary!"
-            exit 1
-          fi
-
-      # 7. Start llama-server Daemon on Port 9931
-      - name: Start llama-server (Port 9931)
-        run: |
-          CORES=$(nproc)
-          CTX="${{ github.event.inputs.context_size }}"
-
-          echo "Starting llama serve for $MODEL_FILE on $CORES cores with ${CTX} context..."
-          llama serve \
-            -m "./models/$MODEL_FILE" \
-            --host 127.0.0.1 \
-            --port 9931 \
-            -c $CTX \
-            -np 1 \
-            --flash-attn on \
-            --cache-type-k q8_0 \
-            --cache-type-v q8_0 \
-            -b 4096 \
-            -ub 1024 \
-            -t $CORES \
-            -tb $CORES \
-            --temp 0.2 \
-            > llama-server.log 2>&1 &
-
-          echo $! > "${{ github.workspace }}/.llama_server.pid"
-
-          for i in {1..60}; do
-            if curl -s http://127.0.0.1:9931/health | grep -q "ok"; then
-              echo "llama server is ready on port 9931!"
-              break
-            fi
-            sleep 2
-          done
-
-      # 8. Start Bun Summarizer API Server on Port 9932
       - name: Start Summarizer Bun API Daemon (Port 9932)
         env:
           PORT: 9932
-          SERVER_URL: "http://127.0.0.1:9931"
-          MODEL_NAME: "${{ env.MODEL_FILE }}"
-          RUNNER_NAME: "${{ runner.name }}"
-          SHARD_ID: "${{ github.job }}"
-          LLAMA_PID_FILE: "${{ github.workspace }}/.llama_server.pid"
+          CONFIG_ROOT: ${{ github.workspace }}/${{ env.CONFIG_ROOT }}
+          RUNNER_NAME: ${{ runner.name }}
+          SHARD_ID: ${{ github.job }}
+          LLAMA_PID_FILE: ${{ github.workspace }}/llama-server.pid
         run: |
+          set -euo pipefail
           cd services/summarizer
           bun run src/index.ts > backend_ts_server_log.log 2>&1 &
-          echo $! > .summarizer_api.pid
-
-          for i in {1..30}; do
-            if curl -s http://127.0.0.1:9932/health | grep -q "ok"; then
-              echo "Summarizer Bun API is healthy on port 9932!"
+          API_PID=$!
+          echo "$API_PID" > .summarizer_api.pid
+          for _ in {1..30}; do
+            if ! kill -0 "$API_PID" 2>/dev/null; then
+              cat backend_ts_server_log.log >&2
+              exit 1
+            fi
+            if curl -sf http://127.0.0.1:9932/health > /dev/null; then
               break
             fi
             sleep 1
           done
+          curl -sf http://127.0.0.1:9932/health > /dev/null
 
-      # 9. Query the Summarizer API via HTTP POST
       - name: Dispatch Summarize Request
+        env:
+          INPUT_URL: ${{ inputs.url }}
+          INPUT_TEXT: ${{ inputs.input_text }}
+          SYSTEM_PROMPT: ${{ inputs.prompt }}
         run: |
-          RESPONSE=$(curl -s -X POST http://127.0.0.1:9932/api/summarize \
-            -H "Content-Type: application/json" \
-            -d '{
-              "url": "${{ github.event.inputs.url }}",
-              "input_text": "${{ github.event.inputs.input_text }}",
-              "system_prompt": "${{ github.event.inputs.prompt }}"
-            }')
-
-          echo "API Response:"
+          set -euo pipefail
+          REQUEST=$(jq -n --arg url "$INPUT_URL" --arg input_text "$INPUT_TEXT" \
+            --arg system_prompt "$SYSTEM_PROMPT" \
+            '{url: $url, input_text: $input_text, system_prompt: $system_prompt}')
+          RESPONSE=$(curl -sf -X POST http://127.0.0.1:9932/api/summarize \
+            -H "Content-Type: application/json" --data-binary "$REQUEST")
           echo "$RESPONSE" | jq .
+          echo "$RESPONSE" | jq -e '.success == true' > /dev/null
 
-          SUCCESS=$(echo "$RESPONSE" | jq -r '.success')
-          if [ "$SUCCESS" != "true" ]; then
-            echo "::error::API request returned failure!"
-            cat services/summarizer/backend_ts_server_log.log
-            exit 1
-          fi
+      - name: Stop local processes
+        if: always()
+        run: |
+          for file in services/summarizer/.summarizer_api.pid llama-server.pid; do
+            if [ -f "$file" ]; then
+              kill "$(cat "$file")" 2>/dev/null || true
+              rm -f "$file"
+            fi
+          done
 
-      # 10. Upload All Logs and Artifacts
       - name: Upload Logs and Telemetry
         if: always()
         uses: actions/upload-artifact@v4

@@ -5,7 +5,7 @@ import { existsSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import {
   FeedIngestEventSchema,
-  deriveCandidateId, deriveUrlKey,
+  CandidateRejectionContract, deriveCandidateId, deriveUrlKey,
   FeedHealthContract,
 } from "@idhazh/common-contracts";
 import { persistLedger } from "@idhazh/ledger-file-writer";
@@ -21,7 +21,8 @@ import { endpointKey, readFeedHistory } from "../src/read-ledger-history/read-fe
 import { loadHarvestInputs, sourceSnapshot } from "../src/harvest-feeds/load-harvest-inputs";
 import { readDailyPublication, DailyPublicationSchema, DailyPublicationContract } from "../src/read-ledger-history/read-daily-publication";
 import { ItemHealthFailureProjectionContract } from "../src/read-ledger-history/item-health-failure";
-import { recordPlanningMetrics } from "../src/metrics/metrics-recorder";
+import { preparePlanningMetrics, recordPlanningMetrics } from "../src/metrics/metrics-recorder";
+import { canonicalizeUrl } from "../src/harvest-feeds/url-cleaner";
 
 async function seenWindow(recorded: Awaited<ReturnType<typeof recordedPlan>>, knownUrl: string) {
   recorded.inputs.clock_config.collect.seen_window_days = 2;
@@ -76,6 +77,16 @@ test("real composition shares one clock and override and reads native dispatches
   let clocks = 0;
   recorded.runtime.clock = () => new Date(++clocks === 1 ? "2026-10-21T23:59:59.999Z" : "2026-10-22T00:00:01Z");
   const configuredLimit = recorded.inputs.harvest.config.curate.article_limit;
+  const blockedUrl = "https://fool.com/the-ascent/blocked-story";
+  const innocentUrl = "https://news.example/innocent-query?next=fool.com%2Fthe-ascent%2Fstory";
+  const blockedIdentity = canonicalizeUrl(blockedUrl);
+  const innocentIdentity = canonicalizeUrl(innocentUrl);
+  recorded.transport.recordings.bodies.rss = `<rss version="2.0"><channel><title>Structured exclusion</title>
+    <item><title>Configured exclusion</title><link>${blockedUrl}</link><pubDate>Wed, 21 Oct 2026 09:15:00 GMT</pubDate></item>
+    <item><title>Missing link</title></item>
+    <item><title>Innocent query mention</title><link>${innocentUrl}</link><pubDate>Wed, 21 Oct 2026 10:15:00 GMT</pubDate></item>
+  </channel></rss>`;
+  recorded.transport.recordings.responses[innocentUrl] = [{ status: 200, fixture: "article" }];
   try {
     const result = await runFeedPlan({
       freshness_hours: 18, article_limit: 1, partition_strategy: "none",
@@ -93,6 +104,22 @@ test("real composition shares one clock and override and reads native dispatches
       .toMatchObject({ fetch_status: "not_requested", parsed_count: null, harvested_count: null });
     expect(result.evidence.harvest.feed_outcomes.find(row => row.source.source_id === "empty-news"))
       .toMatchObject({ parsed_count: 0, harvested_count: 0 });
+    expect(recorded.transport.requests.some(request => request.url.href === blockedUrl)).toBe(false);
+    expect(recorded.transport.requests.some(request => request.url.href === innocentUrl)).toBe(true);
+    const blocked = result.evidence.harvest.articles.find(article =>
+      article.rejection?.drop_reason === "BLOCKED_URL_MARKER");
+    expect(blocked?.rejection).toMatchObject({
+      canonical_url: blockedIdentity.canonical_url,
+      url_key: deriveUrlKey(blockedIdentity.canonical_url),
+      details: { matched_url_key: deriveUrlKey(blockedIdentity.canonical_url), matched_url_marker: "fool.com/the-ascent/" },
+    });
+    const innocent = result.evidence.harvest.candidates.find(candidate =>
+      candidate.url_key === innocentIdentity.url_key);
+    expect(innocent).toMatchObject({
+      canonical_url: innocentIdentity.canonical_url,
+      url_key: deriveUrlKey(innocentIdentity.canonical_url),
+    });
+    expect(result.evidence.harvest.candidates.map(candidate => candidate.url_key)).not.toContain(blockedIdentity.url_key);
     for (const candidate of result.evidence.harvest.candidates) {
       expect(candidate.date).toBe(result.context.date);
       expect(candidate.fetched_at).toBe(result.context.now);
@@ -113,7 +140,7 @@ test("real composition shares one clock and override and reads native dispatches
     const harvestDecisions = events.filter(event => event.stage === "harvest-feeds" && event.payload.kind === "candidate_decision");
     expect(harvestDecisions).toHaveLength(3);
     const screenDecisions = events.filter(event => event.stage === "screen-article-candidates" && event.payload.kind === "candidate_decision");
-    expect(screenDecisions).toHaveLength(2);
+    expect(screenDecisions).toHaveLength(1);
     const choices = events.flatMap(event => event.payload.kind === "portfolio_choice" ? [event.payload] : []);
     expect(choices).toEqual(result.evidence.curation.trace.flatMap(step => step.choice === null ? [] : [step.choice]));
     for (const event of events) if (event.payload.kind === "stage_completion") {
@@ -152,6 +179,20 @@ test("real composition shares one clock and override and reads native dispatches
       outcome: "ok", items: 0, target_attempted: true,
     });
     expect(nativeHealth.rows.find(held => held.row.feed_id === "recorded-news")!.row.items).toBe(2);
+    const planningAudit = await recordPlanningMetrics(result, recorded.inputs);
+    expect(planningAudit.planning_completion.status).toBe("complete");
+    const nativeRejections = await readLedgerParquet(
+      join(recorded.inputs.outputRoot, result.files.harvest_rejections.files[0]!.path),
+      "rejections", CandidateRejectionContract,
+    );
+    if (blocked === undefined || blocked.rejection === null) throw new Error("Missing actual blocked rejection");
+    expect(nativeRejections.rows.map(held => held.row)).toContainEqual(blocked.rejection);
+    const forged = structuredClone(result);
+    const forgedBlocked = forged.evidence.harvest.articles.find(article =>
+      article.rejection?.drop_reason === "BLOCKED_URL_MARKER");
+    if (forgedBlocked?.rejection === null || forgedBlocked === undefined) throw new Error("Missing actual blocked rejection");
+    forgedBlocked.rejection.canonical_url = innocentIdentity.canonical_url;
+    expect(() => preparePlanningMetrics(forged, recorded.inputs)).toThrow("must match a configured host and path");
     const historyFixture = FeedHealthContract.schema.parse(await Bun.file(new URL(
       "../../../tests/fixtures/feed-ingest-plan/feed-health-row.json", import.meta.url,
     )).json());

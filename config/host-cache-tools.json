@@ -1,0 +1,20 @@
+{
+  "packages": ["build-essential", "perl", "flex", "bison", "pkg-config", "binutils", "strace", "util-linux"],
+  "build_jobs": 2,
+  "perf": {
+    "repository": "https://github.com/torvalds/linux.git",
+    "revision": "028ef9c96e96197026887c0f092424679298aae8",
+    "license": "GPL-2.0-only",
+    "checkout_paths": ["/tools/", "/include/", "/scripts/", "/arch/x86/", "/arch/arm64/", "/Makefile", "/Kconfig", "/COPYING"],
+    "make_options": [
+      "NO_LIBPYTHON=1", "NO_JEVENTS=1", "PYTHON=/usr/bin/false", "PYTHON_CONFIG=/usr/bin/false",
+      "NO_LIBPERL=1", "NO_LIBELF=1", "NO_LIBBPF=1", "NO_LIBNUMA=1", "NO_SLANG=1",
+      "NO_LIBAUDIT=1", "NO_LIBCAP=1", "NO_LIBTRACEEVENT=1", "NO_LIBPFM4=1", "BUILD_BPF_SKEL=0"
+    ]
+  },
+  "multichase": {
+    "repository": "https://github.com/google/multichase.git",
+    "revision": "8b68e918f8d2e84794f2c20cdb6c7ebb9c3952bb",
+    "license": "Apache-2.0"
+  }
+}

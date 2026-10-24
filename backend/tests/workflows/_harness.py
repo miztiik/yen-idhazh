@@ -78,8 +78,13 @@ EXPECTED_WORKFLOWS: Final = {
 }
 
 # Named inputs keep workflow checks independent of new files in the checkout.
-# The addon workflow has no application routing contract in EXPECTED_WORKFLOWS.
-WORKFLOW_FILES: Final = (*EXPECTED_WORKFLOWS, "duckdb-addon.yml")
+# Extra workflows share runtime checks but have no application routing contract here.
+WORKFLOW_FILES: Final = (
+    *EXPECTED_WORKFLOWS,
+    "duckdb-addon.yml",
+    "yen-ai-pipeline.yml",
+    "ai-pipeline-tests.yml",
+)
 WORKFLOW_PATHS: Final = tuple(WORKFLOWS_DIR / name for name in WORKFLOW_FILES)
 
 
@@ -221,8 +226,8 @@ def _read_the_pin() -> tuple[str, str, str]:
     return build, asset, digest
 
 
-# One llama.cpp build for the pipeline, the validation case and the measurement
-# harness. The sha256 is the release API's own `digest` field, confirmed by
+# One llama.cpp build for the pipeline and its manual test workflows. The
+# sha256 is the release API's own `digest` field, confirmed by
 # downloading the 16,377,727-byte archive and hashing it, on 2026-08-25.
 PINNED_LLAMA_BUILD, PINNED_LLAMA_ASSET, PINNED_LLAMA_SHA256 = _read_the_pin()
 
@@ -235,6 +240,8 @@ LLAMA_RUNTIME_WORKFLOWS: Final = frozenset(
         "digest.yml",
         "idhazh-pipeline-tests.yaml",
         "llm-council.yml",
+        "yen-ai-pipeline.yml",
+        "ai-pipeline-tests.yml",
     }
 )
 
@@ -289,7 +296,7 @@ SHARED_DOWNLOAD_CALLS: Final = (DOWNLOAD_MODEL_FILES,)
 
 # The number of workflow jobs that fetch model weights. Kept separate from
 # discovery so a search that stops finding callers cannot make this check pass.
-WEIGHTS_FETCH_JOBS: Final = 3
+WEIGHTS_FETCH_JOBS: Final = 5
 
 # The refs the daily run needs and the one place they are written. The model
 # block reads `config/idhazh.json` where the model is used, so the workflow

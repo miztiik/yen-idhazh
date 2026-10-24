@@ -107,7 +107,6 @@ POINTER_PROMPT_PATH: Final = PROMPTS / "write_about_the_item.txt"
 #: Each module that reads a raw model reply keeps its own two-line cleaner,
 #: as `summarize` does. One shared cleaner is worth having and is not this
 #: row's to make.
-_THINK = re.compile(r"<think>(.*?)</think>", re.DOTALL | re.IGNORECASE)
 _FENCED_JSON = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
 
 
@@ -577,7 +576,7 @@ def build_label_request(
 
 
 def parse_label(raw: str) -> LabelReply:
-    content = _THINK.sub("", raw).strip()
+    content = raw.strip()
     fenced = _FENCED_JSON.match(content)
     if fenced:
         content = fenced.group(1)
@@ -1453,7 +1452,7 @@ def parse_summarize_and_plan(
     A suppressed reply is a summary draft and nothing else, so `visual` comes
     back `None`.
     """
-    content = _THINK.sub("", raw).strip()
+    content = raw.strip()
     fenced = _FENCED_JSON.match(content)
     if fenced:
         content = fenced.group(1)
@@ -1478,7 +1477,7 @@ def _summary_bounds(raw: str) -> tuple[str, int, int] | None:
     One walk over the bytes, shared by the two callers that need it: the
     recovery, which wants the object, and the split, which wants the boundary.
     """
-    content = _THINK.sub("", raw).strip()
+    content = raw.strip()
     fenced = _FENCED_JSON.match(content)
     if fenced:
         content = fenced.group(1)
@@ -1561,7 +1560,7 @@ def split_the_decode(completion: Completion) -> DecodeSplit | None:
     if found is None or completion.completion_tokens <= 0:
         return None
     _, start, end = found
-    whole = len(_THINK.sub("", completion.content).strip())
+    whole = len(completion.content.strip())
     summary_chars = max(end - start, 0)
     plan_chars = max(whole - end, 0)
     if summary_chars + plan_chars <= 0:

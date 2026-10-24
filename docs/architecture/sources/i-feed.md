@@ -9,6 +9,11 @@ I Feed is the project name for this design. The owner supplied the intent on
 methods can change as we learn. No scoring values have been calibrated, and no
 improvement has yet been measured.
 
+Plan 67's D3 observation scope and D4 settlement behavior are owner-approved;
+their native payloads and writers are not deployed. D5 admission,
+restriction/recovery and polling controls remain unapproved. Recommendations
+below do not activate those controls; see the [feedback contract](../contracts/feed-ingest-feedback.md).
+
 **A feed earns its place.** Being on our list gives it a chance to prove useful.
 It does not guarantee requests, model time or space in the digest. A dependable
 source earns more work; one that repeatedly sends us unusable material earns
@@ -155,21 +160,19 @@ Read state through its versioned contract without silently replacing the run's
 pinned code or policy. An incompatible state revision needs an explicit
 migration or declared degraded mode, not a fresh score with restrictions lost.
 
-Keep one serialized state updater. Preserve evidence from failed and partial
-runs independently of successful publication. A checkpoint makes replay
-idempotent: the worker and assembler reporting one article do not create two
-successes. A hard-killed job can lose facts it never exported; those outcomes
-remain unknown. A failed state commit leaves durable pending evidence for
-catch-up; it does not silently clear a restriction. Bound catch-up by the
-retained window and declare insufficient state where that window cannot
-reconstruct an update.
+Runs may proceed concurrently. Keep per-run observations immutable. If
+another update lands first, rebuild only derived state from newer committed
+records; do not hold fetch, parse or selection. A failed save leaves the
+previous derived state intact, retains the run artifacts and reports failure.
+A hard-killed job can lose facts it never exported; those outcomes remain
+unknown. An already-running selection keeps the state revision it read.
 
 | Live input | Next-run effect | What does not follow |
 | --- | --- | --- |
-| Distinct articles repeatedly refuse permitted access | Lower the access-related estimates; apply the configured restriction and recovery schedule. | HTTP 403 does not prove a paywall, and three retries are not three articles. |
+| Distinct articles repeatedly refuse permitted access | Could support an evidence-scoped restriction only after D5 approval. | HTTP 403 does not prove a paywall, and three retries are not three articles. |
 | Readable, substantive material arrives | Update the applicable delivery and assessed-quality estimates. | A successful summary is not proof that the source's claims are true. |
 | Our model fails after usable extraction | Record model cost and pipeline failure; retain the successful source-side outcome. | Do not turn our failure into source misconduct. |
-| A permitted feed poll offers no new eligible URLs | Update expected discovery rate and the next-poll time. | Do not record a failed article opportunity that was never allocated. |
+| A permitted feed poll offers no new eligible URLs | Could inform a next-poll time after the D5 cadence rule is approved. | No rate-to-interval formula is approved; do not record a failed article opportunity that was never allocated. |
 
 Golden examples are regression anchors, not the evidence base for these live
 updates. A slower quality review uses a bounded rotating sample of recent
@@ -358,8 +361,10 @@ current behavior. Include age and possible drift bias in any claimed interval;
 do not attach a standard Beta or UCB confidence label to arbitrary blended,
 correlated assessments without validating its assumptions.
 
-Python owns this arithmetic in either deterministic or hybrid mode. LLM and
-human assessment outputs retain their method, rubric, model/prompt or reviewer
+Python owns this arithmetic in production. The approved isolated TypeScript
+exception covers only the nonsemantic operational-waste score; it does not
+change production planning or authorize qualitative scoring. LLM and human
+assessment outputs retain their method, rubric, model/prompt or reviewer
 revision. Topic classification is a separate output from numeric assessment.
 Changing its accepted labels can still change coverage allocation, so its
 effects belong in evaluation too.
@@ -389,9 +394,9 @@ can bring that time forward. Preserve useful specialist coverage and a bounded
 exploration allowance instead of ranking every feed by raw posting volume.
 
 Apply due times before requesting RSS. Permission checks and retries still
-consume the polling budget. Use conditional HTTP requests where supported as
-an adjacent optimization, not as a claim that the current fetcher implements
-them. A 304 is an unchanged response, not failed extraction. No poll means
+consume the polling budget. Conditional HTTP requests are excluded from Plan
+67; ordinary feed polls may transfer an unchanged body again. Reducing those
+network bytes and time needs a separate owner-approved design. No poll means
 unknown new arrivals, never an observed zero.
 
 The maximum gap needs a freshness decision. With today's 24-hour article age
@@ -449,12 +454,13 @@ settle allocation. A busy publisher's ninety duplicate stories do not establish
 ninety useful contributions. A quiet specialist can earn a place through scarce
 coverage. Independent evaluation checks both quality and useful quantity.
 
-Use the composite once. Do not retain the old tier, RSS reliability and manual
-weight multipliers as additional rewards or penalties for the same evidence.
-Seed tier describes the starting assumption; effective priority is earned.
-Provenance stays factual: a poorly performing institution does not become a
-community publisher. Effective tier bands can change under the configured
-adaptation policy without mislabelling provenance.
+Use the composite once. For the isolated TypeScript planner, retain curated
+source weight and tier as the editorial starting priority, and replace the RSS
+reliability penalty with a normalized, source-attributed operational-waste
+penalty after its evidence rules pass. Do not stack both operational penalties.
+This is not permission to change production Python planning. Publisher names
+and source kinds remain factual; a poor operational result does not rename a
+publisher or make an institution a community source.
 
 | Selection input | Place in the proposed system |
 | --- | --- |
@@ -603,7 +609,7 @@ are five responsibilities, not a requirement for five new files or a framework.
 
 | Responsibility | Contents and ownership |
 | --- | --- |
-| Source catalog | Stable feed identity and [immutable curated publisher IDs](../contracts/publisher-identity.md), endpoints, provenance, starting assumptions, `added_on`, `retired_on` and typed `retirement_reason`. The publisher-ID page approves naming rules only, not catalog implementation. No `retirement_note` or substitute notes field. Preserve unknown legacy values. |
+| Source catalog | Stable feed identity and [immutable curated publisher IDs](../contracts/publisher-identity.md), endpoints, provenance, starting assumptions, `added_on`, `retired_on` and typed `retirement_reason`. The publisher-ID page approves the naming rules, location and simple config shape; feed assignments and runtime use remain open. No `retirement_note` or substitute notes field. Preserve unknown legacy values. |
 | I Feed policy | Formula and objective revisions; signal directions, units, valid domains and normalizers; component/method weights; priors; decay; quotas/floors; taxonomy adaptation; transitions; assessment and hygiene budgets. Parameters declare ranges and step bounds. Each action can be observe-only, recommend, or delegated execution. |
 | Evidence and assessments | Reuse measured ledgers. Link assessor outputs to underlying event IDs, with event/assessment/arrival times, method and rubric revisions, context, pool/selection/assessment probabilities, exposure, attribution and raw costs. Distinguish observation, assessment and prediction. Multiple ratings do not create multiple outcomes. |
 | Derived state | Component estimates and support, composite, effective priority, topic distributions, restrictions, due probes and update checkpoints. Pipeline-owned state is distinct from human-edited policy and catalog. |
@@ -614,6 +620,15 @@ rewrite the source list. Its filename is secondary. Preserve the catalog's
 `feeds` and `retired` separation and historical source lookup. A later authority
 policy can delegate catalog transitions, but runtime state and catalog state
 need an explicit reconciliation procedure rather than two conflicting answers.
+
+Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC: set `added_on` to the
+UTC date a feed first enters the catalog. Leave absent legacy dates and
+retirement reasons unknown; do not infer them. A newly retired feed has
+`retired_on` and a lower-case slug `retirement_reason`; an existing retired
+entry may keep its missing reason as unknown. Keep reason values open in config
+so adding one does not require a code edit. These values remain in
+`config/sources.json`; source additions and changes must not need
+per-source code edits.
 
 Formula implementations are versioned code, not arbitrary executable strings
 in JSON. Raw observations and assessor outputs support bounded replay; stored
@@ -859,12 +874,25 @@ changing catalog. Worker startup stays with the catalog-scale section above and
 with [throughput](../summarize/throughput.md), so an execution experiment does
 not block the score-update path.
 
+Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC: in the isolated
+TypeScript planner, cost from an operation that failed to produce usable
+material for a supported source-side reason may reduce the operational part of
+priority once its evidence qualifies. Keep CPU, memory and HTTP request costs
+separate until each has a declared unit and source attribution; combine only
+their normalized values. Preserve curated source weight and tier, and replace
+rather than stack the existing RSS reliability penalty. This does not change
+production Python planning or permit semantic assessment. See the
+[feedback contract proposal](../contracts/feed-ingest-feedback.md); its
+provisional window, support, coverage and component weights are owner-approved.
+Producer fields and exact operation-to-cost bindings remain open in D3.
+
 ### What the next design pass must settle
 
-An execution plan cannot be written until these are answered, because every row
-it would carry depends on one of them. Unavailable quality measurements are not
-zeros or invented model verdicts. Authority follows
-[CLAUDE.md](../../../CLAUDE.md) section 14.
+Plan 67 carries the current nonsemantic execution scope and the remaining
+contract decisions in its Table D. The broader questions below do not expand
+that scope: qualitative assessment and automatic formula tuning remain
+excluded. Unavailable measurements are not zeros or invented model verdicts.
+Authority follows [CLAUDE.md](../../../CLAUDE.md) section 14.
 
 | # | Decision to settle | Authority |
 | --- | --- | --- |

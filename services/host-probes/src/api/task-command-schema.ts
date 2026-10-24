@@ -1,5 +1,6 @@
 /** Which body-free commands start and stop one transient task profile? */
 import { z } from "zod";
+import { CacheCountersSchema, CacheCountersStartSchema } from "../cache-probe/cache-schema";
 import {
   OwnedProcessSchema, TaskEndReasonSchema, TaskIdentitySchema, TaskOutcomeSchema, TaskProfileSchema,
 } from "../task-profile/profile-schema";
@@ -13,12 +14,14 @@ export const StartTaskProfileResponseSchema = z.union([
   DisabledSchema,
   z.strictObject({
     status: z.literal("started"), handle: z.uuid(), expires_at: z.iso.datetime(), target: OwnedProcessSchema,
+    cache_counters: CacheCountersStartSchema.nullable().default(null),
   }),
 ]);
 export const StopTaskProfileResponseSchema = z.union([
   DisabledSchema,
   z.strictObject({
     status: z.literal("stopped"), handle: z.uuid(), end_reason: TaskEndReasonSchema, profile: TaskProfileSchema,
+    cache_counters: CacheCountersSchema.nullable().default(null),
   }),
 ]);
 export type StartTaskProfile = z.infer<typeof StartTaskProfileSchema>;

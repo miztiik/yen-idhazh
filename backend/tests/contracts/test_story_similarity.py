@@ -16,12 +16,11 @@ from __future__ import annotations
 
 import csv
 import io
-import json
-from typing import Any, get_args
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
-from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
+from support.paths import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 
 from idhazh.contracts.base import derive_text_digest, derive_url_key
 from idhazh.contracts.fitted_similarity_threshold import (
@@ -34,14 +33,9 @@ from idhazh.contracts.story_similarity_distribution import StorySimilarityDistri
 from idhazh.contracts.story_similarity_pair import (
     DROPPED_CELLS,
     RENAMED_CELLS,
-    JudgeModelId,
     SameStoryVerdict,
-    ScorerModelId,
     StorySimilarityPair,
 )
-from idhazh.embed import EMBEDDER_ID
-
-from ._model_cases import MODEL_FILES
 
 pytestmark = pytest.mark.contract
 
@@ -162,29 +156,40 @@ def a_mark(**overrides: Any) -> dict[str, Any]:
     return payload | overrides
 
 
-def test_the_scorer_literal_names_the_encoder_the_pipeline_actually_runs() -> None:
-    """A Literal that names a model nothing runs would type-check and mean nothing.
+def test_recorded_model_identities_do_not_require_current_config_membership() -> None:
+    """All three saved shapes retain unfamiliar IDs without loading a model config."""
+    identities = {"scorer_model": "unseen-encoder-v2", "judge_model": "retired-judge-v1"}
+    pair = StorySimilarityPair.model_validate(
+        a_pair(
+            **identities,
+            verdict="NO",
+            verdict_swapped="NO",
+            usable=True,
+            prompt_digest=derive_text_digest("a turn"),
+            grammar_digest=derive_text_digest("a grammar"),
+        )
+    )
+    record = StorySimilarityDistribution.model_validate(a_record(**identities))
+    fit = FittedSimilarityThreshold.model_validate(a_fit(**identities))
+    for row in (pair, record, fit):
+        assert row.scorer_model == identities["scorer_model"]
+        assert row.judge_model == identities["judge_model"]
+        assert type(row).from_json(row.to_json()) == row
+    assert StorySimilarityPair.from_csv_row(pair.csv_row()) == pair
+    assert FittedSimilarityThreshold.from_csv_row(fit.csv_row()) == fit
 
-    The scorer column exists so that swapping the encoder is a schema diff. That
-    only holds while the spelling on the row is the spelling the embedder
-    answers to, so the two are held against each other rather than both
-    maintained by hand.
-    """
-    assert get_args(ScorerModelId) == (EMBEDDER_ID,)
 
-
-def test_the_judge_literal_names_every_model_this_repo_ships() -> None:
-    """A judge this repository cannot stand up is a judge no row can honestly name.
-
-    The named model inputs must all be representable on a recorded verdict.
-    """
-    shipped = set()
-    for name in MODEL_FILES:
-        path = CONFIG_DIR / "models" / name
-        payload = json.loads(read_text(path))
-        shipped.add(payload["summarizer"]["id"])
-
-    assert set(get_args(JudgeModelId)) == shipped
+@pytest.mark.parametrize("identity", ["", "Upper-case", "../weights", "two\nlines", "weights_v2"])
+def test_saved_model_identities_refuse_malformed_slugs(identity: str) -> None:
+    """Opening membership must not open paths, control characters or other spellings."""
+    for field in ("scorer_model", "judge_model"):
+        for contract, payload in (
+            (StorySimilarityPair, a_pair()),
+            (StorySimilarityDistribution, a_record()),
+            (FittedSimilarityThreshold, a_fit()),
+        ):
+            with pytest.raises(ValidationError, match=field):
+                contract.model_validate(payload | {field: identity})
 
 
 def test_a_pair_named_by_the_wrong_digest_is_refused() -> None:
@@ -324,6 +329,8 @@ def test_a_row_written_before_the_stamp_reads_back_with_its_own_version() -> Non
 
     assert narrow.judge_id == "content-similarity-judge"
     assert narrow.version == "2026-09-18" != StorySimilarityPair.schema_version()
+    assert narrow.scorer_model == "all-minilm-l6-v2-quantized"
+    assert narrow.judge_model == "qwen3-5-9b-q4-k-m"
     assert narrow.judged_by_run_id is None
     assert narrow.grammar_applied is None
     assert narrow.first_token_probabilities is None

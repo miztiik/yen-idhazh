@@ -131,7 +131,7 @@ def test_the_job_clock_closes_that_row_without_a_plan_either(
     (row,) = ledger.load_days(
         common.STATE_ROOT, LedgerName.HOST_FINGERPRINT, [WAKE_DAY], model=HostFingerprintRow
     )
-    assert row.fingerprint is not None, "the clock carries the machine the probe measured"
+    assert row.measured_at is not None, "the clock carries the probe's reading"
     assert row.job_seconds is not None, "the clock filled the cell only it can know"
     assert len({held.envelope.unit_id for held in _raw(common.STATE_ROOT)}) == 1, (
         "one job, one writer, one work unit - however many verbs filed for it"

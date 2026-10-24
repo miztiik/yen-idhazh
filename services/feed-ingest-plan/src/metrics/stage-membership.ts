@@ -6,6 +6,7 @@ import {
 } from "@idhazh/common-contracts";
 import type { CandidateRejectionRecord, FeedIngestCandidate, SourceSnapshot } from "@idhazh/common-contracts";
 import { sourceSnapshot } from "../harvest-feeds/load-harvest-inputs";
+import { matchUrlExclusion, urlExclusionMarker } from "../harvest-feeds/url-exclusions";
 import { measureArticle } from "../curate-article-portfolio/quality-decoupler";
 import { curateArticles } from "../curate-article-portfolio/editorial-selection";
 import type { FeedPlanResult } from "../run-feed-plan";
@@ -87,10 +88,10 @@ export function reconcileStageMembership(result: FeedPlanResult) {
         [rejection.url_key, rejection.url_key, result.evidence.exclusions.settled_failure_codes.get(rejection.url_key!)],
         `harvest.${item.candidate_id}.settled_failure_exclusion`);
     } else if (rejection?.drop_reason === "BLOCKED_URL_MARKER") {
-      const marker = result.evidence.exclusions.blocked_url_markers.find(value =>
-        rejection.canonical_url?.toLowerCase().includes(value.toLowerCase()));
+      const rule = matchUrlExclusion(rejection.canonical_url!, harvest.inputs.config.harvest.url_exclusions);
+      if (rule === undefined) throw new Error("harvest.exclusion: blocked URL must match a configured host and path");
       requireSame([rejection.url_key, rejection.details.matched_url_key, rejection.details.matched_url_marker],
-        [item.url_key, item.url_key, marker], `harvest.${item.candidate_id}.blocked_marker_exclusion`);
+        [item.url_key, item.url_key, urlExclusionMarker(rule)], `harvest.${item.candidate_id}.blocked_marker_exclusion`);
     }
     if (article.candidate !== null) requireSame(article.candidate, candidates.get(item.candidate_id), "harvest.article");
     else if (!harvest.rejections.some(row => isDeepStrictEqual(row, article.rejection))) {

@@ -64,8 +64,15 @@ jobs:
             /.github/scripts/feed-ingest-plan-audit-fixture.ts
             /.github/scripts/feed-ingest-plan-http-proof.ts
             /.github/scripts/feed-ingest-plan-profile-proof.ts
+            /.github/scripts/feed-ingest-plan-cache-proof.ts
+            /.github/scripts/feed-ingest-plan-cache-report.ts
+            /.github/scripts/host-task-profile-proof.ts
+            /.github/scripts/host-cache-affinity-proof.ts
+            /.github/scripts/install-host-cache-tools.sh
             /.github/scripts/feed-ingest-plan-profile-schema.ts
             /.github/scripts/feed-ingest-plan-resource-report.ts
+            /.github/scripts/feed-ingest-plan-pid-report.ts
+            /.github/scripts/feed-ingest-plan-resource-values.ts
             /.github/scripts/feed-ingest-plan-report-format.ts
             /.github/scripts/tests/feed-ingest-plan-outputs.test.ts
             /.github/scripts/tests/feed-ingest-plan-report.test.ts
@@ -94,6 +101,9 @@ jobs:
           bun install --frozen-lockfile --cwd services/feed-ingest-plan
           bun install --frozen-lockfile --cwd services/host-fingerprints
           bun install --frozen-lockfile --cwd services/host-probes
+
+      - name: Install optional Linux cache instruments
+        run: bash .github/scripts/install-host-cache-tools.sh
 
       - name: Check isolated adapters and native compatibility
         run: |

@@ -2,8 +2,8 @@
 import { z } from "zod";
 import {
   CandidateRejectionRecordSchema, FeedIngestCandidateSchema,
-  Sha256Schema, SourceSnapshotSchema, TimestampSchema,
-  FetchFailureSchema, HarvestDiagnosticsSchema,
+  SourceSnapshotSchema, TimestampSchema,
+  FetchFailureSchema, PlannerHarvestObservationSchema,
 } from "@idhazh/common-contracts";
 import type { FeedIngestConfig, FeedOutcomePayload, ItemHealthFailureCode, PolicyIdentity, WriterIdentity } from "@idhazh/common-contracts";
 import type { LedgerRegistration, LedgerSettings, PersistLedgerResult } from "@idhazh/ledger-file-writer";
@@ -13,21 +13,7 @@ import type { SourceHistoryEvidence } from "../read-ledger-history/read-feed-his
 
 export { FetchFailureSchema } from "@idhazh/common-contracts";
 export type FetchFailure = z.infer<typeof FetchFailureSchema>;
-export const HarvestObservationSchema = z.strictObject({
-  candidate_id: Sha256Schema,
-  http_status: z.int().min(100).max(599).nullable(),
-  robots: z.enum(["allowed", "denied", "unknown"]).nullable(),
-  fetch_failure: FetchFailureSchema.nullable(),
-  paywall: z.boolean().nullable(),
-  paywall_evidence: z.enum(["json-ld", "configured-marker", "none", "not-observed"]),
-  extraction: z.enum(["success", "empty", "failed", "not-attempted"]),
-  observed_at: TimestampSchema,
-  diagnostics: HarvestDiagnosticsSchema.nullable().default(null),
-  preflight_freshness: z.strictObject({
-    timing_at: TimestampSchema, timing_source: z.literal("published_at"),
-    age_hours: z.number().finite().positive(), recency_bonus: z.number().finite().nonnegative(),
-  }).optional(),
-});
+export const HarvestObservationSchema = PlannerHarvestObservationSchema;
 export type HarvestObservation = z.infer<typeof HarvestObservationSchema>;
 export const HarvestArticleResultSchema = z.strictObject({
   candidate: FeedIngestCandidateSchema.nullable(),
@@ -65,7 +51,6 @@ export type HarvestContext = {
     published_window_days: number;
     published_on: ReadonlyMap<string, string>;
     settled_failure_codes: ReadonlyMap<string, ItemHealthFailureCode>;
-    blocked_url_markers: readonly string[];
   };
   overrides?: { freshness_hours?: number };
   clock?: () => Date;

@@ -16,6 +16,7 @@ import { recordFeedPlan } from "../record-feed-plan";
 import { documentRoute } from "./routes/document.route";
 import type { CapturedPlanIdentity } from "./plan-operation";
 import { retainFeedReceipts } from "./feed-history-receipts";
+import { stagesRoute } from "./routes/stages.route";
 
 // Calendar-versioned HTTP protocol paths are not runtime planning controls.
 const apiPrefix = "/api/2026-10-20";
@@ -51,12 +52,9 @@ export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime) {
       const firstRequired = required.values().next().value!;
       const seenDays = authoredDays.filter(day =>
         day.day >= firstRequired || acceptedDays.get(day.day) !== JSON.stringify(day));
-      const result = await runFeedPlan(request, {
-        ...inputs, settings: {
-          ...inputs.settings, inputs: { ...inputs.settings.inputs, seen_days: seenDays },
-        },
-      }, {
+      const result = await runFeedPlan(request, inputs, {
         ...runtime, ...captured, clock: () => now,
+        seen_days: seenDays,
         seen_receipts: [...ownFiles].map(([day, files]) => ({ day, files: [...files] })),
         feed_history_receipts: feedReceipts.read(),
         on_feed_history_persisted: receipt => {
@@ -88,6 +86,7 @@ export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime) {
   app.route(apiPrefix, healthRoute(inputs, runtime.observe_publication !== undefined));
   app.route(apiPrefix, planRoute(execute, inputs, runtime));
   app.route(apiPrefix, documentRoute(inputs, runtime));
+  app.route(apiPrefix, stagesRoute(inputs, runtime));
   app.notFound(c => c.json({ code: "NOT_FOUND", issues: [{ field: "route", message: "Unknown API route" }] }, 404));
   app.onError((error, c) => {
     const failure = describePlanError(error, inputs.root);

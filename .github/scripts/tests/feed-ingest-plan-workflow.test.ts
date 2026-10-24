@@ -93,6 +93,17 @@ test("offers independent machine RAM control and commits only genuine planner an
   expect(probes?.run).toContain("bun run test");
   const resourceProof = gateSteps.map(record).find(step => step.name === "Live TypeScript RAM and optional copy proof");
   expect(resourceProof?.run).toBe("bun run .github/scripts/feed-ingest-plan-profile-proof.ts");
+  const cacheInstall = gateSteps.map(record).find(step => step.name === "Install optional Linux cache instruments");
+  expect(cacheInstall?.run).toBe("bash .github/scripts/install-host-cache-tools.sh");
+  expect(cacheInstall?.["continue-on-error"]).not.toBe(true);
+  const cacheTools = JSON.parse(await readFile(join(root, "config", "host-cache-tools.json"), "utf8"));
+  expect(cacheTools.perf.revision).toMatch(/^[a-f0-9]{40}$/);
+  expect(cacheTools.packages).not.toContain("linux-perf");
+  expect(cacheTools.packages.every((name: string) => !/^(python[0-9]|libpython)/.test(name))).toBe(true);
+  for (const option of ["NO_LIBPYTHON=1", "NO_JEVENTS=1", "PYTHON=/usr/bin/false", "PYTHON_CONFIG=/usr/bin/false"]) {
+    expect(cacheTools.perf.make_options).toContain(option);
+  }
+  expect(gateSteps.indexOf(cacheInstall)).toBeLessThan(gateSteps.indexOf(probes));
   const resourceUpload = gateSteps.map(record).find(step => step.name === "Preserve TypeScript resource proof");
   expect(record(resourceUpload?.with).path).toBe("test-results/host-probes/resource-proof.json");
   expect(preflight?.if).toBe("needs.scope.outputs.code == 'true'");
@@ -214,6 +225,8 @@ test("offers independent machine RAM control and commits only genuine planner an
   expect(steps.find(step => step.name === "Install declared TypeScript dependencies")!.run)
     .toContain("bun install --frozen-lockfile --cwd services/host-probes");
   expect(steps.find(step => step.id === "resources")!.run).toContain("await verifyLiveHostProfiling(");
+  expect(steps.find(step => step.name === "Install optional Linux cache instruments")!.run)
+    .toBe("bash .github/scripts/install-host-cache-tools.sh");
   expect(steps.find(step => step.name === "Check isolated adapters and native compatibility")!.run)
     .toContain("./services/host-probes/test/probe.test.ts");
   const commit = steps.find(step => step.name === "Commit exact live planner and host files")!;
@@ -235,6 +248,9 @@ test("offers independent machine RAM control and commits only genuine planner an
   expect(checkout.with?.["sparse-checkout"]).toContain("/packages/common-contracts/");
   expect(checkout.with?.["sparse-checkout"]).toContain("/.github/scripts/feed-ingest-plan-http-proof.ts");
   expect(checkout.with?.["sparse-checkout"]).toContain("/.github/scripts/feed-ingest-plan-profile-proof.ts");
+  expect(checkout.with?.["sparse-checkout"]).toContain("/.github/scripts/feed-ingest-plan-cache-proof.ts");
+  expect(checkout.with?.["sparse-checkout"]).toContain("/.github/scripts/feed-ingest-plan-cache-report.ts");
+  expect(checkout.with?.["sparse-checkout"]).toContain("/.github/scripts/install-host-cache-tools.sh");
   for (const name of ["profile-schema", "resource-report", "report-format"]) {
     expect(checkout.with?.["sparse-checkout"]).toContain(`/.github/scripts/feed-ingest-plan-${name}.ts`);
   }
@@ -417,26 +433,43 @@ test("strict-checks adapters, tests and the actual inline program in one compile
   const { steps } = await workflow();
   const directory = await mkdtemp(join(root, ".row12-typecheck-"));
   try {
+    const checkout = steps.find(step => step.uses?.startsWith("actions/checkout@"))!;
+    const selection = checkout.with?.["sparse-checkout"];
+    if (typeof selection !== "string") throw new Error("Expected named sparse checkout inputs");
+    const adapters: string[] = [];
+    for (const entry of selection.trim().split("\n").map(value => value.trim())) {
+      if (!/^\/[\w./-]+$/.test(entry) || entry.split("/").includes("..")) {
+        throw new Error(`Expected a literal rooted sparse checkout input: ${entry}`);
+      }
+      const path = entry.slice(1);
+      const target = join(directory, ...path.split("/"));
+      await mkdir(dirname(target), { recursive: true });
+      if (entry.endsWith("/")) {
+        await symlink(join(root, ...path.split("/")), target, "junction");
+      } else {
+        await copyFile(join(root, ...path.split("/")), target);
+        if (path.startsWith(".github/scripts/") && path.endsWith(".ts")) adapters.push(target);
+      }
+    }
+    const inline = join(directory, "inline");
+    await mkdir(inline);
     const generated: string[] = [];
     for (const [index, step] of steps.entries()) {
       if (!step.run?.startsWith("bun run - <<'TS'")) continue;
       const script = step.run;
       const code = script.slice(script.indexOf("\n") + 1, script.lastIndexOf("\nTS"));
-      const path = join(directory, `workflow-${index}.ts`);
+      const path = join(inline, `workflow-${index}.ts`);
       await writeFile(path, code.replaceAll('from "./', 'from "../'), "utf8");
       generated.push(path);
     }
-    const service = join(root, "services", "feed-ingest-plan");
+    const service = join(directory, "services", "feed-ingest-plan");
     const child = Bun.spawn([
       "bun", "run", "tsc", "--noEmit", "--target", "ESNext", "--module", "ESNext",
       "--moduleResolution", "Bundler", "--strict", "--noUncheckedIndexedAccess",
       "--exactOptionalPropertyTypes", "--noFallthroughCasesInSwitch", "--noUnusedLocals",
       "--noUnusedParameters", "--verbatimModuleSyntax", "--skipLibCheck",
       "--types", "bun", "--typeRoots", join(service, "node_modules", "@types"), ...generated,
-      ...["feed-ingest-plan-outputs.ts", "feed-ingest-plan-feed-history.ts", "feed-ingest-plan-report.ts", "feed-ingest-plan-commit.ts", "feed-ingest-plan-verification.ts", "feed-ingest-plan-audit-fixture.ts",
-        "feed-ingest-plan-http-proof.ts", "feed-ingest-plan-profile-proof.ts",
-        "tests/feed-ingest-plan-outputs.test.ts", "tests/feed-ingest-plan-report.test.ts",
-        "tests/feed-ingest-plan-workflow.test.ts"].map(path => join(root, ".github", "scripts", ...path.split("/"))),
+      ...adapters,
     ], { cwd: service, stdout: "pipe", stderr: "pipe" });
     const [output, errors] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()]);
     expect({ exit: await child.exited, output, errors }).toEqual({ exit: 0, output: "", errors: "" });
@@ -457,6 +490,7 @@ test("runs the native compatibility verifier in a named-input copy with no backe
       "schemas/source.schema", "schemas/telemetry.schema", "schemas/host-fingerprint.schema",
       "schemas/harvest-diagnostics.schema", "schemas/item-health-failure.schema", "schemas/feed-health.schema",
       "schemas/planner-operation.schema", "schemas/recorded-instant.schema", "observation-order",
+      "schemas/planner-stage.schema",
       "schemas/publication-input.schema",
       "schemas/planning-observations.schema",
     ].map(name => `packages/common-contracts/src/${name}.ts`);

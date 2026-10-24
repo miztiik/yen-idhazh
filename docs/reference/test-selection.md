@@ -151,6 +151,9 @@ matrix in parallel, below the browser or nightly would retain the waste.
 Pictures are design-review material, not pixel-comparison checks. The later
 representative-coverage decision also removed the bulk capture generator:
 keeping the presentation matrix opt-in would retain its maintenance cost.
+Documentation-only changes stop in the scope job after the whitespace check.
+Starting the application gates for them buys a runner and setup without a code
+check to run.
 The second model-absent build remains on code pushes to `main` and on pull
 requests that can change asset loading. Skipping unrelated PR inputs defers no
 model-asset check that those inputs can change. Unknown inputs still buy it.

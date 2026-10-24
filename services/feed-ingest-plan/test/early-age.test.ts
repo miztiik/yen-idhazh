@@ -27,7 +27,8 @@ import type { ProgressRecord } from "../src/logging/progress-logger";
 
 function feed(items: { title?: string; path: string; date: string | null }[]) {
   return `<rss version="2.0"><channel><title>Recorded age decisions</title>${items.map(item =>
-    `<item>${item.title === undefined ? "" : `<title>${item.title}</title>`}<link>https://news.example/${item.path}</link>${
+    `<item>${item.title === undefined ? "" : `<title>${item.title}</title>`}<link>${item.path.startsWith("https://")
+      ? item.path : `https://news.example/${item.path}`}</link>${
       item.date === null ? "" : `<pubDate>${item.date}</pubDate>`}</item>`).join("")}</channel></rss>`;
 }
 
@@ -35,6 +36,7 @@ test("preflight uses the configured age override, strict boundary and future tol
   const root = await mkdtemp(join(tmpdir(), "early-age-"));
   try {
     const recordings = await readRecordings();
+    const loaded = await inputs();
     const run = { ...context(), clock: () => new Date("2026-10-22T12:00:00Z"), overrides: { freshness_hours: 12 } };
     run.writer = { ...run.writer, run_id: "2026-10-22-700" };
     const items = [
@@ -46,16 +48,19 @@ test("preflight uses the configured age override, strict boundary and future tol
       { path: "untitled-old", date: "2026-10-20T00:00:00Z" },
       { title: "Published", path: "published", date: "2026-10-22T11:00:00Z" },
       { title: "Settled failure", path: "settled", date: "2026-10-22T11:00:00Z" },
-      { title: "Blocked marker", path: "blocked", date: "2026-10-22T11:00:00Z" },
+      { title: "Blocked marker", path: "https://fool.com/the-ascent/blocked", date: "2026-10-22T11:00:00Z" },
     ];
     recordings.bodies.rss = feed(items);
-    for (const item of items.slice(1)) recordings.responses[`https://news.example/${item.path}`] = [
+    for (const item of items.slice(1)) recordings.responses[
+      item.path.startsWith("https://") ? item.path : `https://news.example/${item.path}`
+    ] = [
       { status: 200, fixture: "article" },
     ];
     const transport = new RecordedTransport(recordings);
     const planner = await loadPlanInputs(fileURLToPath(new URL("../../../", import.meta.url)));
     const publishedUrl = "https://news.example/published";
     const settledUrl = "https://news.example/settled";
+    const blockedUrl = "https://fool.com/the-ascent/blocked";
     const published = await persistLedger({
       ledger: "published", registryEntry: planner.registrations.published, outputRoot: root,
       ledgerSettings: planner.ledgerSettings,
@@ -83,12 +88,8 @@ test("preflight uses the configured age override, strict boundary and future tol
       publishedDays: [{ day: "2026-10-21", raw_files: published.files.map(file => file.path) }],
       settledFailureDays: [{ day: "2026-10-22", raw_files: settled.files.map(file => file.path) }],
     });
-    run.exclusions = {
-      ...history,
-      blocked_url_markers: ["/blocked"],
-      published_window_days: 1,
-    };
-    const result = await harvestFeeds(await inputs(), run, destination(root), { transport, resolve: transport.resolve });
+    run.exclusions = { ...history, published_window_days: 1 };
+    const result = await harvestFeeds(loaded, run, destination(root), { transport, resolve: transport.resolve });
     expect(transport.requests.some(request => request.url.pathname === "/stale")).toBe(false);
     expect(result.rejections.map(row => row.drop_reason).sort()).toEqual([
       "ALREADY_PUBLISHED", "BLOCKED_URL_MARKER", "SETTLED_FAILURE", "STALE_MAX_AGE_EXCEEDED",
@@ -96,9 +97,10 @@ test("preflight uses the configured age override, strict boundary and future tol
     expect(history.history.published).toMatchObject({ required_day_count: 2, known_day_count: 1 });
     expect(history.history.published.missing_days).toHaveLength(1);
     expect(history.history.settled_failures).toMatchObject({ required_day_count: 1, known_day_count: 1 });
-    for (const path of ["/published", "/settled", "/blocked"]) {
+    for (const path of ["/published", "/settled"]) {
       expect(transport.requests.some(request => request.url.pathname === path)).toBe(false);
     }
+    expect(transport.requests.some(request => request.url.href === blockedUrl)).toBe(false);
     expect(result.articles.filter(article => article.rejection?.drop_reason === "ALREADY_PUBLISHED")[0]?.rejection)
       .toMatchObject({ details: { matched_url_key: deriveUrlKey("https://news.example/published"),
         published_on: "2026-10-21", history_window_days: 1 } });
@@ -106,8 +108,9 @@ test("preflight uses the configured age override, strict boundary and future tol
       .toMatchObject({ details: { matched_url_key: deriveUrlKey("https://news.example/settled"),
         failure_code: "network_error" } });
     expect(result.articles.filter(article => article.rejection?.drop_reason === "BLOCKED_URL_MARKER")[0]?.rejection)
-      .toMatchObject({ details: { matched_url_key: deriveUrlKey("https://news.example/blocked"),
-        matched_url_marker: "/blocked" } });
+      .toMatchObject({ url_key: deriveUrlKey(blockedUrl), details: {
+        matched_url_key: deriveUrlKey(blockedUrl), matched_url_marker: "fool.com/the-ascent/",
+      } });
     const early = result.articles[0]!;
     if (early.rejection === null) throw new Error("Expected expired entry rejection");
     expect(early.rejection?.details.age_hours).toBeCloseTo(12 + 1 / 3600, 8);
@@ -120,7 +123,7 @@ test("preflight uses the configured age override, strict boundary and future tol
     expect(result.candidates.every(row => row.candidate_id === deriveCandidateId(run.writer.run_id, row.source_id, row.entry_ordinal))).toBe(true);
     expect(result.first_sight_candidates.map(row => row.url_key)).toContain(deriveUrlKey(publishedUrl));
     expect(result.first_sight_candidates.map(row => row.url_key)).toContain(deriveUrlKey(settledUrl));
-    expect(result.first_sight_candidates.map(row => row.url_key)).not.toContain(deriveUrlKey("https://news.example/blocked"));
+    expect(result.first_sight_candidates.map(row => row.url_key)).not.toContain(deriveUrlKey(blockedUrl));
     expect(result.feed_outcomes[0]).toMatchObject({ parsed_count: 9, harvested_count: 5 });
     const written = result.rejection_files.files[0]!;
     const persisted = (await readLedgerParquet(join(root, written.path), "rejections", CandidateRejectionContract)).rows;

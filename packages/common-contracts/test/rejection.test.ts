@@ -17,8 +17,12 @@ import {
   PreviousHarvestDiagnosticsSchema,
   ArticleAssessmentContract, EditorialSelectionContract, SourceReliabilityPenaltySchema,
   SOURCE_RELIABILITY_VERSION, FEED_HISTORY_EVENT_VERSION, CONTRACT_VERSION,
+  ParsedFeedBatchSchema, SelectedFeedBatchSchema, PartitionedFeedBatchSchema,
+  PlannerHarvestObservationSchema, PlannerSeenEvidenceSchema, PlannerSeenRowSchema,
+  PlannerStageContextSchema, PlannerStageRequestSchema, StageReferenceRequestSchema,
+  PartitionArticlesRequestSchema,
 } from "../src/index";
-import { runtimeSchemas, schemas } from "./schema-binding";
+import { plannerStageSchemas, runtimeSchemas, schemas } from "./schema-binding";
 
 const day = "2026-10-20";
 const at = `${day}T12:00:00Z`;
@@ -451,5 +455,72 @@ describe("planning audit contracts", () => {
     }
     expect(TimestampSchema.safeParse(`${at.slice(0, -1)}.123Z`).success).toBe(false);
     expect(RecordedInstantSchema.safeParse("2026-02-31T00:00:00.123Z").success).toBe(false);
+
+    const batchId = "00000000-0000-4000-8000-000000000001";
+    const correlationId = "00000000-0000-4000-8000-000000000002";
+    const context = {
+      now: "2026-10-24T12:34:56Z", captured_at: "2026-10-24T12:34:56.999Z",
+      date: "2026-10-24", run_id: "2026-10-24-1", correlation_id: correlationId,
+      writer: {
+        run_id: "2026-10-24-1", attempt: 1, job: null, pipeline_name: "feed-ingest-plan",
+        task_name: "plan", shard: 0, producer: "feed-ingest-plan", git_sha: "a".repeat(40),
+      },
+    };
+    const parsed = {
+      batch_id: batchId, config_sha256: digest, context, request: {},
+      candidates: [], observations: {}, seen: { availability: "available", rows: [] },
+      evidence: {}, opportunity: {
+        covered_event_clusters: null, underrepresented_verticals: null, origin: null,
+      },
+      operational_history: {}, rejections: [],
+    };
+    expect(PlannerStageContextSchema.parse(context).captured_at).toBe(context.captured_at);
+    expect(PlannerStageRequestSchema.parse({})).toEqual({});
+    expect(PlannerStageRequestSchema.safeParse({ article_limit: null }).success).toBe(false);
+    expect(ParsedFeedBatchSchema.parse(parsed).version).toBe("2026-10-24");
+    expect(SelectedFeedBatchSchema.parse({
+      batch_id: batchId, config_sha256: digest, parsed_batch_id: batchId,
+      context, selections: [], rejections: [],
+    }).version).toBe("2026-10-24");
+    expect(PartitionedFeedBatchSchema.parse({
+      batch_id: batchId, config_sha256: digest, selection_batch_id: batchId,
+      context, strategy: "none", dispatch_count: 1, work: [0], dispatches: [],
+    }).version).toBe("2026-10-24");
+    expect(ParsedFeedBatchSchema.safeParse({
+      ...parsed, observations: { [digest]: { candidate_id: digest } },
+    }).success).toBe(false);
+    expect(PartitionedFeedBatchSchema.safeParse({
+      batch_id: batchId, config_sha256: digest, selection_batch_id: batchId,
+      context, strategy: "none", dispatch_count: 2, work: [0], dispatches: [],
+    }).success).toBe(false);
+    const observation = PlannerHarvestObservationSchema.parse({
+      candidate_id: digest, http_status: null, robots: null, fetch_failure: null,
+      paywall: null, paywall_evidence: "not-observed", extraction: "not-attempted",
+      observed_at: context.now,
+    });
+    expect(observation.diagnostics).toBeNull();
+    expect(PlannerHarvestObservationSchema.safeParse({
+      ...observation, preflight_freshness: null,
+    }).success).toBe(false);
+    expect(PlannerSeenEvidenceSchema.safeParse({
+      availability: "available", rows: [{
+        url_key: digest, first_seen_at: context.now, first_seen_run: context.run_id,
+      }],
+    }).success).toBe(false);
+    expect(PlannerSeenRowSchema.safeParse({
+      version: "2026-10-24", url_key: digest,
+      first_seen_at: context.now, first_seen_run: context.run_id,
+    }).success).toBe(true);
+    expect(plannerStageSchemas.PlannerSeenEvidence).toEqual(
+      z.toJSONSchema(PlannerSeenEvidenceSchema, { io: "input" }),
+    );
+    expect(StageReferenceRequestSchema.safeParse({
+      batch_id: batchId, path: "batch.json",
+    }).success).toBe(false);
+    expect(PartitionArticlesRequestSchema.parse({
+      batch_id: batchId, strategy: "round-robin", shards: 2,
+    })).toEqual({
+      batch_id: batchId, strategy: "round-robin", shards: 2,
+    });
   });
 });

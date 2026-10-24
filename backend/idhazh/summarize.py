@@ -7,7 +7,7 @@ reason a specific failure cannot happen:
   system prompt. An instruction inside it is data about a web page.
 - The response shape is enforced by the decoder, so an injection can change the
   words and cannot change the shape.
-- Every `<think>` block is asserted empty where nothing asked for one, rather
+- Every normalized reasoning channel is asserted empty where nothing asked for one, rather
   than assumed. A flag that silently stopped taking effect would otherwise cost
   faithfulness for months before anyone noticed. Where the entry DOES declare a
   closing marker, the block is what was asked for and is discarded here instead
@@ -79,7 +79,6 @@ PROMPT_PATH: Final = Path(__file__).parent / "prompts" / "summarize.txt"
 _MIN_CHARS_PER_WORD: Final = 5
 _MAX_CHARS_PER_WORD: Final = 12
 
-_THINK = re.compile(r"<think>(.*?)</think>", re.DOTALL | re.IGNORECASE)
 _FENCED_JSON = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
 # One sentence, ending at the terminator and keeping it. Used only by the
 # trimmer, which needs whole sentences and never a character offset.
@@ -371,20 +370,6 @@ def build_request(
     )
 
 
-def split_thinking(raw: str) -> tuple[str, str | None]:
-    """Return the content with every think block removed, plus what was inside them.
-
-    Every block is read, not the first. The caller asserts the absence of
-    reasoning, so one unread block defeats the assertion: an empty opening block
-    in front of a block that reasoned used to pass, and every block was stripped
-    afterwards, so nothing downstream could see it either.
-    """
-    blocks: list[str] = _THINK.findall(raw)
-    if not blocks:
-        return raw.strip(), None
-    return _THINK.sub("", raw).strip(), "\n".join(blocks)
-
-
 def parse_draft(
     raw: str,
     *,
@@ -395,20 +380,14 @@ def parse_draft(
 ) -> SummaryDraft:
     """Believe the response only after it has proved its shape.
 
-    **A thinking block is a failure where nothing asked for one, and discarded
-    where something did.** With `thinking` false the flag that was supposed to
-    disable reasoning did not take, and that is a refusal rather than a
-    curiosity. With `thinking` true the block is what the entry asked for: it is
-    stripped here and never returned, so nothing downstream can read a word of
-    it. A refusal that fires on the normal path is not a control, which is why
-    this case is conditional rather than deleted.
+    The completion boundary has already separated reasoning using runtime
+    channels or the selected entry's explicit delimiters. This parser reads
+    only the answer; `to_summary` enforces the reasoning declaration.
 
     `source_words` and `brief` pick the same band the reply was asked under, so
     the decoder validates a key-point count against the band that requested it.
     """
-    content, thought = split_thinking(raw)
-    if not thinking and thought is not None and thought.strip():
-        raise ValueError("thinking was disabled and the model reasoned anyway")
+    content = raw.strip()
     fenced = _FENCED_JSON.match(content)
     if fenced:
         content = fenced.group(1)

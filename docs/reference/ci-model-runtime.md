@@ -1,6 +1,6 @@
 # The model on a runner
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-24
 
 How a job gets the inference runtime and the weights, and how it proves it got
 the ones it asked for. Every value here is exact: a pin, a cache key, a digest,
@@ -12,6 +12,10 @@ a flag. The workflows that use them are in
 `digest.yml`, `llm-council.yml` and `idhazh-pipeline-tests.yaml` run one
 llama.cpp build. Each checks the archive against its digest before it unpacks
 anything, and each goes on to download weights.
+The independent `yen-ai-pipeline.yml` and `ai-pipeline-tests.yml` launchers
+now use the same pinned build and shared model-server action. Their optional
+`models_file` input selects a scratch config; blank reads the committed pointer.
+They no longer choose a repository, filename, quantization or server settings.
 
 | Variable | Value |
 | --- | --- |
@@ -24,10 +28,10 @@ on 2026-08-25 by downloading the 16,377,727-byte archive and hashing it.
 
 ### Where the model file is read, and how many places that is
 
-**One place. `backend/utilities/model_refs.py` is the only reader of a model
-file**, and `backend/utilities/model_runtime.py` is the only program that acts
-on what it says - the pin, the runtime install, the download, the check and the
-server start, as five verbs of one program.
+Cold jobs resolve the selected files through `backend/utilities/model_refs.py`.
+Runtime callers validate the same selected entry through `idhazh.config.load`.
+`backend/utilities/model_runtime.py` handles the pin, runtime install, download,
+verification, server start and request projection as six verbs of one program.
 
 | Verb | What it answers |
 | --- | --- |
@@ -36,6 +40,20 @@ server start, as five verbs of one program.
 | `download-model-files` | fetch every file the model declares, in declared order, each proved before it counts |
 | `verify-model-files` | check every declared file against its recorded digest and its declared size |
 | `start-server` | start llama-server against one config root and prove the process survived |
+| `describe-request` | export the validated selected alias, sampling, template variables, inline delimiters, timeout and committed destination for the independent TypeScript callers |
+
+`describe-request` emits a transient JSON response, not another registry or a
+generated schema file. The TypeScript consumer validates the few fields it uses
+and preserves the declared request values. It does not accept a model name or
+recipient address from the environment. The model's own runtime template still
+formats chat turns; rendered Python calls derive their markers from that same
+template. An invalid response fails its consumer's schema instead of supplying
+invented fallback fields.
+After health and identity checks, the shared model-server action invokes
+`describe-request --prove-runtime`. It renders the selected template and
+requires the existing constrained-decoder probe to pass before any caller
+receives an article. Unsupported template structure or schema handling fails
+startup, even when the process can answer `/health`.
 
 **The pin is `config/llama-cpp-pin.json`** - three keys, `build`, `asset` and
 `sha256`. It is a tunable that changes on an upgrade, so it lives in `config/`

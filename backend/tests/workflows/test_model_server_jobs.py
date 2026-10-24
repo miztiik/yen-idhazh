@@ -11,9 +11,7 @@ from typing import Final
 from urllib.parse import urlsplit
 
 import pytest
-from contracts._model_cases import MODEL_FILES
 from pytest import MonkeyPatch
-from support.models import llama_server_flags
 from support.paths import CONFIG_DIR, REPO_ROOT, read_text
 
 from idhazh.contracts.app_config import AppConfig
@@ -45,7 +43,6 @@ from ._harness import (
     SERVER_LOG_FILE,
     SERVER_STARTER_MODULES,
     START_SERVER_MODULE,
-    WORKFLOWS_DIR,
     _action_call,
     _artifact_upload,
     _bash,
@@ -139,7 +136,7 @@ def test_every_job_that_starts_a_server_reaches_the_one_argv_builder() -> None:
     # the list itself. Only `run:` scripts are read, because a dispatch-form
     # description that names `-tb` tells an operator what an input tunes and
     # starts nothing.
-    flags = llama_server_flags(MODEL_FILES)
+    flags = ("--alias", "--no-context-shift", "--port")
     executed: list[tuple[str, str]] = []
     for filename, workflow in sorted(workflows.items()):
         for job_name in _mapping(workflow.get("jobs"), "jobs"):
@@ -226,13 +223,18 @@ def test_the_model_block_is_one_action_with_a_contract_its_callers_can_read() ->
             f"{filename}/{job_name} hands over {sorted(set(given) - set(declared))}, "
             "which resolves to nothing"
         )
-        names = [
-            str(step.get("name") or step.get("uses") or "")
-            for step in _declared_steps(workflows[filename], job_name)
-        ]
+        steps = _declared_steps(workflows[filename], job_name)
         # A `./` action is this repository at the commit the run checked out, so
         # a job that calls one before checking out has nothing to call.
-        assert names.index("actions/checkout@v6") < names.index(MODEL_SERVER_ACTION), (
+        checkout = next(
+            index
+            for index, step in enumerate(steps)
+            if str(step.get("uses", "")).startswith("actions/checkout@")
+        )
+        launch = next(
+            index for index, step in enumerate(steps) if step.get("uses") == MODEL_SERVER_ACTION
+        )
+        assert checkout < launch, (
             f"{filename}/{job_name} calls the action before it has the tree"
         )
 
@@ -242,6 +244,9 @@ def test_the_model_block_is_one_action_with_a_contract_its_callers_can_read() ->
     # built or tested without.
     for caller in ("judg", "council", "digest.yml"):
         assert caller not in text.lower(), f"the action names its caller: {caller}"
+    assert "describe-request" in text and "--prove-runtime" in text, (
+        "health alone cannot prove template or constrained-decoder compatibility"
+    )
 
 
 @requires_bash
@@ -407,7 +412,7 @@ def test_the_memory_summary_reads_what_the_sampler_wrote() -> None:
 def test_the_loopback_port_is_one_number_wherever_it_is_written() -> None:
     """A server on one port and a stage posting to another is every item failing.
 
-    There is one port in this project and it lives inside
+    The local model's port lives inside
     `model_server.base_url`. The server command reads it back out of the config
     root the job runs under, and every stage posts to that same value, so the
     two cannot disagree by construction.
@@ -447,13 +452,23 @@ def test_the_loopback_port_is_one_number_wherever_it_is_written() -> None:
 
     probed = urlsplit(PROBE_URL_VALUE)
     host, port = str(probed.hostname), str(probed.port)
-    for filename in sorted(_load_workflows()):
-        for line in read_text(WORKFLOWS_DIR / filename).splitlines():
-            if host in line or re.search(rf"\b{port}\b", line):
-                assert PROBE_URL_ENV in line, (
-                    f"{filename} spells an address at `{line.strip()}` rather than "
-                    f"reading {PROBE_URL_ENV} back"
-                )
+    for filename, workflow in sorted(_load_workflows().items()):
+        for job_name in _mapping(workflow.get("jobs"), "jobs"):
+            for step in _steps(workflow, job_name):
+                body = step.get("run")
+                if not isinstance(body, str):
+                    continue
+                if not any(
+                    marker in body
+                    for marker in (PROBE_URL_ENV, "PROBE_URL", "/v1/models", ARGV_MODULE_CALL)
+                ):
+                    continue
+                for line in body.splitlines():
+                    if host in line or re.search(rf"\b{port}\b", line):
+                        assert PROBE_URL_ENV in line or "PROBE_URL" in line, (
+                            f"{filename}/{job_name} spells a model address at "
+                            f"`{line.strip()}` rather than reading its probe input"
+                        )
 
 
 def _a_config_root_posting_to(root: Path, base_url: str) -> Path:

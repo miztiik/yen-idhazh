@@ -24,7 +24,8 @@ unstaged edits and untracked files. Use `--base <ref>` for a different base.
 Every selected group prints the path and reason that selected it. Shared
 contracts, config, styles, layouts and dependencies expand coverage. An unknown
 path or an unreadable base selects broader coverage, never an empty pass.
-Documentation-only changes run a whitespace check, not either application suite.
+The scope job runs a whitespace check for every change. Documentation-only
+changes skip the application jobs, instead of starting one to do no code checks.
 
 | Group | What it checks | Preparation |
 | --- | --- | --- |
@@ -241,6 +242,13 @@ Hosted duration is measured by the CI step, not estimated as a passing gate.
 
 This subsection stays here because it selects the local commands; format and
 compatibility rules remain in the persistence contract.
+
+The independent summarizer service reads its selected model through the
+existing Python config loader, unlike the feed planner above. From the
+repository root, its native checks are `bun run --cwd services/summarizer check`
+and `bun run --cwd services/summarizer test`. Its tests copy named config inputs
+and replay recorded responses on loopback; they download no model and contact
+no external service.
 
 ## Design rationale
 

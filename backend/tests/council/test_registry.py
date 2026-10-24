@@ -234,7 +234,9 @@ def test_a_tenant_refuses_the_night_when_the_council_resolves_it(venue: Path) ->
     _that_refuses(venue, "a-paper-tenant")
 
     with pytest.raises(ValueError, match="a-paper-tenant"):
-        registry.tenant("a-paper-tenant", app=AppConfig.model_validate({}))
+        registry.tenant(
+            "a-paper-tenant", app=AppConfig.model_validate({"models_file": "models/test.json"})
+        )
 
 
 def test_the_check_reads_the_config_the_caller_named(venue: Path) -> None:
@@ -245,7 +247,7 @@ def test_the_check_reads_the_config_the_caller_named(venue: Path) -> None:
     """
     a_venue(venue, package=A_VENUE, slugs={"a-paper-tenant": (1, ())})
     _that_refuses(venue, "a-paper-tenant")
-    app = AppConfig.model_validate({})
+    app = AppConfig.model_validate({"models_file": "models/test.json"})
     council = CouncilConfig(shard_timeout_minutes=199)
 
     with pytest.raises(ValueError, match=str(council.shard_timeout_minutes)):
@@ -261,7 +263,9 @@ def test_a_tenant_nobody_asked_for_cannot_refuse_the_night(venue: Path) -> None:
     )
     _that_refuses(venue, "a-paper-tenant")
 
-    assert registry.tenant("z-paper-tenant", app=AppConfig.model_validate({})).judge_id == (
+    assert registry.tenant(
+        "z-paper-tenant", app=AppConfig.model_validate({"models_file": "models/test.json"})
+    ).judge_id == (
         "z-paper-tenant"
     )
 
@@ -274,6 +278,8 @@ def test_a_tenant_that_declares_no_check_is_asked_nothing(venue: Path) -> None:
     """
     a_venue(venue, package=A_VENUE, slugs={"a-paper-tenant": (1, ())})
 
-    assert registry.tenant("a-paper-tenant", app=AppConfig.model_validate({})).judge_id == (
+    assert registry.tenant(
+        "a-paper-tenant", app=AppConfig.model_validate({"models_file": "models/test.json"})
+    ).judge_id == (
         "a-paper-tenant"
     )
