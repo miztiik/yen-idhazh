@@ -50,15 +50,17 @@ operation record. The planner-only event stream remains its TypeScript-owned
 contract. Use the existing request-attempt and observation records for request
 counts; do not persist a duplicate counter on the event.
 
-| Field or measure | Proposed type and bound | Source and rule |
-| --- | --- | --- |
-| `publisher_id` | Nonempty configured ID or null | Record the configured ID at observation time after Row 3. Keep null when unknown; never backfill history from today's catalog. |
-| `attribution` | `source`, `pipeline` or `unresolved` | Required on each operation outcome. A status code alone does not establish source attribution. |
-| `failure_code` | Nullable string from the producer's declared code vocabulary | Preserve the exact recorded cause. An unrecognized code maps to `unresolved`, not source failure. |
-| `cpu_ms` | Nullable integer, `>= 0` | Eligible only when measured CPU belongs exclusively to this operation. A process CPU delta during overlapping work is not source-attributable. |
-| Task-profile process CPU | Existing pinned-process CPU delta, diagnostic only | It is not additive across overlapping operations and cannot enter source waste. Do not copy it into an article event. |
-| `private_memory` | `unavailable` for source scoring until attribution is proved | Process RSS, including sampled maximum, is diagnostic only. It includes retained and shared memory and cannot identify which source caused it. |
-| `http_request_count` | Nullable integer, `>= 0` | Count dispatched article-target HTTP requests, including each retry and redirect once. Exclude validation checks and API calls. Leave null when the producer cannot prove complete coverage. |
+### Table A - Proposed observation fields
+
+| Id | Field or measure | Proposed type and bound | Source and rule |
+| --- | --- | --- | --- |
+| A1 | `publisher_id` | Nonempty configured ID or null | Record configured ID after Row 3. Keep unknown null; never backfill history. |
+| A2 | `attribution` | `source`, `pipeline` or `unresolved` | Required per operation. A status code alone does not prove source attribution. |
+| A3 | `failure_code` | Nullable declared code | Preserve cause; unknown codes map to `unresolved`. |
+| A4 | `cpu_ms` | Nullable integer, `>= 0` | Eligible only when CPU belongs exclusively to this operation. Overlapping process deltas are not attributable. |
+| A5 | Task-profile process CPU | Existing pinned-process delta; diagnostic only | Not additive across overlapping operations and never eligible for source waste. |
+| A6 | `private_memory` | Unavailable for source scoring until attribution is proved | RSS and sampled maximum are diagnostic; they include retained/shared memory and cannot identify its source. |
+| A7 | `http_request_count` | Nullable integer, `>= 0` | Count complete article-target attempts, including retries and redirects once. Exclude validation/API calls; unknown if coverage is incomplete. |
 
 For requests, `FetchAttemptSchema` already records one row per producer
 execution, including retries and manually followed redirects. Its `phase`
@@ -185,18 +187,7 @@ source-attributable CPU or memory evidence exists.
 
 Reuse the existing registered ledger writer for observed events and state.
 Define a `settle-ingest-feedback` stage that writes a versioned state snapshot;
-concurrent invocations remain allowed. The snapshot should carry:
-
-| Field | Proposed type and bound |
-| --- | --- |
-| `state_revision` | Positive integer, advanced once per committed snapshot |
-| `parent_revision` | Nullable positive integer naming the snapshot read |
-| `written_at_utc`, `evidence_cutoff_utc` | UTC instants |
-| `window_days` | Positive integer copied from the configured rolling-window setting |
-| `window_start`, `window_end` | UTC dates; exactly the named closed days selected by `window_days` |
-| `code_revision`, `policy_digest` | The writer's Git revision and digest of the settings used |
-| `sources` | Rows keyed by nonempty `source_id`, each with the component and restriction fields below |
-| Per-source `next_poll_at_utc`, `next_probe_at_utc` | Nullable UTC instants |
+concurrent invocations remain allowed.
 
 **Owner-directed requirements, 2026-10-24 UTC:** make the evidence window
 configurable, defaulting to seven closed UTC days; read registered data under
@@ -215,6 +206,19 @@ that date's raw files. Follow the existing period precedence so a date comes
 from exactly one source. Do not append raw re-run files to compact rows when
 the index already names that date; this avoids counting the same observations
 twice.
+
+### Table B - Proposed snapshot fields
+
+| Id | Field | Proposed type and bound |
+| --- | --- | --- |
+| B1 | `state_revision` | Positive integer, advanced per committed snapshot |
+| B2 | `parent_revision` | Nullable positive integer naming the snapshot read |
+| B3 | `written_at_utc`, `evidence_cutoff_utc` | UTC instants |
+| B4 | `window_days` | Positive integer copied from configured setting |
+| B5 | `window_start`, `window_end` | UTC dates; the closed days selected by `window_days` |
+| B6 | `code_revision`, `policy_digest` | Writer revision and settings digest |
+| B7 | `sources` | Rows keyed by nonempty `source_id`, with components and restriction fields |
+| B8 | Per-source `next_poll_at_utc`, `next_probe_at_utc` | Nullable UTC instants |
 
 Each source row has `publisher_id: string|null` and `cpu`, `private_memory`
 and `http_requests` component records. Each component has
@@ -240,10 +244,9 @@ the planner-only event stream, declare its native model under
 the existing binding tests.
 
 The checkpoint is `state_revision`, `evidence_cutoff_utc`,
-`window_start` and `window_end`; do not add a growing list of settled event
-IDs. Recompute the rolling window from its configured named UTC ledger days.
-Select the latest compatible snapshot through the registered ledger index,
-not a repository walk.
+`window_start` and `window_end`; do not add settled event IDs. Recompute the
+configured named UTC days and select the latest compatible snapshot through
+the registered index, not a repository walk.
 
 Settle by `event_id`; an identical replay adds no amount or support. A
 correction names the event it replaces and does not create another article
@@ -284,24 +287,34 @@ execution surface and reopen the approved TypeScript-only boundary; that is
 not the recommended route. A stale snapshot must never be replayed over a
 newer restriction.
 
-No other run waits for settlement. If publication is refused or retries are
-exhausted, leave the previously committed snapshot and restrictions unchanged,
-retain the run artifacts, report settlement as failed/unsettled, and do not
-claim completion. Missing or unreadable state is not empty history and must
-not clear known restrictions.
+Settlement does not queue or hold other runs. If publication is refused or
+retries are exhausted, leave the previously committed snapshot and
+restrictions unchanged, retain the run artifacts, report settlement as
+failed/unsettled, do not advance `state_revision`, and do not stop the entire
+planner run. Missing or unreadable state is not empty history and must not
+clear known restrictions.
 
 A run that already read the previous snapshot may finish with that view; a new
 restriction governs allocations that read after it is published. Preventing
 already-running allocations from using an older view would require a separate
 per-source reservation rule, which is not included in this proposal.
 
-The next allocation must read the latest compatible committed snapshot while
-keeping its code and policy pinned. A failed commit does not advance
-`state_revision`; the next settlement recomputes the named evidence window.
-Missing or incompatible state must not become empty history or erase
-restrictions. Whether the affected allocation stops or proceeds without
-applying feedback state remains an operator-policy choice to settle before
-implementation; it must not claim that unknown state was applied.
+The next allocation reads the latest usable summary with its code, revision
+and original UTC window. If the current summary is unreadable, use the last
+valid saved summary when one exists and label it `stale_fallback`; preserve its
+original window and do not invent an expiry time. Apply its saved qualified
+adjustment and known restrictions as the best available state, but do not call
+them current. If none is readable, continue selection without an operational
+adjustment and emit `restrictions_unverified`; never write empty history over
+saved state. Existing robots, trust and access-safety checks do not change.
+
+The proposed read result carries `summary_status: current|stale_fallback|unavailable`,
+nullable `state_revision` and nullable `window_start`/`window_end`. For
+`unavailable`, the score adjustment is null and the result includes the
+`restrictions_unverified` notice, whose meaning is that restrictions could
+not be verified. Fallback data retains its original revision and date range.
+No age threshold is proposed; the status records what the reader used without
+claiming it is current.
 
 ## D5 proposal: bounded controls and operational review
 
@@ -311,19 +324,29 @@ automatic score use after qualification is already approved. Keep any
 existing API development flag separate from feedback policy. This proposal
 does not add selection idempotency, conditional HTTP or semantic assessment.
 
-| Setting | Proposed type and default | Effect |
-| --- | --- | --- |
-| `trial_opportunities` | Integer, 25 maximum per source trial | Report each attempted article. Qualification still needs at least 20 measured opportunities and 80 percent coverage; 25 allows 20 measured opportunities at exactly 80 percent. It does not activate catalog membership. |
-| `restriction_failures` | Integer, 3 distinct source-attributed failed opportunities in the configured closed-UTC-day window, at the same endpoint or feed scope | Pause ordinary work only at that scope. An explicit article-level refusal affects only that article. A bare HTTP 403, pipeline failure or unresolved cause does not trigger it. |
-| `restriction_pause_hours` | Integer, 24 | After the pause, make one recovery probe due; expiry does not restore ordinary work. |
-| `recovery_successes` | Integer, 3 distinct successful article opportunities across at least 2 UTC dates, with at least 80 percent known outcomes | Restore trial access only after the observed sequence; successful time alone is not recovery. |
-| `special_probe_budget` | Integer, 20 opportunities per planner run, at most 1 per source | Shared cap for admission and recovery probes, with due recovery probes first and stable source ID as the tie-break. This is not a cap on ordinary configured feed polls or article fetches. |
-| `maximum_poll_gap_hours` | Integer, 24 | Schedule each permitted feed no later than the current 24-hour freshness target. If workflow delay makes that impossible, record missed freshness; do not claim a guarantee or silently drop ordinary work. |
+### Table C - Provisional controls requiring approval
 
-The trial, restriction, recovery and probe numbers are proposals, not owner
-decisions. A 20-item probe allowance and the score's 20-item support floor
-serve different purposes; the first limits extra work and the second
-qualifies a score. They must not be silently treated as the same approval.
+| Id | Setting | Proposed type and value | Effect |
+| --- | --- | --- | --- |
+| C1 | `trial_opportunities` | Integer, 25 per source trial | Report each attempt. Does not activate catalog membership. |
+| C2 | `restriction_failures` | 3 consecutive known source-attributed failures for one source and endpoint/feed scope, within the configured window | A known success at that scope resets the streak; unknown, pipeline and unresolved outcomes neither assert failure nor reset it. Article refusal restricts only that article. |
+| C3 | `restriction_pause_hours` | Integer, 24 | Pause ends by making a recovery probe due; elapsed time alone does not restore ordinary work. |
+| C4 | `recovery_successes` | 3 distinct successful opportunities across at least 2 UTC dates, with at least 80 percent known outcomes | Restore trial access only after observed recovery. |
+| C5 | `special_probe_budget` | 20 opportunities per planner run, at most 1 per source | Recovery first, then stable source ID. Does not cap ordinary fetches. |
+| C6 | `maximum_poll_gap_hours` | Integer, 24 | Proposed freshness ceiling only; it does not define adaptive polling cadence. |
+
+These are estimates, not approved limits. In particular, the consecutive
+failure rule avoids restricting a high-volume source for scattered failures;
+the threshold and window still need approval. A 20-item probe allowance is
+not the score's 20-item support floor. Permanent retirement remains curated.
+
+Adaptive polling cadence remains unresolved. I Feed names new eligible
+discoveries per completed permitted poll as the evidence and requires due
+times within freshness and coverage bounds, but this plan has no approved
+formula mapping that rate to a next-poll time. A 24-hour maximum alone does
+not implement that behavior, so Row 13 is not ready to implement. Owner
+approval is needed for the rate-to-interval formula and any minimum interval;
+do not add a statistical model to fill this gap.
 Keep permanent retirement in the curated catalog. Never broaden a restriction
 from an article or endpoint to a feed or publisher without evidence at that
 larger scope.
@@ -370,17 +393,22 @@ RSS reliability. Preserve RSS observations as historical evidence only.
 
 The saved score needs one typed `source_operational` evidence object:
 
-| Field | Proposed type and bound |
-| --- | --- |
-| `status` | `qualified`, `insufficient_support`, `missing_state` or `incompatible_state` |
-| `state_revision` | Nullable positive integer |
-| `policy_digest` | Nullable SHA-256 digest |
-| `window_start`, `window_end` | Nullable UTC dates |
-| `cpu`, `private_memory`, `http_requests` | Fixed component records: `status` is `qualified`, `insufficient_support` or `unavailable`; nullable integer `total` and `wasted` amounts are `>= 0`; `attempted_opportunities` and `measured_opportunities` are integers `>= 0`; nullable `coverage` and `waste_fraction` are finite numbers in `[0,1]`; `weight` is a finite number in `[0,1]`, set to one third |
-| `operational_penalty` | Nullable finite number in `[0,1]` |
-| `source_authority_contribution` | Finite number `>= 0` used for this choice |
+### Table D - Proposed saved-score evidence
 
-The current score contract has no operational status or state revision field.
+| Id | Field | Proposed type and bound |
+| --- | --- | --- |
+| D1 | `status` | `qualified`, `insufficient_support`, `missing_state` or `incompatible_state` |
+| D2 | `summary_status` | `current`, `stale_fallback` or `unavailable` |
+| D3 | `state_revision` | Nullable positive integer from the summary actually used |
+| D4 | `policy_digest` | Nullable SHA-256 digest |
+| D5 | `window_start`, `window_end` | Nullable UTC dates from the summary actually used |
+| D6 | `notice_code` | `restrictions_unverified` or null; set when no saved summary is readable |
+| D7 | `cpu`, `private_memory`, `http_requests` | Fixed components; each has `status: qualified|insufficient_support|unavailable`, nullable integer `total`/`wasted >= 0` (`wasted <= total` when known), nonnegative integer `distinct_opportunities`/`measured_opportunities`, nullable `coverage`/`waste_fraction` in `[0,1]`, and `weight: 1/3` |
+| D8 | `operational_penalty` | Nullable finite number in `[0,1]` |
+| D9 | `source_authority_contribution` | Finite number `>= 0` used for this choice |
+
+The current score contract has no operational or summary-read status, state
+revision or notice field.
 Add the object to the saved score evidence, not to a new selection request or
 response. The old `source_reliability` shape remains readable for historical
 rows only; it is not a fallback for new scores. Reader-first schema migration
@@ -408,28 +436,16 @@ exception does not make the saved score row TypeScript-only.
 
 ## Open contract decisions
 
-- D3: the request-first score eligibility and one-third maximum are approved.
-  The seven-closed-day window is a configurable default. The typed producer
-  additions, nonsemantic extraction failure binding, poll/robots cost
-  separation and no-prior/no-decay proposal still need approval.
-  Source-attributable CPU is not established by the current task-profile
-  process delta. The approved support floor, coverage and weights do not
-  approve these producer fields.
-- D4: configurable rolling window, seven-day default, raw/compact registered
-  reads, concurrent runs and graceful failure are owner-directed requirements.
-  Snapshot fields, late-event policy, publication preparation and behavior
-  when state is missing or incompatible remain unapproved proposals.
-- D5: approve or change the trial, restriction, recovery, special-probe and
-  maximum-poll-gap values; approve the bounded review windows, cadence, caller
-  and report-only authority. Window lengths use the proposed configurable
-  `feedback.window_days`, default seven.
-- D8: the request-first component eligibility, equal-thirds/no-renormalization
-  behavior, no-impact treatment for unqualified evidence and no-RSS-fallback
-  rule are approved as recorded below. The typed `source_operational` trace
-  remains a proposal. The RSS penalty replacement, automatic use after
-  qualification and no-duplicate-penalty rule are already approved.
-Only the explicitly recorded portions are approved. The remaining D3-D5 and
-D8 proposals still need approval before implementation.
+- D3: producer fields, extraction binding, scope costs and no-prior/decay.
+- D4: snapshot fields, late-event rules, publication preparation and
+  missing-state details. Window, storage roots, concurrency and fallback
+  behavior are owner-directed.
+- D5: trial/restriction/recovery thresholds, polling formula, review cadence,
+  caller and authority.
+- D8: typed saved-score trace. The approved arithmetic and fallback behavior
+  are recorded above.
+
+These remaining choices need approval before implementation.
 
 ## Design rationale
 
@@ -438,11 +454,9 @@ waste is high, with the combined penalty capped at 1. Separate units are
 required because machine work and network requests are different facts. A
 normalized score can combine them only after the evidence identifies both the
 cost and the work that caused it. Historical host readings alone cannot support
-that attribution.
-This page stays whole because observations, settlement and scoring describe
-one feedback contract consumed by the next planner; separating them would
-detach persisted fields from the behavior they govern.
-
+that attribution. This page stays whole because the observations, settlement
+and score are one contract consumed by the next planner; splitting them would
+separate persisted fields from the behavior they govern.
 Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC: count cost as waste only
 when an operation fails to produce usable material for a supported source-side
 reason. Keep CPU, memory and request costs separate, normalize each before
@@ -465,6 +479,13 @@ The window rolls forward; it is not a frozen seven-date set. A whole-run queue
 was considered and withdrawn: observations are append-only, so it would hold
 fetch, parse and selection without preventing a stale derived snapshot from
 overwriting newer state. Protect only publication of the derived snapshot.
+
+Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC: when the current summary
+is unreadable, use the last valid saved summary if available. If none is
+readable, continue selection without operational adjustment and report that
+restrictions could not be verified. Mark fallback state as stale, retain its
+original UTC range, and do not invent an age limit. Do not overwrite saved
+state with empty history. Existing robots and access-safety rules remain.
 
 ## See also
 
