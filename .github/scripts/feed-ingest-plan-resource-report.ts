@@ -116,6 +116,11 @@ function machineMemory(profile: TaskProfile): string {
 
 function validateResourceProof(proof: ResourceProof, identity: ProfileProofIdentity): void {
   requireIdentity(proof, identity);
+  const task = proof.task_profile;
+  if (task !== null && (task.profile.identity.run_id !== identity.run_id
+    || task.profile.identity.correlation_id !== identity.correlation_id)) {
+    throw new Error("Controlled task CPU evidence differs from the completed planning attempt");
+  }
   if (proof.status !== "complete") return;
   const memory = proof.sample?.memory_kb;
   const copy = proof.copy;
@@ -128,11 +133,6 @@ function validateResourceProof(proof: ResourceProof, identity: ProfileProofIdent
     || copy.on.memcpy_probe_mib !== probeBufferMib(copy.floor_mib, copy.on.l3_cache_bytes, copy.cache_multiple)
     || copy.on.memcpy_probe_mib === null || copy.on.memcpy_probe_mib <= 0) {
     throw new Error("Completed standalone resource proof lacks actual RAM or separate copy OFF/ON measurements");
-  }
-  const task = proof.task_profile;
-  if (task !== null && (task.profile.identity.run_id !== identity.run_id
-    || task.profile.identity.correlation_id !== identity.correlation_id)) {
-    throw new Error("Controlled task CPU evidence differs from the completed planning attempt");
   }
 }
 
