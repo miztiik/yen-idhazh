@@ -12,6 +12,7 @@ import subprocess
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Final
 
 import pytest
 from conftest import CONFIG_DIR, REPO_ROOT, read_text, seed_item_health
@@ -127,6 +128,7 @@ PIN_RELAYED: str = f"${{{{ needs.plan.outputs.{PIN_OUTPUT} }}}}"
 
 #: The artifact the one plan crosses from the job that writes it to every runner.
 PLAN_ARTIFACT: str = "pipeline-tests-plan-${{ github.run_id }}"
+TEST_COMMIT: Final = "1234567890abcdef1234567890abcdef12345678"
 
 #: The config root one runner serves, proves and runs, as the workflow spells it.
 TEST_CASE_ROOT: str = "backend/var/test-cases/${{ matrix.test_case }}/config"
@@ -358,6 +360,8 @@ def test_each_runner_runs_its_own_test_case_on_the_one_plan() -> None:
     assert env["TEST_CASE"] == "${{ matrix.test_case }}"
     assert env["RUNNER"] == "${{ matrix.runner }}"
     assert env["RUN_DATE"] == "${{ needs.plan.outputs.date }}"
+    assert env["RUN_EXECUTION"] == "${{ github.run_id }}"
+    assert env["RUN_COMMIT"] == "${{ github.sha }}"
     assert env["LLAMA_CPP_BUILD"] == PIN_RELAYED, (
         "the build the run manifest stamps is the build the model block installed"
     )
@@ -1352,7 +1356,17 @@ def test_a_test_case_whose_pipeline_failed_is_not_reported_as_a_call_it_could_no
     )
     assert one_shard.shard_count() == 1
     completed = _ran_a_test_case(
-        tmp_path, ["run", _enabled_id(), "2026-09-14", "--execution", "1"], one_shard
+        tmp_path,
+        [
+            "run",
+            _enabled_id(),
+            "2026-09-14",
+            "--execution",
+            "1",
+            "--commit",
+            TEST_COMMIT,
+        ],
+        one_shard,
     )
     assert completed.returncode != 0, "a failed pipeline fails the step that ran it"
     assert completed.returncode != 2, (
@@ -1372,9 +1386,16 @@ def test_a_test_case_whose_pipeline_failed_is_not_reported_as_a_call_it_could_no
             ["2026-09-14"],
             model=RunPlan,
         )
+        raw = ledger.list_raw_files(
+            tmp_path / ledger.STATE_DIRNAME,
+            LedgerName.RUN_PLAN,
+            days={"2026-09-14"},
+        )
     assert [plan.run_id for plan in filed] == [drawn.run_id], (
         "the drawn plan is filed where this test case's stages read a plan, before they start"
     )
+    assert raw
+    assert {held.envelope.identity.git_sha for held in raw} == {TEST_COMMIT}
 
 
 def _scratch(tmp_path: Path, *, models_file: str | None) -> Path:
