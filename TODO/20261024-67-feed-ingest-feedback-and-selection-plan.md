@@ -34,7 +34,7 @@ tracing context. The existing default-off service flag gates the new routes.
 | A5 | Strategy | Extend the existing TypeScript planner and shared fetch/parse units. Keep observation capture, estimates, policy decisions, selection and partitioning separate. Use the existing native ledger writer, not a second ingestion service or scoring framework. Do not add request idempotency to `/select-articles`. Fowler reviewed this strategy and dependency order; the corrected plan still requires owner contract approval. |
 | A6 | Execution | Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. |
 | A7 | Historical authority | Plan 66's sixteen original component rows remain historical delivery records. Its [owner-expanded follow-up work](20261020-66-feed-ingest-plan.md#20-owner-expanded-follow-up-work), including the pending nonsemantic inventory, supplies the unfinished scope. References below use area titles, not another plan's row numbers. Do not dispatch duplicate work from both plans. |
-| A8 | Proposed versus approved | The feed-to-Parquet API flow is authorized, including one complete server-owned parse batch, combined screening/selection, separate partition/persistence APIs, server-generated batch identities and no selection idempotency or input-count cap. The configured 100-article limit bounds output only. Worker parity and production integration are deferred. Approved publisher identity, lifecycle, exposure and operational-score decisions are recorded in their owning [publisher](../docs/architecture/contracts/publisher-identity.md), [curation](../docs/architecture/sources/feed-curation.md) and [feedback](../docs/architecture/contracts/feed-ingest-feedback.md) pages. Publisher mappings remain curated data; uncertain matches stay unknown. Conditional HTTP is excluded. Producer cost bindings, state bounds and activation details not settled by Table D remain unapproved; they do not block the authorized API increment. |
+| A8 | Proposed versus approved | The feed-to-Parquet API flow is authorized, including one complete server-owned parse batch, combined screening/selection, separate partition/persistence APIs, server-generated batch identities and no selection idempotency or input-count cap. The configured 100-article limit bounds output only. Worker parity and production integration are deferred. Approved publisher identity, lifecycle, exposure and operational-score decisions are recorded in their owning [publisher](../docs/architecture/contracts/publisher-identity.md), [curation](../docs/architecture/sources/feed-curation.md) and [feedback](../docs/architecture/contracts/feed-ingest-feedback.md) pages. Publisher mappings remain curated data; uncertain matches stay unknown. Conditional HTTP is excluded. D3/D4 observation and settlement rulings and D8 requests-first eligibility are recorded in the feedback contract. D5 admission, restriction and polling thresholds are separate, unapproved, and do not block the authorized API increment or permit restrictions on ordinary fetches. |
 | A9 | Work surfaces | Implement from current `main` in dedicated worktrees. This coordinator's old `feed-ingest-plan-engine` branch already shipped through [#1612](https://github.com/miztiik/yen-idhazh/pull/1612); do not push it to deliver this continuation. Adopt the existing cache branch before creating another one for that work. |
 
 ### Table B - Original sixteen pending areas and the separate priority-review task
@@ -78,12 +78,12 @@ tracing context. The existing default-off service flag gates the new routes.
 | --- | --- | --- | --- |
 | D1 | Publisher catalog and recorded identity | Settled: `publishers[]` has `id` and `display_name`; feeds have nullable `publisher_id`; no separate alias, reconciliation or provenance fields; IDs stay immutable. Reviewed config changes and Git history record mapping decisions. AI may help find publisher-owned evidence; uncertain mappings remain null. `added_on` is the UTC date first entered; new retirements have `retired_on` and an open lower-case `retirement_reason`; missing legacy values stay unknown. Old config without `publishers` reads as empty; missing values stay unknown; undefined nonnull references fail. Compatible-reader tests belong in Row 2; evidence-backed mapping data belongs in Row 3. | Contract settled by owner; Rows 2, 3, 9 deliver it. |
 | D2 | Selection input and result | Settled for authorized API delivery: selection reads the complete parsed batch by server-generated UUIDv4 `batch_id`. Repeated calls create new stage IDs, not replay keys. A correlation groups observations, not files. Selection returns existing selection/exclusion rows; partition takes its saved batch ID and optional strategy/shards; persistence takes the partitioned batch ID. The configured 100-article limit bounds output only. Native snapshots, exact lookup and error behavior are declared in [operator APIs](../docs/architecture/sources/feed-operator-api.md#selection-partition-and-persistence-apis). | Execution authorized by owner on 2026-10-24; Rows 2 and 8 implement this subset without waiting for publisher/feedback designs. |
-| D3 | Operational observations and estimates | Field/type table for raw facts and resource readings; distinct article/opportunity/request units; attribution rules; valid domains; evidence timestamps; normalization; reference cohort/priors; decay; support and coverage; qualified versus unknown output. No uncalibrated threshold is presented as measured. | Owner approval; Rows 2, 4, 5, 6, 7. |
-| D4 | State ownership and settlement | Native state/checkpoint contract; registered storage; one serialized writer; correction key; latest-compatible revision lookup; bounded pending evidence; pinned code/policy; failed commit, late arrival, overlapping run, missing and incompatible state behavior. No new directory-discovery or retirement authority. | Owner approval; Rows 2, 10, 12, 13. |
-| D5 | Activation and work limits | Defaults and removal conditions for development flags; ordinary versus trial/recovery work; sample sufficiency; restriction scope/thresholds; recovery evidence; polling maximum gap; coverage/exploration; request/probe budgets; precedence and manual/automatic authority. For operational review, approve bounded recent/reference inputs, sample units and coverage, cadence/triggers, source/pipeline revision comparisons, action/rollback authority and the actual caller before Row 19 is dispatchable. Do not introduce a normal-fetch cap through implementation detail. | Owner approval; Rows 3-13 and 19 as applicable. |
+| D3 | Operational observations and estimates | Owner ruling, 2026-10-24 UTC: extend existing records with actual article-request totals, technical extraction outcomes and supported failure causes; keep source, pipeline and unresolved attribution distinct; save per-source operational state with evidence dates, coverage and policy version. Collect actual work for every fetch, parse and technical check; do not cap telemetry at 25 articles. No CPU or memory costs are invented. The configurable rolling closed-UTC-day window (default seven), support floor 20, 80 percent coverage and equal thirds remain approved. Requests are the only eligible component until CPU/private memory are attributable; no renormalization, requests at most one third, no impact for unqualified evidence, no RSS fallback. [The feedback contract](../docs/architecture/contracts/feed-ingest-feedback.md#d3-approved-observation-scope-and-remaining-field-details) holds the implementation details. | Observation behavior is approved; native field names and bindings are implementation details unless they change its meaning. Rows 2, 4, 5, 6, 7. |
+| D4 | State ownership and settlement | Owner rulings, 2026-10-24 UTC: use a configurable rolling closed-UTC-day window (default seven), read registered Parquet ledgers from `state/raw/` and `state/compact/` using existing precedence, allow concurrent runs and fail gracefully. Preserve immutable per-run observations. If another run saves first, recalculate only the derived per-source operational state from newer records; if save fails, retain old state and report failure. Already-running selection keeps its original state revision. Report corrections outside the configured window but exclude them from its score. If current state is unreadable, use valid saved state as stale evidence with its original UTC range; if none is readable, continue without adjustment and report unverified restrictions. Never replace saved state with empty history. Persist derived state as a registered Parquet ledger payload, never a JSON sidecar. These behaviors are approved; see [the feedback contract](../docs/architecture/contracts/feed-ingest-feedback.md#d4-approved-state-behavior-and-implementation-details) for implementation details. No global lock, run-wide serialization or selection idempotency. | Settlement behavior is approved; schema spelling and publication-adapter details need no further owner vote unless they change that behavior. Rows 2, 10. |
+| D5 | Activation and work limits | A2 conditional approval: for trial measurement only, select up to 100 distinct articles from each non-overlapping age group `[24,36]`, `[12,24)`, `[6,12)`, `[2,6)`, `[0,2)` hours; fewer if unavailable. Retries and redirects can raise HTTP requests above 500 across the groups. Reuse existing freshness evidence and fetch/parse/Parquet path; do not change ordinary selection, input limits or APIs. Persist each considered entry's selected, capped, unknown-age or future-age disposition. First deliver approved telemetry Rows 2, 4, 5 and 6. The earlier config-only estimate is withdrawn; total implementation cost is not established. No other trial, restriction, recovery or polling threshold is approved; adaptive polling formula remains open. See [the feedback contract](../docs/architecture/contracts/feed-ingest-feedback.md#d5-proposal-bounded-controls-and-operational-review). | A2 only, conditional on total cost after telemetry; no new telemetry approval required. |
 | D6 | Publisher exposure comparison | Settled 2026-10-24: use the approved 0.25 coefficient; count actual UTC-day publications plus current selections, divide by planned slots and cap at 1; known-empty history is zero, unavailable history uses current selections only and records the gap, and unknown publishers add no count; replace feed crowding rather than duplicate charging. | Approved; Row 9. |
 | D7 | Conditional HTTP state | Removed by owner ruling on 2026-10-24. Conditional requests, validator state, cached bodies, `304` handling and cache-miss recovery are not required in this plan; see C8 for the cost and route to reconsideration. | Closed; no delivery row. |
-| D8 | Isolated operational arithmetic and source-priority replacement | Amend I Feed's Python-arithmetic wording for the approved isolated TypeScript scope; name which qualified term replaces existing operational priority, its fallback and trace. Do not stack RSS reliability, article-delivery loss and inverse yield as duplicate penalties or alter article-quality evidence. | Owner approval; Rows 7, 10, 19. |
+| D8 | Isolated operational arithmetic and source-priority replacement | The approved isolated TypeScript score and RSS-penalty replacement are in [the feedback contract](../docs/architecture/contracts/feed-ingest-feedback.md#d8-proposal-replace-the-rss-penalty). The saved score trace is limited to operational-state status/revision, configured window/evidence dates and request counts/coverage. Keep policy version in derived operational state, not duplicated in the trace. Do not add restriction scopes or invented CPU/memory amounts. Requests-first eligibility, equal-thirds without renormalization, no impact for unqualified evidence and no RSS fallback remain approved. Do not stack RSS reliability, article-delivery loss and inverse yield as duplicate penalties or alter article-quality evidence. | Arithmetic and trace boundary approved; binding to the existing score contract remains. Rows 7, 10. |
 | D9 | Changed canonical URL identity | Bounded old/new comparison; encoding and repeated-query semantics; tracking policy; explicit equivalence and ambiguity rules; read-side migration and cross-language consumers. Approval of the matcher correction is not approval of this migration. | Separate Level-5 approval in Row 16. |
 | D10 | Genuine downstream invocation | Deferred by owner clarification on 2026-10-24. Deliver the feed-to-dispatch-Parquet flow first. Worker parity, the production adapter, workflow cutover and real downstream evidence require a later decision. | Not a gate for the current flow; Rows 17 and 18 deferred. |
 | D11 | New finding during execution | A new persisted meaning, trust-boundary crossing, unrelated repair, scope change or unsupported cost claim. | STOP-AND-SURFACE per [scope changes](../docs/how-to/handle-scope-change.md); do not relax a check or silently narrow delivery. |
@@ -98,14 +98,14 @@ tracing context. The existing default-off service flag gates the new routes.
 | E1 | 1 | Approve runtime contracts and activation policy | - | A | IN-FLIGHT | feed-ingest-feedback-selection | - | - |
 | E2 | 2 | Land compatible shared readers before writers | 1 | B | IN-FLIGHT | publisher-catalog-support | [#1704](https://github.com/miztiik/yen-idhazh/pull/1704) | - |
 | E3 | 3 | Implement curated publisher catalog references | 2 | C | IN-FLIGHT | publisher-catalog-support | [#1704](https://github.com/miztiik/yen-idhazh/pull/1704) | - |
-| E4 | 4 | Wire common fetch and parse observations | 2, 3 | D | PENDING | - | - | - |
+| E4 | 4 | Wire common fetch and parse observations | 2 (publisher IDs from 3 remain nullable until available) | D | PENDING | - | - | - |
 | E5 | 5 | Classify failure and work attribution | 4 | E | PENDING | - | - | - |
 | E6 | 6 | Aggregate article delivery and request costs | 5 | F | PENDING | - | - | - |
 | E7 | 7 | Compute supported operational estimates | 6 | G | PENDING | - | - | - |
 | E8 | 8 | Deliver selection, partition and persistence APIs | - (authorized stage contracts included) | E | DONE | feed-ingest-feedback-selection | - | - |
 | E9 | 9 | Apply the soft publisher-exposure preference | 8 | F | PENDING | - | - | - |
 | E10 | 10 | Settle feedback and consume it in the next allocation | 7, 8 | H | PENDING | - | - | - |
-| E11 | 11 | Report bounded technical admission trials | 10 | I | PENDING | - | - | - |
+| E11 | 11 | Report bounded technical admission trials | 2, 4, 5, 6 | I | PENDING | - | - | - |
 | E12 | 12 | Enforce temporary access restrictions and earned recovery | 11 | J | PENDING | - | - | - |
 | E13 | 13 | Apply discovery evidence before feed polling | 12 | K | PENDING | - | - | - |
 | E14 | 14 | Conditional HTTP (removed by owner ruling) | - | - | REMOVED | - | - | - |
@@ -114,8 +114,21 @@ tracing context. The existing default-off service flag gates the new routes.
 | E17 | 17 | Prove dispatch-Parquet parity, then wire digest workers | 8 | A | DEFERRED | - | - | - |
 | E18 | 18 | Connect actual downstream outcomes to the observer | 2, 10, 17 | M | DEFERRED | - | - | - |
 | E19 | 19 | Review operational regressions and prove the live loop | 9, 12, 13, 14, 21 | N | PENDING | - | - | - |
-| E20 | 20 | Adopt cache delivery and finish the combined hosted proof | - | Z | PENDING | potential-fiesta | [#1671](https://github.com/miztiik/yen-idhazh/pull/1671) | 6a57ff1e-bdfc-4248-86f8-cd5b17c8bde2 |
+| E20 | 20 | Adopt cache delivery and finish the combined hosted proof | - | Z | DONE | potential-fiesta | [#1671](https://github.com/miztiik/yen-idhazh/pull/1671), [#1707](https://github.com/miztiik/yen-idhazh/pull/1707) | 6a57ff1e-bdfc-4248-86f8-cd5b17c8bde2 |
 | E21 | 21 | Review and reuse configured numeric priorities | 9 | O | PENDING | - | - | - |
+
+The approved D3/D4 implementation sequence is Row 2 -> Row 4 -> Row 5 ->
+Row 6 -> Row 7 -> Row 10. Row 2 lands compatible readers and contracts; Row 4
+records all actual request and extraction work; Row 5 classifies supported
+source, pipeline and unresolved causes; Row 6 aggregates article-linked
+request totals and coverage; Row 7 computes the approved request-only score
+when evidence qualifies; Row 10 publishes the derived per-source operational
+state and makes the next selection consume the revision it read or its
+approved stale fallback. Publisher IDs from Row 3 remain null until known and
+do not block recording observations. A2 adds only a conditional, bounded
+trial to Row 11 after the telemetry prerequisites in Rows 2, 4, 5 and 6. It
+does not require Row 10's score consumer. Other D5 rules do not gate these
+rows and must not restrict ordinary fetching.
 
 ## 2. Shared implementation boundaries
 
@@ -142,7 +155,7 @@ tracing context. The existing default-off service flag gates the new routes.
 | G6 | Selection and dispatch result | Preserve the existing selection output format and unchanged selected candidate content, applying the existing limit of 100 selected articles to the whole batch. The partition stage produces the existing schema-validated dispatch rows; the planner persists them through the registered Parquet writer. This is the current delivery endpoint; worker parity and production integration are deferred. |
 | G7 | Soft breadth | Count confirmed publishers, not feeds or stories. Use actual known publication exposure and current choices. Unknown day history falls back to current-run publisher exposure with an explicit unavailable status; unknown publishers are not distinct invented publishers. Do not add a hard day ceiling. |
 | G8 | Observation independence | Distinct articles, allocated opportunities, HTTP attempts, polls and model time have different denominators. Retrying or replaying an article does not add an independent article vote. A nonallocated slot is not wasted; a model failure after usable extraction is not source-access failure. |
-| G9 | Durable feedback | Preserve raw facts before final run success; one writer settles supported outcomes and corrections idempotently. The next decision names its compatible state revision and cutoff. Unknown, pending, missing, known empty and observed zero remain distinct. |
+| G9 | Durable feedback | Preserve raw facts before final run success; each concurrent run may settle supported outcomes, and a stale publication recomputes derived state from newer committed records. The next decision names its compatible state revision and cutoff. Unknown, pending, missing, known empty and observed zero remain distinct. |
 | G10 | Bounded reads and state | Use named run inputs, configured periods and existing ledger indexes. Declare maximum catch-up and insufficient-state behavior. New registered state may represent temporary restrictions, but must not become another permanent-retirement authority. |
 | G11 | Technical admission and recovery | Report all sampled attempts, successful extraction warnings and exclusions. Technical success does not establish news value. Restriction expiry permits a probe, not automatic recovery. HTTP 403 alone proves neither paywall nor publisher-wide failure. |
 | G12 | Actual costs | Retain source, pipeline and unresolved attribution; keep shared startup/infrastructure costs separate. Optional unmeasured resource values stay null. Hardware-counter permission denial is not a measured zero. |
@@ -196,15 +209,15 @@ deferred.
 
 ## 3. Row #1 - Approve runtime contracts and activation policy
 
-- **Scope:** Resolve Table D's shared design decisions in the owning docs and obtain recorded owner approval before any dependent implementation.
+- **Scope:** Record settled decisions and close only the policy choices that still need owner approval before their dependent implementation.
 - **Level:** 5; consultation and documentation only until sign-off.
 - **Files touched:**
   - `docs/architecture/contracts/publisher-identity.md`
-  - `docs/architecture/contracts/feed-ingest-feedback.md` (new)
+  - `docs/architecture/contracts/feed-ingest-feedback.md`
   - `docs/architecture/sources/feed-operator-api.md`
   - `docs/architecture/sources/feed-curation.md`
   - `docs/architecture/sources/i-feed.md`
-- **Acceptance gates:** Local: documentation selector, named-link/anchor checks and ASCII/whitespace. CI: documentation-selected checks. Every D1-D8 decision has exact fields, units, defaults, ownership, migration, authority and acceptance examples; unresolved decisions keep this row open.
+- **Acceptance gates:** Local: documentation selector, named-link/anchor checks and ASCII/whitespace. CI: documentation-selected checks. D1, D2, D6 and D7 are settled. D3 observation scope and D4 settlement behavior are owner-approved; declare their native payload fields, producer bindings and registered Parquet ledger before writers, without another policy vote unless the meaning changes. D8 arithmetic and trace boundary are approved; bind the final trace shape to the existing score contract. D5 thresholds remain unapproved except for A2's conditional age-group trial. No other D5 approval is needed to implement Rows 2, 4, 5, 6, 7 and 10 without restricting ordinary fetches.
 - **Oracle:** Walk one real recorded article and one late corrected outcome from capture to the proposed next decision without inventing a field, timestamp, denominator or authority; this cannot establish effectiveness of an unbuilt policy.
 
 ### Table I - Decisions
@@ -221,24 +234,36 @@ deferred.
 
 ## 4. Row #2 - Land compatible shared readers before writers
 
-- **Scope:** This PR phase implements the publisher-identity subset only: the shared source snapshot field, its native declaration, versioned historical readers and the binding checks. The saved-batch APIs were delivered separately; their readers change here only to migrate old saved batches without inventing identity. Other feedback contracts remain open.
+- **Scope:** Implement only approved native declarations, bound copies, migrations and compatible readers needed by later rows. The new stage-snapshot subset is declared with its first real reader/writer in the authorized Row 8 API phase; this row retains the broader publisher and feedback contracts. This PR phase delivers the publisher-identity subset only: the shared source snapshot field, its native declaration, versioned historical readers and binding checks. The saved-batch APIs were delivered separately; their readers change here only to migrate old saved batches without inventing identity. Per-operation observations and other feedback contracts remain open.
 - **Level:** 5; the approved Row 1 field/type table is mandatory.
 - **Files touched:**
   - `backend/idhazh/contracts/feed_ingest_candidate.py`
   - `backend/idhazh/contracts/feed_ingest_article_assessment.py`
   - `backend/idhazh/contracts/feed_ingest_dispatch.py`
   - `backend/idhazh/contracts/feed_ingest_editorial_selection.py`
+  - `backend/idhazh/contracts/feed_ingest_rejection.py`
   - `backend/idhazh/contracts/feed_ingest_source_run.py`
   - `backend/idhazh/contracts/feed_health.py`
-  - `backend/idhazh/contracts/planner_stage.py`
+  - `backend/idhazh/contracts/planner_operation.py`
+  - `backend/idhazh/contracts/feed_ingest_observations.py` (new; persisted per-operation Parquet rows, not a second planner event contract)
+  - `backend/idhazh/contracts/feed_ingest_feedback.py` (new)
+  - `backend/idhazh/contracts/planner_stage.py` (new; authorized stage subset)
   - `packages/common-contracts/src/schemas/source.schema.ts`
   - `packages/common-contracts/src/schemas/candidate.schema.ts`
   - `packages/common-contracts/src/schemas/article-assessment.schema.ts`
   - `packages/common-contracts/src/schemas/dispatch.schema.ts`
   - `packages/common-contracts/src/schemas/editorial-selection.schema.ts`
+  - `packages/common-contracts/src/schemas/rejection.schema.ts`
+  - `packages/common-contracts/src/schemas/source-run.schema.ts`
   - `packages/common-contracts/src/schemas/event.schema.ts`
   - `packages/common-contracts/src/schemas/feed-health.schema.ts`
-  - `packages/common-contracts/src/schemas/planner-stage.schema.ts`
+  - `packages/common-contracts/src/schemas/planner-operation.schema.ts`
+  - `packages/common-contracts/src/schemas/ingest-observations.schema.ts` (new)
+  - `packages/common-contracts/src/schemas/ingest-feedback.schema.ts` (new)
+  - `packages/common-contracts/src/schemas/planner-stage.schema.ts` (new; authorized stage subset)
+  - `packages/common-contracts/src/index.ts`
+  - `packages/common-contracts/test/schema-binding.ts`
+  - `config/ledgers.json`
   - `packages/common-contracts/src/version.ts`
   - `services/feed-ingest-plan/src/read-ledger-history/encode-historical-record.ts`
   - `services/feed-ingest-plan/src/metrics/audit-contracts.ts`
@@ -248,7 +273,8 @@ deferred.
   - `services/feed-ingest-plan/test/harvest.test.ts`
   - `services/feed-ingest-plan/test/plan-engine.test.ts`
   - `services/feed-ingest-plan/test/ledger-history.test.ts`
-- **Acceptance gates:** Type-check and run the existing recorded harvest, planner and ledger-history cases. Bind `SourceSnapshot` and feed-health fields to the native Pydantic shapes. Prove that legacy snapshots stay unknown and refuse a publisher ID under an old schema version. Do not add publisher-dependent selection behavior.
+  - `docs/architecture/contracts/feed-ingest-feedback.md`
+- **Acceptance gates:** Local: common-contract and service type checks; recorded harvest, planner and ledger-history cases using named schemas and real Parquet. Bind `SourceSnapshot` and feed-health fields to native Pydantic shapes; prove legacy snapshots remain unknown and old schema versions refuse publisher identity. Register the operation-row ledger for raw writing, compaction and indexed reading. Keep the planner-only `event.schema.ts` TypeScript-owned; Pydantic and TypeScript contracts define persisted Parquet observations, not a duplicate event stream. CI: existing native binding and historical compatibility gates. Do not emit per-operation observations in this phase or add publisher-dependent selection behavior.
 - **Oracle:** Existing historical rows and request receipts retain their original evidence and readable identity, while current approved shapes reject invalid combinations; this cannot prove that future writers capture real observations.
 
 ### Table K - Decisions
@@ -303,6 +329,7 @@ deferred.
 - **Level:** 3.
 - **Files touched:**
   - `services/feed-ingest-plan/src/api/document-operations.ts`
+  - `services/feed-ingest-plan/src/harvest-feeds/feed-client.ts`
   - `services/feed-ingest-plan/src/harvest-feeds/robots-policy.ts`
   - `services/feed-ingest-plan/src/harvest-feeds/harvest-pool.ts`
   - `services/feed-ingest-plan/src/ingest-observations.ts` (new)
@@ -311,7 +338,7 @@ deferred.
   - `services/feed-ingest-plan/test/parse-batch.test.ts` (new)
   - `docs/architecture/sources/feed-operator-api.md`
   - `docs/architecture/sources/feed-harvesting.md`
-- **Acceptance gates:** Local: recorded transport/parse/API cases cover successful, failed, malformed, empty, refused, not-attempted and interrupted work; verify one complete parse-batch artifact preserves every result for its correlation ID. CI: ingestion integration and native compatibility.
+- **Acceptance gates:** Local: recorded transport/parse/API cases cover successful, failed, malformed, empty, refused, not-attempted and interrupted work; verify one complete parse-batch artifact preserves every result for its correlation ID. Persist per-operation Parquet observations as each unit completes, before a later plan stage can fail; count actual dispatched requests from the feed-client path, with API validation, robots and target requests kept distinct. CI: ingestion integration and native compatibility.
 - **Oracle:** Equivalent real fixture work through `/plan` and separate fetch/parse units produces the same causal facts, while completed replay adds no work or observations; this cannot prove current external source access.
 
 ### Table O - Decisions
@@ -363,7 +390,7 @@ deferred.
   - `services/feed-ingest-plan/test/metrics.test.ts`
   - `tests/fixtures/feed-ingest-plan/ingest-outcomes.json`
   - `docs/architecture/contracts/feed-ingest-feedback.md`
-- **Acceptance gates:** Local: existing summary/metrics cases cover distinct articles, reserved versus unallocated opportunities, repeated reports, retry counts, mixed attribution, unknown publishers and zero exposure; real native readback. CI: metrics and binding gates.
+- **Acceptance gates:** Local: existing metric cases cover distinct articles, reserved versus unallocated opportunities, repeated reports, retry counts, mixed attribution, unknown publishers and zero exposure; verify registered raw/compact operation-row readback with real Parquet. CI: metrics and binding gates.
 - **Oracle:** Repeating an identical article report does not add article support, while a genuine extra HTTP attempt adds request cost; this cannot establish semantic usefulness or factual truth.
 
 ### Table S - Decisions
@@ -477,7 +504,7 @@ deferred.
 
 ## 12. Row #10 - Settle feedback and consume it in the next allocation
 
-- **Scope:** Close the durable operational loop with a single state writer and an actual next-run allocation consumer, not report-only estimates.
+- **Scope:** Close the durable operational loop with concurrent observation settlement, fresh-base derived-state publication and an actual next-run allocation consumer, not report-only estimates.
 - **Level:** 3 after D4/D8 approval.
 - **Files touched:**
   - `config/ledgers.json`
@@ -507,18 +534,17 @@ deferred.
 
 ## 13. Row #11 - Report bounded technical admission trials
 
-- **Scope:** Run the approved bounded technical trial and report every sampled article, warning, exclusion and insufficient-support outcome.
-- **Level:** 3 after D5 approval.
+- **Scope:** After the approved telemetry path in Rows 2, 4, 5 and 6 is delivered, implement A2's conditional age-group trial if its total config/code cost is acceptable. Select up to 100 distinct articles per non-overlapping age group `[24,36]`, `[12,24)`, `[6,12)`, `[2,6)`, `[0,2)` hours; retries and redirects can raise HTTP requests above 500 across the five groups. Persist each considered entry's disposition, including selected, excluded by the group cap, unknown age and future publication time. Record all actual trial work. Do not cap ordinary work, all-work telemetry, selection input or the existing 100-item selected output.
+- **Level:** 3, conditional on total cost after telemetry; other Row 11 admission rules wait for D5 approval.
 - **Files touched:**
   - `config/feed-ingest-plan.json`
-  - `services/feed-ingest-plan/src/technical-admission.ts` (new)
-  - `services/feed-ingest-plan/src/settle-ingest-feedback.ts`
+  - `packages/common-contracts/src/schemas/config.schema.ts`
+  - `packages/common-contracts/test/config.test.ts`
+  - `services/feed-ingest-plan/src/harvest-feeds/harvest-pool.ts`
   - `services/feed-ingest-plan/test/harvest.test.ts`
-  - `services/feed-ingest-plan/test/source-run-summary.test.ts`
-  - `tests/fixtures/feed-ingest-plan/ingest-outcomes.json`
-  - `docs/architecture/sources/i-feed.md`
-- **Acceptance gates:** Local: existing cases cover one readable exception among blocked articles, all-known success, mixed warnings, no article observations, repeated URL/attempts and insufficient distinct support. CI: trial-to-state integration without unauthorized catalog activation.
-- **Oracle:** One successful article cannot hide the other sampled failures or satisfy a higher approved support requirement; this cannot establish qualitative news value or grant catalog membership.
+  - Existing per-operation observation contract and registered writer from Rows 2 and 4
+- **Acceptance gates:** Local: existing cases cover non-overlapping age boundaries, unknown and future ages kept ungrouped, group-cap disposition, fewer-than-100 cohorts and complete actual request/extraction outcomes. CI: trial-to-Parquet integration after Row 6, without changing ordinary selection or catalog membership.
+- **Oracle:** Each known-age trial article belongs to at most one group; every actual request is recorded; this cannot establish qualitative news value or grant catalog membership.
 
 ### Table AC - Decisions
 
@@ -775,17 +801,18 @@ publication from dispatch-Parquet creation alone.
 
 ## 22. Row #20 - Adopt cache delivery and finish the combined hosted proof
 
-- **Scope:** Correct the named-module sparse checkout omission and add a regression inside the existing bounded workflow test, then complete the combined hosted proof only with fresh dispatch authorization. Do not start another profiler implementation.
-- **Delivery status:** Cache PR [#1671](https://github.com/miztiik/yen-idhazh/pull/1671) merged at `b037f8`; URL matcher PR [#1703](https://github.com/miztiik/yen-idhazh/pull/1703) merged at `52a0e1`. The authorized combined hosted [run 40131128910](https://github.com/miztiik/yen-idhazh/actions/runs/40131128910) on `b037f8` failed before live work. Row 20 remains PENDING: this correction phase is not yet merged and there is no successful combined hosted proof.
+- **Scope:** Adopt the cache delivery, correct the named-module sparse checkout omission with an existing bounded workflow regression, and complete the combined hosted proof. No further implementation or dispatch is part of this closure.
+- **Delivery status:** DONE. Cache PR [#1671](https://github.com/miztiik/yen-idhazh/pull/1671) merged at `b037f8`; URL matcher PR [#1703](https://github.com/miztiik/yen-idhazh/pull/1703) merged at `52a0e1`; sparse checkout correction [#1707](https://github.com/miztiik/yen-idhazh/pull/1707) merged at `962b4cc`. The first authorized [run 40131128910](https://github.com/miztiik/yen-idhazh/actions/runs/40131128910) on `b037f8` failed before live work. The owner explicitly authorized one corrected [run 40133676513](https://github.com/miztiik/yen-idhazh/actions/runs/40133676513), which succeeded on exact head `b1830d0f0a684e5c09715f597ca05542d38edcd2`, attempt 1.
 - **Failure:** Sparse checkout omitted `.github/scripts/feed-ingest-plan-pid-report.ts` and `.github/scripts/feed-ingest-plan-resource-values.ts`, imported by the resource/cache/profile reporters. `Check isolated adapters` failed with `Cannot find module` imports, and the existing workflow strict-check test failed. Normal CI used a complete checkout and passed; it did not prove the hosted sparse selection.
-- **Level:** 3; tightly coupled workflow preflight correction and regression, with hosted verification still pending.
+- **Level:** 3; workflow preflight correction and regression delivered, with combined hosted verification complete. This status closure changes documentation only.
 - **Files touched:**
   - `.github/workflows/feed-ingest-plan-test.yml` (explicit selection of the two omitted modules)
   - Existing bounded workflow test (regression for the hosted sparse selection)
   - `docs/how-to/run-feed-ingest-plan-test.md` (sparse preflight requirements)
   - `TODO/20261024-67-feed-ingest-feedback-and-selection-plan.md` (this row's status)
   - `TODO/20261020-66-feed-ingest-plan.md` (only the corresponding expanded-follow-up status, after verified delivery)
-- **Acceptance gates:** Local: verify the existing child's unchanged records rather than repeat its checks; extend the existing bounded workflow test to cover the two omitted named modules and pass its strict check. CI: refresh exact correction PR head and required checks. The failed authorized run used `freshness_hours=24` and `profile_machine_memory=true`, leaving article/shard/strategy overrides unset. No dispatch is part of this correction phase; another hosted run requires fresh authorization after the correction merges. A successful hosted proof must verify the exact planning attempt, selected HTML membership, completed-request replay/conflict privacy and no extra work, enabled machine RAM, real fetch/parse profiles and successful safe reporting. Inspect the actual Table L/notice, target/handle/result binding, cleanup, affinity and scoped no-Python audit. Compare every named native/host output to its exact committed Git blob; rederive source counts from that run's catalog. Keep generated audit evidence distinct from publication. Do not automatically redispatch on failure.
+- **Completed proof:** Run `2026-10-24-40133676513`, correlation `792986e7-d810-403d-817c-a1d1de6f971d`, used `freshness_hours=24` and `profile_machine_memory=true`; other overrides were omitted. The coordinator inspected downloaded actual artifacts and compared SHA-256 hashes of all 11 native/host output files with their exact Git blobs in landed [output commit `3c3a95fb7f8afd2cd5c1781d654cb883669d411f`](https://github.com/miztiik/yen-idhazh/commit/3c3a95fb7f8afd2cd5c1781d654cb883669d411f). That run's catalog contained 156 active feed IDs: 11,030 parsed items, 915 harvested, 679 eligible, 121 normalized and 100 selected.
+- **Acceptance evidence:** Configured feed `bbc-tech` and selected HTML from `cgtn-opnion` were proved separately; dispatch receipt `01a16fd0-0cf6-8f14-a30e-1660c0dbd191` bound candidate `bc4d37262ad56fdc1112a6ae27d488fef22645271ce2da433aac15d0d4daa02f` to worker 2 of 4 with 990 words. Actual replay, journal, private HTTP 409 conflict handling and no extra network work were verified, as were CPU/PID RAM, independent machine RAM, reports, native bytes and the scoped no-Python audit. Restricted affinity `[1,3]` selected CPU 1; owned cancellation preserved the target. Hardware performance counters (PMU) reported `permission_denied` with null counts; the measured working-set curve is not direct L3-hit latency. A permitted-host counter measurement remains open separately under AU2, not as a Row 20 blocker. Live evidence retained `audited_complete=false` and `publication=null`, distinct from the `generated_fixture` audit; this proof makes no actual worker-publication claim.
 - **Oracle:** The actual hosted feed/selected-HTML/native-output proof and resource report agree on their real work and identities, with denied counters null and working-set latency correctly labelled; this cannot measure direct L3-hit latency or successful PMU events on a denied host.
 
 ### Table AU - Decisions
