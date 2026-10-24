@@ -16,6 +16,7 @@
   },
   "curate": {
     "article_limit": 100,
+    "source_reliability_penalty_enabled": true,
     "source_authority_weight": 1.0,
     "base_source_allowance": 3,
     "bonus_uncovered_event_cluster": 1,

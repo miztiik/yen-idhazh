@@ -17,6 +17,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from _host_placement import refuse_external_placement
 from conftest import REPO_ROOT, read_text
 
 from idhazh import cli, config, ledger
@@ -26,7 +27,7 @@ from idhazh.contracts.ledger_name import LedgerName
 from idhazh.council import registry, session
 from idhazh.council.deadline import SECONDS_A_MINUTE
 
-from ._config import copy_config, write_declarations
+from ._config import copy_config, set_host_fingerprint_placement, write_declarations
 from ._tenants import a_scripted_venue, a_venue, forget, written
 
 A_VENUE = "a_paper_venue"
@@ -73,12 +74,14 @@ def venue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     forget(A_VENUE)
 
 
-def _config_registering(root: Path, *slugs: str) -> Path:
+def _config_registering(root: Path, *slugs: str, shards: int | None = None) -> Path:
     """The loader's named config inputs, with the named slugs registered."""
     target = copy_config(root)
     write_declarations(target, slugs)
     raw = json.loads(read_text(target / "llm_council.json"))
     raw["judge_names"] = list(slugs)
+    if shards is not None:
+        raw["shards"] = shards
     (target / "llm_council.json").write_text(
         json.dumps(raw, indent=2), encoding="utf-8", newline="\n"
     )
@@ -189,6 +192,7 @@ def test_a_council_verb_runs_a_night_that_hosts_nobody(verb: str, tmp_path: Path
 def test_settle_records_one_machine_for_the_night_not_for_each_judged_date(venue: Path) -> None:
     a_venue(venue, package=A_VENUE, slugs={A_SLUG: (1, ())})
     config_root = _config_registering(venue, A_SLUG)
+    set_host_fingerprint_placement(config_root, False)
     state = venue / "state"
     address = [
         "--config",
@@ -201,8 +205,9 @@ def test_settle_records_one_machine_for_the_night_not_for_each_judged_date(venue
         A_SHA,
     ]
 
-    for judged in (A_DATE, "2026-09-19"):
-        assert cli.main(["council-settle", "--date", judged, *address]) == 0
+    with refuse_external_placement():
+        for judged in (A_DATE, "2026-09-19"):
+            assert cli.main(["council-settle", "--date", judged, *address]) == 0
 
     rows = ledger.load_days(
         state, LedgerName.HOST_FINGERPRINT, [A_RUN[:10]], model=HostFingerprintRow
@@ -214,6 +219,7 @@ def test_settle_records_one_machine_for_the_night_not_for_each_judged_date(venue
     assert row.run_id == A_RUN
     assert row.job_seconds is not None
     assert row.memcpy_probe_mib == 0 and row.memcpy_gib_s is None
+    assert row.measured_at is not None
 
 
 @pytest.mark.parametrize("verb", [*COUNCIL_VERBS, "council-shard"])
@@ -362,7 +368,7 @@ def test_a_unit_that_raised_files_one_failed_row_beside_its_completed_siblings(
 ) -> None:
     """The Oracle: four parts recorded, exactly one failed, with no invented model cost."""
     a_scripted_venue(venue, package=A_VENUE, slug=A_SLUG, shard_count=4, dead_units=(2,))
-    config_root = _config_registering(venue, A_SLUG)
+    config_root = _config_registering(venue, A_SLUG, shards=5)
     state_root = tmp_path / "state"
 
     _a_whole_night(config_root, state_root, slugs=(A_SLUG,), shards=4, dead=(2,))
@@ -530,7 +536,7 @@ def test_the_saving_job_files_one_date_and_a_rerun_replaces_its_rows(
 ) -> None:
     """The door records the workflow identity and keeps only the later attempt."""
     a_scripted_venue(venue, package=A_VENUE, slug=A_SLUG, shard_count=2)
-    config_root = _config_registering(venue, A_SLUG)
+    config_root = _config_registering(venue, A_SLUG, shards=3)
     state_root = tmp_path / "state"
 
     monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")

@@ -118,12 +118,22 @@ def a_config(root: Path, *declarations: Path) -> Path:
     """A config folder under `root`: the committed files, plus these declarations.
 
     Each argument is a declaration file, a fixture folder, or the committed
-    task folder, whose named integration inputs are copied.
+    task folder, whose named integration inputs are copied. Local host collection
+    is on; external placement and the bandwidth benchmark are off.
     """
     config_dir = root / "config"
     (config_dir / "gardener").mkdir(parents=True, exist_ok=True)
     for name in COMMITTED_FILES:
         shutil.copyfile(CONFIG_DIR / name, config_dir / name)
+    app_config = config_dir / "idhazh.json"
+    app_settings = json.loads(app_config.read_text(encoding="utf-8"))
+    app_settings["observability"].update(
+        host_telemetry_enabled=True,
+        host_fingerprint=True,
+        host_fingerprint_bandwidth_jobs=[],
+        host_fingerprint_placement_enabled=False,
+    )
+    app_config.write_text(json.dumps(app_settings, indent=2) + "\n", encoding="utf-8")
     task_names: set[str] = set()
     for given in declarations:
         if given == CONFIG_DIR / "gardener":

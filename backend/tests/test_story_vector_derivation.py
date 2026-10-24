@@ -23,7 +23,7 @@ from idhazh.story_dataset.evaluation import evaluate
 from idhazh.story_dataset.partitions import build_partition
 from idhazh.story_dataset.predictions import freeze_development, predict
 from idhazh.story_dataset.storage import canonical, digest, file_hash, now
-from idhazh.story_dataset.vector_derivation import derive_gemma, normalize_prefix
+from idhazh.story_dataset.vector_derivation import derive_gemma
 from idhazh.story_dataset.vectors import model_matrix, register_extension
 from idhazh.story_dataset.workers import export_batch, import_submission
 
@@ -79,11 +79,28 @@ def test_derived_prefix_l2_lineage_preserves_native_bytes(
     tmp_path: Path, dimensions: Literal[128, 256, 512]
 ) -> None:
     native = native_fixture(tmp_path)
+    matrix = np.zeros((len(native.article_ids), 768), dtype=np.float32)
+    matrix[:, [0, 127, 128, 256, 767]] = [3, 4, 12, 84, 1000]
+    matrix[1, [0, 127, 128, 256, 767]] = [5, 12, 84, 132, -2000]
+    np.save(tmp_path / "old.npy", matrix)
+    native.caches[0].file_sha256 = file_hash(tmp_path / "old.npy")
+    # Prefix lengths are 5/13/85 and 13/85/157; the final column is excluded.
+    columns, first, second = {
+        128: ([0, 127], [3 / 5, 4 / 5], [5 / 13, 12 / 13]),
+        256: ([0, 127, 128], [3 / 13, 4 / 13, 12 / 13], [5 / 85, 12 / 85, 84 / 85]),
+        512: (
+            [0, 127, 128, 256],
+            [3 / 85, 4 / 85, 12 / 85, 84 / 85],
+            [5 / 157, 12 / 157, 84 / 157, 132 / 157],
+        ),
+    }[dimensions]
+    expected = np.zeros((len(native.article_ids), dimensions), dtype=np.float32)
+    expected[:, columns] = first
+    expected[1, columns] = second
     before = canonical(native)
-    matrix = np.load(tmp_path / "old.npy")
     derived = derive_gemma(native, tmp_path, tmp_path, "embeddinggemma-two", dimensions)
     saved = np.load(tmp_path / derived.caches[0].file)
-    np.testing.assert_allclose(saved, normalize_prefix(matrix.astype(np.float64), dimensions))
+    np.testing.assert_allclose(saved, expected, rtol=float(np.finfo(np.float32).eps), atol=0)
     np.testing.assert_allclose(np.linalg.norm(saved, axis=1), 1, atol=1e-6)
     assert saved.shape == (len(articles()), dimensions) and saved.dtype == np.float32
     assert derived.derivation.base_vector_revision == digest(native)
@@ -214,6 +231,15 @@ def test_native_extension_coverage_derives_same_representation_and_refuses_confl
     native = native_fixture(tmp_path)
     all_ids = list(native.article_ids)
     matrix = np.load(tmp_path / "old.npy")
+    expected_rows = {}
+    for row, identity in enumerate(all_ids):
+        left, right, length = (3, 4, 5) if row % 2 == 0 else (5, -12, 13)
+        matrix[row, :128] = 0
+        matrix[row, row] = left
+        matrix[row, 127] = right
+        expected_rows[identity] = np.zeros(128, dtype=np.float32)
+        expected_rows[identity][row] = left / length
+        expected_rows[identity][127] = right / length
     selected = all_ids[:4]
     np.save(tmp_path / "old.npy", matrix[4:])
     native = native.model_copy(update={
@@ -248,9 +274,14 @@ def test_native_extension_coverage_derives_same_representation_and_refuses_confl
         derived = derive_gemma(updated, tmp_path, tmp_path, "embeddinggemma-two", 128)
         ids, combined = model_matrix(updated, "embeddinggemma-two", tmp_path)
         assert derived.article_ids == ids
+        assert ids == all_ids[4:] + selected
         assert set(ids) == set(all_ids)
+        np.testing.assert_array_equal(combined, np.concatenate((matrix[4:], matrix[:4])))
         np.testing.assert_allclose(
-            np.load(tmp_path / derived.caches[0].file), normalize_prefix(combined, 128)
+            np.load(tmp_path / derived.caches[0].file),
+            np.array([expected_rows[identity] for identity in all_ids[4:] + selected]),
+            rtol=float(np.finfo(np.float32).eps),
+            atol=0,
         )
         assert derived.derivation.base_files_sha256 == [
             updated.caches[0].file_sha256, updated.extensions[0].cache.file_sha256,

@@ -4,6 +4,7 @@ import type { DropReasonCount, SourceRunRecord, LedgerCompletionEvidence } from 
 import type { FeedPlanResult } from "../run-feed-plan";
 import type { StageMembership } from "./stage-membership";
 import { requireSame } from "./stage-membership";
+import { resolveOperationalHistory } from "../curate-article-portfolio/portfolio-input";
 
 export type SourceRunSummary = Omit<SourceRunRecord,
   "version" | "observation_phase" | "expected_source_count" | "completion_evidence">;
@@ -32,7 +33,7 @@ export function deriveSourceRunSummaries(result: FeedPlanResult, membership: Sta
     const supplied = operational[0] ?? null;
     for (const measured of operational) requireSame(measured, supplied, `source.${id}.operational_history`);
     const native = evidence.feed_history.sources.get(id)?.reliability ?? null;
-    const history = native ?? supplied;
+    const history = resolveOperationalHistory(id, supplied, native);
     if (history !== null) {
       FiniteSchema.min(0).max(1).parse(history.success_fraction);
       PositiveCountSchema.parse(history.attempted);

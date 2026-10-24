@@ -68,23 +68,25 @@ Table D - PR outcomes
 | D10 | 10 | Independent historical reader proofs | 1 | I | DONE | independent-historical-reader-proofs | [#1659](https://github.com/miztiik/yen-idhazh/pull/1659), merged 2026-10-24 UTC at `f0449de3db08c710e5b2292a03910da157bcb498` | - |
 | D11 | 11 | Contract tests prove authored and constructed behavior | 1 | J | DONE | config-refusal-selection-proofs | [#1664](https://github.com/miztiik/yen-idhazh/pull/1664), merged at `90ea0e77cedaf7eeaff8e9690bacf144eebb44d3` | - |
 | D12 | 12 | Explicit controls and measurement behavior | 1 | K | DONE | explicit-control-behavior-proofs | [#1661](https://github.com/miztiik/yen-idhazh/pull/1661), merged at `6a43c2b3c4747358a678587d8d877245b9b49134` | - |
-| D13 | 13 | Extraction and metric behavior | 1 | L | IN-FLIGHT | row13-test-proofs | - | - |
+| D13 | 13 | Extraction and metric behavior | 1 | L | DONE | row13-test-proofs | [#1670](https://github.com/miztiik/yen-idhazh/pull/1670), merged at `6019523e22802792a5de672c4df9d90ff4447c7a` | - |
 | D14 | 14 | Grouping and dataset behavior | 1 | M | DONE | grouping-and-dataset-proofs | [#1665](https://github.com/miztiik/yen-idhazh/pull/1665), merged at `fe086c907f50f52c7c51a9c98c4425ce6f6e6357` | - |
 | D15 | 15 | Encoder thread resolution uses production behavior | 1 | N | DONE | prove-encoder-thread-resolution | [#1667](https://github.com/miztiik/yen-idhazh/pull/1667), merged at `956fd7e27cdcbc927bd86ce54ecede4f993779ef` | - |
 | D16 | 16 | Bounded state CSV integrity checks | 1 | O | DONE | bound-csv-integrity-checks | [#1668](https://github.com/miztiik/yen-idhazh/pull/1668), merged at `cff5cc58c8cc15c59b5b525fca84335e2e88c4ce` | - |
-| D17 | 17 | Default-on host-placement acquisition control | 12 | P | IN-FLIGHT | host-fingerprint-placement | - | - |
+| D17 | 17 | Default-on host-placement acquisition control | 12 | P | IN-FLIGHT | host-fingerprint-placement | [#1682](https://github.com/miztiik/yen-idhazh/pull/1682) | - |
 | D18 | 18 | Workflow checks reject supported broken inputs | 1, 22 | Q | IN-FLIGHT | strengthen-workflow-proof-checks | - | - |
 | D19 | 19 | Independent source-health publication proofs | 1 | R | DONE | prove-source-health-publication | [#1674](https://github.com/miztiik/yen-idhazh/pull/1674), merged at `e7f46b2317852ea5d3f212f83ea86ac51edc05ed` | - |
 | D20 | 20 | Prove reader output behavior | 1 | S | IN-FLIGHT | prove-reader-output-behavior | - | - |
 | D21 | 21 | Prove ledger dates and named-plan reads | 1 | T | DONE | prove-ledger-date-selection | [#1675](https://github.com/miztiik/yen-idhazh/pull/1675), merged at `31a689f073d602e75870f7fa48da72d3043f6c13` | - |
 | D22 | 22 | Configured council planning and collection job deadlines | 1 | U | IN-FLIGHT | configure-council-job-deadlines | - | - |
-| D23 | 23 | Independent qualification and planning controls | 1 | V | IN-FLIGHT | prove-planning-controls-independently | - | - |
-| D24 | 24 | Independent council test controls | 17 | W | IN-FLIGHT | prove-council-controls-independently | - | - |
+| D23 | 23 | Independent qualification and planning controls | 1 | V | IN-FLIGHT | prove-planning-controls-independently | [#1683](https://github.com/miztiik/yen-idhazh/pull/1683) | - |
+| D24 | 24 | Independent council test controls | 17 | W | IN-FLIGHT | prove-council-controls-independently | [#1688](https://github.com/miztiik/yen-idhazh/pull/1688) | - |
 | D25 | 25 | Concrete remaining gardener and ledger safety proofs | 24 | X | IN-FLIGHT | strengthen-gardener-safety-proofs | - | - |
-| D26 | 26 | Prove time boundaries without stand-ins | 21, 25 | Y | IN-FLIGHT | prove-time-boundaries-without-stand-ins | - | - |
+| D26 | 26 | Prove time boundaries without stand-ins | 21, 25 | Y | IN-FLIGHT | prove-time-boundaries-without-stand-ins | [#1679](https://github.com/miztiik/yen-idhazh/pull/1679) | - |
 | D27 | 27 | Explicit offline gardener collection controls | 17, 26 | Z | IN-FLIGHT | control-gardener-host-collection | - | - |
 | D28 | 28 | Independent prefix normalization arithmetic | 1, 27 | AA | IN-FLIGHT | prove-vector-arithmetic | - | - |
 | D29 | 29 | Populated registry values and mandatory real CSV reader | 1, 28 | AB | IN-FLIGHT | close-contract-proof-gaps | - | - |
+| D30 | 30 | Native tagging-term acceptance and refusal | 1, 29 | AC | IN-FLIGHT | validate-tagging-terms | - | - |
+| D31 | 31 | Bind declared UI defaults to their consumers | 1, 17, 30 | AD | IN-FLIGHT | bind-ui-default-consumers | - | - |
 
 The canary implementation for Row 3 is delivered separately from its suite-wide
 review obligation. Rows 5 and 6 carry additional changes found by that review.
@@ -880,9 +882,10 @@ counts use the untouched archive and the completed branch instead.
   Exact-head CI passed. All 12 reviewed Row 12 test, production and
   documentation files remain byte-identical to
   `cbb23a22ddcd711ebe3fa34a042e707050ba2a1b`. D3 remains open.
-- **Delivery:** Implementation `32c85d883` was delivered in
-  [#1661](https://github.com/miztiik/yen-idhazh/pull/1661), merged at
-  `6a43c2b3c4747358a678587d8d877245b9b49134`. The worker did not merge it.
+- **Delivery:** PR [#1661](https://github.com/miztiik/yen-idhazh/pull/1661)
+  carried head `cbb23a22ddcd711ebe3fa34a042e707050ba2a1b` and merged at
+  `6a43c2b3c4747358a678587d8d877245b9b49134` after `scope`, `gates`, `robots`
+  and `site` passed; `browser` was skipped. D12 is DONE.
 - **Dependencies:** Row 1. Shared-plan editing remains serialized.
 
 ## 14 - Row #13 - Extraction and metric behavior
@@ -1178,24 +1181,30 @@ counts use the untouched archive and the completed branch instead.
 - **Independent faults:** Three planned production faults must fail for the
   intended evidence: ignoring config false, ignoring caller false, and
   disabling local machine collection when placement is off. The bounded
-  runner restores the source after each fault. These proofs had not run at
-  plan freeze.
-- **Local gates at plan freeze:** The six focused config, silicon and council
-  tests passed before the final nullable-clock assertion was added. Ruff and
-  whitespace checks passed. Mypy found the optional timestamp use; the test
-  now asserts the timestamp exists before parsing it, and the type check must
-  be rerun. The independent fault proofs and the refreshed shared selector
-  remain pending. CI on the merge candidate is authoritative. No published
-  site behavior changed.
+  runner restores the source after each fault.
+- **Local gates:** The six focused config, silicon and council tests passed
+  after the nullable-clock assertion, before the main merge. Ruff and
+  whitespace checks passed. Mypy passed on the eight affected source and test
+  files. Three production-fault proofs passed: ignoring configured false,
+  ignoring caller false, and disabling local collection when placement is off.
+  The fault runner restored `silicon.py` byte-for-byte. The shared selector
+  list was preserved; its run was stopped while waiting for all five seats and
+  grants no test certification. CI on the merge candidate is authoritative.
+  No published site behavior changed.
 - **Plan integration:** Verified and imported the complete frozen Row 16
   predecessor, 89,674 bytes, SHA-256
   `9b79f8297e884665f4a77f0f0b6faedc6de97bac39a9a860e18fcda4019563be`.
   Added only D17, this section and the owner-approved A5 placement-setting
-  exception. All prior rows, evidence, rulings, D3 IN-FLIGHT and D12 IN-FLIGHT
-  remain unchanged.
-- **Delivery:** One phase PR for coordinator review and merge. The worker does
-  not merge the PR. The frozen full successor releases the serialized editor
-  to Row 18 independently of remaining checks, push or CI.
+  exception. Then merged current `origin/main` normally after Rows 11 and 12
+  were delivered. The conflict resolution keeps exactly one complete current-
+  main Row 11 section and its merged receipt, the completed Row 12 receipt and
+  bounded-copy corrections, and all complete Rows 13-16. The later main merge
+  retains the completed Rows 14-16 receipts and complete Rows 18-22 sections.
+  D3 remains IN-FLIGHT; D12 is DONE.
+- **Delivery:** PR [#1682](https://github.com/miztiik/yen-idhazh/pull/1682)
+  is open for coordinator review and merge. The worker does not merge it. The
+  frozen full successor releases the serialized editor to Row 18 independently
+  of remaining checks, push or CI.
 - **Dependencies:** Row 12's real `ask_placement` forwarding API.
 
 ## 19 - Row #18 - Workflow checks reject supported broken inputs
@@ -1345,208 +1354,41 @@ counts use the untouched archive and the completed branch instead.
   subject floor. Snapshot the caller's populated list and model values before
   selection. Keep score-versus-input ordering, public-day preservation,
   eligibility, provenance, true reasons and historical reads. Exercise the
-  12/13 wording edge with valid test-owned counts.
+  12/13 wording edge with valid test-owned counts. Compose real rank output
+  with lead selection to prove the committed carriage step beats a qualifying
+  shared-subject term. Give the neutral comparison a strict native rank
+  advantage so the zero-weight control proves that subject term is active
+  without relying on tie order.
 - **Visual behavior:** Reverse both channels in a valid plan and derive the
-  expected marks from that plan and its table. Compare complete alt-text
-  number tokens to the source values. Keep published-data, provenance,
-  portability, output-failure and identity checks. Require the named no-picture
+  expected marks from that plan and its table. Compare signed alt-text numeric
+  values as `Decimal` values with independent values from the element table.
+  Keep published-data, provenance, portability, output-failure and identity
+  checks. Require the named no-picture
   refusal, assert authored title and caption do not enter data, validate the
   reserved item names through `ItemId`, set the test directory as the real
   working directory, and prove a rejected write leaves no output tree.
 - **Evidence at freeze:** Against `c10fd2f03e90cad07fdd400cc55a72ef9042d2d8`,
   the two modules collected 70 cases across 66 test functions. The new
-  freshness and weighted-signal cases add two functions; the count boundary
-  adds one case; one test name is corrected. No behavior test is removed.
-  The exact collected ids and source hashes are in the worker report.
-  `npm run test:changed -- --list` selected exactly these two backend modules.
-  The selected gate is queued on the shared gate lock; its result and the
-  disposable production-fault proofs are pending and are not represented as
-  passes. Fault copies must use the copied code and fail at the intended
-  assertions.
-- **Plan integration:** Verified and imported the complete frozen Row 19
-  predecessor, 102,543 bytes, SHA-256
-  `094f4dce4c63088201bc1120bbe9f58d5b69a837938c074962ee3bebf77eeaa7`.
-  Added only D20 and this section. Earlier rows, A5, D3, and Row 18's pending
-  Row 22 dependency remain unchanged. The complete frozen successor releases
-  the serialized editor to Row 21 independently of local gates and CI.
-- **Delivery:** Open one phase PR after plan integration. The worker does not
-  merge it.
-- **Dependencies:** Row 1.
-
-## 22 - Row #21 - Prove ledger dates and named-plan reads
-
-- **Scope:** Strengthen only `backend/tests/test_ledger.py` and
-  `backend/tests/test_plan_status.py`. No production, config, contract, fixture
-  or dependency changes. Do not change date meanings, accepted historical
-  payloads or publication policy.
-- **Ledger proofs:** `test_the_unbounded_cover_reads_one_held_month_at_a_time`
-  derives each expected month's days with `calendar.monthrange` and `date`,
-  independently of the production calendar helper, while retaining the
-  one-held-month-at-a-time read bound. The fitted-row test uses distinct valid
-  dates (`2026-09-18` fitted, `2026-09-17` covered), requires filing under the
-  fitted day, and reads back the row and writer identity. The newest-day test
-  explicitly names the generated dates (`2026-09-30`, `2026-10-01`,
-  `2026-10-02`), requires only `2026-10-01` and `2026-10-02` in the two-day
-  cover, and checks reliability using only those selected rows.
-- **Named-plan proofs:** The relative-root test requires the generated
-  `TODO/alpha.md` plan to be read with eleven populated rows and independent
-  first/last row values before comparing relative and absolute roots. Rename
-  `test_a_detached_worktree_is_never_asked_about_a_pull_request` to
-  `test_a_detached_worktree_note_omits_pull_request_wording`: the tested
-  guarantee is only that the note omits that wording. Do not add a pretend
-  GitHub client or claim that the test proves no request was made.
-- **Preserved guarantees:** Keep the 730-day cover/window safety, independent
-  116-part capture counts, read behavior, telemetry privacy, literal boundary
-  dates and real Git evidence. Do not alter the existing `FixedClock`
-  stand-in or timestamp semantics; its structural replacement is separate
-  work.
-- **Inventory:** Five baseline identifiers were collected. Four remain
-  unchanged; the detached-worktree note test is the sole rename. No test
-  functions are added or removed. Baseline SHA-1 object IDs were
-  `7879f3be43eded3350fc6a6be5c6cad79969cd2b` for `test_ledger.py` and
-  `43218ab4d92db65e963eb590f5f72dafc1cc2d7c` for `test_plan_status.py`;
-  resulting object IDs are `2312aab2e7fc587c7dd9a3be9ccf21bdb0e994de` and
-  `9be52e6a5d199d3f3451cea4017512d615505eb5`, respectively.
-- **Verification:** The shared selector record
-  `backend/var/checks/44fa0b73b9c905debcf25aa8af6aa523cb6e9f7dbbedd04961092167d15a0131.json`
-  records whitespace, Ruff, mypy and all 91 selected tests passing. Its source
-  modules match the unchanged Row 21 commit blobs
-  `2312aab2e7fc587c7dd9a3be9ccf21bdb0e994de` and
-  `9be52e6a5d199d3f3451cea4017512d615505eb5`; therefore this evidence is
-  reused for Row 21 without a repeat solely for main integration. Seven
-  disposable production faults failed at their intended assertions, five
-  controls passed before and after, and restored source hashes were verified.
-  No full-suite run is claimed.
-- **Plan integration:** Merged current `origin/main`
-  `e7f46b2317852ea5d3f212f83ea86ac51edc05ed` normally. Preserved the current
-  Row 11 section and verified receipts for Rows 11, 12, 14, 15, 16 and 19,
-  along with all other phase sections, A5 and D3. The two Row 21 test-module
-  blobs remain unchanged. The frozen historical Row 21 successor remains
-  108,564 bytes with SHA-256
-  `85bb171daf2a4e00cd4689817825e295d10ddd6a0638381698f1299d682cbca3`.
-- **Delivery:** Delivered in
-  [#1675](https://github.com/miztiik/yen-idhazh/pull/1675), merged at
-  `31a689f073d602e75870f7fa48da72d3043f6c13`. Source commit
-  `7950bf6825560734a28d0dcd1d57a7634a378ac2` remains unchanged;
-  `test_ledger.py` ownership remains released. The worker did not merge it.
-- **Dependencies:** Row 1.
-
-## 23 - Row #22 - Configured council planning and collection job deadlines
-
-- **Scope:** Move only the planning and collection operational budgets out of
-  workflow literals into independent validated Actions configuration. Preserve
-  both 30-minute total-job defaults, including checkout and installation; a
-  step-only deadline is not an equivalent replacement.
-- **Authority:** This is the production prerequisite uncovered by Row 18's
-  corrected timeout proof, covered by kumarsnaveen's structural-expansion
-  authorization on 2026-10-24 UTC. Fowler supplied the construction; the owner,
-  not the advisor, authorized the scope expansion.
-- **Files touched:** `.github/workflows/llm-council.yml`;
-  `config/llm_council_job_timeouts.json` (new);
-  `backend/tests/workflows/test_council_job_timeouts.py` (new);
-  `backend/tests/workflows/test_llm_council_workflow.py` (three released
-  compatibility assertions only); `backend/utilities/shard_bound.py`
-  (descriptive docstring only);
-  `docs/architecture/publishing/llm-council.md`; this plan.
-- **Construction:** The `job_bounds` prerequisite checks out the workflow
-  revision and runs the existing strict positive-integer reader with stock
-  runner `python3`. It publishes separate planning and collection outputs.
-  Each consumer directly needs that job and uses its own output through
-  `fromJSON` at whole-job scope. No backend installation, model or tenant
-  loading is needed. Repository-authored Actions config has no persisted
-  payload version or migration.
-- **Preserved guarantees:** Judging keeps its existing shard output and
-  deadline. Collection still runs after planning or judging fails or is
-  cancelled, but only after budget validation succeeds. Failed validation
-  leaves the run red and cannot start planned work with missing deadlines.
-- **Runtime cost and rationale:** One runner startup and checkout is added
-  before planning. The prerequisite has no custom deadline and inherits the
-  Actions 6-hour ceiling, at which GitHub kills the job. There is no new CI
-  job, package dependency, destination or persisted shape. The existing
-  council page owns this policy; it stays whole because the addition explains
-  the same workflow clock.
-- **Oracle:** The real reader and actual CLI preserve distinct nondefault
-  planning and collection values and prove independent substitution. Missing
-  keys and bool/string/float/zero/negative values fail with the named key.
-  Tests follow the producer step, job output, direct dependency and
-  `fromJSON` job deadline. Missing dependencies, swapped keys, self-step
-  references, step-only deadlines, broken outputs and lost failure/cancellation
-  collection must fail.
-- **Inventory:** No existing test functions or identifiers are removed or
-  renamed. Six new functions add 18 parameter cases. Only the collector's
-  dependency assertion, job-level condition assertion and expected permissions
-  map change in the existing council module, after Row 18's explicit source
-  release. Row 18's checker and shared harness are not imported.
-- **Evidence at freeze:** Source commit
-  `55ab017f198b94f396553c348e9caf6f9768d261`; clean implementation tree before
-  importing the plan. New module: 18 passed. Existing council module:
-  43 passed. Collection: 61 cases, not a full-suite claim. Repository ruff
-  and targeted mypy passed. The shared selector expands unknown workflow,
-  config and utility inputs to all groups; only targeted gates run locally.
-  Two generic producer/artifact controls remain queued under `gate_lock`.
-- **Negative proof:** In a disposable base checkout with its own
-  `pyproject.toml` and verified reader import, the new wiring cases fail for
-  the absent direct dependency. Eight real YAML/config/reader faults fail at
-  their intended assertions/refusals: missing dependency, swapped producer
-  key, self-step timeout, absent whole-job timeout, wrong output, success-only
-  collection, zero config budget and reader acceptance of zero. All 18
-  unchanged controls pass before and after; source hashes restore exactly.
-  Separately moving the timeout onto the actual planning step fails only
-  the planning case; the collection case still passes. Both unchanged
-  two-case controls pass before and after that edit.
-- **Evidence identity:** Restored workflow SHA-256
-  `bc8fd1e1d41bf9f68ca69846e37e8bb8e5afb1e0c9ea8a72a6bb0040ee2f7fc7`;
-  new test
-  `3fb5c7c718907300b4323a45eef43311c91f0325efaf2e0595ea808336a8e3a2`;
-  config
-  `76d0cf38d409fd360126612e54d0dcb9c5b59b999e5f075f798b514eba424ea0`;
-  reader
-  `6a6b72898f8830ce22e664e9396007856a6e027ad15b114c83a672bec319fc87`;
-  three-assertion compatibility source
-  `a4dc627dd45fb9da720f88c8482173ff6fc31672b75bf969ce8bc8b52b2c4f39`.
-  Exact selected identifiers, changed-input hashes and fault logs are in the
-  worker's session report; these are evidence, not new application artifacts.
-- **Plan integration:** Verified and imported the exact full Row 21
-  predecessor, 108,564 bytes, SHA-256
-  `85bb171daf2a4e00cd4689817825e295d10ddd6a0638381698f1299d682cbca3`.
-  Added only D22, this complete section and the approved A5 scope note.
-  All earlier rows, earlier A5 exceptions and D3 remain intact. This complete
-  successor releases the serialized editor independently of gates and CI.
-- **Delivery:** Open an independently green phase PR after plan integration;
-  the worker does not merge. Row 18 depends on this production fix, then
-  integrates the new main wiring into its own checker work and reruns its
-  changed-input proofs.
-- **Dependencies:** Row 1.
-
-## 21 - Row #20 - Prove reader output behavior
-
-- **Scope:** Strengthen only `backend/tests/test_leading_stories.py` and
-  `backend/tests/test_render.py`. No production, config, contract, fixture,
-  dependency or frontend changes.
-- **Leading-story behavior:** Prove the configured block and desk caps, the
-  one-publication, one-subject and yesterday limits, item-id tie breaking,
-  freshness multiplication, null corroboration, and the block's configured
-  subject floor. Snapshot the caller's populated list and model values before
-  selection. Keep score-versus-input ordering, public-day preservation,
-  eligibility, provenance, true reasons and historical reads. Exercise the
-  12/13 wording edge with valid test-owned counts.
-- **Visual behavior:** Reverse both channels in a valid plan and derive the
-  expected marks from that plan and its table. Compare complete alt-text
-  number tokens to the source values. Keep published-data, provenance,
-  portability, output-failure and identity checks. Require the named no-picture
-  refusal, assert authored title and caption do not enter data, validate the
-  reserved item names through `ItemId`, set the test directory as the real
-  working directory, and prove a rejected write leaves no output tree.
-- **Evidence at freeze:** Against `c10fd2f03e90cad07fdd400cc55a72ef9042d2d8`,
-  the two modules collected 70 cases across 66 test functions. The new
-  freshness and weighted-signal cases add two functions; the count boundary
-  adds one case; one test name is corrected. No behavior test is removed.
-  The exact collected ids and source hashes are in the worker report.
-  `npm run test:changed -- --list` selected exactly these two backend modules.
-  The selected gate is queued on the shared gate lock; its result and the
-  disposable production-fault proofs are pending and are not represented as
-  passes. Fault copies must use the copied code and fail at the intended
-  assertions.
+  freshness, weighted-signal and rank-to-lead composition cases add three
+  functions; the count boundary adds one case; one test name is corrected. No
+  behavior test is removed. The exact collected ids and source hashes are in
+  the worker report. `npm run test:changed -- --list` selected exactly these
+  two backend modules. The first selected run reported 72 passes and one
+  failure because the freshness comparison shared a publication id and was
+  capped; the test now gives each story a distinct id. At freeze, the final
+  selected gate and copied-production fault proofs were pending.
+- **Post-freeze evidence:** The selected gate on
+  `1d7b57d88e7dd09c3a1fedf939cf3fb67f734163` passed whitespace, Ruff, mypy
+  (832 source files) and 74 tests. Its record is
+  `backend/var/checks/2929ab1d06597361872200f1a749454f9490f70614ff8beaf1d404b18da6e5a5.json`.
+  After the alt-text sign correction, its focused test passed and a copied
+  `chart.py` sign-flip failed at the independent Decimal comparison, with
+  controls passing before and after and the source hash restored. The receipt
+  is in the worker report. The six remaining copied-production faults then
+  failed at their intended assertions with controls passing before and after
+  and copied source hashes restored. Their receipt is
+  `row20-fault-proofs-selected.json` in the worker session files. Unchanged
+  tests and fault proofs were not rerun for the subsequent plan-only merge.
 - **Plan integration:** Verified and imported the complete frozen Row 19
   predecessor, 102,543 bytes, SHA-256
   `094f4dce4c63088201bc1120bbe9f58d5b69a837938c074962ee3bebf77eeaa7`.
@@ -1719,10 +1561,9 @@ counts use the untouched archive and the completed branch instead.
   existing source-quota safety test rather than duplicating it.
 - **Quota finding:** A real quota-disabled production fault survives the
   original safety test: the live 24-hour age limit excludes its third lab story.
-  The correction retains that safety identifier, proves at least three lab
-  stories are eligible before the quota, and must reject the quota-disabled
-  fault. The correction and its final source hashes remain pending at this
-  plan freeze; no production defect is claimed.
+  The corrected test retains that safety identifier, proves all three named lab
+  stories are eligible before the quota, and rejects the quota-disabled fault
+  at its exact count assertion. No production defect is claimed.
 - **Other controls:** Keep complete fresh-state repeatability under an accurate
   name; prove exact health-detail clipping and response-body exclusion at the
   plan record boundary. Require real round-robin input and complete alternating
@@ -1735,28 +1576,39 @@ counts use the untouched archive and the completed branch instead.
   planning case becomes `test_fresh_state_roots_produce_the_same_plan_items`.
   All other identifiers remain. Original inventory: 261 functions and 311
   collected cases. Row 4's removed fixture-only test remains absent.
-- **Evidence at freeze:** Implementation commit
-  `6cf996e54438d230e454fafdb47db8887cc45430` precedes the quota correction.
-  The four-module run passed 311 cases without skips or errors. Its final
-  six-attempt diagnostic refinement passed the 15-case copied-tree control,
-  whose source hashes match that commit. Ruff and the four-file type check
-  passed; an exact-final qualification type check remains queued. Sixteen
-  copied-production faults failed their intended assertions without collection
-  errors or skips and restored their hashes. Remaining faults, final controls
-  and corrected-source gates are pending. Full-suite CI is not claimed.
+- **Completed evidence:** The four-module run passed 311 cases without skips
+  or errors. Final refinements passed 15 copied-tree controls before and after
+  the faults. All 25 distinct copied-production faults failed their intended
+  assertions or guards, with 26 failed executions because prefix trimming
+  exercises two cases. No collection errors or skips counted as proof; every
+  source hash restored. Final Ruff and applicable type checks passed.
+- **Review correction:** Source commit
+  `238435294e71cbfdceed4334dbdf9e67ae166f77` isolates the shard-count, supply-size
+  and article-limit cases from live ceiling tuning with validated test-owned
+  run/day ceilings of 12. Shared helpers, production and the quota correction
+  remain unchanged. Only these three controls and their three affected faults
+  were rerun: controls passed before and after; faults failed their intended
+  assertions. Unaffected evidence was reused after exact AST/helper/input hash
+  comparisons. No full-suite CI result is claimed.
 - **Evidence files:** The worker session report `row23-report.md` and frozen
   `row23-original.json`, `row23-original-ids.json`,
-  `row23-source-reconciliation.json` and `row23-proof-results-initial.json`
-  record original IDs, hashes, decisions and partial proof outcomes. These are
+  `row23-source-reconciliation.json`, `row23-proof-results.json` and
+  `row23-review-proof-results.json` record original IDs, hashes, decisions and
+  completed proof outcomes. These are
   session evidence, not new application payloads.
 - **Plan integration:** Imported the exact full Row 22 predecessor, 114,623
   bytes, SHA-256
   `83e5d49bc3dd2aa6c885b129971c2d713ee6cda2aaf046754df2d6b67586752c`.
   Added only D23 and this section. A5, D3, every earlier row and the single
-  latest Row 11 correction receipt remain unchanged. Release the full successor
-  to Row 24 immediately; remaining gates do not hold the serialized editor.
-- **Delivery:** Open the phase PR after the final source and evidence are
-  ready. The worker does not merge it.
+  latest Row 11 correction receipt remained unchanged at release. The complete
+  successor was released immediately to Row 24 independently of gates. That
+  immutable artifact remains unchanged. Normal main integration preserves all
+  canonical complete sections, removes only identical duplicate Rows 20-22,
+  and carries the corrected current Row 24 from `4d61d64e` without changing
+  its pending delivery.
+- **Delivery:** Open for review in
+  [#1683](https://github.com/miztiik/yen-idhazh/pull/1683). The coordinator owns
+  required CI and merge; the worker does not merge it.
 - **Dependencies:** Row 1.
 
 ## 25 - Row #24 - Independent council test controls
@@ -1787,7 +1639,7 @@ Table E - Finding identity and exact source hashes
 | E5 | 5 - REWRITE | `test_lifecycle.py::test_only_active_judges_get_cells_work_and_publication_paths[True]`, `[False]` -> same two cases | `55e17740b7fe032fae17fed94b432a184f193785b25c0196bc5effc18dd1b7f3` | `a6ebfed157f8188b17f26dff986de119a324c46e9cee343c9b07fbe546f089fa` |
 | E6 | 6 - REWRITE | `test_night_plan.py::test_the_plan_is_the_union_of_what_the_tenants_owe_newest_first` -> same | `f0ee98baec42c9c6346a9affaa4efebf8c88d1f88a26820a82d7bab78dd519c1` | `530af08ae2439b89cac2d1b4a247312e9f23dfb51a0ee96420cf593e54f81902` |
 | E7 | 7 - KEEP (Row 17) | `test_publication.py::test_many_tenants_and_later_dates_survive_a_failure` -> same | `13888090c72039c187755aee5d43ab58c8939db80f3c107487cc7df5204b9c5f` | `13888090c72039c187755aee5d43ab58c8939db80f3c107487cc7df5204b9c5f` |
-| E8 | 8 - REWRITE | `test_selection.py::test_each_judge_has_its_own_repair_cap` -> same | `1106e4d1f43db96e3768cfd8d7e19516be82550d72f840efb07d3f2cf704e11a` | `da4843af090a852665040627ea2e6c7f9baf37ee04718992ba2f8af214953f54` |
+| E8 | 8 - REWRITE | `test_selection.py::test_each_judge_has_its_own_repair_cap` -> same | `1106e4d1f43db96e3768cfd8d7e19516be82550d72f840efb07d3f2cf704e11a` | `0bf4e9b1e7f1583060791da6d8e177cdff223db0a28e6f0db05f73f9856f60b5` |
 | E9 | 9 - KEEP (Row 17) | `test_session.py::test_settle_records_one_machine_for_the_night_not_for_each_judged_date` -> same | `c6394e5cc24d348800578beaea53b4a8279791b94cce6081bf256d8af0f8cdf3` | `c6394e5cc24d348800578beaea53b4a8279791b94cce6081bf256d8af0f8cdf3` |
 | E10 | 10 - REWRITE | `test_session.py::test_a_unit_that_raised_files_one_failed_row_beside_its_completed_siblings` -> same | `8921b00fa4e8f6f298fce1d13bf8d1bd126d0f2f1ec3cb58a3eea522373dab2a` | `bb3bfb4440b89cfb360d5fa8b1dee37626aa8375003d9465ea5b67ff9ecb92b3` |
 | E11 | 11 - REWRITE | `test_session.py::test_the_saving_job_files_one_date_and_a_rerun_replaces_its_rows` -> same | `90959eb84db4bb78d59bafd5cb1a0f13954dc4c896b84a02d643c034376b2dd7` | `41146c8a2fad6ae5051ffebb4674754c2baffa4ef773ff18d79a53fc83d12990` |
@@ -1807,31 +1659,55 @@ Table F - Controls, expected behavior and rejected faults
 | F5 | Room ceiling 3; active tenant width 2; paused and retired tenants retained in copied lifecycle config -> only the active tenant gets two cells, is loaded, prepared, run and settled, and writes its four expected rows and committed path. Reject inactive execution or ceiling-used-as-width; preserve the real status and workflow inputs. |
 | F6 | First night `2026-09-24`, window 6, repair cap 3; one tenant owes `25`, another owes `25,24,23`; tonight `26` -> `[26,25,24]`, newest first, with `23` excluded by first night. Reject dependence on shipped dates or failure to form the union. |
 | F7 | Preserve Row 17's real machine collection: telemetry and fingerprint enabled, bandwidth jobs empty, placement acquisition disabled only in this copied config. Three tenants, dates `2026-10-08` and `2026-10-09`, one tenant raises -> all six output files complete, six rows with exactly one raised failure, later-date rows survive, and one local machine row remains with zero memory probe. Reject lost later-date output, lost failure isolation, or disabling machine collection to avoid host metadata. |
-| F8 | First night `2026-10-01`, window 6, per-tenant repair cap 2; tonight `2026-10-10`; first tenant owes `09,08`, second owes `07,06` -> first gets `10,09`, second gets `10,07`; model flags remain `false,false,true,true`. Reject a cap shared across tenants or dependence on the shipped cap/window. |
+| F8 | First night `2026-10-01`, window 6, per-tenant repair cap 1; tonight `2026-10-10`; first tenant owes `09,08`, second owes `07,06` -> first gets `10,09`, second gets `10,07`; model flags remain `false,false,true,true`. Reject a cap shared across tenants or dependence on the shipped cap/window. |
 | F9 | Preserve Row 17's real machine collection and disable only placement acquisition in the copied config; settle the same run for `2026-09-20` and `2026-09-19` -> one machine row for the run night, job unset, task `save_council_results`, memory probe zero, and measured instant present. Reject one machine row per judged date or disabling local collection. |
 | F10 | Council ceiling 5; tenant width 4; work part 2 raises -> four work rows plus selection and combination; exactly part 2 is failed with `fault: raised` and null model/token costs, while its three siblings complete. Reject ceiling-used-as-width or invented cost on failure. |
 | F11 | Council ceiling 3; tenant width 2; same date saved at attempts 1 and 2 -> two physical attempts retained, current settlement contains only attempt 2 and exactly selection, two work parts and combination. Reject appending the first attempt as current output or changing row identity fields. |
 
-- **Evidence at freeze:** The Row 17 source base is
+- **Evidence at corrected freeze:** The Row 17 source base is
   `9cf4b204a311a9333cc2b84b067a36b90922f3f1`. Ruff passed on the seven
-  council test modules. The seven-module selector remains queued behind the
-  shared `gate_lock`; it has not started. Full `python -m mypy` remains in
-  progress. No fault demonstration or passing test result is claimed here.
-  Keep the queued selector and type check; do not bypass the gate or repeat an
-  unchanged selector. Row 17's publication and settle proofs remain its
-  responsibility unless their consumed hashes and results are supplied.
+  changed council test files, and full `python -m mypy` passed with no issues
+  in 835 source files. The seven-module selector reported 115 passed and one
+  failure: the selection case set a two-date repair cap but expected one older
+  date. The corrected case now authors cap 1, so each tenant receives its
+  newest owed date. The corrected `test_selection.py` selector passed all 43
+  cases. The other six modules passed all 73 cases in the first selector, so
+  the combined result is 116 passing cases without repeating unchanged tests.
+  Eight copied-production faults rejected all eleven findings at their named
+  assertions: tenant width for E1-E3; the venue clock for E4; inactive lifecycle
+  execution for E5; the first-night floor for E6; local machine collection for
+  the unchanged E7 and E9; a shared repair cap for E8; invented model cost for
+  E10; and stale attempts for E11. E5 covers both `runs_model` values. Each
+  fault loaded one temporary copy of its named production module. Every
+  production source hash matched before and after; the E10 and E11 original
+  tests also passed after the copied faults were removed. Per-fault source and
+  mutation hashes, assertion names and test identifiers are in the session
+  artifact `row24-fault-proof-results.json`. No production source changed.
 - **Plan integration:** Imported the exact released Row 23 predecessor,
   118,619 bytes, SHA-256
   `78f4022d614719552f6bb0f4f5e0033bebf4a20bc2219324f0a85938b45d52d5`.
   Added only D24 and this section. A5, D3, all earlier row sections and all
-  complete Row 19-23 sections remain intact. This full successor is frozen and
-  released independently of gates and delivery.
-- **Delivery:** Row 17 is the source dependency and has not yet merged. After
-  its merge, verify the GitHub merge receipt and equivalent source changes,
-  merge current `main` normally into this branch, then open the Row 24 phase
-  PR. Do not merge the Row 24 PR.
+  complete Row 19-23 sections remain intact. The first Row 24 release remains
+  preserved at its original artifact path, 127,951 bytes, SHA-256
+  `68009a5cd5e05c3867abc8340802bd13f180510b36f72edf8ece6fb2ec3ca73c`.
+  This narrow correction updates the current Row 24 section and report only;
+  it does not replace the frozen release or any downstream predecessor. The
+  exact old and new text, source hashes and named gate evidence are recorded
+  in the session artifact `row24-correction.md`.
+- **Delivery:** Source commit `3e82f5263f0540fa69faf1142a84815fc0e9be99`
+  contains the seven council test files. This plan section now carries the
+  final proof receipt. The independent source diff is `row24-source-diff.patch`,
+  13,324 bytes, SHA-256
+  `eda228338a5dce3d2bb06db238111d70a0c1cc24c497ac13519b6e21ef7f8f2a`.
+  Row 17 merged through [#1682](https://github.com/miztiik/yen-idhazh/pull/1682)
+  at `e3433f078fc74c82dbfa7729c3876204c3958550`; its required source is present
+  on `main`. Current `main` was integrated by normal merge commit
+  `243d036aa1f5191806e62d0a4a244bd3427e2a6d`. The authorized Row 24 phase PR
+  is [#1688](https://github.com/miztiik/yen-idhazh/pull/1688); it remains open
+  for review and required checks.
 - **Dependencies:** Row 17; Row 23 is the required exact plan predecessor, not
   a gate dependency.
+
 
 ## 26 - Row #25 - Concrete remaining gardener and ledger safety proofs
 
@@ -1949,6 +1825,36 @@ Table I - Independent controls and expected faults
 - **Dependencies:** Row 21 owns the source prerequisite; Row 25 is the
   exact full-plan predecessor. Neither plan freeze waits for gates.
 
+- **Final local evidence:** After normal main integration at
+  `6f9a5d18d`, the three named modules collected and passed 67 cases.
+  All 61 original cases remain, accounting separately for Row 12's
+  main-delivered tokenizer-refusal rename; Row 26 adds six date cases.
+  Six copied production faults failed their intended assertions: lower
+  attempt settlement, local-day conversion, ignored operator date, removed
+  resolver call, naive callsite clock and local callsite clock. Every copied
+  module's import location was checked, each restored control passed, and
+  production source hashes matched after restoration. No collection failure
+  counts as a fault proof.
+  Removing an unregistered test marker then passed all six date cases with
+  no warnings; import spacing was normalized afterward. Ruff passed.
+  Mypy passed the initially changed three Python files and the binding
+  correction separately. The shared selector classified the utility as
+  unknown/shared and selected broad coverage; this row ran the focused
+  selection above and leaves the full suite to CI.
+- **Verified prerequisite and integration:** GitHub confirms Row 21 merged
+  at `31a689f073d602e75870f7fa48da72d3043f6c13` on
+  `2026-10-24T10:21:52Z`. Its `test_ledger.py` blob
+  `2312aab2e7fc587c7dd9a3be9ccf21bdb0e994de` matches the released source.
+  The normal merge retains every complete current-main Row 1-21 section
+  and its receipts, plus the complete later Row 22-26 sections and A5.
+  The historical 141,434-byte Row 26 freeze with SHA-256
+  `d969aaf615469d8b84e3298d861332428346aa9f5d706bea0a96d83acb54c833`
+  remains unchanged; this final evidence is not a replacement freeze.
+- **Phase delivery:** [#1679](https://github.com/miztiik/yen-idhazh/pull/1679)
+  is open against `main`. It is not merged; full-suite CI remains the
+  merge-candidate gate. The frozen Row 26 successor has already been
+  released to Row 27 independently of these delivery receipts.
+
 ## 28 - Row #27 - Explicit offline gardener collection controls
 
 - **Scope:** Change only `backend/tests/gardener/_garden.py` and
@@ -2010,6 +1916,35 @@ Table I - Independent controls and expected faults
   `test_runner.py` SHA-256
   `ddf22cc620c300434686a0a81f2154801d5e89dd33122de6f961f324bb88375b`.
   The source-writing slot is released independently of gates and plan handoff.
+- **Post-freeze wording correction:** Coordinator-authorized level-0 commit
+  `598e9ff49` additionally changes `backend/tests/test_silicon.py`. Rename
+  `test_the_committed_config_reads_bandwidth_on_the_bench_and_nowhere_else`
+  to `test_the_committed_config_requests_no_bandwidth_jobs` and correct only
+  its docstring: the approved empty job list disables bandwidth everywhere.
+  AST comparison confirms the exact `assert named == ()` body and every other
+  module statement remain unchanged. Ruff and whitespace checks pass. No
+  placement case, helper, default or policy changes; no unchanged silicon
+  suite rerun. The released immutable full successor remains historical.
+- **Post-freeze local results:** The bounded run of the 14 named gardener
+  modules passed all 215 cases with no failures, errors or skips. The JUnit
+  receipt is `backend/var/row27-gardener-users.xml` in the retained worktree.
+  Row 17 supplied its unchanged real placement proof receipt; the consumed
+  production `silicon.py` blob
+  `3c04fb46085421176d1750b479856ba56eb0d809` and original test module blob
+  `6501c6d18c517fd1698e02bc97b0cbc14b2a3ce9` match the Row 27 inputs.
+  Config-off, caller-off and collection-suppression faults were each detected,
+  and that runner restored its production source byte-for-byte. Reuse this
+  receipt without rerunning the unchanged fingerprint suite. Row 17 PR
+  [#1682](https://github.com/miztiik/yen-idhazh/pull/1682) is open, not merged,
+  at this receipt. No CI pass is claimed here.
+- **Delivery integration:** Row 17 PR
+  [#1682](https://github.com/miztiik/yen-idhazh/pull/1682) merged at
+  `e3433f078fc74c82dbfa7729c3876204c3958550`. Merge that current main normally;
+  keep its complete canonical rows 1 through 29, corrected Row 24 repair cap
+  and all newer receipts. Reject duplicate row headings and outcome IDs before
+  indexing them. The two gardener sources retain their frozen hashes; reuse
+  the accepted local results rather than rerun unchanged checks. Open the
+  authorized Row 27 phase PR without merging it.
 - **Plan integration:** Imported the exact released Row 26 full predecessor,
   141,434 bytes, SHA-256
   `d969aaf615469d8b84e3298d861332428346aa9f5d706bea0a96d83acb54c833`.
@@ -2229,6 +2164,172 @@ Table I - Independent controls and expected faults
   CI-receipt-only commit. Keep worktree, branch and evidence artifacts.
 - **Dependencies:** Row 1 supplies semantic test policy; Row 28 is the exact
   full-plan predecessor, not a production dependency.
+
+## 31 - Row #30 - Native tagging-term acceptance and refusal
+
+- **Intent and scope:** Resolve supplemental103/104 in
+  `backend/tests/test_tag.py` and `docs/concepts/taxonomy.md` only, plus this
+  serialized plan append. No production, accepted language, policy, dependency,
+  payload or publication change. Keep supplemental101/102's distinct committed
+  active-entry and entity-alias effectiveness checks.
+- **Fixed baseline:** Commit
+  `e7f46b2317852ea5d3f212f83ea86ac51edc05ed` carries 21 test functions and
+  21 collected cases in the tag module. Original source is 11,142 bytes,
+  SHA-256 `daac8ea824136e4ad36ef23f5d4b216d362881283075117461aa817ab062a109`.
+  The archived baseline receipt lists every original identifier.
+- **Identifier accounting:** All identifiers use prefix
+  `backend/tests/test_tag.py::`. Remove
+  `test_the_committed_terms_are_all_matchable` in favor of
+  `test_keyword_models_accept_curated_phrases` and
+  `test_keyword_models_refuse_a_punctuation_first_term`.
+  Remove `test_no_committed_term_is_short_enough_to_match_inside_a_word`
+  in favor of `test_keyword_models_refuse_a_one_character_word`.
+  Each replacement is collected once for `[lens]` and once for `[event]`.
+  Rename
+  `test_the_tagger_can_only_ever_emit_an_id_the_committed_file_carries`
+  to `test_the_tagger_can_only_ever_emit_an_id_the_vocabulary_carries`;
+  preserve its actual hostile text and closed-vocabulary assertions.
+  Retain the other 18 identifiers. Expected final accounting is 22 functions
+  and 25 collected cases: 21 original cases minus two removed scans, plus six
+  native-model cases, with one rename and no dropped safety responsibility.
+- **Native refusal:** Construct the actual `LensDef` and `EventDef`, not a
+  library-only `TypeAdapter` and not a copied constraint. Both accept two-letter
+  words and phrases containing the existing permitted space, apostrophe,
+  slash, ampersand, period and hyphen. The two-character punctuation-first
+  input `--` isolates the pattern; the one-character alphanumeric input `a`
+  isolates minimum length. Each refusal must identify `keywords[0]` and its
+  own validation error kind. Primary category C2; secondary C5 and C6.
+- **Controlled matcher inputs:** Native `Taxonomy` and `Watchlist` fixtures
+  carry known lenses, events, entities and aliases. No current configuration
+  is read at module import. Only the two retained committed-config guards
+  load current config inside their test bodies. Whole-word matching,
+  case/punctuation folding, phrase order, sorting, absent documents, hostile
+  text, retired lens/entity tombstones, actual Article-to-tag composition,
+  alias matching, failed articles, payload preservation, repeatability and
+  the six named prompt-file checks remain distinct responsibilities.
+- **Owning documentation:** Explain why native refusal and controlled matcher
+  behavior are separate from committed-config effectiveness in the existing
+  taxonomy design rationale. The page stays whole because this paragraph
+  explains the same curated-term boundary, not another subsystem.
+- **Frozen source:** Tag module is 13,686 bytes, SHA-256
+  `5093905178de89ef8f6d41d01a6bed128e3c56e83f04e1ca7c490006b06bf3f7`.
+  Taxonomy page is 22,722 bytes, SHA-256
+  `2ff73108c9a16a8664b6fe0bbb2a412194c59396d5a2c98a32ba054f166af907`.
+  Release the source-writing slot with these hashes before expensive checks.
+- **Required real faults and controls:** In one disposable archived-base copy,
+  import its own actual contracts and overlay only the changed tag test.
+  First remove the actual `MatchTerm` pattern while retaining minimum length:
+  both punctuation-refusal cases must fail because the native models accept
+  the formerly invalid input. Restore exact production bytes. Then relax only
+  the actual minimum length to one: both short-word refusal cases must fail
+  for that reason. Restore exact production bytes and run all 25 cases as the
+  control. Record original/restored production hashes and exact test results.
+  These proofs are PENDING at freeze; no pass is claimed.
+- **Gate state at freeze:** Shared selector inspection, bounded affected
+  pytest, changed-file Ruff, changed-file mypy and whitespace checks are
+  PENDING. Use the documented shared lock only for pytest, not Ruff/mypy.
+  No redundant full local backend/frontend run. Full merge-candidate CI is
+  authoritative and PENDING; no browser check is required for this test/doc
+  change.
+- **Immutable integration:** Verified and imported exact released Row 29,
+  160,945 bytes, SHA-256
+  `84dcb99543de018d2dd38b9ccf6e3a436f94f2c8d55dff51f881c5ee3b982d14`.
+  Append only D30 and this complete section before See also. Deleting only
+  those additions must reconstruct every predecessor byte, including A5,
+  D3 IN-FLIGHT, the single D11 and all earlier complete sections and receipts.
+  Freeze the independent full30 artifact and release it immediately to the
+  coordinator and Row 31 without waiting on gates, Row 29 CI or merge.
+- **Delivery:** After real focused proofs and gates, integrate current main
+  normally and preserve newer canonical plan receipts. Open the authorized
+  phase PR without merging. Report fixed baseline/final identifiers, mapping,
+  source hashes, actual fault/control evidence, immutable handoff and exact
+  PR-head receipts to the coordinator. Do not rewrite historical frozen
+  artifacts or add a CI-receipt-only commit. Keep this worktree and evidence.
+- **Dependencies:** Row 1 supplies semantic test policy. Exact full Row 29 is
+  the plan predecessor only; there is no production/source dependency.
+
+
+## 2 - Row #31 - Bind declared UI defaults to their consumers
+
+- **Scope:** Resolve supplemental findings 5, 58 and 60 individually. This is
+  a test-only binding repair, not a theme feature. No production validator,
+  payload, configuration value, model default, frontend behavior, dependency,
+  editor policy, mock or network change.
+- **Files:** `backend/tests/contracts/test_app_config.py`,
+  `backend/tests/test_appearance_config.py`,
+  `docs/how-to/run-the-gates.md`, and this serialized plan update.
+- **Original/final mapping:** Delete only
+  `test_the_seed_covers_what_a_reading_surface_draws_before_a_reader_acts`.
+  Its inequality is false: the actual home shell carries the prefix UNION
+  the leading stories. Existing survivor:
+  `frontend/tests/day-seam.spec.ts`, describe `the home page anchors its leads`,
+  case `every lead is in the seed, however far down the day it sits`.
+  That bounded fixture places leads at positions 25 and 39 with a prefix of
+  15 items; omitting the actual homeShell keep list fails the lead inclusion
+  assertions. No frontend case or browser matrix is added.
+- **Appearance formatting:** Rename
+  `test_the_committed_file_is_lf_and_ascii` to
+  `test_the_committed_file_is_ascii`. Preserve its ASCII refusal under
+  CLAUDE.md section 5. Remove only its current-file carriage-return assertion:
+  `.gitattributes` owns checkout line endings. Remove the false claim that
+  appearance-file bytes contribute to the run digest. Legal JSON whitespace
+  edits must not fail these checks.
+- **Default binding:** Keep
+  `test_the_default_theme_is_the_one_root_carries`, replacing independent
+  dark literals with agreement against the actual tokens.css :root selector
+  group. Bind native UI/appearance defaults, both committed config declarations,
+  app.html initial/storage-refusal choices, and theme.ts absent-storage,
+  absent-choice and storage-refusal fallbacks. Missing declarations fail by
+  name. Use bounded declaration matches following existing binding-test
+  practice, not a custom CSS/TypeScript parser or a new dependency.
+  The theme_default field does not currently drive first paint; do not claim
+  that declaration agreement proves runtime configurability.
+- **Preservation:** Every other configuration guard and historical/safety
+  responsibility remains. In particular, preserve the raw subject/carriage
+  inequality and the actual Row 17 strict host-placement cases unchanged.
+  Primary categories: C10 for the removed false relation, C4 for formatting,
+  and C5 for consumer/default agreement.
+- **Owning documentation:** Add only neutral testing guidance explaining
+  declaration agreement versus runtime configurability. The existing gate page
+  stays whole: the paragraph clarifies what a binding check certifies, within
+  the existing local-check guidance, rather than adding a separate procedure.
+- **Frozen source:** Commit `435c9d955` contains only the three owned source/doc
+  paths. SHA-256: app-config test
+  `5b77d13c89ddfe90c71adad5ed575d43e05cc36790d54f65d6391bfca615a9c9`;
+  appearance test
+  `d832d63e730e6b5c5d459f6ac843f1f8d2fdbca3cb0b1797c72d6796c30c064e`;
+  gate guide
+  `3f7fc0e37e9316ca3152d2c24ebde7fd476a1ef304c38ea1f17b3c3050a1bb04`.
+  Source slot released before expensive checks.
+- **Required faults and controls:** In a disposable copy, independently change
+  the actual CSS root theme, actual app.html fallback, actual theme.ts fallback,
+  and committed theme declaration; each disagreement must fail the binding.
+  Insert non-ASCII into otherwise valid appearance JSON and require the
+  retained ASCII refusal. Legal whitespace-only JSON edits must pass.
+  Restore original bytes and record hashes and passing controls.
+  These proofs are PENDING at freeze; no passing result is claimed.
+- **Gate state at freeze:** Shared `--list` inspected. Inherited Row 17 source
+  selects broad groups; full exact-head CI remains authoritative and PENDING.
+  Only the two affected Python files receive local pytest, Ruff and mypy.
+  Focused pytest is queued behind the documented machine lock. No redundant
+  full local backend/frontend suite and no new published-site smoke obligation.
+- **Immutable integration:** Import exact released full30, 166,646 bytes,
+  SHA-256
+  `9ab4621b497f06a2c7e89bce69320c985110d6c8eafbe23db1d9823b8260c039`.
+  Append only D31 and this complete section before See also. Reverse removal
+  must reconstruct exact30, preserving A5, D3 IN-FLIGHT, the single D11,
+  every earlier section and all earlier receipts. Freeze independent full31
+  and release immediately without waiting for gates or merges.
+- **Delivery:** After Row 17 merges, integrate current main normally, preserve
+  newer canonical receipts, finish focused proofs, and open the authorized phase
+  PR. Do not merge it. Report exact source/case accounting, fault/restoration
+  evidence, immutable artifact and PR-head receipts to the coordinator. Do not
+  rewrite historical artifacts or add a CI-receipt-only commit.
+- **Dependencies:** Actual Row 17 supplies the owned app-config test base.
+  Row 30 is the immutable full-plan predecessor only. Row 1 supplies the
+  semantic test policy.
+
+
 
 ## See also
 

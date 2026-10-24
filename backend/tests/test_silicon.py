@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import os
+import sys
 import time
+from datetime import UTC, datetime
 from pathlib import Path
+from types import FrameType
 
 import pytest
+from _host_placement import refuse_external_placement
 from conftest import FIXTURES_DIR, SEED_COMMIT
 
 from idhazh import config, ledger
@@ -14,7 +18,7 @@ from idhazh.contracts.base import ServerJob
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.host_fingerprint import HostFingerprintRow, fingerprint_v2
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.telemetry import silicon
+from idhazh.telemetry import silicon, task_telemetry
 
 #: One committed capture of llama-server's own log, so the four-field stamp the
 #: load time is decoded from is a real one rather than a shape somebody typed.
@@ -103,13 +107,90 @@ def test_only_the_jobs_config_names_take_the_bandwidth_reading(tmp_path: Path) -
     )
 
 
-def test_the_committed_config_reads_bandwidth_on_the_bench_and_nowhere_else() -> None:
-    """The default is the bench alone, which is the job whose purpose is to tell
-    one machine from another. Read off the committed file rather than restated
-    here, so moving the knob moves this test with it."""
+def test_the_committed_config_requests_no_bandwidth_jobs() -> None:
+    """The committed empty job list requests no bandwidth benchmark."""
     named = config.load().app.observability.host_fingerprint_bandwidth_jobs
 
     assert named == ()
+
+
+@pytest.mark.parametrize(
+    ("placement_enabled", "ask_placement"),
+    [(False, True), (True, False)],
+    ids=["config-off", "caller-off"],
+)
+def test_placement_off_keeps_a_real_local_machine_row(
+    tmp_path: Path,
+    placement_enabled: bool,
+    ask_placement: bool,
+) -> None:
+    settings = config.load()
+    settings.app.observability.host_telemetry_enabled = True
+    settings.app.observability.host_fingerprint = True
+    settings.app.observability.host_fingerprint_bandwidth_floor_mib = 0
+    settings.app.observability.host_fingerprint_placement_enabled = placement_enabled
+    before = datetime.now(UTC)
+
+    with refuse_external_placement():
+        row, paths = silicon.file_machine_row(
+            date=FINGERPRINT_DAY,
+            run_id=A_RUN_ID,
+            settings=settings,
+            state_root=tmp_path,
+            commit_sha=SEED_COMMIT,
+            pipeline_name="placement-test",
+            task_name="record-machine",
+            ask_placement=ask_placement,
+        )
+
+    after = datetime.now(UTC)
+    assert row is not None
+    assert paths and all(path.is_file() for path in paths)
+    saved = settled(tmp_path)
+    assert len(saved) == 1
+    assert saved[0] == row
+    assert (row.pipeline_name, row.task_name, row.run_id) == (
+        "placement-test",
+        "record-machine",
+        A_RUN_ID,
+    )
+    assert row.measured_at is not None
+    measured_at = datetime.fromisoformat(row.measured_at.replace("Z", "+00:00"))
+    assert before.replace(microsecond=0) <= measured_at <= after
+    assert row.cpu_target_measured_at == row.measured_at
+
+
+def test_default_config_reaches_real_placement_before_any_network_call(
+    tmp_path: Path,
+) -> None:
+    settings = config.load()
+    assert settings.app.observability.host_fingerprint_placement_enabled is True
+    requested: list[FrameType] = []
+
+    class PlacementRequestedError(Exception):
+        pass
+
+    def stop_before_network(frame: FrameType, event: str, argument: object) -> None:
+        if event == "call" and frame.f_code is silicon.placement.__code__:
+            requested.append(frame)
+            raise PlacementRequestedError
+
+    previous = sys.getprofile()
+    sys.setprofile(stop_before_network)
+    try:
+        with pytest.raises(PlacementRequestedError):
+            with task_telemetry.record(
+                date=FINGERPRINT_DAY,
+                run_id=A_RUN_ID,
+                settings=settings,
+                state_root=tmp_path,
+                commit_sha=SEED_COMMIT,
+                job=ServerJob.WORK,
+            ):
+                pass
+    finally:
+        sys.setprofile(previous)
+    assert len(requested) == 1
 
 
 CPUINFO_XEON = """processor\t: 0

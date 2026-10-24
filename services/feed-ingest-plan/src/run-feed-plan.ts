@@ -6,6 +6,7 @@ import { harvestPolicy, loadHarvestInputs, sourceSnapshot } from "./harvest-feed
 import { screenArticleCandidates } from "./screen-article-candidates/triage-gates";
 import { curateArticles, persistPortfolio } from "./curate-article-portfolio/editorial-selection";
 import type { ArticleEvidence, OpportunityEvidence } from "./curate-article-portfolio/portfolio-input";
+import { resolveOperationalHistory } from "./curate-article-portfolio/portfolio-input";
 import { resolveRunContext } from "./resolve-run-context";
 import { readSeenEvidence, rememberFirstSight } from "./read-ledger-history/read-seen-evidence";
 import { readExclusionEvidence } from "./read-ledger-history/read-exclusion-evidence";
@@ -180,13 +181,19 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   complete("screen-article-candidates", harvest.candidates.length, screening.admitted.length, screening.rejections.length);
   logger.startStep();
   const curation = curateArticles({
-    articles: screening.admitted.map(article => ({
-      ...article, evidence: runtime.evidence?.get(article.candidate.candidate_id) ?? {
+    articles: screening.admitted.map(article => {
+      const supplied = runtime.evidence?.get(article.candidate.candidate_id) ?? {
         publisher: null, parent_domain: null, operational: null, primary_evidence: null,
         estimated_work: article.candidate.word_count,
-      },
-    })),
+      };
+      return { ...article, evidence: {
+        ...supplied,
+        operational: resolveOperationalHistory(article.candidate.source_id, supplied.operational,
+          feedHistory.sources.get(article.candidate.source_id)!.reliability),
+      } };
+    }),
     planning: harvestInputs, observed_at: context.now,
+    reliability_floor: inputs.clock_config.collect.reliability_floor,
     opportunity: runtime.opportunity ?? {
       covered_event_clusters: null, underrepresented_verticals: null, origin: null,
     },

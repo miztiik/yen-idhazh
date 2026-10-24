@@ -7,9 +7,8 @@ import csv
 import io
 import json
 from collections.abc import Collection, Sequence
-from datetime import UTC, datetime, timedelta, tzinfo
 from datetime import date as date_type
-from importlib import import_module
+from datetime import timedelta
 from pathlib import Path
 from typing import Any, Final
 
@@ -29,7 +28,7 @@ from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob, derive_url_key
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
-from idhazh.contracts.file_envelope import WriterIdentity
+from idhazh.contracts.file_envelope import Compression, Format, RowIdentity, Tier, WriterIdentity
 from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import (
@@ -44,7 +43,8 @@ from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.validation_row import ValidationRow
 from idhazh.contracts.visual_prune import VisualPruneRow
-from idhazh.ledger import ledger_files
+from idhazh.ledger import filenames, ledger_files
+from idhazh.ledger.persist import _rendered
 from idhazh.telemetry import silicon
 from idhazh.telemetry.source_health import feed_reliability, reliability
 from utilities.reconcile_prefill import TOLERANCE, reconcile
@@ -837,26 +837,53 @@ def test_load_visual_prunes_reports_every_day_the_tree_holds_oldest_first(
 
 
 def test_a_second_attempt_replaces_its_first_and_another_run_is_kept(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
 ) -> None:
     """One row per pass: a re-run of one attempt replaces it, a second run adds its own.
 
     GitHub re-runs a failed job into the same run id, so the second attempt's
     file carries the first attempt's work unit and only the higher attempt is
     read. A second run of the same day is a different unit, and a different pass.
-    All writes share one millisecond, so file hashes can put run 2 first.
+    All stored files share one millisecond, so file hashes can put run 2 first.
     """
-
-    class FixedClock:
-        @staticmethod
-        def now(tz: tzinfo) -> datetime:
-            return datetime(2026, 9, 7, tzinfo=UTC).astimezone(tz)
-
-    monkeypatch.setattr(import_module("idhazh.ledger.persist"), "datetime", FixedClock)
     state = tmp_path / "state"
-    file_prune(state, prune_row(on="2026-09-07", run="1", before=100))
-    file_prune(state, prune_row(on="2026-09-07", run="1", before=200), attempt=2)
-    file_prune(state, prune_row(on="2026-09-07", run="2", before=300))
+    written_at_ms = 1_788_739_200_000
+    for run, attempt, before in (("1", 1, 100), ("1", 2, 200), ("2", 1, 300)):
+        row = prune_row(on="2026-09-07", run=run, before=before)
+        identity = prune_identity(run_id=row.run_id, attempt=attempt)
+        unit = filenames.unit_id(
+            ledger=LedgerName.VISUAL_PRUNES,
+            covers=row.date,
+            run_id=identity.run_id,
+            job=identity.job,
+            shard=identity.shard,
+            producer=identity.producer,
+        )
+        stored = RowIdentity(
+            ledger=LedgerName.VISUAL_PRUNES,
+            covers=row.date,
+            run_id=identity.run_id,
+            attempt=identity.attempt,
+            job=identity.job,
+            shard=identity.shard,
+            unit_id=str(unit),
+        ).model_dump(mode="json") | row.model_dump(mode="json")
+        name, data = _rendered(
+            [stored],
+            model=VisualPruneRow,
+            ledger=LedgerName.VISUAL_PRUNES,
+            covers=row.date,
+            identity=identity,
+            tier=Tier.RAW,
+            period=None,
+            built_from=None,
+            fmt=Format.JSON,
+            compression=Compression.NONE,
+            written_at_ms=written_at_ms,
+        )
+        target = ledger.raw_path(state, LedgerName.VISUAL_PRUNES, row.date, name, fmt=Format.JSON)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
 
     rows = ledger.load_visual_prunes(state)
 
