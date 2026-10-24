@@ -1354,24 +1354,41 @@ counts use the untouched archive and the completed branch instead.
   subject floor. Snapshot the caller's populated list and model values before
   selection. Keep score-versus-input ordering, public-day preservation,
   eligibility, provenance, true reasons and historical reads. Exercise the
-  12/13 wording edge with valid test-owned counts.
+  12/13 wording edge with valid test-owned counts. Compose real rank output
+  with lead selection to prove the committed carriage step beats a qualifying
+  shared-subject term. Give the neutral comparison a strict native rank
+  advantage so the zero-weight control proves that subject term is active
+  without relying on tie order.
 - **Visual behavior:** Reverse both channels in a valid plan and derive the
-  expected marks from that plan and its table. Compare complete alt-text
-  number tokens to the source values. Keep published-data, provenance,
-  portability, output-failure and identity checks. Require the named no-picture
+  expected marks from that plan and its table. Compare signed alt-text numeric
+  values as `Decimal` values with independent values from the element table.
+  Keep published-data, provenance, portability, output-failure and identity
+  checks. Require the named no-picture
   refusal, assert authored title and caption do not enter data, validate the
   reserved item names through `ItemId`, set the test directory as the real
   working directory, and prove a rejected write leaves no output tree.
 - **Evidence at freeze:** Against `c10fd2f03e90cad07fdd400cc55a72ef9042d2d8`,
   the two modules collected 70 cases across 66 test functions. The new
-  freshness and weighted-signal cases add two functions; the count boundary
-  adds one case; one test name is corrected. No behavior test is removed.
-  The exact collected ids and source hashes are in the worker report.
-  `npm run test:changed -- --list` selected exactly these two backend modules.
-  The selected gate is queued on the shared gate lock; its result and the
-  disposable production-fault proofs are pending and are not represented as
-  passes. Fault copies must use the copied code and fail at the intended
-  assertions.
+  freshness, weighted-signal and rank-to-lead composition cases add three
+  functions; the count boundary adds one case; one test name is corrected. No
+  behavior test is removed. The exact collected ids and source hashes are in
+  the worker report. `npm run test:changed -- --list` selected exactly these
+  two backend modules. The first selected run reported 72 passes and one
+  failure because the freshness comparison shared a publication id and was
+  capped; the test now gives each story a distinct id. At freeze, the final
+  selected gate and copied-production fault proofs were pending.
+- **Post-freeze evidence:** The selected gate on
+  `1d7b57d88e7dd09c3a1fedf939cf3fb67f734163` passed whitespace, Ruff, mypy
+  (832 source files) and 74 tests. Its record is
+  `backend/var/checks/2929ab1d06597361872200f1a749454f9490f70614ff8beaf1d404b18da6e5a5.json`.
+  After the alt-text sign correction, its focused test passed and a copied
+  `chart.py` sign-flip failed at the independent Decimal comparison, with
+  controls passing before and after and the source hash restored. The receipt
+  is in the worker report. The six remaining copied-production faults then
+  failed at their intended assertions with controls passing before and after
+  and copied source hashes restored. Their receipt is
+  `row20-fault-proofs-selected.json` in the worker session files. Unchanged
+  tests and fault proofs were not rerun for the subsequent plan-only merge.
 - **Plan integration:** Verified and imported the complete frozen Row 19
   predecessor, 102,543 bytes, SHA-256
   `094f4dce4c63088201bc1120bbe9f58d5b69a837938c074962ee3bebf77eeaa7`.
