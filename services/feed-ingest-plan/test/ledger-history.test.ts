@@ -193,6 +193,16 @@ test("recorded audit rows migrate through native Parquet without invented eviden
       version: EditorialSelectionContract.schemaVersion, ratings: { source_reliability: null },
     });
     expect(migrated.get("source-runs")).toMatchObject({ date: day, run_id: run });
+    const sourceRun = SourceRunRecordSchema.parse(migrated.get("source-runs"));
+    const previousSourceRun = SourceRunContract.legacyVersions![PLANNER_EXCLUSIONS_VERSION]!;
+    const { publisher_id: _publisherId, ...legacySnapshot } = sourceRun.source;
+    const previousRun = previousSourceRun.schema.parse({
+      ...sourceRun, version: PLANNER_EXCLUSIONS_VERSION, source: legacySnapshot,
+    });
+    expect(previousSourceRun.migrate(previousRun).source.publisher_id).toBeNull();
+    expect(previousSourceRun.schema.safeParse({
+      ...sourceRun, version: PLANNER_EXCLUSIONS_VERSION,
+    }).success).toBe(false);
     const originalSource = await Bun.file(new URL(
       "../../../tests/fixtures/contracts/feed-ingest-source-run/one-observation.json", import.meta.url,
     )).json();

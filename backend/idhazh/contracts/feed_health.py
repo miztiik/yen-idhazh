@@ -120,6 +120,11 @@ class FeedHealthRow(Contract):
     __schema_stem__: ClassVar[str] = "feed-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-24T20:04",
+            change="Record curated publisher identity on new feed observations.",
+            why="Feed history retains the identity known when the observation was made.",
+        ),
+        ChangelogEntry(
             version="2026-10-23T18:50",
             change="checked_at retains supplied millisecond precision beside legacy whole seconds.",
             why="Observation order must survive compaction without using a file clock.",
@@ -136,8 +141,8 @@ class FeedHealthRow(Contract):
         ),
         ChangelogEntry(
             version="2026-08-23",
-            change="Initial shape: the feed, the run, the outcome and what it yielded.",
-            why="A feed can go quiet for a week before anybody notices.",
+            change="Earlier changes are available in git history.",
+            why="The contract changelog keeps its four newest changes and one history pointer.",
         ),
     )
 
@@ -204,6 +209,7 @@ class FeedHealthRow(Contract):
             "as every other boolean cell under state/ is."
         ),
     )
+    publisher_id: Slug | None = None
 
     @model_validator(mode="after")
     def _precision_matches_the_declared_shape(self) -> Self:

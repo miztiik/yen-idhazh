@@ -96,8 +96,8 @@ tracing context. The existing default-off service flag gates the new routes.
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | E1 | 1 | Approve runtime contracts and activation policy | - | A | IN-FLIGHT | feed-ingest-feedback-selection | - | - |
-| E2 | 2 | Land compatible shared readers before writers | 1 | B | PENDING | - | - | - |
-| E3 | 3 | Implement curated publisher catalog references | 2 | C | PENDING | - | - | - |
+| E2 | 2 | Land compatible shared readers before writers | 1 | B | IN-FLIGHT | publisher-catalog-support | - | - |
+| E3 | 3 | Implement curated publisher catalog references | 2 | C | IN-FLIGHT | publisher-catalog-support | - | - |
 | E4 | 4 | Wire common fetch and parse observations | 2, 3 | D | PENDING | - | - | - |
 | E5 | 5 | Classify failure and work attribution | 4 | E | PENDING | - | - | - |
 | E6 | 6 | Aggregate article delivery and request costs | 5 | F | PENDING | - | - | - |
@@ -221,38 +221,34 @@ deferred.
 
 ## 4. Row #2 - Land compatible shared readers before writers
 
-- **Scope:** Implement only the approved native declarations, bound copies, migrations and compatible readers needed by later rows. The new stage-snapshot subset is declared with its first real reader/writer in the authorized Row 8 API phase; this row retains the broader publisher and feedback contracts.
+- **Scope:** This PR phase implements the publisher-identity subset only: the shared source snapshot field, its native declaration, versioned historical readers and the binding checks. The saved-batch APIs were delivered separately; their readers change here only to migrate old saved batches without inventing identity. Other feedback contracts remain open.
 - **Level:** 5; the approved Row 1 field/type table is mandatory.
 - **Files touched:**
   - `backend/idhazh/contracts/feed_ingest_candidate.py`
   - `backend/idhazh/contracts/feed_ingest_article_assessment.py`
   - `backend/idhazh/contracts/feed_ingest_dispatch.py`
   - `backend/idhazh/contracts/feed_ingest_editorial_selection.py`
-  - `backend/idhazh/contracts/feed_ingest_rejection.py`
   - `backend/idhazh/contracts/feed_ingest_source_run.py`
-  - `backend/idhazh/contracts/planner_operation.py`
-  - `backend/idhazh/contracts/feed_ingest_observations.py` (new)
-  - `backend/idhazh/contracts/feed_ingest_feedback.py` (new)
-  - `backend/idhazh/contracts/planner_stage.py` (new; authorized stage subset)
+  - `backend/idhazh/contracts/feed_health.py`
+  - `backend/idhazh/contracts/planner_stage.py`
   - `packages/common-contracts/src/schemas/source.schema.ts`
   - `packages/common-contracts/src/schemas/candidate.schema.ts`
   - `packages/common-contracts/src/schemas/article-assessment.schema.ts`
   - `packages/common-contracts/src/schemas/dispatch.schema.ts`
   - `packages/common-contracts/src/schemas/editorial-selection.schema.ts`
-  - `packages/common-contracts/src/schemas/rejection.schema.ts`
-  - `packages/common-contracts/src/schemas/source-run.schema.ts`
   - `packages/common-contracts/src/schemas/event.schema.ts`
-  - `packages/common-contracts/src/schemas/planner-operation.schema.ts`
-  - `packages/common-contracts/src/schemas/ingest-observations.schema.ts` (new)
-  - `packages/common-contracts/src/schemas/ingest-feedback.schema.ts` (new)
-  - `packages/common-contracts/src/schemas/planner-stage.schema.ts` (new; authorized stage subset)
-  - `packages/common-contracts/src/index.ts`
-  - `packages/common-contracts/test/schema-binding.ts`
+  - `packages/common-contracts/src/schemas/feed-health.schema.ts`
+  - `packages/common-contracts/src/schemas/planner-stage.schema.ts`
+  - `packages/common-contracts/src/version.ts`
   - `services/feed-ingest-plan/src/read-ledger-history/encode-historical-record.ts`
-  - `services/feed-ingest-plan/test/ledger-history.test.ts`
+  - `services/feed-ingest-plan/src/metrics/audit-contracts.ts`
+  - `services/feed-ingest-plan/src/api/stage-store.ts` and its existing stage readers
+  - `backend/tests/contracts/test_curated_registries.py`
   - `backend/tests/contracts/test_feed_ingest_contracts.py`
-  - `docs/architecture/contracts/feed-ingest-feedback.md`
-- **Acceptance gates:** Local: common-contract and service type checks, existing schema-binding/ledger-history cases using named recorded schemas and real Parquet. CI: existing native binding and historical compatibility gates. Add no producer emission in this PR.
+  - `services/feed-ingest-plan/test/harvest.test.ts`
+  - `services/feed-ingest-plan/test/plan-engine.test.ts`
+  - `services/feed-ingest-plan/test/ledger-history.test.ts`
+- **Acceptance gates:** Type-check and run the existing recorded harvest, planner and ledger-history cases. Bind `SourceSnapshot` and feed-health fields to the native Pydantic shapes. Prove that legacy snapshots stay unknown and refuse a publisher ID under an old schema version. Do not add publisher-dependent selection behavior.
 - **Oracle:** Existing historical rows and request receipts retain their original evidence and readable identity, while current approved shapes reject invalid combinations; this cannot prove that future writers capture real observations.
 
 ### Table K - Decisions
@@ -269,21 +265,22 @@ deferred.
 
 ## 5. Row #3 - Implement curated publisher catalog references
 
-- **Scope:** Load approved publisher definitions and explicit feed references, validate them and capture identities for new observations without changing historical meaning.
+- **Scope:** Load publisher definitions and explicit feed references, validate them and capture identity in new source snapshots, feed-health rows, events and audit rows without changing historical meaning. Test mappings use recorded inputs only; no unsupported mapping is added to the live catalog.
 - **Level:** 3 after approved declarations; changed catalog authority returns to Row 1.
 - **Files touched:**
   - `config/sources.json`
   - `backend/idhazh/contracts/sources.py`
-  - `services/feed-ingest-plan/src/load-plan-inputs.ts`
   - `services/feed-ingest-plan/src/harvest-feeds/load-harvest-inputs.ts`
-  - `services/feed-ingest-plan/src/run-feed-plan.ts`
-  - `services/feed-ingest-plan/src/metrics/metrics-recorder.ts`
+  - `services/feed-ingest-plan/src/resolve-planning-inputs.ts`
+  - `backend/idhazh/stages/plan.py`
+  - `services/feed-ingest-plan/src/metrics/audit-contracts.ts`
   - `services/feed-ingest-plan/src/publisher-catalog.ts` (new)
-  - `services/feed-ingest-plan/test/policy.test.ts`
+  - `services/feed-ingest-plan/test/harvest-recordings.ts`
+  - `services/feed-ingest-plan/test/plan-recordings.ts`
+  - `services/feed-ingest-plan/test/harvest.test.ts`
   - `services/feed-ingest-plan/test/plan-engine.test.ts`
-  - `services/feed-ingest-plan/test/plan-api.test.ts`
   - `docs/architecture/contracts/publisher-identity.md`
-- **Acceptance gates:** Local: existing policy/composition/API cases for confirmed multi-feed references, collisions, unresolved references, retired reservations, display-name changes and unknown legacy IDs; strict type checks. Prove approved publisher definitions/references survive initial loading and both planner/audit reconstructions, participate in harvest/operation fingerprints and preserve keyed-request conflicts. Change an assignment with checkout identity fixed; its applicable fingerprint must change. New observations retain approved identity provenance. CI: existing source-config/native gates and historical readback.
+- **Acceptance gates:** Strict type checks and the existing native source-config, recorded harvest and planner cases. Prove valid shared references, duplicate and undefined-ID rejection, empty-registry legacy reads, fingerprint change on assignment, and identity through planning, observations and audit. The live registry remains empty because no current feed mapping had sufficient publisher-owned evidence; fixture mappings are not production assignments.
 - **Oracle:** Changing a publisher display name or domain does not change its ID, while duplicate definitions and undefined references fail; this cannot verify editorial identity without curated provenance.
 
 ### Table M - Decisions

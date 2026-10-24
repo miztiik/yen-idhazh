@@ -1,12 +1,14 @@
 /** Which validated content belongs to one offered feed entry? */
 import { z } from "zod";
-import { ArticleLabelsSchema, PolicyIdentitySchema, SourceSnapshotSchema } from "./source.schema";
-import { CountSchema, DateStampSchema, NonEmptySchema, RunIdSchema, Sha256Schema, SlugSchema, TimestampSchema, UrlSchema, VersionSchema, checkUrlIdentity, deriveCandidateId, reject } from "./primitives";
-import { CONTRACT_VERSION, PLANNING_OBSERVATIONS_VERSION } from "../version";
+import {
+  ArticleLabelsSchema, PolicyIdentitySchema, PreviousSourceSnapshotSchema, SourceSnapshotSchema,
+} from "./source.schema";
+import { CountSchema, DateStampSchema, NonEmptySchema, RunIdSchema, Sha256Schema, SlugSchema, TimestampSchema, UrlSchema, checkUrlIdentity, deriveCandidateId, reject } from "./primitives";
+import { CONTRACT_VERSION, PLANNING_OBSERVATIONS_VERSION, PUBLISHER_IDENTITY_VERSION } from "../version";
 import { PlanningObservationsSchema } from "./planning-observations.schema";
 
 export const FeedIngestCandidateSchema = z.strictObject({
-  version: z.literal(PLANNING_OBSERVATIONS_VERSION).default(PLANNING_OBSERVATIONS_VERSION), date: DateStampSchema, correlation_id: NonEmptySchema,
+  version: z.literal(PUBLISHER_IDENTITY_VERSION).default(PUBLISHER_IDENTITY_VERSION), date: DateStampSchema, correlation_id: NonEmptySchema,
   run_id: RunIdSchema, candidate_id: Sha256Schema, entry_ordinal: CountSchema,
   source_id: SlugSchema, vertical: SlugSchema, source: SourceSnapshotSchema,
   canonical_url: UrlSchema, url_key: Sha256Schema, title: NonEmptySchema,
@@ -23,11 +25,25 @@ export const FeedIngestCandidateSchema = z.strictObject({
 export const CandidateSchema = FeedIngestCandidateSchema;
 export type FeedIngestCandidate = z.infer<typeof FeedIngestCandidateSchema>;
 
-const { planning_observations: _observations, ...previousFields } = FeedIngestCandidateSchema.shape;
-export const PreviousFeedIngestCandidateSchema = z.strictObject({ ...previousFields, version: VersionSchema });
+const {
+  planning_observations: _observations, source: _source, ...previousCandidateFields
+} = FeedIngestCandidateSchema.shape;
+const PreviousCandidateSchema = z.strictObject({
+  ...previousCandidateFields, source: PreviousSourceSnapshotSchema, version: z.literal(CONTRACT_VERSION),
+});
+const PreviousObservedCandidateSchema = z.strictObject({
+  ...FeedIngestCandidateSchema.shape, source: PreviousSourceSnapshotSchema,
+  version: z.literal(PLANNING_OBSERVATIONS_VERSION),
+});
+export const PreviousFeedIngestCandidateSchema = z.union([
+  PreviousCandidateSchema, PreviousObservedCandidateSchema,
+]);
 export function readFeedIngestCandidate(raw: unknown): FeedIngestCandidate {
   if (typeof raw === "object" && raw !== null && "version" in raw && raw.version === CONTRACT_VERSION) {
-    return FeedIngestCandidateSchema.parse({ ...PreviousFeedIngestCandidateSchema.parse(raw), version: PLANNING_OBSERVATIONS_VERSION });
+    return FeedIngestCandidateSchema.parse({ ...PreviousFeedIngestCandidateSchema.parse(raw), version: PUBLISHER_IDENTITY_VERSION });
+  }
+  if (typeof raw === "object" && raw !== null && "version" in raw && raw.version === PLANNING_OBSERVATIONS_VERSION) {
+    return FeedIngestCandidateSchema.parse({ ...PreviousFeedIngestCandidateSchema.parse(raw), version: PUBLISHER_IDENTITY_VERSION });
   }
   return FeedIngestCandidateSchema.parse(raw);
 }

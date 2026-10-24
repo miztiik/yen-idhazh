@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { createHash } from "node:crypto";
 import { CONTRACT_VERSION, CandidateRejectionContract, EditorialSelectionContract,
   PLANNER_EXCLUSIONS_VERSION, PLANNING_OBSERVATIONS_VERSION, EXTRACTION_QUALITY_VERSION,
+  PUBLISHER_IDENTITY_VERSION, SOURCE_RELIABILITY_VERSION,
   PreviousHarvestDiagnosticsSchema } from "@idhazh/common-contracts";
 import type { LedgerCompletionEvidence } from "@idhazh/common-contracts";
 import { describeObjectSchema, digestRows, persistLedger } from "@idhazh/ledger-file-writer";
@@ -13,6 +14,7 @@ import { main } from "../src/index";
 import { readPlanningHistory } from "../src/metrics/planning-populations";
 import { ArticleAssessmentContract, DiversityMetricContract, DispatchContract, SourceRunContract } from "../src/metrics/audit-contracts";
 import { commitLogicalRecords, PLANNING_RECORD_KEYS } from "../src/read-ledger-history/logical-records";
+import { encodeHistoricalRecord } from "../src/read-ledger-history/encode-historical-record";
 import { selectCompleteAttempt } from "../src/read-ledger-history/complete-attempt";
 import type { AttemptHistory } from "../src/read-ledger-history/complete-attempt";
 import { recordedPlan, namedPlanningFiles } from "./plan-recordings";
@@ -198,6 +200,21 @@ test("recorded rejection commitments retain their original schema stamp after mi
     expect(() => commitLogicalRecords("rejections", migrated, selected, "2026-10-19")).toThrow("unsupported");
     expect(commitLogicalRecords("rejections", migrated, selected, "2026-10-22").commitment.row_schema_version).toBe("2026-10-22");
     const assessments = history.ledgers["article-assessments"].rows;
+    const assessment = ArticleAssessmentContract.schema.parse(assessments[0]!.row);
+    const assignedAssessment = ArticleAssessmentContract.schema.parse({
+      ...assessment, source: { ...assessment.source, publisher_id: "fixture-publisher" },
+    });
+    expect(ArticleAssessmentContract.schema.parse(encodeHistoricalRecord(
+      "article-assessments", assignedAssessment, PUBLISHER_IDENTITY_VERSION,
+    )).source.publisher_id).toBe("fixture-publisher");
+    const previousAssessment = encodeHistoricalRecord(
+      "article-assessments", assessment, SOURCE_RELIABILITY_VERSION,
+    );
+    expect(ArticleAssessmentContract.legacyVersions[SOURCE_RELIABILITY_VERSION].schema.parse(previousAssessment)
+      .source).not.toHaveProperty("publisher_id");
+    expect(() => encodeHistoricalRecord(
+      "article-assessments", assignedAssessment, SOURCE_RELIABILITY_VERSION,
+    )).toThrow("cannot omit curated publisher identity");
     expect(() => commitLogicalRecords("article-assessments", assessments, selected, "2026-10-22"))
       .toThrow("cannot omit measured diagnostics");
     const historicalAssessments = assessments.map(held => {

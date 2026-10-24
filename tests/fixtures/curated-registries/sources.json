@@ -1,4 +1,5 @@
 {
+  "publishers": [],
   "feeds": [
     {
       "id": "zeta-lab",
@@ -7,6 +8,7 @@
       "url": "https://example.test/zeta.xml",
       "tier": 7,
       "kind": "research-note",
+      "publisher_id": null,
       "form": "abstract",
       "weight": 0.35,
       "status": "draft",
@@ -19,6 +21,7 @@
       "url": "https://example.test/alpha.xml",
       "tier": 3,
       "kind": "reporting",
+      "publisher_id": null,
       "form": "article",
       "weight": 1.0,
       "status": "active",
@@ -49,6 +52,7 @@
       "url": "https://example.test/old.xml",
       "tier": 9,
       "kind": "announcement",
+      "publisher_id": null,
       "form": "article",
       "weight": 0.15,
       "status": "retired",

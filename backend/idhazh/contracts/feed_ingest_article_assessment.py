@@ -40,6 +40,11 @@ class ArticleAssessmentRecord(Contract):
     __schema_stem__: ClassVar[str] = "feed-ingest-article-assessment"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-24T20:04",
+            change="Record curated publisher identity in source snapshots.",
+            why="New observations preserve reviewed identity without rewriting history.",
+        ),
+        ChangelogEntry(
             version="2026-10-24",
             change="Record a separate measured source-reliability ranking penalty.",
             why="Delivery history remains distinct from article and extraction evidence.",
@@ -56,16 +61,11 @@ class ArticleAssessmentRecord(Contract):
         ),
         ChangelogEntry(
             version="2026-10-22T18:15",
-            change="Retain the original fetch and extraction diagnostics at each decision.",
-            why="Later decisions must not erase observed transport and extraction evidence.",
-        ),
-        ChangelogEntry(
-            version="2026-10-20",
-            change="Earlier changes are in this file's git history.",
-            why="Git retains the original declaration.",
+            change="Earlier changes are available in git history.",
+            why="The contract changelog keeps its four newest changes and one history pointer.",
         ),
     )
-    version: Literal["2026-10-24"] = "2026-10-24"
+    version: Literal["2026-10-24T20:04"] = "2026-10-24T20:04"
     diagnostics: HarvestDiagnostics | None = None
 
     date: DateStamp
@@ -114,6 +114,8 @@ class ArticleAssessmentRecord(Contract):
     @model_validator(mode="before")
     @classmethod
     def migrate_previous_timing(cls, value: Any) -> Any:
+        if isinstance(value, dict) and value.get("version") == "2026-10-24":
+            return {**value, "version": "2026-10-24T20:04"}
         if isinstance(value, dict) and value.get("version") in {
             "2026-10-20", "2026-10-22", "2026-10-22T18:15", "2026-10-22T20:30",
             "2026-10-23",
@@ -146,7 +148,7 @@ class ArticleAssessmentRecord(Contract):
                     "planner exclusions require the declared exclusion "
                     "contract version"
                 )
-            return {**value, "version": "2026-10-24"}
+            return {**value, "version": "2026-10-24T20:04"}
         if not isinstance(value, dict) or value.get("version") != "2026-10-20":
             return value
         migrated = dict(value)
@@ -154,7 +156,7 @@ class ArticleAssessmentRecord(Contract):
             raise ValueError("legacy timing requires its recorded timestamp and clock")
         migrated["timing_at"] = migrated.pop("effective_published_at")
         migrated["timing_basis"] = migrated.pop("publication_clock")
-        migrated["version"] = "2026-10-24"
+        migrated["version"] = "2026-10-24T20:04"
         return migrated
 
     @model_validator(mode="after")

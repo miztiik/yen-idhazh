@@ -31,6 +31,7 @@ CONTRACT_NAMES = (
 )
 
 MODEL_NAMES = (
+    ("feed_ingest_candidate", "SourceSnapshot"),
     ("planner_stage", "PlannerStageContext"),
     ("planner_stage", "PlannerStageRequest"),
     ("planner_stage", "RecordedIdentity"),

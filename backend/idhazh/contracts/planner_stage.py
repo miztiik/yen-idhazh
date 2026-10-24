@@ -205,12 +205,17 @@ class ParsedFeedBatch(Contract):
     __schema_stem__: ClassVar[str] = "parsed-feed-batch"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-24T20:04",
+            change="Preserve curated publisher identity in parsed candidates.",
+            why="Every later stage reads the source identity recorded at harvest.",
+        ),
+        ChangelogEntry(
             version="2026-10-24",
             change="Declare complete parsed candidate batches and their evidence.",
             why="Later planner stages read one validated snapshot by its server identity.",
         ),
     )
-    version: Literal["2026-10-24"] = "2026-10-24"
+    version: Literal["2026-10-24T20:04"] = "2026-10-24T20:04"
     batch_id: UUID4
     config_sha256: Sha256
     context: PlannerStageContext
@@ -222,6 +227,13 @@ class ParsedFeedBatch(Contract):
     opportunity: PlannerOpportunityEvidence
     operational_history: dict[Slug, OperationalHistory | None]
     rejections: list[CandidateRejectionRecord]
+
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_previous_version(cls, value: Any) -> Any:
+        if isinstance(value, dict) and value.get("version") == "2026-10-24":
+            return {**value, "version": "2026-10-24T20:04"}
+        return value
 
     @model_validator(mode="after")
     def validate_batch(self) -> Self:
@@ -257,18 +269,30 @@ class SelectedFeedBatch(Contract):
     __schema_stem__: ClassVar[str] = "selected-feed-batch"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-24T20:04",
+            change="Preserve curated publisher identity in selected snapshots.",
+            why="Partitioning reads the identity recorded with each selected article.",
+        ),
+        ChangelogEntry(
             version="2026-10-24",
             change="Declare selected feed batches linked to their parsed input.",
             why="Partitioning reads ranked choices without copying the original batch.",
         ),
     )
-    version: Literal["2026-10-24"] = "2026-10-24"
+    version: Literal["2026-10-24T20:04"] = "2026-10-24T20:04"
     batch_id: UUID4
     config_sha256: Sha256
     parsed_batch_id: UUID4
     context: PlannerStageContext
     selections: list[EditorialSelectionRow]
     rejections: list[CandidateRejectionRecord]
+
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_previous_version(cls, value: Any) -> Any:
+        if isinstance(value, dict) and value.get("version") == "2026-10-24":
+            return {**value, "version": "2026-10-24T20:04"}
+        return value
 
     @model_validator(mode="after")
     def validate_selections(self) -> Self:
@@ -302,12 +326,17 @@ class PartitionedFeedBatch(Contract):
     __schema_stem__: ClassVar[str] = "partitioned-feed-batch"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-24T20:04",
+            change="Preserve curated publisher identity in partitioned snapshots.",
+            why="Saved dispatch rows retain the identity carried by selection.",
+        ),
+        ChangelogEntry(
             version="2026-10-24",
             change="Declare partitioned feed batches and worker assignments.",
             why="Persistence receives one validated dispatch snapshot after partitioning.",
         ),
     )
-    version: Literal["2026-10-24"] = "2026-10-24"
+    version: Literal["2026-10-24T20:04"] = "2026-10-24T20:04"
     batch_id: UUID4
     config_sha256: Sha256
     selection_batch_id: UUID4
@@ -316,6 +345,13 @@ class PartitionedFeedBatch(Contract):
     dispatch_count: PositiveCount
     work: list[NonNegative]
     dispatches: list[FeedIngestDispatch]
+
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_previous_version(cls, value: Any) -> Any:
+        if isinstance(value, dict) and value.get("version") == "2026-10-24":
+            return {**value, "version": "2026-10-24T20:04"}
+        return value
 
     @model_validator(mode="after")
     def validate_partition(self) -> Self:

@@ -10,6 +10,7 @@ import json
 from copy import deepcopy
 
 import pytest
+from pydantic import ValidationError
 from support.paths import CONFIG_DIR, FIXTURES_DIR, read_text
 
 from idhazh.contracts.base import Contract
@@ -68,3 +69,54 @@ def test_a_controlled_registry_survives_a_read_and_a_rewrite(
     assert CURATED[name].from_json(rewritten).model_dump(mode="json") == expected, (
         f"{name} changed values on the next read"
     )
+    if name == "sources.json":
+        legacy = deepcopy(authored)
+        legacy.pop("publishers", None)
+        for feed in [*legacy["feeds"], *legacy.get("retired", [])]:
+            feed.pop("publisher_id", None)
+        legacy_sources = Sources.from_json(json.dumps(legacy))
+        assert legacy_sources.publishers == []
+        assert all(feed.publisher_id is None for feed in legacy_sources.feeds)
+
+        publisher = {
+            "id": "reviewed-publication", "display_name": "Reviewed Publication",
+            "added_on": "2026-10-20",
+        }
+        mapped = deepcopy(authored)
+        mapped["publishers"] = [publisher]
+        mapped["feeds"][0]["publisher_id"] = publisher["id"]
+        assert Sources.model_validate(mapped).feeds[0].publisher_id == publisher["id"]
+        with pytest.raises(ValidationError, match="publisher ids must be distinct"):
+            Sources.model_validate({**mapped, "publishers": [publisher, publisher]})
+        with pytest.raises(ValidationError, match="must reference a defined publisher"):
+            Sources.model_validate({
+                **mapped, "feeds": [{**mapped["feeds"][0], "publisher_id": "missing-publication"}],
+            })
+        old_publisher = Sources.model_validate({
+            **legacy, "publishers": [{
+                "id": "legacy-publication", "display_name": "Legacy Publication",
+            }],
+        }).publishers[0]
+        assert old_publisher.added_on is None
+        assert old_publisher.status is None
+        assert old_publisher.retired_on is None
+        assert old_publisher.retirement_reason is None
+        with pytest.raises(ValidationError, match="newly retired publisher"):
+            Sources.model_validate({
+                **mapped,
+                "publishers": [{**publisher, "status": "retired"}],
+            })
+        retired = Sources.model_validate({
+            **mapped, "publishers": [{
+                **publisher, "status": "retired", "retired_on": "2026-10-21",
+                "retirement_reason": "publication closed",
+            }],
+        }).publishers[0]
+        assert retired.retirement_reason == "publication closed"
+        with pytest.raises(ValidationError, match="lowercase"):
+            Sources.model_validate({
+                **mapped, "publishers": [{
+                    **publisher, "status": "retired", "retired_on": "2026-10-21",
+                    "retirement_reason": "Publication Closed",
+                }],
+            })

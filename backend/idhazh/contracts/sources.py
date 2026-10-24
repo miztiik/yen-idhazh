@@ -20,7 +20,7 @@ from typing import ClassVar, Self
 
 from pydantic import Field, model_validator
 
-from idhazh.contracts.base import ChangelogEntry, Contract, Slug, Url, records_json
+from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, Model, Slug, Url, records_json
 from idhazh.contracts.taxonomy import (
     Lifecycled,
     LifecycleStatus,
@@ -46,6 +46,7 @@ class FeedDef(Lifecycled):
         default="reporting",
         description="Who is speaking. A reader needs this before they will share an item.",
     )
+    publisher_id: Slug | None = None
     form: SourceForm = Field(
         default=SourceForm.ARTICLE,
         description=(
@@ -59,6 +60,35 @@ class FeedDef(Lifecycled):
         le=1.0,
         description="Soft retirement: drop the weight, observe, then retire.",
     )
+
+
+class PublisherDef(Model):
+    """One reviewed editorial publication reserved in the source catalog."""
+
+    id: Slug
+    display_name: str = Field(min_length=1)
+    added_on: DateStamp | None = None
+    status: LifecycleStatus | None = None
+    retired_on: DateStamp | None = None
+    retirement_reason: str | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def _retirement_fields_match_status(self) -> Self:
+        retired = self.status is LifecycleStatus.RETIRED
+        has_retirement_fields = self.retired_on is not None or self.retirement_reason is not None
+        if has_retirement_fields and (self.retired_on is None or self.retirement_reason is None):
+            raise ValueError("publisher retirement needs both retired_on and retirement_reason")
+        if retired and self.added_on is not None and not has_retirement_fields:
+            raise ValueError("a newly retired publisher needs retired_on and retirement_reason")
+        if self.status is not LifecycleStatus.RETIRED and has_retirement_fields:
+            raise ValueError("retirement fields are only meaningful on a retired publisher")
+        if self.retirement_reason is not None and (
+            not self.retirement_reason.strip() or self.retirement_reason != self.retirement_reason.lower()
+        ):
+            raise ValueError("publisher retirement_reason must be nonempty lowercase text")
+        if self.retired_on is not None and self.added_on is not None and self.retired_on < self.added_on:
+            raise ValueError("retired_on cannot precede added_on")
+        return self
 
 
 class SalienceFeedDef(Lifecycled):
@@ -87,6 +117,11 @@ class Sources(Contract):
     __schema_stem__: ClassVar[str] = "sources"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-24T20:04",
+            change="Add publisher definitions and nullable feed references.",
+            why="New observations can retain reviewed identity while legacy values remain unknown.",
+        ),
+        ChangelogEntry(
             version="2026-10-20",
             change="Source classification accepts open kind and numeric tier identifiers.",
             why="Registry membership can change without invalidating recorded payloads.",
@@ -100,11 +135,6 @@ class Sources(Contract):
             version="2026-08-23T18:47",
             change="Added feed form with an abstract value.",
             why="A reader must be told when the summary is of an abstract and not an article.",
-        ),
-        ChangelogEntry(
-            version="2026-08-22T10:00",
-            change="Split retired feeds out of feeds into their own list.",
-            why="A retired feed sat in the list Collect loops, so it cost a request every run.",
         ),
         ChangelogEntry(
             version="2026-08-21",
@@ -121,6 +151,7 @@ class Sources(Contract):
         default_factory=list,
         description="Tombstones. Never fetched, never ranked, still able to name an id.",
     )
+    publishers: list[PublisherDef] = Field(default_factory=list)
 
     def known_feeds(self) -> list[FeedDef]:
         """Every feed this project has ever read, live or retired.
@@ -162,4 +193,13 @@ class Sources(Contract):
         urls = [feed.url for feed in known]
         if len(set(urls)) != len(urls):
             raise ValueError("feed urls must be distinct across feeds and retired")
+        publisher_ids = [publisher.id for publisher in self.publishers]
+        if len(set(publisher_ids)) != len(publisher_ids):
+            raise ValueError("publisher ids must be distinct")
+        known_publishers = set(publisher_ids)
+        if any(
+            feed.publisher_id is not None and feed.publisher_id not in known_publishers
+            for feed in known
+        ):
+            raise ValueError("feed publisher_id must reference a defined publisher")
         return self
