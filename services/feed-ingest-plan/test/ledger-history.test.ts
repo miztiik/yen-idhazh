@@ -18,6 +18,7 @@ import { tableToIPC } from "apache-arrow";
 import { readLedgerParquet } from "../src/read-ledger-history/read-parquet";
 import { readLedgerDay } from "../src/read-ledger-history/read-period";
 import { readPublisherPublication } from "../src/read-ledger-history/read-publisher-publication";
+import { classifyPublicationHistoryError } from "../src/read-ledger-history/classify-publication-history-error";
 import { ItemHealthPublicationSchema, PublishedRowSchema, PUBLISHED_ROW_SCHEMA_VERSION } from "../src/metrics/publication-evidence";
 import { ITEM_HEALTH_ROW_SCHEMA_VERSION } from "../src/read-ledger-history/item-health-version";
 import { resolveHealthInventory } from "../src/read-ledger-history/read-health-inventory";
@@ -483,6 +484,30 @@ test("one named raw listing verifies its ordered filename digest, sizes and miss
     expect(empty.counts.size).toBe(0);
     const missing = await readPublisherPublication({ ...request, published_days: [] });
     expect(missing.availability).toBe("unavailable");
+    const invalidIndex = join(publisherRoot, "invalid-publication-index.json");
+    for (const contents of ["{", JSON.stringify({ version: "not-a-version" })]) {
+      await writeFile(invalidIndex, contents);
+      const invalid = await readPublisherPublication({
+        ...request, published_days: [{ day, raw_index: "invalid-publication-index.json" }],
+      });
+      expect(invalid.availability).toBe("unavailable");
+      expect(invalid.counts.size).toBe(0);
+      expect(invalid.gaps).toEqual(["invalid_publication_history"]);
+    }
+    expect(classifyPublicationHistoryError(new TypeError("unexpected programming error"))).toBeNull();
+    expect(classifyPublicationHistoryError(new Error("unexpected programming error"))).toBeNull();
+    expect(classifyPublicationHistoryError("unexpected non-error")).toBeNull();
+    for (const bytes of [new Uint8Array([1, 2, 3]), new Uint8Array(20)]) {
+      await writeFile(join(stateRoot, publication.files[0]!.path), bytes);
+      await expect(readLedgerDay({
+        ledger: "published", day, contract: { schema: PublishedRowSchema, schemaVersion: PUBLISHED_ROW_SCHEMA_VERSION },
+        rawFiles: publication.files.map(file => join(stateRoot, file.path)),
+      })).rejects.toThrow();
+      const corrupt = await readPublisherPublication(request);
+      expect(corrupt.availability).toBe("unavailable");
+      expect(corrupt.counts.size).toBe(0);
+      expect(corrupt.gaps).toEqual(["invalid_publication_history"]);
+    }
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 60_000);
 

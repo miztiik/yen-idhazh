@@ -436,13 +436,13 @@ def test_dispatch_keeps_selection_and_content_identity() -> None:
     assert ScoreEvidence.model_validate(scores).publisher_exposure is not None
     with pytest.raises(ValidationError, match="replaces feed crowding"):
         ScoreEvidence.model_validate(scores | {"source": {"available": True, "value": 0}})
-    for change in (
+    for exposure_change in (
         {"published_today": None}, {"history_status": "unavailable"},
         {"exposure": 1.5}, {"value": 0.5}, {"planned_slots": 0},
         {"selected_so_far": -1}, {"publisher_id": None}, {"coefficient": -1},
     ):
         with pytest.raises(ValidationError):
-            PublisherExposurePenalty.model_validate(exposure | change)
+            PublisherExposurePenalty.model_validate(exposure | exposure_change)
     historical_exposure = json.loads(json.dumps(payload))
     historical_exposure["selection"]["ratings"]["publisher_exposure"] = exposure
     with pytest.raises(ValidationError, match="publisher exposure requires"):

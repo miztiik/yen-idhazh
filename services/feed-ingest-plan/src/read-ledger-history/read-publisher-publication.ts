@@ -7,12 +7,16 @@ import { defaultDayInput, historyCoverage, readNamedDays, usableDay } from "./na
 import { PublishedRowProjectionContract } from "./published-row";
 import { ITEM_HEALTH_ROW_SCHEMA_VERSION } from "./item-health-version";
 import type { PublisherPublicationHistory } from "../curate-article-portfolio/publisher-exposure";
+import { writeJsonLine } from "../logging/structured-logger";
+import { classifyPublicationHistoryError } from "./classify-publication-history-error";
 
-export async function readPublisherPublication(input: Readonly<{
+type PublisherPublicationInput = Readonly<{
   root: string; day: string;
   published: LedgerRegistration; item_health: LedgerRegistration; selections: LedgerRegistration;
   published_days: readonly SeenDayInput[]; health_days: readonly SeenDayInput[];
-}>) {
+}>;
+
+async function readConfirmedPublication(input: PublisherPublicationInput) {
   const named = (days: readonly SeenDayInput[], registration: LedgerRegistration) => {
     const today = days.filter(day => day.day === input.day);
     if (today.length > 1) throw new Error("Publisher publication history repeats its UTC day");
@@ -71,4 +75,25 @@ export async function readPublisherPublication(input: Readonly<{
     ...evidence, gaps: [...new Set(gaps)],
     history: { publications: historyCoverage(published), health: healthHistory, identities: identityHistory },
   };
+}
+
+export async function readPublisherPublication(input: PublisherPublicationInput) {
+  try {
+    return await readConfirmedPublication(input);
+  } catch (error) {
+    const diagnostic = classifyPublicationHistoryError(error);
+    if (diagnostic === null) throw error;
+    const gap = "invalid_publication_history";
+    writeJsonLine({
+      timestamp: new Date().toISOString(), level: "WARN", event: "publisher_history_unavailable",
+      day: input.day, gap, diagnostic,
+    });
+    const evidence: PublisherPublicationHistory = {
+      day: input.day, availability: "unavailable", counts: new Map(),
+    };
+    return {
+      ...evidence, gaps: [gap],
+      history: { publications: historyCoverage([]), health: null, identities: null },
+    };
+  }
 }

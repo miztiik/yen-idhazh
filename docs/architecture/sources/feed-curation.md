@@ -251,6 +251,11 @@ Conflicting snapshots, an unknown publisher, a missing owner or incomplete
 history make publication history unavailable. Partial known counts are not
 used as a complete census. Known-empty publication membership needs no
 identity join.
+Malformed JSON, schema-invalid data, named native-integrity failures and
+unreadable optional files report `invalid_publication_history`, emit a warning
+with the precise diagnostic and use current selections. The shared reader
+still refuses corrupt evidence; this optional boundary never uses its rows.
+Unrecognized errors, including programming errors, are not suppressed.
 
 Only today's named files are read. A publication from yesterday's selection
 cannot be attributed unless today's bounded evidence supplies the required
