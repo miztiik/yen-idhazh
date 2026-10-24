@@ -29,6 +29,7 @@ Finite = Annotated[float, Field(allow_inf_nan=False)]
 Count = Annotated[StrictInt, Field(ge=0)]
 PositiveCount = Annotated[StrictInt, Field(gt=0)]
 NonEmpty = Annotated[str, StringConstraints(min_length=1)]
+PUBLISHER_IDENTITY_VERSION = "2026-10-24T20:04"
 PlanningStage = Literal[
     "harvest-feeds",
     "screen-article-candidates",
@@ -36,6 +37,16 @@ PlanningStage = Literal[
     "partition-article-shards",
     "seal-article-ledger",
 ]
+
+
+def reject_legacy_publisher_identity(value: Any, snapshots: list[Any]) -> None:
+    if (
+        not isinstance(value, dict)
+        or value.get("version", PUBLISHER_IDENTITY_VERSION) == PUBLISHER_IDENTITY_VERSION
+    ):
+        return
+    if any(isinstance(snapshot, dict) and "publisher_id" in snapshot for snapshot in snapshots):
+        raise ValueError("curated publisher identity requires its declared contract version")
 
 
 def derive_candidate_id(run_id: str, source_id: str, entry_ordinal: int) -> str:
@@ -52,6 +63,7 @@ class SourceSnapshot(Model):
     """Which configured source facts were used, without consulting today's registry?"""
 
     source_id: Slug
+    publisher_id: Slug | None = None
     feed_url: Url
     title: NonEmpty
     vertical: Slug
@@ -201,6 +213,11 @@ class FeedIngestCandidate(Contract):
     __schema_stem__: ClassVar[str] = "feed-ingest-candidate"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-24T20:04",
+            change="Record curated publisher identity in source snapshots.",
+            why="New observations preserve reviewed identity without rewriting history.",
+        ),
+        ChangelogEntry(
             version="2026-10-23",
             change="Retain headline matches and partial optional salience observations.",
             why="Planning evidence stays separate from later article classification.",
@@ -211,7 +228,7 @@ class FeedIngestCandidate(Contract):
             why="Stage boundaries retain content and independent evidence.",
         ),
     )
-    version: Literal["2026-10-23"] = "2026-10-23"
+    version: Literal["2026-10-24T20:04"] = "2026-10-24T20:04"
     date: DateStamp
     correlation_id: NonEmpty
     run_id: RunId
@@ -236,8 +253,9 @@ class FeedIngestCandidate(Contract):
     @model_validator(mode="before")
     @classmethod
     def migrate_previous_version(cls, value: Any) -> Any:
-        if isinstance(value, dict) and value.get("version") == "2026-10-20":
-            return {**value, "version": "2026-10-23"}
+        if isinstance(value, dict) and value.get("version") in {"2026-10-20", "2026-10-23"}:
+            reject_legacy_publisher_identity(value, [value.get("source")])
+            return {**value, "version": "2026-10-24T20:04"}
         return value
 
     @model_validator(mode="after")

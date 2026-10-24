@@ -96,8 +96,8 @@ tracing context. The existing default-off service flag gates the new routes.
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | E1 | 1 | Approve runtime contracts and activation policy | - | A | IN-FLIGHT | feed-ingest-feedback-selection | - | - |
-| E2 | 2 | Land compatible shared readers before writers | 1 | B | PENDING | - | - | - |
-| E3 | 3 | Implement curated publisher catalog references | 2 | C | PENDING | - | - | - |
+| E2 | 2 | Land compatible shared readers before writers | 1 | B | IN-FLIGHT | publisher-catalog-support | [#1704](https://github.com/miztiik/yen-idhazh/pull/1704) | - |
+| E3 | 3 | Implement curated publisher catalog references | 2 | C | IN-FLIGHT | publisher-catalog-support | [#1704](https://github.com/miztiik/yen-idhazh/pull/1704) | - |
 | E4 | 4 | Wire common fetch and parse observations | 2 (publisher IDs from 3 remain nullable until available) | D | PENDING | - | - | - |
 | E5 | 5 | Classify failure and work attribution | 4 | E | PENDING | - | - | - |
 | E6 | 6 | Aggregate article delivery and request costs | 5 | F | PENDING | - | - | - |
@@ -234,7 +234,7 @@ deferred.
 
 ## 4. Row #2 - Land compatible shared readers before writers
 
-- **Scope:** Implement only the approved native declarations, bound copies, migrations and compatible readers needed by later rows. The new stage-snapshot subset is declared with its first real reader/writer in the authorized Row 8 API phase; this row retains the broader publisher and feedback contracts.
+- **Scope:** Implement only approved native declarations, bound copies, migrations and compatible readers needed by later rows. The new stage-snapshot subset is declared with its first real reader/writer in the authorized Row 8 API phase; this row retains the broader publisher and feedback contracts. This PR phase delivers the publisher-identity subset only: the shared source snapshot field, its native declaration, versioned historical readers and binding checks. The saved-batch APIs were delivered separately; their readers change here only to migrate old saved batches without inventing identity. Per-operation observations and other feedback contracts remain open.
 - **Level:** 5; the approved Row 1 field/type table is mandatory.
 - **Files touched:**
   - `backend/idhazh/contracts/feed_ingest_candidate.py`
@@ -243,6 +243,7 @@ deferred.
   - `backend/idhazh/contracts/feed_ingest_editorial_selection.py`
   - `backend/idhazh/contracts/feed_ingest_rejection.py`
   - `backend/idhazh/contracts/feed_ingest_source_run.py`
+  - `backend/idhazh/contracts/feed_health.py`
   - `backend/idhazh/contracts/planner_operation.py`
   - `backend/idhazh/contracts/feed_ingest_observations.py` (new; persisted per-operation Parquet rows, not a second planner event contract)
   - `backend/idhazh/contracts/feed_ingest_feedback.py` (new)
@@ -255,6 +256,7 @@ deferred.
   - `packages/common-contracts/src/schemas/rejection.schema.ts`
   - `packages/common-contracts/src/schemas/source-run.schema.ts`
   - `packages/common-contracts/src/schemas/event.schema.ts`
+  - `packages/common-contracts/src/schemas/feed-health.schema.ts`
   - `packages/common-contracts/src/schemas/planner-operation.schema.ts`
   - `packages/common-contracts/src/schemas/ingest-observations.schema.ts` (new)
   - `packages/common-contracts/src/schemas/ingest-feedback.schema.ts` (new)
@@ -262,11 +264,17 @@ deferred.
   - `packages/common-contracts/src/index.ts`
   - `packages/common-contracts/test/schema-binding.ts`
   - `config/ledgers.json`
+  - `packages/common-contracts/src/version.ts`
   - `services/feed-ingest-plan/src/read-ledger-history/encode-historical-record.ts`
-  - `services/feed-ingest-plan/test/ledger-history.test.ts`
+  - `services/feed-ingest-plan/src/metrics/audit-contracts.ts`
+  - `services/feed-ingest-plan/src/api/stage-store.ts` and its existing stage readers
+  - `backend/tests/contracts/test_curated_registries.py`
   - `backend/tests/contracts/test_feed_ingest_contracts.py`
+  - `services/feed-ingest-plan/test/harvest.test.ts`
+  - `services/feed-ingest-plan/test/plan-engine.test.ts`
+  - `services/feed-ingest-plan/test/ledger-history.test.ts`
   - `docs/architecture/contracts/feed-ingest-feedback.md`
-- **Acceptance gates:** Local: common-contract and service type checks, existing schema-binding/ledger-history cases using named recorded schemas and real Parquet. Register the operation-row ledger for raw writing, compaction and indexed reading. Keep the planner-only `event.schema.ts` TypeScript-owned; the Pydantic payload and TS copy define persisted Parquet observations, not a duplicate event stream. CI: existing native binding and historical compatibility gates. Add no producer emission in this PR.
+- **Acceptance gates:** Local: common-contract and service type checks; recorded harvest, planner and ledger-history cases using named schemas and real Parquet. Bind `SourceSnapshot` and feed-health fields to native Pydantic shapes; prove legacy snapshots remain unknown and old schema versions refuse publisher identity. Register the operation-row ledger for raw writing, compaction and indexed reading. Keep the planner-only `event.schema.ts` TypeScript-owned; Pydantic and TypeScript contracts define persisted Parquet observations, not a duplicate event stream. CI: existing native binding and historical compatibility gates. Do not emit per-operation observations in this phase or add publisher-dependent selection behavior.
 - **Oracle:** Existing historical rows and request receipts retain their original evidence and readable identity, while current approved shapes reject invalid combinations; this cannot prove that future writers capture real observations.
 
 ### Table K - Decisions
@@ -283,21 +291,24 @@ deferred.
 
 ## 5. Row #3 - Implement curated publisher catalog references
 
-- **Scope:** Load approved publisher definitions and explicit feed references, validate them and capture identities for new observations without changing historical meaning.
+- **Scope:** Load publisher definitions and explicit feed references, validate them and capture identity in new source snapshots, feed-health rows, events and audit rows without changing historical meaning. Test mappings use recorded inputs only; no unsupported mapping is added to the live catalog.
 - **Level:** 3 after approved declarations; changed catalog authority returns to Row 1.
 - **Files touched:**
   - `config/sources.json`
   - `backend/idhazh/contracts/sources.py`
-  - `services/feed-ingest-plan/src/load-plan-inputs.ts`
   - `services/feed-ingest-plan/src/harvest-feeds/load-harvest-inputs.ts`
-  - `services/feed-ingest-plan/src/run-feed-plan.ts`
-  - `services/feed-ingest-plan/src/metrics/metrics-recorder.ts`
+  - `services/feed-ingest-plan/src/resolve-planning-inputs.ts`
+  - `backend/idhazh/stages/plan.py`
+  - `services/feed-ingest-plan/src/metrics/audit-contracts.ts`
   - `services/feed-ingest-plan/src/publisher-catalog.ts` (new)
-  - `services/feed-ingest-plan/test/policy.test.ts`
+  - `services/feed-ingest-plan/test/harvest-recordings.ts`
+  - `services/feed-ingest-plan/test/plan-recordings.ts`
+  - `services/feed-ingest-plan/test/harvest.test.ts`
   - `services/feed-ingest-plan/test/plan-engine.test.ts`
-  - `services/feed-ingest-plan/test/plan-api.test.ts`
   - `docs/architecture/contracts/publisher-identity.md`
-- **Acceptance gates:** Local: existing policy/composition/API cases for confirmed multi-feed references, collisions, unresolved references, retired reservations, display-name changes and unknown legacy IDs; strict type checks. Prove approved publisher definitions/references survive initial loading and both planner/audit reconstructions, participate in harvest/operation fingerprints and preserve keyed-request conflicts. Change an assignment with checkout identity fixed; its applicable fingerprint must change. New observations retain approved identity provenance. CI: existing source-config/native gates and historical readback.
+  - `docs/architecture/sources/i-feed.md`
+  - `tests/fixtures/curated-registries/sources.json`
+- **Acceptance gates:** Strict type checks and the existing native source-config, recorded harvest and planner cases. Prove valid shared references, duplicate and undefined-ID rejection, empty-registry legacy reads, fingerprint change on assignment, and identity through planning, observations and audit. The live registry remains empty because no current feed mapping had sufficient publisher-owned evidence; fixture mappings are not production assignments.
 - **Oracle:** Changing a publisher display name or domain does not change its ID, while duplicate definitions and undefined references fail; this cannot verify editorial identity without curated provenance.
 
 ### Table M - Decisions

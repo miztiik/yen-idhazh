@@ -18,7 +18,7 @@ from idhazh.contracts.base import (
     Slug,
     Timestamp,
 )
-from idhazh.contracts.feed_ingest_candidate import SourceSnapshot
+from idhazh.contracts.feed_ingest_candidate import SourceSnapshot, reject_legacy_publisher_identity
 from idhazh.contracts.feed_ingest_rejection import DropReason, RejectionStage
 from idhazh.contracts.taxonomy import LifecycleStatus
 
@@ -93,6 +93,11 @@ class SourceRunRecord(Contract):
     __schema_stem__: ClassVar[str] = "feed-ingest-source-run"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-24T20:04",
+            change="Record curated publisher identity in source snapshots.",
+            why="New observations preserve reviewed identity without rewriting history.",
+        ),
+        ChangelogEntry(
             version="2026-10-22T20:30",
             change="Count configured planner exclusions by their typed terminal reason.",
             why="Source audit counts must include each pre-fetch refusal accurately.",
@@ -109,16 +114,11 @@ class SourceRunRecord(Contract):
         ),
         ChangelogEntry(
             version="2026-10-22",
-            change="Keep run date separate from the actual observation instant.",
-            why="A later publication observation must retain its original run identity.",
-        ),
-        ChangelogEntry(
-            version="2026-10-20",
             change="Earlier changes are available in git history.",
-            why="The contract changelog keeps only its four newest changes.",
+            why="The contract changelog keeps its four newest changes and one history pointer.",
         ),
     )
-    version: Literal["2026-10-22T20:30"] = "2026-10-22T20:30"
+    version: Literal["2026-10-24T20:04"] = "2026-10-24T20:04"
 
     date: DateStamp
     correlation_id: str = Field(min_length=1)
@@ -157,8 +157,9 @@ class SourceRunRecord(Contract):
     @classmethod
     def migrate_previous_version(cls, value: Any) -> Any:
         if isinstance(value, dict) and value.get("version") in {
-            "2026-10-20", "2026-10-22", "2026-10-22T10:05", "2026-10-22T18:15"
+            "2026-10-20", "2026-10-22", "2026-10-22T10:05", "2026-10-22T18:15", "2026-10-22T20:30"
         }:
+            reject_legacy_publisher_identity(value, [value.get("source")])
             legacy_reasons = {"ALREADY_PUBLISHED", "SETTLED_FAILURE", "BLOCKED_URL_MARKER"}
             drop_reasons = value.get("drop_reasons", [])
             uses_new_reason = value.get("last_failure_reason") in legacy_reasons or (
@@ -173,7 +174,7 @@ class SourceRunRecord(Contract):
                     "planner exclusions require the declared source-run "
                     "contract version"
                 )
-            return {**value, "version": "2026-10-22T20:30"}
+            return {**value, "version": "2026-10-24T20:04"}
         return value
 
     @model_validator(mode="after")

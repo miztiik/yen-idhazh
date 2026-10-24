@@ -5,8 +5,9 @@ import { existsSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import {
   FeedIngestEventSchema,
-  CandidateRejectionContract, deriveCandidateId, deriveUrlKey,
-  FeedHealthContract,
+  CandidateRejectionContract,
+  deriveCandidateId, deriveUrlKey,
+  FeedHealthContract, SOURCE_RELIABILITY_VERSION, readFeedIngestEvent,
 } from "@idhazh/common-contracts";
 import { persistLedger } from "@idhazh/ledger-file-writer";
 import { runFeedPlan, summarizePlan } from "../src/run-feed-plan";
@@ -70,10 +71,12 @@ async function seenWindow(recorded: Awaited<ReturnType<typeof recordedPlan>>, kn
 }
 
 test("real composition shares one clock and override and reads native dispatches with exact choices", async () => {
+  const publisherId = "recorded-publication";
   const recorded = await recordedPlan([
-    source(), source({ id: "resting-news", status: "draft" }),
-    source({ id: "empty-news", url: "https://news.example/empty.xml" }),
-  ]);
+    source({ publisher_id: publisherId }),
+    source({ id: "resting-news", status: "draft", publisher_id: publisherId }),
+    source({ id: "empty-news", url: "https://news.example/empty.xml", publisher_id: publisherId }),
+  ], [{ id: publisherId, display_name: "Recorded Publication" }]);
   let clocks = 0;
   recorded.runtime.clock = () => new Date(++clocks === 1 ? "2026-10-21T23:59:59.999Z" : "2026-10-22T00:00:01Z");
   const configuredLimit = recorded.inputs.harvest.config.curate.article_limit;
@@ -100,6 +103,8 @@ test("real composition shares one clock and override and reads native dispatches
       deriveCandidateId("2026-10-21-700", "recorded-news", 2),
     ]);
     expect(result.evidence.harvest.feed_outcomes).toHaveLength(3);
+    expect(result.evidence.harvest.feed_outcomes.map(row => row.source.publisher_id))
+      .toEqual([publisherId, publisherId, publisherId]);
     expect(result.evidence.harvest.feed_outcomes.find(row => row.source.source_id === "resting-news"))
       .toMatchObject({ fetch_status: "not_requested", parsed_count: null, harvested_count: null });
     expect(result.evidence.harvest.feed_outcomes.find(row => row.source.source_id === "empty-news"))
@@ -137,6 +142,18 @@ test("real composition shares one clock and override and reads native dispatches
     });
     expect(new Set(events.map(event => event.event_id)).size).toBe(events.length);
     expect(events.filter(event => event.payload.kind === "feed_outcome")).toHaveLength(3);
+    expect(events.flatMap(event => event.payload.kind === "feed_outcome" ? [event.payload.source.publisher_id] : []))
+      .toEqual([publisherId, publisherId, publisherId]);
+    const feedEvent = events.find(event => event.payload.kind === "feed_outcome");
+    if (!feedEvent || feedEvent.payload.kind !== "feed_outcome") throw new Error("feed outcome event was not emitted");
+    const { publisher_id: _publisherId, ...legacyEventSource } = feedEvent.payload.source;
+    expect(readFeedIngestEvent({
+      ...feedEvent, version: SOURCE_RELIABILITY_VERSION,
+      payload: { ...feedEvent.payload, source: legacyEventSource },
+    }).payload).toMatchObject({ kind: "feed_outcome", source: { publisher_id: null } });
+    expect(() => readFeedIngestEvent({
+      ...feedEvent, version: SOURCE_RELIABILITY_VERSION,
+    })).toThrow();
     const harvestDecisions = events.filter(event => event.stage === "harvest-feeds" && event.payload.kind === "candidate_decision");
     expect(harvestDecisions).toHaveLength(3);
     const screenDecisions = events.filter(event => event.stage === "screen-article-candidates" && event.payload.kind === "candidate_decision");
@@ -160,6 +177,8 @@ test("real composition shares one clock and override and reads native dispatches
     }
     expect(rows).toEqual(result.evidence.partition.dispatches);
     expect(rows[0]!.content.article_text).toBe(result.evidence.curation.selected[0]!.candidate.article_text);
+    expect(rows[0]!.content.source.publisher_id).toBe(publisherId);
+    expect(rows[0]!.selection.source.publisher_id).toBe(publisherId);
     expect(rows[0]!.partition).toEqual({ strategy: "none", worker_assignment: 0, dispatch_count: 1 });
     expect(rows[0]!.selection.policy).toEqual(rows[0]!.content.policy);
     expect(summarizePlan(result)).toMatchObject({
@@ -179,8 +198,10 @@ test("real composition shares one clock and override and reads native dispatches
       outcome: "ok", items: 0, target_attempted: true,
     });
     expect(nativeHealth.rows.find(held => held.row.feed_id === "recorded-news")!.row.items).toBe(2);
+    expect(nativeHealth.rows.every(held => held.row.publisher_id === publisherId)).toBe(true);
     const planningAudit = await recordPlanningMetrics(result, recorded.inputs);
     expect(planningAudit.planning_completion.status).toBe("complete");
+    expect(planningAudit.source_records.every(row => row.source.publisher_id === publisherId)).toBe(true);
     const nativeRejections = await readLedgerParquet(
       join(recorded.inputs.outputRoot, result.files.harvest_rejections.files[0]!.path),
       "rejections", CandidateRejectionContract,

@@ -1,11 +1,14 @@
 /** Which ranked articles were selected before assigning workers? */
 import { z } from "zod";
-import { ArticleLabelsSchema, PolicyIdentitySchema, PreviousScoreEvidenceSchema, ScoreEvidenceSchema, SourceSnapshotSchema } from "./source.schema";
+import {
+  ArticleLabelsSchema, PolicyIdentitySchema, PreviousScoreEvidenceSchema, PreviousSourceSnapshotSchema,
+  ScoreEvidenceSchema, SourceSnapshotSchema,
+} from "./source.schema";
 import { DateStampSchema, NonEmptySchema, NonNegativeSchema, PositiveCountSchema, Sha256Schema, SlugSchema, UrlSchema, checkUrlIdentity, reject } from "./primitives";
-import { CONTRACT_VERSION, SOURCE_RELIABILITY_VERSION } from "../version";
+import { CONTRACT_VERSION, PUBLISHER_IDENTITY_VERSION, SOURCE_RELIABILITY_VERSION } from "../version";
 
 export const EditorialSelectionRowSchema = z.strictObject({
-  version: z.literal(SOURCE_RELIABILITY_VERSION).default(SOURCE_RELIABILITY_VERSION),
+  version: z.literal(PUBLISHER_IDENTITY_VERSION).default(PUBLISHER_IDENTITY_VERSION),
   date: DateStampSchema, correlation_id: NonEmptySchema,
   candidate_id: Sha256Schema, source_id: SlugSchema, vertical: SlugSchema,
   source: SourceSnapshotSchema, canonical_url: UrlSchema, url_key: Sha256Schema,
@@ -16,17 +19,28 @@ export const EditorialSelectionRowSchema = z.strictObject({
   if (value.source_id !== value.source.source_id || value.vertical !== value.source.vertical) reject(ctx, "source identity must match source snapshot");
 });
 export type EditorialSelectionRow = z.infer<typeof EditorialSelectionRowSchema>;
+const previousSelectionFields = EditorialSelectionRowSchema.shape;
 export const PreviousEditorialSelectionSchema = z.strictObject({
-  ...EditorialSelectionRowSchema.shape, version: z.literal(CONTRACT_VERSION).default(CONTRACT_VERSION),
+  ...previousSelectionFields, source: PreviousSourceSnapshotSchema,
+  version: z.literal(CONTRACT_VERSION).default(CONTRACT_VERSION),
   ratings: PreviousScoreEvidenceSchema,
 });
+export const PreviousReliableEditorialSelectionSchema = z.strictObject({
+  ...previousSelectionFields, source: PreviousSourceSnapshotSchema, version: z.literal(SOURCE_RELIABILITY_VERSION),
+});
 export const EditorialSelectionContract = {
-  schema: EditorialSelectionRowSchema, schemaVersion: SOURCE_RELIABILITY_VERSION,
+  schema: EditorialSelectionRowSchema, schemaVersion: PUBLISHER_IDENTITY_VERSION,
   legacyVersions: {
     [CONTRACT_VERSION]: {
       schema: PreviousEditorialSelectionSchema,
       migrate: (row: object): EditorialSelectionRow => EditorialSelectionRowSchema.parse({
-        ...PreviousEditorialSelectionSchema.parse(row), version: SOURCE_RELIABILITY_VERSION,
+        ...PreviousEditorialSelectionSchema.parse(row), version: PUBLISHER_IDENTITY_VERSION,
+      }),
+    },
+    [SOURCE_RELIABILITY_VERSION]: {
+      schema: PreviousReliableEditorialSelectionSchema,
+      migrate: (row: object): EditorialSelectionRow => EditorialSelectionRowSchema.parse({
+        ...PreviousReliableEditorialSelectionSchema.parse(row), version: PUBLISHER_IDENTITY_VERSION,
       }),
     },
   },

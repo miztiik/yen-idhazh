@@ -2,6 +2,7 @@
 import { isDeepStrictEqual } from "node:util";
 import {
   ParsedFeedBatchSchema, SelectedFeedBatchSchema, PartitionedFeedBatchSchema, StageReferenceRequestSchema,
+  readParsedFeedBatch, readSelectedFeedBatch, readPartitionedFeedBatch,
 } from "@idhazh/common-contracts";
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
@@ -11,11 +12,11 @@ import { readStageBatch } from "./stage-store";
 
 export async function executePersistence(raw: unknown, inputs: PlanInputs, runtime: PlanRuntime) {
   const request = StageReferenceRequestSchema.parse(raw);
-  const batch = await readStageBatch(inputs.outputRoot, "partitioned", request.batch_id, PartitionedFeedBatchSchema);
+  const batch = await readStageBatch(inputs.outputRoot, "partitioned", request.batch_id, PartitionedFeedBatchSchema, readPartitionedFeedBatch);
   requireStageConfiguration(batch, inputs, runtime);
-  const selected = await readStageBatch(inputs.outputRoot, "selected", batch.selection_batch_id, SelectedFeedBatchSchema);
+  const selected = await readStageBatch(inputs.outputRoot, "selected", batch.selection_batch_id, SelectedFeedBatchSchema, readSelectedFeedBatch);
   requireStageConfiguration(selected, inputs, runtime);
-  const parsed = await readStageBatch(inputs.outputRoot, "parsed", selected.parsed_batch_id, ParsedFeedBatchSchema);
+  const parsed = await readStageBatch(inputs.outputRoot, "parsed", selected.parsed_batch_id, ParsedFeedBatchSchema, readParsedFeedBatch);
   requireStageConfiguration(parsed, inputs, runtime);
   const expected = partitionArticles({
     selections: selected.selections, candidates: parsed.candidates,
