@@ -21,6 +21,7 @@ import hashlib
 import json
 import re
 from collections.abc import Callable, Mapping, Sequence, Set
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Final
 
@@ -318,14 +319,20 @@ def test_there_is_no_train_split() -> None:
     assert [side.value for side in ReferenceSplit] == ["dev", "test"]
 
 
+def assert_calendar_stamp(version: str) -> None:
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2})?)?", version)
+    assert datetime.fromisoformat(version).date().isoformat() == version[:10]
+
+
 def test_the_schema_is_stamped_with_a_date_and_a_newest_first_changelog() -> None:
     """The shape, not the date - a literal date makes every legitimate stamp a red build."""
     entries = ReferenceDatasetRow.__changelog__
     assert ReferenceDatasetRow.schema_version() == entries[0].version
     versions = [entry.version for entry in entries]
     assert versions == sorted(versions, reverse=True), "newest first"
-    assert all(re.fullmatch(r"\d{4}-\d{2}-\d{2}", version) for version in versions)
-    assert all(entry.why for entry in entries)
+    for version in versions:
+        assert_calendar_stamp(version)
+    assert all(entry.why.strip() for entry in entries)
 
 
 # --- the supplied-URL collection's shapes -----------------------------------
@@ -442,7 +449,7 @@ def test_a_successful_extraction_keeps_its_paragraph_break_and_its_provenance() 
     row = ReferenceExtractionRow.model_validate(extraction_row())
     assert row.text is not None and "\n\n" in row.text
     assert row.failure_code is None
-    assert row.article_sha256 == derive_text_digest(row.text)
+    assert row.article_sha256 == hashlib.sha256(row.text.encode("utf-8")).hexdigest()
 
 
 def test_a_failure_carries_a_reason_and_no_text() -> None:
@@ -534,8 +541,8 @@ def test_the_new_shapes_are_stamped_and_changelogged() -> None:
         ReferenceExtractionRow,
         ReferenceCollectionMetadata,
     ):
-        assert contract.schema_version().startswith("2026-09-13")
-        assert contract.__changelog__[0].why
+        assert_calendar_stamp(contract.schema_version())
+        assert contract.__changelog__[0].why.strip()
 
 
 # --- the publisher key ------------------------------------------------------
@@ -815,7 +822,7 @@ def test_the_saved_text_is_the_whole_article_and_keeps_its_paragraphs(
     assert len([line for line in kept.text.splitlines() if line.strip()]) >= 3
     assert kept.text.endswith("\n")
     assert kept.article_words is not None and kept.article_words > 20
-    assert kept.article_sha256 == derive_text_digest(kept.text)
+    assert kept.article_sha256 == hashlib.sha256(kept.text.encode("utf-8")).hexdigest()
     # The sanitizer's job, proven rather than assumed: the nav and the modal are
     # on the page and not in what was saved.
     assert "Subscribe" not in kept.text
@@ -1608,6 +1615,3 @@ def test_the_fixture_is_the_shape_every_test_above_assumes() -> None:
         for domain in {c.domain for c in candidates}
     }
     assert sorted(counts.values()) == [2, 4], "the lopsided case is the point of the fixture"
-    for candidate in candidates:
-        text = builder.article_path(FIXTURES, candidate.url_key).read_text(encoding="utf-8")
-        assert hashlib.sha256(text.encode("utf-8")).hexdigest()

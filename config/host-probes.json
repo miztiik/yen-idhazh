@@ -3,6 +3,7 @@
   "task_profile": {
     "enabled": false,
     "memory_enabled": false,
+    "machine_memory_enabled": false,
     "cpu_window_ms": 1000,
     "poll_interval_ms": 1000,
     "max_retained_samples": 128,

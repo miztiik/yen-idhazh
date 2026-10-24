@@ -7,7 +7,8 @@ export const MAX_TIMER_DELAY_MS = 2 ** 31 - 1;
 
 export const TaskProfileConfigSchema = z.strictObject({
   enabled: z.boolean().default(false).describe("Opt into transient whole-task profiles only; remove when this profiler is retired."),
-  memory_enabled: z.boolean().default(false).describe("Opt into process and machine RAM in enabled task profiles; remove when RAM collection is retired."),
+  memory_enabled: z.boolean().default(false).describe("Opt into PID RAM in enabled task profiles; remove when process RAM collection is retired."),
+  machine_memory_enabled: z.boolean().default(false).describe("Opt into whole-machine RAM and vmstat in enabled task profiles independently of PID RAM; remove when machine RAM collection is retired."),
   cpu_window_ms: z.int().positive().max(MAX_TIMER_DELAY_MS),
   poll_interval_ms: z.int().positive().max(MAX_TIMER_DELAY_MS),
   max_retained_samples: z.int().positive(),

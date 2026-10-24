@@ -7,8 +7,10 @@ import { serveSamples, START_TASK_PROFILE_PATH, STOP_TASK_PROFILE_PATH } from ".
 import {
   StartTaskProfileResponseSchema, StopTaskProfileResponseSchema,
 } from "../../services/host-probes/src/api/task-command-schema";
-import { OwnedProcessSchema, TaskProfileSchema } from "../../services/host-probes/src/task-profile/profile-schema";
+import { OwnedProcessSchema } from "../../services/host-probes/src/task-profile/profile-schema";
 import { readPinnedProcess, readProcessIdentity } from "../../services/host-probes/src/task-profile/process-stat";
+import { ControlledWorkResultSchema, TaskProfileProofSchema } from "./feed-ingest-plan-profile-schema";
+export { TaskProfileProofSchema } from "./feed-ingest-plan-profile-schema";
 
 // These are time and Linux memory-unit conversions, not sampling controls.
 const MILLISECONDS_PER_SECOND = 1000;
@@ -17,18 +19,9 @@ const ControlsSchema = z.strictObject({
   minimum_elapsed_work_ms: z.number().finite().positive(), buffer_bytes: z.int().positive(),
   minimum_periodic_samples: z.int().positive(),
 });
-const WorkResultSchema = z.strictObject({
-  type: z.literal("complete"), allocated_bytes: z.int().positive(),
-  elapsed_ms: z.number().finite().positive(), batches: z.int().positive(), digest: z.string().regex(/^[a-f0-9]{64}$/),
-});
 const ChildMessageSchema = z.union([
-  z.strictObject({ type: z.literal("ready"), pid: z.int().positive() }), WorkResultSchema,
+  z.strictObject({ type: z.literal("ready"), pid: z.int().positive() }), ControlledWorkResultSchema,
 ]);
-export const TaskProfileProofSchema = z.strictObject({
-  scope: z.literal("controlled_cpu_task"), handle: z.uuid(), expires_at: z.iso.datetime(),
-  target: OwnedProcessSchema, server: OwnedProcessSchema, target_alive_at_stop: z.literal(true),
-  work: WorkResultSchema, profile: TaskProfileSchema,
-});
 
 export async function verifyTaskProfileHttp(identity: { run_id: string; correlation_id: string }) {
   if (process.platform !== "linux") throw new Error("Live PID CPU proof requires Linux");
@@ -37,7 +30,7 @@ export async function verifyTaskProfileHttp(identity: { run_id: string; correlat
   ).json());
   const defaults = await loadConfig();
   const config = ProbeConfigSchema.parse({ ...defaults, task_profile: {
-    ...defaults.task_profile, enabled: true, memory_enabled: true,
+    ...defaults.task_profile, enabled: true, memory_enabled: true, machine_memory_enabled: true,
   } });
   if (config.task_profile.poll_interval_ms !== MILLISECONDS_PER_SECOND) {
     throw new Error("Controlled task proof requires the configured one-second polling cadence");
@@ -104,7 +97,7 @@ export async function verifyTaskProfileHttp(identity: { run_id: string; correlat
     child.send({ command: "work" });
     const worked = await completed;
     if ("error" in worked) throw worked.error;
-    const work = WorkResultSchema.parse(worked.message);
+    const work = ControlledWorkResultSchema.parse(worked.message);
     const stoppedResponse = await post(STOP_TASK_PROFILE_PATH, { handle: started.handle, outcome: "success" });
     if (stoppedResponse.status !== 200 || stoppedResponse.headers.get("cache-control") !== "no-store") {
       throw new Error("Actual task profile HTTP stop failed");

@@ -249,7 +249,7 @@ def test_the_report_names_every_denominator_it_divides_by(tree: Path) -> None:
     assert "missing days        4 calendar days in that range published nothing" in text
     assert f"registry entries    {len(ENTITY_IDS)}" in text
     assert "the longest gap this record can express is 7 days" in text
-    assert "2 of 30 entries were mentioned twice or more" in text
+    assert f"2 of {len(ENTITY_IDS)} entries were mentioned twice or more" in text
 
     row = next(line.split() for line in text.splitlines() if line.startswith("openai "))
     assert row == ["openai", "4", "2.0", "4", "4", "2.0", "4"]

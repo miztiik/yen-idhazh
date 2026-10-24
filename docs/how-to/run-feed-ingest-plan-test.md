@@ -49,9 +49,10 @@ See [partition evidence](../architecture/sources/feed-partitioning.md).
 
 ## Manual controls
 
-The workflow exposes three text boxes and one strategy dropdown. All four
-values pass through the actual CLI parser and shared request validator;
-they never become shell code.
+The workflow exposes three text boxes, one strategy dropdown and one
+whole-machine RAM checkbox. Planning values pass through the actual CLI parser
+and shared request validator; the checkbox passes through a strict boolean
+parser into the isolated task profiler. None becomes shell code.
 
 ### Table A - Run controls
 
@@ -61,11 +62,13 @@ they never become shell code.
 | A2 | `article_limit` | Optional positive integer; prefilled with 100 articles. Clear it to use configuration. |
 | A3 | `shards` | Optional positive worker count; prefilled with 4 workers. Clear it to use configuration. |
 | A4 | `partition_strategy` | Dropdown with `bin-pack` (default), `round-robin` and `none`. |
+| A5 | `profile_machine_memory` | Boolean checkbox, default false. Collect whole-machine RAM during actual document fetch/parse work. CPU and PID RAM stay enabled for that proof; the separate standalone RAM HTTP sample and copy OFF/ON proof remain independent. |
 
-The repository's `config/feed-ingest-plan.json` owns these defaults. GitHub
-requires literal form defaults, so the existing workflow test checks all four
-against that file and the strategy choices against the request validator.
-Update the form defaults when changing their configured values.
+The repository's `config/feed-ingest-plan.json` owns the first four defaults;
+`config/host-probes.json` owns the machine-RAM default. GitHub requires literal
+form defaults, so the existing workflow test binds them to their configuration
+and the strategy choices to the request validator. Update form defaults when
+changing their configured values.
 
 There is no date or reporting input. One captured UTC clock supplies the run
 date and the runner. For `none`, clear the prefilled `shards` value or set it
@@ -255,12 +258,27 @@ workflow. [Gate commands](run-the-gates.md) own its installation and test cost.
 ## Resource proof
 
 The isolated workflow explicitly enables the default-off whole-task CPU and
-RAM controls only for its separate fetch/parse listener. Each document's
+PID RAM controls only for its separate fetch/parse listener. Whole-machine task
+RAM follows `profile_machine_memory`, false by default. It does not control PID
+RAM, the standalone RAM HTTP proof or the copy benchmark. The independent worker
+runs from each task's opening through closing observation, requesting one poll
+each second. The rolling CPU window is a separate control, not a one-second
+measurement cutoff. Each document's
 `stage-api-proof.json` entry contains validated profiles for exactly its two
 actual work calls. Their request, run and correlation identities must match.
 Restart replay and conflicts must leave the profile count at two as well as
 preserving the original response bytes and journal digest. No raw article
 body, parser response or journal enters these profiles.
+
+When optional reporting is enabled, completion adds task CPU and RAM to Tables
+H and I in the GitHub step summary and emits concise resource notices. Table J
+shows the separate RAM sample, L3 cache, derived copy buffer size, copy OFF/ON
+rates and host context. CPU is host-wide, not PID-specific. Sampled RSS maxima
+and machine available-memory minima are not exact task peaks. Missing evidence
+is not recorded; disabled machine RAM is labelled disabled, never zero.
+The report refuses malformed or foreign revision/run/attempt/correlation/request
+evidence before writing these measurements. Reporting errors remain in the
+existing optional step and do not become a new planner gate.
 
 A fast live parse may have only a partial CPU window or no elapsed CPU ticks.
 That is recorded, not padded with a wait or reported as a full window.
@@ -286,9 +304,10 @@ scope `controlled_cpu_task`. It does not stand in for fast live document work.
 
 After all document profiles close, the separate resource step starts the real
 RAM sample HTTP listener and calls its sample route over loopback. It requires
-actual CPU and machine total, free and available RAM readings. After the
-controlled task closes, it calls the existing host collector with copy
-unselected and explicitly selected for
+actual CPU and machine total, free and available RAM readings, even when task
+machine RAM is disabled. This is one standalone sample, not a background
+machine-memory poller. After the controlled task closes, it calls the existing
+host collector with copy unselected and explicitly selected for
 `isolated-copy-proof`. The test records the real hardware context, L3 size if
 available, derived buffer size, repeat count and median read-plus-write rate.
 It allocates two buffers and measures memory-copy throughput, not L3 hit/miss

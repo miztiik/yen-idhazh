@@ -3,48 +3,23 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { arch, release } from "node:os";
 import { randomUUID } from "node:crypto";
-import { z } from "../../services/host-probes/node_modules/zod";
-import { HostFingerprintRowSchema } from "../../packages/common-contracts/src/index";
 import { loadConfig as loadProbeConfig } from "../../services/host-probes/src/config";
 import { SAMPLE_PATH, serveSamples } from "../../services/host-probes/src/api/server";
 import { HostSampleSchema } from "../../services/host-probes/src/probe/sample-host";
 import { collectFingerprint } from "../../services/host-fingerprints/src/collect-fingerprint";
 import { loadConfig, loadSettings, SelectedSettingsSchema } from "../../services/host-fingerprints/src/config";
 import { probeBufferMib } from "../../services/host-fingerprints/src/inspect/copy-bandwidth";
-import { TaskProfileProofSchema, verifyTaskProfileHttp } from "./host-task-profile-proof";
-
-const fields = HostFingerprintRowSchema.shape;
-export const CopyResultSchema = z.object({
-  memcpy_probe_mib: fields.memcpy_probe_mib, memcpy_gib_s: fields.memcpy_gib_s,
-  l3_cache_bytes: fields.l3_cache_bytes, cpu_model: fields.cpu_model,
-  cpu_logical_processors: fields.cpu_logical_processors, cpu_allowed_processors: fields.cpu_allowed_processors,
-  cpu_quota_state: fields.cpu_quota_state, cpu_quota_cores: fields.cpu_quota_cores, fingerprint: fields.fingerprint,
-}).strip();
-const ResourceProofSchema = z.strictObject({
-  scope: z.literal("live_linux_ram_http_and_separate_copy"),
-  status: z.enum(["running", "complete", "failed"]),
-  stage: z.enum(["start", "ram_http", "task_cpu_ram_http", "copy_off", "copy_on", "complete"]),
-  git_sha: z.string().regex(/^[a-f0-9]{40}$/), run_id: z.string().min(1), correlation_id: z.uuid(),
-  host: z.strictObject({ platform: z.literal("linux"), arch: z.string(), release: z.string(), bun: z.string() }),
-  sample: HostSampleSchema.nullable(),
-  task_profile: TaskProfileProofSchema.nullable(),
-  copy: z.strictObject({
-    task_name: z.string().min(1),
-    floor_mib: z.int().nonnegative(), cache_multiple: z.int().positive(), repeats: z.int().positive(),
-    buffers: z.literal(2), method: z.literal("median_read_plus_write"),
-    off: CopyResultSchema.nullable(), on: CopyResultSchema.nullable(),
-    off_reason: z.string().nullable(), on_reason: z.string().nullable(),
-  }).nullable(),
-  error: z.string().nullable(),
-});
+import { verifyTaskProfileHttp } from "./host-task-profile-proof";
+import { CopyResultSchema, ProfileProofIdentitySchema, ResourceProofSchema } from "./feed-ingest-plan-profile-schema";
+import type { ResourceProof } from "./feed-ingest-plan-profile-schema";
 
 export async function verifyLiveHostProfiling(
   identity: { git_sha: string; run_id: string; correlation_id: string; attempt: number }, artifactRoot: string,
 ) {
   if (process.platform !== "linux") throw new Error("Live resource proof requires Linux; fixture results do not certify it");
-  const proof: z.infer<typeof ResourceProofSchema> = {
+  const proof: ResourceProof = {
+    ...ProfileProofIdentitySchema.parse(identity),
     scope: "live_linux_ram_http_and_separate_copy", status: "running", stage: "start",
-    git_sha: identity.git_sha, run_id: identity.run_id, correlation_id: identity.correlation_id,
     host: { platform: "linux", arch: arch(), release: release(), bun: Bun.version },
     sample: null, task_profile: null, copy: null, error: null,
   };
@@ -99,14 +74,14 @@ export async function verifyLiveHostProfiling(
       const row = CopyResultSchema.parse(result.row);
       if (enabled) {
         proof.copy.on = row;
-        proof.copy.on_reason = result.unavailable.memcpy_gib_s ?? null;
+        proof.copy.on_reason = ResourceProofSchema.shape.copy.unwrap().shape.on_reason.parse(result.unavailable.memcpy_gib_s ?? null);
         const expected = probeBufferMib(proof.copy.floor_mib, row.l3_cache_bytes, proof.copy.cache_multiple);
         if (row.memcpy_probe_mib !== expected || expected <= 0 || row.memcpy_gib_s === null || row.memcpy_gib_s <= 0) {
           throw new Error("Opt-in copy probe did not measure actual derived-buffer transfers");
         }
       } else {
         proof.copy.off = row;
-        proof.copy.off_reason = result.unavailable.memcpy_gib_s ?? null;
+        proof.copy.off_reason = ResourceProofSchema.shape.copy.unwrap().shape.off_reason.parse(result.unavailable.memcpy_gib_s ?? null);
         if (row.memcpy_probe_mib !== 0 || row.memcpy_gib_s !== null || proof.copy.off_reason !== "configured_off") {
           throw new Error("Unselected copy task did not remain off");
         }

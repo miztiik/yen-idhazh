@@ -7,9 +7,10 @@ layout is checked by `test_record_layouts.py` and `test_json_serialization.py`.
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 
 import pytest
-from conftest import CONFIG_DIR, read_text
+from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 
 from idhazh.contracts.base import Contract
 from idhazh.contracts.sources import Sources
@@ -41,4 +42,29 @@ def test_a_curated_registry_survives_a_read_and_a_rewrite(name: str) -> None:
     rewritten = CURATED[name].from_json(text).to_json()
     assert json.loads(rewritten) == json.loads(text), (
         f"config/{name} does not hold the keys and values its contract writes"
+    )
+
+
+@pytest.mark.parametrize(
+    ("name", "records", "index", "default_field"),
+    [
+        pytest.param("sources.json", "feeds", 1, "weight", id="sources.json"),
+        pytest.param("taxonomy.json", "verticals", 1, "floor", id="taxonomy.json"),
+        pytest.param("watchlist.json", "entities", 0, "kind", id="watchlist.json"),
+    ],
+)
+def test_a_controlled_registry_survives_a_read_and_a_rewrite(
+    name: str, records: str, index: int, default_field: str
+) -> None:
+    """Native readers preserve chosen values and order, including an omitted default."""
+    expected = json.loads(read_text(FIXTURES_DIR / "curated-registries" / name))
+    expected["version"] = CURATED[name].schema_version()
+    authored = deepcopy(expected)
+    del authored["version"]
+    del authored[records][index][default_field]
+
+    rewritten = CURATED[name].from_json(json.dumps(authored)).to_json()
+    assert json.loads(rewritten) == expected, f"{name} lost a chosen key, value or list order"
+    assert CURATED[name].from_json(rewritten).model_dump(mode="json") == expected, (
+        f"{name} changed values on the next read"
     )
