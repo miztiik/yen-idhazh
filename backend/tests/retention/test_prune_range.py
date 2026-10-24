@@ -29,8 +29,10 @@ from __future__ import annotations
 
 import functools
 import hashlib
+import os
+import signal
 import shutil
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from datetime import date as date_type
 from datetime import timedelta
 from pathlib import Path
@@ -56,7 +58,7 @@ from idhazh.contracts.knobs.gardener import CompactionPolicy, TaskPolicy
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain
-from idhazh.telemetry import door_prune, prune
+from idhazh.telemetry import prune
 
 from ._trees import health_row
 
@@ -430,7 +432,7 @@ def test_the_eval_ledger_is_refused_with_the_sentence_its_declaration_gives(
 
     The sentence is read off the committed declaration rather than copied here,
     so the reason a person reads is the one that sits beside the eval ledger's
-    windows. Refused before anything is read, so the tree is as it was.
+    windows.     A refused request leaves the tree unchanged.
     """
     state = a_census(tmp_path / "state")
     before = fingerprints(state)
@@ -468,8 +470,8 @@ def test_a_live_pass_on_the_door_is_refused_without_a_writer_it_can_name(
 ) -> None:
     """A rebuilt file names the run and the commit that wrote it, so a live pass needs both.
 
-    Refused before a file is read, so the tree is as it was. A dry run needs
-    neither, and still lists what the live pass would take.
+    A refused live request leaves the tree unchanged. A dry run needs neither,
+    and still lists what the live pass would take.
     """
     state = a_census(tmp_path / "state")
     before = fingerprints(state)
@@ -780,59 +782,106 @@ def test_a_pass_that_stopped_part_way_is_finished_by_the_same_command(
 
 
 def test_a_pass_on_the_door_that_fails_part_way_names_what_changed_and_is_run_again(
-    every_tier: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    every_tier: Path, tmp_path: Path
 ) -> None:
-    """The third change raises: the two before it happened, the record names them, a re-run finishes.
-
-    The failure is injected by wrapping the one function that makes a change: the
-    real change runs for every file but the third, so the tree is the one a file
-    system that refused one change leaves. The record names the first two
-    paths of the dry run's list, and the first day of the range as the place
-    the next pass starts, because no day was finished.
-    """
+    """A real file-system refusal follows two deletes, and the same pass resumes."""
     stopped = a_copy(every_tier, tmp_path / "stopped")
     whole = a_copy(every_tier, tmp_path / "whole")
+    since, until = "2026-03-03", "2026-03-05"
     planned = prune_range(
-        stopped, target=CENSUS, since=SINCE, until=UNTIL, run_id=PRUNE_RUN, commit=PRUNE_COMMIT
+        stopped,
+        target=CENSUS,
+        since=since,
+        until=until,
+        run_id=PRUNE_RUN,
+        commit=PRUNE_COMMIT,
     )
-    changes = 0
-    real_apply = door_prune._apply
+    assert len(planned.removed) == 2, "the selected range must begin with exactly two raw deletes"
+    assert planned.rewritten, "the selected compact day must be rewritten after the deletes"
 
-    def fail_on_the_third(change: door_prune._Change) -> None:
-        nonlocal changes
-        changes += 1
-        if changes == 3:
-            raise OSError("the file system said no")
-        real_apply(change)
+    if os.name == "nt":
+        from contextlib import contextmanager
+        from ctypes import WinDLL, WinError, get_last_error
+        from ctypes.wintypes import BOOL, DWORD, HANDLE, LPCWSTR, LPVOID
 
-    monkeypatch.setattr(door_prune, "_apply", fail_on_the_third)
-    with pytest.raises(prune.PruneInterruptedError) as stop:
-        prune_range(
-            stopped,
-            target=CENSUS,
-            since=SINCE,
-            until=UNTIL,
-            dry_run=False,
-            run_id=PRUNE_RUN,
-            commit=PRUNE_COMMIT,
-        )
-    monkeypatch.undo()
+        # CreateFileW flags and its failure handle are fixed by the Windows API.
+        GENERIC_READ = 0x80000000
+        SHARE_READ_WRITE = 0x00000003
+        OPEN_EXISTING = 3
+        FILE_ATTRIBUTE_NORMAL = 0x80
+        INVALID_HANDLE_VALUE = HANDLE(-1).value
+
+        @contextmanager
+        def no_delete_share(path: Path) -> Iterator[None]:
+            kernel32 = WinDLL("kernel32", use_last_error=True)
+            create_file = kernel32.CreateFileW
+            create_file.argtypes = [LPCWSTR, DWORD, DWORD, LPVOID, DWORD, DWORD, HANDLE]
+            create_file.restype = HANDLE
+            close_handle = kernel32.CloseHandle
+            close_handle.argtypes = [HANDLE]
+            close_handle.restype = BOOL
+            handle = create_file(
+                str(path),
+                GENERIC_READ,
+                SHARE_READ_WRITE,
+                None,
+                OPEN_EXISTING,
+                FILE_ATTRIBUTE_NORMAL,
+                None,
+            )
+            if handle == INVALID_HANDLE_VALUE:
+                raise WinError(get_last_error())
+            try:
+                yield
+            finally:
+                if not close_handle(handle):
+                    raise WinError(get_last_error())
+
+        first_rewrite = stopped / Path(planned.rewritten[0]).relative_to(ledger.STATE_DIRNAME)
+        with no_delete_share(first_rewrite):
+            with pytest.raises(prune.PruneInterruptedError) as stop:
+                prune_range(
+                    stopped,
+                    target=CENSUS,
+                    since=since,
+                    until=until,
+                    dry_run=False,
+                    run_id=PRUNE_RUN,
+                    commit=PRUNE_COMMIT,
+                )
+    else:
+        import resource
+
+        previous_limit = resource.getrlimit(resource.RLIMIT_FSIZE)
+        previous_handler = signal.signal(signal.SIGXFSZ, signal.SIG_IGN)
+        try:
+            resource.setrlimit(resource.RLIMIT_FSIZE, (0, previous_limit[1]))
+            with pytest.raises(prune.PruneInterruptedError) as stop:
+                prune_range(
+                    stopped,
+                    target=CENSUS,
+                    since=since,
+                    until=until,
+                    dry_run=False,
+                    run_id=PRUNE_RUN,
+                    commit=PRUNE_COMMIT,
+                )
+        finally:
+            resource.setrlimit(resource.RLIMIT_FSIZE, previous_limit)
+            signal.signal(signal.SIGXFSZ, previous_handler)
 
     so_far = stop.value.so_far
-    first_two = (*planned.removed, *planned.rewritten)[:2]
-    assert changes == 3, "the pass kept changing files after a failure"
-    assert (so_far.taken, so_far.written) == (
-        tuple(path for path in first_two if path in planned.removed),
-        tuple(path for path in first_two if path in planned.rewritten),
-    )
-    assert (so_far.stopped_because, so_far.resume_from) == (StopReason.FAILED, SINCE)
+    assert isinstance(stop.value.__cause__, OSError)
+    assert so_far.taken == planned.removed
+    assert so_far.written == ()
+    assert (so_far.stopped_because, so_far.resume_from) == (StopReason.FAILED, since)
     assert so_far.fault is GardenerFault.RAISED
     for state in (stopped, whole):
         prune_range(
             state,
             target=CENSUS,
-            since=SINCE,
-            until=UNTIL,
+            since=since,
+            until=until,
             dry_run=False,
             run_id=PRUNE_RUN,
             commit=PRUNE_COMMIT,

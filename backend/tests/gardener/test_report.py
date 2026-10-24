@@ -17,6 +17,7 @@ runner. The report reads nothing else, so nothing else is built.
 from __future__ import annotations
 
 import dataclasses
+import re
 
 import pytest
 
@@ -34,6 +35,15 @@ TAKEN = ("18000000001", "18000000002", "18000000003")
 NEXT = "18000000004"
 #: The setting that makes a task live, in the file that holds it.
 SETTING = "dry_run: false in config/gardener/<task>.json"
+
+# A completed removal claim states that a named member, file, day or period
+# already has a removed state. Future work and neutral next-step guidance do not.
+_COMPLETED_REMOVAL_CLAIM = re.compile(
+    r"\b(?:member|file|day|period)s?\s+"
+    r"(?:is|are|was|were|has been|have been)\s+"
+    r"(?:gone|deleted|removed)\b",
+    re.IGNORECASE,
+)
 
 #: The fault each stop that has one carries, unless a case names another.
 NATURAL_FAULT = {
@@ -160,11 +170,15 @@ def test_what_a_dry_run_is_told_next_names_the_setting_and_never_says_anything_i
     assert "nothing was changed" in said
 
 
-def test_no_sentence_a_task_can_be_told_says_a_member_is_gone() -> None:
-    """A sentence is fixed for its word, so it says the same on a dry run and a live one."""
-    sentences = [*report.NEXT.values(), *report.WHY.values(), *report.NOTED.values()]
+def test_guidance_and_recovery_notes_make_no_completed_removal_claim() -> None:
+    """Guidance and recovery notes never claim that a deletion already happened."""
+    guidance = [*report.NEXT.values(), *report.WHY.values()]
+    recovery_notes = list(report.NOTED.values())
 
-    assert not [sentence for sentence in sentences if "gone" in sentence]
+    assert not [sentence for sentence in guidance if _COMPLETED_REMOVAL_CLAIM.search(sentence)]
+    assert not [
+        sentence for sentence in recovery_notes if _COMPLETED_REMOVAL_CLAIM.search(sentence)
+    ]
 
 
 @pytest.mark.parametrize("fault", list(GardenerFault))
@@ -183,6 +197,11 @@ def test_every_word_a_record_or_a_line_can_hold_has_a_sentence_a_person_reads() 
     assert set(report.WHY) == set(GardenerFault)
     assert set(report.NOTED) == set(RecoveryNote)
     assert set(report.NEXT) == set(TaskOutcome)
+    assert all(isinstance(sentence, str) and sentence.strip() for sentence in report.WHY.values())
+    assert all(
+        isinstance(sentence, str) and sentence.strip() for sentence in report.NOTED.values()
+    )
+    assert all(isinstance(sentence, str) and sentence.strip() for sentence in report.NEXT.values())
 
 
 def test_a_finished_task_says_what_its_pass_did_and_names_its_error_by_type_alone() -> None:

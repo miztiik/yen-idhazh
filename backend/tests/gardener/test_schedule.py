@@ -12,7 +12,7 @@ No clock is read. Every instant is written out, in UTC.
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta, timezone
 
 import pytest
 
@@ -22,6 +22,7 @@ from idhazh.gardener.schedule import (
     is_month_eligible,
     month_ended_at,
     newest_eligible,
+    newest_eligible_month,
 )
 
 pytestmark = pytest.mark.contract
@@ -80,6 +81,18 @@ def test_the_boundary_moves_with_the_knob_and_nothing_else(after_days: int) -> N
     assert is_eligible(day, now=boundary, after_days=after_days)
 
 
+def test_non_utc_instants_use_the_utc_day_at_the_eligibility_boundary() -> None:
+    """The local date stays 26 September while the UTC date crosses midnight."""
+    offset = timezone(timedelta(hours=5, minutes=30))
+    before_utc_midnight = datetime(2026, 9, 26, 5, 29, 59, tzinfo=offset)
+    at_utc_midnight = datetime(2026, 9, 26, 5, 30, tzinfo=offset)
+
+    assert newest_eligible(now=before_utc_midnight, after_days=1) == date(2026, 9, 23)
+    assert newest_eligible(now=at_utc_midnight, after_days=1) == date(2026, 9, 24)
+    assert not is_eligible(date(2026, 9, 24), now=before_utc_midnight, after_days=1)
+    assert is_eligible(date(2026, 9, 24), now=at_utc_midnight, after_days=1)
+
+
 def test_an_instant_with_no_timezone_is_refused() -> None:
     """A naive instant cannot be compared with the end of a UTC day, and Python says so."""
     with pytest.raises(TypeError):
@@ -115,3 +128,15 @@ def test_a_month_turns_eligible_at_its_end_plus_the_days_and_not_a_microsecond_b
         is_month_eligible("2026-08", now=at(boundary.date(), clock), after_days=45)
         for clock in WAKES
     )
+
+
+def test_non_utc_instants_use_the_utc_month_at_the_eligibility_boundary() -> None:
+    """The local date stays 16 October as August reaches 45 full days old in UTC."""
+    offset = timezone(timedelta(hours=5, minutes=30))
+    before_utc_midnight = datetime(2026, 10, 16, 5, 29, 59, tzinfo=offset)
+    at_utc_midnight = datetime(2026, 10, 16, 5, 30, tzinfo=offset)
+
+    assert newest_eligible_month(now=before_utc_midnight, after_days=45) == "2026-07"
+    assert newest_eligible_month(now=at_utc_midnight, after_days=45) == "2026-08"
+    assert not is_month_eligible("2026-08", now=before_utc_midnight, after_days=45)
+    assert is_month_eligible("2026-08", now=at_utc_midnight, after_days=45)

@@ -186,8 +186,11 @@ def test_an_index_entry_whose_file_is_gone_is_refused_by_name(
 
 @pytest.mark.parametrize("day", ["2026-1-22", "20260122", "2026-01"])
 def test_a_day_that_is_not_a_utc_day_is_refused_before_a_file_is_read(
-    every_tier: Path, day: str
+    tmp_path: Path, day: str
 ) -> None:
-    """A day is compared as text everywhere, so one in another shape would match nothing."""
+    """Invalid input wins over a real state-path obstruction with a distinct error."""
+    state = tmp_path / "state"
+    state.write_text("not a state directory", encoding="utf-8")
+
     with pytest.raises(ValueError, match="is not a YYYY-MM-DD UTC day"):
-        ledger.find_holding_files(every_tier, CENSUS, [day])
+        ledger.find_holding_files(state, CENSUS, [day])

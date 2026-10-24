@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 from typing import Final
 
@@ -38,6 +39,7 @@ from idhazh.ledger import lifecycle, paths
 from idhazh.stages import score_merge_line_holdout, work
 from idhazh.telemetry import FileSink, source_health
 from idhazh.telemetry.publish import day_metrics
+from idhazh.telemetry.spans import AttrKey, SpanName, Tracer
 
 from ._fixtures import fixture_rows
 
@@ -157,7 +159,43 @@ def _collect_metrics(state: Path) -> bool:
 
 
 def _trace(state: Path) -> bool:
-    return isinstance(work.trace_sink(config.load(CONFIG_DIR), run_id=A_RUN, shard=0), FileSink)
+    settings = config.load(CONFIG_DIR)
+    settings = replace(
+        settings,
+        app=settings.app.model_copy(
+            update={
+                "observability": settings.app.observability.model_copy(
+                    update={"tracing_enabled": True}
+                )
+            }
+        ),
+    )
+    sink = work.trace_sink(settings, run_id=A_RUN, shard=0)
+    if not isinstance(sink, FileSink):
+        return False
+
+    tracer = Tracer(
+        sink=sink,
+        now=lambda: "2026-09-24T00:00:00Z",
+        clock=lambda: 0.0,
+    )
+    with tracer.trace(A_RUN):
+        with tracer.span(SpanName.ITEM) as span:
+            span.set(AttrKey.OUTCOME, "completed")
+
+    assert [json.loads(line) for line in sink.path.read_text(encoding="utf-8").splitlines()] == [
+        {
+            "trace_id": A_RUN,
+            "span_id": "item-001",
+            "parent_id": None,
+            "name": "item",
+            "kind": "span",
+            "started_at": "2026-09-24T00:00:00Z",
+            "duration_ms": 0,
+            "attributes": {"outcome": "completed"},
+        }
+    ]
+    return True
 
 
 #: Every route that records new rows and asks the check, with the ledger it
@@ -216,10 +254,15 @@ ROUTES: Final[dict[str, tuple[LedgerName, int, Callable[[Path], bool]]]] = {
 
 
 @pytest.mark.parametrize("route", sorted(ROUTES))
-def test_every_checked_route_writes_into_an_active_family(route: str, tmp_path: Path) -> None:
+def test_every_checked_route_writes_into_an_active_family(
+    route: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _, _, write = ROUTES[route]
+    state = tmp_path / "state"
+    if route == "trace_sink":
+        monkeypatch.setattr(work.common, "STATE_ROOT", state)
 
-    assert write(tmp_path / "state"), f"{route} wrote nothing into an active family"
+    assert write(state), f"{route} wrote nothing into an active family"
 
 
 @pytest.mark.parametrize("route", sorted(ROUTES))
@@ -233,12 +276,17 @@ def test_every_checked_route_writes_nothing_into_a_paused_family_and_says_so_onc
     which, rows, write = ROUTES[route]
     family = _family_of(which)
     _pause(monkeypatch, family)
+    state = tmp_path / "state"
+    if route == "trace_sink":
+        monkeypatch.setattr(work.common, "STATE_ROOT", state)
 
     with caplog.at_level(logging.WARNING, logger="idhazh"):
-        wrote = write(tmp_path / "state")
+        wrote = write(state)
 
     skipped = [record.getMessage() for record in caplog.records if SKIPPED in record.getMessage()]
     assert not wrote, f"{route} wrote into the paused family {family}"
+    if route == "trace_sink":
+        assert not _files(state), "the paused trace sink left a file behind"
     assert skipped == [
         f"{SKIPPED} ledger={which.value} family={family} status=paused rows={rows}"
     ]
