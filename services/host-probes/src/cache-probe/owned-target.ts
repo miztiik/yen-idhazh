@@ -1,5 +1,5 @@
 /** Does one explicit PID still identify a process owned by this operator? */
-import { readProcessIdentity } from "../task-profile/process-memory";
+import { readProcessIdentity } from "../task-profile/process-stat";
 import { readProcFile } from "../probe/proc-reader";
 import type { ProbeContext } from "../probe/proc-reader";
 import type { OwnedProcess } from "../task-profile/profile-schema";

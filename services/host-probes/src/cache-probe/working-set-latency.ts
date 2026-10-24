@@ -2,7 +2,7 @@
 import { arch, release } from "node:os";
 import { readProcFile } from "../probe/proc-reader";
 import type { ProbeContext } from "../probe/proc-reader";
-import { readProcessIdentity } from "../task-profile/process-memory";
+import { readProcessIdentity } from "../task-profile/process-stat";
 import type { CacheProbeConfig } from "./cache-config";
 import { CACHE_API_VERSION, CacheLatencySchema } from "./cache-schema";
 import type { CacheLatency, CacheReason } from "./cache-schema";

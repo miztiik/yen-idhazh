@@ -6,7 +6,7 @@ import { CacheProbeConfigSchema } from "../../services/host-probes/src/cache-pro
 import { CacheCountersSchema, CacheLatencySchema } from "../../services/host-probes/src/cache-probe/cache-schema";
 import { startCacheCounters } from "../../services/host-probes/src/cache-probe/cache-counters";
 import { measureWorkingSetLatency } from "../../services/host-probes/src/cache-probe/working-set-latency";
-import { readProcessIdentity } from "../../services/host-probes/src/task-profile/process-memory";
+import { readProcessIdentity } from "../../services/host-probes/src/task-profile/process-stat";
 import { OwnedProcessSchema } from "../../services/host-probes/src/task-profile/profile-schema";
 import { startBoundedTool } from "../../services/host-probes/src/cache-probe/bounded-tool";
 

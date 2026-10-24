@@ -14,6 +14,14 @@ async function main(): Promise<void> {
   } else {
     const server = serveSamples(config);
     console.error(JSON.stringify({ listening: server.url.toString() }));
+    const stop = () => {
+      void server.stop(true).catch((error: unknown) => {
+        console.error(JSON.stringify({ event: "host_probe_cleanup_failed", error: error instanceof Error ? error.name : "unknown" }));
+        process.exitCode = 1;
+      });
+    };
+    process.once("SIGINT", stop);
+    process.once("SIGTERM", stop);
   }
 }
 
