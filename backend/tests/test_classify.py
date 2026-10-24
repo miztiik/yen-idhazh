@@ -22,6 +22,8 @@ from conftest import (
     REPO_ROOT,
     SUMMARIZE_AND_PLAN_REPLIES,
     RecordedEndpoint,
+    a_sampling,
+    a_server,
     a_table,
     committed_markers,
     label_payload,
@@ -622,7 +624,7 @@ class TestTheLabelCallsDerivedBudget:
         assert "boolean" in schema_types(label_schema())
 
     def test_the_request_hands_the_decoder_the_derived_budget(self, dense: Article) -> None:
-        payload = label_payload(dense)
+        payload = build_label_with_derived_budget(dense)
 
         assert payload["n_predict"] == label_budget_tokens()
         assert "max_tokens" not in payload, (
@@ -1406,6 +1408,17 @@ def summarize_and_plan_payload(article: Article, reply: str = "{}") -> dict[str,
     )
 
 
+def build_label_with_derived_budget(article: Article) -> dict[str, Any]:
+    return build_label_request(
+        article,
+        a_table(article),
+        model_id="m",
+        server=a_server(),
+        sampling=a_sampling(),
+        markers=committed_markers(),
+    )
+
+
 def bounded(schema: object, path: str = "") -> set[str]:
     """Every place in a generated schema a decoder may write without a bound."""
     loose: set[str] = set()
@@ -1674,7 +1687,12 @@ class TestTheDerivedBudget:
         assert summarize_and_plan_budget_tokens(wider) > summarize_and_plan_budget_tokens(ask)
 
     def test_the_request_hands_the_decoder_the_derived_budget(self, dense: Article) -> None:
-        payload = summarize_and_plan_payload(dense)
+        payload = build_summarize_and_plan_request(
+            build_label_with_derived_budget(dense),
+            "{}",
+            markers=committed_markers(),
+            source_words=dense.band_source_words,
+        )
 
         assert payload["n_predict"] == summarize_and_plan_budget_tokens()
         assert payload["json_schema"] == summarize_and_plan_schema(source_words=dense.band_source_words)
@@ -1977,7 +1995,7 @@ def test_the_visual_gate_moves_nothing_in_front_of_the_cached_prefix() -> None:
     than the decode it saves.
     """
     article = Article.from_json(read_text(FIXTURES_DIR / "contracts" / "article" / "ok.json"))
-    first = label_payload(article)
+    first = build_label_with_derived_budget(article)
     reply = json.loads(read_text(LABEL_REPLIES / "labelled.json"))["choices"][0][
         "message"
     ]["content"]
@@ -2004,4 +2022,3 @@ def test_the_visual_gate_moves_nothing_in_front_of_the_cached_prefix() -> None:
     assert suppressed["n_predict"] < asked["n_predict"]
     assert asked["cache_prompt"] is True
     assert suppressed["cache_prompt"] is True
-
