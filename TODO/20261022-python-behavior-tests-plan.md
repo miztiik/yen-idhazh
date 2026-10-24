@@ -58,7 +58,7 @@ Table D - PR outcomes
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | D1 | 1 | Semantic contracts and focused byte guarantees | - | A | DONE | - | - | - |
 | D2 | 2 | Vector tests independent of the current asset | - | A | DONE | - | - | - |
-| D3 | 3 | Finish the behavior review and remove proven fixture-only checks | 1, 2 | B | IN-FLIGHT | - | - | - |
+| D3 | 3 | Finish the behavior review and remove proven fixture-only checks | 1, 2 | B | DONE | - | [#1650](https://github.com/miztiik/yen-idhazh/pull/1650); final review closure below | - |
 | D4 | 4 | Safe removals with named survivors | 1, 2 | C | DONE | - | [#1652](https://github.com/miztiik/yen-idhazh/pull/1652), merged at `75a4e12af6ad40f79691afba41b20ce71414c2e6` | - |
 | D5 | 5 | Expectations derived from the test's own input | 2 | D | DONE | input-based-vector-expectations | [#1654](https://github.com/miztiik/yen-idhazh/pull/1654), merged at `3073686d6d28f824f53e8b45a88caddf2691932a` | - |
 | D6 | 6 | Pipeline records follow the input that produced them | 1 | E | DONE | input-based-pipeline-records | [#1655](https://github.com/miztiik/yen-idhazh/pull/1655), merged at `6bb8dfea19613c116142131550c97fead234747d` | - |
@@ -72,26 +72,27 @@ Table D - PR outcomes
 | D14 | 14 | Grouping and dataset behavior | 1 | M | DONE | grouping-and-dataset-proofs | [#1665](https://github.com/miztiik/yen-idhazh/pull/1665), merged at `fe086c907f50f52c7c51a9c98c4425ce6f6e6357` | - |
 | D15 | 15 | Encoder thread resolution uses production behavior | 1 | N | DONE | prove-encoder-thread-resolution | [#1667](https://github.com/miztiik/yen-idhazh/pull/1667), merged at `956fd7e27cdcbc927bd86ce54ecede4f993779ef` | - |
 | D16 | 16 | Bounded state CSV integrity checks | 1 | O | DONE | bound-csv-integrity-checks | [#1668](https://github.com/miztiik/yen-idhazh/pull/1668), merged at `cff5cc58c8cc15c59b5b525fca84335e2e88c4ce` | - |
-| D17 | 17 | Default-on host-placement acquisition control | 12 | P | IN-FLIGHT | host-fingerprint-placement | [#1682](https://github.com/miztiik/yen-idhazh/pull/1682) | - |
-| D18 | 18 | Workflow checks reject supported broken inputs | 1, 22 | Q | IN-FLIGHT | strengthen-workflow-proof-checks | - | - |
+| D17 | 17 | Default-on host-placement acquisition control | 12 | P | DONE | host-fingerprint-placement | [#1682](https://github.com/miztiik/yen-idhazh/pull/1682), merged at `e3433f078fc74c82dbfa7729c3876204c3958550` | - |
+| D18 | 18 | Workflow checks reject supported broken inputs | 1, 22 | Q | DONE | strengthen-workflow-proof-checks | [#1681](https://github.com/miztiik/yen-idhazh/pull/1681), merged at `6c88f140702840e4a94339b8ac2df8e988319905` | - |
 | D19 | 19 | Independent source-health publication proofs | 1 | R | DONE | prove-source-health-publication | [#1674](https://github.com/miztiik/yen-idhazh/pull/1674), merged at `e7f46b2317852ea5d3f212f83ea86ac51edc05ed` | - |
-| D20 | 20 | Prove reader output behavior | 1 | S | IN-FLIGHT | prove-reader-output-behavior | - | - |
+| D20 | 20 | Prove reader output behavior | 1 | S | DONE | prove-reader-output-behavior | [#1684](https://github.com/miztiik/yen-idhazh/pull/1684), merged at `e11197d1fd30c10086512ef86a2d590e662a0cfe` | - |
 | D21 | 21 | Prove ledger dates and named-plan reads | 1 | T | DONE | prove-ledger-date-selection | [#1675](https://github.com/miztiik/yen-idhazh/pull/1675), merged at `31a689f073d602e75870f7fa48da72d3043f6c13` | - |
-| D22 | 22 | Configured council planning and collection job deadlines | 1 | U | IN-FLIGHT | configure-council-job-deadlines | - | - |
-| D23 | 23 | Independent qualification and planning controls | 1 | V | IN-FLIGHT | prove-planning-controls-independently | [#1683](https://github.com/miztiik/yen-idhazh/pull/1683) | - |
-| D24 | 24 | Independent council test controls | 17 | W | IN-FLIGHT | prove-council-controls-independently | [#1688](https://github.com/miztiik/yen-idhazh/pull/1688) | - |
-| D25 | 25 | Concrete remaining gardener and ledger safety proofs | 24 | X | IN-FLIGHT | strengthen-gardener-safety-proofs | - | - |
-| D26 | 26 | Prove time boundaries without stand-ins | 21, 25 | Y | IN-FLIGHT | prove-time-boundaries-without-stand-ins | [#1679](https://github.com/miztiik/yen-idhazh/pull/1679) | - |
-| D27 | 27 | Explicit offline gardener collection controls | 17, 26 | Z | IN-FLIGHT | control-gardener-host-collection | - | - |
-| D28 | 28 | Independent prefix normalization arithmetic | 1, 27 | AA | IN-FLIGHT | prove-vector-arithmetic | - | - |
-| D29 | 29 | Populated registry values and mandatory real CSV reader | 1, 28 | AB | IN-FLIGHT | close-contract-proof-gaps | - | - |
-| D30 | 30 | Native tagging-term acceptance and refusal | 1, 29 | AC | IN-FLIGHT | validate-tagging-terms | - | - |
-| D31 | 31 | Bind declared UI defaults to their consumers | 1, 17, 30 | AD | IN-FLIGHT | bind-ui-default-consumers | - | - |
+| D22 | 22 | Configured council planning and collection job deadlines | 1 | U | DONE | configure-council-job-deadlines | [#1676](https://github.com/miztiik/yen-idhazh/pull/1676), merged at `cb4eaa747eca52888319affa901329324f60f9c4` | - |
+| D23 | 23 | Independent qualification and planning controls | 1 | V | DONE | prove-planning-controls-independently | [#1683](https://github.com/miztiik/yen-idhazh/pull/1683), merged at `123e0d5e20f960d7cd2b3e0b0acbe05bba6500f4` | - |
+| D24 | 24 | Independent council test controls | 17 | W | DONE | prove-council-controls-independently | [#1688](https://github.com/miztiik/yen-idhazh/pull/1688), merged at `9e524ce33fb5bb0a13bb5d429b4910eb4f7657f1` | - |
+| D25 | 25 | Concrete remaining gardener and ledger safety proofs | 24 | X | DONE | strengthen-gardener-safety-proofs | [#1689](https://github.com/miztiik/yen-idhazh/pull/1689), merged at `ab8713351aa6af2381bf2bfc71d0f359ac46bc3b` | - |
+| D26 | 26 | Prove time boundaries without stand-ins | 21, 25 | Y | DONE | prove-time-boundaries-without-stand-ins | [#1679](https://github.com/miztiik/yen-idhazh/pull/1679), merged at `f722561d809db5d9f054f9e20844fa22d7a65391` | - |
+| D27 | 27 | Explicit offline gardener collection controls | 17, 26 | Z | DONE | control-gardener-host-collection | [#1687](https://github.com/miztiik/yen-idhazh/pull/1687), merged at `d6fe91f971a7ac85e0938b34da8b34a631560d37` | - |
+| D28 | 28 | Independent prefix normalization arithmetic | 1, 27 | AA | DONE | prove-vector-arithmetic | [#1678](https://github.com/miztiik/yen-idhazh/pull/1678), merged at `a44cccc242c4d3ba217c13995f26c8a8af0e0cf8` | - |
+| D29 | 29 | Populated registry values and mandatory real CSV reader | 1, 28 | AB | DONE | close-contract-proof-gaps | [#1677](https://github.com/miztiik/yen-idhazh/pull/1677), merged at `2dfc94589a3dd12b74317401efcedc00f7faefb4` | - |
+| D30 | 30 | Native tagging-term acceptance and refusal | 1, 29 | AC | DONE | validate-tagging-terms | [#1680](https://github.com/miztiik/yen-idhazh/pull/1680), merged at `9cf0fff40d5dd283fc785959e592ee2b5ce1fc85` | - |
+| D31 | 31 | Bind declared UI defaults to their consumers | 1, 17, 30 | AD | DONE | bind-ui-default-consumers | [#1686](https://github.com/miztiik/yen-idhazh/pull/1686), merged at `78fbac96d6522f42bbc17c902bd61f5e82ffc344` | - |
 
 The canary implementation for Row 3 is delivered separately from its suite-wide
 review obligation. Rows 5 and 6 carry additional changes found by that review.
-The review stays open until the previously screened functions have been read,
-each proposed action has a disposition, and the final collection is reconciled.
+The review is closed: all original functions and their named helpers have
+been read, each action has an authored disposition, and the final collection
+is reconciled against the fully delivered source below.
 
 ## 2 - Row #1 - Semantic contracts and focused byte guarantees
 
@@ -199,6 +200,44 @@ Table J - Rejected alternatives
 | J2 | Delete everything mentioning quality, missing data, totals or drift | Those terms also describe validation, selection and failure-handling implementations. | Specific lost reader, safety and correctness guarantees, each requiring owner approval. | Fowler; directly inspected counterexamples. |
 | J3 | Move every data assertion into a new producer check or scheduled suite | Many checks are already enforced, or concern only a test fixture; relocating all of them preserves the redundancy. | Extra runtime reads and another maintenance surface; a genuine uncovered production invariant must be priced separately. | Existing producer ownership and the contract-impact boundary. |
 | J4 | Treat fewer tests as proof of faster CI | Collected count does not measure runtime and shared-runner noise can dominate. | Paired runs on identified hardware if a later implementation decision actually needs a speed measurement. | Existing measurement policy. |
+
+### Final review closure - 2026-10-24 UTC
+
+All 31 source phases are merged at
+`ab8713351aa6af2381bf2bfc71d0f359ac46bc3b`. The eight exact original review
+partitions cover 4875 distinct functions and 7230 distinct collected cases,
+with no duplicate, missing or nonbaseline identity. Current authored overlays
+resolve all earlier proposals; Row64 removes only the incidental canary
+length census and names the native log-axis proofs.
+
+One final collection on this source exited zero: 4910 functions and 7349
+cases. Its output SHA-256 is
+`03657846ffc47d1438e7f1f0d6f1e1138c7f85c0d3bc0ae48929e1a89d61d40c`.
+This is collection evidence, not an executed-suite pass.
+
+The private `final-identity-reconciliation.json` records every original
+function and case, each authored change and target, all additions, exact
+source commits, and separate concurrent-main changes. It has zero unresolved
+mappings: 67 original function identities disappear, 102 new function
+identities appear, and 223 retained original function syntax trees change.
+There are 237 absent original case strings and 356 new case strings. Of 6993
+shared strings, one Row19 parameter has changed meaning and is explicitly
+mapped to its preserved input at the new index; 6992 use exact identity.
+Matching identities do not claim unchanged behavior.
+
+Concurrent PRs 1642, 1646, 1666 and 1672 remain separately attributed.
+PR1666's request-body capture removals have no plan replacements.
+The Row12 UTC defect is fixed by Row26, and the Row18 workflow deadline
+defect is fixed by Row22. Worker source checks are reused, not repeated.
+Row25's clean controls passed before its nine faults; source hashes prove
+restoration, not an after-restoration test rerun.
+
+The durable rules live in the execution and gate guides: reject duplicate
+IDs before lookups, validate the prospective merged plan, distinguish
+historical releases from current proof, reconcile exact source identities,
+and state only what each result proves. No durable finding remains only in
+this plan. The closure change deletes this finished plan under
+`docs/how-to/distill-a-plan.md`; Git preserves this final ledger.
 
 ## 5 - Row #4 - Safe removals (follow-on of the suite review)
 
