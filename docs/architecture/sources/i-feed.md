@@ -9,6 +9,11 @@ I Feed is the project name for this design. The owner supplied the intent on
 methods can change as we learn. No scoring values have been calibrated, and no
 improvement has yet been measured.
 
+Plan 67's D3 observation scope and D4 settlement behavior are owner-approved;
+their native payloads and writers are not deployed. D5 admission,
+restriction/recovery and polling controls remain unapproved. Recommendations
+below do not activate those controls; see the [feedback contract](../contracts/feed-ingest-feedback.md).
+
 **A feed earns its place.** Being on our list gives it a chance to prove useful.
 It does not guarantee requests, model time or space in the digest. A dependable
 source earns more work; one that repeatedly sends us unusable material earns
@@ -155,21 +160,19 @@ Read state through its versioned contract without silently replacing the run's
 pinned code or policy. An incompatible state revision needs an explicit
 migration or declared degraded mode, not a fresh score with restrictions lost.
 
-Keep one serialized state updater. Preserve evidence from failed and partial
-runs independently of successful publication. A checkpoint makes replay
-idempotent: the worker and assembler reporting one article do not create two
-successes. A hard-killed job can lose facts it never exported; those outcomes
-remain unknown. A failed state commit leaves durable pending evidence for
-catch-up; it does not silently clear a restriction. Bound catch-up by the
-retained window and declare insufficient state where that window cannot
-reconstruct an update.
+Runs may proceed concurrently. Keep per-run observations immutable. If
+another update lands first, rebuild only derived state from newer committed
+records; do not hold fetch, parse or selection. A failed save leaves the
+previous derived state intact, retains the run artifacts and reports failure.
+A hard-killed job can lose facts it never exported; those outcomes remain
+unknown. An already-running selection keeps the state revision it read.
 
 | Live input | Next-run effect | What does not follow |
 | --- | --- | --- |
-| Distinct articles repeatedly refuse permitted access | Lower the access-related estimates; apply the configured restriction and recovery schedule. | HTTP 403 does not prove a paywall, and three retries are not three articles. |
+| Distinct articles repeatedly refuse permitted access | Could support an evidence-scoped restriction only after D5 approval. | HTTP 403 does not prove a paywall, and three retries are not three articles. |
 | Readable, substantive material arrives | Update the applicable delivery and assessed-quality estimates. | A successful summary is not proof that the source's claims are true. |
 | Our model fails after usable extraction | Record model cost and pipeline failure; retain the successful source-side outcome. | Do not turn our failure into source misconduct. |
-| A permitted feed poll offers no new eligible URLs | Update expected discovery rate and the next-poll time. | Do not record a failed article opportunity that was never allocated. |
+| A permitted feed poll offers no new eligible URLs | Could inform a next-poll time after the D5 cadence rule is approved. | No rate-to-interval formula is approved; do not record a failed article opportunity that was never allocated. |
 
 Golden examples are regression anchors, not the evidence base for these live
 updates. A slower quality review uses a bounded rotating sample of recent
