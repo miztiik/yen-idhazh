@@ -14,6 +14,8 @@ import { normalizeOpportunity } from "./quota-normalizer";
 import { choosePortfolio } from "./mmr-portfolio";
 import { measureArticle, recordAssessment } from "./quality-decoupler";
 import { recordRejection } from "./record-rejection";
+import { validatePublisherHistory } from "./publisher-exposure";
+import type { PublisherPublicationHistory } from "./publisher-exposure";
 
 export function curateArticles(input: Readonly<{
   articles: readonly PortfolioArticle[];
@@ -21,9 +23,14 @@ export function curateArticles(input: Readonly<{
   opportunity: OpportunityEvidence;
   observed_at: string;
   reliability_floor: number;
+  publication_history?: PublisherPublicationHistory;
 }>) {
   validateOpportunity(input.opportunity);
   const articles = validatePortfolioArticles(input.articles, input.planning, input.observed_at);
+  const publicationHistory = input.publication_history ?? {
+    day: input.observed_at.slice(0, 10), availability: "unavailable", counts: new Map<string, number>(),
+  };
+  validatePublisherHistory(publicationHistory, input.observed_at);
   const controls = {
     enabled: input.planning.config.curate.source_reliability_penalty_enabled,
     reliability_floor: NonNegativeSchema.max(1).parse(input.reliability_floor),
@@ -32,7 +39,7 @@ export function curateArticles(input: Readonly<{
   const normalization = normalizeOpportunity(carriers.representatives, input.opportunity, controls, articles);
   const portfolio = choosePortfolio(
     normalization.admitted, input.planning.config.curate, normalization.allowances,
-    carriers.groups, input.opportunity, controls,
+    carriers.groups, input.opportunity, controls, publicationHistory,
   );
   const rejections: CandidateRejectionRecord[] = [
     ...carriers.suppressed.map(suppression => recordRejection(

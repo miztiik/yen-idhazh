@@ -36,6 +36,11 @@ class FeedIngestDispatch(Contract):
     __schema_stem__: ClassVar[str] = "feed-ingest-dispatch"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-24T23:00",
+            change="Carry selections with separately recorded publisher exposure.",
+            why="Dispatch preserves the selected day counts and evidence gaps.",
+        ),
+        ChangelogEntry(
             version="2026-10-24T20:04",
             change="Carry curated publisher identity in dispatch snapshots.",
             why="Dispatch keeps the reviewed source identity selected upstream.",
@@ -51,17 +56,12 @@ class FeedIngestDispatch(Contract):
             why="Dispatch retains the planning evidence without changing selection scores.",
         ),
         ChangelogEntry(
-            version="2026-10-22",
-            change="Allow content and later selection to retain separate dates and policies.",
-            why="Their shared article identity does not make their stage evidence identical.",
-        ),
-        ChangelogEntry(
             version="2026-10-20",
             change="Earlier changes are available in git history.",
             why="Worker allocation must preserve selection and content identity.",
         ),
     )
-    version: Literal["2026-10-24T20:04"] = "2026-10-24T20:04"
+    version: Literal["2026-10-24T23:00"] = "2026-10-24T23:00"
     content: FeedIngestCandidate
     selection: EditorialSelectionRow
     partition: PartitionAssignment
@@ -70,7 +70,7 @@ class FeedIngestDispatch(Contract):
     @classmethod
     def migrate_previous_version(cls, value: Any) -> Any:
         if isinstance(value, dict) and value.get("version") in (
-            "2026-10-20", "2026-10-22", "2026-10-23", "2026-10-24"
+            "2026-10-20", "2026-10-22", "2026-10-23", "2026-10-24", "2026-10-24T20:04"
         ):
             content = value.get("content")
             selection = value.get("selection")
@@ -80,14 +80,16 @@ class FeedIngestDispatch(Contract):
             ]
             reject_legacy_publisher_identity(value, snapshots)
             expected_selection_version = (
-                "2026-10-24" if value.get("version") == "2026-10-24" else "2026-10-20"
+                value["version"] if value.get("version") in {
+                    "2026-10-24", "2026-10-24T20:04"
+                } else "2026-10-20"
             )
             if (
                 isinstance(selection, dict)
                 and selection.get("version", "2026-10-20") != expected_selection_version
             ):
                 raise ValueError("historical dispatch requires its original selection version")
-            return {**value, "version": "2026-10-24T20:04"}
+            return {**value, "version": "2026-10-24T23:00"}
         return value
 
     @model_validator(mode="after")

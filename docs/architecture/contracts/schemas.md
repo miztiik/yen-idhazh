@@ -128,9 +128,18 @@ and terminal rejections use `2026-10-23`; source-run observations use
 unsharded editorial selections and dispatches use `2026-10-24` for their nested
 source-reliability score evidence.
 Their models live in `backend/idhazh/contracts/feed_ingest_*.py`.
+Selections, article assessments, dispatches, selected batches and partitioned
+batches now use `2026-10-24T23:00` for nullable publisher-exposure evidence.
+The native Python declarations and strict TypeScript copies migrate prior
+versions without reinterpreting their `source` feed-crowding term. Historical
+exposure remains null, not an invented publication count; old physical schemas
+and logical commitments retain their original encoding. Current scores cannot
+charge both terms. The formula and bounded publication join live in
+[editorial selection](../sources/feed-curation.md#publisher-exposure-adjustment).
+Candidate, source-run, parsed-batch and rejection stamps are unchanged.
 These declarations do not enable a producer, register a ledger, or change the
 production planner.
-Planner events are independently stamped `2026-10-24` in their TypeScript
+Planner events are independently stamped `2026-10-24T23:00` in their TypeScript
 schema. Native tests cover current fixture validation, UUID versions, typed
 payloads, forbidden article text, identity propagation and event ordering.
 

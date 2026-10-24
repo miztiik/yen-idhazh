@@ -1,17 +1,17 @@
 /** Which typed observation crosses a planning stage boundary? */
 import { z } from "zod";
 import { isDeepStrictEqual } from "node:util";
-import { ArticleAssessmentContract, ArticleAssessmentRecordSchema, PreviousArticleAssessmentSchema, PreviousDiagnosticArticleAssessmentSchema, PreviousExclusionArticleAssessmentSchema, PreviousQualityArticleAssessmentSchema, PreviousReliableArticleAssessmentSchema } from "./article-assessment.schema";
+import { ArticleAssessmentContract, ArticleAssessmentRecordSchema, PreviousArticleAssessmentSchema, PreviousDiagnosticArticleAssessmentSchema, PreviousExclusionArticleAssessmentSchema, PreviousPublisherArticleAssessmentSchema, PreviousQualityArticleAssessmentSchema, PreviousReliableArticleAssessmentSchema } from "./article-assessment.schema";
 import {
   ArticleLabelsSchema, PolicyIdentitySchema, PreviousScoreEvidenceSchema, PreviousSourceSnapshotSchema,
-  ScoreEvidenceSchema, SourceSnapshotSchema,
+  PreviousPublisherScoreEvidenceSchema, ScoreEvidenceSchema, SourceSnapshotSchema,
 } from "./source.schema";
 import {
   DropReasonSchema, PreviousDiagnosticDropReasonSchema, PreviousPreDiagnosticsDropReasonSchema,
 } from "./rejection.schema";
 import { FetchStatusSchema, ParseStatusSchema } from "./source-run.schema";
 import { CountSchema, DateStampSchema, PlanningStageSchema, PositiveCountSchema, RunIdSchema, Sha256Schema, SlugSchema, TimestampSchema, reject } from "./primitives";
-import { EXTRACTION_QUALITY_VERSION, FEED_HISTORY_EVENT_VERSION, FEED_INGEST_EVENT_VERSION, HARVEST_DIAGNOSTICS_VERSION, PLANNER_EXCLUSIONS_VERSION, SOURCE_RELIABILITY_VERSION } from "../version";
+import { EXTRACTION_QUALITY_VERSION, FEED_HISTORY_EVENT_VERSION, FEED_INGEST_EVENT_VERSION, HARVEST_DIAGNOSTICS_VERSION, PLANNER_EXCLUSIONS_VERSION, PUBLISHER_IDENTITY_VERSION, SOURCE_RELIABILITY_VERSION } from "../version";
 import { HarvestDiagnosticsSchema, PreviousHarvestDiagnosticsSchema } from "./harvest-diagnostics.schema";
 
 export const FeedOutcomePayloadSchema = z.strictObject({
@@ -95,6 +95,9 @@ export const FeedIngestEventSchema = z.strictObject({
   $id: "feed-ingest-event", version: FEED_INGEST_EVENT_VERSION,
   changelog: [{
     version: FEED_INGEST_EVENT_VERSION,
+    change: "Replace feed crowding with recorded soft publisher exposure.",
+  }, {
+    version: PUBLISHER_IDENTITY_VERSION,
     change: "Record curated publisher identity in source snapshots.",
   }, {
     version: SOURCE_RELIABILITY_VERSION,
@@ -102,9 +105,6 @@ export const FeedIngestEventSchema = z.strictObject({
   }, {
     version: FEED_HISTORY_EVENT_VERSION,
     change: "Record native feed rest, retirement, reliability and daily publication evidence.",
-  }, {
-    version: EXTRACTION_QUALITY_VERSION,
-    change: "Retain measured extraction quality and implementation fingerprints.",
   }, {
     version: "2026-10-22T20:30",
     change: "Earlier changes are in git.",
@@ -174,7 +174,15 @@ const PreviousReliableEventSchema = z.strictObject({
   payload: z.discriminatedUnion("kind", [
     PreviousFeedOutcomePayloadSchema,
     CandidateDecisionPayloadSchema.extend({ assessment: PreviousReliableArticleAssessmentSchema }),
-    PreviousPortfolioChoicePayloadSchema, StageCompletionPayloadSchema,
+    z.strictObject({ ...PortfolioChoicePayloadSchema.shape, scores: PreviousPublisherScoreEvidenceSchema }), StageCompletionPayloadSchema,
+  ]),
+});
+const PreviousPublisherEventSchema = z.strictObject({
+  ...FeedIngestEventSchema.shape, version: z.literal(PUBLISHER_IDENTITY_VERSION),
+  payload: z.discriminatedUnion("kind", [
+    FeedOutcomePayloadSchema,
+    CandidateDecisionPayloadSchema.extend({ assessment: PreviousPublisherArticleAssessmentSchema }),
+    z.strictObject({ ...PortfolioChoicePayloadSchema.shape, scores: PreviousPublisherScoreEvidenceSchema }), StageCompletionPayloadSchema,
   ]),
 });
 
@@ -182,7 +190,7 @@ export function readFeedIngestEvent(input: unknown): FeedIngestEvent {
   if (input && typeof input === "object" && "version" in input) {
     const schema = [
       PreviousEventSchema, PreviousDiagnosticEventSchema, PreviousExclusionEventSchema,
-      PreviousQualityEventSchema, PreviousHistoryEventSchema, PreviousReliableEventSchema,
+      PreviousQualityEventSchema, PreviousHistoryEventSchema, PreviousReliableEventSchema, PreviousPublisherEventSchema,
     ].find(schema => schema.shape.version.value === input.version);
     if (schema !== undefined) {
       const previous = schema.parse(input);

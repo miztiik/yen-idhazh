@@ -102,6 +102,12 @@ test("real composition shares one clock and override and reads native dispatches
     expect(result.evidence.curation.rows.map(row => row.candidate_id)).toEqual([
       deriveCandidateId("2026-10-21-700", "recorded-news", 2),
     ]);
+    expect(result.evidence.curation.rows[0]!.ratings.publisher_exposure).toMatchObject({
+      publisher_id: publisherId, history_status: "unavailable",
+      published_today: null, selected_so_far: 0, planned_slots: 1, value: 0,
+    });
+    expect(result.evidence.curation.rows[0]!.ratings.source).toEqual({ available: false, value: null });
+    expect(result.evidence.publisher_publication.gaps).toContain("publication_history_unavailable");
     expect(result.evidence.harvest.feed_outcomes).toHaveLength(3);
     expect(result.evidence.harvest.feed_outcomes.map(row => row.source.publisher_id))
       .toEqual([publisherId, publisherId, publisherId]);
