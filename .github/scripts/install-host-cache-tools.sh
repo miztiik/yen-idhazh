@@ -62,15 +62,24 @@ stage=perf_build
 perf_build_started=$SECONDS
 mkdir -p "$trace"
 # One trace per owned build process prevents interleaved exec lines hiding an interpreter.
-strace -ff -e trace=execve -s 512 -o "$trace/exec" \
-  make --quiet -C "$perf_source/tools/perf" -j "$jobs" "${perf_options[@]}" perf >>"$log" 2>&1
+if strace -ff -e trace=execve -s 512 -o "$trace/exec" \
+  make --quiet -C "$perf_source/tools/perf" -j "$jobs" "${perf_options[@]}" perf >>"$log" 2>&1; then
+  perf_build_status=0
+else
+  perf_build_status=$?
+fi
 perf_build_seconds=$((SECONDS - perf_build_started))
 trace_files=("$trace"/exec.*)
 test -s "${trace_files[0]}"
 python_exec_count=$(awk '/execve\("[^"]*(\/python[0-9.]*(-config)?|[.]py)"/ && /[=] 0$/ { count++ } END { print count+0 }' "${trace_files[@]}")
 if test "$python_exec_count" -ne 0; then
-  echo "Official perf build executed Python; this is not a compliant instrument" >&2
+  printf 'Official perf build executed Python %s times; this is not a compliant instrument\n' "$python_exec_count" >&2
   exit 1
+fi
+if test "$perf_build_status" -ne 0; then
+  printf 'Official no-Python perf build failed with exit status %s\n' "$perf_build_status" >&2
+  tail -n 25 "$log" >&2
+  exit "$perf_build_status"
 fi
 install "$perf_source/tools/perf/perf" "$tools/perf"
 readelf -d "$tools/perf" >"$RUNNER_TEMP/host-cache-perf-elf.txt"
