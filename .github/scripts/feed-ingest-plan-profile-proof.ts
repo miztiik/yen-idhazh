@@ -12,6 +12,7 @@ import { probeBufferMib } from "../../services/host-fingerprints/src/inspect/cop
 import { verifyTaskProfileHttp } from "./host-task-profile-proof";
 import { CopyResultSchema, ProfileProofIdentitySchema, ResourceProofSchema } from "./feed-ingest-plan-profile-schema";
 import type { ResourceProof } from "./feed-ingest-plan-profile-schema";
+import { formatPidCpuReport } from "./feed-ingest-plan-pid-report";
 
 export async function verifyLiveHostProfiling(
   identity: { git_sha: string; run_id: string; correlation_id: string; attempt: number }, artifactRoot: string,
@@ -46,6 +47,8 @@ export async function verifyLiveHostProfiling(
     proof.stage = "task_cpu_ram_http";
     await persist();
     proof.task_profile = await verifyTaskProfileHttp(identity);
+    const pidReport = formatPidCpuReport([{ work: "Controlled CPU task / external PID", profile: proof.task_profile.profile }]);
+    for (const notice of pidReport.annotations) console.log(notice);
     await persist();
     const config = await loadConfig();
     const settings = await loadSettings();

@@ -171,9 +171,11 @@ test("actual CLI planning proof and all native files survive both real report mo
     expect(resourceReport.summary).toContain("configured off");
     expect(Bun.markdown.html(resourceReport.summary)).toContain("cache-derived buffer");
     expect(resourceReport.summary).toContain(`${evidence.resourceProof.copy!.on!.l3_cache_bytes} bytes`);
-    expect(resourceReport.annotations).toHaveLength(5);
+    expect(resourceReport.annotations.filter(line => !line.includes("PID CPU"))).toHaveLength(5);
+    expect(resourceReport.annotations.filter(line => line.includes("PID CPU"))).toHaveLength(4);
+    expect(resourceReport.annotations.some(line => line.includes("3000 ms CPU") && line.includes("%25 of one core"))).toBe(true);
     expect(resourceReport.annotations.every(line => line.startsWith("::notice title=") && !line.includes("\n"))).toBe(true);
-    for (const [letter, columns, count] of [["H", 7, 4], ["I", 4, 4], ["J", 3, 7]] as const) {
+    for (const [letter, columns, count] of [["H", 7, 4], ["I", 4, 4], ["J", 3, 7], ["K", 7, 4]] as const) {
       const section = resourceReport.summary.split(`## Table ${letter} -`)[1]?.split("\n## ")[0];
       if (section === undefined) throw new Error(`Missing resource table ${letter}`);
       const html = Bun.markdown.html(section);
@@ -181,6 +183,13 @@ test("actual CLI planning proof and all native files survive both real report mo
       expect(html.match(/<th>/g)).toHaveLength(columns);
       expect(html.match(/<td>/g)).toHaveLength(columns * count);
     }
+    const pidSection = resourceReport.summary.split("## Table K -")[1]!;
+    const firstPid = pidSection.split("\n").find(line => line.startsWith("| K1 |"))!.split("|");
+    const processCpu = evidence.stageProof.documents[0]!.profiling!.profiles[0]!.processes.worker;
+    expect(Number.parseFloat(firstPid[4]!)).toBeCloseTo(processCpu.cpu_interval_ms, 3);
+    expect(Number.parseFloat(firstPid[5]!)).toBe(3000);
+    expect(Number.parseFloat(firstPid[6]!)).toBeGreaterThan(100);
+    expect(Number.parseFloat(firstPid[6]!)).toBeCloseTo(processCpu.cpu.value!.percent_one_core, 3);
     const ids = [...resourceReport.summary.matchAll(/^\| ([A-Z]\d+) \|/gm)].map(match => match[1]);
     expect(new Set(ids).size).toBe(ids.length);
     const fullEvidence = await recordProfileEvidence(fixture.directory, identity, sourceId, {
@@ -197,6 +206,10 @@ test("actual CLI planning proof and all native files survive both real report mo
     });
     expect(Bun.markdown.html(formatResourceReport({ ...resourceInput, ...unchangedCounters }).summary)).toContain("Unavailable (no ticks)");
     expect(formatResourceReport({ ...resourceInput, ...unchangedCounters }).summary).toContain("no measured full window");
+    const zeroPid = formatResourceReport({ ...resourceInput, ...unchangedCounters }).summary
+      .split("## Table K -")[1]!.split("\n").find(line => line.startsWith("| K1 |"))!.split("|");
+    expect(Number.parseFloat(zeroPid[5]!)).toBe(0);
+    expect(Number.parseFloat(zeroPid[6]!)).toBe(0);
     for (const machineMemoryEnabled of [false, true]) {
       const absent = formatResourceReport({ response: summary, machineMemoryEnabled });
       expect(absent.summary).toContain("| H1 | Task profiles | Not recorded | Unavailable");
@@ -216,13 +229,16 @@ test("actual CLI planning proof and all native files survive both real report mo
     expect(() => formatResourceReport({ ...resourceInput, runNumber: "foreign" })).toThrow("completed planning attempt");
     expect(() => formatResourceReport({ ...resourceInput, runAttempt: String(identity.attempt + 1) })).toThrow("completed planning attempt");
     expect(() => formatResourceReport({ ...resourceInput, machineMemoryEnabled: true })).toThrow("workflow input");
-    for (const tamper of ["request", "count", "cpu", "replay", "journal", "disabled-machine"] as const) {
+    for (const tamper of ["request", "count", "cpu", "pid-cpu", "replay", "journal", "disabled-machine"] as const) {
       const stageProof = structuredClone(evidence.stageProof);
       const document = stageProof.documents[0]!;
       const profile = document.profiling!.profiles[0]!;
       if (tamper === "request") profile.identity.request_id = "b0d6a594-059f-46e1-bd6d-682452627e53";
       if (tamper === "count") document.profiling!.after_checks_count = 3;
       if (tamper === "cpu" && profile.cpu.value !== null) profile.cpu.value.user = -1;
+      if (tamper === "pid-cpu" && profile.processes.worker.cpu.value !== null) {
+        profile.processes.worker.cpu.value.percent_one_core = -1;
+      }
       if (tamper === "replay") document.calls.find(call => call.stage === "fetch_replay_after_restart")!.response_sha256 = "b".repeat(64);
       if (tamper === "journal") document.journal_records_sha256!.after_checks = "b".repeat(64);
       if (tamper === "disabled-machine") profile.machine_available_min_kb = 1;

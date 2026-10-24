@@ -273,7 +273,11 @@ body, parser response or journal enters these profiles.
 When optional reporting is enabled, completion adds task CPU and RAM to Tables
 H and I in the GitHub step summary and emits concise resource notices. Table J
 shows the separate RAM sample, L3 cache, derived copy buffer size, copy OFF/ON
-rates and host context. CPU is host-wide, not PID-specific. Sampled RSS maxima
+rates and host context. Table H CPU remains host-wide, not PID-specific.
+Table K and separate PID notices show CPU milliseconds, actual process
+intervals and percentages of one core for each recorded task/server PID,
+including the controlled external task. One fully used core is 100 percent;
+multi-threaded PID values can exceed 100 percent. Sampled RSS maxima
 and machine available-memory minima are not exact task peaks. Missing evidence
 is not recorded; disabled machine RAM is labelled disabled, never zero.
 The report refuses malformed or foreign revision/run/attempt/correlation/request

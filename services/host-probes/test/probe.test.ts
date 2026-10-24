@@ -275,6 +275,20 @@ test("periodic file sampling uses closing minus opening counters and closes with
   expect(reports.at(-1)?.outcome).toBe("cancelled");
   await expect(profileTask({ ...options, report: () => { throw new Error("report failed"); } },
     identity, () => { throw new Error("actual task failed"); })).rejects.toThrow(AggregateError);
+  let releaseReport: () => void;
+  const reporting = new Promise<void>(resolve => { releaseReport = resolve; });
+  const taskFailure = new Error("Actual task failed before its pending report");
+  try {
+    await profileTask({
+      ...options, config: { ...config, task_profile: { ...config.task_profile, lifecycle_timeout_ms: 1000 } },
+      report: () => reporting,
+    }, identity, () => { throw taskFailure; });
+    throw new Error("A pending report must fail at its lifecycle deadline");
+  } catch (error) {
+    if (!(error instanceof AggregateError)) throw error;
+    expect(error.errors[0]).toBe(taskFailure);
+    expect(error.errors[1]?.message).toBe("Task profile reporting timed out");
+  } finally { releaseReport!(); }
   const quick = await startTaskProfile(options, identity);
   const partial = await quick!.close("success");
   expect(partial.samples[0]?.cpu_window.full_window).toBe(false);
@@ -445,6 +459,30 @@ test("HTTP sampling returns fixture memory and exposes a stopped CPU clock", asy
       await scoped.close();
       const recorded = JSON.parse(await fixture("host-probes/process-inputs.json"));
       await Bun.write(join(directory, "4242", "stat"), recorded.stat);
+    }
+  }
+  for (const stopThrough of ["request", "shutdown"] as const) {
+    let releaseReport: () => void;
+    const reporting = new Promise<void>(resolve => { releaseReport = resolve; });
+    const pendingReport = createSampleHandler({
+      ...config, task_profile: { ...config.task_profile, lifecycle_timeout_ms: 1000 },
+    }, { platform: "linux", procRoot: directory }, () => reporting);
+    try {
+      const started = StartTaskProfileResponseSchema.parse(await (await pendingReport(command(START_TASK_PROFILE_PATH, input))).json());
+      if (started.status !== "started") throw new Error("Pending report case requires an actual collector");
+      if (stopThrough === "request") {
+        const failed = await pendingReport(command(STOP_TASK_PROFILE_PATH, { handle: started.handle, outcome: "success" }));
+        expect(failed.status).toBe(500);
+        expect((await pendingReport(command(STOP_TASK_PROFILE_PATH, { handle: started.handle, outcome: "error" }))).status).toBe(500);
+      }
+      const shutdown = pendingReport.close();
+      expect(pendingReport.close()).toBe(shutdown);
+      await expect(shutdown).rejects.toThrow(AggregateError);
+      expect((await pendingReport(command(START_TASK_PROFILE_PATH, input))).status).toBe(503);
+      expect(readProcessIdentity(input.target.pid, config.max_proc_bytes, { platform: "linux", procRoot: directory }).value)
+        .toMatchObject(input.target);
+    } finally {
+      releaseReport!();
     }
   }
 });

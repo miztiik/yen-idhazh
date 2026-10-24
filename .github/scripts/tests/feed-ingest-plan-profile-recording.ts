@@ -46,6 +46,7 @@ export async function recordProfileEvidence(
     const calls: StageProfileProof["documents"][number]["calls"] = [];
     for (const operation of ["fetch", "parse"] as const) {
       copyFileSync(start, join(directory, "stat"));
+      await Bun.write(join(directory, String(process.pid), "stat"), processInput.stat.replace("4242 ", `${process.pid} `));
       const collector = new TaskCollector(CollectorInputSchema.parse({
         identity: { pipeline_name: "feed-ingest-plan", task_name: operation,
           run_id: identity.run_id, correlation_id: identity.correlation_id, request_id: requests[operation].request_id },
@@ -55,7 +56,11 @@ export async function recordProfileEvidence(
       }));
       const input = processInput.status.repeat(128);
       for (let repeat = 0; repeat < 512; repeat++) digest(input);
-      if (options.withTicks !== false) copyFileSync(end, join(directory, "stat"));
+      if (options.withTicks !== false) {
+        copyFileSync(end, join(directory, "stat"));
+        await Bun.write(join(directory, String(process.pid), "stat"),
+          processInput.cpu_intervals[0].closing_stat.replace("4242 ", `${process.pid} `));
+      }
       profiles.push(collector.close("success"));
       const original = { stage: operation, endpoint: operation, request: requests[operation], http_status: 200,
         response_sha256: digest(processInput.status), network: { dns: 0, http: 0 } };

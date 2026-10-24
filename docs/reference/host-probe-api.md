@@ -108,6 +108,7 @@ Table A - task HTTP bounds
 | A1 | `task_profile.max_profile_handles` | 16 entries total, including starting, running, closing and completed profiles. Reservation precedes asynchronous startup. |
 | A2 | `task_profile.profile_handle_ttl_ms` | 21600000 milliseconds, or six hours, for the explicit HTTP safety expiry; completed results are retained for at most another such period. `expires_at` exposes the task deadline. |
 | A3 | `max_request_body_bytes` | 16384 bytes, or 16 KiB, per JSON command, including streamed bodies. |
+| A4 | `task_profile.lifecycle_timeout_ms` | 10000 milliseconds, or ten seconds, for collector startup and one closing deadline that includes shutdown and asynchronous reporting. It does not limit task duration. |
 
 New starts remove expired results, then the earliest-started completed result
 when space is needed. Active profiles are never evicted. Completed results
@@ -127,6 +128,8 @@ and an unknown or evicted handle returns 404. A stopping service refuses
 new starts with 503. Unexpected collection or report failures log an error
 and return 500, not a successful profile. Missing individual measurements
 stay null with a reason; a real zero PID CPU interval remains zero.
+The owned collector is terminated before a report callback is awaited.
+A callback that never settles fails stop and shutdown at the closing deadline.
 All responses are uncached.
 
 ## Embedded use

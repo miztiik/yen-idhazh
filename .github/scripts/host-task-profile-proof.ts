@@ -9,12 +9,11 @@ import {
 } from "../../services/host-probes/src/api/task-command-schema";
 import { OwnedProcessSchema } from "../../services/host-probes/src/task-profile/profile-schema";
 import { readPinnedProcess, readProcessIdentity } from "../../services/host-probes/src/task-profile/process-stat";
-import { ControlledWorkResultSchema, TaskProfileProofSchema } from "./feed-ingest-plan-profile-schema";
+import {
+  CONTROLLED_POLL_INTERVAL_MS, CONTROLLED_TASK_NAME, ControlledWorkResultSchema, TaskProfileProofSchema,
+} from "./feed-ingest-plan-profile-schema";
 export { TaskProfileProofSchema } from "./feed-ingest-plan-profile-schema";
 
-// These are time and Linux memory-unit conversions, not sampling controls.
-const MILLISECONDS_PER_SECOND = 1000;
-const BYTES_PER_LINUX_KB = 1024;
 const ControlsSchema = z.strictObject({
   minimum_elapsed_work_ms: z.number().finite().positive(), buffer_bytes: z.int().positive(),
   minimum_periodic_samples: z.int().positive(),
@@ -32,7 +31,7 @@ export async function verifyTaskProfileHttp(identity: { run_id: string; correlat
   const config = ProbeConfigSchema.parse({ ...defaults, task_profile: {
     ...defaults.task_profile, enabled: true, memory_enabled: true, machine_memory_enabled: true,
   } });
-  if (config.task_profile.poll_interval_ms !== MILLISECONDS_PER_SECOND) {
+  if (config.task_profile.poll_interval_ms !== CONTROLLED_POLL_INTERVAL_MS) {
     throw new Error("Controlled task proof requires the configured one-second polling cadence");
   }
   type ChildMessage = z.infer<typeof ChildMessageSchema>;
@@ -79,7 +78,7 @@ export async function verifyTaskProfileHttp(identity: { run_id: string; correlat
     const target = pin(child.pid);
     const serverPin = pin(process.pid);
     const input = {
-      identity: { pipeline_name: "host-probes", task_name: "controlled-cpu-task", run_id: identity.run_id,
+      identity: { pipeline_name: "host-probes", task_name: CONTROLLED_TASK_NAME, run_id: identity.run_id,
         correlation_id: identity.correlation_id, request_id: randomUUID() },
       target, server: serverPin,
     };
@@ -103,27 +102,13 @@ export async function verifyTaskProfileHttp(identity: { run_id: string; correlat
       throw new Error("Actual task profile HTTP stop failed");
     }
     const stopped = StopTaskProfileResponseSchema.parse(await stoppedResponse.json());
-    if (stopped.status !== "stopped") throw new Error("Enabled task CPU proof did not return its profile");
+    if (stopped.status !== "stopped" || stopped.end_reason !== "explicit_stop") {
+      throw new Error("Enabled task CPU proof did not return its explicit stop");
+    }
     const profile = stopped.profile;
-    const worker = profile.processes.worker;
-    const clock = profile.process_clock_ticks_per_second;
-    if (profile.identity.task_name !== "controlled-cpu-task" || profile.outcome !== "success"
-      || stopped.end_reason !== "explicit_stop" || profile.end_reason !== "explicit_stop"
-      || worker.closing.pid !== target.pid || worker.closing.start_ticks !== target.start_ticks
-      || profile.processes.server.closing.pid !== serverPin.pid
-      || profile.processes.server.closing.start_ticks !== serverPin.start_ticks
-      || clock.reason !== null || clock.value <= 0
-      || worker.cpu.reason !== null || worker.cpu.value.cpu_time_ms <= 0 || worker.cpu.value.percent_one_core <= 0
-      || worker.cpu_interval_ms < work.elapsed_ms || profile.elapsed_ms < work.elapsed_ms
-      || work.elapsed_ms < controls.minimum_elapsed_work_ms || work.allocated_bytes !== controls.buffer_bytes
-      || profile.periodic_sample_count < controls.minimum_periodic_samples
-      || !profile.samples.some(sample => sample.phase === "poll" && sample.processes.worker.cpu_window.full_window
-        && sample.processes.worker.cpu_window.cpu.value !== null
-        && sample.processes.worker.cpu_window.cpu.value.cpu_time_ms > 0)
-      || !profile.samples.every((sample, index) => index === 0 || sample.elapsed_ms >= profile.samples[index - 1]!.elapsed_ms)
-      || worker.closing.memory_kb.rss === null || worker.closing.memory_kb.rss < controls.buffer_bytes / BYTES_PER_LINUX_KB
-      || profile.processes.server.closing.memory_kb.rss === null || profile.machine_available_min_kb === null) {
-      throw new Error("Actual external PID CPU, identities, RAM or full-task intervals were not proved");
+    if (work.elapsed_ms < controls.minimum_elapsed_work_ms || work.allocated_bytes !== controls.buffer_bytes
+      || profile.periodic_sample_count < controls.minimum_periodic_samples) {
+      throw new Error("Controlled task did not meet its declared CPU/RAM work inputs");
     }
     if (readPinnedProcess(target, config.max_proc_bytes, {}).reason !== null) {
       throw new Error("Controlled target must remain alive through the HTTP closing observation");

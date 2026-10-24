@@ -288,8 +288,12 @@ its first periodic poll and still has opening and closing observations.
 `max_retained_samples` defaults to 128 observations and must hold the window's
 polls plus two endpoints. Both raw CPU history and returned observations stay
 bounded. Whole-task counts, extrema and endpoint differences survive eviction.
-`lifecycle_timeout_ms` defaults to 10000 milliseconds for starting or stopping
-the collector, not for limiting task duration.
+`lifecycle_timeout_ms` defaults to 10000 milliseconds for starting the collector
+and for one closing deadline covering collector shutdown and asynchronous
+reporting, not for limiting task duration. The owned collector stops before
+the report callback runs. A callback that does not settle fails closing at
+that deadline; it cannot keep the collector or HTTP shutdown waiting forever.
+An actual-work failure and a reporting failure remain separate errors.
 
 Host CPU remains machine-wide, including other work on the machine.
 Whole-task shares use opening and closing counters. Each rolling sample reports its actual

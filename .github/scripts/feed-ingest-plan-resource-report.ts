@@ -6,6 +6,8 @@ import { probeBufferMib } from "../../services/host-fingerprints/src/inspect/cop
 import { ProfileProofIdentitySchema, ResourceProofSchema, StageProfileProofSchema } from "./feed-ingest-plan-profile-schema";
 import type { ProfileProofIdentity, ResourceProof, StageProfileProof } from "./feed-ingest-plan-profile-schema";
 import { escapeMarkdown, resourceNotice } from "./feed-ingest-plan-report-format";
+import { formatPidCpuReport } from "./feed-ingest-plan-pid-report";
+import { measurement } from "./feed-ingest-plan-resource-values";
 
 const ReportContextSchema = z.object({
   date: DateStampSchema, run_id: RunIdSchema, correlation_id: RequestIdSchema,
@@ -98,11 +100,6 @@ function readTaskRows(stage: StageProfileProof, identity: ProfileProofIdentity, 
   return rows;
 }
 
-function measurement(value: number | null, unit: string, reason?: string): string {
-  return value === null ? `Unavailable${reason === undefined ? "" : ` (${reason.replaceAll("_", " ")})`}`
-    : `${Number.isInteger(value) ? value : value.toFixed(3)} ${unit}`;
-}
-
 function processMemory(process: TaskProfile["processes"]["worker"]): string {
   const closing = process.closing;
   if (closing.unavailable["memory_kb.rss"] === "not_configured") return "Not configured";
@@ -131,6 +128,11 @@ function validateResourceProof(proof: ResourceProof, identity: ProfileProofIdent
     || copy.on.memcpy_probe_mib !== probeBufferMib(copy.floor_mib, copy.on.l3_cache_bytes, copy.cache_multiple)
     || copy.on.memcpy_probe_mib === null || copy.on.memcpy_probe_mib <= 0) {
     throw new Error("Completed standalone resource proof lacks actual RAM or separate copy OFF/ON measurements");
+  }
+  const task = proof.task_profile;
+  if (task !== null && (task.profile.identity.run_id !== identity.run_id
+    || task.profile.identity.correlation_id !== identity.correlation_id)) {
+    throw new Error("Controlled task CPU evidence differs from the completed planning attempt");
   }
 }
 
@@ -182,6 +184,13 @@ export function formatResourceReport(input: ResourceReportControls & Readonly<{
   if (rows.length === 0) annotations.push(resourceNotice(
     `Task CPU and process RAM: ${taskState.toLowerCase()}; whole-machine task RAM: ${machineState.toLowerCase()}. No task measurements are inferred.`,
   ));
+  const pidReport = formatPidCpuReport([
+    ...rows,
+    ...(resource?.task_profile == null ? [] : [{
+      work: "Controlled CPU task / external PID", profile: resource.task_profile.profile,
+    }]),
+  ]);
+  annotations.push(...pidReport.annotations);
   const contextRows = resource === null ? ["| J1 | Standalone RAM and copy OFF/ON | Not recorded; resource-proof.json absent. |"] : [
     `| J1 | Standalone RAM HTTP sample (${resource.status}) | ${escapeMarkdown(sample == null ? "Not recorded" :
       `total ${measurement(sample.memory_kb.total, "kB", sample.unavailable["memory_kb.total"])}; free ${measurement(sample.memory_kb.free, "kB", sample.unavailable["memory_kb.free"])}; available ${measurement(sample.memory_kb.available, "kB", sample.unavailable["memory_kb.available"])}; interval ${measurement(sample.interval_ms, "ms")}; ${sample.sampled_at} UTC`)} |`,
@@ -215,5 +224,6 @@ export function formatResourceReport(input: ResourceReportControls & Readonly<{
     "## Table J - Separate RAM sample, cache and copy", "",
     "| Id | Observation | Recorded result |", "| --- | --- | --- |", ...contextRows, "",
     "The standalone probe writes resource-proof.json after document CPU windows close. Its one RAM HTTP sample still runs when task machine RAM is off. Copy OFF/ON is a separate bandwidth proof with two buffers, not L3 hit/miss counts or a task-RAM switch.", "",
+    pidReport.summary,
   ].join("\n") };
 }
