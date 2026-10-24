@@ -13,6 +13,7 @@ from idhazh.contracts.qualification import (
     QualificationReport,
     QualificationShard,
 )
+from idhazh.event_lines import escaped_data, escaped_property
 
 #: A verdict a reader can find without reading the row. The words beside them
 #: carry the meaning; these only say where to look.
@@ -228,3 +229,48 @@ def render_report(report: QualificationReport) -> str:
         "",
     ]
     return "\n".join(lines)
+
+
+def render_annotations(report: QualificationReport) -> list[str]:
+    """The run page's annotations: the verdict, each red gate, and a thin corpus.
+
+    GitHub shows at most ten errors and ten warnings per step and drops the rest
+    without a word. So the verdict is a notice, and each gate adds at most one
+    error. The ceiling is GateName's size, which a test asserts. The full table
+    stays in the step summary.
+    """
+    failed = [outcome for outcome in report.gates if outcome.status is GateStatus.FAILED]
+    verdict = "QUALIFIED" if report.qualified else "ESCALATE"
+    lines = [
+        _command(
+            "notice",
+            "Qualification verdict",
+            f"{report.candidate.model_id}: {verdict}. "
+            f"{len(report.gates) - len(failed)} of {len(report.gates)} gates passed. "
+            f"{report.corpus_items} articles, {report.repeats} repeats each, "
+            f"{report.scored} scored.",
+        )
+    ]
+    lines += [
+        _command(
+            "error",
+            f"Gate failed: {outcome.gate.value}",
+            f"{outcome.measured} against {outcome.threshold}. Set by {outcome.source}. "
+            f"{outcome.detail}",
+        )
+        for outcome in failed
+    ]
+    if report.corpus_shortfalls:
+        lines.append(
+            _command(
+                "warning",
+                "Corpus thinner than config asks",
+                "; ".join(report.corpus_shortfalls),
+            )
+        )
+    return lines
+
+
+def _command(level: str, title: str, message: str) -> str:
+    """One workflow command, escaped so a message cannot start another one."""
+    return f"::{level} title={escaped_property(title)}::{escaped_data(message)}"

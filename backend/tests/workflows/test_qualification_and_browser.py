@@ -108,6 +108,29 @@ def test_both_qualification_pages_survive_the_run_that_needed_them() -> None:
     )
 
 
+def test_the_run_page_annotates_the_verdict_between_the_gates_and_the_table() -> None:
+    """A red run names its red gates in the run's annotation list, not only in a page.
+
+    The annotation step reads the verdict file the gates wrote, so its notice and
+    error lines cannot disagree with the table. It runs after the gates decide and
+    before the table, and always, because an ESCALATE is what it exists to show.
+    """
+    workflow = _load_workflows()["validate.yml"]
+
+    annotate = _step(workflow, "decide", "name", "Annotate the verdict")
+    assert annotate.get("if") == "always()"
+    script = _script(annotate, "validate.yml/decide/Annotate the verdict")
+    assert "qualification_annotations.py" in script
+    assert "${{" not in script
+
+    names = [step.get("name") for step in _steps(workflow, "decide")]
+    assert (
+        names.index("Run the gates")
+        < names.index("Annotate the verdict")
+        < names.index("The verdict")
+    )
+
+
 def _browser_install_jobs(
     workflows: Mapping[str, dict[str, object]],
 ) -> dict[tuple[str, str], list[dict[str, object]]]:

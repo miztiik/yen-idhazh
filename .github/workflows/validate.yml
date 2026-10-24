@@ -481,6 +481,14 @@ jobs:
             --job-budget-minutes "${{ fromJSON(inputs.job_budget_minutes) }}" \
             --runner ubuntu-latest
 
+      # The run page's own words for the verdict: one notice, and one error per
+      # gate that failed. Read from the verdict file the gates just wrote, so the
+      # annotations and the table below cannot disagree. `if: always()` for the
+      # same reason the table has it.
+      - name: Annotate the verdict
+        if: always()
+        run: python3 backend/utilities/qualification_annotations.py
+
       # The ten gates, failures first. `if: always()` because the step above
       # exits non-zero on an ESCALATE, and that is precisely the verdict a
       # reader opened this page for.
@@ -514,6 +522,6 @@ jobs:
         run: |
           echo "A hard gate failed. Adopting this model changes a persisted" >&2
           echo "contract and re-goldens every fixture, so the run stops here" >&2
-          echo "for sign-off. The failing gate and its measured value are in" >&2
-          echo "the step log above and in the qualification-report artifact." >&2
+          echo "for sign-off. Each failing gate is a red annotation on this run," >&2
+          echo "with its measured value. The table is in the step summary." >&2
           exit 1

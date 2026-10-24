@@ -226,3 +226,66 @@ def test_neither_page_writes_a_model_name_it_was_not_given() -> None:
     for page in (shard_page, report_page):
         assert "a-model-nobody-has-served" in page
         assert shard.candidate.model_id not in page
+
+
+def test_a_qualified_run_is_one_notice_that_names_the_model_and_its_counts() -> None:
+    report = a_report()
+    lines = qualification_summary.render_annotations(report)
+
+    assert len(lines) == 1
+    assert lines[0].startswith("::notice title=Qualification verdict::")
+    assert f"{report.candidate.model_id}: QUALIFIED." in lines[0]
+    assert f"{len(GateName)} of {len(GateName)} gates passed" in lines[0]
+
+
+def test_each_red_gate_is_one_error_named_by_the_gate_with_its_bar() -> None:
+    lines = qualification_summary.render_annotations(a_report(failing=GateName.FAITHFULNESS_FLOOR))
+    errors = [line for line in lines if line.startswith("::error ")]
+
+    assert len(errors) == 1
+    assert errors[0].startswith("::error title=Gate failed%3A faithfulness_floor::")
+    assert "0.612 against 0.700. Set by evaluation.faithfulness_floor." in errors[0]
+    assert lines[0].startswith("::notice") and "ESCALATE" in lines[0]
+
+
+def test_every_gate_red_stays_within_the_ten_errors_github_shows() -> None:
+    report = a_report()
+    every_red = report.model_copy(
+        update={
+            "gates": [
+                outcome.model_copy(update={"status": GateStatus.FAILED}) for outcome in report.gates
+            ],
+            "qualified": False,
+        }
+    )
+    lines = qualification_summary.render_annotations(every_red)
+    errors = [line for line in lines if line.startswith("::error ")]
+
+    assert len(errors) == len(GateName)
+    assert len(errors) <= 10, "GitHub shows ten errors a step and drops the rest silently"
+
+
+def test_a_message_cannot_break_its_line_or_start_another_command() -> None:
+    report = a_report(failing=GateName.FAITHFULNESS_FLOOR)
+    hostile = [
+        outcome.model_copy(update={"detail": "50% short\n::error::forged"})
+        if outcome.status is GateStatus.FAILED
+        else outcome
+        for outcome in report.gates
+    ]
+    lines = qualification_summary.render_annotations(report.model_copy(update={"gates": hostile}))
+    error = next(line for line in lines if line.startswith("::error "))
+
+    assert all("\n" not in line for line in lines)
+    assert not any(line.startswith("::error::forged") for line in lines)
+    assert "50%25 short%0A::error::forged" in error
+
+
+def test_corpus_shortfalls_are_one_warning_not_one_per_shortfall() -> None:
+    lines = qualification_summary.render_annotations(
+        a_report(shortfalls=["brief-path items: 0, the corpus asks for 2", "one tier empty"])
+    )
+    warnings = [line for line in lines if line.startswith("::warning ")]
+
+    assert len(warnings) == 1
+    assert "brief-path items: 0, the corpus asks for 2; one tier empty" in warnings[0]

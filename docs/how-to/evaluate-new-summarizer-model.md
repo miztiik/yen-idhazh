@@ -692,13 +692,20 @@ nothing there is a second measurement that could disagree with the artifact -
 and neither page spells a model name, so it cannot describe a model the run did
 not serve.
 
+`decide` also writes the verdict into the run's annotation list, the part of the
+run page GitHub shows first. One notice carries the model, the verdict and the
+counts. Each red gate is one error with its measured value and the config key
+that sets its bar. `qualification_annotations.py` reads the same `report.json`
+the table is rendered from. GitHub shows at most ten errors per step, and there
+are ten gates, so no red gate is dropped.
+
 What the shard page carries that the gates do not: **which articles the sampler
 worded more than one way**. `wording_spread` reports a count, and a count sends
 the next reader to the artifact to diff digests by hand. The shard page names
 them. Nothing there is a defect - above zero temperature a second wording is the
 sampler working, and no gate reads it.
 
-Both steps run under `if: always()`, on purpose. A run that died half way is
+These steps run under `if: always()`, on purpose. A run that died half way is
 exactly the one whose counts somebody wants, and `decide` exits non-zero on an
 ESCALATE - which is precisely the verdict the reader opened the page for.
 
