@@ -8,10 +8,10 @@ benchmark. No cache result changes a host-fingerprint row or a Python contract.
 L3 means the third-level cache; the last-level cache is called LLC and is not
 necessarily L3 on every processor.
 
-**Status: in progress.** Native latency and honest hardware refusals have real
-Linux evidence. Final shared-main integration and hosted acceptance of the
-combined API remain pending. Counter availability is not evidence that a
-counter was measured.
+Native latency, integrated HTTP routing, verified affinity and complete owned
+cleanup have real Linux evidence with the Python-free build. Actual LLC
+counter access remains unavailable on the measured runner; detecting that
+refusal is not evidence that a counter was measured.
 
 ## Instruments and interpretation
 
@@ -140,8 +140,8 @@ provides taskset. These are optional CI/measurement dependencies, not default
 service or browser dependencies.
 The installation records elapsed seconds and the actual perf and multichase
 binary byte counts, added OS packages and perf's actual ELF dependencies.
-Before the fresh runner reading, the source-build time of one to three minutes
-is an estimate, not a passing reading. It adds no Python package, default npm dependency,
+The measured setup and native bytes are in the current benchmark record.
+It adds no Python package, default npm dependency,
 browser asset or committed binary. Missing or failed installation fails the
 proof rather than fabricating an instrument.
 
