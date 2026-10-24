@@ -391,7 +391,10 @@ def test_the_committed_window_is_one_a_measurement_widened() -> None:
     assert window(models.summarizer.server) > UNMEASURED_WINDOW, (
         "the summarizer is the one role a measurement widened"
     )
-    assert models.summarizer.server["-fa"] == "on"
+    assert any(
+        models.summarizer.server.get(flag) == "on"
+        for flag in ("-fa", "--flash-attn")
+    )
 
 
 #: What the summarize prompt costs before a word of the article reaches it, and

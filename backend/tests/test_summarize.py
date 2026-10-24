@@ -1295,7 +1295,10 @@ def test_every_committed_role_starts_a_server_that_names_its_own_settings() -> N
             server=entry.server,
             port=8181,
         )
-        assert argv[argv.index("-lv") + 1] == "4", f"{role} starts a server that says nothing"
+        assert any(
+            flag in argv and argv[argv.index(flag) + 1] == "4"
+            for flag in ("-lv", "--log-verbosity")
+        ), f"{role} starts a server that does not describe its settings"
 
 
 def test_the_output_schema_is_generated_not_hand_written() -> None:

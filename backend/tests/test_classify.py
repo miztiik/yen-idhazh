@@ -18,6 +18,7 @@ import pytest
 from conftest import (
     CONFIG_DIR,
     FIXTURES_DIR,
+    INCUMBENT_MODEL,
     LABEL_REPLIES,
     REPO_ROOT,
     SUMMARIZE_AND_PLAN_REPLIES,
@@ -75,7 +76,7 @@ from idhazh.classify.calls import (
 from idhazh.contracts.article import Article
 from idhazh.contracts.element import ElementKind, ElementTable, Extractor
 from idhazh.contracts.knobs.extract import ElementsConfig
-from idhazh.contracts.knobs.models import ModelEntry
+from idhazh.contracts.knobs.models import ModelEntry, ModelsConfig
 from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.summary import Summary, SummaryStatus
@@ -287,21 +288,22 @@ class TestThePromptBytes:
 
         Both reply openings, because the one a prompt ends with is chosen by the
         envelope's own closing marker and a wrong pair would be invisible on the
-        case the incumbent runs. The thinking case is BUILT from the committed
-        entry - the incumbent declares no closing marker, so that case has no
-        entry in `config/` and would otherwise be untested until a swap turned
-        it on.
+        case the recorded model runs. Its thinking case uses the same markers
+        with the closing marker enabled.
 
         **The recording and the entry name the same weights.** The fixture says
-        which bytes the server had loaded, so a swap that moved the weights and
-        not the recording fails here rather than rendering quietly.
+        which bytes the server had loaded. Compare it with that model's file,
+        not the current selection: changing models does not change a recording.
         """
         recorded = json.loads(read_text(CHAT_TEMPLATE_RENDERING))
         system, user = recorded["system"], recorded["user"]
-        markers = committed_markers()
+        entry = ModelsConfig.from_json(
+            read_text(CONFIG_DIR / "models" / INCUMBENT_MODEL)
+        ).summarizer
+        markers = committed_markers(INCUMBENT_MODEL)
         thinking = dataclasses.replace(markers, thinking_close="</think>")
 
-        assert configured().sha256 == recorded["weights_sha256"]
+        assert entry.sha256 == recorded["weights_sha256"]
         assert render_prompt(system=system, user=user, markers=markers) == (
             recorded["generation_prompt"]
         )

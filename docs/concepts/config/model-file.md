@@ -16,6 +16,11 @@ Everything that is a fact about one set of weights lives in one file of its own:
 
 `models_file` is spelled relative to `config/` and its grammar pins it to `config/models/` and to `.json`, because the value is an operator's edit that becomes a path this build opens (`CLAUDE.md` section 2). It ships a default naming the committed file, so a fresh clone still runs unconfigured.
 
+The current default is `models/ornith-1.5-9b-q5km.json`. Keep it aligned with
+the committed selection when that selection changes. Recorded template checks
+remain tied to the model that produced their bytes, not the current selection.
+Server-setting checks accept the runtime's short and long flag spellings.
+
 **`config/idhazh.json` still carrying a `models` block is refused by name**, and refused rather than lifted onto the new file: a lift would read one model out of the old block while `models_file` named another file, and the run would stand a server up on whichever won.
 
 **Both files travel with the run.** `Settings.digests` records the pointer file and the model file it names, because the pointer moving and the file it points at being re-tuned are two different edits and a record that held only one of them could not tell them apart.
