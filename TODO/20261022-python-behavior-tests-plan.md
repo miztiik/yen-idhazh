@@ -658,13 +658,15 @@ counts use the untouched archive and the completed branch instead.
   - `backend/tests/contracts/test_sources_and_marks.py`
   - `backend/tests/contracts/test_ledger_index.py`
   - `backend/tests/contracts/test_source_classification_binding.py`
+  - `frontend/tests/source-classification-binding.spec.ts`
+  - `frontend/scripts/test-groups.ts`
 - **Changes and acceptance proof:**
   - Compare the loaded rest threshold with the file value, keep the tuned
     threshold and real `after_failures` caller, and remove only the committed
     literal. Construct a finite published window one day beyond the authored
     first-sight window; require the loaded value and relation, not `730`.
     Keep named retired-key refusals and both the moved key and successor file
-    in the prune refusal.
+    in the prune refusal; remove one duplicate read of the same config file.
   - Hash the copied model-file bytes independently with SHA-256, then prove
     unchanged stability and changed-byte sensitivity. Remove the stale-teacher
     premise while retaining its named destination error. Keep
@@ -679,10 +681,11 @@ counts use the untouched archive and the completed branch instead.
     `definitions-a` taxonomy to prove a published retired lens still reads
     while its tombstone stops new matching.
   - Require the compact-index decoded model to equal the object written, not
-    only to serialize to stable text. Compare TypeScript field types with the
-    live Python JSON Schema using the TypeScript compiler API, require an
-    invalid property name in the refusal, and test omitted defaults beside
-    separately authored source kind and entity tier values.
+    only to serialize to stable text. Compare required TypeScript field names
+    and types with the live Python JSON Schema using the TypeScript compiler
+    API; an optional marker is refused because serialized output emits the
+    field. Require an invalid property name in the refusal, and test omitted
+    defaults beside separately authored source kind and entity tier values.
 - **Gates:** Run the shared changed-test selector over the seven backend
   modules and the frontend type-binding logic test, with Ruff and mypy.
   In disposable archive copies, fault each preserved behavior and record its
@@ -736,23 +739,41 @@ counts use the untouched archive and the completed branch instead.
     `backend/tests/contracts/test_taxonomy_and_prompts.py::test_a_draft_or_retired_entry_reaches_no_prompt`.
     Making a retired lens matchable failed
     `backend/tests/contracts/test_sources_and_marks.py::test_a_published_item_carrying_a_retired_lens_still_reads`.
-  -   Omitting compact-index state from a stable writer, with an empty entry in
-  the disposable input, passed text idempotence but failed object equality in
+  - Omitting compact-index state from a stable writer, with an empty entry in
+    the disposable input, passed text idempotence but failed object equality in
   `backend/tests/contracts/test_ledger_index.py::test_a_compact_index_writes_one_entry_a_line_and_reads_back_what_it_wrote`.
-  The TypeScript binding now parses the interface with the compiler API and
-  compares it with the live Python JSON Schema; its post-change fault proof
-  is pending. Accepting unknown properties failed
+    The TypeScript binding compares required interface AST fields with the
+    live Python JSON Schema. Boolean-to-string and optional-field AST
+    mutations fail
+    `frontend/tests/source-classification-binding.spec.ts::the Python source-kind binding refuses an optional TypeScript field`
+    and
+    `frontend/tests/source-classification-binding.spec.ts::the Python type binding refuses a boolean field changed to string`.
+    Accepting unknown properties failed
   `backend/tests/contracts/test_source_classification_binding.py::test_invalid_registry_refuses_loading_by_name[invalid-property-invented_rule]`.
-  Overwriting the authored source kind and entity tier each failed
+    Overwriting the authored source kind and entity tier each failed
   `backend/tests/contracts/test_source_classification_binding.py::test_configured_defaults_apply_only_to_authored_config`.
-- **Gate record:** Pending the final shared-selector run and post-change
-  TypeScript binding fault proof. The earlier 226-case backend-only record
-  predates this frontend test and does not certify the current change.
+- **Gate record:** The shared selector chose the seven backend modules and all
+  frontend groups because the selector inventory changed. Whitespace, Ruff,
+  mypy, Svelte checks, test-tooling checks and the canary build passed. Pytest
+  passed 225 cases, logic passed 1,501, and browser checks passed 113; none
+  failed or skipped. Record:
+  `backend/var/checks/cdbdb0c4954ddedb8a33c187ae08431d04bd5d604d09f1b73cc8362d5b53fb60.json`.
+  That run predates the optional-field proof and the duplicate-read cleanup.
+  The final targeted results are 27 passing retention tests and 3 passing
+  source-kind binding tests, including both bounded type faults; `npm run check`
+  found zero errors and warnings. The merge itself did not repeat local
+  application gates. PR checks `scope`, `gates`, `browser` and `site` passed at
+  the prior Row 11 head; `robots` was skipped.
 - **Plan integration:** The serialized slot is released. Row 5 and Row 9
-  delivery receipts, Row 10's verified head and the exact owner ruling in A5
+  delivery receipts, Row 10's merged receipt and the exact owner ruling in A5
   are retained. D3 remains open; Row 10 is not a dependency.
-- **Delivery:** Test and plan changes are committed in `62968e83a`; the
-  current-main merge is `6a2179890`. The phase pull request is pending.
+- **Delivery:** Tests and the initial plan update are committed in `62968e83a`
+  and `26ac9f90c`; current main, including Row 10's merge receipt, is merged
+  into this branch without rewriting history. The AST binding proof is
+  committed at `f0498735f`; [#1664](https://github.com/miztiik/yen-idhazh/pull/1664)
+  is open. The current conflict-resolution candidate and targeted check
+  results are recorded in the Row 11 execution report. No merge of the phase
+  PR was performed.
 
 ## 13 - Row #12 - Explicit controls and measurement behavior
 
@@ -1056,136 +1077,6 @@ counts use the untouched archive and the completed branch instead.
   does not merge the PR. The frozen full successor releases the serialized
   editor to Row 17 independently of checks, push or CI.
 - **Dependencies:** Row 1.
-
-## 12 - Row #11 - Contract tests prove authored and constructed behavior
-
-- **Scope:** Replace assertions tied to current committed values with bounded
-  authored or constructed inputs in seven contract-test modules. Preserve the
-  contract behavior, historical acceptance, path rules and reader bindings.
-- **Files touched:**
-  - `backend/tests/contracts/test_retention_knobs.py`
-  - `backend/tests/contracts/test_model_registry.py`
-  - `backend/tests/contracts/test_ledger_registry.py`
-  - `backend/tests/contracts/test_taxonomy_and_prompts.py`
-  - `backend/tests/contracts/test_sources_and_marks.py`
-  - `backend/tests/contracts/test_ledger_index.py`
-  - `backend/tests/contracts/test_source_classification_binding.py`
-  - `frontend/tests/source-classification-binding.spec.ts`
-  - `frontend/scripts/test-groups.ts`
-- **Changes and acceptance proof:**
-  - Compare the loaded rest threshold with the file value, keep the tuned
-    threshold and real `after_failures` caller, and remove only the committed
-    literal. Construct a finite published window one day beyond the authored
-    first-sight window; require the loaded value and relation, not `730`.
-    Keep named retired-key refusals and both the moved key and successor file
-    in the prune refusal; remove one duplicate read of the same config file.
-  - Hash the copied model-file bytes independently with SHA-256, then prove
-    unchanged stability and changed-byte sensitivity. Remove the stale-teacher
-    premise while retaining its named destination error. Keep
-    `declared_for == sha256` for every file in the bounded `MODEL_FILES` list.
-  - Construct a nonalphabetical mixed-consent registry with an independent
-    expected order. Explicitly enable consent when proving paused and retired
-    family behavior. Construct every grain's valid stem/suffix pair and both
-    refused edits instead of scanning committed registry entries.
-  - Require missing definitions to be refused for active verticals, lenses
-    and events, and keep the prompt-block proof that all active definitions
-    appear while draft and retired entries do not. Use the bounded
-    `definitions-a` taxonomy to prove a published retired lens still reads
-    while its tombstone stops new matching.
-  - Require the compact-index decoded model to equal the object written, not
-    only to serialize to stable text. Compare required TypeScript field names
-    and types with the live Python JSON Schema using the TypeScript compiler
-    API; an optional marker is refused because serialized output emits the
-    field. Require an invalid property name in the refusal, and test omitted
-    defaults beside separately authored source kind and entity tier values.
-- **Gates:** Run the shared changed-test selector over the seven backend
-  modules and the frontend type-binding logic test, with Ruff and mypy.
-  In disposable archive copies, fault each preserved behavior and record its
-  full failing pytest or frontend test identifier below. The frontend change
-  adds only a contract test and selector inventory entry; no production,
-  config, committed data, persisted shape, emitted-byte or acceptance change.
-- **Dependencies:** Row 1. Serialize edits to this shared plan.
-- **Proof record:** Disposable archive faults each failed the named case; no
-  temporary fault changed this worktree.
-  - Hard-coding the plan caller failed
-    `backend/tests/contracts/test_retention_knobs.py::test_the_rest_rule_reads_the_knob_the_committed_config_spells`.
-    Aliasing the published window to the first-sight field failed
-    `backend/tests/contracts/test_retention_knobs.py::test_the_published_window_is_unbounded_or_outlives_the_first_sight_store`.
-    Truncating the prune successor path failed both
-    `backend/tests/contracts/test_retention_knobs.py::test_a_prune_number_left_in_finetune_is_sent_to_the_squash_declaration[prune_every_days]`
-    and
-    `backend/tests/contracts/test_retention_knobs.py::test_a_prune_number_left_in_finetune_is_sent_to_the_squash_declaration[prune_keep_days]`.
-    Replacing the named retired-key refusal with a generic error failed all
-    six cases of
-    `backend/tests/contracts/test_retention_knobs.py::test_a_config_still_spelling_a_retired_knob_is_refused_by_name`:
-    `[models-visual_planner]`,
-    `backend/tests/contracts/test_retention_knobs.py::test_a_config_still_spelling_a_retired_knob_is_refused_by_name[models-route]`,
-    `backend/tests/contracts/test_retention_knobs.py::test_a_config_still_spelling_a_retired_knob_is_refused_by_name[run-two_calls_per_item]`,
-    `backend/tests/contracts/test_retention_knobs.py::test_a_config_still_spelling_a_retired_knob_is_refused_by_name[run-visual_planner_budget_minutes]`,
-    `backend/tests/contracts/test_retention_knobs.py::test_a_config_still_spelling_a_retired_knob_is_refused_by_name[run-route_budget_minutes]`
-    and
-    `backend/tests/contracts/test_retention_knobs.py::test_a_config_still_spelling_a_retired_knob_is_refused_by_name[finetune-student]`.
-  - Normalizing model-file bytes failed
-    `backend/tests/contracts/test_model_registry.py::test_the_model_file_bytes_are_digested_with_the_rest_of_the_config`.
-    A stale pairing in an inactive named model file failed
-    `backend/tests/contracts/test_model_registry.py::test_every_model_file_loads_and_not_only_the_one_the_pointer_names`.
-    Repointing the stale teacher to the wrong destination failed
-    `backend/tests/contracts/test_model_registry.py::test_the_teacher_names_the_slot_the_model_file_declares`.
-  - Reversing registry family order failed
-    `backend/tests/contracts/test_ledger_registry.py::test_explorer_catalog_derives_eligible_names_from_registry_order`.
-    Tying explicit consent to family status failed both
-    `backend/tests/contracts/test_ledger_registry.py::test_explorer_consent_is_independent_of_family_lifecycle[paused]`
-    and
-    `backend/tests/contracts/test_ledger_registry.py::test_explorer_consent_is_independent_of_family_lifecycle[retired]`.
-    Removing the flat stem failed
-    `backend/tests/contracts/test_ledger_registry.py::test_a_grain_accepts_its_path_fields_and_refuses_the_other_shapes[flat-score-distribution-.json]`;
-    requiring a tree suffix failed the same test's
-    `[tree-None-None]` case.
-  - Removing active-definition validation failed all three constructed cases
-    `backend/tests/contracts/test_taxonomy_and_prompts.py::test_an_offered_entry_without_a_definition_is_refused[verticals]`,
-    `backend/tests/contracts/test_taxonomy_and_prompts.py::test_an_offered_entry_without_a_definition_is_refused[lenses]`
-    and
-    `backend/tests/contracts/test_taxonomy_and_prompts.py::test_an_offered_entry_without_a_definition_is_refused[events]`.
-    Omitting an active event and admitting a draft
-    each failed
-    `backend/tests/contracts/test_taxonomy_and_prompts.py::test_a_draft_or_retired_entry_reaches_no_prompt`.
-    Making a retired lens matchable failed
-    `backend/tests/contracts/test_sources_and_marks.py::test_a_published_item_carrying_a_retired_lens_still_reads`.
-  - Omitting compact-index state from a stable writer, with an empty entry in
-    the disposable input, passed text idempotence but failed object equality in
-  `backend/tests/contracts/test_ledger_index.py::test_a_compact_index_writes_one_entry_a_line_and_reads_back_what_it_wrote`.
-    The TypeScript binding compares required interface AST fields with the
-    live Python JSON Schema. Boolean-to-string and optional-field AST
-    mutations fail
-    `frontend/tests/source-classification-binding.spec.ts::the Python source-kind binding refuses an optional TypeScript field`
-    and
-    `frontend/tests/source-classification-binding.spec.ts::the Python type binding refuses a boolean field changed to string`.
-    Accepting unknown properties failed
-  `backend/tests/contracts/test_source_classification_binding.py::test_invalid_registry_refuses_loading_by_name[invalid-property-invented_rule]`.
-    Overwriting the authored source kind and entity tier each failed
-  `backend/tests/contracts/test_source_classification_binding.py::test_configured_defaults_apply_only_to_authored_config`.
-- **Gate record:** The shared selector chose the seven backend modules and all
-  frontend groups because the selector inventory changed. Whitespace, Ruff,
-  mypy, Svelte checks, test-tooling checks and the canary build passed. Pytest
-  passed 225 cases, logic passed 1,501, and browser checks passed 113; none
-  failed or skipped. Record:
-  `backend/var/checks/cdbdb0c4954ddedb8a33c187ae08431d04bd5d604d09f1b73cc8362d5b53fb60.json`.
-  That run predates the optional-field proof and the duplicate-read cleanup.
-  The final targeted results are 27 passing retention tests and 3 passing
-  source-kind binding tests, including both bounded type faults; `npm run check`
-  found zero errors and warnings. The merge itself did not repeat local
-  application gates. PR checks `scope`, `gates`, `browser` and `site` passed at
-  the prior Row 11 head; `robots` was skipped.
-- **Plan integration:** The serialized slot is released. Row 5 and Row 9
-  delivery receipts, Row 10's merged receipt and the exact owner ruling in A5
-  are retained. D3 remains open; Row 10 is not a dependency.
-- **Delivery:** Tests and the initial plan update are committed in `62968e83a`
-  and `26ac9f90c`; current main, including Row 10's merge receipt, is merged
-  into this branch without rewriting history. The AST binding proof is
-  committed at `f0498735f`; [#1664](https://github.com/miztiik/yen-idhazh/pull/1664)
-  is open. The current conflict-resolution candidate and targeted check
-  results are recorded in the Row 11 execution report. No merge of the phase
-  PR was performed.
 
 ## See also
 
