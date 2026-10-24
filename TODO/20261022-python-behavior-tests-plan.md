@@ -76,7 +76,7 @@ Table D - PR outcomes
 | D18 | 18 | Workflow checks reject supported broken inputs | 1, 22 | Q | IN-FLIGHT | strengthen-workflow-proof-checks | - | - |
 | D19 | 19 | Independent source-health publication proofs | 1 | R | DONE | prove-source-health-publication | [#1674](https://github.com/miztiik/yen-idhazh/pull/1674), merged at `e7f46b2317852ea5d3f212f83ea86ac51edc05ed` | - |
 | D20 | 20 | Prove reader output behavior | 1 | S | IN-FLIGHT | prove-reader-output-behavior | - | - |
-| D21 | 21 | Prove ledger dates and named-plan reads | 1 | T | IN-FLIGHT | prove-ledger-date-selection | [#1675](https://github.com/miztiik/yen-idhazh/pull/1675) | - |
+| D21 | 21 | Prove ledger dates and named-plan reads | 1 | T | DONE | prove-ledger-date-selection | [#1675](https://github.com/miztiik/yen-idhazh/pull/1675), merged at `31a689f073d602e75870f7fa48da72d3043f6c13` | - |
 | D22 | 22 | Configured council planning and collection job deadlines | 1 | U | IN-FLIGHT | configure-council-job-deadlines | - | - |
 | D23 | 23 | Independent qualification and planning controls | 1 | V | IN-FLIGHT | prove-planning-controls-independently | - | - |
 | D24 | 24 | Independent council test controls | 17 | W | IN-FLIGHT | prove-council-controls-independently | - | - |
@@ -1736,6 +1736,32 @@ Table I - Independent controls and expected faults
   Do not merge the Row 26 PR.
 - **Dependencies:** Row 21 owns the source prerequisite; Row 25 is the
   exact full-plan predecessor. Neither plan freeze waits for gates.
+
+- **Final local evidence:** After normal main integration at
+  `6f9a5d18d`, the three named modules collected and passed 67 cases.
+  All 61 original cases remain, accounting separately for Row 12's
+  main-delivered tokenizer-refusal rename; Row 26 adds six date cases.
+  Six copied production faults failed their intended assertions: lower
+  attempt settlement, local-day conversion, ignored operator date, removed
+  resolver call, naive callsite clock and local callsite clock. Every copied
+  module's import location was checked, each restored control passed, and
+  production source hashes matched after restoration. No collection failure
+  counts as a fault proof.
+  Removing an unregistered test marker then passed all six date cases with
+  no warnings; import spacing was normalized afterward. Ruff passed.
+  Mypy passed the initially changed three Python files and the binding
+  correction separately. The shared selector classified the utility as
+  unknown/shared and selected broad coverage; this row ran the focused
+  selection above and leaves the full suite to CI.
+- **Verified prerequisite and integration:** GitHub confirms Row 21 merged
+  at `31a689f073d602e75870f7fa48da72d3043f6c13` on
+  `2026-10-24T10:21:52Z`. Its `test_ledger.py` blob
+  `2312aab2e7fc587c7dd9a3be9ccf21bdb0e994de` matches the released source.
+  The normal merge retains every complete current-main Row 1-21 section
+  and its receipts, plus the complete later Row 22-26 sections and A5.
+  The historical 141,434-byte Row 26 freeze with SHA-256
+  `d969aaf615469d8b84e3298d861332428346aa9f5d706bea0a96d83acb54c833`
+  remains unchanged; this final evidence is not a replacement freeze.
 
 ## See also
 

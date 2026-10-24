@@ -9,8 +9,6 @@ import pytest
 
 from utilities.measure_budgets import Tokenizer, main, parse_args, resolve_measurement_date
 
-pytestmark = pytest.mark.unit
-
 
 @pytest.mark.parametrize(
     ("instant", "taken_on", "expected"),
