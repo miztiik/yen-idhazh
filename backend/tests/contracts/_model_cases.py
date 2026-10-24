@@ -8,4 +8,5 @@ MODEL_FILES: Final = (
     "ornith-1.5-9b-q5km.json",
     "qwen3.5-9b-q4km-thinking.json",
     "qwen3.5-9b-q4km.json",
+    "qwen3.8-9b-q5km-distill.json",
 )

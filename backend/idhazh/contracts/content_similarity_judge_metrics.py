@@ -64,6 +64,11 @@ class ContentSimilarityJudgeMetrics(JudgeConfigStamp, Contract):
     __schema_stem__: ClassVar[str] = "content-similarity-judge-metrics"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-24",
+            change="The Qwen 3.8 Distill Q5 model joins judge_model.",
+            why="A shipped model file can be recorded in a future judge verdict.",
+        ),
+        ChangelogEntry(
             version="2026-10-08",
             change="shard is renamed work_part_index. An old shard heading is read under it.",
             why="The ledger door writes its own shard cell on every row it files.",

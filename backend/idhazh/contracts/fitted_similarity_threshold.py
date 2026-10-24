@@ -93,6 +93,11 @@ class FittedSimilarityThreshold(Contract):
     __schema_stem__: ClassVar[str] = "fitted-similarity-threshold"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-24",
+            change="The Qwen 3.8 Distill Q5 model joins judge_model.",
+            why="A shipped model file can be recorded in a future judge verdict.",
+        ),
+        ChangelogEntry(
             version="2026-09-24",
             change="key_point_weight is gone. Its heading is carried and dropped on read.",
             why="The term shipped at a weight of zero and never moved a score.",
@@ -106,11 +111,6 @@ class FittedSimilarityThreshold(Contract):
             version="2026-09-19",
             change="smoothing_weight splits into fall_weight and rise_weight; max_up_step added.",
             why="The line now damps and caps both directions, so one number cannot carry it.",
-        ),
-        ChangelogEntry(
-            version="2026-09-18T12:00",
-            change="pairs_in_band counts the pairs the draw dealt, not the pairs in the band.",
-            why="The count before the budget is persisted nowhere, so nothing could write it.",
         ),
         ChangelogEntry(
             version="2026-09-18",
