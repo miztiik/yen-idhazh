@@ -33,7 +33,8 @@ import os
 import shutil
 import signal
 from collections.abc import Callable, Iterable, Iterator, Mapping
-from datetime import date as date_type, timedelta
+from datetime import date as date_type
+from datetime import timedelta
 from pathlib import Path
 from typing import Final
 
