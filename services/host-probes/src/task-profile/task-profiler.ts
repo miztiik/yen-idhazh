@@ -23,6 +23,18 @@ export type TaskProfileSession = {
   close: (outcome: TaskOutcome, reason?: TaskEndReason) => Promise<TaskProfile>;
 };
 
+async function withinDeadline<T>(work: Promise<T>, deadline: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      work,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), Math.max(0, deadline - performance.now()));
+      }),
+    ]);
+  } finally { clearTimeout(timer); }
+}
+
 export async function startTaskProfile(
   options: TaskProfiling, identity: TaskIdentity,
   controls: { signal?: AbortSignal; expiresAfterMs?: number } = {},
@@ -39,12 +51,19 @@ export async function startTaskProfile(
     server: options.server ?? null, context: options.context ?? {},
   });
   const worker = new Worker(new URL("./collector.worker.ts", import.meta.url), { workerData: input });
+  let terminating: ReturnType<Worker["terminate"]> | undefined;
+  const terminate = () => terminating ??= worker.terminate();
   type Ready = Pick<TaskProfileSession, "target" | "expires_at">;
   let ready: (value: Ready) => void;
   let failedStart: (error: Error) => void;
   const started = new Promise<Ready>((resolve, reject) => { ready = resolve; failedStart = reject; });
-  let finish: (result: TaskProfileResult) => void;
-  const finished = new Promise<TaskProfileResult>(resolve => { finish = resolve; });
+  let resolveFinished: (result: TaskProfileResult) => void;
+  const finished = new Promise<TaskProfileResult>(resolve => { resolveFinished = resolve; });
+  let completionDeadline: number | undefined;
+  const finish = (result: TaskProfileResult) => {
+    completionDeadline ??= performance.now() + input.config.lifecycle_timeout_ms;
+    resolveFinished(result);
+  };
   let received = false;
   const fail = (error: Error) => {
     received = true;
@@ -54,7 +73,7 @@ export async function startTaskProfile(
   worker.on("message", (raw: unknown) => {
     const message = CollectorMessageSchema.safeParse(raw);
     if (!message.success) { fail(new Error("Task collector returned invalid metadata")); return; }
-    if (message.data.type === "ready") ready(message.data);
+    if (message.data.type === "ready") ready({ target: message.data.target, expires_at: message.data.expires_at });
     else if (message.data.type === "rejected") fail(new ProcessPinError(message.data.reason));
     else { received = true; finish({ profile: message.data.profile }); }
   });
@@ -68,17 +87,30 @@ export async function startTaskProfile(
   if (controls.signal?.aborted) abort();
   let details: Ready;
   try { details = await started; }
-  catch (error) { await worker.terminate(); throw error; }
+  catch (error) {
+    try {
+      await withinDeadline(terminate(), performance.now() + input.config.lifecycle_timeout_ms,
+        "Task profile startup cleanup timed out");
+    } catch (cleanup) {
+      throw new AggregateError([error, cleanup], "Task profile startup and cleanup failed");
+    }
+    throw error;
+  }
   finally { clearTimeout(timeout); controls.signal?.removeEventListener("abort", abort); }
   const settled = (async (): Promise<TaskProfileResult> => {
     let result = await finished;
-    if ("profile" in result) {
-      try { await options.report(result.profile); }
-      catch (error) { result = { error: new Error("Task profile reporting failed", { cause: error }) }; }
-    }
-    try { await worker.terminate(); }
+    const deadline = completionDeadline ??= performance.now() + input.config.lifecycle_timeout_ms;
+    try { await withinDeadline(terminate(), deadline, "Task profile collector cleanup timed out"); }
     catch (error) {
       result = { error: new AggregateError("error" in result ? [result.error, error] : [error], "Task collector cleanup failed") };
+    }
+    if ("profile" in result) {
+      const profile = result.profile;
+      try {
+        await withinDeadline(Promise.resolve().then(() => options.report(profile)), deadline, "Task profile reporting timed out");
+      } catch (error) {
+        result = { error: error instanceof Error ? error : new Error("Task profile reporting failed", { cause: error }) };
+      }
     }
     return result;
   })();
@@ -87,10 +119,14 @@ export async function startTaskProfile(
     ...details, settled,
     close(outcome, end_reason = "task_settled") {
       closing ??= (async () => {
-        const timeout = setTimeout(() => finish({ error: new Error("Task profile collector shutdown timed out") }),
-          input.config.lifecycle_timeout_ms);
+        completionDeadline ??= performance.now() + input.config.lifecycle_timeout_ms;
+        const timeout = setTimeout(() => fail(new Error("Task profile collector shutdown timed out")),
+          Math.max(0, completionDeadline - performance.now()));
         try {
-          if (!received) worker.postMessage({ outcome, end_reason });
+          if (!received) {
+            try { worker.postMessage({ outcome, end_reason }); }
+            catch (error) { fail(new Error("Task profile close command failed", { cause: error })); }
+          }
           const result = await settled;
           if ("error" in result) throw result.error;
           return result.profile;

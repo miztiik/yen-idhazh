@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import {
   ArticleAssessmentRecordSchema, CandidateRejectionContract, CONTRACT_VERSION,
-  EditorialSelectionRowSchema, SourceRunRecordSchema,
+  EditorialSelectionContract, EditorialSelectionRowSchema, SourceRunRecordSchema,
   PLANNER_EXCLUSIONS_VERSION, EXTRACTION_QUALITY_VERSION, PreviousHarvestDiagnosticsSchema,
 } from "@idhazh/common-contracts";
 import type { LedgerCompletionEvidence } from "@idhazh/common-contracts";
@@ -27,7 +27,7 @@ import {
   ArticleAssessmentContract, DiversityMetricContract, DispatchContract, SourceRunContract, legacyAuditSchemas,
 } from "../src/metrics/audit-contracts";
 
-const selectionContract = { schema: EditorialSelectionRowSchema, schemaVersion: CONTRACT_VERSION };
+const selectionContract = EditorialSelectionContract;
 beforeAll(async () => { await initializeParquet(); });
 function evidence(ledger: LedgerCompletionEvidence["ledger"], written: PersistLedgerResult): LedgerCompletionEvidence {
   if (written.status === "skipped") throw new Error("Fixture completion ledger was skipped");
@@ -110,7 +110,10 @@ async function migrateAuditFixture<TLegacy extends object, TCurrent extends obje
   const input: unknown = await Bun.file(new URL(path, import.meta.url)).json();
   const row = legacySchema.parse(input);
   const written = await writeRows(root, ledger, day, legacySchema, [row], writer(run), "2026-10-20");
+  const pathBefore = join(root, written.files[0]!.path);
+  const originalBytes = await readFile(pathBefore);
   const loaded = await readWritten(root, ledger, day, currentContract, written);
+  expect(await readFile(pathBefore)).toEqual(originalBytes);
   expect(loaded.rows).toHaveLength(1);
   expect(loaded.rows[0]!.row).toMatchObject({ version: currentContract.schemaVersion });
   return loaded.rows[0]!.row;
@@ -174,6 +177,10 @@ test("recorded audit rows migrate through native Parquet without invented eviden
       root, day, run, "dispatches",
       "../../../tests/fixtures/contracts/feed-ingest-dispatch/one-article.json",
       legacyAuditSchemas.Dispatch, DispatchContract));
+    migrated.set("editorial-selections", await migrateAuditFixture(
+      root, day, run, "editorial-selections",
+      "../../../tests/fixtures/contracts/feed-ingest-editorial-selection/one-article.json",
+      EditorialSelectionContract.legacyVersions[CONTRACT_VERSION].schema, EditorialSelectionContract));
     migrated.set("rejections", await migrateAuditFixture(
       root, day, run, "rejections",
       "../../../tests/fixtures/contracts/feed-ingest-rejection/empty-feed.json",
@@ -182,6 +189,9 @@ test("recorded audit rows migrate through native Parquet without invented eviden
       timing_basis: "unavailable", timing_at: null, age_hours: null, max_age_hours: null, diagnostics: null,
     });
     expect(migrated.get("diversity")).toMatchObject({ top_k: null });
+    expect(migrated.get("editorial-selections")).toMatchObject({
+      version: EditorialSelectionContract.schemaVersion, ratings: { source_reliability: null },
+    });
     expect(migrated.get("source-runs")).toMatchObject({ date: day, run_id: run });
     const originalSource = await Bun.file(new URL(
       "../../../tests/fixtures/contracts/feed-ingest-source-run/one-observation.json", import.meta.url,
@@ -198,7 +208,7 @@ test("recorded audit rows migrate through native Parquet without invented eviden
     const { diagnostics: _diagnostics, ...previousAssessment } = ArticleAssessmentRecordSchema.parse(migrated.get("article-assessments"));
     const assessmentSchema = ArticleAssessmentContract.legacyVersions["2026-10-22"].schema;
     const assessmentFile = await writeRows(root, "article-assessments", day, assessmentSchema,
-      [{ ...previousAssessment, version: "2026-10-22" }], writer(run), "2026-10-22");
+      [assessmentSchema.parse({ ...previousAssessment, version: "2026-10-22" })], writer(run), "2026-10-22");
     const assessmentHistory = await readWritten(root, "article-assessments", day, ArticleAssessmentContract, assessmentFile);
     expect(assessmentHistory.rows[0]!.row.diagnostics).toBeNull();
     const previousRejection = CandidateRejectionContract.schema.parse(migrated.get("rejections"));
@@ -223,7 +233,7 @@ test("recorded audit rows migrate through native Parquet without invented eviden
       [priorAssessmentRow], writer(run), PLANNER_EXCLUSIONS_VERSION);
     const readAssessment = await readWritten(root, "article-assessments", day, ArticleAssessmentContract, priorAssessmentFile);
     expect(readAssessment.rows[0]!.row).toMatchObject({
-      version: EXTRACTION_QUALITY_VERSION, diagnostics: { extract_ms: 2, quality: null },
+      version: ArticleAssessmentContract.schemaVersion, diagnostics: { extract_ms: 2, quality: null },
     });
     expect(priorAssessment.schema.safeParse({
       ...priorAssessmentRow, diagnostics: { ...priorDiagnostics, quality: null },
@@ -248,7 +258,7 @@ test("native monthly and yearly precedence reads only the requested day's origin
     const original = raw.rows[0]!;
     const otherDay = "2026-10-20";
     const neighbor = await writeRows(root, "editorial-selections", otherDay, EditorialSelectionRowSchema,
-      [{ ...original.row, date: otherDay }], writer(input.fixture.run_id));
+      [{ ...original.row, date: otherDay }], writer(input.fixture.run_id), selectionContract.schemaVersion);
     const neighborRows = await readWritten(root, "editorial-selections", otherDay, selectionContract, neighbor);
     const indexes: Partial<Record<"daily" | "monthly" | "yearly", string>> = {};
     const daily = await compactSelections(root, input, raw.rows, "daily");

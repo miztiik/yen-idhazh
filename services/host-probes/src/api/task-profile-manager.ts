@@ -94,14 +94,14 @@ export class TaskProfileManager {
       result: null, retainUntil: null, cacheStarting: null, cache: null, cacheResult: null,
     };
     this.entries.set(handle, entry);
-    entry.starting = startTaskProfile({
-      config: this.config, context: this.options.context ?? {}, report: this.options.report,
-      target: input.target, ...(input.server === undefined ? {} : { server: input.server }),
-    }, input.identity, {
-      signal: signal === undefined ? entry.abort.signal : AbortSignal.any([signal, entry.abort.signal]),
-      expiresAfterMs: this.config.task_profile.profile_handle_ttl_ms,
-    });
     try {
+      entry.starting = startTaskProfile({
+        config: this.config, context: this.options.context ?? {}, report: this.options.report,
+        target: input.target, ...(input.server === undefined ? {} : { server: input.server }),
+      }, input.identity, {
+        signal: signal === undefined ? entry.abort.signal : AbortSignal.any([signal, entry.abort.signal]),
+        expiresAfterMs: this.config.task_profile.profile_handle_ttl_ms,
+      });
       const session = await entry.starting;
       if (session === null) throw new Error("Enabled task profile did not start");
       entry.session = session;
@@ -148,7 +148,7 @@ export class TaskProfileManager {
     if (!this.config.task_profile.enabled) return { status: "disabled", reason: "configured_off" };
     this.prune();
     const entry = this.entries.get(input.handle);
-    if (entry === undefined) throw new TaskProfileCommandError(404, "Unknown or evicted task profile handle");
+    if (entry === undefined) throw new TaskProfileCommandError(404, "Unknown or removed task profile handle");
     const profile = await this.closeEntry(entry, input.outcome, "explicit_stop");
     return StopTaskProfileResponseSchema.parse({
       status: "stopped", handle: input.handle, end_reason: profile.end_reason, profile,

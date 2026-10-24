@@ -11,6 +11,7 @@ from idhazh.contracts.base import Contract
 from idhazh.contracts.file_envelope import FileEnvelope
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.ledger import keys, paths
+from idhazh.ledger.arrow_schema import ColumnType, LogicalType
 from idhazh.ledger.persist import file_columns
 
 _STATE_DIR: Final = "state"
@@ -119,10 +120,45 @@ def _add_history(
 
 def _contract_schema(
     model: type[Contract], *, envelope_version: str | None = None
-) -> Any:
+) -> tuple[Any, dict[str, ColumnType | LogicalType]]:
     from idhazh.ledger import parquet
 
-    return parquet.schema_of(file_columns(model, envelope_version=envelope_version))
+    columns = file_columns(model, envelope_version=envelope_version)
+    return parquet.schema_of(columns), {column.name: column.type for column in columns}
+
+
+def _matches_older_type(
+    logical: ColumnType | LogicalType, expected: Any, actual: Any,
+) -> bool:
+    """Allow absent nullable children, not changed existing types, in an older file."""
+    if expected.equals(actual):
+        return True
+    if isinstance(logical, ColumnType) or type(expected) is not type(actual):
+        return False
+    if logical.kind == "struct":
+        stored = [actual.field(index) for index in range(actual.num_fields)]
+        names = [field.name for field in stored]
+        held = {field.name: field for field in stored}
+        if names != [field.name for field in logical.fields if field.name in held]:
+            return False
+        for field in logical.fields:
+            if field.name not in held:
+                if not field.nullable:
+                    return False
+                continue
+            actual_field = held[field.name]
+            if actual_field.nullable != field.nullable or not _matches_older_type(
+                field.type, expected.field(field.name).type, actual_field.type,
+            ):
+                return False
+        return True
+    if logical.kind == "list":
+        if logical.item_type is None:
+            raise TypeError("Declared list has no item type")
+        return bool(expected.value_field.nullable == actual.value_field.nullable) and (
+            _matches_older_type(logical.item_type, expected.value_type, actual.value_type)
+        )
+    return False
 
 
 def _check_file(
@@ -137,7 +173,7 @@ def _check_file(
 
     metadata, actual = parquet.read_footer_schema(path)
     envelope = FileEnvelope.from_metadata(metadata)
-    expected = _contract_schema(model, envelope_version=envelope.version)
+    expected, logical_types = _contract_schema(model, envelope_version=envelope.version)
     faults: list[_Fault] = []
     file_stamp = envelope.row_schema_version
     if file_stamp > contract_stamp:
@@ -190,7 +226,13 @@ def _check_file(
                 )
             )
     for name in sorted(expected_names & actual_names):
-        if not expected.field(name).type.equals(actual.field(name).type):
+        expected_type = expected.field(name).type
+        actual_type = actual.field(name).type
+        matches = (
+            _matches_older_type(logical_types[name], expected_type, actual_type)
+            if file_stamp < contract_stamp else expected_type.equals(actual_type)
+        )
+        if not matches:
             faults.append(
                 _Fault(
                     kind="F2",
@@ -239,7 +281,7 @@ def check(site_tree: Path, published: Sequence[LedgerName]) -> int:
             )
             continue
         contracted_ledgers += 1
-        expected = _contract_schema(model)
+        expected, _ = _contract_schema(model)
         contract_stamp = model.schema_version()
         current = 0
         history: dict[str, _History] = {}

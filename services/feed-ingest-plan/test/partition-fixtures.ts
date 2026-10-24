@@ -27,10 +27,11 @@ export function writer(runId: string, attempt = 1, shard = 0): WriterIdentity {
   });
 }
 export async function fixtureInput(root: string, options: { count?: number; freshness?: number; words?: number[] } = {}) {
-  const [fixture, authored, taxonomy] = await Promise.all([
+  const [fixture, authored, taxonomy, clock] = await Promise.all([
     Bun.file(new URL("../../../tests/fixtures/feed-ingest-plan/ledger-history.json", import.meta.url)).json() as Promise<HistoryFixture>,
     Bun.file(new URL("../../../config/feed-ingest-plan.json", import.meta.url)).json(),
     Bun.file(new URL("../../../config/taxonomy.json", import.meta.url)).json(),
+    Bun.file(new URL("../../../config/idhazh.json", import.meta.url)).json(),
   ]);
   const planning = loadPlanningConfig({
     ...authored, vertical_overrides: {},
@@ -84,7 +85,7 @@ export async function fixtureInput(root: string, options: { count?: number; fres
       },
     })),
     planning, opportunity: { covered_event_clusters: null, underrepresented_verticals: null, origin: null },
-    observed_at: fixture.observed_at,
+    observed_at: fixture.observed_at, reliability_floor: clock.collect.reliability_floor,
   });
   const persisted = await persistPortfolio(curation, {
     outputRoot: root, writerContext: writer(fixture.run_id), ledgerSettings: settings, date: fixture.date,

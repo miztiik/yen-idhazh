@@ -2,7 +2,7 @@
 import { compareArticle } from "./quality-decoupler";
 import { compareStory } from "./story-evidence";
 import type { StoryComparison } from "./story-evidence";
-import type { PortfolioArticle } from "./portfolio-input";
+import type { PortfolioArticle, ReliabilityControls } from "./portfolio-input";
 
 export type CarrierGroup = Readonly<{
   representative: PortfolioArticle;
@@ -16,10 +16,10 @@ export type CarrierSuppression = Readonly<{
   reason: "DUPLICATE_CANONICAL_URL" | "REPLACED_BY_CARRIER";
 }>;
 
-export function groupCarriers(articles: readonly PortfolioArticle[]) {
+export function groupCarriers(articles: readonly PortfolioArticle[], controls: ReliabilityControls) {
   const groups: { members: PortfolioArticle[]; comparisons: StoryComparison[] }[] = [];
   const comparisons: StoryComparison[] = [];
-  for (const article of [...articles].sort(compareArticle)) {
+  for (const article of [...articles].sort((left, right) => compareArticle(left, right, controls))) {
     let chosen: typeof groups[number] | undefined;
     let evidence: StoryComparison[] = [];
     for (const group of groups) {

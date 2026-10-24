@@ -2,9 +2,9 @@
 import { resolve } from "node:path";
 import { z } from "zod";
 import {
-  ArticleAssessmentRecordSchema, CONTRACT_VERSION, DiversityMetricRowSchema,
+  ArticleAssessmentRecordSchema, DiversityMetricRowSchema,
   LedgerCompletionEvidenceSchema, WriterIdentitySchema, CandidateRejectionContract,
-  EditorialSelectionRowSchema,
+  EditorialSelectionContract,
   RunIdSchema, NonEmptySchema, Sha256Schema, FeedMetricsConfigSchema,
 } from "@idhazh/common-contracts";
 import type { LedgerCompletionEvidence, WriterIdentity, RowIdentity } from "@idhazh/common-contracts";
@@ -130,9 +130,8 @@ export async function recordPlanningMetrics(
   await readWritten(result.files.harvest_rejections, "rejections", rejectionContract, result.evidence.harvest.rejections, inputs, result);
   await readWritten(result.files.screening_rejections, "rejections", rejectionContract, result.evidence.screening.rejections, inputs, result);
   await readWritten(result.files.curation_rejections, "rejections", rejectionContract, result.evidence.curation.rejections, inputs, result);
-  const selections = await readWritten(result.files.selections, "editorial-selections", {
-    schema: EditorialSelectionRowSchema, schemaVersion: CONTRACT_VERSION,
-  }, result.evidence.curation.rows, inputs, result);
+  const selections = await readWritten(result.files.selections, "editorial-selections",
+    EditorialSelectionContract, result.evidence.curation.rows, inputs, result);
   const dispatches = await readWritten(result.files.dispatches, "dispatches", {
     ...DispatchContract,
   }, result.evidence.partition.dispatches, inputs, result);

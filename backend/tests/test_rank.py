@@ -16,6 +16,8 @@ from __future__ import annotations
 import json
 import logging
 import re
+import socket
+import sys
 from dataclasses import replace
 from itertools import pairwise
 from typing import Any, Final
@@ -1000,29 +1002,59 @@ def test_a_cluster_of_three_keeps_only_the_strongest_telling() -> None:
 
 
 def test_the_encoder_finds_a_repeat_and_reaches_no_network() -> None:
-    """The pass over the committed ONNX encoder: two sources spelling one headline
-    embed to the same vector and the weaker telling is recorded. The encoder is a
-    local file, so this reaches no network (Guardrail #7).
-    """
-    embedder = Embedder(REPO_ROOT, AssistConfig())
-    assert embedder.available, "the committed ONNX encoder must be present for this test"
-    embedder.load()
-    headline = "Grid restored after a day-long outage"
-    strong = _planned("ai", 1, source_id="alpha", rank_score=10.0, title=headline)
-    weak = _planned("ai", 2, source_id="beta", rank_score=5.0, title=headline)
-    text_strong = dedup_text(strong.title, None)
-    text_weak = dedup_text(weak.title, None)
-    assert text_strong is not None and text_weak is not None
-    vectors = dict(
-        zip(
-            [strong.item_id, weak.item_id],
-            embedder.encode([text_strong, text_weak]),
-            strict=True,
+    """The real local encoder finds the weaker repeat while socket I/O is refused."""
+    attempts: list[str] = []
+    guarding = True
+
+    def refuse_network(event: str, _args: tuple[Any, ...]) -> None:
+        if guarding and event in {
+            "socket.connect",
+            "socket.getaddrinfo",
+            "socket.gethostbyname",
+            "socket.gethostbyaddr",
+            "socket.getnameinfo",
+            "socket.sendto",
+            "socket.sendmsg",
+        }:
+            attempts.append(event)
+            raise AssertionError(f"encoder attempted network I/O: {event}")
+
+    sys.addaudithook(refuse_network)
+    try:
+        with socket.socket() as connection:
+            with pytest.raises(
+                AssertionError, match=r"encoder attempted network I/O: socket\.connect"
+            ):
+                connection.connect(("192.0.2.1", 443))
+        with pytest.raises(
+            AssertionError, match=r"encoder attempted network I/O: socket\.getaddrinfo"
+        ):
+            socket.getaddrinfo("encoder-test.invalid", 443)
+        assert attempts == ["socket.connect", "socket.getaddrinfo"]
+        attempts.clear()
+
+        embedder = Embedder(REPO_ROOT, AssistConfig())
+        assert embedder.available, "the committed ONNX encoder must be present for this test"
+        embedder.load()
+        headline = "Grid restored after a day-long outage"
+        strong = _planned("ai", 1, source_id="alpha", rank_score=10.0, title=headline)
+        weak = _planned("ai", 2, source_id="beta", rank_score=5.0, title=headline)
+        text_strong = dedup_text(strong.title, None)
+        text_weak = dedup_text(weak.title, None)
+        assert text_strong is not None and text_weak is not None
+        vectors = dict(
+            zip(
+                [strong.item_id, weak.item_id],
+                embedder.encode([text_strong, text_weak]),
+                strict=True,
+            )
         )
-    )
-    findings = duplicates_within_plan([strong, weak], vectors, similarity_min=0.94)
-    assert [finding.item.item_id for finding in findings] == [weak.item_id]
-    assert findings[0].similarity == pytest.approx(1.0, abs=1e-6)
+        findings = duplicates_within_plan([strong, weak], vectors, similarity_min=0.94)
+        assert [finding.item.item_id for finding in findings] == [weak.item_id]
+        assert findings[0].similarity == pytest.approx(1.0, abs=1e-6)
+        assert attempts == [], "even a caught network refusal must fail the encoder test"
+    finally:
+        guarding = False
 
 
 # --- the record-only wiring: what it writes down, and what it never cuts ------

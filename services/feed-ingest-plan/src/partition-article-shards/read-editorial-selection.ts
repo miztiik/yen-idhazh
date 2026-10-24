@@ -1,7 +1,7 @@
 /** Which validated current or proven historical selections retain their original article content? */
 import { isDeepStrictEqual } from "node:util";
 import { join } from "node:path";
-import { CONTRACT_VERSION, EditorialSelectionRowSchema } from "@idhazh/common-contracts";
+import { EditorialSelectionContract, EditorialSelectionRowSchema } from "@idhazh/common-contracts";
 import type { FeedIngestCandidate, WriterIdentity } from "@idhazh/common-contracts";
 import type { PersistLedgerResult } from "@idhazh/ledger-file-writer";
 import type { CurationResult } from "../curate-article-portfolio/editorial-selection";
@@ -22,9 +22,7 @@ export async function readCurrentSelections(input: Readonly<{
   if (input.writer.shard !== 0 || input.writer.run_id !== input.context.run_id) throw new Error("Current selections require their unsharded planning writer");
   const rows = [];
   for (const committed of input.persisted.files) {
-    const file = await readLedgerParquet(join(input.outputRoot, committed.path), "editorial-selections", {
-      schema: EditorialSelectionRowSchema, schemaVersion: CONTRACT_VERSION,
-    });
+    const file = await readLedgerParquet(join(input.outputRoot, committed.path), "editorial-selections", EditorialSelectionContract);
     if (file.envelope.tier !== "raw" || file.envelope.covers !== input.context.date
       || committed.covers !== file.envelope.covers || !isDeepStrictEqual(file.envelope.identity, input.writer)
       || file.envelope.identity.shard !== 0 || file.envelope.file_id !== committed.file_id

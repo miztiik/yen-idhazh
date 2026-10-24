@@ -4,8 +4,9 @@
 
 Which local HTTP commands measure one process for an operator-owned task?
 The Bun host probe includes PID CPU and optional process and machine RAM.
-Optional [cache probes](host-cache-probes.md) add exact last-level-cache
-event counts to this same task lifetime and a separate native latency command.
+Optional [cache probes](host-cache-probes.md) attach exact last-level-cache
+events to this same handle lifetime; their separate latency command measures
+an owned native benchmark, not the caller's task CPU.
 It samples until explicit stop, process exit, process reuse, service shutdown
 or the declared safety expiry. CPU windows and polling cadence do not end
 a task. [Measurement scopes and units](host-metrics.md#whole-task-typescript-samples)
@@ -23,7 +24,8 @@ Unknown fields fail. No command accepts a path, executable, URL, proc root,
 configuration override or process name to search. Task names, identity and
 PID pins must come from the operator, never fetched article text.
 Linux writes process identity and counters to `/proc/<pid>/stat`.
-The operator supplies both the requested PID and its kernel start ticks.
+The operator supplies both the requested PID and its kernel start ticks,
+the process start-time counter in that file.
 The start ticks distinguish a reused PID from the original process.
 
 `GET /api/2026-10-20/sample` remains the independent single-interval machine
@@ -61,8 +63,8 @@ Success returns HTTP 200 with `status: "started"`, that `handle`,
 the verified `target` and `expires_at`, a UTC instant.
 The caller starts its actual work only after this response.
 
-PID and start ticks are checked before collector startup and again in the
-collector's opening observation. A stale or unverifiable pin returns 409.
+The target PID and start ticks are checked before collector startup and again
+in the collector's opening observation. A stale or unverifiable pin returns 409.
 A caller that aborts startup receives no usable handle; the collector is
 closed before startup cleanup returns. Failed startup releases its reserved
 capacity.
@@ -82,7 +84,7 @@ capacity.
 still alive to obtain its closing CPU counters. The reply has HTTP 200,
 `status: "stopped"`, the `handle`, `end_reason` and validated `profile`.
 Concurrent and repeated stops return the same result while retained;
-the first stop owns the outcome.
+the first closing event owns the result.
 
 Normal HTTP stop uses `end_reason: "explicit_stop"`. A target exit or PID
 reuse closes the profile as `cancelled`, with `owner_exited` or `pid_reused`.
@@ -90,13 +92,12 @@ Safety expiry uses `cancelled` and `expired`, not successful full-task
 completion. Service shutdown uses `cancelled` and `service_stopped`.
 No close operation signals or kills an observed target or server.
 
-Start and stop also return `cache_counters` separately from `profile`.
-Its default-off result does not start perf or read cache hardware.
-With cache counters enabled, an unavailable tool or hardware permission stays
-an explicit cache result; CPU/RAM profiling continues. The result retains its
-own actual interval and does not change the task's CPU window or polling.
-The separate `POST /api/2026-10-24/cache/latency` command accepts `{}` and
-does not create a task handle. Its bounds and units are in the cache reference.
+Start and stop return `cache_counters` beside the unchanged CPU/RAM `profile`.
+Both cache flags default to false. Counter refusal remains explicit and does
+not stop CPU/RAM profiling. The cache result retains its own actual interval.
+`POST /api/2026-10-24/cache/latency` accepts only `{}` and creates no task handle.
+Its native-tool, concurrency, body-time and working-set bounds are defined in
+the [cache reference](host-cache-probes.md).
 
 The instrument and completed handles exist only in this service process.
 There is no disk registry, host-ledger field or request-journal change.
@@ -107,7 +108,7 @@ stderr; none of these makes it durable request authority.
 ## Bounds and failures
 
 `config/host-probes.json` owns these controls. The task instrument remains
-default-off; its process-RAM and machine-RAM controls are separate.
+default-off; RAM follows the [measurement controls](host-metrics.md#whole-task-typescript-samples).
 Neither CPU windows nor polling intervals limit task lifetime.
 
 Table A - task HTTP bounds
@@ -117,6 +118,7 @@ Table A - task HTTP bounds
 | A1 | `task_profile.max_profile_handles` | 16 entries total, including starting, running, closing and completed profiles. Reservation precedes asynchronous startup. |
 | A2 | `task_profile.profile_handle_ttl_ms` | 21600000 milliseconds, or six hours, for the explicit HTTP safety expiry; completed results are retained for at most another such period. `expires_at` exposes the task deadline. |
 | A3 | `max_request_body_bytes` | 16384 bytes, or 16 KiB, per JSON command, including streamed bodies. |
+| A4 | `task_profile.lifecycle_timeout_ms` | 10000 milliseconds, or ten seconds, for collector startup and one closing deadline that includes shutdown and asynchronous reporting. It does not limit task duration. |
 
 New starts remove expired results, then the earliest-started completed result
 when space is needed. Active profiles are never evicted. Completed results
@@ -136,6 +138,8 @@ and an unknown or evicted handle returns 404. A stopping service refuses
 new starts with 503. Unexpected collection or report failures log an error
 and return 500, not a successful profile. Missing individual measurements
 stay null with a reason; a real zero PID CPU interval remains zero.
+The owned collector is terminated before a report callback is awaited.
+A callback that never settles fails stop and shutdown at the closing deadline.
 All responses are uncached.
 
 ## Embedded use

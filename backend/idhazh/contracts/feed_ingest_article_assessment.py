@@ -40,6 +40,11 @@ class ArticleAssessmentRecord(Contract):
     __schema_stem__: ClassVar[str] = "feed-ingest-article-assessment"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-24",
+            change="Record a separate measured source-reliability ranking penalty.",
+            why="Delivery history remains distinct from article and extraction evidence.",
+        ),
+        ChangelogEntry(
             version="2026-10-23",
             change="Retain measured extraction quality and implementation fingerprints.",
             why="Later decisions preserve original signals without inventing worker readings.",
@@ -55,17 +60,12 @@ class ArticleAssessmentRecord(Contract):
             why="Later decisions must not erase observed transport and extraction evidence.",
         ),
         ChangelogEntry(
-            version="2026-10-22",
-            change="Preserve signed age and the measured timing basis and instant.",
-            why="First sight and tolerated future publication times are distinct evidence.",
-        ),
-        ChangelogEntry(
             version="2026-10-20",
             change="Earlier changes are in this file's git history.",
             why="Git retains the original declaration.",
         ),
     )
-    version: Literal["2026-10-23"] = "2026-10-23"
+    version: Literal["2026-10-24"] = "2026-10-24"
     diagnostics: HarvestDiagnostics | None = None
 
     date: DateStamp
@@ -115,6 +115,13 @@ class ArticleAssessmentRecord(Contract):
     @classmethod
     def migrate_previous_timing(cls, value: Any) -> Any:
         if isinstance(value, dict) and value.get("version") in {
+            "2026-10-20", "2026-10-22", "2026-10-22T18:15", "2026-10-22T20:30",
+            "2026-10-23",
+        }:
+            scores = value.get("score_evidence")
+            if isinstance(scores, dict) and scores.get("source_reliability") is not None:
+                raise ValueError("source reliability requires the declared score contract version")
+        if isinstance(value, dict) and value.get("version") in {
             "2026-10-20", "2026-10-22", "2026-10-22T18:15", "2026-10-22T20:30"
         }:
             diagnostics = value.get("diagnostics")
@@ -127,16 +134,19 @@ class ArticleAssessmentRecord(Contract):
                     "extraction quality requires the declared quality contract version"
                 )
         if isinstance(value, dict) and value.get("version") in {
-            "2026-10-22", "2026-10-22T18:15", "2026-10-22T20:30"
+            "2026-10-22", "2026-10-22T18:15", "2026-10-22T20:30", "2026-10-23"
         }:
-            if value.get("version") != "2026-10-22T20:30" and value.get("reason") in {
-                "ALREADY_PUBLISHED", "SETTLED_FAILURE", "BLOCKED_URL_MARKER"
-            }:
+            if (
+                value.get("version") not in {"2026-10-22T20:30", "2026-10-23"}
+                and value.get("reason") in {
+                    "ALREADY_PUBLISHED", "SETTLED_FAILURE", "BLOCKED_URL_MARKER"
+                }
+            ):
                 raise ValueError(
                     "planner exclusions require the declared exclusion "
                     "contract version"
                 )
-            return {**value, "version": "2026-10-23"}
+            return {**value, "version": "2026-10-24"}
         if not isinstance(value, dict) or value.get("version") != "2026-10-20":
             return value
         migrated = dict(value)
@@ -144,7 +154,7 @@ class ArticleAssessmentRecord(Contract):
             raise ValueError("legacy timing requires its recorded timestamp and clock")
         migrated["timing_at"] = migrated.pop("effective_published_at")
         migrated["timing_basis"] = migrated.pop("publication_clock")
-        migrated["version"] = "2026-10-23"
+        migrated["version"] = "2026-10-24"
         return migrated
 
     @model_validator(mode="after")

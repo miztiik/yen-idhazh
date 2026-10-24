@@ -19,13 +19,18 @@ import pytest
 
 from idhazh.assemble import leading_stories, subject_clusters
 from idhazh.config import load
+from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestRunRef, DigestVerticalRef
 from idhazh.contracts.eval_row import ConfidenceBand
 from idhazh.contracts.item_health import TimeSource
 from idhazh.contracts.knobs.placement import PlacementConfig
 from idhazh.contracts.knobs.ui import UiConfig
-from idhazh.contracts.taxonomy import SourceKind, Taxonomy
+from idhazh.contracts.run_plan import PlannedItem
+from idhazh.contracts.sources import SourceForm
+from idhazh.contracts.taxonomy import SourceKind, Taxonomy, VerticalDef
 from idhazh.contracts.watchlist import EntityDef, Watchlist
+from idhazh.discover import Candidate
+from idhazh.rank import plan_vertical
 
 #: The hour the block is chosen at. An hour after the default story appeared,
 #: so every story a test does not date itself sits inside the freshness
@@ -167,6 +172,7 @@ def test_the_block_holds_the_configured_count_and_never_more() -> None:
         for rank in range(2)
     ]
     assert len(choose(items)) == UiConfig().leading_stories
+    assert len(choose(items, leading_stories=3)) == 3
 
 
 def test_the_block_takes_the_strongest_stories_and_not_the_head_of_the_order() -> None:
@@ -198,20 +204,20 @@ def test_a_desk_may_not_hold_more_than_its_share() -> None:
     ] + five_desks()[1:]
     chosen = choose(items)
     assert sum(1 for item_id in chosen if item_id.startswith("ai-")) == UiConfig().leading_per_desk
+    capped = choose(items, leading_per_desk=1)
+    assert sum(1 for item_id in capped if item_id.startswith("ai-")) == 1
 
 
 def test_one_publication_may_hold_one_lead() -> None:
     """Otherwise a busy newsroom is the whole first screen."""
-    items = [
-        story(
-            f"{desk}-{index:010d}",
-            vertical=desk,
-            source_id="one-newsroom",
-            rank_score=2.0 - index / 10,
-        )
-        for index, desk in enumerate(DESKS)
-    ]
-    assert len(choose(items)) == 0, "one source cannot fill a block on its own"
+    items = five_desks()
+    items[0] = items[0].model_copy(update={"source_id": "one-newsroom"})
+    items[1] = items[1].model_copy(update={"source_id": "one-newsroom"})
+
+    chosen = choose(items)
+
+    assert len(chosen) == len(DESKS) - 1
+    assert sum(item_id in {items[0].item_id, items[1].item_id} for item_id in chosen) == 1
 
 
 def test_one_subject_may_hold_one_lead_however_many_desks_it_crosses() -> None:
@@ -220,36 +226,34 @@ def test_one_subject_may_hold_one_lead_however_many_desks_it_crosses() -> None:
     A running story crosses desks and sources, so the first three caps do not
     bound it: three of five would clear all of them.
     """
-    items = [
-        story(
-            f"{desk}-{index:010d}",
-            vertical=desk,
-            source_id=f"feed-{index}",
-            title="Nvidia does something",
-            rank_score=2.0 - index / 10,
-        )
-        for index, desk in enumerate(DESKS)
-    ]
-    assert len(choose(items, wl=REGISTRY)) == 0, "one subject cannot fill a block"
+    items = five_desks()
+    items[0] = items[0].model_copy(update={"title": "Nvidia does something"})
+    items[1] = items[1].model_copy(update={"title": "Nvidia reports a change"})
+
+    chosen = choose(items, wl=REGISTRY)
+
+    assert len({items[0].item_id, items[1].item_id} & set(chosen)) == 1
 
 
 def test_a_second_story_dated_yesterday_is_refused() -> None:
-    """One late arrival is a catch-up; five are yesterday's page.
-
-    With every story dated yesterday only one may lead, which puts the block
-    under its own minimum - so the day goes straight to the stream.
-    """
+    """One late arrival is a catch-up; a second is beyond today's allowance."""
     items = [
         story(
             f"{desk}-{index:010d}",
             vertical=desk,
             source_id=f"feed-{index}",
             rank_score=2.0 - index / 10,
-            published_at="2026-08-30T09:00:00Z",
+            published_at=(
+                "2026-08-30T09:00:00Z" if index < 2 else "2026-08-31T09:00:00Z"
+            ),
         )
         for index, desk in enumerate(DESKS)
     ]
-    assert choose(items) == []
+    chosen = choose(items)
+    yesterday = {
+        item.item_id for item in items if item.published_at == "2026-08-30T09:00:00Z"
+    }
+    assert len(set(chosen) & yesterday) == 1
     assert len(choose(items, lead_max_yesterday=5)) == UiConfig().leading_stories
 
 
@@ -262,7 +266,13 @@ def test_every_lead_names_a_story_the_day_holds() -> None:
 def test_two_builds_of_one_day_choose_the_same_five() -> None:
     """The tie-break is the item id, which is derived from the address."""
     items = five_desks()
-    assert choose(items) == choose(list(reversed(items)))
+    items[1] = items[1].model_copy(update={"rank_score": items[0].rank_score})
+
+    forward = choose(items)
+    backward = choose(list(reversed(items)))
+
+    assert forward == backward
+    assert forward.index(items[0].item_id) < forward.index(items[1].item_id)
 
 
 # --- age, read at the hour the block is chosen ------------------------------
@@ -334,6 +344,47 @@ def test_two_stories_of_one_age_keep_their_order_whatever_that_age_is() -> None:
         assert chosen.index("ai-0000000001") < chosen.index("energy-0000000002")
 
 
+def test_freshness_multiplies_the_rank_score() -> None:
+    placement = PlacementConfig(
+        freshness_offset_hours=0,
+        freshness_scale_hours=24,
+        freshness_decay_at_scale=0.5,
+    )
+    items = [
+        story(
+            "ai-0000000001",
+            source_id="feed-ai",
+            rank_score=3.0,
+            published_at="2026-08-30T10:00:00Z",
+        ),
+        story(
+            "energy-0000000002",
+            vertical="energy",
+            source_id="feed-energy",
+            rank_score=2.0,
+            published_at=NOW,
+        ),
+        story("world-0000000003", vertical="world", source_id="feed-world", rank_score=1.0),
+        story("india-0000000004", vertical="india", source_id="feed-india", rank_score=0.9),
+        story(
+            "business-economy-0000000005",
+            vertical="business-economy",
+            source_id="feed-business",
+            rank_score=0.8,
+        ),
+    ]
+    old_age_hours = 24.0
+    past_shoulder = max(0.0, old_age_hours - placement.freshness_offset_hours)
+    old_multiplier = placement.freshness_decay_at_scale ** (
+        (past_shoulder / placement.freshness_scale_hours) ** 2
+    )
+    assert 3.0 * old_multiplier < 2.0
+
+    chosen = choose(items, placement=placement)
+
+    assert chosen.index(items[1].item_id) < chosen.index(items[0].item_id)
+
+
 def test_the_evening_run_of_a_day_does_not_lead_on_the_morning_story() -> None:
     """The defect this closes, in the shape the row described it.
 
@@ -364,6 +415,148 @@ def test_the_weights_bind_and_the_top_story_is_not_the_top_rank_score() -> None:
     items[1] = items[1].model_copy(update={"also_covered_by": 4})
     assert choose(items)[0] == items[0].item_id
     assert choose(items, lead_also_covered_weight=0.1)[0] == items[1].item_id
+
+
+def test_rank_carriage_outranks_a_qualifying_shared_subject_in_the_block() -> None:
+    """The committed carriage step beats a smaller subject term in the real path."""
+    configured = load()
+    app = configured.app
+    ui = app.ui
+
+    def planned_story(
+        item_id: str,
+        *,
+        vertical: str,
+        url: str,
+        title: str,
+        source_ids: list[str],
+        feed_weight: float,
+    ) -> tuple[DigestItem, PlannedItem]:
+        candidates = [
+            Candidate(
+                canonical_url=url,
+                source_url=url,
+                url_key=derive_url_key(url),
+                source_id=source_id,
+                vertical=vertical,
+                tier=1,
+                source_form=SourceForm.ARTICLE,
+                title=title,
+                published_at=NOW,
+                weight=feed_weight,
+            )
+            for source_id in source_ids
+        ]
+        planned = plan_vertical(
+            VerticalDef(id=vertical, display_name=DESKS[vertical], min_feeds=1),
+            candidates,
+            config=app.collect,
+            eligible_feeds=len(source_ids),
+            now=NOW,
+        ).items
+        assert len(planned) == 1
+        ranked = planned[0]
+        assert ranked.carried_by == len(source_ids)
+        return (
+            story(
+                item_id,
+                vertical=vertical,
+                source_id=ranked.source_id,
+                title=ranked.title or title,
+                rank_score=ranked.rank_score,
+                carried_by=ranked.carried_by,
+                published_at=ranked.published_at,
+            ),
+            ranked,
+        )
+
+    extra, extra_ranked = planned_story(
+        "ai-0000000000",
+        vertical="ai",
+        url="https://extra.example.test/report",
+        title="A new chip order",
+        source_ids=["extra-feed-a", "extra-feed-b"],
+        feed_weight=0.9,
+    )
+    subject_entries = [
+        planned_story(
+            f"world-{index + 1:010d}",
+            vertical="world",
+            url=f"https://subject.example.test/report-{index}",
+            title=f"Nvidia reports an update {index}",
+            source_ids=[f"subject-feed-{index}"],
+            feed_weight=0.9,
+        )
+        for index in range(ui.lead_cluster_floor)
+    ]
+    subjects = [item for item, _ in subject_entries]
+    subject_ranks = [ranked for _, ranked in subject_entries]
+    neutral, neutral_ranked = planned_story(
+        "business-economy-0000000000",
+        vertical="business-economy",
+        url="https://neutral.example.test/report",
+        title="A report on business conditions",
+        source_ids=["neutral-feed"],
+        feed_weight=1.0,
+    )
+    items = [extra, *subjects, neutral]
+
+    def selected_ids(weights: UiConfig) -> list[str]:
+        return [
+            item.item_id
+            for item in leading_stories(
+                items,
+                date="2026-08-31",
+                watchlist=REGISTRY,
+                taxonomy=configured.taxonomy,
+                ui=weights,
+                placement=app.placement,
+                now=NOW,
+                desk_names=DESKS,
+            )
+        ]
+
+    selected = selected_ids(ui)
+    selected_without_subject_weight = selected_ids(
+        ui.model_copy(update={"lead_shared_subject_weight": 0.0})
+    )
+    subject_ids = {item.item_id for item in subjects}
+    assert selected[0] == extra.item_id
+    assert min(selected.index(item_id) for item_id in subject_ids if item_id in selected) < (
+        selected.index(neutral.item_id)
+    )
+    assert selected_without_subject_weight.index(neutral.item_id) < min(
+        selected_without_subject_weight.index(item_id)
+        for item_id in subject_ids
+        if item_id in selected_without_subject_weight
+    )
+
+    assert extra_ranked.carriage_step == app.collect.carriage_step
+    assert all(ranked.carriage_step == 0.0 for ranked in subject_ranks)
+    equal_terms = (
+        "authority_score",
+        "tier_score",
+        "feed_weight",
+        "feed_reliability",
+        "watchlist_bonus",
+        "lens_bonus",
+        "recency_bonus",
+    )
+    assert all(
+        getattr(extra_ranked, term) == getattr(subject_ranks[0], term)
+        for term in equal_terms
+    )
+    assert all(ranked.rank_score == subject_ranks[0].rank_score for ranked in subject_ranks)
+    assert all(neutral_ranked.rank_score > ranked.rank_score for ranked in subject_ranks)
+
+    cluster = next(
+        entry
+        for entry in subject_clusters(items, REGISTRY, taxonomy=configured.taxonomy)
+        if entry.entity == "nvidia"
+    )
+    assert cluster.qualifies(ui.lead_cluster_floor)
+    assert cluster.sources == {item.source_id for item in subjects}
+    assert ui.lead_shared_subject_weight > 0.0
 
 
 def test_every_weight_but_the_rank_score_at_zero_is_todays_order() -> None:
@@ -399,10 +592,16 @@ def test_a_story_the_pass_could_not_read_scores_no_corroboration() -> None:
     nobody found.
     """
     items = five_desks()
-    items[1] = items[1].model_copy(update={"also_covered_by": None})
-    items[2] = items[2].model_copy(update={"also_covered_by": 0})
+    items[1] = items[1].model_copy(update={"also_covered_by": None, "rank_score": 1.85})
+    items[2] = items[2].model_copy(update={"also_covered_by": 0, "rank_score": 1.9})
     weighted = choose(items, lead_also_covered_weight=0.1)
-    assert weighted == [item.item_id for item in items[: UiConfig().leading_stories]]
+    assert weighted == [
+        items[0].item_id,
+        items[2].item_id,
+        items[1].item_id,
+        items[3].item_id,
+        items[4].item_id,
+    ]
 
 
 # --- eligibility ------------------------------------------------------------
@@ -505,6 +704,10 @@ def test_an_excluded_story_is_still_in_the_day() -> None:
     """
     items = five_desks()
     items[0] = items[0].model_copy(update={"band": ConfidenceBand.LOW})
+    before = [
+        (item, item.model_dump(mode="python"))
+        for item in items
+    ]
     leads = leading_stories(
         items,
         date="2026-08-31",
@@ -515,6 +718,10 @@ def test_an_excluded_story_is_still_in_the_day() -> None:
         now=NOW,
         desk_names=DESKS,
     )
+    assert items == [item for item, _ in before]
+    assert [item.model_dump(mode="python") for item in items] == [
+        values for _, values in before
+    ]
     day = DigestDay(
         version=DigestDay.schema_version(),
         date="2026-08-31",
@@ -556,6 +763,49 @@ def test_a_subject_under_the_floor_earns_nothing() -> None:
     at_floor = subject_clusters(carriers("Nvidia", 3), REGISTRY, taxonomy=load().taxonomy)
     assert [cluster.qualifies(3) for cluster in at_floor] == [True]
 
+    items = [
+        story(
+            "ai-0000000000",
+            title="Nvidia reports a change",
+            rank_score=1.0,
+            source_id="feed-ai",
+        ),
+        story(
+            "energy-0000000001",
+            vertical="energy",
+            title="Nvidia announces a plan",
+            rank_score=0.9,
+            source_id="feed-energy",
+        ),
+        story(
+            "world-0000000002",
+            vertical="world",
+            title="A reactor is ordered",
+            rank_score=1.1,
+            source_id="feed-world",
+        ),
+        story(
+            "india-0000000003",
+            vertical="india",
+            title="A court hears a case",
+            rank_score=0.8,
+            source_id="feed-india",
+        ),
+        story(
+            "business-economy-0000000004",
+            vertical="business-economy",
+            title="A company reports results",
+            rank_score=0.7,
+            source_id="feed-business",
+        ),
+    ]
+    assert choose(
+        items,
+        wl=REGISTRY,
+        lead_cluster_floor=3,
+        lead_shared_subject_weight=0.2,
+    )[0] == items[2].item_id
+
 
 def test_one_source_filing_four_pieces_is_one_source() -> None:
     """Decision 2: one item per source per entity."""
@@ -588,7 +838,7 @@ def test_a_story_naming_two_subjects_takes_the_larger_weight_and_never_the_sum()
     that one weight is all it can buy: a rival scoring one weight plus a whisker
     higher still leads, which it could not if the two subjects were summed.
     """
-    weight = UiConfig().lead_shared_subject_weight
+    weight = 0.2
     both = story(
         "ai-0000000000",
         title="Nvidia and OpenAI announce a deal",
@@ -608,7 +858,10 @@ def test_a_story_naming_two_subjects_takes_the_larger_weight_and_never_the_sum()
         for index, entry in enumerate(carriers("OpenAI", 3))
     ]
     chosen = choose(
-        [both, rival, *carriers("Nvidia", 3), *openai_carriers], wl=REGISTRY, leading_min=1
+        [both, rival, *carriers("Nvidia", 3), *openai_carriers],
+        wl=REGISTRY,
+        leading_min=1,
+        lead_shared_subject_weight=weight,
     )
     assert chosen[0] == rival.item_id, (
         "a story naming two running subjects outranked a rival worth one weight "
@@ -652,36 +905,41 @@ def test_the_desk_sentence_is_only_true_of_the_desks_own_lead() -> None:
     """
     strongest = story("ai-0000000000", rank_score=3.0, source_id="feed-one")
     second = story("ai-0000000001", rank_score=2.5, source_id="feed-two")
-    told = reasons([strongest, second, *five_desks()[1:]])
+    told = reasons([strongest, second, *five_desks()[1:]], leading_stories=6)
     assert told[strongest.item_id] == "The lead story on our AI desk."
     assert second.item_id not in told
 
 
 def test_a_lead_that_cannot_say_anything_true_is_not_a_lead() -> None:
     weak = story("ai-0000000009", rank_score=0.1, source_id="feed-nine")
-    assert weak.item_id not in choose([weak, *five_desks()])
+    chosen = choose([*five_desks()[:4], weak], leading_per_desk=2)
+    assert len(chosen) == 4
+    assert weak.item_id not in chosen
 
 
-def test_a_count_reads_as_a_word_up_to_twelve_and_as_a_numeral_above_it() -> None:
+@pytest.mark.parametrize(
+    ("story_count", "expected"),
+    [
+        (12, "Twelve of today's stories are about OpenAI."),
+        (13, "13 of today's stories are about OpenAI."),
+    ],
+)
+def test_a_count_switches_from_a_word_to_a_numeral_at_thirteen(
+    story_count: int, expected: str
+) -> None:
     subject = story(
         "ai-0000000000", title="OpenAI does something", rank_score=3.0, source_id="lead-feed"
     )
     many = [
-        entry.model_copy(update={"item_id": f"india-{index:010d}", "vertical": "india"})
-        for index, entry in enumerate(carriers("OpenAI", 13))
+        entry.model_copy(update={"item_id": f"india-{100 + index:010d}", "vertical": "india"})
+        for index, entry in enumerate(carriers("OpenAI", story_count - 1))
     ]
     told = reasons([subject, *many, *five_desks()[1:]], wl=REGISTRY)
-    assert told[subject.item_id] == "14 of today's stories are about OpenAI."
+    assert told[subject.item_id] == expected
 
 
-def test_no_sentence_is_offered_for_recency_or_for_a_weighted_lens() -> None:
-    """Decision 11, as a check on what the block says rather than on a comment.
-
-    The rail already prints the time, and a weighted lens is an editorial
-    subsidy for an under-carried theme - a sentence about it would tell the
-    reader about our config rather than about the news. So a story whose only
-    distinguishing fact is that it is newer says nothing, and does not lead.
-    """
+def test_no_sentence_is_offered_for_recency() -> None:
+    """The rail already prints the time; being newer is not a reason to lead."""
     lead = story("ai-0000000000", rank_score=3.0, source_id="feed-one")
     newer = story(
         "ai-0000000001",
@@ -692,6 +950,26 @@ def test_no_sentence_is_offered_for_recency_or_for_a_weighted_lens() -> None:
     told = reasons([lead, newer, *five_desks()[1:]])
     assert told[lead.item_id] == "The lead story on our AI desk."
     assert newer.item_id not in told
+
+
+def test_a_weighted_signal_does_not_replace_a_true_desk_reason() -> None:
+    weighted = story(
+        "ai-0000000000",
+        rank_score=1.0,
+        source_id="feed-one",
+        carried_by=1,
+    ).model_copy(update={"also_covered_by": 4})
+    rival = story(
+        "energy-0000000001",
+        vertical="energy",
+        rank_score=1.1,
+        source_id="feed-two",
+    )
+    told = reasons(
+        [weighted, rival, *five_desks()[2:]],
+        lead_also_covered_weight=0.1,
+    )
+    assert told[weighted.item_id] == "The lead story on our AI desk."
 
 
 def test_the_front_page_vote_is_not_a_sentence() -> None:

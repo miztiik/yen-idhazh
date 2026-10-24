@@ -1,6 +1,6 @@
 # Selecting an editorial portfolio
 
-**Last Updated**: 2026-10-22
+**Last Updated**: 2026-10-24
 
 This page owns how the isolated TypeScript planner chooses articles from one
 screened run. Production digest planning is unchanged.
@@ -30,8 +30,35 @@ Operational reliability retains its success fraction, attempted-feed
 denominator and measured window. It is not multiplied into article quality.
 The base score is the sum of the screening stage's measured recency bonus and
 configured source authority: authority coefficient times source weight times
-the applied tier weight. Word count, byline presence and source kind are not
-model verdicts. Informative and suitability verdicts remain not assessed.
+the applied tier weight.
+
+The runner supplies the [native feed history](planner-feed-history.md) read
+from the planner's named `state/raw/feed-health/` files or their compact
+successors, then includes the current saved feed read. A productive read
+returned at least one item. The success fraction is productive reads divided
+by evidence-bearing attempts, not a census of every configured source or day.
+Its `window_days` is the configured recorded-day lookback; missing days do not
+become known empty days.
+
+When enabled, a separate source-reliability penalty reduces only source
+authority:
+
+```text
+production_factor = max(collect.reliability_floor, success_fraction)
+source_reliability_penalty = authority * (1 - production_factor)
+priority_score = base_article_score - source_reliability_penalty
+```
+
+The floor and window come from `config/idhazh.json`, which the operator edits.
+There is no new coefficient. The penalty applies once to an article, not once
+per carrier or outlet. Missing history has null history, factor and penalty,
+and makes no ranking change; it is not recorded as measured perfect health.
+Disabling the term retains known history and records a zero penalty.
+Conflicting native and caller-supplied history is refused, as is inconsistent
+history for two articles from one source.
+
+Word count, byline presence and source kind are not model verdicts.
+Informative and suitability verdicts remain not assessed.
 
 Publication timing comes from screening. An unknown publication time earns no
 invented recency bonus. A first-seen time remains first-seen in returned quality
@@ -45,7 +72,8 @@ the stored evidence.
 ## Opportunity before selection
 
 Canonical URL duplicates and supported carrier groups are reduced first.
-Each source's representatives are then sorted by base score, with candidate
+Carrier representatives and each source's remaining articles are ordered by
+priority score, including the separate reliability penalty, with candidate
 identity breaking ties. The source allowance is its configured base plus
 earned configured bonuses. Each bonus type is granted at most once:
 
@@ -80,7 +108,8 @@ when the candidate's known occurrence is in the supplied coverage set. Unknown
 occurrence or prior coverage makes it unavailable. It is not an inferred
 similarity score, entity match or claim that reporting verified a fact.
 
-The marginal score subtracts each available penalty from the base score.
+The marginal score subtracts the source-reliability penalty and each available
+set-dependent penalty from the unchanged base article score.
 Unavailable terms contribute nothing and retain their explicit status.
 Source kind has no eligibility rule, quota or authority shortcut. Its zero
 coefficient removes its influence.
@@ -148,8 +177,11 @@ relative to the caller's state-directory output root. Selection is
 unsharded; writer shard zero is provenance, not a worker assignment. Selected
 rows retain candidate identity, original source and labels, effective policy,
 positive rank, caller-supplied work estimate and the scores at their own
-selection step. Full article text is returned to the caller, not duplicated
-in this ledger.
+selection step. Their separate `source_reliability` evidence records the
+enabled state, source-authority contribution, configured floor, measured
+fraction, attempted-read denominator, window, factor and penalty. An article
+removed before greedy evaluation still has no invented greedy score.
+Full article text is returned to the caller, not duplicated in this ledger.
 
 Empty writes return explicit empty file lists. A skipped or failed write is
 an error, never a completed run. The audit stage must not declare completion
@@ -184,3 +216,15 @@ what is known about its article, and what that article adds to the current
 set. Combining them into one quality product would conceal which fact changed
 a decision. Returning the exact greedy trace lets the later audit stage
 record each answer without inventing evidence or recomputing history.
+
+Owner approval, kumarsnaveen_microsoft, 2026-10-24, A1: reuse Python's
+source-authority ranking effect as this separately recorded penalty, on by
+default for the isolated TypeScript planner. Keep article quality and diversity
+selection distinct. This does not require identical Python and TypeScript
+selection and does not change the production Python planner or digest.
+
+## See also
+
+- [Planning policies](feed-ingest-policies.md) - the global switch and its removal condition.
+- [Audit recording](feed-ingest-audit.md) - exact replay and completion proof.
+- [Contract schemas](../contracts/schemas.md) - current and historical score evidence.

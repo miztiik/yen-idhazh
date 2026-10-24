@@ -551,6 +551,18 @@ make this slower.
 
 **Where a data check belongs, and what a removal cites.** Historical reader fixtures, known identity values, wire-format guarantees, and config/consumer bindings are behaviour evidence: a test names a bounded input and the code change that would break its promise. A check of incidental stored content (such as the current published tree or a count that changes as data accumulates) belongs to the code that writes it, or to an operator utility outside pytest. When a check is removed, its pull request names the behaviour test that survives and the broken-code edit that test detects. Which tests own byte and value checks is set out in the [schema page](../architecture/contracts/schemas.md#one-serialization-so-a-round-trip-is-byte-identical).
 
+Compare declared defaults with the consumer's actual fallback declarations,
+not separate assertions that each equals the same literal. Declaration agreement
+does not prove runtime configurability: that requires changing the setting and
+observing the consumer's output.
+
+**A handoff states what each result proves.** Record the exact source commit,
+selected inputs and actual result. A passing control before a deliberate fault
+and a matching source hash after restoration do not claim a passing rerun
+after restoration. Historical collection lists and phase reports support
+identity accounting, not a final-source pass; the
+[execution contract](execute-a-plan.md#closure) owns that reconciliation.
+
 ## The backend gates
 
 Run all three from the repository root. Each must be clean.

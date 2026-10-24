@@ -273,7 +273,11 @@ body, parser response or journal enters these profiles.
 When optional reporting is enabled, completion adds task CPU and RAM to Tables
 H and I in the GitHub step summary and emits concise resource notices. Table J
 shows the separate RAM sample, L3 cache, derived copy buffer size, copy OFF/ON
-rates and host context. CPU is host-wide, not PID-specific. Sampled RSS maxima
+rates and host context. Table H CPU remains host-wide, not PID-specific.
+Table K and separate PID notices show CPU milliseconds, actual process
+intervals and percentages of one core for each recorded task/server PID,
+including the controlled external task. One fully used core is 100 percent;
+multi-threaded PID values can exceed 100 percent. Sampled RSS maxima
 and machine available-memory minima are not exact task peaks. Missing evidence
 is not recorded; disabled machine RAM is labelled disabled, never zero.
 The report refuses malformed or foreign revision/run/attempt/correlation/request
@@ -288,20 +292,34 @@ work. Its `recorded_parse_profile` log is recorded-work evidence, not a live
 network measurement. The workflow runs these existing named cases on Linux;
 Windows results do not certify Linux process RAM.
 
+The same resource proof also starts a separate real Bun process for a
+controlled CPU task. The named fixture touches 32 MiB of RAM and hashes that
+buffer for at least 3.2 seconds of elapsed work. These are controlled-work
+inputs, not a delay added to live fetch or parse. Actual CPU milliseconds
+are measured separately and need not equal elapsed time.
+
+The proof pins that child's PID and start ticks, then uses the real
+host-probe start/stop HTTP commands. It requires multiple one-second polls,
+positive CPU time for the requested external PID, matching process identities,
+process and machine RAM, and actual monotonic intervals. Stop takes the closing
+observation while the child is still alive; only then does the fixture owner
+close its child. `resource-proof.json` retains this as `task_profile` with
+scope `controlled_cpu_task`. It does not stand in for fast live document work.
+
 After all document profiles close, the separate resource step starts the real
 RAM sample HTTP listener and calls its sample route over loopback. It requires
 actual CPU and machine total, free and available RAM readings, even when task
 machine RAM is disabled. This is one standalone sample, not a background
-machine-memory poller. It then calls
-the existing host collector with copy unselected and explicitly selected for
+machine-memory poller. After the controlled task closes, it calls the existing
+host collector with copy unselected and explicitly selected for
 `isolated-copy-proof`. The test records the real hardware context, L3 size if
 available, derived buffer size, repeat count and median read-plus-write rate.
 It allocates two buffers and measures memory-copy throughput, not L3 hit/miss
-counts. Copy work never overlaps fetch/parse CPU measurement.
+counts. Copy work never overlaps fetch/parse or controlled-task CPU measurement.
 
 `resource-proof.json` contains only validated safe metadata in the existing
 temporary evidence root. Completion requires `resource_proof_complete: true`.
-Main CI also runs this same RAM HTTP/copy proof without fetching live feeds
+Main CI also runs this same task CPU/RAM HTTP and copy proof without fetching live feeds
 or publishing data, and retains the `typescript-resource-proof` artifact.
 The same step now opts into the separate
 [cache instruments](../reference/host-cache-probes.md), after copy work closes.

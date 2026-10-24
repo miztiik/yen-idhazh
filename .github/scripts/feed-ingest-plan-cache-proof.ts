@@ -10,7 +10,7 @@ import { readProcessIdentity } from "../../services/host-probes/src/task-profile
 import { OwnedProcessSchema } from "../../services/host-probes/src/task-profile/profile-schema";
 import { startBoundedTool } from "../../services/host-probes/src/cache-probe/bounded-tool";
 import { CACHE_LATENCY_PATH, serveSamples } from "../../services/host-probes/src/api/server";
-import { verifyTaskProfileHttp } from "./host-task-profile-proof";
+import type { TaskProfileProof } from "./feed-ingest-plan-profile-schema";
 import { CacheAffinityProofSchema, verifyCacheAffinity } from "./host-cache-affinity-proof";
 
 export const CacheProofSchema = z.strictObject({
@@ -50,6 +50,7 @@ export const CacheProofSchema = z.strictObject({
 export async function verifyLiveCacheProfiling(
   identity: { run_id: string; correlation_id: string },
   config: ProbeConfig, hardware: { l3_cache_bytes: number | null }, installation: unknown,
+  task: TaskProfileProof,
   report: (proof: z.infer<typeof CacheProofSchema>) => Promise<void>,
 ) {
   if (process.platform !== "linux" || process.geteuid?.() === 0) {
@@ -80,10 +81,11 @@ export async function verifyLiveCacheProfiling(
     ...config.cache_probe, counters: { ...config.cache_probe.counters, enabled: true },
     latency: { ...config.cache_probe.latency, enabled: true },
   });
-  const task = await verifyTaskProfileHttp(identity, ProbeConfigSchema.parse({ ...config, cache_probe: enabled }));
   const counters = task.cache_counters;
   if (counters === null || task.cache_counters_start === null
-    || counters.target.pid !== task.target.pid || counters.target.start_ticks !== task.target.start_ticks) {
+    || counters.target.pid !== task.target.pid || counters.target.start_ticks !== task.target.start_ticks
+    || task.profile.identity.run_id !== identity.run_id || task.profile.identity.correlation_id !== identity.correlation_id
+    || !task.repeat_stop_identical) {
     throw new Error("Task HTTP cache counters did not retain the actual controlled PID");
   }
   proof.task_api = {

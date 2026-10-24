@@ -15,6 +15,7 @@ export function parseClockTicks(text: string): ClockTicks {
 }
 
 export function resolveClockTicks(config: ProbeConfig): Promise<ClockTicks> {
+  if (!config.task_profile.enabled) return Promise.resolve({ value: null, reason: "configured_off" });
   clockTicks ??= process.platform !== "linux"
     ? Promise.resolve({ value: null, reason: "unsupported_platform" })
     : new Promise<ClockTicks>((resolve, reject) => {

@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { z } from "../../../services/host-probes/node_modules/zod";
 
 const ControlsSchema = z.strictObject({
-  cpu_work_ms: z.number().finite().positive(), buffer_bytes: z.int().positive(),
+  minimum_elapsed_work_ms: z.number().finite().positive(), buffer_bytes: z.int().positive(),
   minimum_periodic_samples: z.int().positive(),
 });
 const CommandSchema = z.strictObject({ command: z.enum(["work", "close"]) });
@@ -24,7 +24,7 @@ process.on("message", (raw: unknown) => {
   if (worked) throw new Error("Controlled task accepts one actual work command");
   worked = true;
   const start = performance.now();
-  const deadline = start + controls.cpu_work_ms;
+  const deadline = start + controls.minimum_elapsed_work_ms;
   buffer = Buffer.alloc(controls.buffer_bytes, 1);
   let batches = 0;
   let digest = "";

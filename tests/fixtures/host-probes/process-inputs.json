@@ -24,6 +24,14 @@
       "elapsed_ms": 1500,
       "cpu_time_ms": 750,
       "percent_one_core": 50
+    },
+    {
+      "name": "large absolute counters retain a single tick",
+      "opening_stat": "4242 (recorded ) worker) R 1 1 1 0 -1 0 11 0 7 0 90071992547409920 7 0 0 20 0 2 0 12345 0 0\n",
+      "closing_stat": "4242 (recorded ) worker) R 1 1 1 0 -1 0 11 0 7 0 90071992547409921 7 0 0 20 0 2 0 12345 0 0\n",
+      "elapsed_ms": 2,
+      "cpu_time_ms": 10,
+      "percent_one_core": 500
     }
   ],
   "status": "Name:\trecorded worker\nVmRSS:\t600 kB\nVmHWM:\t900 kB\nRssAnon:\t400 kB\n",

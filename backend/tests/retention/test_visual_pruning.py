@@ -283,13 +283,8 @@ def test_the_oldest_picture_is_found_without_opening_the_rest_of_the_archive(
     assert opened == {3: {"2019/01/01"}}
 
 
-def test_a_name_inside_the_dated_tree_that_is_not_a_date_is_a_fault(tmp_path: Path) -> None:
-    """Under a year directory the layout is ours, so an unreadable name is a bug.
-
-    A skip here would leave files the cleanup cannot account for, silently, for
-    as long as whatever wrote them keeps writing. The root above is the other
-    way round and stays that way - see the stray-directory test further down.
-    """
+def test_a_year_level_sibling_does_not_change_a_named_day_visual_list(tmp_path: Path) -> None:
+    """A file outside the requested day does not alter the exact selected list."""
     root = site(tmp_path, {"2020-01-01": ["old-0000000003.webp"]})
     (root / "2020" / "notes.txt").write_bytes(b"x")
 

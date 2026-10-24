@@ -7,6 +7,7 @@ import {
 import type { CandidateRejectionRecord, FeedIngestCandidate, SourceSnapshot } from "@idhazh/common-contracts";
 import { sourceSnapshot } from "../harvest-feeds/load-harvest-inputs";
 import { measureArticle } from "../curate-article-portfolio/quality-decoupler";
+import { curateArticles } from "../curate-article-portfolio/editorial-selection";
 import type { FeedPlanResult } from "../run-feed-plan";
 
 export function requireSame(actual: unknown, expected: unknown, field: string): void {
@@ -154,6 +155,10 @@ export function reconcileStageMembership(result: FeedPlanResult) {
   requireSame(curation.quality, curation.input.map(article => ({
     candidate_id: article.candidate.candidate_id, ...measureArticle(article),
   })), "curation.quality");
+  requireSame(curation, curateArticles({
+    articles: curation.input, planning: harvest.inputs, opportunity: curation.opportunity,
+    observed_at: context.now, reliability_floor: curation.reliability_controls.reliability_floor,
+  }), "curation.replay");
   const representatives = curation.carriers.representatives.map(article => article.candidate);
   const suppressedIds = new Set(curation.carriers.suppressed.map(row => row.article.candidate.candidate_id));
   partition(eligible, representatives, curation.rejections.filter(row => row.candidate_id !== null && suppressedIds.has(row.candidate_id)), "deduplication");

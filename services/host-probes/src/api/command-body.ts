@@ -4,6 +4,7 @@ export class CommandBodyError extends Error {
 }
 
 export async function readCommandBody(request: Request, maxBytes: number, timeoutMs?: number): Promise<unknown> {
+  if (request.signal.aborted) throw new CommandBodyError(400, "Host probe request aborted");
   if (request.headers.has("Origin")) throw new CommandBodyError(400, "Host probe commands accept operator requests, not browser origins");
   if (request.headers.get("Content-Type")?.split(";", 1)[0]?.trim().toLowerCase() !== "application/json") {
     throw new CommandBodyError(400, "Content-Type must be application/json");
@@ -36,6 +37,9 @@ export async function readCommandBody(request: Request, maxBytes: number, timeou
       }
       chunks.push(part.value);
     }
+  } catch (error) {
+    if (request.signal.aborted) throw new CommandBodyError(400, "Host probe request aborted");
+    throw error;
   } finally { clearTimeout(timeout); reader.releaseLock(); }
   let text: string;
   try { text = new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks)); }
