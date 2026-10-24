@@ -51,8 +51,8 @@ REFUSED = 2
 #: Who files the drawn plan into a test case's ledger, as the envelope names a writer.
 PRODUCER: Final = "utilities.pipeline_test_case"
 
-#: The commit the plan's file names. This runner is handed none, and the
-#: `record` it starts runs without `--commit` for the same reason.
+#: The commit a local or direct invocation names when it is not told one.
+#: Workflow runners always pass the checked-out commit.
 UNNAMED_COMMIT: Final = "0" * 40
 
 #: Where each test case's tree lives: the config root the config step writes,
@@ -83,7 +83,14 @@ def jobs(settings: PipelineTestsConfig) -> str:
 
 
 def _stage(
-    stage: str, *, date: str, execution: int, config_root: Path, shard: int, shards: int
+    stage: str,
+    *,
+    date: str,
+    execution: int,
+    config_root: Path,
+    shard: int,
+    shards: int,
+    commit: str = UNNAMED_COMMIT,
 ) -> list[str]:
     """One production command, on the interpreter that started this program."""
     return [
@@ -97,6 +104,8 @@ def _stage(
         str(execution),
         "--config",
         config_root.as_posix(),
+        "--commit",
+        commit,
         "--shard",
         str(shard),
         "--shards",
@@ -104,7 +113,7 @@ def _stage(
     ]
 
 
-def _file_the_plan(drawn: RunPlan, *, trial_case_dirname: str) -> None:
+def _file_the_plan(drawn: RunPlan, *, trial_case_dirname: str, commit: str) -> None:
     """File the drawn plan into one test case's trial ledger, where its stages read it.
 
     Every case shares the trial root but reads its plan beside its own ledgers.
@@ -124,7 +133,7 @@ def _file_the_plan(drawn: RunPlan, *, trial_case_dirname: str) -> None:
                 job=ServerJob.PLAN,
                 shard=0,
                 producer=PRODUCER,
-                git_sha=UNNAMED_COMMIT,
+                git_sha=commit,
             ),
         )
 
@@ -135,7 +144,12 @@ def _refuse(message: str) -> int:
 
 
 def run(
-    settings: PipelineTestsConfig, test_case_id: str, date: str, runner: int, execution: int
+    settings: PipelineTestsConfig,
+    test_case_id: str,
+    date: str,
+    runner: int,
+    execution: int,
+    commit: str = UNNAMED_COMMIT,
 ) -> int:
     """Work every shard this runner holds at once, record each, and file the run.
 
@@ -178,7 +192,7 @@ def run(
     shutil.rmtree(run_root, ignore_errors=True)
     shutil.rmtree(test_case_root / "run", ignore_errors=True)
     run_root.mkdir(parents=True)
-    _file_the_plan(drawn, trial_case_dirname=test_case.id)
+    _file_the_plan(drawn, trial_case_dirname=test_case.id, commit=commit)
 
     shards = settings.shard_count()
     started = time.monotonic()
@@ -192,6 +206,7 @@ def run(
                     config_root=config_root,
                     shard=shard,
                     shards=shards,
+                    commit=commit,
                 ),
                 "--no-faithfulness",
             ]
@@ -208,6 +223,7 @@ def run(
                 config_root=config_root,
                 shard=shard,
                 shards=shards,
+                commit=commit,
             ),
             check=False,
         )
@@ -235,6 +251,11 @@ def main(argv: list[str] | None = None) -> int:
     one.add_argument(
         "--execution", type=int, required=True, help="the run the plan was drawn for"
     )
+    one.add_argument(
+        "--commit",
+        default=UNNAMED_COMMIT,
+        help="the commit the runner checked out; workflow dispatches pass the real SHA",
+    )
     args = parser.parse_args(argv)
 
     settings = PipelineTestsConfig.from_json(
@@ -243,7 +264,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.verb == "jobs":
         print(jobs(settings))
         return 0
-    return run(settings, args.test_case, args.date, args.runner, args.execution)
+    return run(
+        settings,
+        args.test_case,
+        args.date,
+        args.runner,
+        args.execution,
+        commit=args.commit,
+    )
 
 
 if __name__ == "__main__":
