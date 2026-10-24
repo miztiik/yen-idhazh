@@ -48,6 +48,7 @@ from idhazh import ledger
 from idhazh.contracts.base import DATE_PATTERN
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.llm.reasoning import split_reasoning
 
 #: The order the run makes them in. A viewer that sorted these alphabetically
 #: would print the reply before the question on every item.
@@ -60,10 +61,6 @@ CALL_TITLE = {
     "label": "the label call",
     "summary": "the summarize-and-plan call",
 }
-
-#: A reasoning channel some builds leave inline. Stripped before the JSON is
-#: looked for, and counted, because its size is itself a finding.
-THINK = re.compile(r"<think>.*?</think>", re.DOTALL)
 
 #: Longer than this and a value gets its own quoted block instead of a table
 #: cell. A summary body inside a cell is a table nobody can read.
@@ -418,7 +415,9 @@ def longest_run(text: str) -> tuple[int, str]:
     return best_length, text[best_at : best_at + 60]
 
 
-def reply_json(reply: str) -> tuple[dict[str, Any] | None, str, int]:
+def reply_json(
+    reply: str, *, reasoning_delimiters: tuple[str, str] | None = None
+) -> tuple[dict[str, Any] | None, str, int]:
     """The reply's JSON object, what stopped it being read, and the thinking.
 
     Permissive on purpose. The reply worth opening is the one the pipeline could
@@ -426,10 +425,8 @@ def reply_json(reply: str) -> tuple[dict[str, Any] | None, str, int]:
     on exactly the item somebody came here about. What is reported instead is
     the character the JSON broke at, which is the one fact a stall log never had.
     """
-    body = THINK.sub("", reply)
-    if "<think>" in body:
-        body = body[: body.index("<think>")]
-    thought = len(reply) - len(body)
+    body, reasoning = split_reasoning(reply, delimiters=reasoning_delimiters)
+    thought = len(reasoning or "")
     body = body.strip()
     start = body.find("{")
     if start < 0:
@@ -796,12 +793,20 @@ def about_section(pair: Mapping[str, Capture], number: int, *, summary_at: int) 
     return out
 
 
-def reply_section(capture: Capture, title: str, number: int) -> list[str]:
+def reply_section(
+    capture: Capture,
+    title: str,
+    number: int,
+    *,
+    reasoning_delimiters: tuple[str, str] | None = None,
+) -> list[str]:
     """One reply read as what it says, rather than as the bytes it arrived in."""
     out = [f"## {number}. What {title} sent back", ""]
     if capture.reply is None:
         return [*out, "The reply was not captured on this run.", ""]
-    payload, trouble, thought = reply_json(capture.reply)
+    payload, trouble, thought = reply_json(
+        capture.reply, reasoning_delimiters=reasoning_delimiters
+    )
     step = count(1)
     if thought:
         out += [
@@ -836,7 +841,9 @@ def reply_section(capture: Capture, title: str, number: int) -> list[str]:
     return out
 
 
-def findings(pair: Mapping[str, Capture]) -> list[str]:
+def findings(
+    pair: Mapping[str, Capture], *, reasoning_delimiters: tuple[str, str] | None = None
+) -> list[str]:
     """Everything that looks wrong in this pair, ahead of everything that does not."""
     said: list[str] = []
     for call in CALL_ORDER:
@@ -861,7 +868,7 @@ def findings(pair: Mapping[str, Capture]) -> list[str]:
                 f"run starting `{sample}`. That is a decoder that could not leave a state, "
                 "not an article that was long."
             )
-        _, trouble, _ = reply_json(capture.reply)
+        _, trouble, _ = reply_json(capture.reply, reasoning_delimiters=reasoning_delimiters)
         if trouble:
             said.append(f"The reply to {name}: {trouble}.")
     return said
@@ -921,7 +928,13 @@ def raw_section(pair: Mapping[str, Capture], number: int, *, head: int, tail: in
     return out
 
 
-def render(pair: Mapping[str, Capture], *, head: int, tail: int) -> str:
+def render(
+    pair: Mapping[str, Capture],
+    *,
+    head: int,
+    tail: int,
+    reasoning_delimiters: tuple[str, str] | None = None,
+) -> str:
     """One item's calls as a document: the story, what is wrong, the cost, the bytes.
 
     Every heading carries its number, and the numbers run in the order a reader
@@ -929,7 +942,7 @@ def render(pair: Mapping[str, Capture], *, head: int, tail: int) -> str:
     verdict, the cost, each reply read as what it says, and the bytes last.
     """
     item_id = next(iter(pair.values())).item_id
-    said = findings(pair)
+    said = findings(pair, reasoning_delimiters=reasoning_delimiters)
     summary_at = 4 + CALL_ORDER.index("summary")
     out: list[str] = [f"# {item_id}", ""]
     out += about_section(pair, 1, summary_at=summary_at)
@@ -953,7 +966,9 @@ def render(pair: Mapping[str, Capture], *, head: int, tail: int) -> str:
             out += [f"## {number}. What {title} sent back", ""]
             out += ["There is no capture file for this call.", ""]
             continue
-        out += reply_section(capture, title, number)
+        out += reply_section(
+            capture, title, number, reasoning_delimiters=reasoning_delimiters
+        )
     out += raw_section(pair, len(CALL_ORDER) + 4, head=head, tail=tail)
     return "\n".join(out)
 
@@ -1021,7 +1036,20 @@ def main(argv: list[str] | None = None) -> int:
         help="the state tree the item-health ledger sits under (default: state)",
     )
     parser.add_argument("--out", type=Path, help="write markdown here instead of to the terminal")
+    parser.add_argument(
+        "--reasoning-delimiters",
+        nargs=2,
+        metavar=("OPEN", "CLOSE"),
+        help="the historical response's explicit inline delimiters; never read today's model",
+    )
     args = parser.parse_args(argv)
+    delimiters = (
+        (args.reasoning_delimiters[0], args.reasoning_delimiters[1])
+        if args.reasoning_delimiters is not None
+        else None
+    )
+    if delimiters is not None and not all(delimiters):
+        parser.error("--reasoning-delimiters requires two nonempty strings")
 
     if not args.directory.is_dir():
         parser.error(f"{args.directory} is not a directory")
@@ -1052,7 +1080,9 @@ def main(argv: list[str] | None = None) -> int:
     documents = []
     for item_id in wanted:
         pair = merged(found[item_id], rows.get(item_id))
-        documents.append(render(pair, head=head, tail=args.tail))
+        documents.append(
+            render(pair, head=head, tail=args.tail, reasoning_delimiters=delimiters)
+        )
     text = "\n\n".join(documents)
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)

@@ -261,6 +261,48 @@ def test_typescript_envelope_fields_and_footer_keys(typescript_schemas: dict[str
         )
 
 
+def test_recorded_pair_projection_binds_native_fields_vocabularies_and_identity_format() -> None:
+    from idhazh.contracts.base import SLUG_PATTERN
+    from idhazh.contracts.story_similarity_pair import StorySimilarityPair
+
+    bun = shutil.which("bun")
+    assert bun, "Install Bun to run the publication evidence binding gate"
+    completed = subprocess.run(
+        [
+            bun,
+            "--eval",
+            'import { z } from "zod";'
+            'import { RecordedEventPairSchema } from "./src/metrics/publication-evidence";'
+            "process.stdout.write(JSON.stringify(z.toJSONSchema(RecordedEventPairSchema)));",
+        ],
+        cwd=REPO_ROOT / "services" / "feed-ingest-plan",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    projection = json.loads(completed.stdout)
+    native = StorySimilarityPair.json_schema()
+    fixture = json.loads(
+        read_text(REPO_ROOT / "tests" / "fixtures" / "feed-ingest-plan" / "publication-evidence.json")
+    )
+    assert list(projection["properties"]) == fixture["bindings"]["RecordedEventPair"]["fields"]
+    for name, field in projection["properties"].items():
+        source = native["properties"][name]
+        assert normalized_shape(
+            {key: value for key, value in field.items() if key != "default"}, projection
+        ) == normalized_shape(
+            {key: value for key, value in source.items() if key != "default"}, native
+        ), name
+    for name in ("scorer_model", "judge_model"):
+        for schema in (native, projection):
+            field = schema["properties"][name]
+            text = next(
+                branch for branch in field.get("anyOf", [field]) if branch.get("type") == "string"
+            )
+            assert text["pattern"] == SLUG_PATTERN
+            assert "enum" not in text and "const" not in text
+
+
 def rejection_payload() -> dict[str, Any]:
     return cast(
         dict[str, Any],

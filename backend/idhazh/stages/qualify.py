@@ -256,7 +256,7 @@ def _observe(
     ledger sums them - both calls really spent what they spent.
     """
     answered = [reply for reply in replies if reply is not None] or [Completion(content="")]
-    inline = "".join(summarize.split_thinking(reply.content)[1] or "" for reply in answered)
+    inline = "".join(reply.inline_reasoning for reply in answered)
     last = answered[-1]
     return ItemObservation(
         item_id=article.item_id,

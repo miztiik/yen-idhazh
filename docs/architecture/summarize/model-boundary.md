@@ -1,6 +1,6 @@
 # The model boundary
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-10-24
 
 How the summarizer stays generic while the model behind it changes. This page
 owns the shape of the boundary - what crosses it, which side each fact lives
@@ -95,7 +95,9 @@ design.
 | How a turn opens and closes | Envelope, per model | Different between model families; nothing this project wrote decides it |
 | How an assistant reply opens | Envelope, per model | A generation prompt ends with more than a role header, and what it ends with is the model's |
 | Whether a system role exists, and where its text goes when it does not | Envelope, per model | A turn topology. The bytes do not change; their address does. `turns.system_role` is a closed choice of two, and `turns.system_joiner` is what separates the two blocks when they share a turn |
-| Which template keyword turns reasoning off | Envelope, per model | It is a variable name belonging to that model's template. `turns.thinking_kwarg` carries it, and null means the template reads none |
+| Which template keyword turns reasoning off | Envelope, per model | `thinking_kwarg` explicitly names the switch or is null. A template can always reason without a switch; `thinking_close` still selects the separate reasoning span |
+| Additional template variables | Envelope, per model | `chat_template_kwargs` is sent unchanged during derivation and chat requests, so the template that was checked is the template that runs |
+| Legacy inline reasoning delimiters | Envelope, per model | `reasoning_delimiters` is an explicit nullable pair. No parser chooses syntax from a model name |
 | The window, the batch sizes, the budgets | Envelope, per model | Measured against those weights, and pinned to their digest |
 | **Which architecture the weights carry** | Envelope, per model | `arch` is the `general.architecture` key written inside the GGUF - `qwen35` for the configured weights, `gemma4` for a Gemma 4 entry. Required with no default: an entry that inherits the incumbent's architecture is claiming something nobody checked. Case 4 reads the key back out of the file the server was pointed at, a few kilobytes of header rather than a second download, and refuses when the two disagree - the one case where the digest, the alias and the filename all agree and only the words get worse |
 | **Which weights the settings were set for** | Envelope, per model | `declared_for` holds the entry's own `sha256`, and load refuses a mismatch. The failure it stops is five strings edited in place - repo, file, revision, digest and id - with the settings underneath them untouched. Not hypothetical: the summarizer moved from the 8B to the 9B on 2026-08-27 and the settings block did not move with it. The markers need no such pin since 2026-09-21, because the server derives them from the template the weights carry |
@@ -230,6 +232,20 @@ reply into our schema, and a grammar is a runtime control that behaves
 identically on any model. So only two things on the way out are model-shaped:
 which envelope the runtime wrapped the reply in, and whether a reasoning block
 is present and has to be dropped before anything reads it.
+
+`parse_completion` separates reasoning once, before a label, summary or recovery
+parser reads the answer. It reads the runtime's `reasoning_content` channel and
+only parses an inline prefix when the selected entry declares its delimiters.
+The transient `reasoning` and `inline_reasoning` fields remain distinct, so
+existing runtime-channel flags and inline-word counts keep their meanings.
+Delimiter text inside a JSON answer stays content. An unclosed prefix supplies
+no answer and cannot become a published summary. Separate reasoning spans keep
+their existing answer-only continuation and combined cost accounting.
+
+The artifact analyzer does not load today's model to explain an old response.
+For a historical inline reply, pass that response's pair with
+`--reasoning-delimiters '<opening>' '<closing>'`; the raw response and its
+recorded model identity stay unchanged.
 
 The envelope is also where the runtime says why the decode stopped, and the two
 routes spell that differently: the chat route writes `finish_reason`, the
@@ -378,11 +394,9 @@ dead.
 Reverting costs one line because adopting never modified the previous model's
 file. Its weights cache key is its own digest, so that cache is still valid.
 
-**A file the pointer does not name is still a file it can name**, so every entry
-under `config/models/` is loaded and checked by
-`backend/tests/contracts/test_model_registry.py` rather than only the active
-one. Before that, an alternative sat unvalidated until the day somebody switched
-to it - and that day is a pipeline run.
+**The selected file is validated when it is loaded.** Contract tests write valid
+and invalid entries under their own filenames. They do not keep a second list
+of production models that a new file must join before tests can run.
 
 **A second set of weights that drafts ahead of the first is not offered.** It
 was until 2026-09-21, as `models.summarizer.draft`, and the mechanism's whole
@@ -449,6 +463,14 @@ CI does not commit that page. Doc routing is reviewed in a pull request, and
 every commit CI makes lands in the range the scheduled prune has to rewrite.
 
 ## Design rationale
+
+**Tests describe behavior, not the selected model.** Generic tests supply
+explicit turn markers, reasoning keywords and server flags. A new valid model
+filename needs no fixture entry.
+Recorded protocol responses keep the runtime and weights provenance captured
+with them; current production settings must not change their inputs. Runtime
+marker derivation and sanitizer refusals remain covered with fixed inputs,
+including markers the boundary cannot safely accept.
 
 **One complete file per model, never a merge.** A layered shape - global
 defaults with per-model overrides - makes the same swap a one-line edit, so the

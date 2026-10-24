@@ -143,15 +143,14 @@ class AppConfig(Contract):
     extract: ExtractConfig = Field(default_factory=ExtractConfig)
     elements: ElementsConfig = Field(default_factory=ElementsConfig)
     models_file: ModelsFile = Field(
-        default="models/ornith-1.5-9b-q5km.json",
         description=(
             "Which file under config/models/ holds the active model. The whole swap: "
             "every fact about a set of weights - the repository, the digest, the window "
             "they were measured in, the markers their server renders - lives in the "
             "file this names, so pointing at another committed file swaps the model and "
             "pointing back reverts it, with the previous model's measured numbers still "
-            "on disk rather than in git history. It carries a default naming the "
-            "committed file so a fresh clone runs unconfigured (Guardrail #6)."
+            "on disk rather than in git history. Required: the committed app config "
+            "selects the fresh-clone model; source code never selects one."
         ),
     )
     summarize: SummarizeConfig = Field(default_factory=SummarizeConfig)

@@ -13,7 +13,7 @@ from collections import Counter
 from pathlib import Path
 
 import pytest
-from support.models import committed_markers
+from support.models import a_markers
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 from support.refill import refetched, refill_body, refill_published, refill_recorded
 
@@ -97,7 +97,7 @@ def test_the_first_two_turns_are_the_bytes_the_run_really_sends(
         article,
         model_id=models.summarizer.id,
         sampling=models.summarizer.sampling,
-        markers=committed_markers(),
+        markers=a_markers(),
         prompt_config=app.summarize,
     )
     harvested = corpus.harvest_rows(

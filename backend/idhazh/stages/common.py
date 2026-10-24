@@ -362,6 +362,7 @@ def _two_spans(
         answer_span(payload, thought=thought.content, markers=markers),
         endpoint=endpoint,
         timeout=timeout,
+        reasoning_delimiters=markers.reasoning_delimiters,
     )
     # What the answer span really had to prefill. It is the one reading that
     # settles whether the slot held the thinking or re-read it, which is an
@@ -417,8 +418,15 @@ def _ask_the_model(
                     endpoint=endpoint,
                     timeout=timeout,
                 )
-                if markers is not None and markers.thinks
-                else post(payload, endpoint=endpoint, timeout=timeout)
+                if markers is not None and markers.thinks and "prompt" in payload
+                else post(
+                    payload,
+                    endpoint=endpoint,
+                    timeout=timeout,
+                    reasoning_delimiters=(
+                        markers.reasoning_delimiters if markers is not None else None
+                    ),
+                )
             )
         except HTTPError as error:
             # Before OSError, which HTTPError subclasses. A server that answered is
@@ -543,7 +551,10 @@ def _one_call(
     no_reply = FailureCode.MODEL_UNREACHABLE
     try:
         completion = post(
-            payload, endpoint=endpoint, timeout=request_timeout_seconds(settings.models.summarizer)
+            payload,
+            endpoint=endpoint,
+            timeout=request_timeout_seconds(settings.models.summarizer),
+            reasoning_delimiters=markers.reasoning_delimiters,
         )
     except HTTPError as error:
         body = error.read().decode("utf-8", errors="replace")

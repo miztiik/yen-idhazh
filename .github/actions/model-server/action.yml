@@ -189,6 +189,7 @@ runs:
         PROBE_URL: ${{ inputs.probe_url }}
         MODEL_ALIAS: ${{ steps.model.outputs.summarizer_id }}
         WEIGHTS_FILE: ${{ steps.model.outputs.summarizer_file }}
+        CONFIG_ROOT: ${{ inputs.config_root }}
       run: |
         set -euo pipefail
         for _ in $(seq 1 120); do
@@ -218,3 +219,5 @@ runs:
           curl -s "${PROBE_URL}/props" >&2 || true
           exit 1
         }
+        python3 backend/utilities/model_runtime.py describe-request \
+          --config-root "$CONFIG_ROOT" --prove-runtime > /dev/null
