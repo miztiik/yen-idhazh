@@ -217,7 +217,7 @@ class FeedHealthRow(Contract):
         if (
             isinstance(value, dict)
             and value.get("version", cls.schema_version()) != cls.schema_version()
-            and "publisher_id" in value
+            and value.get("publisher_id") is not None
         ):
             raise ValueError(
                 "curated publisher identity requires its declared contract version"
