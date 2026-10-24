@@ -94,7 +94,7 @@ position and actual allowance in the existing rejection details.
 ## Marginal choices and concentration
 
 At each greedy choice the planner recomputes every remaining candidate's score
-against the actual already selected set. Each source, source-kind, parent
+against the actual already selected set. Each source-kind, parent
 domain, vertical, assigned-desk, lens, event-type, event-cluster and entity term
 is its own coefficient times the fraction of selected articles sharing at
 least one value in that same dimension. Several shared labels on one selected
@@ -108,8 +108,8 @@ when the candidate's known occurrence is in the supplied coverage set. Unknown
 occurrence or prior coverage makes it unavailable. It is not an inferred
 similarity score, entity match or claim that reporting verified a fact.
 
-The marginal score subtracts the source-reliability penalty and each available
-set-dependent penalty from the unchanged base article score.
+The marginal score subtracts the source-reliability penalty, publisher-exposure
+penalty and each available set-dependent penalty from the unchanged base article score.
 Unavailable terms contribute nothing and retain their explicit status.
 Source kind has no eligibility rule, quota or authority shortcut. Its zero
 coefficient removes its influence.
@@ -209,7 +209,14 @@ The native dispatch regression covers both a later selection day and a changed
 freshness policy, then reads the persisted Parquet back through the current
 contract. Same-day, unchanged-policy runs retain their existing behavior.
 
-## Proposed publisher-exposure adjustment
+## Publisher-exposure adjustment
+
+**Integration limit:** Production publication currently does not retain a link
+to the isolated planner's recorded publisher snapshots. Nonempty production
+history therefore remains unavailable and uses the approved current-run-only
+fallback. Native fixtures prove the strict reader, not downstream integration.
+Preserving the original planner identity through actual workers/publication
+remains deferred with Plan 67 Rows 17/18; this phase does not add that producer.
 
 Count actual publications for the publisher on the current UTC day, then add
 that publisher's already-selected items in the current run. Normalize the
@@ -228,6 +235,50 @@ by planned slots and capped at 1. Known-empty history contributes zero.
 Unavailable history uses current-run selections only and records that history
 was unavailable. Unknown publisher identity adds no publisher count. This is
 a soft preference, not a cap or a selection block.
+
+`selectArticles`, used by `/select-articles` and `/plan`, reads the captured
+UTC day's registered `published` ledger through the existing raw/compact
+precedence. Published URL and item membership is the publication authority:
+an extraction success, a past shadow selection or an item-health retry alone
+is not a publication. Each distinct published URL counts once.
+
+The bounded reader joins that membership to successful publish-stage health
+records by item and URL, requiring one recorded run/source owner. It then
+requires one publisher identity across the selection snapshots with that
+run, source and URL. Identity comes only from the saved `source.publisher_id`,
+never the current catalog, caller attribution text, feed title or domain.
+Conflicting snapshots, an unknown publisher, a missing owner or incomplete
+history make publication history unavailable. Partial known counts are not
+used as a complete census. Known-empty publication membership needs no
+identity join.
+Malformed JSON, schema-invalid data, named native-integrity failures and
+unreadable optional files report `invalid_publication_history`, emit a warning
+with the precise diagnostic and use current selections. The shared reader
+still refuses corrupt evidence; this optional boundary never uses its rows.
+The reader marks these data refusals with `LedgerHistoryReadError`; callers do
+not copy its diagnostic strings to decide whether to continue. Unrecognized
+errors, including programming errors, are not suppressed.
+
+Only today's named files are read. A publication from yesterday's selection
+cannot be attributed unless today's bounded evidence supplies the required
+recorded identity; otherwise it uses the current-selection-only fallback.
+This deliberately gives up historical coverage rather than inventing identity
+or growing the read window. The live publisher registry is still empty; real
+fixture mappings prove the behavior, not live publisher coverage.
+
+Every evaluated score records `publisher_exposure`: UTC day, nullable
+publisher ID, publication-history status, nullable publication count,
+already-selected count, planned slots, coefficient, normalized exposure and
+nonnegative penalty. Unknown identity records zero current count and null
+exposure/penalty. With missing history, known identity still records a measured
+current-selection adjustment. The legacy `source` feed-crowding field remains
+unavailable on new choices, so the adjustment is charged once. Older saved
+scores retain their original feed term and null publisher exposure.
+
+The stage response's `publisher_history` reports availability and named evidence
+gaps even when no article is selected. The plan summary also retains the named
+history file evidence. Publication-history inputs are captured once for a
+selection; audit replay uses that same evidence, not a later disk read.
 
 ## Design rationale
 

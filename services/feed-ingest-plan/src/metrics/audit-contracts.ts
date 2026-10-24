@@ -12,7 +12,8 @@ import {
   PLANNER_EXCLUSIONS_VERSION,
   PreviousFeedIngestDispatchSchema, PreviousObservedFeedIngestDispatchSchema,
   PreviousReliableFeedIngestDispatchSchema, readFeedIngestDispatch,
-  PreviousSourceSnapshotSchema, PUBLISHER_IDENTITY_VERSION,
+  PreviousSourceSnapshotSchema, PUBLISHER_IDENTITY_VERSION, PUBLISHER_EXPOSURE_VERSION,
+  PreviousPublisherFeedIngestDispatchSchema,
 } from "@idhazh/common-contracts";
 import type {
   DiversityMetricRow,
@@ -99,8 +100,9 @@ export const SourceRunContract: LedgerRowContract<SourceRunRecord> = {
 };
 export const DispatchContract: LedgerRowContract<FeedIngestDispatch> = {
   schema: FeedIngestDispatchSchema,
-  schemaVersion: PUBLISHER_IDENTITY_VERSION,
+  schemaVersion: PUBLISHER_EXPOSURE_VERSION,
   legacyVersions: {
+    [PUBLISHER_IDENTITY_VERSION]: { schema: PreviousPublisherFeedIngestDispatchSchema, migrate: migrateDispatch },
     [PREVIOUS_VERSION]: { schema: LegacyDispatchSchema, migrate: migrateDispatch },
     [FEED_INGEST_AUDIT_VERSION]: { schema: PreviousDispatchSchema, migrate: migrateDispatch },
     [PLANNING_OBSERVATIONS_VERSION]: { schema: PreviousObservedFeedIngestDispatchSchema, migrate: migrateDispatch },

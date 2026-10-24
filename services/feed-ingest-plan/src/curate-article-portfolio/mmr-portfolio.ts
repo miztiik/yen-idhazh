@@ -6,6 +6,8 @@ import type { OpportunityEvidence, PortfolioArticle, ReliabilityControls } from 
 import { measurePriority } from "./quality-decoupler";
 import type { SourceAllowance } from "./quota-normalizer";
 import type { CarrierGroup } from "./carrier-cluster";
+import { measurePublisherExposure } from "./publisher-exposure";
+import type { PublisherPublicationHistory } from "./publisher-exposure";
 
 type Penalty = ScoreEvidence["source"];
 type Relaxation = ScoreEvidence["cap_relaxations"][number];
@@ -33,10 +35,11 @@ export function scoreMarginal(
   article: PortfolioArticle, selected: readonly PortfolioArticle[], allowance: SourceAllowance,
   group: CarrierGroup, opportunity: OpportunityEvidence, exploration: boolean,
   relaxations: readonly Relaxation[], controls: ReliabilityControls,
+  plannedSlots: number, publicationHistory: PublisherPublicationHistory,
 ): ScoreEvidence {
   const weights = article.policy.curate.mmr_weights;
   const terms = {
-    source: penalty(article, selected, weights.lambda_source, a => [a.candidate.source_id]),
+    source: unavailable(),
     source_kind: penalty(article, selected, weights.lambda_source_kind, a => [a.candidate.source.kind]),
     domain: penalty(article, selected, weights.lambda_domain, a => scalar(a.evidence.parent_domain?.value)),
     vertical: penalty(article, selected, weights.lambda_vertical, a => [a.candidate.vertical]),
@@ -52,9 +55,12 @@ export function scoreMarginal(
       },
   };
   const priority = measurePriority(article, controls);
+  const publisherExposure = measurePublisherExposure(article, selected, plannedSlots, publicationHistory);
   return ScoreEvidenceSchema.parse({
     base_article_score: priority.base_article_score, source_reliability: priority.source_reliability,
-    marginal_score: priority.priority_score - Object.values(terms).reduce((sum, term) => sum + (term.value ?? 0), 0),
+    publisher_exposure: publisherExposure,
+    marginal_score: priority.priority_score - (publisherExposure.value ?? 0)
+      - Object.values(terms).reduce((sum, term) => sum + (term.value ?? 0), 0),
     ...terms,
     source_allowance: allowance.allowance,
     bonus_uncovered_event_cluster: allowance.witnesses.some(w => w.kind === "uncovered_event_cluster"),
@@ -77,6 +83,7 @@ export function choosePortfolio(
   articles: readonly PortfolioArticle[], config: FeedIngestConfig["curate"],
   allowances: ReadonlyMap<string, SourceAllowance>, groups: readonly CarrierGroup[],
   opportunity: OpportunityEvidence, controls: ReliabilityControls,
+  publicationHistory: PublisherPublicationHistory,
 ) {
   const groupById = new Map(groups.map(group => [group.representative.candidate.candidate_id, group]));
   const selected: PortfolioArticle[] = [];
@@ -115,7 +122,8 @@ export function choosePortfolio(
       return {
         article, candidate_id: article.candidate.candidate_id,
         scores: scoreMarginal(article, selected, allowance, group, opportunity,
-          exploration && !sources.has(article.candidate.source_id) && blocked.length === 0, relaxations, controls),
+          exploration && !sources.has(article.candidate.source_id) && blocked.length === 0, relaxations, controls,
+          target, publicationHistory),
         blocked_by: blocked,
       };
     });

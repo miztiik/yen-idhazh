@@ -32,6 +32,7 @@ CONTRACT_NAMES = (
 
 MODEL_NAMES = (
     ("feed_ingest_candidate", "SourceSnapshot"),
+    ("feed_ingest_candidate", "PublisherExposurePenalty"),
     ("planner_stage", "PlannerStageContext"),
     ("planner_stage", "PlannerStageRequest"),
     ("planner_stage", "RecordedIdentity"),
@@ -414,7 +415,11 @@ def test_candidate_identity_precedes_article_validation() -> None:
 
 
 def test_dispatch_keeps_selection_and_content_identity() -> None:
-    from idhazh.contracts.feed_ingest_candidate import SourceReliabilityPenalty
+    from idhazh.contracts.feed_ingest_candidate import (
+        PublisherExposurePenalty,
+        ScoreEvidence,
+        SourceReliabilityPenalty,
+    )
     from idhazh.contracts.feed_ingest_dispatch import FeedIngestDispatch
     from idhazh.contracts.feed_ingest_planning_observations import PlanningObservations
 
@@ -424,6 +429,30 @@ def test_dispatch_keeps_selection_and_content_identity() -> None:
     row = FeedIngestDispatch.model_validate(payload)
     assert row.partition.dispatch_count == 1
     assert row.selection.ratings.source_reliability is None
+    assert row.selection.ratings.publisher_exposure is None
+    exposure = {
+        "day": row.selection.date, "publisher_id": "recorded-publisher",
+        "history_status": "available", "published_today": 2, "selected_so_far": 1,
+        "planned_slots": 2, "coefficient": 0.25, "exposure": 1, "value": 0.25,
+    }
+    assert PublisherExposurePenalty.model_validate(exposure).value == 0.25
+    scores = row.selection.ratings.model_dump() | {
+        "publisher_exposure": exposure, "source": {"available": False, "value": None},
+    }
+    assert ScoreEvidence.model_validate(scores).publisher_exposure is not None
+    with pytest.raises(ValidationError, match="replaces feed crowding"):
+        ScoreEvidence.model_validate(scores | {"source": {"available": True, "value": 0}})
+    for exposure_change in (
+        {"published_today": None}, {"history_status": "unavailable"},
+        {"exposure": 1.5}, {"value": 0.5}, {"planned_slots": 0},
+        {"selected_so_far": -1}, {"publisher_id": None}, {"coefficient": -1},
+    ):
+        with pytest.raises(ValidationError):
+            PublisherExposurePenalty.model_validate(exposure | exposure_change)
+    historical_exposure = json.loads(json.dumps(payload))
+    historical_exposure["selection"]["ratings"]["publisher_exposure"] = exposure
+    with pytest.raises(ValidationError, match="publisher exposure requires"):
+        FeedIngestDispatch.model_validate(historical_exposure)
     for partial_feed in (False, True):
         observations = {
             "feed_headline": None,

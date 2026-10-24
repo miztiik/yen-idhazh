@@ -21,6 +21,7 @@ from idhazh.contracts.feed_ingest_candidate import (
     PositiveCount,
     ScoreEvidence,
     SourceSnapshot,
+    reject_legacy_publisher_exposure,
     reject_legacy_publisher_identity,
 )
 
@@ -30,6 +31,11 @@ class EditorialSelectionRow(Contract):
 
     __schema_stem__: ClassVar[str] = "feed-ingest-editorial-selection"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-24T23:00",
+            change="Replace feed crowding with separately recorded publisher exposure.",
+            why="Day publications and current choices are distinct from historical feed penalties.",
+        ),
         ChangelogEntry(
             version="2026-10-24T20:04",
             change="Record curated publisher identity in source snapshots.",
@@ -46,7 +52,7 @@ class EditorialSelectionRow(Contract):
             why="Ranking can be replayed without rescoring or copying article text.",
         ),
     )
-    version: Literal["2026-10-24T20:04"] = "2026-10-24T20:04"
+    version: Literal["2026-10-24T23:00"] = "2026-10-24T23:00"
     date: DateStamp
     correlation_id: NonEmpty
     candidate_id: Sha256
@@ -64,7 +70,11 @@ class EditorialSelectionRow(Contract):
     @model_validator(mode="before")
     @classmethod
     def migrate_previous_version(cls, value: Any) -> Any:
-        if isinstance(value, dict) and value.get("version") in {"2026-10-20", "2026-10-24"}:
+        if isinstance(value, dict):
+            reject_legacy_publisher_exposure(value, value.get("ratings"))
+        if isinstance(value, dict) and value.get("version") in {
+            "2026-10-20", "2026-10-24", "2026-10-24T20:04"
+        }:
             reject_legacy_publisher_identity(value, [value.get("source")])
             ratings = value.get("ratings")
             if (
@@ -73,7 +83,7 @@ class EditorialSelectionRow(Contract):
                 and ratings.get("source_reliability") is not None
             ):
                 raise ValueError("source reliability requires the declared score contract version")
-            return {**value, "version": "2026-10-24T20:04"}
+            return {**value, "version": "2026-10-24T23:00"}
         return value
 
     @model_validator(mode="after")

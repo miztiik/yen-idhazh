@@ -6,8 +6,10 @@ How is a publisher ID created once, then kept stable as names and feeds change?
 
 **Status**: The catalog and persisted identity readers are implemented. No
 current feed mapping had publisher-owned evidence in this review, so the live
-registry is empty and all configured feeds remain unknown. Publisher exposure
-behavior remains a separate phase. I Feed remains a design proposal, not a
+registry is empty and all configured feeds remain unknown. Soft publisher
+exposure is implemented in the isolated planner; its
+[selection contract](../sources/feed-curation.md#publisher-exposure-adjustment)
+owns the behavior and missing-history fallback. I Feed remains a design proposal, not a
 deployed engine.
 
 ## The identity being named
@@ -173,9 +175,10 @@ soft, not hard caps or a reason to block selection when history is missing.
 The existing [source-reliability penalty](../sources/feed-curation.md#inputs-and-independent-evidence)
 measures operational delivery, not article quality.
 
-Publisher identity is recorded through the existing planning and audit flow; it
-does not change article selection. Publisher exposure rules and their runtime
-behavior remain a separate phase.
+Publisher identity is recorded through the existing planning and audit flow.
+The isolated planner uses that recorded ID for the separately approved
+[soft exposure preference](../sources/feed-curation.md#publisher-exposure-adjustment).
+This does not add mappings or change production Python selection.
 
 ## Manual acceptance checklist
 

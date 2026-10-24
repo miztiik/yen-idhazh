@@ -30,6 +30,7 @@ Count = Annotated[StrictInt, Field(ge=0)]
 PositiveCount = Annotated[StrictInt, Field(gt=0)]
 NonEmpty = Annotated[str, StringConstraints(min_length=1)]
 PUBLISHER_IDENTITY_VERSION = "2026-10-24T20:04"
+PUBLISHER_EXPOSURE_VERSION = "2026-10-24T23:00"
 PlanningStage = Literal[
     "harvest-feeds",
     "screen-article-candidates",
@@ -42,11 +43,24 @@ PlanningStage = Literal[
 def reject_legacy_publisher_identity(value: Any, snapshots: list[Any]) -> None:
     if (
         not isinstance(value, dict)
-        or value.get("version", PUBLISHER_IDENTITY_VERSION) == PUBLISHER_IDENTITY_VERSION
+        or value.get("version", PUBLISHER_IDENTITY_VERSION) in {
+            PUBLISHER_IDENTITY_VERSION,
+            PUBLISHER_EXPOSURE_VERSION,
+        }
     ):
         return
     if any(isinstance(snapshot, dict) and "publisher_id" in snapshot for snapshot in snapshots):
         raise ValueError("curated publisher identity requires its declared contract version")
+
+
+def reject_legacy_publisher_exposure(value: Any, scores: Any) -> None:
+    if (
+        isinstance(value, dict)
+        and value.get("version", PUBLISHER_EXPOSURE_VERSION) != PUBLISHER_EXPOSURE_VERSION
+        and isinstance(scores, dict)
+        and "publisher_exposure" in scores
+    ):
+        raise ValueError("publisher exposure requires its declared score contract version")
 
 
 def derive_candidate_id(run_id: str, source_id: str, entry_ordinal: int) -> str:
@@ -153,12 +167,43 @@ class SourceReliabilityPenalty(Model):
         return self
 
 
+class PublisherExposurePenalty(Model):
+    """Which confirmed publisher counts reduced this choice on its UTC day?"""
+
+    day: DateStamp
+    publisher_id: Slug | None
+    history_status: Literal["available", "unavailable"]
+    published_today: Count | None
+    selected_so_far: Count
+    planned_slots: PositiveCount
+    coefficient: NonNegative
+    exposure: Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)] | None
+    value: NonNegative | None
+
+    @model_validator(mode="after")
+    def validate_counts(self) -> Self:
+        known = self.publisher_id is not None
+        if (self.published_today is not None) != (known and self.history_status == "available"):
+            raise ValueError("publication count requires known publisher and available history")
+        if not known:
+            if self.selected_so_far != 0 or self.exposure is not None or self.value is not None:
+                raise ValueError("unknown publisher carries no count or adjustment")
+        else:
+            exposure = min(
+                1, ((self.published_today or 0) + self.selected_so_far) / self.planned_slots
+            )
+            if self.exposure != exposure or self.value != self.coefficient * exposure:
+                raise ValueError("publisher adjustment must match capped day and selection counts")
+        return self
+
+
 class ScoreEvidence(Model):
     """Which ratings and separate portfolio penalties decided a greedy choice?"""
 
     base_article_score: Finite
     marginal_score: Finite
     source_reliability: SourceReliabilityPenalty | None = None
+    publisher_exposure: PublisherExposurePenalty | None = None
     source: PenaltyEvidence
     source_kind: PenaltyEvidence
     domain: PenaltyEvidence
@@ -178,6 +223,12 @@ class ScoreEvidence(Model):
     replacement_url_key: Sha256 | None
     exploration_slot: bool
     cap_relaxations: list[Literal["distinct_sources", "source_share"]]
+
+    @model_validator(mode="after")
+    def validate_replacement(self) -> Self:
+        if self.publisher_exposure is not None and self.source.available:
+            raise ValueError("publisher exposure replaces feed crowding rather than charging both")
+        return self
 
 
 class PolicyIdentity(Model):

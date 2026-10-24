@@ -159,6 +159,7 @@ export function reconcileStageMembership(result: FeedPlanResult) {
   requireSame(curation, curateArticles({
     articles: curation.input, planning: harvest.inputs, opportunity: curation.opportunity,
     observed_at: context.now, reliability_floor: curation.reliability_controls.reliability_floor,
+    publication_history: result.evidence.publisher_publication,
   }), "curation.replay");
   const representatives = curation.carriers.representatives.map(article => article.candidate);
   const suppressedIds = new Set(curation.carriers.suppressed.map(row => row.article.candidate.candidate_id));

@@ -228,7 +228,9 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
       seen: seen.sealing,
       feed_health: feedFiles.health,
     },
-    evidence: { harvest, screening, curation, seen, exclusions: exclusionEvidence, partition, feed_history: feedHistory, daily_publication: dailyPublication },
+    evidence: { harvest, screening, curation, seen, exclusions: exclusionEvidence, partition,
+      feed_history: feedHistory, daily_publication: dailyPublication,
+      publisher_publication: selection.publisher_publication },
   };
 }
 export type FeedPlanResult = Awaited<ReturnType<typeof runFeedPlan>>;
@@ -274,6 +276,12 @@ export function summarizePlan(result: FeedPlanResult & { metrics?: PlanningMetri
     feed_history: {
       ...result.evidence.feed_history.history,
       daily_publication: result.evidence.daily_publication.history,
+      publisher_publication: {
+        day: result.evidence.publisher_publication.day,
+        availability: result.evidence.publisher_publication.availability,
+        gaps: result.evidence.publisher_publication.gaps,
+        history: result.evidence.publisher_publication.history,
+      },
     },
     editorial_inputs: {
       headline_consumer: "existing_mmr_lens_entity_penalties",

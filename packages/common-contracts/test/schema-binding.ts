@@ -8,7 +8,7 @@ import {
   ENVELOPE_VERSIONS, FILE_ENVELOPE_VERSION, FileEnvelopeSchema,
   FOOTER_METADATA_KEYS, OPTIONAL_FOOTER_METADATA_KEYS,
   LedgerCompletionEvidenceSchema, PartitionAssignmentSchema,
-  PenaltyEvidenceSchema, PolicyIdentitySchema,
+  PenaltyEvidenceSchema, PolicyIdentitySchema, PublisherExposurePenaltySchema,
   RejectionDetailsSchema, RowIdentitySchema, ROW_IDENTITY_COLUMN_VERSIONS, ScoreEvidenceSchema, SourceRunRecordSchema,
   SourceSnapshotSchema, WriterIdentitySchema, FeedHealthRowSchema,
   FetchedDocumentSchema, PlannerOperationSchema,
@@ -25,6 +25,7 @@ import {
 export const runtimeSchemas = {
   SourceSnapshot: SourceSnapshotSchema, ArticleLabels: ArticleLabelsSchema,
   PenaltyEvidence: PenaltyEvidenceSchema, ScoreEvidence: ScoreEvidenceSchema,
+  PublisherExposurePenalty: PublisherExposurePenaltySchema,
   PolicyIdentity: PolicyIdentitySchema, FeedIngestCandidate: FeedIngestCandidateSchema,
   EditorialSelectionRow: EditorialSelectionRowSchema, PartitionAssignment: PartitionAssignmentSchema,
   FeedIngestDispatch: FeedIngestDispatchSchema, RejectionDetails: RejectionDetailsSchema,
