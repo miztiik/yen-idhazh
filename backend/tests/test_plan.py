@@ -392,7 +392,13 @@ def test_the_plan_records_an_operator_shard_count_even_when_it_exceeds_the_deriv
 
 def test_the_plan_derives_its_shard_count_from_its_final_items() -> None:
     run = RunConfig.model_validate(
-        {**config.load().app.run.model_dump(), "shard_size": 2, "max_parallel": 4}
+        {
+            **config.load().app.run.model_dump(),
+            "shard_size": 2,
+            "max_parallel": 4,
+            "safety_ceiling_per_run": 12,
+            "safety_ceiling_per_day": 12,
+        }
     )
     feeds, replies = story_supply(6)
     full = plan(feeds, fetcher=replies.__getitem__, run=run)
@@ -557,11 +563,16 @@ def test_a_second_vertical_with_no_feeds_still_appears_in_the_plan() -> None:
 
 def test_supply_decides_the_size_of_the_day() -> None:
     """No per-vertical cap. What the feeds offered is what the day is."""
-    run = config.load().app.run
-    assert 9 < min(run.safety_ceiling_per_run, run.safety_ceiling_per_day)
+    run = RunConfig.model_validate(
+        {
+            **config.load().app.run.model_dump(),
+            "safety_ceiling_per_run": 12,
+            "safety_ceiling_per_day": 12,
+        }
+    )
     for count in (6, 9):
         feeds, replies = story_supply(count)
-        built = plan(feeds, fetcher=replies.__getitem__)
+        built = plan(feeds, fetcher=replies.__getitem__, run=run)
         assert {item.canonical_url for item in built.items} == {
             f"https://ai-supply-{index}.example.org/story" for index in range(count)
         }
@@ -789,6 +800,13 @@ def test_an_article_limit_keeps_the_best_stories_of_the_whole_run() -> None:
     Unset, it plans exactly what it planned before. It can lower the crash
     guard and never raise it.
     """
+    run = RunConfig.model_validate(
+        {
+            **config.load().app.run.model_dump(),
+            "safety_ceiling_per_run": 12,
+            "safety_ceiling_per_day": 12,
+        }
+    )
     ai_feeds, ai_replies = story_supply(3, tier=3)
     energy_feeds, energy_replies = story_supply(3, vertical="energy", tier=1)
     feeds = [*ai_feeds, *energy_feeds]
@@ -797,7 +815,7 @@ def test_an_article_limit_keeps_the_best_stories_of_the_whole_run() -> None:
         AI,
         VerticalDef(id="energy", display_name="Energy", min_feeds=3, definition=DEFINITION),
     ]
-    full = plan(feeds, fetcher=replies.__getitem__, verticals=verticals)
+    full = plan(feeds, fetcher=replies.__getitem__, verticals=verticals, run=run)
     assert len(full.items) == 6
     strongest = sorted(full.items, key=lambda item: (-item.rank_score, item.item_id))[:2]
     assert {item.vertical for item in strongest} == {"energy"}
@@ -805,12 +823,18 @@ def test_an_article_limit_keeps_the_best_stories_of_the_whole_run() -> None:
     expected = [item.item_id for item in full.items if item.item_id in winners]
     assert expected != [item.item_id for item in full.items[:2]]
 
-    limited = plan(feeds, fetcher=replies.__getitem__, verticals=verticals, article_limit=2)
+    limited = plan(
+        feeds, fetcher=replies.__getitem__, verticals=verticals, run=run, article_limit=2
+    )
     assert [item.item_id for item in limited.items] == expected
     for limit in (None, len(full.items) + 1):
         assert (
             plan(
-                feeds, fetcher=replies.__getitem__, verticals=verticals, article_limit=limit
+                feeds,
+                fetcher=replies.__getitem__,
+                verticals=verticals,
+                run=run,
+                article_limit=limit,
             ).to_json()
             == full.to_json()
         )
@@ -819,6 +843,7 @@ def test_an_article_limit_keeps_the_best_stories_of_the_whole_run() -> None:
         feeds,
         fetcher=replies.__getitem__,
         verticals=verticals,
+        run=run,
         safety_ceiling=1,
         article_limit=len(full.items),
     )
