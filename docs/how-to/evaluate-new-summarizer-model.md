@@ -41,7 +41,7 @@ Three blocks follow: **measure the candidate**, **adopt**, **revert**.
 
 ## The cheapest check is the pipeline tests, and it uses the real prompts
 
-Reach for `idhazh-pipeline-tests.yaml` first. It draws a few real articles - two
+Reach for `idhazh-pipeline-tests.yaml` first. It draws a few real articles - three
 by default - and runs the production path over them - the real fetcher, the real
 extractor, the real prompts, the real two calls, the real model server - and it
 takes a models file, so it runs that path on a candidate:
