@@ -58,12 +58,17 @@ jobs:
             /.github/scripts/feed-ingest-plan-verification.ts
             /.github/scripts/feed-ingest-plan-audit-fixture.ts
             /.github/scripts/feed-ingest-plan-http-proof.ts
+            /.github/scripts/feed-ingest-plan-profile-proof.ts
             /.github/scripts/tests/feed-ingest-plan-outputs.test.ts
             /.github/scripts/tests/feed-ingest-plan-report.test.ts
             /.github/scripts/tests/feed-ingest-plan-workflow.test.ts
             /.github/workflows/feed-ingest-plan-test.yml
             /.github/workflows/ci.yml
             /tests/fixtures/feed-ingest-plan/
+            /tests/fixtures/host-probes/
+            /tests/fixtures/host-fingerprints/linux-inputs.json
+            /tests/fixtures/runtime/2026-08-30-probe-proc-stat-at-start.txt
+            /tests/fixtures/runtime/2026-08-30-probe-proc-stat-at-end.txt
             /tests/fixtures/ledger-file-writer/
             /tests/fixtures/contracts/feed-ingest-dispatch/one-article.json
             /tests/fixtures/contracts/feed-ingest-event/one-observation.json
@@ -79,12 +84,16 @@ jobs:
           bun install --frozen-lockfile --cwd packages/ledger-file-writer
           bun install --frozen-lockfile --cwd services/feed-ingest-plan
           bun install --frozen-lockfile --cwd services/host-fingerprints
+          bun install --frozen-lockfile --cwd services/host-probes
 
       - name: Check isolated adapters and native compatibility
         run: |
           bun run --cwd packages/common-contracts check
           bun run --cwd packages/ledger-file-writer check
           bun run --cwd services/feed-ingest-plan check
+          bun run --cwd services/host-fingerprints check
+          bun run --cwd services/host-probes check
+          bun test ./services/host-probes/test/probe.test.ts ./services/feed-ingest-plan/test/plan-api.test.ts ./services/host-fingerprints/test/fingerprint.test.ts --timeout 30000
           bun test ./.github/scripts/tests/feed-ingest-plan-report.test.ts ./.github/scripts/tests/feed-ingest-plan-outputs.test.ts ./.github/scripts/tests/feed-ingest-plan-workflow.test.ts --timeout 30000
           bun run .github/scripts/feed-ingest-plan-verification.ts
 
@@ -327,6 +336,26 @@ jobs:
           }
           TS
 
+      - name: Prove live RAM endpoint and separate optional copy
+        id: resources
+        run: |
+          bun run - <<'TS'
+          import { join } from "node:path";
+          import { verifyLiveHostProfiling } from "./.github/scripts/feed-ingest-plan-profile-proof";
+          import { writeGitHubOutputs } from "./.github/scripts/feed-ingest-plan-outputs";
+          const { RUNNER_TEMP, GITHUB_OUTPUT, GITHUB_RUN_ATTEMPT } = process.env;
+          if (!RUNNER_TEMP || !GITHUB_OUTPUT || !GITHUB_RUN_ATTEMPT) throw new Error("Resource proof requires isolated run identity");
+          const root = join(RUNNER_TEMP, "feed-ingest-plan");
+          const summary = await Bun.file(join(root, "response.json")).json();
+          const git = Bun.spawn(["git", "rev-parse", "HEAD"], { stdout: "pipe", stderr: "inherit" });
+          const git_sha = (await new Response(git.stdout).text()).trim();
+          if (await git.exited !== 0) throw new Error("Resource proof cannot resolve executed revision");
+          await verifyLiveHostProfiling({
+            git_sha, run_id: summary.run_id, correlation_id: summary.correlation_id, attempt: Number(GITHUB_RUN_ATTEMPT),
+          }, root);
+          await writeGitHubOutputs(GITHUB_OUTPUT, { resource_proof_complete: "true" });
+          TS
+
       - name: Verify full audit on generated publication fixtures
         id: audit_fixture
         run: |
@@ -378,7 +407,7 @@ jobs:
         run: bun run .github/scripts/feed-ingest-plan-report.ts config/feed-ingest-plan.json "$RUNNER_TEMP/feed-ingest-plan/events.json" "$RUNNER_TEMP/feed-ingest-plan"
 
       - name: Commit exact live planner and host files
-        if: ${{ success() && steps.plan.outputs.planning_complete == 'true' && steps.plan.outputs.stage_api_complete == 'true' && steps.audit_fixture.outputs.audited_complete == 'true' && steps.audit_fixture.outputs.scope == 'generated_fixture' }}
+        if: ${{ success() && steps.plan.outputs.planning_complete == 'true' && steps.plan.outputs.stage_api_complete == 'true' && steps.resources.outputs.resource_proof_complete == 'true' && steps.audit_fixture.outputs.audited_complete == 'true' && steps.audit_fixture.outputs.scope == 'generated_fixture' }}
         env:
           CURRENT_RUN_FILES: ${{ steps.plan.outputs.current_run_files }}
           HOST_FILES: ${{ steps.host.outputs.host_files }}
@@ -418,13 +447,15 @@ jobs:
         env:
           PLANNING_COMPLETE: ${{ steps.plan.outputs.planning_complete }}
           STAGE_API_COMPLETE: ${{ steps.plan.outputs.stage_api_complete }}
+          RESOURCE_PROOF_COMPLETE: ${{ steps.resources.outputs.resource_proof_complete }}
           AUDITED_COMPLETE: ${{ steps.audit_fixture.outputs.audited_complete }}
           AUDIT_SCOPE: ${{ steps.audit_fixture.outputs.scope }}
         run: |
           bun run - <<'TS'
           if (process.env.PLANNING_COMPLETE !== "true" || process.env.AUDITED_COMPLETE !== "true"
-            || process.env.STAGE_API_COMPLETE !== "true" || process.env.AUDIT_SCOPE !== "generated_fixture") {
-            console.error("Live planning, separate feed and selected HTML fetch/parse/replay or generated full-audit proof is unavailable. No production publication is claimed.");
+            || process.env.STAGE_API_COMPLETE !== "true" || process.env.RESOURCE_PROOF_COMPLETE !== "true"
+            || process.env.AUDIT_SCOPE !== "generated_fixture") {
+            console.error("Live planning, separate feed and selected HTML fetch/parse/replay, CPU/RAM/copy proof or generated full-audit proof is unavailable. No production publication is claimed.");
             process.exitCode = 2;
           }
           TS

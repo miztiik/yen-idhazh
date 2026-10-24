@@ -19,6 +19,16 @@ import { EXTRACTOR_VERSION, SANITIZER_FINGERPRINT } from "../../services/feed-in
 import { DispatchContract as nativeDispatchContract } from "../../services/feed-ingest-plan/src/metrics/audit-contracts";
 import { readLedgerParquet } from "../../services/feed-ingest-plan/src/read-ledger-history/read-parquet";
 import { verifyParquetFiles } from "./feed-ingest-plan-verification";
+import { z } from "../../services/host-probes/node_modules/zod";
+import { loadConfig as loadProbeConfig, ProbeConfigSchema } from "../../services/host-probes/src/config";
+import { TaskProfileSchema } from "../../services/host-probes/src/task-profile/profile-schema";
+import type { TaskProfile } from "../../services/host-probes/src/task-profile/profile-schema";
+
+const DocumentProfilingSchema = z.strictObject({
+  profiles: z.array(TaskProfileSchema).max(2),
+  actual_work_count: z.int().nonnegative().nullable(),
+  after_checks_count: z.int().nonnegative().nullable(),
+});
 
 class ProofUnavailable extends Error {
   constructor(readonly reason: "NO_SUCCESSFUL_CONFIGURED_FEED" | "INVALID_PLANNING_COMPLETION"
@@ -198,10 +208,12 @@ export async function verifyLiveDocumentHttp(
       journal_records_sha256: null as null | { before_restart: string; after_checks: string },
       selection: target.selection, reason: null as string | null,
       error: null as string | null,
+      profiling: { profiles: [] as TaskProfile[], actual_work_count: null as number | null, after_checks_count: null as number | null },
     };
     evidence.documents.push(proof);
     const persist = () => {
       evidence.stage = `${target.kind}:${proof.stage}`;
+      DocumentProfilingSchema.parse(proof.profiling);
       return writeFile(join(artifactRoot, "stage-api-proof.json"), JSON.stringify(evidence));
     };
     let privateRoot: string | undefined;
@@ -218,8 +230,18 @@ export async function verifyLiveDocumentHttp(
       privateRoot = outputRoot;
       const counts = { dns: 0, http: 0 };
       const apiInputs = { ...inputs, outputRoot };
+      const probeConfig = await loadProbeConfig();
+      const profilingConfig = ProbeConfigSchema.parse({ ...probeConfig,
+        task_profile: { ...probeConfig.task_profile, enabled: true, memory_enabled: true } });
       const apiRuntime: PlanRuntime = {
         ...runtime,
+        task_profiling: {
+          config: profilingConfig,
+          report: profile => {
+            proof.profiling.profiles.push(TaskProfileSchema.parse(profile));
+            DocumentProfilingSchema.parse(proof.profiling);
+          },
+        },
         boundary: {
           resolve: hostname => { counts.dns++; return resolveAddresses(hostname); },
           transport: { request: request => { counts.http++; return networkTransport.request(request); } },
@@ -265,6 +287,21 @@ export async function verifyLiveDocumentHttp(
       function requireOffline(call: Call) {
         if (call.network.dns !== 0 || call.network.http !== 0) throw new Error(`${call.stage}: unexpected outbound network work`);
       }
+      function requireProfile(operation: "fetch" | "parse", request_id: string) {
+        const matches = proof.profiling.profiles.filter(profile => profile.identity.request_id === request_id);
+        const profile = matches[0];
+        if (matches.length !== 1 || !profile || profile.identity.task_name !== operation
+          || profile.identity.run_id !== proof.run_id || profile.identity.correlation_id !== proof.correlation_id
+          || profile.outcome !== "success" || profile.processes.worker.closing.pid !== process.pid
+          || profile.processes.worker.closing.start_ticks === null
+          || profile.processes.worker.closing.memory_kb.rss === null
+          || profile.processes.worker.sampled_rss_max_kb === null
+          || profile.machine_available_min_kb === null
+          || profile.samples.at(-1)?.memory_kb.total === null
+          || (profile.cpu.reason !== null && profile.cpu.reason !== "no_ticks")) {
+          throw new Error(`${operation}: live task profiling evidence is unavailable or mismatched`);
+        }
+      }
       function requireIdentity(observation: ReturnType<typeof PlannerObservationSchema.parse>, operation: "fetch" | "parse") {
         if (observation.article_id !== proof.article_id || observation.source_id !== source!.id
           || observation.correlation_id !== proof.correlation_id || observation.operation !== operation
@@ -285,6 +322,7 @@ export async function verifyLiveDocumentHttp(
       server = servePlan(apiInputs, apiRuntime);
       const fetched = await post("fetch", "fetch", fetchRequest);
       requireStatus(fetched, 200);
+      requireProfile("fetch", fetchRequest.request_id);
       const receipt = readFetchReceipt(JSON.parse(fetched.private_response_bytes.toString("utf8")));
       requireIdentity(receipt.observation, "fetch");
       if (receipt.fetch_request_id !== fetchRequest.request_id || receipt.kind !== target.kind
@@ -309,6 +347,8 @@ export async function verifyLiveDocumentHttp(
       const parsed = await post("parse", "parse", parseRequest);
       requireStatus(parsed, 200);
       requireOffline(parsed);
+      requireProfile("parse", parseRequest.request_id);
+      proof.profiling.actual_work_count = proof.profiling.profiles.length;
       const result = readParseReceipt(JSON.parse(parsed.private_response_bytes.toString("utf8")), target.kind);
       requireIdentity(result.observation, "parse");
       if (result.fetch_request_id !== receipt.fetch_request_id || result.failure !== null || result.parsed === null
@@ -355,6 +395,10 @@ export async function verifyLiveDocumentHttp(
       requireOffline(conflict);
       if (JSON.parse(conflict.private_response_bytes.toString("utf8")).code !== "REQUEST_CONFLICT") throw new Error("Changed configuration: wrong refusal");
       const afterChecks = journalDigest(parseRequest.request_id);
+      proof.profiling.after_checks_count = proof.profiling.profiles.length;
+      if (proof.profiling.actual_work_count !== 2 || proof.profiling.after_checks_count !== 2) {
+        throw new Error("Replay or refusal started a new actual-work profile");
+      }
       proof.journal_records_sha256 = { before_restart: beforeRestart, after_checks: afterChecks };
       if (beforeRestart !== afterChecks) throw new Error("Replay or refusal changed completed journal records");
       proof.stage = "stop_listener";

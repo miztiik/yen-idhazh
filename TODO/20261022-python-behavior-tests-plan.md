@@ -65,8 +65,8 @@ Table D - PR outcomes
 | D7 | 7 | Config reader values and accurate migration test names | 1 | F | DONE | config-reader-behavior-proofs | [#1653](https://github.com/miztiik/yen-idhazh/pull/1653) | - |
 | D8 | 8 | Workflow checks retain independent failure evidence | 1 | G | DONE | workflow-behavior-proofs | [#1656](https://github.com/miztiik/yen-idhazh/pull/1656), merged at `43bdd37d671275af2f904590f7ca69498cc74a91` | - |
 | D9 | 9 | Remove the unused watchlist entry limit | 1 | H | DONE | remove-unused-watchlist-limit | [#1657](https://github.com/miztiik/yen-idhazh/pull/1657), merged at `f479997fec70f4f57b13a6d3a649b5d92a4fd5f7` | - |
-| D10 | 10 | Independent historical reader proofs | 1 | I | IN-FLIGHT | independent-historical-reader-proofs | [#1659](https://github.com/miztiik/yen-idhazh/pull/1659) | - |
-| D11 | 11 | Contract tests prove authored and constructed behavior | 1 | J | IN-FLIGHT | config-refusal-selection-proofs | - | - |
+| D10 | 10 | Independent historical reader proofs | 1 | I | DONE | independent-historical-reader-proofs | [#1659](https://github.com/miztiik/yen-idhazh/pull/1659), merged at `f0449de3db08c710e5b2292a03910da157bcb498` | - |
+| D11 | 11 | Contract tests prove authored and constructed behavior | 1 | J | IN-FLIGHT | config-refusal-selection-proofs | [#1664](https://github.com/miztiik/yen-idhazh/pull/1664) | - |
 
 The canary implementation for Row 3 is delivered separately from its suite-wide
 review obligation. Rows 5 and 6 carry additional changes found by that review.
@@ -652,6 +652,8 @@ counts use the untouched archive and the completed branch instead.
   - `backend/tests/contracts/test_sources_and_marks.py`
   - `backend/tests/contracts/test_ledger_index.py`
   - `backend/tests/contracts/test_source_classification_binding.py`
+  - `frontend/tests/source-classification-binding.spec.ts`
+  - `frontend/scripts/test-groups.ts`
 - **Changes and acceptance proof:**
   - Compare the loaded rest threshold with the file value, keep the tuned
     threshold and real `after_failures` caller, and remove only the committed
@@ -730,23 +732,34 @@ counts use the untouched archive and the completed branch instead.
     `backend/tests/contracts/test_taxonomy_and_prompts.py::test_a_draft_or_retired_entry_reaches_no_prompt`.
     Making a retired lens matchable failed
     `backend/tests/contracts/test_sources_and_marks.py::test_a_published_item_carrying_a_retired_lens_still_reads`.
-  -   Omitting compact-index state from a stable writer, with an empty entry in
-  the disposable input, passed text idempotence but failed object equality in
+  - Omitting compact-index state from a stable writer, with an empty entry in
+    the disposable input, passed text idempotence but failed object equality in
   `backend/tests/contracts/test_ledger_index.py::test_a_compact_index_writes_one_entry_a_line_and_reads_back_what_it_wrote`.
-  The TypeScript binding now parses the interface with the compiler API and
-  compares it with the live Python JSON Schema; its post-change fault proof
-  is pending. Accepting unknown properties failed
+    The TypeScript binding compares the interface AST with the live Python
+    JSON Schema. A Boolean-to-string AST mutation failed
+    `frontend/tests/source-classification-binding.spec.ts::the Python type binding refuses a boolean field changed to string`.
+    Accepting unknown properties failed
   `backend/tests/contracts/test_source_classification_binding.py::test_invalid_registry_refuses_loading_by_name[invalid-property-invented_rule]`.
-  Overwriting the authored source kind and entity tier each failed
+    Overwriting the authored source kind and entity tier each failed
   `backend/tests/contracts/test_source_classification_binding.py::test_configured_defaults_apply_only_to_authored_config`.
-- **Gate record:** Pending the final shared-selector run and post-change
-  TypeScript binding fault proof. The earlier 226-case backend-only record
-  predates this frontend test and does not certify the current change.
+- **Gate record:** The shared selector chose the seven backend modules and all
+  frontend groups because the selector inventory changed. Whitespace, Ruff,
+  mypy, Svelte checks, test-tooling checks and the canary build passed. Pytest
+  passed 225 cases, logic passed 1,501, and browser checks passed 113; none
+  failed or skipped. Record:
+  `backend/var/checks/cdbdb0c4954ddedb8a33c187ae08431d04bd5d604d09f1b73cc8362d5b53fb60.json`.
+  The targeted source-kind binding spec passed both cases, including the
+  Boolean-to-string mutation proof; `npm run check` reported zero errors and
+  warnings. PR checks `scope`, `gates`, `browser` and `site` passed; `robots`
+  was skipped. Plan-only merge work did not repeat these gates.
 - **Plan integration:** The serialized slot is released. Row 5 and Row 9
-  delivery receipts, Row 10's verified head and the exact owner ruling in A5
+  delivery receipts, Row 10's merged receipt and the exact owner ruling in A5
   are retained. D3 remains open; Row 10 is not a dependency.
-- **Delivery:** Test and plan changes are committed in `62968e83a`; the
-  current-main merge is `6a2179890`. The phase pull request is pending.
+- **Delivery:** Tests and the initial plan update are committed in `62968e83a`
+  and `26ac9f90c`; current main, including Row 10's merge receipt, is merged
+  into this branch without rewriting history. The AST binding proof is
+  committed at `f0498735f`; [#1664](https://github.com/miztiik/yen-idhazh/pull/1664)
+  is open. No merge of the phase PR was performed.
 
 ## See also
 
