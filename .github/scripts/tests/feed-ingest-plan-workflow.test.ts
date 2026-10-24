@@ -457,6 +457,7 @@ test("runs the native compatibility verifier in a named-input copy with no backe
       "schemas/source.schema", "schemas/telemetry.schema", "schemas/host-fingerprint.schema",
       "schemas/harvest-diagnostics.schema", "schemas/item-health-failure.schema", "schemas/feed-health.schema",
       "schemas/planner-operation.schema", "schemas/recorded-instant.schema", "observation-order",
+      "schemas/planner-stage.schema",
       "schemas/publication-input.schema",
       "schemas/planning-observations.schema",
     ].map(name => `packages/common-contracts/src/${name}.ts`);

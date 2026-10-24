@@ -209,6 +209,26 @@ The native dispatch regression covers both a later selection day and a changed
 freshness policy, then reads the persisted Parquet back through the current
 contract. Same-day, unchanged-policy runs retain their existing behavior.
 
+## Proposed publisher-exposure adjustment
+
+Count actual publications for the publisher on the current UTC day, then add
+that publisher's already-selected items in the current run. Normalize the
+count by the planned selection slots, capped at 1, before applying the
+configured coefficient:
+
+```text
+exposure = min(1, (published_today + selected_so_far) / planned_slots)
+adjustment = -lambda_source * exposure
+```
+
+The owner approved reusing the current `lambda_source` value of 0.25 and
+replacing the feed-crowding term rather than charging both. The approved
+normalizer is actual publications today plus items already selected, divided
+by planned slots and capped at 1. Known-empty history contributes zero.
+Unavailable history uses current-run selections only and records that history
+was unavailable. Unknown publisher identity adds no publisher count. This is
+a soft preference, not a cap or a selection block.
+
 ## Design rationale
 
 Selection preserves three distinct answers: whether a source was operational,
@@ -222,6 +242,26 @@ source-authority ranking effect as this separately recorded penalty, on by
 default for the isolated TypeScript planner. Keep article quality and diversity
 selection distinct. This does not require identical Python and TypeScript
 selection and does not change the production Python planner or digest.
+
+Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC: replace the isolated
+TypeScript planner's RSS reliability penalty with a normalized penalty for
+cost from operations that failed to produce usable material for a supported
+source-side reason. Preserve curated source weight and tier. Apply the new
+penalty only after its evidence rules pass; do not stack it with RSS
+reliability. This supersedes the earlier penalty choice above. It does not
+change production Python planning. The formula and evidence
+thresholds are proposed in
+[feed-ingest feedback](../contracts/feed-ingest-feedback.md); their provisional
+window, support, coverage and weight defaults are owner-approved. Producer
+fields and exact operation-to-cost bindings remain open in D3.
+
+Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC: reuse the existing
+`lambda_source` value of 0.25 for the soft publisher-exposure preference and
+replace the feed-crowding term. Do not stack both. Count actual publications
+on the current UTC day plus the publisher's already-selected items, divide by
+planned selection slots and cap at 1. Known-empty history is zero; unavailable
+history falls back to current-run selections and records that history was
+unavailable; an unknown publisher contributes no count.
 
 ## See also
 
