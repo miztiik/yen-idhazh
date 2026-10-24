@@ -107,10 +107,8 @@ def test_only_the_jobs_config_names_take_the_bandwidth_reading(tmp_path: Path) -
     )
 
 
-def test_the_committed_config_reads_bandwidth_on_the_bench_and_nowhere_else() -> None:
-    """The default is the bench alone, which is the job whose purpose is to tell
-    one machine from another. Read off the committed file rather than restated
-    here, so moving the knob moves this test with it."""
+def test_the_committed_config_requests_no_bandwidth_jobs() -> None:
+    """The committed empty job list requests no bandwidth benchmark."""
     named = config.load().app.observability.host_fingerprint_bandwidth_jobs
 
     assert named == ()
