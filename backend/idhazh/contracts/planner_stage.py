@@ -40,6 +40,9 @@ NonEmptyList = Annotated[list[NonEmpty], Field(min_length=1)]
 
 def _remove_optional_default(schema: dict[str, Any]) -> None:
     schema.pop("default", None)
+    variants = schema.pop("anyOf", None)
+    if variants is not None:
+        schema.update(next(variant for variant in variants if variant.get("type") != "null"))
 
 
 class PlannerStageContext(Model):
@@ -71,19 +74,19 @@ class PlannerStageContext(Model):
 class PlannerStageRequest(Model):
     """Resolved optional controls saved with the parsed candidate batch."""
 
-    freshness_hours: Finite = Field(
+    freshness_hours: Finite | None = Field(
         default=None, validate_default=False, exclude_if=lambda value: value is None,
         json_schema_extra=_remove_optional_default,
     )
-    article_limit: PositiveCount = Field(
+    article_limit: PositiveCount | None = Field(
         default=None, validate_default=False, exclude_if=lambda value: value is None,
         json_schema_extra=_remove_optional_default,
     )
-    shards: PositiveCount = Field(
+    shards: PositiveCount | None = Field(
         default=None, validate_default=False, exclude_if=lambda value: value is None,
         json_schema_extra=_remove_optional_default,
     )
-    partition_strategy: Literal["bin-pack", "round-robin", "none"] = Field(
+    partition_strategy: Literal["bin-pack", "round-robin", "none"] | None = Field(
         default=None, validate_default=False, exclude_if=lambda value: value is None,
         json_schema_extra=_remove_optional_default,
     )
@@ -162,7 +165,7 @@ class PlannerHarvestObservation(Model):
     extraction: Literal["success", "empty", "failed", "not-attempted"]
     observed_at: Timestamp
     diagnostics: HarvestDiagnostics | None = None
-    preflight_freshness: PreflightFreshness = Field(
+    preflight_freshness: PreflightFreshness | None = Field(
         default=None,
         validate_default=False,
         exclude_if=lambda value: value is None,
