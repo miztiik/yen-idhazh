@@ -103,7 +103,7 @@ names a processor per job rather than per dispatch.
 **What the speed case is worth skipping.** Those four `llama-bench` columns are
 9.1, 26.7, 27.2 and 87.6 minutes against whole dispatches of 170.6, 188.5, 113.6
 and 287.8 - between a tenth and a third. That is the size of what
-`bench.run_model_speed_case` and the `model_speed_case` dispatch input buy back
+the `model_speed_case` dispatch input set to `skip` buys back
 when somebody is exercising the flow rather than measuring a model
 ([github-actions.md](../github-actions.md#design-rationale)). The job was keyed
 `llm` until 2026-09-17; older run pages show that name.

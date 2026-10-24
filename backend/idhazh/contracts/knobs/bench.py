@@ -19,8 +19,8 @@ class BenchConfig(Model):
         le=20,
         description=(
             "Articles one bench repeat reads. It sizes the whole dispatch: a named "
-            "candidate runs a baseline case and the candidate's case, so three repeats "
-            "is six passes over this many articles, and one pass is the unit the job "
+            "candidate runs a baseline case and the candidate's case, so two repeats "
+            "is four passes over this many articles, and one pass is the unit the job "
             "timeout is spent in.\n\n"
             "Three because five does not fit, not because three is thrifty. Measured "
             "2026-09-17 over the four dispatches of 2026-09-16 (35086403868, "
@@ -28,7 +28,8 @@ class BenchConfig(Model):
             "slowest pass took 65.6 minutes for five articles, so six passes compute "
             "to 393.7 minutes against a 330-minute job timeout - over by 19 percent. "
             "Four articles is 315 minutes, which is 95.5 percent of the timeout and no "
-            "headroom at all. Three is 236 minutes, 71.6 percent, and it fits. "
+            "headroom at all. Three is 236 minutes at three repeats, 71.6 percent, and it "
+            "fits; at two repeats it is about 157. "
             "Guardrail #2: the timeout is GitHub's, so the design is what gives.\n\n"
             "Raising it costs the dispatch, and past three it costs the dispatch its "
             "result. Lowering it costs evidence: at five articles a per-article "
@@ -45,7 +46,7 @@ class BenchConfig(Model):
     )
 
     repeats: int = Field(
-        default=3,
+        default=2,
         ge=2,
         description=(
             "How many times a bench dispatch runs each case. Two is the floor because "
@@ -53,39 +54,14 @@ class BenchConfig(Model):
             "and a dispatch that cannot produce a spread is refused before it starts.\n\n"
             "It lives here, beside `corpus_items`, because the two numbers multiply and "
             "the product is what the job timeout is spent on. A named candidate runs two "
-            "cases, so three repeats is six passes over `corpus_items` articles - 236 "
-            "minutes against a 330-minute timeout at three articles, which fits. Held in "
+            "cases, so two repeats is four passes over `corpus_items` articles - about "
+            "157 minutes against a 330-minute timeout at three articles. Held in "
             "two files, the next person raises one of the two without seeing the other "
             "and finds out at 330 minutes, when GitHub kills the job (Guardrail #2).\n\n"
             "A case set costs more at the same number: `draft_depth` runs four cases, so "
-            "three repeats there is twelve passes rather than six. That is what "
+            "two repeats there is eight passes rather than four. That is what "
             "`measure.yml`'s `runtime_repeats` dispatch input is for - it overrules this "
-            "knob for one run without a commit, and empty follows it."
-        ),
-    )
-
-    run_model_speed_case: bool = Field(
-        default=True,
-        description=(
-            "Does a bench dispatch measure the model's raw speed before it measures "
-            "real work? Default true, and it is removed the day the speed case stops "
-            "costing a dispatch time worth saving - measured 2026-09-16 over four "
-            "dispatches on stock ubuntu-latest at 9.1, 26.7, 27.2 and 87.6 minutes, "
-            "so today it is worth between a tenth and a third of the whole dispatch.\n\n"
-            "False runs the rest of the flow and skips that half: the fixed corpus, "
-            "the real server over it, the machine record and the committed host row "
-            "all still happen. What is given up is the prefill and decode rates, and "
-            "with them the dossier - a dossier is both cases, so a dispatch that "
-            "skipped one emits the server half and a line saying which half is "
-            "missing rather than a page that reads whole.\n\n"
-            "It also moves who pays for the weights. The speed case fills the cache "
-            "entry the server case restores, so a dispatch that skips it downloads "
-            "the candidate once in the server case instead - the same bytes, in a "
-            "different job.\n\n"
-            "`measure.yml`'s `model_speed_case` dispatch input overrules this for one "
-            "run without a commit: `config` follows this knob, `run` and `skip` do "
-            "not. This is operator control rather than a feature behind a flag, so "
-            "there is no second implementation waiting behind it - the same jobs run "
-            "either way and one of them is not dispatched."
+            "knob for one run without a commit. The form's default is this same number, "
+            "and a test holds the two together."
         ),
     )

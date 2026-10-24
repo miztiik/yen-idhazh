@@ -321,8 +321,8 @@ dispatch - 9.1 to 87.6 minutes of the four measured on 2026-09-16
 It exists so somebody changing the workflow can exercise the flow without paying
 for a measurement nobody will read. A candidate adopted on a dossier with no
 raw-case block has not been measured on the axis this step exists to measure, so
-leave the box alone here. `bench.run_model_speed_case` in `config/idhazh.json` is
-the same switch for every dispatch.
+leave the box alone here. The `model_speed_case` input is the same switch for
+every dispatch.
 
 **Case one, artifact `bench-raw`** - raw prefill and decode with nothing else in
 the process:
@@ -419,12 +419,12 @@ gh workflow run measure.yml --ref <branch> \
  -f runtime_repeats=2
 ```
 
-`runtime_repeats` is 2 here and not 3 to buy a cheaper dispatch, and it is not a
-correction to the knob. Repeats multiply the corpus and the job timeout is what
-the product is spent against, so the two numbers sit beside each other in config:
-`bench.repeats` is three and `bench.corpus_items` is three, which is six passes
-and 236 minutes against a 330-minute timeout (Guardrail #2 - the limit is
-GitHub's, so the design is what gives). Leave the input empty to take the knob.
+`runtime_repeats` is 2 here, which is also the form default and `bench.repeats`.
+Repeats multiply the corpus and the job timeout is what the product is spent
+against, so the two numbers sit beside each other in config: `bench.repeats` is
+two and `bench.corpus_items` is three, which is four passes at about 157 minutes
+against a 330-minute timeout (Guardrail #2 - the limit is GitHub's, so the design
+is what gives). Leave the input at its default to take the knob.
 
 **When the question is not what a setting costs but whether it changes the
 words, dispatch a case set.** A named candidate runs the unchanged server and

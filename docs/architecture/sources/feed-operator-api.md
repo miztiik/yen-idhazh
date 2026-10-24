@@ -121,9 +121,10 @@ can pass `PlanRuntime.task_profiling` with validated controls and a report
 callback. An absent callback configuration leaves profiling out. The ordinary
 listener writes enabled profiles as structured stderr records, never into the
 HTTP response, fetched artifact or SQLite record.
-The host probe's HTTP API still exposes only its standalone `GET /sample`
-route under the dated API prefix; task start/stop HTTP controls are follow-up
-work, not part of these embedded wrappers.
+The separate [host-probe task API](../../reference/host-probe-api.md)
+provides operator-owned HTTP start and stop controls for explicitly pinned
+processes. Its standalone `GET /sample` remains independent. These controls
+belong to the host probe, not these fetch/parse routes or their replay rules.
 
 Fetch starts measurement only after the active source and operator URL pass
 validation. Parse starts only after its completed fetch, configuration,
@@ -142,11 +143,6 @@ request. No ranking, selection, article text or source-status rule changes.
 Unexpected collection or callback errors fail explicitly and do not commit a
 successful response. As with any interrupted fetch, retry can repeat unfinished
 external work.
-
-The separate [host-probe task commands](../../reference/host-probe-api.md)
-can profile other operator tasks by an explicitly pinned PID. They belong to
-the host-probe listener, not these fetch/parse routes, and do not change their
-durable replay rules.
 
 ## Design rationale
 

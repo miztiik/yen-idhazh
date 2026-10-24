@@ -1,6 +1,6 @@
 # Models
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-10-24
 One row per model. Each row points at a model's dossier - the page holding that
 model's identity and measured properties, with the hardware that took each
 reading, the date and the spread.
@@ -10,6 +10,13 @@ reading, the date and the spread.
 | Qwen3.5-9B-Q4_K_M | summarizer | [models/qwen3.5-9b-q4km.md](models/qwen3.5-9b-q4km.md) |
 | Gemma-4-E4B-it-qat-UD-Q4_K_XL | summarizer candidate | [models/gemma-4-e4b-qat.md](models/gemma-4-e4b-qat.md) |
 | Ornith-1.5-9B-Q5_K_M | summarizer candidate | [models/ornith-1.5-9b-q5km.md](models/ornith-1.5-9b-q5km.md) |
+
+**Ternary-Bonsai-2-27B-PTQ1_0 is parked for future investigation.** Its
+experimental probe did not return a usable reply within the run window, so it is
+not performant enough for this repository at this time. It is not a configured
+summarizer, it has no dossier, and this finding is not a summary-quality verdict.
+The probe result is in
+[benchmarks/what-a-bonsai-27b-probe-settled.md](benchmarks/what-a-bonsai-27b-probe-settled.md).
 
 A bench records speed and memory. Qualification is the separate judgement of
 whether a candidate writes summaries well enough to publish.
@@ -77,6 +84,7 @@ definitions.
 - [models/qwen3.5-9b-q4km.md](models/qwen3.5-9b-q4km.md) - Qwen3.5 model dossier.
 - [models/gemma-4-e4b-qat.md](models/gemma-4-e4b-qat.md) - a benched candidate.
 - [models/ornith-1.5-9b-q5km.md](models/ornith-1.5-9b-q5km.md) - a benched candidate.
+- [benchmarks/what-a-bonsai-27b-probe-settled.md](benchmarks/what-a-bonsai-27b-probe-settled.md) - the parked ternary-model finding.
 - [pipeline-cost.md](pipeline-cost.md) - the instrument log: everything measured that is not a property of one model.
 - [documentation-structure.md](documentation-structure.md) - where each kind of page lives, and what a dossier may not hold.
 - [../how-to/evaluate-new-summarizer-model.md](../how-to/evaluate-new-summarizer-model.md) - measure a candidate, adopt it in one line, and put the old one back in the same line.

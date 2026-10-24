@@ -437,20 +437,21 @@ BENCH_RAW_JOB_EXPRESSION: Final = f"needs['{BENCH_RAW_JOB}']"
 
 BENCH_SERVER_JOB: Final = "runtime"
 
-#: The dispatch input and the config knob that decide whether the speed case
-#: runs at all, and the `models` output that carries the answer to a job's `if:`.
-#: A job cannot read a step of its own job, so the decision travels as an output.
+#: The dispatch input that decides whether the speed case runs at all, and the
+#: `models` output that carries the answer to a job's `if:`. A job cannot read a
+#: step of its own job, so the decision travels as an output.
 BENCH_SPEED_INPUT: Final = "model_speed_case"
-
-BENCH_SPEED_KNOB: Final = "run_model_speed_case"
 
 BENCH_SPEED_OUTPUT: Final = f"needs.models.outputs.{BENCH_SPEED_INPUT}"
 
-BENCH_SPEED_MODULE: Final = "backend/utilities/model_speed_case.py"
+#: A module that imports `idhazh`, for the install-order checks. Any of them will do.
+IDHAZH_IMPORTER: Final = "backend/utilities/runtime_sweep.py"
 
 BENCH_SPEED_SKIP_STEP: Final = "Say what a bypassed speed case cost this dossier"
 
 BENCH_SUMMARY_STEP: Final = "Put the speed readings in the run summary"
+
+BENCH_PAGE_STEP: Final = "Write the bench run page"
 
 BENCH_CACHE_KEY: Final = (
     "bench-${{ needs.models.outputs.candidate_cache_key }}-${{ env.LLAMA_CPP_BUILD }}"
