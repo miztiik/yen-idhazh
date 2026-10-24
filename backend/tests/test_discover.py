@@ -27,7 +27,7 @@ from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome, RobotsOutc
 from idhazh.contracts.item_health import TimeSource
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.sources import FeedDef, SourceForm
-from idhazh.contracts.taxonomy import LifecycleStatus, VerticalDef
+from idhazh.contracts.taxonomy import LifecycleStatus, SourceTierDefinition, VerticalDef
 from idhazh.discover import (
     Candidate,
     candidates_from_feed,
@@ -1132,6 +1132,14 @@ def test_tier_weights_come_from_config() -> None:
     config = collect_config()
     assert tier_weight(1, config) > tier_weight(2, config)
     assert tier_weight(2, config) > tier_weight(3, config)
+    config.bind_source_tiers(
+        [
+            SourceTierDefinition(id=1, display_name="Institution", weight=0.17),
+            SourceTierDefinition(id=2, display_name="Trade press", weight=0.83),
+            SourceTierDefinition(id=3, display_name="Community", weight=0.41),
+        ]
+    )
+    assert [tier_weight(tier, config) for tier in (1, 2, 3)] == [0.17, 0.83, 0.41]
 
 
 def test_no_hash_appears_in_any_planned_item_id() -> None:
