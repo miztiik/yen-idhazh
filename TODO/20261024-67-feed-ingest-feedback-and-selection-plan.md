@@ -109,7 +109,7 @@ tracing context. The existing default-off service flag gates the new routes.
 | E12 | 12 | Enforce temporary access restrictions and earned recovery | 11 | J | PENDING | - | - | - |
 | E13 | 13 | Apply discovery evidence before feed polling | 12 | K | PENDING | - | - | - |
 | E14 | 14 | Conditional HTTP (removed by owner ruling) | - | - | REMOVED | - | - | - |
-| E15 | 15 | Correct structured host and path exclusions | - (matcher intent approved separately) | B | IN-REVIEW | structured-url-exclusions | - | - |
+| E15 | 15 | Correct structured host and path exclusions | - (matcher intent approved separately) | B | IN-REVIEW | structured-url-exclusions | [#1703](https://github.com/miztiik/yen-idhazh/pull/1703) | 4985fe0e-ca49-4ad2-9aaa-cd31323d8c52; tests: fbf40c01-d984-48ef-b6a5-a75fb4afe74d |
 | E16 | 16 | Review and migrate URL identity separately | 15 | L | PENDING | - | - | - |
 | E17 | 17 | Prove dispatch-Parquet parity, then wire digest workers | 8 | A | DEFERRED | - | - | - |
 | E18 | 18 | Connect actual downstream outcomes to the observer | 2, 10, 17 | M | DEFERRED | - | - | - |

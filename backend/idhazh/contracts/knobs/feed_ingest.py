@@ -6,7 +6,7 @@ import re
 from collections.abc import Mapping
 from typing import Annotated, Any, Literal, Self
 
-from pydantic import ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from idhazh.contracts.base import Model
 
@@ -141,6 +141,22 @@ class FeedUrlExclusion(Model):
         pattern=r"^\/.*", json_schema_extra={"format": "starts_with"},
     )]
     include_subdomains: bool = Field(strict=True)
+
+    @field_validator("path_prefix")
+    @classmethod
+    def validate_path_prefix(cls, value: str) -> str:
+        if (
+            not value.isascii()
+            or any(ord(char) <= 32 or ord(char) == 127 or char in '?#\\`{}<>"' for char in value)
+            or value.startswith("//")
+            or (value != "/" and value.endswith("/"))
+            or re.search(r"(?:^|/)(?:\.|%2e){1,2}(?:/|$)", value, re.IGNORECASE)
+        ):
+            raise ValueError(
+                "path_prefix must be an absolute path without query, fragment, "
+                "dot segments or trailing slash"
+            )
+        return value
 
 
 class FeedHarvestConfig(Model):

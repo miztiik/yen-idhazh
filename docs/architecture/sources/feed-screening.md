@@ -51,7 +51,7 @@ history and constructing downstream assessments.
 Before any article request, the isolated TypeScript harvester checks
 `harvest.url_exclusions` in `config/feed-ingest-plan.json`. Each validated rule
 names a host, a path prefix and whether subdomains are included. Hosts compare
-without case; subdomains must end at a dot boundary. Paths compare with case
+without case or one terminal DNS dot; subdomains must end at a dot boundary. Paths compare with case
 and match the prefix itself or its descendants at a slash boundary. A root
 prefix matches all paths on that host. Queries and fragments do not participate.
 Rule paths have no trailing slash except the root and cannot contain a query,

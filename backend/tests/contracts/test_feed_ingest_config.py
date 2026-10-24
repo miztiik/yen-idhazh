@@ -172,5 +172,13 @@ def test_python_refuses_invalid_global_settings_and_duplicate_references() -> No
     for patch in patches:
         with pytest.raises(ValidationError):
             feed_ingest.FeedIngestConfig.model_validate(payload | patch)
+    safety = json.loads(read_text(
+        REPO_ROOT / "tests" / "fixtures" / "feed-ingest-plan" / "harvest-safety.json"
+    ))
+    for rule in safety["invalid_url_exclusions"]:
+        with pytest.raises(ValidationError):
+            feed_ingest.FeedUrlExclusion.model_validate(rule)
+    for rule in safety["url_exclusions"]:
+        feed_ingest.FeedUrlExclusion.model_validate(rule)
     with pytest.raises(ValidationError, match="duplicate ids"):
         feed_ingest.PlanningTaxonomy.model_validate({"verticals": [{"id": "ai"}, {"id": "ai"}]})

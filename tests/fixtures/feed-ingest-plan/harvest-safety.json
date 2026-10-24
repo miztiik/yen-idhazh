@@ -84,6 +84,8 @@
       "expected": true
     },
     {"name": "approved subdomain", "url": "https://news.fool.com/the-ascent/story", "expected": true},
+    {"name": "DNS terminal dot keeps exclusion", "url": "https://fool.com./the-ascent/story", "expected": true},
+    {"name": "DNS terminal dot on rule keeps exclusion", "url": "https://news.fool.com/the-ascent/story", "rules": [{"host": "fool.com.", "path_prefix": "/the-ascent", "include_subdomains": true}], "expected": true},
     {"name": "host suffix without a dot boundary", "url": "https://fool.com.evil.example/the-ascent/story", "expected": false},
     {"name": "path prefix without a segment boundary", "url": "https://fool.com/the-ascentive/story", "expected": false},
     {"name": "path case is significant", "url": "https://fool.com/The-Ascent/story", "expected": false},
@@ -101,6 +103,11 @@
     {"host": "fool.com", "path_prefix": "the-ascent", "include_subdomains": true},
     {"host": "fool.com", "path_prefix": "/the-ascent/", "include_subdomains": true},
     {"host": "fool.com", "path_prefix": "/the-ascent?next=story", "include_subdomains": true},
+    {"host": "fool.com", "path_prefix": "/the-ascent#story", "include_subdomains": true},
+    {"host": "fool.com", "path_prefix": "/the-ascent\\story", "include_subdomains": true},
+    {"host": "fool.com", "path_prefix": "//the-ascent", "include_subdomains": true},
+    {"host": "fool.com", "path_prefix": "/the-ascent/../story", "include_subdomains": true},
+    {"host": "fool.com", "path_prefix": "/the-ascent/%2e%2e/story", "include_subdomains": true},
     {"host": "fool.com", "path_prefix": "/the-ascent", "include_subdomains": "yes"},
     {"host": "fool.com", "path_prefix": "/the-ascent", "include_subdomains": true, "marker": "fool.com/the-ascent/"}
   ]
