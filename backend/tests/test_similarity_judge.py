@@ -658,7 +658,9 @@ def test_judging_changes_only_its_own_sampling_setting(
     entry = settings.models.summarizer.model_copy(
         update={"sampling": sampling | {"temperature": 0.71}}
     )
-    settings = dataclasses.replace(settings, models=ModelsConfig(summarizer=entry))
+    settings = dataclasses.replace(
+        settings, models=ModelsConfig.model_validate({"summarizer": entry})
+    )
 
     assert judge.decode_settings(settings) == sampling | {
         "temperature": tuning.judge_temperature
@@ -943,7 +945,8 @@ def test_judging_selects_its_declared_role_or_the_summarizer(separate_judge: boo
     summarizer = settings.models.summarizer.model_copy(update={"sampling": {}})
     judging = summarizer.model_copy() if separate_judge else None
     settings = dataclasses.replace(
-        settings, models=ModelsConfig(summarizer=summarizer, judge=judging)
+        settings,
+        models=ModelsConfig.model_validate({"summarizer": summarizer, "judge": judging}),
     )
 
     assert judge.entry_of(settings) is (judging if separate_judge else summarizer)
