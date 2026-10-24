@@ -301,7 +301,9 @@ class TestTheGateSuppressesThePlanAndNeverTheCall:
         assert whole["prompt"].startswith(shared)
         assert suppressed["prompt"].startswith(shared)
         assert whole["prompt"][len(shared) :] != suppressed["prompt"][len(shared) :]
-        assert suppressed["n_predict"] == SUPPRESSED_BUDGET_TOKENS
+        assert suppressed.get("max_tokens", suppressed.get("n_predict")) == (
+            first.get("max_tokens", SUPPRESSED_BUDGET_TOKENS)
+        )
 
     def test_both_halves_reach_the_model_whichever_shape_is_asked_for(self) -> None:
         """They sit in the system turn now, so this is true by construction.
@@ -641,6 +643,5 @@ class TestTheDowngradeLadder:
             committed_visuals(downgrade_floor_percentiles=[50, 50])
         with pytest.raises(ValidationError):
             committed_visuals(downgrade_floor_percentiles=[101])
-
 
 

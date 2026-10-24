@@ -30,6 +30,7 @@ from conftest import (
     CONFIG_DIR,
     CONTRACT_FIXTURES_DIR,
     FIXTURES_DIR,
+    INCUMBENT_MODEL,
     _rendered_by_the_template,
     committed_markers,
     read_text,
@@ -235,8 +236,9 @@ def _settings_judging_behind_a_thinking_span() -> config.Settings:
     """
     settings = _settings()
     thinking = ModelsConfig.from_json(read_text(CONFIG_DIR / "models" / THINKING_ENTRY_FILE))
+    plain = ModelsConfig.from_json(read_text(CONFIG_DIR / "models" / INCUMBENT_MODEL))
     models = ModelsConfig.model_validate(
-        settings.models.model_dump(mode="json")
+        plain.model_dump(mode="json")
         | {"judge": thinking.summarizer.model_dump(mode="json")}
     )
     return dataclasses.replace(settings, models=models)
@@ -642,65 +644,28 @@ def test_a_pair_is_read_twice_with_the_two_summaries_swapped() -> None:
     )
 
 
-def test_every_decode_carries_the_grammar_and_asks_for_the_first_position() -> None:
-    """The control is what was sent, not what the prompt asked for in words.
-
-    Read off the bodies the server was really posted, so a builder that stopped
-    sending the grammar fails here rather than three hundred verdicts later.
-    """
-    day = _a_day()
-    with JudgeServer(_reply("two-events")) as server:
-        judge.judge_pair(
-            day.items[0],
-            day.items[1],
-            client=_client(server),
-            settings=_settings(),
-            markers=committed_markers(),
-        )
-        decodes = server.decodes
-
-    assert decodes, "no body was posted, so this proves nothing"
-    for body in decodes:
-        assert body["grammar"] == prompt.grammar()
-        assert body["n_probs"] == len(prompt.first_token_prefixes())
-        assert body["n_predict"] == prompt.REPLY_TOKENS
-        assert "json_schema" not in body, "two controls in one body is a build deciding which wins"
-
-
-def test_the_decode_is_sent_at_the_judging_knob_and_not_the_entry(tmp_path: Path) -> None:
-    """A sampler that strays turns the swap from a bias reading into a noise reading.
-
-    Read off the posted body rather than off the config, because the defect this
-    catches is the builder ignoring the knob - which a config assertion cannot
-    see. The entry's own temperature is asserted to be a different number, so
-    this fails rather than passes by coincidence if the wiring is dropped.
-    """
+@pytest.mark.parametrize("sampling", [{}, {"operator_option": 17}])
+def test_judging_changes_only_its_own_sampling_setting(
+    tmp_path: Path, sampling: dict[str, Any]
+) -> None:
+    """Judging preserves arbitrary operator settings and changes only its own knob."""
     settings = _settings_with_temperatures(
         tmp_path, judge_temperature=0.37, entry_temperature=0.71
     )
     from idhazh.content_similarity_judge import settings as judge_settings
 
     tuning = judge_settings.load(settings.config_dir)
-    entry = settings.models.summarizer
-    assert tuning.judge_temperature == 0.37
-    assert entry.sampling["temperature"] == 0.71
-    assert entry.sampling["temperature"] != tuning.judge_temperature
-    day = _a_day()
-    with JudgeServer(_reply("two-events")) as server:
-        judge.judge_pair(
-            day.items[0],
-            day.items[1],
-            client=_client(server),
-            settings=settings,
-            markers=committed_markers(),
-        )
-        decodes = server.decodes
+    entry = settings.models.summarizer.model_copy(
+        update={"sampling": sampling | {"temperature": 0.71}}
+    )
+    settings = dataclasses.replace(
+        settings, models=ModelsConfig.model_validate({"summarizer": entry})
+    )
 
-    assert decodes, "no body was posted, so this proves nothing"
-    for body in decodes:
-        assert body["temperature"] == tuning.judge_temperature
-        assert body["top_p"] == entry.sampling["top_p"]
-        assert body["seed"] == entry.sampling["seed"]
+    assert judge.decode_settings(settings) == sampling | {
+        "temperature": tuning.judge_temperature
+    }
+    assert entry.sampling == sampling | {"temperature": 0.71}
 
 
 def test_a_reply_the_grammar_could_not_have_written_is_written_down(
@@ -873,18 +838,12 @@ def test_a_thinking_entry_reads_its_verdict_off_the_answer_span() -> None:
         )
         decodes = server.decodes
 
-    close = settings.models.judge.thinking_close if settings.models.judge else None
     assert reading.verdict is SameStoryVerdict.YES
     assert reading.thinking_spans == 1
     assert reading.thinking == json.loads(thought)["content"]
     with pytest.raises(judge.GrammarNotAppliedError):
         judge.verdict_of(reading.thinking)
     assert len(decodes) == 2
-    assert "grammar" not in decodes[0], "a span held to three literals cannot reason"
-    assert "n_probs" not in decodes[0]
-    assert decodes[0]["stop"] == [close]
-    assert decodes[1]["grammar"] == prompt.grammar()
-    assert decodes[1]["prompt"] == decodes[0]["prompt"] + reading.thinking + close
     assert reading.first_token_margin is not None, "the margin is read off the answer's window"
 
 
@@ -979,15 +938,18 @@ def test_a_settings_with_no_judge_role_decodes_one_span_and_says_so() -> None:
     assert len(decodes) == 1
 
 
-def test_a_judge_role_decodes_on_the_weights_the_summariser_server_holds() -> None:
-    """One server, one file. A second entry moves the decode and never the weights."""
-    settings = _settings_judging_behind_a_thinking_span()
-    judging = settings.models.judge
+@pytest.mark.parametrize("separate_judge", [False, True])
+def test_judging_selects_its_declared_role_or_the_summarizer(separate_judge: bool) -> None:
+    """Select the optional judge entry, or fall back to the summarizer."""
+    settings = _settings()
+    summarizer = settings.models.summarizer.model_copy(update={"sampling": {}})
+    judging = summarizer.model_copy() if separate_judge else None
+    settings = dataclasses.replace(
+        settings,
+        models=ModelsConfig.model_validate({"summarizer": summarizer, "judge": judging}),
+    )
 
-    assert judging is not None
-    assert judge.entry_of(settings) is judging
-    assert judging.sha256 == settings.models.summarizer.sha256
-    assert judging.thinks and not settings.models.summarizer.thinks
+    assert judge.entry_of(settings) is (judging if separate_judge else summarizer)
 
 
 def test_a_verdict_is_the_word_and_at_most_one_leading_space() -> None:

@@ -18,10 +18,13 @@ import pytest
 from conftest import (
     CONFIG_DIR,
     FIXTURES_DIR,
+    INCUMBENT_MODEL,
     LABEL_REPLIES,
     REPO_ROOT,
     SUMMARIZE_AND_PLAN_REPLIES,
     RecordedEndpoint,
+    a_sampling,
+    a_server,
     a_table,
     committed_markers,
     label_payload,
@@ -73,7 +76,7 @@ from idhazh.classify.calls import (
 from idhazh.contracts.article import Article
 from idhazh.contracts.element import ElementKind, ElementTable, Extractor
 from idhazh.contracts.knobs.extract import ElementsConfig
-from idhazh.contracts.knobs.models import ModelEntry
+from idhazh.contracts.knobs.models import ModelEntry, ModelsConfig
 from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.summary import Summary, SummaryStatus
@@ -285,21 +288,22 @@ class TestThePromptBytes:
 
         Both reply openings, because the one a prompt ends with is chosen by the
         envelope's own closing marker and a wrong pair would be invisible on the
-        case the incumbent runs. The thinking case is BUILT from the committed
-        entry - the incumbent declares no closing marker, so that case has no
-        entry in `config/` and would otherwise be untested until a swap turned
-        it on.
+        case the recorded model runs. Its thinking case uses the same markers
+        with the closing marker enabled.
 
         **The recording and the entry name the same weights.** The fixture says
-        which bytes the server had loaded, so a swap that moved the weights and
-        not the recording fails here rather than rendering quietly.
+        which bytes the server had loaded. Compare it with that model's file,
+        not the current selection: changing models does not change a recording.
         """
         recorded = json.loads(read_text(CHAT_TEMPLATE_RENDERING))
         system, user = recorded["system"], recorded["user"]
-        markers = committed_markers()
+        entry = ModelsConfig.from_json(
+            read_text(CONFIG_DIR / "models" / INCUMBENT_MODEL)
+        ).summarizer
+        markers = committed_markers(INCUMBENT_MODEL)
         thinking = dataclasses.replace(markers, thinking_close="</think>")
 
-        assert configured().sha256 == recorded["weights_sha256"]
+        assert entry.sha256 == recorded["weights_sha256"]
         assert render_prompt(system=system, user=user, markers=markers) == (
             recorded["generation_prompt"]
         )
@@ -622,7 +626,7 @@ class TestTheLabelCallsDerivedBudget:
         assert "boolean" in schema_types(label_schema())
 
     def test_the_request_hands_the_decoder_the_derived_budget(self, dense: Article) -> None:
-        payload = label_payload(dense)
+        payload = build_label_with_derived_budget(dense)
 
         assert payload["n_predict"] == label_budget_tokens()
         assert "max_tokens" not in payload, (
@@ -1406,6 +1410,17 @@ def summarize_and_plan_payload(article: Article, reply: str = "{}") -> dict[str,
     )
 
 
+def build_label_with_derived_budget(article: Article) -> dict[str, Any]:
+    return build_label_request(
+        article,
+        a_table(article),
+        model_id="m",
+        server=a_server(),
+        sampling=a_sampling(),
+        markers=committed_markers(),
+    )
+
+
 def bounded(schema: object, path: str = "") -> set[str]:
     """Every place in a generated schema a decoder may write without a bound."""
     loose: set[str] = set()
@@ -1674,7 +1689,12 @@ class TestTheDerivedBudget:
         assert summarize_and_plan_budget_tokens(wider) > summarize_and_plan_budget_tokens(ask)
 
     def test_the_request_hands_the_decoder_the_derived_budget(self, dense: Article) -> None:
-        payload = summarize_and_plan_payload(dense)
+        payload = build_summarize_and_plan_request(
+            build_label_with_derived_budget(dense),
+            "{}",
+            markers=committed_markers(),
+            source_words=dense.band_source_words,
+        )
 
         assert payload["n_predict"] == summarize_and_plan_budget_tokens()
         assert payload["json_schema"] == summarize_and_plan_schema(source_words=dense.band_source_words)
@@ -1977,7 +1997,7 @@ def test_the_visual_gate_moves_nothing_in_front_of_the_cached_prefix() -> None:
     than the decode it saves.
     """
     article = Article.from_json(read_text(FIXTURES_DIR / "contracts" / "article" / "ok.json"))
-    first = label_payload(article)
+    first = build_label_with_derived_budget(article)
     reply = json.loads(read_text(LABEL_REPLIES / "labelled.json"))["choices"][0][
         "message"
     ]["content"]
@@ -2004,4 +2024,3 @@ def test_the_visual_gate_moves_nothing_in_front_of_the_cached_prefix() -> None:
     assert suppressed["n_predict"] < asked["n_predict"]
     assert asked["cache_prompt"] is True
     assert suppressed["cache_prompt"] is True
-

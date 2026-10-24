@@ -351,16 +351,7 @@ def three_bodies(sampling: dict[str, Any], *, only: str | None = None) -> Any:
     return [make() for make in built.values()]
 
 
-def test_the_chat_route_sends_no_token_cap_on_either_envelope() -> None:
-    """One span carries both here, so any cap would have to be a sum of two.
-
-    The runtime owns the split on this route: the model's own template wrote
-    the prompt, so a caller cannot stop the decode at a marker and restart it
-    under the grammar. It had two numbers to add until 2026-09-21 and neither
-    was read off these weights. What bounds the decode now is the window with
-    no context shift, and what bounds the wait is the per-request timeout -
-    both per item, both loud.
-    """
+def test_the_chat_route_defaults_to_8192_output_tokens_on_either_envelope() -> None:
     sampling = a_sampling()
     quiet = request_payload(
         model_id="m",
@@ -380,8 +371,89 @@ def test_the_chat_route_sends_no_token_cap_on_either_envelope() -> None:
     )
 
     for body in (quiet, loud):
-        assert "max_tokens" not in body
+        assert body["max_tokens"] == 8192
         assert "n_predict" not in body
+
+
+def test_rendered_routes_default_to_8192_tokens_without_a_caller_budget() -> None:
+    completion = completion_payload(
+        model_id="m",
+        system="s",
+        user="u",
+        output_schema=output_schema(),
+        server=a_server(),
+        sampling=a_sampling(),
+        markers=built_envelope(),
+    )
+    grammar = grammar_completion_payload(
+        model_id="m",
+        system="s",
+        user="u",
+        grammar='root ::= "yes"',
+        server=a_server(),
+        sampling=a_sampling(),
+        markers=built_envelope(),
+        first_token_alternatives=3,
+    )
+    continuation = continued_completion_payload(
+        completion,
+        reply="{}",
+        user="Continue.",
+        output_schema=output_schema(),
+        markers=built_envelope(),
+    )
+
+    for body in (completion, grammar, continuation):
+        assert body["n_predict"] == 8192
+        assert "max_tokens" not in body
+
+
+@pytest.mark.parametrize("limit", [2048, 4096])
+def test_the_configured_token_limit_reaches_every_route_without_a_second_limit(limit: int) -> None:
+    chat, completion, grammar = three_bodies(a_sampling(max_tokens=limit))
+
+    for body in (chat, completion, grammar):
+        assert body["max_tokens"] == limit
+        assert "n_predict" not in body
+    assert chat["response_format"]["type"] == "json_schema"
+    assert completion["json_schema"] == output_schema()
+    assert grammar["grammar"] == 'root ::= "yes"'
+
+
+@pytest.mark.parametrize("route", ["chat", "completion", "grammar"])
+def test_two_configured_token_limit_spellings_are_not_sent_together(route: str) -> None:
+    with pytest.raises(ValueError, match="both max_tokens and n_predict"):
+        three_bodies(a_sampling(max_tokens=4096, n_predict=2048), only=route)
+
+
+def test_a_configured_token_limit_survives_continuations_and_reasoning() -> None:
+    markers = built_envelope(thinking_close="</think>")
+    first = completion_payload(
+        model_id="m",
+        system="s",
+        user="u",
+        output_schema=output_schema(),
+        server=a_server(),
+        sampling=a_sampling(max_tokens=4096),
+        markers=markers,
+        max_answer_tokens=64,
+    )
+    second = continued_completion_payload(
+        first,
+        reply='{"title": "a bridge"}',
+        user="Now the picture.",
+        output_schema=output_schema(),
+        markers=markers,
+        max_answer_tokens=128,
+    )
+    thought = thinking_span(second, markers=markers)
+    answer = answer_span(second, thought="Considering the facts.", markers=markers)
+
+    for body in (first, second, thought, answer):
+        assert body["max_tokens"] == 4096
+        assert "n_predict" not in body
+    assert "json_schema" not in thought
+    assert answer["json_schema"] == output_schema()
 
 
 def test_thinking_is_off_in_the_request() -> None:
@@ -1223,7 +1295,10 @@ def test_every_committed_role_starts_a_server_that_names_its_own_settings() -> N
             server=entry.server,
             port=8181,
         )
-        assert argv[argv.index("-lv") + 1] == "4", f"{role} starts a server that says nothing"
+        assert any(
+            flag in argv and argv[argv.index(flag) + 1] == "4"
+            for flag in ("-lv", "--log-verbosity")
+        ), f"{role} starts a server that does not describe its settings"
 
 
 def test_the_output_schema_is_generated_not_hand_written() -> None:
@@ -3114,9 +3189,6 @@ class TestTheServerSettlesTheEntry:
     passes, and with one value changed it refuses and the message names both
     sides. A check nobody has made fail is a check nobody has tested.
 
-    The turn markers have their own module,
-    `backend/tests/contracts/test_turn_envelope.py`, because the derivation is a
-    contract about somebody else's template rather than a check on a reply.
     """
 
     def test_a_probe_fixture_that_hides_where_it_came_from_is_refused(
