@@ -36,7 +36,7 @@ export async function extractContentFromUrl(
 
   const { document } = parseHTML(html);
   const fallbackTitle = document.title || "Web Document";
-  const defuddleResult: any = await Defuddle(document, url, { markdown: true, useAsync: false });
+  const defuddleResult: any = await Defuddle(document, url, { markdown: true });
   const content = defuddleResult.content?.trim() || "";
 
   if (content.length < 50) {

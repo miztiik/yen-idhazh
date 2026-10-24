@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 from support.ledger import seed_item_health
-from support.paths import CONTRACT_FIXTURES_DIR, read_text
+from support.paths import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 
 from idhazh.contracts.base import ServerJob, derive_url_key
 from idhazh.contracts.item_health import ItemHealthRow
@@ -28,6 +28,20 @@ from utilities import pipeline_artifact_analyzer as analyzer
 DAY = "2026-09-14"
 RUN_ID = "2026-09-14-34852763827"
 ITEM_ID = "india-5tnmq7gbk3xj9wcd"
+
+
+def test_historical_reply_parsing_uses_only_explicit_historical_delimiters() -> None:
+    recorded = json.loads(
+        read_text(FIXTURES_DIR / "completions" / "reasoned-anyway.json")
+    )
+    raw = recorded["choices"][0]["message"]["content"]
+    body, trouble, thought = analyzer.reply_json(
+        raw, reasoning_delimiters=("<think>", "</think>")
+    )
+    assert body is not None and body["title"]
+    assert trouble == ""
+    assert thought > 0
+    assert analyzer.reply_json(raw)[2] == 0, "no current model supplies a default"
 
 
 def capture_of(

@@ -78,6 +78,7 @@ from idhazh.llm.server import (
     SystemPlacement,
     TurnMarkers,
     continued_prompt,
+    parse_completion,
     post,
     render_prompt,
 )
@@ -549,9 +550,13 @@ class TestTheLabelCallShape:
         """`can emit no number at all` includes emitting nothing at all."""
         assert parse_label(json.dumps(a_reply().model_dump())).labels == []
 
-    def test_it_strips_a_thinking_block(self) -> None:
+    def test_it_reads_the_normalized_answer_not_the_reasoning(self) -> None:
         raw = "<think>reading it</think>" + json.dumps(a_reply().model_dump())
-        assert parse_label(raw).proposed == []
+        reply = parse_completion(
+            json.dumps({"content": raw}), reasoning_delimiters=("<think>", "</think>")
+        )
+        assert parse_label(reply.content).proposed == []
+        assert reply.inline_reasoning == "reading it"
 
 
 class TestTheLabelCallsDerivedBudget:

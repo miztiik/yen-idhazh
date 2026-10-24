@@ -347,14 +347,36 @@ def refused_markers(**replaced: str) -> str:
     start rather than that a helper raises when called directly. It moved there
     on 2026-09-21 with the markers themselves; what it refuses did not change.
     """
+    rendered = renderings_of(**replaced)
     with pytest.raises(ProbeRefusedError) as refused:
         turn_markers_from_renderings(
             model_id="a-candidate",
             thinking_close=None,
             thinking_kwarg=None,
-            **renderings_of(**replaced),
+            plain=rendered["plain"],
+            thinking=rendered["thinking"],
+            history=rendered["history"],
         )
     return str(refused.value)
+
+
+def test_derived_markers_keep_selected_template_variables_and_inline_syntax() -> None:
+    rendered = renderings_of()
+    markers = turn_markers_from_renderings(
+        model_id="an-unlisted-compatible-entry",
+        thinking_kwarg=None,
+        thinking_close="[/reason]",
+        chat_template_kwargs={"answer_style": "plain", "format": {"brief": True}},
+        reasoning_delimiters=("[reason]", "[/reason]"),
+        plain=rendered["plain"],
+        thinking=rendered["thinking"],
+        history=rendered["history"],
+    )
+    assert markers.thinks
+    assert markers.template_kwargs() == {
+        "answer_style": "plain", "format": {"brief": True}
+    }
+    assert markers.reasoning_delimiters == ("[reason]", "[/reason]")
 
 
 def test_an_entry_whose_family_the_pattern_never_learned_is_refused_at_server_start() -> None:

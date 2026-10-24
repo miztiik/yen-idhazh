@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
+from support.models import a_markers
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh import config
@@ -17,6 +18,7 @@ from idhazh.contracts import canonical_json
 from idhazh.contracts.app_config import SUPERSEDED_APP_NAMES, AppConfig
 from idhazh.contracts.knobs.models import SUPERSEDED_MODELS_NAMES, ModelsConfig
 from idhazh.contracts.run_manifest import RunManifest
+from idhazh.llm.server import request_payload, server_argv
 
 from ._fixtures import (
     committed_models,
@@ -52,7 +54,13 @@ def test_swapping_the_model_is_one_line_and_reverting_is_the_same_line(tmp_path:
         "revision": "f" * 40,
         "sha256": "1" * 64,
         "hf_base_repo": None,
+        "thinking_kwarg": "reason_now",
+        "thinking_close": None,
+        "chat_template_kwargs": {"answer_style": "plain"},
+        "reasoning_delimiters": ["<reason>", "</reason>"],
     }
+    other["summarizer"]["server"]["--threads-batch"] = 2
+    other["summarizer"]["sampling"]["top_k"] = 7
     other["summarizer"]["declared_for"] = "1" * 64
     (tmp_path / "config" / candidate).write_text(
         canonical_json(other), encoding="utf-8", newline="\n"
@@ -63,6 +71,34 @@ def test_swapping_the_model_is_one_line_and_reverting_is_the_same_line(tmp_path:
     swapped = config.load(tmp_path / "config")
     assert swapped.models.summarizer.id == "some-other-model-q4-k-m"
     assert swapped.models.summarizer.sha256 == "1" * 64
+    entry = swapped.models.summarizer
+    markers = a_markers(
+        thinking_kwarg=entry.thinking_kwarg,
+        thinking_close=entry.thinking_close,
+        chat_template_kwargs=entry.chat_template_kwargs,
+        reasoning_delimiters=entry.reasoning_delimiters,
+    )
+    request = request_payload(
+        model_id=entry.id,
+        system="Instructions",
+        user="Article",
+        output_schema={"type": "object"},
+        sampling=entry.sampling,
+        markers=markers,
+    )
+    assert request["model"] == entry.id
+    assert request["top_k"] == 7
+    assert request["chat_template_kwargs"] == {"answer_style": "plain", "reason_now": False}
+    argv = server_argv(
+        binary=Path("llama-server"),
+        weights=Path(entry.file),
+        model=entry,
+        server=entry.server,
+        port=8080,
+    )
+    assert argv[argv.index("--model") + 1] == entry.file
+    assert argv[argv.index("--alias") + 1] == entry.id
+    assert argv[argv.index("--threads-batch") + 1] == "2"
     assert changed_lines(before, read_text(tmp_path / "config" / "idhazh.json")) == 1
 
     point_at(tmp_path, incumbent)
@@ -80,19 +116,27 @@ def point_at(root: Path, models_file: str) -> None:
     )
 
 
-def test_a_template_that_reads_no_keyword_may_not_be_asked_to_think() -> None:
-    """Both halves are facts about the same template, so one entry owns the pair.
+def test_a_template_can_reason_without_a_switch() -> None:
+    declared = ModelsConfig.model_validate(
+        entry_with(thinking_kwarg=None, thinking_close="</reason>")
+    )
 
-    A null keyword means the request carries no `chat_template_kwargs` at all,
-    so a declared closing marker asks for reasoning through a channel nothing
-    sends.
-    """
-    payload = entry_with(thinking_kwarg=None, thinking_close="</think>")
+    assert declared.summarizer.thinks
+    assert declared.summarizer.thinking_kwarg is None
 
-    with pytest.raises(ValidationError) as raised:
+
+def test_the_reasoning_keyword_must_be_explicit_even_when_it_is_null() -> None:
+    payload = entry_with()
+    del payload["summarizer"]["thinking_kwarg"]
+    with pytest.raises(ValidationError, match="thinking_kwarg"):
         ModelsConfig.model_validate(payload)
 
-    assert "sends no chat_template_kwargs at all" in str(raised.value)
+
+def test_the_reasoning_switch_cannot_be_overridden_by_extra_template_variables() -> None:
+    with pytest.raises(ValidationError, match="chat_template_kwargs repeats thinking_kwarg"):
+        ModelsConfig.model_validate(
+            entry_with(thinking_kwarg="reason", chat_template_kwargs={"reason": False})
+        )
 
 
 def test_a_template_that_reads_no_keyword_loads_with_reasoning_off() -> None:
