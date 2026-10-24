@@ -27,21 +27,36 @@ source="$RUNNER_TEMP/host-cache-source"
 perf_source="$RUNNER_TEMP/host-cache-perf-source"
 log="$RUNNER_TEMP/host-cache-tools-install.log"
 apt_log="$RUNNER_TEMP/host-cache-packages.log"
+apt_plan="$RUNNER_TEMP/host-cache-packages-plan.log"
 trace="$RUNNER_TEMP/host-cache-perf-build-executions"
 started=$SECONDS
 stage=packages
 trap 'printf "Declared native cache tool build failed at %s\n" "$stage" >&2; if test -f "$log"; then tail -n 25 "$log" >&2; fi' ERR
 sudo apt-get update --quiet >"$log" 2>&1
-apt-get --simulate install --no-install-recommends -- "${packages[@]}" >"$apt_log" 2>&1
-if awk '$1 == "Inst" && $2 ~ /^(python[0-9]|libpython)/ { found=1 } END { exit !found }' "$apt_log"; then
+apt-get --simulate install --no-install-recommends -- "${packages[@]}" >"$apt_plan" 2>&1
+if awk '$1 == "Inst" && $2 ~ /^(python[0-9]|libpython)/ { found=1 } END { exit !found }' "$apt_plan"; then
   echo "Declared native build dependencies would install or update Python packages" >&2
   exit 1
 fi
-sudo apt-get install --yes --no-install-recommends -- "${packages[@]}" >"$apt_log" 2>&1
-mapfile -t added_packages < <(awk '/^Selecting previously unselected package / { sub(/[.]$/, "", $5); print $5 }' "$apt_log")
+mapfile -t planned_packages < <(awk '$1 == "Inst" { print $2 }' "$apt_plan")
+added_packages=()
+for package in "${planned_packages[@]}"; do
+  if previous=$(dpkg-query -W -f='${db:Status-Status}' "$package" 2>/dev/null); then
+    if test "$previous" != installed; then added_packages+=("$package"); fi
+  else
+    status=$?
+    if test "$status" -ne 1; then
+      echo "Cannot read the declared package's pre-install status" >&2
+      exit "$status"
+    fi
+    added_packages+=("$package")
+  fi
+done
+sudo apt-get -o Dpkg::Use-Pty=0 install --yes --no-install-recommends -- "${packages[@]}" >"$apt_log" 2>&1
 if ((${#added_packages[@]})); then
-  added_json=$(dpkg-query -W -f='${binary:Package}\t${Version}\t${Installed-Size}\n' "${added_packages[@]}" |
-    jq -Rn '[inputs | split("\t") | {name: .[0], version: .[1], installed_kib: (.[2] | tonumber)}]')
+  added_json=$(dpkg-query -W -f='${binary:Package}\t${Version}\t${Installed-Size}\t${db:Status-Status}\n' "${added_packages[@]}" |
+    jq -Rn '[inputs | split("\t") | if .[3] != "installed" then error("Native package was not installed") else
+      {name: .[0], version: .[1], installed_kib: (.[2] | tonumber)} end]')
 else
   added_json='[]'
 fi
